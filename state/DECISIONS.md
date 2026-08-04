@@ -99,3 +99,30 @@ actually has value — the reconstructed client and the reputation around it.
 **Falsifier:** none accepted. This is a values constraint, not an optimization.
 
 **Review:** n/a
+
+---
+
+## D-005 — GSC-first sequencing, driven by the August game-update clock
+Date: 2026-08-04 · Status: OPEN
+
+**Options considered:** learning-loop first (ANCHOR's original priority — Berkeley 2026-08-26) /
+GSC engine first / fleet-first
+
+**Chose:** GSC (client reconstruction) first.
+
+**Because:** ANCHOR treated the learning loop as the only external clock. There's a second, sharper
+one — the CC devs' planned August update. An update drifts WASM indices / offsets / struct layouts
+(the vault is full of "18 stale indices", "a stale export = the wrong fn under a trusted name") and
+can make version-differentiation harder — invalidating hard-won RE and the current full-item captures
+as ground truth. Berkeley learning is absorbable alongside classes (interactive, foreground), so it
+doesn't need the 3-weeks-ahead lead ANCHOR assumed. GSC is background/autonomous (oracle-gated), so
+the two parallelize rather than compete for attention.
+
+**Falsifier:** if the update lands and the reconstruction wasn't at a usable checkpoint against the
+stable binary, we mis-sequenced (should have started sooner / raced harder). Equally wrong if
+GSC-first let the learning loop slip behind Lucas's actual classes.
+
+**Review:** 2026-09-01 (with the other kill criteria).
+
+**Note:** amends ANCHOR's "priority is the learning loop" premise. ANCHOR's next scheduled review is
+2026-11-01, but this is a same-day amendment — carry it into the 2026-09-01 review.
