@@ -126,3 +126,31 @@ GSC-first let the learning loop slip behind Lucas's actual classes.
 
 **Note:** amends ANCHOR's "priority is the learning loop" premise. ANCHOR's next scheduled review is
 2026-11-01, but this is a same-day amendment — carry it into the 2026-09-01 review.
+
+---
+
+## D-006 — Adopt Hermes on the loop box, running on the ChatGPT sub via Codex OAuth (amends D-001)
+Date: 2026-08-04 · Status: OPEN
+
+**Options considered:** `claude -p` on cron (D-001's choice) / thin custom dispatcher + OpenRouter /
+Hermes (`NousResearch/hermes-agent`) with OpenAI Codex OAuth + OpenRouter fallback
+
+**Chose:** Hermes on `gs-recursion`, primary = ChatGPT Pro via Codex OAuth, fallback = OpenRouter.
+
+**Because:** D-001 rejected a third-party harness on the premise "subscription auth is blocked" —
+which is true for **Anthropic**, but **not** for OpenAI. Verified 2026-08-04: Hermes runs on the
+ChatGPT subscription via **Codex OAuth** (GPT-5.x, not metered API) with an automated
+`fallback_providers` swap to OpenRouter on quota/rate-limit/error. This runs the 24/7 loop on the
+$200 sub without burning the soon-halved Claude weekly limit, and Hermes' management surface is the
+single control front Lucas wanted. Claude `claude -p` stays an optional heavy tier, off the 24/7 path.
+
+**Falsifier:** if OpenAI restricts Codex OAuth in third-party harnesses (or rate-limits it below
+usefulness), Hermes-on-subscription stops working — but the fallback chain already degrades it to
+OpenRouter, so the failure is absorbed, not fatal. Equally wrong if silent auto-fallback runs up a
+metered OpenRouter bill unnoticed → mitigated by `fallback_threshold_per_day: 3 → notify`.
+
+**Review:** 2026-09-01 (with the capacity kill criteria).
+
+**Note:** supersedes D-001's "no Hermes" conclusion *for the OpenAI side only*. D-001's core point —
+never run two harnesses fighting over one auth store — still holds: Hermes owns the loop, `claude -p`
+is invoked as a tool, not a second supervisor.
