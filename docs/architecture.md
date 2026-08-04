@@ -46,10 +46,28 @@ Tiers (names are a skin over the function — rename freely):
   and Lucas. Async (INBOX/Telegram) and sync (a conductor session).
 - **Lucas — top of the escalation chain.** Sees only what genuinely needs him (below).
 
-Engines: `claude -p` is the subscription-covered workhorse; GPT/Codex is a parallel interactive seat
-or metered API; OpenRouter/Haiku is the cheap routine tier. Calling `claude -p` still spends the
-Claude limit, so the mix conserves Claude quota only insofar as GPT/OpenRouter carry load — a
-routing-budget knob, not free headroom.
+### Engines in scope + control (Claude · GPT · OpenRouter — all first-class)
+
+All three are in scope; the loop routes among them by cost and task:
+
+- **Claude** (`claude -p`) — subscription-covered workhorse for hard reasoning/dev. Spends the Claude
+  limit, so heavy use competes with interactive sessions.
+- **GPT / ChatGPT Pro ($200)** — Lucas's, and **stays under Lucas's control.** Default role: a
+  human-driven parallel *interactive* seat (Codex/ChatGPT). The autonomous loop may call GPT only as
+  a **metered API within an explicit spend cap Lucas sets**, escalation-gated for anything expensive
+  — it never burns the subscription unsupervised.
+- **OpenRouter** — cheap routine tier (heartbeat, triage, summarization) + the graceful-degrade
+  fallback so the loop never hard-stops on a quota.
+
+**Control invariants (load-bearing):**
+- `routing.yaml` is the single control surface for which engine does what. **Lucas edits it to
+  rebalance; the loop never edits its own routing/auth/budget** (CLAUDE.md hard rule 3). So Lucas
+  always has the wheel on how much of each subscription gets spent.
+- GPT usage is Lucas-controlled by construction: interactive seat by default, automated GPT only
+  within a budget cap + escalation gate.
+- Calling `claude -p` still spends the Claude limit, so the Claude+GPT+OpenRouter mix conserves Claude
+  quota only insofar as GPT/OpenRouter carry load — a routing-budget knob Lucas owns, not free
+  headroom.
 
 ## Escalation: auto / notify / escalate
 
