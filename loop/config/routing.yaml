@@ -1,0 +1,23 @@
+# Fallback chain. Agents do not negotiate quotas with each other — they fall through
+# this list and log the switch.
+
+jobs:
+  morning_brief:
+    primary:  { provider: anthropic, mode: subscription, model: claude-haiku-4-5 }
+    fallback: { provider: openrouter, model: deepseek/deepseek-chat }
+    max_tokens: 4000
+
+  project_triage:
+    primary:  { provider: anthropic, mode: subscription, model: claude-haiku-4-5 }
+    fallback: { provider: openrouter, model: deepseek/deepseek-chat }
+    max_tokens: 4000
+
+  problem_set:
+    primary:  { provider: anthropic, mode: subscription, model: claude-sonnet-5 }
+    fallback: { provider: openrouter, model: deepseek/deepseek-chat }
+    max_tokens: 8000
+
+alerting:
+  # If the fallback fires more than this in a day, something structural is wrong.
+  fallback_threshold_per_day: 3
+  on_threshold: notify
