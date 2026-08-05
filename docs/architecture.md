@@ -1,6 +1,6 @@
 # Recursion — architecture
 
-Last updated: 2026-08-04. Read `ANCHOR.md` first — that's WHY/WHAT; this is HOW.
+Last updated: 2026-08-05. Read `ANCHOR.md` first — that's WHY/WHAT; this is HOW.
 
 ## Purpose
 
@@ -71,6 +71,47 @@ an **automated fallback to OpenRouter** on quota exhaustion / rate-limit / error
 > That is OpenAI's *general* API-key guidance; the **Codex-OAuth-in-Hermes** path is the exception,
 > and it is what we use. See D-006.
 
+## The model roster — who's who, who calls whom, what it costs
+
+Five model names are in play. They are NOT five peers — they fall into two planes, and only one
+plane is metered. This is the whole interaction map: if it holds, everything interacts as expected.
+
+**Plane 1 — the supervision brain (flat-rate, always-on).** The GPT 5.6 family on the ChatGPT Pro
+sub via Codex OAuth: three capability tiers, one sub, ~$0 at the margin.
+
+| Model | Tier / job | Fires when |
+|---|---|---|
+| GPT 5.6 Luna  | cheap heartbeat / triage (`heartbeat`) | every cron tick — "anything wrong or new?" |
+| GPT 5.6 Terra | brief + routine decisions (`brief`/`decision`, the DEFAULT) | Luna surfaces a signal |
+| GPT 5.6 Sol   | escalated hard reasoning (`hard`), pinned per-job | Terra hits a genuinely hard call |
+
+Naming: the Lua/Terra/Sol tier names predate the GPT 5.6 models, which happen to share two of them.
+`routing.yaml` now binds them 1:1 (heartbeat→luna, brief/decision→terra, hard→sol), so the "skin"
+and the model are the same weight per tier. That is the answer to "it's a lot of models":
+Luna/Terra/Sol are ONE family, three sizes, on ONE sub.
+
+**Plane 2 — the execution arms (what the brain dispatches to do the actual work).** The supervisor
+reasons; it does not write the renderer. When something needs DOING it spawns an arm:
+
+| Arm | Runs on | Cost | For |
+|---|---|---|---|
+| Claude Opus (top tier), `claude -p` | Claude Max sub (flat) | ~$0 at margin, kept OFF the 24/7 path (weekly limit) | deep single-focus work — GSC client/RE, renderer, hard multi-file coding — and the conductor session you drop into |
+| OpenRouter → Deepseek-class, price-sorted | metered ($) | the ONLY per-token spend | (a) bulk PARALLEL cheap coverage; (b) last-resort fallback if Codex OAuth is down |
+
+⚠ "Opus 5": the current top Opus tier is 4.8 (what these sessions run on today). If an Opus 5 ships
+it slots into the identical role — the plane, not the version number, is load-bearing.
+
+⚠ Deepseek vs the D-008 fallback chain are two different jobs. The SUPERVISOR's outage fallback is
+`luna → gemini-2.5-flash-lite` (D-008, chosen on cost). Deepseek-class is the BULK-EXECUTION lane —
+many cheap agents in parallel for coverage-not-correctness work (memory: OpenRouter = coverage).
+Both are OpenRouter, both price-sorted, different callers.
+
+**The flow, one line:** cron → Luna heartbeat → (signal) Terra → (hard) Sol → (needs doing) dispatch
+to Opus for depth or Deepseek-class for parallel bulk → results to the ledger → Terra briefs you on
+Telegram → you steer. Everything that CAN run on a flat sub (Luna/Terra/Sol on Pro; Opus on Max)
+does; OpenRouter is fenced to fallback + bulk and watched by `fallback-watch.sh`. That is how the
+$200 sub is maximized — the entire 24/7 brain lives inside it.
+
 ## Escalation: auto / notify / escalate
 
 Every proposed action is scored on **reversibility × cost × ambiguity × verifiability.** Higher on
@@ -95,8 +136,15 @@ prioritized, drop rather than append.
 
 **2. Direct access + changing things.** Four levers:
 - **Async (pull, low-attention default):** read INBOX/briefs/state; answer escalations.
-- **Sync (drop-in):** open a **conductor session** — interactive Claude Code with full read/write to
-  `state/` + dispatch rights. Steer directly: redirect the GSC loop, pause a fleet action.
+- **Sync (drop-in on a PC — the deep-dive escape hatch):** when a Telegram escalation doesn't carry
+  enough context to decide, open a **conductor session** — interactive Claude Code (Opus) with full
+  read/write to `state/` + dispatch rights. To keep the jump to one step, every escalation carries a
+  **context handle**: the workstream id + a pointer to the exact ledger slice / handoff / repo path
+  that produced it + the escalation text. On the PC, `recursion open <workstream>` (or paste the
+  handle into a Claude Code session in that repo) boots the conductor with that context pre-loaded —
+  you land already oriented, not scavenging. Decide; your answer lands in `state/INBOX.md` /
+  `DECISIONS.md` and the loop reads it next cycle. This is the review-throughput valve — it lowers
+  the cost of getting *enough* context to act.
 - **Declarative steering (the wheel):** the loops READ `DECISIONS.md` + `ANCHOR.md`. Change a
   decision → the loops pick it up next cycle. Config as control.
 - **Kill switch:** a `state/PAUSE` flag every loop checks first. Present ⇒ autonomous action halts
@@ -115,6 +163,24 @@ prioritized, drop rather than append.
 - **Guard the digest.** Summaries drop quiet-but-important facts (memory: `digests-miss-inert`).
   Periodic full refresh against ground truth, not just rolling summaries.
 
+## Observability — seeing the parallel work
+
+Push tells you what changed; you also need a pull view of what's running RIGHT NOW across the arms.
+One source of truth, three ways to read it (all built by the dispatcher session — they don't exist yet):
+
+- **`state/BOARD.md` — the live registry.** The dispatcher rewrites it each tick: one row per
+  in-flight arm — workstream, tier/model, state (queued/running/done/blocked), started, tokens,
+  metered $ so far. Committed to `loop/auto`, so it doubles as history. Single source of truth;
+  nothing else invents its own status.
+- **Telegram `/status` — pull, from your phone.** Ask the supervisor "what's running" → it reads
+  BOARD.md and replies. The async counterpart to the pushed brief.
+- **On a PC:** `recursion board` prints the same table; `tail -f loop/logs/<date>-*.log` streams any
+  single arm live; the conductor session is the deepest view — you are inside the arm.
+
+The board answers the two questions that matter under a flat sub: is any arm silently on metered
+OpenRouter? (the $ column, cross-checked by `fallback-watch.sh`) and is generation outrunning review?
+(queued/done counts — ANCHOR's actual constraint).
+
 ## Where everything runs
 
 - **Windows (Lucas's box):** GSC oracle loop (live `cubic.exe` + CheatEngine MCP + client code). GSC
@@ -124,7 +190,51 @@ prioritized, drop rather than append.
   fleet monitor, alerting.
 - **Railway (app layer only):** API, Discord bot, dashboard, renderer, Postgres.
 
-## Open naming check
+## Where the AI compute runs — and what actually costs money
 
-Lua / Terra / Sol / Hermes are a PROPOSED mapping onto the functional tiers above — confirm or
-rename. The function is fixed; the skin is yours.
+The concern: will the VPS handle it, will traffic get expensive, and does it keep working when your
+computer is off? Three separate things, separated.
+
+**Where the arms run: on the VPS, not your computer.** `claude -p`, the OpenRouter calls, and the
+Luna/Terra/Sol supervisor are all thin API CLIENTS — the model itself runs in Anthropic / OpenAI /
+OpenRouter's cloud. They execute on gs-recursion-nbg and reach those APIs over the network. So the
+brain and nearly every arm are 24/7 and do NOT need your computer on. That is the whole reason
+Recursion gets its own always-on box (D-I).
+
+**The one exception — the GSC oracle.** The client-reconstruction loop scores itself against the
+native mesh in live `cubic.exe` via CheatEngine — Windows-local, game-bound, and it CANNOT move to a
+headless VPS. So oracle-gated GSC iteration is the single workstream that pauses when your PC is off.
+Recursion handles this by treating your PC as an INTERMITTENT worker: it queues oracle jobs and hands
+them to a local runner when the box is up, and keeps everything else flowing on the VPS meanwhile.
+Non-oracle GSC work (planning, code that needs no live measurement) still runs on the VPS.
+
+**What actually costs money — it is NOT VPS traffic.** Three cost buckets, only one scales:
+- *Bandwidth:* negligible and flat. The Hetzner CX box includes ~20 TB/mo egress; AI API calls are
+  text (a huge session is a few MB). The VPS bill does not move with AI traffic. Stop worrying about
+  this one.
+- *Tokens:* the real cost — governed by the sub model, not the VPS. Luna/Terra/Sol on the flat $200
+  Pro sub and Opus on the flat Claude Max sub are ~$0 at the margin no matter how much they run;
+  OpenRouter is the only metered leg, fenced to fallback + bulk and watched by `fallback-watch.sh`.
+- *VPS CPU/RAM:* the arms are thin clients (compute is remote), so a CX23 (2 vCPU/4 GB) runs the
+  dispatcher + several concurrent arms comfortably. The Box-1/Box-2 split (D-G) keeps a `claude -p`
+  burst from OOM-ing the fleet workers; if parallel arms grow, bump Box 2 to a CX33 (8 GB) — cost is
+  noise, resize freely.
+
+Net: the VPS handles it, it runs consistently with your computer off, and "expensive traffic" is a
+token question answered by the flat subs — not a bandwidth question.
+
+## Naming — resolved 2026-08-05
+
+Lua/Terra/Sol/Hermes began as a functional skin. The GPT 5.6 line then shipped models literally
+named Sol/Terra/Luna, so `routing.yaml` binds each functional tier to the same-weight GPT model
+(heartbeat→luna, brief/decision→terra, hard→sol; Hermes = the harness/front). Skin and models are
+one thing per tier — see "The model roster" above. No rename needed.
+
+## Build order — the dispatcher is the enabler, not a blocked step (2026-08-05)
+
+The dispatcher does NOT wait on Chiron or the GSC client; those are workstreams it supervises, not
+prerequisites. So: fleet first (active, near-done), the **dispatcher second** — the moment it exists,
+every other workstream plugs into it and is run *through* Recursion instead of hand-opened. Building
+it early changes how the later work gets worked; it is not step 2 of a queue. (GSC = build the
+working *client* — net/crypto/protocol/world/behaviors/game + the custom renderer — not the renderer
+alone.)
