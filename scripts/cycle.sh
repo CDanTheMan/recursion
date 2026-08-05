@@ -45,11 +45,14 @@ log "heartbeat signal=$SIGNAL reason=${REASON:-}"
 
 # --- 2) Brief (Terra) — only on a signal, or when forced. ----------------------------
 if [ "$SIGNAL" = "brief" ] || [ "$FORCE" = "force" ]; then
-  bash scripts/board.sh add br supervision brief gpt-5.6-terra running "daily brief" >/dev/null
+  # Forced (daily) brief pushes the full digest; intra-day briefs stay silent (escalations
+  # still ping via run.sh). This is what keeps a 3-hourly heartbeat from spamming Telegram.
+  if [ "$FORCE" = "force" ]; then DELIVER=1; LBL="daily brief (pushed)"; else DELIVER=0; LBL="intra-day refresh (silent)"; fi
+  bash scripts/board.sh add br supervision brief gpt-5.6-terra running "$LBL" >/dev/null
   BR_USAGE="$LOG_DIR/$DATE-morning.usage.json"
-  if bash loop/supervisor/run.sh morning; then
-    bash scripts/board.sh finish br done "$BR_USAGE" "delivered" >/dev/null
-    log "brief delivered"
+  if DELIVER_BRIEF=$DELIVER bash loop/supervisor/run.sh morning; then
+    bash scripts/board.sh finish br done "$BR_USAGE" "$LBL" >/dev/null
+    log "brief done (deliver=$DELIVER)"
   else
     bash scripts/board.sh finish br blocked "$BR_USAGE" "run failed" >/dev/null
     log "brief FAILED (run.sh alerts separately)"

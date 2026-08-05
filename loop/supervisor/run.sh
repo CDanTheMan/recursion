@@ -102,8 +102,13 @@ else
   log "no changes"
 fi
 
-# --- Deliver the brief to Telegram. -----------------------------------------------
-[ -f "$BRIEF" ] && bash "$ROOT/scripts/notify.sh" -f "$BRIEF" || true
+# --- Deliver the brief to Telegram (daily digest only). ---------------------------
+# Intra-day heartbeat-triggered briefs set DELIVER_BRIEF=0: they still write the brief,
+# update the board, and fire escalation pings above — but don't push a full digest every
+# few hours. Escalations always reach you; routine intra-day briefs stay silent.
+if [ "${DELIVER_BRIEF:-1}" = "1" ] && [ -f "$BRIEF" ]; then
+  bash "$ROOT/scripts/notify.sh" -f "$BRIEF" || true
+fi
 fi   # end brief-mode block
 
 # --- Per-job fallback check: did this run drop off the sub onto metered billing? ---
