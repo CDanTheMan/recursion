@@ -5,4 +5,4 @@ engine: none
 acceptance: test -f ANCHOR.md
 workdir: .
 autonomy: auto
-status: running
+status: passed
