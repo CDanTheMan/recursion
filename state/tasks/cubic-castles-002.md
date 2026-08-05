@@ -6,7 +6,7 @@ repo: /opt/golden-stallion-client
 acceptance: bash /opt/recursion/scripts/gsc-conformance-gate.sh
 workdir: .
 autonomy: auto
-status: queued
+status: running
 
 Make the failing tests in user-client/render/hsr.conformance.test.cjs pass: "block 516 matches
 §5.3 exactly", "HSR culls exactly 10 of 46 with all five neighbours occluding, 0 with none",
