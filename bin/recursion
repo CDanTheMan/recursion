@@ -20,6 +20,7 @@ case "$CMD" in
   drain)         bash scripts/drain.sh ;;
   plan)          bash scripts/plan.sh "${1:?workstream}" ;;
   reflect)       bash scripts/reflect.sh ;;
+  publish)       bash scripts/publish.sh "$@" ;;
   proposals)     cat state/PROPOSALS.md 2>/dev/null || echo "(no proposals yet)" ;;
   lessons)       cat state/LESSONS.md 2>/dev/null || echo "(no lessons yet)" ;;
   pause)         bash scripts/pause.sh "$@" ;;
