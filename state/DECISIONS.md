@@ -154,3 +154,31 @@ metered OpenRouter bill unnoticed → mitigated by `fallback_threshold_per_day: 
 **Note:** supersedes D-001's "no Hermes" conclusion *for the OpenAI side only*. D-001's core point —
 never run two harnesses fighting over one auth store — still holds: Hermes owns the loop, `claude -p`
 is invoked as a tool, not a second supervisor.
+
+---
+
+## D-007 — Confirm ChatGPT Pro (Codex OAuth) + Claude Max for the August PoC; SuperGrok/Cursor set aside
+Date: 2026-08-04 · Status: OPEN
+
+**Options considered (since D-006):** dual SuperGrok Heavy (verified OAuth via OpenCode/Hermes) /
+Cursor Ultra ($200 → $400 credits, Grok incl.) / stay on ChatGPT Pro (Codex OAuth) + Claude Max
+
+**Chose:** ChatGPT Pro via Codex OAuth (loop) + Claude Max (interactive) — one-month August PoC,
+reassess Sept 1. Confirms D-006.
+
+**Because:** SuperGrok Heavy was genuinely strong (official xAI↔OpenCode integration, subscription
+OAuth, Grok 4.3 / 1M ctx) but the $100 promo expired → $300/mo, no longer worth it. Cursor Ultra is
+good value but its credits lock to Cursor's own tools (cursor-agent), forcing a harness switch off
+OpenCode/Hermes and unable to reach the local GSC oracle. ChatGPT Pro via Codex OAuth already runs
+headless in the Hermes we stood up, is exactly $200, and matches ANCHOR's August-PoC budget. Lucas
+chose to run it this month on the increased budget, then make a reformed decision.
+
+**Falsifier:** if the Sept-1 `ccusage` review shows the loop never approached ChatGPT-Pro limits (a
+$20 Plus or OpenRouter-only would have sufficed), the $200 was over-bought. Equally wrong if
+merged/verified output didn't track generation — a purchased backlog (ANCHOR).
+
+**Review:** 2026-09-01 (with the capacity kill criteria).
+
+**Note:** OpenCode stays installed as an available coding agent (auth with Codex, or revisit Grok if
+pricing changes) — not on the PoC critical path. Preserve this "why we set them aside" so a future
+session doesn't re-shop SuperGrok/Cursor without new pricing.
