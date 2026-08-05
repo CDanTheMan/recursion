@@ -182,3 +182,37 @@ merged/verified output didn't track generation — a purchased backlog (ANCHOR).
 **Note:** OpenCode stays installed as an available coding agent (auth with Codex, or revisit Grok if
 pricing changes) — not on the PoC critical path. Preserve this "why we set them aside" so a future
 session doesn't re-shop SuperGrok/Cursor without new pricing.
+
+---
+
+## D-008 — Engine config deployed on gs-recursion: local terminal, system service, luna→gemini fallback
+Date: 2026-08-05 · Status: OPEN
+
+**Options considered (fallback model):** anthropic/claude-haiku-4.5 (first pick) / deepseek-chat-v3.1 /
+openai/gpt-5.6-luna / a luna→non-OpenAI chain
+
+**Chose:** Primary `gpt-5.6-terra` (Codex OAuth). Fallback chain via OpenRouter, `sort: price`:
+leg 1 `openai/gpt-5.6-luna`, leg 2 `google/gemini-2.5-flash-lite`. Terminal backend `local`;
+gateway installed as a systemd **system** service run as root (boot-persistent).
+
+**Because:** luna is the cheapest current-gen model on OpenRouter ($0.10/$0.60 per Mtok) — beats
+DeepSeek ($0.25/$0.95) on both axes and stays in the primary's family. haiku-4.5 (first pick,
+$1.00/$5.00) was ~10x too dear for a leg that only fires on primary outage. Leg 2 is a non-OpenAI
+backstop: if the fallback trigger is an OpenAI-wide outage, an openai/* leg is also down, so a
+different vendor covers it. `local` backend because the box is a dedicated single-tenant disposable
+sandbox (Docker's isolation is defeated once you mount in the auth/keys it must use). System-service-
+as-root because auth/keys/repo all live under /root and the box must survive reboots (D-I).
+
+**Falsifier:** if the Sept-1 review shows the fallback fired often enough that metered OpenRouter
+spend was material, the primary sub was undersized or the loop is too chatty — revisit tiering.
+Equally wrong if luna proved too weak for fallback decisions and the loop made bad calls during an
+outage window unnoticed — then leg 1 should be terra, not luna.
+
+**Review:** 2026-09-01 (with the capacity kill criteria).
+
+**Note:** implements D-006/D-007. Config lives in `/root/.hermes/config.yaml` on gs-recursion
+(backup `config.yaml.bak-20260805`); verify live with the `fallback_providers` block + `hermes model`.
+STILL TODO, and NOT a Hermes toggle: (1) a fallback-spend ALERT — must be a Recursion-side monitor
+(cron checks OpenRouter usage / greps gateway logs for fallback events → Telegram); (2) per-tier model
+routing (Lua→luna, decisions→terra, escalate→sol) is Recursion dispatcher logic, built when the loop
+lands, not a global Hermes setting.
