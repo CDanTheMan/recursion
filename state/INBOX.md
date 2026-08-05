@@ -87,3 +87,11 @@ correct design (no tractable conformance tasks).
 **Blocked on:** approval of the numeric native-mesh error metric/control and its integration into overnight task planning.
 **Context:** after the corpus deployment, conformance is complete (206 pass, 0 fail, 5 skip); it can only detect regressions and supplies no tractable new renderer tasks.
 **Options:** approve the proposed strict-decrease native-diff gate and planner integration; approve the gate but defer planner integration; reject/defer and keep GSC overnight work idle pending a different frontier definition.
+
+## build escalation — chiron-002  (2026-08-05T21:18:58Z)
+**Workstream:** chiron
+**Pointer:** state/tasks/chiron-002.md · branch loop/work/chiron-002 · arm log loop/logs/2026-08-05-arm-chiron-002-211542.out
+Blocked on: acceptance test failed after retry
+Acceptance: `cd apps/chiron && npm install && npm run build` exited 1
+Options: inspect the worktree/branch, fix the task or its acceptance, then `recursion work chiron-002` (or `recursion requeue chiron-002`).
+Close it with: `recursion resolve chiron-002 "<what you decided>"`.
