@@ -6,7 +6,8 @@ repo: /opt/golden-stallion-client
 acceptance: bash /opt/recursion/scripts/gsc-conformance-gate.sh
 workdir: .
 autonomy: auto
-status: queued
+status: blocked
+blocked_on: model corpus absent on box (user-client/render/data/models/blocks ~12MB, gitignored + PC-local); all target conformance tests need it — scp the corpus to unblock
 
 Make the failing tests in user-client/render/multipart.conformance.test.cjs pass: "parts are
 split, and only for blocks that have a suffixed file", "multiPart OFF reproduces the merged mesh
