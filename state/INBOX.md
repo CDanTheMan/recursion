@@ -23,3 +23,10 @@ Options: inspect the worktree/branch, fix the task or its acceptance, then `recu
 ## resolved 2026-08-05T11:26:47Z — chiron-001 PASSED
 claude /login done on box; re-ran and acceptance (npm install && npm run build) went green.
 Auto-committed to loop/work/chiron-001 (ba02110) at $0.00 on flat Max. Nothing to action.
+
+## build escalation — cubic-castles-001  (2026-08-05T12:53:40Z)
+**Workstream:** cubic-castles
+**Pointer:** state/tasks/cubic-castles-001.md · branch loop/work/cubic-castles-001 · arm log loop/logs/2026-08-05-arm-cubic-castles-001-121558.out
+Blocked on: acceptance test failed after retry
+Acceptance: `bash /opt/recursion/scripts/gsc-conformance-gate.sh` exited 2
+Options: inspect the worktree/branch, fix the task or its acceptance, then `recursion work cubic-castles-001`.
