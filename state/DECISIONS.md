@@ -126,3 +126,93 @@ GSC-first let the learning loop slip behind Lucas's actual classes.
 
 **Note:** amends ANCHOR's "priority is the learning loop" premise. ANCHOR's next scheduled review is
 2026-11-01, but this is a same-day amendment — carry it into the 2026-09-01 review.
+
+---
+
+## D-006 — Adopt Hermes on the loop box, running on the ChatGPT sub via Codex OAuth (amends D-001)
+Date: 2026-08-04 · Status: OPEN
+
+**Options considered:** `claude -p` on cron (D-001's choice) / thin custom dispatcher + OpenRouter /
+Hermes (`NousResearch/hermes-agent`) with OpenAI Codex OAuth + OpenRouter fallback
+
+**Chose:** Hermes on `gs-recursion`, primary = ChatGPT Pro via Codex OAuth, fallback = OpenRouter.
+
+**Because:** D-001 rejected a third-party harness on the premise "subscription auth is blocked" —
+which is true for **Anthropic**, but **not** for OpenAI. Verified 2026-08-04: Hermes runs on the
+ChatGPT subscription via **Codex OAuth** (GPT-5.x, not metered API) with an automated
+`fallback_providers` swap to OpenRouter on quota/rate-limit/error. This runs the 24/7 loop on the
+$200 sub without burning the soon-halved Claude weekly limit, and Hermes' management surface is the
+single control front Lucas wanted. Claude `claude -p` stays an optional heavy tier, off the 24/7 path.
+
+**Falsifier:** if OpenAI restricts Codex OAuth in third-party harnesses (or rate-limits it below
+usefulness), Hermes-on-subscription stops working — but the fallback chain already degrades it to
+OpenRouter, so the failure is absorbed, not fatal. Equally wrong if silent auto-fallback runs up a
+metered OpenRouter bill unnoticed → mitigated by `fallback_threshold_per_day: 3 → notify`.
+
+**Review:** 2026-09-01 (with the capacity kill criteria).
+
+**Note:** supersedes D-001's "no Hermes" conclusion *for the OpenAI side only*. D-001's core point —
+never run two harnesses fighting over one auth store — still holds: Hermes owns the loop, `claude -p`
+is invoked as a tool, not a second supervisor.
+
+---
+
+## D-007 — Confirm ChatGPT Pro (Codex OAuth) + Claude Max for the August PoC; SuperGrok/Cursor set aside
+Date: 2026-08-04 · Status: OPEN
+
+**Options considered (since D-006):** dual SuperGrok Heavy (verified OAuth via OpenCode/Hermes) /
+Cursor Ultra ($200 → $400 credits, Grok incl.) / stay on ChatGPT Pro (Codex OAuth) + Claude Max
+
+**Chose:** ChatGPT Pro via Codex OAuth (loop) + Claude Max (interactive) — one-month August PoC,
+reassess Sept 1. Confirms D-006.
+
+**Because:** SuperGrok Heavy was genuinely strong (official xAI↔OpenCode integration, subscription
+OAuth, Grok 4.3 / 1M ctx) but the $100 promo expired → $300/mo, no longer worth it. Cursor Ultra is
+good value but its credits lock to Cursor's own tools (cursor-agent), forcing a harness switch off
+OpenCode/Hermes and unable to reach the local GSC oracle. ChatGPT Pro via Codex OAuth already runs
+headless in the Hermes we stood up, is exactly $200, and matches ANCHOR's August-PoC budget. Lucas
+chose to run it this month on the increased budget, then make a reformed decision.
+
+**Falsifier:** if the Sept-1 `ccusage` review shows the loop never approached ChatGPT-Pro limits (a
+$20 Plus or OpenRouter-only would have sufficed), the $200 was over-bought. Equally wrong if
+merged/verified output didn't track generation — a purchased backlog (ANCHOR).
+
+**Review:** 2026-09-01 (with the capacity kill criteria).
+
+**Note:** OpenCode stays installed as an available coding agent (auth with Codex, or revisit Grok if
+pricing changes) — not on the PoC critical path. Preserve this "why we set them aside" so a future
+session doesn't re-shop SuperGrok/Cursor without new pricing.
+
+---
+
+## D-008 — Engine config deployed on gs-recursion: local terminal, system service, luna→gemini fallback
+Date: 2026-08-05 · Status: OPEN
+
+**Options considered (fallback model):** anthropic/claude-haiku-4.5 (first pick) / deepseek-chat-v3.1 /
+openai/gpt-5.6-luna / a luna→non-OpenAI chain
+
+**Chose:** Primary `gpt-5.6-terra` (Codex OAuth). Fallback chain via OpenRouter, `sort: price`:
+leg 1 `openai/gpt-5.6-luna`, leg 2 `google/gemini-2.5-flash-lite`. Terminal backend `local`;
+gateway installed as a systemd **system** service run as root (boot-persistent).
+
+**Because:** luna is the cheapest current-gen model on OpenRouter ($0.10/$0.60 per Mtok) — beats
+DeepSeek ($0.25/$0.95) on both axes and stays in the primary's family. haiku-4.5 (first pick,
+$1.00/$5.00) was ~10x too dear for a leg that only fires on primary outage. Leg 2 is a non-OpenAI
+backstop: if the fallback trigger is an OpenAI-wide outage, an openai/* leg is also down, so a
+different vendor covers it. `local` backend because the box is a dedicated single-tenant disposable
+sandbox (Docker's isolation is defeated once you mount in the auth/keys it must use). System-service-
+as-root because auth/keys/repo all live under /root and the box must survive reboots (D-I).
+
+**Falsifier:** if the Sept-1 review shows the fallback fired often enough that metered OpenRouter
+spend was material, the primary sub was undersized or the loop is too chatty — revisit tiering.
+Equally wrong if luna proved too weak for fallback decisions and the loop made bad calls during an
+outage window unnoticed — then leg 1 should be terra, not luna.
+
+**Review:** 2026-09-01 (with the capacity kill criteria).
+
+**Note:** implements D-006/D-007. Config lives in `/root/.hermes/config.yaml` on gs-recursion
+(backup `config.yaml.bak-20260805`); verify live with the `fallback_providers` block + `hermes model`.
+STILL TODO, and NOT a Hermes toggle: (1) a fallback-spend ALERT — must be a Recursion-side monitor
+(cron checks OpenRouter usage / greps gateway logs for fallback events → Telegram); (2) per-tier model
+routing (Lua→luna, decisions→terra, escalate→sol) is Recursion dispatcher logic, built when the loop
+lands, not a global Hermes setting.
