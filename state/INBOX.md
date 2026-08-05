@@ -57,3 +57,10 @@ Only then does the offline gate have tractable PROGRESS to measure.
 **Blocked on:** the 1,464 gitignored `.modl` files (~12 MB) are absent from the box; all relevant conformance tasks require them.
 **Context:** cubic-castles-001 correctly found the alpha lane already implemented, but the gate cannot measure whole-mesh totals without the corpus. Tasks 002–003 are blocked.
 **Options:** copy `user-client/render/data/models` from the PC checkout to `/opt/golden-stallion-client/user-client/render/data/`; or regenerate `models/blocks` from `DynaContent/models/blocks`.
+
+## 2026-08-05 15:15 — Choose how to provide the Cubic Castles block-model corpus
+**Workstream:** cubic-castles
+**Pointer:** CURRENT INBOX: “DECISION NEEDED — GSC overnight blocked on the model corpus”; `golden-stallion-client/user-client/render/data/models/blocks`
+**Blocked on:** the 1,464 gitignored `.modl` files (~12 MB) are absent from the box, so all relevant conformance tasks cannot measure whole-mesh totals.
+**Context:** `cubic-castles-001` found the water alpha lane already exists; the offline gate requires at least one failing test to turn green. Tasks 002–003 are blocked.
+**Options:** copy `user-client/render/data/models` from the PC checkout to `/opt/golden-stallion-client/user-client/render/data/`; or regenerate `models/blocks` from `DynaContent/models/blocks`.
