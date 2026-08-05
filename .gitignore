@@ -23,3 +23,6 @@ state/.work.lock/
 .next/
 out/
 dist/
+
+# GSC build-loop runtime (baseline pass-set is box-local, regenerated per HEAD)
+state/gsc/

@@ -50,13 +50,17 @@ ID="$(field id)"; WORKSTREAM="$(field workstream)"; GOAL="$(field goal)"
 ENGINE="$(field engine)"; ACCEPTANCE="$(field acceptance)"; WORKDIR="$(field workdir)"
 AUTONOMY="$(field autonomy)"; MODEL="$(field model)"
 WORKDIR="${WORKDIR:-.}"; AUTONOMY="${AUTONOMY:-auto}"; ENGINE="${ENGINE:-claude}"
+# repo: which git repo the arm builds in. Default = this repo ($ROOT). An external repo
+# (e.g. /opt/golden-stallion-client) lets the loop build another codebase; its build output
+# and loop/work/<id> branch live in THAT repo, gated by whatever acceptance the task names.
+REPO_DIR="$(field repo)"; REPO_DIR="${REPO_DIR:-$ROOT}"
 [ -n "$ID" ] || { log "task $TASK missing 'id:'"; exit 2; }
 BRANCH="loop/work/$ID"
 ARMLOG="$LOG_DIR/$DATE-arm-$ID-$STAMP.out"
 # body = the detailed spec (everything after the first blank line)
 BODY="$(awk 'f{print} /^[[:space:]]*$/{f=1}' "$TASK")"
 
-log "task=$ID ws=${WORKSTREAM:-?} engine=$ENGINE workdir=$WORKDIR"
+log "task=$ID ws=${WORKSTREAM:-?} engine=$ENGINE repo=$REPO_DIR workdir=$WORKDIR"
 log "acceptance: ${ACCEPTANCE:-<none>}"
 
 set_status(){ sed -i "s#^status: .*#status: $1#" "$TASK" 2>/dev/null || true; }
@@ -97,14 +101,14 @@ fi
 
 # --- create the isolated worktree on loop/work/<id> (never touches the main tree) -------
 mk_worktree(){
-  local wt="$ROOT/.worktrees/$ID" base
-  git worktree remove --force "$wt" 2>/dev/null || true
+  local wt="$REPO_DIR/.worktrees/$ID" base
+  git -C "$REPO_DIR" worktree remove --force "$wt" 2>/dev/null || true
   rm -rf "$wt" 2>/dev/null || true
-  git worktree prune 2>/dev/null || true
-  base="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"
+  git -C "$REPO_DIR" worktree prune 2>/dev/null || true
+  base="$(git -C "$REPO_DIR" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"
   base="${base:-master}"
-  git rev-parse --verify "$base" >/dev/null 2>&1 || base="$(git rev-parse --abbrev-ref HEAD)"
-  git worktree add -B "$BRANCH" "$wt" "$base" >>"$LOG" 2>&1 || return 1
+  git -C "$REPO_DIR" rev-parse --verify "$base" >/dev/null 2>&1 || base="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"
+  git -C "$REPO_DIR" worktree add -B "$BRANCH" "$wt" "$base" >>"$LOG" 2>&1 || return 1
   printf '%s\n' "$wt"
 }
 
@@ -112,13 +116,16 @@ mk_worktree(){
 BUILD_PROMPT="You are a build arm for the Recursion system. Produce working source files.
 
 TASK: $GOAL
-Write your output into the directory: $WORKDIR (relative to the current working directory).
+The target repo is already checked out at the current directory; your output goes here.
+Output/work subdir for this task: $WORKDIR
 
-Constraints:
-- WRITE FILES ONLY. Do NOT run npm, builds, servers, git, or any shell command — a separate
-  verifier runs the acceptance test after you finish.
-- Your work is gated by this exact command (make it exit 0): $ACCEPTANCE
-- Keep it minimal and CORRECT. A minimal thing that builds beats a rich thing that does not.
+Rules:
+- Your work is gated by this exact command, which MUST exit 0: $ACCEPTANCE
+- You MAY read the codebase and run \`node\` (e.g. \`node --test <file>\`) to check your work as
+  you go. You may NOT run installers, servers, git, or any other shell command.
+- Do NOT modify test files (*.test.cjs), truth fixtures, or golden data to force a pass — that
+  is tampering and the gate rejects it. Fix the IMPLEMENTATION, not the test.
+- Keep changes minimal and CORRECT. Minimal-and-correct beats broad-and-broken.
 
 $BODY"
 
@@ -131,8 +138,10 @@ run_arm(){
       command -v claude >/dev/null 2>&1 || return 90
       # claude may print "Not logged in" yet still exit 0 (writing nothing) — the gate
       # catches a no-op arm and escalates. This arm is ~flat on Claude Max once logged in.
-      ( cd "$wt" && claude -p "$BUILD_PROMPT" --permission-mode acceptEdits ${MODEL:+--model "$MODEL"} ) \
-        >"$ARMLOG" 2>&1 || true
+      # acceptEdits auto-approves file writes; --allowedTools adds ONLY `node` (so the arm can
+      # run tests to iterate) — never arbitrary bash, on a root box.
+      ( cd "$wt" && claude -p "$BUILD_PROMPT" --permission-mode acceptEdits \
+          --allowedTools 'Bash(node:*)' ${MODEL:+--model "$MODEL"} ) >"$ARMLOG" 2>&1 || true
       return 0 ;;
     hermes)
       # hermes has native file/terminal tools — BUT tool-calling turns fall off the Codex
@@ -179,7 +188,7 @@ if [ "$arc" -ne 0 ]; then
   esac
   board finish "$ID" blocked - "$msg"
   set_status escalated; escalate "$msg"; commit_state
-  git worktree remove --force "$WT" 2>/dev/null || true
+  git -C "$REPO_DIR" worktree remove --force "$WT" 2>/dev/null || true
   exit 0
 fi
 
@@ -213,7 +222,7 @@ engine: $ENGINE" 2>>"$LOG" || true
   if [ -f "$ARM_USAGE" ]; then board finish "$ID" done "$ARM_USAGE" "$NOTE"; else board finish "$ID" done - "$NOTE"; fi
   set_status passed; commit_state
   notify "✅ Recursion build passed: $ID -> $BRANCH (acceptance green). Review/merge at your pace."
-  git worktree remove --force "$WT" 2>/dev/null || true   # branch persists for review
+  git -C "$REPO_DIR" worktree remove --force "$WT" 2>/dev/null || true   # branch persists for review
   log "DONE $ID passed"
 else
   board finish "$ID" blocked - "acceptance failed (exit $rc)"
