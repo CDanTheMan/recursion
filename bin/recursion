@@ -13,6 +13,8 @@ case "$CMD" in
   cycle)         bash scripts/cycle.sh "${1:-}" ;;
   run)           bash loop/supervisor/run.sh "${1:?job (morning|heartbeat)}" ;;
   dispatch)      bash scripts/dispatch.sh "$@" ;;
+  tasks)         bash scripts/tasks.sh "${1:-}" ;;
+  work)          bash scripts/work.sh "${1:-}" ;;
   pause)         bash scripts/pause.sh "$@" ;;
   resume)        bash scripts/resume.sh ;;
   inbox)         cat state/INBOX.md ;;
@@ -49,6 +51,9 @@ recursion <command>
   run <job>           run one job (morning | heartbeat)
   dispatch <ws> <engine> <prompt_file> [model] [label]
                       spawn an execution arm (engine: hermes | claude | openrouter)
+  tasks [status]      list the build-loop queue (state/tasks/), optionally by status
+  work [id]           run the executor: build a task, verify acceptance, auto-commit
+                      the green result to loop/work/<id> (no id -> first queued task)
   open <workstream>   assemble a context handle for a PC deep-dive (escape hatch)
   pause [reason]      kill switch ON   (state/PAUSE — halts autonomous action)
   resume              kill switch OFF
