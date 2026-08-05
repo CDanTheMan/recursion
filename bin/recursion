@@ -18,6 +18,7 @@ case "$CMD" in
   resolve)       bash scripts/resolve.sh "$@" ;;
   requeue)       bash scripts/resolve.sh --requeue "$@" ;;
   drain)         bash scripts/drain.sh ;;
+  conduct)       bash scripts/conduct.sh ;;
   plan)          bash scripts/plan.sh "${1:?workstream}" ;;
   reflect)       bash scripts/reflect.sh ;;
   publish)       bash scripts/publish.sh "$@" ;;
@@ -65,6 +66,7 @@ recursion <command>
   resolve <id> [note] close an escalation: stamp a RESOLVED note to INBOX + status=resolved
   requeue <id> [note] re-open a task for another run (status -> queued)
   drain               run queued tasks one at a time under bounds (the continuation engine)
+  conduct             run queued tasks IN PARALLEL — one per workstream, capped (parallel)
   plan <workstream>   emit a task for the next unchecked roadmap item (state/roadmaps/<ws>.md)
   reflect             the box reviews itself: one improvement -> proposals, one lesson -> memory
   proposals           print the self-improvement queue (state/PROPOSALS.md — human decides)

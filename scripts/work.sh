@@ -29,11 +29,6 @@ notify(){ [ "${RECURSION_NO_NOTIFY:-0}" = "1" ] && return 0; bash "$ROOT/scripts
 # --- kill switch (architecture.md): state/PAUSE halts the executor like every job. ------
 if [ -f "$ROOT/state/PAUSE" ]; then log "PAUSED (state/PAUSE) — executor idle."; exit 0; fi
 
-# --- concurrency = 1 (first-slice default). mkdir is atomic. ---------------------------
-LOCK="$ROOT/state/.work.lock"
-if ! mkdir "$LOCK" 2>/dev/null; then log "another executor holds $LOCK — exiting."; exit 0; fi
-trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
-
 # --- resolve the task -----------------------------------------------------------------
 ARG="${1:-}"
 if   [ -n "$ARG" ] && [ -f "$ARG" ];                  then TASK="$ARG"
@@ -69,6 +64,15 @@ GSSH=""; [ -n "$SSHKEY" ] && GSSH="ssh -i ${SSHKEY/#\~/$HOME} -o IdentitiesOnly=
 gitr(){ if [ -n "$GSSH" ]; then GIT_SSH_COMMAND="$GSSH" git -C "$REPO_DIR" "$@"; else git -C "$REPO_DIR" "$@"; fi; }
 [ -n "$ID" ] || { log "task $TASK missing 'id:'"; exit 2; }
 BRANCH="loop/work/$ID"
+
+# --- per-workstream lock (parallel-loops.md): at most one build per workstream; different
+# workstreams run concurrently. mkdir is atomic. Replaces the old global state/.work.lock so
+# conduct.sh can drive several at once. Serial callers (drain/manual/cycle) run one work.sh, so
+# this behaves exactly like the old global lock for them. -------------------------------
+mkdir -p "$ROOT/state/.locks" 2>/dev/null || true
+WSLOCK="$ROOT/state/.locks/ws-${WORKSTREAM:-none}.lock"
+if ! mkdir "$WSLOCK" 2>/dev/null; then log "workstream ${WORKSTREAM:-none} already building (held $WSLOCK) — exiting."; exit 0; fi
+trap 'rmdir "$WSLOCK" 2>/dev/null || true' EXIT
 ARMLOG="$LOG_DIR/$DATE-arm-$ID-$STAMP.out"
 # body = the detailed spec (everything after the first blank line)
 BODY="$(awk 'f{print} /^[[:space:]]*$/{f=1}' "$TASK")"
@@ -79,12 +83,18 @@ log "acceptance: ${ACCEPTANCE:-<none>}"
 set_status(){ sed -i "s#^status: .*#status: $1#" "$TASK" 2>/dev/null || true; }
 
 # ledger writes (task status + BOARD) go to loop/auto, like every other loop write.
+# Under parallel loops several work.sh share this one $ROOT tree/index, so serialize the ledger
+# commit behind a short lock (spin <=30s, then proceed). Serial callers acquire it instantly.
+ledger_lock(){ local i=0; mkdir -p "$ROOT/state/.locks" 2>/dev/null || true; while ! mkdir "$ROOT/state/.locks/ledger.lock" 2>/dev/null; do i=$((i+1)); [ "$i" -ge 60 ] && return 0; sleep 0.5; done; return 0; }
+ledger_unlock(){ rmdir "$ROOT/state/.locks/ledger.lock" 2>/dev/null || true; }
 commit_state(){
   if git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -q '^loop/auto$'; then
+    ledger_lock
     git add -A state/ 2>/dev/null || true
     git diff --cached --quiet 2>/dev/null || \
       git -c user.name="recursion-loop" -c user.email="loop@recursion.local" \
         commit -q -m "loop: task $ID -> $(field status)" 2>/dev/null || true
+    ledger_unlock
   fi
 }
 
@@ -119,6 +129,11 @@ fi
 # --- create the isolated worktree on loop/work/<id> (never touches the main tree) -------
 mk_worktree(){
   local wt="$REPO_DIR/.worktrees/$ID" base def
+  # per-repo worktree lock (parallel-loops.md): serialize git worktree ops so two workstreams
+  # sharing a repo do not race git ref/index locks. Cross-repo streams never contend.
+  local rk wtlock wi=0; rk="$(printf '%s' "$REPO_DIR" | md5sum | cut -c1-12)"
+  wtlock="$ROOT/state/.locks/wt-$rk.lock"; mkdir -p "$ROOT/state/.locks" 2>/dev/null || true
+  while ! mkdir "$wtlock" 2>/dev/null; do wi=$((wi+1)); [ "$wi" -ge 120 ] && break; sleep 0.5; done
   git -C "$REPO_DIR" worktree remove --force "$wt" 2>/dev/null || true
   rm -rf "$wt" 2>/dev/null || true
   git -C "$REPO_DIR" worktree prune 2>/dev/null || true
@@ -133,7 +148,9 @@ mk_worktree(){
   if git -C "$REPO_DIR" rev-parse --verify "origin/$def" >/dev/null 2>&1; then base="origin/$def"
   elif git -C "$REPO_DIR" rev-parse --verify "$def" >/dev/null 2>&1; then base="$def"
   else base="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"; fi
-  git -C "$REPO_DIR" worktree add -B "$BRANCH" "$wt" "$base" >>"$LOG" 2>&1 || return 1
+  git -C "$REPO_DIR" worktree add -B "$BRANCH" "$wt" "$base" >>"$LOG" 2>&1; local addrc=$?
+  rmdir "$wtlock" 2>/dev/null || true
+  [ "$addrc" -eq 0 ] || return 1
   # seed gitignored data the tests need but the worktree did not inherit (see SEED note above).
   local p
   for p in $SEED; do
