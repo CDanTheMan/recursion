@@ -11,17 +11,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # cron runs with a minimal PATH; make sure it can find `hermes`.
 HERMES_DIR="$(dirname "$(command -v hermes 2>/dev/null || echo /usr/local/bin/hermes)")"
 
-BRIEF_CRON="${BRIEF_CRON:-30 6 * * *}"     # box time (UTC on the Hetzner box)
+BRIEF_CRON="${BRIEF_CRON:-30 6 * * *}"     # guaranteed daily digest (box time = UTC)
+CYCLE_CRON="${CYCLE_CRON:-15 */3 * * *}"   # cheap heartbeat every 3h; brief fires only on a signal
 WATCH_CRON="${WATCH_CRON:-0 */3 * * *}"
 
 PATHLINE="PATH=$HERMES_DIR:/usr/local/bin:/usr/bin:/bin # recursion-path"
-BRIEF="$BRIEF_CRON cd $ROOT && RECURSION_ROOT=$ROOT bash loop/supervisor/run.sh morning # recursion-brief"
+BRIEF="$BRIEF_CRON cd $ROOT && RECURSION_ROOT=$ROOT bash scripts/cycle.sh force # recursion-brief"
+CYCLE="$CYCLE_CRON cd $ROOT && RECURSION_ROOT=$ROOT bash scripts/cycle.sh # recursion-cycle"
 WATCH="$WATCH_CRON cd $ROOT && RECURSION_ROOT=$ROOT bash scripts/fallback-watch.sh # recursion-watch"
 
 # Robust against a box with no existing crontab (crontab -l exits non-zero the first time).
 CUR="$(crontab -l 2>/dev/null || true)"
-KEEP="$(printf '%s\n' "$CUR" | grep -vE '# recursion-(brief|watch|path)$' | grep -v '^$' || true)"
-printf '%s\n%s\n%s\n%s\n' "$KEEP" "$PATHLINE" "$BRIEF" "$WATCH" | grep -v '^$' | crontab -
+KEEP="$(printf '%s\n' "$CUR" | grep -vE '# recursion-(brief|cycle|watch|path)$' | grep -v '^$' || true)"
+printf '%s\n%s\n%s\n%s\n%s\n' "$KEEP" "$PATHLINE" "$BRIEF" "$CYCLE" "$WATCH" | grep -v '^$' | crontab -
 
 # Make sure the cron daemon is actually running + enabled at boot.
 for svc in cron crond; do

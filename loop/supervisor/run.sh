@@ -33,7 +33,8 @@ fi
 # --- Per-tier model (realizes Lua/Terra/Sol routing via --model). -----------------
 # Decisions/brief = terra; cheap heartbeat = luna. See loop/config/routing.yaml.
 case "$JOB" in
-  morning) PROMPT_FILE="loop/supervisor/morning-brief.md"; MODEL="gpt-5.6-terra" ;;
+  morning)   PROMPT_FILE="loop/supervisor/morning-brief.md"; MODEL="gpt-5.6-terra"; MODE="brief" ;;
+  heartbeat) PROMPT_FILE="loop/supervisor/heartbeat.md";     MODEL="gpt-5.6-luna";  MODE="signal" ;;
   *) echo "unknown job: $JOB" >&2; exit 2 ;;
 esac
 
@@ -72,6 +73,7 @@ if ! hermes -z "$PROMPT" -m "$MODEL" --usage-file "$USAGE" >"$OUT" 2>>"$LOG"; th
 fi
 cat "$OUT" >> "$LOG"
 
+if [ "${MODE:-brief}" = "brief" ]; then   # signal-mode (heartbeat) stops here — no brief/deliver/commit
 # --- Write the brief (everything before the escalation block). --------------------
 BRIEF="state/briefs/$DATE.md"
 awk 'BEGIN{p=1} /^===INBOX-START===/{p=0} p{print} /^===INBOX-END===/{p=1}' "$OUT" > "$BRIEF"
@@ -102,6 +104,7 @@ fi
 
 # --- Deliver the brief to Telegram. -----------------------------------------------
 [ -f "$BRIEF" ] && bash "$ROOT/scripts/notify.sh" -f "$BRIEF" || true
+fi   # end brief-mode block
 
 # --- Per-job fallback check: did this run drop off the sub onto metered billing? ---
 PROV="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("provider",""))' "$USAGE" 2>/dev/null || true)"

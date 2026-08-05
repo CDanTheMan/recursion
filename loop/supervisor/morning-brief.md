@@ -30,10 +30,15 @@ and pings Lucas separately — everything between the markers must be self-conta
 
 ===INBOX-START===
 ## YYYY-MM-DD HH:MM — <one-line ask>
+**Workstream:** one of: golden-stallion | cubic-castles | csl-labs | physics-coursework | supervision
+**Pointer:** the exact ledger slice / handoff / repo path that produced this (so a PC deep-dive boots oriented)
 **Blocked on:** the specific decision or fact missing
 **Context:** where it came up
 **Options:** the 2-3 real choices, if any
 ===INBOX-END===
+
+The Workstream + Pointer lines are the "context handle": they let Lucas run `recursion open <workstream>`
+on a PC and land already oriented instead of scavenging. Always include both.
 
 If there are no true escalations, omit the block entirely. Never put a guess in the brief in
 place of an escalation, and never escalate something you could resolve from the ledger.

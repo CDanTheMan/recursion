@@ -9,3 +9,9 @@ __pycache__/
 loop/logs/
 .DS_Store
 .claude/
+
+# internal runtime dotfiles (BOARD.md itself IS tracked; its sidecars are not)
+state/.board.tsv
+state/.board-tick
+state/.recursion-snapshot.txt
+state/.openrouter-usage.json
