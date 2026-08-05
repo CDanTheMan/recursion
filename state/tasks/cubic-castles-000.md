@@ -3,6 +3,7 @@ workstream: cubic-castles
 goal: Wiring control — validate the external-repo worktree + conformance gate (no arm, zero cost)
 engine: none
 repo: /opt/golden-stallion-client
+seed: user-client/render/data/models
 acceptance: bash /opt/recursion/scripts/gsc-conformance-gate.sh --no-progress
 workdir: .
 autonomy: auto

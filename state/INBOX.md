@@ -64,3 +64,19 @@ Only then does the offline gate have tractable PROGRESS to measure.
 **Blocked on:** the 1,464 gitignored `.modl` files (~12 MB) are absent from the box, so all relevant conformance tasks cannot measure whole-mesh totals.
 **Context:** `cubic-castles-001` found the water alpha lane already exists; the offline gate requires at least one failing test to turn green. Tasks 002–003 are blocked.
 **Options:** copy `user-client/render/data/models` from the PC checkout to `/opt/golden-stallion-client/user-client/render/data/`; or regenerate `models/blocks` from `DynaContent/models/blocks`.
+
+## RESOLVED 2026-08-05 — GSC corpus deployed; conformance is COMPLETE
+Corpus (1,399 .modl + 65 .ref, 12 MB) copied to the box GSC checkout; work.sh now SEEDS it into
+every worktree (git worktree does not inherit gitignored files — new `seed:` task field). Gate
+re-baselined 154 -> 205 genuine passes. Full corpus-present suite: 211 tests, 206 pass, 0 FAIL,
+5 skip. The 5 skips need a different absent dataset (gitignored raw cell dumps furys/world-*-cells
+.bin) and only VERIFY an already-implemented cull rule.
+=> There are NO failing conformance tests. cubic-castles-001/002/003 are MOOT — those features
+(water alpha, hsr, multipart) were already implemented; the corpus was the entire blocker.
+=> STRATEGIC: the conformance suite is now a REGRESSION gate (keep 205 green), not a source of
+open work. The real renderer frontier is NATIVE-DIFF QUALITY (reduce Sum|per-slot triangle error|
+vs the native mesh registry — joining gap, overlay pass, etc., per docs/spec/RENDERER-NORTH-STAR).
+That needs a NUMERIC acceptance gate (error must strictly decrease + a control reproducing the old
+golden), not the pass/fail gate. Building that gate + a task planner over the real frontier is the
+next design decision for productive overnight GSC work. Nothing is broken; the loop is idle by
+correct design (no tractable conformance tasks).

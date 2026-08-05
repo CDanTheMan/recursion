@@ -3,11 +3,12 @@ workstream: cubic-castles
 goal: Implement multiPart block splitting so multipart.conformance tests pass
 engine: claude
 repo: /opt/golden-stallion-client
+seed: user-client/render/data/models
 acceptance: bash /opt/recursion/scripts/gsc-conformance-gate.sh
 workdir: .
 autonomy: auto
-status: blocked
-blocked_on: model corpus absent on box (user-client/render/data/models/blocks ~12MB, gitignored + PC-local); all target conformance tests need it — scp the corpus to unblock
+status: moot
+resolved: feature already implemented; corpus absence was the only blocker. With corpus present the target tests pass at baseline (206). No arm work to do.
 
 Make the failing tests in user-client/render/multipart.conformance.test.cjs pass: "parts are
 split, and only for blocks that have a suffixed file", "multiPart OFF reproduces the merged mesh

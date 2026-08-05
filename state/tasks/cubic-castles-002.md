@@ -3,11 +3,12 @@ workstream: cubic-castles
 goal: Implement HSR side-culling so hsr.conformance tests pass
 engine: claude
 repo: /opt/golden-stallion-client
+seed: user-client/render/data/models
 acceptance: bash /opt/recursion/scripts/gsc-conformance-gate.sh
 workdir: .
 autonomy: auto
-status: blocked
-blocked_on: model corpus absent on box (user-client/render/data/models/blocks ~12MB, gitignored + PC-local); all target conformance tests need it — scp the corpus to unblock
+status: moot
+resolved: feature already implemented; corpus absence was the only blocker. With corpus present the target tests pass at baseline (206). No arm work to do.
 
 Make the failing tests in user-client/render/hsr.conformance.test.cjs pass: "block 516 matches
 §5.3 exactly", "HSR culls exactly 10 of 46 with all five neighbours occluding, 0 with none",

@@ -1,6 +1,6 @@
 # Recursion board — live registry
 
-Tick: 2026-08-05T18:15:01Z  ·  rendered 2026-08-05T18:15:33Z
+Tick: 2026-08-05T18:15:01Z  ·  rendered 2026-08-05T21:03:49Z
 
 | Workstream | Tier | Model | State | Started | Tokens | $ metered | Note |
 |---|---|---|---|---|---|---|---|

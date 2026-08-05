@@ -46,28 +46,30 @@ Tiers (names are a skin over the function — rename freely):
   and Lucas. Async (INBOX/Telegram) and sync (a conductor session).
 - **Lucas — top of the escalation chain.** Sees only what genuinely needs him (below).
 
-### Engines in scope + control (Claude · GPT · OpenRouter — all first-class)
+### Engines in scope + control — the loop runs on Hermes (verified 2026-08-04)
 
-All three are in scope; the loop routes among them by cost and task:
+The always-on loop runs on **Hermes** (`NousResearch/hermes-agent`) as the harness — the **Hermes**
+tier (front/router) made concrete. Hermes supports OpenAI **Codex OAuth**, so the loop runs on
+Lucas's **ChatGPT Pro subscription** (GPT-5.x via Codex OAuth) — NOT metered API, NOT Claude — with
+an **automated fallback to OpenRouter** on quota exhaustion / rate-limit / error.
 
-- **Claude** (`claude -p`) — subscription-covered workhorse for hard reasoning/dev. Spends the Claude
-  limit, so heavy use competes with interactive sessions.
-- **GPT / ChatGPT Pro ($200)** — Lucas's, and **stays under Lucas's control.** Default role: a
-  human-driven parallel *interactive* seat (Codex/ChatGPT). The autonomous loop may call GPT only as
-  a **metered API within an explicit spend cap Lucas sets**, escalation-gated for anything expensive
-  — it never burns the subscription unsupervised.
-- **OpenRouter** — cheap routine tier (heartbeat, triage, summarization) + the graceful-degrade
-  fallback so the loop never hard-stops on a quota.
+- **Primary: ChatGPT Pro via Codex OAuth** — the 24/7 loop engine. Subsidized by the $200 sub; Pro's
+  high limits suit an always-on agent. Interactive OAuth login (Lucas does it once on the box).
+- **Fallback: OpenRouter** — Hermes swaps mid-session via `fallback_providers`; `provider.sort=price`.
+- **Optional heavy tier: Claude `claude -p`** — flat-cost, added only if a specific task wants it.
+  Deliberately NOT in the 24/7 path — avoids burning the soon-halved Claude weekly limit round-the-clock.
 
-**Control invariants (load-bearing):**
-- `routing.yaml` is the single control surface for which engine does what. **Lucas edits it to
-  rebalance; the loop never edits its own routing/auth/budget** (CLAUDE.md hard rule 3). So Lucas
-  always has the wheel on how much of each subscription gets spent.
-- GPT usage is Lucas-controlled by construction: interactive seat by default, automated GPT only
-  within a budget cap + escalation gate.
-- Calling `claude -p` still spends the Claude limit, so the Claude+GPT+OpenRouter mix conserves Claude
-  quota only insofar as GPT/OpenRouter carry load — a routing-budget knob Lucas owns, not free
-  headroom.
+**Control (Lucas owns it):**
+- Lucas owns the Hermes provider/fallback config and interacts through Hermes' own management surface
+  (the single front). The loop never edits its own routing/auth/budget (CLAUDE.md hard rule 3).
+- ⚠ **Automatic fallback can silently revert to *metered* OpenRouter billing.** Guard: alert when
+  fallback fires (`routing.yaml` `fallback_threshold_per_day: 3 → notify`) so silent spend can't hide.
+- Residual risk: leans on OpenAI continuing to permit Codex OAuth in third-party harnesses. If that
+  changes, the loop degrades to OpenRouter automatically — the fallback chain absorbs it, no redesign.
+
+> ⚠ Corrects an earlier claim in this session that the ChatGPT sub "can't power headless automation."
+> That is OpenAI's *general* API-key guidance; the **Codex-OAuth-in-Hermes** path is the exception,
+> and it is what we use. See D-006.
 
 ## Escalation: auto / notify / escalate
 

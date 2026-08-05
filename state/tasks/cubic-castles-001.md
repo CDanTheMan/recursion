@@ -3,10 +3,12 @@ workstream: cubic-castles
 goal: Implement the water vertex-alpha lane so alpha.conformance tests pass (water alpha = 0.4)
 engine: claude
 repo: /opt/golden-stallion-client
+seed: user-client/render/data/models
 acceptance: bash /opt/recursion/scripts/gsc-conformance-gate.sh
 workdir: .
 autonomy: auto
-status: failed
+status: moot
+resolved: feature already implemented; corpus absence was the only blocker. With corpus present the target tests pass at baseline (206). No arm work to do.
 
 Make the failing tests in user-client/render/alpha.conformance.test.cjs pass — e.g.
 "SILENCE BREAKER: water vertices carry 0.4, not 1.0" and "the alpha lane moves NO triangle and
