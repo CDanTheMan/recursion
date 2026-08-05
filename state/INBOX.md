@@ -95,3 +95,6 @@ Blocked on: acceptance test failed after retry
 Acceptance: `cd apps/chiron && npm install && npm run build` exited 1
 Options: inspect the worktree/branch, fix the task or its acceptance, then `recursion work chiron-002` (or `recursion requeue chiron-002`).
 Close it with: `recursion resolve chiron-002 "<what you decided>"`.
+
+## RESOLVED 2026-08-05T21:22:51Z — chiron-002
+bootstrap flaw: no chiron scaffold on origin/master, so the arm branched from an empty base and reinvented the app as a static build instead of extending the Next.js scaffold. Chain paused (AUTO_PLAN=0) until the scaffold is on main.
