@@ -5,4 +5,4 @@ engine: none
 acceptance: test -f __definitely_absent_37420__
 workdir: .
 autonomy: auto
-status: running
+status: failed
