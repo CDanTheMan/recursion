@@ -122,17 +122,29 @@ Constraints:
 
 $BODY"
 
+ARM_USAGE="${ARMLOG%.out}.usage.json"
 run_arm(){
   local wt="$1"
   case "$ENGINE" in
     none) return 0 ;;   # verify-only: gate whatever is already in the worktree
     claude)
       command -v claude >/dev/null 2>&1 || return 90
+      # claude may print "Not logged in" yet still exit 0 (writing nothing) — the gate
+      # catches a no-op arm and escalates. This arm is ~flat on Claude Max once logged in.
       ( cd "$wt" && claude -p "$BUILD_PROMPT" --permission-mode acceptEdits ${MODEL:+--model "$MODEL"} ) \
         >"$ARMLOG" 2>&1 || true
       return 0 ;;
-    deepseek|openrouter|hermes)
-      return 91 ;;   # not yet a file-writing build arm (first slice = claude); design: add a file-emission protocol later
+    hermes)
+      # hermes has native file/terminal tools — BUT tool-calling turns fall off the Codex
+      # sub onto metered OpenRouter (measured 2026-08-05), so this arm is FENCED like every
+      # metered leg. Its cost lands on the BOARD via --usage-file.
+      [ "${RECURSION_ALLOW_METERED:-0}" = "1" ] || return 93
+      command -v hermes >/dev/null 2>&1 || return 94
+      ( cd "$wt" && hermes -z "$BUILD_PROMPT" -m "${MODEL:-gpt-5.6-sol}" -t file,terminal --yolo \
+          --usage-file "$ARM_USAGE" ) >"$ARMLOG" 2>&1 || true
+      return 0 ;;
+    deepseek|openrouter)
+      return 91 ;;   # raw chat-completion has no file tools — needs a file-emission protocol (design: later)
     *) return 92 ;;
   esac
 }
@@ -159,8 +171,10 @@ log "worktree: $WT (branch $BRANCH)"
 if run_arm "$WT"; then arc=0; else arc=$?; fi
 if [ "$arc" -ne 0 ]; then
   case "$arc" in
-    90) msg="claude CLI unavailable for engine=claude" ;;
-    91) msg="engine=$ENGINE is not yet a file-writing build arm (first slice = claude)" ;;
+    90) msg="claude CLI not logged in / unavailable (run: claude /login on the box)" ;;
+    91) msg="engine=$ENGINE has no file-writing tool yet (needs a file-emission protocol)" ;;
+    93) msg="engine=hermes is metered (tool-calls route to OpenRouter) — set RECURSION_ALLOW_METERED=1 to allow" ;;
+    94) msg="hermes CLI unavailable" ;;
     *)  msg="arm dispatch error (code $arc)" ;;
   esac
   board finish "$ID" blocked - "$msg"
@@ -196,7 +210,7 @@ acceptance: $ACCEPTANCE (green)
 engine: $ENGINE" 2>>"$LOG" || true
     NOTE="passed -> $BRANCH"; log "committed build output to $BRANCH"
   fi
-  board finish "$ID" done - "$NOTE"
+  if [ -f "$ARM_USAGE" ]; then board finish "$ID" done "$ARM_USAGE" "$NOTE"; else board finish "$ID" done - "$NOTE"; fi
   set_status passed; commit_state
   notify "✅ Recursion build passed: $ID -> $BRANCH (acceptance green). Review/merge at your pace."
   git worktree remove --force "$WT" 2>/dev/null || true   # branch persists for review
