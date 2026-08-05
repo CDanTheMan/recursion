@@ -23,3 +23,4 @@ state/.work.lock/
 .next/
 out/
 dist/
+*.bak
