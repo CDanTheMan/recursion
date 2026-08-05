@@ -138,6 +138,14 @@ ban-safety + maintainability). "1:1 first, customize second" = reach native-diff
    `bench/context-pack/` as per-gap boot context. Then a recursion `gsc` workstream drives it,
    gated by `gsc-nativediff-gate.sh`, green = reviewable branch (NO auto-merge — read-only key),
    N-idle/N-act/B → escalate. Do NOT widen `PLAN_WORKSTREAMS` to `gsc` until the prep lands.
+   **STATUS 2026-08-05:** GSC-repo prep is BUILT on two review branches (`prep/loop-drivable-gate` =
+   gap register + `native-diff --metric` + seed manifest; `prep/loop-conductor-arm` = `loop-arm.sh` +
+   protected-path gate + contract). Safety machinery proven in `--dry-run` (no spend). REMAINING, in
+   order: (a) Lucas merges both branches to GSC main; (b) a supervised REAL-SPEND shakedown of
+   `loop-arm.sh` on one gap (G1b) proving generation quality vs the gate; (c) recursion-side wiring
+   (gate → `--metric`; a metered-fenced work.sh conductor engine; a gap-register-driven roadmap).
+   Only THEN widen `PLAN_WORKSTREAMS`. A lane without a proven acceptance layer just manufactures
+   review backlog — the chiron lesson.
 3. **A live-access escalation protocol** — a structured "I need capture #2 (water realm)" / "I need
    a live read of seed provenance" that reaches the human.
 4. **Metrics feedback (Item 21).** The supervisor is blind to Golden Stallion fleet/app health.
