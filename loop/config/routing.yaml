@@ -1,23 +1,26 @@
-# Fallback chain. Agents do not negotiate quotas with each other — they fall through
-# this list and log the switch.
+# Tier -> model routing for the supervisor.
+#
+# This file DOCUMENTS the map. Two places consume the same decision, keep all three in sync:
+#   - loop/supervisor/run.sh   mirrors `tiers` in its `case "$JOB"` block (the -m flag)
+#   - Hermes config.yaml on gs-recursion holds the GLOBAL primary + fallback chain
+# See state/DECISIONS.md D-008 for the why.
+#
+# Global (Hermes /root/.hermes/config.yaml on gs-recursion):
+#   primary  : openai-codex / gpt-5.6-terra                 (ChatGPT Pro sub — not metered)
+#   fallback : openrouter / openai/gpt-5.6-luna
+#              -> google/gemini-2.5-flash-lite  (provider_routing.sort: price)
 
-jobs:
-  morning_brief:
-    primary:  { provider: anthropic, mode: subscription, model: claude-haiku-4-5 }
-    fallback: { provider: openrouter, model: deepseek/deepseek-chat }
-    max_tokens: 4000
-
-  project_triage:
-    primary:  { provider: anthropic, mode: subscription, model: claude-haiku-4-5 }
-    fallback: { provider: openrouter, model: deepseek/deepseek-chat }
-    max_tokens: 4000
-
-  problem_set:
-    primary:  { provider: anthropic, mode: subscription, model: claude-sonnet-5 }
-    fallback: { provider: openrouter, model: deepseek/deepseek-chat }
-    max_tokens: 8000
+tiers:
+  # Lua — cheap heartbeat / triage / high-volume. Cheapest tier, still on the sub.
+  heartbeat: { model: gpt-5.6-luna,  provider: openai-codex }
+  # Terra & Sol — decision work: the daily brief, project triage, loop/infra direction.
+  brief:     { model: gpt-5.6-terra, provider: openai-codex }
+  decision:  { model: gpt-5.6-terra, provider: openai-codex }
+  # Escalated hard reasoning — pin explicitly on the job that needs it.
+  hard:      { model: gpt-5.6-sol,   provider: openai-codex }
 
 alerting:
-  # If the fallback fires more than this in a day, something structural is wrong.
+  # fallback-watch.sh alerts on ANY metered OpenRouter spend since the last check.
+  # More than this many fallback days = something structural (D-006 falsifier / Sept-1 review).
   fallback_threshold_per_day: 3
   on_threshold: notify

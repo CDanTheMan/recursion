@@ -1,0 +1,62 @@
+# Access — how Lucas drives the loop
+
+The supervisor runs on `gs-recursion` (Hetzner Nuremberg, always-on) as a Hermes engine on
+the ChatGPT Pro sub. It is deliberately event-driven and mostly idle. You stay in control
+through four levers, lowest-attention first.
+
+Box: `ssh gs-recursion` · repo: `/opt/recursion` (`RECURSION_ROOT`) · times are UTC.
+
+## 1. Async — Telegram (default, low attention)
+- The daily **brief** arrives in your Telegram at the scheduled time.
+- **Escalations** arrive as a separate `🔔 Recursion needs a decision` message and are also
+  appended to `state/INBOX.md` (the durable queue — a ping you miss isn't lost).
+- You can message the bot directly any time; it answers on your $200 sub (`gpt-5.6-terra`).
+- **Answer an escalation** by replying in Telegram, or edit `state/INBOX.md` and record the
+  call in `state/DECISIONS.md` — the loop reads both next run.
+
+## 2. Sync — conductor session (drop in and steer)
+```bash
+ssh gs-recursion
+cd /opt/recursion
+hermes chat            # interactive, full tools, on the sub — redirect the loop live
+```
+Use this to change direction in the moment: reprioritise, resolve several INBOX items,
+inspect state. For heavy multi-file reasoning you can also run `claude` here (Claude Max),
+but that's the optional heavy tier — not the 24/7 path.
+
+## 3. Declarative — the wheel (config as control)
+The loop READS these every run; edit them and the change takes effect next cycle:
+- `state/DECISIONS.md` — the decision log. Change a call here and the loop honours it.
+- `ANCHOR.md` — scope and success criteria. What's out of scope stops re-entering.
+- `loop/config/routing.yaml` — which model each tier uses.
+Edit locally, commit, push; the box pulls. (Automated runs only ever touch `loop/auto`.)
+
+## 4. Kill switch — PAUSE (the safety valve)
+Halts ALL autonomous action instantly; only heartbeat + escalation remain.
+```bash
+ssh gs-recursion "cd /opt/recursion && bash scripts/pause.sh 'reason'"   # stop
+ssh gs-recursion "cd /opt/recursion && bash scripts/resume.sh"           # resume
+```
+Every scheduled job checks `state/PAUSE` before doing anything.
+
+## Health checks
+```bash
+ssh gs-recursion "crontab -l | grep recursion-"                 # jobs installed?
+ssh gs-recursion "systemctl status hermes-gateway --no-pager"   # Telegram front alive?
+ssh gs-recursion "ls -t /opt/recursion/loop/logs | head"        # recent run logs
+ssh gs-recursion "cat /opt/recursion/state/briefs/\$(date +%F).md"  # today's brief
+```
+
+## Change the brief time
+Default fires 06:30 UTC. To set it to your local morning (pick the UTC hour):
+```bash
+ssh gs-recursion "cd /opt/recursion && BRIEF_CRON='0 12 * * *' bash scripts/install-cron.sh"
+```
+
+## What the loop can and cannot do on its own (the guardrails)
+- **Auto** (act, log to `loop/auto`): reversible, cheap, machine-verifiable work.
+- **Notify** (act, then tell you): worth knowing, didn't need approval.
+- **Escalate** (block on you): irreversible / spends money or proxies / ambiguous /
+  unverifiable / anything mining (DO-NOT-DEPLOY) / any decision not in `DECISIONS.md`.
+- Hard rules it never breaks: never `git push --force`; never commit to `main`; never edit
+  its own auth/model/cron; never modify `state/projects/*`. See `CLAUDE.md`.
