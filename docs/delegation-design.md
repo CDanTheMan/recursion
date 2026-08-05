@@ -116,12 +116,30 @@ The oracle can't move to the headless VPS, so GSC uses a two-part executor:
 |---|---|
 | Arm interface (`dispatch.sh`: hermes/claude/openrouter) | ✅ v1 |
 | BOARD registry, escalation-with-handle, PAUSE, fallback-watch | ✅ v1 |
-| Task model + `state/tasks/` queue | ❌ |
-| Planner (`plan.sh`: goal -> tasks with acceptance) | ❌ |
-| Executor (`work.sh`: pull -> dispatch -> verify -> integrate) | ❌ |
-| Auto-commit to `loop/work/<id>` + branch reporting | ❌ |
+| Task model + `state/tasks/` queue | ✅ v2 (2026-08-05) |
+| Executor (`work.sh`: pull -> arm -> verify -> integrate) | ✅ v2 (2026-08-05) |
+| Auto-commit to `loop/work/<id>` (isolated worktree) + BOARD reporting | ✅ v2 (2026-08-05) |
+| Gate control (`work.selftest.sh`: green integrates, red escalates) | ✅ v2 (2026-08-05) |
+| `recursion work` / `recursion tasks` CLI | ✅ v2 (2026-08-05) |
+| Planner (`plan.sh`: goal -> tasks with acceptance) | ❌ (tasks hand-written for now) |
 | GSC oracle bridge (PC intermittent worker + oracle-jobs queue) | ❌ |
 | Deepseek bulk budget + per-project fences | ❌ |
+
+## Arm economics — measured 2026-08-05 (load-bearing)
+
+The build-arm cost model is NOT what the roster implied. Measured on gs-recursion:
+
+- **The Codex OAuth sub does not serve tool-calling turns.** Text-only briefs run free on
+  `openai-codex`, but the moment an arm needs a file/terminal tool, hermes falls back to
+  metered OpenRouter. So there is **no free hermes file-writing arm** — `engine: hermes` is a
+  real build arm but is FENCED behind `RECURSION_ALLOW_METERED=1` like every metered leg, and
+  its cost lands on the BOARD.
+- **`claude -p` is the free-ish file-writing arm** (flat Claude Max) — but it needs a one-time
+  interactive `claude /login` on the box; before that it exits 0 having written nothing (the
+  gate catches the no-op and escalates). Logged in 2026-08-05; chiron-001 built green at $0.00.
+- Net routing for BUILD tasks today: `engine: claude` = free-ish depth/scaffold arm (default);
+  `engine: hermes` = metered fallback (fenced); `engine: deepseek|openrouter` = raw
+  chat-completion, still needs a file-emission protocol before it can write a tree (later).
 
 ## Open decisions (for the build session)
 
@@ -133,9 +151,16 @@ The oracle can't move to the headless VPS, so GSC uses a two-part executor:
 5. **Concurrency** — how many arms in parallel per workstream (VPS is a CX23; thin clients, but cap it).
 6. **How much the daily brief reports** on build progress (passed/failed/escalated counts) without bloating the one-page cap.
 
-## First build slice (when Lucas picks a target)
+## First build slice — PROVEN 2026-08-05
 
-The minimal vertical that proves the machine: one hand-written task -> executor dispatches one
-real arm -> acceptance command runs -> on green, auto-commit to `loop/work/<id>` -> BOARD shows
-it. Candidates in safety order: **chiron app scaffold** (VPS-safe, no game/PC dependency) ->
-**guerra site** -> **cubic-castles** (needs the oracle bridge first).
+The minimal vertical that proves the machine ran end to end: task `chiron-001` (hand-written,
+`state/tasks/chiron-001.md`) -> the claude/Opus arm scaffolded `apps/chiron` in an isolated
+worktree on `loop/work/chiron-001` -> the executor ran the acceptance command
+`npm install && npm run build` -> it compiled clean (`✓ Generating static pages (4/4)`) ->
+auto-committed to `loop/work/chiron-001` (ba02110) at $0.00 on flat Max -> BOARD shows it.
+The gate control (`work.selftest.sh`) separately proves a KNOWN-BAD task fails and escalates,
+so a green is meaningful and not a false pass.
+
+Next candidates in safety order: **guerra site** (VPS-verifiable) -> **cubic-castles** (needs
+the oracle bridge first). A `plan.sh` that emits tasks from a goal, and a real Deepseek bulk
+leg with a budget, remain the next build steps.
