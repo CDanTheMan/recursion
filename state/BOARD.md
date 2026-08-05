@@ -1,6 +1,6 @@
 # Recursion board — live registry
 
-Tick: 2026-08-05T10:24:01Z  ·  rendered 2026-08-05T11:25:36Z
+Tick: 2026-08-05T10:24:01Z  ·  rendered 2026-08-05T12:11:57Z
 
 | Workstream | Tier | Model | State | Started | Tokens | $ metered | Note |
 |---|---|---|---|---|---|---|---|
@@ -10,3 +10,4 @@ Tick: 2026-08-05T10:24:01Z  ·  rendered 2026-08-05T11:25:36Z
 | selftest | none | none | done | 11:04:40Z | - | 0.0000 | passed (no file changes) |
 | selftest | none | none | blocked | 11:04:41Z | - | 0.0000 | acceptance failed (exit 1) |
 | chiron | claude | claude | done | 11:23:20Z | - | 0.0000 | passed -> loop/work/chiron-001 |
+| cubic-castles | none | none | running | 12:11:57Z | - | - | Wiring control — validate the external-r |
