@@ -80,3 +80,10 @@ That needs a NUMERIC acceptance gate (error must strictly decrease + a control r
 golden), not the pass/fail gate. Building that gate + a task planner over the real frontier is the
 next design decision for productive overnight GSC work. Nothing is broken; the loop is idle by
 correct design (no tractable conformance tasks).
+
+## 2026-08-05 21:15 — Approve the next Cubic Castles renderer acceptance frontier
+**Workstream:** cubic-castles
+**Pointer:** OPEN SELF-IMPROVEMENT PROPOSALS: “Add a native-diff numeric acceptance gate for GSC frontier tasks”; `scripts/gsc-nativediff-gate.sh`; `state/gsc/nativediff-baseline.tsv`; `state/roadmaps/gsc-renderer.md`
+**Blocked on:** approval of the numeric native-mesh error metric/control and its integration into overnight task planning.
+**Context:** after the corpus deployment, conformance is complete (206 pass, 0 fail, 5 skip); it can only detect regressions and supplies no tractable new renderer tasks.
+**Options:** approve the proposed strict-decrease native-diff gate and planner integration; approve the gate but defer planner integration; reject/defer and keep GSC overnight work idle pending a different frontier definition.
