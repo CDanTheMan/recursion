@@ -9,7 +9,7 @@ workdir: apps/chiron
 autonomy: auto
 automerge: yes
 automerge_scope: apps/chiron
-status: running
+status: passed
 planned_from: state/roadmaps/chiron.md:10
 
 Add a landing page: hero title, one-line pitch, and a primary CTA button (still builds)
