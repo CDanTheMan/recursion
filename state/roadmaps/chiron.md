@@ -2,7 +2,7 @@ engine: claude
 repo: /opt/recursion
 sshkey: ~/.ssh/id_deploy
 workdir: apps/chiron
-acceptance: cd apps/chiron && npm install && npm run build
+acceptance: npm install && npm run build
 automerge: yes
 automerge_scope: apps/chiron
 
