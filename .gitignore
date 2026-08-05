@@ -15,3 +15,11 @@ state/.board.tsv
 state/.board-tick
 state/.recursion-snapshot.txt
 state/.openrouter-usage.json
+state/.work.lock/
+# build-loop: worktrees + build artifacts (loop/auto must never track these;
+# build output is committed on loop/work/<id> from inside the worktree instead)
+.worktrees/
+.next/
+out/
+dist/
+*.bak

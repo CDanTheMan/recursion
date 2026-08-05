@@ -68,4 +68,29 @@ if git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -q '^loop/auto$'; then
   git diff --cached --quiet 2>/dev/null || git commit -q -m "loop: board $DATE $(date -u +%H:%MZ)" 2>/dev/null || true
 fi
 
+# --- 3.5) Daily reflection (opt-in). --------------------------------------------------
+# Once a day (on the forced/daily tick), the box reviews ITSELF and queues at most one
+# improvement to state/PROPOSALS.md + one durable lesson to state/LESSONS.md/hermes memory.
+# It never applies anything (CLAUDE.md rule 3) — the next brief surfaces the queue. $0 codex
+# arm; default OFF (the human enables autonomy in .env; the loop can't self-enable, rule 3).
+if [ "${RECURSION_AUTO_REFLECT:-0}" = "1" ] && [ "$FORCE" = "force" ] && [ ! -f "$ROOT/state/PAUSE" ]; then
+  log "auto-reflect: daily self-review"
+  bash scripts/reflect.sh >>"$LOG" 2>&1 || log "reflect FAILED (non-fatal)"
+fi
+
+# --- 4) Autonomous continuation (opt-in). ---------------------------------------------
+# On the existing 3h cadence, if enabled and there is queued work, kick the drainer in the
+# BACKGROUND (non-blocking, lock-guarded) so a heavy build never stalls the heartbeat. With
+# RECURSION_AUTO_PLAN=1 it first refills the queue from the roadmaps. Both default OFF — the
+# human enables autonomy in .env; the loop can't self-enable it (CLAUDE.md rule 3).
+if [ "${RECURSION_AUTO_DRAIN:-0}" = "1" ] && [ ! -f "$ROOT/state/PAUSE" ]; then
+  if [ "${RECURSION_AUTO_PLAN:-0}" = "1" ]; then
+    for ws in ${RECURSION_PLAN_WORKSTREAMS:-}; do bash scripts/plan.sh "$ws" >>"$LOG" 2>&1 || true; done
+  fi
+  if grep -lq '^status: *queued' state/tasks/*.md 2>/dev/null; then
+    log "auto-drain: queued work present — kicking drainer in background"
+    nohup bash scripts/drain.sh >>"$LOG_DIR/$DATE-drain.log" 2>&1 &
+  fi
+fi
+
 log "cycle done (signal=$SIGNAL)"

@@ -9,10 +9,20 @@ CMD="${1:-help}"; shift || true
 latest_brief(){ ls -t state/briefs/*.md 2>/dev/null | grep -v gitkeep | head -1; }
 
 case "$CMD" in
-  board|status)  bash scripts/board.sh render ;;
+  board|status)  bash scripts/board.sh render; echo; bash scripts/board-summary.sh ;;
   cycle)         bash scripts/cycle.sh "${1:-}" ;;
   run)           bash loop/supervisor/run.sh "${1:?job (morning|heartbeat)}" ;;
   dispatch)      bash scripts/dispatch.sh "$@" ;;
+  tasks)         bash scripts/tasks.sh "${1:-}" ;;
+  work)          bash scripts/work.sh "${1:-}" ;;
+  resolve)       bash scripts/resolve.sh "$@" ;;
+  requeue)       bash scripts/resolve.sh --requeue "$@" ;;
+  drain)         bash scripts/drain.sh ;;
+  plan)          bash scripts/plan.sh "${1:?workstream}" ;;
+  reflect)       bash scripts/reflect.sh ;;
+  publish)       bash scripts/publish.sh "$@" ;;
+  proposals)     cat state/PROPOSALS.md 2>/dev/null || echo "(no proposals yet)" ;;
+  lessons)       cat state/LESSONS.md 2>/dev/null || echo "(no lessons yet)" ;;
   pause)         bash scripts/pause.sh "$@" ;;
   resume)        bash scripts/resume.sh ;;
   inbox)         cat state/INBOX.md ;;
@@ -41,7 +51,7 @@ case "$CMD" in
     cat <<EOF
 recursion <command>
 
-  board | status      the live registry (state/BOARD.md) — what's running now
+  board | status      the live registry (state/BOARD.md) + build-loop summary — what's running now
   brief               print the latest daily brief
   inbox               pending escalations (things waiting on you)
   logs [N]            tail the newest loop log (default 40 lines)
@@ -49,6 +59,16 @@ recursion <command>
   run <job>           run one job (morning | heartbeat)
   dispatch <ws> <engine> <prompt_file> [model] [label]
                       spawn an execution arm (engine: hermes | claude | openrouter)
+  tasks [status]      list the build-loop queue (state/tasks/), optionally by status
+  work [id]           run the executor: build a task, verify acceptance, auto-commit
+                      the green result to loop/work/<id> (no id -> first queued task)
+  resolve <id> [note] close an escalation: stamp a RESOLVED note to INBOX + status=resolved
+  requeue <id> [note] re-open a task for another run (status -> queued)
+  drain               run queued tasks one at a time under bounds (the continuation engine)
+  plan <workstream>   emit a task for the next unchecked roadmap item (state/roadmaps/<ws>.md)
+  reflect             the box reviews itself: one improvement -> proposals, one lesson -> memory
+  proposals           print the self-improvement queue (state/PROPOSALS.md — human decides)
+  lessons             print durable operational lessons (state/LESSONS.md — re-fed into arms)
   open <workstream>   assemble a context handle for a PC deep-dive (escape hatch)
   pause [reason]      kill switch ON   (state/PAUSE — halts autonomous action)
   resume              kill switch OFF
