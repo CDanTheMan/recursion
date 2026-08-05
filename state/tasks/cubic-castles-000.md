@@ -6,7 +6,7 @@ repo: /opt/golden-stallion-client
 acceptance: bash /opt/recursion/scripts/gsc-conformance-gate.sh --no-progress
 workdir: .
 autonomy: auto
-status: running
+status: passed
 
 Control task. engine=none writes nothing; it just proves the build-loop can create a worktree
 in the golden-stallion-client repo, run the conformance gate there, and pass on a clean HEAD
