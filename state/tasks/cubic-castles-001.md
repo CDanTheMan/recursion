@@ -6,7 +6,7 @@ repo: /opt/golden-stallion-client
 acceptance: bash /opt/recursion/scripts/gsc-conformance-gate.sh
 workdir: .
 autonomy: auto
-status: queued
+status: running
 
 Make the failing tests in user-client/render/alpha.conformance.test.cjs pass — e.g.
 "SILENCE BREAKER: water vertices carry 0.4, not 1.0" and "the alpha lane moves NO triangle and
