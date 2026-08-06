@@ -285,10 +285,16 @@ if verify "$WT"; then
 else
   rc=$?
   log "acceptance FAILED (exit $rc), attempt 1"
-  if [ "$ENGINE" != "none" ]; then
+  # A deliberate NO-OP (rc=2 no-progress with NO implementation change) will not benefit from a
+  # retry — the arm chose not to ship (0x68, overlay-0x6c both did this). Retry only a genuine
+  # "tried but failed": impl files changed, or a non-no-progress failure. Saves a wasted ~1h run.
+  impl_changed=$(git -C "$WT" status --porcelain -- . ":(exclude)docs" 2>/dev/null | grep -c . || true)
+  if [ "$ENGINE" != "none" ] && { [ "$rc" != "2" ] || [ "${impl_changed:-0}" -gt 0 ]; }; then
     log "retry once (design: retry once then escalate)"
     run_arm "$WT" || true
     if verify "$WT"; then PASS=1; else rc=$?; fi
+  else
+    log "no retry: deliberate no-op (rc=$rc, impl-files-changed=${impl_changed:-0})"
   fi
 fi
 

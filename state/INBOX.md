@@ -106,3 +106,27 @@ Blocked on: acceptance test failed after retry
 Acceptance: `cd apps/chiron && npm install && npm run build` exited 1
 Options: inspect the worktree/branch, fix the task or its acceptance, then `recursion work chiron-003` (or `recursion requeue chiron-003`).
 Close it with: `recursion resolve chiron-003 "<what you decided>"`.
+
+## 2026-08-06 00:15 — Approve the Cubic Castles native-diff acceptance frontier
+**Workstream:** cubic-castles
+**Pointer:** CURRENT INBOX: “2026-08-05 21:15 — Approve the next Cubic Castles renderer acceptance frontier”; `scripts/gsc-nativediff-gate.sh`; `state/gsc/nativediff-baseline.tsv`; `state/roadmaps/gsc-renderer.md`
+**Blocked on:** human approval of the numeric native-mesh error metric/control and whether to integrate it into overnight task planning.
+**Context:** corpus-present conformance is complete (206 pass, 0 fail, 5 skips), so it is now regression-only and provides no tractable renderer work; the next frontier is reducing native-diff error.
+**Options:** approve the strict-decrease gate plus planner integration; approve the gate but defer planner integration; defer/reject and leave GSC overnight work idle pending another frontier.
+
+## 2026-08-06 03:15 — Approve the Cubic Castles native-diff acceptance frontier
+**Workstream:** cubic-castles
+**Pointer:** CURRENT INBOX: “2026-08-06 00:15 — Approve the Cubic Castles native-diff acceptance frontier”; `scripts/gsc-nativediff-gate.sh`; `state/gsc/nativediff-baseline.tsv`; `state/roadmaps/gsc-renderer.md`
+**Blocked on:** Human approval of the numeric native-mesh error metric/control and whether it may drive overnight task planning.
+**Context:** Corpus-present conformance is complete (206 pass, 0 fail, 5 skip), so it is regression-only and yields no tractable renderer work. The native-diff frontier now needs a reviewed acceptance definition.
+**Options:** Approve strict-decrease gate plus planner integration; approve the gate but defer planner integration; defer/reject and leave GSC overnight work idle pending another frontier.
+
+## 2026-08-06 06:15 — Approve the Cubic Castles native-diff acceptance frontier
+**Workstream:** cubic-castles
+**Pointer:** OPEN SELF-IMPROVEMENT PROPOSALS: “Add a native-diff numeric acceptance gate for GSC frontier tasks”; `scripts/gsc-nativediff-gate.sh`; `state/gsc/nativediff-baseline.tsv`; `state/roadmaps/gsc-renderer.md`
+**Blocked on:** Human approval of the numeric native-mesh error metric/control and whether it may drive overnight task planning.
+**Context:** Corpus-present conformance is complete (206 pass, 0 fail, 5 skip), so it is regression-only and yields no tractable renderer work. The native-diff frontier needs a reviewed acceptance definition.
+**Options:** Approve strict-decrease gate plus planner integration; approve the gate but defer planner integration; defer/reject and leave GSC overnight work idle pending another frontier.
+
+## 2026-08-06 [RESOLVED] — native-diff acceptance frontier -> DECISIONS.md D-002
+Chosen: Option B — approve the strict-decrease native-diff gate as the metric; DEFER planner integration until the two-tier decomp-decision gate lands + register de-staled + a supervised shakedown. Stop re-raising this. See D-002.
