@@ -53,7 +53,15 @@ _unlock(){ rmdir "$LOCKDIR/taskctl.lock" 2>/dev/null || true; }
 
 _now(){ date -u +%FT%TZ; }
 _epoch(){ date +%s; }
-_taskfile(){ printf '%s/%s.md' "$TASKDIR" "$1"; }
+# Resolve a task to a file. work.sh accepts an id OR an arbitrary task-file path, so taskctl
+# must too — otherwise a path-invoked task looks like "no such task" and the caller silently
+# does nothing. (Caught by work.selftest.sh, which invokes work.sh with an absolute path.)
+# TASKCTL_FILE lets a caller that already resolved the file say so explicitly.
+_taskfile(){
+  if   [ -n "${TASKCTL_FILE:-}" ] && [ -f "$TASKCTL_FILE" ]; then printf '%s' "$TASKCTL_FILE"
+  elif [ -f "$1" ];                                          then printf '%s' "$1"
+  else printf '%s/%s.md' "$TASKDIR" "$1"; fi
+}
 _field(){ sed -n "s/^$2: *//p" "$1" 2>/dev/null | head -1 | tr -d '\r'; }
 
 # JSON string escape — a goal line containing a quote or backslash must not produce a

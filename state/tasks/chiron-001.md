@@ -5,8 +5,6 @@ engine: claude
 acceptance: npm install && npm run build
 workdir: apps/chiron
 autonomy: auto
-automerge: yes
-automerge_scope: apps/chiron
 status: passed
 
 Build a MINIMAL but real Next.js 14 application (App Router, TypeScript) in the directory
