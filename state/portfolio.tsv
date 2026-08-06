@@ -20,5 +20,5 @@ golden-stallion-client	/opt/golden-stallion-client	git@github.com:NotSkittlz/gol
 ai-investment-cockpit	/opt/ai-investment-cockpit	git@github.com:NotSkittlz/ai-investment-cockpit.git	main	~/.ssh/ai-investment-cockpit_deploy	-	-	active
 edgar-morning-brew	/opt/edgar-morning-brew	git@github.com:NotSkittlz/edgar-morning-brew.git	main	~/.ssh/edgar-morning-brew_deploy	-	-	active
 guerra-construction-group	/opt/guerra-construction-group	git@github.com:NotSkittlz/guerra-construction-group.git	main	~/.ssh/guerra-construction-group_deploy	-	-	active
-chiron	/opt/chiron	git@github.com:NotSkittlz/chiron.git	main	~/.ssh/chiron_deploy	state/roadmaps/chiron.md	-	pending
+chiron	/opt/chiron	git@github.com:NotSkittlz/chiron.git	main	~/.ssh/chiron_deploy	state/roadmaps/chiron.md	-	active
 santa-clara-construction	/opt/santa-clara-construction	git@github.com:NotSkittlz/santa-clara-construction.git	main	~/.ssh/santa-clara-construction_deploy	-	-	pending

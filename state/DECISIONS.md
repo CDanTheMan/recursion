@@ -335,3 +335,30 @@ drain, conduct, reflection, pushes, merges) still halts hard; those keep their o
 external state, the split was drawn in the wrong place and (A)'s blunt exit was safer.
 
 **Review:** 2026-09-15
+
+## D-013 — chiron graduates to its own repo; the monorepo copy is frozen, not yet deleted
+Date: 2026-08-06
+
+**Chose:** `apps/chiron` was split out with `git subtree split` (full history: 6 commits) and
+pushed to `NotSkittlz/chiron`. `/opt/chiron` is the clone, registered `active` in
+`state/portfolio.tsv` with its own deploy key, and `state/roadmaps/chiron.md` now stamps
+`repo: /opt/chiron`, `sshkey: ~/.ssh/chiron_deploy`, `workdir: .` onto every task it plans.
+
+**Why:** chiron is a product, not part of the control plane, and building it inside the control
+plane's own repo meant every chiron branch touched the repo that governs it. Per-repo pilots
+(Lucas, 2026-08-06: "the pilots are going to be the names of the repositories") need one repo per
+pilot.
+
+**Verified, not assumed:** the split tree was compared to `master:apps/chiron` by blob OID — 11
+files, all 11 identical object ids, so the content is byte-identical rather than merely similar.
+
+**Deliberately NOT done here:** `apps/chiron/` is still in this repo. Deleting it belongs in a
+follow-up, after Lucas has looked at the new repo — a graduation and a deletion in one merge
+leaves no cheap way back. It is frozen with `apps/chiron/GRADUATED.md` because a stale duplicate
+that still looks live is worse than an absent one.
+
+**Falsifier:** a chiron task that plans, builds and publishes against `/opt/recursion` rather than
+`/opt/chiron` — that would mean the roadmap header is not the only thing stamping `repo:`.
+
+**Completed chiron-001/002/003 were left pointing at /opt/recursion.** They record what actually
+happened; repointing finished work at a repo it never ran in makes the ledger lie.

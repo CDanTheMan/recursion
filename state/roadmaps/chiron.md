@@ -1,11 +1,11 @@
 engine: claude
-repo: /opt/recursion
-sshkey: ~/.ssh/id_deploy
-workdir: apps/chiron
+repo: /opt/chiron
+sshkey: ~/.ssh/chiron_deploy
+workdir: .
 acceptance: npm install && npm run build
 
-<!-- CONTRACT: apps/chiron/PRODUCT.md (why/scope). LEDGER: apps/chiron/features.json — authoritative
-     for WHAT/ordering/deps; query with `node apps/chiron/features.cjs --next`. This checklist is the
+<!-- CONTRACT: PRODUCT.md (why/scope). LEDGER: features.json — authoritative
+     for WHAT/ordering/deps; query with `node features.cjs --next`. This checklist is the
      human-readable mirror; the ledger wins on ordering + deps. Build order follows deps (nav before
      the pages that embed it). C6 (real 5-series curriculum) is status=escalate — needs Lucas. -->
 
