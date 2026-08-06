@@ -127,3 +127,6 @@ Close it with: `recursion resolve chiron-003 "<what you decided>"`.
 **Blocked on:** Human approval of the numeric native-mesh error metric/control and whether it may drive overnight task planning.
 **Context:** Corpus-present conformance is complete (206 pass, 0 fail, 5 skip), so it is regression-only and yields no tractable renderer work. The native-diff frontier needs a reviewed acceptance definition.
 **Options:** Approve strict-decrease gate plus planner integration; approve the gate but defer planner integration; defer/reject and leave GSC overnight work idle pending another frontier.
+
+## 2026-08-06 [RESOLVED] — native-diff acceptance frontier -> DECISIONS.md D-002
+Chosen: Option B — approve the strict-decrease native-diff gate as the metric; DEFER planner integration until the two-tier decomp-decision gate lands + register de-staled + a supervised shakedown. Stop re-raising this. See D-002.

@@ -216,3 +216,12 @@ STILL TODO, and NOT a Hermes toggle: (1) a fallback-spend ALERT — must be a Re
 (cron checks OpenRouter usage / greps gateway logs for fallback events → Telegram); (2) per-tier model
 routing (Lua→luna, decisions→terra, escalate→sol) is Recursion dispatcher logic, built when the loop
 lands, not a global Hermes setting.
+
+## D-002 — GSC/cubic-castles native-diff gate: approved as the metric; planner integration DEFERRED
+Date: 2026-08-06 · Status: RESOLVED (Lucas, via session)
+**Options considered:** A) approve gate + planner integration / B) approve gate, DEFER planner integration / C) defer/reject, leave GSC idle
+**Chose:** B
+**Because:** The strict-decrease Sum|per-slot| native-diff gate is a sound regression/quality metric (SUM-not-total; byte-identical untargeted worlds = the control) — approved in that role; it is Tier-2 of the two-tier gate. But DEFER letting it auto-drive overnight planning: proven 2026-08-06 that the pure count ratchet REJECTS decomp-exact correct fixes that couple across worlds — two conductor runs (0x68 Cloud, 0x6c overlay) each found a correct fix and correctly NO-OPd, because a fix that helps one world while an unrelated defect in another makes it score worse fails "no world worsens". Auto-planning on the count gate manufactures no-op branches, not merges. Also the gap register is STALE (0x74/0x88 already measure 1.000 = closed), so a planner would queue dead gaps. The real driver is Tier-1 = a decomp-DECISION ledger (correctness vs the decompiled predicate), now being built.
+**Falsifier:** if the FIRST two-tier-gated autonomous cubic-castles run still produces only no-ops (the decomp-decision ledger does not make correct coupled fixes landable either), then the blocker was not the gate and deferring-for-the-ledger was the wrong remedy.
+**Lift condition:** two-tier gate merged + gap register de-staled from live measurement + 1 supervised shakedown passes -> add cubic-castles/gsc to RECURSION_PLAN_WORKSTREAMS.
+**Review:** 2026-09-06
