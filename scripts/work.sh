@@ -224,11 +224,24 @@ mk_worktree(){
 # question beats hours of plausible wrong work — and the 0x68 run already proved the arm will
 # honour that: it refused to narrow scope to manufacture a green, and no-op'd honestly.
 ALLOWED_PATHS="$(field allowed_paths)"; ALLOWED_PATHS="${ALLOWED_PATHS:-$WORKDIR}"
+
+# A human answer to THIS task's blocker, if one was given. Without this the seam is one-way:
+# the arm stops with a precise question, a human answers into state/INBOX.md — a file the arm
+# never reads — and the next run receives the identical prompt and blocks on the identical
+# question. See scripts/assist.sh.
+HUMAN_GUIDANCE=""
+if [ -x "$ROOT/scripts/assist.sh" ]; then
+  HUMAN_GUIDANCE="$(RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/assist.sh" guidance "$ID" 2>/dev/null || true)"
+  [ -n "$HUMAN_GUIDANCE" ] && log "envelope carries a human answer for $ID"
+fi
 NON_GOALS="$(field non_goals)"
 GOAL_ID="$(field goal_id)"
 
 BUILD_PROMPT="You are a BUILD ARM for the Recursion system — a bounded executor.
-
+${HUMAN_GUIDANCE:+
+=========================== $HUMAN_GUIDANCE
+===========================
+}
 AUTHORITY
 Hermes owns planning, priority, and product direction. You do not. You implement ONE task
 inside ONE boundary and report what you did. You may not redefine the task, widen its scope,
@@ -491,9 +504,24 @@ fi
 if read_result "$WT" && [ "$RESULT_STATUS" = "blocked" ]; then
   board finish "$ID" blocked - "arm blocked on ambiguity"
   set_status blocked
+  # Record the ask as an ANSWERABLE item, not just a notification. assist.sh open returns 3 when
+  # the arm is re-asking a question a human already answered — that is the answer failing to
+  # reach the arm, and it needs a different escalation than "the arm has a question", because
+  # re-asking it looks like the system working while it burns a human every cycle.
+  ASSIST_RC=0
+  if [ -x "$ROOT/scripts/assist.sh" ]; then
+    RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/assist.sh" open "$ID" "$(field assist_kind)" \
+      "${RESULT_BLOCKER:-<no question given>}" >>"$LOG" 2>&1 || ASSIST_RC=$?
+  fi
+  if [ "$ASSIST_RC" = "3" ]; then
+    escalate "the arm re-blocked on a question that was ALREADY ANSWERED — the answer is not reaching it:
+${RESULT_BLOCKER:-<no question given>}"
+  else
   escalate "the arm STOPPED on ambiguity instead of guessing (this is correct behaviour):
 ${RESULT_BLOCKER:-<no question given>}
-${RESULT_SUMMARY:+context: $RESULT_SUMMARY}"
+${RESULT_SUMMARY:+context: $RESULT_SUMMARY}
+Answer it with: recursion assist $ID \"...\"  (that requeues this task with your answer attached)"
+  fi
   commit_state
   log "$ID: arm blocked on ambiguity — escalated with its question"
   exit 0
