@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# hermes-conductor.test.sh — the actuator must be unable to do anything outside its whitelist,
+# whatever the model returns.
+#
+# WHY THESE TESTS. hermes-decide.sh turns model output into a decision file; conduct-hermes.sh
+# turns that file into process arguments. That is a genuine injection surface, and the file
+# also sits on disk between the two steps, so anything could rewrite it. These tests treat the
+# decision file as HOSTILE INPUT rather than as something a friendly model produced.
+#
+# ★ Test 1 is the CONTROL: a valid whitelisted decision must actually execute. Without it,
+# every refusal below would also pass on an actuator that refuses everything.
+#
+#   run: bash scripts/tests/hermes-conductor.test.sh
+set -uo pipefail
+export LC_ALL=C
+SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+fails=0
+ok(){ printf 'ok    %s\n' "$1"; }
+no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
+
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+R="$TMP/repo"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/roadmaps" "$R/loop/logs"
+for s in conduct-hermes.sh hermes-decide.sh validate-decision.py taskctl.sh notify.sh plan.sh publish.sh work.sh conduct.sh; do
+  cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
+done
+chmod +x "$R"/scripts/*.sh 2>/dev/null
+: > "$R/.env"
+
+# A marker-based stand-in for the real executors: we are testing DISPATCH, not what each
+# script does (those have their own suites). Overwriting them keeps the test hermetic.
+for s in plan work conduct publish; do
+  cat > "$R/scripts/$s.sh" <<STUB
+#!/usr/bin/env bash
+printf '%s %s\n' "$s" "\$*" >> "$TMP/ran.log"
+exit 0
+STUB
+  chmod +x "$R/scripts/$s.sh"
+done
+
+cat > "$R/state/roadmaps/chiron.md" <<'T'
+acceptance: true
+
+- [ ] a planned item
+T
+cat > "$R/state/tasks/good-001.md" <<'T'
+id: good-001
+workstream: chiron
+goal: a real goal
+acceptance: true
+status: queued
+
+body
+T
+cat > "$R/state/tasks/nogate-001.md" <<'T'
+id: nogate-001
+workstream: chiron
+goal: a task with no gate
+status: queued
+
+body
+T
+
+decide(){ printf '%s' "$1" > "$TMP/d.json"; }
+conduct(){ ( cd "$R" && RECURSION_ROOT="$R" bash scripts/conduct-hermes.sh --file "$TMP/d.json" ) >"$TMP/out" 2>&1; echo $?; }
+ran(){ grep -q "$1" "$TMP/ran.log" 2>/dev/null; }
+
+: > "$TMP/ran.log"
+
+# --- 1) ★ CONTROL: a valid whitelisted decision EXECUTES -----------------------------------
+decide '{"verb":"work","args":["good-001"],"goal":"g","wrong_if":"w","why":"because"}'
+rc=$(conduct)
+if [ "$rc" = "0" ] && ran "work good-001"; then
+  ok "★ CONTROL — a valid whitelisted decision executes (the actuator is not refusing everything)"
+else
+  no "★ CONTROL FAILED — a valid decision did not run (rc=$rc); every refusal below is meaningless"
+  sed 's/^/        /' "$TMP/out" | tail -4
+fi
+
+# --- 2) an unknown verb executes NOTHING ---------------------------------------------------
+: > "$TMP/ran.log"
+decide '{"verb":"rm","args":["-rf"],"goal":"g","wrong_if":"w"}'
+rc=$(conduct)
+if [ "$rc" != "0" ] && [ ! -s "$TMP/ran.log" ]; then
+  ok "an unknown verb is refused and executes nothing"
+else
+  no "an unknown verb reached execution (rc=$rc, ran=$(cat "$TMP/ran.log"))"
+fi
+
+# --- 3) ★ INJECTION: shell metacharacters in args never reach a shell ----------------------
+: > "$TMP/ran.log"
+PWNED="$TMP/pwned"
+decide "{\"verb\":\"work\",\"args\":[\"good-001; touch $PWNED\"],\"goal\":\"g\",\"wrong_if\":\"w\"}"
+rc=$(conduct)
+if [ ! -f "$PWNED" ] && [ "$rc" != "0" ]; then
+  ok "★ command injection in an argument is refused (no shell evaluation)"
+else
+  no "★ INJECTION SUCCEEDED — the actuator evaluated a model-supplied argument"
+fi
+
+# --- 4) path traversal is refused ----------------------------------------------------------
+decide '{"verb":"publish","args":["../../etc/passwd"],"goal":"g","wrong_if":"w"}'
+rc=$(conduct)
+[ "$rc" != "0" ] && ok "path traversal in an argument is refused" \
+                 || no "path traversal was accepted"
+
+# --- 5) a default branch is never pushed ---------------------------------------------------
+for b in main master HEAD; do
+  decide "{\"verb\":\"publish\",\"args\":[\"$b\"],\"goal\":\"g\",\"wrong_if\":\"w\"}"
+  rc=$(conduct)
+  [ "$rc" != "0" ] || { no "publish accepted the default branch '$b'"; break; }
+done
+[ "$rc" != "0" ] && ok "publishing a default branch (main/master/HEAD) is refused"
+
+# --- 6) a task with NO acceptance gate is refused ------------------------------------------
+# delegation-design.md: no machine-checkable gate, no autonomy — it escalates.
+: > "$TMP/ran.log"
+decide '{"verb":"work","args":["nogate-001"],"goal":"g","wrong_if":"w"}'
+rc=$(conduct)
+if [ "$rc" != "0" ] && [ ! -s "$TMP/ran.log" ]; then
+  ok "a task with no acceptance gate is refused (no gate, no autonomy)"
+else
+  no "a gateless task was dispatched"
+fi
+
+# --- 7) a nonexistent task / roadmap is refused ---------------------------------------------
+decide '{"verb":"work","args":["does-not-exist"],"goal":"g","wrong_if":"w"}'
+[ "$(conduct)" != "0" ] && ok "a nonexistent task is refused" || no "a nonexistent task was dispatched"
+decide '{"verb":"plan","args":["no-such-ws"],"goal":"g","wrong_if":"w"}'
+[ "$(conduct)" != "0" ] && ok "planning a workstream with no roadmap is refused" || no "planned a nonexistent workstream"
+
+# --- 8) ★ PAUSE: acting is halted, and the decision is preserved not discarded --------------
+: > "$TMP/ran.log"
+printf 'PAUSED\nreason: test\n' > "$R/state/PAUSE"
+decide '{"verb":"work","args":["good-001"],"goal":"g","wrong_if":"w"}'
+rc=$(conduct)
+if [ ! -s "$TMP/ran.log" ] && grep -q 'PAUSED' "$TMP/out"; then
+  ok "★ under PAUSE the decision is DEFERRED, not executed (and not discarded)"
+else
+  no "★ a decision executed while paused"
+fi
+# noop must still be allowed while paused — deciding is awareness
+decide '{"verb":"noop","args":[],"goal":"g","wrong_if":"w","why":"nothing to do"}'
+[ "$(conduct)" = "0" ] && ok "noop is still allowed while paused" || no "noop refused while paused"
+rm -f "$R/state/PAUSE"
+
+# --- 9) malformed / empty decision files fail closed ----------------------------------------
+decide 'this is not json'
+[ "$(conduct)" != "0" ] && ok "a malformed decision file fails closed" || no "malformed decision accepted"
+decide '{"args":["x"],"goal":"g"}'
+[ "$(conduct)" != "0" ] && ok "a decision with no verb fails closed" || no "verbless decision accepted"
+
+# --- 10) hermes-decide validation: goal and falsifier are mandatory -------------------------
+# Exercised through the validator directly — no model call, no spend.
+# Exercise the REAL validator (scripts/validate-decision.py), not a re-implementation of its
+# rules — a test that restates the rule cannot catch the rule being wrong. No model call.
+val(){ python3 "$R/scripts/validate-decision.py" "noop plan work conduct publish escalate resolve-esc reap" "$1" 2>&1 | cut -d' ' -f1; }
+[ "$(val '{"verb":"noop","args":[],"goal":"g","wrong_if":"w"}')" = "OK" ] \
+  && ok "validator accepts a complete decision" || no "validator rejected a valid decision"
+[ "$(val '{"verb":"noop","args":[],"wrong_if":"w"}')" = "ERR" ] \
+  && ok "validator rejects a decision with no parent GOAL (invariant 12)" || no "goalless decision accepted"
+[ "$(val '{"verb":"noop","args":[],"goal":"g"}')" = "ERR" ] \
+  && ok "validator rejects a decision with no FALSIFIER" || no "falsifier-less decision accepted"
+[ "$(val '{"verb":"deploy","args":[],"goal":"g","wrong_if":"w"}')" = "ERR" ] \
+  && ok "validator rejects an off-whitelist verb" || no "off-whitelist verb accepted"
+
+echo
+[ "$fails" -eq 0 ] && { echo "hermes-conductor: ALL PASS"; exit 0; }
+echo "hermes-conductor: $fails FAILED"; exit 1
