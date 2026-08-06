@@ -57,3 +57,4 @@ state/escalations.tsv
 .hermes/
 loop/prompts/
 loop/artifacts/
+state/.intake-watermark

@@ -42,6 +42,10 @@ VERBS="noop plan work conduct publish escalate resolve-esc reap"
 build_brief(){
   echo "===== AUTHORITY (you are bound by this) ====="
   sed -n '1,60p' CONTROL_PLANE.md 2>/dev/null || echo "(CONTROL_PLANE.md absent)"
+  echo; echo "===== INSTRUCTIONS FROM LUCAS (highest priority — he is the principal) ====="
+  # What he actually said, in his words, from the cockpit. These outrank the roadmaps: a roadmap
+  # is what was planned, an open instruction is what he wants now.
+  bash scripts/intake.sh open 2>/dev/null || echo "(none)"
   echo; echo "===== SCOPE (ANCHOR) ====="
   sed -n '1,60p' ANCHOR.md 2>/dev/null
   echo; echo "===== DECISIONS (open calls you must honour) ====="
@@ -116,6 +120,10 @@ HARD RULES
   produces the same question at the cost of an arm.
 - If CAPACITY reports DEFER, do not choose 'conduct' or 'work'. The box cannot take the load, and
   queueing into a full box produces timeouts that look like failing tests. 'noop' is correct.
+- An OPEN INSTRUCTION from Lucas is the highest-priority input you have. Act on it through the
+  verbs you are given, or 'escalate' saying precisely what you cannot do — but never ignore one
+  and never silently reinterpret it. If it asks for something outside your verbs (a new project, a
+  new roadmap, a flag change), 'escalate' is the correct answer, not a workaround.
 
 Reply with reasoning first, then EXACTLY this block and nothing after it:
 
