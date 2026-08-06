@@ -103,14 +103,50 @@ fi
 # --- Extract escalations → durable INBOX queue + a distinct Telegram ping. ---------
 ESC="$(awk '/^===INBOX-START===/{f=1;next} /^===INBOX-END===/{f=0} f' "$OUT")"
 if [ -n "${ESC//[[:space:]]/}" ]; then
-  { echo; echo "$ESC"; } >> state/INBOX.md
-  log "escalation(s) appended to state/INBOX.md"
-  # Tag the ping when paused: an escalation that will NOT be acted on until you resume is a
-  # materially different message from one the box is about to work on.
-  PFX="🔔 Recursion needs a decision:"
-  [ "$PAUSED" = "1" ] && PFX="⏸🔔 Recursion needs a decision (box is PAUSED — nothing will act on this until you resume):"
-  bash "$ROOT/scripts/notify.sh" "$PFX
-$ESC" || true
+  # --- ESCALATION IDENTITY (the four-times bug) -------------------------------------------
+  # This block used to append whatever the brief emitted, unconditionally. Meanwhile the
+  # heartbeat signals `brief` for as long as the INBOX holds an unanswered item — so an
+  # unanswered ask regenerated itself every cycle. The SAME escalation was appended four
+  # times in nine hours (21:15, 00:15, 03:15, 06:15). A queue that refills itself faster
+  # than it is worked cannot be worked down, and each copy re-pinged Telegram.
+  #
+  # Fix: derive a stable key from the ask, and let taskctl decide NEW vs DUP. On DUP we
+  # neither append nor re-notify — we bump the sighting count, so "asked 5 times" is visible
+  # as a number instead of five rows.
+  ESC_TITLE="$(printf '%s' "$ESC" | sed -n 's/^## *//p' | head -1)"
+  # Strip the leading date/time stamp — the same ask carries a different one each cycle and
+  # would otherwise key differently every time, which is exactly how the duplicates arose.
+  ESC_KEY="$(printf '%s' "$ESC_TITLE" \
+    | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][0-9:]+Z?)?[[:space:]]*[—-]*[[:space:]]*//' \
+    | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed -E 's/^-+|-+$//g' | cut -c1-72)"
+  ESC_WS="$(printf '%s' "$ESC" | sed -n 's/^\*\*Workstream:\*\* *//p' | head -1)"
+  ESC_PTR="$(printf '%s' "$ESC" | sed -n 's/^\*\*Pointer:\*\* *//p' | head -1 | cut -c1-120)"
+
+  VERDICT="NEW -"
+  if [ -x "$ROOT/scripts/taskctl.sh" ] && [ -n "$ESC_KEY" ]; then
+    VERDICT="$(RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/taskctl.sh" \
+                 esc-record "$ESC_KEY" "$ESC_TITLE" "$ESC_WS" "$ESC_PTR" 2>/dev/null || echo "NEW -")"
+  fi
+  EID="$(printf '%s' "$VERDICT" | awk '{print $2}')"
+
+  case "$VERDICT" in
+    DUP*)
+      SEEN="$(printf '%s' "$VERDICT" | awk '{print $3}')"
+      log "escalation SUPPRESSED as duplicate of $EID (seen ${SEEN}x) — not appended, not re-pinged"
+      ;;
+    *)
+      { echo; printf '%s\n' "$ESC" | sed "1s/^## /## [$EID] /"; } >> state/INBOX.md
+      log "escalation $EID appended to state/INBOX.md"
+      # Tag the ping when paused: an escalation that will NOT be acted on until you resume is
+      # a materially different message from one the box is about to work on.
+      PFX="🔔 Recursion needs a decision [$EID]:"
+      [ "$PAUSED" = "1" ] && PFX="⏸🔔 Recursion needs a decision [$EID] (box is PAUSED — nothing will act on this until you resume):"
+      bash "$ROOT/scripts/notify.sh" "$PFX
+$ESC
+
+Resolve with: recursion resolve-esc $EID \"<what you decided>\"" || true
+      ;;
+  esac
 fi
 
 # --- Save today's snapshot for tomorrow's diff. -----------------------------------
