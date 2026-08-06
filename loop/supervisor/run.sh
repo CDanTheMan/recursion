@@ -24,11 +24,17 @@ cd "$ROOT"
 
 log(){ echo "[$(date -Is)] $*" | tee -a "$LOG"; }
 
-# --- Kill switch (architecture.md): state/PAUSE halts all autonomous action. ------
-if [ -f "$ROOT/state/PAUSE" ]; then
-  log "PAUSED (state/PAUSE present) — skipping $JOB. Remove it or run scripts/resume.sh."
-  exit 0
-fi
+# --- Kill switch (D-012): PAUSE halts EXECUTION, preserves AWARENESS. --------------
+# The heartbeat and the brief are MONITORING, not execution: they call one text-only model,
+# write a brief, and extract escalations. None of that changes a repo, a branch, or anything
+# external. They therefore keep running while paused — otherwise the box goes silent exactly
+# when you have most reason to want its read on the situation. What stays halted (in
+# cycle.sh, and re-checked in each of them): arms, planning, drain/conduct, reflection.
+# Pushing also stays halted — this script only ever commits locally to loop/auto.
+PAUSED=0
+[ -f "$ROOT/state/PAUSE" ] && PAUSED=1
+[ "${RECURSION_PAUSED:-}" = "1" ] && PAUSED=1
+[ "$PAUSED" = "1" ] && log "PAUSED — running $JOB in MONITOR-ONLY mode (no execution)."
 
 # --- Per-tier model (realizes Lua/Terra/Sol routing via --model). -----------------
 # Decisions/brief = terra; cheap heartbeat = luna. See loop/config/routing.yaml.
@@ -81,12 +87,29 @@ if [ "${MODE:-brief}" = "brief" ]; then   # signal-mode (heartbeat) stops here �
 BRIEF="state/briefs/$DATE.md"
 awk 'BEGIN{p=1} /^===INBOX-START===/{p=0} p{print} /^===INBOX-END===/{p=1}' "$OUT" > "$BRIEF"
 
+# A brief produced while paused MUST say so on its first line. Otherwise it reads exactly
+# like a normal brief, and "the queue did not move" looks like a stall rather than the
+# kill switch doing its job (D-012).
+if [ "$PAUSED" = "1" ]; then
+  PAUSE_REASON="$(sed -n '2s/^reason: *//p' "$ROOT/state/PAUSE" 2>/dev/null)"
+  { echo "> ⏸ **PAUSED** — execution is halted; this brief is monitoring only."
+    [ -n "$PAUSE_REASON" ] && echo "> reason: $PAUSE_REASON"
+    echo "> No arms, planning, drain, or reflection ran. Lift with \`scripts/resume.sh\`."
+    echo
+    cat "$BRIEF"
+  } > "$BRIEF.tmp" && mv "$BRIEF.tmp" "$BRIEF"
+fi
+
 # --- Extract escalations → durable INBOX queue + a distinct Telegram ping. ---------
 ESC="$(awk '/^===INBOX-START===/{f=1;next} /^===INBOX-END===/{f=0} f' "$OUT")"
 if [ -n "${ESC//[[:space:]]/}" ]; then
   { echo; echo "$ESC"; } >> state/INBOX.md
   log "escalation(s) appended to state/INBOX.md"
-  bash "$ROOT/scripts/notify.sh" "🔔 Recursion needs a decision:
+  # Tag the ping when paused: an escalation that will NOT be acted on until you resume is a
+  # materially different message from one the box is about to work on.
+  PFX="🔔 Recursion needs a decision:"
+  [ "$PAUSED" = "1" ] && PFX="⏸🔔 Recursion needs a decision (box is PAUSED — nothing will act on this until you resume):"
+  bash "$ROOT/scripts/notify.sh" "$PFX
 $ESC" || true
 fi
 
