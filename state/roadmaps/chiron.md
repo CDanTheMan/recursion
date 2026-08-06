@@ -6,8 +6,13 @@ acceptance: npm install && npm run build
 automerge: yes
 automerge_scope: apps/chiron
 
-- [x] Scaffold a minimal Next.js Chiron shell that builds cleanly
-- [x] Add a landing page: hero title, one-line pitch, and a primary CTA button (still builds)
-- [ ] Add a /learn route with a static list of 3 placeholder lesson cards (still builds)
-- [ ] Add a shared header/nav component linking Home and /learn (still builds)
-- [ ] Add a /about route with a short static description (still builds)
+<!-- CONTRACT: apps/chiron/PRODUCT.md (why/scope). LEDGER: apps/chiron/features.json — authoritative
+     for WHAT/ordering/deps; query with `node apps/chiron/features.cjs --next`. This checklist is the
+     human-readable mirror; the ledger wins on ordering + deps. Build order follows deps (nav before
+     the pages that embed it). C6 (real 5-series curriculum) is status=escalate — needs Lucas. -->
+
+- [x] Scaffold a minimal Next.js Chiron shell that builds cleanly (ledger C1)
+- [x] Add a landing page: hero title, one-line pitch, primary CTA to /learn (ledger C2)
+- [ ] Add a shared header/nav component (links Home, /learn, /about) on every page (ledger C3)
+- [ ] Add a /learn index: a responsive grid of lesson cards, each linking to its lesson page (ledger C4)
+- [ ] Add a /about route with a short static description (ledger C5)
