@@ -19,10 +19,20 @@ field(){ sed -n "s/^$1: *//p" "$2" 2>/dev/null | head -1 | tr -d '\r'; }
 
 [ "${RECURSION_ALLOW_PUSH:-0}" = "1" ] || { echo "publish: RECURSION_ALLOW_PUSH!=1 — nothing pushed (set it in .env)"; exit 0; }
 
-# --branch <name>: push one named local branch to origin as a REVIEW branch (never to default).
+# --branch <name> [--repo <path>] [--key <keyfile>]: push one named local branch to origin as a
+# REVIEW branch, NEVER to the default branch. Optional --repo/--key push a branch in another repo
+# (e.g. golden-stallion-client with its deploy key) — the universal review-branch pusher for every
+# repo the loop drives. Never --force, never to default; main stays yours to merge on GitHub.
 if [ "${1:-}" = "--branch" ] && [ -n "${2:-}" ]; then
-  git rev-parse --verify "$2" >/dev/null 2>&1 || { echo "publish: no such local branch: $2"; exit 2; }
-  if gitp push origin "$2:$2" 2>&1 | tail -2; then echo "  -> pushed $2 to origin (review branch)"; fi
+  BR="$2"; RREPO="$ROOT"; RKEY="${KEY/#\~/$HOME}"; shift 2
+  while [ $# -gt 0 ]; do case "$1" in
+    --repo) RREPO="$2"; shift 2;;
+    --key)  RKEY="${2/#\~/$HOME}"; shift 2;;
+    *) shift;;
+  esac; done
+  RGSSH="ssh -i $RKEY -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
+  git -C "$RREPO" rev-parse --verify "$BR" >/dev/null 2>&1 || { echo "publish: no such local branch: $BR in $RREPO"; exit 2; }
+  if GIT_SSH_COMMAND="$RGSSH" git -C "$RREPO" push origin "$BR:$BR" 2>&1 | tail -2; then echo "  -> pushed $BR to origin (review branch, repo=$RREPO)"; fi
   exit 0
 fi
 
