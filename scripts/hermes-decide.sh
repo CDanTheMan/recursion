@@ -67,6 +67,10 @@ build_brief(){
     echo "--- $r"; grep -nE '^- \[' "$r" | head -12; done
   echo; echo "===== REVIEW BRANCHES (what awaits Lucas) ====="
   bash scripts/branch-review.sh 2>/dev/null | head -40
+  echo; echo "===== PORTFOLIO (git-native truth; a repo whose freshness cannot be PROVEN is not dispatchable) ====="
+  # This fetches every registered repo, so the brief reports the real remote, not a stale
+  # remote-tracking ref. A repo in FAULT or DIVERGED must not be dispatched at — choose escalate.
+  bash scripts/resync.sh status 2>/dev/null || echo "(some repos are not provably current — see above)"
   echo; echo "===== CAPACITY (do not queue work this box cannot run) ====="
   echo "load: $(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)  cores: $(nproc 2>/dev/null)"
   free -m 2>/dev/null | awk '/^Mem:/{printf "mem: %sMB avail of %sMB\n",$7,$2} /^Swap:/{printf "swap: %sMB used\n",$3}'
@@ -103,6 +107,8 @@ HARD RULES
   progress; an idle box with a clear reason is a good outcome.
 - Every decision must serve a goal that already exists in the roadmaps or DECISIONS. If the
   most valuable next step is not written down anywhere, choose 'escalate' and say so.
+- Never dispatch work at a repo the PORTFOLIO section reports as FAULT or DIVERGED. A repo whose
+  freshness cannot be proven will silently build on a stale base and revert merged fixes.
 
 Reply with reasoning first, then EXACTLY this block and nothing after it:
 
