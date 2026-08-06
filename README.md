@@ -1,10 +1,22 @@
 # Recursion
 
+**Who decides:** `CONTROL_PLANE.md` — the authority constitution (adopted 2026-08-06,
+D-010). Hermes is the executive control plane; Claude Code is a bounded executor; Lucas is
+final authority and merges every review branch himself. Read it before changing how the
+loop is driven.
+
 The meta layer. This repo does not build products — it supervises the repos that do,
 tracks decisions, and runs the learning loop.
 
-**Not** part of Golden Stallion or CSL Labs. Those push status *into* here; this repo
-never reaches into them.
+**Not** part of Golden Stallion or CSL Labs — it supervises them without being one of them.
+
+<!-- superseded-by: CONTROL_PLANE.md (2026-08-06, D-011) -->
+> **Changed 2026-08-06 (D-011).** This used to read "those push status *into* here; this
+> repo never reaches into them." Recursion now keeps a **live git clone** of every
+> registered project and derives status from git, because hand-pushed copies went stale
+> silently and read exactly like working state. The original intent — a small blast radius
+> — is preserved by **per-repo deploy keys** rather than by refusing to read: each key
+> reaches exactly one repo, and no account-level credential lives on the box.
 
 ## Layout
 

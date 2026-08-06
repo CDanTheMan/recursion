@@ -80,3 +80,33 @@ Otherwise drop to one subscription + cheap OpenRouter fallback. Two of three sys
 failing means drop back — that is a successful experiment, not a failure.
 
 Measure with `ccusage` weekly. "I felt faster" is not a result.
+
+---
+
+## 2026-08-06 amendment — portfolio operating model (supersedes the WIP cap)
+
+Recursion is now a Hermes-led control plane (see `CONTROL_PLANE.md`, D-010). Hermes is the
+executive: it holds the portfolio, takes direct orders from Lucas, decomposes them into
+goals, and dispatches bounded workers. That changes how scope gets limited.
+
+**Superseded — "New projects. Eight concurrent threads is already over capacity."**
+The portfolio is explicitly multi-project and repo-keyed. Projects are registered and
+activated by configuration, not limited by a count. Registered ≠ active.
+
+**Preserved — the reason for the cap still holds.** *Generated work that isn't verified is
+a liability, not an asset.* That is now enforced by two mechanisms instead of a number:
+
+1. **Goal linkage.** No task exists without a defined parent goal. Work that does not
+   serve a registered goal is never scheduled. That is the scope limit.
+2. **Capacity admission control.** Hermes tracks box resources (CPU, RAM, swap, disk,
+   in-flight arms, heavy gates) and subscription quota, and refuses to launch work that
+   would throttle the machine or the subs. Concurrency is bounded by measured headroom.
+
+The rationing rule above (model tier by task difficulty) is unchanged, and so is its
+conclusion: if output accumulates faster than it is reviewed, the answer is less
+generation, not more capacity.
+
+**Still open — not decided by this amendment.** "Golden Stallion feature work —
+maintenance only through fall" (above) has not been lifted. The portfolio now *monitors*
+three Golden Stallion repos, but monitoring is not feature work. Until Lucas rules, GS
+work stays maintenance-only and the registry marks those projects accordingly.

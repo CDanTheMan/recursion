@@ -1,6 +1,19 @@
 # Recursion — architecture
 
-Last updated: 2026-08-05. Read `ANCHOR.md` first — that's WHY/WHAT; this is HOW.
+Last updated: 2026-08-06. Read `ANCHOR.md` first — that's WHY/WHAT; read `CONTROL_PLANE.md` for
+WHO decides; this is HOW.
+
+<!-- superseded-by: CONTROL_PLANE.md (2026-08-06, D-010) — authority claims only -->
+
+> **AUTHORITY SUPERSEDED 2026-08-06 (D-010).** Two claims below are no longer the model:
+> **Hermes is not a "front/router"** or message bus — it is the executive control plane, top of
+> the automation chain, holding the portfolio and the goal→task→event lifecycle. And **Claude is
+> not "the conductor session you drop into"** — it is a bounded executor that receives one task,
+> one worktree, allowed paths, explicit non-goals, and a machine-checkable gate. Deep steering
+> happens with Hermes. See `CONTROL_PLANE.md`.
+>
+> Everything else here — the tiering, the escalation scoring, the cost model, the where-it-runs
+> map, the context-management rules — is current and load-bearing.
 
 ## Purpose
 
@@ -44,9 +57,17 @@ Tiers (names are a skin over the function — rename freely):
     OpenRouter per `routing.yaml`.
 - **Hermes — the front/router.** The single interface Lucas talks to + the message bus between tiers
   and Lucas. Async (INBOX/Telegram) and sync (a conductor session).
+  <!-- superseded-by: CONTROL_PLANE.md (2026-08-06, D-010) -->
+  > **SUPERSEDED.** Hermes is the **executive control plane**, not a router: it holds the portfolio
+  > and the goal→task→event lifecycle, decides what runs next, monitors it, and takes direct orders
+  > from Lucas. *Still true:* it remains the single interface Lucas talks to — that part of the
+  > original design was right and is why it became the executive rather than being replaced.
 - **Lucas — top of the escalation chain.** Sees only what genuinely needs him (below).
 
 ### Engines in scope + control — the loop runs on Hermes (verified 2026-08-04)
+
+<!-- superseded-by: CONTROL_PLANE.md (2026-08-06, D-010): "front/router" below is the old framing.
+     The harness fact in this section — Hermes on Codex OAuth — is unchanged and current. -->
 
 The always-on loop runs on **Hermes** (`NousResearch/hermes-agent`) as the harness — the **Hermes**
 tier (front/router) made concrete. Hermes supports OpenAI **Codex OAuth**, so the loop runs on
@@ -96,6 +117,13 @@ reasons; it does not write the renderer. When something needs DOING it spawns an
 | Arm | Runs on | Cost | For |
 |---|---|---|---|
 | Claude Opus (top tier), `claude -p` | Claude Max sub (flat) | ~$0 at margin, kept OFF the 24/7 path (weekly limit) | deep single-focus work — GSC client/RE, renderer, hard multi-file coding — and the conductor session you drop into |
+
+<!-- superseded-by: CONTROL_PLANE.md (2026-08-06, D-010) -->
+> **SUPERSEDED — the Claude row only.** Claude is a **bounded executor**, not "the conductor session
+> you drop into": one task, one worktree, allowed paths, explicit non-goals, a machine-checkable
+> gate. Deep steering happens with Hermes. *Still true:* Claude is the deep single-focus arm for
+> GSC / RE / renderer work and stays off the 24/7 path — that cost and capability reasoning is
+> unchanged, and is exactly why it remains the executor of choice for hard work.
 | OpenRouter → Deepseek-class, price-sorted | metered ($) | the ONLY per-token spend | (a) bulk PARALLEL cheap coverage; (b) last-resort fallback if Codex OAuth is down |
 
 ⚠ "Opus 5": the current top Opus tier is 4.8 (what these sessions run on today). If an Opus 5 ships

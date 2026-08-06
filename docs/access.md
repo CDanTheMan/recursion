@@ -32,7 +32,10 @@ The loop READS these every run; edit them and the change takes effect next cycle
 Edit locally, commit, push; the box pulls. (Automated runs only ever touch `loop/auto`.)
 
 ## 4. Kill switch — PAUSE (the safety valve)
-Halts ALL autonomous action instantly; only heartbeat + escalation remain.
+Halts **execution** instantly and preserves **awareness**: heartbeat, status answering,
+escalation delivery, and a PAUSED-labelled brief all keep running. Build arms, planning,
+drain/conduct, reflection, pushes, and merges all stop. Ratified and implemented 2026-08-06
+(D-012) — before that the code exited before the heartbeat, contradicting this page.
 ```bash
 ssh gs-recursion "cd /opt/recursion && bash scripts/pause.sh 'reason'"   # stop
 ssh gs-recursion "cd /opt/recursion && bash scripts/resume.sh"           # resume
