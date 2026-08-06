@@ -110,6 +110,9 @@ fi
 # update the board, and fire escalation pings above — but don't push a full digest every
 # few hours. Escalations always reach you; routine intra-day briefs stay silent.
 if [ "${DELIVER_BRIEF:-1}" = "1" ] && [ -f "$BRIEF" ]; then
+  # Append the review-branch tracker VERBATIM so the digest always carries the exact branch list,
+  # merge status, and review order (the loop pushes branches; you merge on GitHub).
+  { echo; echo; bash "$ROOT/scripts/branch-review.sh" 2>/dev/null; } >> "$BRIEF"
   bash "$ROOT/scripts/notify.sh" -f "$BRIEF" || true
 fi
 fi   # end brief-mode block
