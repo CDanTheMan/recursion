@@ -74,7 +74,31 @@ run(){ # execute an argv array, or print it under --dry-run
 # --- the whitelist. A fixed case list: there is no path from an unrecognised verb to
 # execution, and nothing here reaches auth, cron, .env, flags, merges, or deploys. --------
 rc=0
+# Prose for the authoring verbs. Held to the same rules validate-decision.py applied, because
+# this file is a separate boundary and the decision sat on disk in between.
+TEXT="$(printf '%s' "$DECISION" | python3 -c 'import json,sys
+t=json.load(sys.stdin).get("text","") or ""
+if len(t)>500 or any(ord(c)<32 for c in t) or t.lstrip().startswith("-"): t=""
+print(t)' 2>/dev/null || true)"
+
 case "$VERB" in
+  # AUTHORING. These WRITE, so they go through scripts/author.sh — one writer, append-only,
+  # state/ only — for the same reason execution goes through the proven scripts rather than
+  # through whatever the model felt like running. author.sh validates its own arguments again:
+  # the decision file sits on disk between deciding and acting, so this is a separate boundary.
+  roadmap-add|note)
+    A0="${ARGS[0]:-}"; [ -n "$A0" ] || { log "$VERB needs a target"; exit 2; }
+    [ -n "$TEXT" ] || { log "REFUSED — $VERB needs prose in the \"text\" field"; exit 2; }
+    run bash scripts/author.sh "$VERB" "$A0" "$TEXT"; rc=$? ;;
+
+  roadmap-new|portfolio-add|register)
+    A0="${ARGS[0]:-}"; [ -n "$A0" ] || { log "$VERB needs an argument"; exit 2; }
+    run bash scripts/author.sh "$VERB" "$A0" "${ARGS[1]:-}"; rc=$? ;;
+
+  handled)
+    A0="${ARGS[0]:-}"; [ -n "$A0" ] || { log "handled needs an instruction id"; exit 2; }
+    run bash scripts/intake.sh handled "$A0" "${TEXT:-handled}"; rc=$? ;;
+
   noop)
     log "noop — nothing to run${WHY:+ ($WHY)}" ;;
 
