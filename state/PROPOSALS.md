@@ -37,3 +37,32 @@ is the actual enforcement. The flag stops *our* code path; protection stops *any
 
 **Risk of applying:** none to correctness — it only removes an autonomous write. The chiron
 chain will publish review branches instead of self-merging, which is the intended model.
+
+## PROPOSAL 2026-08-06 — point notifications at The Cockpit (two human-only steps)
+
+The routing code is merged and tested; it is INERT until both of these happen, and it fails safe
+in the meantime (every message goes to the current chat, exactly as before).
+
+**1. Grant the bot topic rights.** ~~DONE 2026-08-06~~ — Lucas promoted @recursion_manager_bot to
+administrator, `topics.sh ensure` created all eight topics (recursion=3, golden-stallion=4,
+golden-stallion-extension=5, golden-stallion-client=6, ai-investment-cockpit=7,
+edgar-morning-brew=8, guerra-construction-group=9, chiron=10), the ids are in
+`state/portfolio.tsv`, a second `ensure` created 0, and `check` verifies all eight.
+Routing was confirmed end-to-end on BOTH delivery paths: the API reports the message landing in
+`message_thread_id: 10` of "The Cockpit".
+
+**2. Add two lines to `.env`** (a human edits .env — CLAUDE.md rule 3):
+
+    RECURSION_TELEGRAM_CHAT=-1003894008732
+    RECURSION_TELEGRAM_HOME_THREAD=1
+
+`TELEGRAM_CHAT_ID` is currently `8913126684`, which `getChat` reports as `type=private` — a DM,
+not the supergroup. Leave it: it stays the fallback, so nothing that works today stops working.
+
+**Why not just change .env myself:** it is the one file the loop may never edit, because it holds
+the flags that decide what the loop is allowed to do. That rule is worth more than the
+convenience of skipping this note.
+
+**Falsifier:** after both steps, a build message from a chiron task should appear in the `chiron`
+topic and not in General. If it lands in General, the registry has a topic id that `message_thread_id`
+is not receiving.

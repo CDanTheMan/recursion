@@ -63,12 +63,12 @@ gitk(){ # gitk <path> <key> <git args...>
 # --- escalation: a drift a human must settle is an ITEM, not a log line --------------------
 # Keys are stable and carry no timestamp, so the same drift seen ten times is one escalation
 # with a sighting count — the dedup contract from the task-graph branch.
-esc(){ # esc <key> <title> [pointer]
+esc(){ # esc <key> <title> [pointer] [project]
   [ -x "$TASKCTL" ] || return 0
   local out
   out="$(RECURSION_ROOT="$ROOT" bash "$TASKCTL" esc-record "$1" "$2" portfolio "${3:-}" 2>/dev/null)"
   case "$out" in
-    NEW*) [ -x "$NOTIFY" ] && bash "$NOTIFY" "🔔 portfolio: $2" >/dev/null 2>&1 || true ;;
+    NEW*) [ -x "$NOTIFY" ] && bash "$NOTIFY" --project "${4:-}" "🔔 portfolio: $2" >/dev/null 2>&1 || true ;;
     *) : ;;   # DUP — already open. Do not re-notify; that was the four-times bug.
   esac
 }
@@ -199,20 +199,20 @@ sync)
     inspect "$p" "$k" "$d"; rc=$?
     case "$rc" in
       3) echo "FAULT     $pr — $R_WHY"; fails=$((fails+1))
-         esc "resync-auth-$pr" "$pr: cannot prove it is current with origin — $R_WHY" "$p"; continue ;;
+         esc "resync-auth-$pr" "$pr: cannot prove it is current with origin — $R_WHY" "$p" "$pr"; continue ;;
       4) echo "DIVERGED  $pr — $R_WHY"; fails=$((fails+1))
-         esc "resync-diverged-$pr" "$pr: $d has diverged from origin — reconcile before more work lands on it" "$p"; continue ;;
+         esc "resync-diverged-$pr" "$pr: $d has diverged from origin — reconcile before more work lands on it" "$p" "$pr"; continue ;;
     esac
     if [ "$R_BEHIND" -gt 0 ]; then
       if ff_default "$p" "$d" "$R_BEHIND" "$R_AHEAD"; then echo "FF        $pr — $d +$R_BEHIND"
       else echo "FF-FAILED $pr — $d could not fast-forward"; fails=$((fails+1))
-           esc "resync-ff-$pr" "$pr: $d is behind origin but would not fast-forward" "$p"; continue; fi
+           esc "resync-ff-$pr" "$pr: $d is behind origin but would not fast-forward" "$p" "$pr"; continue; fi
     else echo "OK        $pr — $R_WHY"; fi
     # These do not block a build (the arm works in an isolated worktree off origin/<def>), but
     # they are work that exists in exactly one place, so they are never left silent.
-    [ "$R_AHEAD"    -gt 0 ] && esc "resync-unpushed-$pr" "$pr: $R_AHEAD commit(s) on $d exist only on this box" "$p"
-    [ "$R_UNPUSHED" -gt 0 ] && esc "resync-localonly-$pr" "$pr: $R_UNPUSHED local branch(es) hold commits on no remote" "$p"
-    [ "$R_DIRTY"    = 1   ] && esc "resync-dirty-$pr" "$pr: uncommitted changes in the working tree" "$p"
+    [ "$R_AHEAD"    -gt 0 ] && esc "resync-unpushed-$pr" "$pr: $R_AHEAD commit(s) on $d exist only on this box" "$p" "$pr"
+    [ "$R_UNPUSHED" -gt 0 ] && esc "resync-localonly-$pr" "$pr: $R_UNPUSHED local branch(es) hold commits on no remote" "$p" "$pr"
+    [ "$R_DIRTY"    = 1   ] && esc "resync-dirty-$pr" "$pr: uncommitted changes in the working tree" "$p" "$pr"
   done <<< "$rows"
   [ "$fails" -eq 0 ] || exit 1 ;;
 
