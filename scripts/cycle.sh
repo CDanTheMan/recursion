@@ -88,8 +88,13 @@ if [ "${RECURSION_AUTO_DRAIN:-0}" = "1" ] && [ ! -f "$ROOT/state/PAUSE" ]; then
     for ws in ${RECURSION_PLAN_WORKSTREAMS:-}; do bash scripts/plan.sh "$ws" >>"$LOG" 2>&1 || true; done
   fi
   if grep -lq '^status: *queued' state/tasks/*.md 2>/dev/null; then
-    log "auto-drain: queued work present — kicking drainer in background"
-    nohup bash scripts/drain.sh >>"$LOG_DIR/$DATE-drain.log" 2>&1 &
+    if [ "${RECURSION_CONDUCT:-0}" = "1" ]; then
+      log "auto-drain: queued work — kicking PARALLEL conductor in background"
+      nohup bash scripts/conduct.sh >>"$LOG_DIR/$DATE-conduct.log" 2>&1 &
+    else
+      log "auto-drain: queued work present — kicking drainer in background"
+      nohup bash scripts/drain.sh >>"$LOG_DIR/$DATE-drain.log" 2>&1 &
+    fi
   fi
 fi
 

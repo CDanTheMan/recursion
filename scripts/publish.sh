@@ -12,12 +12,19 @@
 set -uo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"; cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
-KEY="${1:-$HOME/.ssh/id_deploy}"
+KEY="${RECURSION_DEPLOY_KEY:-$HOME/.ssh/id_deploy}"
 GSSH="ssh -i ${KEY/#\~/$HOME} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
 gitp(){ GIT_SSH_COMMAND="$GSSH" git "$@"; }
 field(){ sed -n "s/^$1: *//p" "$2" 2>/dev/null | head -1 | tr -d '\r'; }
 
 [ "${RECURSION_ALLOW_PUSH:-0}" = "1" ] || { echo "publish: RECURSION_ALLOW_PUSH!=1 — nothing pushed (set it in .env)"; exit 0; }
+
+# --branch <name>: push one named local branch to origin as a REVIEW branch (never to default).
+if [ "${1:-}" = "--branch" ] && [ -n "${2:-}" ]; then
+  git rev-parse --verify "$2" >/dev/null 2>&1 || { echo "publish: no such local branch: $2"; exit 2; }
+  if gitp push origin "$2:$2" 2>&1 | tail -2; then echo "  -> pushed $2 to origin (review branch)"; fi
+  exit 0
+fi
 
 def="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')"; def="${def:-master}"
 gitp fetch --prune --quiet origin 2>/dev/null || echo "publish: fetch failed (continuing on local refs)"
