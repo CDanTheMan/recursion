@@ -76,10 +76,9 @@ build_brief(){
   # remote-tracking ref. A repo in FAULT or DIVERGED must not be dispatched at — choose escalate.
   bash scripts/resync.sh status 2>/dev/null || echo "(some repos are not provably current — see above)"
   echo; echo "===== CAPACITY (do not queue work this box cannot run) ====="
-  echo "load: $(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)  cores: $(nproc 2>/dev/null)"
-  free -m 2>/dev/null | awk '/^Mem:/{printf "mem: %sMB avail of %sMB\n",$7,$2} /^Swap:/{printf "swap: %sMB used\n",$3}'
-  df -h / 2>/dev/null | awk 'NR==2{print "disk: "$4" free ("$5" used)"}'
-  echo "in-flight arms: $(ls -d state/.locks/ws-*.lock 2>/dev/null | wc -l)"
+  # scripts/capacity.sh is the decider, so the brief shows exactly what the conductor will act
+  # on. A brief that computes its own numbers can disagree with the gate that enforces them.
+  bash scripts/capacity.sh report 2>/dev/null || echo "(capacity unreadable — treat the box as full)"
   echo; echo "===== PROPOSALS (human-gated; you may not apply these) ====="
   tail -25 state/PROPOSALS.md 2>/dev/null
 }
@@ -115,6 +114,8 @@ HARD RULES
   freshness cannot be proven will silently build on a stale base and revert merged fixes.
 - Never dispatch a task that has an OPEN assist. It is waiting on Lucas, and running it again
   produces the same question at the cost of an arm.
+- If CAPACITY reports DEFER, do not choose 'conduct' or 'work'. The box cannot take the load, and
+  queueing into a full box produces timeouts that look like failing tests. 'noop' is correct.
 
 Reply with reasoning first, then EXACTLY this block and nothing after it:
 

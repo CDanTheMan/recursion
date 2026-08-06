@@ -79,7 +79,12 @@ BRANCH="loop/work/$ID"
 mkdir -p "$ROOT/state/.locks" 2>/dev/null || true
 WSLOCK="$ROOT/state/.locks/ws-${WORKSTREAM:-none}.lock"
 if ! mkdir "$WSLOCK" 2>/dev/null; then log "workstream ${WORKSTREAM:-none} already building (held $WSLOCK) — exiting."; exit 0; fi
-trap 'rmdir "$WSLOCK" 2>/dev/null || true' EXIT
+# ONE EXIT trap, both cleanups. A second `trap ... EXIT` REPLACES this one rather than
+# adding to it — which is how the heavy-gate release silently disabled the workstream-lock
+# release, leaking a lock per run and wedging the next run of that workstream at
+# "already building". `declare -F` covers the window before release_heavy is defined,
+# since work.sh can exit early (no acceptance test, unprovable base) with the trap armed.
+trap 'declare -F release_heavy >/dev/null 2>&1 && release_heavy; rmdir "$WSLOCK" 2>/dev/null || true' EXIT
 ARMLOG="$LOG_DIR/$DATE-arm-$ID-$STAMP.out"
 # body = the detailed spec (everything after the first blank line)
 BODY="$(awk 'f{print} /^[[:space:]]*$/{f=1}' "$TASK")"
@@ -384,12 +389,40 @@ PY
   [ -n "$RESULT_STATUS" ]
 }
 
+# --- HEAVY GATES ARE EXCLUSIVE ----------------------------------------------------------
+# A task may declare `gate_class: heavy` when its acceptance is real local compute (node --test
+# over a corpus, a renderer diff) rather than a cheap assertion. Two heavy gates that each FIT in
+# memory still ruin each other: they contend for 2 cores, push into swap, and the timeouts that
+# fire read as flaky tests instead of as a starved box. A gate whose verdict depends on what else
+# happened to be running is not a gate, so heavy ones serialise box-wide.
+GATE_CLASS="$(field gate_class)"; GATE_CLASS="${GATE_CLASS:-light}"
+HEAVY_HELD=0
+acquire_heavy(){
+  [ "$GATE_CLASS" = "heavy" ] || return 0
+  [ -x "$ROOT/scripts/capacity.sh" ] || return 0
+  local waited=0 out
+  while :; do
+    out="$(RECURSION_ROOT="$ROOT" RECURSION_HEAVY_TAG="$ID" bash "$ROOT/scripts/capacity.sh" heavy acquire "$ID" 2>&1)"
+    case "$out" in ACQUIRED*) HEAVY_HELD=1; log "heavy-gate lock acquired after ${waited}s"; return 0 ;; esac
+    waited=$((waited+10))
+    if [ "$waited" -ge "${RECURSION_HEAVY_WAIT_S:-1800}" ]; then
+      log "heavy-gate lock still held after ${waited}s ($out) — running the gate anyway rather than losing the build"
+      return 0
+    fi
+    sleep 10
+  done
+}
+release_heavy(){ [ "$HEAVY_HELD" = "1" ] && { RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/capacity.sh" heavy release >/dev/null 2>&1; HEAVY_HELD=0; }; return 0; }
+
 # --- the gate: run the acceptance command in the app dir; its exit code is the verdict. --
 verify(){
+  acquire_heavy
   local wt="$1" adir="$1/$WORKDIR"
   [ -d "$adir" ] || adir="$wt"
   ( cd "$adir" && bash -c "$ACCEPTANCE" ) >>"$ARMLOG" 2>&1
 }
+
+release_heavy   # the gate is over; do not hold the box through publish/merge
 
 # --- after a GREEN build: optionally PUBLISH the review branch, and optionally AUTO-MERGE. -----
 # Layers of defense, all off by default:
