@@ -1,10 +1,8 @@
 # Recursion board — live registry
 
-Tick: 2026-08-05T21:15:01Z  ·  rendered 2026-08-05T22:03:56Z
+Tick: 2026-08-06T00:15:01Z  ·  rendered 2026-08-06T00:15:11Z
 
 | Workstream | Tier | Model | State | Started | Tokens | $ metered | Note |
 |---|---|---|---|---|---|---|---|
-| supervision | heartbeat | gpt-5.6-luna | done | 21:15:01Z | 20347 | 0.0000 | brief: unanswered inbox decision |
-| supervision | brief | gpt-5.6-terra | done | 21:15:16Z | 21391 | 0.0000 | intra-day refresh (silent) |
-| chiron | claude | claude | running | 21:53:15Z | - | - | Add a landing page: hero title, one-line |
-| chiron | claude | claude | done | 22:02:00Z | - | 0.0000 | passed -> loop/work/chiron-003 |
+| supervision | heartbeat | gpt-5.6-luna | done | 00:15:01Z | 22496 | 0.0000 | brief: unanswered Inbox items |
+| supervision | brief | gpt-5.6-terra | running | 00:15:11Z | - | - | intra-day refresh (silent) |

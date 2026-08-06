@@ -106,3 +106,10 @@ Blocked on: acceptance test failed after retry
 Acceptance: `cd apps/chiron && npm install && npm run build` exited 1
 Options: inspect the worktree/branch, fix the task or its acceptance, then `recursion work chiron-003` (or `recursion requeue chiron-003`).
 Close it with: `recursion resolve chiron-003 "<what you decided>"`.
+
+## 2026-08-06 00:15 — Approve the Cubic Castles native-diff acceptance frontier
+**Workstream:** cubic-castles
+**Pointer:** CURRENT INBOX: “2026-08-05 21:15 — Approve the next Cubic Castles renderer acceptance frontier”; `scripts/gsc-nativediff-gate.sh`; `state/gsc/nativediff-baseline.tsv`; `state/roadmaps/gsc-renderer.md`
+**Blocked on:** human approval of the numeric native-mesh error metric/control and whether to integrate it into overnight task planning.
+**Context:** corpus-present conformance is complete (206 pass, 0 fail, 5 skips), so it is now regression-only and provides no tractable renderer work; the next frontier is reducing native-diff error.
+**Options:** approve the strict-decrease gate plus planner integration; approve the gate but defer planner integration; defer/reject and leave GSC overnight work idle pending another frontier.
