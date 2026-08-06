@@ -59,6 +59,13 @@ SEED="$(field seed)"; SEED="${SEED//,/ }"
 # are ALSO globally fenced by env flags (RECURSION_ALLOW_PUSH / RECURSION_ALLOW_AUTOMERGE) set only
 # in .env by the human — the loop can never self-enable them (CLAUDE.md rule 3).
 SSHKEY="$(field sshkey)"; AUTOMERGE="$(field automerge)"; AUTOMERGE_SCOPE="$(field automerge_scope)"
+# A task that names no key falls back to the PORTFOLIO REGISTRY (state/portfolio.tsv). The
+# repo->key mapping used to live only in whoever typed the command, so a task that forgot
+# `sshkey:` fetched with no credential — and a credential-less git fetch fails QUIETLY.
+if [ -z "$SSHKEY" ] && [ -x "$ROOT/scripts/resync.sh" ]; then
+  SSHKEY="$(RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/resync.sh" key "$REPO_DIR" 2>/dev/null || true)"
+  [ -n "$SSHKEY" ] && log "deploy key from portfolio registry: $SSHKEY"
+fi
 PLANNED_FROM="$(field planned_from)"   # <roadmap>:<line> — flipped [~]->[x] when this task passes
 GSSH=""; [ -n "$SSHKEY" ] && GSSH="ssh -i ${SSHKEY/#\~/$HOME} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=12"
 gitr(){ if [ -n "$GSSH" ]; then GIT_SSH_COMMAND="$GSSH" git -C "$REPO_DIR" "$@"; else git -C "$REPO_DIR" "$@"; fi; }
@@ -174,10 +181,15 @@ mk_worktree(){
   rm -rf "$wt" 2>/dev/null || true
   git -C "$REPO_DIR" worktree prune 2>/dev/null || true
   # Fetch latest so the task builds on the FRESHEST merged base — this is what makes work
-  # ACCUMULATE across tasks (once you merge task N, task N+1 builds on top). Non-fatal: offline
-  # or no cred just falls back to the local base. Disable with RECURSION_GIT_FETCH=0.
+  # ACCUMULATE across tasks (once you merge task N, task N+1 builds on top).
+  #
+  # This fetch is now a REFRESH, not the decision. require_fresh_base() already proved the repo
+  # is current and refused to reach here otherwise. It used to be the decision, and it decided
+  # badly: on failure it logged "building on local base" and carried on, so the arm built on a
+  # stale tree, the gate passed (it was testing the old tree), and merging the result REVERTED
+  # whatever had been fixed upstream in the meantime.
   if [ "${RECURSION_GIT_FETCH:-1}" = "1" ]; then
-    gitr fetch --prune --quiet origin >>"$LOG" 2>&1 && log "fetched origin" || log "fetch skipped/failed — building on local base"
+    gitr fetch --prune --quiet origin >>"$LOG" 2>&1 && log "fetched origin" || log "fetch failed at worktree time (freshness was proven moments ago)"
   fi
   def="$(git -C "$REPO_DIR" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"; def="${def:-master}"
   # prefer the remote-tracking tip (freshest merged main); fall back to local, then current HEAD.
@@ -403,6 +415,39 @@ integrate_remote(){
 board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" running "${GOAL:0:40}"
 if ! claim_task; then exit 0; fi
 commit_state
+
+# --- FRESHNESS IS A PRECONDITION, NOT BEST EFFORT ---------------------------------------
+# "A task may not start against a base older than origin's default." Proving that requires
+# reaching the remote, and a git op with no usable credential fails SILENTLY — so the failure
+# to prove freshness is itself a blocker, not a shrug. See scripts/resync.sh for the two
+# observed failures this closes.
+FRESH_WHY=""
+require_fresh_base(){
+  if [ "${RECURSION_REQUIRE_FRESH_BASE:-1}" != "1" ]; then
+    log "FRESH-BASE CHECK DISABLED (RECURSION_REQUIRE_FRESH_BASE=0) — building on whatever base is local"
+    return 0
+  fi
+  if [ ! -x "$ROOT/scripts/resync.sh" ]; then
+    FRESH_WHY="scripts/resync.sh is missing — base freshness cannot be proven"; return 1
+  fi
+  local out rc
+  out="$(RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/resync.sh" check "$REPO_DIR" 2>&1)"; rc=$?
+  case "$rc" in
+    0) log "base freshness: $out"; return 0 ;;
+    3) FRESH_WHY="cannot prove $REPO_DIR is current with origin — $out" ;;
+    4) FRESH_WHY="$REPO_DIR needs a human before more work lands on it — $out" ;;
+    *) FRESH_WHY="resync check exited $rc — $out" ;;
+  esac
+  return 1
+}
+
+if ! require_fresh_base; then
+  board finish "$ID" blocked - "stale/unprovable base"
+  set_status blocked
+  escalate "$FRESH_WHY"
+  commit_state
+  exit 0
+fi
 
 if ! WT="$(mk_worktree)"; then
   board finish "$ID" blocked - "worktree create failed"

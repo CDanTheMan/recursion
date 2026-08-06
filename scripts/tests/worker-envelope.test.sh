@@ -40,11 +40,26 @@ cp "$SRC/scripts/work.sh" "$R/scripts/"
 cp "$SRC/scripts/board.sh" "$R/scripts/" 2>/dev/null || true
 cp "$SRC/scripts/notify.sh" "$R/scripts/" 2>/dev/null || true
 cp "$SRC/scripts/taskctl.sh" "$R/scripts/" 2>/dev/null || true
+cp "$SRC/scripts/resync.sh" "$R/scripts/" 2>/dev/null || true
 printf 'seed\n' > "$R/apps/chiron/seed.txt"
 printf 'protected fixture\n' > "$R/scripts/tests/existing.test.cjs"
 : > "$R/.env"
-( cd "$R" && git init -q . && git add -A >/dev/null 2>&1 \
-  && git -c user.name=t -c user.email=t@t commit -qm init >/dev/null 2>&1 ) || true
+# The repo gets a real (local, bare) origin and a registry row, because work.sh will not build
+# on a base whose freshness it cannot prove — see scripts/resync.sh. Giving the fixture a real
+# upstream keeps these tests on the REAL dispatch path; setting RECURSION_REQUIRE_FRESH_BASE=0
+# would have been one line shorter and would have quietly stopped testing what actually runs.
+ORIGIN="$TMP/origin.git"
+git -c init.defaultBranch=main init -q --bare "$ORIGIN"
+( cd "$R" \
+  && git -c init.defaultBranch=main init -q . \
+  && git add -A >/dev/null 2>&1 \
+  && git -c user.name=t -c user.email=t@t commit -qm init >/dev/null 2>&1 \
+  && git branch -M main >/dev/null 2>&1 \
+  && git remote add origin "$ORIGIN" \
+  && git push -q origin main >/dev/null 2>&1 \
+  && git fetch -q origin >/dev/null 2>&1 ) || true
+printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n' > "$R/state/portfolio.tsv"
+printf 'wtest\t%s\t%s\tmain\t-\t-\t-\tactive\n' "$R" "$ORIGIN" >> "$R/state/portfolio.tsv"
 
 MARKER="$TMP/acceptance-ran"
 

@@ -1,0 +1,24 @@
+# portfolio.tsv — the registry of every repo the control plane is allowed to touch.
+#
+# ONE ROW PER REPO. This is the single source of truth for repo -> deploy key, which until now
+# lived only in whoever typed the command; a git op run with the wrong key returns EMPTY, and an
+# empty answer reads exactly like a true negative. resync.sh reads this so no caller has to
+# remember, and work.sh falls back to it when a task omits sshkey:.
+#
+# status: active    = synced every cycle AND dispatchable
+#         reference = synced (so it is never lost) but NEVER dispatched at
+#         pending   = registered, not yet cloned/created — skipped by sync, refused by check
+#
+# topic = telegram forum thread id for this project (B7 fills these; '-' until then).
+# Tab-separated. Do not align with spaces — the columns are read with cut -f.
+#
+#project	path	remote	branch	sshkey	roadmap	topic	status
+recursion	/opt/recursion	git@github.com:NotSkittlz/recursion.git	master	~/.ssh/id_deploy	-	-	active
+golden-stallion	/opt/golden-stallion	git@github.com:NotSkittlz/golden-stallion.git	main	~/.ssh/golden-stallion_deploy	-	-	active
+golden-stallion-extension	/opt/golden-stallion-extension	git@github.com:NotSkittlz/golden-stallion-extension.git	main	~/.ssh/golden-stallion-extension_deploy	-	-	active
+golden-stallion-client	/opt/golden-stallion-client	git@github.com:NotSkittlz/golden-stallion-client.git	main	~/.ssh/gsc_deploy	state/roadmaps/gsc-renderer.md	-	active
+ai-investment-cockpit	/opt/ai-investment-cockpit	git@github.com:NotSkittlz/ai-investment-cockpit.git	main	~/.ssh/ai-investment-cockpit_deploy	-	-	active
+edgar-morning-brew	/opt/edgar-morning-brew	git@github.com:NotSkittlz/edgar-morning-brew.git	main	~/.ssh/edgar-morning-brew_deploy	-	-	active
+guerra-construction-group	/opt/guerra-construction-group	git@github.com:NotSkittlz/guerra-construction-group.git	main	~/.ssh/guerra-construction-group_deploy	-	-	active
+chiron	/opt/chiron	git@github.com:NotSkittlz/chiron.git	main	~/.ssh/chiron_deploy	state/roadmaps/chiron.md	-	pending
+santa-clara-construction	/opt/santa-clara-construction	git@github.com:NotSkittlz/santa-clara-construction.git	main	~/.ssh/santa-clara-construction_deploy	-	-	pending
