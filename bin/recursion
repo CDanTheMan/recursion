@@ -16,6 +16,10 @@ case "$CMD" in
   tasks)         bash scripts/tasks.sh "${1:-}" ;;
   work)          bash scripts/work.sh "${1:-}" ;;
   resolve)       bash scripts/resolve.sh "$@" ;;
+  # `assist` is the RETURN path: resolve/requeue close or reopen a task, but neither carries an
+  # ANSWER back to the arm, so a requeued task re-blocks on the same question. See scripts/assist.sh.
+  assist)        if [ "$#" -ge 2 ]; then bash scripts/assist.sh answer "$@"; else bash scripts/assist.sh show "${1:?task id}"; fi ;;
+  assists)       bash scripts/assist.sh list "${1:-open}" ;;
   requeue)       bash scripts/resolve.sh --requeue "$@" ;;
   drain)         bash scripts/drain.sh ;;
   conduct)       bash scripts/conduct.sh ;;

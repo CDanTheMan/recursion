@@ -60,6 +60,10 @@ build_brief(){
   done
   echo; echo "===== OPEN ESCALATIONS (blockers — who owns each?) ====="
   bash scripts/taskctl.sh esc-list open 2>/dev/null | awk -F'\t' '{printf "%s  [%s seen %sx]  %s\n",$1,$7,$6,$9}' || echo "(none)"
+  echo; echo "===== ASSISTS (tasks waiting on a HUMAN — you cannot unblock these) ====="
+  # A task with an open assist is not queued work: re-dispatching it burns an arm to produce the
+  # same question. Only Lucas can close these.
+  bash scripts/assist.sh list open 2>/dev/null || echo "(none)"
   echo; echo "===== RECENT EVENTS ====="
   tail -25 state/events.jsonl 2>/dev/null || echo "(no events)"
   echo; echo "===== ROADMAPS (human-set direction) ====="
@@ -109,6 +113,8 @@ HARD RULES
   most valuable next step is not written down anywhere, choose 'escalate' and say so.
 - Never dispatch work at a repo the PORTFOLIO section reports as FAULT or DIVERGED. A repo whose
   freshness cannot be proven will silently build on a stale base and revert merged fixes.
+- Never dispatch a task that has an OPEN assist. It is waiting on Lucas, and running it again
+  produces the same question at the cost of an arm.
 
 Reply with reasoning first, then EXACTLY this block and nothing after it:
 
