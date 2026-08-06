@@ -33,6 +33,17 @@ export RECURSION_PAUSED="$PAUSED"   # run.sh labels the brief from this
 log "cycle start (force=${FORCE:-no}, paused=$PAUSED)"
 bash scripts/board.sh begin
 
+# --- 0) Reap dead leases. MONITORING, so it runs even while paused. --------------------
+# A worker that dies leaves `status: running` forever, and the board renders it as live work
+# — that happened (an orphaned arm had to be found and killed by hand) and nothing detected
+# it. Reaping is a state correction, not execution: it only ever moves running -> stale on a
+# task whose lease has already expired. Doing it under PAUSE is the point — a paused box
+# should still be able to tell you that a row is a corpse.
+if [ -x scripts/taskctl.sh ]; then
+  REAPED="$(bash scripts/taskctl.sh reap 2>/dev/null | grep -c '^reaped ' || true)"
+  [ "${REAPED:-0}" -gt 0 ] && log "reaped ${REAPED} stale task lease(s)"
+fi
+
 # --- 1) Heartbeat (Lua/luna). --------------------------------------------------------
 bash scripts/board.sh add hb supervision heartbeat gpt-5.6-luna running "scanning ledger" >/dev/null
 HB_USAGE="$LOG_DIR/$DATE-heartbeat.usage.json"

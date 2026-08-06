@@ -27,6 +27,14 @@ case "$CMD" in
   pause)         bash scripts/pause.sh "$@" ;;
   resume)        bash scripts/resume.sh ;;
   inbox)         cat state/INBOX.md ;;
+
+  # --- escalation identity + leases (taskctl) ------------------------------------------
+  # `resolve` closes a TASK; `resolve-esc` closes an ESCALATION. They are different objects:
+  # a supervisor escalation has no task behind it, which is why it had no id and duplicated.
+  escalations|esc)  bash scripts/taskctl.sh esc-list "${1:-open}" ;;
+  resolve-esc)      bash scripts/taskctl.sh esc-resolve "${1:?escalation id, e.g. esc-0001}" "${2:-}" ;;
+  reap)             bash scripts/taskctl.sh reap ;;
+  events)           tail -n "${1:-30}" state/events.jsonl 2>/dev/null || echo "(no events yet)" ;;
   brief)         B="$(latest_brief)"; [ -n "$B" ] && { echo "# $B"; echo; cat "$B"; } || echo "(no brief yet)" ;;
   logs)          tail -n "${2:-40}" "$(ls -t loop/logs/*.log 2>/dev/null | head -1)" 2>/dev/null || echo "(no logs)" ;;
 
