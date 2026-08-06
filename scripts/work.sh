@@ -24,7 +24,7 @@ LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/$DATE-work.log"
 log(){ echo "[$(date -Is)] work: $*" | tee -a "$LOG" >&2; }
 board(){ bash scripts/board.sh "$@" >/dev/null 2>&1 || true; }
-notify(){ [ "${RECURSION_NO_NOTIFY:-0}" = "1" ] && return 0; bash "$ROOT/scripts/notify.sh" "$@" >/dev/null 2>&1 || true; }
+notify(){ [ "${RECURSION_NO_NOTIFY:-0}" = "1" ] && return 0; bash "$ROOT/scripts/notify.sh" ${REPO_DIR:+--project "$REPO_DIR"} "$@" >/dev/null 2>&1 || true; }
 
 # --- kill switch (architecture.md): state/PAUSE halts the executor like every job. ------
 if [ -f "$ROOT/state/PAUSE" ]; then log "PAUSED (state/PAUSE) — executor idle."; exit 0; fi

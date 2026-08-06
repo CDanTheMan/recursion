@@ -18,6 +18,9 @@ fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 
+# Fixtures must never page Lucas: `hermes send` uses the gateway's own creds,
+# so an empty fixture .env does not stop delivery (observed twice, 2026-08-06).
+export RECURSION_NO_NOTIFY=1
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/repo"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/roadmaps" "$R/loop/logs"
 for s in conduct-hermes.sh hermes-decide.sh validate-decision.py taskctl.sh notify.sh plan.sh publish.sh work.sh conduct.sh; do

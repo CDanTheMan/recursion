@@ -42,8 +42,12 @@ DIR="$ROOT/state/assists"; mkdir -p "$DIR"
 TASKCTL="$ROOT/scripts/taskctl.sh"
 NOTIFY="$ROOT/scripts/notify.sh"
 CMD="${1:-list}"; shift 2>/dev/null || true
+ASSIST_PROJECT="$(taskrepo "${1:-}" 2>/dev/null || true)"
 now(){ date -u +%FT%TZ; }
-notify(){ [ "${RECURSION_NO_NOTIFY:-0}" = "1" ] && return 0; [ -x "$NOTIFY" ] && bash "$NOTIFY" "$@" >/dev/null 2>&1 || true; }
+# An assist is routed by the TASK's repo, so a GSC question lands in the GSC topic rather
+# than in a general stream where it competes with build noise for attention.
+taskrepo(){ sed -n 's/^repo: *//p' "$ROOT/state/tasks/$1.md" 2>/dev/null | head -1 | tr -d '\r'; }
+notify(){ [ "${RECURSION_NO_NOTIFY:-0}" = "1" ] && return 0; [ -x "$NOTIFY" ] && bash "$NOTIFY" ${ASSIST_PROJECT:+--project "$ASSIST_PROJECT"} "$@" >/dev/null 2>&1 || true; }
 event(){ [ -x "$TASKCTL" ] && RECURSION_ROOT="$ROOT" bash "$TASKCTL" event "$1" "$2" "$3" >/dev/null 2>&1 || true; }
 
 f(){ sed -n "s/^$1: *//p" "$2" 2>/dev/null | head -1 | tr -d '\r'; }
