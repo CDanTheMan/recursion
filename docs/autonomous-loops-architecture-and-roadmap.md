@@ -21,11 +21,34 @@ here and the running box disagree, the box wins and this file is stale — fix i
 
 ---
 
+<!-- superseded-by: CONTROL_PLANE.md (2026-08-06, D-010) — authority sections only; see §1 and §5 -->
+
+> **AUTHORITY SUPERSEDED 2026-08-06 (D-010).** This document described the supervisor as a
+> scheduled, stateless text transform and the Telegram agent as a *reactive* console. That is
+> the mailbox shape the rebase replaces: **Hermes is the executive control plane** — it owns the
+> portfolio, the goal→task→event lifecycle, dispatch, monitoring, escalation, replanning, and
+> review-branch publication, and it takes direct orders from Lucas. See `CONTROL_PLANE.md`.
+>
+> **What survives, and why it is not a contradiction:** "the supervisor never writes code" is
+> still correct and load-bearing. Hermes *decides*; deterministic scripts *execute*. Keeping the
+> planner out of implementation is both a correctness boundary (no second implementer) and a cost
+> boundary (tool-calling turns fall off the Codex sub onto metered OpenRouter). The lane algebra
+> (§3), the gates, the escalation seam, and the guardrails (§8) are all preserved as-is.
+>
+> Everything below is retained as the record of what was built and why. Read it as history plus
+> live mechanics, not as the authority model.
+
 ## 1. The two planes (unchanged since v1)
 
 - **Plane 1 — Supervisor.** GPT-5.6 via Codex OAuth ($0 on the ChatGPT sub). cron → `cycle.sh` →
   heartbeat (luna) + daily brief (terra) + reflection (terra). Re-derives a ledger from disk every
   run; owns escalation, git, delivery. Never writes code.
+  <!-- superseded-by: CONTROL_PLANE.md (2026-08-06, D-010) -->
+  > **PARTLY SUPERSEDED.** "Never writes code" is **retained** — the planner must not become a
+  > second implementer, and text-only is also what keeps it on the flat sub (tool-calling turns
+  > fall to metered OpenRouter). What is superseded is *stateless*: Hermes now owns durable
+  > portfolio/goal/task/event state and drives the lifecycle, rather than re-deriving a read-only
+  > ledger every tick and waiting to be asked.
 - **Plane 2 — Execution arms.** The thing that actually builds. Today: `claude -p` flat (Max, $0) —
   a competent *file-writer* that turns a spec into code and passes a gate. Metered arms
   (hermes-tools / OpenRouter / DeepSeek) are fenced behind `RECURSION_ALLOW_METERED`.
@@ -64,8 +87,13 @@ A task with no machine-checkable gate is never auto-integrated — it escalates.
   mirrored in `loop/hermes-skills/` (box `/root/.hermes/skills/` is authoritative).
 - **Autonomy, human-fenced** — `.env` flags (loop can never self-set them — rule 3):
   `AUTO_REFLECT`, `AUTO_DRAIN`, `AUTO_PLAN`, `ALLOW_PUSH`, `ALLOW_AUTOMERGE`, `CONDUCT` (parallel
-  drainer; default off), `PLAN_WORKSTREAMS="chiron"`. `id_deploy` has READ+WRITE (verified). GSC
-  key is READ-ONLY.
+  drainer; default off), `PLAN_WORKSTREAMS="chiron"`. `id_deploy` has READ+WRITE (verified).
+  ⚠ **Corrected 2026-08-06 — this paragraph was stale.** The **GSC key is WRITE**, not read-only,
+  and every registered project now has its own per-repo WRITE deploy key (`~/.ssh/<repo>_deploy`,
+  seven added 2026-08-06). Enforcement of "never merge main" moved to **GitHub branch protection**,
+  which is the only thing a write key actually respects. `RECURSION_ALLOW_AUTOMERGE` is being
+  turned **off** (Lucas, 2026-08-06): every feature ships as a sequential review branch. Read live
+  flag values from `.env`; never recall them.
 
 ---
 
@@ -115,6 +143,14 @@ ban-safety + maintainability). "1:1 first, customize second" = reach native-diff
   loop's guardrails** (it does what you tell it). It runs OPS (status, resolve/requeue/plan/drain/
   pause). **Structural changes to the loops go through a reviewed authoring session, never the agent
   ad-hoc** — that is how authorship stays singular and drift stays out.
+
+  <!-- superseded-by: CONTROL_PLANE.md (2026-08-06, D-010) -->
+  > **SUPERSEDED 2026-08-06 (D-010).** "Reactive console" is no longer the model. Telegram is the
+  > **cockpit**: threaded by project (forum topics), and Hermes leads each thread rather than
+  > waiting to be asked. Hermes takes direct orders from Lucas there, dispatches, reports live
+  > worker/gate/branch state, and correlates replies to the escalation they answer.
+  > *Still true:* the gateway is root and outside the loop's rails — a human drives it — and
+  > structural changes still go through a reviewed authoring session.
 
 ---
 

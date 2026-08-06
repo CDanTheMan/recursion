@@ -32,3 +32,20 @@ Tell me (or just merge) and I will **fast-forward `loop/auto` to `main`** so the
 pages 2–5 off a coherent base (I'll re-enable `RECURSION_AUTO_PLAN=1` at that point).
 
 Nothing here is on `main` yet — this is a review branch. `main` is untouched until you merge.
+
+---
+
+## RESOLVED 2026-08-06 — the divergence is gone
+
+Measured on the box: `git rev-list --left-right --count origin/master...loop/auto` = **0 / 16**.
+`origin/master` has **no** commits that `loop/auto` lacks, so `loop/auto` is now a strict
+superset and `master` is **fast-forwardable** to it. `apps/chiron` is present on `origin/master`,
+which also clears the 2026-08-05 chain-bootstrap blocker (a task branching from a scaffold-less
+base and reinventing the app).
+
+The body above is retained as the record of WHY the histories diverged and how the merge policy
+was decided — that reasoning is still the precedent for the next divergence. Only its "currently
+divergent / not fast-forwardable" *status* is stale.
+
+**Merge order for the current review queue** (a dependency lands before what builds on it):
+`loop/auto` → then the `rebase/*` branches in their numbered order.
