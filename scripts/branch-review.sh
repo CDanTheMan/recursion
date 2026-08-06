@@ -8,11 +8,36 @@
 set -uo pipefail
 HOME="${HOME:-/root}"
 
-# repo rows: name|path|sshkey  (empty sshkey => default key). GSC needs its deploy key to fetch.
-REPOS=(
-  "recursion|/opt/recursion|"
-  "golden-stallion-client|/opt/golden-stallion-client|$HOME/.ssh/gsc_deploy"
-)
+# Repos to enumerate — AUTO-DISCOVERED: every git repo under /opt with an origin remote, using its
+# per-repo deploy key (~/.ssh/<name>_deploy) when one exists. The list used to be hardcoded to two
+# repos, so a newly registered project was silently absent from the digest — the same class of bug
+# as the hardcoded branch prefix below. RECURSION_REVIEW_REPOS overrides with explicit
+# name|path|key rows (newline-separated). B6 replaces discovery with the portfolio registry; until
+# then, discovery beats a list that goes stale the moment a project is added.
+discover_repos(){
+  local d name key
+  for d in /opt/*/; do
+    d="${d%/}"; name="$(basename "$d")"
+    [ -d "$d/.git" ] || continue
+    git -C "$d" remote get-url origin >/dev/null 2>&1 || continue
+    key=""
+    [ -f "$HOME/.ssh/${name}_deploy" ] && key="$HOME/.ssh/${name}_deploy"
+    # golden-stallion-client predates the <name>_deploy convention
+    [ "$name" = "golden-stallion-client" ] && [ -f "$HOME/.ssh/gsc_deploy" ] && key="$HOME/.ssh/gsc_deploy"
+    [ "$name" = "recursion" ] && key=""    # uses the default key
+    printf '%s|%s|%s\n' "$name" "$d" "$key"
+  done
+}
+if [ -n "${RECURSION_REVIEW_REPOS:-}" ]; then
+  mapfile -t REPOS <<<"$RECURSION_REVIEW_REPOS"
+else
+  mapfile -t REPOS < <(discover_repos)
+fi
+
+# Branch namespaces that count as REVIEW branches. `loop/*` alone missed every branch the
+# control-plane rebase produces (rebase/*, fix/*, re/*, prep/*): they were pushed to origin and
+# still absent from this digest. Published but unsurfaced is indistinguishable from not published.
+REVIEW_PREFIXES="${RECURSION_REVIEW_PREFIXES:-loop rebase fix re prep}"
 
 gitfetch(){ # $1=path $2=key
   if [ -n "$2" ]; then
@@ -31,12 +56,14 @@ for entry in "${REPOS[@]}"; do
   gitfetch "$path" "$key"
   def="$(git -C "$path" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"; def="${def:-main}"
   # all loop/* refs, remote (reviewable) and local (not yet pushed), deduped to branch names
+  refargs=()
+  for pfx in $REVIEW_PREFIXES; do refargs+=("refs/remotes/origin/$pfx" "refs/heads/$pfx"); done
   mapfile -t brs < <(git -C "$path" for-each-ref --format='%(refname:short)' \
-      'refs/remotes/origin/loop' 'refs/heads/loop' 2>/dev/null | sed 's#^origin/##' | sort -u)
+      "${refargs[@]}" 2>/dev/null | sed 's#^origin/##' | sort -u)
   [ "${#brs[@]}" -eq 0 ] && continue
 
   # build sortable rows: <sortkey>\t<line>   (open first, then oldest-first within each group)
-  rows=()
+  rows=(); merged=0
   for br in "${brs[@]}"; do
     onorigin=0; git -C "$path" rev-parse --verify -q "origin/$br" >/dev/null 2>&1 && onorigin=1
     ref="origin/$br"; [ "$onorigin" -eq 1 ] || ref="$br"
@@ -45,7 +72,10 @@ for entry in "${REPOS[@]}"; do
     ts="$(git -C "$path" log -1 --format='%ct' "$ref" 2>/dev/null || echo 0)"
     ago="$(git -C "$path" log -1 --format='%cr' "$ref" 2>/dev/null)"
     if git -C "$path" merge-base --is-ancestor "$ref" "origin/$def" 2>/dev/null; then
-      grp=2; tag="✅ merged (prunable)"
+      # Already merged: nothing is waiting on it. Counted, not listed — widening the repo and
+      # prefix scope surfaced ~30 historical merged branches, which would bury the handful that
+      # actually need review and blow the brief's one-page cap (CLAUDE.md, bounded output).
+      merged=$((merged+1)); continue
     elif [ "$onorigin" -eq 1 ]; then
       grp=0; tag="🟡 OPEN — review on GitHub"; GRAND_OPEN=$((GRAND_OPEN+1))
     else
@@ -53,8 +83,14 @@ for entry in "${REPOS[@]}"; do
     fi
     rows+=("${grp} ${ts}	- [$tag] \`$br\` ($tip, $ago) — $subj")
   done
+  # A repo with nothing open contributes one quiet line, not a heading and a wall of history.
+  if [ "${#rows[@]}" -eq 0 ]; then
+    [ "$merged" -gt 0 ] && echo "### $name" && echo "_nothing open ($merged merged, prunable)._" && echo ""
+    continue
+  fi
   echo "### $name"
   printf '%s\n' "${rows[@]}" | sort -k1,1n -k2,2n | cut -f2-
+  [ "$merged" -gt 0 ] && echo "- _($merged already-merged branch(es) hidden — prunable)_"
   echo ""
 done
 if [ "$GRAND_OPEN" -eq 0 ]; then
