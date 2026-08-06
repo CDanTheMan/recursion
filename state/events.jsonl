@@ -1,4 +1,0 @@
-{"ts":"2026-08-06T09:14:13Z","event":"start","task":"selftest-green","project":"selftest","goal":"","pid":176942,"detail":"owner=work.sh:176834@gs-recursion-nbg attempt=1"}
-{"ts":"2026-08-06T09:14:14Z","event":"start","task":"selftest-red","project":"selftest","goal":"","pid":177208,"detail":"owner=work.sh:177100@gs-recursion-nbg attempt=1"}
-{"ts":"2026-08-06T09:16:17Z","event":"start","task":"selftest-green","project":"selftest","goal":"","pid":189599,"detail":"owner=work.sh:189490@gs-recursion-nbg attempt=1"}
-{"ts":"2026-08-06T09:16:19Z","event":"start","task":"selftest-red","project":"selftest","goal":"","pid":189865,"detail":"owner=work.sh:189757@gs-recursion-nbg attempt=1"}

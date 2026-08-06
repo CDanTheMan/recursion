@@ -24,3 +24,10 @@ state/.locks/
 out/
 dist/
 *.bak
+
+# Runtime event log (taskctl). Append-only and unbounded, and every test run that exercises
+# work.sh appends to it — work.selftest.sh alone leaked four selftest-* events into a review
+# branch. It is durable state ON THE BOX, read live by the board/digest, not repo history;
+# committing it would grow the repo per tick and make every branch conflict on it.
+# Retention/rotation is a B5 decision.
+state/events.jsonl
