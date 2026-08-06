@@ -1,0 +1,2 @@
+#id	key	status	first_seen	last_seen	count	workstream	pointer	title
+esc-0001	disable-autonomous-merging-and-verify-branch-protection	open	2026-08-06T09:15:42Z	2026-08-06T09:15:42Z	1	supervision	OPEN SELF-IMPROVEMENT PROPOSALS: “Turn OFF autonomous merge to the default branch”; `/opt/recursion/.env`; `state/ta	2026-08-06 09:15 — Disable autonomous merging and verify branch protection
