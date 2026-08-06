@@ -17,13 +17,20 @@ LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/$DATE-cycle.log"
 log(){ echo "[$(date -Is)] $*" | tee -a "$LOG"; }
 
-# Kill switch: a hard stop for v1 (heartbeat-under-pause is a v2 refinement). ------
+# Kill switch (D-012): PAUSE halts EXECUTION and preserves AWARENESS. -----------------
+# Heartbeat, brief, and escalation delivery keep running; arms, planning, drain/conduct and
+# reflection do not. The old behaviour exited here, before the heartbeat — which contradicted
+# docs/access.md, docs/architecture.md and pause.sh's own message, and meant that the moment
+# you most needed to see what the box thought was the one moment it went silent. A paused box
+# that cannot tell you it is paused is a blind spot, not a safety feature.
+PAUSED=0
 if [ -f "$ROOT/state/PAUSE" ]; then
-  log "PAUSED (state/PAUSE) — cycle idle. resume.sh to lift."
-  exit 0
+  PAUSED=1
+  log "PAUSED (state/PAUSE) — monitoring only: heartbeat + brief + escalations run; no arms, no planning, no drain. resume.sh to lift."
 fi
+export RECURSION_PAUSED="$PAUSED"   # run.sh labels the brief from this
 
-log "cycle start (force=${FORCE:-no})"
+log "cycle start (force=${FORCE:-no}, paused=$PAUSED)"
 bash scripts/board.sh begin
 
 # --- 1) Heartbeat (Lua/luna). --------------------------------------------------------
@@ -73,9 +80,12 @@ fi
 # improvement to state/PROPOSALS.md + one durable lesson to state/LESSONS.md/hermes memory.
 # It never applies anything (CLAUDE.md rule 3) — the next brief surfaces the queue. $0 codex
 # arm; default OFF (the human enables autonomy in .env; the loop can't self-enable, rule 3).
-if [ "${RECURSION_AUTO_REFLECT:-0}" = "1" ] && [ "$FORCE" = "force" ] && [ ! -f "$ROOT/state/PAUSE" ]; then
+# Reflection spawns an arm, so it is EXECUTION and stays halted under PAUSE (D-012).
+if [ "${RECURSION_AUTO_REFLECT:-0}" = "1" ] && [ "$FORCE" = "force" ] && [ "$PAUSED" = "0" ]; then
   log "auto-reflect: daily self-review"
   bash scripts/reflect.sh >>"$LOG" 2>&1 || log "reflect FAILED (non-fatal)"
+elif [ "$PAUSED" = "1" ] && [ "${RECURSION_AUTO_REFLECT:-0}" = "1" ] && [ "$FORCE" = "force" ]; then
+  log "paused: skipping reflect (spawns an arm = execution)"
 fi
 
 # --- 4) Autonomous continuation (opt-in). ---------------------------------------------
@@ -83,7 +93,11 @@ fi
 # BACKGROUND (non-blocking, lock-guarded) so a heavy build never stalls the heartbeat. With
 # RECURSION_AUTO_PLAN=1 it first refills the queue from the roadmaps. Both default OFF — the
 # human enables autonomy in .env; the loop can't self-enable it (CLAUDE.md rule 3).
-if [ "${RECURSION_AUTO_DRAIN:-0}" = "1" ] && [ ! -f "$ROOT/state/PAUSE" ]; then
+# Planning and draining are EXECUTION — halted under PAUSE (D-012). conduct.sh and work.sh
+# each re-check state/PAUSE themselves; this is the outer gate, not the only one.
+if [ "${RECURSION_AUTO_DRAIN:-0}" = "1" ] && [ "$PAUSED" = "1" ]; then
+  log "paused: skipping plan/drain/conduct (execution)"
+elif [ "${RECURSION_AUTO_DRAIN:-0}" = "1" ]; then
   if [ "${RECURSION_AUTO_PLAN:-0}" = "1" ]; then
     for ws in ${RECURSION_PLAN_WORKSTREAMS:-}; do bash scripts/plan.sh "$ws" >>"$LOG" 2>&1 || true; done
   fi
