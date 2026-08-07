@@ -36,7 +36,7 @@ log(){ echo "[$(date -Is)] decide: $*" | tee -a "$LOG" >&2; }
 
 # The verbs Hermes may choose. This list is the contract: conduct-hermes.sh refuses anything
 # else, so adding a verb here without adding it there is inert, and vice versa.
-VERBS="noop plan work conduct publish escalate resolve-esc reap"
+VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add register note handled"
 
 # --- the state brief: ground truth, re-derived every run ---------------------------------
 build_brief(){
@@ -105,6 +105,20 @@ Choose exactly one verb:
   resolve-esc <esc-id>     close an escalation that is demonstrably settled
   reap        reclaim dead task leases
 
+AUTHORING — how an instruction from Lucas becomes work the loop can actually do. These WRITE, so
+they are deliberately small: append-only, into state/ only, never code and never a gate. Prose
+goes in the "text" field, not in args.
+  roadmap-add <ws>              + text: append one plannable checklist item to a roadmap
+  roadmap-new <ws> <project>    create a roadmap wired to a registered repo
+  portfolio-add <project> <remote>   add a PENDING registry row
+  register <project>            clone + activate a pending row — ONLY if its deploy key exists
+  note <project>                + text: append to a project's state file
+  handled <instruction-id>      + text: close one of Lucas's instructions, saying what you did
+
+You CANNOT provision a deploy key; only Lucas can, on GitHub. `portfolio-add` prepares a repo and
+`register` completes it, and when the key is missing the honest answer is 'escalate' asking him
+for one. Never report a repo as ready because you wrote a row about it.
+
 HARD RULES
 - If the box is PAUSED, the only executable verb is 'noop'. Decide anyway and explain.
 - Never choose work that has no machine-checkable acceptance gate.
@@ -128,7 +142,7 @@ HARD RULES
 Reply with reasoning first, then EXACTLY this block and nothing after it:
 
 ===DECISION-START===
-{\"verb\":\"...\",\"args\":[\"...\"],\"project\":\"...\",\"goal\":\"the existing goal this serves\",\"why\":\"one or two sentences\",\"confidence\":\"high|medium|low\",\"wrong_if\":\"the specific observable that would mean this was the wrong call\"}
+{\"verb\":\"...\",\"args\":[\"...\"],\"text\":\"prose, for the authoring verbs only\",\"project\":\"...\",\"goal\":\"the existing goal this serves\",\"why\":\"one or two sentences\",\"confidence\":\"high|medium|low\",\"wrong_if\":\"the specific observable that would mean this was the wrong call\"}
 ===DECISION-END===
 
 'goal' and 'wrong_if' are mandatory. A decision that cannot name the goal it serves, or what

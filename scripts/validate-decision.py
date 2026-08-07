@@ -48,6 +48,23 @@ def validate(verbs, raw):
     if any(".." in a for a in args):
         return False, "path traversal in argument"
 
+    # `text` carries prose for the authoring verbs (a roadmap item, a note, an escalation
+    # title). It is NOT held to ARG_RE: that pattern exists because args become process
+    # arguments, and prose cannot survive it. Passed as one argv element and never through a
+    # shell, the risks that remain are newlines/control characters (which would forge extra
+    # lines in an append-only file) and a leading dash (which would be read as a flag).
+    text = d.get("text", "")
+    if text is not None and not isinstance(text, str):
+        return False, "text must be a string"
+    text = text or ""
+    if text:
+        if len(text) > 500:
+            return False, "text is too long (%d chars, max 500)" % len(text)
+        if any(ord(ch) < 32 for ch in text):
+            return False, "text contains newlines or control characters"
+        if text.lstrip().startswith("-"):
+            return False, "text may not begin with '-' (it would be read as a flag)"
+
     for req in ("goal", "wrong_if"):
         if not str(d.get(req, "")).strip():
             return False, (
