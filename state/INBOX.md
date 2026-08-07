@@ -130,3 +130,10 @@ Close it with: `recursion resolve chiron-003 "<what you decided>"`.
 
 ## 2026-08-06 [RESOLVED] — native-diff acceptance frontier -> DECISIONS.md D-002
 Chosen: Option B — approve the strict-decrease native-diff gate as the metric; DEFER planner integration until the two-tier decomp-decision gate lands + register de-staled + a supervised shakedown. Stop re-raising this. See D-002.
+
+## [esc-0001] 2026-08-06 09:15 — Disable autonomous merging and verify branch protection
+**Workstream:** supervision
+**Pointer:** OPEN SELF-IMPROVEMENT PROPOSALS: “Turn OFF autonomous merge to the default branch”; `/opt/recursion/.env`; `state/tasks/chiron-001.md`; `state/tasks/chiron-003.md`
+**Blocked on:** human action to disable `RECURSION_ALLOW_AUTOMERGE=1`, remove task-level automerge fields, and confirm protected default branches on every repo with a write deploy key.
+**Context:** `chiron-001` and `chiron-003` are passed with automerge enabled; the next qualifying loop can fast-forward-push a default branch, contrary to the recorded review-branch-only policy.
+**Options:** disable automerge and enforce branch protection now; or explicitly authorize autonomous default-branch merging despite the control-plane invariant.

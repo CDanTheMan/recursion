@@ -47,10 +47,35 @@ esac
 # --- Work on the auto branch. Never the default branch (CLAUDE.md hard rule 2). ----
 DEFAULT_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"
 DEFAULT_BRANCH="${DEFAULT_BRANCH:-master}"
+# state/BOARD.md is RENDERED every run and tracked, so it is dirty almost always — and a dirty
+# tracked file makes `git checkout` refuse. That is how the box got stuck on master with the
+# heartbeat and the brief failing on every cycle while the digests (which need no branch switch)
+# kept arriving. Discarding it is safe precisely because it is regenerated below.
+git checkout -q -- state/BOARD.md 2>/dev/null || true
 git rev-parse --verify "$BRANCH" >/dev/null 2>&1 \
   && git checkout -q "$BRANCH" \
   || git checkout -q -b "$BRANCH"
-git merge -q --ff-only "$DEFAULT_BRANCH" 2>/dev/null || true
+
+# ★ THE RUNTIME BRANCH MUST CARRY THE REVIEWED CODE. cron runs whatever is in this working tree,
+# and this checkout makes that tree $BRANCH — so if $BRANCH lags the default branch, the box runs
+# OLD CODE while every log line still looks healthy. It was 21 commits behind when this was found.
+#
+# The previous line here was `git merge --ff-only "$DEFAULT_BRANCH" || true`, which cannot ever
+# succeed: $BRANCH accumulates its own ledger commits, so it is never a strict ancestor. It had
+# been failing silently under `|| true` since the first one. A real merge is the operation that
+# was actually intended — the default branch is what Lucas has reviewed and merged, so taking it
+# is "run what he approved". A conflict is a human's call, so it aborts and escalates rather than
+# guessing.
+if ! git merge -q --no-edit "$DEFAULT_BRANCH" 2>/dev/null; then
+  git merge --abort 2>/dev/null || true
+  log "MERGE CONFLICT bringing $DEFAULT_BRANCH into $BRANCH — the box is running code older than review"
+  [ -x "$ROOT/scripts/taskctl.sh" ] && bash "$ROOT/scripts/taskctl.sh" esc-record \
+      "runtime-branch-conflict" \
+      "$BRANCH cannot merge $DEFAULT_BRANCH — the box is running code older than what you merged" \
+      infra "$ROOT" >/dev/null 2>&1 || true
+fi
+BEHIND="$(git rev-list --count "$BRANCH..$DEFAULT_BRANCH" 2>/dev/null || echo 0)"
+[ "${BEHIND:-0}" -gt 0 ] && log "WARNING: $BRANCH is $BEHIND commit(s) behind $DEFAULT_BRANCH — running stale code"
 
 mkdir -p state/briefs
 log "start $JOB (model=$MODEL)"

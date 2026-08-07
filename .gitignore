@@ -58,3 +58,10 @@ state/escalations.tsv
 loop/prompts/
 loop/artifacts/
 state/.intake-watermark
+
+# ★ THE KILL SWITCH IS RUNTIME STATE, NOT HISTORY. state/PAUSE was tracked, and it existed on
+# loop/auto and not on master — so `git checkout master`, an ordinary thing to do while reviewing,
+# DELETED it and silently unpaused the box (2026-08-06, with AUTO_DRAIN=1). A safety control whose
+# presence depends on which branch is checked out is not a safety control. Same class as
+# events.jsonl: state ON the box, not in its history.
+state/PAUSE
