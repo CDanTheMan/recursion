@@ -2,7 +2,7 @@
 title: Hermes Project Pilot Phase 2 Handoff
 type: handoff
 status: ready-for-review
-last-verified: 2026-08-06
+last-verified: 2026-08-07
 related:
   - CONTROL_PLANE.md
   - docs/plans/hermes-project-pilot-production-plan.md
@@ -68,3 +68,50 @@ pointers with a durable queue.
 
 No pilot, autonomous execution, PAUSE removal, deployment, merge, push, or PR is authorized by
 this handoff.
+
+## Copy/paste prompt for the next session
+
+```text
+Continue the Hermes Project Pilot with Phase 3 only.
+
+First read:
+- C:\Users\drfoo\github\AGENTS.md
+- Recursion's CLAUDE.md and ANCHOR.md
+- the live /opt/recursion/CONTROL_PLANE.md on gs-recursion
+- docs/plans/hermes-project-pilot-production-plan.md
+- docs/plans/hermes-project-pilot-phase0-evidence.md
+- docs/plans/hermes-project-pilot-phase1-handoff.md
+- docs/plans/hermes-project-pilot-phase1-deployment.md
+- docs/plans/hermes-project-pilot-phase2-handoff.md
+
+The Phase 2 PR is recorded in docs/plans/hermes-project-pilot-phase2-handoff.md. Before
+implementation, confirm that Lucas reviewed and merged it and that its Phase 2 controls are present
+in current origin/master. Confirm the Phase 2 implementation commit
+9a4778fa794158c32e5f1381fb7b24c930202542 is an ancestor of origin/master. If the PR is not
+merged, stop and report the blocker.
+
+Keep remote state/PAUSE enabled. Do not deploy Phase 1 or Phase 2 unless Lucas separately
+authorizes a paused deployment. Leave the dirty local master at 20c1fa7 and all of its user-owned
+changes untouched. Fetch origin and create a new clean Phase 3 authoring worktree and review branch
+from the merged origin/master. Do not reuse the dirty master or base Phase 3 on an unmerged branch.
+
+Before changing code, reproduce and record:
+- the existing baseline: 17/17 green;
+- the Phase 1 control suite: 8/8 green;
+- the Phase 1 positive artifact/sandbox/publication audit: green;
+- the Phase 2 control suite: 6/6 green;
+- the Phase 2 positive schema/action-coupling/rotation/backup audit: green;
+- the Phase 3 red suite: 6 intended failures;
+- the live Phase 1 audit and PAUSE evidence. Treat remaining live findings as deployment-gated;
+  do not silently waive or fix them on production.
+
+Present an implementation plan before non-trivial code. Execute Phase 3 only, preserving the
+existing file/event architecture and all Phase 1 and Phase 2 controls. Make all six Phase 3
+controls pass without weakening them while keeping the 17/17 baseline, all eight Phase 1 controls,
+all six Phase 2 controls, and both positive audits green.
+
+Create or update a Phase 3 handoff and append exact red-to-green commands, results, commit OID, and
+final live PAUSE evidence to the project-pilot evidence. Do not run pilots, enable autonomous
+execution, lift PAUSE, deploy, merge, push the Phase 3 branch, or open its PR unless Lucas
+separately authorizes publication.
+```
