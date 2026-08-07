@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "golden-stallion",
+  "repo": "/opt/golden-stallion",
+  "remote": "git@github.com:NotSkittlz/golden-stallion.git",
+  "default_branch": "main",
+  "deploy_key_ref": "~/.ssh/golden-stallion_deploy",
+  "charter": "Observe Golden Stallion and perform maintenance only under an approved project goal. Feature scope, cross-repo contracts, credentials, deployment, merge, and portfolio priority require Head Hermes or Lucas.",
+  "allowed_paths": [
+    "."
+  ],
+  "topic": 4,
+  "pilot_id": "pilot-golden-stallion",
+  "activation_gate": "clone-auth-freshness-v1",
+  "notification_targets": [
+    "project-topic:telegram:-1003894008732:4",
+    "head-hermes:telegram:-1003894008732:1",
+    "lucas-direct:telegram:8913126684"
+  ],
+  "goal_source": "state/goals",
+  "status": "active"
+}

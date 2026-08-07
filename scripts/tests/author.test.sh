@@ -23,8 +23,9 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 
 export RECURSION_NO_NOTIFY=1
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-R="$TMP/root"; mkdir -p "$R/scripts" "$R/state/roadmaps" "$R/state/projects" "$R/state/instructions" "$R/loop/logs"
-for s in author.sh taskctl.sh notify.sh resync.sh intake.sh conduct-hermes.sh validate-decision.py; do
+R="$TMP/root"; mkdir -p "$R/scripts" "$R/state/roadmaps" "$R/state/projects" "$R/state/project-config" \
+  "$R/state/pilots" "$R/state/instructions" "$R/state/.locks" "$R/loop/logs"
+for s in author.sh project-pilot.py taskctl.sh notify.sh resync.sh intake.sh conduct-hermes.sh validate-decision.py; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null
@@ -87,14 +88,19 @@ line two")
                  || no "a multi-line item was appended"
 
 # --- 5) portfolio-add can only ever create a PENDING row ----------------------------------------
-rc=$(au portfolio-add santa-clara git@github.com:NotSkittlz/santa-clara.git)
+rc=$(au portfolio-add santa-clara git@github.com:NotSkittlz/santa-clara.git \
+  "Build only within santa-clara under approved goals; no portfolio or policy authority")
 row="$(grep '^santa-clara' "$R/state/portfolio.tsv" || true)"
 if [ "$rc" = "0" ] && printf '%s' "$row" | grep -q 'pending$'; then
   ok "portfolio-add creates a PENDING row — never an active one"
 else
   no "portfolio-add produced: $row"
 fi
-rc=$(au portfolio-add evil "http://not-github.example/x.git")
+rc=$(au project-topic-bind santa-clara 33)
+[ "$rc" = "0" ] && grep '^santa-clara' "$R/state/portfolio.tsv" | cut -f7 | grep -qx 33 \
+  && ok "pending project binds one explicit Telegram topic before activation" \
+  || no "pending project topic binding failed (rc=$rc): $(cat "$TMP/out")"
+rc=$(au portfolio-add evil "http://not-github.example/x.git" "bounded fixture charter")
 [ "$rc" != "0" ] && ok "a non-GitHub remote is refused" || no "an arbitrary remote was added"
 
 # --- 6) ★ THE HUMAN GATE: no deploy key, no repo -------------------------------------------------
@@ -111,9 +117,9 @@ printf '%s' "$still" | grep -q 'pending$' && ok "the refused row is still pendin
 # ★ CONTROL for the gate: WITH a key, the same call succeeds — or "it refuses" is satisfied by a
 # register that can never work at all.
 KEY="$TMP/fake_deploy"; : > "$KEY"
-python3 - "$R/state/portfolio.tsv" "$KEY" "$ORIGIN" <<'PY'
-import io,sys
-reg,key,remote=sys.argv[1],sys.argv[2],sys.argv[3]
+python3 - "$R/state/portfolio.tsv" "$R/state/project-config/santa-clara.json" "$KEY" "$ORIGIN" <<'PY'
+import io,json,sys
+reg,config,key,remote=sys.argv[1:]
 out=[]
 for line in io.open(reg,encoding='utf-8',newline='').read().split('\n'):
     c=line.split('\t')
@@ -121,6 +127,8 @@ for line in io.open(reg,encoding='utf-8',newline='').read().split('\n'):
         c[2]=remote; c[4]=key; c[1]=key+'-clone'; line='\t'.join(c)
     out.append(line)
 io.open(reg,'w',encoding='utf-8',newline='\n').write('\n'.join(out))
+d=json.load(open(config,encoding='utf-8')); d.update(repo=key+'-clone',remote=remote,deploy_key_ref=key)
+with open(config,'w',encoding='utf-8') as out: json.dump(d,out); out.write('\n')
 PY
 rc=$(au register santa-clara)
 if [ "$rc" = "0" ] && grep '^santa-clara' "$R/state/portfolio.tsv" | grep -q 'active$'; then

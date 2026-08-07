@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "santa-clara-construction",
+  "repo": "/opt/santa-clara-construction",
+  "remote": "git@github.com:NotSkittlz/santa-clara-construction.git",
+  "default_branch": "main",
+  "deploy_key_ref": "~/.ssh/santa-clara-construction_deploy",
+  "charter": "Remain pending until Lucas provisions the deploy key and approves an actionable project goal. Portfolio priority, policy, credentials, deployment, and merge are excluded.",
+  "allowed_paths": [
+    "."
+  ],
+  "topic": "-",
+  "pilot_id": "pilot-santa-clara-construction",
+  "activation_gate": "clone-auth-freshness-v1",
+  "notification_targets": [
+    "head-hermes:telegram:-1003894008732:1",
+    "lucas-direct:telegram:8913126684"
+  ],
+  "goal_source": "state/goals",
+  "status": "pending"
+}

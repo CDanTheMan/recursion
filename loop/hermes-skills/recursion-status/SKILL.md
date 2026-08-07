@@ -36,8 +36,9 @@ The `recursion` CLI is on PATH. Run what the question needs; do not run all of t
 - `recursion lessons` — durable operational lessons the box has learned.
 - `recursion brief` — the latest daily brief (one page).
 - `recursion tasks` — the task queue, optionally `recursion tasks <status>`.
+- `recursion pilot status <project>` — scoped live task/run/git evidence for any registered project.
 
-Project-specific:
+Project-specific legacy details (use only after the scoped pilot status above):
 - **Chiron** (a Next.js app the build-loop is building): its progress is the checklist in
   `state/roadmaps/chiron.md` — run `grep -n "^- \[" /opt/recursion/state/roadmaps/chiron.md`
   (`[x]` done, `[~]` planned/in-flight, `[ ]` not started). The built branch is `loop/work/chiron-001`.

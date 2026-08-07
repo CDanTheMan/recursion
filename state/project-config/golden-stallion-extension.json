@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "golden-stallion-extension",
+  "repo": "/opt/golden-stallion-extension",
+  "remote": "git@github.com:NotSkittlz/golden-stallion-extension.git",
+  "default_branch": "main",
+  "deploy_key_ref": "~/.ssh/golden-stallion-extension_deploy",
+  "charter": "Operate only inside golden-stallion-extension under an approved project goal and its existing capture, protocol, and verification rules. Live game action, cross-project priority, policy, credentials, merge, and deployment are excluded.",
+  "allowed_paths": [
+    "."
+  ],
+  "topic": 5,
+  "pilot_id": "pilot-golden-stallion-extension",
+  "activation_gate": "clone-auth-freshness-v1",
+  "notification_targets": [
+    "project-topic:telegram:-1003894008732:5",
+    "head-hermes:telegram:-1003894008732:1",
+    "lucas-direct:telegram:8913126684"
+  ],
+  "goal_source": "state/goals",
+  "status": "active"
+}

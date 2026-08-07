@@ -123,7 +123,7 @@ poll)
   # overwrites rather than duplicates.
   TMPOUT="$(mktemp)"; trap 'rm -f "$TMPOUT"' EXIT
   python3 - "$DB" "$LAST" "$ALLOW" "$DIR" "$REG" "$DRY" "$(now)" "$BACKFILL" >"$TMPOUT" <<'PY'
-import io, os, re, sqlite3, sys, shutil, tempfile
+import io, json, os, re, sqlite3, sys, shutil, tempfile
 
 db, last, allow, outdir, reg, dry, stamp, backfill = sys.argv[1:9]
 last = int(last); dry = dry == "1"; backfill = backfill == "1"
@@ -146,15 +146,41 @@ def connect(path):
 
 conn, tmp = connect(db)
 
-# thread id -> project, so an instruction typed in a project's topic is ABOUT that project.
+# Thread id -> durable project pilot. The Telegram session history is a cache; these files are
+# the authority for which logical pilot, memory namespace, and project own a topic.
 topics = {}
+project_ids = []
 try:
     for line in io.open(reg, encoding="utf-8", newline="").read().split("\n"):
         c = line.split("\t")
         if len(c) >= 8 and not c[0].startswith("#") and c[6] not in ("-", ""):
-            topics[c[6]] = c[0]
+            project_ids.append(c[0])
+            binding = {"project": c[0], "pilot_id": "", "memory_key": ""}
+            try:
+                state = os.path.dirname(outdir)
+                cfg = json.load(io.open(os.path.join(state, "project-config", c[0]+".json"), encoding="utf-8"))
+                pilot = json.load(io.open(os.path.join(state, "pilots", cfg["pilot_id"]+".json"), encoding="utf-8"))
+                if (c[7] == "active" and cfg.get("status") == "active" and pilot.get("status") == "active"
+                        and str(cfg.get("topic")) == c[6] and str(pilot.get("topic")) == c[6]):
+                    binding.update(pilot_id=pilot["id"], memory_key=pilot["memory_key"])
+            except Exception:
+                pass
+            topics[c[6]] = binding
 except Exception:
     pass
+
+def route_for(body, binding):
+    if not binding or not binding.get("pilot_id"):
+        return "head-hermes"
+    # Project pilots do not own portfolio/policy, credentials, production, PAUSE, model routing,
+    # or another project's priority. Conservative forwarding is safer than a local guess.
+    if re.search(r"\b(portfolio|priorit\w*|policy|spend\w*|credential\w*|deploy\w*|merge\w*|pause|resume|cron|model\s+policy|control\s+plane|deploy\s+key)\b", body, re.I):
+        return "head-hermes"
+    current = binding["project"]
+    for other in project_ids:
+        if other != current and re.search(r"(?<![A-Za-z0-9_-])"+re.escape(other)+r"(?![A-Za-z0-9_-])", body, re.I):
+            return "head-hermes"
+    return binding["pilot_id"]
 
 rows = list(conn.execute("""
     select m.id, m.content, m.timestamp, s.chat_id, s.thread_id, s.user_id, s.source
@@ -196,7 +222,11 @@ for mid, content, ts, chat, thread, uid, source in rows:
     # Only strip a leading bracket that actually looks like a sender name: a few words, no
     # SHOUTING marker. A greedy strip is what caused the bug above.
     body = re.sub(r"^\[[A-Za-z][A-Za-z .'-]{0,40}\]\s*", "", text)
-    project = topics.get(str(thread or ""), "")
+    binding = topics.get(str(thread or ""), {})
+    project = binding.get("project", "")
+    pilot_id = binding.get("pilot_id", "")
+    memory_key = binding.get("memory_key", "")
+    routing_target = route_for(body, binding)
     if dry:
         print("WOULD ingest %s thread=%s project=%s %r" % (mid, thread, project or "-", body[:70]))
         written += 1
@@ -207,10 +237,12 @@ for mid, content, ts, chat, thread, uid, source in rows:
         correlation = "telegram:%s:%s:%s" % (chat, thread or "root", mid)
         output.write(
             "schema_version: 1\nid: %d\nreceived: %s\nprincipal: %s\ntopic: %s\n"
-            "project_id: %s\nreply_correlation: %s\ndeduplication_key: %s\n"
+            "project_id: %s\npilot_id: %s\npilot_memory_key: %s\nrouting_target: %s\n"
+            "reply_correlation: %s\ndeduplication_key: %s\n"
             "from: %s\nchat: %s\nthread: %s\nproject: %s\nstatus: open\n"
             "action_ids: \n\n## INSTRUCTION\n%s\n" %
-            (mid, stamp, uid, thread or "-", project or "", correlation, correlation,
+            (mid, stamp, uid, thread or "-", project or "", pilot_id, memory_key, routing_target,
+             correlation, correlation,
              uid, chat, thread or "-", project or "-", body))
         output.flush(); os.fsync(output.fileno())
     os.replace(tmppath, path)
@@ -256,9 +288,13 @@ list) n="${1:-10}"; ls -1 "$DIR"/*.md 2>/dev/null | tail -"$n" | while read -r f
           "$(awk '/^## INSTRUCTION/{f=1;next} f' "$f" | tr '\n' ' ' | cut -c1-80)"; done
       [ -n "$(ls -A "$DIR" 2>/dev/null)" ] || echo "(no instructions yet)" ;;
 
-open) found=0
+open) found=0; TARGET="${1:-}"
       for f in "$DIR"/*.md; do [ -f "$f" ] || continue
         [ "$(sed -n 's/^status: *//p' "$f" | head -1)" = "open" ] || continue
+        if [ -n "$TARGET" ]; then
+          route="$(sed -n 's/^routing_target: *//p' "$f" | head -1)"
+          [ "${route:-head-hermes}" = "$TARGET" ] || continue
+        fi
         found=1
         project="$(sed -n 's/^project_id: *//p' "$f" | head -1)"; [ -n "$project" ] || project="$(sed -n 's/^project: *//p' "$f" | head -1)"
         printf '%-10s %-26s %s\n' "$(sed -n 's/^id: *//p' "$f")" "$project" \

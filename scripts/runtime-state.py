@@ -26,6 +26,8 @@ RUNTIME_PATHS = (
     "state/action-events.jsonl",
     "state/actions",
     "state/instructions",
+    "state/pilot-requests",
+    "state/runs",
     "state/escalations.tsv",
     "state/.intake-watermark",
     "state/event-archive",

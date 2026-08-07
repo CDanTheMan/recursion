@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "pilot-golden-stallion-client",
+  "project_id": "golden-stallion-client",
+  "topic": 6,
+  "charter": "Advance only the approved offline golden-stallion-client reconstruction goal through its existing conformance and native-diff gates. Tests, fixtures, oracles, baselines, live game access, portfolio policy, merge, and deployment are excluded.",
+  "model_policy": "project-pilot",
+  "concurrency_limit": 0,
+  "budget": {
+    "max_decisions_per_turn": 1,
+    "max_inflight_workers": 0,
+    "publication": false
+  },
+  "notification_targets": [
+    "project-topic:telegram:-1003894008732:6",
+    "head-hermes:telegram:-1003894008732:1",
+    "lucas-direct:telegram:8913126684"
+  ],
+  "goal_source": "state/goals/goal-gsc-client-reconstruction.md",
+  "memory_key": "telegram-topic:6",
+  "worktree_root": ".worktrees/golden-stallion-client",
+  "status": "active"
+}
