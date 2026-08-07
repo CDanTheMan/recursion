@@ -83,9 +83,48 @@ def validate(kind: str, value: object) -> dict:
                 fail(f"{field} must be a unique array")
             for item in items:
                 require_identifier(item, field)
-    for field in ("arguments", "allowed_paths", "non_goals"):
+    for field in ("arguments", "allowed_paths", "non_goals", "notification_targets"):
         if field in value and not isinstance(value[field], list):
             fail(f"{field} must be an array")
+    if "concurrency_limit" in value and (
+        not isinstance(value["concurrency_limit"], int) or value["concurrency_limit"] < 0
+    ):
+        fail("concurrency_limit must be a non-negative integer")
+    if "budget" in value and kind == "pilot" and not isinstance(value["budget"], dict):
+        fail("pilot budget must be an object")
+    if kind == "task" and value.get("evidence_contract") == "worker-result-v1":
+        phase5 = (
+            "model_alias", "verifier_model_alias", "deadline_seconds",
+            "verifier_deadline_seconds", "network_policy", "verification",
+            "expected_change", "gate_files",
+        )
+        missing_phase5 = [field for field in phase5 if field not in value]
+        if missing_phase5:
+            fail("Phase 5 task is missing: " + ", ".join(missing_phase5))
+        if value["model_alias"] not in {"sonnet-routine", "opus-complex"}:
+            fail("invalid implementer model alias")
+        if value["verifier_model_alias"] not in {"opus-review", "opus-complex"}:
+            fail("invalid verifier model alias")
+        if value["model_alias"] == value["verifier_model_alias"]:
+            fail("implementer and verifier aliases must be independent")
+        if value["network_policy"] not in {"provider-only", "none"}:
+            fail("invalid network policy")
+        if value["verification"] != "independent":
+            fail("generated work requires independent verification")
+        if value["expected_change"] not in {"required", "optional"}:
+            fail("invalid expected_change policy")
+        if not isinstance(value["gate_files"], list):
+            fail("gate_files must be an array")
+        for field in ("deadline_seconds", "verifier_deadline_seconds"):
+            if not isinstance(value[field], int) or value[field] < 1:
+                fail(f"{field} must be a positive integer")
+        if str(value.get("acceptance", "")).strip() in {"", "true", ":", "/bin/true", "exit 0"}:
+            fail("acceptance gate is structurally vacuous")
+    if kind == "run":
+        if "process_group" in value and (not isinstance(value["process_group"], int) or value["process_group"] < 1):
+            fail("process_group must be a positive integer")
+        if "role" in value and value["role"] not in {"implementer", "verifier"}:
+            fail("invalid worker role")
     if "idempotency_key" in value:
         key = value["idempotency_key"]
         if not isinstance(key, str) or not key or len(key) > 256:

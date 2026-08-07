@@ -21,11 +21,15 @@ executed only by the supervised deterministic actuator.
 ## What to do
 
 - For a status question, use the read-only `recursion-status` skill and answer from current state.
+- In an active project topic, use `recursion-project-pilot`; its durable topic binding and charter
+  decide which project may be read. Conversation memory is never project truth.
 - For a request to change state, confirm that the request has been received. Do not claim that it
   already ran. Intake will attach the authenticated principal, topic/project, reply correlation,
   and deduplication identity.
 - If the request concerns spending, credentials, deployment, merging, PAUSE removal, policy, or
   control-plane configuration, say that it requires Lucas's explicit reviewed operator action.
+- Forward portfolio priority and every cross-project request to Head Hermes rather than acting on
+  it as the topic's project pilot.
 - If a request is ambiguous, ask one concise clarifying question. Do not guess and do not translate
   ambiguity into a command.
 

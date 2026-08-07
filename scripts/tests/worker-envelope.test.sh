@@ -92,7 +92,7 @@ status_of(){ sed -n 's/^status: *//p' "$R/state/tasks/$1.md" | head -1 | tr -d '
 inbox_tail(){ tail -25 "$R/state/INBOX.md" 2>/dev/null; }
 
 # --- 1) ★ CONTROL: an in-scope change with a green gate must PASS ---------------------------
-mktask t-ok "apps/chiron" "true"
+mktask t-ok "apps/chiron" "test -s apps/chiron/new.txt"
 run_case t-ok 'mkdir -p apps/chiron && echo hello > apps/chiron/new.txt'
 if [ "$(status_of t-ok)" = "passed" ]; then
   ok "★ CONTROL — an in-scope change with a green gate PASSES (the gate is not refusing everything)"
@@ -102,7 +102,7 @@ else
 fi
 
 # --- 2) writing a CONTROL-PLANE file is refused --------------------------------------------
-mktask t-cp "apps/chiron" "true"
+mktask t-cp "apps/chiron" "test -s apps/chiron/a.txt"
 run_case t-cp 'mkdir -p apps/chiron && echo x > apps/chiron/a.txt && echo "evil" > scripts/pwn.sh'
 if [ "$(status_of t-cp)" != "passed" ] && inbox_tail | grep -q 'SCOPE VIOLATION'; then
   ok "control-plane write (scripts/) is REFUSED and escalated"
@@ -111,7 +111,7 @@ else
 fi
 
 # --- 3) editing a TEST file is refused (the gate cannot see this) ---------------------------
-mktask t-test "apps/chiron" "true"
+mktask t-test "apps/chiron" "test -s apps/chiron/b.txt"
 run_case t-test 'mkdir -p apps/chiron && echo x > apps/chiron/b.txt && echo "assert(true)" >> scripts/tests/existing.test.cjs'
 if [ "$(status_of t-test)" != "passed" ]; then
   ok "editing a *.test.cjs is REFUSED (tamper path the acceptance gate cannot detect)"
@@ -120,7 +120,7 @@ else
 fi
 
 # --- 4) wandering outside allowed_paths is refused ------------------------------------------
-mktask t-out "apps/chiron" "true"
+mktask t-out "apps/chiron" "test -s apps/chiron/c.txt"
 run_case t-out 'mkdir -p apps/chiron other && echo x > apps/chiron/c.txt && echo y > other/stray.txt'
 if [ "$(status_of t-out)" != "passed" ] && inbox_tail | grep -qi 'outside allowed_paths'; then
   ok "a write outside allowed_paths is REFUSED and names the offending path"
@@ -162,7 +162,7 @@ done
 exit 0
 STUB
 chmod +x "$BIN/claude"
-mktask t-prompt "apps/chiron" "true"
+mktask t-prompt "apps/chiron" "test -s apps/chiron/seed.txt"
 export STUB_PROMPT_OUT="$TMP/prompt.txt"
 ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 RECURSION_GIT_FETCH=0 \
     RECURSION_TEST_WORKER=logical STUB_PROMPT_OUT="$TMP/prompt.txt" bash scripts/work.sh t-prompt ) >/dev/null 2>&1
