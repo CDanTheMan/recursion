@@ -541,5 +541,17 @@ live audit still had exactly the same two deployment-gated Phase 1 findings. The
 waived nor changed.
 
 No Phase 1, Phase 2, or Phase 3 deployment, pilot, autonomous execution, PAUSE removal, merge,
-push, or Phase 3 PR occurred. The local review handoff is in
-`docs/plans/hermes-project-pilot-phase3-handoff.md`.
+push, or Phase 3 PR occurred during implementation and the original evidence snapshot. The local
+review handoff was written to `docs/plans/hermes-project-pilot-phase3-handoff.md`.
+
+### Review-branch publication follow-up
+
+Lucas subsequently authorized committing and pushing the Phase 3 review branch so he can review
+and merge it in GitHub. The handoff update was committed as
+`fdc08a23e7feaebb845f7191ef26cad17d3337d6`, and
+`review/hermes-phase3-controls` was pushed to the same OID. No PR was opened.
+
+A post-push read-only production check at `2026-08-07T14:34:41Z` again found PAUSE present with
+SHA-256 `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`, production unchanged on
+`loop/auto` at `b51bfff09fdc8f51cb8313ceb7267dbe0f701c69`, both Hermes gateway/supervisor units inactive, and
+zero `recursion-worker-*` units. Branch publication did not deploy any phase or change production.
