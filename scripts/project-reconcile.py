@@ -683,7 +683,12 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
         outcome, rc = run_gate_interruptibly(base, worktree, goal["acceptance_suite"], wall_deadline)
         head = git_output(worktree, "rev-parse", "HEAD")
         dirty = git_output(worktree, "status", "--porcelain", "--untracked-files=all")
-        verdict = "pass" if outcome == "pass" and rc == 0 and head == commit and not dirty else outcome
+        if outcome == "pass" and rc == 0 and head == commit and not dirty:
+            verdict = "pass"
+        elif outcome == "pass":
+            verdict = "fail"
+        else:
+            verdict = outcome
         value = {"schema_version": 1, "id": f"goal-evidence-{goal_id}", "project_id": project,
                  "goal_id": goal_id, "verdict": verdict, "exit_code": rc,
                  "commit_oid": commit, "acceptance_suite": goal["acceptance_suite"],

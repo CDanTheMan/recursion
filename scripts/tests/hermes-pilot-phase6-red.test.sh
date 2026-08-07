@@ -205,16 +205,29 @@ launch_count(){ [ -f "$1/state/worker-launches" ] && wc -l < "$1/state/worker-la
 R="$(setup success)"; write_task "$R" success-task proposed 0
 ticks "$R" 8
 loop_live=0; [ "$(action_count "$R" work)" -gt 0 ] && loop_live=1
+M="$(setup success-mutating-gate)"; write_task "$M" mutation-task proposed 0
+set_field "$M/state/goals/phase6-goal.md" acceptance_suite "printf mutation > app/gate-mutation.txt"
+ticks "$M" 8
+mutation_closed=0
+if [ "$(goal_status "$M")" != achieved ] && [ "$(launch_count "$M")" = 1 ] \
+   && python3 - "$M/state/evidence/phase6-goal.json" <<'PY'
+import json,sys
+try: row=json.load(open(sys.argv[1]))
+except Exception: raise SystemExit(1)
+raise SystemExit(0 if row.get('verdict')=='fail' and row.get('worktree_clean') is False else 1)
+PY
+then mutation_closed=1; fi
 if [ "$(goal_status "$R")" = achieved ] && [ "$(task_status "$R" success-task)" = passed ] \
    && [ "$(action_count "$R" work)" = 1 ] \
+   && [ "$mutation_closed" = 1 ] \
    && python3 - "$R/state/evidence/phase6-goal.json" <<'PY'
 import json,sys
 try: row=json.load(open(sys.argv[1]))
 except Exception: raise SystemExit(1)
 raise SystemExit(0 if row.get('verdict')=='pass' and row.get('commit_oid') and row.get('independent_verifier') else 1)
 PY
-then ok "successful goal reconciled through exact-commit acceptance and independent verification"
-else no "successful goal did not reach achieved through the exact evidence chain"; fi
+then ok "successful goal reconciled exactly while a mutating final gate failed closed"
+else no "exact goal verification accepted failure or rejected clean success"; fi
 
 # 2. Machine-gate failure gets one durable retry and no unbounded third launch.
 R="$(setup gate-failure)"; write_task "$R" gate-task ready 0; touch "$R/state/test-gate-fail"
