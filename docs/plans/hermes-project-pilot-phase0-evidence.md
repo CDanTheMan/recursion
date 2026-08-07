@@ -12,18 +12,19 @@ related:
   - docs/plans/hermes-project-pilot-phase4-handoff.md
   - docs/plans/hermes-project-pilot-phase5-handoff.md
   - docs/plans/hermes-project-pilot-phase6-handoff.md
+  - docs/plans/hermes-project-pilot-phase7-handoff.md
 ---
 # Hermes project pilot Phase 0 evidence
 
 ## Verdict
 
 Phase 0 established the reproducible baseline and red controls without fixing a defect. Phases 1
-through 5 subsequently closed their authoring controls on separate reviewed bases and were merged
-through Lucas's review workflow. Phase 6 now closes its authoring controls on merged Phase 5. Its
-review branch was published only after separate authorization from Lucas; no PR was opened. Exact
-evidence is appended below.
+through 6 subsequently closed their authoring controls on separate reviewed bases and were merged
+through Lucas's review workflow. Phase 7 now closes its authoring controls on merged Phase 6. Lucas
+separately authorized publication after the Phase 7 controls/evidence completed; the review branch
+was pushed, and no PR was opened. Exact evidence is appended below.
 
-Production remains paused and undeployed for Phases 1-6. No live pilot ran, no autonomous execution was
+Production remains paused and undeployed for Phases 1-7. No live pilot ran, no autonomous execution was
 enabled, no product repository changed, and no protected or default branch was pushed or merged by
 this work. The two live Phase 1 findings remain deployment gates, not waived controls.
 
@@ -1083,3 +1084,193 @@ only publication of the review branch. `review/hermes-phase6-controls` was pushe
 `f8996fe545a7faf59883b1b4d50be8d10a721f1d`, exactly matching the then-current local tip. This
 follow-up did not open a PR, merge, deploy, run a pilot, raise concurrency, remove PAUSE, send a
 human-visible test notification, or begin Phase 7.
+
+## Phase 7 — reporting and notification fan-out
+
+### Merge gate and isolated authoring base
+
+Phase 7 authoring did not begin until both final Phase 6 review OIDs were proved merged:
+
+```text
+git fetch origin
+git merge-base --is-ancestor b4b2924664793f4c7b60d507269e2bcdafd7d413 origin/master
+# rc=0
+git merge-base --is-ancestor e1dc1edad6b33e15f50c7a2dd795d274de87b90f origin/master
+# rc=0
+git rev-parse origin/master
+# 44d9a2b1b01bf5bdd9a1723602e6e36070d0f7ac
+```
+
+The Phase 6 review branch was not needed for the ancestry decision and could have been pruned after
+merge. A new clean worktree `C:\Users\drfoo\github\recursion-hermes-phase7` and local branch
+`review/hermes-phase7-controls` were created from that exact merged `origin/master`. No previous
+worktree or unmerged review branch was reused. The dirty user-owned `master` remained at
+`20c1fa77042f3aa9f5d8978352792f3b058bc0d1` and was not an authoring or test source.
+
+### Pre-change controls and live gate
+
+Before implementation changed, an untouched named Linux clone of merged base `44d9a2b` ran:
+
+```text
+bash scripts/audit/hermes-pilot-phase0-baseline.sh
+# rc=0; BASELINE_COMMIT=44d9a2b1b01bf5bdd9a1723602e6e36070d0f7ac;
+# BASELINE_BRANCH=phase7-base; BASELINE_SUITES=17; BASELINE_FAILED_SUITES=0
+
+bash scripts/tests/hermes-pilot-phase1-red.test.sh
+bash scripts/audit/hermes-pilot-phase1-green.sh
+# both rc=0; 8/8 controls and Phase 1 positive audit green
+
+bash scripts/tests/hermes-pilot-phase2-red.test.sh
+bash scripts/audit/hermes-pilot-phase2-green.sh
+# both rc=0; 6/6 controls and Phase 2 positive audit green
+
+bash scripts/tests/hermes-pilot-phase3-red.test.sh
+bash scripts/audit/hermes-pilot-phase3-green.sh
+# both rc=0; 6/6 controls and Phase 3 positive audit green
+
+bash scripts/tests/hermes-pilot-phase4-red.test.sh
+bash scripts/audit/hermes-pilot-phase4-green.sh
+# both rc=0; 4/4 controls and Phase 4 positive audit green
+
+bash scripts/tests/hermes-pilot-phase5-red.test.sh
+bash scripts/audit/hermes-pilot-phase5-green.sh
+# both rc=0; 9/9 controls and Phase 5 positive audit green
+
+bash scripts/tests/hermes-pilot-phase6-red.test.sh
+bash scripts/audit/hermes-pilot-phase6-green.sh
+# both rc=0; 18/18 controls and Phase 6 positive audit green
+```
+
+The pre-change read-only live snapshot at `2026-08-07T19:01:51Z` found production `loop/auto` at
+`9c70a860df2a2b68f4359cdbfeb9fdca1c877ad3`, PAUSE present before and after with SHA-256
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`,
+`hermes-gateway=active`, `recursion-hermes-gateway=inactive`, the supervisor timer inactive, and
+zero `recursion-worker-*` units. The live Phase 1 audit returned `1` with exactly two expected
+deployment-gated findings: the installed gateway is unrestricted/root, and the installed
+`aiohttp==3.14.1` plus `cryptography==48.0.1` have known advisories. Nothing was waived or changed.
+
+### Phase 7 red controls
+
+The Phase 7 falsifier was authored before implementation and overlaid by itself onto the untouched
+merged base. It was then preserved separately as commit
+`c7453771770bae171ae1b281a28000ae05c4e7bd` (`Add Hermes pilot Phase 7 red controls`):
+
+```text
+bash scripts/tests/hermes-pilot-phase7-red.test.sh
+# rc=1; exactly 16 FAIL lines
+# hermes-pilot-phase7-red: 16 FAILED (expected on the pre-Phase 7 base)
+```
+
+The 16 red failures covered retry-then-exactly-once delivery; no duplicates on repeated ticks;
+independent retry state by destination; bounded backoff and retry exhaustion; durable crash/reboot
+acknowledgement; dead-letter escalation; PAUSE; malformed/missing/unknown/unconfigured destination
+refusal; project-topic isolation; Head Hermes/portfolio isolation; explicit-only Lucas DM routing;
+exactly one Head Hermes portfolio result; complete terminal audit correlation; recovery across
+events/outbox/acknowledgements/retries/dead letters/receipts/existing delivery records; refusal of
+unsupported "sent" claims; and zero sends after complete acknowledgement.
+
+During green bring-up the harness received only mechanical and strengthening repairs: unbuffered
+progress output, a completely correlated rogue delivery, an explicit missing-pair recovery fixture,
+durable actions in the terminal-chain assertion, stable rotated-event identity, a positive
+Lucas-attention policy case, and a dead-letter direct-delivery assertion. No control was removed or
+weakened.
+
+### Phase 7 implementation
+
+Final implementation OID `b4d3a30317e7d11f8e31b5e2578eb53aaeb5155c`
+(`Implement Hermes pilot Phase 7 reporting`) keeps one canonical file/event architecture and the
+existing durable decision/action/actuator path. The scheduler only observes canonical events,
+notification state, delivery records, receipts, and reports and enqueues idempotent decisions.
+Whitelisted actuator actions own every enqueue/retry/acknowledgement/dead-letter/terminal-report/
+audit/recovery transition, and human-visible output still crosses only the existing `notify.sh`
+sender.
+
+The implementation adds strict configured destination policy; exact `(event_id, destination)`
+identity; independent bounded retries; fsync-backed outbox, lifecycle history, transport receipts,
+reports, audit chains, and recovery snapshots; transport-evidence-only acknowledgement; terminal
+pilot-report acknowledgement before one Head Hermes portfolio result; and complete correlated
+terminal evidence. It does not add a scheduler process, executor, state store, publisher, delivery
+queue, notifier, worker launcher, or model-to-shell path. Tests use only the inert fixture transport.
+
+### Exact-commit green after red
+
+A fresh named-branch Linux clone made from a Git bundle at exact final implementation OID
+`b4d3a30317e7d11f8e31b5e2578eb53aaeb5155c` retained separate command logs and ran:
+
+```text
+bash scripts/audit/hermes-pilot-phase0-baseline.sh
+# rc=0; BASELINE_COMMIT=b4d3a30317e7d11f8e31b5e2578eb53aaeb5155c;
+# BASELINE_BRANCH=review/hermes-phase7-controls;
+# BASELINE_SUITES=17; BASELINE_FAILED_SUITES=0
+
+bash scripts/tests/hermes-pilot-phase1-red.test.sh
+bash scripts/audit/hermes-pilot-phase1-green.sh
+# both rc=0; hermes-pilot-phase1-red/green: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase2-red.test.sh
+bash scripts/audit/hermes-pilot-phase2-green.sh
+# both rc=0; hermes-pilot-phase2-red/green: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase3-red.test.sh
+bash scripts/audit/hermes-pilot-phase3-green.sh
+# both rc=0; hermes-pilot-phase3-red/green: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase4-red.test.sh
+bash scripts/audit/hermes-pilot-phase4-green.sh
+# both rc=0; hermes-pilot-phase4-red/green: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase5-red.test.sh
+bash scripts/audit/hermes-pilot-phase5-green.sh
+# both rc=0; hermes-pilot-phase5-red/green: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase6-red.test.sh
+bash scripts/audit/hermes-pilot-phase6-green.sh
+# both rc=0; all 18 controls and Phase 6 positive audit green
+
+bash scripts/tests/hermes-pilot-phase7-red.test.sh
+# rc=0; all 16 controls passed; hermes-pilot-phase7-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase7-green.sh
+# rc=0; parser/schema, sole-path, routing/identity, durability/recovery, retry/PAUSE,
+# terminal-ordering/audit architecture checks and all 16 behavioral controls green;
+# hermes-pilot-phase7-green: ALL PASS
+```
+
+The independently logged baseline/Phase 1-5, Phase 6, and Phase 7 command groups each ended
+`MATRIX_RC=0`. The commands and result summaries above are the durable evidence; no `/tmp` path is
+treated as canonical.
+
+### Final live PAUSE and Phase 7 boundary
+
+The final read-only snapshot at `2026-08-07T20:23:47Z` ran the installed live Phase 1 audit between
+two PAUSE checks:
+
+```text
+ssh gs-recursion 'cd /opt/recursion && bash scripts/audit/hermes-pilot-live-phase1-red.sh'
+# LIVE_AUDIT_RC=1; exactly 2 expected deployment-gated findings
+# BRANCH=loop/auto
+# OID=9c70a860df2a2b68f4359cdbfeb9fdca1c877ad3
+# hermes-gateway=active; recursion-hermes-gateway=inactive
+# recursion-supervisor.timer=inactive; recursion-worker-* units=0
+```
+
+PAUSE was present before and after with unchanged SHA-256
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`. Production remained on the
+same `loop/auto` commit seen before Phase 7 implementation. The two findings remained the
+unrestricted/root installed gateway and advisories in installed `aiohttp==3.14.1` and
+`cryptography==48.0.1`. This work did not alter the service, dependencies, ref, PAUSE, timers,
+workers, configuration, or delivery state.
+
+No Phase 1-7 deployment, live pilot, autonomous production execution, project-concurrency increase,
+human-visible test notification, PAUSE removal, product-repository change, PR, merge, or Phase 8
+work occurred. The Phase 7 handoff is `docs/plans/hermes-project-pilot-phase7-handoff.md`. Every
+further action requires separate Lucas authorization.
+
+### Phase 7 review-branch publication follow-up
+
+After Phase 7 implementation, exact-commit verification, evidence, and the Phase 8 session prompt
+were complete, Lucas separately authorized committing and pushing the working review branch. The
+initial published remote tip was `2c022d9116fde584dccead79552da569515cdb18`, exactly matching the
+then-current local tip. Publication created `origin/review/hermes-phase7-controls`; it did not open
+a PR, merge, deploy, run a pilot, raise concurrency, remove PAUSE, send a human-visible test
+notification, mutate product repositories, or begin Phase 8.

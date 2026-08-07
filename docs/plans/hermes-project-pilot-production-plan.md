@@ -2,7 +2,7 @@
 title: Hermes Project Pilot Production Plan
 type: implementation-plan
 status: proposed
-last-verified: 2026-08-06
+last-verified: 2026-08-07
 related:
   - CONTROL_PLANE.md
   - docs/architecture.md
@@ -231,6 +231,11 @@ Required controls:
   host reboot, stale base, publisher failure, and verifier disagreement.
 - Once a goal reaches `achieved`, repeated scheduler ticks launch zero workers.
 ## Phase 7 - Reporting and notification fan-out
+
+Status: authored, control-complete, and published on the Phase 7 review branch; not merged,
+deployed, or exercised against a human-visible transport. See
+`docs/plans/hermes-project-pilot-phase7-handoff.md`.
+
 Deliverables:
 
 - Durable outbox destinations: project topic for detail, Head Hermes channel for portfolio summary,
