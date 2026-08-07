@@ -21,7 +21,9 @@ related:
   `529d15e6438035b4ed62369459307af8a642fde3` are ancestors of merged
   `origin/master` at `10bca6cfe1df81a4f03592a49868e70f89fd43f3` (PR #26).
 - Phase 6 red-control commit: `50d354c758f002ef64db57dc78c549f178b1e00e`.
-- Phase 6 implementation commit: `b00d7debb1c3cabecd3c75d9fc41e19b94d59dff`.
+- Phase 6 core implementation commit: `b00d7debb1c3cabecd3c75d9fc41e19b94d59dff`.
+- Phase 6 final implementation OID: `b4b2924664793f4c7b60d507269e2bcdafd7d413`; this adds the
+  exit-zero-but-mutating final-gate refusal and its control.
 - Local review branch: `review/hermes-phase6-controls` in the clean worktree
   `C:\Users\drfoo\github\recursion-hermes-phase6`.
 - Publication state: local only. The branch was not pushed, no PR was opened, and nothing was
@@ -87,9 +89,11 @@ exhaustion, PAUSE, crash/reboot recovery, stale base, publisher failure, verifie
 five capacity/budget limits, deterministic terminals, six-source recovery, verifying closure, and
 zero post-achievement launch. The red suite was committed separately before implementation.
 
-At exact implementation OID `b00d7de`, the same 18 cases all passed. A fresh named Linux clone from
-a Git bundle also passed the baseline and every historical control/audit. The precise commands and
-results are in the Phase 0 evidence file.
+At exact final implementation OID `b4b2924`, the same 18 cases all passed. The successful-goal case
+also proves that a final gate which exits zero after dirtying the detached exact-commit worktree is
+recorded as failed and cannot achieve or relaunch the goal. A fresh named Linux clone from a Git
+bundle passed the baseline and every historical control/audit. The precise commands and results are
+in the Phase 0 evidence file.
 
 ## Production boundary and observed drift
 
@@ -99,7 +103,8 @@ read-only snapshot at `2026-08-07T18:18:10Z` found `loop/auto` had independently
 `9c70a860df2a2b68f4359cdbfeb9fdca1c877ad3` (`loop: board 2026-08-07 18:16Z`). That commit descends
 from the earlier deployed commit and was not authored, deployed, or invoked by this Phase 6 work.
 
-PAUSE remained present before and after the final audit with SHA-256
+The final read-only recheck at `2026-08-07T18:46:33Z` found that ref unchanged. PAUSE remained
+present before and after the final audit with SHA-256
 `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`; `hermes-gateway` was active,
 `recursion-hermes-gateway` and `recursion-supervisor.timer` were inactive, and zero
 `recursion-worker-*` units existed. The audit retained exactly two deployment-gated failures: the

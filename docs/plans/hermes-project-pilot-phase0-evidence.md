@@ -986,10 +986,13 @@ and zero dispatch after achievement.
 
 ### Phase 6 implementation
 
-The implementation is commit `b00d7debb1c3cabecd3c75d9fc41e19b94d59dff`
-(`Implement Hermes pilot Phase 6 controls`). It preserves the canonical file/event state, the
-durable decision/action queue, sole actuator, existing publisher, and Phase 5 `work` execution path.
-It adds one deterministic reconciler invoked inside the already-supervised actuator, not a second
+The core implementation is commit `b00d7debb1c3cabecd3c75d9fc41e19b94d59dff`
+(`Implement Hermes pilot Phase 6 controls`). Final implementation OID
+`b4b2924664793f4c7b60d507269e2bcdafd7d413` (`Fail closed on mutating Phase 6 goal gates`) adds
+the explicit control and refusal for an exit-zero final acceptance command that dirties its detached
+exact-commit worktree. Together they preserve the canonical file/event state, durable
+decision/action queue, sole actuator, existing publisher, and Phase 5 `work` execution path. They
+add one deterministic reconciler invoked inside the already-supervised actuator, not a second
 scheduler or executor.
 
 The reconciler observes canonical task/run/process/worktree/ref/event/delivery truth, emits
@@ -1002,13 +1005,13 @@ evidence; and a model's claim of completion has no state-transition authority.
 
 ### Exact-commit green after red
 
-A fresh named-branch Linux clone made from a Git bundle at exact implementation commit
-`b00d7debb1c3cabecd3c75d9fc41e19b94d59dff` ran:
+A fresh named-branch Linux clone made from a Git bundle at exact final implementation OID
+`b4b2924664793f4c7b60d507269e2bcdafd7d413` ran:
 
 ```text
 bash scripts/audit/hermes-pilot-phase0-baseline.sh
-# rc=0; BASELINE_COMMIT=b00d7debb1c3cabecd3c75d9fc41e19b94d59dff;
-# BASELINE_BRANCH=phase6-exact; BASELINE_SUITES=17; BASELINE_FAILED_SUITES=0
+# rc=0; BASELINE_COMMIT=b4b2924664793f4c7b60d507269e2bcdafd7d413;
+# BASELINE_BRANCH=phase6-b4b2924; BASELINE_SUITES=17; BASELINE_FAILED_SUITES=0
 
 bash scripts/tests/hermes-pilot-phase1-red.test.sh
 bash scripts/audit/hermes-pilot-phase1-green.sh
@@ -1031,7 +1034,8 @@ bash scripts/audit/hermes-pilot-phase5-green.sh
 # both rc=0; 9/9 controls and Phase 5 positive audit green
 
 bash scripts/tests/hermes-pilot-phase6-red.test.sh
-# rc=0; 18/18 controls passed; hermes-pilot-phase6-red: ALL PASS
+# rc=0; 18/18 controls passed, including clean success plus dirty-final-gate refusal;
+# hermes-pilot-phase6-red: ALL PASS
 
 bash scripts/audit/hermes-pilot-phase6-green.sh
 # rc=0; parser, sole-path, CAS/event, verifying-closure, budget, recovery-source,
@@ -1039,14 +1043,15 @@ bash scripts/audit/hermes-pilot-phase6-green.sh
 ```
 
 The Phase 6 cases prove success through Phase 5 exact-OID evidence and a distinct final goal gate;
-bounded gate retry and publisher failure; one ambiguity assist; deterministic failure-budget and
-terminal closure; PAUSE interruption; no duplicate recovery launch/delivery; stale-base refusal;
-verifier disagreement refusal; every configured resource bound; review backpressure; evidence-only
-reopen; and zero worker launch on repeated ticks after achievement.
+refusal when that final gate dirties the exact detached worktree even if it exits zero; bounded gate
+retry and publisher failure; one ambiguity assist; deterministic failure-budget and terminal
+closure; PAUSE interruption; no duplicate recovery launch/delivery; stale-base refusal; verifier
+disagreement refusal; every configured resource bound; review backpressure; evidence-only reopen;
+and zero worker launch on repeated ticks after achievement.
 
 ### Final live PAUSE and Phase 6 boundary
 
-The final read-only snapshot at `2026-08-07T18:18:10Z` ran the installed live Phase 1 audit between
+The final read-only snapshot at `2026-08-07T18:46:33Z` ran the installed live Phase 1 audit between
 two PAUSE checks. PAUSE was present both times with unchanged SHA-256
 `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`.
 
