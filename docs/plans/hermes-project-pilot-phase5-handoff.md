@@ -21,7 +21,8 @@ related:
 - Phase 5 implementation commit: `719ca2453f8e1a85f684611b0cd0fe175524992b`.
 - Local review branch: `review/hermes-phase5-controls` in the clean worktree
   `C:\Users\drfoo\github\recursion-hermes-phase5`.
-- Publication state: local only. The branch was not pushed and no PR was opened.
+- Publication state: Lucas separately authorized the branch push after Phase 5 completed;
+  `origin/review/hermes-phase5-controls` is published for review. No PR was opened.
 - Authoring base: merged Phase 4 `origin/master` at
   `2d631c4df36edec96d9d69013f8b8afedb28a79e` (PR #25 merge).
 - Phase 4 implementation commit `537749193abcd6e8a9ce0aa9c3a8da73c679b42d` and published
@@ -88,10 +89,11 @@ original bytes.
 
 ## Review and publication boundary
 
-No publication was authorized. The branch has not been pushed, no PR exists, and nothing was
-merged or deployed. Phase 1's paused deployment runbook remains unexecuted; Phases 2 through 5 are
-also undeployed. Keep `/opt/recursion/state/PAUSE` present and treat the two live Phase 1 findings
-as deployment gates rather than waived criteria.
+Phase 5 completed without publication. Lucas subsequently authorized only pushing the review
+branch, and `origin/review/hermes-phase5-controls` is now published. No PR was opened, and nothing
+was merged or deployed. Phase 1's paused deployment runbook remains unexecuted; Phases 2 through 5
+are also undeployed. Keep `/opt/recursion/state/PAUSE` present and treat the two live Phase 1
+findings as deployment gates rather than waived criteria.
 
 The dirty user-owned `master` remains at `20c1fa77042f3aa9f5d8978352792f3b058bc0d1`; it was not an
 authoring or test source and none of its tracked or untracked files were changed.

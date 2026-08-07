@@ -899,3 +899,12 @@ No Phase 1, Phase 2, Phase 3, Phase 4, or Phase 5 deployment, live pilot, autono
 project-concurrency increase, PAUSE removal, product-repository change, merge, push, or PR occurred.
 The local Phase 5 handoff is `docs/plans/hermes-project-pilot-phase5-handoff.md`. Phase 6 remains
 unauthorized.
+
+### Phase 5 review-branch publication follow-up
+
+After Phase 5 implementation and evidence collection were complete, Lucas separately authorized
+only publication of the review branch. `review/hermes-phase5-controls` was pushed to
+`origin/review/hermes-phase5-controls`; the first published remote tip was
+`c139ad99b5babf848274f6a3da4f65deb9be68b7`, exactly matching the then-current local tip. This
+follow-up did not open a PR, merge, deploy, run a pilot, raise concurrency, remove PAUSE, or begin
+Phase 6.
