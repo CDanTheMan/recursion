@@ -96,7 +96,7 @@ A task with no machine-checkable gate is never auto-integrated — it escalates.
   candidate; and stops deterministically. PAUSE prevents dispatch, gates, publication, and
   in-flight goal verification. Phase 6 is merged into `origin/master`; production remains
   PAUSE-gated and has not run this loop. See `docs/plans/hermes-project-pilot-phase6-handoff.md`.
-- **Reporting and notification fan-out (Phase 7, authored but not deployed)** — the existing
+- **Reporting and notification fan-out (Phase 7, published for review but not deployed)** — the existing
   supervised actuator asks one deterministic outbox observer to enqueue idempotent schema-v1
   decisions. Event reconciliation, exact `(event_id, destination)` fan-out, retry, durable
   transport-evidence acknowledgement, dead-letter escalation, terminal project reporting, the
@@ -105,7 +105,7 @@ A task with no machine-checkable gate is never auto-integrated — it escalates.
   `notify.sh`; no second scheduler, sender, state store, or delivery queue exists. Strict policy
   separates the project topic, Head Hermes/explicit portfolio destinations, and explicit Lucas-DM
   attention. PAUSE preserves event/outbox awareness and pending work while preventing sends. The
-  Phase 7 review branch is local-only and production has not run it. See
+  Phase 7 review branch is published for Lucas's review; production has not run it. See
   `docs/plans/hermes-project-pilot-phase7-handoff.md`.
 - **Autonomy, human-fenced** — `.env` flags (loop can never self-set them — rule 3):
   `AUTO_REFLECT`, `AUTO_DRAIN`, `AUTO_PLAN`, `ALLOW_PUSH`, `ALLOW_AUTOMERGE`, `CONDUCT` (parallel

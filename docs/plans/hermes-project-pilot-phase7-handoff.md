@@ -24,8 +24,9 @@ related:
 - Phase 7 final implementation OID: `b4d3a30317e7d11f8e31b5e2578eb53aaeb5155c`.
 - Local review branch: `review/hermes-phase7-controls` in the clean worktree
   `C:\Users\drfoo\github\recursion-hermes-phase7`.
-- Publication state: local-only. The Phase 7 branch was not pushed and no PR was opened. Nothing
-  was merged or deployed.
+- Publication state: Lucas separately authorized the branch push after Phase 7 completed. The
+  review branch is published; its initial remote tip was
+  `2c022d9116fde584dccead79552da569515cdb18`. No PR was opened, and nothing was merged or deployed.
 - Exact implementation proof: 17/17 baseline; every Phase 1-6 control and positive audit; all 16
   Phase 7 behavioral controls; and the Phase 7 positive architecture audit are green.
 - Production remained PAUSE-gated throughout. No live pilot, autonomous production execution,
@@ -125,8 +126,9 @@ zero, and the live audit retained exactly the same two deployment-gated findings
 production. The exact command and output summary are in the Phase 0 evidence file.
 
 No Phase 1-7 deployment, live pilot, autonomous production execution, project-concurrency increase,
-human-visible test notification, PAUSE removal, product-repository change, branch push, PR, merge,
-or Phase 8 work occurred. Every such action still requires separate authorization from Lucas.
+human-visible test notification, PAUSE removal, product-repository change, PR, merge, or Phase 8
+work occurred. Except for the separately authorized Phase 7 review-branch publication, every such
+action still requires separate authorization from Lucas.
 
 The dirty user-owned `master` remains at `20c1fa77042f3aa9f5d8978352792f3b058bc0d1` with tracked
 diff hash `2574b133121e0ea12eca06f5b8bd1d23449fc27a`; it was not an authoring or test source, and its

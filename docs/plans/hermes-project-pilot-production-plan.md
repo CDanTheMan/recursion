@@ -232,7 +232,7 @@ Required controls:
 - Once a goal reaches `achieved`, repeated scheduler ticks launch zero workers.
 ## Phase 7 - Reporting and notification fan-out
 
-Status: authored and control-complete on the local Phase 7 review branch; not published, merged,
+Status: authored, control-complete, and published on the Phase 7 review branch; not merged,
 deployed, or exercised against a human-visible transport. See
 `docs/plans/hermes-project-pilot-phase7-handoff.md`.
 

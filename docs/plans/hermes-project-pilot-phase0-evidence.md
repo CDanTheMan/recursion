@@ -20,9 +20,9 @@ related:
 
 Phase 0 established the reproducible baseline and red controls without fixing a defect. Phases 1
 through 6 subsequently closed their authoring controls on separate reviewed bases and were merged
-through Lucas's review workflow. Phase 7 now closes its authoring controls on merged Phase 6. The
-Phase 7 review branch remains local-only; it was not pushed and no PR was opened. Exact evidence is
-appended below.
+through Lucas's review workflow. Phase 7 now closes its authoring controls on merged Phase 6. Lucas
+separately authorized publication after the Phase 7 controls/evidence completed; the review branch
+was pushed, and no PR was opened. Exact evidence is appended below.
 
 Production remains paused and undeployed for Phases 1-7. No live pilot ran, no autonomous execution was
 enabled, no product repository changed, and no protected or default branch was pushed or merged by
@@ -1262,7 +1262,15 @@ unrestricted/root installed gateway and advisories in installed `aiohttp==3.14.1
 workers, configuration, or delivery state.
 
 No Phase 1-7 deployment, live pilot, autonomous production execution, project-concurrency increase,
-human-visible test notification, PAUSE removal, product-repository change, review-branch push, PR,
-merge, or Phase 8 work occurred. The local Phase 7 handoff is
-`docs/plans/hermes-project-pilot-phase7-handoff.md`. Every further action requires separate Lucas
-authorization.
+human-visible test notification, PAUSE removal, product-repository change, PR, merge, or Phase 8
+work occurred. The Phase 7 handoff is `docs/plans/hermes-project-pilot-phase7-handoff.md`. Every
+further action requires separate Lucas authorization.
+
+### Phase 7 review-branch publication follow-up
+
+After Phase 7 implementation, exact-commit verification, evidence, and the Phase 8 session prompt
+were complete, Lucas separately authorized committing and pushing the working review branch. The
+initial published remote tip was `2c022d9116fde584dccead79552da569515cdb18`, exactly matching the
+then-current local tip. Publication created `origin/review/hermes-phase7-controls`; it did not open
+a PR, merge, deploy, run a pilot, raise concurrency, remove PAUSE, send a human-visible test
+notification, mutate product repositories, or begin Phase 8.
