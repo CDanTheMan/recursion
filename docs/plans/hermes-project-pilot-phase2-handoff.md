@@ -15,7 +15,8 @@ related:
 ## Current state
 
 - Phase 2 implementation commit: `9a4778fa794158c32e5f1381fb7b24c930202542`.
-- Local review branch: `review/hermes-phase2-controls` (not pushed or published).
+- Published review branch: `review/hermes-phase2-controls`.
+- Draft PR: `https://github.com/NotSkittlz/recursion/pull/23`, targeting `master`.
 - Authoring base: merged Phase 1 `origin/master` at
   `b25b3294dcbd320f92cd104718d795648fd57449`.
 - PR #22 was merged by Lucas; Phase 1 implementation commit
@@ -49,10 +50,11 @@ Phase 2 preserves Recursion's canonical file/event architecture. It adds:
 
 ## Review and publication boundary
 
-The branch exists only in the clean local worktree
-`C:\Users\drfoo\github\recursion-hermes-phase2`. Lucas must review the local changes and separately
-authorize publication before anyone pushes the branch or opens a PR. Do not merge or deploy it as
-part of publication unless separately authorized for those actions.
+Lucas authorized publication on 2026-08-07. The clean local worktree at
+`C:\Users\drfoo\github\recursion-hermes-phase2` was pushed as
+`review/hermes-phase2-controls`, and draft PR #23 was opened against `master`. Lucas will review
+the branch and PR and perform the merge. Publication did not authorize deployment or any live
+control-plane change.
 
 Phase 1's paused deployment proposal remains documented but unexecuted. Its two live findings are
 deployment gates, not waived acceptance criteria. Keep `/opt/recursion/state/PAUSE` present and do
@@ -66,8 +68,8 @@ handoff—owns gateway narrowing to intake only, validated authoring preservatio
 decision/usage evidence, lossless planner projections, and replacement of singleton decision
 pointers with a durable queue.
 
-No pilot, autonomous execution, PAUSE removal, deployment, merge, push, or PR is authorized by
-this handoff.
+No pilot, autonomous execution, PAUSE removal, deployment, or merge was performed. The only newly
+authorized external actions were pushing the Phase 2 review branch and opening draft PR #23.
 
 ## Copy/paste prompt for the next session
 
