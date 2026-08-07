@@ -279,3 +279,6 @@ After all checks, `/opt/recursion/state/PAUSE` remained present with SHA-256
 `loop/auto` at `58b912c46b0bbba8f420fdda685e05b958279daa`; and no `recursion-worker-*` transient unit was
 left behind. No Phase 2 implementation, pilot, autonomous execution, PAUSE removal, deployment,
 merge, push, or new PR occurred.
+
+The next-session handoff and copy/paste Phase 2 prompt are in
+`docs/plans/hermes-project-pilot-phase1-handoff.md`.
