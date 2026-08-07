@@ -61,6 +61,18 @@ if [ -x scripts/resync.sh ]; then
   fi
 fi
 
+# --- 0.6) Intake. AWARENESS, so it runs even while paused. ---------------------------------
+# Reads what Lucas said in the cockpit out of the gateway's own store and files it as durable
+# instructions. It does NOT poll Telegram — the hermes gateway already long-polls getUpdates on
+# this token, and two pollers steal updates from each other, losing messages silently.
+#
+# Hearing is not acting: an instruction is data for Hermes to decide on, and the actuator
+# whitelist still governs what runs. That is exactly why this is safe under PAUSE — a paused box
+# that cannot even hear you is a box you have to SSH into to talk to.
+if [ -x scripts/intake.sh ]; then
+  bash scripts/intake.sh poll >>"$LOG" 2>&1 || log "intake failed — see $LOG"
+fi
+
 # --- 1) Heartbeat (Lua/luna). --------------------------------------------------------
 bash scripts/board.sh add hb supervision heartbeat gpt-5.6-luna running "scanning ledger" >/dev/null
 HB_USAGE="$LOG_DIR/$DATE-heartbeat.usage.json"
