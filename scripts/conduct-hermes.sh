@@ -90,7 +90,7 @@ fi
 
 [ -f "$FILE" ] || { log "no decision file at $FILE"; exit 2; }
 
-VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify"
+VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify reconcile-goal task-transition goal-transition verify-goal publish-task"
 RAW_DECISION="$(cat "$FILE" 2>/dev/null || true)"
 VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$RAW_DECISION" 2>&1)"
 case "$VALID" in
@@ -100,6 +100,7 @@ esac
 
 read_field(){ python3 -c 'import json,sys;print(json.load(open(sys.argv[1],encoding="utf-8")).get(sys.argv[2],"") or "")' "$FILE" "$1" 2>/dev/null; }
 VERB="$(read_field verb)"; WHY="$(read_field why)"; GOAL="$(read_field goal)"
+ACTOR="$(read_field actor)"
 DECISION_ID="$(read_field id)"; IDEMPOTENCY_KEY="$(read_field idempotency_key)"
 INSTRUCTION_ID="$(read_field instruction_id)"
 mapfile -t ARGS < <(python3 -c 'import json,sys
@@ -312,6 +313,28 @@ case "$VERB" in
     # Project-pilot authority is rechecked against the durable topic/pilot/charter records here.
     # The helper may create scoped proposal/task state; it never launches a worker or publishes.
     run python3 scripts/project-pilot.py execute "$FILE"; rc=$? ;;
+
+  reconcile-goal|task-transition|goal-transition|verify-goal|publish-task)
+    # These are not model-callable verbs: project-reconcile.py emits them from canonical
+    # truth, and the pilot identity is rechecked at this final actuator boundary.
+    P0="${ARGS[0]:-}"; [ -n "$P0" ] || { log "$VERB needs a project"; exit 2; }
+    EXPECTED_ACTOR="$(python3 - "$ROOT/state/project-config/$P0.json" <<'PY' 2>/dev/null
+import json,sys
+print(json.load(open(sys.argv[1],encoding='utf-8')).get('pilot_id',''))
+PY
+)"
+    [ -n "$EXPECTED_ACTOR" ] && [ "$ACTOR" = "$EXPECTED_ACTOR" ] \
+      || { log "REFUSED - Phase 6 decision actor is not the bound project pilot"; exit 5; }
+    case "$VERB" in
+      reconcile-goal) run python3 scripts/project-reconcile.py reconcile "${ARGS[0]}" "${ARGS[1]}" ;;
+      task-transition) run python3 scripts/project-reconcile.py transition-task \
+        "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]}" "${ARGS[3]}" "${ARGS[4]}" "${ARGS[5]}" ;;
+      goal-transition) run python3 scripts/project-reconcile.py transition-goal \
+        "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]}" "${ARGS[3]}" "${ARGS[4]}" ;;
+      verify-goal) run python3 scripts/project-reconcile.py verify-goal "${ARGS[0]}" "${ARGS[1]}" ;;
+      publish-task) run python3 scripts/project-reconcile.py publish-task "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]}" ;;
+    esac
+    rc=$? ;;
 
   assist-answer)
     A0="${ARGS[0]:-}"; [ -n "$A0" ] || { log "assist-answer needs a task id"; exit 2; }

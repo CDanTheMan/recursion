@@ -61,7 +61,7 @@
         "acceptance_suite": {"type": "string", "minLength": 1},
         "falsifier": {"type": "string", "minLength": 1},
         "budget": {"type": ["object", "string"]},
-        "status": {"enum": ["draft", "approved", "active", "verifying", "achieved", "blocked", "abandoned"]}
+        "status": {"enum": ["draft", "approved", "active", "verifying", "achieved", "blocked", "abandoned", "budget-exhausted", "paused"]}
       },
       "additionalProperties": true
     },

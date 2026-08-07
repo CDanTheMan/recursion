@@ -17,6 +17,17 @@ while [ "$STOP" = 0 ]; do
     continue
   fi
   set +e
+  # Phase 6 adds no scheduler process. The existing supervised actuator asks the deterministic
+  # reconciler to enqueue at most one idempotent reconcile decision per eligible goal, then
+  # drains those decisions through the same queue/action path it already owns.
+  if [ -x "$ROOT/scripts/project-reconcile.py" ]; then
+    RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" schedule >/dev/null
+    schedule_rc=$?
+    case "$schedule_rc" in
+      0) : ;;
+      *) log "goal reconciliation scheduling failed rc=$schedule_rc; no direct execution occurred" ;;
+    esac
+  fi
   RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/conduct-hermes.sh"
   rc=$?
   set -e
