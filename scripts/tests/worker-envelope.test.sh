@@ -37,6 +37,8 @@ chmod +x "$BIN/claude"
 # disposable repo with a realistic shape (a protected tree and a product tree)
 R="$TMP/repo"; mkdir -p "$R/scripts/tests" "$R/apps/chiron" "$R/other" "$R/state/tasks" "$R/loop/logs"
 cp "$SRC/scripts/work.sh" "$R/scripts/"
+cp "$SRC/scripts/worker-sandbox.sh" "$R/scripts/"
+chmod +x "$R/scripts/worker-sandbox.sh"
 cp "$SRC/scripts/board.sh" "$R/scripts/" 2>/dev/null || true
 cp "$SRC/scripts/notify.sh" "$R/scripts/" 2>/dev/null || true
 cp "$SRC/scripts/taskctl.sh" "$R/scripts/" 2>/dev/null || true
@@ -83,7 +85,7 @@ T
 run_case(){ # id script
   rm -f "$MARKER"
   ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 \
-      RECURSION_GIT_FETCH=0 STUB_ARM_SCRIPT="$2" \
+      RECURSION_GIT_FETCH=0 RECURSION_TEST_WORKER=logical STUB_ARM_SCRIPT="$2" \
       bash scripts/work.sh "$1" ) >"$TMP/out-$1" 2>&1
 }
 status_of(){ sed -n 's/^status: *//p' "$R/state/tasks/$1.md" | head -1 | tr -d '\r'; }
@@ -163,7 +165,7 @@ chmod +x "$BIN/claude"
 mktask t-prompt "apps/chiron" "true"
 export STUB_PROMPT_OUT="$TMP/prompt.txt"
 ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 RECURSION_GIT_FETCH=0 \
-    STUB_PROMPT_OUT="$TMP/prompt.txt" bash scripts/work.sh t-prompt ) >/dev/null 2>&1
+    RECURSION_TEST_WORKER=logical STUB_PROMPT_OUT="$TMP/prompt.txt" bash scripts/work.sh t-prompt ) >/dev/null 2>&1
 miss=""
 for phrase in "bounded executor" "ALLOWED PATHS" "PROTECTED" "ON AMBIGUITY" "recursion-result.json" "Hermes owns planning"; do
   grep -qF "$phrase" "$TMP/prompt.txt" 2>/dev/null || miss="$miss '$phrase'"
