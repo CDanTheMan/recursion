@@ -25,6 +25,7 @@ STATUSES = {
     "decision": {"proposed", "accepted", "queued", "executed", "refused", "cancelled"},
     "escalation": {"open", "resolved", "cancelled"},
     "delivery": {"pending", "running", "succeeded", "failed", "cancelled", "dead-letter"},
+    "notification_event": {"recorded"},
     "instruction": {"open", "consumed", "acknowledged", "cancelled"},
     "action": {"pending", "running", "succeeded", "failed", "cancelled"},
 }
@@ -37,6 +38,7 @@ REQUIRED = {
     "decision": ("schema_version", "id", "actor", "verb", "arguments", "reason", "goal_id", "idempotency_key", "status"),
     "escalation": ("schema_version", "id", "goal_id", "required_actor", "question", "evidence", "status"),
     "delivery": ("schema_version", "id", "event_id", "destination", "attempt", "acknowledgement", "status"),
+    "notification_event": ("schema_version", "id", "source_event_id", "event_type", "project_id", "goal_id", "message", "message_digest", "status"),
     "instruction": ("schema_version", "id", "principal", "topic", "project_id", "deduplication_key", "status", "action_ids"),
     "action": ("schema_version", "id", "idempotency_key", "verb", "arguments", "goal_id", "status", "lease_expires", "attempts", "result_evidence"),
 }
@@ -153,6 +155,21 @@ def validate(kind: str, value: object) -> dict:
         numeric = "attempts" if kind == "action" else "attempt"
         if not isinstance(value[numeric], int) or value[numeric] < 0:
             fail(f"{numeric} must be a non-negative integer")
+    if kind == "delivery":
+        if "max_attempts" in value and (not isinstance(value["max_attempts"], int) or value["max_attempts"] < 1):
+            fail("max_attempts must be a positive integer")
+        if "message_digest" in value and not re.fullmatch(r"[0-9a-f]{64}", str(value["message_digest"])):
+            fail("delivery message_digest must be sha256")
+    if kind == "notification_event":
+        if value["event_type"] not in {
+            "goal-accepted", "plan-approved", "worker-launched", "task-passed", "task-failed",
+            "task-blocked", "human-answer-received", "review-branch-published", "goal-verifying",
+            "goal-achieved", "goal-stopped", "pilot-terminal-report", "portfolio-result",
+            "lucas-attention-required", "delivery-dead-letter",
+        }:
+            fail("unknown notification event type")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(value["message_digest"])):
+            fail("notification message_digest must be sha256")
     return value
 
 

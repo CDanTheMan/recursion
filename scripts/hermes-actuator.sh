@@ -28,6 +28,17 @@ while [ "$STOP" = 0 ]; do
       *) log "goal reconciliation scheduling failed rc=$schedule_rc; no direct execution occurred" ;;
     esac
   fi
+  # Phase 7 uses this same supervised loop. The notification scheduler observes append-only
+  # events/outbox truth and emits decisions only; delivery and reporting still occur below through
+  # the durable queue and sole actuator.
+  if [ -x "$ROOT/scripts/notification-outbox.py" ]; then
+    RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/notification-outbox.py" schedule >/dev/null
+    notification_rc=$?
+    case "$notification_rc" in
+      0) : ;;
+      *) log "notification reconciliation scheduling failed rc=$notification_rc; no direct send occurred" ;;
+    esac
+  fi
   RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/conduct-hermes.sh"
   rc=$?
   set -e

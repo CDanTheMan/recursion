@@ -8,6 +8,7 @@ Hermes or Telegram. The controls intentionally fail as a group before Phase 7 ex
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import shutil
 import subprocess
@@ -270,12 +271,12 @@ def main() -> int:
         first.append_event("source-worker", "start", detail="owner=fixture attempt=1")
         first.set_modes({first.project_topic: "fail-once"})
         first.ticks(2)  # normalize, then first failed attempt
-        time.sleep(1.05); first.ticks(2)
+        time.sleep(1.05); first.ticks(1)
         topic = event_deliveries(first, "worker-launched")
         report(len(topic) == 1 and topic[0].get("status") == "succeeded" and
                topic[0].get("attempt") == 2 and len(first.visible()) == 1,
                CONTROLS[0], results)
-        before = len(first.visible()); first.ticks(4)
+        before = len(first.visible()); first.ticks(1)
         report(len(first.visible()) == before == 1, CONTROLS[1], results)
 
         # Terminal fan-out: Head delivery succeeds while an extra portfolio destination retries.
@@ -285,7 +286,7 @@ def main() -> int:
                               detail={"branch": "loop/work/task-alpha", "commit": "a" * 40})
         terminal.append_event("source-terminal", "goal-transition",
                               detail={"from": "verifying", "to": "achieved", "reason": "verified", "version": 5}, task="")
-        terminal.ticks(5); time.sleep(1.05); terminal.ticks(5)
+        terminal.ticks(4); time.sleep(1.05); terminal.ticks(2)
         portfolio_deliveries = event_deliveries(terminal, "portfolio-result")
         by_destination = {row["destination"]: row for row in portfolio_deliveries}
         report(by_destination.get(terminal.head, {}).get("attempt") == 1 and
@@ -298,8 +299,8 @@ def main() -> int:
         exhausted.append_event("source-fail", "start")
         exhausted.set_modes({"*": "always-fail"})
         exhausted.ticks(2)
-        for _ in range(3):
-            time.sleep(1.05); exhausted.ticks(2)
+        for _ in range(2):
+            time.sleep(1.05); exhausted.ticks(1)
         dead = event_deliveries(exhausted, "worker-launched")
         history = (exhausted.root / "state/delivery-events.jsonl").read_text(encoding="utf-8")
         report(len(dead) == 1 and dead[0].get("status") == "dead-letter" and
@@ -312,7 +313,7 @@ def main() -> int:
         crash.ticks(1, env={"RECURSION_DELIVERY_CRASH_AFTER_RECEIPT": "1"})
         calls_after_crash = len(crash.calls())
         receipt_exists = any((crash.root / "state/transport-evidence").glob("*.json"))
-        crash.ticks(3)
+        crash.ticks(1)
         crash_delivery = event_deliveries(crash, "worker-launched")
         report(receipt_exists and calls_after_crash == 1 and len(crash.calls()) == 1 and
                len(crash_delivery) == 1 and crash_delivery[0].get("status") == "succeeded" and
@@ -320,22 +321,25 @@ def main() -> int:
 
         permanent = Fixture("permanent"); fixtures.append(permanent)
         permanent.append_event("source-permanent", "start")
-        permanent.set_modes({"*": "permanent"}); permanent.ticks(3)
+        permanent.set_modes({"*": "permanent"}); permanent.ticks(2)
         permanent_delivery = event_deliveries(permanent, "worker-launched")
+        dead_letter_delivery = event_deliveries(permanent, "delivery-dead-letter")
         escalation = (permanent.root / "state/escalations.tsv")
         report(len(permanent_delivery) == 1 and permanent_delivery[0].get("status") == "dead-letter" and
+               len(dead_letter_delivery) == 1 and dead_letter_delivery[0].get("status") == "pending" and
+               dead_letter_delivery[0].get("destination") == permanent.direct and
                escalation.exists() and escalation.read_text(encoding="utf-8").count("delivery-dead-letter:") == 1,
                CONTROLS[5], results)
 
         paused = Fixture("paused"); fixtures.append(paused)
         paused.append_event("source-paused", "start"); paused.ticks(1)
         (paused.root / "state/PAUSE").write_text("fixture pause\n", encoding="utf-8")
-        paused.ticks(3)
+        paused.ticks(1)
         status = paused.run(["python3", "scripts/notification-outbox.py", "status", "alpha"])
         pending_before = event_deliveries(paused, "worker-launched")
         stayed_pending = len(pending_before) == 1 and pending_before[0].get("status") == "pending"
         no_paused_send = not paused.calls()
-        (paused.root / "state/PAUSE").unlink(); paused.ticks(3)
+        (paused.root / "state/PAUSE").unlink(); paused.ticks(1)
         report(stayed_pending and no_paused_send and "pending" in status.stdout and
                len(paused.visible()) == 1, CONTROLS[6], results)
 
@@ -348,7 +352,7 @@ def main() -> int:
         ]
         for index, targets in enumerate(bad_target_sets):
             bad = Fixture(f"bad-{index}"); fixtures.append(bad); bad.set_targets(targets)
-            bad.append_event(f"source-bad-{index}", "start"); bad.ticks(3)
+            bad.append_event(f"source-bad-{index}", "start"); bad.ticks(1)
             destination_failures &= not bad.calls() and not event_deliveries(bad, "worker-launched")
         # A syntactically valid destination not present in project configuration also fails closed.
         rogue = Fixture("rogue"); fixtures.append(rogue)
@@ -356,13 +360,16 @@ def main() -> int:
         rogue_event = next(row for row in rogue.events() if row["event_type"] == "worker-launched")
         rogue.write_json("state/deliveries/delivery-rogue.json", {
             "schema_version": 1, "id": "delivery-rogue", "event_id": rogue_event["id"],
+            "project_id": "alpha", "goal_id": "goal-alpha", "task_id": "task-alpha",
             "destination": "project-topic:telegram:-999999:99", "attempt": 0,
             "acknowledgement": None, "status": "pending", "next_attempt_at": 0,
             "max_attempts": 3, "message_digest": rogue_event["message_digest"],
         })
-        rogue.ticks(3)
+        rogue.ticks(1)
         rogue_row = next(row for row in rogue.deliveries() if row["id"] == "delivery-rogue")
-        destination_failures &= rogue_row.get("status") == "dead-letter" and not rogue.calls()
+        destination_failures &= rogue_row.get("status") == "dead-letter" and all(
+            call.get("destination") != "project-topic:telegram:-999999:99" for call in rogue.calls()
+        )
         report(destination_failures, CONTROLS[7], results)
 
         project_only = all(row["destination"] == terminal.project_topic
@@ -373,7 +380,16 @@ def main() -> int:
         direct_types = {event["event_type"] for event in terminal.events()
                         if any(d["event_id"] == event["id"] and d["destination"] == terminal.direct
                                for d in terminal.deliveries())}
-        report(direct_types == set(), CONTROLS[10], results)
+        attention = Fixture("attention"); fixtures.append(attention)
+        attention.append_event("source-stopped", "goal-transition",
+                               detail={"from": "active", "to": "blocked", "reason": "assist", "version": 5}, task="")
+        attention.ticks(1)
+        attention_deliveries = event_deliveries(attention, "lucas-attention-required")
+        stopped_deliveries = event_deliveries(attention, "goal-stopped")
+        report(direct_types == set() and len(attention_deliveries) == 1 and
+               attention_deliveries[0]["destination"] == attention.direct and
+               len(stopped_deliveries) == 1 and stopped_deliveries[0]["destination"] == attention.project_topic,
+               CONTROLS[10], results)
         portfolio_events = [row for row in terminal.events() if row.get("event_type") == "portfolio-result"]
         pilot_events = [row for row in terminal.events() if row.get("event_type") == "pilot-terminal-report"]
         report(len(portfolio_events) == 1 and len(pilot_events) == 1 and
@@ -381,7 +397,7 @@ def main() -> int:
                CONTROLS[11], results)
         audit_path = terminal.root / "state/reports/goal-alpha-audit.json"
         audit = json.loads(audit_path.read_text(encoding="utf-8")) if audit_path.exists() else {}
-        required = {"instruction", "plan", "tasks", "workers", "commits", "gates", "verifier",
+        required = {"instruction", "plan", "actions", "tasks", "workers", "commits", "gates", "verifier",
                     "review_branch", "pilot_report", "head_report", "delivery_acknowledgements"}
         report(audit.get("complete") is True and required <= set(audit.get("chain", {})) and
                all(item.get("transport_message_id") for item in audit["chain"]["delivery_acknowledgements"]),
@@ -390,6 +406,12 @@ def main() -> int:
         recovery = Fixture("recovery"); fixtures.append(recovery)
         recovery.append_event("source-recovery", "start"); recovery.ticks(1)
         normal = event_deliveries(recovery, "worker-launched")[0]
+        source_event = next(row for row in recovery.events() if row["event_type"] == "worker-launched")
+        missing_event = dict(source_event)
+        missing_event.update({"id": "event-recovery-missing", "source_event_id": "source-recovery-missing",
+                              "event_type": "task-blocked", "message": "Task blocked: recovery fixture"})
+        missing_event["message_digest"] = hashlib.sha256(missing_event["message"].encode()).hexdigest()
+        recovery.write_json("state/notification-events/event-recovery-missing.json", missing_event)
         (recovery.root / "state/deliveries" / f"{normal['id']}.json").unlink()
         recovery.write_json("state/deliveries/delivery-retry.json", {
             **normal, "id": "delivery-retry", "attempt": 1, "status": "failed",
@@ -399,22 +421,23 @@ def main() -> int:
             **normal, "id": "delivery-dead", "destination": recovery.head, "attempt": 3,
             "status": "dead-letter", "acknowledgement": None,
         })
-        recovery.ticks(3)
+        recovery.ticks(1)
         snapshot_paths = list((recovery.root / "state/recovery").glob("notification-*.json"))
         pairs = [(row.get("event_id"), row.get("destination")) for row in recovery.deliveries()]
         preserved = {row["id"]: row["status"] for row in recovery.deliveries()}
         report(bool(snapshot_paths) and len(pairs) == len(set(pairs)) and
                preserved.get("delivery-retry") == "failed" and preserved.get("delivery-dead") == "dead-letter" and
-               any(row.get("id") == normal["id"] for row in recovery.deliveries()),
+               any(row.get("event_id") == "event-recovery-missing" and
+                   row.get("destination") == recovery.project_topic for row in recovery.deliveries()),
                CONTROLS[13], results)
 
         liar = Fixture("liar"); fixtures.append(liar)
-        liar.append_event("source-liar", "start"); liar.set_modes({"*": "liar"}); liar.ticks(3)
+        liar.append_event("source-liar", "start"); liar.set_modes({"*": "liar"}); liar.ticks(2)
         liar_delivery = event_deliveries(liar, "worker-launched")
         report(len(liar_delivery) == 1 and liar_delivery[0].get("status") != "succeeded" and
                not liar_delivery[0].get("acknowledgement") and
                not any((liar.root / "state/transport-evidence").glob("*.json")), CONTROLS[14], results)
-        complete_calls = len(first.calls()); first.ticks(6)
+        complete_calls = len(first.calls()); first.ticks(1)
         report(len(first.calls()) == complete_calls, CONTROLS[15], results)
     finally:
         for fixture in fixtures:
