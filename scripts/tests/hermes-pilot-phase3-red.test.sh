@@ -24,6 +24,7 @@ fi
 A="$TMP/author-text"; mkdir -p "$A/scripts" "$A/state" "$A/loop/logs"
 cp "$SRC/scripts/conduct-hermes.sh" "$A/scripts/"
 cp "$SRC/scripts/taskctl.sh" "$A/scripts/"
+cp "$SRC/scripts/validate-decision.py" "$A/scripts/"
 cat > "$A/scripts/author.sh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s|%s|%s\n' "$1" "$2" "$3" > "$AUTHOR_LOG"
@@ -107,7 +108,9 @@ done
 
 # 6. Restart must preserve every pending decision. A singleton latest file drops the older one.
 DROOT="$TMP/pending"; mkdir -p "$DROOT/scripts" "$DROOT/state/tasks" "$DROOT/loop/logs"
-cp "$SRC/scripts/conduct-hermes.sh" "$DROOT/scripts/"; cp "$SRC/scripts/taskctl.sh" "$DROOT/scripts/"
+for helper in conduct-hermes.sh taskctl.sh decision-queue.py validate-control-state.py validate-decision.py; do
+  cp "$SRC/scripts/$helper" "$DROOT/scripts/"
+done
 cat > "$DROOT/scripts/work.sh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$1" >> "$PENDING_LOG"
@@ -115,8 +118,8 @@ STUB
 chmod +x "$DROOT/scripts/"*.sh
 for id in first second; do printf 'id: %s\ngoal_id: g\nacceptance: true\nstatus: queued\n' "$id" > "$DROOT/state/tasks/$id.md"; done
 cat > "$DROOT/state/decisions.jsonl" <<'J'
-{"id":"d1","verb":"work","args":["first"],"goal":"g","wrong_if":"lost"}
-{"id":"d2","verb":"work","args":["second"],"goal":"g","wrong_if":"lost"}
+{"id":"d1","verb":"work","args":["first"],"goal":"g","why":"queue control","wrong_if":"lost"}
+{"id":"d2","verb":"work","args":["second"],"goal":"g","why":"queue control","wrong_if":"lost"}
 J
 tail -1 "$DROOT/state/decisions.jsonl" > "$DROOT/state/.decision-latest.json"
 : > "$TMP/pending.log"

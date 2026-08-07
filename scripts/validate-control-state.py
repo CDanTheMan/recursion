@@ -65,6 +65,14 @@ def validate(kind: str, value: object) -> dict:
     if value.get("status") not in STATUSES[kind]:
         fail(f"invalid {kind} status: {value.get('status')!r}")
 
+    non_empty = {
+        "decision": ("actor", "reason", "goal_id", "idempotency_key"),
+        "instruction": ("principal", "deduplication_key"),
+    }
+    for field in non_empty.get(kind, ()):
+        if not isinstance(value.get(field), str) or not value[field].strip():
+            fail(f"{field} must be a non-empty string")
+
     for field in ("project_id", "pilot_id", "goal_id", "task_id", "event_id", "verb"):
         if field in value and value[field] is not None:
             require_identifier(value[field], field)

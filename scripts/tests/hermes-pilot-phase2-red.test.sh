@@ -13,6 +13,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/replay"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/loop/logs"
 cp "$SRC/scripts/conduct-hermes.sh" "$R/scripts/"
 cp "$SRC/scripts/taskctl.sh" "$R/scripts/"
+cp "$SRC/scripts/validate-decision.py" "$R/scripts/"
 cat > "$R/scripts/work.sh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$1" >> "$ACTION_LOG"
