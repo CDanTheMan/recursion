@@ -17,9 +17,10 @@ related:
 ## Current state
 
 - Phase 4 implementation commit: `537749193abcd6e8a9ce0aa9c3a8da73c679b42d`.
-- Local review branch: `review/hermes-phase4-controls` in the clean worktree
+- Review branch: `review/hermes-phase4-controls` in the clean worktree
   `C:\Users\drfoo\github\recursion-hermes-phase4`.
-- Publication state: local only. The branch was not pushed and no PR was opened.
+- Publication state: Lucas authorized a branch-only publication for review on 2026-08-07. The
+  branch is published as `origin/review/hermes-phase4-controls`; no PR was authorized or opened.
 - Authoring base: merged Phase 3 `origin/master` at
   `f120566a49a8d9a371e8b03d42d7e2aaf13dd7fc` (PR #24 merge).
 - Phase 3 implementation commit `06a7422b6b51b9e2db6f7ca3e86b76da3cab2953` and its published
@@ -66,10 +67,11 @@ or deployment. Existing active rows received tracked metadata but were not react
 
 ## Review and publication boundary
 
-Lucas has not authorized Phase 4 publication. Do not push this branch, open its PR, merge it, or
-deploy it without a separate explicit instruction. Phase 1's paused deployment runbook remains
-unexecuted; Phase 2, Phase 3, and Phase 4 are also undeployed. Keep `/opt/recursion/state/PAUSE`
-present and treat the two live Phase 1 findings as deployment gates rather than waived criteria.
+Lucas authorized committing and pushing the Phase 4 review branch on 2026-08-07. That authorization
+does not include opening a PR, merging, deploying, running a live pilot, or changing PAUSE. Phase
+1's paused deployment runbook remains unexecuted; Phase 2, Phase 3, and Phase 4 are also undeployed.
+Keep `/opt/recursion/state/PAUSE` present and treat the two live Phase 1 findings as deployment
+gates rather than waived criteria.
 
 The dirty local `master` remains user-owned at `20c1fa7`; do not use or clean it. Lucas's normal
 review path is this clean Phase 4 worktree/branch, followed by his GitHub merge only after he
@@ -82,9 +84,9 @@ the Claude worker/verifier hierarchy: complete worker envelopes, model aliases, 
 full diff scope checks, non-vacuous gates/results, timeout/lease handling, and independent verifier
 evidence at the exact commit. Phase 4 deliberately launches none of that hierarchy.
 
-Do not begin Phase 5 until Phase 4 is reviewed, publication is separately authorized, the branch
-is merged by Lucas, and `537749193abcd6e8a9ce0aa9c3a8da73c679b42d` is independently confirmed
-as an ancestor of current `origin/master`.
+Do not begin Phase 5 until Phase 4 is reviewed and merged by Lucas and
+`537749193abcd6e8a9ce0aa9c3a8da73c679b42d` is independently confirmed as an ancestor of current
+`origin/master`.
 
 ## Copy/paste prompt for the next implementation session
 
@@ -103,11 +105,11 @@ First read:
 - docs/plans/hermes-project-pilot-phase3-handoff.md
 - docs/plans/hermes-project-pilot-phase4-handoff.md
 
-The Phase 4 implementation is commit 537749193abcd6e8a9ce0aa9c3a8da73c679b42d on the local review
-branch recorded in the Phase 4 handoff. Before implementation, confirm Lucas separately authorized
-publication, reviewed and merged the branch, and that the commit is an ancestor of current
-origin/master. Confirm all Phase 4 controls and artifacts are present. If it is not merged, stop
-and report the blocker.
+The Phase 4 implementation is commit 537749193abcd6e8a9ce0aa9c3a8da73c679b42d on the published
+review branch origin/review/hermes-phase4-controls recorded in the Phase 4 handoff. Before
+implementation, confirm Lucas reviewed and merged the branch and that the implementation commit is
+an ancestor of current origin/master. Confirm all Phase 4 controls and artifacts are present. If it
+is not merged, stop and report the blocker.
 
 Keep remote state/PAUSE enabled. Do not deploy Phases 1-4 unless Lucas separately authorizes a
 paused deployment. Leave the dirty local master at 20c1fa7 and all user-owned changes untouched.
