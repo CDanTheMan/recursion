@@ -1,9 +1,15 @@
+schema_version: 1
 id: chiron-001
 workstream: chiron
+goal_id: goal-chiron-learning-shell
+dependencies:
 goal: Scaffold a minimal Next.js Chiron learning-app shell that builds cleanly
 engine: claude
+worker_class: claude
 acceptance: npm install && npm run build
 workdir: apps/chiron
+allowed_paths: apps/chiron
+non_goals: foreground learning-loop autonomy
 autonomy: auto
 status: passed
 

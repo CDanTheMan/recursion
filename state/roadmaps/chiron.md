@@ -1,4 +1,9 @@
 engine: claude
+goal_id: goal-chiron-learning-shell
+dependencies:
+allowed_paths: .
+non_goals: foreground learning-loop autonomy
+worker_class: claude
 repo: /opt/chiron
 sshkey: ~/.ssh/chiron_deploy
 workdir: .

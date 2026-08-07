@@ -1,14 +1,21 @@
+schema_version: 1
 id: gsc-overlay-0x6c
 workstream: gsc
+goal_id: goal-gsc-client-reconstruction
+dependencies:
 goal: Close the 0x6c under-emission (the shadetops/translucent-overlay pass) across worlds by fixing the shadetops APPLICATION PREDICATE, WITHOUT over-emitting on 0x68 and WITHOUT worsening any world.
 engine: claude
+worker_class: claude
 repo: /opt/golden-stallion-client
 sshkey: ~/.ssh/gsc_deploy
 seed: user-client/render/data/models
 acceptance: bash /opt/recursion/scripts/gsc-nativediff-gate.sh
 workdir: .
+allowed_paths: user-client/render
+non_goals: tests fixtures oracle baselines live-game automation
 autonomy: auto
 automerge: no
+status: proposed
 planned_from: live-re-derived (0x6c is the biggest coherent under-emission: vikings -7862, furys -3680, chickenlips -3060)
 
 CONTEXT — the biggest coherent error on the board is 0x6c UNDER-emission. MEASURE FIRST, then fix minimally.

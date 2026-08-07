@@ -1,11 +1,17 @@
+schema_version: 1
 id: cubic-castles-003
 workstream: cubic-castles
+goal_id: goal-gsc-client-reconstruction
+dependencies: cubic-castles-000
 goal: Implement multiPart block splitting so multipart.conformance tests pass
 engine: claude
+worker_class: claude
 repo: /opt/golden-stallion-client
 seed: user-client/render/data/models
 acceptance: bash /opt/recursion/scripts/gsc-conformance-gate.sh
 workdir: .
+allowed_paths: user-client/render
+non_goals: tests fixtures oracle baselines live-game automation
 autonomy: auto
 status: moot
 resolved: feature already implemented; corpus absence was the only blocker. With corpus present the target tests pass at baseline (206). No arm work to do.

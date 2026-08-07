@@ -161,8 +161,10 @@ if [ "\${1:-}" = - ] && [ -f "\${2:-}" ]; then printf 'id: partial\n' > "\$2"; e
 exec "$REAL_PY" "\$@"
 STUB
 chmod +x "$TMP/atomic-bin/python3"
+set +e
 PATH="$TMP/atomic-bin:$PATH" RECURSION_ROOT="$AROOT" bash "$AROOT/scripts/taskctl.sh" start a test \
   >/dev/null 2>&1; atomic_rc=$?
+set -e
 if [ "$atomic_rc" -ne 0 ] && cmp -s "$TMP/a.before" "$AROOT/state/tasks/a.md"; then
   ok "interrupted state update preserved the previous complete file"
 else

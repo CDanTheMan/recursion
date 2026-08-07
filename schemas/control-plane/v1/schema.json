@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recursion.local/schemas/control-plane/v1/schema.json",
+  "title": "Recursion control-plane state v1",
+  "type": "object",
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "project": {
+      "type": "object",
+      "required": ["schema_version", "id", "repo", "default_branch", "deploy_key_ref", "charter", "topic", "pilot_id", "status"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/identifier"},
+        "repo": {"type": "string", "minLength": 1},
+        "default_branch": {"$ref": "#/$defs/identifier"},
+        "deploy_key_ref": {"type": "string", "minLength": 1},
+        "charter": {"type": "string", "minLength": 1},
+        "topic": {"type": ["string", "integer"]},
+        "pilot_id": {"$ref": "#/$defs/identifier"},
+        "status": {"enum": ["pending", "active", "paused", "retired"]}
+      },
+      "additionalProperties": true
+    },
+    "pilot": {
+      "type": "object",
+      "required": ["schema_version", "id", "project_id", "charter", "model_policy", "status"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/identifier"},
+        "project_id": {"$ref": "#/$defs/identifier"},
+        "charter": {"type": "string", "minLength": 1},
+        "model_policy": {"type": "string", "minLength": 1},
+        "status": {"enum": ["pending", "active", "paused", "retired"]}
+      },
+      "additionalProperties": true
+    },
+    "goal": {
+      "type": "object",
+      "required": ["schema_version", "id", "project_id", "outcome", "acceptance_suite", "falsifier", "budget", "status"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/identifier"},
+        "project_id": {"$ref": "#/$defs/identifier"},
+        "outcome": {"type": "string", "minLength": 1},
+        "acceptance_suite": {"type": "string", "minLength": 1},
+        "falsifier": {"type": "string", "minLength": 1},
+        "budget": {"type": ["object", "string"]},
+        "status": {"enum": ["draft", "approved", "active", "verifying", "achieved", "blocked", "abandoned"]}
+      },
+      "additionalProperties": true
+    },
+    "task": {
+      "type": "object",
+      "required": ["schema_version", "id", "goal_id", "dependencies", "allowed_paths", "non_goals", "worker_class", "acceptance", "status"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/identifier"},
+        "goal_id": {"$ref": "#/$defs/identifier"},
+        "dependencies": {"type": "array", "items": {"$ref": "#/$defs/identifier"}, "uniqueItems": true},
+        "allowed_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "non_goals": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "worker_class": {"type": "string", "minLength": 1},
+        "acceptance": {"type": "string", "minLength": 1},
+        "status": {"enum": ["proposed", "ready", "queued", "leased", "running", "verifying", "passed", "failed", "blocked", "stale", "cancelled", "moot", "resolved", "escalated"]}
+      },
+      "additionalProperties": true
+    },
+    "run": {
+      "type": "object",
+      "required": ["schema_version", "id", "task_id", "worker", "worktree", "base_commit", "pid", "lease_expires", "deadline", "usage", "result", "status"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/identifier"},
+        "task_id": {"$ref": "#/$defs/identifier"},
+        "worker": {"type": "string", "minLength": 1},
+        "worktree": {"type": "string", "minLength": 1},
+        "base_commit": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "pid": {"type": "integer", "minimum": 1},
+        "lease_expires": {"type": "string", "minLength": 1},
+        "deadline": {"type": "string", "minLength": 1},
+        "usage": {"type": "object"},
+        "result": {"type": ["object", "string"]},
+        "status": {"enum": ["pending", "running", "succeeded", "failed", "blocked", "cancelled", "stale"]}
+      },
+      "additionalProperties": true
+    },
+    "decision": {
+      "type": "object",
+      "required": ["schema_version", "id", "actor", "verb", "arguments", "reason", "goal_id", "idempotency_key", "status"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/identifier"},
+        "actor": {"type": "string", "minLength": 1},
+        "verb": {"$ref": "#/$defs/identifier"},
+        "arguments": {"type": "array"},
+        "reason": {"type": "string", "minLength": 1},
+        "goal_id": {"$ref": "#/$defs/identifier"},
+        "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 256},
+        "status": {"enum": ["proposed", "accepted", "queued", "executed", "refused", "cancelled"]}
+      },
+      "additionalProperties": true
+    },
+    "escalation": {
+      "type": "object",
+      "required": ["schema_version", "id", "goal_id", "required_actor", "question", "evidence", "status"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/identifier"},
+        "goal_id": {"$ref": "#/$defs/identifier"},
+        "task_id": {"type": ["string", "null"]},
+        "run_id": {"type": ["string", "null"]},
+        "required_actor": {"type": "string", "minLength": 1},
+        "question": {"type": "string", "minLength": 1},
+        "evidence": {"type": ["object", "string"]},
+        "resolution": {"type": ["object", "string", "null"]},
+        "status": {"enum": ["open", "resolved", "cancelled"]}
+      },
+      "additionalProperties": true
+    },
+    "delivery": {
+      "type": "object",
+      "required": ["schema_version", "id", "event_id", "destination", "attempt", "acknowledgement", "status"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/identifier"},
+        "event_id": {"$ref": "#/$defs/identifier"},
+        "destination": {"type": "string", "minLength": 1},
+        "attempt": {"type": "integer", "minimum": 0},
+        "acknowledgement": {"type": ["string", "null"]},
+        "status": {"enum": ["pending", "running", "succeeded", "failed", "cancelled", "dead-letter"]}
+      },
+      "additionalProperties": true
+    },
+    "instruction": {
+      "type": "object",
+      "required": ["schema_version", "id", "principal", "topic", "project_id", "deduplication_key", "status", "action_ids"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/identifier"},
+        "principal": {"type": "string", "minLength": 1},
+        "topic": {"type": ["string", "integer"]},
+        "project_id": {"type": ["string", "null"]},
+        "reply_correlation": {"type": ["string", "null"]},
+        "deduplication_key": {"type": "string", "minLength": 1},
+        "status": {"enum": ["open", "consumed", "acknowledged", "cancelled"]},
+        "action_ids": {"type": "array", "items": {"$ref": "#/$defs/identifier"}, "uniqueItems": true}
+      },
+      "additionalProperties": true
+    },
+    "action": {
+      "type": "object",
+      "required": ["schema_version", "id", "idempotency_key", "verb", "arguments", "goal_id", "status", "lease_expires", "attempts", "result_evidence"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/identifier"},
+        "decision_id": {"type": ["string", "null"]},
+        "instruction_id": {"type": ["string", "null"]},
+        "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 256},
+        "verb": {"$ref": "#/$defs/identifier"},
+        "arguments": {"type": "array"},
+        "goal_id": {"type": ["string", "null"]},
+        "status": {"enum": ["pending", "running", "succeeded", "failed", "cancelled"]},
+        "lease_expires": {"type": ["integer", "null"]},
+        "attempts": {"type": "integer", "minimum": 0},
+        "result_evidence": {"type": ["object", "string", "null"]}
+      },
+      "additionalProperties": true
+    }
+  }
+}

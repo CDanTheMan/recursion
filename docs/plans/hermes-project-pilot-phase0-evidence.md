@@ -282,3 +282,116 @@ merge, push, or new PR occurred.
 
 The next-session handoff and copy/paste Phase 2 prompt are in
 `docs/plans/hermes-project-pilot-phase1-handoff.md`.
+
+## Phase 2 authoring evidence
+
+### Publication gate and clean base
+
+GitHub reported PR #22 merged by `NotSkittlz` at `2026-08-07T05:53:42Z` with merge commit
+`b25b3294dcbd320f92cd104718d795648fd57449`. The PR head was
+`ee898ea0c9b95060de30dd86022d85a46d58b020`; GitHub records no separate submitted review, so
+Lucas's merge is the available review/approval event. After fetching, Git proved the Phase 1
+implementation commit `0da2e1c8b0bea07849166aae58f80d9ed8191a49` is an ancestor of current
+`origin/master`, and the merged tree contains the Phase 1 controls and audit artifacts.
+
+Phase 2 was authored in the clean worktree
+`C:\Users\drfoo\github\recursion-hermes-phase2` on `review/hermes-phase2-controls`, based exactly
+on merged `origin/master` at `b25b329`. The dirty user-owned `master` remained at `20c1fa7` with
+all of its tracked and untracked files untouched. Its graph became ahead 5 / behind 123 only
+because the required fetch advanced `origin/master`; it was never used as an authoring base.
+
+### Reproduced starting evidence
+
+Before changing code, these commands ran in a disposable Linux clone of merged base `b25b329`:
+
+```text
+bash scripts/audit/hermes-pilot-phase0-baseline.sh
+# rc=0; BASELINE_SUITES=17; BASELINE_FAILED_SUITES=0
+
+bash scripts/tests/hermes-pilot-phase1-red.test.sh
+# rc=0; 8/8 Phase 1 controls passed; hermes-pilot-phase1-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase1-green.sh
+# rc=0; uid-65534 sandbox, canonical review-only publication, protected/default-ref,
+# dependency, artifact, and aggregate audits: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase2-red.test.sh
+# rc=1; 6 intended Phase 2 failures
+
+bash scripts/tests/hermes-pilot-phase3-red.test.sh
+# rc=1; 6 intended Phase 3 failures
+
+bash scripts/audit/hermes-pilot-live-phase1-red.sh
+# rc=1; 2 deployment-gated live findings: unrestricted root gateway service and advisories in
+# installed aiohttp==3.14.1 / cryptography==48.0.1
+```
+
+The Phase 2 harness had one sequencing defect: control 5 restored `set -e`, so control 6's
+intentional nonzero crashing writer exited the harness before its assertion. The harness now uses
+`set +e` only around that intentional failure and immediately restores `set -e`. Copying only this
+harness repair onto an otherwise untouched `b25b329` clone and rerunning
+`bash scripts/tests/hermes-pilot-phase2-red.test.sh` still produced exactly the same six intended
+failures (`rc=1`). The repair makes the sixth falsifier executable; it does not weaken a control.
+
+### Green after red
+
+The Phase 2 implementation is commit
+`9a4778fa794158c32e5f1381fb7b24c930202542` (`Implement Hermes pilot Phase 2 controls`). It keeps
+the existing file/event architecture and adds versioned schemas and validation; fail-closed locks
+and atomic, durable state changes; validator-enforced goal/dependency IDs; an append-only,
+idempotent action lifecycle with leases, attempts, crash recovery, and evidence; instruction
+acknowledgement coupled to the exact succeeded action; and PAUSE-gated event rotation plus
+manifest-hashed backup/restore.
+
+A completely fresh Linux clone at that exact commit ran this final matrix:
+
+```text
+bash scripts/audit/hermes-pilot-phase0-baseline.sh
+# rc=0; BASELINE_SUITES=17; BASELINE_FAILED_SUITES=0
+
+bash scripts/tests/hermes-pilot-phase1-red.test.sh
+# rc=0; 8/8 Phase 1 controls passed; hermes-pilot-phase1-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase1-green.sh
+# rc=0; strict sandbox ran as uid=65534; canonical review-only publication passed;
+# aiohttp==3.14.3 OSV_CLEAR; cryptography==50.0.0 OSV_CLEAR; aggregate audit: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase2-red.test.sh
+# rc=0; 6/6 Phase 2 controls passed; hermes-pilot-phase2-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase2-green.sh
+# rc=0; all ten control-state schemas validated; instruction/action coupling passed;
+# PAUSE-gated rotation and manifest-hashed backup/restore passed; aggregate audit: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase3-red.test.sh
+# rc=1; exactly 6 intended Phase 3 failures remain
+
+bash scripts/audit/hermes-pilot-live-phase1-red.sh
+# rc=1; exactly the same 2 deployment-gated live findings remain
+```
+
+The six Phase 2 controls specifically proved that ten concurrent replays launch one idempotent
+action, post-dispatch crash recovery does not relaunch it, simultaneous planners reserve distinct
+tasks and roadmap items, task start enforces its parent goal and dependencies, lock contention
+fails closed, and an interrupted update preserves the previous complete state file. The positive
+audit separately proved schema coverage, exact action-coupled instruction acknowledgement, and
+PAUSE-gated rotation/backup/restore.
+
+### Phase boundary and final live PAUSE
+
+Phase 3 remains deliberately unimplemented. Its six failures are direct Telegram execution,
+dropped validated authoring text, acknowledgement without a succeeded action link, decisions
+without provider/usage evidence, planner projection loss, and singleton decision-pointer loss.
+
+The final read-only live snapshot at `2026-08-07T06:55:40+00:00` found
+`/opt/recursion/state/PAUSE` present with unchanged SHA-256
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`. Production remained on
+`loop/auto` at `987fcfe08793b9fb5a452edf288a4fe9fc367ea1`; zero `recursion-worker-*` units were running;
+and both `recursion-hermes-gateway.service` and `recursion-hermes-supervisor.timer` were inactive.
+The live Phase 1 audit still has exactly two deployment-gated findings: the installed gateway is
+unrestricted/root, and the installed dependency environment reports advisories for
+`aiohttp==3.14.1` and `cryptography==48.0.1`. These were neither waived nor changed on production.
+
+No Phase 1 or Phase 2 deployment, Phase 3 implementation, pilot, autonomous execution, PAUSE
+removal, merge, push, or Phase 2 PR occurred. The local review handoff is in
+`docs/plans/hermes-project-pilot-phase2-handoff.md`.
