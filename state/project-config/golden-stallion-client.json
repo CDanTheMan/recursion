@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "golden-stallion-client",
+  "repo": "/opt/golden-stallion-client",
+  "remote": "git@github.com:NotSkittlz/golden-stallion-client.git",
+  "default_branch": "main",
+  "deploy_key_ref": "~/.ssh/gsc_deploy",
+  "charter": "Advance only the approved offline golden-stallion-client reconstruction goal through its existing conformance and native-diff gates. Tests, fixtures, oracles, baselines, live game access, portfolio policy, merge, and deployment are excluded.",
+  "allowed_paths": [
+    "."
+  ],
+  "topic": 6,
+  "pilot_id": "pilot-golden-stallion-client",
+  "activation_gate": "clone-auth-freshness-v1",
+  "notification_targets": [
+    "project-topic:telegram:-1003894008732:6",
+    "head-hermes:telegram:-1003894008732:1",
+    "lucas-direct:telegram:8913126684"
+  ],
+  "goal_source": "state/goals/goal-gsc-client-reconstruction.md",
+  "status": "active"
+}

@@ -23,6 +23,13 @@ case "$CMD" in
   author)        bash scripts/author.sh "$@" ;;
   intake)        bash scripts/intake.sh "${1:-poll}" "${2:-}" ;;
   instructions)  bash scripts/intake.sh open ;;
+  pilot)
+    SUB="${1:-help}"; shift || true
+    case "$SUB" in
+      status|context|topic|route|repo|logs|evidence) python3 scripts/project-pilot.py "$SUB" "$@" ;;
+      verify) python3 scripts/project-pilot.py verify-registry ;;
+      *) echo "usage: recursion pilot <status PROJECT|context PROJECT|repo PROJECT [PATH]|logs PROJECT [FILE]|evidence PROJECT [FILE]|topic THREAD|route PROJECT REQUEST [TARGET]|verify>"; exit 2 ;;
+    esac ;;
   capacity)      bash scripts/capacity.sh "${1:-report}" ;;
   resync)        bash scripts/resync.sh "${1:-status}" "${2:-}" ;;
   topics)        bash scripts/topics.sh "${1:-list}" ;;
@@ -80,6 +87,7 @@ recursion <command>
   dispatch <ws> <engine> <prompt_file> [model] [label]
                       spawn an execution arm (engine: hermes | claude | openrouter)
   tasks [status]      list the build-loop queue (state/tasks/), optionally by status
+  pilot <subcommand>  bounded topic/project context and live status (read-only operator surface)
   work [id]           run the executor: build a task, verify acceptance, auto-commit
                       the green result to loop/work/<id> (no id -> first queued task)
   resolve <id> [note] close an escalation: stamp a RESOLVED note to INBOX + status=resolved

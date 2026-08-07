@@ -45,6 +45,8 @@ state/.decision-latest.json
 # file is their append-only lifecycle history; both are runtime state, not review-branch content.
 state/actions/
 state/action-events.jsonl
+state/pilot-requests/
+state/runs/
 state/event-archive/
 state/instructions/
 

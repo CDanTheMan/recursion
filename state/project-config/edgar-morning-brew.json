@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "edgar-morning-brew",
+  "repo": "/opt/edgar-morning-brew",
+  "remote": "git@github.com:NotSkittlz/edgar-morning-brew.git",
+  "default_branch": "main",
+  "deploy_key_ref": "~/.ssh/edgar-morning-brew_deploy",
+  "charter": "Operate only within edgar-morning-brew under an approved project goal and machine gate. Portfolio priority, policy, spending, credentials, deployment, and merge are excluded.",
+  "allowed_paths": [
+    "."
+  ],
+  "topic": 8,
+  "pilot_id": "pilot-edgar-morning-brew",
+  "activation_gate": "clone-auth-freshness-v1",
+  "notification_targets": [
+    "project-topic:telegram:-1003894008732:8",
+    "head-hermes:telegram:-1003894008732:1",
+    "lucas-direct:telegram:8913126684"
+  ],
+  "goal_source": "state/goals",
+  "status": "active"
+}

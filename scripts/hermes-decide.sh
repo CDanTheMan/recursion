@@ -41,7 +41,7 @@ flock -n 9 || { log "control lock contended; refusing overlapping planner/sync w
 
 # The verbs Hermes may choose. This list is the contract: conduct-hermes.sh refuses anything
 # else, so adding a verb here without adding it there is inert, and vice versa.
-VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add register note assist-answer"
+VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify"
 
 # --- the state brief: ground truth, re-derived every run ---------------------------------
 build_brief(){
@@ -50,7 +50,9 @@ build_brief(){
   echo; echo "===== INSTRUCTIONS FROM LUCAS (highest priority — he is the principal) ====="
   # What he actually said, in his words, from the cockpit. These outrank the roadmaps: a roadmap
   # is what was planned, an open instruction is what he wants now.
-  bash scripts/intake.sh open 2>/dev/null || echo "(none)"
+  # Project-topic instructions are owned by their durable project pilot. Head Hermes sees only
+  # explicit head routing (portfolio/policy/cross-project/credentials/production) here.
+  bash scripts/intake.sh open head-hermes 2>/dev/null || echo "(none)"
   echo; echo "===== SCOPE (ANCHOR) ====="
   cat ANCHOR.md 2>/dev/null || echo "(ANCHOR.md absent)"
   echo; echo "===== DECISIONS (open calls you must honour) ====="
@@ -115,7 +117,8 @@ they are deliberately small: append-only, into state/ only, never code and never
 goes in the "text" field, not in args.
   roadmap-add <ws>              + text: append one plannable checklist item to a roadmap
   roadmap-new <ws> <project>    create a roadmap wired to a registered repo
-  portfolio-add <project> <remote>   add a PENDING registry row
+  portfolio-add <project> <remote>   + text: prepare a PENDING row and bounded charter
+  project-topic-bind <project> <topic>   bind an existing Telegram topic while pending
   register <project>            clone + activate a pending row — ONLY if its deploy key exists
   note <project>                + text: append to a project's state file
   assist-answer <task-id>       + text: answer one open assist through the actuator

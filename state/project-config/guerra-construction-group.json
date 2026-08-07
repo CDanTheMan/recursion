@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "guerra-construction-group",
+  "repo": "/opt/guerra-construction-group",
+  "remote": "git@github.com:NotSkittlz/guerra-construction-group.git",
+  "default_branch": "main",
+  "deploy_key_ref": "~/.ssh/guerra-construction-group_deploy",
+  "charter": "Operate only within guerra-construction-group under an approved project goal and machine gate. Portfolio priority, policy, credentials, deployment, and merge are excluded.",
+  "allowed_paths": [
+    "."
+  ],
+  "topic": 9,
+  "pilot_id": "pilot-guerra-construction-group",
+  "activation_gate": "clone-auth-freshness-v1",
+  "notification_targets": [
+    "project-topic:telegram:-1003894008732:9",
+    "head-hermes:telegram:-1003894008732:1",
+    "lucas-direct:telegram:8913126684"
+  ],
+  "goal_source": "state/goals",
+  "status": "active"
+}

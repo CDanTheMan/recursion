@@ -25,7 +25,14 @@ import sys
 
 ARG_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,80}")
 ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
-AUTHORING_TEXT_VERBS = {"roadmap-add", "note", "assist-answer"}
+AUTHORING_TEXT_VERBS = {
+    "roadmap-add", "note", "assist-answer", "portfolio-add",
+    "pilot-plan-propose", "pilot-task-create", "pilot-block", "pilot-escalate",
+}
+PILOT_VERBS = {
+    "pilot-plan-propose", "pilot-task-create", "pilot-worker-request",
+    "pilot-verifier-request", "pilot-block", "pilot-escalate", "pilot-goal-verify",
+}
 ARITY = {
     "noop": (0, 0),
     "conduct": (0, 0),
@@ -40,6 +47,14 @@ ARITY = {
     "assist-answer": (1, 1),
     "roadmap-new": (2, 2),
     "portfolio-add": (2, 2),
+    "project-topic-bind": (2, 2),
+    "pilot-plan-propose": (2, 2),
+    "pilot-task-create": (4, 5),
+    "pilot-worker-request": (3, 3),
+    "pilot-verifier-request": (3, 3),
+    "pilot-block": (3, 3),
+    "pilot-escalate": (2, 2),
+    "pilot-goal-verify": (2, 2),
     "escalate": (1, 3),
 }
 
@@ -98,6 +113,15 @@ def validate(verbs, raw):
         return False, "instruction_id is not a canonical identifier"
     if verb == "assist-answer" and not instruction_id:
         return False, "assist-answer requires instruction_id correlation"
+    if verb in PILOT_VERBS:
+        actor = str(d.get("actor", ""))
+        project = str(d.get("project", ""))
+        if not actor.startswith("pilot-") or not ID_RE.fullmatch(actor):
+            return False, "project-pilot verb requires a canonical pilot actor"
+        if not ID_RE.fullmatch(project) or not args or args[0] != project:
+            return False, "project-pilot verb must target its declared project"
+        if not instruction_id:
+            return False, "project-pilot verb requires topic instruction correlation"
 
     for req in ("goal", "wrong_if"):
         if not str(d.get(req, "")).strip():

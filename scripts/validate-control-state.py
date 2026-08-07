@@ -83,9 +83,15 @@ def validate(kind: str, value: object) -> dict:
                 fail(f"{field} must be a unique array")
             for item in items:
                 require_identifier(item, field)
-    for field in ("arguments", "allowed_paths", "non_goals"):
+    for field in ("arguments", "allowed_paths", "non_goals", "notification_targets"):
         if field in value and not isinstance(value[field], list):
             fail(f"{field} must be an array")
+    if "concurrency_limit" in value and (
+        not isinstance(value["concurrency_limit"], int) or value["concurrency_limit"] < 0
+    ):
+        fail("concurrency_limit must be a non-negative integer")
+    if "budget" in value and kind == "pilot" and not isinstance(value["budget"], dict):
+        fail("pilot budget must be an object")
     if "idempotency_key" in value:
         key = value["idempotency_key"]
         if not isinstance(key, str) or not key or len(key) > 256:

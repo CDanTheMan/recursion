@@ -90,7 +90,7 @@ fi
 
 [ -f "$FILE" ] || { log "no decision file at $FILE"; exit 2; }
 
-VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add register note assist-answer"
+VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify"
 RAW_DECISION="$(cat "$FILE" 2>/dev/null || true)"
 VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$RAW_DECISION" 2>&1)"
 case "$VALID" in
@@ -298,9 +298,20 @@ case "$VERB" in
     [ -n "$TEXT" ] || { log "REFUSED — $VERB needs prose in the \"text\" field"; exit 2; }
     run bash scripts/author.sh "$VERB" "$A0" "$TEXT"; rc=$? ;;
 
-  roadmap-new|portfolio-add|register)
+  roadmap-new|register|project-topic-bind)
     A0="${ARGS[0]:-}"; [ -n "$A0" ] || { log "$VERB needs an argument"; exit 2; }
     run bash scripts/author.sh "$VERB" "$A0" "${ARGS[1]:-}"; rc=$? ;;
+
+  portfolio-add)
+    A0="${ARGS[0]:-}"; A1="${ARGS[1]:-}"
+    [ -n "$A0" ] && [ -n "$A1" ] && [ -n "$TEXT" ] \
+      || { log "portfolio-add needs project, remote, and charter text"; exit 2; }
+    run bash scripts/author.sh portfolio-add "$A0" "$A1" "$TEXT"; rc=$? ;;
+
+  pilot-plan-propose|pilot-task-create|pilot-worker-request|pilot-verifier-request|pilot-block|pilot-escalate|pilot-goal-verify)
+    # Project-pilot authority is rechecked against the durable topic/pilot/charter records here.
+    # The helper may create scoped proposal/task state; it never launches a worker or publishes.
+    run python3 scripts/project-pilot.py execute "$FILE"; rc=$? ;;
 
   assist-answer)
     A0="${ARGS[0]:-}"; [ -n "$A0" ] || { log "assist-answer needs a task id"; exit 2; }

@@ -7,8 +7,8 @@
 # come back as `escalate`. That is the gap between a scheduler and a manager.
 #
 # ★ THE BOUND, because this is an expansion of authority and should read like one:
-#   - It writes ONLY under state/roadmaps/, state/projects/, state/portfolio.tsv and
-#     state/instructions/. Never scripts/, never .env, never code, never a gate, never a test.
+#   - It writes ONLY under state/roadmaps/, state/projects/, state/project-config/, state/pilots/,
+#     state/portfolio.tsv and state/instructions/. Never scripts/, .env, code, gates, or tests.
 #   - Roadmaps and notes are APPEND-ONLY. A model that can rewrite a roadmap can delete the plan,
 #     and the deletion would look exactly like a plan. Appending is bounded and reviewable, and
 #     everything lands on loop/auto where `git log` shows who wrote what.
@@ -20,8 +20,9 @@
 #
 #   author.sh roadmap-add <workstream> <item>     append a plannable checklist item
 #   author.sh roadmap-new <workstream> <project>  create a roadmap wired to a registered repo
-#   author.sh portfolio-add <project> <remote>    add a PENDING registry row (a key activates it)
-#   author.sh register <project>                  clone + activate a pending row IF its key exists
+#   author.sh portfolio-add <project> <remote> <charter>  prepare a PENDING project/pilot
+#   author.sh project-topic-bind <project> <topic>        bind an existing Telegram topic
+#   author.sh register <project>                  activate only after every proof passes
 #   author.sh note <project> <text>               append to the project's state file
 set -uo pipefail
 export LC_ALL=C
@@ -84,50 +85,34 @@ roadmap-new)
   echo "created state/roadmaps/$WS.md wired to $PROJ ($(fld "$ROW" 2))" ;;
 
 portfolio-add)
-  PROJ="${1:?usage: author.sh portfolio-add <project> <remote>}"; REMOTE="${2:?remote}"
+  PROJ="${1:?usage: author.sh portfolio-add <project> <remote> <charter>}"; REMOTE="${2:?remote}"; shift 2
+  CHARTER="$*"
   ok_name "$PROJ" || { echo "author: invalid project name" >&2; exit 2; }
   [ -n "$(row_for "$PROJ")" ] && { echo "author: '$PROJ' is already in the portfolio" >&2; exit 2; }
-  case "$REMOTE" in git@github.com:*|https://github.com/*) : ;;
-    *) echo "author: '$REMOTE' is not a github remote" >&2; exit 2 ;; esac
-  # PENDING, always. Activating needs a deploy key, and only Lucas can put one on GitHub — so
-  # this verb can prepare the portfolio and can never enlarge it by itself.
-  printf '%s\t/opt/%s\t%s\tmain\t~/.ssh/%s_deploy\t-\t-\tpending\n' "$PROJ" "$PROJ" "$REMOTE" "$PROJ" >> "$REG"
+  [ -n "${CHARTER//[[:space:]]/}" ] \
+    || { echo "author: portfolio preparation needs a bounded charter" >&2; exit 2; }
+  [ -x "$ROOT/scripts/project-pilot.py" ] \
+    || { echo "author: project-pilot registry helper is absent" >&2; exit 4; }
+  RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-pilot.py" prepare "$PROJ" "$REMOTE" "$CHARTER" \
+    >/dev/null || exit $?
   event portfolio-add "" "$PROJ pending"
   echo "added $PROJ as PENDING. It needs a deploy key at ~/.ssh/${PROJ}_deploy (Lucas provisions it on GitHub), then: recursion author register $PROJ" ;;
+
+project-topic-bind)
+  PROJ="${1:?usage: author.sh project-topic-bind <project> <topic>}"; TOPIC="${2:?topic id}"
+  [ -x "$ROOT/scripts/project-pilot.py" ] || { echo "author: project-pilot registry helper is absent" >&2; exit 4; }
+  RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-pilot.py" bind-topic "$PROJ" "$TOPIC" >/dev/null || exit $?
+  event project-topic-bind "" "$PROJ -> $TOPIC"
+  echo "bound pending project $PROJ to Telegram topic $TOPIC" ;;
 
 register)
   PROJ="${1:?usage: author.sh register <project>}"
   ROW="$(row_for "$PROJ")"; [ -n "$ROW" ] || { echo "author: '$PROJ' is not in the portfolio" >&2; exit 2; }
   [ "$(fld "$ROW" 8)" = "pending" ] || { echo "author: '$PROJ' is status=$(fld "$ROW" 8), not pending" >&2; exit 2; }
-  P="$(fld "$ROW" 2)"; REMOTE="$(fld "$ROW" 3)"; BR="$(fld "$ROW" 4)"; KEY="$(fld "$ROW" 5)"
-  KP="${KEY/#\~/$HOME}"
-  # ★ THE HUMAN GATE. No key, no repo. This is not a flag the loop can flip — it is a credential
-  # that exists on GitHub or does not.
-  [ -f "$KP" ] || { echo "author: no deploy key at $KEY — Lucas must provision it on GitHub before $PROJ can join the portfolio" >&2; exit 4; }
-  GSSH="ssh -i $KP -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
-  if [ -d "$P/.git" ]; then
-    have="$(git -C "$P" remote get-url origin 2>/dev/null)"
-    [ "$have" = "$REMOTE" ] || { echo "author: $P already exists and points at '$have', not '$REMOTE'" >&2; exit 4; }
-  else
-    GIT_SSH_COMMAND="$GSSH" git clone -q "$REMOTE" "$P" 2>&1 | tail -2 || true
-    [ -d "$P/.git" ] || { echo "author: clone failed for $PROJ" >&2; exit 4; }
-  fi
-  # Prove it before promising it: an active row that cannot reach origin is exactly what
-  # portfolio-lint calls a GHOST.
-  python3 - "$REG" "$PROJ" <<'PY'
-import io,sys
-reg,proj=sys.argv[1],sys.argv[2]
-out=[]
-for line in io.open(reg,encoding='utf-8',newline='').read().split('\n'):
-    c=line.split('\t')
-    if len(c)>=8 and c[0]==proj and c[7]=='pending':
-        c[7]='active'; line='\t'.join(c)
-    out.append(line)
-io.open(reg,'w',encoding='utf-8',newline='\n').write('\n'.join(out))
-PY
-  if [ -x "$ROOT/scripts/resync.sh" ] && ! RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/resync.sh" check "$PROJ" >/dev/null 2>&1; then
-    echo "author: $PROJ cloned but does not check fresh — left active for inspection; run: recursion resync status" >&2
-  fi
+  [ -x "$ROOT/scripts/project-pilot.py" ] \
+    || { echo "author: project-pilot registry helper is absent" >&2; exit 4; }
+  RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-pilot.py" activate "$PROJ" >/dev/null || exit $?
+  ROW="$(row_for "$PROJ")"; P="$(fld "$ROW" 2)"; BR="$(fld "$ROW" 4)"
   event register "" "$PROJ active"
   echo "registered $PROJ -> $P (active, branch $BR)" ;;
 
