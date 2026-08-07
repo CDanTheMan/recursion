@@ -144,3 +144,10 @@ Chosen: Option B — approve the strict-decrease native-diff gate as the metric;
 **Blocked on:** Human-only change to remove autonomous-merge authorization and confirmation that protected default branches reject direct pushes for every repository with a write deploy key.
 **Context:** `chiron-001` and `chiron-003` passed while automerge is enabled; a later qualifying loop could push a default branch despite the recorded review-branch-only invariant.
 **Options:** Disable automerge and enforce branch protection now; or explicitly authorize autonomous default-branch merging despite the control-plane invariant.
+
+## [esc-0006] 2026-08-07 15:15 — Disable autonomous merging and verify default-branch protection
+**Workstream:** supervision
+**Pointer:** CURRENT INBOX: `[esc-0005] 2026-08-07 03:15`; OPEN SELF-IMPROVEMENT PROPOSALS items 2–3; `state/tasks/chiron-001.md`; `state/tasks/chiron-003.md`
+**Blocked on:** Human-only removal of autonomous-merge authorization and confirmation that protected default branches reject direct pushes for every repository holding a write deploy key.
+**Context:** `chiron-001` and `chiron-003` passed while automerge remains enabled; a later qualifying loop could push a default branch, violating the recorded review-branch-only control-plane invariant.
+**Options:** Disable automerge and enforce branch protection now; or explicitly authorize autonomous default-branch merging despite the invariant.

@@ -7,3 +7,5 @@
 {"ts":"2026-08-07T06:15:45Z","event":"decision","task":"","project":"","goal":"","pid":959068,"detail":"noop "}
 {"ts":"2026-08-07T09:15:48Z","event":"decision","task":"","project":"","goal":"","pid":1066758,"detail":"noop "}
 {"ts":"2026-08-07T12:15:46Z","event":"decision","task":"","project":"","goal":"","pid":1070869,"detail":"noop "}
+{"schema_version":1,"ts":"2026-08-07T15:15:47Z","event":"decision","task":"","project":"","goal":"","pid":1130081,"detail":"noop "}
+{"schema_version":1,"ts":"2026-08-07T15:15:59Z","event":"escalation-open","task":"","project":"","goal":"","pid":1130148,"detail":"esc-0006 supervision 2026-08-07 15:15 \u2014 Disable autonomous merging and verify default-branch protection"}
