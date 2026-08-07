@@ -9,3 +9,4 @@
 {"ts":"2026-08-07T12:15:46Z","event":"decision","task":"","project":"","goal":"","pid":1070869,"detail":"noop "}
 {"schema_version":1,"ts":"2026-08-07T15:15:47Z","event":"decision","task":"","project":"","goal":"","pid":1130081,"detail":"noop "}
 {"schema_version":1,"ts":"2026-08-07T15:15:59Z","event":"escalation-open","task":"","project":"","goal":"","pid":1130148,"detail":"esc-0006 supervision 2026-08-07 15:15 \u2014 Disable autonomous merging and verify default-branch protection"}
+{"schema_version":1,"ts":"2026-08-07T21:16:00Z","event":"escalation-open","task":"","project":"","goal":"","pid":1949938,"detail":"esc-0007 supervision 2026-08-07 21:15 \u2014 Disable autonomous default-branch merging and verify protection"}
