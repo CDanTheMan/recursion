@@ -1,6 +1,6 @@
 #id	key	status	first_seen	last_seen	count	workstream	pointer	title
 esc-0001	disable-autonomous-merging-and-verify-branch-protection	open	2026-08-06T09:15:42Z	2026-08-06T09:15:42Z	1	supervision	OPEN SELF-IMPROVEMENT PROPOSALS: “Turn OFF autonomous merge to the default branch”; `/opt/recursion/.env`; `state/ta	2026-08-06 09:15 — Disable autonomous merging and verify branch protection
-esc-0002	resync-localonly-recursion	open	2026-08-07T03:15:04Z	2026-08-07T03:15:04Z	1	portfolio	/opt/recursion	recursion: 1 local branch(es) hold commits on no remote
-esc-0003	resync-dirty-recursion	open	2026-08-07T03:15:07Z	2026-08-07T03:15:07Z	1	portfolio	/opt/recursion	recursion: uncommitted changes in the working tree
-esc-0004	resync-localonly-golden-stallion-extension	open	2026-08-07T03:15:15Z	2026-08-07T03:15:15Z	1	portfolio	/opt/golden-stallion-extension	golden-stallion-extension: 1 local branch(es) hold commits on no remote
-esc-0005	disable-autonomous-merging-and-confirm-branch-protection	open	2026-08-07T03:16:04Z	2026-08-07T03:16:04Z	1	supervision	CURRENT INBOX: “[esc-0001] 2026-08-06 09:15 — Disable autonomous merging and verify branch protection”; OPEN SELF-	2026-08-07 03:15 — Disable autonomous merging and confirm branch protection
+esc-0002	resync-localonly-recursion	open	2026-08-07T03:15:04Z	2026-08-07T06:15:05Z	2	portfolio	/opt/recursion	recursion: 1 local branch(es) hold commits on no remote
+esc-0003	resync-dirty-recursion	open	2026-08-07T03:15:07Z	2026-08-07T06:15:05Z	2	portfolio	/opt/recursion	recursion: uncommitted changes in the working tree
+esc-0004	resync-localonly-golden-stallion-extension	open	2026-08-07T03:15:15Z	2026-08-07T06:15:10Z	2	portfolio	/opt/golden-stallion-extension	golden-stallion-extension: 1 local branch(es) hold commits on no remote
+esc-0005	disable-autonomous-merging-and-confirm-branch-protection	open	2026-08-07T03:16:04Z	2026-08-07T06:15:59Z	2	supervision	CURRENT INBOX: “[esc-0001] 2026-08-06 09:15 — Disable autonomous merging and verify branch protection”; OPEN SELF-	2026-08-07 03:15 — Disable autonomous merging and confirm branch protection
