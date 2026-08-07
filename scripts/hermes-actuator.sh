@@ -17,6 +17,28 @@ while [ "$STOP" = 0 ]; do
     continue
   fi
   set +e
+  # Phase 6 adds no scheduler process. The existing supervised actuator asks the deterministic
+  # reconciler to enqueue at most one idempotent reconcile decision per eligible goal, then
+  # drains those decisions through the same queue/action path it already owns.
+  if [ -x "$ROOT/scripts/project-reconcile.py" ]; then
+    RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" schedule >/dev/null
+    schedule_rc=$?
+    case "$schedule_rc" in
+      0) : ;;
+      *) log "goal reconciliation scheduling failed rc=$schedule_rc; no direct execution occurred" ;;
+    esac
+  fi
+  # Phase 7 uses this same supervised loop. The notification scheduler observes append-only
+  # events/outbox truth and emits decisions only; delivery and reporting still occur below through
+  # the durable queue and sole actuator.
+  if [ -x "$ROOT/scripts/notification-outbox.py" ]; then
+    RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/notification-outbox.py" schedule >/dev/null
+    notification_rc=$?
+    case "$notification_rc" in
+      0) : ;;
+      *) log "notification reconciliation scheduling failed rc=$notification_rc; no direct send occurred" ;;
+    esac
+  fi
   RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/conduct-hermes.sh"
   rc=$?
   set -e

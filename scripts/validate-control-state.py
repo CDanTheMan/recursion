@@ -19,12 +19,13 @@ IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 STATUSES = {
     "project": {"pending", "active", "paused", "retired"},
     "pilot": {"pending", "active", "paused", "retired"},
-    "goal": {"draft", "approved", "active", "verifying", "achieved", "blocked", "abandoned"},
+    "goal": {"draft", "approved", "active", "verifying", "achieved", "blocked", "abandoned", "budget-exhausted", "paused"},
     "task": {"proposed", "ready", "queued", "leased", "running", "verifying", "passed", "failed", "blocked", "stale", "cancelled", "moot", "resolved", "escalated"},
     "run": {"pending", "running", "succeeded", "failed", "blocked", "cancelled", "stale"},
     "decision": {"proposed", "accepted", "queued", "executed", "refused", "cancelled"},
     "escalation": {"open", "resolved", "cancelled"},
     "delivery": {"pending", "running", "succeeded", "failed", "cancelled", "dead-letter"},
+    "notification_event": {"recorded"},
     "instruction": {"open", "consumed", "acknowledged", "cancelled"},
     "action": {"pending", "running", "succeeded", "failed", "cancelled"},
 }
@@ -37,6 +38,7 @@ REQUIRED = {
     "decision": ("schema_version", "id", "actor", "verb", "arguments", "reason", "goal_id", "idempotency_key", "status"),
     "escalation": ("schema_version", "id", "goal_id", "required_actor", "question", "evidence", "status"),
     "delivery": ("schema_version", "id", "event_id", "destination", "attempt", "acknowledgement", "status"),
+    "notification_event": ("schema_version", "id", "source_event_id", "event_type", "project_id", "goal_id", "message", "message_digest", "status"),
     "instruction": ("schema_version", "id", "principal", "topic", "project_id", "deduplication_key", "status", "action_ids"),
     "action": ("schema_version", "id", "idempotency_key", "verb", "arguments", "goal_id", "status", "lease_expires", "attempts", "result_evidence"),
 }
@@ -92,6 +94,26 @@ def validate(kind: str, value: object) -> dict:
         fail("concurrency_limit must be a non-negative integer")
     if "budget" in value and kind == "pilot" and not isinstance(value["budget"], dict):
         fail("pilot budget must be an object")
+    # Empty Phase 2 goal-budget objects remain a valid pre-Phase-6 projection. A goal is not
+    # autonomously schedulable until project-reconcile.parse_budget sees the complete policy.
+    if kind == "goal" and isinstance(value.get("budget"), dict) and value["budget"]:
+        required_budget = {
+            "max_concurrency", "max_tokens", "max_cost_usd", "max_wall_clock_seconds",
+            "max_task_attempts", "max_failures", "max_review_queue", "max_publish_attempts",
+            "publication_required",
+        }
+        missing_budget = sorted(required_budget - value["budget"].keys())
+        if missing_budget:
+            fail("Phase 6 goal budget is missing: " + ", ".join(missing_budget))
+        for field in required_budget - {"max_cost_usd", "publication_required"}:
+            if isinstance(value["budget"][field], bool) or not isinstance(value["budget"][field], int) \
+               or value["budget"][field] < 0:
+                fail(f"invalid Phase 6 goal budget field: {field}")
+        cost = value["budget"]["max_cost_usd"]
+        if isinstance(cost, bool) or not isinstance(cost, (int, float)) or cost < 0:
+            fail("invalid Phase 6 goal budget field: max_cost_usd")
+        if not isinstance(value["budget"]["publication_required"], bool):
+            fail("invalid Phase 6 goal budget field: publication_required")
     if kind == "task" and value.get("evidence_contract") == "worker-result-v1":
         phase5 = (
             "model_alias", "verifier_model_alias", "deadline_seconds",
@@ -133,6 +155,21 @@ def validate(kind: str, value: object) -> dict:
         numeric = "attempts" if kind == "action" else "attempt"
         if not isinstance(value[numeric], int) or value[numeric] < 0:
             fail(f"{numeric} must be a non-negative integer")
+    if kind == "delivery":
+        if "max_attempts" in value and (not isinstance(value["max_attempts"], int) or value["max_attempts"] < 1):
+            fail("max_attempts must be a positive integer")
+        if "message_digest" in value and not re.fullmatch(r"[0-9a-f]{64}", str(value["message_digest"])):
+            fail("delivery message_digest must be sha256")
+    if kind == "notification_event":
+        if value["event_type"] not in {
+            "goal-accepted", "plan-approved", "worker-launched", "task-passed", "task-failed",
+            "task-blocked", "human-answer-received", "review-branch-published", "goal-verifying",
+            "goal-achieved", "goal-stopped", "pilot-terminal-report", "portfolio-result",
+            "lucas-attention-required", "delivery-dead-letter",
+        }:
+            fail("unknown notification event type")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(value["message_digest"])):
+            fail("notification message_digest must be sha256")
     return value
 
 

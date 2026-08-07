@@ -33,6 +33,10 @@ PILOT_VERBS = {
     "pilot-plan-propose", "pilot-task-create", "pilot-worker-request",
     "pilot-verifier-request", "pilot-block", "pilot-escalate", "pilot-goal-verify",
 }
+PHASE7_VERBS = {
+    "notification-reconcile", "notification-deliver", "notification-portfolio",
+    "notification-audit", "notification-recover",
+}
 ARITY = {
     "noop": (0, 0),
     "conduct": (0, 0),
@@ -55,6 +59,18 @@ ARITY = {
     "pilot-block": (3, 3),
     "pilot-escalate": (2, 2),
     "pilot-goal-verify": (2, 2),
+    # Phase 6 internal decisions are emitted by the deterministic reconciler, then travel
+    # through the same durable queue and sole actuator as every other state change.
+    "reconcile-goal": (2, 2),
+    "task-transition": (6, 6),
+    "goal-transition": (5, 5),
+    "verify-goal": (2, 2),
+    "publish-task": (3, 3),
+    "notification-reconcile": (2, 2),
+    "notification-deliver": (2, 2),
+    "notification-portfolio": (2, 2),
+    "notification-audit": (2, 2),
+    "notification-recover": (2, 2),
     "escalate": (1, 3),
 }
 
@@ -122,6 +138,16 @@ def validate(verbs, raw):
             return False, "project-pilot verb must target its declared project"
         if not instruction_id:
             return False, "project-pilot verb requires topic instruction correlation"
+    if verb in PHASE7_VERBS:
+        actor = str(d.get("actor", ""))
+        project = str(d.get("project", ""))
+        if not ID_RE.fullmatch(project) or not args or args[0] != project:
+            return False, "Phase 7 verb must target its declared project"
+        if verb == "notification-portfolio":
+            if actor != "head-hermes":
+                return False, "portfolio result must be emitted by Head Hermes"
+        elif not actor.startswith("pilot-") or not ID_RE.fullmatch(actor):
+            return False, "Phase 7 project action requires a canonical pilot actor"
 
     for req in ("goal", "wrong_if"):
         if not str(d.get(req, "")).strip():

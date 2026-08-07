@@ -25,6 +25,7 @@
 #   taskctl.sh heartbeat <id>          extend the lease
 #   taskctl.sh finish <id> <status> [note]
 #   taskctl.sh block <id> <reason>     mark blocked (see esc-record for the escalation)
+#   taskctl.sh cas <id> <from> <to> <reason>  Phase 6 compare-and-swap transition
 #   taskctl.sh get <id> [field]        canonical status, or one field
 #   taskctl.sh reap                    expire dead leases -> stale + event (safe, idempotent)
 #   taskctl.sh event <kind> <task> <detail...>
@@ -243,6 +244,10 @@ start)
   if [ "$cur" = "running" ] && [ -n "$exp" ] && [ "$exp" -gt "$(_epoch)" ] 2>/dev/null; then
     _unlock; echo "taskctl: $ID already leased by $(_field "$F" lease_owner) until $exp" >&2; exit 4
   fi
+  case "$cur" in
+    ready|queued|stale) : ;;
+    *) _unlock; echo "taskctl: $ID is status=$cur, not dispatchable" >&2; exit 4 ;;
+  esac
   att="$(_field "$F" attempts)"; att="$(( ${att:-0} + 1 ))"
   _set_fields "$F" status running lease_owner "$OWNER" \
     lease_expires "$(( $(_epoch) + LEASE_TTL ))" attempts "$att" started_at "$(_now)" \
@@ -278,6 +283,24 @@ block)
     || { rc=$?; _unlock; exit "$rc"; }
   emit_event block "$ID" "$REASON" || { rc=$?; _unlock; exit "$rc"; }
   _unlock; echo "blocked $ID" ;;
+
+cas)
+  ID="${1:?usage: taskctl cas <id> <from> <to> <reason>}"
+  FROM="${2:?from}"; TO="${3:?to}"; REASON="${4:?reason}"
+  F="$(_taskfile "$ID")"; [ -f "$F" ] || { echo "taskctl: no such task: $ID" >&2; exit 2; }
+  case "$FROM:$TO" in
+    proposed:ready|failed:ready|stale:ready|running:stale|leased:stale|ready:blocked|queued:blocked) : ;;
+    *) echo "taskctl: refused transition $FROM -> $TO" >&2; exit 6 ;;
+  esac
+  _lock || exit $?
+  CUR="$(_field "$F" status)"
+  [ "$CUR" = "$FROM" ] || { _unlock; echo "taskctl: CAS expected $FROM, found $CUR" >&2; exit 73; }
+  VER="$(_field "$F" version)"; VER="$(( ${VER:-1} + 1 ))"
+  _set_fields "$F" status "$TO" version "$VER" lease_expires 0 transition_reason "$REASON" \
+    transition_at "$(_now)" || { rc=$?; _unlock; exit "$rc"; }
+  emit_event task-transition "$ID" "from=$FROM to=$TO reason=$REASON version=$VER" \
+    || { rc=$?; _unlock; exit "$rc"; }
+  _unlock; echo "transitioned $ID $FROM -> $TO" ;;
 
 get)
   ID="${1:?usage: taskctl get <id> [field]}"; FLD="${2:-status}"

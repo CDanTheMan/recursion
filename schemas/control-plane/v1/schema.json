@@ -61,7 +61,7 @@
         "acceptance_suite": {"type": "string", "minLength": 1},
         "falsifier": {"type": "string", "minLength": 1},
         "budget": {"type": ["object", "string"]},
-        "status": {"enum": ["draft", "approved", "active", "verifying", "achieved", "blocked", "abandoned"]}
+        "status": {"enum": ["draft", "approved", "active", "verifying", "achieved", "blocked", "abandoned", "budget-exhausted", "paused"]}
       },
       "additionalProperties": true
     },
@@ -156,7 +156,35 @@
         "destination": {"type": "string", "minLength": 1},
         "attempt": {"type": "integer", "minimum": 0},
         "acknowledgement": {"type": ["string", "null"]},
-        "status": {"enum": ["pending", "running", "succeeded", "failed", "cancelled", "dead-letter"]}
+        "status": {"enum": ["pending", "running", "succeeded", "failed", "cancelled", "dead-letter"]},
+        "project_id": {"type": ["string", "null"]},
+        "goal_id": {"type": ["string", "null"]},
+        "task_id": {"type": ["string", "null"]},
+        "next_attempt_at": {"type": ["integer", "null"], "minimum": 0},
+        "max_attempts": {"type": "integer", "minimum": 1},
+        "backoff_seconds": {"type": "integer", "minimum": 0},
+        "last_error": {"type": ["string", "null"]},
+        "attempt_token": {"type": ["string", "null"]},
+        "receipt_path": {"type": ["string", "null"]},
+        "message_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "additionalProperties": true
+    },
+    "notification_event": {
+      "type": "object",
+      "required": ["schema_version", "id", "source_event_id", "event_type", "project_id", "goal_id", "message", "message_digest", "status"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/identifier"},
+        "source_event_id": {"$ref": "#/$defs/identifier"},
+        "event_type": {"enum": ["goal-accepted", "plan-approved", "worker-launched", "task-passed", "task-failed", "task-blocked", "human-answer-received", "review-branch-published", "goal-verifying", "goal-achieved", "goal-stopped", "pilot-terminal-report", "portfolio-result", "lucas-attention-required", "delivery-dead-letter"]},
+        "project_id": {"$ref": "#/$defs/identifier"},
+        "goal_id": {"type": ["string", "null"]},
+        "task_id": {"type": ["string", "null"]},
+        "message": {"type": "string", "minLength": 1, "maxLength": 3800},
+        "message_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "status": {"const": "recorded"},
+        "routing_error": {"type": ["string", "null"]}
       },
       "additionalProperties": true
     },
