@@ -10,17 +10,19 @@ related:
   - docs/delegation-design.md
   - docs/plans/hermes-project-pilot-phase3-handoff.md
   - docs/plans/hermes-project-pilot-phase4-handoff.md
+  - docs/plans/hermes-project-pilot-phase5-handoff.md
 ---
 # Hermes project pilot Phase 0 evidence
 
 ## Verdict
 
 Phase 0 established the reproducible baseline and red controls without fixing a defect. Phases 1
-through 4 subsequently closed their authoring controls on separate reviewed bases; their exact
-evidence is appended below. Phase 3 was reviewed and merged. Phase 4 is committed locally for
-Lucas's review and remains unpublished.
+through 4 subsequently closed their authoring controls on separate reviewed bases and were merged
+through Lucas's review workflow. Phase 5 now closes its local authoring controls on merged Phase 4;
+its implementation is committed locally for review and remains unpublished. Exact evidence is
+appended below.
 
-Production remains paused and undeployed for Phases 1-4. No live pilot ran, no autonomous execution was
+Production remains paused and undeployed for Phases 1-5. No live pilot ran, no autonomous execution was
 enabled, no product repository changed, and no protected or default branch was pushed or merged by
 this work. The two live Phase 1 findings remain deployment gates, not waived controls.
 
@@ -722,3 +724,178 @@ findings. They were neither waived nor changed.
 No Phase 1, Phase 2, Phase 3, or Phase 4 deployment, live pilot, autonomous execution, PAUSE
 removal, product-repository change, merge, push, or PR occurred. The Phase 4 branch remains local
 for Lucas's review. Its handoff is `docs/plans/hermes-project-pilot-phase4-handoff.md`.
+
+## Phase 4 review follow-up and Phase 5 authoring evidence
+
+### Phase 4 merge gate and clean Phase 5 base
+
+The required fetch advanced `origin/master` to
+`2d631c4df36edec96d9d69013f8b8afedb28a79e`, authored by `NotSkittlz` as
+`Merge pull request #25 from NotSkittlz/review/hermes-phase4-controls`. Its parents are merged
+Phase 3 master `f120566a49a8d9a371e8b03d42d7e2aaf13dd7fc` and published Phase 4 handoff tip
+`679b12d3b353f95b418dc1f5a45f79872416dc6f`. Both the Phase 4 implementation
+`537749193abcd6e8a9ce0aa9c3a8da73c679b42d` and handoff tip returned zero from
+`git merge-base --is-ancestor <oid> origin/master`. The merged tree contained the Phase 4 red
+control, positive audit, project-pilot helper, schema/validator changes, topic skill, project/pilot
+metadata, and registration artifacts. This independently satisfied the Phase 5 merge gate before
+authoring began and supersedes the earlier local-only Phase 4 snapshot above.
+
+Phase 5 was authored in the new clean worktree
+`C:\Users\drfoo\github\recursion-hermes-phase5` on local branch
+`review/hermes-phase5-controls`, based exactly on merged `origin/master` at `2d631c4`. The dirty
+user-owned `master` remained at `20c1fa77042f3aa9f5d8978352792f3b058bc0d1`. Its tracked and
+untracked status list remained the same as the start-of-session inventory; its behind count moved
+only because the requested fetch advanced `origin/master`. It was never an authoring or test
+source.
+
+### Reproduced merged-base evidence
+
+Before changing code, a disposable named-branch Linux clone at exact base `2d631c4` ran:
+
+```text
+bash scripts/audit/hermes-pilot-phase0-baseline.sh
+# rc=0; BASELINE_COMMIT=2d631c4df36edec96d9d69013f8b8afedb28a79e;
+# BASELINE_SUITES=17; BASELINE_FAILED_SUITES=0
+
+bash scripts/tests/hermes-pilot-phase1-red.test.sh
+bash scripts/audit/hermes-pilot-phase1-green.sh
+# both rc=0; 8/8 controls and positive sandbox/publication/dependency audit green
+
+bash scripts/tests/hermes-pilot-phase2-red.test.sh
+bash scripts/audit/hermes-pilot-phase2-green.sh
+# both rc=0; 6/6 controls and positive schema/action-coupling/rotation/backup audit green
+
+bash scripts/tests/hermes-pilot-phase3-red.test.sh
+bash scripts/audit/hermes-pilot-phase3-green.sh
+# both rc=0; 6/6 controls and positive intake/decision/queue/coupling/supervision audit green
+
+bash scripts/tests/hermes-pilot-phase4-red.test.sh
+bash scripts/audit/hermes-pilot-phase4-green.sh
+# both rc=0; 4/4 controls and positive pilot/topic/verb/registration audit green
+```
+
+The final Phase 5 falsifier was then copied by itself onto another untouched named-branch clone of
+that same base and run without any implementation helper:
+
+```text
+bash scripts/tests/hermes-pilot-phase5-red.test.sh
+# rc=1; exactly 9 failures:
+# - a committed protected-file mutation was hidden and its gate ran;
+# - a committed test/fixture/rename/delete/out-of-scope mutation set passed;
+# - generated work passed without its result report;
+# - a no-op passed a required-change task;
+# - literal `true` passed as an autonomy gate;
+# - a worker rewrote its own gate and passed;
+# - a sleeping worker finished instead of timing out and had no timeout evidence/escalation;
+# - no independent exact-commit verifier run/evidence existed;
+# - verifier mutation was indistinguishable from success.
+# hermes-pilot-phase5-red: 9 FAILED (expected on the pre-Phase 5 base)
+```
+
+This control is non-vacuous in both directions: the first six cases were `passed` on the old code,
+the sleeping worker was also `passed`, and both verifier cases exposed the absence of an independent
+review boundary. The green implementation requires the intended `escalated`, `blocked`, or `passed`
+terminal state rather than counting any merely non-passed intermediate state as success.
+
+### Pre-change live deployment gate
+
+The separate read-only production snapshot at `2026-08-07T16:24:14Z` used:
+
+```text
+ssh gs-recursion 'cd /opt/recursion && bash scripts/audit/hermes-pilot-live-phase1-red.sh'
+# rc=1; exactly 2 deployment-gated findings
+sha256sum /opt/recursion/state/PAUSE
+# 919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+```
+
+Production was `loop/auto` at `c6332c191501c47a9c9b82c50cb81f82f5678528`. PAUSE was present
+before and after the audit with that hash; the gateway was active for PAUSE-safe awareness, the
+supervisor timer was inactive, and zero `recursion-worker-*` units existed. The two findings were
+the undeployed unrestricted/root gateway service and advisories in installed `aiohttp==3.14.1` and
+`cryptography==48.0.1`. They remained deployment gates and were not changed.
+
+### Phase 5 implementation
+
+The red control was first preserved as local commit
+`c5e60eb53508cfe557673522eb4d4334f33b3c6f` (`Add Hermes pilot Phase 5 red controls`). The Phase 5
+implementation is commit `719ca2453f8e1a85f684611b0cd0fe175524992b`
+(`Implement Hermes pilot Phase 5 controls`). It keeps the file/event task store, existing durable
+instruction/decision/action queue, sole deterministic actuator, proven work action, canonical
+review branch, and publisher boundary. It adds:
+
+- pilot-created strict task envelopes with exact identity/base, allowed paths, non-goals,
+  acceptance/evidence/deadline/network/ambiguity contracts, required-change policy, and distinct
+  implementer/verifier model aliases;
+- versionless role aliases resolved only from human-owned environment mappings—no tracked concrete
+  model version and no worker-write path to routing or budgets;
+- atomic run records carrying PID/PGID, heartbeat/lease/deadline, logs, usage, result, complete
+  changed-file evidence, machine-gate result, exact candidate OID, and verifier verdict;
+- complete `base..HEAD`, staged, unstaged, untracked, rename/copy, and delete scope evidence with
+  deny-first checks for tests, fixtures, control-plane files, gate files, and out-of-scope paths;
+- non-vacuous gate validation and declared gate-file fingerprints; strict result-to-observed-diff
+  agreement; rejection of missing result and no-op output for a required-change task;
+- timeout termination with confirmed dead process group, lease clearing, blocked task state, and
+  one run-keyed actionable escalation;
+- candidate commit before the machine gate, a tracked-state immutability check after the gate, and
+  a separate read-only verifier worktree at the exact same OID; verifier source mutation, result
+  mismatch, wrong implementer identity, or wrong OID fails closed.
+
+The worker hierarchy remains inside the existing `work` actuator action. Phase 4 pilot worker and
+verifier verbs still create durable requests only; configured pilot concurrency remains zero.
+There is no second executor and Phase 6 dispatch/reconciliation was not begun.
+
+### Exact-commit green after red
+
+A fresh named-branch Linux clone made from a Git bundle at exact implementation commit
+`719ca2453f8e1a85f684611b0cd0fe175524992b` ran:
+
+```text
+bash scripts/audit/hermes-pilot-phase0-baseline.sh
+# rc=0; BASELINE_COMMIT=719ca2453f8e1a85f684611b0cd0fe175524992b;
+# BASELINE_SUITES=17; BASELINE_FAILED_SUITES=0
+
+bash scripts/tests/hermes-pilot-phase1-red.test.sh
+bash scripts/audit/hermes-pilot-phase1-green.sh
+# both rc=0; 8/8 controls and Phase 1 positive audit green
+
+bash scripts/tests/hermes-pilot-phase2-red.test.sh
+bash scripts/audit/hermes-pilot-phase2-green.sh
+# both rc=0; 6/6 controls and Phase 2 positive audit green
+
+bash scripts/tests/hermes-pilot-phase3-red.test.sh
+bash scripts/audit/hermes-pilot-phase3-green.sh
+# both rc=0; 6/6 controls and Phase 3 positive audit green
+
+bash scripts/tests/hermes-pilot-phase4-red.test.sh
+bash scripts/audit/hermes-pilot-phase4-green.sh
+# both rc=0; 4/4 controls and Phase 4 positive audit green
+
+bash scripts/tests/hermes-pilot-phase5-red.test.sh
+# rc=0; 9/9 controls passed; hermes-pilot-phase5-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase5-green.sh
+# rc=0; shell/Python artifacts; human-owned aliases; non-vacuous/fingerprinted gates;
+# complete scope-source evidence; task/run schema; read-only verifier/network artifacts;
+# and aggregate Phase 5 controls all green; hermes-pilot-phase5-green: ALL PASS
+```
+
+The Phase 5 controls specifically proved that committed mutations cannot hide protected or
+out-of-scope paths; missing result, required-change no-op, `true`, and self-modified gate cannot
+pass; a hung worker is terminated with lease `0`, a dead recorded PGID, and exactly one correlated
+timeout escalation; a valid implementer and verifier have distinct run IDs and PIDs bound to the
+same machine-gated OID; and a mutating verifier is refused without changing the implementer branch.
+
+### Final live PAUSE and Phase 5 boundary
+
+The final read-only snapshot at `2026-08-07T17:01:08Z` used the same live audit and PAUSE hash
+commands. Production remained `loop/auto` at
+`c6332c191501c47a9c9b82c50cb81f82f5678528`; PAUSE was present before and after with SHA-256
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`; the PAUSE-safe gateway was
+active, the supervisor timer was inactive, and zero `recursion-worker-*` units existed. The live
+audit returned `1` with exactly the same two deployment-gated Phase 1 findings. They were neither
+waived nor changed.
+
+No Phase 1, Phase 2, Phase 3, Phase 4, or Phase 5 deployment, live pilot, autonomous execution,
+project-concurrency increase, PAUSE removal, product-repository change, merge, push, or PR occurred.
+The local Phase 5 handoff is `docs/plans/hermes-project-pilot-phase5-handoff.md`. Phase 6 remains
+unauthorized.
