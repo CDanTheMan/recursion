@@ -9,6 +9,7 @@ related:
   - "ANCHOR.md"
   - "state/DECISIONS.md"
   - "docs/plans/hermes-project-pilot-phase6-handoff.md"
+  - "docs/plans/hermes-project-pilot-phase7-handoff.md"
   - "golden-stallion-client/docs/plans/four-lane-closure-plan-2026-08-05.md"
   - "golden-stallion-client/docs/spec/client-architecture.md"
 ---
@@ -86,15 +87,26 @@ A task with no machine-checkable gate is never auto-integrated — it escalates.
   STRUCTURAL changes to a reviewed authoring session (counterpart to read-only `recursion-status`).
   Verified the `hermes-telegram` bundle carries the skills tools, so the gateway can load it. Both
   mirrored in `loop/hermes-skills/` (box `/root/.hermes/skills/` is authoritative).
-- **Project-goal reconciliation (Phase 6, authored but not deployed)** — a deterministic
+- **Project-goal reconciliation (Phase 6, merged but not deployed)** — a deterministic
   reconciler observes canonical goal/task/run/process/worktree/ref/event/delivery truth and emits
   only idempotent schema-v1 decisions through the existing durable action queue and sole actuator.
   It admits dependency-ready work under concurrency/token/cost/wall/retry/failure/review budgets;
   reuses the Phase 5 bounded worker, scope, gate, timeout, and exact-commit verifier path; publishes
   only through the existing review-branch publisher; independently verifies the exact final
   candidate; and stops deterministically. PAUSE prevents dispatch, gates, publication, and
-  in-flight goal verification. The review branch is local-only; production remains PAUSE-gated and
-  has not run this loop. See `docs/plans/hermes-project-pilot-phase6-handoff.md`.
+  in-flight goal verification. Phase 6 is merged into `origin/master`; production remains
+  PAUSE-gated and has not run this loop. See `docs/plans/hermes-project-pilot-phase6-handoff.md`.
+- **Reporting and notification fan-out (Phase 7, authored but not deployed)** — the existing
+  supervised actuator asks one deterministic outbox observer to enqueue idempotent schema-v1
+  decisions. Event reconciliation, exact `(event_id, destination)` fan-out, retry, durable
+  transport-evidence acknowledgement, dead-letter escalation, terminal project reporting, the
+  one Head Hermes portfolio result, audit-chain refresh, and recovery reconciliation all execute
+  through the existing decision/action/actuator path. Human-visible delivery still uses
+  `notify.sh`; no second scheduler, sender, state store, or delivery queue exists. Strict policy
+  separates the project topic, Head Hermes/explicit portfolio destinations, and explicit Lucas-DM
+  attention. PAUSE preserves event/outbox awareness and pending work while preventing sends. The
+  Phase 7 review branch is local-only and production has not run it. See
+  `docs/plans/hermes-project-pilot-phase7-handoff.md`.
 - **Autonomy, human-fenced** — `.env` flags (loop can never self-set them — rule 3):
   `AUTO_REFLECT`, `AUTO_DRAIN`, `AUTO_PLAN`, `ALLOW_PUSH`, `ALLOW_AUTOMERGE`, `CONDUCT` (parallel
   drainer; default off), `PLAN_WORKSTREAMS="chiron"`. `id_deploy` has READ+WRITE (verified).
