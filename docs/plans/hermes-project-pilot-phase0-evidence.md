@@ -19,9 +19,9 @@ related:
 
 Phase 0 established the reproducible baseline and red controls without fixing a defect. Phases 1
 through 5 subsequently closed their authoring controls on separate reviewed bases and were merged
-through Lucas's review workflow. Phase 6 now closes its local authoring controls on merged Phase 5;
-its implementation is committed locally for review and remains unpublished. Exact evidence is
-appended below.
+through Lucas's review workflow. Phase 6 now closes its authoring controls on merged Phase 5. Its
+review branch was published only after separate authorization from Lucas; no PR was opened. Exact
+evidence is appended below.
 
 Production remains paused and undeployed for Phases 1-6. No live pilot ran, no autonomous execution was
 enabled, no product repository changed, and no protected or default branch was pushed or merged by
@@ -1071,6 +1071,15 @@ gateway is unrestricted/root, and installed `aiohttp==3.14.1` plus `cryptography
 known advisories.
 
 No Phase 1-6 deployment, live pilot, autonomous production execution, project-concurrency increase,
-human-visible test notification, PAUSE removal, product-repository change, merge, push, or PR was
-performed. The local Phase 6 handoff is
-`docs/plans/hermes-project-pilot-phase6-handoff.md`. Phase 7 remains unauthorized.
+human-visible test notification, PAUSE removal, product-repository change, merge, or PR was
+performed. The Phase 6 handoff is `docs/plans/hermes-project-pilot-phase6-handoff.md`. Phase 7
+remains unauthorized.
+
+### Phase 6 review-branch publication follow-up
+
+After Phase 6 implementation and evidence collection were complete, Lucas separately authorized
+only publication of the review branch. `review/hermes-phase6-controls` was pushed to
+`origin/review/hermes-phase6-controls`; the first published remote tip was
+`f8996fe545a7faf59883b1b4d50be8d10a721f1d`, exactly matching the then-current local tip. This
+follow-up did not open a PR, merge, deploy, run a pilot, raise concurrency, remove PAUSE, send a
+human-visible test notification, or begin Phase 7.

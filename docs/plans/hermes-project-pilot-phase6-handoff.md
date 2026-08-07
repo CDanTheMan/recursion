@@ -26,8 +26,8 @@ related:
   exit-zero-but-mutating final-gate refusal and its control.
 - Local review branch: `review/hermes-phase6-controls` in the clean worktree
   `C:\Users\drfoo\github\recursion-hermes-phase6`.
-- Publication state: local only. The branch was not pushed, no PR was opened, and nothing was
-  merged or deployed.
+- Publication state: Lucas separately authorized the branch push after Phase 6 completed. The
+  review branch is published; no PR was opened, and nothing was merged or deployed.
 - Exact implementation proof: 17/17 baseline; every Phase 1-5 control and positive audit; all 18
   Phase 6 behavioral controls; and the Phase 6 positive architecture audit are green.
 - Production remained PAUSE-gated throughout this work and had zero transient worker units at the
@@ -111,8 +111,10 @@ present before and after the final audit with SHA-256
 unrestricted/root installed gateway and advisories in installed `aiohttp==3.14.1` and
 `cryptography==48.0.1`.
 
-Do not push this branch, open a PR, merge, deploy, lift PAUSE, raise live project concurrency, run a
-live pilot, or begin Phase 7 without separate authorization from Lucas.
+The initial published remote tip was `f8996fe545a7faf59883b1b4d50be8d10a721f1d`, exactly matching
+the then-current local tip. Publication did not open a PR, merge, deploy, lift PAUSE, raise live
+project concurrency, run a live pilot, or begin Phase 7. Those actions still require separate
+authorization from Lucas.
 
 The dirty user-owned `master` remains at `20c1fa77042f3aa9f5d8978352792f3b058bc0d1`; it was not an
 authoring or test source and its tracked and untracked changes remain user-owned.
