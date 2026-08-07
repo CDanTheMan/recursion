@@ -1,70 +1,99 @@
 #!/usr/bin/env bash
-# publish.sh — push the box's local branches to origin, gated by the same flags as the autonomous
-# flow. This is the "enable the box to push" surface: the box pushes with its own deploy key, never
-# the operator's shell. Two things:
-#   1. loop/auto  -> origin  (the infra REVIEW branch; a human merges it to the default branch)
-#   2. each PASSED task branch whose diff is within its automerge_scope -> ff-merged to default
-#      (this discharges the pre-existing chiron-001 scaffold, which predates work.sh's
-#      integrate_remote; FUTURE task work auto-merges via work.sh itself).
-#
-# All pushing is gated: RECURSION_ALLOW_PUSH for the branch push, RECURSION_ALLOW_AUTOMERGE for the
-# ff-merge to default. Scope-checked + ff-only, exactly like work.sh integrate_remote. Never --force.
-set -uo pipefail
-ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"; cd "$ROOT"
+# Review-only publisher. This is the sole push path for worker output.
+set -euo pipefail
+ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
-KEY="${RECURSION_DEPLOY_KEY:-$HOME/.ssh/id_deploy}"
-GSSH="ssh -i ${KEY/#\~/$HOME} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
-gitp(){ GIT_SSH_COMMAND="$GSSH" git "$@"; }
-field(){ sed -n "s/^$1: *//p" "$2" 2>/dev/null | head -1 | tr -d '\r'; }
 
-[ "${RECURSION_ALLOW_PUSH:-0}" = "1" ] || { echo "publish: RECURSION_ALLOW_PUSH!=1 — nothing pushed (set it in .env)"; exit 0; }
+refuse(){ echo "publish: REFUSED — $*" >&2; exit 2; }
+unpaused(){ [ ! -f "$ROOT/state/PAUSE" ] || refuse "state/PAUSE blocks publication"; }
+unpaused
+[ "${RECURSION_ALLOW_PUSH:-0}" = 1 ] \
+  || { echo "publish: RECURSION_ALLOW_PUSH!=1 — nothing pushed (set it in .env)"; exit 0; }
 
-# --branch <name> [--repo <path>] [--key <keyfile>]: push one named local branch to origin as a
-# REVIEW branch, NEVER to the default branch. Optional --repo/--key push a branch in another repo
-# (e.g. golden-stallion-client with its deploy key) — the universal review-branch pusher for every
-# repo the loop drives. Never --force, never to default; main stays yours to merge on GitHub.
-if [ "${1:-}" = "--branch" ] && [ -n "${2:-}" ]; then
-  BR="$2"; RREPO="$ROOT"; RKEY="${KEY/#\~/$HOME}"; shift 2
-  while [ $# -gt 0 ]; do case "$1" in
-    --repo) RREPO="$2"; shift 2;;
-    --key)  RKEY="${2/#\~/$HOME}"; shift 2;;
-    *) shift;;
-  esac; done
-  RGSSH="ssh -i $RKEY -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
-  git -C "$RREPO" rev-parse --verify "$BR" >/dev/null 2>&1 || { echo "publish: no such local branch: $BR in $RREPO"; exit 2; }
-  if GIT_SSH_COMMAND="$RGSSH" git -C "$RREPO" push origin "$BR:$BR" 2>&1 | tail -2; then echo "  -> pushed $BR to origin (review branch, repo=$RREPO)"; fi
+canonical_branch(){
+  local branch="$1"
+  [[ "$branch" =~ ^loop/work/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] \
+    || refuse "only canonical loop/work/<task-id> review refs are accepted: $branch"
+  git check-ref-format "refs/heads/$branch" >/dev/null 2>&1 \
+    || refuse "invalid branch ref: $branch"
+}
+
+registry_row(){
+  local repo="$1" want path
+  want="$(realpath -e "$repo" 2>/dev/null)" || return 1
+  while IFS=$'\t' read -r project path remote branch key roadmap topic status rest; do
+    case "$project" in ""|'#'*) continue;; esac
+    [ "$status" = active ] || continue
+    [ "$(realpath -e "$path" 2>/dev/null || true)" = "$want" ] || continue
+    printf '%s\t%s\t%s\n' "$branch" "$key" "$project"
+    return 0
+  done < "$ROOT/state/portfolio.tsv"
+  return 1
+}
+
+publish_one(){
+  local branch="$1" repo="$2" key="${3:-}" row def registry_key project
+  local src_ref dst_ref id status remote_def
+  canonical_branch "$branch"
+  repo="$(realpath -e "$repo" 2>/dev/null)" || refuse "repository does not exist: $repo"
+  row="$(registry_row "$repo")" || refuse "repository is not active in state/portfolio.tsv: $repo"
+  IFS=$'\t' read -r def registry_key project <<<"$row"
+  [ -n "$def" ] || refuse "registered default branch is empty for $project"
+  src_ref="refs/heads/$branch"; dst_ref="$src_ref"
+  [ "$dst_ref" != "refs/heads/$def" ] \
+    || refuse "resolved destination is the registered default branch: $def"
+  git -C "$repo" show-ref --verify --quiet "$src_ref" \
+    || refuse "no direct local branch $src_ref in $repo"
+  ! git -C "$repo" symbolic-ref -q "$src_ref" >/dev/null 2>&1 \
+    || refuse "symbolic branch refs are not publishable: $branch"
+
+  remote_def="$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"
+  [ -z "$remote_def" ] || [ "$remote_def" = "$def" ] \
+    || refuse "registry default $def disagrees with origin/HEAD $remote_def"
+
+  id="${branch#loop/work/}"
+  [ -f "$ROOT/state/tasks/$id.md" ] || refuse "no canonical task for branch $branch"
+  status="$(sed -n 's/^status: *//p' "$ROOT/state/tasks/$id.md" | head -1 | tr -d '\r')"
+  [ "$status" = passed ] || refuse "task $id is not passed (status=${status:-missing})"
+
+  [ -n "$key" ] || key="$registry_key"
+  case "$key" in ""|-) refuse "publisher key is not configured for $project";; esac
+  key="${key/#\~/$HOME}"
+  [ -f "$key" ] || refuse "publisher key file is missing for $project"
+  unpaused
+  local gssh="ssh -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
+  if GIT_SSH_COMMAND="$gssh" git -C "$repo" push origin "$src_ref:$dst_ref"; then
+    echo "publish: pushed $branch for review (project=$project); default $def unchanged"
+  else
+    refuse "review-branch push failed for $branch"
+  fi
+}
+
+if [ "${1:-}" = --branch ]; then
+  [ $# -ge 2 ] || refuse "--branch requires a value"
+  BRANCH="$2"; REPO="$ROOT"; KEY=""; shift 2
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --repo) [ $# -ge 2 ] || refuse "--repo requires a value"; REPO="$2"; shift 2;;
+      --key) [ $# -ge 2 ] || refuse "--key requires a value"; KEY="$2"; shift 2;;
+      *) refuse "unknown option: $1";;
+    esac
+  done
+  publish_one "$BRANCH" "$REPO" "$KEY"
   exit 0
 fi
+[ $# -eq 0 ] || refuse "use --branch loop/work/<task-id> [--repo path] [--key path]"
 
-def="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')"; def="${def:-master}"
-gitp fetch --prune --quiet origin 2>/dev/null || echo "publish: fetch failed (continuing on local refs)"
-
-# 1) infra review branch --------------------------------------------------------------
-if git rev-parse --verify loop/auto >/dev/null 2>&1; then
-  if gitp push origin loop/auto 2>&1 | tail -1; then echo "  -> pushed loop/auto (infra review branch); merge it to $def at your pace"; fi
-fi
-
-# 2) passed, in-scope task branches -> ff-merge to default ------------------------------
+# Bulk publication is still review-only. There is intentionally no default-branch merge path.
 shopt -s nullglob
-for tf in state/tasks/*.md; do
-  [ "$(field status "$tf")" = "passed" ] || continue
-  [ "$(field automerge "$tf")" = "yes" ] || continue
-  id="$(field id "$tf")"; br="loop/work/$id"
-  git rev-parse --verify "$br" >/dev/null 2>&1 || continue
-  scope="$(field automerge_scope "$tf")"; scope="${scope%/}"
-  echo "task $id ($br):"
-  gitp push origin "$br" 2>&1 | tail -1 && echo "  pushed $br for review"
-  if [ "${RECURSION_ALLOW_AUTOMERGE:-0}" != "1" ] || [ -z "$scope" ]; then
-    echo "  (automerge off or no scope — left for manual merge)"; continue
-  fi
-  outside="$(git diff --name-only "origin/$def..$br" 2>/dev/null | grep -v "^$scope/" || true)"
-  if [ -n "$outside" ]; then
-    echo "  BLOCKED — $br touches files outside $scope/:"; printf '    %s\n' $outside | head; continue
-  fi
-  if gitp push origin "$br:$def" 2>&1 | tail -1; then
-    echo "  ✅ AUTO-MERGED $br -> $def (ff-only, scope=$scope/)"
-  else
-    echo "  ff-merge rejected ($def advanced since base) — needs a manual merge"
-  fi
+for task in state/tasks/*.md; do
+  [ "$(sed -n 's/^status: *//p' "$task" | head -1)" = passed ] || continue
+  id="$(sed -n 's/^id: *//p' "$task" | head -1)"
+  repo="$(sed -n 's/^repo: *//p' "$task" | head -1)"; repo="${repo:-$ROOT}"
+  branch="loop/work/$id"
+  git -C "$repo" show-ref --verify --quiet "refs/heads/$branch" || continue
+  unpaused
+  publish_one "$branch" "$repo" ""
 done
-echo "publish: done"
+echo "publish: review branches complete"

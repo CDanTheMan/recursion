@@ -21,9 +21,10 @@ chmod +x "$BIN/claude"
 
 R="$TMP/controller"
 mkdir -p "$R/scripts" "$R/state/tasks" "$R/loop/logs" "$R/app"
-for s in work.sh taskctl.sh board.sh notify.sh resync.sh capacity.sh; do
+for s in work.sh worker-sandbox.sh taskctl.sh board.sh notify.sh resync.sh capacity.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
+chmod +x "$R/scripts/worker-sandbox.sh" 2>/dev/null || true
 : > "$R/.env"
 printf 'seed\n' > "$R/app/seed.txt"
 git -c init.defaultBranch=main init -q "$R"
@@ -55,7 +56,8 @@ STARTED="$TMP/arm-started"; GATE="$TMP/gate-ran"
 mktask pause-midrun "touch '$GATE'"
 STUB_ARM_SCRIPT='touch "$STUB_STARTED"; sleep 3; mkdir -p app; echo done > app/result.txt' \
 STUB_STARTED="$STARTED" PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 \
-RECURSION_REQUIRE_FRESH_BASE=0 bash "$R/scripts/work.sh" pause-midrun >"$TMP/pause.out" 2>&1 &
+RECURSION_REQUIRE_FRESH_BASE=0 RECURSION_TEST_WORKER=sandbox \
+bash "$R/scripts/work.sh" pause-midrun >"$TMP/pause.out" 2>&1 &
 wpid=$!
 for _ in $(seq 1 50); do [ -f "$STARTED" ] && break; sleep 0.1; done
 printf 'PAUSED test\nreason: Phase 0 mid-run control\n' > "$R/state/PAUSE"
@@ -78,10 +80,11 @@ printf 'called\n' > "$STUB_PUBLOG"
 STUB
 chmod 700 "$TMP/publisher"
 mktask worker-sandbox "test -f app/ok.txt"
-STUB_ARM_SCRIPT='cat "$STUB_SECRET" > "$STUB_LEAK"; echo outside > "$STUB_OUTSIDE"; id -u > "$STUB_UIDLOG"; "$STUB_PUBLISHER"; mkdir -p app; echo ok > app/ok.txt' \
+STUB_ARM_SCRIPT='set -e; cat "$STUB_SECRET" > "$STUB_LEAK"; echo outside > "$STUB_OUTSIDE"; id -u > "$STUB_UIDLOG"; "$STUB_PUBLISHER"; mkdir -p app; echo ok > app/ok.txt' \
 STUB_SECRET="$SECRET" STUB_LEAK="$LEAK" STUB_OUTSIDE="$OUTSIDE" STUB_UIDLOG="$UIDLOG" \
 STUB_PUBLISHER="$TMP/publisher" STUB_PUBLOG="$PUBLOG" PATH="$BIN:$PATH" RECURSION_ROOT="$R" \
-RECURSION_NO_NOTIFY=1 RECURSION_REQUIRE_FRESH_BASE=0 bash "$R/scripts/work.sh" worker-sandbox \
+RECURSION_NO_NOTIFY=1 RECURSION_REQUIRE_FRESH_BASE=0 RECURSION_TEST_WORKER=sandbox \
+bash "$R/scripts/work.sh" worker-sandbox \
   >"$TMP/sandbox.out" 2>&1 || true
 if [ ! -e "$LEAK" ] && [ ! -e "$OUTSIDE" ] && [ ! -e "$PUBLOG" ] \
    && { [ ! -e "$UIDLOG" ] || [ "$(cat "$UIDLOG")" != "$(id -u)" ]; } \

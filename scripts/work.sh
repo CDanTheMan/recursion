@@ -23,11 +23,32 @@ DATE="$(date +%F)"; STAMP="$(date +%H%M%S)"
 LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/$DATE-work.log"
 log(){ echo "[$(date -Is)] work: $*" | tee -a "$LOG" >&2; }
-board(){ bash scripts/board.sh "$@" >/dev/null 2>&1 || true; }
+board(){ pause_checkpoint "board state transition" || return 75; bash scripts/board.sh "$@" >/dev/null 2>&1 || true; }
 notify(){ [ "${RECURSION_NO_NOTIFY:-0}" = "1" ] && return 0; bash "$ROOT/scripts/notify.sh" ${REPO_DIR:+--project "$REPO_DIR"} "$@" >/dev/null 2>&1 || true; }
 
+pause_checkpoint(){
+  local stage="${1:-execution}"
+  [ ! -f "$ROOT/state/PAUSE" ] || { log "PAUSED during $stage — refusing later gates/state/publication"; return 75; }
+}
+
+terminate_worker_group(){
+  local pgid="$1" i
+  kill -TERM -- "-$pgid" 2>/dev/null || true
+  for i in $(seq 1 50); do
+    kill -0 -- "-$pgid" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  kill -KILL -- "-$pgid" 2>/dev/null || true
+  for i in $(seq 1 50); do
+    kill -0 -- "-$pgid" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  log "worker process group $pgid did not confirm termination"
+  return 1
+}
+
 # --- kill switch (architecture.md): state/PAUSE halts the executor like every job. ------
-if [ -f "$ROOT/state/PAUSE" ]; then log "PAUSED (state/PAUSE) — executor idle."; exit 0; fi
+pause_checkpoint startup || exit 0
 
 # --- resolve the task -----------------------------------------------------------------
 ARG="${1:-}"
@@ -54,11 +75,9 @@ REPO_DIR="$(field repo)"; REPO_DIR="${REPO_DIR:-$ROOT}"
 # corpus (e.g. the GSC block-model corpus user-client/render/data/models) is absent in a new
 # worktree and every test that needs it fails. Declaring it here makes the dependency explicit.
 SEED="$(field seed)"; SEED="${SEED//,/ }"
-# git authority (all default-safe). sshkey = the deploy key for THIS repo (fetch, and push IF the
-# key has write). automerge/automerge_scope opt a task into PATH-SCOPED auto-merge. Push and merge
-# are ALSO globally fenced by env flags (RECURSION_ALLOW_PUSH / RECURSION_ALLOW_AUTOMERGE) set only
-# in .env by the human — the loop can never self-enable them (CLAUDE.md rule 3).
-SSHKEY="$(field sshkey)"; AUTOMERGE="$(field automerge)"; AUTOMERGE_SCOPE="$(field automerge_scope)"
+# Git authority. sshkey proves read freshness and is handed only to the review-only publisher.
+# The worker sandbox never mounts this key. There is no autonomous default-branch merge path.
+SSHKEY="$(field sshkey)"
 # A task that names no key falls back to the PORTFOLIO REGISTRY (state/portfolio.tsv). The
 # repo->key mapping used to live only in whoever typed the command, so a task that forgot
 # `sshkey:` fetched with no credential — and a credential-less git fetch fails QUIETLY.
@@ -101,6 +120,7 @@ log "acceptance: ${ACCEPTANCE:-<none>}"
 TASKCTL="$ROOT/scripts/taskctl.sh"
 set_status(){
   local st="$1" note="${2:-}"
+  pause_checkpoint "task transition to $st" || return 75
   if [ -x "$TASKCTL" ]; then
     case "$st" in
       passed|failed|moot|resolved|stale)
@@ -117,6 +137,7 @@ set_status(){
 # guard: on 2026-08-06 an arm auto-retried into a second hour-long run on the same task and the
 # orphan had to be killed by hand. Refusing here is cheaper than detecting it later.
 claim_task(){
+  pause_checkpoint "task lease" || return 75
   [ -x "$TASKCTL" ] || { set_status running; return 0; }
   RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" bash "$TASKCTL" start "$ID" "work.sh:$$@$(hostname)" >>"$LOG" 2>&1
   local rc=$?
@@ -136,6 +157,7 @@ claim_task(){
 ledger_lock(){ local i=0; mkdir -p "$ROOT/state/.locks" 2>/dev/null || true; while ! mkdir "$ROOT/state/.locks/ledger.lock" 2>/dev/null; do i=$((i+1)); [ "$i" -ge 60 ] && return 0; sleep 0.5; done; return 0; }
 ledger_unlock(){ rmdir "$ROOT/state/.locks/ledger.lock" 2>/dev/null || true; }
 commit_state(){
+  pause_checkpoint "state commit" || return 75
   if git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -q '^loop/auto$'; then
     ledger_lock
     git add -A state/ 2>/dev/null || true
@@ -149,6 +171,7 @@ commit_state(){
 # escalation carries the context handle (Workstream + Pointer) — morning-brief.md format.
 escalate(){
   local reason="$1" rc="${2:-}"
+  pause_checkpoint "escalation state transition" || return 75
   { echo
     echo "## build escalation — $ID  ($(date -u +%FT%TZ))"
     echo "**Workstream:** ${WORKSTREAM:-unknown}"
@@ -300,32 +323,40 @@ Keep changes minimal and CORRECT. Minimal-and-correct beats broad-and-broken.
 $BODY"
 
 ARM_USAGE="${ARMLOG%.out}.usage.json"
-run_arm(){
+run_arm_supervised(){
   local wt="$1"
   case "$ENGINE" in
     none) return 0 ;;   # verify-only: gate whatever is already in the worktree
-    claude)
-      command -v claude >/dev/null 2>&1 || return 90
-      # claude may print "Not logged in" yet still exit 0 (writing nothing) — the gate
-      # catches a no-op arm and escalates. This arm is ~flat on Claude Max once logged in.
-      # acceptEdits auto-approves file writes; --allowedTools adds ONLY `node` (so the arm can
-      # run tests to iterate) — never arbitrary bash, on a root box.
-      ( cd "$wt" && claude -p "$BUILD_PROMPT" --permission-mode acceptEdits \
-          --allowedTools 'Bash(node:*)' ${MODEL:+--model "$MODEL"} ) >"$ARMLOG" 2>&1 || true
-      return 0 ;;
-    hermes)
-      # hermes has native file/terminal tools — BUT tool-calling turns fall off the Codex
-      # sub onto metered OpenRouter (measured 2026-08-05), so this arm is FENCED like every
-      # metered leg. Its cost lands on the BOARD via --usage-file.
-      [ "${RECURSION_ALLOW_METERED:-0}" = "1" ] || return 93
-      command -v hermes >/dev/null 2>&1 || return 94
-      ( cd "$wt" && hermes -z "$BUILD_PROMPT" -m "${MODEL:-gpt-5.6-sol}" -t file,terminal --yolo \
-          --usage-file "$ARM_USAGE" ) >"$ARMLOG" 2>&1 || true
-      return 0 ;;
+    claude|hermes) ;;
     deepseek|openrouter)
       return 91 ;;   # raw chat-completion has no file tools — needs a file-emission protocol (design: later)
     *) return 92 ;;
   esac
+
+  [ "$ENGINE" != hermes ] || [ "${RECURSION_ALLOW_METERED:-0}" = "1" ] || return 93
+  [ -x "$ROOT/scripts/worker-sandbox.sh" ] || return 95
+  local -a cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine "$ENGINE" --worktree "$wt" --prompt "$BUILD_PROMPT")
+  [ -n "$MODEL" ] && cmd+=(--model "$MODEL")
+  [ "$ENGINE" != hermes ] || cmd+=(--usage-file "$ARM_USAGE")
+
+  pause_checkpoint "worker launch" || return 75
+  setsid --wait "${cmd[@]}" >"$ARMLOG" 2>&1 &
+  local worker_pgid=$! rc i
+  log "worker process group=$worker_pgid engine=$ENGINE"
+  while kill -0 "$worker_pgid" 2>/dev/null; do
+    if [ -f "$ROOT/state/PAUSE" ]; then
+      log "PAUSE observed with worker process group $worker_pgid in flight"
+      terminate_worker_group "$worker_pgid" || true
+      wait "$worker_pgid" 2>/dev/null || true
+      kill -0 -- "-$worker_pgid" 2>/dev/null \
+        && { log "worker group still alive after cancellation"; return 96; }
+      log "worker process group $worker_pgid terminated before gates/publication"
+      return 75
+    fi
+    sleep 0.1
+  done
+  if wait "$worker_pgid"; then rc=0; else rc=$?; fi
+  return "$rc"
 }
 
 # --- SCOPE GATE: runs BEFORE the acceptance gate, and outranks it. -----------------------
@@ -402,6 +433,7 @@ acquire_heavy(){
   [ -x "$ROOT/scripts/capacity.sh" ] || return 0
   local waited=0 out
   while :; do
+    pause_checkpoint "heavy-gate wait" || return 75
     out="$(RECURSION_ROOT="$ROOT" RECURSION_HEAVY_TAG="$ID" bash "$ROOT/scripts/capacity.sh" heavy acquire "$ID" 2>&1)"
     case "$out" in ACQUIRED*) HEAVY_HELD=1; log "heavy-gate lock acquired after ${waited}s"; return 0 ;; esac
     waited=$((waited+10))
@@ -416,6 +448,7 @@ release_heavy(){ [ "$HEAVY_HELD" = "1" ] && { RECURSION_ROOT="$ROOT" bash "$ROOT
 
 # --- the gate: run the acceptance command in the app dir; its exit code is the verdict. --
 verify(){
+  pause_checkpoint "acceptance gate" || return 75
   acquire_heavy
   local wt="$1" adir="$1/$WORKDIR"
   [ -d "$adir" ] || adir="$wt"
@@ -424,40 +457,24 @@ verify(){
 
 release_heavy   # the gate is over; do not hold the box through publish/merge
 
-# --- after a GREEN build: optionally PUBLISH the review branch, and optionally AUTO-MERGE. -----
-# Layers of defense, all off by default:
-#   publish  : RECURSION_ALLOW_PUSH=1 (env, human-set). Pushes loop/work/<id> only. Never force.
-#   automerge: RECURSION_ALLOW_AUTOMERGE=1 (env) AND task `automerge: yes` AND the branch diff
-#              touches ONLY automerge_scope/  AND the merge is fast-forward. ff-only push to the
-#              default branch = safest merge (no merge commit; auto-rejects if main moved). Any
-#              file outside scope -> BLOCK + escalate (a chiron lane can't smuggle a control change).
+# --- after a GREEN build: optionally PUBLISH the canonical review branch. -----------------
+# RECURSION_ALLOW_PUSH remains human-set and off by default. publish.sh accepts only a direct
+# loop/work/<task-id> source/destination and has no default-branch merge path.
 integrate_remote(){
-  local def; def="$(git -C "$REPO_DIR" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"; def="${def:-master}"
-  if [ "${RECURSION_ALLOW_PUSH:-0}" = "1" ]; then
-    if gitr push origin "$BRANCH" >>"$LOG" 2>&1; then
-      log "published $BRANCH to origin"; notify "📤 [$ID] published $BRANCH for review"
-    else
-      log "publish failed (read-only key or non-ff) — branch stays local on the box"
-    fi
-  fi
-  [ "${RECURSION_ALLOW_AUTOMERGE:-0}" = "1" ] && [ "$AUTOMERGE" = "yes" ] || return 0
-  local scope="${AUTOMERGE_SCOPE:-$WORKDIR}"; scope="${scope%/}"
-  local outside; outside="$(git -C "$REPO_DIR" diff --name-only "origin/$def..$BRANCH" 2>/dev/null | grep -v "^$scope/" || true)"
-  if [ -n "$outside" ]; then
-    log "auto-merge BLOCKED — branch touches files outside $scope/:"; printf '%s\n' "$outside" >>"$LOG"
-    notify "🛑 [$ID] auto-merge blocked — touched files outside $scope/. Left on $BRANCH for your review."
-    escalate "auto-merge blocked: branch changed files outside automerge_scope=$scope/ — needs human review"
-    return 0
-  fi
-  if gitr push origin "$BRANCH:$def" >>"$LOG" 2>&1; then
-    log "AUTO-MERGED $BRANCH -> $def (ff-only, scope=$scope/)"; notify "🚀 [$ID] auto-merged to $def (chiron, scope-checked, ff-only)"
+  [ "${RECURSION_ALLOW_PUSH:-0}" = "1" ] || return 0
+  pause_checkpoint "review-branch publication" || return 75
+  local -a args=(--branch "$BRANCH" --repo "$REPO_DIR")
+  [ -z "$SSHKEY" ] || args+=(--key "$SSHKEY")
+  if RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/publish.sh" "${args[@]}" >>"$LOG" 2>&1; then
+    log "published $BRANCH to origin through the review-only publisher"
+    notify "📤 [$ID] published $BRANCH for review"
   else
-    log "auto-merge push rejected (non-ff: $def advanced) — needs your merge"
-    notify "⚠ [$ID] auto-merge needs you ($def moved since base). Review $BRANCH."
+    log "publisher refused or failed — branch stays local on the box"
   fi
 }
 
 # ============================ pipeline ============================
+pause_checkpoint "board transition" || exit 0
 board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" running "${GOAL:0:40}"
 if ! claim_task; then exit 0; fi
 commit_state
@@ -503,13 +520,19 @@ fi
 log "worktree: $WT (branch $BRANCH)"
 
 # --- EXECUTE (attempt 1) --------------------------------------------------------------
-if run_arm "$WT"; then arc=0; else arc=$?; fi
+if run_arm_supervised "$WT"; then arc=0; else arc=$?; fi
 if [ "$arc" -ne 0 ]; then
+  if [ "$arc" = 75 ]; then
+    log "PAUSE cancelled $ID; worktree retained and no gate/state/publication step ran"
+    exit 0
+  fi
   case "$arc" in
     90) msg="claude CLI not logged in / unavailable (run: claude /login on the box)" ;;
     91) msg="engine=$ENGINE has no file-writing tool yet (needs a file-emission protocol)" ;;
     93) msg="engine=hermes is metered (tool-calls route to OpenRouter) — set RECURSION_ALLOW_METERED=1 to allow" ;;
     94) msg="hermes CLI unavailable" ;;
+    95) msg="worker sandbox unavailable or dedicated runner not provisioned" ;;
+    96) msg="worker process group could not be confirmed terminated" ;;
     *)  msg="arm dispatch error (code $arc)" ;;
   esac
   board finish "$ID" blocked - "$msg"
@@ -522,6 +545,7 @@ fi
 # Order is the point: a tampered diff that reaches a green gate has already been declared a
 # pass by the time a post-hoc check runs.
 SCOPE_FAIL=""
+pause_checkpoint "scope gate" || exit 0
 if ! scope_check "$WT"; then
   board finish "$ID" blocked - "scope violation"
   set_status escalated
@@ -535,6 +559,7 @@ fi
 # A deliberate, reasoned block is a GOOD outcome (CLAUDE.md: escalate, don't guess). Record it
 # as blocked with the arm's own question rather than running a gate that is certain to fail.
 if read_result "$WT" && [ "$RESULT_STATUS" = "blocked" ]; then
+  pause_checkpoint "blocked-result transition" || exit 0
   board finish "$ID" blocked - "arm blocked on ambiguity"
   set_status blocked
   # Record the ask as an ANSWERABLE item, not just a notification. assist.sh open returns 3 when
@@ -573,8 +598,13 @@ else
   impl_changed=$(git -C "$WT" status --porcelain -- . ":(exclude)docs" 2>/dev/null | grep -c . || true)
   if [ "$ENGINE" != "none" ] && { [ "$rc" != "2" ] || [ "${impl_changed:-0}" -gt 0 ]; }; then
     log "retry once (design: retry once then escalate)"
-    run_arm "$WT" || true
-    if verify "$WT"; then PASS=1; else rc=$?; fi
+    if run_arm_supervised "$WT"; then retry_arc=0; else retry_arc=$?; fi
+    [ "$retry_arc" != 75 ] || { log "PAUSE cancelled retry; no later step ran"; exit 0; }
+    if [ "$retry_arc" = 0 ]; then
+      if verify "$WT"; then PASS=1; else rc=$?; fi
+    else
+      rc="$retry_arc"
+    fi
   else
     log "no retry: deliberate no-op (rc=$rc, impl-files-changed=${impl_changed:-0})"
   fi
@@ -582,6 +612,7 @@ fi
 
 # --- INTEGRATE ------------------------------------------------------------------------
 if [ "$PASS" = "1" ]; then
+  pause_checkpoint "post-gate integration" || exit 0
   # Re-check scope AFTER the retry: attempt 2 gets its own chance to wander, and a green gate
   # on an out-of-scope diff is exactly the outcome the scope gate exists to refuse.
   if ! scope_check "$WT"; then
@@ -607,6 +638,7 @@ $SCOPE_FAIL"
   if git -C "$WT" diff --cached --quiet 2>/dev/null; then
     NOTE="passed (no file changes)"; log "acceptance green; nothing to commit (verify-only)"
   else
+    pause_checkpoint "build-output commit" || exit 0
     git -C "$WT" -c user.name="recursion-loop" -c user.email="loop@recursion.local" \
       commit -q -m "build($ID): $GOAL
 
@@ -617,12 +649,14 @@ engine: $ENGINE" 2>>"$LOG" || true
   if [ -f "$ARM_USAGE" ]; then board finish "$ID" done "$ARM_USAGE" "$NOTE"; else board finish "$ID" done - "$NOTE"; fi
   set_status passed; commit_state
   notify "✅ Recursion build passed: $ID -> $BRANCH (acceptance green). Review/merge at your pace."
-  [ "$COMMITTED" = "1" ] && integrate_remote   # publish / path-scoped auto-merge (both env-fenced, off by default)
+  [ "$COMMITTED" = "1" ] && integrate_remote   # canonical review publication only; off by default
   # close the plan->build->done loop: a passed planned task flips its roadmap item [~] -> [x].
   if [ -n "$PLANNED_FROM" ]; then
+    pause_checkpoint "roadmap transition" || exit 0
     rf="${PLANNED_FROM%%:*}"; rl="${PLANNED_FROM##*:}"
     [ -f "$rf" ] && sed -i "${rl}s/^- \[~\] /- [x] /" "$rf" 2>/dev/null && log "roadmap $rf:$rl -> done"
   fi
+  pause_checkpoint "worktree removal" || exit 0
   git -C "$REPO_DIR" worktree remove --force "$WT" 2>/dev/null || true   # branch persists for review
   log "DONE $ID passed"
 else
