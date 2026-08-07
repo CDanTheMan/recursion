@@ -2,12 +2,13 @@
 title: "Recursion — autonomous-loops architecture & roadmap (the anti-drift anchor)"
 type: spec
 status: current
-last-verified: 2026-08-05
+last-verified: 2026-08-07
 related:
   - "docs/architecture.md"
   - "CLAUDE.md"
   - "ANCHOR.md"
   - "state/DECISIONS.md"
+  - "docs/plans/hermes-project-pilot-phase6-handoff.md"
   - "golden-stallion-client/docs/plans/four-lane-closure-plan-2026-08-05.md"
   - "golden-stallion-client/docs/spec/client-architecture.md"
 ---
@@ -58,7 +59,7 @@ A task with no machine-checkable gate is never auto-integrated — it escalates.
 
 ---
 
-## 2. What is BUILT (the spine) — verified 2026-08-05
+## 2. What is BUILT (the spine) — verified 2026-08-07
 
 - **Supervisor tier** — heartbeat/brief/reflection on cron; ledger; INBOX + Telegram escalation.
 - **Build-loop v2** — `plan.sh` (roadmap → task) → `work.sh` (arm → acceptance gate → auto-commit
@@ -85,6 +86,15 @@ A task with no machine-checkable gate is never auto-integrated — it escalates.
   STRUCTURAL changes to a reviewed authoring session (counterpart to read-only `recursion-status`).
   Verified the `hermes-telegram` bundle carries the skills tools, so the gateway can load it. Both
   mirrored in `loop/hermes-skills/` (box `/root/.hermes/skills/` is authoritative).
+- **Project-goal reconciliation (Phase 6, authored but not deployed)** — a deterministic
+  reconciler observes canonical goal/task/run/process/worktree/ref/event/delivery truth and emits
+  only idempotent schema-v1 decisions through the existing durable action queue and sole actuator.
+  It admits dependency-ready work under concurrency/token/cost/wall/retry/failure/review budgets;
+  reuses the Phase 5 bounded worker, scope, gate, timeout, and exact-commit verifier path; publishes
+  only through the existing review-branch publisher; independently verifies the exact final
+  candidate; and stops deterministically. PAUSE prevents dispatch, gates, publication, and
+  in-flight goal verification. The review branch is local-only; production remains PAUSE-gated and
+  has not run this loop. See `docs/plans/hermes-project-pilot-phase6-handoff.md`.
 - **Autonomy, human-fenced** — `.env` flags (loop can never self-set them — rule 3):
   `AUTO_REFLECT`, `AUTO_DRAIN`, `AUTO_PLAN`, `ALLOW_PUSH`, `ALLOW_AUTOMERGE`, `CONDUCT` (parallel
   drainer; default off), `PLAN_WORKSTREAMS="chiron"`. `id_deploy` has READ+WRITE (verified).
