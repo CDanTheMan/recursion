@@ -15,7 +15,9 @@ related:
 
 Phase 0 established a reproducible green baseline and red controls for the confirmed audit
 defects. No defect was fixed. Production remains paused, no pilot ran, no autonomous execution was
-enabled, no product repository changed, and no branch was pushed or merged.
+enabled, no product repository changed, and no protected or default branch was pushed or merged.
+The Phase 0-only commit was subsequently published on a review branch as draft PR #21 for Lucas's
+review; that publication did not change the live control plane.
 
 Phases 1-3 are blocked on review of this evidence and implementation of the red controls. Pilots
 and autonomous execution remain forbidden until those phases pass review.
@@ -26,6 +28,8 @@ and autonomous execution remain forbidden until those phases pass review.
 |---|---|
 | Authoring base | `origin/master` at `b1391908c17dc61c65613b0adda85918b486c1cd` |
 | Authoring branch | `review/hermes-phase0-controls` in `C:\Users\drfoo\github\recursion-hermes-phase0` |
+| Phase 0 commit | `2e98bc57a6a0ff1257f4d23166af36c10619f902` (`Add Hermes pilot Phase 0 controls`) |
+| Review publication | draft PR #21 (`https://github.com/NotSkittlz/recursion/pull/21`), `review/hermes-phase0-controls` -> `master` |
 | Deployed commit | `/opt/recursion` branch `loop/auto` at `58b912c46b0bbba8f420fdda685e05b958279daa` |
 | User-owned checkout | `master` at `20c1fa77042f3aa9f5d8978352792f3b058bc0d1`, ahead 5 / behind 115; dirty state preserved |
 | Production plan | copied byte-for-byte into the authoring worktree; SHA-256 `b47295865fcc6be190d47f36e5a6eaa7d2260522baf8b816b30c521edc6873bd` |
@@ -36,6 +40,19 @@ anomaly observed was an untracked `.env.bak.1786014440`; it was not opened, move
 The pre-existing live flags remain `RECURSION_ALLOW_PUSH=1`, `RECURSION_AUTO_DRAIN=1`,
 `RECURSION_AUTO_PLAN=1`, `RECURSION_AUTO_REFLECT=1`, and `RECURSION_ALLOW_AUTOMERGE=0`.
 Phase 0 did not edit them; this makes the interruptive PAUSE control a critical prerequisite.
+
+## Next-session handoff
+
+Phase 0 is committed and published for review. Do not begin implementation unless PR #21 has been
+reviewed and merged. After approval, fetch the new `origin/master` and create a new clean Phase 1
+authoring worktree/branch from that exact commit. Do not reuse or modify the dirty local `master`,
+and do not base Phase 1 on an unmerged review branch.
+
+Phase 1 is the only authorized implementation scope for the next session. Reproduce the existing
+17/17 green baseline and the intended Phase 1 red results first, then make the Phase 1 controls pass
+while keeping the baseline green. Append the exact green-after-red commands, commit OID, results,
+and live PAUSE evidence to this document. Do not begin Phase 2, run a pilot, enable autonomous
+execution, merge or deploy, or remove `state/PAUSE`.
 
 ## Existing baseline
 
