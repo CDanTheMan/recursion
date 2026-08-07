@@ -137,3 +137,10 @@ Chosen: Option B — approve the strict-decrease native-diff gate as the metric;
 **Blocked on:** human action to disable `RECURSION_ALLOW_AUTOMERGE=1`, remove task-level automerge fields, and confirm protected default branches on every repo with a write deploy key.
 **Context:** `chiron-001` and `chiron-003` are passed with automerge enabled; the next qualifying loop can fast-forward-push a default branch, contrary to the recorded review-branch-only policy.
 **Options:** disable automerge and enforce branch protection now; or explicitly authorize autonomous default-branch merging despite the control-plane invariant.
+
+## [esc-0005] 2026-08-07 03:15 — Disable autonomous merging and confirm branch protection
+**Workstream:** supervision
+**Pointer:** CURRENT INBOX: “[esc-0001] 2026-08-06 09:15 — Disable autonomous merging and verify branch protection”; OPEN SELF-IMPROVEMENT PROPOSALS items 2–3; `/opt/recursion/.env`; `state/tasks/chiron-001.md`; `state/tasks/chiron-003.md`
+**Blocked on:** Human-only change to remove autonomous-merge authorization and confirmation that protected default branches reject direct pushes for every repository with a write deploy key.
+**Context:** `chiron-001` and `chiron-003` passed while automerge is enabled; a later qualifying loop could push a default branch despite the recorded review-branch-only invariant.
+**Options:** Disable automerge and enforce branch protection now; or explicitly authorize autonomous default-branch merging despite the control-plane invariant.

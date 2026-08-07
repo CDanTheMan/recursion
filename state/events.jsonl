@@ -1,1 +1,6 @@
 {"ts":"2026-08-06T09:15:42Z","event":"escalation-open","task":"","project":"","goal":"","pid":184817,"detail":"esc-0001 supervision 2026-08-06 09:15 \u2014 Disable autonomous merging and verify branch protection"}
+{"ts":"2026-08-07T03:15:04Z","event":"escalation-open","task":"","project":"","goal":"","pid":749701,"detail":"esc-0002 portfolio recursion: 1 local branch(es) hold commits on no remote"}
+{"ts":"2026-08-07T03:15:07Z","event":"escalation-open","task":"","project":"","goal":"","pid":749835,"detail":"esc-0003 portfolio recursion: uncommitted changes in the working tree"}
+{"ts":"2026-08-07T03:15:15Z","event":"escalation-open","task":"","project":"","goal":"","pid":750296,"detail":"esc-0004 portfolio golden-stallion-extension: 1 local branch(es) hold commits on no remote"}
+{"ts":"2026-08-07T03:15:43Z","event":"decision","task":"","project":"","goal":"","pid":751772,"detail":"noop "}
+{"ts":"2026-08-07T03:16:04Z","event":"escalation-open","task":"","project":"","goal":"","pid":751849,"detail":"esc-0005 supervision 2026-08-07 03:15 \u2014 Disable autonomous merging and confirm branch protection"}
