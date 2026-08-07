@@ -1,4 +1,5 @@
 # portfolio.tsv — the registry of every repo the control plane is allowed to touch.
+# schema_version: 1 (project projection; canonical JSON schema: schemas/control-plane/v1/schema.json)
 #
 # ONE ROW PER REPO. This is the single source of truth for repo -> deploy key, which until now
 # lived only in whoever typed the command; a git op run with the wrong key returns EMPTY, and an

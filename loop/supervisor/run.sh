@@ -149,12 +149,22 @@ if [ -n "${ESC//[[:space:]]/}" ]; then
 
   VERDICT="NEW -"
   if [ -x "$ROOT/scripts/taskctl.sh" ] && [ -n "$ESC_KEY" ]; then
+    set +e
     VERDICT="$(RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/taskctl.sh" \
-                 esc-record "$ESC_KEY" "$ESC_TITLE" "$ESC_WS" "$ESC_PTR" 2>/dev/null || echo "NEW -")"
+                 esc-record "$ESC_KEY" "$ESC_TITLE" "$ESC_WS" "$ESC_PTR" 2>&1)"
+    verdict_rc=$?
+    set -e
+    if [ "$verdict_rc" -ne 0 ]; then
+      log "escalation state write REFUSED (rc=$verdict_rc): ${VERDICT:0:160}"
+      VERDICT="REFUSED -"
+    fi
   fi
   EID="$(printf '%s' "$VERDICT" | awk '{print $2}')"
 
   case "$VERDICT" in
+    REFUSED*)
+      log "escalation held because canonical state could not be locked/updated; no duplicate fallback write"
+      ;;
     DUP*)
       SEEN="$(printf '%s' "$VERDICT" | awk '{print $3}')"
       log "escalation SUPPRESSED as duplicate of $EID (seen ${SEEN}x) — not appended, not re-pinged"

@@ -1,14 +1,21 @@
+schema_version: 1
 id: gsc-0x68-cloud
 workstream: gsc
+goal_id: goal-gsc-client-reconstruction
+dependencies:
 goal: Reduce furys_storage slot 0x68 (inline/Cloud) triangle OVER-emission (+19926, ratio 1.037) toward native, WITHOUT overshooting into under-emission and WITHOUT worsening any other world.
 engine: claude
+worker_class: claude
 repo: /opt/golden-stallion-client
 sshkey: ~/.ssh/gsc_deploy
 seed: user-client/render/data/models
 acceptance: bash /opt/recursion/scripts/gsc-nativediff-gate.sh
 workdir: .
+allowed_paths: user-client/render
+non_goals: tests fixtures oracle baselines live-game automation
 autonomy: auto
 automerge: no
+status: proposed
 planned_from: live-re-derived (0x68 is the dominant furys error; register gap G1b/0x74 already CLOSED at 1.000)
 
 CONTEXT — this is the single biggest geometry error on the board. MEASURE FIRST, then fix minimally.
