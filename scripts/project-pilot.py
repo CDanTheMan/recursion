@@ -372,8 +372,11 @@ def goal_for(base: Path, project: str, goal_id: str) -> tuple[Path, dict[str, st
         if value.get("id") == goal_id:
             if value.get("project_id") != project or value.get("status") not in {"approved", "active"}:
                 fail("goal is not approved for this project")
-            if not value.get("acceptance_suite"):
+            acceptance = value.get("acceptance_suite", "").strip()
+            if not acceptance:
                 fail("approved goal has no gate")
+            if acceptance in {"true", ":", "/bin/true", "exit 0"}:
+                fail("approved goal gate is structurally vacuous")
             return path, value
     fail(f"goal {goal_id} is absent")
 
@@ -406,6 +409,10 @@ def execute(base: Path, decision_path: Path) -> dict:
         body = (f"schema_version: 1\nid: {task_id}\nproject_id: {project}\npilot_id: {pilot['id']}\n"
                 f"goal_id: {goal_id}\ndependencies: {','.join(dependencies)}\nallowed_paths: {scope}\n"
                 f"non_goals: portfolio,policy,credentials,merge,deploy\nworker_class: claude\n"
+                f"engine: claude\nmodel_alias: sonnet-routine\nverifier_model_alias: opus-review\n"
+                f"deadline_seconds: 3600\nverifier_deadline_seconds: 1800\n"
+                f"network_policy: provider-only\nevidence_contract: worker-result-v1\n"
+                f"verification: independent\nexpected_change: required\ngate_files:\n"
                 f"acceptance: {goal['acceptance_suite']}\nstatus: proposed\n\n{text}\n")
         atomic_text(path, body); return {"created": str(path.relative_to(base)), "status": "proposed"}
     if verb in {"pilot-worker-request", "pilot-verifier-request", "pilot-block"}:

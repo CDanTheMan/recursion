@@ -65,7 +65,18 @@ field(){ sed -n "s/^$1: *//p" "$TASK" | head -1 | tr -d '\r'; }
 ID="$(field id)"; WORKSTREAM="$(field workstream)"; GOAL="$(field goal)"
 ENGINE="$(field engine)"; ACCEPTANCE="$(field acceptance)"; WORKDIR="$(field workdir)"
 AUTONOMY="$(field autonomy)"; MODEL="$(field model)"
+MODEL_ALIAS="$(field model_alias)"; VERIFIER_MODEL_ALIAS="$(field verifier_model_alias)"
+DEADLINE_SECONDS="$(field deadline_seconds)"; VERIFIER_DEADLINE_SECONDS="$(field verifier_deadline_seconds)"
+NETWORK_POLICY="$(field network_policy)"; EVIDENCE_CONTRACT="$(field evidence_contract)"
+VERIFICATION_POLICY="$(field verification)"; EXPECTED_CHANGE="$(field expected_change)"
+GATE_FILES="$(field gate_files)"
 WORKDIR="${WORKDIR:-.}"; AUTONOMY="${AUTONOMY:-auto}"; ENGINE="${ENGINE:-claude}"
+ALLOWED_PATHS="$(field allowed_paths)"; ALLOWED_PATHS="${ALLOWED_PATHS:-$WORKDIR}"
+STRICT_PHASE5=0
+[ "$EVIDENCE_CONTRACT" != worker-result-v1 ] || STRICT_PHASE5=1
+DEADLINE_SECONDS="${DEADLINE_SECONDS:-${RECURSION_WORKER_TIMEOUT_S:-3600}}"
+VERIFIER_DEADLINE_SECONDS="${VERIFIER_DEADLINE_SECONDS:-${RECURSION_VERIFIER_TIMEOUT_S:-1800}}"
+NETWORK_POLICY="${NETWORK_POLICY:-provider-only}"; EXPECTED_CHANGE="${EXPECTED_CHANGE:-optional}"
 # repo: which git repo the arm builds in. Default = this repo ($ROOT). An external repo
 # (e.g. /opt/golden-stallion-client) lets the loop build another codebase; its build output
 # and loop/work/<id> branch live in THAT repo, gated by whatever acceptance the task names.
@@ -90,6 +101,8 @@ GSSH=""; [ -n "$SSHKEY" ] && GSSH="ssh -i ${SSHKEY/#\~/$HOME} -o IdentitiesOnly=
 gitr(){ if [ -n "$GSSH" ]; then GIT_SSH_COMMAND="$GSSH" git -C "$REPO_DIR" "$@"; else git -C "$REPO_DIR" "$@"; fi; }
 [ -n "$ID" ] || { log "task $TASK missing 'id:'"; exit 2; }
 BRANCH="loop/work/$ID"
+BASE_COMMIT=""; CANDIDATE_OID=""; LAST_SCOPE_FILE=""; LAST_RUN_ID=""; LAST_RUN_EVIDENCE=""
+IMPLEMENTER_RUN_ID=""; VERIFIER_RUN_ID=""; RESOLVED_MODEL="$MODEL"; RESOLVED_VERIFIER_MODEL=""
 
 # --- per-workstream lock (parallel-loops.md): at most one build per workstream; different
 # workstreams run concurrently. mkdir is atomic. Replaces the old global state/.work.lock so
@@ -191,6 +204,18 @@ escalate(){
 Reply referencing [$ID], or on the box: recursion resolve $ID \"...\""
 }
 
+# Timeout and verifier failures carry a stable run identity. Record that identity before the
+# human-facing ask so reconciliation or a repeated caller cannot create duplicate escalations.
+escalate_once(){ # key reason
+  local key="$1" reason="$2" recorded
+  if [ -x "$TASKCTL" ]; then
+    recorded="$(RECURSION_ROOT="$ROOT" bash "$TASKCTL" esc-record "$key" "$reason" \
+      "${WORKSTREAM:-unknown}" "state/tasks/$ID.md" 2>>"$LOG" || true)"
+    case "$recorded" in DUP*) log "suppressed duplicate escalation $key ($recorded)"; return 0 ;; esac
+  fi
+  escalate "$reason"
+}
+
 # --- acceptance is the contract: no test -> no autonomy (delegation-design.md) ----------
 if [ -z "$ACCEPTANCE" ]; then
   board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" blocked "no acceptance test"
@@ -198,6 +223,22 @@ if [ -z "$ACCEPTANCE" ]; then
   escalate "no machine-checkable acceptance test (autonomy requires one)"
   commit_state
   exit 0
+fi
+
+# Validate the gate before leasing a worker. The validator rejects literal/no-op success and
+# records any declared gate files whose hashes become part of the exact-commit evidence.
+GATE_CONTRACT=""
+if [ -x "$ROOT/scripts/validate-gate.py" ]; then
+  if ! GATE_CONTRACT="$(python3 "$ROOT/scripts/validate-gate.py" --acceptance "$ACCEPTANCE" \
+      --allowed-paths "${ALLOWED_PATHS:-$WORKDIR}" --gate-files "$GATE_FILES" --repo "$REPO_DIR" 2>>"$LOG")"; then
+    board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "invalid acceptance gate"
+    set_status escalated
+    escalate "invalid or structurally vacuous acceptance gate; no worker was launched"
+    commit_state
+    exit 0
+  fi
+elif [ "$STRICT_PHASE5" = 1 ]; then
+  log "Phase 5 gate validator is missing"; exit 95
 fi
 
 # --- create the isolated worktree on loop/work/<id> (never touches the main tree) -------
@@ -254,7 +295,25 @@ mk_worktree(){
 # The arm is told to STOP on ambiguity rather than choose. A stopped job with a precise
 # question beats hours of plausible wrong work — and the 0x68 run already proved the arm will
 # honour that: it refused to narrow scope to manufacture a green, and no-op'd honestly.
-ALLOWED_PATHS="$(field allowed_paths)"; ALLOWED_PATHS="${ALLOWED_PATHS:-$WORKDIR}"
+if [ "$STRICT_PHASE5" = 1 ]; then
+  case "$DEADLINE_SECONDS:$VERIFIER_DEADLINE_SECONDS" in
+    *[!0-9:]*|:*|*:) log "invalid Phase 5 worker deadline"; exit 2 ;;
+  esac
+  [ "$DEADLINE_SECONDS" -ge 1 ] && [ "$DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
+    || { log "worker deadline is outside the human-owned budget"; exit 2; }
+  [ "$VERIFIER_DEADLINE_SECONDS" -ge 1 ] && [ "$VERIFIER_DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
+    || { log "verifier deadline is outside the human-owned budget"; exit 2; }
+  case "$NETWORK_POLICY" in provider-only|none) ;; *) log "invalid network policy: $NETWORK_POLICY"; exit 2 ;; esac
+  [ "$VERIFICATION_POLICY" = independent ] \
+    || { log "Phase 5 generated work requires independent verification"; exit 2; }
+  [ -n "$MODEL_ALIAS" ] && [ -n "$VERIFIER_MODEL_ALIAS" ] && [ "$MODEL_ALIAS" != "$VERIFIER_MODEL_ALIAS" ] \
+    || { log "implementer and verifier need distinct human-owned model aliases"; exit 2; }
+  [ -x "$ROOT/scripts/resolve-model-alias.py" ] || { log "model alias resolver is missing"; exit 95; }
+  RESOLVED_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$MODEL_ALIAS" implementer 2>>"$LOG")" \
+    || { log "implementer model alias is not human-configured"; exit 95; }
+  RESOLVED_VERIFIER_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$VERIFIER_MODEL_ALIAS" verifier 2>>"$LOG")" \
+    || { log "verifier model alias is not human-configured"; exit 95; }
+fi
 
 # A human answer to THIS task's blocker, if one was given. Without this the seam is one-way:
 # the arm stops with a precise question, a human answers into state/INBOX.md — a file the arm
@@ -325,9 +384,26 @@ Keep changes minimal and CORRECT. Minimal-and-correct beats broad-and-broken.
 
 $BODY"
 
+if [ "$STRICT_PHASE5" = 1 ]; then
+  BUILD_PROMPT="$BUILD_PROMPT
+
+PHASE 5 EXECUTION CONTRACT
+PROJECT / GOAL / TASK: ${WORKSTREAM:-unknown} / ${GOAL_ID:-unknown} / $ID
+EXACT BASE COMMIT: populated by the controller before launch and immutable for this run.
+MODEL ALIAS: $MODEL_ALIAS (the human-owned mapping is not editable by this worker)
+DEADLINE: ${DEADLINE_SECONDS}s
+NETWORK POLICY: $NETWORK_POLICY
+EVIDENCE CONTRACT: $EVIDENCE_CONTRACT
+VERIFICATION: a distinct $VERIFIER_MODEL_ALIAS run will review the exact machine-gated commit.
+Changing tests, fixtures, gate files, result policy, model routing, or any out-of-scope path
+invalidates the run even if committed before the controller inspects the worktree."
+fi
+
 ARM_USAGE="${ARMLOG%.out}.usage.json"
-run_arm_supervised(){
-  local wt="$1"
+run_model_supervised(){ # role worktree prompt resolved-model alias usage deadline run-id [commit] [implementer-run] [evidence-dir] [readonly]
+  local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
+  local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
+  local evidence_dir="${11:-}" readonly="${12:-0}"
   case "$ENGINE" in
     none) return 0 ;;   # verify-only: gate whatever is already in the worktree
     claude|hermes) ;;
@@ -338,28 +414,73 @@ run_arm_supervised(){
 
   [ "$ENGINE" != hermes ] || [ "${RECURSION_ALLOW_METERED:-0}" = "1" ] || return 93
   [ -x "$ROOT/scripts/worker-sandbox.sh" ] || return 95
-  local -a cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine "$ENGINE" --worktree "$wt" --prompt "$BUILD_PROMPT")
-  [ -n "$MODEL" ] && cmd+=(--model "$MODEL")
-  [ "$ENGINE" != hermes ] || cmd+=(--usage-file "$ARM_USAGE")
+  local -a cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine "$ENGINE" --worktree "$wt"
+    --prompt "$prompt" --role "$role" --network-policy "$NETWORK_POLICY")
+  [ -n "$resolved_model" ] && cmd+=(--model "$resolved_model")
+  [ "$ENGINE" != hermes ] || cmd+=(--usage-file "$usage")
+  [ "$readonly" != 1 ] || cmd+=(--read-only-worktree)
+  [ -z "$evidence_dir" ] || cmd+=(--evidence-dir "$evidence_dir")
 
   pause_checkpoint "worker launch" || return 75
-  setsid --wait "${cmd[@]}" >"$ARMLOG" 2>&1 &
-  local worker_pgid=$! rc i
-  log "worker process group=$worker_pgid engine=$ENGINE"
+  local worker_pgid rc now_epoch deadline_epoch heartbeat_epoch log_path
+  log_path="$ARMLOG"; [ "$role" != verifier ] || log_path="$ROOT/loop/logs/$DATE-verifier-$ID-$STAMP.out"
+  RECURSION_VERIFICATION_COMMIT="$commit_oid" RECURSION_IMPLEMENTER_RUN_ID="$implementer_run" \
+    setsid --wait "${cmd[@]}" >"$log_path" 2>&1 &
+  worker_pgid=$!
+  deadline_epoch="$(( $(date +%s) + deadline_s ))"; heartbeat_epoch=0
+  LAST_RUN_ID="$run_id"; LAST_RUN_EVIDENCE="$ROOT/state/runs/$run_id.json"
+  log "$role process group=$worker_pgid engine=$ENGINE alias=${alias:-legacy} deadline=${deadline_s}s"
+  if [ "$STRICT_PHASE5" = 1 ]; then
+    mkdir -p "$ROOT/state/runs"
+    python3 "$ROOT/scripts/worker-evidence.py" start --path "$LAST_RUN_EVIDENCE" --run-id "$run_id" \
+      --task-id "$ID" --role "$role" --model-alias "$alias" --worktree "$wt" \
+      --base-commit "$BASE_COMMIT" --pid "$worker_pgid" --process-group "$worker_pgid" \
+      --deadline-epoch "$deadline_epoch" --log "${log_path#$ROOT/}" --network-policy "$NETWORK_POLICY" \
+      ${implementer_run:+--implementer-run-id "$implementer_run"} ${commit_oid:+--commit-oid "$commit_oid"} \
+      >>"$LOG" 2>&1 || { terminate_worker_group "$worker_pgid"; wait "$worker_pgid" 2>/dev/null || true; return 98; }
+  fi
   while kill -0 "$worker_pgid" 2>/dev/null; do
     if [ -f "$ROOT/state/PAUSE" ]; then
-      log "PAUSE observed with worker process group $worker_pgid in flight"
+      log "PAUSE observed with $role process group $worker_pgid in flight"
       terminate_worker_group "$worker_pgid" || true
       wait "$worker_pgid" 2>/dev/null || true
       kill -0 -- "-$worker_pgid" 2>/dev/null \
         && { log "worker group still alive after cancellation"; return 96; }
-      log "worker process group $worker_pgid terminated before gates/publication"
+      [ "$STRICT_PHASE5" != 1 ] || python3 "$ROOT/scripts/worker-evidence.py" finish \
+        "$LAST_RUN_EVIDENCE" cancelled pause 75 >>"$LOG" 2>&1 || true
+      log "$role process group $worker_pgid terminated before gates/publication"
       return 75
+    fi
+    now_epoch="$(date +%s)"
+    if [ "$STRICT_PHASE5" = 1 ] && [ "$now_epoch" -ge "$deadline_epoch" ]; then
+      log "$role deadline expired; terminating process group $worker_pgid"
+      terminate_worker_group "$worker_pgid" || true
+      wait "$worker_pgid" 2>/dev/null || true
+      kill -0 -- "-$worker_pgid" 2>/dev/null && return 96
+      python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed timeout 124 \
+        >>"$LOG" 2>&1 || true
+      return 97
+    fi
+    if [ "$STRICT_PHASE5" = 1 ] && [ "$now_epoch" -ge "$heartbeat_epoch" ]; then
+      heartbeat_epoch="$(( now_epoch + ${RECURSION_WORKER_HEARTBEAT_S:-5} ))"
+      python3 "$ROOT/scripts/worker-evidence.py" heartbeat "$LAST_RUN_EVIDENCE" "$deadline_epoch" \
+        >>"$LOG" 2>&1 || true
+      [ "$role" != implementer ] || RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" \
+        bash "$TASKCTL" heartbeat "$ID" >>"$LOG" 2>&1 || true
     fi
     sleep 0.1
   done
   if wait "$worker_pgid"; then rc=0; else rc=$?; fi
   return "$rc"
+}
+
+run_arm_supervised(){
+  local wt="$1" attempt="${2:-1}" run_id
+  run_id="$ID-impl-$STAMP-$$-a$attempt"
+  run_model_supervised implementer "$wt" "$BUILD_PROMPT
+EXACT BASE COMMIT: $BASE_COMMIT" "$RESOLVED_MODEL" "${MODEL_ALIAS:-legacy}" "$ARM_USAGE" \
+    "$DEADLINE_SECONDS" "$run_id"
+  local rc=$?; IMPLEMENTER_RUN_ID="$LAST_RUN_ID"; return "$rc"
 }
 
 # --- SCOPE GATE: runs BEFORE the acceptance gate, and outranks it. -----------------------
@@ -374,6 +495,20 @@ run_arm_supervised(){
 PROTECTED_RE='(^|/)([^/]*\.test\.(cjs|js|mjs)$|scripts/|state/|CONTROL_PLANE\.md$|ANCHOR\.md$|CLAUDE\.md$|\.env|\.github/)|(^|/)(render/data|fixtures|golden|oracle)/|(^|/)[^/]*baseline[^/]*$'
 scope_check(){
   local wt="$1" changed outside protected
+  if [ -n "$BASE_COMMIT" ] && [ -x "$ROOT/scripts/git-scope.py" ]; then
+    local scope_id="${LAST_RUN_ID:-$ID-scope-$STAMP-$$}" err rc
+    mkdir -p "$ROOT/state/runs"; LAST_SCOPE_FILE="$ROOT/state/runs/$scope_id-scope.json"
+    err="$LAST_SCOPE_FILE.err"
+    python3 "$ROOT/scripts/git-scope.py" --repo "$wt" --base "$BASE_COMMIT" \
+      --allowed-paths "$ALLOWED_PATHS" --protected-extra "$GATE_FILES" \
+      --ignore .recursion-result.json --check >"$LAST_SCOPE_FILE" 2>"$err"; rc=$?
+    if [ "$rc" -ne 0 ]; then
+      SCOPE_FAIL="$(cat "$err" 2>/dev/null)"; [ -n "$SCOPE_FAIL" ] || SCOPE_FAIL="complete Git scope inspection failed (rc=$rc)"
+      return 1
+    fi
+    rm -f "$err"
+    return 0
+  fi
   changed="$(git -C "$wt" status --porcelain --untracked-files=all 2>/dev/null \
              | sed -E 's/^.{3}//' | sed -E 's/^"(.*)"$/\1/' | grep -v '^\.recursion-result\.json$' || true)"
   [ -z "$changed" ] && return 0
@@ -423,6 +558,60 @@ PY
   [ -n "$RESULT_STATUS" ]
 }
 
+phase5_record_run(){ # status outcome rc [commit]
+  [ "$STRICT_PHASE5" = 1 ] || return 0
+  local status="$1" outcome="$2" rc="$3" commit_oid="${4:-}" result_file="${VALIDATED_RESULT_FILE:-}"
+  local -a args=(finish "$LAST_RUN_EVIDENCE" "$status" "$outcome" "$rc")
+  [ -z "$result_file" ] || args+=(--result-file "$result_file")
+  [ -z "$LAST_SCOPE_FILE" ] || args+=(--scope-file "$LAST_SCOPE_FILE")
+  [ ! -f "$ARM_USAGE" ] || args+=(--usage-file "$ARM_USAGE")
+  [ -z "$commit_oid" ] || args+=(--commit-oid "$commit_oid")
+  python3 "$ROOT/scripts/worker-evidence.py" "${args[@]}" >>"$LOG" 2>&1
+}
+
+phase5_validate_result(){
+  [ "$STRICT_PHASE5" = 1 ] || return 0
+  local result="$1/.recursion-result.json"
+  VALIDATED_RESULT_FILE="$ROOT/state/runs/$LAST_RUN_ID-result.json"
+  [ -f "$result" ] || { SCOPE_FAIL="required worker result is missing"; phase5_record_run failed missing-result 98 || true; return 1; }
+  python3 "$ROOT/scripts/validate-worker-result.py" "$result" "$LAST_SCOPE_FILE" \
+    --expected-change "$EXPECTED_CHANGE" >"$VALIDATED_RESULT_FILE" 2>"$VALIDATED_RESULT_FILE.err" \
+    || { SCOPE_FAIL="$(cat "$VALIDATED_RESULT_FILE.err")"; phase5_record_run failed invalid-result 98 || true; return 1; }
+  rm -f "$VALIDATED_RESULT_FILE.err"
+  read_result "$1" || { SCOPE_FAIL="validated result could not be projected"; return 1; }
+  phase5_record_run succeeded worker-complete 0 || return $?
+}
+
+phase5_commit_candidate(){
+  [ "$STRICT_PHASE5" = 1 ] || return 0
+  local wt="$1"
+  rm -f "$wt/.recursion-result.json"
+  git -C "$wt" add -A 2>>"$LOG" || return 1
+  if ! git -C "$wt" diff --cached --quiet; then
+    pause_checkpoint "candidate commit" || return 75
+    git -C "$wt" -c user.name="recursion-loop" -c user.email="loop@recursion.local" \
+      commit -q -m "build($ID): $GOAL
+
+Phase-5 evidence contract: $EVIDENCE_CONTRACT" 2>>"$LOG" || return 1
+  fi
+  CANDIDATE_OID="$(git -C "$wt" rev-parse HEAD)" || return 1
+  if [ -n "$(git -C "$wt" status --porcelain --untracked-files=all)" ]; then
+    SCOPE_FAIL="candidate worktree is not clean after commit"; return 1
+  fi
+  scope_check "$wt" || return 1
+  phase5_record_run succeeded candidate-committed 0 "$CANDIDATE_OID" || return $?
+}
+
+phase5_reject(){ # short board note, evidence-backed reason
+  local note="$1" reason="$2"
+  board finish "$ID" blocked - "$note"
+  set_status escalated
+  escalate "$reason"
+  commit_state
+  log "$reason; worktree retained for inspection: ${WT:-unknown}"
+  exit 0
+}
+
 # --- HEAVY GATES ARE EXCLUSIVE ----------------------------------------------------------
 # A task may declare `gate_class: heavy` when its acceptance is real local compute (node --test
 # over a corpus, a renderer diff) rather than a cheap assertion. Two heavy gates that each FIT in
@@ -456,6 +645,77 @@ verify(){
   local wt="$1" adir="$1/$WORKDIR"
   [ -d "$adir" ] || adir="$wt"
   ( cd "$adir" && bash -c "$ACCEPTANCE" ) >>"$ARMLOG" 2>&1
+}
+
+phase5_record_gate(){ # exit-code
+  [ "$STRICT_PHASE5" = 1 ] || return 0
+  python3 "$ROOT/scripts/worker-evidence.py" gate "$LAST_RUN_EVIDENCE" "$CANDIDATE_OID" \
+    "$ACCEPTANCE" "$1" "${ARMLOG#$ROOT/}" >>"$LOG" 2>&1
+}
+
+phase5_assert_gate_commit(){
+  [ "$STRICT_PHASE5" = 1 ] || return 0
+  [ "$(git -C "$1" rev-parse HEAD 2>/dev/null)" = "$CANDIDATE_OID" ] \
+    && git -C "$1" diff --quiet --ignore-submodules -- \
+    && git -C "$1" diff --cached --quiet --ignore-submodules --
+}
+
+run_independent_verifier(){
+  [ "$STRICT_PHASE5" = 1 ] || return 0
+  local impl_run="$IMPLEMENTER_RUN_ID" impl_evidence="$LAST_RUN_EVIDENCE"
+  local short verify_wt verifier_id evidence_dir verdict verifier_log
+  short="${CANDIDATE_OID:0:12}"; verify_wt="$REPO_DIR/.worktrees/$ID-verifier-$short-$$"
+  verifier_id="$ID-verify-$STAMP-$$"; evidence_dir="$ROOT/state/runs/$verifier_id-evidence"
+  verdict="$evidence_dir/verdict.json"; verifier_log="$ROOT/loop/logs/$DATE-verifier-$ID-$STAMP.out"
+  local prompt rc head dirty
+  rm -rf "$evidence_dir"; mkdir -p "$evidence_dir"
+  git -C "$REPO_DIR" worktree add --detach "$verify_wt" "$CANDIDATE_OID" >>"$LOG" 2>&1 || return 99
+  prompt="You are an INDEPENDENT VERIFIER, not the implementer. Review task $ID for goal ${GOAL_ID:-unknown}.
+The checkout is an isolated read-only worktree at exact commit $CANDIDATE_OID, based on $BASE_COMMIT.
+Inspect the complete base..commit diff, the task boundary, and the machine gate evidence.
+Do not modify source, tests, fixtures, gates, or the implementer's branch. You are not allowed
+to repair the change you review. Write only /evidence/verdict.json with this schema:
+{\"verdict\":\"pass|fail|blocked\",\"commit_oid\":\"$CANDIDATE_OID\",\"implementer_run_id\":\"$impl_run\",\"summary\":\"...\",\"evidence\":[\"...\"],\"risks\":[\"...\"]}
+Acceptance command (already machine-run against this OID): $ACCEPTANCE
+Allowed implementation paths: $ALLOWED_PATHS
+Explicit non-goals: ${NON_GOALS:-none}."
+  if run_model_supervised verifier "$verify_wt" "$prompt" "$RESOLVED_VERIFIER_MODEL" \
+      "$VERIFIER_MODEL_ALIAS" "${verifier_log%.out}.usage.json" "$VERIFIER_DEADLINE_SECONDS" \
+      "$verifier_id" "$CANDIDATE_OID" "$impl_run" "$evidence_dir" 1; then rc=0; else rc=$?; fi
+  VERIFIER_RUN_ID="$LAST_RUN_ID"
+  if [ "$rc" -ne 0 ]; then
+    git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
+    LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
+    return "$rc"
+  fi
+  head="$(git -C "$verify_wt" rev-parse HEAD 2>/dev/null || true)"
+  dirty="$(git -C "$verify_wt" status --porcelain --untracked-files=all 2>/dev/null || true)"
+  if [ "$head" != "$CANDIDATE_OID" ] || [ -n "$dirty" ]; then
+    python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed verifier-mutated-source 99 \
+      --commit-oid "$CANDIDATE_OID" >>"$LOG" 2>&1 || true
+    git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
+    LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
+    return 99
+  fi
+  if ! python3 "$ROOT/scripts/validate-verifier-result.py" "$verdict" --commit "$CANDIDATE_OID" \
+      --implementer-run "$impl_run" >"$evidence_dir/validated-verdict.json" 2>>"$LOG"; then
+    python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed invalid-verdict 99 \
+      --commit-oid "$CANDIDATE_OID" >>"$LOG" 2>&1 || true
+    git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
+    LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
+    return 99
+  fi
+  mv -f "$evidence_dir/validated-verdict.json" "$verdict"
+  python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" succeeded verified 0 \
+    --result-file "$verdict" --commit-oid "$CANDIDATE_OID" >>"$LOG" 2>&1 || return 98
+  python3 "$ROOT/scripts/worker-evidence.py" verify "$LAST_RUN_EVIDENCE" "$CANDIDATE_OID" \
+    "$impl_run" "$verdict" >>"$LOG" 2>&1 || return 98
+  python3 "$ROOT/scripts/worker-evidence.py" link-verifier "$impl_evidence" "$VERIFIER_RUN_ID" \
+    "$CANDIDATE_OID" "$verdict" >>"$LOG" 2>&1 || return 98
+  local verdict_value; verdict_value="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["verdict"])' "$verdict")"
+  git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
+  LAST_RUN_EVIDENCE="$impl_evidence"; LAST_RUN_ID="$impl_run"; IMPLEMENTER_RUN_ID="$impl_run"
+  [ "$verdict_value" = pass ]
 }
 
 release_heavy   # the gate is over; do not hold the box through publish/merge
@@ -522,12 +782,23 @@ if ! WT="$(mk_worktree)"; then
   exit 0
 fi
 log "worktree: $WT (branch $BRANCH)"
+BASE_COMMIT="$(git -C "$WT" rev-parse HEAD)"
+[ -n "$BASE_COMMIT" ] || phase5_reject "base evidence missing" "exact worker base commit could not be recorded"
 
 # --- EXECUTE (attempt 1) --------------------------------------------------------------
-if run_arm_supervised "$WT"; then arc=0; else arc=$?; fi
+if run_arm_supervised "$WT" 1; then arc=0; else arc=$?; fi
 if [ "$arc" -ne 0 ]; then
   if [ "$arc" = 75 ]; then
     log "PAUSE cancelled $ID; worktree retained and no gate/state/publication step ran"
+    exit 0
+  fi
+  if [ "$arc" = 97 ]; then
+    board finish "$ID" blocked - "worker timeout"
+    set_status blocked
+    escalate_once "worker-timeout:$ID:$IMPLEMENTER_RUN_ID" \
+      "WORKER TIMEOUT — $ID exceeded ${DEADLINE_SECONDS}s; process group terminated, lease cleared, inspect $LAST_RUN_EVIDENCE"
+    commit_state
+    log "worker timeout retained worktree for inspection: $WT"
     exit 0
   fi
   case "$arc" in
@@ -537,6 +808,7 @@ if [ "$arc" -ne 0 ]; then
     94) msg="hermes CLI unavailable" ;;
     95) msg="worker sandbox unavailable or dedicated runner not provisioned" ;;
     96) msg="worker process group could not be confirmed terminated" ;;
+    98) msg="worker run evidence could not be recorded atomically" ;;
     *)  msg="arm dispatch error (code $arc)" ;;
   esac
   board finish "$ID" blocked - "$msg"
@@ -558,6 +830,10 @@ $SCOPE_FAIL"
   commit_state
   log "SCOPE VIOLATION on $ID — left worktree for inspection: $WT"
   exit 0
+fi
+
+if [ "$STRICT_PHASE5" = 1 ] && ! phase5_validate_result "$WT"; then
+  phase5_reject "invalid worker result" "RESULT CONTRACT VIOLATION — $SCOPE_FAIL"
 fi
 
 # A deliberate, reasoned block is a GOOD outcome (CLAUDE.md: escalate, don't guess). Record it
@@ -589,12 +865,22 @@ Answer it with: recursion assist $ID \"...\"  (that requeues this task with your
   exit 0
 fi
 
+if [ "$STRICT_PHASE5" = 1 ] && ! phase5_commit_candidate "$WT"; then
+  phase5_reject "candidate commit refused" "PHASE 5 CANDIDATE REFUSED — ${SCOPE_FAIL:-commit or evidence failure}"
+fi
+
 # --- VERIFY (+ retry the arm once on red, per design) ---------------------------------
 PASS=0; rc=0
 if verify "$WT"; then
-  PASS=1
+  if ! phase5_assert_gate_commit "$WT"; then
+    phase5_record_gate 99 || true
+    phase5_reject "gate mutated candidate" \
+      "MACHINE GATE MUTATED tracked candidate state; exact commit $CANDIDATE_OID was not certified"
+  fi
+  PASS=1; rc=0; phase5_record_gate 0 || true
 else
   rc=$?
+  phase5_record_gate "$rc" || true
   log "acceptance FAILED (exit $rc), attempt 1"
   # A deliberate NO-OP (rc=2 no-progress with NO implementation change) will not benefit from a
   # retry — the arm chose not to ship (0x68, overlay-0x6c both did this). Retry only a genuine
@@ -602,10 +888,38 @@ else
   impl_changed=$(git -C "$WT" status --porcelain -- . ":(exclude)docs" 2>/dev/null | grep -c . || true)
   if [ "$ENGINE" != "none" ] && { [ "$rc" != "2" ] || [ "${impl_changed:-0}" -gt 0 ]; }; then
     log "retry once (design: retry once then escalate)"
-    if run_arm_supervised "$WT"; then retry_arc=0; else retry_arc=$?; fi
+    if run_arm_supervised "$WT" 2; then retry_arc=0; else retry_arc=$?; fi
     [ "$retry_arc" != 75 ] || { log "PAUSE cancelled retry; no later step ran"; exit 0; }
+    if [ "$retry_arc" = 97 ]; then
+      board finish "$ID" blocked - "worker timeout on retry"
+      set_status blocked
+      escalate_once "worker-timeout:$ID:$IMPLEMENTER_RUN_ID" \
+        "WORKER TIMEOUT — $ID retry exceeded ${DEADLINE_SECONDS}s; process group terminated, lease cleared, inspect $LAST_RUN_EVIDENCE"
+      commit_state
+      exit 0
+    fi
     if [ "$retry_arc" = 0 ]; then
-      if verify "$WT"; then PASS=1; else rc=$?; fi
+      if [ "$STRICT_PHASE5" = 1 ]; then
+        SCOPE_FAIL=""
+        scope_check "$WT" || phase5_reject "scope violation on retry" \
+          "SCOPE VIOLATION after retry — retry output was rejected before its gate: $SCOPE_FAIL"
+        phase5_validate_result "$WT" || phase5_reject "invalid retry result" \
+          "RESULT CONTRACT VIOLATION after retry — $SCOPE_FAIL"
+        if [ "$RESULT_STATUS" = blocked ]; then
+          phase5_reject "retry blocked on ambiguity" \
+            "retry worker stopped on ambiguity: ${RESULT_BLOCKER:-no precise question supplied}"
+        fi
+        phase5_commit_candidate "$WT" || phase5_reject "retry candidate refused" \
+          "PHASE 5 retry candidate refused — ${SCOPE_FAIL:-commit or evidence failure}"
+      fi
+      if verify "$WT"; then
+        if ! phase5_assert_gate_commit "$WT"; then
+          phase5_record_gate 99 || true
+          phase5_reject "retry gate mutated candidate" \
+            "MACHINE GATE MUTATED tracked retry state; exact commit $CANDIDATE_OID was not certified"
+        fi
+        PASS=1; rc=0; phase5_record_gate 0 || true
+      else rc=$?; phase5_record_gate "$rc" || true; fi
     else
       rc="$retry_arc"
     fi
@@ -631,24 +945,42 @@ $SCOPE_FAIL"
   # The envelope requires a result file. Absent/malformed is not fatal — the machine-checkable
   # gate is still the contract — but it IS recorded, because "tests passed" without a statement
   # of what changed is the implementer marking its own homework.
-  if read_result "$WT"; then
+  if [ "$STRICT_PHASE5" = 1 ]; then
+    log "$ID result contract validated before exact candidate commit $CANDIDATE_OID"
+  elif read_result "$WT"; then
     log "$ID result: $RESULT_STATUS — ${RESULT_SUMMARY:0:160}"
   else
     log "$ID: WARNING — no valid .recursion-result.json (envelope requires one)"
   fi
   COMMITTED=0
-  rm -f "$WT/.recursion-result.json" 2>/dev/null || true   # a report, not an artifact
-  git -C "$WT" add -A 2>>"$LOG" || true
-  if git -C "$WT" diff --cached --quiet 2>/dev/null; then
-    NOTE="passed (no file changes)"; log "acceptance green; nothing to commit (verify-only)"
+  if [ "$STRICT_PHASE5" = 1 ]; then
+    [ -n "$CANDIDATE_OID" ] || phase5_reject "missing candidate OID" \
+      "machine gate passed without an exact candidate commit identity"
+    if run_independent_verifier; then verifier_rc=0; else verifier_rc=$?; fi
+    if [ "$verifier_rc" -ne 0 ]; then
+      if [ "$verifier_rc" = 97 ]; then
+        phase5_reject "verifier timeout" \
+          "VERIFIER TIMEOUT — $ID independent verifier exceeded ${VERIFIER_DEADLINE_SECONDS}s; it was terminated and cannot certify $CANDIDATE_OID"
+      fi
+      phase5_reject "independent verification failed" \
+        "INDEPENDENT VERIFICATION REFUSED — verifier run ${VERIFIER_RUN_ID:-missing} did not return a clean pass for exact commit $CANDIDATE_OID"
+    fi
+    COMMITTED=1; NOTE="passed -> $BRANCH at $CANDIDATE_OID (independently verified)"
+    log "exact commit $CANDIDATE_OID passed machine gate and independent verifier $VERIFIER_RUN_ID"
   else
-    pause_checkpoint "build-output commit" || exit 0
-    git -C "$WT" -c user.name="recursion-loop" -c user.email="loop@recursion.local" \
-      commit -q -m "build($ID): $GOAL
+    rm -f "$WT/.recursion-result.json" 2>/dev/null || true
+    git -C "$WT" add -A 2>>"$LOG" || true
+    if git -C "$WT" diff --cached --quiet 2>/dev/null; then
+      NOTE="passed (no file changes)"; log "acceptance green; nothing to commit (verify-only)"
+    else
+      pause_checkpoint "build-output commit" || exit 0
+      git -C "$WT" -c user.name="recursion-loop" -c user.email="loop@recursion.local" \
+        commit -q -m "build($ID): $GOAL
 
 acceptance: $ACCEPTANCE (green)
 engine: $ENGINE" 2>>"$LOG" || true
-    NOTE="passed -> $BRANCH"; COMMITTED=1; log "committed build output to $BRANCH"
+      NOTE="passed -> $BRANCH"; COMMITTED=1; log "committed build output to $BRANCH"
+    fi
   fi
   if [ -f "$ARM_USAGE" ]; then board finish "$ID" done "$ARM_USAGE" "$NOTE"; else board finish "$ID" done - "$NOTE"; fi
   set_status passed; commit_state
