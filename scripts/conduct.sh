@@ -21,6 +21,11 @@ MAX="${RECURSION_DRAIN_MAX:-6}"
 FAILSTOP="${RECURSION_DRAIN_FAILSTOP:-2}"
 DEADLINE="${RECURSION_DRAIN_DEADLINE_MIN:-360}"
 POLL="${RECURSION_CONDUCT_POLL_S:-5}"
+# How long to keep holding for capacity before giving the queue back to the next cycle. Waiting
+# forever would hold the single-instance .conduct.lock forever, and a held lock makes every later
+# conduct run exit at once — one full box wedging all future conducting, silently.
+CAPWAIT="${RECURSION_CONDUCT_CAP_WAIT_S:-600}"
+CAP_SINCE=0
 LOCK="$ROOT/state/.conduct.lock"
 LOG="$ROOT/loop/logs/$(date +%F)-conduct.log"
 log(){ echo "[$(date -Is)] conduct: $*" | tee -a "$LOG"; }
@@ -34,6 +39,12 @@ START="$(date +%s)"; launched=0; done_n=0; nonpass=0
 declare -A PID2ID PID2WS RUNNING_WS
 
 status_of(){ sed -n 's/^status: *//p' "state/tasks/$1.md" 2>/dev/null | head -1 | tr -d '\r'; }
+
+# $(n_running) on an EMPTY associative array is an unbound-variable error under `set -u` in
+# bash 5.3, and ${#A[@]-0} / ${#A[@]:-0} are both "bad substitution" — there is no default-value
+# form for it. Iterating ${!A[@]} IS safe when empty, so the count goes through here. This fired
+# only when the conductor launched nothing, which capacity deferral now makes an ordinary path.
+n_running(){ local n=0 k; for k in "${!PID2ID[@]}"; do n=$((n+1)); done; printf '%s' "$n"; }
 
 # next queued task whose workstream is NOT already running under this conductor.
 # emits "<id>\t<ws>" and returns 0, or returns 1 when nothing is launchable.
@@ -72,10 +83,24 @@ while :; do
   [ "$nonpass" -ge "$FAILSTOP" ] && { log "$FAILSTOP non-passes — stop launching (approach not landing)"; break; }
 
   # launch while we have a free slot, budget left, and an idle workstream with queued work.
-  while [ "${#PID2ID[@]}" -lt "$CONC" ] && [ "$launched" -lt "$MAX" ]; do
+  while [ "$(n_running)" -lt "$CONC" ] && [ "$launched" -lt "$MAX" ]; do
+    # ADMISSION CONTROL. RECURSION_CONDUCT_CONCURRENCY is a fixed count, and a fixed count
+    # assumes every task costs the same. It also cannot see what ELSE is on the box — an
+    # overnight gate, a stray node, the reflection pass. Ask before launching; a deferral is not
+    # a failure, it just means this poll launches nothing and the next one asks again.
+    if [ -x scripts/capacity.sh ]; then
+      cap="$(bash scripts/capacity.sh check arm 2>&1)"; caprc=$?
+      if [ "$caprc" -ne 0 ]; then
+        [ "$cap" != "${LAST_CAP:-}" ] && log "holding: $cap"   # log the reason once, not every poll
+        LAST_CAP="$cap"
+        [ "$CAP_SINCE" = "0" ] && CAP_SINCE="$(date +%s)"
+        break
+      fi
+      LAST_CAP=""; CAP_SINCE=0
+    fi
     line="$(next_launchable)" || break
     id="${line%%$'\t'*}"; ws="${line##*$'\t'}"
-    log "launch $id (ws=$ws) [#$((launched+1))/$MAX, running $(( ${#PID2ID[@]} + 1 ))/$CONC]"
+    log "launch $id (ws=$ws) [#$((launched+1))/$MAX, running $(( $(n_running) + 1 ))/$CONC]"
     nohup bash scripts/work.sh "$id" >>"$LOG" 2>&1 &
     pid=$!
     PID2ID[$pid]="$id"; PID2WS[$pid]="$ws"; RUNNING_WS[$ws]=1
@@ -83,15 +108,27 @@ while :; do
   done
 
   # nothing running and nothing launchable -> the queue is drained.
-  [ "${#PID2ID[@]}" -eq 0 ] && { log "queue empty / no idle workstream with work — done ($done_n ran)"; break; }
+  # ...unless CAPACITY is what stopped us. "The box is busy" is not "the queue is empty", and
+  # reporting the second when the first is true is a silent success on work that never ran.
+  if [ "$(n_running)" -eq 0 ]; then
+    if [ -n "${LAST_CAP:-}" ]; then
+      capwaited=$(( $(date +%s) - CAP_SINCE ))
+      if [ "$capwaited" -ge "$CAPWAIT" ]; then
+        log "gave up after ${capwaited}s waiting on capacity — the queue stays for the next cycle ($LAST_CAP)"
+        break
+      fi
+    else
+      log "queue empty / no idle workstream with work — done ($done_n ran)"; break
+    fi
+  fi
 
   sleep "$POLL"
   reap
 done
 
 # let in-flight builds finish (bounded by their own logic), then reap.
-if [ "${#PID2ID[@]}" -gt 0 ]; then
-  log "draining ${#PID2ID[@]} in-flight build(s) to completion"
-  while [ "${#PID2ID[@]}" -gt 0 ]; do sleep "$POLL"; reap; done
+if [ "$(n_running)" -gt 0 ]; then
+  log "draining $(n_running) in-flight build(s) to completion"
+  while [ "$(n_running)" -gt 0 ]; do sleep "$POLL"; reap; done
 fi
 log "done ($done_n tasks, $nonpass non-pass)"

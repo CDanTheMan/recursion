@@ -24,7 +24,7 @@ LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/$DATE-work.log"
 log(){ echo "[$(date -Is)] work: $*" | tee -a "$LOG" >&2; }
 board(){ bash scripts/board.sh "$@" >/dev/null 2>&1 || true; }
-notify(){ [ "${RECURSION_NO_NOTIFY:-0}" = "1" ] && return 0; bash "$ROOT/scripts/notify.sh" "$@" >/dev/null 2>&1 || true; }
+notify(){ [ "${RECURSION_NO_NOTIFY:-0}" = "1" ] && return 0; bash "$ROOT/scripts/notify.sh" ${REPO_DIR:+--project "$REPO_DIR"} "$@" >/dev/null 2>&1 || true; }
 
 # --- kill switch (architecture.md): state/PAUSE halts the executor like every job. ------
 if [ -f "$ROOT/state/PAUSE" ]; then log "PAUSED (state/PAUSE) — executor idle."; exit 0; fi
@@ -59,6 +59,13 @@ SEED="$(field seed)"; SEED="${SEED//,/ }"
 # are ALSO globally fenced by env flags (RECURSION_ALLOW_PUSH / RECURSION_ALLOW_AUTOMERGE) set only
 # in .env by the human — the loop can never self-enable them (CLAUDE.md rule 3).
 SSHKEY="$(field sshkey)"; AUTOMERGE="$(field automerge)"; AUTOMERGE_SCOPE="$(field automerge_scope)"
+# A task that names no key falls back to the PORTFOLIO REGISTRY (state/portfolio.tsv). The
+# repo->key mapping used to live only in whoever typed the command, so a task that forgot
+# `sshkey:` fetched with no credential — and a credential-less git fetch fails QUIETLY.
+if [ -z "$SSHKEY" ] && [ -x "$ROOT/scripts/resync.sh" ]; then
+  SSHKEY="$(RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/resync.sh" key "$REPO_DIR" 2>/dev/null || true)"
+  [ -n "$SSHKEY" ] && log "deploy key from portfolio registry: $SSHKEY"
+fi
 PLANNED_FROM="$(field planned_from)"   # <roadmap>:<line> — flipped [~]->[x] when this task passes
 GSSH=""; [ -n "$SSHKEY" ] && GSSH="ssh -i ${SSHKEY/#\~/$HOME} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=12"
 gitr(){ if [ -n "$GSSH" ]; then GIT_SSH_COMMAND="$GSSH" git -C "$REPO_DIR" "$@"; else git -C "$REPO_DIR" "$@"; fi; }
@@ -72,7 +79,12 @@ BRANCH="loop/work/$ID"
 mkdir -p "$ROOT/state/.locks" 2>/dev/null || true
 WSLOCK="$ROOT/state/.locks/ws-${WORKSTREAM:-none}.lock"
 if ! mkdir "$WSLOCK" 2>/dev/null; then log "workstream ${WORKSTREAM:-none} already building (held $WSLOCK) — exiting."; exit 0; fi
-trap 'rmdir "$WSLOCK" 2>/dev/null || true' EXIT
+# ONE EXIT trap, both cleanups. A second `trap ... EXIT` REPLACES this one rather than
+# adding to it — which is how the heavy-gate release silently disabled the workstream-lock
+# release, leaking a lock per run and wedging the next run of that workstream at
+# "already building". `declare -F` covers the window before release_heavy is defined,
+# since work.sh can exit early (no acceptance test, unprovable base) with the trap armed.
+trap 'declare -F release_heavy >/dev/null 2>&1 && release_heavy; rmdir "$WSLOCK" 2>/dev/null || true' EXIT
 ARMLOG="$LOG_DIR/$DATE-arm-$ID-$STAMP.out"
 # body = the detailed spec (everything after the first blank line)
 BODY="$(awk 'f{print} /^[[:space:]]*$/{f=1}' "$TASK")"
@@ -80,7 +92,43 @@ BODY="$(awk 'f{print} /^[[:space:]]*$/{f=1}' "$TASK")"
 log "task=$ID ws=${WORKSTREAM:-?} engine=$ENGINE repo=$REPO_DIR workdir=$WORKDIR"
 log "acceptance: ${ACCEPTANCE:-<none>}"
 
-set_status(){ sed -i "s#^status: .*#status: $1#" "$TASK" 2>/dev/null || true; }
+# --- status goes through taskctl (B3) so leases and events actually happen. --------------
+# This used to be a bare `sed`. That is why a killed worker left `status: running` forever:
+# nothing held a lease, so nothing could tell a live run from a corpse. Routing the lifecycle
+# transitions through taskctl gives each one an expiring lease and an event-log entry, and the
+# reaper can then reclaim what dies. Statuses taskctl has no verb for still fall back to a
+# direct edit, so a checkout without taskctl degrades rather than breaks.
+TASKCTL="$ROOT/scripts/taskctl.sh"
+set_status(){
+  local st="$1" note="${2:-}"
+  if [ -x "$TASKCTL" ]; then
+    case "$st" in
+      passed|failed|moot|resolved|stale)
+        RECURSION_ROOT="$ROOT" bash "$TASKCTL" finish "$ID" "$st" "$note" >/dev/null 2>&1 && return 0 ;;
+      escalated|blocked)
+        RECURSION_ROOT="$ROOT" bash "$TASKCTL" block "$ID" "$note" >/dev/null 2>&1 \
+          && { sed -i "s#^status: .*#status: $st#" "$TASK" 2>/dev/null; return 0; } ;;
+    esac
+  fi
+  sed -i "s#^status: .*#status: $st#" "$TASK" 2>/dev/null || true
+}
+
+# Claim the task. taskctl refuses a task whose lease is still LIVE, which is the double-run
+# guard: on 2026-08-06 an arm auto-retried into a second hour-long run on the same task and the
+# orphan had to be killed by hand. Refusing here is cheaper than detecting it later.
+claim_task(){
+  [ -x "$TASKCTL" ] || { set_status running; return 0; }
+  RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" bash "$TASKCTL" start "$ID" "work.sh:$$@$(hostname)" >>"$LOG" 2>&1
+  local rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    4) log "$ID is already leased by a live worker — exiting rather than double-running it."; return 1 ;;
+    # Any OTHER failure is a taskctl problem, not a lease conflict. Degrade to a direct status
+    # write and keep building: an executor that refuses to run because its bookkeeping helper
+    # is unhappy is a worse failure than one that runs without a lease.
+    *) log "taskctl start failed (rc=$rc) — proceeding without a lease"; set_status running; return 0 ;;
+  esac
+}
 
 # ledger writes (task status + BOARD) go to loop/auto, like every other loop write.
 # Under parallel loops several work.sh share this one $ROOT tree/index, so serialize the ledger
@@ -138,10 +186,15 @@ mk_worktree(){
   rm -rf "$wt" 2>/dev/null || true
   git -C "$REPO_DIR" worktree prune 2>/dev/null || true
   # Fetch latest so the task builds on the FRESHEST merged base — this is what makes work
-  # ACCUMULATE across tasks (once you merge task N, task N+1 builds on top). Non-fatal: offline
-  # or no cred just falls back to the local base. Disable with RECURSION_GIT_FETCH=0.
+  # ACCUMULATE across tasks (once you merge task N, task N+1 builds on top).
+  #
+  # This fetch is now a REFRESH, not the decision. require_fresh_base() already proved the repo
+  # is current and refused to reach here otherwise. It used to be the decision, and it decided
+  # badly: on failure it logged "building on local base" and carried on, so the arm built on a
+  # stale tree, the gate passed (it was testing the old tree), and merging the result REVERTED
+  # whatever had been fixed upstream in the meantime.
   if [ "${RECURSION_GIT_FETCH:-1}" = "1" ]; then
-    gitr fetch --prune --quiet origin >>"$LOG" 2>&1 && log "fetched origin" || log "fetch skipped/failed — building on local base"
+    gitr fetch --prune --quiet origin >>"$LOG" 2>&1 && log "fetched origin" || log "fetch failed at worktree time (freshness was proven moments ago)"
   fi
   def="$(git -C "$REPO_DIR" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"; def="${def:-master}"
   # prefer the remote-tracking tip (freshest merged main); fall back to local, then current HEAD.
@@ -165,20 +218,84 @@ mk_worktree(){
   printf '%s\n' "$wt"
 }
 
-# --- the arm: GENERATE files into the worktree. Exit code is advisory — the gate decides. -
-BUILD_PROMPT="You are a build arm for the Recursion system. Produce working source files.
+# --- the WORKER ENVELOPE (CONTROL_PLANE.md role 4) ---------------------------------------
+# The arm used to receive a goal and a gate. That is enough to build, and not enough to stay
+# bounded: nothing stated the authority model, the paths it may touch, what it must NOT do, or
+# what to do when the task is ambiguous. An arm with only a goal and a gate optimises for the
+# gate — and the gate cannot see scope. This envelope states all of it explicitly, and the
+# protected-path check below enforces the parts a prompt cannot.
+#
+# The arm is told to STOP on ambiguity rather than choose. A stopped job with a precise
+# question beats hours of plausible wrong work — and the 0x68 run already proved the arm will
+# honour that: it refused to narrow scope to manufacture a green, and no-op'd honestly.
+ALLOWED_PATHS="$(field allowed_paths)"; ALLOWED_PATHS="${ALLOWED_PATHS:-$WORKDIR}"
 
-TASK: $GOAL
-The target repo is already checked out at the current directory; your output goes here.
-Output/work subdir for this task: $WORKDIR
+# A human answer to THIS task's blocker, if one was given. Without this the seam is one-way:
+# the arm stops with a precise question, a human answers into state/INBOX.md — a file the arm
+# never reads — and the next run receives the identical prompt and blocks on the identical
+# question. See scripts/assist.sh.
+HUMAN_GUIDANCE=""
+if [ -x "$ROOT/scripts/assist.sh" ]; then
+  HUMAN_GUIDANCE="$(RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/assist.sh" guidance "$ID" 2>/dev/null || true)"
+  [ -n "$HUMAN_GUIDANCE" ] && log "envelope carries a human answer for $ID"
+fi
+NON_GOALS="$(field non_goals)"
+GOAL_ID="$(field goal_id)"
 
-Rules:
-- Your work is gated by this exact command, which MUST exit 0: $ACCEPTANCE
-- You MAY read the codebase and run \`node\` (e.g. \`node --test <file>\`) to check your work as
-  you go. You may NOT run installers, servers, git, or any other shell command.
-- Do NOT modify test files (*.test.cjs), truth fixtures, or golden data to force a pass — that
-  is tampering and the gate rejects it. Fix the IMPLEMENTATION, not the test.
-- Keep changes minimal and CORRECT. Minimal-and-correct beats broad-and-broken.
+BUILD_PROMPT="You are a BUILD ARM for the Recursion system — a bounded executor.
+${HUMAN_GUIDANCE:+
+=========================== $HUMAN_GUIDANCE
+===========================
+}
+AUTHORITY
+Hermes owns planning, priority, and product direction. You do not. You implement ONE task
+inside ONE boundary and report what you did. You may not redefine the task, widen its scope,
+reprioritise, create new workstreams, or change control-plane policy.
+
+TASK: $GOAL${GOAL_ID:+
+PARENT GOAL: $GOAL_ID}
+REPO: already checked out at the current directory; your output goes here.
+WORK DIR: $WORKDIR
+
+ALLOWED PATHS — you may create or modify files ONLY under:
+  $ALLOWED_PATHS
+
+PROTECTED — never modify, for any reason, even if it would make the gate pass:
+  - test files (*.test.cjs, *.test.js, scripts/tests/**)
+  - truth fixtures, golden data, oracles, baselines (render/data/**, *baseline*, *oracle*)
+  - the control plane: CONTROL_PLANE.md, ANCHOR.md, CLAUDE.md, state/**, scripts/**, .env,
+    cron, any auth/model/provider config
+  Editing a test or a fixture to turn the gate green is TAMPERING. The gate rejects it, and
+  so does a separate path check that runs before the gate. Fix the IMPLEMENTATION.
+${NON_GOALS:+
+EXPLICIT NON-GOALS for this task (in scope for the project, NOT for you, right now):
+  $NON_GOALS
+}
+ACCEPTANCE — this exact command must exit 0:
+  $ACCEPTANCE
+You MAY read the codebase and run \`node\` (e.g. \`node --test <file>\`) to check your work.
+You may NOT run installers, servers, git, or any other shell command.
+
+ON AMBIGUITY — STOP, do not guess.
+If the task can be read two materially different ways, or completing it needs a decision that
+is not written down, do NOT pick one. Write .recursion-result.json with status \"blocked\" and
+your precise question, change nothing else, and stop. A stopped job with a clear question is a
+GOOD outcome and is recorded as such. Inventing scope is the failure mode this system exists
+to prevent.
+
+WHEN DONE — write .recursion-result.json in the repo root:
+{
+  \"status\": \"done\" | \"blocked\" | \"no-op\",
+  \"summary\": \"one or two sentences on what you changed and why\",
+  \"files_changed\": [\"path\", ...],
+  \"tests_run\": \"what you ran and what it said\",
+  \"risks\": [\"anything a reviewer should check\"],
+  \"blocker\": \"the precise question, if status is blocked\"
+}
+\"no-op\" is legitimate: if the correct action is to change nothing, say so and explain why.
+Do not manufacture a change to look productive.
+
+Keep changes minimal and CORRECT. Minimal-and-correct beats broad-and-broken.
 
 $BODY"
 
@@ -211,12 +328,101 @@ run_arm(){
   esac
 }
 
+# --- SCOPE GATE: runs BEFORE the acceptance gate, and outranks it. -----------------------
+# A prompt is a request; this is the enforcement. It answers a question the acceptance gate
+# structurally cannot: the gate scores the OUTCOME, so a diff that quietly edits a fixture, a
+# test, or a control-plane file to reach that outcome still exits 0. Order matters — checking
+# scope only after a green gate means a tampered pass has already been declared.
+#
+# Two rules, deny-first:
+#   PROTECTED  never writable, regardless of allowed_paths (tests, fixtures, control plane)
+#   ALLOWED    everything else must sit under the task's declared allowed_paths
+PROTECTED_RE='(^|/)([^/]*\.test\.(cjs|js|mjs)$|scripts/|state/|CONTROL_PLANE\.md$|ANCHOR\.md$|CLAUDE\.md$|\.env|\.github/)|(^|/)(render/data|fixtures|golden|oracle)/|(^|/)[^/]*baseline[^/]*$'
+scope_check(){
+  local wt="$1" changed outside protected
+  changed="$(git -C "$wt" status --porcelain --untracked-files=all 2>/dev/null \
+             | sed -E 's/^.{3}//' | sed -E 's/^"(.*)"$/\1/' | grep -v '^\.recursion-result\.json$' || true)"
+  [ -z "$changed" ] && return 0
+
+  protected="$(printf '%s\n' "$changed" | grep -E "$PROTECTED_RE" || true)"
+  if [ -n "$protected" ]; then
+    SCOPE_FAIL="modified PROTECTED paths (tests/fixtures/control-plane):
+$(printf '%s\n' "$protected" | head -10)"
+    return 1
+  fi
+  # allowed_paths may be a space/comma list; "." means the whole repo (legacy tasks).
+  local ap; ap="${ALLOWED_PATHS//,/ }"
+  case " $ap " in *" . "*) return 0 ;; esac
+  outside="$(printf '%s\n' "$changed" | while read -r p; do
+      [ -z "$p" ] && continue
+      ok=0; for a in $ap; do a="${a%/}"; case "$p" in "$a"|"$a"/*) ok=1; break;; esac; done
+      [ "$ok" = "0" ] && printf '%s\n' "$p"
+    done)"
+  if [ -n "$outside" ]; then
+    SCOPE_FAIL="modified files OUTSIDE allowed_paths ($ap):
+$(printf '%s\n' "$outside" | head -10)"
+    return 1
+  fi
+  return 0
+}
+
+# --- RESULT SCHEMA: the arm must say what it did, in a parseable form. -------------------
+# Absent or malformed is NOT a silent pass. "The gate went green" is the implementer marking
+# its own homework; the envelope requires a statement a reviewer (or Hermes) can read without
+# opening the diff. A `blocked` result is a legitimate, recorded outcome, not a failure.
+read_result(){
+  local wt="$1" f="$1/.recursion-result.json"
+  RESULT_STATUS=""; RESULT_SUMMARY=""; RESULT_BLOCKER=""
+  [ -f "$f" ] || return 1
+  eval "$(python3 - "$f" <<'PY' 2>/dev/null || true
+import json,sys,shlex
+try: d=json.load(open(sys.argv[1],encoding='utf-8'))
+except Exception: sys.exit(0)
+if not isinstance(d,dict): sys.exit(0)
+st=str(d.get('status','') or '')
+if st not in ('done','blocked','no-op'): st=''
+print("RESULT_STATUS=%s"  % shlex.quote(st))
+print("RESULT_SUMMARY=%s" % shlex.quote(str(d.get('summary','') or '')[:400]))
+print("RESULT_BLOCKER=%s" % shlex.quote(str(d.get('blocker','') or '')[:400]))
+PY
+)"
+  [ -n "$RESULT_STATUS" ]
+}
+
+# --- HEAVY GATES ARE EXCLUSIVE ----------------------------------------------------------
+# A task may declare `gate_class: heavy` when its acceptance is real local compute (node --test
+# over a corpus, a renderer diff) rather than a cheap assertion. Two heavy gates that each FIT in
+# memory still ruin each other: they contend for 2 cores, push into swap, and the timeouts that
+# fire read as flaky tests instead of as a starved box. A gate whose verdict depends on what else
+# happened to be running is not a gate, so heavy ones serialise box-wide.
+GATE_CLASS="$(field gate_class)"; GATE_CLASS="${GATE_CLASS:-light}"
+HEAVY_HELD=0
+acquire_heavy(){
+  [ "$GATE_CLASS" = "heavy" ] || return 0
+  [ -x "$ROOT/scripts/capacity.sh" ] || return 0
+  local waited=0 out
+  while :; do
+    out="$(RECURSION_ROOT="$ROOT" RECURSION_HEAVY_TAG="$ID" bash "$ROOT/scripts/capacity.sh" heavy acquire "$ID" 2>&1)"
+    case "$out" in ACQUIRED*) HEAVY_HELD=1; log "heavy-gate lock acquired after ${waited}s"; return 0 ;; esac
+    waited=$((waited+10))
+    if [ "$waited" -ge "${RECURSION_HEAVY_WAIT_S:-1800}" ]; then
+      log "heavy-gate lock still held after ${waited}s ($out) — running the gate anyway rather than losing the build"
+      return 0
+    fi
+    sleep 10
+  done
+}
+release_heavy(){ [ "$HEAVY_HELD" = "1" ] && { RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/capacity.sh" heavy release >/dev/null 2>&1; HEAVY_HELD=0; }; return 0; }
+
 # --- the gate: run the acceptance command in the app dir; its exit code is the verdict. --
 verify(){
+  acquire_heavy
   local wt="$1" adir="$1/$WORKDIR"
   [ -d "$adir" ] || adir="$wt"
   ( cd "$adir" && bash -c "$ACCEPTANCE" ) >>"$ARMLOG" 2>&1
 }
+
+release_heavy   # the gate is over; do not hold the box through publish/merge
 
 # --- after a GREEN build: optionally PUBLISH the review branch, and optionally AUTO-MERGE. -----
 # Layers of defense, all off by default:
@@ -253,7 +459,41 @@ integrate_remote(){
 
 # ============================ pipeline ============================
 board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" running "${GOAL:0:40}"
-set_status running; commit_state
+if ! claim_task; then exit 0; fi
+commit_state
+
+# --- FRESHNESS IS A PRECONDITION, NOT BEST EFFORT ---------------------------------------
+# "A task may not start against a base older than origin's default." Proving that requires
+# reaching the remote, and a git op with no usable credential fails SILENTLY — so the failure
+# to prove freshness is itself a blocker, not a shrug. See scripts/resync.sh for the two
+# observed failures this closes.
+FRESH_WHY=""
+require_fresh_base(){
+  if [ "${RECURSION_REQUIRE_FRESH_BASE:-1}" != "1" ]; then
+    log "FRESH-BASE CHECK DISABLED (RECURSION_REQUIRE_FRESH_BASE=0) — building on whatever base is local"
+    return 0
+  fi
+  if [ ! -x "$ROOT/scripts/resync.sh" ]; then
+    FRESH_WHY="scripts/resync.sh is missing — base freshness cannot be proven"; return 1
+  fi
+  local out rc
+  out="$(RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/resync.sh" check "$REPO_DIR" 2>&1)"; rc=$?
+  case "$rc" in
+    0) log "base freshness: $out"; return 0 ;;
+    3) FRESH_WHY="cannot prove $REPO_DIR is current with origin — $out" ;;
+    4) FRESH_WHY="$REPO_DIR needs a human before more work lands on it — $out" ;;
+    *) FRESH_WHY="resync check exited $rc — $out" ;;
+  esac
+  return 1
+}
+
+if ! require_fresh_base; then
+  board finish "$ID" blocked - "stale/unprovable base"
+  set_status blocked
+  escalate "$FRESH_WHY"
+  commit_state
+  exit 0
+fi
 
 if ! WT="$(mk_worktree)"; then
   board finish "$ID" blocked - "worktree create failed"
@@ -275,6 +515,48 @@ if [ "$arc" -ne 0 ]; then
   board finish "$ID" blocked - "$msg"
   set_status escalated; escalate "$msg"; commit_state
   git -C "$REPO_DIR" worktree remove --force "$WT" 2>/dev/null || true
+  exit 0
+fi
+
+# --- SCOPE + RESULT, BEFORE the acceptance gate ----------------------------------------
+# Order is the point: a tampered diff that reaches a green gate has already been declared a
+# pass by the time a post-hoc check runs.
+SCOPE_FAIL=""
+if ! scope_check "$WT"; then
+  board finish "$ID" blocked - "scope violation"
+  set_status escalated
+  escalate "SCOPE VIOLATION — the arm went outside its boundary, so the acceptance result is not trusted and was not run:
+$SCOPE_FAIL"
+  commit_state
+  log "SCOPE VIOLATION on $ID — left worktree for inspection: $WT"
+  exit 0
+fi
+
+# A deliberate, reasoned block is a GOOD outcome (CLAUDE.md: escalate, don't guess). Record it
+# as blocked with the arm's own question rather than running a gate that is certain to fail.
+if read_result "$WT" && [ "$RESULT_STATUS" = "blocked" ]; then
+  board finish "$ID" blocked - "arm blocked on ambiguity"
+  set_status blocked
+  # Record the ask as an ANSWERABLE item, not just a notification. assist.sh open returns 3 when
+  # the arm is re-asking a question a human already answered — that is the answer failing to
+  # reach the arm, and it needs a different escalation than "the arm has a question", because
+  # re-asking it looks like the system working while it burns a human every cycle.
+  ASSIST_RC=0
+  if [ -x "$ROOT/scripts/assist.sh" ]; then
+    RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/assist.sh" open "$ID" "$(field assist_kind)" \
+      "${RESULT_BLOCKER:-<no question given>}" >>"$LOG" 2>&1 || ASSIST_RC=$?
+  fi
+  if [ "$ASSIST_RC" = "3" ]; then
+    escalate "the arm re-blocked on a question that was ALREADY ANSWERED — the answer is not reaching it:
+${RESULT_BLOCKER:-<no question given>}"
+  else
+  escalate "the arm STOPPED on ambiguity instead of guessing (this is correct behaviour):
+${RESULT_BLOCKER:-<no question given>}
+${RESULT_SUMMARY:+context: $RESULT_SUMMARY}
+Answer it with: recursion assist $ID \"...\"  (that requeues this task with your answer attached)"
+  fi
+  commit_state
+  log "$ID: arm blocked on ambiguity — escalated with its question"
   exit 0
 fi
 
@@ -300,7 +582,27 @@ fi
 
 # --- INTEGRATE ------------------------------------------------------------------------
 if [ "$PASS" = "1" ]; then
+  # Re-check scope AFTER the retry: attempt 2 gets its own chance to wander, and a green gate
+  # on an out-of-scope diff is exactly the outcome the scope gate exists to refuse.
+  if ! scope_check "$WT"; then
+    board finish "$ID" blocked - "scope violation (post-retry)"
+    set_status escalated
+    escalate "SCOPE VIOLATION after retry — the gate went GREEN but the diff left its boundary, so the pass is not accepted:
+$SCOPE_FAIL"
+    commit_state
+    log "SCOPE VIOLATION (post-gate) on $ID — not committed. Worktree: $WT"
+    exit 0
+  fi
+  # The envelope requires a result file. Absent/malformed is not fatal — the machine-checkable
+  # gate is still the contract — but it IS recorded, because "tests passed" without a statement
+  # of what changed is the implementer marking its own homework.
+  if read_result "$WT"; then
+    log "$ID result: $RESULT_STATUS — ${RESULT_SUMMARY:0:160}"
+  else
+    log "$ID: WARNING — no valid .recursion-result.json (envelope requires one)"
+  fi
   COMMITTED=0
+  rm -f "$WT/.recursion-result.json" 2>/dev/null || true   # a report, not an artifact
   git -C "$WT" add -A 2>>"$LOG" || true
   if git -C "$WT" diff --cached --quiet 2>/dev/null; then
     NOTE="passed (no file changes)"; log "acceptance green; nothing to commit (verify-only)"

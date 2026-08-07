@@ -1,15 +1,16 @@
 engine: claude
-repo: /opt/recursion
-sshkey: ~/.ssh/id_deploy
-workdir: apps/chiron
+repo: /opt/chiron
+sshkey: ~/.ssh/chiron_deploy
+workdir: .
 acceptance: npm install && npm run build
-automerge: yes
-automerge_scope: apps/chiron
 
-<!-- CONTRACT: apps/chiron/PRODUCT.md (why/scope). LEDGER: apps/chiron/features.json — authoritative
-     for WHAT/ordering/deps; query with `node apps/chiron/features.cjs --next`. This checklist is the
+<!-- CONTRACT: PRODUCT.md (why/scope). LEDGER: features.json — authoritative
+     for WHAT/ordering/deps; query with `node features.cjs --next`. This checklist is the
      human-readable mirror; the ledger wins on ordering + deps. Build order follows deps (nav before
      the pages that embed it). C6 (real 5-series curriculum) is status=escalate — needs Lucas. -->
+
+<!-- automerge deliberately ABSENT (2026-08-06): the loop pushes review branches;
+     Lucas merges every branch on GitHub. Re-adding it here re-arms the whole chain. -->
 
 - [x] Scaffold a minimal Next.js Chiron shell that builds cleanly (ledger C1)
 - [x] Add a landing page: hero title, one-line pitch, primary CTA to /learn (ledger C2)

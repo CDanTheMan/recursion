@@ -65,6 +65,11 @@ R="$TMP/repo"; mkdir -p "$R"
 tar -C "$SRC" -cf - scripts loop state ANCHOR.md CLAUDE.md 2>/dev/null | tar -C "$R" -xf - 2>/dev/null
 mkdir -p "$R/state/briefs" "$R/loop/logs" "$R/state/tasks"
 : > "$R/.env"
+# ★ NEUTRALISE THE PORTFOLIO. The tar above copies the live state/, and state/portfolio.tsv
+# holds ABSOLUTE paths to the real repos under /opt. cycle.sh resyncs the portfolio every tick,
+# so without this line running this test fast-forwards Lucas's actual working copies. A header
+# with no rows keeps the resync STEP under test while giving it nothing outside $TMP to touch.
+printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n' > "$R/state/portfolio.tsv"
 ( cd "$R" && git init -q . && git add -A >/dev/null 2>&1 \
   && git -c user.name=t -c user.email=t@t commit -qm init >/dev/null 2>&1 \
   && git checkout -qb loop/auto ) || true
@@ -106,6 +111,16 @@ if grep -q 'heartbeat signal=' "$TMP/cycle.out"; then
 else
   no "paused: heartbeat did not run — the box is blind while paused"
   sed 's/^/        /' "$TMP/cycle.out" | head -5
+fi
+
+# --- 1b) PRESERVATION IS AWARENESS: the portfolio still resyncs while paused ---------------
+# Lucas merges on GitHub while the box is paused. A paused box that stops following origin
+# wakes up behind, and anything it then builds reverts what he merged — so the resync is
+# monitoring (D-012), not execution, and must survive PAUSE like the heartbeat does.
+if grep -q 'portfolio resynced\|portfolio resync reported drift' "$TMP/cycle.out"; then
+  ok "paused: the portfolio resync RAN (the box keeps following origin while halted)"
+else
+  no "paused: the portfolio resync did not run — a paused box drifts behind origin silently"
 fi
 
 # --- 2) ★ NO EXECUTION: no arm, no drain, no reflect, task untouched -----------------------

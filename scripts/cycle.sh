@@ -44,6 +44,35 @@ if [ -x scripts/taskctl.sh ]; then
   [ "${REAPED:-0}" -gt 0 ] && log "reaped ${REAPED} stale task lease(s)"
 fi
 
+# --- 0.5) Resync the portfolio. MONITORING + PRESERVATION, so it runs even while paused. ---
+# Lucas reviews and merges on GitHub, so origin moves while this box sleeps. Anything built on
+# a base older than origin's default silently reverts what he just merged, which is the one
+# failure he asked for by name. So every cycle fast-forwards each registered repo BEFORE any
+# dispatch can happen, and turns what a fast-forward cannot fix — divergence, unpushed work, a
+# dirty tree, an unreachable remote — into an escalation instead of a log line.
+#
+# Under PAUSE this still runs: it is state correction and awareness, not execution (D-012). A
+# paused box that quietly falls 100 commits behind is how a pause turns into a rebase.
+if [ -x scripts/resync.sh ]; then
+  if bash scripts/resync.sh sync >>"$LOG" 2>&1; then
+    log "portfolio resynced"
+  else
+    log "portfolio resync reported drift a human must settle — see state/INBOX.md"
+  fi
+fi
+
+# --- 0.6) Intake. AWARENESS, so it runs even while paused. ---------------------------------
+# Reads what Lucas said in the cockpit out of the gateway's own store and files it as durable
+# instructions. It does NOT poll Telegram — the hermes gateway already long-polls getUpdates on
+# this token, and two pollers steal updates from each other, losing messages silently.
+#
+# Hearing is not acting: an instruction is data for Hermes to decide on, and the actuator
+# whitelist still governs what runs. That is exactly why this is safe under PAUSE — a paused box
+# that cannot even hear you is a box you have to SSH into to talk to.
+if [ -x scripts/intake.sh ]; then
+  bash scripts/intake.sh poll >>"$LOG" 2>&1 || log "intake failed — see $LOG"
+fi
+
 # --- 1) Heartbeat (Lua/luna). --------------------------------------------------------
 bash scripts/board.sh add hb supervision heartbeat gpt-5.6-luna running "scanning ledger" >/dev/null
 HB_USAGE="$LOG_DIR/$DATE-heartbeat.usage.json"
@@ -77,6 +106,15 @@ if [ "$SIGNAL" = "brief" ] || [ "$FORCE" = "force" ]; then
   fi
 else
   log "quiet tick — no brief"
+fi
+
+# --- 2.5) Per-project digests, on the daily cycle only. ------------------------------------
+# One message per active project, into that project's own topic. This is what gives each topic a
+# pilot's memory: the gateway already keys a conversational session per (chat, thread), so the
+# digest puts that project's facts into the session Lucas talks to when he opens the thread.
+# Daily only — a digest every three hours is noise, and noise is how a real alert gets missed.
+if [ "$FORCE" = "force" ] && [ -x scripts/digest.sh ]; then
+  bash scripts/digest.sh --all >>"$LOG" 2>&1 || log "per-project digests failed — see $LOG"
 fi
 
 # --- 3) Commit the BOARD to loop/auto (run.sh already put us on that branch). ---------

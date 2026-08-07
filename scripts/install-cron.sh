@@ -14,16 +14,23 @@ HERMES_DIR="$(dirname "$(command -v hermes 2>/dev/null || echo /usr/local/bin/he
 BRIEF_CRON="${BRIEF_CRON:-30 6 * * *}"     # guaranteed daily digest (box time = UTC)
 CYCLE_CRON="${CYCLE_CRON:-15 */3 * * *}"   # cheap heartbeat every 3h; brief fires only on a signal
 WATCH_CRON="${WATCH_CRON:-0 */3 * * *}"
+# The supervisor's own tick. hermes-decide DECIDES and RECORDS; it never executes — actuation is
+# scripts/conduct-hermes.sh, which is not scheduled. So this entry is safe by construction: the
+# worst it can do is post a decision Lucas disagrees with. Set DECIDE_CRON="" to leave it out.
+DECIDE_CRON="${DECIDE_CRON:-45 */6 * * *}"
 
 PATHLINE="PATH=$HERMES_DIR:/usr/local/bin:/usr/bin:/bin # recursion-path"
 BRIEF="$BRIEF_CRON cd $ROOT && RECURSION_ROOT=$ROOT bash scripts/cycle.sh force # recursion-brief"
 CYCLE="$CYCLE_CRON cd $ROOT && RECURSION_ROOT=$ROOT bash scripts/cycle.sh # recursion-cycle"
 WATCH="$WATCH_CRON cd $ROOT && RECURSION_ROOT=$ROOT bash scripts/fallback-watch.sh # recursion-watch"
+DECIDE="$DECIDE_CRON cd $ROOT && RECURSION_ROOT=$ROOT bash scripts/hermes-decide.sh # recursion-decide"
 
 # Robust against a box with no existing crontab (crontab -l exits non-zero the first time).
 CUR="$(crontab -l 2>/dev/null || true)"
-KEEP="$(printf '%s\n' "$CUR" | grep -vE '# recursion-(brief|cycle|watch|path)$' | grep -v '^$' || true)"
-printf '%s\n%s\n%s\n%s\n%s\n' "$KEEP" "$PATHLINE" "$BRIEF" "$CYCLE" "$WATCH" | grep -v '^$' | crontab -
+KEEP="$(printf '%s\n' "$CUR" | grep -vE '# recursion-(brief|cycle|watch|decide|path)$' | grep -v '^$' || true)"
+# DECIDE_CRON="" omits the supervisor tick entirely — the empty line is filtered below.
+DECIDE_LINE=""; [ -n "$DECIDE_CRON" ] && DECIDE_LINE="$DECIDE"
+printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$KEEP" "$PATHLINE" "$BRIEF" "$CYCLE" "$WATCH" "$DECIDE_LINE" | grep -v '^$' | crontab -
 
 # Make sure the cron daemon is actually running + enabled at boot.
 for svc in cron crond; do
