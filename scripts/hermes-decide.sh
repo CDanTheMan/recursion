@@ -199,4 +199,14 @@ open(sys.argv[1],'a',encoding='utf-8').write(json.dumps(d,sort_keys=True)+"\n")
 open(sys.argv[2],'w',encoding='utf-8').write(json.dumps(d,sort_keys=True)+"\n")
 PY
 bash scripts/taskctl.sh event decision "" "$VERB $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(" ".join(json.load(sys.stdin).get("args",[])))')" >/dev/null 2>&1 || true
+# Post the decision where Lucas can see it. This is the ONLY thing scheduling this script does
+# to the world: hermes-decide decides and records, and conduct-hermes.sh is the only thing that
+# executes. So a cron entry for this file is safe by construction — the supervisor thinks out
+# loud, on a schedule, and nothing moves until a human turns actuation on.
+if [ -x scripts/notify.sh ] && [ "${RECURSION_DECIDE_QUIET:-0}" != "1" ]; then
+  bash scripts/notify.sh "🧭 Hermes decided: $VERB $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(" ".join(json.load(sys.stdin).get("args",[])))' 2>/dev/null)
+why: $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("why",""))' 2>/dev/null)
+wrong if: $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("wrong_if",""))' 2>/dev/null)
+(recorded, NOT executed — actuation is still off)" || true
+fi
 printf '%s\n' "$DECISION"

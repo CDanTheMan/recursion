@@ -25,6 +25,13 @@ BIN="$TMP/bin"; mkdir -p "$BIN"
 R="$TMP/repo"; mkdir -p "$R"
 tar -C "$SRC" -cf - scripts loop state ANCHOR.md CLAUDE.md 2>/dev/null | tar -C "$R" -xf - 2>/dev/null
 mkdir -p "$R/state/briefs" "$R/loop/logs" "$R/state/tasks"
+# ★ NEUTRALISE THE PORTFOLIO. The tar above copies the live state/, including
+# state/portfolio.tsv with ABSOLUTE paths to the real repos under /opt. This test runs cycle.sh
+# three times, and cycle.sh resyncs the portfolio every run — so without this the test fetched
+# eight real repos three times over. That cost 280s (measured) and, worse, reached outside its
+# own fixture to touch Lucas's working copies. Third instance of that pattern today.
+printf '#project	path	remote	branch	sshkey	roadmap	topic	status
+' > "$R/state/portfolio.tsv"
 rm -f "$R"/state/tasks/*.md "$R/state/escalations.tsv" "$R/state/events.jsonl"
 : > "$R/.env"
 printf '# Inbox\n\n_(empty)_\n' > "$R/state/INBOX.md"

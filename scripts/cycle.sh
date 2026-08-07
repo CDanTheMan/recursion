@@ -108,6 +108,15 @@ else
   log "quiet tick — no brief"
 fi
 
+# --- 2.5) Per-project digests, on the daily cycle only. ------------------------------------
+# One message per active project, into that project's own topic. This is what gives each topic a
+# pilot's memory: the gateway already keys a conversational session per (chat, thread), so the
+# digest puts that project's facts into the session Lucas talks to when he opens the thread.
+# Daily only — a digest every three hours is noise, and noise is how a real alert gets missed.
+if [ "$FORCE" = "force" ] && [ -x scripts/digest.sh ]; then
+  bash scripts/digest.sh --all >>"$LOG" 2>&1 || log "per-project digests failed — see $LOG"
+fi
+
 # --- 3) Commit the BOARD to loop/auto (run.sh already put us on that branch). ---------
 # History of what ran, tick by tick. Never main (CLAUDE.md rule 2); non-fatal.
 if git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -q '^loop/auto$'; then
