@@ -244,6 +244,16 @@ def registry_lock(base: Path):
         yield
 
 
+@contextmanager
+def goal_state_lock(base: Path, goal_id: str):
+    """Serialize Phase 4 task creation with Phase 6 goal verification/transitions."""
+    lock_dir = base / "state/.locks"; lock_dir.mkdir(parents=True, exist_ok=True)
+    with (lock_dir / f"reconcile-{goal_id}.lock").open("a+", encoding="utf-8") as lock:
+        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError: fail("goal state lock is contended", 73)
+        yield
+
+
 def verify_registry(base: Path) -> None:
     seen: dict[str, set[str]] = {key: set() for key in ("topic", "pilot", "memory", "worktree")}
     for row in rows(base):
@@ -402,19 +412,23 @@ def execute(base: Path, decision_path: Path) -> dict:
         dependencies = [] if len(args) < 5 or args[4] in ("", "-") else str(args[4]).split(",")
         state = scoped_state(base, project); owned = {task.get("id") for task in state["tasks"]}
         if any(dep not in owned for dep in dependencies): fail("task dependency crosses project scope")
-        _, goal = goal_for(base, project, goal_id); text = str(decision.get("text") or "").strip()
+        text = str(decision.get("text") or "").strip()
         if not text or "\n" in text: fail("task needs bounded one-line intent")
-        path = base / "state/tasks" / f"{task_id}.md"
-        if path.exists(): fail(f"task {task_id} already exists", 2)
-        body = (f"schema_version: 1\nid: {task_id}\nproject_id: {project}\npilot_id: {pilot['id']}\n"
-                f"goal_id: {goal_id}\ndependencies: {','.join(dependencies)}\nallowed_paths: {scope}\n"
-                f"non_goals: portfolio,policy,credentials,merge,deploy\nworker_class: claude\n"
-                f"engine: claude\nmodel_alias: sonnet-routine\nverifier_model_alias: opus-review\n"
-                f"deadline_seconds: 3600\nverifier_deadline_seconds: 1800\n"
-                f"network_policy: provider-only\nevidence_contract: worker-result-v1\n"
-                f"verification: independent\nexpected_change: required\ngate_files:\n"
-                f"acceptance: {goal['acceptance_suite']}\nstatus: proposed\n\n{text}\n")
-        atomic_text(path, body); return {"created": str(path.relative_to(base)), "status": "proposed"}
+        with goal_state_lock(base, goal_id):
+            # Re-read under the same lock Phase 6 uses to enter verifying. A task creation
+            # that raced that transition must lose; remembered pilot state is not authority.
+            _, goal = goal_for(base, project, goal_id)
+            path = base / "state/tasks" / f"{task_id}.md"
+            if path.exists(): fail(f"task {task_id} already exists", 2)
+            body = (f"schema_version: 1\nversion: 1\nid: {task_id}\nproject_id: {project}\npilot_id: {pilot['id']}\n"
+                    f"goal_id: {goal_id}\ndependencies: {','.join(dependencies)}\nallowed_paths: {scope}\n"
+                    f"non_goals: portfolio,policy,credentials,merge,deploy\nworker_class: claude\n"
+                    f"engine: claude\nmodel_alias: sonnet-routine\nverifier_model_alias: opus-review\n"
+                    f"deadline_seconds: 3600\nverifier_deadline_seconds: 1800\n"
+                    f"network_policy: provider-only\nevidence_contract: worker-result-v1\n"
+                    f"verification: independent\nexpected_change: required\ngate_files:\n"
+                    f"acceptance: {goal['acceptance_suite']}\nstatus: proposed\n\n{text}\n")
+            atomic_text(path, body); return {"created": str(path.relative_to(base)), "status": "proposed"}
     if verb in {"pilot-worker-request", "pilot-verifier-request", "pilot-block"}:
         if len(args) != 3:
             fail(f"{verb} needs project, goal, and task")

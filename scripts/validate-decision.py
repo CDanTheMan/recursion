@@ -55,6 +55,13 @@ ARITY = {
     "pilot-block": (3, 3),
     "pilot-escalate": (2, 2),
     "pilot-goal-verify": (2, 2),
+    # Phase 6 internal decisions are emitted by the deterministic reconciler, then travel
+    # through the same durable queue and sole actuator as every other state change.
+    "reconcile-goal": (2, 2),
+    "task-transition": (6, 6),
+    "goal-transition": (5, 5),
+    "verify-goal": (2, 2),
+    "publish-task": (3, 3),
     "escalate": (1, 3),
 }
 
