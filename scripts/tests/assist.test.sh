@@ -25,7 +25,7 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 BIN="$TMP/bin"; mkdir -p "$BIN"
 R="$TMP/repo"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/assists" "$R/loop/logs" "$R/app"
-for s in work.sh assist.sh taskctl.sh notify.sh board.sh resync.sh publish.sh; do
+for s in work.sh worker-sandbox.sh assist.sh taskctl.sh notify.sh board.sh resync.sh publish.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null
@@ -69,7 +69,8 @@ blocked_result(){ printf '{"status":"blocked","summary":"stopped","files_changed
 st(){ sed -n 's/^status: *//p' "$R/state/tasks/$1.md" | head -1 | tr -d '\r'; }
 a_field(){ sed -n "s/^$2: *//p" "$R/state/assists/$1.md" 2>/dev/null | head -1 | tr -d '\r'; }
 run_work(){ ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 \
-    STUB_PROMPT_FILE="$TMP/prompt.txt" STUB_RESULT="${STUB_RESULT:-}" bash scripts/work.sh "$1" ) >"$TMP/w.out" 2>&1; }
+    RECURSION_TEST_WORKER=logical STUB_PROMPT_FILE="$TMP/prompt.txt" STUB_RESULT="${STUB_RESULT:-}" \
+    bash scripts/work.sh "$1" ) >"$TMP/w.out" 2>&1; }
 assist(){ ( cd "$R" && RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 bash scripts/assist.sh "$@" ) >"$TMP/a.out" 2>&1; echo $?; }
 
 QUESTION='Does op 0x6c carry the overlay tint, or is the tint a separate pass? I cannot tell from the corpus.'
