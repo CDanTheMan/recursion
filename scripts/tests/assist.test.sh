@@ -58,7 +58,7 @@ id: $1
 workstream: atest
 goal: ${2:-a task that will need help}
 engine: claude
-acceptance: true
+acceptance: test -s app/seed.txt
 allowed_paths: app
 workdir: .
 autonomy: auto

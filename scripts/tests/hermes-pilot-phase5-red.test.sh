@@ -8,12 +8,18 @@ fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"
+cleanup(){
+  if [ "${PHASE5_KEEP_TMP:-0}" = 1 ]; then echo "PHASE5_TMP=$TMP" >&2
+  else rm -rf "$TMP"; fi
+}
+trap cleanup EXIT
 BIN="$TMP/bin"; R="$TMP/controller"; ORIGIN="$TMP/origin.git"
 mkdir -p "$BIN" "$R/scripts/tests" "$R/state/tasks" "$R/state/runs" \
   "$R/loop/logs" "$R/app" "$R/fixtures" "$R/other"
 for s in work.sh worker-sandbox.sh taskctl.sh board.sh notify.sh resync.sh capacity.sh \
-         git-scope.py validate-gate.py validate-worker-result.py worker-evidence.py; do
+         git-scope.py validate-gate.py validate-worker-result.py validate-verifier-result.py \
+         resolve-model-alias.py worker-evidence.py; do
   [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$R/scripts/"
 done
 chmod +x "$R/scripts/"* 2>/dev/null || true
@@ -93,7 +99,7 @@ MARKER1="$TMP/gate-committed-protected"
 mktask committed-protected "test -s app/committed.txt && touch $MARKER1"
 result="$(done_result committed '["app/committed.txt","scripts/protected.sh"]')"
 run_case committed-protected "printf ok > app/committed.txt; printf evil > scripts/protected.sh; printf '%s' '$result' > .recursion-result.json; git add -A; git -c user.name=arm -c user.email=arm@t commit -qm hidden"
-if [ "$(status_of committed-protected)" != passed ] && [ ! -e "$MARKER1" ]; then
+if [ "$(status_of committed-protected)" = escalated ] && [ ! -e "$MARKER1" ]; then
   ok "committed protected-file mutation is rejected before its gate"
 else
   no "a committed protected-file mutation was hidden (status=$(status_of committed-protected) gate=$([ -e "$MARKER1" ] && echo ran || echo blocked))"
@@ -104,7 +110,7 @@ MARKER2="$TMP/gate-committed-mutations"
 mktask committed-mutations "test -s app/mutations.txt && touch $MARKER2"
 result="$(done_result mutations '["app/mutations.txt","scripts/tests/existing.test.cjs","fixtures/truth.json","app/truth-moved.json","other/stray.txt"]')"
 run_case committed-mutations "printf ok > app/mutations.txt; printf evil >> scripts/tests/existing.test.cjs; git mv fixtures/truth.json app/truth-moved.json; printf stray > other/stray.txt; printf '%s' '$result' > .recursion-result.json; git add -A; git -c user.name=arm -c user.email=arm@t commit -qm hidden"
-if [ "$(status_of committed-mutations)" != passed ] && [ ! -e "$MARKER2" ]; then
+if [ "$(status_of committed-mutations)" = escalated ] && [ ! -e "$MARKER2" ]; then
   ok "committed test/fixture/rename/delete/out-of-scope mutations are rejected"
 else
   no "committed mutation set passed or reached its gate (status=$(status_of committed-mutations))"
@@ -113,7 +119,7 @@ fi
 # 3. Generated work without the required result contract must fail closed.
 mktask missing-result "test -s app/missing-result.txt"
 run_case missing-result 'printf ok > app/missing-result.txt' "$verdict_script"
-[ "$(status_of missing-result)" != passed ] \
+[ "$(status_of missing-result)" = escalated ] \
   && ok "missing worker result cannot pass" \
   || no "generated work passed without a result report"
 
@@ -121,7 +127,7 @@ run_case missing-result 'printf ok > app/missing-result.txt' "$verdict_script"
 mktask nonvacuous-noop "test -s app/seed.txt"
 noop='{"status":"no-op","summary":"nothing changed","files_changed":[],"tests_run":"fixture gate","risks":[],"blocker":""}'
 run_case nonvacuous-noop "printf '%s' '$noop' > .recursion-result.json" "$verdict_script"
-[ "$(status_of nonvacuous-noop)" != passed ] \
+[ "$(status_of nonvacuous-noop)" = escalated ] \
   && ok "no-op is rejected for a task that requires a change" \
   || no "a no-op passed a non-vacuous implementation task"
 
@@ -129,14 +135,14 @@ run_case nonvacuous-noop "printf '%s' '$noop' > .recursion-result.json" "$verdic
 mktask vacuous-gate true
 result="$(done_result vacuous '["app/vacuous.txt"]')"
 run_case vacuous-gate "printf ok > app/vacuous.txt; printf '%s' '$result' > .recursion-result.json" "$verdict_script"
-[ "$(status_of vacuous-gate)" != passed ] \
+[ "$(status_of vacuous-gate)" = escalated ] \
   && ok "literal true gate is rejected as structurally vacuous" \
   || no "literal true was accepted as an autonomy gate"
 
 mktask self-modified-gate "bash app/gate.sh" required app/gate.sh
 result="$(done_result selfgate '["app/gate.sh"]')"
 run_case self-modified-gate "printf '#!/usr/bin/env bash\nexit 0\n' > app/gate.sh; chmod +x app/gate.sh; printf '%s' '$result' > .recursion-result.json" "$verdict_script"
-[ "$(status_of self-modified-gate)" != passed ] \
+[ "$(status_of self-modified-gate)" = escalated ] \
   && ok "worker-modified gate file is rejected" \
   || no "the worker rewrote its own gate and passed"
 
@@ -149,7 +155,7 @@ timeout_count="$(grep -c 'WORKER TIMEOUT.*hung-worker' "$R/state/INBOX.md" 2>/de
 timeout_run="$(grep -l '"outcome": "timeout"' "$R/state/runs/"*.json 2>/dev/null | head -1 || true)"
 pgid=""; [ -z "$timeout_run" ] || pgid="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("process_group",""))' "$timeout_run")"
 dead=1; [ -z "$pgid" ] || { kill -0 -- "-$pgid" 2>/dev/null && dead=0 || dead=1; }
-if [ "$(status_of hung-worker)" != passed ] && [ "$lease" = 0 ] && [ "$timeout_count" = 1 ] \
+if [ "$(status_of hung-worker)" = blocked ] && [ "$lease" = 0 ] && [ "$timeout_count" = 1 ] \
    && [ -n "$timeout_run" ] && [ "$dead" = 1 ]; then
   ok "hung worker timed out, lost its lease, terminated, and opened one actionable escalation"
 else
@@ -183,7 +189,7 @@ result="$(done_result verifier '["app/verifier-mutation.txt"]')"
 mutating_verifier='printf evil > app/verifier-mutation.txt; '"$verdict_script"
 run_case verifier-mutation "printf original > app/verifier-mutation.txt; printf '%s' '$result' > .recursion-result.json" "$mutating_verifier"
 branch_value="$(git -C "$R" show loop/work/verifier-mutation:app/verifier-mutation.txt 2>/dev/null || true)"
-if [ "$(status_of verifier-mutation)" != passed ] && [ "$branch_value" = original ]; then
+if [ "$(status_of verifier-mutation)" = escalated ] && [ "$branch_value" = original ]; then
   ok "verifier mutation is rejected and cannot alter implementer output"
 else
   no "verifier mutation was silent (status=$(status_of verifier-mutation) implementer_output=${branch_value:-missing})"

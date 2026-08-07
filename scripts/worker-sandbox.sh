@@ -4,7 +4,8 @@
 set -euo pipefail
 
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-ENGINE=""; WT=""; PROMPT=""; MODEL=""; USAGE_FILE=""
+ENGINE=""; WT=""; PROMPT=""; MODEL=""; USAGE_FILE=""; ROLE="implementer"
+NETWORK_POLICY="provider-only"; READ_ONLY_WORKTREE=0; EVIDENCE_DIR=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --engine) ENGINE="${2:-}"; shift 2 ;;
@@ -12,12 +13,21 @@ while [ $# -gt 0 ]; do
     --prompt) PROMPT="${2:-}"; shift 2 ;;
     --model) MODEL="${2:-}"; shift 2 ;;
     --usage-file) USAGE_FILE="${2:-}"; shift 2 ;;
+    --role) ROLE="${2:-}"; shift 2 ;;
+    --network-policy) NETWORK_POLICY="${2:-}"; shift 2 ;;
+    --read-only-worktree) READ_ONLY_WORKTREE=1; shift ;;
+    --evidence-dir) EVIDENCE_DIR="${2:-}"; shift 2 ;;
     *) echo "worker-sandbox: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 case "$ENGINE" in claude|hermes) ;; *) echo "worker-sandbox: invalid engine" >&2; exit 92;; esac
+case "$ROLE" in implementer|verifier) ;; *) echo "worker-sandbox: invalid worker role" >&2; exit 92;; esac
+case "$NETWORK_POLICY" in provider-only|none) ;; *) echo "worker-sandbox: invalid network policy" >&2; exit 92;; esac
 [ -d "$WT" ] || { echo "worker-sandbox: worktree is missing" >&2; exit 95; }
 WT="$(realpath -e "$WT")"
+[ -z "$EVIDENCE_DIR" ] || { mkdir -p "$EVIDENCE_DIR"; EVIDENCE_DIR="$(realpath -e "$EVIDENCE_DIR")"; }
+export RECURSION_WORKER_ROLE="$ROLE"
+[ -z "$EVIDENCE_DIR" ] || export RECURSION_EVIDENCE_DIR="$EVIDENCE_DIR"
 
 case "${RECURSION_TEST_WORKER:-}" in
   logical)
@@ -117,11 +127,26 @@ RUN=(systemd-run --quiet --wait --collect --pipe --service-type=exec --unit "$UN
   --property RestrictSUIDSGID=yes --property LockPersonality=yes
   --property UMask=0077 --property KillMode=control-group
   --property "InaccessiblePaths=/opt /srv"
-  --property "BindPaths=$WT:/workspace" --property ReadWritePaths=/workspace
   --property "InaccessiblePaths=-/workspace/.env -/workspace/.git -/workspace/state -/workspace/CONTROL_PLANE.md -/workspace/ANCHOR.md -/workspace/CLAUDE.md"
   --property "ReadOnlyPaths=-/workspace/scripts -/workspace/.github"
   --setenv HOME=/home/runner --setenv USER="$RUNNER_USER" --setenv LOGNAME="$RUNNER_USER"
-  --setenv LANG=C.UTF-8 --setenv PATH=/usr/local/bin:/usr/bin:/bin)
+  --setenv LANG=C.UTF-8 --setenv PATH=/usr/local/bin:/usr/bin:/bin
+  --setenv RECURSION_WORKER_ROLE="$ROLE")
+
+if [ "$READ_ONLY_WORKTREE" = 1 ]; then
+  RUN+=(--property "BindReadOnlyPaths=$WT:/workspace" --property ReadOnlyPaths=/workspace)
+else
+  RUN+=(--property "BindPaths=$WT:/workspace" --property ReadWritePaths=/workspace)
+fi
+if [ -n "$EVIDENCE_DIR" ]; then
+  chown -R "$RUNNER_UID:$RUNNER_GID" "$EVIDENCE_DIR"
+  RUN+=(--property "BindPaths=$EVIDENCE_DIR:/evidence" --property ReadWritePaths=/evidence
+        --setenv RECURSION_EVIDENCE_DIR=/evidence)
+fi
+if [ "$NETWORK_POLICY" = none ]; then RUN+=(--property PrivateNetwork=yes); fi
+for name in RECURSION_VERIFICATION_COMMIT RECURSION_IMPLEMENTER_RUN_ID; do
+  value="${!name:-}"; [ -z "$value" ] || RUN+=(--setenv "$name=$value")
+done
 
 if [ -n "$RUNNER_HOME" ] && [ -d "$RUNNER_HOME" ]; then
   RUN+=(--property "BindReadOnlyPaths=$RUNNER_HOME:/home/runner")
@@ -129,7 +154,7 @@ fi
 if [ "${RECURSION_TEST_WORKER:-}" = sandbox ]; then
   case "$(realpath -m "$ROOT")" in /tmp/*) ;; *) echo "worker-sandbox: sandbox test env refused" >&2; exit 95;; esac
   [ -n "${STUB_ARM_SCRIPT:-}" ] && RUN+=(--setenv STUB_ARM_SCRIPT="$STUB_ARM_SCRIPT")
-  for name in STUB_SECRET STUB_LEAK STUB_OUTSIDE STUB_UIDLOG STUB_PUBLISHER STUB_PUBLOG; do
+  for name in STUB_SECRET STUB_LEAK STUB_OUTSIDE STUB_UIDLOG STUB_PUBLISHER STUB_PUBLOG STUB_VERIFIER_SCRIPT; do
     value="${!name:-}"; [ -n "$value" ] && RUN+=(--setenv "$name=$value")
   done
   if [ -n "${STUB_STARTED:-}" ]; then
