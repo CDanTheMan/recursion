@@ -16,7 +16,7 @@ related:
 - Phase 1 implementation commit: `0da2e1c8b0bea07849166aae58f80d9ed8191a49`.
 - Evidence commit before this handoff: `aef8a7cfeb7de6e8eb413f250c3386c8a332a75b`.
 - Review branch: `review/hermes-phase1-controls`.
-- Phase 1 PR: pending publication in this session.
+- Phase 1 PR: `https://github.com/NotSkittlz/recursion/pull/22` (ready for review).
 - Authoring base: merged Phase 0 `origin/master` at
   `aadf7b301c9bd3e73b94c6cf5a47e6b5de893146`.
 - Local Phase 1 controls: 8/8 green; positive sandbox/publication/dependency audit green.
