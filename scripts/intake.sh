@@ -25,14 +25,13 @@
 #
 # ★ INTAKE IS NOT A COMMAND CHANNEL. A message becomes a durable INSTRUCTION that Hermes reads
 # in its brief and must act on or escalate; the actuator whitelist still governs what may run.
-# The single exception is answering an assist, because that is Lucas answering a question the
-# system asked him, and it can only requeue one task (see scripts/assist.sh).
+# There is no executable shortcut, including for assist answers. Every authenticated message is
+# durable input; only a schema-checked Head Hermes decision and the sole actuator may change state.
 #
 #   intake.sh poll [--dry-run] [--backfill]   ingest new messages; advance the watermark
 #                                (a first run SEEDS the watermark; --backfill takes history too)
 #   intake.sh list [n]           the most recent instructions
-#   intake.sh open               instructions not yet marked handled
-#   intake.sh handled <id> [why] mark one handled (Hermes acts through the actuator, then this)
+#   intake.sh open               instructions not yet acknowledged
 #   intake.sh consume <id> <action-id>...      couple consumption to durable actions
 #   intake.sh acknowledge <id> <action-id>...  close only when those actions succeeded
 set -uo pipefail
@@ -64,7 +63,7 @@ updates={'schema_version':'1','status':status,'action_ids':actions}
 for key,value in updates.items():
     hit=False
     for i,line in enumerate(lines):
-        if line.startswith(key+': '): lines[i]=key+': '+value; hit=True; break
+        if line.startswith(key+':'): lines[i]=key+': '+value; hit=True; break
     if not hit:
         for i,line in enumerate(lines):
             if line.strip()=='': lines.insert(i,key+': '+value); hit=True; break
@@ -205,10 +204,14 @@ for mid, content, ts, chat, thread, uid, source in rows:
     path = os.path.join(outdir, "%08d.md" % mid)
     tmppath = path + ".tmp.%d" % os.getpid()
     with io.open(tmppath, "w", encoding="utf-8", newline="\n") as output:
+        correlation = "telegram:%s:%s:%s" % (chat, thread or "root", mid)
         output.write(
-            "schema_version: 1\nid: %d\nreceived: %s\nfrom: %s\nchat: %s\nthread: %s\n"
-            "project: %s\nstatus: open\naction_ids: \n\n## INSTRUCTION\n%s\n" %
-            (mid, stamp, uid, chat, thread or "-", project or "-", body))
+            "schema_version: 1\nid: %d\nreceived: %s\nprincipal: %s\ntopic: %s\n"
+            "project_id: %s\nreply_correlation: %s\ndeduplication_key: %s\n"
+            "from: %s\nchat: %s\nthread: %s\nproject: %s\nstatus: open\n"
+            "action_ids: \n\n## INSTRUCTION\n%s\n" %
+            (mid, stamp, uid, thread or "-", project or "", correlation, correlation,
+             uid, chat, thread or "-", project or "-", body))
         output.flush(); os.fsync(output.fileno())
     os.replace(tmppath, path)
     dfd = os.open(outdir, os.O_RDONLY)
@@ -239,28 +242,8 @@ finally: os.close(fd)
 PY
   fi
 
-  # ONE executable shortcut, and only one: Lucas answering a question the system asked him.
-  # `assist <task-id> <text>` is the human half of scripts/assist.sh — it can requeue exactly the
-  # task that asked, and nothing else. Every other message stays inert until Hermes decides on it
-  # through the actuator whitelist, because a chat line must never become a command.
-  if [ "$DRY" = "0" ] && [ -x "$ROOT/scripts/assist.sh" ]; then
-    grep '^INGESTED ' "$TMPOUT" | sed 's/^INGESTED \([0-9]*\) .*/\1/' | while read -r mid; do
-      f="$DIR/$(printf '%08d' "$mid").md"
-      [ -f "$f" ] || continue
-      body="$(awk '/^## INSTRUCTION/{f=1;next} f' "$f" | head -1)"
-      case "$body" in
-        assist\ *)
-          tid="$(printf '%s' "$body" | awk '{print $2}')"
-          ans="$(printf '%s' "$body" | cut -d' ' -f3-)"
-          if [ -n "$tid" ] && [ -n "${ans//[[:space:]]/}" ]; then
-            if RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/assist.sh" answer "$tid" "$ans" >/dev/null 2>&1; then
-              RECURSION_ROOT="$ROOT" bash "$0" handled "$mid" "answered assist $tid" >/dev/null
-              echo "  -> answered assist $tid from instruction $mid"
-            fi
-          fi ;;
-      esac
-    done
-  fi
+  # Message text never executes here. An assist answer is another durable instruction; the
+  # planner may emit assist-answer and the actuator will couple it to the resulting action.
   # A quiet poll is a SUCCESS. Without this the trailing grep-for-ingested-lines finds nothing,
   # its exit status becomes the script's, and cycle.sh logs "intake failed" on every normal
   # cycle — an error message that means "nothing happened", which is how real errors get ignored.
@@ -268,7 +251,8 @@ PY
   ;;
 
 list) n="${1:-10}"; ls -1 "$DIR"/*.md 2>/dev/null | tail -"$n" | while read -r f; do
-        printf '%-10s %-26s %s\n' "$(sed -n 's/^id: *//p' "$f")" "$(sed -n 's/^project: *//p' "$f")" \
+        project="$(sed -n 's/^project_id: *//p' "$f" | head -1)"; [ -n "$project" ] || project="$(sed -n 's/^project: *//p' "$f" | head -1)"
+        printf '%-10s %-26s %s\n' "$(sed -n 's/^id: *//p' "$f")" "$project" \
           "$(awk '/^## INSTRUCTION/{f=1;next} f' "$f" | tr '\n' ' ' | cut -c1-80)"; done
       [ -n "$(ls -A "$DIR" 2>/dev/null)" ] || echo "(no instructions yet)" ;;
 
@@ -276,16 +260,12 @@ open) found=0
       for f in "$DIR"/*.md; do [ -f "$f" ] || continue
         [ "$(sed -n 's/^status: *//p' "$f" | head -1)" = "open" ] || continue
         found=1
-        printf '%-10s %-26s %s\n' "$(sed -n 's/^id: *//p' "$f")" "$(sed -n 's/^project: *//p' "$f")" \
+        project="$(sed -n 's/^project_id: *//p' "$f" | head -1)"; [ -n "$project" ] || project="$(sed -n 's/^project: *//p' "$f" | head -1)"
+        printf '%-10s %-26s %s\n' "$(sed -n 's/^id: *//p' "$f")" "$project" \
           "$(awk '/^## INSTRUCTION/{f=1;next} f' "$f" | tr '\n' ' ' | cut -c1-80)"; done
       [ "$found" = "1" ] || echo "(no open instructions)" ;;
 
-handled) ID="${1:?usage: intake.sh handled <id> [why]}"; shift; WHY="${*:-handled}"
-      F="$DIR/$(printf '%08d' "$ID").md"
-      [ -f "$F" ] || { echo "intake: no instruction $ID" >&2; exit 2; }
-      sed -i "s/^status: .*/status: handled/" "$F"
-      { echo; echo "## HANDLED $(now)"; printf '%s\n' "$WHY"; } >> "$F"
-      echo "marked $ID handled" ;;
+handled) echo "intake: handled is forbidden; acknowledge a coupled succeeded action" >&2; exit 2 ;;
 
 consume) ID="${1:?usage: intake.sh consume <id> <action-id>...}"; shift
       F="$DIR/$(printf '%08d' "$ID").md"

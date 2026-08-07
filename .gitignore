@@ -32,10 +32,13 @@ dist/
 # Retention/rotation is a B5 decision.
 state/events.jsonl
 
-# Hermes decision record + latest-decision pointer (hermes-decide.sh). Runtime state on the
-# BOX, like state/events.jsonl: appended every decision cycle, read live by the actuator and
-# the digest. Tracking it would grow the repo per tick and conflict on every branch.
+# Hermes decision journal + durable queue projections. Runtime state on the BOX, like
+# state/events.jsonl: appended every decision cycle, read live by the actuator and the digest.
+# Tracking it would grow the repo per tick and conflict on every branch.
 state/decisions.jsonl
+state/decision-queue/
+# Legacy pre-Phase-3 singleton. It is never read or written; keep an undeployed box clean until
+# a separately authorized paused deployment quarantines the old runtime artifact.
 state/.decision-latest.json
 
 # Phase 2 durable action queue. The JSON projections are recoverable current state and the JSONL

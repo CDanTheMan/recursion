@@ -24,32 +24,37 @@ cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
 
 MODE="${1:-}"
-DATE="$(date +%F)"; STAMP="$(date -u +%FT%TZ)"
+DATE="$(date +%F)"; STAMP="$(date -u +%FT%TZ)"; RUN_TAG="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/$DATE-decide.log"
-OUT="$LOG_DIR/$DATE-decide.out"
-USAGE="$LOG_DIR/$DATE-decide.usage.json"
+OUT="$LOG_DIR/$DATE-decide-$RUN_TAG.out"
+USAGE="$LOG_DIR/$DATE-decide-$RUN_TAG.usage.json"
 DECISIONS="$ROOT/state/decisions.jsonl"
-LATEST="$ROOT/state/.decision-latest.json"
 MODEL="${RECURSION_DECIDE_MODEL:-gpt-5.6-terra}"
 log(){ echo "[$(date -Is)] decide: $*" | tee -a "$LOG" >&2; }
 
+# Decision-time resync reads and fetches git truth. The actuator may mutate the same repos, so
+# both halves take one fail-closed lock instead of colliding through independent schedules.
+mkdir -p "$ROOT/state/.locks" || exit 70
+exec 9>>"$ROOT/state/.locks/hermes-control.lock"
+flock -n 9 || { log "control lock contended; refusing overlapping planner/sync work"; exit 73; }
+
 # The verbs Hermes may choose. This list is the contract: conduct-hermes.sh refuses anything
 # else, so adding a verb here without adding it there is inert, and vice versa.
-VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add register note handled"
+VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add register note assist-answer"
 
 # --- the state brief: ground truth, re-derived every run ---------------------------------
 build_brief(){
   echo "===== AUTHORITY (you are bound by this) ====="
-  sed -n '1,60p' CONTROL_PLANE.md 2>/dev/null || echo "(CONTROL_PLANE.md absent)"
+  cat CONTROL_PLANE.md 2>/dev/null || echo "(CONTROL_PLANE.md absent)"
   echo; echo "===== INSTRUCTIONS FROM LUCAS (highest priority — he is the principal) ====="
   # What he actually said, in his words, from the cockpit. These outrank the roadmaps: a roadmap
   # is what was planned, an open instruction is what he wants now.
   bash scripts/intake.sh open 2>/dev/null || echo "(none)"
   echo; echo "===== SCOPE (ANCHOR) ====="
-  sed -n '1,60p' ANCHOR.md 2>/dev/null
+  cat ANCHOR.md 2>/dev/null || echo "(ANCHOR.md absent)"
   echo; echo "===== DECISIONS (open calls you must honour) ====="
-  grep -E '^## D-|^\*\*Chose:|^\*\*Falsifier:|^Date:' state/DECISIONS.md 2>/dev/null | tail -60
+  cat state/DECISIONS.md 2>/dev/null || echo "(DECISIONS.md absent)"
   echo; echo "===== RUNTIME: PAUSE ====="
   if [ -f state/PAUSE ]; then echo "PAUSED — execution is halted. You may still decide; the only"
     echo "executable verb while paused is 'noop'. Say what you WOULD do and why."
@@ -113,7 +118,7 @@ goes in the "text" field, not in args.
   portfolio-add <project> <remote>   add a PENDING registry row
   register <project>            clone + activate a pending row — ONLY if its deploy key exists
   note <project>                + text: append to a project's state file
-  handled <instruction-id>      + text: close one of Lucas's instructions, saying what you did
+  assist-answer <task-id>       + text: answer one open assist through the actuator
 
 You CANNOT provision a deploy key; only Lucas can, on GitHub. `portfolio-add` prepares a repo and
 `register` completes it, and when the key is missing the honest answer is 'escalate' asking him
@@ -138,11 +143,14 @@ HARD RULES
   verbs you are given, or 'escalate' saying precisely what you cannot do — but never ignore one
   and never silently reinterpret it. If it asks for something outside your verbs (a new project, a
   new roadmap, a flag change), 'escalate' is the correct answer, not a workaround.
+- When a decision answers an OPEN INSTRUCTION, copy its exact id into "instruction_id". The
+  actuator couples that instruction to the resulting durable action and acknowledges it only
+  after success. Never emit a separate "handled" decision.
 
 Reply with reasoning first, then EXACTLY this block and nothing after it:
 
 ===DECISION-START===
-{\"verb\":\"...\",\"args\":[\"...\"],\"text\":\"prose, for the authoring verbs only\",\"project\":\"...\",\"goal\":\"the existing goal this serves\",\"why\":\"one or two sentences\",\"confidence\":\"high|medium|low\",\"wrong_if\":\"the specific observable that would mean this was the wrong call\"}
+{\"verb\":\"...\",\"args\":[\"...\"],\"text\":\"prose, for the authoring verbs only\",\"instruction_id\":\"exact open instruction id, or omit\",\"project\":\"...\",\"goal\":\"the existing goal this serves\",\"why\":\"one or two sentences\",\"confidence\":\"high|medium|low\",\"wrong_if\":\"the specific observable that would mean this was the wrong call\"}
 ===DECISION-END===
 
 'goal' and 'wrong_if' are mandatory. A decision that cannot name the goal it serves, or what
@@ -160,8 +168,27 @@ fi
 # --- COST FENCE: the whole design rests on this staying free. ----------------------------
 # A silent fallback to metered OpenRouter is the failure D-008 warned about, and it would make
 # an always-on executive quietly expensive. Refuse the decision rather than act on a billed one.
-PROV="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("provider",""))' "$USAGE" 2>/dev/null || true)"
-COST="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("estimated_cost_usd",0))' "$USAGE" 2>/dev/null || echo 0)"
+USAGE_FIELDS="$(python3 - "$USAGE" <<'PY'
+import json,sys
+try:
+    value=json.load(open(sys.argv[1],encoding='utf-8'))
+    provider=value['provider']
+    cost=value['estimated_cost_usd']
+    if not isinstance(provider,str) or not provider.strip(): raise ValueError('provider absent')
+    if isinstance(cost,bool) or not isinstance(cost,(int,float)) or cost < 0:
+        raise ValueError('usage cost absent')
+    print(provider+'\t'+str(cost))
+except Exception as exc:
+    print('usage evidence absent or invalid: '+str(exc),file=sys.stderr)
+    raise SystemExit(1)
+PY
+)"
+if [ "$?" -ne 0 ] || [ -z "$USAGE_FIELDS" ]; then
+  log "REFUSED - provider/usage evidence is absent or invalid"
+  exit 3
+fi
+PROV="${USAGE_FIELDS%%$'\t'*}"
+COST="${USAGE_FIELDS#*$'\t'}"
 if [ -n "$PROV" ] && [ "$PROV" != "openai-codex" ]; then
   log "REFUSED — decision ran on '$PROV' (cost=\$$COST), not the flat sub."
   bash scripts/notify.sh "⚠ Recursion: a Hermes DECISION fell back to $PROV (\$$COST). Decision discarded — the executive must stay on the flat sub." || true
@@ -188,16 +215,15 @@ esac
 VERB="$(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(json.load(sys.stdin)["verb"])')"
 log "decision: $VERB — $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("why",""))' | cut -c1-120)"
 
-[ "$MODE" = "--dry-run" ] && { printf '%s\n' "$DECISION"; exit 0; }
+CANONICAL="$(printf '%s' "$DECISION" | python3 "$ROOT/scripts/decision-queue.py" normalize \
+  --stamp "$STAMP" --provider "$PROV" --usage-file "$USAGE")" \
+  || { log "REFUSED - decision could not be normalized to schema v1"; exit 5; }
 
-# --- record: the decision is durable state, not a chat message ---------------------------
-python3 - "$DECISIONS" "$LATEST" "$STAMP" "$PROV" "$COST" <<PY
-import json,sys
-d=json.loads('''$DECISION''')
-d['ts']=sys.argv[3]; d['provider']=sys.argv[4]; d['cost_usd']=sys.argv[5]
-open(sys.argv[1],'a',encoding='utf-8').write(json.dumps(d,sort_keys=True)+"\n")
-open(sys.argv[2],'w',encoding='utf-8').write(json.dumps(d,sort_keys=True)+"\n")
-PY
+[ "$MODE" = "--dry-run" ] && { printf '%s\n' "$CANONICAL"; exit 0; }
+
+# --- record: append-only journal plus durable pending projection; no latest singleton ----
+QUEUE_PATH="$(printf '%s' "$CANONICAL" | python3 "$ROOT/scripts/decision-queue.py" enqueue)" \
+  || { log "REFUSED - durable decision enqueue failed"; exit 73; }
 bash scripts/taskctl.sh event decision "" "$VERB $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(" ".join(json.load(sys.stdin).get("args",[])))')" >/dev/null 2>&1 || true
 # Post the decision where Lucas can see it. This is the ONLY thing scheduling this script does
 # to the world: hermes-decide decides and records, and conduct-hermes.sh is the only thing that
@@ -207,6 +233,6 @@ if [ -x scripts/notify.sh ] && [ "${RECURSION_DECIDE_QUIET:-0}" != "1" ]; then
   bash scripts/notify.sh "🧭 Hermes decided: $VERB $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(" ".join(json.load(sys.stdin).get("args",[])))' 2>/dev/null)
 why: $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("why",""))' 2>/dev/null)
 wrong if: $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("wrong_if",""))' 2>/dev/null)
-(recorded, NOT executed — actuation is still off)" || true
+(queued at $QUEUE_PATH; the supervised actuator is the sole execution path)" || true
 fi
-printf '%s\n' "$DECISION"
+printf '%s\n' "$CANONICAL"

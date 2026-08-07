@@ -37,7 +37,8 @@ echo "ok    versioned schemas and validator cover all ten control-state objects"
 # exactly that action id; acknowledgement is refused until/if every coupled action succeeded.
 R="$TMP/control"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/state/goals" \
   "$R/state/instructions" "$R/loop/logs"
-cp "$SRC/scripts/conduct-hermes.sh" "$SRC/scripts/taskctl.sh" "$SRC/scripts/intake.sh" "$R/scripts/"
+cp "$SRC/scripts/conduct-hermes.sh" "$SRC/scripts/taskctl.sh" "$SRC/scripts/intake.sh" \
+  "$SRC/scripts/validate-decision.py" "$R/scripts/"
 cat > "$R/scripts/work.sh" <<'STUB'
 #!/usr/bin/env bash
 printf 'launch\n' >> "$ACTION_LOG"
