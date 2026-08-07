@@ -12,7 +12,7 @@
 #   - execution uses argv arrays, never eval, never a constructed shell string.
 # A decision this script does not recognise does nothing at all.
 #
-#   conduct-hermes.sh                 execute state/.decision-latest.json
+#   conduct-hermes.sh                 drain every durable pending decision
 #   conduct-hermes.sh --file <path>   execute a specific decision file
 #   conduct-hermes.sh --dry-run       print what would run, execute nothing
 set -uo pipefail
@@ -21,7 +21,7 @@ ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
 
-FILE="$ROOT/state/.decision-latest.json"; DRY=0
+FILE=""; DRY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --file) FILE="$2"; shift 2 ;;
@@ -34,10 +34,74 @@ LOG="$ROOT/loop/logs/$DATE-conduct-hermes.log"; mkdir -p "$(dirname "$LOG")"
 log(){ echo "[$(date -Is)] conduct-hermes: $*" | tee -a "$LOG" >&2; }
 ev(){ bash scripts/taskctl.sh event "$1" "" "$2" >/dev/null 2>&1 || true; }
 
+drain_queue(){
+  local queue_file claim_rc child_rc action_state aggregate=0
+  [ "$DRY" = 0 ] || { log "--dry-run requires an explicit --file"; return 2; }
+  [ -x "$ROOT/scripts/decision-queue.py" ] \
+    || { log "durable decision queue helper is absent"; return 74; }
+  mkdir -p "$ROOT/state/.locks" || return 70
+  exec 8>>"$ROOT/state/.locks/hermes-control.lock"
+  flock -n 8 || { log "control lock contended; refusing overlapping actuation"; return 73; }
+  python3 "$ROOT/scripts/decision-queue.py" import-journal >/dev/null || return $?
+  while :; do
+    queue_file="$(python3 "$ROOT/scripts/decision-queue.py" claim)"
+    claim_rc=$?
+    [ "$claim_rc" -ne 4 ] || break
+    [ "$claim_rc" -eq 0 ] || return "$claim_rc"
+    RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
+      bash "$ROOT/scripts/conduct-hermes.sh" --file "$queue_file"
+    child_rc=$?
+    action_state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$queue_file")" \
+      || return $?
+    case "$action_state" in
+      succeeded)
+        python3 "$ROOT/scripts/decision-queue.py" succeed "$queue_file" "action succeeded" >/dev/null \
+          || return $? ;;
+      failed|cancelled)
+        python3 "$ROOT/scripts/decision-queue.py" fail "$queue_file" "action $action_state rc=$child_rc" >/dev/null \
+          || return $?
+        aggregate=1 ;;
+      running)
+        # A live or unreconciled Phase 2 action claim must never be launched again. Leave its
+        # decision in running so a later lease reconciliation can make the terminal call.
+        log "decision remains coupled to a running action; stopping this queue pass"
+        return 75 ;;
+      absent)
+        if [ "$child_rc" -eq 75 ] || [ -f "$ROOT/state/PAUSE" ]; then
+          python3 "$ROOT/scripts/decision-queue.py" defer "$queue_file" "execution deferred" >/dev/null \
+            || return $?
+          return 75
+        fi
+        python3 "$ROOT/scripts/decision-queue.py" fail "$queue_file" "no action record rc=$child_rc" >/dev/null \
+          || return $?
+        aggregate=1 ;;
+      *)
+        log "corrupt action state '$action_state'; preserving the running decision"
+        return 74 ;;
+    esac
+  done
+  return "$aggregate"
+}
+
+if [ -z "$FILE" ]; then
+  drain_queue
+  exit $?
+fi
+
 [ -f "$FILE" ] || { log "no decision file at $FILE"; exit 2; }
+
+VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add register note assist-answer"
+RAW_DECISION="$(cat "$FILE" 2>/dev/null || true)"
+VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$RAW_DECISION" 2>&1)"
+case "$VALID" in
+  OK\ *) : ;;
+  *) log "REFUSED - ${VALID:-decision validation produced no output}"; exit 5 ;;
+esac
 
 read_field(){ python3 -c 'import json,sys;print(json.load(open(sys.argv[1],encoding="utf-8")).get(sys.argv[2],"") or "")' "$FILE" "$1" 2>/dev/null; }
 VERB="$(read_field verb)"; WHY="$(read_field why)"; GOAL="$(read_field goal)"
+DECISION_ID="$(read_field id)"; IDEMPOTENCY_KEY="$(read_field idempotency_key)"
+INSTRUCTION_ID="$(read_field instruction_id)"
 mapfile -t ARGS < <(python3 -c 'import json,sys
 d=json.load(open(sys.argv[1],encoding="utf-8"))
 for a in (d.get("args") or []): print(a)' "$FILE" 2>/dev/null)
@@ -60,7 +124,148 @@ done
 if [ -f "$ROOT/state/PAUSE" ] && [ "$VERB" != "noop" ]; then
   log "PAUSED — refusing to execute '$VERB'. The decision is recorded; it will not run until resume."
   ev decision-deferred "paused: $VERB"
-  exit 0
+  exit 75
+fi
+
+# --- durable action claim. The decision file may be replayed after a crash or scheduler retry.
+# A deterministic action id plus an append-only lifecycle journal makes that replay observe the
+# prior claim instead of dispatching again. This strengthens the existing actuator; it does not
+# introduce a second execution path.
+ACTION_LOCK=""; ACTION_LOCK_HELD=0; ACTION_FILE=""; ACTION_ID=""
+action_unlock(){
+  [ "$ACTION_LOCK_HELD" = 1 ] || return 0
+  rm -f -- "$ACTION_LOCK/pid" 2>/dev/null || true
+  rmdir "$ACTION_LOCK" 2>/dev/null || true
+  ACTION_LOCK_HELD=0
+}
+action_lock(){
+  local i=0 holder
+  mkdir -p "$ROOT/state/actions" "$ROOT/state/.locks" || return 70
+  ACTION_LOCK="$ROOT/state/.locks/action-$ACTION_ID.lock"
+  while :; do
+    if [ ! -d "$ROOT/state/.locks/runtime-state.lock" ] && mkdir "$ACTION_LOCK" 2>/dev/null; then
+      break
+    fi
+    holder="$(cat "$ACTION_LOCK/pid" 2>/dev/null || true)"
+    case "$holder" in
+      ''|*[!0-9]*) : ;;
+      *) if ! kill -0 "$holder" 2>/dev/null; then
+           rm -f -- "$ACTION_LOCK/pid" 2>/dev/null || true
+           rmdir "$ACTION_LOCK" 2>/dev/null || true
+           continue
+         fi ;;
+    esac
+    i=$((i+1))
+    [ "$i" -lt "${RECURSION_LOCK_ATTEMPTS:-100}" ] \
+      || { log "action lock contended; refusing duplicate/unlocked dispatch"; return 73; }
+    sleep "${RECURSION_LOCK_DELAY_S:-0.1}"
+  done
+  printf '%s\n' "$$" > "$ACTION_LOCK/pid"
+  ACTION_LOCK_HELD=1
+}
+action_field(){
+  python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2],"") or "")' \
+    "$ACTION_FILE" "$1" 2>/dev/null
+}
+action_transition(){ # status evidence
+  local status="$1" evidence="${2:-}" rc
+  ACTION_STATUS="$status" ACTION_EVIDENCE="$evidence" ACTION_ID="$ACTION_ID" \
+  ACTION_KEY="$IDEMPOTENCY_KEY" ACTION_DECISION="$DECISION_ID" \
+  ACTION_INSTRUCTION="$INSTRUCTION_ID" ACTION_VERB="$VERB" ACTION_GOAL="$GOAL" \
+  ACTION_SOURCE="$FILE" ACTION_OWNER="$$@$(hostname)" \
+  python3 - "$ACTION_FILE" "$ROOT/state/action-events.jsonl" <<'PY'
+import json,os,sys,tempfile,time
+path,journal=sys.argv[1:3]
+now=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
+status=os.environ['ACTION_STATUS']
+try:
+    with open(path,encoding='utf-8') as src: record=json.load(src)
+except FileNotFoundError:
+    record={
+      'schema_version':1,'id':os.environ['ACTION_ID'],
+      'decision_id':os.environ.get('ACTION_DECISION') or None,
+      'instruction_id':os.environ.get('ACTION_INSTRUCTION') or None,
+      'idempotency_key':os.environ['ACTION_KEY'],'verb':os.environ['ACTION_VERB'],
+      'arguments':json.load(open(os.environ['ACTION_SOURCE'],encoding='utf-8')).get('args') or [],
+      'goal_id':os.environ.get('ACTION_GOAL') or None,'status':'pending',
+      'lease_owner':None,'lease_expires':None,'attempts':0,'result_evidence':None,
+      'created_at':now,'updated_at':now,
+    }
+if status=='running':
+    record['attempts']=int(record.get('attempts') or 0)+1
+    record['lease_owner']=os.environ['ACTION_OWNER']
+    record['lease_expires']=int(time.time())+int(os.environ.get('RECURSION_ACTION_LEASE_S','3600'))
+elif status in ('succeeded','failed','cancelled'):
+    record['lease_owner']=None; record['lease_expires']=None
+record['status']=status
+record['result_evidence']=os.environ.get('ACTION_EVIDENCE') or None
+record['updated_at']=now
+directory=os.path.dirname(path); os.makedirs(directory,exist_ok=True)
+fd,tmp=tempfile.mkstemp(prefix='.'+os.path.basename(path)+'.tmp.',dir=directory)
+try:
+    with os.fdopen(fd,'w',encoding='utf-8',newline='\n') as out:
+        json.dump(record,out,sort_keys=True,separators=(',',':')); out.write('\n')
+        out.flush(); os.fsync(out.fileno())
+    os.replace(tmp,path)
+    dfd=os.open(directory,os.O_RDONLY)
+    try: os.fsync(dfd)
+    finally: os.close(dfd)
+except BaseException:
+    try: os.unlink(tmp)
+    except FileNotFoundError: pass
+    raise
+event={'schema_version':1,'ts':now,'action_id':record['id'],'status':status,
+       'attempt':record['attempts'],'idempotency_key':record['idempotency_key'],
+       'evidence':record['result_evidence']}
+jfd=os.open(journal,os.O_WRONLY|os.O_CREAT|os.O_APPEND,0o600)
+try:
+    os.write(jfd,(json.dumps(event,sort_keys=True,separators=(',',':'))+'\n').encode())
+    os.fsync(jfd)
+finally: os.close(jfd)
+PY
+  rc=$?
+  [ "$rc" -eq 0 ] || log "failed durable action transition status=$status rc=$rc"
+  return "$rc"
+}
+
+if [ "$DRY" = 0 ]; then
+  if [ -z "$IDEMPOTENCY_KEY" ]; then
+    IDEMPOTENCY_KEY="decision:${DECISION_ID:-$(sha256sum "$FILE" | awk '{print $1}')}"
+  fi
+  [ "${#IDEMPOTENCY_KEY}" -le 256 ] \
+    || { log "REFUSED — idempotency key exceeds 256 characters"; exit 5; }
+  ACTION_ID="action-$(printf '%s' "$IDEMPOTENCY_KEY" | sha256sum | cut -c1-24)"
+  ACTION_FILE="$ROOT/state/actions/$ACTION_ID.json"
+  action_lock || exit $?
+  trap 'action_unlock' EXIT
+  if [ -f "$ACTION_FILE" ]; then
+    prior="$(action_field status)"
+    case "$prior" in
+      succeeded) log "idempotent replay: $ACTION_ID already succeeded; no dispatch"; action_unlock; trap - EXIT; exit 0 ;;
+      failed|cancelled) log "idempotent replay: $ACTION_ID is terminal ($prior); explicit retry required"; action_unlock; trap - EXIT; exit 1 ;;
+      running)
+        lease="$(action_field lease_expires)"
+        if printf '%s' "$lease" | grep -qE '^[0-9]+$' && [ "$lease" -le "$(date +%s)" ]; then
+          action_transition failed "stale dispatch lease expired; reconciliation refused relaunch" || true
+          log "recovery: $ACTION_ID lease expired; marked failed for explicit reconciliation, not relaunched"
+          action_unlock; trap - EXIT; exit 1
+        fi
+        log "recovery: $ACTION_ID was already dispatched; refusing a double launch"
+        action_unlock; trap - EXIT; exit 75 ;;
+      pending) : ;;
+      *) log "REFUSED — corrupt/unknown action status '$prior'"; action_unlock; trap - EXIT; exit 74 ;;
+    esac
+  else
+    action_transition pending "decision accepted" || { action_unlock; trap - EXIT; exit 74; }
+  fi
+  action_transition running "dispatch claimed" || { action_unlock; trap - EXIT; exit 74; }
+  if [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ]; then
+    if ! RECURSION_ROOT="$ROOT" bash scripts/intake.sh consume "$INSTRUCTION_ID" "$ACTION_ID"; then
+      action_transition failed "instruction coupling failed before dispatch" || true
+      action_unlock; trap - EXIT
+      exit 74
+    fi
+  fi
 fi
 
 log "verb=$VERB args=[${ARGS[*]-}] goal=${GOAL:0:60}"
@@ -76,10 +281,12 @@ run(){ # execute an argv array, or print it under --dry-run
 rc=0
 # Prose for the authoring verbs. Held to the same rules validate-decision.py applied, because
 # this file is a separate boundary and the decision sat on disk in between.
-TEXT="$(printf '%s' "$DECISION" | python3 -c 'import json,sys
-t=json.load(sys.stdin).get("text","") or ""
-if len(t)>500 or any(ord(c)<32 for c in t) or t.lstrip().startswith("-"): t=""
-print(t)' 2>/dev/null || true)"
+TEXT="$(read_field text)"
+if [ -n "$TEXT" ] && { [ "${#TEXT}" -gt 500 ] || printf '%s' "$TEXT" | grep -q '[[:cntrl:]]' \
+  || printf '%s' "$TEXT" | grep -qE '^[[:space:]]*-'; }; then
+  log "REFUSED - invalid authoring text at actuator boundary"
+  exit 5
+fi
 
 case "$VERB" in
   # AUTHORING. These WRITE, so they go through scripts/author.sh — one writer, append-only,
@@ -95,9 +302,10 @@ case "$VERB" in
     A0="${ARGS[0]:-}"; [ -n "$A0" ] || { log "$VERB needs an argument"; exit 2; }
     run bash scripts/author.sh "$VERB" "$A0" "${ARGS[1]:-}"; rc=$? ;;
 
-  handled)
-    A0="${ARGS[0]:-}"; [ -n "$A0" ] || { log "handled needs an instruction id"; exit 2; }
-    run bash scripts/intake.sh handled "$A0" "${TEXT:-handled}"; rc=$? ;;
+  assist-answer)
+    A0="${ARGS[0]:-}"; [ -n "$A0" ] || { log "assist-answer needs a task id"; exit 2; }
+    [ -n "$TEXT" ] || { log "REFUSED - assist-answer needs prose in the text field"; exit 2; }
+    run bash scripts/assist.sh answer "$A0" "$TEXT"; rc=$? ;;
 
   noop)
     log "noop — nothing to run${WHY:+ ($WHY)}" ;;
@@ -147,6 +355,17 @@ case "$VERB" in
     exit 5 ;;
 esac
 
-[ "$DRY" = "1" ] || ev decision-executed "$VERB rc=$rc"
+[ "$DRY" = "1" ] || {
+  if [ "$rc" -eq 0 ]; then
+    action_transition succeeded "log=$LOG rc=0"
+    if [ "$?" -eq 0 ] && [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ]; then
+      RECURSION_ROOT="$ROOT" bash scripts/intake.sh acknowledge "$INSTRUCTION_ID" "$ACTION_ID" \
+        || { rc=74; action_transition failed "instruction acknowledgement failed" || true; }
+    fi
+  else action_transition failed "log=$LOG rc=$rc"
+  fi || rc=74
+  ev decision-executed "$VERB rc=$rc"
+  action_unlock; trap - EXIT
+}
 log "done (verb=$VERB rc=$rc)"
 exit "$rc"

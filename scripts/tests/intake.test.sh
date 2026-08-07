@@ -125,10 +125,17 @@ else
   no "★ the watermark went deaf: a new message was never ingested"
 fi
 
-# --- 6) an instruction knows which project it is about -------------------------------------------
+# --- 6) an instruction carries complete authenticated routing/correlation metadata ---------------
 f="$(ls -1 "$R/state/instructions"/*.md | head -1)"
-grep -q '^project: chiron' "$f" && ok "a topic thread resolves to its project (registry column 7)" \
-                                || no "project routing failed: $(sed -n '1,7p' "$f" | tr '\n' ' ')"
+if grep -q '^principal: 8913126684$' "$f" \
+   && grep -q '^topic: 10$' "$f" \
+   && grep -q '^project_id: chiron$' "$f" \
+   && grep -q '^reply_correlation: telegram:' "$f" \
+   && grep -q '^deduplication_key: telegram:' "$f"; then
+  ok "authenticated instruction preserves principal, topic, project, reply, and dedup metadata"
+else
+  no "instruction routing/correlation metadata is incomplete: $(sed -n '1,12p' "$f" | tr '\n' ' ')"
+fi
 
 # --- 7) ★ AN INSTRUCTION IS NOT A COMMAND --------------------------------------------------------
 # The whole safety argument rests here: text arrives as data for Hermes to decide on, and the
@@ -147,7 +154,7 @@ else
   no "★ ARBITRARY EXECUTION — a chat line ran a script: $(cat "$TMP/ran.log")"
 fi
 
-# --- 8) the ONE exception: Lucas answering an assist the system asked him for ----------------------
+# --- 8) even an assist answer stays inert until the sole actuator handles it ----------------------
 cat > "$R/state/tasks/gsc-q.md" <<'T'
 id: gsc-q
 workstream: gsc
@@ -162,10 +169,12 @@ add s-cockpit telegram "$LUCAS" -1003894008732 10 user "[Lucas Guerra] assist gs
 intake poll >/dev/null
 ast="$(sed -n 's/^status: *//p' "$R/state/assists/gsc-q.md" 2>/dev/null | head -1)"
 tst="$(sed -n 's/^status: *//p' "$R/state/tasks/gsc-q.md" | head -1)"
-if [ "$ast" = "answered" ] && [ "$tst" = "queued" ]; then
-  ok "★ 'assist <id> <text>' answers that assist and requeues that task — the human-in-the-loop verb"
+latest_instruction="$(ls -1 "$R/state/instructions"/*.md | tail -1)"
+if [ "$ast" = "open" ] && [ "$tst" = "blocked" ] \
+   && grep -q '^status: open$' "$latest_instruction"; then
+  ok "★ assist-shaped Telegram text remains a durable open instruction, not a direct action"
 else
-  no "★ the assist shortcut did not work (assist=$ast task=$tst)"
+  no "★ assist text bypassed intake (instruction=$(sed -n 's/^status: *//p' "$latest_instruction" | head -1) assist=$ast task=$tst)"
 fi
 
 echo

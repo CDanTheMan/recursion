@@ -14,9 +14,10 @@ HERMES_DIR="$(dirname "$(command -v hermes 2>/dev/null || echo /usr/local/bin/he
 BRIEF_CRON="${BRIEF_CRON:-30 6 * * *}"     # guaranteed daily digest (box time = UTC)
 CYCLE_CRON="${CYCLE_CRON:-15 */3 * * *}"   # cheap heartbeat every 3h; brief fires only on a signal
 WATCH_CRON="${WATCH_CRON:-0 */3 * * *}"
-# The supervisor's own tick. hermes-decide DECIDES and RECORDS; it never executes — actuation is
-# scripts/conduct-hermes.sh, which is not scheduled. So this entry is safe by construction: the
-# worst it can do is post a decision Lucas disagrees with. Set DECIDE_CRON="" to leave it out.
+# The supervisor's own tick decides and atomically enqueues; it never executes. The continuously
+# supervised actuator is deploy/systemd/hermes-actuator.service, never a second cron entry.
+# Both paths take state/.locks/hermes-control.lock so resync/planning cannot overlap git mutation.
+# Set DECIDE_CRON="" to leave the planning tick out.
 DECIDE_CRON="${DECIDE_CRON:-45 */6 * * *}"
 
 PATHLINE="PATH=$HERMES_DIR:/usr/local/bin:/usr/bin:/bin # recursion-path"

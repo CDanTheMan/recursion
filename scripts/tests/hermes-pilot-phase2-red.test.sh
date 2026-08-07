@@ -13,6 +13,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/replay"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/loop/logs"
 cp "$SRC/scripts/conduct-hermes.sh" "$R/scripts/"
 cp "$SRC/scripts/taskctl.sh" "$R/scripts/"
+cp "$SRC/scripts/validate-decision.py" "$R/scripts/"
 cat > "$R/scripts/work.sh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$1" >> "$ACTION_LOG"
@@ -161,8 +162,10 @@ if [ "\${1:-}" = - ] && [ -f "\${2:-}" ]; then printf 'id: partial\n' > "\$2"; e
 exec "$REAL_PY" "\$@"
 STUB
 chmod +x "$TMP/atomic-bin/python3"
+set +e
 PATH="$TMP/atomic-bin:$PATH" RECURSION_ROOT="$AROOT" bash "$AROOT/scripts/taskctl.sh" start a test \
   >/dev/null 2>&1; atomic_rc=$?
+set -e
 if [ "$atomic_rc" -ne 0 ] && cmp -s "$TMP/a.before" "$AROOT/state/tasks/a.md"; then
   ok "interrupted state update preserved the previous complete file"
 else

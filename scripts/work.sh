@@ -124,10 +124,14 @@ set_status(){
   if [ -x "$TASKCTL" ]; then
     case "$st" in
       passed|failed|moot|resolved|stale)
-        RECURSION_ROOT="$ROOT" bash "$TASKCTL" finish "$ID" "$st" "$note" >/dev/null 2>&1 && return 0 ;;
-      escalated|blocked)
-        RECURSION_ROOT="$ROOT" bash "$TASKCTL" block "$ID" "$note" >/dev/null 2>&1 \
-          && { sed -i "s#^status: .*#status: $st#" "$TASK" 2>/dev/null; return 0; } ;;
+        RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" bash "$TASKCTL" finish "$ID" "$st" "$note" >/dev/null 2>&1
+        return $? ;;
+      blocked)
+        RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" bash "$TASKCTL" block "$ID" "$note" >/dev/null 2>&1
+        return $? ;;
+      escalated)
+        RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" bash "$TASKCTL" finish "$ID" escalated "$note" >/dev/null 2>&1
+        return $? ;;
     esac
   fi
   sed -i "s#^status: .*#status: $st#" "$TASK" 2>/dev/null || true
@@ -144,22 +148,21 @@ claim_task(){
   case "$rc" in
     0) return 0 ;;
     4) log "$ID is already leased by a live worker — exiting rather than double-running it."; return 1 ;;
-    # Any OTHER failure is a taskctl problem, not a lease conflict. Degrade to a direct status
-    # write and keep building: an executor that refuses to run because its bookkeeping helper
-    # is unhappy is a worse failure than one that runs without a lease.
-    *) log "taskctl start failed (rc=$rc) — proceeding without a lease"; set_status running; return 0 ;;
+    # Any OTHER failure means the canonical state transition was not proven. Running anyway
+    # creates an unleased action the control plane cannot reconcile, so fail closed.
+    *) log "taskctl start failed (rc=$rc) — refusing to run without canonical state"; return "$rc" ;;
   esac
 }
 
 # ledger writes (task status + BOARD) go to loop/auto, like every other loop write.
 # Under parallel loops several work.sh share this one $ROOT tree/index, so serialize the ledger
 # commit behind a short lock (spin <=30s, then proceed). Serial callers acquire it instantly.
-ledger_lock(){ local i=0; mkdir -p "$ROOT/state/.locks" 2>/dev/null || true; while ! mkdir "$ROOT/state/.locks/ledger.lock" 2>/dev/null; do i=$((i+1)); [ "$i" -ge 60 ] && return 0; sleep 0.5; done; return 0; }
+ledger_lock(){ local i=0; mkdir -p "$ROOT/state/.locks" 2>/dev/null || return 73; while ! mkdir "$ROOT/state/.locks/ledger.lock" 2>/dev/null; do i=$((i+1)); [ "$i" -ge 60 ] && { log "ledger lock contended — refusing unlocked commit"; return 73; }; sleep 0.5; done; return 0; }
 ledger_unlock(){ rmdir "$ROOT/state/.locks/ledger.lock" 2>/dev/null || true; }
 commit_state(){
   pause_checkpoint "state commit" || return 75
   if git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -q '^loop/auto$'; then
-    ledger_lock
+    ledger_lock || return $?
     git add -A state/ 2>/dev/null || true
     git diff --cached --quiet 2>/dev/null || \
       git -c user.name="recursion-loop" -c user.email="loop@recursion.local" \
@@ -476,7 +479,8 @@ integrate_remote(){
 # ============================ pipeline ============================
 pause_checkpoint "board transition" || exit 0
 board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" running "${GOAL:0:40}"
-if ! claim_task; then exit 0; fi
+claim_task; claim_rc=$?
+[ "$claim_rc" -eq 0 ] || exit "$claim_rc"
 commit_state
 
 # --- FRESHNESS IS A PRECONDITION, NOT BEST EFFORT ---------------------------------------
@@ -653,8 +657,11 @@ engine: $ENGINE" 2>>"$LOG" || true
   # close the plan->build->done loop: a passed planned task flips its roadmap item [~] -> [x].
   if [ -n "$PLANNED_FROM" ]; then
     pause_checkpoint "roadmap transition" || exit 0
-    rf="${PLANNED_FROM%%:*}"; rl="${PLANNED_FROM##*:}"
-    [ -f "$rf" ] && sed -i "${rl}s/^- \[~\] /- [x] /" "$rf" 2>/dev/null && log "roadmap $rf:$rl -> done"
+    if RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/plan.sh" --complete "$PLANNED_FROM" >>"$LOG" 2>&1; then
+      log "roadmap $PLANNED_FROM -> done"
+    else
+      log "roadmap completion refused for $PLANNED_FROM; canonical row was not advanced"
+    fi
   fi
   pause_checkpoint "worktree removal" || exit 0
   git -C "$REPO_DIR" worktree remove --force "$WT" 2>/dev/null || true   # branch persists for review

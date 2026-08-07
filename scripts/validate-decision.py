@@ -24,6 +24,24 @@ import re
 import sys
 
 ARG_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,80}")
+ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+AUTHORING_TEXT_VERBS = {"roadmap-add", "note", "assist-answer"}
+ARITY = {
+    "noop": (0, 0),
+    "conduct": (0, 0),
+    "reap": (0, 0),
+    "plan": (1, 1),
+    "work": (1, 1),
+    "publish": (1, 1),
+    "resolve-esc": (1, 1),
+    "register": (1, 1),
+    "roadmap-add": (1, 1),
+    "note": (1, 1),
+    "assist-answer": (1, 1),
+    "roadmap-new": (2, 2),
+    "portfolio-add": (2, 2),
+    "escalate": (1, 3),
+}
 
 
 def validate(verbs, raw):
@@ -47,6 +65,10 @@ def validate(verbs, raw):
         return False, "unsafe argument(s): %r" % bad
     if any(".." in a for a in args):
         return False, "path traversal in argument"
+    if verb in ARITY:
+        minimum, maximum = ARITY[verb]
+        if not minimum <= len(args) <= maximum:
+            return False, "%s requires %d..%d argument(s)" % (verb, minimum, maximum)
 
     # `text` carries prose for the authoring verbs (a roadmap item, a note, an escalation
     # title). It is NOT held to ARG_RE: that pattern exists because args become process
@@ -64,6 +86,18 @@ def validate(verbs, raw):
             return False, "text contains newlines or control characters"
         if text.lstrip().startswith("-"):
             return False, "text may not begin with '-' (it would be read as a flag)"
+        if re.search(r"`|\$\(|\$\{|[;&|<>]", text):
+            return False, "text contains shell-shaped syntax"
+        if re.search(r"(^|\s)(#{1,6}\s|\*\*|__|\[[^]]+\]\()", text):
+            return False, "text contains Markdown markup"
+    if verb in AUTHORING_TEXT_VERBS and not text.strip():
+        return False, "%s requires bounded prose in text" % verb
+
+    instruction_id = d.get("instruction_id")
+    if instruction_id is not None and not ID_RE.fullmatch(str(instruction_id)):
+        return False, "instruction_id is not a canonical identifier"
+    if verb == "assist-answer" and not instruction_id:
+        return False, "assist-answer requires instruction_id correlation"
 
     for req in ("goal", "wrong_if"):
         if not str(d.get(req, "")).strip():

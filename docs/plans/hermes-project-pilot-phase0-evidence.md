@@ -1,26 +1,26 @@
 ---
 title: Hermes Project Pilot Phase 0 Evidence
 type: verification
-status: blocked
-last-verified: 2026-08-06
+status: ready-for-review
+last-verified: 2026-08-07
 related:
   - CONTROL_PLANE.md
   - docs/plans/hermes-project-pilot-production-plan.md
   - docs/architecture.md
   - docs/delegation-design.md
+  - docs/plans/hermes-project-pilot-phase3-handoff.md
 ---
 # Hermes project pilot Phase 0 evidence
 
 ## Verdict
 
-Phase 0 established a reproducible green baseline and red controls for the confirmed audit
-defects. No defect was fixed. Production remains paused, no pilot ran, no autonomous execution was
-enabled, no product repository changed, and no protected or default branch was pushed or merged.
-The Phase 0-only commit was subsequently published on a review branch as draft PR #21 for Lucas's
-review; that publication did not change the live control plane.
+Phase 0 established the reproducible baseline and red controls without fixing a defect. Phases 1,
+2, and 3 subsequently closed their authoring controls on separate reviewed bases; their exact
+evidence is appended below. Phase 3 is now ready for Lucas's local review but remains unpublished.
 
-Phases 1-3 are blocked on review of this evidence and implementation of the red controls. Pilots
-and autonomous execution remain forbidden until those phases pass review.
+Production remains paused and undeployed for Phases 1-3. No pilot ran, no autonomous execution was
+enabled, no product repository changed, and no protected or default branch was pushed or merged by
+this work. The two live Phase 1 findings remain deployment gates, not waived controls.
 
 ## Immutable starting points
 
@@ -41,7 +41,7 @@ The pre-existing live flags remain `RECURSION_ALLOW_PUSH=1`, `RECURSION_AUTO_DRA
 `RECURSION_AUTO_PLAN=1`, `RECURSION_AUTO_REFLECT=1`, and `RECURSION_ALLOW_AUTOMERGE=0`.
 Phase 0 did not edit them; this makes the interruptive PAUSE control a critical prerequisite.
 
-## Next-session handoff
+## Historical Phase 0 next-session handoff (superseded)
 
 Phase 0 is committed and published for review. Do not begin implementation unless PR #21 has been
 reviewed and merged. After approval, fetch the new `origin/master` and create a new clean Phase 1
@@ -282,3 +282,276 @@ merge, push, or new PR occurred.
 
 The next-session handoff and copy/paste Phase 2 prompt are in
 `docs/plans/hermes-project-pilot-phase1-handoff.md`.
+
+## Phase 2 authoring evidence
+
+### Publication gate and clean base
+
+GitHub reported PR #22 merged by `NotSkittlz` at `2026-08-07T05:53:42Z` with merge commit
+`b25b3294dcbd320f92cd104718d795648fd57449`. The PR head was
+`ee898ea0c9b95060de30dd86022d85a46d58b020`; GitHub records no separate submitted review, so
+Lucas's merge is the available review/approval event. After fetching, Git proved the Phase 1
+implementation commit `0da2e1c8b0bea07849166aae58f80d9ed8191a49` is an ancestor of current
+`origin/master`, and the merged tree contains the Phase 1 controls and audit artifacts.
+
+Phase 2 was authored in the clean worktree
+`C:\Users\drfoo\github\recursion-hermes-phase2` on `review/hermes-phase2-controls`, based exactly
+on merged `origin/master` at `b25b329`. The dirty user-owned `master` remained at `20c1fa7` with
+all of its tracked and untracked files untouched. Its graph became ahead 5 / behind 123 only
+because the required fetch advanced `origin/master`; it was never used as an authoring base.
+
+### Reproduced starting evidence
+
+Before changing code, these commands ran in a disposable Linux clone of merged base `b25b329`:
+
+```text
+bash scripts/audit/hermes-pilot-phase0-baseline.sh
+# rc=0; BASELINE_SUITES=17; BASELINE_FAILED_SUITES=0
+
+bash scripts/tests/hermes-pilot-phase1-red.test.sh
+# rc=0; 8/8 Phase 1 controls passed; hermes-pilot-phase1-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase1-green.sh
+# rc=0; uid-65534 sandbox, canonical review-only publication, protected/default-ref,
+# dependency, artifact, and aggregate audits: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase2-red.test.sh
+# rc=1; 6 intended Phase 2 failures
+
+bash scripts/tests/hermes-pilot-phase3-red.test.sh
+# rc=1; 6 intended Phase 3 failures
+
+bash scripts/audit/hermes-pilot-live-phase1-red.sh
+# rc=1; 2 deployment-gated live findings: unrestricted root gateway service and advisories in
+# installed aiohttp==3.14.1 / cryptography==48.0.1
+```
+
+The Phase 2 harness had one sequencing defect: control 5 restored `set -e`, so control 6's
+intentional nonzero crashing writer exited the harness before its assertion. The harness now uses
+`set +e` only around that intentional failure and immediately restores `set -e`. Copying only this
+harness repair onto an otherwise untouched `b25b329` clone and rerunning
+`bash scripts/tests/hermes-pilot-phase2-red.test.sh` still produced exactly the same six intended
+failures (`rc=1`). The repair makes the sixth falsifier executable; it does not weaken a control.
+
+### Green after red
+
+The Phase 2 implementation is commit
+`9a4778fa794158c32e5f1381fb7b24c930202542` (`Implement Hermes pilot Phase 2 controls`). It keeps
+the existing file/event architecture and adds versioned schemas and validation; fail-closed locks
+and atomic, durable state changes; validator-enforced goal/dependency IDs; an append-only,
+idempotent action lifecycle with leases, attempts, crash recovery, and evidence; instruction
+acknowledgement coupled to the exact succeeded action; and PAUSE-gated event rotation plus
+manifest-hashed backup/restore.
+
+A completely fresh Linux clone at that exact commit ran this final matrix:
+
+```text
+bash scripts/audit/hermes-pilot-phase0-baseline.sh
+# rc=0; BASELINE_SUITES=17; BASELINE_FAILED_SUITES=0
+
+bash scripts/tests/hermes-pilot-phase1-red.test.sh
+# rc=0; 8/8 Phase 1 controls passed; hermes-pilot-phase1-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase1-green.sh
+# rc=0; strict sandbox ran as uid=65534; canonical review-only publication passed;
+# aiohttp==3.14.3 OSV_CLEAR; cryptography==50.0.0 OSV_CLEAR; aggregate audit: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase2-red.test.sh
+# rc=0; 6/6 Phase 2 controls passed; hermes-pilot-phase2-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase2-green.sh
+# rc=0; all ten control-state schemas validated; instruction/action coupling passed;
+# PAUSE-gated rotation and manifest-hashed backup/restore passed; aggregate audit: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase3-red.test.sh
+# rc=1; exactly 6 intended Phase 3 failures remain
+
+bash scripts/audit/hermes-pilot-live-phase1-red.sh
+# rc=1; exactly the same 2 deployment-gated live findings remain
+```
+
+The six Phase 2 controls specifically proved that ten concurrent replays launch one idempotent
+action, post-dispatch crash recovery does not relaunch it, simultaneous planners reserve distinct
+tasks and roadmap items, task start enforces its parent goal and dependencies, lock contention
+fails closed, and an interrupted update preserves the previous complete state file. The positive
+audit separately proved schema coverage, exact action-coupled instruction acknowledgement, and
+PAUSE-gated rotation/backup/restore.
+
+### Phase boundary and final live PAUSE
+
+Phase 3 remains deliberately unimplemented. Its six failures are direct Telegram execution,
+dropped validated authoring text, acknowledgement without a succeeded action link, decisions
+without provider/usage evidence, planner projection loss, and singleton decision-pointer loss.
+
+The final read-only live snapshot at `2026-08-07T06:55:40+00:00` found
+`/opt/recursion/state/PAUSE` present with unchanged SHA-256
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`. Production remained on
+`loop/auto` at `987fcfe08793b9fb5a452edf288a4fe9fc367ea1`; zero `recursion-worker-*` units were running;
+and both `recursion-hermes-gateway.service` and `recursion-hermes-supervisor.timer` were inactive.
+The live Phase 1 audit still has exactly two deployment-gated findings: the installed gateway is
+unrestricted/root, and the installed dependency environment reports advisories for
+`aiohttp==3.14.1` and `cryptography==48.0.1`. These were neither waived nor changed on production.
+
+No Phase 1 or Phase 2 deployment, Phase 3 implementation, pilot, autonomous execution, PAUSE
+removal, merge, push, or Phase 2 PR occurred. The local review handoff is in
+`docs/plans/hermes-project-pilot-phase2-handoff.md`.
+
+## Phase 3 authoring evidence
+
+### Publication gate and clean base
+
+GitHub reported PR #23 merged by `NotSkittlz` at `2026-08-07T13:48:52Z` with merge commit
+`6adb1ba5b297c92d47c3d5c561ef7267dd7f3e3a`. The PR head was
+`b01d6f738650d2990ae08e2b49fca758c9314922`. GitHub records no separately submitted review, so
+Lucas's merge is the available review/approval event. After fetching, Git proved the Phase 2
+implementation commit `9a4778fa794158c32e5f1381fb7b24c930202542` is an ancestor of current
+`origin/master`, and the merged tree contains the Phase 2 controls, positive audit, and handoff.
+
+Phase 3 was authored in the clean worktree
+`C:\Users\drfoo\github\recursion-hermes-phase3` on `review/hermes-phase3-controls`, based exactly
+on merged `origin/master` at `6adb1ba`. The dirty user-owned `master` remained at
+`20c1fa77042f3aa9f5d8978352792f3b058bc0d1`. Its tracked-diff hash remained
+`2574b133121e0ea12eca06f5b8bd1d23449fc27a`; its tracked and untracked status list was unchanged.
+It was never used as an authoring base.
+
+### Reproduced starting evidence
+
+Before changing code, these commands ran in a disposable named-branch Linux clone of merged base
+`6adb1ba5b297c92d47c3d5c561ef7267dd7f3e3a`:
+
+```text
+bash scripts/audit/hermes-pilot-phase0-baseline.sh
+# rc=0; BASELINE_SUITES=17; BASELINE_FAILED_SUITES=0
+
+bash scripts/tests/hermes-pilot-phase1-red.test.sh
+# rc=0; 8/8 Phase 1 controls passed; hermes-pilot-phase1-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase1-green.sh
+# rc=0; uid-65534 sandbox, canonical review-only publication, protected/default-ref,
+# dependency, artifact, and aggregate audits: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase2-red.test.sh
+# rc=0; 6/6 Phase 2 controls passed; hermes-pilot-phase2-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase2-green.sh
+# rc=0; all ten schemas, exact instruction/action coupling, PAUSE-gated rotation, and
+# manifest-hashed backup/restore passed; aggregate audit: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase3-red.test.sh
+# rc=1; exactly 6 intended failures: direct gateway execution, dropped authoring text,
+# handling without a succeeded action, absent provider/usage evidence accepted, truncated
+# precedence inputs, and singleton decision-pointer loss
+```
+
+The pre-change read-only live audit ran separately:
+
+```text
+ssh gs-recursion 'cd /opt/recursion && bash scripts/audit/hermes-pilot-live-phase1-red.sh'
+# rc=1; exactly 2 deployment-gated findings; PAUSE present before and after
+```
+
+At `2026-08-07T13:59:30+00:00`, production was `loop/auto` at
+`b51bfff09fdc8f51cb8313ceb7267dbe0f701c69`; the PAUSE SHA-256 was
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`; zero
+`recursion-worker-*` units were present; and the gateway and supervisor timer were inactive. The
+two findings were the unrestricted/root gateway unit and advisories in the installed
+`aiohttp==3.14.1` / `cryptography==48.0.1` environment. They were treated as deployment gates and
+were not changed.
+
+### Green after red
+
+The Phase 3 implementation is commit
+`06a7422b6b51b9e2db6f7ca3e86b76da3cab2953` (`Implement Hermes pilot Phase 3 controls`). It keeps
+the Phase 2 file/event and action-journal architecture while narrowing Telegram to inert intake,
+recording complete instruction identity, requiring fresh provider/usage evidence, projecting full
+precedence inputs, atomically queueing schema-v1 decisions without a singleton pointer, coupling
+successful actions back to their exact instruction, and supervising one non-cron actuator behind a
+shared planner/actuator lock.
+
+The affected code first passed this focused exact-commit gate in a fresh Linux clone:
+
+```text
+bash -n scripts/conduct-hermes.sh scripts/hermes-decide.sh scripts/intake.sh \
+  scripts/hermes-actuator.sh scripts/audit/hermes-pilot-phase3-green.sh \
+  scripts/tests/hermes-pilot-phase3-red.test.sh
+python3 -m py_compile scripts/decision-queue.py scripts/validate-decision.py \
+  scripts/validate-control-state.py
+bash scripts/tests/intake.test.sh
+bash scripts/tests/hermes-conductor.test.sh
+bash scripts/tests/hermes-pilot-phase2-red.test.sh
+bash scripts/audit/hermes-pilot-phase2-green.sh
+bash scripts/tests/hermes-pilot-phase3-red.test.sh
+bash scripts/audit/hermes-pilot-phase3-green.sh
+# every command rc=0; FOCUSED_MATRIX=PASS
+```
+
+A second completely fresh Linux clone at the exact implementation commit ran the final matrix:
+
+```text
+bash scripts/audit/hermes-pilot-phase0-baseline.sh
+# rc=0; BASELINE_COMMIT=06a7422b6b51b9e2db6f7ca3e86b76da3cab2953;
+# BASELINE_SUITES=17; BASELINE_FAILED_SUITES=0
+
+bash scripts/tests/hermes-pilot-phase1-red.test.sh
+# rc=0; 8/8 Phase 1 controls passed; hermes-pilot-phase1-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase1-green.sh
+# rc=0; strict sandbox uid=65534; canonical review-only publication passed;
+# aiohttp==3.14.3 OSV_CLEAR; cryptography==50.0.0 OSV_CLEAR; aggregate audit: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase2-red.test.sh
+# rc=0; 6/6 Phase 2 controls passed; hermes-pilot-phase2-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase2-green.sh
+# rc=0; schema/action-coupling/rotation/backup audit: ALL PASS
+
+bash scripts/tests/hermes-pilot-phase3-red.test.sh
+# rc=0; 6/6 Phase 3 controls passed; hermes-pilot-phase3-red: ALL PASS
+
+bash scripts/audit/hermes-pilot-phase3-green.sh
+# rc=0; authenticated inert intake, schema-v1 decision queue, complete projections,
+# supervised PAUSE/restart behavior, exact successful-action coupling, hostile-output inertness,
+# and non-colliding service/cron structure passed; hermes-pilot-phase3-green: ALL PASS
+```
+
+The six red-to-green controls prove that the Telegram gateway has no direct state-changing path,
+validated authoring text reaches the sole actuator, an instruction cannot be closed without its
+successful action, absent provider/usage evidence fails closed, precedence inputs are lossless,
+and restart drains every pending decision once. The positive audit separately proves complete
+authenticated metadata, atomic schema-v1 queueing, PAUSE-aware supervised execution, automatic
+instruction/action coupling, restart idempotency, hostile-output inertness, and the absence of a
+colliding actuator cron path.
+
+### Final live PAUSE and phase boundary
+
+The final read-only snapshot used:
+
+```text
+ssh gs-recursion 'cd /opt/recursion && bash scripts/audit/hermes-pilot-live-phase1-red.sh'
+# rc=1; exactly 2 deployment-gated findings
+sha256sum /opt/recursion/state/PAUSE
+# 919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+```
+
+At `2026-08-07T14:27:15+00:00`, `/opt/recursion/state/PAUSE` was present before and after the live
+audit with that unchanged SHA-256. Production remained on `loop/auto` at
+`b51bfff09fdc8f51cb8313ceb7267dbe0f701c69`; zero `recursion-worker-*` units were present; and
+both `recursion-hermes-gateway.service` and `recursion-hermes-supervisor.timer` were inactive. The
+live audit still had exactly the same two deployment-gated Phase 1 findings. They were neither
+waived nor changed.
+
+No Phase 1, Phase 2, or Phase 3 deployment, pilot, autonomous execution, PAUSE removal, merge,
+push, or Phase 3 PR occurred during implementation and the original evidence snapshot. The local
+review handoff was written to `docs/plans/hermes-project-pilot-phase3-handoff.md`.
+
+### Review-branch publication follow-up
+
+Lucas subsequently authorized committing and pushing the Phase 3 review branch so he can review
+and merge it in GitHub. The handoff update was committed as
+`fdc08a23e7feaebb845f7191ef26cad17d3337d6`, and
+`review/hermes-phase3-controls` was pushed to the same OID. No PR was opened.
+
+A post-push read-only production check at `2026-08-07T14:34:41Z` again found PAUSE present with
+SHA-256 `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`, production unchanged on
+`loop/auto` at `b51bfff09fdc8f51cb8313ceb7267dbe0f701c69`, both Hermes gateway/supervisor units inactive, and
+zero `recursion-worker-*` units. Branch publication did not deploy any phase or change production.

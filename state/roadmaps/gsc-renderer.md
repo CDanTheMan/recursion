@@ -1,4 +1,9 @@
 engine: claude
+goal_id: goal-gsc-client-reconstruction
+dependencies:
+allowed_paths: user-client/render
+non_goals: tests fixtures oracle baselines live-game automation
+worker_class: claude
 repo: /opt/golden-stallion-client
 sshkey: ~/.ssh/gsc_deploy
 seed: user-client/render/data/models

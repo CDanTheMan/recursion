@@ -19,9 +19,63 @@
 #     - [ ] Add a landing page with a hero + CTA        <- plan.sh emits THIS, marks it [~]
 set -euo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"; cd "$ROOT"
+fsync_dir(){ python3 - "$1" <<'PY' >/dev/null 2>&1
+import os,sys
+fd=os.open(sys.argv[1],os.O_RDONLY)
+try: os.fsync(fd)
+finally: os.close(fd)
+PY
+}
+
+if [ "${1:-}" = --complete ]; then
+  PLANNED="${2:?usage: plan.sh --complete state/roadmaps/<workstream>.md:<line>}"
+  case "$PLANNED" in state/roadmaps/*.md:[0-9]*) ;; *) echo "plan: invalid planned_from pointer" >&2; exit 2 ;; esac
+  RM="${PLANNED%:*}"; LN="${PLANNED##*:}"; WS="$(basename "$RM" .md)"
+  printf '%s' "$WS" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$' || exit 2
+  [ -f "$RM" ] || { echo "plan: no roadmap for completion: $RM" >&2; exit 2; }
+  mkdir -p state/.locks
+  LOCK="state/.locks/planner-$WS.lock"; attempts=0
+  while ! mkdir "$LOCK" 2>/dev/null; do
+    attempts=$((attempts+1))
+    [ "$attempts" -lt "${RECURSION_LOCK_ATTEMPTS:-100}" ] \
+      || { echo "plan: planner lock contended; refusing unlocked completion" >&2; exit 73; }
+    sleep "${RECURSION_LOCK_DELAY_S:-0.1}"
+  done
+  trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+  current="$(sed -n "${LN}p" "$RM")"
+  case "$current" in '- [x] '*) echo "roadmap already complete: $PLANNED"; exit 0 ;; '- [~] '*) : ;; *) echo "plan: roadmap row is not reserved: $PLANNED" >&2; exit 75 ;; esac
+  tmp_rm="$(mktemp "$(dirname "$RM")/.$(basename "$RM").tmp.XXXXXX")"
+  cp -p -- "$RM" "$tmp_rm"
+  sed -i "${LN}s/^- \[~\] /- [x] /" "$tmp_rm"
+  python3 - "$tmp_rm" <<'PY'
+import os,sys
+with open(sys.argv[1],'rb') as source: os.fsync(source.fileno())
+PY
+  mv -f -- "$tmp_rm" "$RM"
+  fsync_dir "$(dirname "$RM")"
+  echo "roadmap complete: $PLANNED"
+  exit 0
+fi
+
 WS="${1:?usage: plan.sh <workstream>}"
+printf '%s' "$WS" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$' \
+  || { echo "plan: invalid workstream id" >&2; exit 2; }
 RM="state/roadmaps/$WS.md"
 [ -f "$RM" ] || { echo "no roadmap: $RM (create it: header of task defaults + a '- [ ]' checklist)"; exit 2; }
+TASKDIR="state/tasks"; mkdir -p "$TASKDIR"
+
+# Allocation and roadmap reservation are one critical section. The old read/allocate/write/sed
+# sequence let two planners choose the same ID and checklist row. A contended lock never degrades
+# to an unlocked write.
+LOCKDIR="state/.locks"; mkdir -p "$LOCKDIR"
+LOCK="$LOCKDIR/planner-$WS.lock"; attempts=0
+while ! mkdir "$LOCK" 2>/dev/null; do
+  attempts=$((attempts+1))
+  [ "$attempts" -lt "${RECURSION_LOCK_ATTEMPTS:-100}" ] \
+    || { echo "plan: planner lock contended; refusing unlocked allocation" >&2; exit 73; }
+  sleep "${RECURSION_LOCK_DELAY_S:-0.1}"
+done
+trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
 
 # header defaults: read a key's value from the key:value lines above the first checklist item
 hget(){ awk -v k="$1" -F': *' '/^- \[/{exit} $1==k{sub(/^[^:]+: */,"");print;exit}' "$RM"; }
@@ -40,18 +94,36 @@ ID="$WS-$next"; TASK="state/tasks/$ID.md"
 ENGINE="$(hget engine)";   REPO="$(hget repo)";     SSHKEY="$(hget sshkey)"
 WORKDIR="$(hget workdir)"; ACC="$(hget acceptance)"; SEED="$(hget seed)"
 AM="$(hget automerge)";    AMS="$(hget automerge_scope)"; MODEL="$(hget model)"
+GOAL_ID="$(hget goal_id)"; DEPS="$(hget dependencies)"; ALLOWED="$(hget allowed_paths)"
+NON_GOALS="$(hget non_goals)"; WORKER_CLASS="$(hget worker_class)"
+GOAL_ID="${GOAL_ID:-goal-$WS}"
+printf '%s' "$GOAL_ID" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$' \
+  || { echo "plan: roadmap has an invalid goal_id" >&2; exit 2; }
+if [ -f schemas/control-plane/v1/schema.json ] || [ -d state/goals ]; then
+  [ -f "state/goals/$GOAL_ID.md" ] \
+    || { echo "plan: parent goal does not exist: $GOAL_ID" >&2; exit 6; }
+  [ "$(sed -n 's/^status: *//p' "state/goals/$GOAL_ID.md" | head -1)" = active ] \
+    || { echo "plan: parent goal is not active: $GOAL_ID" >&2; exit 6; }
+fi
 
+tmp_task="$(mktemp "$TASKDIR/.${ID}.tmp.XXXXXX")"
 {
+  echo "schema_version: 1"
   echo "id: $ID"
   echo "workstream: $WS"
+  echo "goal_id: $GOAL_ID"
+  echo "dependencies: $DEPS"
   echo "goal: $GOAL"
   echo "engine: ${ENGINE:-claude}"
+  echo "worker_class: ${WORKER_CLASS:-${ENGINE:-claude}}"
   [ -n "$REPO" ]    && echo "repo: $REPO"
   [ -n "$SSHKEY" ]  && echo "sshkey: $SSHKEY"
   [ -n "$SEED" ]    && echo "seed: $SEED"
   [ -n "$MODEL" ]   && echo "model: $MODEL"
   echo "acceptance: ${ACC:?roadmap $WS is missing an 'acceptance:' default (no gate => no autonomy)}"
   echo "workdir: ${WORKDIR:-.}"
+  echo "allowed_paths: ${ALLOWED:-${WORKDIR:-.}}"
+  echo "non_goals: $NON_GOALS"
   echo "autonomy: auto"
   [ -n "$AM" ]  && echo "automerge: $AM"
   [ -n "$AMS" ] && echo "automerge_scope: $AMS"
@@ -62,9 +134,25 @@ AM="$(hget automerge)";    AMS="$(hget automerge_scope)"; MODEL="$(hget model)"
   echo
   echo "(Auto-planned from the $WS roadmap. Fix the IMPLEMENTATION, not the test/fixtures. The gate"
   echo "is the acceptance command above; keep every currently-passing check green.)"
-} > "$TASK"
+} > "$tmp_task"
+python3 - "$tmp_task" <<'PY'
+import os,sys
+with open(sys.argv[1],'rb') as f: os.fsync(f.fileno())
+PY
+mv -f -- "$tmp_task" "$TASK"
+fsync_dir "$TASKDIR"
 
 # mark the roadmap item as queued ([~]) so it is not re-emitted; it flips to [x] when the task passes.
-sed -i "${LN}s/^- \[ \] /- [~] /" "$RM"
+tmp_rm="$(mktemp "$(dirname "$RM")/.$(basename "$RM").tmp.XXXXXX")"
+cp -p -- "$RM" "$tmp_rm"
+line="$(sed -n "${LN}p" "$tmp_rm")"
+case "$line" in '- [ ] '*) ;; *) rm -f -- "$tmp_rm" "$TASK"; echo "plan: roadmap row changed during reservation" >&2; exit 75 ;; esac
+sed -i "${LN}s/^- \[ \] /- [~] /" "$tmp_rm"
+python3 - "$tmp_rm" <<'PY'
+import os,sys
+with open(sys.argv[1],'rb') as f: os.fsync(f.fileno())
+PY
+mv -f -- "$tmp_rm" "$RM"
+fsync_dir "$(dirname "$RM")"
 echo "planned $ID -> $TASK"
 echo "  goal: $GOAL"
