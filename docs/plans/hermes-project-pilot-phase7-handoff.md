@@ -131,3 +131,84 @@ or Phase 8 work occurred. Every such action still requires separate authorizatio
 The dirty user-owned `master` remains at `20c1fa77042f3aa9f5d8978352792f3b058bc0d1` with tracked
 diff hash `2574b133121e0ea12eca06f5b8bd1d23449fc27a`; it was not an authoring or test source, and its
 tracked and untracked changes remain user-owned.
+
+## Copy/paste prompt for the Phase 8 session
+
+```text
+Continue the Hermes Project Pilot with Phase 8 only.
+
+First read:
+- C:\Users\drfoo\github\AGENTS.md
+- Recursion's CLAUDE.md and ANCHOR.md
+- the live /opt/recursion/CONTROL_PLANE.md on gs-recursion
+- docs/architecture.md
+- docs/delegation-design.md
+- docs/autonomous-loops-architecture-and-roadmap.md
+- docs/plans/hermes-project-pilot-production-plan.md
+- docs/plans/hermes-project-pilot-phase0-evidence.md
+- docs/plans/hermes-project-pilot-phase1-handoff.md
+- docs/plans/hermes-project-pilot-phase1-deployment.md
+- docs/plans/hermes-project-pilot-phase2-handoff.md
+- docs/plans/hermes-project-pilot-phase3-handoff.md
+- docs/plans/hermes-project-pilot-phase4-handoff.md
+- docs/plans/hermes-project-pilot-phase5-handoff.md
+- docs/plans/hermes-project-pilot-phase6-handoff.md
+- docs/plans/hermes-project-pilot-phase7-handoff.md
+
+The Phase 7 final implementation OID is
+b4d3a30317e7d11f8e31b5e2578eb53aaeb5155c on the published review branch
+origin/review/hermes-phase7-controls. Before any Phase 8 implementation or live action, fetch origin
+and confirm Lucas reviewed and merged Phase 7, that the final implementation OID is an ancestor of
+current origin/master, and that all Phase 7 handoff/evidence artifacts are present. The review
+branch may already have been pruned after merge. If the implementation commit is not an ancestor of
+origin/master or the artifacts are absent, stop and report the blocker.
+
+Keep remote state/PAUSE enabled between every explicitly observed pilot window. Do not deploy,
+change production flags or concurrency, lift PAUSE, send a human-visible notification, or start a
+live pilot until the applicable Phase 8 preflight is complete and Lucas explicitly authorizes that
+specific production action/window. Leave the dirty local master at 20c1fa7 and all user-owned
+tracked and untracked changes untouched. If Phase 8 requires repository changes, fetch origin and
+create a new clean Phase 8 authoring worktree/review branch from merged origin/master; never author
+from the dirty master or a prior worktree.
+
+Before changing code or production, reproduce and record the 17/17 baseline; every Phase 1-7
+control suite; every Phase 1-7 positive audit; the live Phase 1 audit; the PAUSE hash before and
+after; deployed ref; services/timer/worker state; project configuration; notification destinations;
+branch protection; backup/restore readiness; and the exact rollback for each proposed live action.
+Treat the two existing live Phase 1 findings as deployment gates, not waivers. Do not silently fix
+or work around them on production.
+
+Present a Phase 8 execution plan and obtain alignment before any production mutation. Execute
+Phase 8 only, through the real hierarchy and existing canonical file/event,
+decision/action/actuator, Phase 5 worker/verifier, Phase 6 goal-reconciler, Phase 7 outbox, and sole
+notify.sh paths. Do not manually drive worker commands, create a parallel scheduler/executor/store/
+publisher/sender, bypass exact-commit verification, or accept a model/process claim as evidence.
+
+Run the observed pilots from the production plan in order, with a go/no-go gate and rollback between
+them:
+1. Chiron success: one small reversible build-verifiable goal from Lucas instruction through the
+   project pilot, bounded worker, independent verifier, review branch, terminal reports, exact
+   delivery acknowledgements, and deterministic stop.
+2. Chiron assist: force a genuine ambiguity; prove pilot -> Head Hermes -> Lucas -> answer -> the
+   same task resumes once without duplicate work or notification.
+3. GSC offline: one existing offline machine-gated task only; no live game action; preserve the
+   conformance/native-diff stack and prove no test, fixture, oracle, or baseline changed.
+4. Parallel: two project topics and one goal each; prove state/worktree/memory isolation, global and
+   per-project capacity, independent verification, reporting isolation, and no shared-state damage.
+5. Soak: 24 observed hours covering scheduler ticks, gateway restart, host reboot, PAUSE during
+   work, notification failure/recovery, usage/cost reconciliation, exact-once actions/deliveries,
+   bounded review backlog, and deterministic terminal closure.
+
+After each pilot/window, restore PAUSE, verify its hash/state, prove zero unintended workers/sends,
+capture the exact instruction/goal/task/run/commit/gate/verifier/review/report/delivery audit chain,
+and stop on any mismatch. Do not advance to the next pilot on partial evidence. Promotion requires
+all production-plan gates: all controls green, no default-branch push or autonomous deployment
+path, verified branch protection, demonstrated backup/restore and crash recovery, four completed
+pilots with no lost or duplicate action/event/delivery, bounded review backlog, stable memory and
+recovery, and explicit Lucas approval.
+
+Create/update the Phase 8 handoff and append exact commands, results, production windows, rollback
+evidence, pilot/soak audit chains, final deployed OIDs, and final PAUSE evidence to the project-pilot
+evidence. Do not push a Phase 8 branch, open its PR, merge, promote beyond Phase 8, or prune evidence
+unless Lucas separately authorizes the applicable action.
+```
