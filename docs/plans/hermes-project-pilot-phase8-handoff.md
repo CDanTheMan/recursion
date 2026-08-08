@@ -24,8 +24,9 @@ related:
 - Phase 8 implementation commit: `7d0dc10fcb5914f98353be1f73deb15498e71b7c`.
 - Local review branch: `review/hermes-phase8-pilot` in the clean worktree
   `C:\Users\drfoo\github\recursion-hermes-phase8`, based on merged `origin/master`.
-- Publication state: local only. The Phase 8 branch has not been pushed; no PR has been opened; no
-  merge or deployment has occurred.
+- Publication state: Lucas separately authorized a push after local implementation, verification,
+  and evidence were complete. The branch was published with initial remote tip
+  `a411e1cdcc999c9606f35879d0ad3a1d3d58f438`; no PR was opened, and no merge or deployment occurred.
 - Exact Linux proof: 17/17 historical baseline; every Phase 1-7 behavioral control and positive
   audit; all six Phase 8 plan/window/assist controls; the real Linux parallel-capacity control; and
   the Phase 8 positive architecture audit are green at the exact implementation OID.
@@ -206,13 +207,14 @@ evidence is a no-go for the next window.
 ## Authorization boundary and next action
 
 Lucas approved the Phase 8 implementation plan and the requirement to replace the old Chiron plan
-shape. That approval authorized local Phase 8 authoring and read-only preflight, not a push, PR,
-merge, production repair, deployment, configuration change, PAUSE removal, human-visible
-notification, backup/restore drill, or pilot window.
+shape. That approval authorized local Phase 8 authoring and read-only preflight. Lucas later
+authorized the review-branch push, which is the only remote mutation completed. Neither approval
+authorized a PR, merge, production repair, deployment, configuration change, PAUSE removal,
+human-visible notification, backup/restore drill, or pilot window.
 
-The next possible action is a separately authorized publication of the clean local Phase 8 review
-branch. Deployment cannot be proposed as go until the two Phase 1 findings, branch-protection gate,
-and production backup/restore demonstration are resolved through reviewed actions. The first
-Chiron window additionally requires the merged/deployed Phase 8 code, a configured human-owned
-pilot model alias and bounded capacity, a fresh Lucas goal instruction, exact plan-digest approval,
-and exact window authorization.
+The next action belongs to Lucas's GitHub review workflow: review and merge the published branch,
+then prune it when satisfied. Deployment cannot be proposed as go until the two Phase 1 findings,
+branch-protection gate, and production backup/restore demonstration are resolved through reviewed
+actions. The first Chiron window additionally requires the merged/deployed Phase 8 code, a
+configured human-owned pilot model alias and bounded capacity, a fresh Lucas goal instruction,
+exact plan-digest approval, and exact window authorization.

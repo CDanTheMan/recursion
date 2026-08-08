@@ -252,9 +252,9 @@ Required controls:
   review branch, pilot report, head report, and all delivery acknowledgements.
 ## Phase 8 - Observed pilots and promotion
 
-Status: fresh-plan/window controls are authored and exact-commit control-complete on the local,
-unpublished `review/hermes-phase8-pilot` branch. No Phase 8 deployment, production configuration
-change, observed pilot, human-visible notification, or soak has started. See
+Status: fresh-plan/window controls are authored, exact-commit control-complete, and published on
+`review/hermes-phase8-pilot` for Lucas's review. No PR, merge, Phase 8 deployment, production
+configuration change, observed pilot, human-visible notification, or soak has started. See
 `docs/plans/hermes-project-pilot-phase8-handoff.md`.
 
 Run pilots through the real hierarchy, not by manually driving worker commands.

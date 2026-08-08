@@ -1554,8 +1554,35 @@ The final deployed OID observed by Phase 8 is
 `87189cd6e43ecc3d91f78881b82fb2186c7b2ebe`; the final PAUSE SHA-256 is
 `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`. Production remains paused.
 The two Phase 1 findings, unverified branch protection, undemonstrated production backup/restore,
-unset model/capacity configuration, and unpublished/unmerged Phase 8 implementation are hard gates.
+unset model/capacity configuration, and unmerged Phase 8 implementation are hard gates.
 
-No Phase 8 branch push, PR, merge, deployment, production flag/concurrency change, PAUSE removal,
-human-visible notification, product-repository mutation, backup/restore drill, live pilot, or soak
-occurred. Every such next action requires separate Lucas authorization.
+### Phase 8 review-branch publication follow-up
+
+After Phase 8 implementation, exact-commit verification, live read-only preflight, handoff, and
+evidence were complete, Lucas separately authorized pushing the commits and review branch for his
+review and merge. Immediately before publication:
+
+```text
+git fetch origin
+# FETCH_RC=0
+# origin/master=7aa6e0f44ffd5145d15c38dfad893ed46389308b
+# origin/master is an ancestor of local HEAD
+
+git ls-remote --heads origin refs/heads/review/hermes-phase8-pilot
+# rc=0; branch absent
+
+git push --set-upstream origin review/hermes-phase8-pilot
+# rc=0; new remote branch created
+# initial remote tip=a411e1cdcc999c9606f35879d0ad3a1d3d58f438
+# exact local/remote OID match
+```
+
+Publication used a normal non-force push. The full GitHub CLI was unavailable, but it was not
+needed for this explicitly push-only action; the configured authenticated Git transport succeeded.
+No PR was opened. The documentation-only follow-up commit records the publication and is part of
+the same authorized branch push.
+
+No Phase 8 PR, merge, deployment, production flag/concurrency change, PAUSE removal, human-visible
+notification, product-repository mutation, backup/restore drill, live pilot, soak, or branch prune
+occurred. Those actions remain separate and, except for Lucas's own review/merge/prune workflow,
+require the applicable explicit authorization.
