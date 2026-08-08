@@ -1,8 +1,8 @@
 # Recursion board — live registry
 
-Tick: 2026-08-08T06:15:01Z  ·  rendered 2026-08-08T06:15:56Z
+Tick: 2026-08-08T06:30:01Z  ·  rendered 2026-08-08T06:31:11Z
 
 | Workstream | Tier | Model | State | Started | Tokens | $ metered | Note |
 |---|---|---|---|---|---|---|---|
-| supervision | heartbeat | gpt-5.6-luna | done | 06:15:23Z | 27216 | 0.0000 | brief: unanswered inbox blocker |
-| supervision | brief | gpt-5.6-terra | done | 06:15:34Z | 28218 | 0.0000 | intra-day refresh (silent) |
+| supervision | heartbeat | gpt-5.6-luna | done | 06:30:23Z | 27284 | 0.0000 | brief: Inbox escalation |
+| supervision | brief | gpt-5.6-terra | done | 06:30:35Z | 28158 | 0.0000 | daily brief (pushed) |
