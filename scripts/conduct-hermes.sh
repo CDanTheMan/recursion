@@ -21,11 +21,12 @@ ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
 
-FILE=""; DRY=0
+FILE=""; DRY=0; PAUSED_SAFE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --file) FILE="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
+    --paused-safe) PAUSED_SAFE=1; shift ;;
     *) shift ;;
   esac
 done
@@ -35,7 +36,8 @@ log(){ echo "[$(date -Is)] conduct-hermes: $*" | tee -a "$LOG" >&2; }
 ev(){ bash scripts/taskctl.sh event "$1" "" "$2" >/dev/null 2>&1 || true; }
 
 drain_queue(){
-  local queue_file claim_rc child_rc action_state aggregate=0
+  local queue_file claim_rc child_rc action_state aggregate=0 project global first i
+  local -a pids=() files=() projects=() claim_args=()
   [ "$DRY" = 0 ] || { log "--dry-run requires an explicit --file"; return 2; }
   [ -x "$ROOT/scripts/decision-queue.py" ] \
     || { log "durable decision queue helper is absent"; return 74; }
@@ -43,42 +45,95 @@ drain_queue(){
   exec 8>>"$ROOT/state/.locks/hermes-control.lock"
   flock -n 8 || { log "control lock contended; refusing overlapping actuation"; return 73; }
   python3 "$ROOT/scripts/decision-queue.py" import-journal >/dev/null || return $?
+
+  finalize_claim(){
+    local claimed="$1" result_rc="$2" state
+    state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed")" || return $?
+    case "$state" in
+      succeeded) python3 "$ROOT/scripts/decision-queue.py" succeed "$claimed" "action succeeded" >/dev/null ;;
+      failed|cancelled)
+        python3 "$ROOT/scripts/decision-queue.py" fail "$claimed" "action $state rc=$result_rc" >/dev/null
+        aggregate=1 ;;
+      running) log "decision remains coupled to a running action"; return 75 ;;
+      absent)
+        if [ "$result_rc" -eq 75 ] || [ -f "$ROOT/state/PAUSE" ]; then
+          python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "execution deferred" >/dev/null
+          return 75
+        fi
+        python3 "$ROOT/scripts/decision-queue.py" fail "$claimed" "no action record rc=$result_rc" >/dev/null
+        aggregate=1 ;;
+      *) log "corrupt action state '$state'; preserving $claimed"; return 74 ;;
+    esac
+  }
+
+  # Reconcile projections left running by a prior actuator process before claiming anything
+  # new. A genuinely running action is never double-launched and blocks new admissions until
+  # its own durable action reaches terminal state.
+  shopt -s nullglob
+  for queue_file in "$ROOT/state/decision-queue/running"/*.json; do
+    action_state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$queue_file")" || return $?
+    case "$action_state" in
+      succeeded) python3 "$ROOT/scripts/decision-queue.py" succeed "$queue_file" "recovered action succeeded" >/dev/null || return $? ;;
+      failed|cancelled) python3 "$ROOT/scripts/decision-queue.py" fail "$queue_file" "recovered action $action_state" >/dev/null || return $?; aggregate=1 ;;
+      absent) python3 "$ROOT/scripts/decision-queue.py" defer "$queue_file" "recovered claim had no action" >/dev/null || return $? ;;
+      running) log "live action recovery is still running; refusing new admission"; return 75 ;;
+      *) log "corrupt recovered action state '$action_state'"; return 74 ;;
+    esac
+  done
+
+  # Deterministic state transitions run serially. They may enqueue more transitions, which this
+  # same loop drains before any worker dispatch, preserving the goal/task CAS order.
   while :; do
-    queue_file="$(python3 "$ROOT/scripts/decision-queue.py" claim)"
+    if [ "$PAUSED_SAFE" = 1 ]; then
+      queue_file="$(python3 "$ROOT/scripts/decision-queue.py" claim-pending --kind non-work \
+        --verb noop --verb pilot-plan-propose --verb pilot-plan-approve --verb pilot-window-open \
+        --verb pilot-window-close --verb assist-answer)"
+    else
+      queue_file="$(python3 "$ROOT/scripts/decision-queue.py" claim-pending --kind non-work)"
+    fi
     claim_rc=$?
     [ "$claim_rc" -ne 4 ] || break
     [ "$claim_rc" -eq 0 ] || return "$claim_rc"
     RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
       bash "$ROOT/scripts/conduct-hermes.sh" --file "$queue_file"
     child_rc=$?
-    action_state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$queue_file")" \
-      || return $?
-    case "$action_state" in
-      succeeded)
-        python3 "$ROOT/scripts/decision-queue.py" succeed "$queue_file" "action succeeded" >/dev/null \
-          || return $? ;;
-      failed|cancelled)
-        python3 "$ROOT/scripts/decision-queue.py" fail "$queue_file" "action $action_state rc=$child_rc" >/dev/null \
-          || return $?
-        aggregate=1 ;;
-      running)
-        # A live or unreconciled Phase 2 action claim must never be launched again. Leave its
-        # decision in running so a later lease reconciliation can make the terminal call.
-        log "decision remains coupled to a running action; stopping this queue pass"
-        return 75 ;;
-      absent)
-        if [ "$child_rc" -eq 75 ] || [ -f "$ROOT/state/PAUSE" ]; then
-          python3 "$ROOT/scripts/decision-queue.py" defer "$queue_file" "execution deferred" >/dev/null \
-            || return $?
-          return 75
-        fi
-        python3 "$ROOT/scripts/decision-queue.py" fail "$queue_file" "no action record rc=$child_rc" >/dev/null \
-          || return $?
-        aggregate=1 ;;
-      *)
-        log "corrupt action state '$action_state'; preserving the running decision"
-        return 74 ;;
-    esac
+    finalize_claim "$queue_file" "$child_rc" || return $?
+  done
+
+  [ "$PAUSED_SAFE" = 0 ] || return "$aggregate"
+
+  # Work decisions remain ordinary actions through this same actuator. The only difference is
+  # that independent projects may occupy separate bounded slots. One slot per project plus the
+  # global ceiling proves isolation; project/goal/window admission is rechecked in --file.
+  global="${RECURSION_PILOT_GLOBAL_CONCURRENCY:-1}"
+  case "$global" in ''|*[!0-9]*) log "invalid global pilot concurrency '$global'"; return 4 ;; esac
+  [ "$global" -ge 1 ] && [ "$global" -le 16 ] || { log "global pilot concurrency must be 1..16"; return 4; }
+  while :; do
+    while [ "${#pids[@]}" -lt "$global" ]; do
+      claim_args=(claim-pending --kind work)
+      for project in "${projects[@]}"; do claim_args+=(--exclude-project "$project"); done
+      queue_file="$(python3 "$ROOT/scripts/decision-queue.py" "${claim_args[@]}")"
+      claim_rc=$?
+      [ "$claim_rc" -ne 4 ] || break
+      [ "$claim_rc" -eq 0 ] || return "$claim_rc"
+      project="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("project","") or "")' "$queue_file")"
+      [ -n "$project" ] || project="unknown-$(basename "$queue_file")"
+      RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
+        bash "$ROOT/scripts/conduct-hermes.sh" --file "$queue_file" &
+      pids+=("$!"); files+=("$queue_file"); projects+=("$project")
+    done
+    [ "${#pids[@]}" -gt 0 ] || break
+    first="${pids[0]}"; queue_file="${files[0]}"
+    wait "$first"; child_rc=$?
+    finalize_claim "$queue_file" "$child_rc" || return $?
+    pids=("${pids[@]:1}"); files=("${files[@]:1}"); projects=("${projects[@]:1}")
+    if [ -f "$ROOT/state/PAUSE" ]; then
+      for ((i=0; i<${#pids[@]}; i++)); do
+        wait "${pids[$i]}"; child_rc=$?
+        finalize_claim "${files[$i]}" "$child_rc" || true
+      done
+      return 75
+    fi
   done
   return "$aggregate"
 }
@@ -90,7 +145,7 @@ fi
 
 [ -f "$FILE" ] || { log "no decision file at $FILE"; exit 2; }
 
-VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify reconcile-goal task-transition goal-transition verify-goal publish-task notification-reconcile notification-deliver notification-portfolio notification-audit notification-recover"
+VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify reconcile-goal task-transition goal-transition verify-goal publish-task notification-reconcile notification-deliver notification-portfolio notification-audit notification-recover"
 RAW_DECISION="$(cat "$FILE" 2>/dev/null || true)"
 VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$RAW_DECISION" 2>&1)"
 case "$VALID" in
@@ -122,10 +177,14 @@ for a in ${ARGS+"${ARGS[@]}"}; do
 done
 
 # --- PAUSE: deciding is awareness, acting is not (D-012). --------------------------------
-if [ -f "$ROOT/state/PAUSE" ] && [ "$VERB" != "noop" ]; then
+if [ -f "$ROOT/state/PAUSE" ]; then
+  case "$VERB" in
+    noop|pilot-plan-propose|pilot-plan-approve|pilot-window-open|pilot-window-close|assist-answer) : ;;
+    *)
   log "PAUSED — refusing to execute '$VERB'. The decision is recorded; it will not run until resume."
   ev decision-deferred "paused: $VERB"
-  exit 75
+      exit 75 ;;
+  esac
 fi
 
 # --- durable action claim. The decision file may be replayed after a crash or scheduler retry.
@@ -309,7 +368,7 @@ case "$VERB" in
       || { log "portfolio-add needs project, remote, and charter text"; exit 2; }
     run bash scripts/author.sh portfolio-add "$A0" "$A1" "$TEXT"; rc=$? ;;
 
-  pilot-plan-propose|pilot-task-create|pilot-worker-request|pilot-verifier-request|pilot-block|pilot-escalate|pilot-goal-verify)
+  pilot-plan-propose|pilot-plan-approve|pilot-window-open|pilot-window-close|pilot-task-create|pilot-worker-request|pilot-verifier-request|pilot-block|pilot-escalate|pilot-goal-verify)
     # Project-pilot authority is rechecked against the durable topic/pilot/charter records here.
     # The helper may create scoped proposal/task state; it never launches a worker or publishes.
     run python3 scripts/project-pilot.py execute "$FILE"; rc=$? ;;
@@ -365,7 +424,7 @@ PY
   assist-answer)
     A0="${ARGS[0]:-}"; [ -n "$A0" ] || { log "assist-answer needs a task id"; exit 2; }
     [ -n "$TEXT" ] || { log "REFUSED - assist-answer needs prose in the text field"; exit 2; }
-    run bash scripts/assist.sh answer "$A0" "$TEXT"; rc=$? ;;
+    RECURSION_INSTRUCTION_ID="$INSTRUCTION_ID" run bash scripts/assist.sh answer "$A0" "$TEXT"; rc=$? ;;
 
   noop)
     log "noop — nothing to run${WHY:+ ($WHY)}" ;;
@@ -384,6 +443,10 @@ PY
     # The gate is the contract (delegation-design.md): no acceptance command, no autonomy.
     if [ -z "$(sed -n 's/^acceptance: *//p' "state/tasks/$ID.md" | head -1)" ]; then
       log "REFUSED — task $ID has no acceptance gate; it must escalate, not run"; exit 5
+    fi
+    if grep -q '^pilot_id: ' "state/tasks/$ID.md" && [ -x scripts/project-reconcile.py ]; then
+      RECURSION_ROOT="$ROOT" python3 scripts/project-reconcile.py admit-work "$ID" >/dev/null \
+        || { log "REFUSED - task $ID lacks exact open pilot-window authority"; exit 5; }
     fi
     run bash scripts/work.sh "$ID"; rc=$? ;;
 
@@ -424,6 +487,10 @@ esac
     fi
   else action_transition failed "log=$LOG rc=$rc"
   fi || rc=74
+  if [ "$rc" -ne 0 ] && [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ]; then
+    RECURSION_ROOT="$ROOT" bash scripts/intake.sh release "$INSTRUCTION_ID" "$ACTION_ID" \
+      || log "failed action $ACTION_ID could not reopen instruction $INSTRUCTION_ID"
+  fi
   ev decision-executed "$VERB rc=$rc"
   action_unlock; trap - EXIT
 }

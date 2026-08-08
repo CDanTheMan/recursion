@@ -19,5 +19,6 @@
   "goal_source": "state/goals/goal-chiron-learning-shell.md",
   "memory_key": "telegram-topic:10",
   "worktree_root": ".worktrees/chiron",
+  "window_required": true,
   "status": "active"
 }

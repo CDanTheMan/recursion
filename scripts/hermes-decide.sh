@@ -41,10 +41,51 @@ flock -n 9 || { log "control lock contended; refusing overlapping planner/sync w
 
 # The verbs Hermes may choose. This list is the contract: conduct-hermes.sh refuses anything
 # else, so adding a verb here without adding it there is inert, and vice versa.
-VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify"
+VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify"
+
+# Invoke the durable identity that owns the oldest open instruction. There is still one planner
+# process and one queue; this selects a scoped prompt, not another scheduler or executor.
+SELECTED_INSTRUCTION=""; DECIDER_ACTOR="head-hermes"; PILOT_PROJECT=""
+for instruction_file in "$ROOT/state/instructions"/*.md; do
+  [ -f "$instruction_file" ] || continue
+  [ "$(sed -n 's/^status: *//p' "$instruction_file" | head -1)" = open ] || continue
+  SELECTED_INSTRUCTION="$instruction_file"
+  route="$(sed -n 's/^routing_target: *//p' "$instruction_file" | head -1)"
+  case "$route" in
+    pilot-*)
+      PILOT_PROJECT="$(sed -n 's/^project_id: *//p' "$instruction_file" | head -1)"
+      expected="$(python3 - "$ROOT/state/project-config/$PILOT_PROJECT.json" <<'PY' 2>/dev/null
+import json,sys
+try: print(json.load(open(sys.argv[1],encoding='utf-8')).get('pilot_id',''))
+except Exception: print('')
+PY
+)"
+      [ -n "$PILOT_PROJECT" ] && [ "$route" = "$expected" ] \
+        || { log "REFUSED - open instruction has an invalid project-pilot binding"; exit 5; }
+      DECIDER_ACTOR="$route" ;;
+    *) DECIDER_ACTOR="head-hermes" ;;
+  esac
+  break
+done
+
+build_pilot_brief(){
+  echo "===== AUTHORITY (project pilot $DECIDER_ACTOR; project $PILOT_PROJECT) ====="
+  cat CONTROL_PLANE.md 2>/dev/null || echo "(CONTROL_PLANE.md absent)"
+  echo; echo "===== EXACT AUTHENTICATED INSTRUCTION (highest priority) ====="
+  [ -n "$SELECTED_INSTRUCTION" ] && head -c 8192 "$SELECTED_INSTRUCTION" || echo "(none)"
+  echo; echo "===== PROJECT CHARTER AND LIVE SCOPED STATE ====="
+  python3 scripts/project-pilot.py status "$PILOT_PROJECT" 2>/dev/null \
+    || echo "(project state is not provable - choose pilot-escalate)"
+  echo; echo "===== RUNTIME: PAUSE ====="
+  if [ -f state/PAUSE ]; then echo "PAUSED - no worker may run"; cat state/PAUSE
+  else echo "not paused"; fi
+  echo; echo "===== CAPACITY ====="
+  bash scripts/capacity.sh report 2>/dev/null || echo "(capacity unreadable - do not request work)"
+}
 
 # --- the state brief: ground truth, re-derived every run ---------------------------------
 build_brief(){
+  if [ "$DECIDER_ACTOR" != head-hermes ]; then build_pilot_brief; return; fi
   echo "===== AUTHORITY (you are bound by this) ====="
   cat CONTROL_PLANE.md 2>/dev/null || echo "(CONTROL_PLANE.md absent)"
   echo; echo "===== INSTRUCTIONS FROM LUCAS (highest priority — he is the principal) ====="
@@ -52,7 +93,11 @@ build_brief(){
   # is what was planned, an open instruction is what he wants now.
   # Project-topic instructions are owned by their durable project pilot. Head Hermes sees only
   # explicit head routing (portfolio/policy/cross-project/credentials/production) here.
-  bash scripts/intake.sh open head-hermes 2>/dev/null || echo "(none)"
+  if [ -n "$SELECTED_INSTRUCTION" ] && [ "$DECIDER_ACTOR" = head-hermes ]; then
+    head -c 8192 "$SELECTED_INSTRUCTION"
+  else
+    bash scripts/intake.sh open head-hermes 2>/dev/null || echo "(none)"
+  fi
   echo; echo "===== SCOPE (ANCHOR) ====="
   cat ANCHOR.md 2>/dev/null || echo "(ANCHOR.md absent)"
   echo; echo "===== DECISIONS (open calls you must honour) ====="
@@ -96,10 +141,21 @@ build_brief(){
 
 if [ "$MODE" = "--brief" ]; then build_brief; exit 0; fi
 
-PROMPT="You are HERMES, the executive control plane for the Recursion system.
+if [ "$DECIDER_ACTOR" = head-hermes ]; then
+  ROLE_PROMPT="You are HEAD HERMES, the executive control plane for the Recursion system.
+Lucas is the principal. You own portfolio decisions and delegate bounded project work."
+else
+  MODEL="${RECURSION_PILOT_MODEL:-}"
+  [ -n "$MODEL" ] || { log "REFUSED - RECURSION_PILOT_MODEL alias is not configured"; exit 3; }
+  ROLE_PROMPT="You are $DECIDER_ACTOR, the persistent logical GPT project pilot for $PILOT_PROJECT.
+You may orient, synthesize bounded plans, monitor, and escalate only inside the scoped charter in
+your brief. You do not own portfolio policy and you never implement. Emit only noop or a pilot-*
+verb, with actor=$DECIDER_ACTOR."
+fi
 
-Lucas is the principal. You own the portfolio, choose what runs next, and monitor it. You are
-NOT an implementer: you never write code and never edit files. You emit ONE decision; a
+PROMPT="$ROLE_PROMPT
+
+You are NOT an implementer: you never write code and never edit files. You emit ONE decision; a
 deterministic script executes it through already-proven tooling.
 
 Choose exactly one verb:
@@ -123,19 +179,39 @@ goes in the "text" field, not in args.
   note <project>                + text: append to a project's state file
   assist-answer <task-id>       + text: answer one open assist through the actuator
 
+PROJECT-PILOT PLAN SYNTHESIS - a fresh project instruction becomes a new bounded plan; never
+reuse a historical goal merely because it already exists.
+  pilot-plan-propose <project> <plan-id> + text and a top-level "plan" object containing:
+    schema_version=1, id, project_id; one goal with a NEW id, outcome, acceptance_suite,
+    falsifier, and complete Phase 6 budget; and 1..16 tasks with NEW ids, intent, dependencies,
+    allowed_paths, non_goals including credentials/merge/deploy, acceptance, model_alias,
+    verifier_model_alias, deadlines, network_policy, worker-result-v1 evidence_contract,
+    independent verification, expected_change, and gate_files.
+  pilot-plan-approve <project> <plan-id> <sha256>  materialize only when Lucas's correlated
+    instruction itself names that exact plan id and digest.
+  pilot-window-open <project> <goal-id> <window-id> <seconds>  admit that exact approved goal;
+    Lucas's correlated instruction must name every bound, and PAUSE must still be present.
+  pilot-window-close <project> <window-id>  revoke one window. Observing PAUSE also revokes it.
+Set "actor" to the project's bound pilot id for pilot-plan-propose and other project-pilot
+verbs. Set it to "head-hermes" for approval/window verbs; those additionally require a separate
+authenticated Lucas instruction that names the exact object.
+
 You CANNOT provision a deploy key; only Lucas can, on GitHub. `portfolio-add` prepares a repo and
 `register` completes it, and when the key is missing the honest answer is 'escalate' asking him
 for one. Never report a repo as ready because you wrote a row about it.
 
 HARD RULES
-- If the box is PAUSED, the only executable verb is 'noop'. Decide anyway and explain.
+- If the box is PAUSED, workers, gates, publication, and execution stay forbidden. Safe plan
+  proposal, exact approval/window state, assist answers, and noop remain available through their
+  explicit verbs; opening a window while PAUSED does not lift PAUSE.
 - Never choose work that has no machine-checkable acceptance gate.
 - Never choose anything that merges, deploys, spends money, or touches auth/cron/.env/flags.
   Those are Lucas's. If one is needed, choose 'escalate'.
 - Prefer 'noop' over inventing work. Generation that outruns review is a liability, not
   progress; an idle box with a clear reason is a good outcome.
-- Every decision must serve a goal that already exists in the roadmaps or DECISIONS. If the
-  most valuable next step is not written down anywhere, choose 'escalate' and say so.
+- Every execution decision must serve an existing goal. A fresh project objective is the one
+  exception: synthesize it with pilot-plan-propose, then wait for a separate exact-digest Lucas
+  approval. Never reinterpret or attach it to a historical goal/task shell.
 - Never dispatch work at a repo the PORTFOLIO section reports as FAULT or DIVERGED. A repo whose
   freshness cannot be proven will silently build on a stale base and revert merged fixes.
 - Never dispatch a task that has an OPEN assist. It is waiting on Lucas, and running it again
@@ -153,7 +229,7 @@ HARD RULES
 Reply with reasoning first, then EXACTLY this block and nothing after it:
 
 ===DECISION-START===
-{\"verb\":\"...\",\"args\":[\"...\"],\"text\":\"prose, for the authoring verbs only\",\"instruction_id\":\"exact open instruction id, or omit\",\"project\":\"...\",\"goal\":\"the existing goal this serves\",\"why\":\"one or two sentences\",\"confidence\":\"high|medium|low\",\"wrong_if\":\"the specific observable that would mean this was the wrong call\"}
+{\"actor\":\"head-hermes or the exact bound pilot id\",\"verb\":\"...\",\"args\":[\"...\"],\"text\":\"prose, for the authoring verbs only\",\"plan\":\"complete object for pilot-plan-propose only; omit otherwise\",\"instruction_id\":\"exact open instruction id, or omit\",\"project\":\"...\",\"goal\":\"existing goal, or the fresh proposed goal id\",\"why\":\"one or two sentences\",\"confidence\":\"high|medium|low\",\"wrong_if\":\"the specific observable that would mean this was the wrong call\"}
 ===DECISION-END===
 
 'goal' and 'wrong_if' are mandatory. A decision that cannot name the goal it serves, or what
@@ -232,7 +308,8 @@ bash scripts/taskctl.sh event decision "" "$VERB $(printf '%s' "$DECISION" | pyt
 # to the world: hermes-decide decides and records, and conduct-hermes.sh is the only thing that
 # executes. So a cron entry for this file is safe by construction — the supervisor thinks out
 # loud, on a schedule, and nothing moves until a human turns actuation on.
-if [ -x scripts/notify.sh ] && [ "${RECURSION_DECIDE_QUIET:-0}" != "1" ]; then
+if [ -x scripts/notify.sh ] && [ "${RECURSION_DECIDE_QUIET:-0}" != "1" ] \
+    && [ "$DECIDER_ACTOR" = head-hermes ] && [[ "$VERB" != pilot-* ]] && [ "$VERB" != assist-answer ]; then
   bash scripts/notify.sh "🧭 Hermes decided: $VERB $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(" ".join(json.load(sys.stdin).get("args",[])))' 2>/dev/null)
 why: $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("why",""))' 2>/dev/null)
 wrong if: $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("wrong_if",""))' 2>/dev/null)

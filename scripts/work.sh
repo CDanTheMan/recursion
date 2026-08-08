@@ -24,7 +24,7 @@ LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/$DATE-work.log"
 log(){ echo "[$(date -Is)] work: $*" | tee -a "$LOG" >&2; }
 board(){ pause_checkpoint "board state transition" || return 75; bash scripts/board.sh "$@" >/dev/null 2>&1 || true; }
-notify(){ [ "${RECURSION_NO_NOTIFY:-0}" = "1" ] && return 0; bash "$ROOT/scripts/notify.sh" ${REPO_DIR:+--project "$REPO_DIR"} "$@" >/dev/null 2>&1 || true; }
+notify(){ [ -n "${PILOT_ID:-}" ] && return 0; [ "${RECURSION_NO_NOTIFY:-0}" = "1" ] && return 0; bash "$ROOT/scripts/notify.sh" ${REPO_DIR:+--project "$REPO_DIR"} "$@" >/dev/null 2>&1 || true; }
 
 pause_checkpoint(){
   local stage="${1:-execution}"
@@ -63,6 +63,7 @@ fi
 
 field(){ sed -n "s/^$1: *//p" "$TASK" | head -1 | tr -d '\r'; }
 ID="$(field id)"; WORKSTREAM="$(field workstream)"; GOAL="$(field goal)"
+PILOT_ID="$(field pilot_id)"
 ENGINE="$(field engine)"; ACCEPTANCE="$(field acceptance)"; WORKDIR="$(field workdir)"
 AUTONOMY="$(field autonomy)"; MODEL="$(field model)"
 MODEL_ALIAS="$(field model_alias)"; VERIFIER_MODEL_ALIAS="$(field verifier_model_alias)"
@@ -724,6 +725,7 @@ release_heavy   # the gate is over; do not hold the box through publish/merge
 # RECURSION_ALLOW_PUSH remains human-set and off by default. publish.sh accepts only a direct
 # loop/work/<task-id> source/destination and has no default-branch merge path.
 integrate_remote(){
+  [ -z "${PILOT_ID:-}" ] || return 0  # Phase 6 owns exact-commit pilot publication.
   [ "${RECURSION_ALLOW_PUSH:-0}" = "1" ] || return 0
   pause_checkpoint "review-branch publication" || return 75
   local -a args=(--branch "$BRANCH" --repo "$REPO_DIR")

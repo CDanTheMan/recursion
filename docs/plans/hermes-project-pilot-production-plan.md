@@ -2,7 +2,7 @@
 title: Hermes Project Pilot Production Plan
 type: implementation-plan
 status: proposed
-last-verified: 2026-08-07
+last-verified: 2026-08-08
 related:
   - CONTROL_PLANE.md
   - docs/architecture.md
@@ -232,8 +232,8 @@ Required controls:
 - Once a goal reaches `achieved`, repeated scheduler ticks launch zero workers.
 ## Phase 7 - Reporting and notification fan-out
 
-Status: authored, control-complete, and published on the Phase 7 review branch; not merged,
-deployed, or exercised against a human-visible transport. See
+Status: reviewed and merged in PR #28. The current production checkout descends from that merge,
+but Phase 7 has not been exercised against a human-visible transport. See
 `docs/plans/hermes-project-pilot-phase7-handoff.md`.
 
 Deliverables:
@@ -251,6 +251,11 @@ Required controls:
 - Every terminal goal can be traced from Lucas's instruction to plan, workers, commits, gates, verifier,
   review branch, pilot report, head report, and all delivery acknowledgements.
 ## Phase 8 - Observed pilots and promotion
+
+Status: fresh-plan/window controls are authored, exact-commit control-complete, and published on
+`review/hermes-phase8-pilot` for Lucas's review. No PR, merge, Phase 8 deployment, production
+configuration change, observed pilot, human-visible notification, or soak has started. See
+`docs/plans/hermes-project-pilot-phase8-handoff.md`.
 
 Run pilots through the real hierarchy, not by manually driving worker commands.
 

@@ -27,7 +27,8 @@ DESTINATION = re.compile(
     r"telegram:(-?[1-9][0-9]*)(?::([1-9][0-9]*))?$"
 )
 PROJECT_EVENTS = {
-    "goal-accepted", "plan-approved", "worker-launched", "task-passed", "task-failed",
+    "plan-proposed", "goal-accepted", "plan-approved", "pilot-window-armed", "pilot-window-opened",
+    "pilot-window-closed", "worker-launched", "task-passed", "task-failed",
     "task-blocked", "human-answer-received", "review-branch-published", "goal-verifying",
     "goal-achieved", "goal-stopped",
 }
@@ -212,6 +213,18 @@ def mapped_events(raw: dict) -> list[dict]:
             event_types.append("goal-stopped")
     elif kind == "start":
         event_types.append("worker-launched")
+    elif kind == "pilot-plan-proposed":
+        event_types.append("plan-proposed")
+    elif kind == "pilot-plan-approved":
+        event_types.append("plan-approved")
+    elif kind == "pilot-window-opened":
+        event_types.append("pilot-window-opened")
+    elif kind == "pilot-window-armed":
+        event_types.append("pilot-window-armed")
+    elif kind == "pilot-window-closed":
+        event_types.append("pilot-window-closed")
+    elif kind == "assist-open":
+        event_types.append("lucas-attention-required")
     elif kind == "finish":
         match = re.search(r"(?:^|\s)status=(passed|failed|blocked)(?:\s|$)", detail_text)
         if match:
@@ -245,7 +258,10 @@ def all_mapped(base: Path, project: str | None = None) -> list[dict]:
 
 def message_for(event: dict) -> str:
     labels = {
-        "goal-accepted": "Goal accepted", "plan-approved": "Plan approved",
+        "plan-proposed": "Plan proposed", "goal-accepted": "Goal accepted",
+        "plan-approved": "Plan approved", "pilot-window-armed": "Pilot window armed",
+        "pilot-window-opened": "Pilot window opened",
+        "pilot-window-closed": "Pilot window closed",
         "worker-launched": "Worker launched", "task-passed": "Task passed",
         "task-failed": "Task failed", "task-blocked": "Task blocked",
         "human-answer-received": "Human answer received",
@@ -260,6 +276,14 @@ def message_for(event: dict) -> str:
     suffix = f" goal={event.get('goal_id') or '-'}"
     if event.get("task_id"):
         suffix += f" task={event['task_id']}"
+    detail = detail_object((event.get("source") or {}).get("detail"))
+    if event["event_type"] in {"plan-proposed", "plan-approved"}:
+        suffix += f" plan={detail.get('plan_id') or '-'} digest={detail.get('plan_digest') or '-'}"
+    if event["event_type"] in {"pilot-window-armed", "pilot-window-opened", "pilot-window-closed"}:
+        suffix += f" window={detail.get('window_id') or '-'}"
+    if event["event_type"] == "lucas-attention-required" and event.get("task_id"):
+        raw_detail = str((event.get("source") or {}).get("detail") or "")[:300]
+        suffix += f" question={raw_detail} reply='assist {event['task_id']} <answer>'"
     return f"{label}: project={event['project_id']}{suffix} event={event['id']}"
 
 
@@ -399,6 +423,33 @@ def build_chain(base: Path, project: str, goal_id: str) -> dict:
             continue
         if row.get("goal_id") == goal_id and row.get("verb") == "pilot-plan-propose":
             plans.append(row)
+    structured_plans = []
+    for path in sorted((base / "state/plans" / project).glob("*.json")):
+        try:
+            row = read_json(path)
+        except Exception:
+            continue
+        plan_goal = row.get("plan", {}).get("goal", {}) if isinstance(row.get("plan"), dict) else {}
+        if plan_goal.get("id") == goal_id:
+            structured_plans.append(row)
+    plans.extend(structured_plans)
+    approval_instructions = []
+    for row in structured_plans:
+        approval_id = str(row.get("approval_instruction_id") or "")
+        if not approval_id:
+            continue
+        approval_path = base / "state/instructions" / (
+            f"{int(approval_id):08d}.md" if approval_id.isdigit() else f"{approval_id}.md"
+        )
+        approval_instructions.append({"id": approval_id, "record": read_fields(approval_path)})
+    windows = []
+    for path in sorted((base / "state/pilot-windows").glob("*.json")):
+        try:
+            row = read_json(path)
+        except Exception:
+            continue
+        if row.get("project_id") == project and row.get("goal_id") == goal_id:
+            windows.append(row)
     tasks = []
     for path in sorted((base / "state/tasks").glob("*.md")):
         row = read_fields(path)
@@ -450,7 +501,8 @@ def build_chain(base: Path, project: str, goal_id: str) -> dict:
             })
     return {
         "instruction": {"id": instruction_id, "record": instruction, "action_ids": instruction.get("action_ids")},
-        "plan": plans, "actions": actions, "tasks": tasks, "workers": runs, "commits": commits, "gates": gates,
+        "plan": plans, "plan_approval": approval_instructions, "pilot_windows": windows,
+        "actions": actions, "tasks": tasks, "workers": runs, "commits": commits, "gates": gates,
         "verifier": verifiers, "review_branch": review, "pilot_report": pilot_report,
         "head_report": head_report, "delivery_acknowledgements": acknowledgements,
         "_delivery_count": len(relevant_deliveries),
@@ -465,6 +517,8 @@ def create_terminal_reports(base: Path, terminal: dict) -> None:
         chain["instruction"]["id"] and chain["instruction"]["record"] and chain["plan"] and chain["actions"] and
         chain["tasks"] and chain["workers"] and chain["commits"] and chain["gates"] and chain["verifier"]
     )
+    if any("plan_digest" in row for row in chain["plan"]):
+        prerequisites = prerequisites and bool(chain["plan_approval"] and chain["pilot_windows"])
     if terminal["event_type"] == "goal-achieved":
         prerequisites = prerequisites and bool(chain["review_branch"])
     if not prerequisites:
