@@ -2,7 +2,7 @@
 title: Hermes Project Pilot Phase 0 Evidence
 type: verification
 status: ready-for-review
-last-verified: 2026-08-07
+last-verified: 2026-08-08
 related:
   - CONTROL_PLANE.md
   - docs/plans/hermes-project-pilot-production-plan.md
@@ -13,6 +13,7 @@ related:
   - docs/plans/hermes-project-pilot-phase5-handoff.md
   - docs/plans/hermes-project-pilot-phase6-handoff.md
   - docs/plans/hermes-project-pilot-phase7-handoff.md
+  - docs/plans/hermes-project-pilot-phase8-handoff.md
 ---
 # Hermes project pilot Phase 0 evidence
 
@@ -1274,3 +1275,287 @@ initial published remote tip was `2c022d9116fde584dccead79552da569515cdb18`, exa
 then-current local tip. Publication created `origin/review/hermes-phase7-controls`; it did not open
 a PR, merge, deploy, run a pilot, raise concurrency, remove PAUSE, send a human-visible test
 notification, mutate product repositories, or begin Phase 8.
+
+## Phase 8 — observed-pilot admission and fresh plan synthesis
+
+### Phase 7 merge gate and clean authoring source
+
+Phase 8 began only after fetching `origin` and verifying the Phase 7 merge and artifacts:
+
+```text
+git rev-parse origin/master
+# 7aa6e0f44ffd5145d15c38dfad893ed46389308b
+
+git merge-base --is-ancestor b4d3a30317e7d11f8e31b5e2578eb53aaeb5155c origin/master
+# rc=0
+
+git log -1 --format=%H origin/master
+# 7aa6e0f44ffd5145d15c38dfad893ed46389308b
+# Merge pull request #28 from NotSkittlz/review/hermes-phase7-controls
+
+test -f docs/plans/hermes-project-pilot-phase7-handoff.md
+test -f docs/plans/hermes-project-pilot-phase0-evidence.md
+git ls-tree -r --name-only origin/master -- scripts/tests/hermes-pilot-phase7-red.test.sh \
+  scripts/audit/hermes-pilot-phase7-green.sh docs/plans/hermes-project-pilot-phase7-handoff.md
+# all required paths present
+```
+
+Lucas's merge of PR #28 is the review/approval event. The clean Phase 8 worktree
+`C:\Users\drfoo\github\recursion-hermes-phase8` and branch `review/hermes-phase8-pilot` were created
+from that exact merged commit. The dirty user-owned `master` remained at
+`20c1fa77042f3aa9f5d8978352792f3b058bc0d1`; its tracked-diff hash remained
+`2574b133121e0ea12eca06f5b8bd1d23449fc27a`. No tracked or untracked user-owned file was changed.
+
+### Aligned Phase 8 design boundary
+
+Lucas approved the presented Phase 8 implementation plan and explicitly rejected using the old
+Chiron plan shape for autonomy. The approved local-authoring scope was:
+
+1. require a fresh schema-complete plan synthesized from a new Lucas instruction;
+2. require a separate authenticated Lucas instruction naming the exact plan ID and SHA-256 before
+   goal/task materialization;
+3. require another exact-goal, bounded pilot-window instruction before scheduling;
+4. route plan approval, window control, and assists through Head Hermes while retaining the one
+   canonical decision/action/actuator path;
+5. enforce global and per-project capacity through the existing durable queue and sole actuator;
+6. preserve Phase 5 worker/verifier, Phase 6 reconciliation, Phase 7 outbox, and `notify.sh` as the
+   only implementation, verification, reporting, and delivery paths; and
+7. treat PAUSE observation as revocation of every open window.
+
+The approval did not authorize publication, a PR, merge, deployment, production repair,
+configuration/concurrency change, PAUSE removal, notification, backup/restore drill, or pilot.
+
+### Phase 8 red controls
+
+The Phase 8 falsifiers were committed separately before implementation as
+`234d49b46197b7e120ca96b7efdfdc904ba87ec0` (`test: add phase 8 pilot falsifiers`). Overlaying only
+those controls onto untouched merged base `7aa6e0f` ran:
+
+```text
+bash scripts/tests/hermes-pilot-phase8-red.test.sh
+# rc=1; phase8: 0/6 controls passed
+```
+
+The six intended failures proved the base lacked: a fresh schema-complete plan that cannot reuse
+legacy Chiron state; atomic rejection of malformed/vacuous plans; exact-digest approval and
+idempotent materialization; exact-goal bounded admission; PAUSE window revocation; and one-time
+same-task assist resumption through the durable notification path.
+
+### Phase 8 implementation
+
+Final implementation OID:
+`7d0dc10fcb5914f98353be1f73deb15498e71b7c` (`feat: gate phase 8 project pilots`). It has red-control
+commit `234d49b` as its parent and merged Phase 7 `7aa6e0f` as the red-control commit's parent.
+
+The implementation changes 22 files, adding 1,504 lines and removing 70. It adds no second
+scheduler, executor, publisher, store, sender, or worker launcher. It adds:
+
+- immutable plan records and schema validation for complete Phase 5 task envelopes, Phase 6
+  budgets, DAG integrity, scopes, non-goals, gates, review-only publication, and bounded text;
+- Head-Hermes-only exact-digest approval and idempotent goal/task materialization;
+- armed/open/closed exact-goal pilot windows with first-unpaused-observation activation and PAUSE
+  revocation;
+- logical GPT project-pilot briefs and a fail-closed required `RECURSION_PILOT_MODEL` alias;
+- compare-and-swap same-task assist resumption and failed-action instruction release;
+- filtered existing-queue claims for global capacity and one-worker-per-project capacity;
+- final admission checks at scheduler, actuator, and worker boundaries;
+- Phase 7 event/outbox mappings for plans, windows, and assists, with direct pilot sends suppressed;
+  and
+- runtime backup coverage for plan/window state.
+
+The only tracked production-policy changes are `window_required: true` in the Chiron and GSC pilot
+records. Their concurrency remains zero and no environment/configuration value was changed.
+
+### Exact implementation Linux matrix
+
+A Git bundle produced a disposable named-branch clone at exact OID `7d0dc10` on `gs-recursion`.
+Before testing, the fixture proved:
+
+```text
+git rev-parse HEAD
+# 7d0dc10fcb5914f98353be1f73deb15498e71b7c
+git branch --show-current
+# review/hermes-phase8-pilot
+```
+
+The fixture ran the following 17 top-level commands, with separate logs and correct pipeline return
+codes:
+
+```text
+bash scripts/audit/hermes-pilot-phase0-baseline.sh
+bash scripts/tests/hermes-pilot-phase1-red.test.sh
+bash scripts/audit/hermes-pilot-phase1-green.sh
+bash scripts/tests/hermes-pilot-phase2-red.test.sh
+bash scripts/audit/hermes-pilot-phase2-green.sh
+bash scripts/tests/hermes-pilot-phase3-red.test.sh
+bash scripts/audit/hermes-pilot-phase3-green.sh
+bash scripts/tests/hermes-pilot-phase4-red.test.sh
+bash scripts/audit/hermes-pilot-phase4-green.sh
+bash scripts/tests/hermes-pilot-phase5-red.test.sh
+bash scripts/audit/hermes-pilot-phase5-green.sh
+bash scripts/tests/hermes-pilot-phase6-red.test.sh
+bash scripts/audit/hermes-pilot-phase6-green.sh
+bash scripts/tests/hermes-pilot-phase7-red.test.sh
+bash scripts/audit/hermes-pilot-phase7-green.sh
+bash scripts/tests/hermes-pilot-phase8-red.test.sh && \
+  python3 scripts/tests/hermes-pilot-phase8-parallel.py
+bash scripts/audit/hermes-pilot-phase8-green.sh
+```
+
+Results:
+
+```text
+BASELINE_COMMIT=7d0dc10fcb5914f98353be1f73deb15498e71b7c
+BASELINE_BRANCH=review/hermes-phase8-pilot
+BASELINE_SUITES=17
+BASELINE_FAILED_SUITES=0
+
+# Phase 1 through Phase 7 control and positive-audit logs: RC=0 / ALL PASS
+# Phase 8 behavioral control: 6/6 controls passed
+# Linux parallel control: two projects overlap under global=2 while one project remains capacity=1
+# Phase 8 positive audit: hermes-pilot-phase8-green: ALL PASS
+
+MATRIX_TOTAL=17 MATRIX_FAILED=0
+```
+
+Every individual log ended `RC=0`; the matrix stderr file was empty. The copied local raw-log
+directory is
+`C:\Users\drfoo\github\.tmp\hermes-phase8-exact-7d0dc10fcb59\remote-logs`. Its SHA-256 manifest is:
+
+```text
+matrix-summary.log d311664e62163fb5bd7a4c6516590802c30c2b4b02619d4f2479314dc2881f7d
+phase0-baseline.log 076845918e38ea33a860cde7b073dbaf65f6b9c749ad977e5cb00483edfd54d0
+phase1-audit.log d949cd46da27b19b7986695bf6bfe3f117335277b32a362afd13b9cfb03a107b
+phase1-control.log 5c6878acbab308603cb03bce920a04b0bca64273558c1c04636962d0ba027937
+phase2-audit.log 935135f8a8c724946954bcd7725a0fd86fe18a0c42d78a0064c3106b45710b75
+phase2-control.log c74a3d7433175177f8bac51c062edcfee0b9373f50d93b0d648ead9bad55d45c
+phase3-audit.log 129ddfe72966bfae6edc23aeb68c0e49dc86549bff479a21badc938f887f35c7
+phase3-control.log 9a9e599f5eafe494b4b1b21cdaf91742e984a3fbf3823eeaf7b0363b981642af
+phase4-audit.log 056b904926960be33d18ce860163746ebb8a6d3389cdc2ea7d9d47b668c45e69
+phase4-control.log 65b33383783d93b9573d23d9b19ae5ecd96d95023aa630fd807252752e237488
+phase5-audit.log 2fffacb40497f8c9a0e15a02abc23a5055169251df105b2a6a077f7f3f603779
+phase5-control.log 24f2f09312925fa1f126f2ab599e8261512f655beae487f754c518a6ee7601b9
+phase6-audit.log b26da6df1081f725ed908afe761454ae951ec27b11a15ada00526554496d074d
+phase6-control.log 3741b157258093c3e0bb909febb68c8091da6d479d5b239e1a0e04fd04c555eb
+phase7-audit.log df02aa14273c8be21114b7a90d0324bb3a7fdbcc44871533b87de61ff496595f
+phase7-control.log 2be909329ba5be0730fca2b5d643b236b8fe38b6bde3f93d86d5156f968d1e28
+phase8-audit.log 398f0b4fc9bee8861c63ffcae669cd4b2995f6a26ea76b6655bedd5c9de65d96
+phase8-control.log 105f3b54542bd2739fefe1c12f6d7fe3946ee77553422a91e1150039ed6e6fb2
+```
+
+After copying the logs, process and real-path checks found no active fixture process and resolved
+only the exact disposable paths. Those two `/tmp/recursion-phase8-*7d0dc10fcb59` fixtures were then
+removed and their absence verified. No production path was removed.
+
+### Read-only production preflight
+
+The live constitution was re-read in full; its SHA-256 was
+`da43555b6977e55fc0bb185fd7d6d5e76384b638cbcaff4d798596cce68630d4`. The initial and final
+read-only snapshots bracketed the installed Phase 1 audit:
+
+```text
+ssh gs-recursion 'cd /opt/recursion; test -f state/PAUSE; sha256sum state/PAUSE'
+# rc=0
+# 919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db  state/PAUSE
+
+ssh gs-recursion 'cd /opt/recursion && bash scripts/audit/hermes-pilot-live-phase1-red.sh'
+# LIVE_AUDIT_RC=1
+# exactly 2 expected deployment-gated findings:
+#   hermes-gateway unrestricted/root
+#   installed aiohttp==3.14.1 and cryptography==48.0.1 have known advisories
+
+ssh gs-recursion 'cd /opt/recursion; test -f state/PAUSE; sha256sum state/PAUSE'
+# rc=0; identical SHA-256
+```
+
+At the final `2026-08-08T17:18:24Z` snapshot:
+
+```text
+BRANCH=loop/auto
+OID=87189cd6e43ecc3d91f78881b82fb2186c7b2ebe
+PHASE7_MERGE_ANCESTOR_RC=0
+PHASE7_IMPLEMENTATION_ANCESTOR_RC=0
+PAUSE=root:root,0644,189-bytes
+PAUSE_SHA256=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+hermes-gateway=active
+recursion-hermes-gateway=inactive
+recursion-supervisor.timer=inactive
+recursion-supervisor.service=inactive
+recursion-worker-* units=0
+active project-worktree processes=0
+```
+
+Production moved from the earlier Phase 7 snapshot because its PAUSE-safe awareness cadence wrote
+board/morning commits after merging Phase 7. `git diff 7aa6e0f..87189cd` contains only board, brief,
+event, escalation, inbox, and related awareness state. An untracked `.env.bak.1786014440` was
+observed but not read or changed. The default recursion deploy key currently cannot authenticate
+`git ls-remote origin`; that finding was not repaired or bypassed.
+
+`python3 scripts/project-pilot.py verify-registry` returned `OK`. Chiron and GSC were clean/fresh at
+their remote heads. Both pilot records remained active but configured with
+`concurrency_limit=0`, `max_inflight_workers=0`, and publication false. The old Chiron goal/tasks
+remain in the registry but are ineligible for Phase 8 plan reuse. GSC has exactly the existing two
+proposed offline native-diff tasks; no test, fixture, oracle, baseline, corpus, or product repository
+was touched.
+
+For every registered project, `notification-outbox.py status` reported `paused:true`, zero events,
+and zero deliveries. Runtime decision/action/run/lease/delivery/outbox/report/dead-letter
+directories were absent or empty; no pending/running action existed. `RECURSION_PILOT_MODEL`,
+`RECURSION_DECIDE_MODEL`, and `RECURSION_PILOT_GLOBAL_CONCURRENCY` were all unset.
+
+The runtime backup tool was present and help-loadable, with SHA-256
+`463243151d675838a655757d903e77e93e564035384e35985e84dc41424407c4`; no execution locks existed
+and the host had about 25.8 GB available. Exact fixture backup/restore, PAUSE preservation, manifest
+hash verification, and crash recovery passed in the Phase 2/6/7/8 audits. No production snapshot or
+restore drill has been authorized or demonstrated, so promotion remains blocked on that gate.
+
+### Authenticated GitHub and Santa Clara inventory
+
+Authenticated GitHub REST reads returned HTTP 403 for the default-branch protection endpoint of
+all nine registered repositories: recursion, golden-stallion, golden-stallion-extension,
+golden-stallion-client, ai-investment-cockpit, edgar-morning-brew, guerra-construction-group,
+chiron, and santa-clara-construction. This matches the existing private-repository plan limitation;
+none is verifiably protected and nothing was changed.
+
+The GitHub repository connector and authenticated REST API confirmed:
+
+```text
+repository=NotSkittlz/santa-clara-construction
+visibility=private
+default_branch=main
+size=0
+archived=false
+account_permissions=admin,maintain,pull,push,triage
+deploy_key_title=gs-recursion
+deploy_key_verified=true
+deploy_key_read_only=false
+deploy_key_created_at=2026-08-06T08:00:05Z
+```
+
+On `gs-recursion`, `/root/.ssh/santa-clara-construction_deploy` was readable and had fingerprint
+`SHA256:AioH/xSd+WQNtGNqvSjKLJQwbWf74Dgo5lNOFqyp4lk`. A direct batch SSH authentication test returned
+GitHub's successful-authentication/no-shell response for exactly
+`NotSkittlz/santa-clara-construction`. No key bytes or credential values were logged. The project
+remains pending because the repository is empty and it has no topic, approved goal, or actionable
+charter; no clone or activation occurred.
+
+### Rollback, pilot windows, and final Phase 8 boundary
+
+No production action or observed pilot window occurred, so there is no fabricated pilot/soak audit
+chain or rollback execution to report. The exact rollback gates for deployment, Chiron success,
+Chiron assist, GSC offline, parallel, and soak fault sub-windows are recorded in
+`docs/plans/hermes-project-pilot-phase8-handoff.md`. Each begins with the same mandatory boundary:
+capture a manifest-hashed pre-action snapshot while PAUSE is asserted, and on any mismatch restore
+the exact PAUSE bytes/hash, close the window, terminate and verify zero workers, preserve review
+branches unmerged, prove zero unintended sends, and restore the verified pre-window runtime state
+before considering a retry.
+
+The final deployed OID observed by Phase 8 is
+`87189cd6e43ecc3d91f78881b82fb2186c7b2ebe`; the final PAUSE SHA-256 is
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`. Production remains paused.
+The two Phase 1 findings, unverified branch protection, undemonstrated production backup/restore,
+unset model/capacity configuration, and unpublished/unmerged Phase 8 implementation are hard gates.
+
+No Phase 8 branch push, PR, merge, deployment, production flag/concurrency change, PAUSE removal,
+human-visible notification, product-repository mutation, backup/restore drill, live pilot, or soak
+occurred. Every such next action requires separate Lucas authorization.
