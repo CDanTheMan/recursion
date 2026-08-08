@@ -36,6 +36,8 @@ def queue_root(base: Path) -> Path:
 
 
 def fsync_dir(path: Path) -> None:
+    if os.name == "nt":
+        return
     fd = os.open(path, os.O_RDONLY)
     try:
         os.fsync(fd)
@@ -93,6 +95,7 @@ def normalize(raw: dict, stamp: str | None = None, provider: str | None = None,
         "verb": verb,
         "args": args,
         "text": raw.get("text", "") or "",
+        "plan": raw.get("plan") or None,
         "goal": goal,
         "instruction_id": raw.get("instruction_id") or None,
         "wrong_if": raw.get("wrong_if", ""),
@@ -214,6 +217,30 @@ def claim(base: Path) -> Path | None:
         return target
 
 
+def claim_pending(base: Path, kind: str, excluded_projects: set[str], allowed_verbs: set[str]) -> Path | None:
+    """Claim one pending projection without treating another running claim as singleton state."""
+    if kind not in {"work", "non-work", "any"}:
+        raise ValueError("claim kind must be work, non-work, or any")
+    with queue_lock(base):
+        for source in sorted((queue_root(base) / "pending").glob("*.json")):
+            record = json.loads(source.read_text(encoding="utf-8"))
+            is_work = record.get("verb") == "work"
+            if allowed_verbs and str(record.get("verb") or "") not in allowed_verbs:
+                continue
+            if kind == "work" and not is_work:
+                continue
+            if kind == "non-work" and is_work:
+                continue
+            if str(record.get("project") or "") in excluded_projects:
+                continue
+            target = queue_root(base) / "running" / source.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(source, target)
+            fsync_dir(source.parent); fsync_dir(target.parent)
+            return target
+    return None
+
+
 def transition(base: Path, source: Path, outcome: str, evidence: str) -> Path:
     resolved = source.resolve()
     running_root = (queue_root(base) / "running").resolve()
@@ -262,6 +289,10 @@ def main() -> int:
         cmd.add_argument("--usage-file")
     sub.add_parser("import-journal")
     sub.add_parser("claim")
+    pending = sub.add_parser("claim-pending")
+    pending.add_argument("--kind", choices=("work", "non-work", "any"), default="any")
+    pending.add_argument("--exclude-project", action="append", default=[])
+    pending.add_argument("--verb", action="append", default=[])
     status = sub.add_parser("action-status")
     status.add_argument("file")
     for name in ("succeed", "fail", "defer"):
@@ -288,6 +319,12 @@ def main() -> int:
             print(import_journal(base))
         elif args.command == "claim":
             path = claim(base)
+            if path:
+                print(path)
+                return 0
+            return 4
+        elif args.command == "claim-pending":
+            path = claim_pending(base, args.kind, set(args.exclude_project), set(args.verb))
             if path:
                 print(path)
                 return 0

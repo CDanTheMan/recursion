@@ -19,5 +19,6 @@
   "goal_source": "state/goals/goal-gsc-client-reconstruction.md",
   "memory_key": "telegram-topic:6",
   "worktree_root": ".worktrees/golden-stallion-client",
+  "window_required": true,
   "status": "active"
 }

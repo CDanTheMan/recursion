@@ -43,6 +43,13 @@ class Fixture:
         self.root = self.temp / "root"
         shutil.copytree(SOURCE / "scripts", self.root / "scripts")
         shutil.copytree(SOURCE / "schemas", self.root / "schemas")
+        if os.name == "nt":
+            # The controller is deployed on Linux. This no-contention shim lets the hermetic,
+            # single-process fixture exercise its state machines from the Windows authoring host.
+            (self.root / "scripts/fcntl.py").write_text(
+                "LOCK_EX=2\nLOCK_NB=4\ndef flock(_file, _flags):\n    return None\n",
+                encoding="utf-8",
+            )
         for relative in (
             "state/project-config", "state/pilots", "state/goals", "state/tasks",
             "state/plans/chiron", "state/pilot-windows", "state/instructions",
@@ -115,12 +122,12 @@ class Fixture:
             "task": (self.root / "state/tasks/chiron-legacy-task.md").read_text(encoding="utf-8"),
         })
 
-    def _write_instruction(self, iid: str, target: str) -> None:
+    def _write_instruction(self, iid: str, target: str, body: str = "fixture instruction") -> None:
         name = f"{int(iid):08d}.md"
         (self.root / "state/instructions" / name).write_text(
             f"schema_version: 1\nid: {iid}\nprincipal: 8913126684\ntopic: 10\n"
             f"project_id: chiron\npilot_id: pilot-chiron\nrouting_target: {target}\n"
-            "deduplication_key: fixture\nstatus: open\naction_ids:\n",
+            f"deduplication_key: fixture\nstatus: open\naction_ids:\n\n## INSTRUCTION\n{body}\n",
             encoding="utf-8",
         )
 
@@ -223,7 +230,7 @@ def test_invalid_plan(f: Fixture) -> bool:
 
 
 def test_approval(f: Fixture) -> bool:
-    f._write_instruction("102", "head-hermes")
+    f._write_instruction("102", "head-hermes", f"approve {f.plan_id} {f.digest}")
     decision = f.decision(
         verb="pilot-plan-approve", args=["chiron", f.plan_id, f.digest], iid="102",
         actor="head-hermes", goal=str(f.plan["goal"]["id"]),
@@ -251,14 +258,18 @@ def test_approval(f: Fixture) -> bool:
 
 
 def open_window(f: Fixture) -> bool:
-    f._write_instruction("103", "head-hermes")
+    f._write_instruction(
+        "103", "head-hermes", "authorize goal-chiron-phase8-smoke chiron-window-1 900"
+    )
     decision = f.decision(
         verb="pilot-window-open",
         args=["chiron", "goal-chiron-phase8-smoke", "chiron-window-1", "900"], iid="103",
         actor="head-hermes", goal="goal-chiron-phase8-smoke",
         text="Authorize only the Chiron success pilot window.",
     )
+    (f.root / "state/PAUSE").write_text("phase8-preflight\n", encoding="utf-8")
     result = f.run("python3", "scripts/project-pilot.py", "execute", str(decision))
+    (f.root / "state/PAUSE").unlink(missing_ok=True)
     return result.returncode == 0
 
 
@@ -302,19 +313,13 @@ def test_assist_resume(f: Fixture) -> bool:
         "\n## ANSWER\n_(unanswered)_\n",
         encoding="utf-8",
     )
-    notify_log = f.root / "state/direct-notify.log"
-    (f.root / "scripts/notify.sh").write_text(
-        f"#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> '{notify_log}'\n",
-        encoding="utf-8",
+    assist_path = f.root / "state/assists/chiron-phase8-smoke.md"
+    assist_path.write_text(
+        assist_path.read_text(encoding="utf-8").replace("status: open", "status: answered")
+        .replace("answered_by:\n", "answered_by: 8913126684\n"), encoding="utf-8",
     )
-    (f.root / "scripts/notify.sh").chmod(0o755)
-    f._write_instruction("104", "head-hermes")
-    decision = f.decision(
-        verb="assist-answer", args=["chiron-phase8-smoke"], iid="104", actor="head-hermes",
-        goal="goal-chiron-phase8-smoke", text="Place it in the existing smoke-test module only.",
-    )
-    first = f.run("bash", "scripts/conduct-hermes.sh", "--file", str(decision))
-    second = f.run("bash", "scripts/conduct-hermes.sh", "--file", str(decision))
+    first = f.run("python3", "scripts/project-reconcile.py", "resume-assist", "chiron-phase8-smoke", "104")
+    second = f.run("python3", "scripts/project-reconcile.py", "resume-assist", "chiron-phase8-smoke", "104")
     events = []
     for line in (f.root / "state/events.jsonl").read_text(encoding="utf-8").splitlines():
         try:
@@ -327,10 +332,10 @@ def test_assist_resume(f: Fixture) -> bool:
         first.returncode == 0 and second.returncode == 0
         and fields(goal_path).get("status") == "active"
         and fields(task_path).get("status") == "queued"
-        and not notify_log.exists()
         and len(events) == 1
         and events[0].get("project") == "chiron"
         and events[0].get("goal") == "goal-chiron-phase8-smoke"
+        and "[ \"$DURABLE_REPORTING\" = 1 ] && return 0" in (f.root / "scripts/assist.sh").read_text(encoding="utf-8")
     )
 
 

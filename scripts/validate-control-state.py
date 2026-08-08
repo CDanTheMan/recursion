@@ -19,6 +19,7 @@ IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 STATUSES = {
     "project": {"pending", "active", "paused", "retired"},
     "pilot": {"pending", "active", "paused", "retired"},
+    "plan": {"proposed", "approved", "rejected"},
     "goal": {"draft", "approved", "active", "verifying", "achieved", "blocked", "abandoned", "budget-exhausted", "paused"},
     "task": {"proposed", "ready", "queued", "leased", "running", "verifying", "passed", "failed", "blocked", "stale", "cancelled", "moot", "resolved", "escalated"},
     "run": {"pending", "running", "succeeded", "failed", "blocked", "cancelled", "stale"},
@@ -32,6 +33,7 @@ STATUSES = {
 REQUIRED = {
     "project": ("schema_version", "id", "repo", "default_branch", "deploy_key_ref", "charter", "topic", "pilot_id", "status"),
     "pilot": ("schema_version", "id", "project_id", "charter", "model_policy", "status"),
+    "plan": ("schema_version", "id", "project_id", "pilot_id", "instruction_id", "plan_digest", "plan", "status"),
     "goal": ("schema_version", "id", "project_id", "outcome", "acceptance_suite", "falsifier", "budget", "status"),
     "task": ("schema_version", "id", "goal_id", "dependencies", "allowed_paths", "non_goals", "worker_class", "acceptance", "status"),
     "run": ("schema_version", "id", "task_id", "worker", "worktree", "base_commit", "pid", "lease_expires", "deadline", "usage", "result", "status"),
@@ -92,6 +94,9 @@ def validate(kind: str, value: object) -> dict:
         not isinstance(value["concurrency_limit"], int) or value["concurrency_limit"] < 0
     ):
         fail("concurrency_limit must be a non-negative integer")
+    if kind == "plan":
+        if not isinstance(value.get("plan"), dict) or not re.fullmatch(r"[0-9a-f]{64}", str(value.get("plan_digest") or "")):
+            fail("plan payload or digest is malformed")
     if "budget" in value and kind == "pilot" and not isinstance(value["budget"], dict):
         fail("pilot budget must be an object")
     # Empty Phase 2 goal-budget objects remain a valid pre-Phase-6 projection. A goal is not

@@ -34,6 +34,7 @@
 #   intake.sh open               instructions not yet acknowledged
 #   intake.sh consume <id> <action-id>...      couple consumption to durable actions
 #   intake.sh acknowledge <id> <action-id>...  close only when those actions succeeded
+#   intake.sh release <id> <action-id>...      reopen only after those actions failed
 set -uo pipefail
 export LC_ALL=C
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -102,6 +103,9 @@ PY
       || { echo "intake: action $aid is not coupled to instruction $iid" >&2; return 2; }
     if [ "$required" = succeeded ] && [ "$status" != succeeded ]; then
       echo "intake: action $aid is $status, not succeeded" >&2; return 2
+    fi
+    if [ "$required" = failed ] && [ "$status" != failed ] && [ "$status" != cancelled ]; then
+      echo "intake: action $aid is $status, not failed/cancelled" >&2; return 2
     fi
     csv="${csv:+$csv,}$aid"
   done
@@ -174,7 +178,7 @@ def route_for(body, binding):
         return "head-hermes"
     # Project pilots do not own portfolio/policy, credentials, production, PAUSE, model routing,
     # or another project's priority. Conservative forwarding is safer than a local guess.
-    if re.search(r"\b(portfolio|priorit\w*|policy|spend\w*|credential\w*|deploy\w*|merge\w*|pause|resume|cron|model\s+policy|control\s+plane|deploy\s+key)\b", body, re.I):
+    if re.search(r"\b(portfolio|priorit\w*|policy|spend\w*|credential\w*|deploy\w*|merge\w*|pause|resume|cron|model\s+policy|control\s+plane|deploy\s+key|assist\b|approve\w*\s+plan|plan\s+digest|authoriz\w*\s+.*window|pilot\s+window|go\s*/?\s*no-go)\b", body, re.I):
         return "head-hermes"
     current = binding["project"]
     for other in project_ids:
@@ -318,6 +322,15 @@ acknowledge) ID="${1:?usage: intake.sh acknowledge <id> <action-id>...}"; shift
       ACTIONS="$(coupled_actions "$ID" succeeded "$@")" || exit $?
       atomic_instruction_transition "$F" acknowledged "$ACTIONS" "succeeded actions: $ACTIONS" || exit $?
       echo "acknowledged $ID -> $ACTIONS" ;;
+
+release) ID="${1:?usage: intake.sh release <id> <action-id>...}"; shift
+      F="$DIR/$(printf '%08d' "$ID").md"
+      [ -f "$F" ] || { echo "intake: no instruction $ID" >&2; exit 2; }
+      [ "$(sed -n 's/^status: *//p' "$F" | head -1)" = consumed ] \
+        || { echo "intake: instruction $ID is not consumed" >&2; exit 2; }
+      ACTIONS="$(coupled_actions "$ID" failed "$@")" || exit $?
+      atomic_instruction_transition "$F" open "$ACTIONS" "failed actions reopened instruction: $ACTIONS" || exit $?
+      echo "released $ID -> $ACTIONS" ;;
 
 *) sed -n '30,34p' "$0"; exit 2 ;;
 esac

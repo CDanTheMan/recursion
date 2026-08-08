@@ -50,6 +50,21 @@
       },
       "additionalProperties": true
     },
+    "plan": {
+      "type": "object",
+      "required": ["schema_version", "id", "project_id", "pilot_id", "instruction_id", "plan_digest", "plan", "status"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/identifier"},
+        "project_id": {"$ref": "#/$defs/identifier"},
+        "pilot_id": {"$ref": "#/$defs/identifier"},
+        "instruction_id": {"$ref": "#/$defs/identifier"},
+        "plan_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "plan": {"type": "object"},
+        "status": {"enum": ["proposed", "approved", "rejected"]}
+      },
+      "additionalProperties": true
+    },
     "goal": {
       "type": "object",
       "required": ["schema_version", "id", "project_id", "outcome", "acceptance_suite", "falsifier", "budget", "status"],
