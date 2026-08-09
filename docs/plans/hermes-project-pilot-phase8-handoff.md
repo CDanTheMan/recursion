@@ -2,7 +2,7 @@
 title: Hermes Project Pilot Phase 8 Handoff
 type: handoff
 status: ready-for-review
-last-verified: 2026-08-08
+last-verified: 2026-08-09
 related:
   - CONTROL_PLANE.md
   - docs/architecture.md
@@ -218,3 +218,173 @@ branch-protection gate, and production backup/restore demonstration are resolved
 actions. The first Chiron window additionally requires the merged/deployed Phase 8 code, a
 configured human-owned pilot model alias and bounded capacity, a fresh Lucas goal instruction,
 exact plan-digest approval, and exact window authorization.
+
+## Post-merge hardening follow-up
+
+Lucas subsequently reported the Phase 8 branch merged and pruned. A fresh fetch verified PR #29's
+merge commit `9422b9cc5bf4270b7184b9af6fa31cae8e6a6876` at `origin/master`, all four Phase 8 commits as
+ancestors, the remote review branch absent, and every Phase 8 handoff/evidence artifact present.
+
+Under Lucas's separate, narrow authorization, the production backup/restore gate was then
+demonstrated while PAUSE remained asserted. The root-owned mode-`0700` snapshot and evidence are
+retained at
+`/var/backups/recursion/hermes-pre-phase8-20260808T224858Z-5a8b2f7464cb`; exact restore occurred
+only in `/var/tmp/recursion-restore-drill-20260808T224858Z-5a8b2f7464cb`, all manifest and recovery
+checks passed, and that disposable staging path was removed. `hermes-gateway` alone was stopped for
+the snapshot and restarted active. No deploy, configuration change, PAUSE removal, notification,
+worker, or product-repository mutation occurred.
+
+The final PAUSE SHA-256 remained
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`; production remained
+`loop/auto` at `5a8b2f7464cb5f87bc09ea2e611cfa1453ca1c26`; workers were zero; and all nine outboxes were paused
+with zero events and deliveries. The live Phase 1 audit still has exactly the same two deployment
+gates. Full commands, negative observations, results, rollback evidence, and retained-evidence
+hashes are appended to `docs/plans/hermes-project-pilot-phase0-evidence.md`.
+
+The backup/restore gate is therefore closed. Remaining prerequisites are: activate personal
+GitHub Pro and prove default-branch protection for the private repositories, remediate the two
+Phase 1 live findings through reviewed deployment, deploy the exact merged Phase 8 code under
+PAUSE, configure approved model/capacity values, then obtain a separate authorization for each
+ordered pilot window. The authorized personal GitHub Pro attempt was blocked before any billing
+mutation because this session had no signed-in controllable browser; no organization budget or
+billing setting was changed.
+
+### Branch-protection follow-up
+
+Lucas subsequently activated personal GitHub Pro and explicitly authorized protection for every
+initialized personal repository. Classic rules now protect `recursion/master` plus the `main`
+branches of `golden-stallion`, `golden-stallion-extension`, `golden-stallion-client`,
+`ai-investment-cockpit`, `edgar-morning-brew`, `guerra-construction-group`, and `chiron`.
+
+All eight persisted rules were re-opened and field-audited: pull requests required; approval count
+not required to avoid a one-user deadlock; conversations resolved; administrators unable to
+bypass; force pushes and deletions disabled; status, signature, deployment, linear-history, and
+lock requirements inactive. The empty Santa Clara repository remains deferred until its first
+`main` branch. No organization budget or billing setting was changed.
+
+The initialized-project branch-protection gate is closed. Remaining pre-deployment gates are the
+two unchanged live Phase 1 findings. After those are remediated through a reviewed, PAUSE-held
+deployment action, the exact merged Phase 8 code can be proposed for its own PAUSE-held deployment;
+model/capacity configuration and every pilot window still require their applicable separate
+authorization.
+
+### Phase 1 remediation blocker
+
+Lucas separately authorized the Phase 1 production remediation. The complete PAUSE-held preflight
+passed the 17/17 baseline, every Phase 1-7 control suite, and every Phase 1-7 positive audit. The
+transaction then failed closed before stopping or changing the service: the reviewed
+`cryptography==50.0.0` requirement is OSV-clear but conflicts with Hermes Agent 0.20.0's exact
+`cryptography==48.0.1` distribution metadata, so mandatory `uv pip check` returned one
+incompatibility. The installed and existing upstream source refs retain that exact pin, while the
+latest published Hermes Agent is older and pins an earlier vulnerable version.
+
+Production therefore remains unchanged: the gateway is active under its original root unit and
+venv, both Phase 1 findings remain, no service identities or state directories were created, all
+pilot supervisors and workers are inactive, no notification was sent, and PAUSE remains
+byte-identical at
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`. Exact logs, staged failure,
+rollback material, and a file manifest are retained in the root-owned mode-`0700` bundle
+`/var/backups/recursion/phase1-remediation-20260809T010739Z-7d682044`.
+
+Do not deploy Phase 8 or retry by overriding package metadata, ignoring `pip check`, or using
+`--no-deps`. The next gate is a reviewed Hermes Agent artifact that declares and tests support for
+`cryptography==50.0.0`; after that artifact exists, rerun the same staged compatibility/import/OSV
+checks and the transactional identity migration. Pilot authorization remains out of scope.
+
+### Phase 1 compatibility patch ready for review
+
+Lucas authorized a separate Hermes Agent compatibility fork. The personal fork now exists at
+`NotSkittlz/hermes-agent`; clean local branch `review/phase1-cryptography50` is based directly on
+the deployed Hermes source OID `36cb5ae5530a75def7df3195e49b7a4aa2add482`, which was verified
+as an ancestor of upstream `main` `b79e83827d1e275f3b5f91594e9f7136d7293e5a`.
+
+The local, unpushed review patch updates cryptography to `50.0.0`, every declared and lazy aiohttp
+pin to `3.14.3`, and the complete lock to eliminate the additional h2 advisory with `h2==4.4.1`.
+The 249-package lock and 126-package production-shaped environment are OSV-clear; `uv lock
+--check`, `uv pip check`, installed metadata, gateway/provider imports, RSA/AES round trips, and the
+canonical 144-test targeted suite all pass. The universal all-extras graph resolves; a literal
+Windows all-extras install remains platform-blocked at Matrix's Unix-only `python-olm` source
+build. A separate full-suite attempt timed out at 1,804 seconds without a summary and is not
+claimed as green; all spawned local test processes were terminated and verified absent.
+
+The exact commands, resolved transitions, negative evidence, cleanup, and audit results are in the
+Phase 0 evidence document. No production or PAUSE action occurred. The next admissible step is
+Lucas review/publication of the compatibility source patch; production retry still requires a new
+PAUSE-held preflight and separate authorization. Do not deploy Phase 8 or start a pilot window.
+
+### Authorized compatibility deployment: new sandbox gate
+
+Lucas authorized publication and testing of the Hermes compatibility patch. Branch
+`review/phase1-cryptography50` is published at exact OID
+`498061d8f1dcd855419b30e8729c869596a89ca6`; it was not merged or pruned. Three PAUSE-held attempts
+were fail-closed and are retained at:
+
+- `/var/backups/recursion/phase1-remediation-20260809T052659Z-498061d8` — metadata-verifier defect,
+  before service mutation;
+- `/var/backups/recursion/phase1-remediation-20260809T060745Z-498061d8` — missing
+  `/etc/sysusers.d` parent after gateway stop, followed by successful automatic and independent
+  rollback; and
+- `/var/backups/recursion/phase1-remediation-20260809T141605Z-498061d8` — exact reviewed artifact
+  reached hardened live readiness and closed both Phase 1 findings, but the Phase 1 positive audit
+  exposed a new sandbox-executable permission blocker and triggered rollback.
+
+The final attempt had a third fresh `17/17` baseline plus every Phase 1-7 control and positive audit
+green before mutation. Its staged environment passed all 104 dependency checks, exact source and
+metadata verification, imports, RS256, and complete OSV. While live under the reviewed unit, the
+gateway ran as `hermes-gateway`, the live Phase 1 audit was `ALL PASS`, systemd exposure was
+`3.6 OK`, the post-switch baseline was 17/17, and the Phase 1 red/artifact controls passed. The
+subsequent positive audit failed with:
+
+```text
+env: '/workspace/.recursion-sandbox/claude': Permission denied
+```
+
+The reviewed unit and transaction use `UMask=0077`; the existing sandbox helper creates the copied
+non-`/usr` executable directory after its worktree ownership handoff without explicitly granting
+the dedicated runner traversal. This exact hardened-umask path now requires a separate reviewed
+Recursion patch and red control. No production chmod, manual worker invocation, weakened test, or
+retry was used.
+
+Rollback and independent verification passed. Production is again active on the original root
+gateway/unit, original Hermes OID `36cb5ae5530a75def7df3195e49b7a4aa2add482`, `aiohttp==3.14.1`,
+and `cryptography==48.0.1`; the original two live findings therefore reproduce exactly. Final
+production awareness OID is `6ce55f71a9d5cbef41510379b4f755b5290d3f90`; PAUSE remains exact at
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`; active agents and workers are
+zero; all execution units are inactive; and all nine outboxes are paused with zero events. The
+created service identities and mode-`0700` state directories remain inert for forensics; reviewed
+sysusers/tmpfiles files were rolled back.
+
+Phase 1 remediation, Phase 8 deployment, model/capacity configuration, PAUSE removal,
+notifications, and every pilot window remain blocked. Full exact commands, results, rollback
+proof, bundle contents, and manifest evidence are appended to the Phase 0 evidence document.
+
+### Hardened-umask sandbox compatibility patch ready for review
+
+Lucas authorized the separate Recursion compatibility change. A new exact regression first
+reproduced the copied-executable failure under inherited `umask 0077` as the only Phase 1 control
+failure. The fix keeps the copied non-`/usr` executable root-owned while granting only the
+`recursion-runner` group access: directory mode `0710`, executable mode `0550`. The existing cleanup,
+OS boundary, allowed-path gate, systemd properties, network policy, and publisher controls remain
+unchanged.
+
+Focused Linux proof then passed the Phase 1 control and positive audit, completing bounded work as
+dedicated UID `981`. The full process-wide-`0077` matrix passed baseline 17/17 plus every Phase 1-7
+control and every Phase 1-7 positive audit, ending `FULL_UMASK_MATRIX=ALL_PASS` with zero residual
+workers. One preliminary detached-HEAD run was correctly refused by the baseline before suite
+execution; that negative fixture result is preserved, and the unchanged named-branch rerun is the
+claimed evidence.
+
+The exact three implementation/control file hashes, patch, commands, logs, final production state,
+and manifest are retained at root-owned mode-`0700`
+`/var/backups/recursion/phase1-umask-compat-20260809T174059Z-9422b9cc`. The disposable test clone was
+removed after the manifest passed. Final production remains unchanged on awareness OID
+`ddff98258b39f6d8d5f4811ea2ff7ee47952a017`, original Hermes OID
+`36cb5ae5530a75def7df3195e49b7a4aa2add482`, original root gateway PID `2542748`, and exact PAUSE
+SHA-256 `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`; workers are zero,
+execution units are inactive, and all nine outboxes are paused with zero events.
+
+The five-file Recursion change is staged only on `review/hermes-post-phase8-hardening`. It is not
+committed, pushed, merged, or deployed. The next action is Lucas review/publication of this patch.
+Only after it is merged into `origin/master` may a new full PAUSE-held preflight and separately
+authorized Phase 1 deployment be proposed. Phase 8 deployment and every pilot window remain
+blocked.

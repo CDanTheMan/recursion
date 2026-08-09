@@ -94,7 +94,26 @@ else
   no "worker inherited controller authority (status=$(status_of worker-sandbox), secret=$([ -e "$LEAK" ] && echo read || echo denied), outside=$([ -e "$OUTSIDE" ] && echo wrote || echo denied), publisher=$([ -e "$PUBLOG" ] && echo called || echo denied))"
 fi
 
-# 3. The publisher itself must reject protected spellings, symbolic refs, and revision/refspec
+# 3. The copied model executable must remain reachable by the dedicated runner when the
+# hardened controller/unit umask is 0077. The directory and executable stay outside allowed_paths
+# and are removed before the controller evaluates the worker diff.
+mktask worker-sandbox-umask "test -f app/ok.txt && test -s app/uid.txt"
+(
+  umask 0077
+  STUB_ARM_SCRIPT='mkdir -p app; id -u > app/uid.txt; echo ok > app/ok.txt' \
+  PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 RECURSION_GIT_FETCH=0 \
+  RECURSION_REQUIRE_FRESH_BASE=0 RECURSION_TEST_WORKER=sandbox \
+  bash "$R/scripts/work.sh" worker-sandbox-umask
+) >"$TMP/umask.out" 2>&1
+umask_uid="$(git -C "$R" show loop/work/worker-sandbox-umask:app/uid.txt 2>/dev/null | tr -d '[:space:]')"
+if [ "$(status_of worker-sandbox-umask)" = passed ] \
+   && [ -n "$umask_uid" ] && [ "$umask_uid" != "$(id -u)" ]; then
+  ok "copied worker executable remained reachable under hardened controller umask"
+else
+  no "copied worker executable was inaccessible under hardened controller umask (status=$(status_of worker-sandbox-umask))"
+fi
+
+# 4. The publisher itself must reject protected spellings, symbolic refs, and revision/refspec
 # expressions. Each case gets a fresh local bare origin, so this cannot touch a real repository.
 probe_ref(){ # label default-branch candidate
   local label="$1" def="$2" candidate="$3" d="$TMP/pub-$1" before after out rc

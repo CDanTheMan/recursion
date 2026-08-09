@@ -84,8 +84,9 @@ SANDBOX_BIN="$WT/.recursion-sandbox"
 case "$EXE_REAL" in
   /usr/*) ;;
   *)
-    rm -rf -- "$SANDBOX_BIN"; mkdir -p "$SANDBOX_BIN"
-    cp "$EXE_REAL" "$SANDBOX_BIN/$ENGINE"; chmod 0555 "$SANDBOX_BIN/$ENGINE"
+    rm -rf -- "$SANDBOX_BIN"
+    install -d -o 0 -g "$RUNNER_GID" -m 0710 "$SANDBOX_BIN"
+    install -o 0 -g "$RUNNER_GID" -m 0550 "$EXE_REAL" "$SANDBOX_BIN/$ENGINE"
     INNER_EXE="/workspace/.recursion-sandbox/$ENGINE"
     ;;
 esac
