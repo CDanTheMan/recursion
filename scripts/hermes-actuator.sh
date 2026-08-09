@@ -12,7 +12,16 @@ cd "$ROOT" || exit 3
 log "started; durable queue consumer is supervised"
 while [ "$STOP" = 0 ]; do
   if [ -f "$ROOT/state/PAUSE" ]; then
-    # PAUSE halts execution, not awareness.  Stay supervised without consuming or dropping work.
+    # PAUSE halts execution, not awareness. It also revokes every Phase 8 window so a later
+    # resume cannot replay old human authority. This closes state only; it dispatches nothing.
+    if [ -x "$ROOT/scripts/project-reconcile.py" ]; then
+      RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" close-paused-windows >/dev/null \
+        || log "PAUSE window revocation failed; execution remains paused"
+    fi
+    # Drain only state-authoring/approval actions that are explicitly safe under PAUSE. Worker,
+    # gate, publisher, and notification-delivery decisions remain pending and untouched.
+    RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/conduct-hermes.sh" --paused-safe >/dev/null 2>&1 \
+      || true
     sleep "$INTERVAL" & wait $! 2>/dev/null || true
     continue
   fi

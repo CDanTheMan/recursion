@@ -46,6 +46,8 @@ state/.decision-latest.json
 state/actions/
 state/action-events.jsonl
 state/pilot-requests/
+state/plans/
+state/pilot-windows/
 state/runs/
 state/evidence/
 state/recovery/

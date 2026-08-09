@@ -42,12 +42,18 @@ DIR="$ROOT/state/assists"; mkdir -p "$DIR"
 TASKCTL="$ROOT/scripts/taskctl.sh"
 NOTIFY="$ROOT/scripts/notify.sh"
 CMD="${1:-list}"; shift 2>/dev/null || true
-ASSIST_PROJECT="$(taskrepo "${1:-}" 2>/dev/null || true)"
 now(){ date -u +%FT%TZ; }
 # An assist is routed by the TASK's repo, so a GSC question lands in the GSC topic rather
 # than in a general stream where it competes with build noise for attention.
 taskrepo(){ sed -n 's/^repo: *//p' "$ROOT/state/tasks/$1.md" 2>/dev/null | head -1 | tr -d '\r'; }
-notify(){ [ "${RECURSION_NO_NOTIFY:-0}" = "1" ] && return 0; [ -x "$NOTIFY" ] && bash "$NOTIFY" ${ASSIST_PROJECT:+--project "$ASSIST_PROJECT"} "$@" >/dev/null 2>&1 || true; }
+ASSIST_PROJECT="$(taskrepo "${1:-}" 2>/dev/null || true)"
+DURABLE_REPORTING=0
+is_durable_task(){
+  local t="$ROOT/state/tasks/$1.md"
+  [ -n "$(sed -n 's/^project_id: *//p' "$t" 2>/dev/null | head -1)" ] \
+    && [ -n "$(sed -n 's/^pilot_id: *//p' "$t" 2>/dev/null | head -1)" ]
+}
+notify(){ [ "$DURABLE_REPORTING" = 1 ] && return 0; [ "${RECURSION_NO_NOTIFY:-0}" = "1" ] && return 0; [ -x "$NOTIFY" ] && bash "$NOTIFY" ${ASSIST_PROJECT:+--project "$ASSIST_PROJECT"} "$@" >/dev/null 2>&1 || true; }
 event(){ [ -x "$TASKCTL" ] && RECURSION_ROOT="$ROOT" bash "$TASKCTL" event "$1" "$2" "$3" >/dev/null 2>&1 || true; }
 
 f(){ sed -n "s/^$1: *//p" "$2" 2>/dev/null | head -1 | tr -d '\r'; }
@@ -61,6 +67,7 @@ case "$CMD" in
 
 open)
   ID="${1:?usage: assist.sh open <task-id> <kind> <question>}"
+  is_durable_task "$ID" && DURABLE_REPORTING=1
   KIND="${2:-decision}"; QUESTION="${3:-}"
   A="$DIR/$ID.md"
   [ -n "${QUESTION//[[:space:]]/}" ] || { echo "assist: refusing to open an assist with no question" >&2; exit 2; }
@@ -107,13 +114,14 @@ open)
     echo "## ANSWER"
     echo "_(unanswered — reply with: recursion assist $ID \"...\")_"
   } > "$A"
-  event assist-open "$ID" "$KIND"
+  event assist-open "$ID" "$KIND: $(printf '%s' "$QUESTION" | head -c 240)"
   echo "NEW $ID"
   notify "🙋 [$ID] needs you ($KIND): $(printf '%s' "$QUESTION" | head -c 240)
 Answer with: recursion assist $ID \"...\"" ;;
 
 answer)
   ID="${1:?usage: assist.sh answer <task-id> <text...>}"; shift
+  is_durable_task "$ID" && DURABLE_REPORTING=1
   TEXT="$*"
   A="$DIR/$ID.md"
   [ -f "$A" ] || { echo "assist: no assist for '$ID' — nothing asked for it" >&2; exit 2; }
@@ -137,8 +145,13 @@ PY
   # Unblock EXACTLY this task. Other blocked tasks are other questions.
   T="$ROOT/state/tasks/$ID.md"
   if [ -f "$T" ]; then
-    sed -i 's/^status: .*/status: queued/' "$T"
-    sed -i '/^blocked_on:/d' "$T"
+    if [ "$DURABLE_REPORTING" = 1 ]; then
+      RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" resume-assist \
+        "$ID" "${RECURSION_INSTRUCTION_ID:-uncorrelated}" || exit $?
+    else
+      sed -i 's/^status: .*/status: queued/' "$T"
+      sed -i '/^blocked_on:/d' "$T"
+    fi
     echo "answered $ID — task returned to queued; the next run carries your answer in the arm's envelope."
   else
     echo "answered $ID — recorded (no task file; nothing to requeue)."
@@ -147,7 +160,7 @@ PY
   [ -x "$TASKCTL" ] && RECURSION_ROOT="$ROOT" bash "$TASKCTL" esc-resolve \
       "$(RECURSION_ROOT="$ROOT" bash "$TASKCTL" esc-list open 2>/dev/null | awk -F'\t' -v k="assist-loop-$ID" '$2==k{print $1;exit}')" \
       "answered" >/dev/null 2>&1
-  event assist-answer "$ID" "answered by ${RECURSION_ANSWERED_BY:-lucas}"
+  [ "$DURABLE_REPORTING" = 1 ] || event assist-answer "$ID" "answered by ${RECURSION_ANSWERED_BY:-lucas}"
   notify "✅ [$ID] answered — requeued" ;;
 
 guidance)

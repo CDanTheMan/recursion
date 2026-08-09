@@ -213,7 +213,10 @@ emit_event(){ # kind task detail
   local kind="$1" task="${2:-}" detail="${3:-}" f proj goal line
   f="$(_taskfile "$task")"
   proj=""; goal=""
-  if [ -f "$f" ]; then proj="$(_field "$f" project)"; [ -z "$proj" ] && proj="$(_field "$f" workstream)"; goal="$(_field "$f" goal_id)"; fi
+  if [ -f "$f" ]; then
+    proj="$(_field "$f" project)"; [ -z "$proj" ] && proj="$(_field "$f" project_id)"
+    [ -z "$proj" ] && proj="$(_field "$f" workstream)"; goal="$(_field "$f" goal_id)"
+  fi
   line="$(printf '{"schema_version":1,"ts":"%s","event":"%s","task":"%s","project":"%s","goal":"%s","pid":%s,"detail":"%s"}' \
     "$(_now)" "$(_esc "$kind")" "$(_esc "$task")" "$(_esc "$proj")" "$(_esc "$goal")" "$$" "$(_esc "$detail")")"
   EVENT_LINE="$line" python3 - "$EVENTS" <<'PY'

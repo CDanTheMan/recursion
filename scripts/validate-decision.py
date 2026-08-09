@@ -27,7 +27,8 @@ ARG_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,80}")
 ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 AUTHORING_TEXT_VERBS = {
     "roadmap-add", "note", "assist-answer", "portfolio-add",
-    "pilot-plan-propose", "pilot-task-create", "pilot-block", "pilot-escalate",
+    "pilot-plan-propose", "pilot-plan-approve", "pilot-window-open", "pilot-window-close",
+    "pilot-task-create", "pilot-block", "pilot-escalate",
 }
 PILOT_VERBS = {
     "pilot-plan-propose", "pilot-task-create", "pilot-worker-request",
@@ -37,6 +38,7 @@ PHASE7_VERBS = {
     "notification-reconcile", "notification-deliver", "notification-portfolio",
     "notification-audit", "notification-recover",
 }
+PHASE8_HEAD_VERBS = {"pilot-plan-approve", "pilot-window-open", "pilot-window-close"}
 ARITY = {
     "noop": (0, 0),
     "conduct": (0, 0),
@@ -53,6 +55,9 @@ ARITY = {
     "portfolio-add": (2, 2),
     "project-topic-bind": (2, 2),
     "pilot-plan-propose": (2, 2),
+    "pilot-plan-approve": (3, 3),
+    "pilot-window-open": (4, 4),
+    "pilot-window-close": (2, 2),
     "pilot-task-create": (4, 5),
     "pilot-worker-request": (3, 3),
     "pilot-verifier-request": (3, 3),
@@ -123,6 +128,11 @@ def validate(verbs, raw):
             return False, "text contains Markdown markup"
     if verb in AUTHORING_TEXT_VERBS and not text.strip():
         return False, "%s requires bounded prose in text" % verb
+    plan = d.get("plan")
+    if verb == "pilot-plan-propose" and not isinstance(plan, dict):
+        return False, "pilot-plan-propose requires a structured plan object"
+    if verb != "pilot-plan-propose" and plan is not None:
+        return False, "plan payload is allowed only for pilot-plan-propose"
 
     instruction_id = d.get("instruction_id")
     if instruction_id is not None and not ID_RE.fullmatch(str(instruction_id)):
@@ -138,6 +148,15 @@ def validate(verbs, raw):
             return False, "project-pilot verb must target its declared project"
         if not instruction_id:
             return False, "project-pilot verb requires topic instruction correlation"
+    if verb in PHASE8_HEAD_VERBS:
+        actor = str(d.get("actor", ""))
+        project = str(d.get("project", ""))
+        if actor != "head-hermes":
+            return False, "Phase 8 approval/window verb requires Head Hermes"
+        if not ID_RE.fullmatch(project) or not args or args[0] != project:
+            return False, "Phase 8 approval/window verb must target its declared project"
+        if not instruction_id:
+            return False, "Phase 8 approval/window verb requires Lucas instruction correlation"
     if verb in PHASE7_VERBS:
         actor = str(d.get("actor", ""))
         project = str(d.get("project", ""))

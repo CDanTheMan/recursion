@@ -79,6 +79,8 @@ def now_iso() -> str:
 
 
 def fsync_dir(path: Path) -> None:
+    if os.name == "nt":
+        return
     fd = os.open(path, os.O_RDONLY)
     try:
         os.fsync(fd)
@@ -147,7 +149,8 @@ def rewrite_fields(path: Path, changes: dict[str, str]) -> None:
     atomic_text(path, "\n".join(output) + "\n")
 
 
-def append_event(base: Path, event: str, project: str, goal: str, task: str = "", detail: object = "") -> None:
+def append_event(base: Path, event: str, project: str, goal: str, task: str = "", detail: object = "",
+                 event_id: str = "") -> None:
     value = {
         "schema_version": 1,
         "ts": now_iso(),
@@ -158,8 +161,17 @@ def append_event(base: Path, event: str, project: str, goal: str, task: str = ""
         "pid": os.getpid(),
         "detail": detail,
     }
+    if event_id:
+        value["id"] = event_id
     path = base / "state/events.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
+    if event_id and path.is_file():
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            try:
+                if json.loads(line).get("id") == event_id:
+                    return
+            except (json.JSONDecodeError, AttributeError):
+                continue
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     try:
         os.write(fd, (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode())
@@ -202,6 +214,114 @@ def project_records(base: Path, project: str) -> tuple[dict, dict]:
     if config.get("status") != "active" or pilot.get("status") != "active":
         raise ReconcileError("project pilot is not active")
     return config, pilot
+
+
+def close_paused_windows(base: Path) -> int:
+    """PAUSE revokes every open window; a later resume needs fresh Lucas authority."""
+    if not (base / "state/PAUSE").is_file():
+        return 0
+    closed = 0
+    for path in sorted((base / "state/pilot-windows").glob("*.json")):
+        try:
+            value = read_json(path)
+        except ReconcileError:
+            continue
+        if value.get("status") != "open":
+            continue
+        event_id = "source-window-pause-" + hashlib.sha256(str(value.get("id") or path.name).encode()).hexdigest()[:24]
+        append_event(base, "pilot-window-closed", str(value.get("project_id") or ""),
+                     str(value.get("goal_id") or ""),
+                     detail={"window_id": value.get("id"), "reason": "pause-observed"}, event_id=event_id)
+        value.update({"status": "closed", "closed_at": now_iso(), "close_reason": "pause-observed"})
+        atomic_json(path, value); closed += 1
+    return closed
+
+
+def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = None) -> dict | None:
+    if pilot is None:
+        _, pilot = project_records(base, project)
+    if not pilot.get("window_required"):
+        return {"id": "legacy-unwindowed", "project_id": project, "goal_id": goal_id,
+                "status": "open", "max_inflight_workers": int(pilot.get("concurrency_limit") or 0)}
+    now = int(time.time()); matches: list[tuple[Path, dict]] = []
+    for path in sorted((base / "state/pilot-windows").glob("*.json")):
+        value = read_json(path)
+        if value.get("project_id") != project or value.get("goal_id") != goal_id \
+                or value.get("status") not in {"armed", "open"}:
+            continue
+        if safe_int(value.get("expires_at_epoch")) <= now:
+            event_id = "source-window-expired-" + hashlib.sha256(str(value.get("id") or path.name).encode()).hexdigest()[:24]
+            append_event(base, "pilot-window-closed", project, goal_id,
+                         detail={"window_id": value.get("id"), "reason": "expired"}, event_id=event_id)
+            value.update({"status": "closed", "closed_at": now_iso(), "close_reason": "expired"})
+            atomic_json(path, value)
+            continue
+        if value.get("status") == "armed":
+            if (base / "state/PAUSE").is_file():
+                continue
+            event_id = "source-window-open-" + hashlib.sha256(
+                f"{value.get('id')}:{value.get('instruction_id')}".encode()).hexdigest()[:24]
+            append_event(base, "pilot-window-opened", project, goal_id,
+                         detail={"window_id": value.get("id"), "instruction_id": value.get("instruction_id")},
+                         event_id=event_id)
+            value.update({"status": "open", "opened_at": now_iso()})
+            atomic_json(path, value)
+        matches.append((path, value))
+    if len(matches) > 1:
+        raise ReconcileError("multiple open pilot windows target one goal")
+    return matches[0][1] if matches else None
+
+
+def require_window(base: Path, project: str, goal_id: str) -> dict:
+    _, pilot = project_records(base, project)
+    window = open_window(base, project, goal_id, pilot)
+    if not window:
+        raise ReconcileError("exact open pilot window authority is absent")
+    return window
+
+
+def admit_work(base: Path, task_id: str) -> dict:
+    path = base / "state/tasks" / f"{task_id}.md"
+    task = read_fields(path)
+    project, goal_id = task.get("project_id", ""), task.get("goal_id", "")
+    if not IDENT.fullmatch(project) or not IDENT.fullmatch(goal_id):
+        raise ReconcileError("work task lacks canonical project/goal identity")
+    window = require_window(base, project, goal_id)
+    return {"project_id": project, "goal_id": goal_id, "window_id": window.get("id")}
+
+
+def resume_assist(base: Path, task_id: str, instruction_id: str) -> dict:
+    task_path = base / "state/tasks" / f"{task_id}.md"
+    assist_path = base / "state/assists" / f"{task_id}.md"
+    task = read_fields(task_path); assist = read_fields(assist_path)
+    project, goal_id = task.get("project_id", ""), task.get("goal_id", "")
+    if not IDENT.fullmatch(task_id) or not IDENT.fullmatch(project) or not IDENT.fullmatch(goal_id):
+        raise ReconcileError("assist resume lacks canonical task/project/goal identity")
+    if assist.get("task") != task_id or assist.get("status") != "answered":
+        raise ReconcileError("assist resume requires the same answered assist")
+    goal_file = goal_path(base, goal_id)
+    event_id = "source-assist-" + hashlib.sha256(f"{project}:{goal_id}:{task_id}:{instruction_id}".encode()).hexdigest()[:24]
+    with goal_lock(base, goal_id):
+        task = read_fields(task_path); goal = read_fields(goal_file); assist = read_fields(assist_path)
+        already = (task.get("status") == "queued" and goal.get("status") == "active"
+                   and assist.get("resume_event_id") == event_id)
+        if already:
+            return {"project_id": project, "goal_id": goal_id, "task_id": task_id,
+                    "event_id": event_id, "status": "resumed"}
+        if task.get("status") not in {"blocked", "queued"} or goal.get("status") not in {"blocked", "active"}:
+            raise ReconcileError("assist resume compare-and-swap found unrelated task or goal state")
+        if task.get("status") == "blocked":
+            rewrite_fields(task_path, {"status": "queued", "blocked_on": "",
+                                       "assist_resume_instruction_id": instruction_id})
+        if goal.get("status") == "blocked":
+            rewrite_fields(goal_file, {"status": "active", "transition_reason": "human-answer-received",
+                                       "transition_at": now_iso()})
+        append_event(base, "assist-answer", project, goal_id, task_id,
+                     {"instruction_id": instruction_id, "answer_actor": assist.get("answered_by")}, event_id)
+        rewrite_fields(assist_path, {"resume_applied": "1", "resume_event_id": event_id,
+                                     "resume_instruction_id": instruction_id})
+    return {"project_id": project, "goal_id": goal_id, "task_id": task_id,
+            "event_id": event_id, "status": "resumed"}
 
 
 def goal_tasks(base: Path, goal_id: str) -> list[tuple[Path, dict[str, str]]]:
@@ -414,11 +534,17 @@ def decision_key(*parts: object) -> str:
 
 def enqueue_decision(base: Path, actor: str, verb: str, args: list[str], goal_id: str,
                      reason: str, key_parts: list[object]) -> Path:
+    project = args[0] if args else ""
+    if verb == "work" and args:
+        try:
+            project = read_fields(base / "state/tasks" / f"{args[0]}.md").get("project_id", "")
+        except ReconcileError:
+            project = ""
     raw = {
         "actor": actor,
         "verb": verb,
         "args": args,
-        "project": args[0] if args else "",
+        "project": project,
         "goal": goal_id,
         "why": reason,
         "wrong_if": "canonical state or exact evidence changes before compare-and-swap",
@@ -913,6 +1039,8 @@ def reconcile(base: Path, project: str, goal_id: str) -> None:
 
 def schedule(base: Path, project: str | None, goal_id: str | None) -> int:
     if (base / "state/PAUSE").exists():
+        close_paused_windows(base)
+        print(0)
         return 0
     scheduled = 0
     paths = [goal_path(base, goal_id)] if goal_id else sorted((base / "state/goals").glob("*.md"))
@@ -933,6 +1061,8 @@ def schedule(base: Path, project: str | None, goal_id: str | None) -> int:
             continue
         if safe_int(pilot.get("concurrency_limit")) <= 0:
             continue
+        if pilot.get("window_required") and not open_window(base, pid, gid, pilot):
+            continue
         fingerprint = snapshot_digest(base, config, gid)
         enqueue_decision(base, str(pilot["id"]), "reconcile-goal", [pid, gid], gid,
                          "event-driven canonical truth reconciliation", [pid, gid, fingerprint])
@@ -947,6 +1077,12 @@ def main() -> int:
     schedule_cmd = sub.add_parser("schedule")
     schedule_cmd.add_argument("--project")
     schedule_cmd.add_argument("--goal")
+    sub.add_parser("close-paused-windows")
+    admit_cmd = sub.add_parser("admit-work")
+    admit_cmd.add_argument("task")
+    resume_cmd = sub.add_parser("resume-assist")
+    resume_cmd.add_argument("task")
+    resume_cmd.add_argument("instruction")
     for name in ("reconcile", "verify-goal"):
         cmd = sub.add_parser(name)
         cmd.add_argument("project")
@@ -966,17 +1102,31 @@ def main() -> int:
     try:
         if args.command == "schedule":
             return schedule(base, args.project, args.goal)
+        if args.command == "close-paused-windows":
+            print(close_paused_windows(base))
+            return 0
+        if args.command == "resume-assist":
+            print(json.dumps(resume_assist(base, args.task, args.instruction),
+                             sort_keys=True, separators=(",", ":")))
+            return 0
         if (base / "state/PAUSE").exists():
             raise ReconcileError("PAUSE blocks Phase 6 actuation")
-        if args.command == "reconcile":
+        if args.command == "admit-work":
+            print(json.dumps(admit_work(base, args.task), sort_keys=True, separators=(",", ":")))
+        elif args.command == "reconcile":
+            require_window(base, args.project, args.goal)
             reconcile(base, args.project, args.goal)
         elif args.command == "transition-task":
+            require_window(base, args.project, args.goal)
             transition_task(base, args.project, args.goal, args.task, args.expected, args.target, args.reason)
         elif args.command == "transition-goal":
+            require_window(base, args.project, args.goal)
             transition_goal(base, args.project, args.goal, args.expected, args.target, args.reason)
         elif args.command == "verify-goal":
+            require_window(base, args.project, args.goal)
             verify_goal(base, args.project, args.goal)
         else:
+            require_window(base, args.project, args.goal)
             publish_task(base, args.project, args.goal, args.task)
     except (OSError, ReconcileError, subprocess.TimeoutExpired) as exc:
         print(f"project-reconcile: {exc}", file=sys.stderr)
