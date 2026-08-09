@@ -2,7 +2,7 @@
 title: Hermes Project Pilot Phase 0 Evidence
 type: verification
 status: ready-for-review
-last-verified: 2026-08-08
+last-verified: 2026-08-09
 related:
   - CONTROL_PLANE.md
   - docs/plans/hermes-project-pilot-production-plan.md
@@ -1586,3 +1586,629 @@ No Phase 8 PR, merge, deployment, production flag/concurrency change, PAUSE remo
 notification, product-repository mutation, backup/restore drill, live pilot, soak, or branch prune
 occurred. Those actions remain separate and, except for Lucas's own review/merge/prune workflow,
 require the applicable explicit authorization.
+
+### Post-merge production backup/restore drill
+
+Lucas subsequently reported the Phase 8 branch merged and pruned. A fresh authenticated fetch on
+2026-08-08 observed `origin/master` at merge commit
+`9422b9cc5bf4270b7184b9af6fa31cae8e6a6876` (PR #29), with Phase 8 commits
+`234d49b46197b7e120ca96b7efdfdc904ba87ec0`,
+`7d0dc10fcb5914f98353be1f73deb15498e71b7c`,
+`a411e1cdcc999c9606f35879d0ad3a1d3d58f438`, and
+`61b907451230e5f49ad44e6760ddcf426102d90d` all ancestors. The remote review branch was absent and
+all handoff/evidence artifacts were present.
+
+Lucas then explicitly authorized one PAUSE-held production-derived backup/restore drill with this
+boundary: stop and restart only `hermes-gateway`; create a root-owned mode-`0700` snapshot outside
+`/opt/recursion`; restore and verify only in disposable staging; retain manifest/log evidence;
+remove staging; do not deploy, lift PAUSE, notify, or change configuration.
+
+Immediately before the drill, production was `loop/auto` at
+`5a8b2f7464cb5f87bc09ea2e611cfa1453ca1c26`. PAUSE was present with SHA-256
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`, the gateway was active,
+worker units and worktree processes were zero, and no execution lock was held. The exact snapshot
+sequence was:
+
+```bash
+test -f /opt/recursion/state/PAUSE
+test "$(sha256sum /opt/recursion/state/PAUSE | awk '{print $1}')" = \
+  919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+install -d -o root -g root -m 0700 /var/backups/recursion
+systemctl stop hermes-gateway.service
+test "$(systemctl is-active hermes-gateway.service || true)" != active
+test "$(systemctl show hermes-gateway.service -p MainPID --value)" = 0
+! pgrep -f '[h]ermes_cli.main gateway run'
+flock -x /opt/recursion/state/.locks/hermes-control.lock \
+  python3 /opt/recursion/scripts/runtime-state.py backup \
+  /var/backups/recursion/hermes-pre-phase8-20260808T224858Z-5a8b2f7464cb
+systemctl start hermes-gateway.service
+test "$(systemctl is-active hermes-gateway.service)" = active
+```
+
+The retained snapshot is:
+
+```text
+/var/backups/recursion/hermes-pre-phase8-20260808T224858Z-5a8b2f7464cb
+owner/mode=root:root 0700
+source_commit=5a8b2f7464cb5f87bc09ea2e611cfa1453ca1c26
+manifest_files=4
+manifest_pause_sha256=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+```
+
+It contains only the manifest-selected runtime files: `state/.intake-watermark`, `state/PAUSE`,
+`state/escalations.tsv`, and `state/events.jsonl`. The pre-existing untracked production
+`.env.bak.1786014440` was not read, copied, or changed. The exact disposable restore sequence was:
+
+```bash
+git clone --no-hardlinks --branch loop/auto /opt/recursion \
+  /var/tmp/recursion-restore-drill-20260808T224858Z-5a8b2f7464cb
+chmod 0700 /var/tmp/recursion-restore-drill-20260808T224858Z-5a8b2f7464cb
+git -C /var/tmp/recursion-restore-drill-20260808T224858Z-5a8b2f7464cb \
+  checkout -b restore-drill-20260808 5a8b2f7464cb5f87bc09ea2e611cfa1453ca1c26
+install -D -o root -g root -m 0644 \
+  /var/backups/recursion/hermes-pre-phase8-20260808T224858Z-5a8b2f7464cb/files/state/PAUSE \
+  /var/tmp/recursion-restore-drill-20260808T224858Z-5a8b2f7464cb/state/PAUSE
+RECURSION_ROOT=/var/tmp/recursion-restore-drill-20260808T224858Z-5a8b2f7464cb \
+  python3 /var/tmp/recursion-restore-drill-20260808T224858Z-5a8b2f7464cb/scripts/runtime-state.py \
+  restore /var/backups/recursion/hermes-pre-phase8-20260808T224858Z-5a8b2f7464cb
+```
+
+A byte/metadata verifier checked every restored path against `manifest.json`, including SHA-256,
+mode, UID, and GID. Its compact result was:
+
+```json
+{"errors":[],"files_verified":4,"pause_sha256":"919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db","restored_commit":"5a8b2f7464cb5f87bc09ea2e611cfa1453ca1c26","schema_version":1,"snapshot_commit":"5a8b2f7464cb5f87bc09ea2e611cfa1453ca1c26"}
+```
+
+The staging-only verification matrix then ran:
+
+```bash
+RECURSION_ROOT="$STAGE" python3 "$STAGE/scripts/project-pilot.py" verify-registry
+RECURSION_ROOT="$STAGE" RECURSION_NO_NOTIFY=1 python3 "$STAGE/scripts/project-reconcile.py" schedule
+RECURSION_ROOT="$STAGE" RECURSION_NO_NOTIFY=1 python3 "$STAGE/scripts/notification-outbox.py" schedule
+bash "$STAGE/scripts/audit/hermes-pilot-phase0-baseline.sh"
+bash "$STAGE/scripts/audit/hermes-pilot-phase2-green.sh"
+bash "$STAGE/scripts/audit/hermes-pilot-phase6-green.sh"
+bash "$STAGE/scripts/audit/hermes-pilot-phase7-green.sh"
+```
+
+Registry verification passed. Two repeated PAUSE-held recovery cycles left runtime-file count at
+zero with zero duplicates. The Phase 0 baseline passed all 17 suites; Phase 2 backup/restore,
+Phase 6 crash recovery, and Phase 7 delivery recovery audits all ended `ALL PASS`. No product
+repository, GSC test, fixture, oracle, corpus, or baseline was involved or changed.
+
+Three negative observations were preserved rather than hidden. First, the initially stopped
+gateway reported systemd state `failed`, not `inactive`; the attempt failed closed and its exit trap
+restarted the gateway. The accepted rerun required the stronger invariant: state not active,
+`MainPID=0`, and no gateway process. Second, a fresh staging clone lacked the runtime-only PAUSE
+file, so the first restore attempt failed before mutation; the retry bootstrapped staging with the
+exact snapshot PAUSE bytes before invoking the canonical restore. Third, one Windows-to-SSH
+wrapper ended `127` after its success output due a trailing carriage return, and the long verifier
+wrapper timed out only after all terminal PASS markers. Independent manifest, log-tail, process,
+and live-state verification established the actual results; neither wrapper anomaly was treated as
+positive evidence by itself.
+
+The exact staging path was realpath-checked, confirmed to have no active process, and removed:
+
+```text
+/var/tmp/recursion-restore-drill-20260808T224858Z-5a8b2f7464cb absent
+```
+
+The snapshot's retained `drill-evidence/` directory is `root:root` mode `0700`; every evidence file
+is owner-only. `evidence-files.sha256` verifies all 14 retained logs/manifests and has SHA-256
+`df9a894f843842ab8bec161a79e29a5d16feadc8fa26f93247ffc7e685acde36`.
+
+The final production observation at `2026-08-08T23:09:00Z` recorded:
+
+```text
+DEPLOYED_BRANCH=loop/auto
+DEPLOYED_OID=5a8b2f7464cb5f87bc09ea2e611cfa1453ca1c26
+HERMES_GATEWAY=active
+SUPERVISOR_SERVICE=inactive
+SUPERVISOR_TIMER=inactive
+RUNNING_WORKER_UNITS=0
+RUNNING_WORKER_PROCESSES=0
+all 9 notification outboxes: paused=true, events=0, deliveries={}
+live Phase 1 audit: rc=1, exactly 2 known deployment gates
+PAUSE_BEFORE_SHA256=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+PAUSE_AFTER_SHA256=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+```
+
+This closes the production backup/restore demonstration gate only. It does not authorize or prove
+a Phase 8 deployment or pilot. The unrestricted root gateway and vulnerable installed dependency
+versions remain hard deployment gates; neither was silently repaired. Private-repository branch
+protection also remains unverified. An authorized attempt to upgrade the personal GitHub account
+to Pro could not begin because no signed-in controllable browser was available; no personal or
+organization billing setting was changed.
+
+### Personal GitHub Pro and default-branch protection
+
+Lucas subsequently upgraded the personal `NotSkittlz` account to GitHub Pro. The authenticated
+personal licensing page exposed `Switch to yearly billing` and `Downgrade to Free`, establishing
+that the personal account is on the monthly Pro plan. This is separate from the paid Team plan that
+was observed on the `Golden-Stallion` organization. No organization billing, subscription, budget,
+or alert control was changed by this work.
+
+GitHub Pro removed the prior private-repository HTTP 403 gate. Lucas then explicitly authorized the
+same protection policy for every initialized personal repository. The empty
+`santa-clara-construction` repository remains deferred until it has an initial `main` branch. The
+following classic branch-protection rules were created and then re-opened by their persisted rule
+IDs at `2026-08-08T23:51:43Z`:
+
+| Repository | Branch | Rule ID |
+|---|---|---:|
+| `NotSkittlz/recursion` | `master` | `81491567` |
+| `NotSkittlz/golden-stallion` | `main` | `81491591` |
+| `NotSkittlz/golden-stallion-extension` | `main` | `81491615` |
+| `NotSkittlz/golden-stallion-client` | `main` | `81491628` |
+| `NotSkittlz/ai-investment-cockpit` | `main` | `81491658` |
+| `NotSkittlz/edgar-morning-brew` | `main` | `81491685` |
+| `NotSkittlz/guerra-construction-group` | `main` | `81491718` |
+| `NotSkittlz/chiron` | `main` | `81491732` |
+
+Every persisted rule independently returned the same effective state:
+
+```text
+has_required_reviews=true                 # a pull request is mandatory
+has_required_reviews_reviews=false        # zero approvals; avoids one-user deadlock
+requires_conversation_resolution=true
+enforce_all_for_admins=true               # owner/admin cannot bypass
+has_required_statuses=false               # no unproven CI context was invented
+allows_force_pushes=false
+allows_deletions=false
+has_signature_requirement=false
+block_merge_commits=false                 # preserves the proven PR merge-commit workflow
+has_required_deployments=false
+lock_branch=false
+```
+
+The form's inactive nested `strict_required_status_checks_policy` value may display true after
+reload, but its parent `has_required_statuses` is false in every rule, so no status check is active.
+Required checks remain a later per-repository change only after a stable green CI context is
+identified and separately reviewed.
+
+The first `recursion` submission reached GitHub's sudo-mode `Confirm access` checkpoint. No rule
+was created until Lucas completed that authentication; the returned branches page then reported
+`Branch protection rule created.` and the rule was re-opened for field-level verification. During
+the remaining bounded rollout, transient Chrome/CDP readback delays occurred. They were not treated
+as evidence: each affected repository was inspected at its persisted edit URL. One unsaved
+investment-cockpit form temporarily contained `mainmain` after a retry; pre-submit state inspection
+caught and corrected it to exact `main` before creation. The final eight-rule audit returned seven
+immediate matches and one transient extension read timeout; a separate retry of exact rule
+`81491615` matched every field. Final result: `8/8` initialized personal default branches enforce
+review-branch-only delivery with no force-push, deletion, or administrator bypass path.
+
+This closes the private-repository branch-protection gate for initialized projects. It does not
+close the two live Phase 1 deployment gates, deploy Phase 8, change production configuration, lift
+PAUSE, send a notification, or authorize a pilot window.
+
+## Phase 1 remediation attempt: dependency metadata blocker
+
+Lucas explicitly authorized completion of the two Phase 1 production remediations. A new
+PAUSE-held preflight at deployed awareness OID
+`7d682044656184815b3883d913dd3d0c50c915d1` and reviewed `origin/master`
+`9422b9cc5bf4270b7184b9af6fa31cae8e6a6876` reproduced the live audit's exact two findings:
+the gateway still ran unrestricted as root, and the 104-package environment contained the known
+`aiohttp==3.14.1` and `cryptography==48.0.1` advisories. The Phase 0 baseline then passed all
+17/17 suites. Every Phase 1-7 control suite and every Phase 1-7 positive audit ended `ALL PASS`.
+The final preflight PAUSE hash remained
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`; all four pilot supervisors
+were inactive and the running worker-unit count was zero.
+
+The preflight also established that the earlier apparent deployment-artifact mismatch was only a
+Windows working-tree line-ending comparison. On the Linux host, each working file was byte-equal
+to its exact `origin/master` Git object and `git diff origin/master -- <four paths>` was empty:
+
+```text
+deploy/systemd/hermes-gateway.service                 8524c6239f1001e579bbc0c67b098a60b9fc0dc6fda8dbac57f35ab823c9cf85
+deploy/requirements/hermes-gateway-phase1.txt        be857a5c5460c41bc4094391ec41adaa4e380ccaf74b465c27c9ad178d0aab49
+deploy/sysusers.d/recursion.conf                     44833b12fd4627280a9fb6c0d5c0bd32082964ed132267e36cc68e8a05fd4817
+deploy/tmpfiles.d/recursion.conf                     4c95c0f6784854e500611958b4be2837d399cffd1a5b1db29a2375644dd57ab5
+```
+
+The authorized transaction extracted those reviewed objects into a root-owned bundle, copied the
+live venv for rollback, cloned the live venv into a separate staged path, and applied the reviewed
+requirements. The exact dependency transition was:
+
+```text
+aiohttp 3.14.1 -> 3.14.3
+cryptography 48.0.1 -> 50.0.0
+```
+
+The mandatory full-environment compatibility gate then refused the stage:
+
+```text
+Found 1 incompatibility
+The package `hermes-agent` requires `cryptography==48.0.1`, but `50.0.0` is installed
+```
+
+This is a new artifact-compatibility blocker. The installed Hermes Agent is editable version
+`0.20.0` at source OID `36cb5ae5530a75def7df3195e49b7a4aa2add482`; that source and its existing
+`origin/main` both pin `cryptography==48.0.1`. PyPI reported the latest published Hermes Agent as
+`0.19.0`, which pins `cryptography==46.0.7`. OSV identifies `50.0.0` as the first version fixing
+`GHSA-g6cj-pr64-35w5`, so neither the published artifact nor the installed source can currently be
+both OSV-clear and `pip check`-clean. The transaction did not edit distribution metadata, ignore
+`pip check`, use `--no-deps`, or otherwise waive the contradiction.
+
+The failure occurred before `MUTATION_STARTED=1` and before `systemctl stop`. Independent final
+verification proved that `hermes-gateway` retained the same PID `2063708`, root identity, original
+unit SHA-256 `6135f46663105dc0149adf3da2659a120fb6f5a47d79871effc1695a90ee891b`, original
+venv versions, and `/root/.hermes` working directory. The two service accounts and both `/var/lib`
+state directories remain absent. No unit, venv switch, service stop/restart, notification, worker,
+publisher, deployment, flag, concurrency, PAUSE, or product-repository mutation occurred. A final
+live audit again reproduced exactly the same two findings.
+
+The failed staged venv was moved out of the Hermes source tree and retained for inspection at:
+
+```text
+/var/backups/recursion/phase1-remediation-20260809T010739Z-7d682044/failed-stage-cryptography50-pip-check
+```
+
+The root-owned mode-`0700` evidence/rollback bundle is retained at
+`/var/backups/recursion/phase1-remediation-20260809T010739Z-7d682044`; its logs, reviewed objects,
+rollback venv, blocker report, and `evidence/MANIFEST.sha256` are owner-only. The full preflight and
+transaction commands are retained as `evidence/phase1-control-preflight.sh` and
+`evidence/phase1-remediate.sh`. The next admissible attempt requires a separately reviewed Hermes
+Agent artifact whose dependency metadata supports `cryptography==50.0.0`, followed by this same
+staged `pip check`, import, complete OSV, and rollback gate. Phase 8 deployment and every pilot
+window remain blocked; PAUSE remains asserted.
+
+## Hermes Agent Phase 1 compatibility fork (review-only)
+
+Lucas authorized a separate reviewable Hermes Agent compatibility fork after the production
+transaction above failed closed. GitHub created and independently re-read the public personal fork
+`NotSkittlz/hermes-agent`; the connected account has admin/push permission on that fork. A clean
+local checkout at `C:\Users\drfoo\github\hermes-agent-compat` added upstream
+`NousResearch/hermes-agent`, verified deployed source OID
+`36cb5ae5530a75def7df3195e49b7a4aa2add482` as a commit and as an ancestor of current upstream
+`main` `b79e83827d1e275f3b5f91594e9f7136d7293e5a`, then created local review branch
+`review/phase1-cryptography50` directly from the deployed OID. The fork branch was not pushed and
+no pull request was opened.
+
+The review patch changes only `pyproject.toml`, `tools/lazy_deps.py`, and `uv.lock`. It declares
+`cryptography==50.0.0`, advances every declared and lazy `aiohttp` pin to `3.14.3`, and regenerates
+the lock with the repository's CI-pinned `uv 0.9.28`. Because the two security releases were still
+inside Hermes's 14-day package quarantine, the manifest includes package-specific temporary
+exceptions with removal dates: cryptography after 2026-08-14 and h2 after 2026-08-17. Complete-lock
+OSV inspection found the pre-existing `h2==4.3.0` request-smuggling advisory
+`GHSA-6hr6-w5qg-qmwg`; the patch therefore also resolves `h2==4.4.1` and `hpack==4.2.0` rather than
+waiving the complete-audit gate.
+
+Exact dependency commands and primary results were:
+
+```text
+C:\Users\drfoo\github\.hermes-compat-tools\Scripts\uv.exe --version
+# uv 0.9.28 (0e1351e40 2026-01-29)
+
+C:\Users\drfoo\github\.hermes-compat-tools\Scripts\uv.exe lock
+C:\Users\drfoo\github\.hermes-compat-tools\Scripts\uv.exe lock --upgrade-package h2
+C:\Users\drfoo\github\.hermes-compat-tools\Scripts\uv.exe lock --check
+# Resolved 249 packages; lock check rc=0
+# aiohttp 3.14.1 -> 3.14.3
+# cryptography 48.0.1 -> 50.0.0
+# msal 1.36.0 -> 1.37.0
+# alibabacloud-tea-openapi 0.4.5 -> 0.3.16
+# h2 4.3.0 -> 4.4.1; hpack 4.1.0 -> 4.2.0
+```
+
+The Alibaba downgrade is the resolver's compatible path, not an ignored conflict:
+`alibabacloud-dingtalk==2.2.42` declares `alibabacloud-tea-openapi>=0.3.16,<1.0.0`; release `0.4.5`
+caps cryptography below 49 on Python 3.9+, while `0.3.16` is inside the DingTalk SDK's supported
+range. `msal==1.37.0` declares `cryptography>=2.5,<51`. `hindsight-client==0.6.1` has no
+cryptography dependency and accepts `aiohttp>=3.8.4`.
+
+The universal all-extras graph resolved successfully. A literal `uv sync --all-extras --python
+3.11` installation on Windows did not complete because Matrix's `python-olm==3.2.16` source build
+requires Unix `make` or `gmake`; this was retained as a platform limitation, not represented as a
+pass. A new external production-shaped environment then installed messaging, WeCom, DingTalk,
+Azure identity, Hindsight, Teams, and dev extras under Python 3.11.15. It resolved 126 installed
+packages and passed:
+
+```text
+C:\Users\drfoo\github\.hermes-compat-tools\Scripts\uv.exe pip check \
+  --python C:\Users\drfoo\github\.hermes-compat-gateway\Scripts\python.exe
+# All installed packages are compatible
+
+# Installed editable metadata:
+# hermes-agent==0.20.0
+# cryptography==50.0.0
+# aiohttp==3.14.3
+# msal==1.37.0
+# alibabacloud-tea-openapi==0.3.16
+# alibabacloud-dingtalk==2.2.42
+# hindsight-client==0.6.1
+# Requires-Dist: cryptography==50.0.0
+# every aiohttp Requires-Dist pin: ==3.14.3
+```
+
+Real imports of the gateway, Weixin, WeCom, DingTalk, Azure identity, MSAL, Hindsight, aiohttp, and
+cryptography passed. An RSA-2048 PyJWT RS256 encode/decode round trip and the canonical Weixin
+AES-128 encrypt/decrypt round trip passed. The OSV batch API then audited both the complete lock
+and the installed production-shaped environment:
+
+```text
+LOCK_OSV_QUERIED=249
+LOCK_OSV_FINDINGS=0
+INSTALLED_OSV_QUERIED=126
+INSTALLED_OSV_FINDINGS=0
+COMPLETE_OSV_CLEAR
+```
+
+The canonical Hermes test wrapper ran 13 dependency/gateway/crypto files after the final lock:
+
+```text
+C:\Program Files\Git\bin\bash.exe scripts/run_tests.sh \
+  tests/test_project_metadata.py \
+  tests/gateway/test_dingtalk.py tests/hermes_cli/test_dingtalk_auth.py \
+  tests/gateway/test_wecom.py tests/gateway/test_wecom_callback.py \
+  tests/gateway/test_wecom_plugin_setup.py tests/gateway/test_weixin.py \
+  tests/gateway/test_weixin_secret_scope.py tests/gateway/test_weixin_typing.py \
+  tests/agent/test_azure_identity_adapter.py tests/hermes_cli/test_azure_detect.py \
+  tests/hermes_cli/test_azure_foundry_entra.py tests/gateway/relay/test_relay_sheds_crypto.py -q
+# 13 files; 144 tests passed; 0 failed
+```
+
+A separate full-suite attempt reached its 1,804-second command ceiling without returning the
+runner's buffered summary. It is recorded as a timeout, not a pass and not a test failure. The
+exact local test process tree and one re-parented local test gateway were terminated; final
+verification returned `LOCAL_TEST_PROCESSES=0`. A literal `%SystemDrive%` directory created by the
+Windows tests was moved, recoverably, out of the checkout to
+`C:\Users\drfoo\github\.hermes-compat-test-artifacts\systemdrive-20260808`. Hermes intentionally
+refused a wheel build because the project supports installer, Docker/Nix, or editable-source
+artifacts; production already uses an editable source install, so the reviewed source commit is the
+applicable artifact.
+
+No connection to `gs-recursion`, production mutation, service action, deployment, notification,
+worker, publisher, flag, concurrency, or PAUSE action occurred during the fork work. The last
+observed production PAUSE evidence therefore remains
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`; it was not re-observed or
+changed in this local-only window. Phase 1 production remediation still requires Lucas to review
+and publish the separate Hermes source patch, followed by a new PAUSE-held production preflight
+and separately authorized transactional deployment. Phase 8 deployment and pilot windows remain
+blocked.
+
+## Hermes compatibility publication and PAUSE-held deployment attempts
+
+Lucas subsequently authorized publication of the separate Hermes compatibility patch, reviewed
+the branch, and explicitly authorized deployment and testing. Local and remote branch
+`review/phase1-cryptography50` both resolved to exact commit
+`498061d8f1dcd855419b30e8729c869596a89ca6`, based directly on deployed Hermes source
+`36cb5ae5530a75def7df3195e49b7a4aa2add482`. Only `pyproject.toml`, `tools/lazy_deps.py`, and
+`uv.lock` differ. The branch remains published for review; it was not merged or pruned during the
+production attempts.
+
+Three independent, root-owned mode-`0700` attempt bundles preserve the exact scripts, inputs,
+outputs, rollback material, and failure summaries:
+
+| Attempt | Bundle | Last completed gate | Result |
+|---|---|---|---|
+| 1 | `/var/backups/recursion/phase1-remediation-20260809T052659Z-498061d8` | fresh 17/17 and Phase 1-7 preflight; staged dependency checks | failed before mutation because a metadata verifier selected editable source `hermes_agent.egg-info`, which has no `direct_url.json` |
+| 2 | `/var/backups/recursion/phase1-remediation-20260809T060745Z-498061d8` | fresh full preflight; explicit dist-info/source verifier; 104-package `pip check`; imports; RS256; complete OSV | stopped the gateway, then failed because `/etc/sysusers.d` did not exist; automatic rollback restored the original runtime |
+| 3 | `/var/backups/recursion/phase1-remediation-20260809T141605Z-498061d8` | fresh full preflight; exact staged artifact; hardened live readiness; live Phase 1 audit; systemd security; 17/17 baseline; Phase 1 red/artifact controls | Phase 1 positive audit found the copied sandbox implementer inaccessible under the hardened `0077` umask; automatic rollback restored the original runtime |
+
+Attempt 1 failed before `MUTATION_STARTED=1` and before `systemctl stop`; the original root gateway
+kept PID `2063708`. The staged environment was retained, and a corrected verifier that directly
+enumerates the venv's sole `site-packages/hermes_agent-*.dist-info` proved its exact editable source
+URL. No production state changed.
+
+Attempt 2 used that corrected verifier. It passed all staged checks, including `AUDITED=104` with
+no OSV findings, then entered the authorized maintenance window. Installing the reviewed sysusers
+file failed closed because this host had no `/etc/sysusers.d` parent. The trap restored the original
+unit, venv, source, dependency versions, and root service identity, then restarted the gateway as
+PID `2446659`. Independent verification reproduced exactly the original two live Phase 1 findings,
+found both service identities and state directories absent, found all execution units/workers
+inactive, and found all nine outboxes paused with zero events. The third transaction therefore
+recorded whether both `/etc` parents existed, created missing parents root-owned mode `0755` inside
+the transaction, and removes only newly created empty parents on rollback. The resulting reviewed
+deployment-script SHA-256 was
+`8c5425fcf2df0f23a656351646974f8b5bb8af54a617485d3687a5e311127cba`.
+
+### Third fresh preflight and exact transaction commands
+
+The third preflight began from production awareness OID
+`6ce55f71a9d5cbef41510379b4f755b5290d3f90`, reviewed Recursion
+`origin/master` `9422b9cc5bf4270b7184b9af6fa31cae8e6a6876`, original Hermes source
+`36cb5ae5530a75def7df3195e49b7a4aa2add482`, and authorized Hermes remote OID
+`498061d8f1dcd855419b30e8729c869596a89ca6`. It ended with:
+
+```text
+BASELINE_SUITES=17
+BASELINE_FAILED_SUITES=0
+hermes-pilot-phase1-red: ALL PASS
+hermes-pilot-phase1-green: ALL PASS
+hermes-pilot-phase2-red: ALL PASS
+hermes-pilot-phase2-green: ALL PASS
+hermes-pilot-phase3-red: ALL PASS
+hermes-pilot-phase3-green: ALL PASS
+hermes-pilot-phase4-red: ALL PASS
+hermes-pilot-phase4-green: ALL PASS
+hermes-pilot-phase5-red: ALL PASS
+hermes-pilot-phase5-green: ALL PASS
+hermes-pilot-phase6-red: ALL PASS
+hermes-pilot-phase6-green: ALL PASS
+hermes-pilot-phase7-red: ALL PASS
+hermes-pilot-phase7-green: ALL PASS
+phase1-control-preflight: ALL PASS
+```
+
+PAUSE had the expected hash before and after. All execution services were inactive and workers
+were zero. The exact host-side entry points were:
+
+```bash
+bash /var/backups/recursion/phase1-remediation-20260809T141605Z-498061d8/evidence/hermes-phase1-final-predeploy-check.sh
+# FINAL_PREDEPLOY_GATE=PASS
+
+bash /var/backups/recursion/phase1-remediation-20260809T141605Z-498061d8/evidence/hermes-phase1-launch-deploy.sh
+# nohup bash .../evidence/hermes-phase1-deploy-498061d8.sh \
+#   /var/backups/recursion/phase1-remediation-20260809T141605Z-498061d8
+
+bash /var/backups/recursion/phase1-remediation-20260809T141605Z-498061d8/evidence/hermes-phase1-verify-third-rollback.sh
+# THIRD_ROLLBACK_VERIFICATION=PASS
+
+cd /var/backups/recursion/phase1-remediation-20260809T141605Z-498061d8
+sha256sum --quiet -c evidence/MANIFEST.sha256
+# rc=0
+```
+
+Before stopping the gateway, the staged 104-package environment passed `uv pip check`, exact
+dist-info/direct-URL and source-OID verification, real imports, an RSA-2048 RS256 round trip, and a
+complete OSV audit. The maintenance transaction then created the reviewed identities, migrated
+only required gateway state, installed the exact reviewed venv and unit, and reached bounded
+readiness as `User=hermes-gateway Group=hermes-gateway` with `active_agents=0`.
+
+The hardened live state closed both original Phase 1 findings:
+
+```text
+ok    remote PAUSE is present
+ok    hermes-gateway runs as a hardened non-root service
+AUDITED=104
+ok    installed gateway dependencies have no known OSV advisories
+hermes-pilot-live-phase1-red: ALL PASS
+```
+
+`systemd-analyze security hermes-gateway` reported overall exposure `3.6 OK`; the new identity,
+`NoNewPrivileges`, `ProtectSystem`, `PrivateTmp`, `ProtectHome`, `PrivateDevices`, and `UMask`
+checks all passed. The post-switch baseline again passed 17/17, the Phase 1 red suite ended
+`ALL PASS`, and the dependency artifact audit reported `aiohttp==3.14.3|OSV_CLEAR`,
+`cryptography==50.0.0|OSV_CLEAR`, and `ALL PASS`.
+
+The next canonical check, the Phase 1 positive audit, failed closed:
+
+```text
+FAIL strict sandbox task status=escalated
+env: '/workspace/.recursion-sandbox/claude': Permission denied
+```
+
+This is not an internet failure, dependency incompatibility, model claim, or waived test. Both the
+transaction and reviewed unit impose `UMask=0077`. The existing `worker-sandbox.sh` chowns the
+worktree, then creates `.recursion-sandbox` for a copied non-`/usr` executable without explicitly
+making that newly created directory traversable by `recursion-runner`. That code path and the
+observed code-126 error identify a hardened-umask/sandbox handoff compatibility blocker. No chmod,
+manual worker command, test weakening, production workaround, or retry was performed.
+
+The automatic trap restored unit SHA-256
+`6135f46663105dc0149adf3da2659a120fb6f5a47d79871effc1695a90ee891b`, original Hermes source,
+the original venv with `aiohttp==3.14.1` and `cryptography==48.0.1`, and the root service identity;
+the gateway restarted active as PID `2542748`. Independent verification passed: the original two
+live findings reproduce exactly, `active_agents=0`, all execution units and workers are inactive,
+and all nine outboxes remain paused with zero events. The newly created service accounts and
+mode-`0700` `/var/lib/hermes-gateway` and `/var/lib/recursion-runner` directories remain inert and
+retained for forensics, as do `failed-live-venv` and the exact reviewed source. The reviewed
+sysusers/tmpfiles configuration files were removed by rollback. `/root/.hermes` was not migrated
+away, deleted, or modified by rollback.
+
+Final production remains on awareness OID
+`6ce55f71a9d5cbef41510379b4f755b5290d3f90`, original Hermes source
+`36cb5ae5530a75def7df3195e49b7a4aa2add482`, and the original root gateway. PAUSE remained present
+through every observed window with SHA-256
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`. No Phase 8 code was deployed,
+no configuration/capacity flag changed, no notification was sent, no pilot was started, and no
+product repository changed.
+
+The next admissible step is a separate reviewed Recursion compatibility patch that proves the
+copied sandbox executable remains traversable/executable by the dedicated runner under an inherited
+`0077` umask without weakening the controller boundary. It needs a red control for this exact
+condition and the complete Phase 1-7 matrix before another separately authorized PAUSE-held
+transaction. Phase 8 deployment and all pilot windows remain blocked.
+
+## Hardened-umask sandbox compatibility patch (review-only)
+
+Lucas authorized the separate Recursion change needed by the third deployment attempt. A fresh
+fetch left `origin/master` unchanged at
+`9422b9cc5bf4270b7184b9af6fa31cae8e6a6876`; the existing clean worktree branch
+`review/hermes-post-phase8-hardening` is based exactly on that merge. The dirty local master at
+`20c1fa77042f3aa9f5d8978352792f3b058bc0d1` was not used or changed.
+
+The regression was added before the implementation. In a disposable Linux clone, both the Phase 1
+red suite and positive audit inherited `umask 0077`. With the original `worker-sandbox.sh`, the new
+control produced exactly one failure and the positive audit reproduced the production error:
+
+```text
+FAIL  copied worker executable was inaccessible under hardened controller umask (status=escalated)
+hermes-pilot-phase1-red: 1 FAILED (expected on the Phase 0 pre-fix commit)
+FAIL strict sandbox task status=escalated
+env: '/workspace/.recursion-sandbox/claude': Permission denied
+RED_PROOF=PASS
+```
+
+The implementation changes only the copied non-`/usr` executable handoff. The controller remains
+required to be root. Instead of allowing `mkdir` and `cp` to inherit a restrictive umask, it uses
+explicit least-privilege metadata:
+
+```bash
+install -d -o 0 -g "$RUNNER_GID" -m 0710 "$SANDBOX_BIN"
+install -o 0 -g "$RUNNER_GID" -m 0550 "$EXE_REAL" "$SANDBOX_BIN/$ENGINE"
+```
+
+The directory and executable therefore remain root-owned and unavailable to unrelated users;
+only the dedicated runner group can traverse/read/execute them. Existing cleanup still removes the
+copied directory before the controller evaluates the allowed-path diff. No controller path,
+publisher permission, worker identity, systemd boundary, network policy, or model command changed.
+
+Focused red-to-green evidence under exact `0077` then reported:
+
+```text
+ok    worker OS boundary denied controller data, outside writes, publisher access, and shared identity
+ok    copied worker executable remained reachable under hardened controller umask
+hermes-pilot-phase1-red: ALL PASS
+ok    strict sandbox completed bounded work as uid=981 (controller uid=0)
+ok    canonical review ref published and registered default remained unchanged
+aiohttp==3.14.3|OSV_CLEAR
+cryptography==50.0.0|OSV_CLEAR
+hermes-pilot-phase1-artifacts: ALL PASS
+hermes-pilot-phase1-green: ALL PASS
+FOCUSED_GREEN=PASS
+```
+
+The exact modified-file SHA-256 values tested on Linux match the local authoring files:
+
+```text
+a5abeb345a3b3dcaf1b372b02f461fffb748cbbc15eab29e8602bc43a728e670  scripts/worker-sandbox.sh
+7135cad8e249e444cdc52c7ce0d40c845ad0715b938c1e6c01bac595c8a010ca  scripts/tests/hermes-pilot-phase1-red.test.sh
+9b9205068bb37eb8f9e034d30c1996bc20f3f8d567d5e41f1484334adc392da1  scripts/audit/hermes-pilot-phase1-green.sh
+```
+
+The first complete-matrix launcher used a detached checkout. The canonical baseline refused with
+`BASELINE HARNESS: use a named branch, not detached HEAD` before executing a suite. That negative
+result was preserved; no result was inferred from it. The same three files and base OID were then
+tested unchanged on disposable named branch
+`review/hermes-post-phase8-hardening-umask-test`, still with process-wide `umask 0077`:
+
+```text
+BASELINE_SUITES=17
+BASELINE_FAILED_SUITES=0
+hermes-pilot-phase1-red: ALL PASS
+hermes-pilot-phase1-green: ALL PASS
+hermes-pilot-phase2-red: ALL PASS
+hermes-pilot-phase2-green: ALL PASS
+hermes-pilot-phase3-red: ALL PASS
+hermes-pilot-phase3-green: ALL PASS
+hermes-pilot-phase4-red: ALL PASS
+hermes-pilot-phase4-green: ALL PASS
+hermes-pilot-phase5-red: ALL PASS
+hermes-pilot-phase5-green: ALL PASS
+hermes-pilot-phase6-red: ALL PASS
+hermes-pilot-phase6-green: ALL PASS
+hermes-pilot-phase7-red: ALL PASS
+hermes-pilot-phase7-green: ALL PASS
+FULL_UMASK_MATRIX=ALL_PASS
+```
+
+Exact red/green logs, both full-matrix logs, launchers, the binary patch, reviewed file copies,
+final live state, result summary, and `evidence/MANIFEST.sha256` are retained in root-owned
+mode-`0700` bundle
+`/var/backups/recursion/phase1-umask-compat-20260809T174059Z-9422b9cc`. Its manifest verifies
+cleanly. The disposable `/var/tmp/recursion-phase1-umask-red.B0l1Wr` clone was removed only after
+that verification.
+
+Final read-only production closure found awareness OID
+`ddff98258b39f6d8d5f4811ea2ff7ee47952a017`, original Hermes source
+`36cb5ae5530a75def7df3195e49b7a4aa2add482`, original root gateway PID `2542748`, zero workers,
+all execution units inactive, and all nine outboxes paused with zero events. PAUSE remained exact
+at `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`. No production code,
+service, dependency, flag, capacity, notification, pilot, or product repository changed.
+
+The five-file Recursion patch—three implementation/control files plus this evidence and the Phase 8
+handoff—is staged only. It has not been committed, pushed, merged, or deployed. Lucas review and
+publication are the next gate; another PAUSE-held deployment still requires separate authorization
+after the reviewed patch is merged into `origin/master`.
