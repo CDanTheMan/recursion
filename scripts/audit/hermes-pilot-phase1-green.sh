@@ -39,10 +39,13 @@ allowed_paths: app
 autonomy: auto
 status: queued
 T
-STUB_ARM_SCRIPT='mkdir -p app; id -u > app/uid.txt; echo ok > app/ok.txt' \
-PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 RECURSION_GIT_FETCH=0 \
-RECURSION_REQUIRE_FRESH_BASE=0 RECURSION_TEST_WORKER=sandbox \
-bash "$R/scripts/work.sh" sandbox-ok >"$TMP/sandbox-work.out" 2>&1
+(
+  umask 0077
+  STUB_ARM_SCRIPT='mkdir -p app; id -u > app/uid.txt; echo ok > app/ok.txt' \
+  PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 RECURSION_GIT_FETCH=0 \
+  RECURSION_REQUIRE_FRESH_BASE=0 RECURSION_TEST_WORKER=sandbox \
+  bash "$R/scripts/work.sh" sandbox-ok
+) >"$TMP/sandbox-work.out" 2>&1
 status="$(sed -n 's/^status: *//p' "$R/state/tasks/sandbox-ok.md" | head -1)"
 [ "$status" = passed ] || {
   echo "FAIL strict sandbox task status=$status"; tail -30 "$TMP/sandbox-work.out"
