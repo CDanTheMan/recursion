@@ -3106,3 +3106,202 @@ delivery, project checkout, PAUSE state, or pilot was changed. The review branch
 merged, and pruned before a fresh full PAUSE-held production correction can be proposed. That
 production action still requires separate Lucas authorization; actuator deployment and all pilot
 windows remain blocked.
+
+## Phase 8 merged PAUSE/resync production correction
+
+Lucas reported the PAUSE/resync branch merged and pruned, then separately authorized the exact
+PAUSE-held correction window after its complete preflight was presented. No actuator deployment,
+PAUSE removal, notification, configuration/capacity change, product-repository action, pilot, or
+soak was authorized.
+
+### Merge, protection, and live starting gates
+
+Fresh workstation fetch/prune and ancestry checks returned:
+
+```text
+origin/master=f7df0d0e8ba7cbfc4109581cfbb62ed37b54813a
+PR #35 merged=true head=76cef9aa32476493989de54cc90b51d26d51abeb
+merge_commit=f7df0d0e8ba7cbfc4109581cfbb62ed37b54813a
+2688671a80e7a69929f0b1e137e43485196d72ac ancestor: yes
+1a16d81c396dde5fbcc87d9ac80cca3017fc3bf2 ancestor: yes
+5bbfad5fc46975b6f3de89744a4cd89ab671e201 ancestor: yes
+76cef9aa32476493989de54cc90b51d26d51abeb ancestor: yes
+origin/review/hermes-phase8-pause-resync absent
+dirty workstation master=20c1fa77042f3aa9f5d8978352792f3b058bc0d1 (20 entries, untouched)
+```
+
+The authenticated GitHub settings page showed classic protection rule `81491567` applying to
+`master`: pull request required, conversation resolution required, no administrator bypass, force
+push disabled, and deletion disabled. The GitHub connector independently reported PR #35 closed
+and merged. No setting changed. Host-side authenticated `ls-remote` using the registered Recursion
+deploy key returned exact `f7df0d0... refs/heads/master`.
+
+The initial live capture at `2026-08-10T04:58:17Z` and final pre-authorization capture proved:
+
+```text
+HEAD=30fb73f56496d1d8e72f00dceb4b59de4bd21a00
+BRANCH=loop/auto
+MASTER=ORIGIN_MASTER=be3cb8b6462bc6bbe2ba12305e6bee47ee102fc8
+TRACKED_DIRTY=false
+STATUS=?? .env.bak.1786014440  # pre-existing; not read or changed
+PAUSE=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+JOURNAL=c0a03878fc98df2bb6e6a83496d003dd198e53a8477cb004af6a3909f5b103a0
+PENDING=883d9f53e2d7263d8ffa733fe61bff959cf1b7e341d4a293d0a9b00f8e0c6684
+GATEWAY=active/running PID 2781295
+CRON=active/running
+ACTUATOR=not-found/inactive
+WORKERS=0; PROJECT_PROCESSES=0
+```
+
+### Fresh exact merged preflight
+
+The root-owned mode-`0700` bundle was created outside `/opt/recursion` at:
+
+```text
+/var/backups/recursion/phase8-pause-resync-preflight-20260810T050140Z-f7df0d0
+source bundle SHA-256=77f930275eadcc21ded63dd7f5d05c829dfd12c2629eb78acbf95f146f12ae33
+```
+
+Exact merged master was checked out on named branch `merged-master`. The retained preflight was
+launched as:
+
+```bash
+nohup bash \
+  /var/backups/recursion/phase8-pause-resync-preflight-20260810T050140Z-f7df0d0/evidence/phase8-resync-preflight.sh \
+  /var/backups/recursion/phase8-pause-resync-preflight-20260810T050140Z-f7df0d0 \
+  > /var/backups/recursion/phase8-pause-resync-preflight-20260810T050140Z-f7df0d0/evidence/preflight-launcher.log \
+  2>&1 < /dev/null &
+```
+
+From `2026-08-10T05:03:54Z` through `05:23:33Z`, it passed exact PAUSE and Git state; merged
+ancestry/artifacts/hashes; GitHub merge and protection; hardened gateway and inert execution
+services; exact crontab; zero model/global/per-project capacity; nine project/pilot configurations;
+nine paused empty outboxes; the sole exact pending PAUSE-safe no-op; and retained Phase 1 and
+production backup/restore evidence. The complete command matrix ended:
+
+```text
+BASELINE_SUITES=17
+BASELINE_FAILED_SUITES=0
+phase0-baseline RC=0
+phase1-control/phase1-audit through phase8-control/phase8-audit: every RC=0
+live-phase1 RC=0
+PREFLIGHT_RESULT=PASS
+```
+
+A disposable merge simulation used a new full live Git bundle and exact source bundle. Attempt 1
+was retained as negative evidence: `git bundle verify` was invoked without a repository context
+and stopped before cloning or mutation. The corrected command used `git -C /opt/recursion bundle
+verify`, then proved a conflict-free merge with exact parents `30fb73f... f7df0d0...`, reviewed
+`deploy/`, `schemas/`, `scripts/`, and `loop/` bytes, exact cycle/resync hashes, and removal of the
+disposable checkout. No production ref or file changed during either simulation attempt.
+
+The retained script/plan SHA-256 values are:
+
+```text
+506e7c1a6b6313f5d8d8d880f4d5904198188015a10425898d391c8093cb56d0  phase8-resync-preflight.sh
+dc9464b0bd3f30b2a402e709db771230adccccafd2ecdc158f9a01176ed5e6a2  phase8-resync-correction.sh
+41b1bc97590ba53c3aa800f919ff22edad992aba73ab31c2c508782dc52607bc  independent-verify.sh
+4512579accf6a3ec1d281bad2ca2a84019cd424007d3e57f3147ff11ff75e1ee  merge-simulation.sh
+f2a5b9709b9001bee534cf6ef25501b1c5ea698c45947f4e45b8055e641ac561  github-protection-and-merge.txt
+819ffc9f8e0c9798a91551a4c16715370495e7f7390c2357f5c259dacdfff4be  correction-plan.txt
+```
+
+### Authorized correction window and armed rollback
+
+Lucas authorized exactly: stop/restart cron only; leave the gateway running; create and verify
+runtime/Git snapshots; compare-and-swap `master` and `origin/master`; merge exact reviewed master
+into `loop/auto`; automatically roll back on mismatch; and do not run cycle/resync, deploy the
+actuator, lift PAUSE, notify, configure capacity/models, touch product repositories, or start a
+pilot.
+
+The transaction command was:
+
+```bash
+nohup bash \
+  /var/backups/recursion/phase8-pause-resync-preflight-20260810T050140Z-f7df0d0/evidence/phase8-resync-correction.sh \
+  /var/backups/recursion/phase8-pause-resync-preflight-20260810T050140Z-f7df0d0 \
+  > /var/backups/recursion/phase8-pause-resync-preflight-20260810T050140Z-f7df0d0/evidence/correction-launcher.log \
+  2>&1 < /dev/null &
+```
+
+It rechecked every inexpensive gate and authenticated origin before service mutation. At
+`2026-08-10T06:05:28Z` it stopped only cron, acquired the existing control lock, and proved no
+scheduled/project/worker process survived. The gateway remained PID `2781295`. It created:
+
+```text
+runtime-before/manifest.json SHA-256=3ff392ff60fcaa6b6f60c384d38b56ac300317995eb7ac230b44a3775f000b24
+runtime files=19
+live-git-before.bundle SHA-256=9b95364ee48382fe1dd9b97419f4fca251e7f3df21921ab43cd4a21f3c1d22ff
+```
+
+The runtime snapshot was restored through the canonical `runtime-state.py` into a validated
+disposable `/var/tmp/recursion-phase8-resync-restore-*` clone, every manifest file verified, and
+only that staging directory was removed. Before importing reviewed objects, the EXIT trap was
+armed to abort a merge, reset only `loop/auto` to `30fb73f...`, restore local and remote-tracking
+master to `be3cb8b...`, delete the temporary ref, restore `runtime-before`, restart cron, and verify
+the exact pre-window PAUSE/journal/pending/service/process/status state.
+
+All gates passed, so rollback did not execute. Compare-and-swap advanced both master refs and the
+reviewed merge committed at `06:05:30Z`:
+
+```text
+HEAD=599cbbdbf6ef538e3c305c61c1affc16320b2244
+PARENTS=30fb73f56496d1d8e72f00dceb4b59de4bd21a00 f7df0d0e8ba7cbfc4109581cfbb62ed37b54813a
+SUBJECT=Merge branch 'master' into loop/auto
+MASTER=ORIGIN_MASTER=f7df0d0e8ba7cbfc4109581cfbb62ed37b54813a
+FINAL_PRESTOP_GATE=PASS
+QUIESCED_GATE=PASS
+SNAPSHOT_AND_STAGING_RESTORE=PASS
+REVIEWED_CORRECTION_GATE=PASS
+CORRECTION_RESULT=PASS
+```
+
+No `cycle.sh`, `resync.sh`, heartbeat, decision, actuator, worker, outbox delivery, notifier, or
+pilot command ran in the window. Cron restarted active; the gateway was never stopped or restarted.
+
+### Independent closure and final sealed evidence
+
+The independent verifier ran from `2026-08-10T06:07:15Z` through `06:07:19Z`. It reverified the
+complete pre-window Git bundle; exact deployed merge and parents; reviewed runtime-tree equality;
+exact cycle/resync hashes; all 19 live runtime files against snapshot hashes, sizes, modes, owners;
+the live Phase 1 audit; authenticated remote master; exact crontab/configuration; nine paused empty
+outboxes; zero action/event/delivery/report/transport files; and services/processes. It ended:
+
+```text
+PASS retained-snapshots
+PASS exact-reviewed-deployment
+PASS runtime-state-zero-delta
+PASS services-correct
+PASS config-crontab-outboxes-unchanged
+PASS authenticated-origin-and-live-phase1
+INDEPENDENT_VERIFY=PASS
+```
+
+Final production state is:
+
+```text
+HEAD=599cbbdbf6ef538e3c305c61c1affc16320b2244
+BRANCH=loop/auto
+MASTER=ORIGIN_MASTER=f7df0d0e8ba7cbfc4109581cfbb62ed37b54813a
+TRACKED_DIRTY=false; STATUS=?? .env.bak.1786014440
+PAUSE=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+JOURNAL=c0a03878fc98df2bb6e6a83496d003dd198e53a8477cb004af6a3909f5b103a0
+PENDING=883d9f53e2d7263d8ffa733fe61bff959cf1b7e341d4a293d0a9b00f8e0c6684
+GATEWAY=active/running PID 2781295
+CRON=active/running PID 3421317
+ACTUATOR=not-found/inactive
+WORKERS=0; PROJECT_PROCESSES=0
+PROJECT_CONFIGS=9 unchanged
+MODEL/CAPACITY=unset/zero
+OUTBOXES=9 paused=true events=0 deliveries=0
+```
+
+The root-owned `0700` bundle retained all positive and negative logs, scripts, Git bundles,
+runtime snapshot, protection evidence, commands, and final state at
+`/var/backups/recursion/phase8-pause-resync-preflight-20260810T050140Z-f7df0d0`. Its sealed
+108-entry `evidence/FINAL-MANIFEST.sha256` verifies; the manifest file SHA-256 is
+`cc3c6ae035b2d1cab9bc5fe61932dcb74860da56b7c01b198f842e277dd57ba0`.
+
+This closes the PAUSE/resync production correction only. Phase 8 actuator deployment remains
+absent; PAUSE remains asserted; model/capacity configuration, notifications, all four pilots, the
+soak, promotion, and evidence-branch push/merge/prune remain separately gated.

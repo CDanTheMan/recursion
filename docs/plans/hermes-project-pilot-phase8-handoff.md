@@ -741,3 +741,59 @@ product repository, PAUSE state, or pilot window was changed. The next gate is L
 merge, and pruning of this branch. Only then may a fresh PAUSE-held production correction be
 proposed; it still requires separate authorization. Phase 8 actuator deployment and every pilot
 remain blocked.
+
+## Merged PAUSE/resync production correction
+
+Lucas reported PR #35 merged and the review branch pruned. Fresh Git and GitHub evidence proved
+merge commit `f7df0d0e8ba7cbfc4109581cfbb62ed37b54813a`, patch/evidence head `76cef9a...`,
+all four patch commits as ancestors, and the remote review ref absent. The signed-in protection
+page still showed rule `81491567` on `master`: pull requests and conversation resolution required,
+administrators included, and force pushes and deletion disabled. No GitHub setting changed.
+
+A fresh PAUSE-held preflight ran from `2026-08-10T05:03:54Z` through `05:23:33Z` in an exact
+Git-bundle clone of merged master. It passed the historical 17/17 baseline, every Phase 1-8
+negative control and positive audit, the live Phase 1 audit, authenticated host-side origin proof,
+both retained backup gates, exact project/pilot configuration, zero model/capacity settings, the
+sole valid pending PAUSE-safe no-op, and all nine paused empty outboxes. A disposable simulation
+then merged exact `f7df0d0...` into exact live parent `30fb73f...`, proved no conflict and exact
+reviewed runtime bytes, and removed the simulation checkout.
+
+Under Lucas's exact correction-window authorization, the transaction ran from `06:05:28Z` through
+`06:05:30Z`. It stopped only `cron.service`, retained the gateway at PID `2781295`, acquired the
+existing control lock, proved zero scheduled/project/worker processes, created a 19-file runtime
+snapshot and a complete Git bundle outside `/opt`, restored and verified the runtime snapshot in
+disposable staging, and removed staging before mutation. The armed compare-and-swap then advanced
+local `master` and `origin/master` from `be3cb8b...` to exact `f7df0d0...` and merged reviewed master
+once into `loop/auto` as:
+
+```text
+599cbbdbf6ef538e3c305c61c1affc16320b2244
+parents: 30fb73f56496d1d8e72f00dceb4b59de4bd21a00 f7df0d0e8ba7cbfc4109581cfbb62ed37b54813a
+subject: Merge branch 'master' into loop/auto
+```
+
+No `cycle.sh`, `resync.sh`, actuator, worker, notifier, or pilot ran. The rollback trap did not
+fire because every gate passed; its exact restoration path was armed before mutation and the
+pre-window Git/runtime artifacts were retained. Independent verification from `06:07:15Z` through
+`06:07:19Z` compared all 19 live runtime files byte-for-byte and by size/mode/owner to the snapshot,
+reverified the exact merge parents and reviewed runtime tree, reran live Phase 1, and proved:
+
+```text
+HEAD=599cbbdbf6ef538e3c305c61c1affc16320b2244
+MASTER=ORIGIN_MASTER=f7df0d0e8ba7cbfc4109581cfbb62ed37b54813a
+PAUSE=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+JOURNAL=c0a03878fc98df2bb6e6a83496d003dd198e53a8477cb004af6a3909f5b103a0
+PENDING=883d9f53e2d7263d8ffa733fe61bff959cf1b7e341d4a293d0a9b00f8e0c6684
+GATEWAY=active/running PID 2781295
+CRON=active/running
+ACTUATOR=not-found/inactive
+WORKERS=0; PROJECT_PROCESSES=0
+OUTBOXES=9 paused=true events=0 deliveries=0
+```
+
+The root-owned mode-`0700` closure bundle is
+`/var/backups/recursion/phase8-pause-resync-preflight-20260810T050140Z-f7df0d0`; its 108-entry final
+manifest SHA-256 is `cc3c6ae035b2d1cab9bc5fe61932dcb74860da56b7c01b198f842e277dd57ba0`.
+This closes only the PAUSE/resync production correction. The Phase 8 actuator remains absent, all
+model/capacity settings remain disabled, and every pilot/soak window remains blocked behind a new
+applicable preflight and separate Lucas authorization.
