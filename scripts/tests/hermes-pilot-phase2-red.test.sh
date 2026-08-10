@@ -77,15 +77,33 @@ acceptance: true
 - [ ] second item
 RMAP
 REAL_LS="$(command -v ls)"
+REAL_MKDIR="$(command -v mkdir)"
+# Align fixed implementations immediately BEFORE lock acquisition. The old ls-only barrier ran
+# after one planner already held the lock, so its peer could not arrive until the holder's
+# arbitrary two-second timeout expired. Under post-baseline load that produced false one-task
+# failures even though the serialized planner was correct.
+cat > "$TMP/plan-bin/mkdir" <<STUB
+#!/usr/bin/env bash
+case "\$*" in *state/.locks/planner-race.lock)
+  : > "$TMP/arrivals/lock-\$\$"
+  for _ in \$(seq 1 100); do [ "\$(find '$TMP/arrivals' -name 'lock-*' -type f | wc -l)" -ge 2 ] && break; sleep 0.02; done ;;
+esac
+exec "$REAL_MKDIR" "\$@"
+STUB
+# Preserve the original vulnerable-read barrier for the pre-Phase 2 implementation, which has no
+# planner lock. With the fixed implementation the lock directory exists, so this second barrier
+# deliberately does not wait while the peer is correctly excluded.
 cat > "$TMP/plan-bin/ls" <<STUB
 #!/usr/bin/env bash
 case "\$*" in *state/tasks/race-*)
-  : > "$TMP/arrivals/\$\$"
-  for _ in \$(seq 1 100); do [ "\$(find '$TMP/arrivals' -type f | wc -l)" -ge 2 ] && break; sleep 0.02; done ;;
+  if [ ! -d "$P/state/.locks/planner-race.lock" ]; then
+    : > "$TMP/arrivals/read-\$\$"
+    for _ in \$(seq 1 100); do [ "\$(find '$TMP/arrivals' -name 'read-*' -type f | wc -l)" -ge 2 ] && break; sleep 0.02; done
+  fi ;;
 esac
 exec "$REAL_LS" "\$@"
 STUB
-chmod +x "$TMP/plan-bin/ls"
+chmod +x "$TMP/plan-bin/ls" "$TMP/plan-bin/mkdir"
 ( cd "$P" && PATH="$TMP/plan-bin:$PATH" RECURSION_ROOT="$P" bash scripts/plan.sh race ) >"$TMP/p1" 2>&1 & p1=$!
 ( cd "$P" && PATH="$TMP/plan-bin:$PATH" RECURSION_ROOT="$P" bash scripts/plan.sh race ) >"$TMP/p2" 2>&1 & p2=$!
 wait "$p1" 2>/dev/null || true; wait "$p2" 2>/dev/null || true
