@@ -31,6 +31,14 @@ set -euo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 [ -f "$ROOT/.env" ] && { set -a; . "$ROOT/.env"; set +a; }
 
+# PAUSE is also a transport interlock. Caller-side checks improve logs, but only this boundary
+# covers every legacy caller and the race where PAUSE appears after an outbox action starts.
+# Refuse before parsing payloads or invoking either transport; rc=75 is a stable temporary hold.
+if [ -f "$ROOT/state/PAUSE" ]; then
+  echo "notify: PAUSE asserted; transport refused" >&2
+  exit 75
+fi
+
 PROJECT=""; THREAD=""; FILE=""; MSG=""; DESTINATION=""; DELIVERY_ID=""; EVENT_ID=""
 ATTEMPT_TOKEN=""; MESSAGE_DIGEST=""; EVIDENCE=""
 while [ $# -gt 0 ]; do

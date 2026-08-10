@@ -172,16 +172,33 @@ if [ -n "${ESC//[[:space:]]/}" ]; then
     *)
       { echo; printf '%s\n' "$ESC" | sed "1s/^## /## [$EID] /"; } >> state/INBOX.md
       log "escalation $EID appended to state/INBOX.md"
-      # Tag the ping when paused: an escalation that will NOT be acted on until you resume is
-      # a materially different message from one the box is about to work on.
       PFX="🔔 Recursion needs a decision [$EID]:"
-      [ "$PAUSED" = "1" ] && PFX="⏸🔔 Recursion needs a decision [$EID] (box is PAUSED — nothing will act on this until you resume):"
-      bash "$ROOT/scripts/notify.sh" "$PFX
+      if [ "$PAUSED" = "1" ]; then
+        log "escalation $EID retained in INBOX; PAUSE suppresses human-visible delivery"
+      else
+        bash "$ROOT/scripts/notify.sh" "$PFX
 $ESC
 
 Resolve with: recursion resolve-esc $EID \"<what you decided>\"" || true
+      fi
       ;;
   esac
+fi
+
+# Build the complete brief before the state commit. Delivery is represented by one canonical
+# source event; the Phase 7 scheduler/decision/action/actuator/outbox path owns the eventual send.
+# PAUSE queues nothing stale for replay into a later production window.
+if [ "${DELIVER_BRIEF:-1}" = "1" ] && [ -f "$BRIEF" ]; then
+  { echo; echo; bash "$ROOT/scripts/branch-review.sh" 2>/dev/null; } >> "$BRIEF"
+  if [ "$PAUSED" = "1" ]; then
+    log "PAUSE suppresses portfolio brief notification enqueue"
+  elif [ -x "$ROOT/scripts/taskctl.sh" ]; then
+    BODY="$(<"$BRIEF")"
+    bash "$ROOT/scripts/taskctl.sh" notify-event portfolio-brief recursion "$BODY" >/dev/null \
+      || log "portfolio brief notification enqueue failed"
+  else
+    log "portfolio brief notification enqueue unavailable — taskctl missing"
+  fi
 fi
 
 # --- Save today's snapshot for tomorrow's diff. -----------------------------------
@@ -199,16 +216,6 @@ else
   log "no changes"
 fi
 
-# --- Deliver the brief to Telegram (daily digest only). ---------------------------
-# Intra-day heartbeat-triggered briefs set DELIVER_BRIEF=0: they still write the brief,
-# update the board, and fire escalation pings above — but don't push a full digest every
-# few hours. Escalations always reach you; routine intra-day briefs stay silent.
-if [ "${DELIVER_BRIEF:-1}" = "1" ] && [ -f "$BRIEF" ]; then
-  # Append the review-branch tracker VERBATIM so the digest always carries the exact branch list,
-  # merge status, and review order (the loop pushes branches; you merge on GitHub).
-  { echo; echo; bash "$ROOT/scripts/branch-review.sh" 2>/dev/null; } >> "$BRIEF"
-  bash "$ROOT/scripts/notify.sh" -f "$BRIEF" || true
-fi
 fi   # end brief-mode block
 
 # --- Per-job fallback check: did this run drop off the sub onto metered billing? ---

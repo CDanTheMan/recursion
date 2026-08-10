@@ -17,16 +17,17 @@ LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/$DATE-cycle.log"
 log(){ echo "[$(date -Is)] $*" | tee -a "$LOG"; }
 
-# Kill switch (D-012): PAUSE halts EXECUTION and preserves AWARENESS. -----------------
-# Heartbeat, brief, and escalation delivery keep running; arms, planning, drain/conduct and
-# reflection do not. The old behaviour exited here, before the heartbeat — which contradicted
+# Kill switch (D-012/D-014): PAUSE halts EXECUTION and preserves local AWARENESS. ------
+# Heartbeat, brief generation, and durable escalation recording keep running; every external
+# notification enqueue/transport, arm, plan, drain/conduct, and reflection stays halted. The old
+# behaviour exited here, before the heartbeat — which contradicted
 # docs/access.md, docs/architecture.md and pause.sh's own message, and meant that the moment
 # you most needed to see what the box thought was the one moment it went silent. A paused box
 # that cannot tell you it is paused is a blind spot, not a safety feature.
 PAUSED=0
 if [ -f "$ROOT/state/PAUSE" ]; then
   PAUSED=1
-  log "PAUSED (state/PAUSE) — monitoring only: heartbeat + brief + escalations run; no arms, no planning, no drain. resume.sh to lift."
+  log "PAUSED (state/PAUSE) — local monitoring only: heartbeat + brief + durable escalations; no notifications or execution. resume.sh to lift."
 fi
 export RECURSION_PAUSED="$PAUSED"   # run.sh labels the brief from this
 
@@ -100,9 +101,15 @@ log "heartbeat signal=$SIGNAL reason=${REASON:-}"
 
 # --- 2) Brief (Terra) — only on a signal, or when forced. ----------------------------
 if [ "$SIGNAL" = "brief" ] || [ "$FORCE" = "force" ]; then
-  # Forced (daily) brief pushes the full digest; intra-day briefs stay silent (escalations
-  # still ping via run.sh). This is what keeps a 3-hourly heartbeat from spamming Telegram.
-  if [ "$FORCE" = "force" ]; then DELIVER=1; LBL="daily brief (pushed)"; else DELIVER=0; LBL="intra-day refresh (silent)"; fi
+  # Forced delivery is admitted only while resumed. run.sh writes the monitoring brief under
+  # PAUSE but neither sends nor queues it for replay into a later authorized window.
+  if [ "$FORCE" = "force" ] && [ "$PAUSED" = "0" ]; then
+    DELIVER=1; LBL="daily brief (durable outbox)"
+  elif [ "$FORCE" = "force" ]; then
+    DELIVER=0; LBL="daily brief (PAUSE-held; delivery suppressed)"
+  else
+    DELIVER=0; LBL="intra-day refresh (silent)"
+  fi
   bash scripts/board.sh add br supervision brief gpt-5.6-terra running "$LBL" >/dev/null
   BR_USAGE="$LOG_DIR/$DATE-morning.usage.json"
   if DELIVER_BRIEF=$DELIVER bash loop/supervisor/run.sh morning; then
@@ -121,14 +128,17 @@ fi
 # pilot's memory: the gateway already keys a conversational session per (chat, thread), so the
 # digest puts that project's facts into the session Lucas talks to when he opens the thread.
 # Daily only — a digest every three hours is noise, and noise is how a real alert gets missed.
-if [ "$FORCE" = "force" ] && [ -x scripts/digest.sh ]; then
+if [ "$FORCE" = "force" ] && [ "$PAUSED" = "0" ] && [ -x scripts/digest.sh ]; then
   bash scripts/digest.sh --all >>"$LOG" 2>&1 || log "per-project digests failed — see $LOG"
+elif [ "$FORCE" = "force" ] && [ "$PAUSED" = "1" ]; then
+  log "paused: skipping per-project notification enqueue"
 fi
 
-# --- 3) Commit the BOARD to loop/auto (run.sh already put us on that branch). ---------
-# History of what ran, tick by tick. Never main (CLAUDE.md rule 2); non-fatal.
+# --- 3) Commit final cycle state to loop/auto (run.sh already put us on that branch). ---
+# board.sh finishes after run.sh's commit; resumed digests append canonical source events after
+# it. Commit exactly those tracked cycle outputs so neither path leaves the checkout dirty.
 if git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -q '^loop/auto$'; then
-  git add -A state/BOARD.md 2>/dev/null || true
+  git add -A state/BOARD.md state/.board.tsv state/events.jsonl 2>/dev/null || true
   git diff --cached --quiet 2>/dev/null || git commit -q -m "loop: board $DATE $(date -u +%H:%MZ)" 2>/dev/null || true
 fi
 

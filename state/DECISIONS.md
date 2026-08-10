@@ -362,3 +362,40 @@ that still looks live is worse than an absent one.
 
 **Completed chiron-001/002/003 were left pointing at /opt/recursion.** They record what actually
 happened; repointing finished work at a repo it never ran in makes the ledger lie.
+
+---
+
+## D-014 — PAUSE preserves local awareness and interlocks every notification transport
+Date: 2026-08-10 · Status: OPEN
+
+**Amends:** D-012. Its heartbeat/monitoring choice remains correct; its claim that escalation
+delivery should remain externally live under PAUSE was falsified.
+
+**Options considered:** (A) keep caller-specific PAUSE checks and continue direct brief/digest
+sends / (B) make the sole `notify.sh` boundary refuse under PAUSE, suppress brief/digest source
+events while paused, and route their resumed delivery through the existing Phase 7
+file/event/decision/action/actuator/outbox path.
+
+**Chose:** B, under Lucas's explicit Phase 8 remediation authorization.
+
+**Because:** at `2026-08-10T06:30:01Z`, root cron ran `scripts/cycle.sh force` while the exact
+PAUSE file was present. The forced path made one legacy morning-brief call and eight legacy digest
+calls outside the Phase 7 outbox. Its `posted` prose did not constitute transport evidence; no
+durable delivery acknowledgement existed. It also appended the review tracker after committing
+state, leaving the production brief tracked dirty. A kill switch that permits an external send is
+not a complete kill switch, and a caller-side check alone cannot close the race where PAUSE appears
+after an outbox action begins.
+
+**Mechanical boundary:** PAUSE still permits heartbeat, fetch/status observation, local brief
+generation, durable INBOX recording, and outbox/status inspection. It prohibits notification
+source enqueue, outbox delivery, and every legacy or durable transport invocation. When resumed,
+daily brief and project digest bodies become stable idempotent source events; the existing Phase 7
+scheduler, decision queue, sole actuator, outbox policy, and `notify.sh` durable mode own delivery
+and require exact transport receipts. The full brief and final board/event state are committed in
+order so a forced cycle leaves no tracked state dirty.
+
+**Falsifier:** any transport invocation, brief/digest source event, replayed stale digest, or
+tracked-state residue caused by a PAUSE-held forced cycle; or any resumed brief/digest that reaches
+a human without a Phase 7 delivery record and durable transport acknowledgement.
+
+**Review:** 2026-09-15

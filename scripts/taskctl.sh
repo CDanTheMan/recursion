@@ -29,6 +29,7 @@
 #   taskctl.sh get <id> [field]        canonical status, or one field
 #   taskctl.sh reap                    expire dead leases -> stale + event (safe, idempotent)
 #   taskctl.sh event <kind> <task> <detail...>
+#   taskctl.sh notify-event <portfolio-brief|project-digest> <project> <message>
 #   taskctl.sh esc-record <key> <title> [workstream] [pointer]
 #                                      -> "NEW <id>" | "DUP <id> <count>"
 #   taskctl.sh esc-resolve <id> [note]
@@ -231,6 +232,48 @@ finally:
 PY
 }
 
+emit_notification_event(){ # kind project message
+  local kind="$1" project="$2" message="$3"
+  EVENT_KIND="$kind" EVENT_PROJECT="$project" EVENT_MESSAGE="$message" EVENT_TS="$(_now)" \
+    python3 - "$EVENTS" <<'PY'
+import hashlib,json,os,re,sys
+path=sys.argv[1]
+kind=os.environ['EVENT_KIND']; project=os.environ['EVENT_PROJECT']; message=os.environ['EVENT_MESSAGE']
+if kind not in {'portfolio-brief','project-digest'}:
+    raise SystemExit(2)
+if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}',project):
+    raise SystemExit(2)
+raw=message.encode('utf-8')
+if not raw:
+    raise SystemExit(2)
+if len(raw)>3800:
+    message=raw[:3800].decode('utf-8',errors='ignore')
+    raw=message.encode('utf-8')
+digest=hashlib.sha256(raw).hexdigest()
+identity=json.dumps([kind,project,digest],sort_keys=True,separators=(',',':')).encode()
+source_id='source-monitoring-'+hashlib.sha256(identity).hexdigest()[:24]
+try:
+    with open(path,encoding='utf-8',errors='replace') as current:
+        for line in current:
+            try: row=json.loads(line)
+            except json.JSONDecodeError: continue
+            if isinstance(row,dict) and row.get('id')==source_id:
+                print(source_id); raise SystemExit(0)
+except FileNotFoundError:
+    pass
+value={'schema_version':1,'id':source_id,'ts':os.environ['EVENT_TS'],'event':kind,
+       'task':'','project':project,'goal':'','pid':os.getpid(),
+       'detail':{'message':message,'message_digest':digest}}
+fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_APPEND,0o600)
+try:
+    os.write(fd,(json.dumps(value,sort_keys=True,separators=(',',':'))+'\n').encode())
+    os.fsync(fd)
+finally:
+    os.close(fd)
+print(source_id)
+PY
+}
+
 cmd="${1:-}"; shift 2>/dev/null || true
 
 case "$cmd" in
@@ -338,6 +381,17 @@ event)
   K="${1:?usage: taskctl event <kind> <task> [detail]}"; T="${2:-}"; D="${3:-}"
   _lock || exit $?
   emit_event "$K" "$T" "$D" || { rc=$?; _unlock; exit "$rc"; }
+  _unlock ;;
+
+notify-event)
+  K="${1:?usage: taskctl notify-event <portfolio-brief|project-digest> <project> <message>}"
+  P="${2:?project}"; M="${3:?message}"
+  [ ! -f "$ROOT/state/PAUSE" ] || { echo "taskctl: PAUSE blocks notification enqueue" >&2; exit 75; }
+  _lock || exit $?
+  if [ -f "$ROOT/state/PAUSE" ]; then
+    _unlock; echo "taskctl: PAUSE blocks notification enqueue" >&2; exit 75
+  fi
+  emit_notification_event "$K" "$P" "$M" || { rc=$?; _unlock; exit "$rc"; }
   _unlock ;;
 
 # --- escalation identity ---------------------------------------------------------------

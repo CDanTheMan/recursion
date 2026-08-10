@@ -95,16 +95,16 @@ render(){ # render <project>
 post(){ # post <project>
   local proj="$1" body
   body="$(render "$proj")" || return $?
-  if [ -x scripts/notify.sh ]; then
-    bash scripts/notify.sh --project "$proj" "$body" || true
-  fi
+  [ -x scripts/taskctl.sh ] || { echo "digest: canonical event writer is unavailable" >&2; return 3; }
+  bash scripts/taskctl.sh notify-event project-digest "$proj" "$body" \
+    >/dev/null || return $?
   printf '%s\n' "$body"
 }
 
 case "${1:-}" in
   --all)
     awk -F'\t' '$1 !~ /^#/ && NF>=8 && $8=="active" {print $1}' "$REG" | while read -r p; do
-      post "$p" >/dev/null 2>&1 && echo "posted digest: $p" || echo "digest failed: $p"
+      post "$p" >/dev/null 2>&1 && echo "queued digest: $p" || echo "digest failed: $p"
     done ;;
   "") echo "usage: digest.sh <project> | --all | <project> --print"; exit 2 ;;
   *)

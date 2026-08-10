@@ -6,12 +6,14 @@ ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "$ROOT"
 
 bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/hermes-decide.sh \
-  scripts/assist.sh scripts/taskctl.sh scripts/work.sh scripts/tests/hermes-pilot-phase8-red.test.sh
+  scripts/assist.sh scripts/taskctl.sh scripts/work.sh scripts/notify.sh scripts/digest.sh \
+  scripts/cycle.sh loop/supervisor/run.sh scripts/tests/hermes-pilot-phase8-red.test.sh
 python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scripts/decision-queue.py \
   scripts/notification-outbox.py scripts/validate-decision.py scripts/validate-control-state.py \
   scripts/runtime-state.py scripts/tests/hermes-pilot-phase8-red.py \
   scripts/tests/hermes-pilot-phase8-parallel.py \
-  scripts/tests/hermes-pilot-phase8-legacy-journal-red.py
+  scripts/tests/hermes-pilot-phase8-legacy-journal-red.py \
+  scripts/tests/hermes-pilot-phase8-notification-red.py
 python3 - <<'PY'
 import json
 json.load(open('schemas/control-plane/v1/schema.json',encoding='utf-8'))
@@ -77,5 +79,15 @@ grep -q 'decision journal import failed rc=' scripts/conduct-hermes.sh
 grep -q 'PAUSE-safe queue pass failed rc=' scripts/hermes-actuator.sh
 echo "ok    exact reviewed legacy noops are non-executable and journal failures are observable"
 
+grep -q 'PAUSE asserted; transport refused' scripts/notify.sh
+grep -q 'notify-event portfolio-brief' loop/supervisor/run.sh
+grep -q 'notify-event project-digest' scripts/digest.sh
+! grep -q 'notify.sh' scripts/digest.sh
+grep -q 'paused: skipping per-project notification enqueue' scripts/cycle.sh
+grep -q 'state/.board.tsv state/events.jsonl' scripts/cycle.sh
+for event in portfolio-brief project-digest; do grep -q "$event" scripts/notification-outbox.py; done
+echo "ok    PAUSE interlocks the sole sender and resumed brief/digest delivery enters the Phase 7 outbox"
+
 bash scripts/tests/hermes-pilot-phase8-red.test.sh
+python3 scripts/tests/hermes-pilot-phase8-notification-red.py
 echo "hermes-pilot-phase8-green: ALL PASS"

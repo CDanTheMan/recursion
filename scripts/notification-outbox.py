@@ -30,7 +30,7 @@ PROJECT_EVENTS = {
     "plan-proposed", "goal-accepted", "plan-approved", "pilot-window-armed", "pilot-window-opened",
     "pilot-window-closed", "worker-launched", "task-passed", "task-failed",
     "task-blocked", "human-answer-received", "review-branch-published", "goal-verifying",
-    "goal-achieved", "goal-stopped",
+    "goal-achieved", "goal-stopped", "project-digest",
 }
 TERMINAL_EVENT_TYPES = {"goal-achieved", "goal-stopped"}
 
@@ -159,6 +159,8 @@ def policy_destinations(base: Path, project: str, event_type: str) -> list[str]:
         raise OutboxError("exactly one configured Lucas direct destination is required")
     if event_type in PROJECT_EVENTS:
         return by_kind["project-topic"]
+    if event_type == "portfolio-brief":
+        return by_kind["head-hermes"]
     if event_type == "pilot-terminal-report":
         return by_kind["head-hermes"]
     if event_type == "portfolio-result":
@@ -235,6 +237,8 @@ def mapped_events(raw: dict) -> list[dict]:
         event_types.append("human-answer-received")
     elif kind in {"review-published", "review-branch-published"}:
         event_types.append("review-branch-published")
+    elif kind in {"portfolio-brief", "project-digest"}:
+        event_types.append(kind)
     result = []
     for event_type in event_types:
         event_id = stable_id("event", raw["_source_id"], event_type)
@@ -271,12 +275,21 @@ def message_for(event: dict) -> str:
         "portfolio-result": "Head Hermes portfolio result",
         "lucas-attention-required": "Lucas attention required",
         "delivery-dead-letter": "Delivery dead letter",
+        "portfolio-brief": "Portfolio brief", "project-digest": "Project digest",
     }
     label = labels[event["event_type"]]
+    detail = detail_object((event.get("source") or {}).get("detail"))
+    if event["event_type"] in {"portfolio-brief", "project-digest"}:
+        message = detail.get("message")
+        digest = detail.get("message_digest")
+        if not isinstance(message, str) or not message or len(message.encode()) > 3800:
+            raise OutboxError("monitoring notification message is absent or oversized")
+        if digest != hashlib.sha256(message.encode()).hexdigest():
+            raise OutboxError("monitoring notification message digest is invalid")
+        return message
     suffix = f" goal={event.get('goal_id') or '-'}"
     if event.get("task_id"):
         suffix += f" task={event['task_id']}"
-    detail = detail_object((event.get("source") or {}).get("detail"))
     if event["event_type"] in {"plan-proposed", "plan-approved"}:
         suffix += f" plan={detail.get('plan_id') or '-'} digest={detail.get('plan_digest') or '-'}"
     if event["event_type"] in {"pilot-window-armed", "pilot-window-opened", "pilot-window-closed"}:

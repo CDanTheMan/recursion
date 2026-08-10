@@ -119,13 +119,16 @@ originating blocker.
 |---|---|
 | heartbeat / monitoring | runs |
 | status answering | runs |
-| escalation delivery | runs |
-| brief | runs, labelled PAUSED |
+| escalation recording | runs to durable INBOX; delivery halted |
+| brief | generated and labelled PAUSED; notification enqueue/delivery halted |
+| notification outbox | status/pending work visible; delivery halted |
 | build arms, planning, drain, conduct, reflection | halted |
 | pushes, merges, deployments | halted |
 
 A paused box that cannot tell you it is paused is a failure, not a safety feature. The
-prior behaviour — exiting before the heartbeat — is superseded; see D-011.
+prior behaviour — exiting before the heartbeat — is superseded; see D-012. Awareness is
+local/durable truth, not permission to change an external system: the 2026-08-10 forced-cycle
+incident proved legacy brief/digest calls could otherwise bypass the Phase 7 outbox. See D-014.
 
 ## Git is the transport
 
