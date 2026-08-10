@@ -25,6 +25,20 @@ from pathlib import Path
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 TERMINAL_DIRS = ("succeeded", "failed")
 QUEUE_DIRS = ("pending", "running", *TERMINAL_DIRS)
+LEGACY_PRE_SCHEMA_NOOP_SHA256 = (
+    # One-time Phase 8 compatibility allowlist. These are the exact immutable line digests
+    # captured from the five 2026-08-07 pre-schema PAUSE noops. Adding any digest is a reviewed
+    # code change; shape matching alone never turns an invalid current record into legacy state.
+    "d589999830dbae9f212aaefaa95dab3562e89654c799426799f6ce71e3afe081",
+    "726c5d82795ee7b42def62b2601f36d0662cb0f5de6f5e4886b11b77f597cc8a",
+    "3bd740a2f8242645af25a01dda28f3db636d8e67fb066db1c6c39e793fb6d7ee",
+    "160cee2fed8ead1e0154bb3635cb19588a3ad312fb4ae4c5501a3b9da4e7784b",
+    "6c14cb6556f79e81bc3b1b4a0a4cb3c14593cb22902e7170410c990372678dda",
+)
+LEGACY_PRE_SCHEMA_NOOP_KEYS = frozenset({
+    "args", "confidence", "cost_usd", "goal", "project", "provider", "text", "ts",
+    "verb", "why", "wrong_if",
+})
 
 
 def root() -> Path:
@@ -163,6 +177,44 @@ def append_journal(base: Path, record: dict) -> None:
         os.close(fd)
 
 
+def reviewed_legacy_marker(raw: dict, line: str, number: int, record: dict) -> dict | None:
+    """Return a non-executable marker only for an exact reviewed pre-schema PAUSE noop."""
+    source_sha256 = hashlib.sha256(line.encode()).hexdigest()
+    if source_sha256 not in LEGACY_PRE_SCHEMA_NOOP_SHA256:
+        return None
+    if (
+        set(raw) != LEGACY_PRE_SCHEMA_NOOP_KEYS
+        or raw.get("verb") != "noop"
+        or raw.get("args") != []
+        or raw.get("confidence") != "high"
+        or raw.get("cost_usd") != "0.0"
+        or raw.get("provider") != "openai-codex"
+        or raw.get("text") != ""
+        or raw.get("project") not in {"recursion", "gsc"}
+        or not all(isinstance(raw.get(field), str) and raw[field] for field in ("goal", "ts", "why", "wrong_if"))
+    ):
+        return None
+    marker_id = f"legacy-decision-{source_sha256[:24]}"
+    return {
+        "schema_version": 1,
+        "id": marker_id,
+        "source": "state/decisions.jsonl",
+        "source_line": number,
+        "source_sha256": source_sha256,
+        "source_goal_sha256": hashlib.sha256(raw["goal"].encode()).hexdigest(),
+        "normalized_decision_id": record["id"],
+        "project": raw["project"],
+        "verb": "noop",
+        "classification": "reviewed-pre-schema-noop",
+        "disposition": "not-enqueued",
+        "reason": "reviewed historical PAUSE noop predates schema-v1 and must not be replayed",
+    }
+
+
+def legacy_marker_path(base: Path, marker: dict) -> Path:
+    return queue_root(base) / "legacy" / f"{marker['id']}.json"
+
+
 def enqueue(base: Path, record: dict, journal: bool) -> Path:
     validate_record(base, record)
     with queue_lock(base):
@@ -181,21 +233,68 @@ def enqueue(base: Path, record: dict, journal: bool) -> Path:
 def import_journal(base: Path) -> int:
     journal = base / "state/decisions.jsonl"
     if not journal.exists():
+        legacy = queue_root(base) / "legacy"
+        if legacy.exists() and any(legacy.glob("*.json")):
+            raise ValueError("legacy decision markers exist without the append-only source journal")
         return 0
-    imported = 0
+    prepared: list[tuple[str, dict]] = []
+    legacy_prefix = True
     with queue_lock(base):
         for number, line in enumerate(journal.read_text(encoding="utf-8").splitlines(), 1):
             if not line.strip():
                 continue
+            raw = None
+            record = None
             try:
-                record = normalize(json.loads(line))
+                raw = json.loads(line)
+                record = normalize(raw)
                 validate_record(base, record)
             except (json.JSONDecodeError, ValueError) as exc:
+                marker = None
+                if legacy_prefix and isinstance(raw, dict) and isinstance(record, dict):
+                    marker = reviewed_legacy_marker(raw, line, number, record)
+                if marker is not None:
+                    prepared.append(("legacy", marker))
+                    continue
                 raise ValueError(f"invalid decision journal line {number}: {exc}") from exc
-            if existing_path(base, record["id"]):
+            legacy_prefix = False
+            prepared.append(("decision", record))
+
+        # Validate all durable compatibility evidence before writing any marker or projection.
+        legacy_digests = tuple(
+            value["source_sha256"] for kind, value in prepared if kind == "legacy"
+        )
+        if legacy_digests and legacy_digests != LEGACY_PRE_SCHEMA_NOOP_SHA256:
+            raise ValueError("reviewed legacy decision prefix is incomplete or out of order")
+        expected_markers = {
+            legacy_marker_path(base, value): value for kind, value in prepared if kind == "legacy"
+        }
+        legacy_root = queue_root(base) / "legacy"
+        observed_markers = set(legacy_root.glob("*.json")) if legacy_root.exists() else set()
+        unexpected = observed_markers - expected_markers.keys()
+        if unexpected:
+            raise ValueError(f"unexpected legacy decision marker: {sorted(unexpected)[0].name}")
+        for path, expected in expected_markers.items():
+            if not path.exists():
                 continue
-            target = queue_root(base) / "pending" / f"{record['id']}.json"
-            atomic_json(target, record)
+            try:
+                observed = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ValueError(f"invalid legacy decision marker {path.name}: {exc}") from exc
+            if observed != expected:
+                raise ValueError(f"legacy decision marker mismatch: {path.name}")
+
+        imported = 0
+        for kind, value in prepared:
+            if kind == "legacy":
+                path = legacy_marker_path(base, value)
+                if not path.exists():
+                    atomic_json(path, value)
+                continue
+            if existing_path(base, value["id"]):
+                continue
+            target = queue_root(base) / "pending" / f"{value['id']}.json"
+            atomic_json(target, value)
             imported += 1
     return imported
 
