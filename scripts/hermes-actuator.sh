@@ -20,8 +20,14 @@ while [ "$STOP" = 0 ]; do
     fi
     # Drain only state-authoring/approval actions that are explicitly safe under PAUSE. Worker,
     # gate, publisher, and notification-delivery decisions remain pending and untouched.
-    RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/conduct-hermes.sh" --paused-safe >/dev/null 2>&1 \
-      || true
+    set +e
+    RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/conduct-hermes.sh" --paused-safe >/dev/null 2>&1
+    paused_rc=$?
+    set -e
+    case "$paused_rc" in
+      0|4|75) : ;;
+      *) log "PAUSE-safe queue pass failed rc=$paused_rc; pending state was preserved" ;;
+    esac
     sleep "$INTERVAL" & wait $! 2>/dev/null || true
     continue
   fi
