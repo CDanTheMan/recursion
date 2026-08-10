@@ -17,16 +17,17 @@ LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/$DATE-cycle.log"
 log(){ echo "[$(date -Is)] $*" | tee -a "$LOG"; }
 
-# Kill switch (D-012): PAUSE halts EXECUTION and preserves AWARENESS. -----------------
-# Heartbeat, brief, and escalation delivery keep running; arms, planning, drain/conduct and
-# reflection do not. The old behaviour exited here, before the heartbeat — which contradicted
+# Kill switch (D-012/D-014): PAUSE halts EXECUTION and preserves local AWARENESS. ------
+# Heartbeat, brief generation, and durable escalation recording keep running; every external
+# notification enqueue/transport, arm, plan, drain/conduct, and reflection stays halted. The old
+# behaviour exited here, before the heartbeat — which contradicted
 # docs/access.md, docs/architecture.md and pause.sh's own message, and meant that the moment
 # you most needed to see what the box thought was the one moment it went silent. A paused box
 # that cannot tell you it is paused is a blind spot, not a safety feature.
 PAUSED=0
 if [ -f "$ROOT/state/PAUSE" ]; then
   PAUSED=1
-  log "PAUSED (state/PAUSE) — monitoring only: heartbeat + brief + escalations run; no arms, no planning, no drain. resume.sh to lift."
+  log "PAUSED (state/PAUSE) — local monitoring only: heartbeat + brief + durable escalations; no notifications or execution. resume.sh to lift."
 fi
 export RECURSION_PAUSED="$PAUSED"   # run.sh labels the brief from this
 

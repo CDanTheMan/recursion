@@ -3305,3 +3305,213 @@ runtime snapshot, protection evidence, commands, and final state at
 This closes the PAUSE/resync production correction only. Phase 8 actuator deployment remains
 absent; PAUSE remains asserted; model/capacity configuration, notifications, all four pilots, the
 soak, promotion, and evidence-branch push/merge/prune remain separately gated.
+
+## Phase 8 forced-cycle notification incident, containment, and control patch
+
+### Merge gate and failed actuator preflight
+
+Lucas reported PR #36 reviewed, merged, and pruned. Fresh Git and authenticated GitHub evidence
+proved:
+
+```text
+PR #36 merged=true at 2026-08-10T06:18:29Z
+PR head=465f8964fbffa113c239d7b337179369a9f8be13
+origin/master=7e6e21f41c3da8914322ac352fabcd4bf95b38a4
+merge-base --is-ancestor 465f896... origin/master RC=0
+origin/review/hermes-phase8-pause-resync-production-evidence absent after fetch --prune
+```
+
+The authenticated protection response still required pull requests and conversation resolution,
+included administrators, and disabled force pushes and deletion. A new clean authoring worktree
+was created from exact `7e6e21f...`; the user-owned dirty master stayed exact `20c1fa7...` and was
+not touched.
+
+The fresh actuator preflight used source bundle SHA-256
+`40377daf0d3ee4dd04864183ae9eac74dbf9aa491cf6508c44f9fe238946ddbc` and script SHA-256
+`926e2cf9050d41d0a73bc26bfde01643a47a08c91f3a57952cd28f8b822efffe`:
+
+```bash
+nohup bash \
+  /var/backups/recursion/phase8-actuator-final-preflight-20260810T062541Z-7e6e21f/evidence/phase8-actuator-preflight.sh \
+  /var/backups/recursion/phase8-actuator-final-preflight-20260810T062541Z-7e6e21f \
+  > /var/backups/recursion/phase8-actuator-final-preflight-20260810T062541Z-7e6e21f/evidence/preflight-launcher.log \
+  2>&1 < /dev/null &
+```
+
+From `06:26:36Z` through `06:46:27Z`, all inexpensive live gates, the 17/17 baseline, every
+Phase 1-8 control/audit pair, and live Phase 1 returned zero. The final immutable-live-state check
+then stopped before any simulation, backup mutation, unit installation, or deployment:
+
+```text
+PREFLIGHT_FAIL=live-head-changed-after-controls
+```
+
+The retained cron journal and Git chain explain the mismatch exactly:
+
+```text
+06:30:01Z root cron: cd /opt/recursion && RECURSION_ROOT=/opt/recursion bash scripts/cycle.sh force
+e1420d24e94595f109023768e48e48e5240bb75d  pre-window HEAD
+724df09e9f2fffbff652f2d96ab234ad7a6551af  loop: morning 2026-08-10
+4db7432bcdad98f7668514d71c5cbb5aab029fe7  loop: board 2026-08-10 06:31Z
+06:31:50Z cron session closed
+```
+
+The forced branch set `DELIVER_BRIEF=1` under PAUSE and invoked `digest.sh --all` without a PAUSE
+guard. `run.sh` committed state, appended the branch tracker to the already committed brief, and
+called legacy `notify.sh`; `digest.sh` called the same legacy sender with `|| true` and printed
+`posted` regardless of transport truth. The log contained one `brief done (deliver=1)` and eight
+`posted digest:` claims. All nine Phase 7 outboxes still reported `paused=true`, `events=0`, and
+`deliveries={}`; the search for notification-event, delivery, and transport-evidence files was
+empty. The exact conclusion is nine unauthorized legacy attempts/claims and **zero durable
+acknowledgements**. It is not evidence that nine messages were delivered.
+
+The incident capture retained refs, reflog, commits, tracked diff, cron/cycle windows, service and
+process state, source excerpts, all outbox states, and the durable-file search. Its manifest
+SHA-256 is `8ff1d25e3a00065093410955b13906b4336b7d1ccb34c3d2f31dd5b11854edf4`. The parent
+root-owned mode-`0700` bundle is
+`/var/backups/recursion/phase8-actuator-final-preflight-20260810T062541Z-7e6e21f`; its final
+303-entry manifest SHA-256 is
+`78baebaabc890181bac9c9a818058f8f589837c7e7f277767f751f76d2693dfe`.
+
+### Authorized cron containment
+
+Lucas authorized temporary cron containment and the reviewable patch. The containment script
+captured the current refs/status, crontab, cron journal, PAUSE, gateway/cron/actuator services,
+worker units, and project processes; acquired `/run/recursion-control.lock`; rechecked zero
+cycle/resync/project work; armed an EXIT rollback; then executed only:
+
+```bash
+systemctl stop cron.service
+```
+
+Postconditions at `2026-08-10T17:23:51Z` were:
+
+```text
+HEAD=bcd65ebcc7c1af3f56be1bb3b7530a837793eaf6 (loop/auto)
+MASTER=f7df0d0e8ba7cbfc4109581cfbb62ed37b54813a
+ORIGIN_MASTER=7e6e21f41c3da8914322ac352fabcd4bf95b38a4
+STATUS=?? .env.bak.1786014440
+PAUSE=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+GATEWAY=active PID 2781295
+CRON=inactive
+ACTUATOR=not-found/inactive
+WORKER_UNITS=0; PROJECT_PROCESSES=0
+CONTAINMENT_RESULT=PASS
+```
+
+The state was identical before and after except for cron's intended active-to-inactive
+transition. Cron had run silent monitoring cycles at 09:15, 12:15, and 15:15 before containment;
+their ledger commits were preserved rather than rewritten. Rollback did not fire. The retained
+one-command reversal is:
+
+```bash
+systemctl start cron.service
+test "$(systemctl is-active cron.service)" = active
+test "$(systemctl is-active hermes-gateway.service)" = active
+test "$(sha256sum /opt/recursion/state/PAUSE | cut -d' ' -f1)" = \
+  919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+```
+
+The root-owned mode-`0700` evidence directory is
+`/var/backups/recursion/phase8-cron-containment-20260810T172243Z`; its manifest verifies and has
+SHA-256 `958738a0a5b6c687b20cd802d041e53ac5746848cf8f21e2dde06671df6a0a90`.
+
+### Red controls and canonical-path implementation
+
+The patch branch was created from exact `origin/master` `7e6e21f...`. The red commits are:
+
+```text
+8aa553f47c8001e8d283cc061b3b52125cd64c45  Add red controls for PAUSE notification isolation
+b9037dd8317ffc623f0c0d61748b4301c3ea550a  Add red control for monitored outbox events
+```
+
+In an exact-base disposable Linux clone, they failed non-vacuously:
+
+```text
+pause-semantics RC=1
+  two PAUSE-held forced-path transport calls
+  one PAUSE-held escalation transport call
+  tracked state/.board.tsv and brief residue
+  resumed direct sends with no canonical brief/digest events
+telegram-routing RC=1
+  sole notify.sh invoked transport under PAUSE and returned zero
+phase8-notification RC=1
+  no canonical notify-event command, monitored mapping, policy delivery, or receipt
+```
+
+Implementation `f180fc7129c9feb3bd094a55336122f0d251a695` extends proven paths only: `taskctl.sh`
+remains the canonical event writer; `state/events.jsonl` remains the source; the existing Phase 7
+scheduler emits schema-v1 decisions; the existing decision/action/conductor/sole-actuator path
+mutates the outbox; and durable-mode `notify.sh` remains the sole sender. There is no new scheduler,
+executor, store, publisher, delivery queue, or transport. The implementation adds stable
+`portfolio-brief` and `project-digest` source identities, exact message digests, policy routing to
+Head Hermes/project topic, and central PAUSE refusal before either transport. It suppresses paused
+source enqueue rather than replaying stale daily messages and commits complete brief/board/event
+state in order.
+
+Focused post-implementation commands in disposable staging were:
+
+```bash
+bash -n scripts/notify.sh scripts/taskctl.sh scripts/digest.sh scripts/cycle.sh loop/supervisor/run.sh
+python3 -m py_compile scripts/notification-outbox.py scripts/tests/hermes-pilot-phase8-notification-red.py
+bash scripts/tests/pause-semantics.test.sh
+bash scripts/tests/telegram-routing.test.sh
+python3 scripts/tests/hermes-pilot-phase8-notification-red.py
+bash scripts/audit/hermes-pilot-phase8-green.sh
+```
+
+Every command returned zero. The controls prove no paused transport or stale enqueue, exact
+idempotent source identity, malformed-input refusal, resumed canonical routing, two exact durable
+transport receipts in the inert fixture, and clean tracked state after paused and resumed forced
+cycles. Governance commit `2e5c3b3b5e8e31619cfd60ae23104c2b79458d81` adds D-014 and updates
+`CONTROL_PLANE.md`/`docs/access.md`, explicitly preserving why D-012 originally kept monitoring
+alive while correcting the external-delivery boundary its falsifier exposed.
+
+No patch byte is deployed. Cron remains stopped, gateway PID `2781295` remains live, PAUSE is
+exact, the actuator is absent, workers are zero, production history is preserved, and no human
+notification, product-repository action, pilot, or soak was performed by containment or patch
+testing.
+
+### Exact full-matrix closure and sealed patch evidence
+
+The complete Linux matrix ran against exact implementation commit
+`f180fc7129c9feb3bd094a55336122f0d251a695` from `2026-08-10T17:42:02Z` through
+`18:00:47Z`. The source worktree was clean before and after. The retained result is:
+
+```text
+BASELINE_SUITES=17
+BASELINE_FAILED_SUITES=0
+phase1-control RC=0; phase1-audit RC=0
+phase2-control RC=0; phase2-audit RC=0
+phase3-control RC=0; phase3-audit RC=0
+phase4-control RC=0; phase4-audit RC=0
+phase5-control RC=0; phase5-audit RC=0
+phase6-control RC=0; phase6-audit RC=0
+phase7-control RC=0; phase7-audit RC=0
+phase8-control RC=0; phase8-notification-control RC=0; phase8-audit RC=0
+live-phase1 RC=0
+immutable-source-and-live-state RC=0
+FULL_MATRIX_FAILURES=0
+```
+
+The immutable gate proved the live state was identical before and after: `loop/auto` remained
+`bcd65ebcc7c1af3f56be1bb3b7530a837793eaf6`; local `master` remained `f7df0d0...`;
+`origin/master` remained `7e6e21f...`; the only status entry remained the pre-existing
+`.env.bak.1786014440`; PAUSE retained SHA-256 `91937183...`; the gateway remained active at PID
+`2781295`; cron remained deliberately inactive; the actuator remained absent; and worker/project
+process counts remained zero. Runtime/configuration hashes, all outbox states, and all delivery
+files also matched before and after. The inner full-matrix manifest verifies and has SHA-256
+`612753113835040ba42d1c7fee637da376fdb1a1066b22cbd85b4096670e7f41`.
+
+The exact tested source is retained as a complete Git bundle with SHA-256
+`8beb15d12df656be50e3dec574d6f0dbd5ecbb5d8db24ca65d5f7339c2ddd2c7`; `git bundle
+verify` reports exact ref `f180fc7129c9feb3bd094a55336122f0d251a695` and complete history. All
+disposable red/green clones, upload bundles, and runners under `/var/tmp` were removed after the
+logs and source bundle were retained. The final root-owned mode-`0700` evidence directory is
+`/var/backups/recursion/phase8-pause-notify-patch-20260810T172243Z`; every entry in its final
+manifest verifies, and the manifest file SHA-256 is
+`1a6faf799cfa4fd672a904ee8bfb7187f15b2058261f615e3c957c8c0be6c561`.
+
+This closes authoring evidence only. The patch, actuator, and pilots remain undeployed. Cron is
+still held inactive as explicit containment; restarting it is the retained one-command rollback,
+not an implicit post-test action.

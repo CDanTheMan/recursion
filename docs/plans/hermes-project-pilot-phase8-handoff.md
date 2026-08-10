@@ -797,3 +797,89 @@ manifest SHA-256 is `cc3c6ae035b2d1cab9bc5fe61932dcb74860da56b7c01b198f842e277dd
 This closes only the PAUSE/resync production correction. The Phase 8 actuator remains absent, all
 model/capacity settings remain disabled, and every pilot/soak window remains blocked behind a new
 applicable preflight and separate Lucas authorization.
+
+## Actuator preflight incident and PAUSE-notification remediation
+
+Lucas reported PR #36 reviewed, merged, and pruned. GitHub and fresh fetch/prune proved evidence
+head `465f8964fbffa113c239d7b337179369a9f8be13` merged through exact `origin/master`
+`7e6e21f41c3da8914322ac352fabcd4bf95b38a4`, the implementation/evidence ancestry held, and
+the remote review ref was absent. Authenticated branch protection still required pull requests and
+conversation resolution, included administrators, and prohibited force pushes and deletion.
+
+The new PAUSE-held actuator preflight began at `2026-08-10T06:26:36Z`. It passed the 17/17
+baseline, every Phase 1-8 control and positive audit, the live Phase 1 audit, authenticated origin,
+project/pilot/notification configuration, all nine paused empty outboxes, services/processes, and
+retained backup/restore gates. Its final immutable-live-state gate then correctly stopped at
+`06:46:27Z`:
+
+```text
+PREFLIGHT_FAIL=live-head-changed-after-controls
+```
+
+Root cron had launched `scripts/cycle.sh force` at `06:30:01Z` while PAUSE was exact. It advanced
+`loop/auto` from `e1420d24...` through morning commit `724df09e...` to board commit
+`4db7432b...`, fetched the merged remote ref, and appended the branch-review tracker after the
+state commit, leaving `state/briefs/2026-08-10.md` tracked dirty. Its log claimed one delivered
+brief and eight posted project digests. Those nine lines prove legacy calls only: the direct
+`notify.sh` paths suppressed errors and created no Phase 7 event, delivery, transport receipt, or
+message-ID acknowledgement. Actual delivery is unknown and is not inferred from process prose.
+
+The root-owned mode-`0700` failed-preflight bundle is
+`/var/backups/recursion/phase8-actuator-final-preflight-20260810T062541Z-7e6e21f`. The 19-file
+incident manifest SHA-256 is `8ff1d25e3a00065093410955b13906b4336b7d1ccb34c3d2f31dd5b11854edf4`; the sealed
+303-entry bundle-manifest SHA-256 is
+`78baebaabc890181bac9c9a818058f8f589837c7e7f277767f751f76d2693dfe`.
+
+Lucas then authorized both temporary containment and a separate reviewable remediation. At
+`2026-08-10T17:23:51Z`, an exact gate acquired the canonical control lock and stopped **only**
+`cron.service`. It left PAUSE, Git/status state, the gateway at PID `2781295`, configuration,
+outboxes, and the incident history unchanged; actuator load state remained `not-found`, worker
+units and project processes remained zero. Cron had already run three later silent monitoring
+cycles at 09:15, 12:15, and 15:15, so containment preserved rather than rewrote their ledger chain
+at `bcd65ebcc7c1af3f56be1bb3b7530a837793eaf6`. The exact rollback is `systemctl start
+cron.service` followed by PAUSE/gateway verification. The containment bundle is
+`/var/backups/recursion/phase8-cron-containment-20260810T172243Z`; manifest SHA-256
+`958738a0a5b6c687b20cd802d041e53ac5746848cf8f21e2dde06671df6a0a90`.
+
+The clean remediation branch `review/hermes-phase8-pause-notification-control` was created from
+exact merged master `7e6e21f...`. Red commit `8aa553f47c8001e8d283cc061b3b52125cd64c45`
+proved PAUSE-held brief/digest/escalation transport calls and tracked brief/board residue. Red
+commit `b9037dd8317ffc623f0c0d61748b4301c3ea550a` proved the canonical monitoring source-event and
+outbox path was absent. Implementation `f180fc7129c9feb3bd094a55336122f0d251a695` then:
+
+- makes the sole `notify.sh` transport boundary return `75` before either legacy or durable send
+  whenever PAUSE exists;
+- prevents paused forced cycles from enqueueing stale brief/digest events for a later window;
+- records resumed brief/digest bodies as stable idempotent events through canonical `taskctl.sh`;
+- maps those events through the existing Phase 7 scheduler, decision queue, sole actuator,
+  policy outbox, exact transport receipt, and acknowledgement path; and
+- completes the brief before its state commit and commits the final board/event projections in
+  order, leaving both paused and resumed forced-cycle tracked state clean.
+
+Governance commit `2e5c3b3b5e8e31619cfd60ae23104c2b79458d81` records D-014 and updates the
+constitutional/access PAUSE table without erasing D-012's original rationale. Focused Linux
+controls passed syntax/compile, PAUSE and resumed forced-cycle behavior, sole-sender interlock,
+event idempotency, policy routing, exact message identity, and durable receipt evidence. No code
+or cleanup was applied to `/opt/recursion`; cron remains deliberately stopped pending reviewed
+deployment, the gateway remains live, and the Phase 8 actuator and all pilot/soak windows remain
+blocked.
+
+The exact implementation commit then passed the complete Linux closure matrix from
+`2026-08-10T17:42:02Z` through `18:00:47Z`: historical baseline `17/17`; every Phase 1-7 control
+and positive audit; Phase 8 control, new notification control, and positive audit; live Phase 1;
+and immutable source/live-state verification. Every return code was zero and
+`FULL_MATRIX_FAILURES=0`. The inner manifest SHA-256 is
+`612753113835040ba42d1c7fee637da376fdb1a1066b22cbd85b4096670e7f41`.
+
+Production remained exact before and after at `loop/auto` `bcd65eb...`, local master `f7df0d0...`,
+remote-tracking master `7e6e21f...`, PAUSE SHA-256 `91937183...`, active gateway PID `2781295`,
+inactive cron, absent actuator, and zero workers/project processes; only the pre-existing untracked
+`.env.bak.1786014440` remained. The complete tested-source bundle SHA-256 is `8beb15d1...` and
+verifies at exact ref `f180fc7...`. All disposable staging was removed. The retained root-owned
+evidence at `/var/backups/recursion/phase8-pause-notify-patch-20260810T172243Z` has a fully
+verifying final manifest whose SHA-256 is `1a6faf799cfa4fd672a904ee8bfb7187f15b2058261f615e3c957c8c0be6c561`.
+
+The review branch is therefore ready to commit, but not deployed. After review, merge, pruning,
+and a fresh applicable PAUSE-held preflight, deployment of this interlock must occur before cron
+can safely resume and before the Phase 8 actuator can be installed or tested. PAUSE removal,
+notifications, configuration/capacity changes, and all pilot windows remain separate gates.
