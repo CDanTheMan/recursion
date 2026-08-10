@@ -12,8 +12,9 @@
 # command it invokes — for that sentinel. A test that only reads the source could not catch a
 # leak that happens through curl's own error output.
 #
-# ★ Test 1 is the CONTROL: an un-routed message must still send. Every routing assertion below
-#   would pass on a notify.sh that sends nothing at all.
+# ★ Test 1 is the kill-switch boundary: PAUSE must stop the transport in this sole sender even
+# if a legacy caller reaches it. Test 2 is the resumed CONTROL: an un-routed message must still
+# send, or every later routing assertion could pass on a sender that drops everything.
 #
 # Hermetic: stub hermes + curl, no network, no real token, no messages sent.
 #
@@ -63,7 +64,17 @@ notify(){ : > "$HERMES_LOG"; : > "$CURL_LOG"
       RECURSION_TELEGRAM_CHAT="$CHAT" RECURSION_TELEGRAM_HOME_THREAD=1 \
       bash scripts/notify.sh "$@" ) >"$TMP/out" 2>"$TMP/err"; echo $?; }
 
-# --- 1) ★ CONTROL: an un-routed message still sends ------------------------------------------
+# --- 1) ★ PAUSE is a central transport interlock ----------------------------------------------
+printf 'PAUSED test\nreason: telegram-routing control\n' > "$R/state/PAUSE"
+rc=$(notify "must remain local")
+if [ "$rc" = "75" ] && [ ! -s "$HERMES_LOG" ] && [ ! -s "$CURL_LOG" ]; then
+  ok "★ PAUSE refuses delivery in the sole sender before either transport is invoked"
+else
+  no "★ PAUSE LEAK — notify reached a transport or returned rc=$rc: $(cat "$HERMES_LOG" "$CURL_LOG" "$TMP/err")"
+fi
+rm -f "$R/state/PAUSE"
+
+# --- 2) ★ CONTROL: an un-routed message still sends ------------------------------------------
 rc=$(notify "plain message")
 if [ "$rc" = "0" ] && grep -q 'HERMES send' "$HERMES_LOG"; then
   ok "★ CONTROL — a plain message is still delivered (notify is not silently dropping everything)"
@@ -155,9 +166,7 @@ fi
 # fixture must export the suppression. This is machine-checkable, so it is checked rather than
 # written down and hoped for.
 # The rule is "cannot reach real Telegram", not "sets one variable". A test may satisfy it by
-# suppressing delivery OR by stubbing `hermes` on PATH — pause-semantics.test.sh legitimately
-# needs notify.sh to RUN, because it asserts that escalations still reach the notifier while
-# paused, so blanket-suppressing it broke two real assertions. Encode the property, not the
+# suppressing delivery OR by stubbing `hermes` on PATH. Encode the property, not the
 # mechanism: a lint that demands one implementation forces tests to lie to it.
 missing=""
 for t in "$SRC"/scripts/tests/*.sh; do
