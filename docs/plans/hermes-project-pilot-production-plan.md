@@ -2,7 +2,7 @@
 title: Hermes Project Pilot Production Plan
 type: implementation-plan
 status: proposed
-last-verified: 2026-08-08
+last-verified: 2026-08-09
 related:
   - CONTROL_PLANE.md
   - docs/architecture.md
@@ -252,10 +252,16 @@ Required controls:
   review branch, pilot report, head report, and all delivery acknowledgements.
 ## Phase 8 - Observed pilots and promotion
 
-Status: fresh-plan/window controls are authored, exact-commit control-complete, and published on
-`review/hermes-phase8-pilot` for Lucas's review. No PR, merge, Phase 8 deployment, production
-configuration change, observed pilot, human-visible notification, or soak has started. See
-`docs/plans/hermes-project-pilot-phase8-handoff.md`.
+Status: the Phase 8 implementation was reviewed, merged through PR #29 as
+`9422b9cc5bf4270b7184b9af6fa31cae8e6a6876`, and its review branch was pruned. The separate Phase 1
+compatibility remediation was reviewed and merged through PR #30 as
+`fa0263587479b3c43b0ba6bb61f5b176383f7cec`, then successfully deployed to `hermes-gateway` under
+PAUSE using frozen Hermes `498061d8f1dcd855419b30e8729c869596a89ca6`. Baseline 17/17, every
+Phase 1-7 control and positive audit, live Phase 1, branch protection, backup/restore, rollback,
+dependency/OSV, and independent closure gates pass. Phase 8 execution remains deliberately inert:
+its supervisor, pilot, actuator, reconciler, outbox, and worker units are inactive; model routing is
+unset; capacity is zero; PAUSE is asserted; and no observed pilot, notification, or soak has
+started. See `docs/plans/hermes-project-pilot-phase8-handoff.md`.
 
 Run pilots through the real hierarchy, not by manually driving worker commands.
 

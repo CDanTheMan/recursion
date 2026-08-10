@@ -37,6 +37,7 @@ ev(){ bash scripts/taskctl.sh event "$1" "" "$2" >/dev/null 2>&1 || true; }
 
 drain_queue(){
   local queue_file claim_rc child_rc action_state aggregate=0 project global first i
+  local import_error import_rc
   local -a pids=() files=() projects=() claim_args=()
   [ "$DRY" = 0 ] || { log "--dry-run requires an explicit --file"; return 2; }
   [ -x "$ROOT/scripts/decision-queue.py" ] \
@@ -44,7 +45,12 @@ drain_queue(){
   mkdir -p "$ROOT/state/.locks" || return 70
   exec 8>>"$ROOT/state/.locks/hermes-control.lock"
   flock -n 8 || { log "control lock contended; refusing overlapping actuation"; return 73; }
-  python3 "$ROOT/scripts/decision-queue.py" import-journal >/dev/null || return $?
+  import_error="$(python3 "$ROOT/scripts/decision-queue.py" import-journal 2>&1 >/dev/null)"
+  import_rc=$?
+  if [ "$import_rc" -ne 0 ]; then
+    log "decision journal import failed rc=$import_rc; pending state was preserved: ${import_error:0:240}"
+    return 74
+  fi
 
   finalize_claim(){
     local claimed="$1" result_rc="$2" state

@@ -10,7 +10,8 @@ bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/hermes-deci
 python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scripts/decision-queue.py \
   scripts/notification-outbox.py scripts/validate-decision.py scripts/validate-control-state.py \
   scripts/runtime-state.py scripts/tests/hermes-pilot-phase8-red.py \
-  scripts/tests/hermes-pilot-phase8-parallel.py
+  scripts/tests/hermes-pilot-phase8-parallel.py \
+  scripts/tests/hermes-pilot-phase8-legacy-journal-red.py
 python3 - <<'PY'
 import json
 json.load(open('schemas/control-plane/v1/schema.json',encoding='utf-8'))
@@ -69,6 +70,12 @@ done
 grep -q 'source-plan-proposed-' scripts/project-pilot.py
 grep -q 'source-assist-' scripts/project-reconcile.py
 echo "ok    stable source-event identities feed exact-once Phase 7 delivery policy"
+
+grep -q 'LEGACY_PRE_SCHEMA_NOOP_SHA256' scripts/decision-queue.py
+grep -q 'reviewed-pre-schema-noop' scripts/decision-queue.py
+grep -q 'decision journal import failed rc=' scripts/conduct-hermes.sh
+grep -q 'PAUSE-safe queue pass failed rc=' scripts/hermes-actuator.sh
+echo "ok    exact reviewed legacy noops are non-executable and journal failures are observable"
 
 bash scripts/tests/hermes-pilot-phase8-red.test.sh
 echo "hermes-pilot-phase8-green: ALL PASS"

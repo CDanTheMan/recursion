@@ -22,16 +22,33 @@ related:
   handoff/evidence artifacts are present.
 - Phase 8 red-control commit: `234d49b46197b7e120ca96b7efdfdc904ba87ec0`.
 - Phase 8 implementation commit: `7d0dc10fcb5914f98353be1f73deb15498e71b7c`.
-- Local review branch: `review/hermes-phase8-pilot` in the clean worktree
-  `C:\Users\drfoo\github\recursion-hermes-phase8`, based on merged `origin/master`.
-- Publication state: Lucas separately authorized a push after local implementation, verification,
-  and evidence were complete. The branch was published with initial remote tip
-  `a411e1cdcc999c9606f35879d0ad3a1d3d58f438`; no PR was opened, and no merge or deployment occurred.
+- Merge state: Lucas reviewed and merged Phase 8 through PR #29 as exact merge commit
+  `9422b9cc5bf4270b7184b9af6fa31cae8e6a6876`; all four Phase 8 commits are ancestors and the
+  review branch was pruned.
+- The Phase 1 remediation evidence was subsequently merged through PR #31 as exact current
+  `origin/master` `b23069ee49519fda5896f43ec888efd71b533167`; evidence commit
+  `71e651ad958fa0e50904e7730e711ed39e6e2d82` and Phase 7 implementation `b4d3a303...` are
+  ancestors, and the review branch is pruned.
 - Exact Linux proof: 17/17 historical baseline; every Phase 1-7 behavioral control and positive
   audit; all six Phase 8 plan/window/assist controls; the real Linux parallel-capacity control; and
   the Phase 8 positive architecture audit are green at the exact implementation OID.
-- No live pilot or soak window has started. Production flags, model routing, concurrency, services,
-  notification state, product repositories, and PAUSE were not changed by Phase 8 work.
+- The separate Phase 1 compatibility remediation was reviewed and merged through PR #30 as
+  `fa0263587479b3c43b0ba6bb61f5b176383f7cec`, then successfully deployed under PAUSE using frozen
+  Hermes `498061d8f1dcd855419b30e8729c869596a89ca6`. The two former live Phase 1 deployment findings
+  are closed; live Phase 1, dependency/OSV, systemd security, rollback, and independent closure
+  gates pass.
+- The Phase 8 deployment preflight found production `loop/auto` at
+  `73987156f5d22d2f2f50ddc542c978d0c48f88b8`, containing merged `origin/master` `fa026358...` as
+  an ancestor. PAUSE remains asserted at SHA-256
+  `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`.
+- Lucas authorized one fresh PAUSE-held Phase 8 actuator deployment. The exact reviewed unit
+  reached active/running state, but its first deterministic PAUSE-safe queue transition was
+  blocked by five legacy pre-schema records in `state/decisions.jsonl`. Automatic rollback
+  restored the runtime snapshot, cron, and the sole valid pending decision and removed the unit.
+- Phase 8 is therefore still not deployed. PAUSE remains exact; `hermes-gateway` and cron are
+  active; the actuator is absent; workers and project processes are zero; model routing remains
+  unset; capacity remains zero; and all nine outboxes remain paused and empty. No PAUSE lift,
+  observed pilot, human-visible notification, product-repository mutation, or soak occurred.
 
 The exact commands, OIDs, results, live snapshot, GitHub inventory, rollback gates, and raw-log
 hashes are appended to `docs/plans/hermes-project-pilot-phase0-evidence.md`.
@@ -206,18 +223,21 @@ evidence is a no-go for the next window.
 
 ## Authorization boundary and next action
 
-Lucas approved the Phase 8 implementation plan and the requirement to replace the old Chiron plan
-shape. That approval authorized local Phase 8 authoring and read-only preflight. Lucas later
-authorized the review-branch push, which is the only remote mutation completed. Neither approval
-authorized a PR, merge, production repair, deployment, configuration change, PAUSE removal,
-human-visible notification, backup/restore drill, or pilot window.
+Lucas approved the Phase 8 implementation plan and replacement of the old Chiron plan shape,
+reviewed and merged the implementation and evidence branches, and separately authorized one fresh
+PAUSE-held actuator deployment. That production authorization did not include a retry, data
+migration, compatibility repair, configuration/capacity change, PAUSE removal, human-visible
+notification, or pilot window. The failed deployment was rolled back and was not retried.
 
-The next action belongs to Lucas's GitHub review workflow: review and merge the published branch,
-then prune it when satisfied. Deployment cannot be proposed as go until the two Phase 1 findings,
-branch-protection gate, and production backup/restore demonstration are resolved through reviewed
-actions. The first Chiron window additionally requires the merged/deployed Phase 8 code, a
-configured human-owned pilot model alias and bounded capacity, a fresh Lucas goal instruction,
-exact plan-digest approval, and exact window authorization.
+The next admissible action is a separate reviewable Phase 8 compatibility patch for legacy
+decision-journal import. It must preserve the append-only source records, fail closed for new
+invalid decisions, deterministically handle already-existing legacy no-op records, surface import
+failure in actuator evidence, and include a live-journal-shaped regression proving the current
+valid PAUSE-safe no-op executes exactly once. Only after that patch is reviewed, merged, and
+pruned may a fresh preflight and separately authorized deployment retry be proposed. The first
+Chiron window still additionally requires deployed Phase 8 code, a configured human-owned pilot
+model alias and bounded capacity, a fresh Lucas goal instruction, exact plan-digest approval, and
+exact window authorization.
 
 ## Post-merge hardening follow-up
 
@@ -388,3 +408,155 @@ committed, pushed, merged, or deployed. The next action is Lucas review/publicat
 Only after it is merged into `origin/master` may a new full PAUSE-held preflight and separately
 authorized Phase 1 deployment be proposed. Phase 8 deployment and every pilot window remain
 blocked.
+
+### Merged remediation deployment failed closed and rolled back
+
+Lucas subsequently merged PR #30 as exact commit
+`fa0263587479b3c43b0ba6bb61f5b176383f7cec` and explicitly authorized one fresh PAUSE-held,
+gateway-only Phase 1 remediation window with frozen Hermes
+`498061d8f1dcd855419b30e8729c869596a89ca6`. Fresh workstation fetch, production OID/ancestry,
+artifact hashes, PR merge metadata, and `recursion/master` protection were re-verified.
+
+The fresh preflight passed baseline 17/17, all Phase 1-7 controls, and all Phase 1-7 positive audits
+while reproducing exactly the two known live Phase 1 findings. Immediate state capture and the exact
+rollback were retained before `FINAL_PREDEPLOY_GATE=PASS`.
+
+The staged frozen-Hermes environment passed exact metadata/import/RS256 verification, `uv pip
+check`, and the complete 104-package OSV audit. During the authorized maintenance window, only
+`hermes-gateway` was stopped. Migration then failed closed before the venv or unit switch because
+plain `rsync --delete` preserved pre-existing excluded destination `bin/` and `logs/`; the explicit
+forbidden-path assertion rejected them.
+
+Automatic rollback and independent verification both passed. Final production is again the old
+active root gateway with Hermes `36cb5ae...`, `aiohttp==3.14.1`, `cryptography==48.0.1`, and the old
+unit hash. PAUSE remains exact at
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`; workers and project
+processes are zero; all execution units are inactive; all nine outboxes are paused and empty; no
+notification, pilot, flag, capacity, product-repository, or Phase 8 deployment action occurred.
+
+The root-owned evidence bundle is
+`/var/backups/recursion/phase1-remediation-20260809T225227Z-498061d8`; its manifest verifies and has
+SHA-256 `9d68d0d735a9e6adc661f510c70c6a7053617e3f06770ffe5b93c3ca5585a93a`. A read-only dry run proved
+the prospective correction: add `--delete-excluded` so excluded source paths are also removed from
+the migrated destination. The syntax-checked candidate has SHA-256
+`4df3299a546802ea15f0080fdc6dd33a108876c20d73e50e921bef03ef38ecaf` and was not launched.
+
+Phase 1 remediation therefore remains open, and Phase 8 deployment/pilots remain blocked. The next
+admissible action is another complete PAUSE-held preflight followed by a new explicit authorization
+for that gateway-maintenance window. Full commands, negative evidence, rollback proof, and final
+state are appended to the Phase 0 evidence document.
+
+### Corrected Phase 1 deployment succeeded under PAUSE
+
+Lucas authorized a new full preflight and corrected gateway-only deployment using merged Recursion
+`fa0263587479b3c43b0ba6bb61f5b176383f7cec`, frozen Hermes
+`498061d8f1dcd855419b30e8729c869596a89ca6`, and the reviewed `rsync --delete-excluded`
+correction. The boundary prohibited PAUSE removal, notification, configuration/capacity changes,
+and pilots.
+
+The new root-owned bundle is
+`/var/backups/recursion/phase1-remediation-20260809T233144Z-498061d8`. Fresh authenticated OID, PR,
+artifact, protection-rule, backup, configuration, destination, and rollback gates all passed. The
+fresh preflight passed baseline 17/17 and all Phase 1-7 controls/audits while reproducing the two
+old live deployment findings.
+
+The corrected transaction passed its staged 104-package compatibility/OSV/import/RS256 gates,
+stopped only `hermes-gateway`, migrated state without inherited root-runtime paths, switched the
+venv and reviewed unit, and reached bounded non-root readiness. Post-deployment live Phase 1,
+baseline 17/17, and every Phase 1-7 control and positive audit ended `ALL PASS`. Independent closure
+also passed exact source/dependency metadata, configuration hashes, service properties, active
+agent/worker counts, outbox inertness, live Phase 1, and systemd security.
+
+Final production runs exact Hermes `498061d8...` as `hermes-gateway:hermes-gateway` with `UMask=0077`,
+`NoNewPrivileges=yes`, `PrivateTmp=yes`, `PrivateDevices=yes`, `ProtectSystem=strict`, and
+`ProtectHome=yes`; systemd exposure is `3.6 OK`. `aiohttp==3.14.3` and
+`cryptography==50.0.0` are OSV-clear. The retained old venv is
+`/usr/local/lib/hermes-agent/venv.pre-phase1-498061d8f1dc` for exact rollback.
+
+Final PAUSE SHA-256 is
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`; active agents and workers
+are zero; execution/supervisor units are inactive; all nine outboxes are paused and empty; project
+and runtime configuration hashes are unchanged; and no notification or pilot occurred. The final
+evidence manifest verifies and has SHA-256
+`bea07eb20a4ed1c5e2214592690eb1323f70201e1e51dfe11064cfacfec5eeba`.
+
+Two evidence-only negative observations are retained in the Phase 0 evidence: an initial closure
+assertion did not distinguish clean pre-start migration state from service-owned runtime paths, and
+the transaction's initial manifest preceded the last tee output. Neither was accepted as positive
+evidence; the corrected independent verifier and post-log reseal both passed.
+
+The two live Phase 1 deployment gates are now closed. This does not deploy Phase 8, configure
+models/capacity, lift PAUSE, authorize a pilot, or promote beyond Phase 8. Those remain separately
+gated next actions.
+
+## Phase 8 actuator deployment: failed closed and rolled back
+
+Lucas explicitly authorized one fresh PAUSE-held Phase 8 actuator deployment, bounded to the exact
+reviewed `hermes-actuator.service`. The boundary excluded gateway changes, PAUSE removal,
+model/capacity configuration, notification, pilots, and product-repository changes, and required
+automatic rollback on any mismatch.
+
+Fresh authenticated evidence found current workstation `origin/master` at PR #31 merge
+`b23069ee49519fda5896f43ec888efd71b533167`, the Phase 1 evidence commit `71e651ad...` and Phase 7
+implementation `b4d3a303...` as ancestors, the evidence review branch pruned, and protection rule
+`81491567` still requiring a pull request and conversation resolution with administrator bypass,
+force-push, and deletion disabled. The production checkout remained `loop/auto` at
+`73987156f5d22d2f2f50ddc542c978d0c48f88b8`; its executable tree had no drift after reviewed
+runtime base `fa026358...`, and all 18 Phase 8 runtime/config blobs matched current merged master.
+
+An initial preflight stopped before deployment because it assumed an empty pending queue. Read-only
+inspection found exactly one valid Head Hermes PAUSE-safe no-op projection,
+`decision-6f037cbf6fb51a7f641ea9d6`, with SHA-256
+`883d9f53e2d7263d8ffa733fe61bff959cf1b7e341d4a293d0a9b00f8e0c6684`. The gate was narrowed to
+accept only that exact record; a second or different record remained fatal. No live data changed.
+The fresh corrected preflight then passed the 17/17 baseline, every Phase 1-8 control and positive
+audit, and live Phase 1.
+
+The authorized transaction used root-owned mode-`0700` bundle
+`/var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee`. It stopped only cron, left the
+hardened gateway running, created and verified a 19-file runtime snapshot, restored and verified it
+in disposable staging, and removed staging. After `FINAL_PREDEPLOY_GATE=PASS`, the exact reviewed
+unit (SHA-256 `5cfd8853d6e66068670aa5f9afcfa5b5671730af927d166a8dca4dad50486d4e`)
+was installed and reached active/running as PID `2934221` from `2026-08-10T01:11:45Z`.
+
+The expected PAUSE-safe no-op did not leave pending state within the bounded observation. The
+transaction failed at `2026-08-10T01:12:10Z` with
+`DEPLOY_FAIL=paused-noop-still-pending` and automatically rolled back by `01:12:12Z`. It disabled
+and removed the actuator unit, restored the exact runtime snapshot and prior crontab/cron state,
+and left the gateway untouched. No action, event, report, delivery, notification, or pilot was
+created, and no retry occurred.
+
+Read-only root-cause proof found six records in `state/decisions.jsonl`. The first five are legacy
+pre-schema no-ops whose prose `goal_id` values are not canonical identifiers; the sixth is the
+valid pending no-op. `conduct-hermes.sh --paused-safe` calls `decision-queue.py import-journal`
+before claiming pending work. Import normalizes and validates line 1 before checking existing
+projections, fails on that legacy `goal_id`, and returns before line 6 can be claimed. The actuator
+currently suppresses that command's diagnostic and continues its loop, explaining the silent
+pending record. The journal itself was not edited, migrated, skipped, or drained.
+
+Independent closure reran the complete matrix from `2026-08-10T01:17:19Z` through `01:36:16Z`;
+all 18 control/audit commands returned zero. A new snapshot matched all 19 pre-deployment runtime
+records exactly after excluding only `created_at`, restored and verified in disposable staging,
+and staging was removed. Final state at `01:37:02Z` was:
+
+```text
+PAUSE=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+CONTROL_PLANE=da43555b6977e55fc0bb185fd7d6d5e76384b638cbcaff4d798596cce68630d4
+ACTUATOR_LOAD=not-found
+ACTUATOR_ACTIVE=inactive
+ACTUATOR_ENABLED=not-found
+CRON_ACTIVE=active
+GATEWAY_ACTIVE=active
+GATEWAY_PID=2781295
+WORKERS=0
+PROJECT_PROCESSES=0
+OUTBOXES=9 paused=true events=0 deliveries=0
+MODEL_ROUTING=unset
+CAPACITY=zero
+```
+
+The bundle's 169 data files were sealed after all log writers stopped; its manifest verifies and
+has SHA-256 `2de6f66997e384d5e360b8005d12cdf73a88f3e895bfa93d38a4156992e13319`.
+Phase 8 remains undeployed and every pilot remains blocked. The next admissible action is the
+separate reviewed legacy-journal compatibility patch described above, followed only after merge by
+a fresh preflight and separately authorized deployment retry.

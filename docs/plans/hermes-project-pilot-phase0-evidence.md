@@ -2212,3 +2212,590 @@ The five-file Recursion patch—three implementation/control files plus this evi
 handoff—is staged only. It has not been committed, pushed, merged, or deployed. Lucas review and
 publication are the next gate; another PAUSE-held deployment still requires separate authorization
 after the reviewed patch is merged into `origin/master`.
+
+## Merged Phase 1 remediation deployment: failed-closed destination cleanup gate
+
+Lucas reported the Recursion compatibility branch merged and explicitly authorized a fresh,
+PAUSE-held, gateway-only Phase 1 remediation deployment using exact Recursion commit
+`fa0263587479b3c43b0ba6bb61f5b176383f7cec` and frozen Hermes commit
+`498061d8f1dcd855419b30e8729c869596a89ca6`. A fresh authenticated workstation fetch found
+`origin/master` at that merge commit and verified reviewed head
+`56efa495ca6a3770e78d8063311c492055dfa307` as an ancestor. Production's existing
+`origin/master` matched it exactly, and deployed awareness branch `loop/auto` at
+`f55ec1f73c9650939d4162e7a4487ef848446eba` contained it as an ancestor. The three merged
+compatibility files had their reviewed Linux hashes:
+
+```text
+a5abeb345a3b3dcaf1b372b02f461fffb748cbbc15eab29e8602bc43a728e670  scripts/worker-sandbox.sh
+7135cad8e249e444cdc52c7ce0d40c845ad0715b938c1e6c01bac595c8a010ca  scripts/tests/hermes-pilot-phase1-red.test.sh
+9b9205068bb37eb8f9e034d30c1996bc20f3f8d567d5e41f1484334adc392da1  scripts/audit/hermes-pilot-phase1-green.sh
+```
+
+Two preliminary launcher invocations stopped before creating a bundle: production's private
+Recursion remote uses SSH but has no GitHub credential, and anonymous HTTPS cannot read the private
+repository. No production credential or remote configuration was added. The accepted trust split
+was a fresh authenticated workstation fetch plus exact server-side OID and ancestry comparison.
+Authenticated GitHub settings readback also re-verified classic protection rule `81491567` on
+`master`: pull request required, conversation resolution required, administrator bypass disabled,
+force pushes disabled, and deletion disabled. PR #30 readback reported `merged=true`, reviewed head
+`56efa495...`, and merge commit `fa026358...`.
+
+The fresh root-owned mode-`0700` transaction bundle is:
+
+```text
+/var/backups/recursion/phase1-remediation-20260809T225227Z-498061d8
+preflight start: 2026-08-09T22:52:27Z
+final closure:   2026-08-09T23:23:25Z
+```
+
+The exact preflight command was retained as
+`evidence/hermes-phase1-launch-preflight.sh`; it launched the retained
+`evidence/phase1-control-preflight.sh` under `nohup`. It reproduced the two expected live Phase 1
+findings, passed the Phase 0 baseline 17/17, and passed every Phase 1-7 control suite and every
+Phase 1-7 positive audit. It ended:
+
+```text
+BASELINE_SUITES=17
+BASELINE_FAILED_SUITES=0
+hermes-pilot-phase1-red: ALL PASS
+hermes-pilot-phase1-green: ALL PASS
+hermes-pilot-phase2-red: ALL PASS
+hermes-pilot-phase2-green: ALL PASS
+hermes-pilot-phase3-red: ALL PASS
+hermes-pilot-phase3-green: ALL PASS
+hermes-pilot-phase4-red: ALL PASS
+hermes-pilot-phase4-green: ALL PASS
+hermes-pilot-phase5-red: ALL PASS
+hermes-pilot-phase5-green: ALL PASS
+hermes-pilot-phase6-red: ALL PASS
+hermes-pilot-phase6-green: ALL PASS
+hermes-pilot-phase7-red: ALL PASS
+hermes-pilot-phase7-green: ALL PASS
+phase1-control-preflight: ALL PASS
+pause_after=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+```
+
+Immediate state capture recorded the deployed refs, old root gateway, all services/timers/workers,
+project/pilot configuration, all notification destinations, nine paused and empty outboxes,
+backup/restore manifests, free space, and the exact rollback. Both existing Phase 1 findings were
+again required, not waived. `FINAL_PREDEPLOY_GATE=PASS` was recorded before this exact detached
+launch:
+
+```bash
+nohup bash \
+  /var/backups/recursion/phase1-remediation-20260809T225227Z-498061d8/evidence/hermes-phase1-deploy-498061d8.sh \
+  /var/backups/recursion/phase1-remediation-20260809T225227Z-498061d8 \
+  > /var/backups/recursion/phase1-remediation-20260809T225227Z-498061d8/evidence/launcher.log \
+  2>&1 < /dev/null &
+```
+
+Before maintenance, the staged venv passed `uv pip check`, exact editable-source metadata,
+gateway/provider imports, RS256, and a complete 104-package OSV query. It contained
+`aiohttp==3.14.3`, `cryptography==50.0.0`, and exact Hermes source `498061d8...`. The script then
+stopped only `hermes-gateway` and began canonical state migration. It failed before the venv switch
+and before installing the hardened unit. The exact new gate was:
+
+```text
+FAILURE_CAUSE=pre-existing excluded destination bin and logs survived rsync --delete, then the explicit forbidden-path assertion failed closed
+VENV_SWITCHED=NO
+HARDENED_UNIT_INSTALLED=NO
+```
+
+This arose because service identities and an inert `/var/lib/hermes-gateway` survived the prior
+rolled-back attempt. The source excludes correctly prevent copying `bin/` and `logs/`, but plain
+`rsync --delete` also preserves already-existing excluded destination paths. The next assertion
+requires those paths absent and therefore stopped the transaction. No assertion was weakened and
+the destination was not manually cleaned in production.
+
+The EXIT trap automatically stopped the gateway, restored the original venv/unit/config-file
+absence, restored the byte/metadata-equivalent pre-existing inert state directory from the new
+rollback snapshot, reloaded systemd, and restarted the old gateway. Independent verification then
+passed old dependency versions, old Hermes OID, exact old unit hash, project/runtime configuration
+hash equality, inert-state manifest equality, zero workers, all execution units inactive, nine
+paused/empty outboxes, and exactly the original two live findings:
+
+```text
+AUTOMATIC_ROLLBACK=PASS
+INDEPENDENT_ROLLBACK_VERIFICATION=ALL_PASS
+RETRY_STARTED=NO
+RESULT=FAILED_CLOSED_ROLLED_BACK
+FINAL_PAUSE_SHA256=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+FINAL_HERMES_OID=36cb5ae5530a75def7df3195e49b7a4aa2add482
+FINAL_GATEWAY_USER=root
+```
+
+A read-only `rsync -ani --delete --delete-excluded` proof showed that the corrected option would
+delete the pre-existing excluded `bin/` and `logs/` paths without touching `/root/.hermes`. A
+syntax-checked prospective transaction adds that option plus ERR line/command logging; it is
+retained only as `evidence/hermes-phase1-deploy-498061d8-candidate-v5.sh`, SHA-256
+`4df3299a546802ea15f0080fdc6dd33a108876c20d73e50e921bef03ef38ecaf`. It was not launched.
+
+The bundle manifest verifies cleanly; `evidence/MANIFEST.sha256` has SHA-256
+`9d68d0d735a9e6adc661f510c70c6a7053617e3f06770ffe5b93c3ca5585a93a`. Final production closure
+found PAUSE exact, old root gateway active, old unit/source/dependencies restored, zero workers or
+project processes, all execution units inactive, and all nine outboxes paused with zero events or
+deliveries. No notification, pilot, flag, capacity, product-repository, or Phase 8 deployment action
+occurred. A new full preflight and a new explicit gateway-maintenance authorization are required
+before the prospective correction may be run.
+
+## Corrected Phase 1 remediation deployment: all gates passed
+
+Lucas explicitly authorized a new full PAUSE-held preflight and corrected gateway-only Phase 1
+deployment using the same exact Recursion and Hermes OIDs plus the reviewed `rsync
+--delete-excluded` migration correction. No authorization was given to lift PAUSE, notify, alter
+project configuration/capacity, or start a pilot.
+
+The fresh transaction used root-owned mode-`0700` bundle:
+
+```text
+/var/backups/recursion/phase1-remediation-20260809T233144Z-498061d8
+preflight start:       2026-08-09T23:31:44Z
+hardened gateway start: 2026-08-09T23:53:56Z
+final closure:         2026-08-10T00:17:44Z
+```
+
+Before preflight, a fresh authenticated workstation fetch again found
+`origin/master=fa0263587479b3c43b0ba6bb61f5b176383f7cec` and reviewed head
+`56efa495ca6a3770e78d8063311c492055dfa307` as its ancestor. Production's existing
+`origin/master` matched. PR #30 again read `merged=true` with merge commit `fa026358...`.
+Authenticated GitHub readback of protection rule `81491567` again showed exact `master`, required
+pull request and conversation resolution, no administrator bypass, and force-push/deletion both
+disabled. No GitHub setting changed.
+
+The fresh PAUSE-held preflight again reproduced exactly the two old Phase 1 live findings, passed
+the Phase 0 baseline 17/17, and passed every Phase 1-7 control and positive audit. Its terminal
+markers were:
+
+```text
+BASELINE_SUITES=17
+BASELINE_FAILED_SUITES=0
+hermes-pilot-phase1-red: ALL PASS
+hermes-pilot-phase1-green: ALL PASS
+hermes-pilot-phase2-red: ALL PASS
+hermes-pilot-phase2-green: ALL PASS
+hermes-pilot-phase3-red: ALL PASS
+hermes-pilot-phase3-green: ALL PASS
+hermes-pilot-phase4-red: ALL PASS
+hermes-pilot-phase4-green: ALL PASS
+hermes-pilot-phase5-red: ALL PASS
+hermes-pilot-phase5-green: ALL PASS
+hermes-pilot-phase6-red: ALL PASS
+hermes-pilot-phase6-green: ALL PASS
+hermes-pilot-phase7-red: ALL PASS
+hermes-pilot-phase7-green: ALL PASS
+phase1-control-preflight: ALL PASS
+pause_after=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+```
+
+Immediate pre-mutation capture again recorded exact refs, services/timer/workers, active-agent
+count, project/pilot configuration, notification destinations, nine paused/empty outboxes,
+branch protection, backup/restore readiness, free space, configuration hashes, and exact rollback.
+All pilot concurrency remained zero and all model aliases/global concurrency remained unset.
+`FINAL_PREDEPLOY_GATE=PASS` preceded this exact launch:
+
+```bash
+nohup bash \
+  /var/backups/recursion/phase1-remediation-20260809T233144Z-498061d8/evidence/hermes-phase1-deploy-498061d8.sh \
+  /var/backups/recursion/phase1-remediation-20260809T233144Z-498061d8 \
+  > /var/backups/recursion/phase1-remediation-20260809T233144Z-498061d8/evidence/launcher.log \
+  2>&1 < /dev/null &
+```
+
+The launched transaction script has SHA-256
+`4df3299a546802ea15f0080fdc6dd33a108876c20d73e50e921bef03ef38ecaf`. It copied the old venv and
+pre-existing inert state into rollback storage, staged exact frozen Hermes source
+`498061d8f1dcd855419b30e8729c869596a89ca6`, passed `uv pip check`, exact editable metadata,
+gateway/provider imports, RS256, and a complete 104-package OSV audit, then stopped only
+`hermes-gateway`.
+
+The corrected canonical migration used:
+
+```bash
+rsync -a --delete --delete-excluded \
+  --exclude='/bin/' --exclude='/cache/' --exclude='/audio_cache/' \
+  --exclude='/image_cache/' --exclude='/logs/' --exclude='/sandboxes/' \
+  --exclude='*.lock' --exclude='*.pid' --exclude='config.yaml.bak*' \
+  --exclude='.update_check' --exclude='.codex_gpt55_autoraise_notice' \
+  --exclude='gateway-starts.log' \
+  /root/.hermes/ /var/lib/hermes-gateway/
+```
+
+The migration manifest proved excluded root-runtime paths absent before service start. The exact
+reviewed unit and identity files were then installed, the staged venv was switched live, and the
+gateway reached bounded readiness as dedicated `hermes-gateway:hermes-gateway`. The old venv is
+retained at `/usr/local/lib/hermes-agent/venv.pre-phase1-498061d8f1dc` for exact rollback.
+
+Post-deployment acceptance passed the live Phase 1 audit, systemd security analysis, a second
+baseline 17/17, and every Phase 1-7 control and positive audit. Important terminal evidence was:
+
+```text
+hermes-pilot-live-phase1-red: ALL PASS
+AUDITED=104
+aiohttp==3.14.3|OSV_CLEAR
+cryptography==50.0.0|OSV_CLEAR
+BASELINE_SUITES=17
+BASELINE_FAILED_SUITES=0
+hermes-pilot-phase1-red: ALL PASS
+hermes-pilot-phase1-green: ALL PASS
+hermes-pilot-phase2-red: ALL PASS
+hermes-pilot-phase2-green: ALL PASS
+hermes-pilot-phase3-red: ALL PASS
+hermes-pilot-phase3-green: ALL PASS
+hermes-pilot-phase4-red: ALL PASS
+hermes-pilot-phase4-green: ALL PASS
+hermes-pilot-phase5-red: ALL PASS
+hermes-pilot-phase5-green: ALL PASS
+hermes-pilot-phase6-red: ALL PASS
+hermes-pilot-phase6-green: ALL PASS
+hermes-pilot-phase7-red: ALL PASS
+hermes-pilot-phase7-green: ALL PASS
+phase1-remediation-compat: ALL PASS
+```
+
+Independent closure rechecked exact source metadata, `uv pip check`, service properties, process
+owner, gateway state, active agents, package versions, configuration hashes, service/worker
+inertness, outboxes, PAUSE, live Phase 1, and systemd security. The effective boundary is:
+
+```text
+User=hermes-gateway
+Group=hermes-gateway
+UMask=0077
+WorkingDirectory=/var/lib/hermes-gateway
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+Overall exposure level for hermes-gateway.service: 3.6 OK
+gateway_state=running
+active_agents=0
+```
+
+One independent-verifier assertion initially required live `bin/`, `logs/`, and lock paths to stay
+absent. It stopped before claiming closure. Inspection proved the migration manifest was clean and
+the running gateway had subsequently recreated its own service-owned runtime `bin/`, `logs/`, and
+`gateway.lock`. The corrected verifier requires a clean migration manifest and exact
+`hermes-gateway` ownership of those recreated runtime paths. It then ended
+`INDEPENDENT_CLOSURE=ALL_PASS`. No service or production file changed during that verifier fix.
+
+The transaction's first manifest was also correctly rejected after terminal observation because
+`deployment.log` and `launcher.log` continued receiving final lines after their initial hashes.
+No result was inferred from that manifest. After all logs and independent evidence were closed, the
+bundle was resealed and `sha256sum --quiet -c evidence/MANIFEST.sha256` passed. The final manifest
+file has SHA-256 `bea07eb20a4ed1c5e2214592690eb1323f70201e1e51dfe11064cfacfec5eeba`.
+
+Final production closure at `2026-08-10T00:17:44Z` observed awareness branch OID
+`73987156f5d22d2f2f50ddc542c978d0c48f88b8` with reviewed
+`origin/master=fa0263587479b3c43b0ba6bb61f5b176383f7cec`, exact Hermes source
+`498061d8f1dcd855419b30e8729c869596a89ca6`, active non-root gateway PID `2781295`, zero active
+agents, zero worker units/processes, every execution/supervisor unit inactive, and all nine
+outboxes paused with zero events/deliveries. Project/runtime configuration hashes were unchanged.
+PAUSE remained exact at
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`. No notification, pilot,
+model/capacity change, PAUSE lift, autonomous deployment, default-branch push, or product-repository
+mutation occurred.
+
+This closes the two Phase 1 deployment gates only. Phase 8 deployment, model/capacity setup, PAUSE
+removal, and every pilot window remain separate actions requiring their applicable authorization.
+
+## Phase 8 actuator deployment: legacy journal blocker and automatic rollback
+
+Lucas clarified and explicitly authorized one fresh PAUSE-held **Phase 8** actuator deployment.
+The authorized boundary was installation and enablement of only the exact reviewed
+`hermes-actuator.service` after a complete preflight, with automatic rollback. It explicitly
+excluded any gateway change, PAUSE removal, notification, model/capacity or other configuration
+change, pilot, or product-repository mutation. The recorded authorization timestamp was
+`2026-08-10T00:45:20Z`.
+
+### Fresh provenance and live invariants
+
+Fresh workstation fetch and authenticated GitHub readback established:
+
+```text
+REVIEWED_MASTER=b23069ee49519fda5896f43ec888efd71b533167
+PR31_MERGE=b23069ee49519fda5896f43ec888efd71b533167
+EVIDENCE_COMMIT=71e651ad958fa0e50904e7730e711ed39e6e2d82
+EVIDENCE_ANCESTOR=PASS
+PHASE7_IMPLEMENTATION=b4d3a30317e7d11f8e31b5e2578eb53aaeb5155c
+PHASE7_ANCESTOR=PASS
+REVIEW_BRANCH_PRESENT=false
+RULE_ID=81491567
+PATTERN=master
+PULL_REQUEST_REQUIRED=true
+CONVERSATION_RESOLUTION_REQUIRED=true
+ADMIN_BYPASS_DISABLED=true
+FORCE_PUSH_DISABLED=true
+DELETION_DISABLED=true
+SETTINGS_CHANGED=false
+```
+
+All Phase 7 handoff/evidence artifacts were present. Production remained on awareness branch
+`loop/auto` at `73987156f5d22d2f2f50ddc542c978d0c48f88b8`, with production
+`origin/master=fa0263587479b3c43b0ba6bb61f5b176383f7cec`; both the Phase 8 implementation
+`7d0dc10fcb5914f98353be1f73deb15498e71b7c` and runtime base `fa026358...` were ancestors.
+Only awareness-state files followed the runtime base. All 18 reviewed Phase 8 executable/config
+blob OIDs, including the unit, actuator, decision queue, worker/verifier, reconciler, outbox,
+runtime-state tool, and both pilot records, matched current merged master.
+
+The live control plane and safety state before the action were:
+
+```text
+CONTROL_PLANE_SHA256=da43555b6977e55fc0bb185fd7d6d5e76384b638cbcaff4d798596cce68630d4
+PAUSE_SHA256=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+PAUSE_OWNER=root:root
+PAUSE_MODE=0644
+PAUSE_SIZE=189
+hermes-gateway=active, User=hermes-gateway, Group=hermes-gateway, PID=2781295
+hermes-actuator=not-found/inactive
+workers=0
+project_processes=0
+outboxes=9 paused=true events=0 deliveries=0
+RECURSION_PILOT_MODEL=unset
+RECURSION_DECIDE_MODEL=unset
+RECURSION_PILOT_GLOBAL_CONCURRENCY=unset
+pilot concurrency_limit=0
+pilot max_inflight_workers=0
+pilot publication=false
+```
+
+Notification destinations, the exact four-line root crontab, project/pilot configuration hashes,
+service/timer/worker state, live Phase 1, retained Phase 1 backup manifest, free space, and the
+rollback were captured before mutation. The pre-existing untracked production file was not read or
+changed. The dirty local master remained at `20c1fa77042f3aa9f5d8978352792f3b058bc0d1`
+with all 20 user-owned status entries untouched.
+
+### Two preflight observations
+
+The first exact preflight invocation was retained as a negative observation:
+
+```bash
+nohup bash \
+  /var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee/evidence/phase8-preflight-attempt1.sh \
+  /var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee \
+  > /var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee/evidence/preflight-attempt1-launcher.log \
+  2>&1 < /dev/null &
+```
+
+At `2026-08-10T00:47:15Z` it stopped before deployment with
+`PREFLIGHT_FAIL=nonempty-state/decision-queue/pending`. The initial gate incorrectly assumed an
+empty pending queue. Read-only inspection identified exactly one schema-valid Head Hermes
+PAUSE-safe no-op projection:
+
+```text
+id=decision-6f037cbf6fb51a7f641ea9d6
+actor=head-hermes
+project=recursion
+goal_id=architecture-rebase
+verb=noop
+status=queued
+SHA256=883d9f53e2d7263d8ffa733fe61bff959cf1b7e341d4a293d0a9b00f8e0c6684
+```
+
+The preflight gate was narrowed to accept only that exact path, hash, schema, and singleton queue
+count; any second or different queue record still failed closed. No production data or service was
+changed by this correction. The corrected preflight was launched as:
+
+```bash
+nohup bash \
+  /var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee/evidence/phase8-preflight.sh \
+  /var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee \
+  > /var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee/evidence/preflight-launcher.log \
+  2>&1 < /dev/null &
+```
+
+From `2026-08-10T00:51:33Z` through `01:10:35Z`, it passed exact PAUSE, ancestry, 18 blob hashes,
+GitHub protection/merge, inert services, zero capacity/routing, paused empty outboxes, the exact
+pending no-op, and retained backup readiness. It then returned zero for:
+
+```text
+phase0-baseline
+phase1-control  phase1-audit
+phase2-control  phase2-audit
+phase3-control  phase3-audit
+phase4-control  phase4-audit
+phase5-control  phase5-audit
+phase6-control  phase6-audit
+phase7-control  phase7-audit
+phase8-control  phase8-audit
+live-phase1
+PREFLIGHT_RESULT=PASS
+```
+
+This reproduced the 17/17 historical baseline and all Phase 1-8 behavioral/positive evidence. The
+three retained transaction script SHA-256 values are:
+
+```text
+21f8666ead39a84b759ab6a567ca94a801a5baf8e3ba610e6656de438e2e16a8  phase8-preflight.sh
+b0498c4ac19b5ae4c1c3a51b48c52b61efdbb7dfbd4492b636e1c0c272cdd380  phase8-deploy.sh
+91f812d80cc869ce34a2d92dbea2a28829f93d96b9a003ead10938d3bd06e089  phase8-independent-verify.sh
+```
+
+### Authorized production window and rollback
+
+The root-owned, mode-`0700` bundle was created outside `/opt/recursion` at:
+
+```text
+/var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee
+```
+
+The transaction command was:
+
+```bash
+nohup bash \
+  /var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee/evidence/phase8-deploy.sh \
+  /var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee \
+  > /var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee/evidence/deployment-launcher.log \
+  2>&1 < /dev/null &
+```
+
+At `2026-08-10T01:11:43Z`, it rechecked PAUSE, gateway, actuator absence, exact queue/config,
+crontab, workers/processes, and all preflight terminal markers. It stopped only `cron.service`; the
+gateway remained active. `runtime-state.py backup` created `runtime-before` with 19 files and exact
+PAUSE. That snapshot verified, restored into disposable staging, verified again, and staging was
+removed. The retained Phase 1 backup manifest also reverified. The exact rollback was already
+armed before `FINAL_PREDEPLOY_GATE=PASS`:
+
+```bash
+systemctl disable --now hermes-actuator.service
+rm -f -- /etc/systemd/system/hermes-actuator.service
+systemctl daemon-reload
+systemctl reset-failed hermes-actuator.service
+RECURSION_ROOT=/opt/recursion python3 scripts/runtime-state.py restore runtime-before
+systemctl start cron.service
+```
+
+The transaction also quarantined any newly generated action/event files before restore; none were
+found because no queue transition occurred. It did not stop or restart `hermes-gateway`.
+
+The reviewed unit has Git blob `0b1e173a850327811123395398457e238e2b8c4c` and Linux SHA-256
+`5cfd8853d6e66068670aa5f9afcfa5b5671730af927d166a8dca4dad50486d4e`. It was installed,
+enabled, and active/running as PID `2934221` at `2026-08-10T01:11:45Z` with:
+
+```text
+ExecStart=/bin/bash /opt/recursion/scripts/hermes-actuator.sh
+WorkingDirectory=/opt/recursion
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+```
+
+After the initial control lock was released, the bounded 20-second observation found the exact
+PAUSE-safe no-op still pending. At `01:12:10Z` the transaction emitted
+`DEPLOY_FAIL=paused-noop-still-pending`, and automatic rollback ended at `01:12:12Z`:
+
+```text
+AUTOMATIC_ROLLBACK=ATTEMPTED
+PAUSE=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+ACTUATOR_LOAD=not-found
+ACTUATOR_ACTIVE=inactive
+CRON_ACTIVE=active
+GATEWAY_ACTIVE=active
+```
+
+No automatic or manual retry occurred.
+
+### Root cause: legacy journal import precedes the valid projection
+
+Read-only analysis retained at `evidence/failure-analysis.txt` found
+`state/decisions.jsonl` SHA-256
+`c0a03878fc98df2bb6e6a83496d003dd198e53a8477cb004af6a3909f5b103a0`, with six non-empty
+records. After the current deterministic normalization, lines 1-5 remain invalid because their
+legacy prose `goal_id` values are not canonical identifiers. Line 6 is the exact valid pending
+`architecture-rebase` no-op and validates.
+
+The live path is:
+
+```text
+hermes-actuator.sh
+  -> conduct-hermes.sh --paused-safe
+  -> decision-queue.py import-journal
+  -> normalize and validate journal line 1
+  -> ERR goal_id is not a canonical identifier
+  -> return before existing-projection check and before pending claim
+```
+
+`hermes-actuator.sh` redirects this call's output to `/dev/null` and accepts the nonzero return for
+the next loop, so only service startup appeared in the journal. This is a live legacy-journal
+compatibility defect, not evidence of an executed action. No journal record was edited, deleted,
+migrated, skipped, or manually drained; no test, fixture, gate, or baseline was changed.
+
+The required reviewed repair must preserve the append-only raw records and fail closed for every
+new invalid decision, deterministically classify or migrate already-existing legacy no-ops, emit a
+durable diagnostic instead of suppressing import failure, and add a six-line live-journal-shaped
+regression proving the valid pending no-op transitions exactly once without duplicate action/event
+creation.
+
+### Independent rollback closure and final evidence
+
+The independent closure used a new root-owned mode-`0700` child bundle and reran the same complete
+preflight against the restored state:
+
+```bash
+nohup bash \
+  /var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee/rollback-closure/evidence/phase8-preflight.sh \
+  /var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee/rollback-closure \
+  > /var/backups/recursion/phase8-actuator-20260810T004518Z-b23069ee/rollback-closure/evidence/closure-launcher.log \
+  2>&1 < /dev/null &
+```
+
+From `2026-08-10T01:17:19Z` through `01:36:16Z`, baseline, every Phase 1-8 control/audit, and live
+Phase 1 all returned zero. A new `runtime-rollback-verify` snapshot then matched every one of the
+19 `runtime-before` file records, hashes, sizes, modes, owners, commit, PAUSE hash, and observed
+locks after excluding only the manifest's `created_at`. It restored and verified in a second
+disposable staging root, which was removed. Closure ended `ROLLBACK_CLOSURE=PASS` at
+`2026-08-10T01:37:02Z`.
+
+Final exact production state was:
+
+```text
+PAUSE=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+CONTROL_PLANE=da43555b6977e55fc0bb185fd7d6d5e76384b638cbcaff4d798596cce68630d4
+ACTUATOR_LOAD=not-found
+ACTUATOR_ACTIVE=inactive
+ACTUATOR_ENABLED=not-found
+CRON_ACTIVE=active
+GATEWAY_ACTIVE=active
+GATEWAY_PID=2781295
+WORKERS=0
+PROJECT_PROCESSES=0
+DECISION_QUEUE_FILES=1
+ROLLBACK_GENERATED_FILES=0
+OUTBOXES=9 paused=true events=0 deliveries=0
+MODEL_ROUTING=unset
+CAPACITY=zero
+DEPLOYED_HEAD=73987156f5d22d2f2f50ddc542c978d0c48f88b8
+DEPLOYED_ORIGIN_MASTER=fa0263587479b3c43b0ba6bb61f5b176383f7cec
+```
+
+The unchanged hardened gateway continued to use frozen Hermes source
+`498061d8f1dcd855419b30e8729c869596a89ca6`; final live Phase 1 returned zero. Current reviewed
+workstation master remained `b23069ee49519fda5896f43ec888efd71b533167`. No Phase 8 runtime OID
+remained installed after rollback.
+
+The final manifest was created only after all launcher/control logs closed. It covers 169 data
+files; `sha256sum --quiet -c evidence/MANIFEST.sha256` passed after sealing. The manifest file's
+SHA-256 is `2de6f66997e384d5e360b8005d12cdf73a88f3e895bfa93d38a4156992e13319`.
+Disposable staging and uploaded `/tmp` helpers were removed; the root-owned evidence bundle and its
+two verified runtime snapshots remain.
+
+The complete deployment audit chain is authorization -> current protected merge and exact blobs
+-> fresh preflight -> runtime backup/restore -> final predeploy gate -> exact unit/PID -> bounded
+PAUSE-safe transition failure -> automatic rollback -> independent full-matrix closure -> exact
+runtime comparison -> sealed manifest. Because the queue was never claimed, there is deliberately
+no new instruction/goal/task/run/action/gate/verifier/review/report/delivery chain and no human
+send. This is zero state delta after rollback, not partial pilot evidence.
+
+Phase 8 remains undeployed. No promotion gate is claimed, and Chiron success, Chiron assist, GSC
+offline, parallel, and soak remain blocked. The next admissible action is a separate reviewable
+legacy decision-journal compatibility patch. A new production retry would still require that patch
+to be reviewed, merged, and pruned, followed by another fresh full preflight and separate explicit
+Lucas authorization.

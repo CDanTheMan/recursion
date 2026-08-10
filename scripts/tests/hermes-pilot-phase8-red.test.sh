@@ -5,3 +5,4 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python3 -u "$HERE/hermes-pilot-phase8-red.py"
 python3 -u "$HERE/hermes-pilot-phase8-parallel.py"
+python3 -u "$HERE/hermes-pilot-phase8-legacy-journal-red.py"
