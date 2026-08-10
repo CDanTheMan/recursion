@@ -44,17 +44,25 @@ if [ -x scripts/taskctl.sh ]; then
   [ "${REAPED:-0}" -gt 0 ] && log "reaped ${REAPED} stale task lease(s)"
 fi
 
-# --- 0.5) Resync the portfolio. MONITORING + PRESERVATION, so it runs even while paused. ---
+# --- 0.5) Observe/resync the portfolio. ---------------------------------------------------
 # Lucas reviews and merges on GitHub, so origin moves while this box sleeps. Anything built on
 # a base older than origin's default silently reverts what he just merged, which is the one
 # failure he asked for by name. So every cycle fast-forwards each registered repo BEFORE any
 # dispatch can happen, and turns what a fast-forward cannot fix — divergence, unpushed work, a
 # dirty tree, an unreachable remote — into an escalation instead of a log line.
 #
-# Under PAUSE this still runs: it is state correction and awareness, not execution (D-012). A
-# paused box that quietly falls 100 commits behind is how a pause turns into a rebase.
+# Under PAUSE only read-only awareness runs: fetch remote-tracking refs, report drift, and escalate,
+# but never checkout, fast-forward, merge, or move a local branch/checked-out executable tree. The
+# 2026-08-10 production incident proved that treating fast-forward as awareness let a paused cycle
+# change deployed code. When resumed, the ordinary sync path still fast-forwards before dispatch.
 if [ -x scripts/resync.sh ]; then
-  if bash scripts/resync.sh sync >>"$LOG" 2>&1; then
+  if [ "$PAUSED" = "1" ]; then
+    if bash scripts/resync.sh observe >>"$LOG" 2>&1; then
+      log "portfolio observed (PAUSE: fetch/status only; no branch maintenance)"
+    else
+      log "portfolio observation reported drift a human must settle — see state/INBOX.md"
+    fi
+  elif bash scripts/resync.sh sync >>"$LOG" 2>&1; then
     log "portfolio resynced"
   else
     log "portfolio resync reported drift a human must settle — see state/INBOX.md"

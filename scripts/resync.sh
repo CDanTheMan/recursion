@@ -22,6 +22,7 @@
 # origin, the task does not start — it escalates to a human.
 #
 #   resync.sh status [--all]        one line per repo: auth, drift, dirt, unpushed work
+#   resync.sh observe [project ...] fetch + report + escalate; never move a local branch/tree
 #   resync.sh sync [project ...]    fetch + fast-forward the default branch; escalate the rest
 #   resync.sh check <project|path>  dispatch precondition. 0 fresh · 3 cannot prove · 4 needs a human
 #   resync.sh key <project|path>    the deploy key for this repo (single source of truth)
@@ -185,6 +186,36 @@ status)
       "$pr" "$R_AUTH" "$d" "$drift" "$([ "$R_DIRTY" = 1 ] && echo yes || echo no)" "$R_UNPUSHED" "$R_WHY"
   done < <(if [ "$ALL" = 1 ]; then reg_rows; else reg_active; fi)
   [ "$bad" -eq 0 ] || exit 1 ;;
+
+observe)
+  # PAUSE-safe portfolio awareness. inspect fetches origin so the result is current, but this
+  # path deliberately never calls ff_default, checkout, merge, update-ref, or anything else
+  # that can move a local branch or checked-out tree. Faults and risky local state still become
+  # durable escalations: PAUSE preserves awareness; it does not hide problems from the operator.
+  if [ "$#" -gt 0 ]; then
+    rows=""; for q in "$@"; do r="$(row_for "$q")" || exit 2; rows="$rows$r"$'\n'; done
+  else rows="$(reg_active)"; fi
+  fails=0
+  while IFS= read -r row; do
+    [ -n "$row" ] || continue
+    pr="$(fld "$row" 1)"; p="$(fld "$row" 2)"; d="$(fld "$row" 4)"; k="$(fld "$row" 5)"
+    inspect "$p" "$k" "$d"; rc=$?
+    case "$rc" in
+      3) echo "FAULT     $pr — $R_WHY"; fails=$((fails+1))
+         esc "resync-auth-$pr" "$pr: cannot prove it is current with origin — $R_WHY" "$p" "$pr"; continue ;;
+      4) echo "DIVERGED  $pr — $R_WHY"; fails=$((fails+1))
+         esc "resync-diverged-$pr" "$pr: $d has diverged from origin — reconcile before more work lands on it" "$p" "$pr"; continue ;;
+    esac
+    if [ "$R_BEHIND" -gt 0 ]; then
+      echo "BEHIND    $pr — $d -$R_BEHIND (observed; PAUSE forbids fast-forward)"
+    else
+      echo "OK        $pr — $R_WHY"
+    fi
+    [ "$R_AHEAD"    -gt 0 ] && esc "resync-unpushed-$pr" "$pr: $R_AHEAD commit(s) on $d exist only on this box" "$p" "$pr"
+    [ "$R_UNPUSHED" -gt 0 ] && esc "resync-localonly-$pr" "$pr: $R_UNPUSHED local branch(es) hold commits on no remote" "$p" "$pr"
+    [ "$R_DIRTY"    = 1   ] && esc "resync-dirty-$pr" "$pr: uncommitted changes in the working tree" "$p" "$pr"
+  done <<< "$rows"
+  [ "$fails" -eq 0 ] || exit 1 ;;
 
 sync)
   # Bring every registered repo (or the named ones) up to origin, and turn everything that a
