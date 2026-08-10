@@ -10,8 +10,9 @@
 # earlier on PATH. No model is called, no Telegram message is sent, no spend. The stub also
 # absorbs `hermes send`, which is notify.sh's preferred delivery path.
 #
-# ★ Test 2 is the one that matters: it asserts NO EXECUTION happened. Asserting only that the
-# heartbeat ran would pass on a build that also launched arms while paused.
+# ★ Tests 1b and 2 are the ones that matter. Test 1b proves awareness without allowing the
+# checked-out executable tree to move; test 2 proves no worker execution happened. Asserting only
+# that the heartbeat ran would pass on a build that also changed code or launched arms while paused.
 #
 #   run: bash scripts/tests/pause-semantics.test.sh
 set -uo pipefail
@@ -64,12 +65,33 @@ chmod +x "$BIN/claude"
 R="$TMP/repo"; mkdir -p "$R"
 tar -C "$SRC" -cf - scripts loop state ANCHOR.md CLAUDE.md 2>/dev/null | tar -C "$R" -xf - 2>/dev/null
 mkdir -p "$R/state/briefs" "$R/loop/logs" "$R/state/tasks"
+rm -f "$R"/loop/logs/*
 : > "$R/.env"
-# ★ NEUTRALISE THE PORTFOLIO. The tar above copies the live state/, and state/portfolio.tsv
-# holds ABSOLUTE paths to the real repos under /opt. cycle.sh resyncs the portfolio every tick,
-# so without this line running this test fast-forwards Lucas's actual working copies. A header
-# with no rows keeps the resync STEP under test while giving it nothing outside $TMP to touch.
-printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n' > "$R/state/portfolio.tsv"
+# Replace the copied production registry with one disposable active repo. Its origin advances by
+# one executable-file commit while its checked-out main stays behind. A paused cycle must fetch
+# that remote tip and report BEHIND, but must not move main or the checked-out executable file.
+GIT="git -c user.name=t -c user.email=t@t -c init.defaultBranch=main"
+PORT_ORIGIN="$TMP/portfolio-origin.git"
+PORT_SEED="$TMP/portfolio-seed"
+PORT_REPO="$TMP/portfolio-repo"
+$GIT init -q --bare "$PORT_ORIGIN"
+$GIT init -q "$PORT_SEED"
+mkdir -p "$PORT_SEED/scripts"
+printf '#!/usr/bin/env bash\necho one\n' > "$PORT_SEED/scripts/pause-probe.sh"
+chmod +x "$PORT_SEED/scripts/pause-probe.sh"
+( cd "$PORT_SEED" && $GIT add -A && $GIT commit -qm one && $GIT branch -M main \
+  && $GIT remote add origin "$PORT_ORIGIN" && $GIT push -q origin main )
+$GIT --git-dir="$PORT_ORIGIN" symbolic-ref HEAD refs/heads/main
+$GIT clone -q "$PORT_ORIGIN" "$PORT_REPO"
+printf '#!/usr/bin/env bash\necho two\n' > "$PORT_SEED/scripts/pause-probe.sh"
+( cd "$PORT_SEED" && $GIT add -A && $GIT commit -qm two && $GIT push -q origin main )
+PORT_BEFORE="$($GIT -C "$PORT_REPO" rev-parse main)"
+PORT_TREE_BEFORE="$(sha256sum "$PORT_REPO/scripts/pause-probe.sh" | awk '{print $1}')"
+PORT_REMOTE="$($GIT -C "$PORT_SEED" rev-parse main)"
+{
+  printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n'
+  printf 'pause-probe\t%s\t%s\tmain\t-\t-\t-\tactive\n' "$PORT_REPO" "$PORT_ORIGIN"
+} > "$R/state/portfolio.tsv"
 ( cd "$R" && git init -q . && git add -A >/dev/null 2>&1 \
   && git -c user.name=t -c user.email=t@t commit -qm init >/dev/null 2>&1 \
   && git checkout -qb loop/auto ) || true
@@ -85,6 +107,7 @@ run_cycle(){ # $1=force|""
   # the run never wrote — asserting on history instead of behaviour. (Caught by running the
   # suite against the pre-fix scripts: it reported a brief written by a run that exits first.)
   rm -f "$R"/state/briefs/*.md
+  rm -f "$R"/loop/logs/*
   printf '# Inbox\n\n_(empty)_\n' > "$R/state/INBOX.md"
   ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" \
       RECURSION_AUTO_DRAIN=1 RECURSION_AUTO_PLAN=1 RECURSION_AUTO_REFLECT=1 \
@@ -113,14 +136,20 @@ else
   sed 's/^/        /' "$TMP/cycle.out" | head -5
 fi
 
-# --- 1b) PRESERVATION IS AWARENESS: the portfolio still resyncs while paused ---------------
-# Lucas merges on GitHub while the box is paused. A paused box that stops following origin
-# wakes up behind, and anything it then builds reverts what he merged — so the resync is
-# monitoring (D-012), not execution, and must survive PAUSE like the heartbeat does.
-if grep -q 'portfolio resynced\|portfolio resync reported drift' "$TMP/cycle.out"; then
-  ok "paused: the portfolio resync RAN (the box keeps following origin while halted)"
+# --- 1b) AWARENESS WITHOUT MAINTENANCE: fetch/status runs, executable tree stays exact -------
+# The production defect this guards was observed at 2026-08-10T03:15Z: paused cycle -> sync
+# fast-forwarded master and then merged it into the checked-out loop/auto tree. Remote-tracking
+# refs are awareness; moving a local branch or checked-out file is branch-changing maintenance.
+PORT_AFTER="$($GIT -C "$PORT_REPO" rev-parse main)"
+PORT_TREE_AFTER="$(sha256sum "$PORT_REPO/scripts/pause-probe.sh" | awk '{print $1}')"
+PORT_FETCHED="$($GIT -C "$PORT_REPO" rev-parse origin/main)"
+if [ "$PORT_AFTER" = "$PORT_BEFORE" ] \
+    && [ "$PORT_TREE_AFTER" = "$PORT_TREE_BEFORE" ] \
+    && [ "$PORT_FETCHED" = "$PORT_REMOTE" ] \
+    && grep -q 'BEHIND.*pause-probe\|pause-probe.*BEHIND' "$R"/loop/logs/*-cycle.log; then
+  ok "paused: fetch/status reports BEHIND without changing local main or its executable tree"
 else
-  no "paused: the portfolio resync did not run — a paused box drifts behind origin silently"
+  no "paused: portfolio awareness changed a branch/tree or failed to fetch/report (main $PORT_BEFORE -> $PORT_AFTER; tree $PORT_TREE_BEFORE -> $PORT_TREE_AFTER; fetched=$PORT_FETCHED remote=$PORT_REMOTE)"
 fi
 
 # --- 2) ★ NO EXECUTION: no arm, no drain, no reflect, task untouched -----------------------
@@ -184,6 +213,12 @@ if grep -q 'auto-drain: queued work' "$TMP/cycle.out"; then
 else
   no "CONTROL FAILED — resumed and the drainer still did not run; the paused assertions prove nothing"
   sed 's/^/        /' "$TMP/cycle.out" | tail -5
+fi
+if [ "$($GIT -C "$PORT_REPO" rev-parse main)" = "$PORT_REMOTE" ] \
+    && [ "$(sha256sum "$PORT_REPO/scripts/pause-probe.sh" | awk '{print $1}')" != "$PORT_TREE_BEFORE" ]; then
+  ok "CONTROL — resumed: portfolio sync DOES fast-forward the branch and executable tree"
+else
+  no "CONTROL FAILED — resumed portfolio sync did not fast-forward; the paused no-change assertion is vacuous"
 fi
 
 echo

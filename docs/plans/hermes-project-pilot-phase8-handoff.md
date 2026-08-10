@@ -1,8 +1,8 @@
 ---
 title: Hermes Project Pilot Phase 8 Handoff
 type: handoff
-status: ready-for-review
-last-verified: 2026-08-09
+status: blocked
+last-verified: 2026-08-10
 related:
   - CONTROL_PLANE.md
   - docs/architecture.md
@@ -49,6 +49,10 @@ related:
   active; the actuator is absent; workers and project processes are zero; model routing remains
   unset; capacity remains zero; and all nine outboxes remain paused and empty. No PAUSE lift,
   observed pilot, human-visible notification, product-repository mutation, or soak occurred.
+- The evidence-correction branch was reviewed, merged through PR #34 as `52f6ad37250d7b7bc798d86c04768aef8cc09c07`,
+  and pruned. The separate PAUSE/resync correction is now reviewable as red commit `2688671...`,
+  implementation commit `1a16d81...`, and historical-control harness commit `5bbfad5...`. Exact
+  Linux proof is green; none of these commits is deployed.
 
 The exact commands, OIDs, results, live snapshot, GitHub inventory, rollback gates, and raw-log
 hashes are appended to `docs/plans/hermes-project-pilot-phase0-evidence.md`.
@@ -560,3 +564,180 @@ has SHA-256 `2de6f66997e384d5e360b8005d12cdf73a88f3e895bfa93d38a4156992e13319`.
 Phase 8 remains undeployed and every pilot remains blocked. The next admissible action is the
 separate reviewed legacy-journal compatibility patch described above, followed only after merge by
 a fresh preflight and separately authorized deployment retry.
+
+## Compatibility merge, evidence correction, and PAUSE-resync blocker
+
+Lucas reviewed, merged, and pruned both Phase 8 follow-up branches. Workstation fetch established
+current `origin/master` `be3cb8b6462bc6bbe2ba12305e6bee47ee102fc8`, with evidence commit
+`abdf4fe4bd1e8cd5ef19c5956b54a441738891a2`, compatibility commit
+`1748f75443b2d81b5951339f88e7c3fc5d2bf6cc`, Phase 7 implementation `b4d3a303...`, and their
+merge commits as ancestors. The review branches were absent. GitHub protection rule `81491567`
+still required pull requests and conversation resolution, applied to administrators, and disabled
+force pushes and deletion.
+
+Lucas then authorized corrected Phase 8 production testing. The authorization was interpreted as
+merged compatibility code plus actuator verification under PAUSE; it did not authorize PAUSE
+removal, a pilot window, notification, model/capacity/configuration change, gateway maintenance,
+or product-repository work.
+
+### Stale compatibility hash stopped the first preflight
+
+Before a control or production mutation, exact merged-source extraction found that the compatibility
+handoff's `scripts/decision-queue.py` Linux SHA-256 was stale. The reviewed Git blob is
+`510fce16166a6e69b2604cdecd10441262ca202a`; its Linux SHA-256 is
+`082c82b6ff5e82fd2123322f8dc695323ca3091ff959254b12f4a46c77fd8a08`, not the recorded
+`b487eb78...`. The other five recorded hashes matched. This was not accepted as a line-ending
+explanation or silently waived.
+
+The stopped attempt is retained at root-owned mode-`0700` bundle
+`/var/backups/recursion/phase8-actuator-20260810T024806Z-be3cb8b`. Its corrected final state showed
+production unchanged at `73987156...`, exact PAUSE/journal/pending hashes, absent actuator, active
+gateway/cron, zero workers/processes, zero legacy markers, unset routing/capacity, and all nine
+outboxes paused and empty. Its manifest verifies with SHA-256
+`b7b50eb68331e502bf2c7edccf6d0183371a09427ff853ac04d6d3508495d2f5`. An initial final-state
+capture had shell-quoting errors; it is retained as `final-state-attempt1.txt` and was not used as
+positive evidence.
+
+### Evidence-only rerun exposed a higher-priority PAUSE defect
+
+Lucas separately authorized an evidence-only correction branch and a rerun of the exact merged
+Linux matrix plus disposable live-shaped proof. Clean authoring branch
+`review/hermes-phase8-preflight-evidence-correction` started from `be3cb8b...`. A fresh root-owned
+bundle staged exact reviewed source outside `/opt/recursion`.
+
+Negative setup observations were preserved rather than converted to passes: the first composite
+upload command failed on Windows-to-SSH quoting before target creation; a later standalone Python
+syntax wrapper misquoted its compile mode; and matrix attempt 1 failed before tests because the
+new bundle parent was mode `0755` while its evidence child was `0700`. After preserving those logs,
+only the bundle parent was corrected to `0700`.
+
+Matrix attempt 2 also stopped before its first test because the live HEAD gate changed. Read-only
+reconstruction established this exact chain:
+
+```text
+2026-08-10T03:15:01Z cron starts cycle.sh with state/PAUSE present
+cycle.sh classifies resync as awareness and calls resync.sh sync under PAUSE
+resync advances local master by six commits to be3cb8b...
+resync creates ce9904b3dfed64c90f95b5214b0fc5460f81810f
+  first parent 73987156f5d22d2f2f50ddc542c978d0c48f88b8
+  second parent be3cb8b6462bc6bbe2ba12305e6bee47ee102fc8
+cycle records deliver=0 and commits morning/board awareness
+final loop/auto = 30fb73f56496d1d8e72f00dceb4b59de4bd21a00
+```
+
+The merge changed the two evidence docs, compatibility handoff, production plan, and all six
+compatibility implementation/control files in the production checkout. Exact merged
+`decision-queue.py` blob `510fce1...` is therefore already present on production, but the actuator
+unit remains absent and no queue processing occurred. This checkout change happened before the
+authorized full baseline, runtime snapshot, staging restore, exact rollback, and
+`FINAL_PREDEPLOY_GATE`; it is not a successful deployment and must not be described as one.
+
+The behavior is a direct precedence conflict. Live `CONTROL_PLANE.md` says PAUSE halts
+branch-changing maintenance. Lower-ranked `scripts/cycle.sh` says resync runs under PAUSE, and
+`scripts/tests/pause-semantics.test.sh` positively requires it. The relevant live SHA-256 values
+are `904fc1a5...` (`cycle.sh`), `511383a5...` (`resync.sh`), and `6882f93f...`
+(`pause-semantics.test.sh`). Under the constitution, the control plane wins; the implementation and
+test are stale.
+
+The retained evidence bundle is
+`/var/backups/recursion/phase8-evidence-correction-20260810T032141Z-be3cb8b`. Its manifest verifies
+with SHA-256 `34ddf6d0c4666f5b5ac5613c5e480ce6bc437a4eec6d421d70b8cd4921899ad9`.
+Final state at `2026-08-10T03:27:38Z` was exact PAUSE, unchanged journal and pending decision,
+zero legacy markers, absent/inactive actuator, active gateway PID `2781295`, active cron, zero
+workers/project processes, unchanged configuration, and nine paused empty outboxes. The cycle log
+proves `deliver=0`. No control matrix, live-shaped proof, service mutation, action, event,
+notification delivery, or pilot started.
+
+### New gate
+
+Phase 8 actuator testing is blocked. The next admissible implementation is a separate reviewable
+PAUSE/resync control patch, not a manual reset or workaround. It must:
+
+1. add a red control proving current paused `cycle.sh -> resync.sh sync` changes the checked-out
+   executable tree;
+2. preserve read-only fetch/status/behind awareness under PAUSE;
+3. refuse checkout, fast-forward, merge, or other branch-changing maintenance while paused;
+4. leave the current exact PAUSE/journal/pending state untouched; and
+5. pass the complete historical matrix before review.
+
+Only after Lucas reviews/merges/prunes that patch may a new full PAUSE-held preflight and separately
+authorized production correction be proposed. Actuator deployment and every pilot window remain
+blocked.
+
+## PAUSE-safe portfolio awareness patch
+
+Lucas reported the evidence-correction branch merged and pruned and authorized the separate
+PAUSE/resync control patch. A fresh fetch established PR #34 merge
+`52f6ad37250d7b7bc798d86c04768aef8cc09c07`, evidence commit `03a5b6a...` as an ancestor, and the
+remote review ref absent. The protected dirty workstation master remained exactly `20c1fa7...`
+with its 20 pre-existing entries. Clean branch `review/hermes-phase8-pause-resync` was created from
+that exact merged base.
+
+The implementation stays in the canonical `cycle.sh -> resync.sh` path:
+
+- `resync.sh observe` performs the existing authenticated `ls-remote` and fetch, evaluates current
+  drift/dirt/local-only state, and records the same durable escalations, but has no checkout,
+  fast-forward, merge, or local-branch update path;
+- paused `cycle.sh` selects `observe` and labels the tick as fetch/status-only; and
+- resumed `cycle.sh` still selects the existing `sync` path before dispatch, so the stale-base
+  protection remains non-vacuous.
+
+The commit chain is:
+
+```text
+2688671a80e7a69929f0b1e137e43485196d72ac  Add paused resync branch-mutation control
+1a16d81c396dde5fbcc87d9ac80cca3017fc3bf2  Keep paused portfolio resync read-only
+5bbfad5fc46975b6f3de89744a4cd89ab671e201  Stabilize planner concurrency falsifier
+```
+
+At exact red commit `2688671...`, the new end-to-end test fetched the disposable remote tip but
+also proved old paused `sync` moved local `main` and changed the checked-out executable SHA. It
+ended `pause-semantics: 1 FAILED`; every other PAUSE assertion and the resumed fast-forward control
+passed. At `1a16d81...`, the direct resync suite and PAUSE suite passed: remote-tracking awareness
+advanced, all local heads and the checked-out executable remained exact, and resumed sync still
+fast-forwarded.
+
+The complete matrix exposed an independent timing defect in the historical Phase 2 test. Its
+old `ls` barrier ran only after one planner held the lock, so the peer could not reach the barrier;
+two full sequences produced a false one-task result while five isolated reruns and an exact
+baseline/Phase-1-prefix diagnostic passed. Commit `5bbfad5...` aligns both planners immediately
+before lock acquisition and preserves the old vulnerable-read barrier only when no planner lock
+exists. Five consecutive current-code runs passed. Overlaying that corrected falsifier on exact
+pre-Phase-2 base `b25b329...` still produced all six intended failures, including
+`planner CAS missing`; the invariant was strengthened, not waived.
+
+The final exact-commit Linux matrix ran from `2026-08-10T04:24:52Z` through `04:44:09Z` and ended:
+
+```text
+BASELINE_SUITES=17
+BASELINE_FAILED_SUITES=0
+phase1-control through phase8-audit: RC=0
+MATRIX_TOTAL=17 MATRIX_PASSED=17 MATRIX_FAILED=0
+MATRIX_RESULT=PASS
+```
+
+All raw red, green, failed-attempt, timing-diagnostic, pre-change falsifier, and final-matrix logs
+are retained root-owned and mode `0700` at
+`/var/backups/recursion/phase8-pause-resync-authoring-20260810T034342Z-52f6ad3`. The evidence
+manifest SHA-256 is `62ec571b6d750d6ebbd9614ab0729ff0bec8f8e8c9d1c88775d5b2b7021a0872`.
+
+Final read-only production verification at `2026-08-10T04:47:21Z` matched the pre-test snapshot:
+
+```text
+HEAD=30fb73f56496d1d8e72f00dceb4b59de4bd21a00
+MASTER=ORIGIN_MASTER=be3cb8b6462bc6bbe2ba12305e6bee47ee102fc8
+PAUSE=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+JOURNAL=c0a03878fc98df2bb6e6a83496d003dd198e53a8477cb004af6a3909f5b103a0
+PENDING=883d9f53e2d7263d8ffa733fe61bff959cf1b7e341d4a293d0a9b00f8e0c6684
+GATEWAY=active/running PID 2781295
+CRON=active
+ACTUATOR=not-found/inactive
+WORKERS=0
+OUTBOXES=9 paused=true events=0 deliveries=0
+```
+
+No `/opt/recursion` file, service, configuration, notification route, action/event/delivery,
+product repository, PAUSE state, or pilot window was changed. The next gate is Lucas review,
+merge, and pruning of this branch. Only then may a fresh PAUSE-held production correction be
+proposed; it still requires separate authorization. Phase 8 actuator deployment and every pilot
+remain blocked.

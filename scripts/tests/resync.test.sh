@@ -9,7 +9,7 @@
 #     built on a stale tree, the gate passed (it was testing the old tree), and merging the
 #     result would revert whatever had been fixed upstream. Test 11 is that case.
 #
-# ★ Tests 1, 3b and 10 are CONTROLS. Without them every refusal here would also pass on a
+# ★ Tests 1, 3c and 10 are CONTROLS. Without them every refusal here would also pass on a
 #   resync.sh that refuses everything and a work.sh that builds nothing — which is the way this
 #   suite would be worthless while scoring full marks.
 #
@@ -97,7 +97,25 @@ rc=$(rs check behind)
 rc=$(rs status)
 grep -q 'BEHIND' "$TMP/out" && ok "status names the drift instead of hiding it" || no "status did not report BEHIND"
 
-# 3b) ★ CONTROL: sync must actually fast-forward, or 'refuses to sync' below proves nothing.
+# 3b) observe must fetch/report the real tip without moving a local branch or checked-out tree.
+before="$($GIT -C "$TMP/behind" rev-parse main)"
+tree_before="$(sha256sum "$TMP/behind/f.txt" | awk '{print $1}')"
+heads_before="$($GIT -C "$TMP/behind" for-each-ref --format='%(refname) %(objectname)' refs/heads | sort)"
+remote_tip="$($GIT --git-dir="$TMP/origins/behind.git" rev-parse refs/heads/main)"
+rc=$(rs observe behind)
+after="$($GIT -C "$TMP/behind" rev-parse main)"
+tree_after="$(sha256sum "$TMP/behind/f.txt" | awk '{print $1}')"
+heads_after="$($GIT -C "$TMP/behind" for-each-ref --format='%(refname) %(objectname)' refs/heads | sort)"
+fetched="$($GIT -C "$TMP/behind" rev-parse origin/main)"
+if [ "$rc" = "0" ] && [ "$before" = "$after" ] && [ "$tree_before" = "$tree_after" ] \
+    && [ "$heads_before" = "$heads_after" ] && [ "$fetched" = "$remote_tip" ] \
+    && grep -q 'BEHIND.*observed; PAUSE forbids fast-forward' "$TMP/out"; then
+  ok "observe fetches/reports BEHIND without moving any local branch or the checked-out tree"
+else
+  no "observe mutated local state or hid drift (rc=$rc main=$before->$after tree=$tree_before->$tree_after fetched=$fetched remote=$remote_tip)"
+fi
+
+# 3c) ★ CONTROL: sync must actually fast-forward, or 'refuses to sync' below proves nothing.
 before="$($GIT -C "$TMP/behind" rev-parse main)"
 rc=$(rs sync behind)
 after="$($GIT -C "$TMP/behind" rev-parse main)"
