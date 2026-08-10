@@ -1,7 +1,7 @@
 ---
 title: Hermes Project Pilot Phase 8 Handoff
 type: handoff
-status: ready-for-review
+status: blocked
 last-verified: 2026-08-09
 related:
   - CONTROL_PLANE.md
@@ -560,3 +560,102 @@ has SHA-256 `2de6f66997e384d5e360b8005d12cdf73a88f3e895bfa93d38a4156992e13319`.
 Phase 8 remains undeployed and every pilot remains blocked. The next admissible action is the
 separate reviewed legacy-journal compatibility patch described above, followed only after merge by
 a fresh preflight and separately authorized deployment retry.
+
+## Compatibility merge, evidence correction, and PAUSE-resync blocker
+
+Lucas reviewed, merged, and pruned both Phase 8 follow-up branches. Workstation fetch established
+current `origin/master` `be3cb8b6462bc6bbe2ba12305e6bee47ee102fc8`, with evidence commit
+`abdf4fe4bd1e8cd5ef19c5956b54a441738891a2`, compatibility commit
+`1748f75443b2d81b5951339f88e7c3fc5d2bf6cc`, Phase 7 implementation `b4d3a303...`, and their
+merge commits as ancestors. The review branches were absent. GitHub protection rule `81491567`
+still required pull requests and conversation resolution, applied to administrators, and disabled
+force pushes and deletion.
+
+Lucas then authorized corrected Phase 8 production testing. The authorization was interpreted as
+merged compatibility code plus actuator verification under PAUSE; it did not authorize PAUSE
+removal, a pilot window, notification, model/capacity/configuration change, gateway maintenance,
+or product-repository work.
+
+### Stale compatibility hash stopped the first preflight
+
+Before a control or production mutation, exact merged-source extraction found that the compatibility
+handoff's `scripts/decision-queue.py` Linux SHA-256 was stale. The reviewed Git blob is
+`510fce16166a6e69b2604cdecd10441262ca202a`; its Linux SHA-256 is
+`082c82b6ff5e82fd2123322f8dc695323ca3091ff959254b12f4a46c77fd8a08`, not the recorded
+`b487eb78...`. The other five recorded hashes matched. This was not accepted as a line-ending
+explanation or silently waived.
+
+The stopped attempt is retained at root-owned mode-`0700` bundle
+`/var/backups/recursion/phase8-actuator-20260810T024806Z-be3cb8b`. Its corrected final state showed
+production unchanged at `73987156...`, exact PAUSE/journal/pending hashes, absent actuator, active
+gateway/cron, zero workers/processes, zero legacy markers, unset routing/capacity, and all nine
+outboxes paused and empty. Its manifest verifies with SHA-256
+`b7b50eb68331e502bf2c7edccf6d0183371a09427ff853ac04d6d3508495d2f5`. An initial final-state
+capture had shell-quoting errors; it is retained as `final-state-attempt1.txt` and was not used as
+positive evidence.
+
+### Evidence-only rerun exposed a higher-priority PAUSE defect
+
+Lucas separately authorized an evidence-only correction branch and a rerun of the exact merged
+Linux matrix plus disposable live-shaped proof. Clean authoring branch
+`review/hermes-phase8-preflight-evidence-correction` started from `be3cb8b...`. A fresh root-owned
+bundle staged exact reviewed source outside `/opt/recursion`.
+
+Negative setup observations were preserved rather than converted to passes: the first composite
+upload command failed on Windows-to-SSH quoting before target creation; a later standalone Python
+syntax wrapper misquoted its compile mode; and matrix attempt 1 failed before tests because the
+new bundle parent was mode `0755` while its evidence child was `0700`. After preserving those logs,
+only the bundle parent was corrected to `0700`.
+
+Matrix attempt 2 also stopped before its first test because the live HEAD gate changed. Read-only
+reconstruction established this exact chain:
+
+```text
+2026-08-10T03:15:01Z cron starts cycle.sh with state/PAUSE present
+cycle.sh classifies resync as awareness and calls resync.sh sync under PAUSE
+resync advances local master by six commits to be3cb8b...
+resync creates ce9904b3dfed64c90f95b5214b0fc5460f81810f
+  first parent 73987156f5d22d2f2f50ddc542c978d0c48f88b8
+  second parent be3cb8b6462bc6bbe2ba12305e6bee47ee102fc8
+cycle records deliver=0 and commits morning/board awareness
+final loop/auto = 30fb73f56496d1d8e72f00dceb4b59de4bd21a00
+```
+
+The merge changed the two evidence docs, compatibility handoff, production plan, and all six
+compatibility implementation/control files in the production checkout. Exact merged
+`decision-queue.py` blob `510fce1...` is therefore already present on production, but the actuator
+unit remains absent and no queue processing occurred. This checkout change happened before the
+authorized full baseline, runtime snapshot, staging restore, exact rollback, and
+`FINAL_PREDEPLOY_GATE`; it is not a successful deployment and must not be described as one.
+
+The behavior is a direct precedence conflict. Live `CONTROL_PLANE.md` says PAUSE halts
+branch-changing maintenance. Lower-ranked `scripts/cycle.sh` says resync runs under PAUSE, and
+`scripts/tests/pause-semantics.test.sh` positively requires it. The relevant live SHA-256 values
+are `904fc1a5...` (`cycle.sh`), `511383a5...` (`resync.sh`), and `6882f93f...`
+(`pause-semantics.test.sh`). Under the constitution, the control plane wins; the implementation and
+test are stale.
+
+The retained evidence bundle is
+`/var/backups/recursion/phase8-evidence-correction-20260810T032141Z-be3cb8b`. Its manifest verifies
+with SHA-256 `34ddf6d0c4666f5b5ac5613c5e480ce6bc437a4eec6d421d70b8cd4921899ad9`.
+Final state at `2026-08-10T03:27:38Z` was exact PAUSE, unchanged journal and pending decision,
+zero legacy markers, absent/inactive actuator, active gateway PID `2781295`, active cron, zero
+workers/project processes, unchanged configuration, and nine paused empty outboxes. The cycle log
+proves `deliver=0`. No control matrix, live-shaped proof, service mutation, action, event,
+notification delivery, or pilot started.
+
+### New gate
+
+Phase 8 actuator testing is blocked. The next admissible implementation is a separate reviewable
+PAUSE/resync control patch, not a manual reset or workaround. It must:
+
+1. add a red control proving current paused `cycle.sh -> resync.sh sync` changes the checked-out
+   executable tree;
+2. preserve read-only fetch/status/behind awareness under PAUSE;
+3. refuse checkout, fast-forward, merge, or other branch-changing maintenance while paused;
+4. leave the current exact PAUSE/journal/pending state untouched; and
+5. pass the complete historical matrix before review.
+
+Only after Lucas reviews/merges/prunes that patch may a new full PAUSE-held preflight and separately
+authorized production correction be proposed. Actuator deployment and every pilot window remain
+blocked.

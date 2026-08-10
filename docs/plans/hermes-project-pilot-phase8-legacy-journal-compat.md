@@ -1,7 +1,7 @@
 ---
 title: Hermes Project Pilot Phase 8 Legacy Journal Compatibility Handoff
 type: handoff
-status: ready-for-review
+status: blocked
 last-verified: 2026-08-09
 related:
   - CONTROL_PLANE.md
@@ -179,10 +179,10 @@ scripts/tests/hermes-pilot-phase8-red.test.sh
 scripts/audit/hermes-pilot-phase8-green.sh
 ```
 
-Workstation SHA-256 values after the full proof are:
+Linux SHA-256 values for the exact reviewed blobs are:
 
 ```text
-b487eb78b2f04c315a0239338fb97465b8bfea383466a5ec981f1643bd4e3757  scripts/decision-queue.py
+082c82b6ff5e82fd2123322f8dc695323ca3091ff959254b12f4a46c77fd8a08  scripts/decision-queue.py
 9df686a4e6cc8685b7205ab6bb01fc493780b3922e44e071b5f394d6891c1177  scripts/conduct-hermes.sh
 491b5a59e0c39337f65568ba61c0cdd68707d80b87a4544ab6aeb4eb7efb05f0  scripts/hermes-actuator.sh
 ee33bc7ef492c268fc010479c96c58948bb55b01e87c234ae69d4131f0b56cf8  scripts/tests/hermes-pilot-phase8-legacy-journal-red.py
@@ -194,3 +194,37 @@ This branch is review-only. It must be reviewed and merged before any fresh depl
 proposed. Merge does not authorize deployment. A retry still requires a new full PAUSE-held
 preflight, exact merged OID/blob verification, a new runtime snapshot/staging restore, and separate
 Lucas authorization. Until then, Phase 8 remains undeployed and every pilot remains blocked.
+
+## Post-merge evidence correction and new blocker
+
+Lucas reviewed and merged the implementation through PR #33. Current `origin/master` is exact
+merge `be3cb8b6462bc6bbe2ba12305e6bee47ee102fc8`; implementation
+`1748f75443b2d81b5951339f88e7c3fc5d2bf6cc` is an ancestor and its review branch is pruned.
+
+The original handoff incorrectly recorded Linux SHA-256
+`b487eb78b2f04c315a0239338fb97465b8bfea383466a5ec981f1643bd4e3757` for
+`scripts/decision-queue.py`. Fresh extraction from exact reviewed Git blob
+`510fce16166a6e69b2604cdecd10441262ca202a` produces SHA-256
+`082c82b6ff5e82fd2123322f8dc695323ca3091ff959254b12f4a46c77fd8a08`; the five other recorded
+Linux hashes match. The old value was stale evidence, not a line-ending conversion and not a
+different reviewed implementation. This correction changes documentation only.
+
+The authorized fresh production-testing preflight then failed closed before the matrix or any
+service/action mutation. While exact PAUSE was present, the scheduled `03:15Z` cycle executed
+`cycle.sh -> resync.sh sync`, advanced local `master` to `be3cb8b...`, and created merge
+`ce9904b3dfed64c90f95b5214b0fc5460f81810f` on production `loop/auto`. That merge installed the
+reviewed compatibility script blobs into the production checkout outside the authorized
+transaction and before its baseline/snapshot/rollback gate. This conflicts with the higher-ranked
+`CONTROL_PLANE.md` rule that PAUSE halts branch-changing maintenance. The lower-ranked
+`cycle.sh` comments and `pause-semantics.test.sh` currently require the opposite behavior.
+
+The actuator remains absent/inactive. The exact pending no-op, append-only journal, PAUSE file,
+gateway PID, configuration, crontab, and all nine paused empty outboxes remain unchanged; workers
+and project processes are zero, and the paused cycle recorded `deliver=0`. No compatibility
+marker, action, action event, notification delivery, pilot, or live-shaped proof was created.
+
+The next admissible implementation action is a separate reviewed PAUSE/resync control patch. It
+must first prove red that a paused cycle can change the checked-out executable tree, then preserve
+read-only fetch/status awareness while refusing checkout, fast-forward, merge, or other
+branch-changing maintenance under PAUSE. Only after review, merge, pruning, a new full preflight,
+and separate production authorization may the actuator deployment be retried.
