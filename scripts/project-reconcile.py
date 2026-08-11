@@ -10,6 +10,8 @@ actions.  Mutating subcommands are therefore actuator verbs, not alternate contr
 from __future__ import annotations
 
 import argparse
+import ctypes
+import datetime
 import fcntl
 import hashlib
 import json
@@ -24,6 +26,15 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterable
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+from transition_receipt import (
+    TransitionReceiptError, commit_event, commit_transition, fields_mutation, json_mutation,
+    resume_transition,
+)
 
 
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -163,21 +174,68 @@ def append_event(base: Path, event: str, project: str, goal: str, task: str = ""
     }
     if event_id:
         value["id"] = event_id
-    path = base / "state/events.jsonl"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if event_id and path.is_file():
-        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-            try:
-                if json.loads(line).get("id") == event_id:
-                    return
-            except (json.JSONDecodeError, AttributeError):
-                continue
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     try:
-        os.write(fd, (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode())
-        os.fsync(fd)
+        commit_event(base, value)
+    except (OSError, TransitionReceiptError) as exc:
+        raise ReconcileError(f"event journal append failed: {exc}") from exc
+
+
+def transition_event(event: str, project: str, goal: str, task: str = "", detail: object = "",
+                     event_id: str = "") -> dict:
+    value = {"schema_version": 1, "ts": now_iso(), "event": event, "project": project,
+             "goal": goal, "task": task, "pid": os.getpid(), "detail": detail}
+    if event_id:
+        value["id"] = event_id
+    return value
+
+
+def commit_reconcile_transition(base: Path, mutations: list, event: dict,
+                                authoritative_index: int = -1) -> None:
+    try:
+        commit_transition(base, mutations, event, authoritative_index=authoritative_index)
+    except (OSError, TransitionReceiptError) as exc:
+        raise ReconcileError(f"crash-consistent transition failed: {exc}") from exc
+
+
+@contextmanager
+def event_serialization_lock(base: Path):
+    """Share taskctl's mkdir mutex and never append through runtime-state rotation."""
+    lock_dir = base / "state/.locks"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    runtime_lock = lock_dir / "runtime-state.lock"
+    path = lock_dir / "taskctl.lock"
+    attempts = max(1, safe_int(os.environ.get("RECURSION_LOCK_ATTEMPTS"), 100))
+    try:
+        delay = max(0.0, float(os.environ.get("RECURSION_LOCK_DELAY_S", "0.1")))
+    except ValueError:
+        delay = 0.1
+    held = False
+    try:
+        for _ in range(attempts):
+            if not runtime_lock.is_dir():
+                try:
+                    path.mkdir()
+                    held = True
+                    (path / "pid").write_text(f"{os.getpid()}\n", encoding="ascii")
+                    # Close the check/mkdir race: runtime-state must either pre-exist here or
+                    # observe taskctl.lock and fail its own compatibility lock.
+                    if runtime_lock.is_dir():
+                        raise ReconcileError("runtime-state rotation acquired during event lock")
+                    break
+                except FileExistsError:
+                    pass
+            time.sleep(delay)
+        if not held:
+            raise ReconcileError("event journal lock is contended; refusing an unlocked append")
+        yield
     finally:
-        os.close(fd)
+        if held:
+            (path / "start").unlink(missing_ok=True)
+            (path / "pid").unlink(missing_ok=True)
+            try:
+                path.rmdir()
+            except OSError:
+                pass
 
 
 @contextmanager
@@ -229,11 +287,12 @@ def close_paused_windows(base: Path) -> int:
         if value.get("status") != "open":
             continue
         event_id = "source-window-pause-" + hashlib.sha256(str(value.get("id") or path.name).encode()).hexdigest()[:24]
-        append_event(base, "pilot-window-closed", str(value.get("project_id") or ""),
-                     str(value.get("goal_id") or ""),
-                     detail={"window_id": value.get("id"), "reason": "pause-observed"}, event_id=event_id)
         value.update({"status": "closed", "closed_at": now_iso(), "close_reason": "pause-observed"})
-        atomic_json(path, value); closed += 1
+        event = transition_event("pilot-window-closed", str(value.get("project_id") or ""),
+                                 str(value.get("goal_id") or ""),
+                                 detail={"window_id": value.get("id"), "reason": "pause-observed"},
+                                 event_id=event_id)
+        commit_reconcile_transition(base, [json_mutation(path, value)], event); closed += 1
     return closed
 
 
@@ -251,21 +310,23 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
             continue
         if safe_int(value.get("expires_at_epoch")) <= now:
             event_id = "source-window-expired-" + hashlib.sha256(str(value.get("id") or path.name).encode()).hexdigest()[:24]
-            append_event(base, "pilot-window-closed", project, goal_id,
-                         detail={"window_id": value.get("id"), "reason": "expired"}, event_id=event_id)
             value.update({"status": "closed", "closed_at": now_iso(), "close_reason": "expired"})
-            atomic_json(path, value)
+            event = transition_event("pilot-window-closed", project, goal_id,
+                                     detail={"window_id": value.get("id"), "reason": "expired"},
+                                     event_id=event_id)
+            commit_reconcile_transition(base, [json_mutation(path, value)], event)
             continue
         if value.get("status") == "armed":
             if (base / "state/PAUSE").is_file():
                 continue
             event_id = "source-window-open-" + hashlib.sha256(
                 f"{value.get('id')}:{value.get('instruction_id')}".encode()).hexdigest()[:24]
-            append_event(base, "pilot-window-opened", project, goal_id,
-                         detail={"window_id": value.get("id"), "instruction_id": value.get("instruction_id")},
-                         event_id=event_id)
             value.update({"status": "open", "opened_at": now_iso()})
-            atomic_json(path, value)
+            event = transition_event("pilot-window-opened", project, goal_id,
+                                     detail={"window_id": value.get("id"),
+                                             "instruction_id": value.get("instruction_id")},
+                                     event_id=event_id)
+            commit_reconcile_transition(base, [json_mutation(path, value)], event)
         matches.append((path, value))
     if len(matches) > 1:
         raise ReconcileError("multiple open pilot windows target one goal")
@@ -297,29 +358,51 @@ def resume_assist(base: Path, task_id: str, instruction_id: str) -> dict:
     project, goal_id = task.get("project_id", ""), task.get("goal_id", "")
     if not IDENT.fullmatch(task_id) or not IDENT.fullmatch(project) or not IDENT.fullmatch(goal_id):
         raise ReconcileError("assist resume lacks canonical task/project/goal identity")
-    if assist.get("task") != task_id or assist.get("status") != "answered":
-        raise ReconcileError("assist resume requires the same answered assist")
+    def answer_is_durable(value: dict[str, str]) -> bool:
+        document = assist_path.read_text(encoding="utf-8", errors="replace")
+        answer = document.partition("## ANSWER")[2].strip()
+        return (value.get("status") in {"open", "answered"}
+                and bool(value.get("answered")) and bool(value.get("answered_by"))
+                and bool(answer) and not answer.startswith("_(unanswered"))
+
+    if assist.get("task") != task_id or not answer_is_durable(assist):
+        raise ReconcileError("assist resume requires the same durably answered assist")
     goal_file = goal_path(base, goal_id)
     event_id = "source-assist-" + hashlib.sha256(f"{project}:{goal_id}:{task_id}:{instruction_id}".encode()).hexdigest()[:24]
     with goal_lock(base, goal_id):
         task = read_fields(task_path); goal = read_fields(goal_file); assist = read_fields(assist_path)
+        if assist.get("task") != task_id or not answer_is_durable(assist):
+            raise ReconcileError("assist answer changed before resume compare-and-swap")
         already = (task.get("status") == "queued" and goal.get("status") == "active"
                    and assist.get("resume_event_id") == event_id)
+        event = transition_event(
+            "assist-answer", project, goal_id, task_id,
+            {"instruction_id": instruction_id, "answer_actor": assist.get("answered_by")}, event_id,
+        )
+        try:
+            resumed = resume_transition(base, event)
+        except (OSError, TransitionReceiptError) as exc:
+            raise ReconcileError(f"assist resume recovery failed: {exc}") from exc
+        if resumed:
+            return {"project_id": project, "goal_id": goal_id, "task_id": task_id,
+                    "event_id": event_id, "status": "resumed"}
         if already:
             return {"project_id": project, "goal_id": goal_id, "task_id": task_id,
                     "event_id": event_id, "status": "resumed"}
         if task.get("status") not in {"blocked", "queued"} or goal.get("status") not in {"blocked", "active"}:
             raise ReconcileError("assist resume compare-and-swap found unrelated task or goal state")
-        if task.get("status") == "blocked":
-            rewrite_fields(task_path, {"status": "queued", "blocked_on": "",
-                                       "assist_resume_instruction_id": instruction_id})
-        if goal.get("status") == "blocked":
-            rewrite_fields(goal_file, {"status": "active", "transition_reason": "human-answer-received",
-                                       "transition_at": now_iso()})
-        append_event(base, "assist-answer", project, goal_id, task_id,
-                     {"instruction_id": instruction_id, "answer_actor": assist.get("answered_by")}, event_id)
-        rewrite_fields(assist_path, {"resume_applied": "1", "resume_event_id": event_id,
-                                     "resume_instruction_id": instruction_id})
+        task_changes = {"status": "queued", "blocked_on": "",
+                        "assist_resume_instruction_id": instruction_id}
+        goal_changes = {"status": "active", "transition_reason": "human-answer-received",
+                        "transition_at": now_iso()}
+        assist_changes = {"status": "answered", "resume_applied": "1",
+                          "resume_event_id": event_id, "resume_instruction_id": instruction_id}
+        commit_reconcile_transition(
+            base,
+            [fields_mutation(task_path, task_changes), fields_mutation(goal_file, goal_changes),
+             fields_mutation(assist_path, assist_changes)],
+            event, authoritative_index=2,
+        )
     return {"project_id": project, "goal_id": goal_id, "task_id": task_id,
             "event_id": event_id, "status": "resumed"}
 
@@ -353,6 +436,8 @@ def parse_budget(goal: dict[str, str]) -> dict:
     for field in integer_fields:
         if isinstance(value[field], bool) or not isinstance(value[field], int) or value[field] < 0:
             raise ReconcileError(f"invalid budget field: {field}")
+    if value["max_review_queue"] < 1:
+        raise ReconcileError("invalid budget field: max_review_queue must be at least 1")
     cost = value["max_cost_usd"]
     if isinstance(cost, bool) or not isinstance(cost, (int, float)) or not math.isfinite(cost) or cost < 0:
         raise ReconcileError("invalid budget field: max_cost_usd")
@@ -377,6 +462,28 @@ def process_alive(pid: object) -> bool:
     number = safe_int(pid)
     if number < 1:
         return False
+    if os.name == "nt":
+        # Python's os.kill(pid, 0) is not a read-only existence probe on Windows:
+        # it may call TerminateProcess for non-console targets.  Query the process
+        # handle instead so reconciliation can never kill the worker it observes.
+        process_query_limited_information = 0x1000
+        still_active = 259
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = (ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong)
+        kernel32.OpenProcess.restype = ctypes.c_void_p
+        kernel32.GetExitCodeProcess.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong))
+        kernel32.GetExitCodeProcess.restype = ctypes.c_int
+        kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+        kernel32.CloseHandle.restype = ctypes.c_int
+        handle = kernel32.OpenProcess(process_query_limited_information, 0, number)
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))) \
+                and exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
     try:
         os.kill(number, 0)
         return True
@@ -476,7 +583,8 @@ def fresh_base(config: dict) -> tuple[bool, str, str]:
     return local == remote_head, local, "fresh" if local == remote_head else "stale-base"
 
 
-def task_evidence(base: Path, repo: Path, task: dict[str, str], runs: list[dict]) -> tuple[bool, str, dict]:
+def task_evidence(base: Path, repo: Path, task: dict[str, str], runs: list[dict],
+                  require_local_review_ref: bool = True) -> tuple[bool, str, dict]:
     task_id = task.get("id", "")
     related = [row for row in runs if row.get("task_id") == task_id]
     implementers = [row for row in related if row.get("role") == "implementer"]
@@ -506,8 +614,10 @@ def task_evidence(base: Path, repo: Path, task: dict[str, str], runs: list[dict]
     try:
         branch_commit = git_output(repo, "rev-parse", f"refs/heads/loop/work/{task_id}")
     except ReconcileError:
+        branch_commit = ""
+    if require_local_review_ref and not branch_commit:
         return False, "canonical local review ref is absent", {"commit_oid": commit}
-    if branch_commit != commit:
+    if branch_commit and branch_commit != commit:
         return False, "review ref does not resolve to the verified commit", {"commit_oid": commit}
     return True, "verified", {
         "commit_oid": commit,
@@ -527,6 +637,48 @@ def remote_review_commit(config: dict, task_id: str) -> str:
     return proc.stdout.split()[0] if proc.returncode == 0 and proc.stdout.split() else ""
 
 
+def remote_default_ancestor_proof(config: dict, commit: str) -> dict:
+    """Fetch and bind the advertised default head before proving commit ancestry."""
+    repo = Path(str(config.get("repo") or ""))
+    remote = str(config.get("remote") or "origin")
+    branch = str(config.get("default_branch") or "")
+    project = str(config.get("id") or "")
+    if not (repo / ".git").exists() or not IDENT.fullmatch(branch) or not IDENT.fullmatch(project):
+        raise ReconcileError("remote default-branch review proof has invalid identity")
+    advertised = subprocess.run(
+        ["git", "ls-remote", remote, f"refs/heads/{branch}"], text=True,
+        capture_output=True, check=False, timeout=20, env=git_environment(config),
+    )
+    rows = [line.split() for line in advertised.stdout.splitlines() if line.split()]
+    if advertised.returncode or len(rows) != 1 or len(rows[0]) != 2 \
+            or rows[0][1] != f"refs/heads/{branch}" \
+            or not re.fullmatch(r"[0-9a-f]{40,64}", rows[0][0]):
+        raise ReconcileError("remote default branch identity is unprovable")
+    advertised_oid = rows[0][0]
+    fetched_ref = f"refs/recursion/review-acceptance/{project}"
+    fetched = subprocess.run(
+        ["git", "-C", str(repo), "fetch", "--quiet", "--no-tags", "--force", remote,
+         f"refs/heads/{branch}:{fetched_ref}"], text=True, capture_output=True,
+        check=False, timeout=60, env=git_environment(config),
+    )
+    if fetched.returncode:
+        raise ReconcileError((fetched.stderr or fetched.stdout or "remote default fetch failed").strip())
+    fetched_oid = git_output(repo, "rev-parse", fetched_ref)
+    if fetched_oid != advertised_oid:
+        raise ReconcileError("fetched default branch disagrees with its advertised identity")
+    ancestor = subprocess.run(
+        ["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, fetched_oid],
+        text=True, capture_output=True, check=False,
+    )
+    if ancestor.returncode == 1:
+        raise ReconcileError("verified commit is not an ancestor of the fetched remote default branch")
+    if ancestor.returncode:
+        raise ReconcileError((ancestor.stderr or ancestor.stdout or "remote ancestry proof failed").strip())
+    return {"kind": "remote-default-ancestor", "branch": branch,
+            "remote_sha256": hashlib.sha256(remote.encode()).hexdigest(),
+            "remote_default_commit": fetched_oid}
+
+
 def decision_key(*parts: object) -> str:
     raw = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode()
     return "phase6:" + hashlib.sha256(raw).hexdigest()
@@ -542,6 +694,8 @@ def enqueue_decision(base: Path, actor: str, verb: str, args: list[str], goal_id
             project = ""
     raw = {
         "actor": actor,
+        "decision_source": "project-reconciler",
+        "routed_decider": actor,
         "verb": verb,
         "args": args,
         "project": project,
@@ -560,7 +714,60 @@ def enqueue_decision(base: Path, actor: str, verb: str, args: list[str], goal_id
     return Path(proc.stdout.strip())
 
 
-def snapshot_digest(base: Path, config: dict, goal_id: str) -> str:
+def lease_state(value: object, observed_epoch: int) -> str | None:
+    if value in (None, ""):
+        return None
+    raw = str(value)
+    try:
+        expires = int(raw)
+    except ValueError:
+        try:
+            expires = int(datetime.datetime.strptime(
+                raw, "%Y-%m-%dT%H:%M:%SZ"
+            ).replace(tzinfo=datetime.timezone.utc).timestamp())
+        except ValueError:
+            return "invalid:" + raw
+    return "expired" if expires <= observed_epoch else "active"
+
+
+def semantic_markdown(path: Path, observed_epoch: int) -> bytes:
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    output: list[str] = []
+    in_header = True
+    lease: str | None = None
+    for line in lines:
+        if in_header and not line.strip():
+            in_header = False
+        if in_header and ":" in line:
+            key, value = line.split(":", 1)
+            key = key.strip()
+            if key == "lease_expires":
+                lease = lease_state(value.strip(), observed_epoch)
+                continue
+            if key in {"event_seq", "last_transition_id"}:
+                continue
+        output.append(line)
+    return json.dumps(
+        {"content": "".join(output), "lease_state": lease},
+        sort_keys=True, separators=(",", ":"),
+    ).encode()
+
+
+def semantic_run(path: Path, observed_epoch: int) -> bytes:
+    value = read_json(path)
+    value.pop("heartbeat_at", None)
+    lease = lease_state(value.pop("lease_expires", None), observed_epoch)
+    value.pop("event_seq", None)
+    value.pop("last_transition_id", None)
+    value["lease_state"] = lease
+    if value.get("status") == "running":
+        value["process_alive"] = process_alive(value.get("pid"))
+    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+
+
+def snapshot_digest(base: Path, config: dict, goal_id: str,
+                    observed_epoch: int | None = None) -> str:
+    observed_epoch = int(time.time()) if observed_epoch is None else observed_epoch
     paths: list[Path] = [goal_path(base, goal_id)]
     tasks = goal_tasks(base, goal_id)
     paths.extend(path for path, _ in tasks)
@@ -576,7 +783,13 @@ def snapshot_digest(base: Path, config: dict, goal_id: str) -> str:
     digest = hashlib.sha256()
     for path in sorted(set(paths)):
         digest.update(str(path.relative_to(base)).encode())
-        digest.update(path.read_bytes())
+        relative = path.relative_to(base).as_posix()
+        if relative.startswith(("state/goals/", "state/tasks/")) and path.suffix == ".md":
+            digest.update(semantic_markdown(path, observed_epoch))
+        elif relative.startswith("state/runs/") and path.suffix == ".json":
+            digest.update(semantic_run(path, observed_epoch))
+        else:
+            digest.update(path.read_bytes())
     repo = Path(str(config.get("repo") or ""))
     if (repo / ".git").exists():
         for namespace in ("refs/heads/loop/work", "refs/remotes/origin/loop/work"):
@@ -637,12 +850,24 @@ def record_recovery(base: Path, project: str, goal_id: str, snapshot: dict) -> N
     raw = json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode()
     identity = hashlib.sha256(raw).hexdigest()
     projection = base / "state/recovery" / f"{goal_id}-{identity[:24]}.json"
+    event = transition_event(
+        "recovery-reconciled", project, goal_id, detail=snapshot,
+        event_id="source-recovery-" + hashlib.sha256(
+            f"{project}\0{goal_id}\0{identity}".encode()).hexdigest()[:24],
+    )
     if projection.exists():
+        try:
+            resumed = resume_transition(base, event)
+        except (OSError, TransitionReceiptError) as exc:
+            raise ReconcileError(f"recovery projection repair failed: {exc}") from exc
+        if not resumed:
+            append_event(base, event["event"], project, goal_id, detail=snapshot,
+                         event_id=event["id"])
         return
-    atomic_json(projection, {"schema_version": 1, "id": f"recovery-{identity[:24]}",
-                             "project_id": project, "goal_id": goal_id,
-                             "observed_at": now_iso(), "snapshot": snapshot})
-    append_event(base, "recovery-reconciled", project, goal_id, detail=snapshot)
+    value = {"schema_version": 1, "id": f"recovery-{identity[:24]}",
+             "project_id": project, "goal_id": goal_id,
+             "observed_at": now_iso(), "snapshot": snapshot}
+    commit_reconcile_transition(base, [json_mutation(projection, value)], event)
 
 
 def transition_task(base: Path, project: str, goal_id: str, task_id: str,
@@ -668,24 +893,112 @@ def transition_goal(base: Path, project: str, goal_id: str, expected: str, targe
     path = goal_path(base, goal_id)
     with goal_lock(base, goal_id):
         current = read_fields(path)
-        if current.get("project_id") != project or current.get("status") != expected:
+        if current.get("project_id") != project:
+            raise ReconcileError("goal compare-and-swap crossed project scope")
+        if current.get("status") == expected:
+            version = safe_int(current.get("version"), 1) + 1
+        elif current.get("status") == target and current.get("last_transition_from") == expected:
+            version = safe_int(current.get("version"), 1)
+        else:
             raise ReconcileError(f"goal compare-and-swap failed: expected {expected}, found {current.get('status')}")
+        transition_id = terminal_event_id(project, goal_id, expected, target, version, "transition")
+        event = transition_event(
+            "goal-transition", project, goal_id,
+            detail={"from": expected, "to": target, "reason": reason, "version": version},
+            event_id=transition_id,
+        )
+        try:
+            if resume_transition(base, event):
+                if target in TERMINAL_GOALS:
+                    ensure_terminal_events(base, project, goal_id, read_fields(path))
+                return
+        except (OSError, TransitionReceiptError) as exc:
+            raise ReconcileError(f"goal transition recovery failed: {exc}") from exc
+        if current.get("status") != expected:
+            raise ReconcileError("goal transition has no matching durable receipt")
+        mutations = []
         if expected == "verifying" and target == "active":
             evidence = goal_evidence(base, goal_id)
-            if not evidence or evidence.get("verdict") not in {"fail", "blocked", "timeout", "corrupt"}:
+            if not evidence or evidence.get("verdict") not in {"fail", "blocked", "timeout", "corrupt", "paused"}:
                 raise ReconcileError("verification may reopen a goal only with failing evidence")
-        version = safe_int(current.get("version"), 1) + 1
+            # Reopen evidence is single-use. Preserve it in immutable history before changing
+            # goal state; otherwise the same stale verdict makes active->verifying bounce forever.
+            evidence_path = base / "state/evidence" / f"{goal_id}.json"
+            history = base / "state/evidence/history"
+            history.mkdir(parents=True, exist_ok=True)
+            verdict = re.sub(r"[^A-Za-z0-9._-]", "_", str(evidence.get("verdict") or "unknown"))
+            archived = history / f"{goal_id}-reopen-v{safe_int(current.get('version'), 1)}-{verdict}.json"
+            if archived.exists():
+                if evidence_path.exists() and evidence_path.read_bytes() != archived.read_bytes():
+                    raise ReconcileError("verification reopen evidence history collision")
+            consumed = {
+                "schema_version": 1, "id": f"goal-evidence-consumed-{goal_id}-v{version}",
+                "project_id": project, "goal_id": goal_id, "verdict": "consumed",
+                "consumed_reason": "verification-reopened", "consumed_for_version": version,
+                "consumed_task_ids": sorted(
+                    str(task.get("id") or "") for _, task in goal_tasks(base, goal_id)
+                ),
+                "source_verdict": evidence.get("verdict"),
+                "source_sha256": hashlib.sha256(
+                    json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode()
+                ).hexdigest(),
+            }
+            mutations.extend([json_mutation(archived, evidence),
+                              json_mutation(evidence_path, consumed)])
+        if expected == "active" and target == "blocked" and reason == "task-blocked":
+            # Decisions are asynchronous.  An assist may have repaired the task after the
+            # decision was queued but before this CAS reached the sink.  Re-check the cause
+            # while holding the same goal lock used for the status CAS.
+            still_blocked = any(
+                task.get("status") in {"blocked", "escalated", "cancelled"}
+                for _, task in goal_tasks(base, goal_id)
+            )
+            if not still_blocked:
+                raise ReconcileError("stale task-blocked transition: no blocked task remains")
         changes = {"status": target, "version": str(version), "last_transition_at": now_iso(),
-                   "last_transition_reason": reason}
+                   "last_transition_reason": reason, "last_transition_from": expected}
         if target in TERMINAL_GOALS:
             changes["terminal_reported"] = "1"
             changes["finished_at"] = now_iso()
-        rewrite_fields(path, changes)
-        append_event(base, "goal-transition", project, goal_id,
-                     detail={"from": expected, "to": target, "reason": reason, "version": version})
+        mutations.append(fields_mutation(path, changes))
+        commit_reconcile_transition(base, mutations, event, authoritative_index=len(mutations) - 1)
         if target in TERMINAL_GOALS:
-            append_event(base, "goal-terminal", project, goal_id,
-                         detail={"status": target, "reason": reason, "version": version})
+            ensure_terminal_events(base, project, goal_id, read_fields(path))
+
+
+def terminal_event_id(project: str, goal_id: str, expected: str, target: str,
+                      version: int, kind: str) -> str:
+    identity = f"{project}\0{goal_id}\0{expected}\0{target}\0{version}\0{kind}".encode()
+    return f"source-goal-{kind}-" + hashlib.sha256(identity).hexdigest()[:24]
+
+
+def ensure_terminal_events(base: Path, project: str, goal_id: str, goal: dict[str, str]) -> None:
+    """Idempotently repair the event projection after a state-write/event-append crash."""
+    target = goal.get("status", "")
+    if target not in TERMINAL_GOALS:
+        return
+    expected = goal.get("last_transition_from", "")
+    reason = goal.get("last_transition_reason", "")
+    version = safe_int(goal.get("version"), 1)
+    if not expected or not reason:
+        # Legacy terminal goals do not carry enough information to synthesize an honest
+        # transition.  New transitions always persist both fields before projection.
+        return
+    transition = transition_event(
+        "goal-transition", project, goal_id,
+        detail={"from": expected, "to": target, "reason": reason, "version": version},
+        event_id=terminal_event_id(project, goal_id, expected, target, version, "transition"),
+    )
+    try:
+        # The state-changing CAS already owns this identity. Reuse its mutation-backed receipt;
+        # treating the same event as a new pure event would collide after a successful commit.
+        if not resume_transition(base, transition):
+            raise ReconcileError("terminal goal transition receipt is absent")
+    except (OSError, TransitionReceiptError) as exc:
+        raise ReconcileError(f"terminal goal transition recovery failed: {exc}") from exc
+    append_event(base, "goal-terminal", project, goal_id,
+                 detail={"status": target, "reason": reason, "version": version},
+                 event_id=terminal_event_id(project, goal_id, expected, target, version, "terminal"))
 
 
 def publish_task(base: Path, project: str, goal_id: str, task_id: str) -> None:
@@ -710,8 +1023,135 @@ def publish_task(base: Path, project: str, goal_id: str, task_id: str) -> None:
     remote = remote_review_commit(config, task_id)
     if remote != evidence["commit_oid"]:
         raise ReconcileError("publisher returned success but exact remote review ref was not proven")
-    append_event(base, "review-published", project, goal_id, task_id,
-                 {"branch": branch, "commit_oid": remote})
+    event = transition_event(
+        "review-published", project, goal_id, task_id,
+        {"branch": branch, "commit_oid": remote},
+        "source-review-published-" + hashlib.sha256(
+            f"{project}\0{goal_id}\0{task_id}\0{remote}".encode()).hexdigest()[:24],
+    )
+    with goal_lock(base, goal_id):
+        commit_reconcile_transition(
+            base, [fields_mutation(base / "state/tasks" / f"{task_id}.md",
+                                   {"review_status": "published", "review_commit": remote,
+                                    "review_published_at": now_iso()})], event,
+        )
+
+
+def accept_review(base: Path, project: str, goal_id: str, task_id: str,
+                  commit: str, reviewed_by: str) -> dict:
+    """Release review backpressure only through an explicit exact-commit human seam."""
+    if reviewed_by != "lucas":
+        raise ReconcileError("review acceptance is reserved for Lucas's local operator seam")
+    if not re.fullmatch(r"[0-9a-f]{40,64}", commit):
+        raise ReconcileError("review acceptance requires an exact commit oid")
+    config, _ = project_records(base, project)
+    task_path = base / "state/tasks" / f"{task_id}.md"
+    with goal_lock(base, goal_id):
+        task = read_fields(task_path)
+        if task.get("project_id") != project or task.get("goal_id") != goal_id \
+                or task.get("status") != "passed":
+            raise ReconcileError("review acceptance crossed project/goal scope or task is not passed")
+        if task.get("review_status") == "accepted":
+            if task.get("review_accepted_commit") != commit or not review_acceptance_valid(base, task):
+                raise ReconcileError("prior review acceptance is inconsistent with durable evidence")
+            append_event(
+                base, "review-accepted", project, goal_id, task_id,
+                {"commit_oid": commit, "reviewed_by": reviewed_by,
+                 "review_proof": task.get("review_proof")},
+                "source-review-accepted-" + hashlib.sha256(
+                    f"{project}\0{goal_id}\0{task_id}\0{commit}\0{reviewed_by}".encode()
+                ).hexdigest()[:24],
+            )
+            return {"project_id": project, "goal_id": goal_id, "task_id": task_id,
+                    "commit_oid": commit, "review_status": "accepted"}
+        repo = Path(str(config["repo"]))
+        runs = run_records(base, {task_id})
+        valid, reason, exact = task_evidence(base, repo, task, runs, require_local_review_ref=False)
+        if not valid or exact.get("commit_oid") != commit:
+            raise ReconcileError(f"human review lacks exact verified evidence: {reason}")
+        goal = read_fields(goal_path(base, goal_id))
+        budget = parse_budget(goal)
+        review_proof = {"kind": "local-exact-commit"}
+        if budget["publication_required"]:
+            published = remote_review_commit(config, task_id)
+            if published == commit:
+                review_proof = {"kind": "published-review-ref", "remote_commit": published}
+            else:
+                # Explicit human acceptance remains mandatory; this merely supports the normal
+                # merge-then-prune review workflow with a freshly fetched ancestry proof.
+                review_proof = remote_default_ancestor_proof(config, commit)
+        evidence = {
+            "schema_version": 1,
+            "id": f"review-acceptance-{task_id}",
+            "project_id": project,
+            "goal_id": goal_id,
+            "task_id": task_id,
+            "commit_oid": commit,
+            "reviewed_by": reviewed_by,
+            "implementer_run_id": exact.get("implementer_run_id"),
+            "verifier_run_id": exact.get("verifier_run_id"),
+            "review_proof": review_proof,
+            "accepted_at": now_iso(),
+        }
+        evidence_path = base / "state/evidence" / f"review-{task_id}.json"
+        if evidence_path.exists():
+            prior = read_json(evidence_path)
+            stable = (prior.get("project_id"), prior.get("goal_id"), prior.get("task_id"),
+                      prior.get("commit_oid"), prior.get("reviewed_by"))
+            expected = (project, goal_id, task_id, commit, reviewed_by)
+            if stable != expected:
+                raise ReconcileError("review acceptance evidence collides with different authority")
+            evidence = prior
+            prior_proof = prior.get("review_proof") if isinstance(prior.get("review_proof"), dict) else {}
+            if prior_proof.get("kind") not in {
+                    "local-exact-commit", "published-review-ref", "remote-default-ancestor"}:
+                raise ReconcileError("prior review acceptance lacks a durable authority proof")
+            review_proof = prior_proof
+        event = transition_event(
+            "review-accepted", project, goal_id, task_id,
+            {"commit_oid": commit, "reviewed_by": reviewed_by,
+             "review_proof": review_proof["kind"]},
+            "source-review-accepted-" + hashlib.sha256(
+                f"{project}\0{goal_id}\0{task_id}\0{commit}\0{reviewed_by}".encode()
+            ).hexdigest()[:24],
+        )
+        commit_reconcile_transition(
+            base,
+            [json_mutation(evidence_path, evidence),
+             fields_mutation(task_path, {"candidate_commit": commit,
+                                         "review_status": "accepted",
+                                         "review_accepted_commit": commit,
+                                         "review_proof": str(review_proof["kind"]),
+                                         "reviewed_by": reviewed_by,
+                                         "review_accepted_at": str(evidence["accepted_at"])})],
+            event,
+            authoritative_index=1,
+        )
+    return {"project_id": project, "goal_id": goal_id, "task_id": task_id,
+            "commit_oid": commit, "review_status": "accepted"}
+
+
+def review_acceptance_valid(base: Path, task: dict[str, str]) -> bool:
+    if task.get("review_status") != "accepted" or task.get("reviewed_by") != "lucas":
+        return False
+    task_id = task.get("id", "")
+    try:
+        evidence = read_json(base / "state/evidence" / f"review-{task_id}.json")
+    except ReconcileError:
+        return False
+    commit = task.get("review_accepted_commit", "")
+    proof = evidence.get("review_proof") if isinstance(evidence.get("review_proof"), dict) else {}
+    return bool(
+        re.fullmatch(r"[0-9a-f]{40,64}", commit)
+        and evidence.get("project_id") == task.get("project_id")
+        and evidence.get("goal_id") == task.get("goal_id")
+        and evidence.get("task_id") == task_id
+        and evidence.get("commit_oid") == commit
+        and evidence.get("reviewed_by") == "lucas"
+        and proof.get("kind") in {"local-exact-commit", "published-review-ref", "remote-default-ancestor"}
+        and task.get("review_proof") == proof.get("kind")
+        and task.get("candidate_commit") == commit
+    )
 
 
 def terminate_group(pgid: int) -> None:
@@ -732,8 +1172,14 @@ def terminate_group(pgid: int) -> None:
         pass
 
 
-def run_gate_interruptibly(base: Path, cwd: Path, command: str, deadline: int) -> tuple[str, int]:
-    process = subprocess.Popen(["bash", "-c", command], cwd=cwd, start_new_session=True)
+def run_gate_interruptibly(base: Path, cwd: Path, command: str, deadline: int,
+                           network_policy: str) -> tuple[str, int]:
+    process = subprocess.Popen(
+        ["bash", str(base / "scripts/worker-sandbox.sh"), "--engine", "gate", "--role", "gate",
+         "--worktree", str(cwd), "--workdir", ".", "--network-policy", "none",
+         "--gate-command", command],
+        cwd=base, start_new_session=True,
+    )
     while process.poll() is None:
         if (base / "state/PAUSE").exists():
             terminate_group(process.pid)
@@ -790,8 +1236,14 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
         value = {"schema_version": 1, "id": f"goal-evidence-{goal_id}", "project_id": project,
                  "goal_id": goal_id, "verdict": "fail", "reason": reason,
                  "checked_at": now_iso(), "commit_oid": exact.get("commit_oid")}
-        atomic_json(evidence_path, value)
-        append_event(base, "goal-verification", project, goal_id, detail=value)
+        event = transition_event(
+            "goal-verification", project, goal_id, detail=value,
+            event_id="source-goal-verification-" + hashlib.sha256(
+                json.dumps([project, goal_id, value], sort_keys=True,
+                           separators=(",", ":")).encode()).hexdigest()[:24],
+        )
+        with goal_lock(base, goal_id):
+            commit_reconcile_transition(base, [json_mutation(evidence_path, value)], event)
         return
     if budget["publication_required"] and remote_review_commit(config, str(sink["id"])) != exact["commit_oid"]:
         raise ReconcileError("goal verification requires the exact published review ref")
@@ -806,7 +1258,11 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
     started = int(time.time())
     wall_deadline = safe_int(goal.get("started_at_epoch"), started) + int(budget["max_wall_clock_seconds"])
     try:
-        outcome, rc = run_gate_interruptibly(base, worktree, goal["acceptance_suite"], wall_deadline)
+        network_policy = sink.get("network_policy", "none")
+        if network_policy not in {"provider-only", "none"}:
+            raise ReconcileError("goal gate inherited an invalid network policy")
+        outcome, rc = run_gate_interruptibly(base, worktree, goal["acceptance_suite"],
+                                             wall_deadline, network_policy)
         head = git_output(worktree, "rev-parse", "HEAD")
         dirty = git_output(worktree, "status", "--porcelain", "--untracked-files=all")
         if outcome == "pass" and rc == 0 and head == commit and not dirty:
@@ -823,8 +1279,14 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
                  "machine_gate": exact["machine_gate"],
                  "independent_verifier": exact["independent_verifier"],
                  "checked_at": now_iso(), "worktree_clean": not bool(dirty)}
-        atomic_json(evidence_path, value)
-        append_event(base, "goal-verification", project, goal_id, detail=value)
+        event = transition_event(
+            "goal-verification", project, goal_id, detail=value,
+            event_id="source-goal-verification-" + hashlib.sha256(
+                json.dumps([project, goal_id, value], sort_keys=True,
+                           separators=(",", ":")).encode()).hexdigest()[:24],
+        )
+        with goal_lock(base, goal_id):
+            commit_reconcile_transition(base, [json_mutation(evidence_path, value)], event)
         if outcome == "paused":
             raise ReconcileError("PAUSE interrupted exact-commit goal verification")
     finally:
@@ -840,6 +1302,17 @@ def goal_evidence(base: Path, goal_id: str) -> dict | None:
         return read_json(path)
     except ReconcileError:
         return {"verdict": "corrupt"}
+
+
+def consumed_evidence_has_new_task_graph(evidence: dict | None,
+                                         tasks: list[tuple[Path, dict[str, str]]]) -> bool:
+    """A consumed failure permits re-verification only after remediation changed the task graph."""
+    if not evidence or evidence.get("verdict") != "consumed":
+        return True
+    prior = evidence.get("consumed_task_ids")
+    current = sorted(str(task.get("id") or "") for _, task in tasks)
+    return isinstance(prior, list) and all(isinstance(item, str) for item in prior) \
+        and sorted(prior) != current
 
 
 def enqueue_transition(base: Path, pilot: dict, project: str, goal_id: str, expected: str,
@@ -858,6 +1331,7 @@ def reconcile(base: Path, project: str, goal_id: str) -> None:
             raise ReconcileError("goal is outside this project pilot")
         status = goal.get("status", "")
         if status in TERMINAL_GOALS:
+            ensure_terminal_events(base, project, goal_id, goal)
             return
         if status not in ACTIVE_GOALS:
             raise ReconcileError(f"goal is not reconcilable: {status}")
@@ -894,6 +1368,13 @@ def reconcile(base: Path, project: str, goal_id: str) -> None:
             elif evidence.get("verdict") == "pass":
                 enqueue_transition(base, pilot, project, goal_id, "verifying", "achieved",
                                    "exact-commit-verified", version)
+            elif evidence.get("verdict") == "consumed":
+                if consumed_evidence_has_new_task_graph(evidence, tasks):
+                    enqueue_decision(
+                        base, str(pilot["id"]), "verify-goal", [project, goal_id], goal_id,
+                        "re-run exact-commit acceptance after remediation changed the task graph",
+                        [project, goal_id, snapshot_digest(base, config, goal_id), "remediated"],
+                    )
             else:
                 enqueue_transition(base, pilot, project, goal_id, "verifying", "active",
                                    "verification-reopened", version)
@@ -955,7 +1436,7 @@ def reconcile(base: Path, project: str, goal_id: str) -> None:
 
         ready_or_proposed = [task for _, task in tasks if task.get("status") in {"proposed", "ready", "queued"}]
         review_backlog = [task for _, task in tasks if task.get("status") == "passed"
-                          and task.get("review_status") != "accepted"]
+                          and not review_acceptance_valid(base, task)]
         if ready_or_proposed and len(review_backlog) >= budget["max_review_queue"]:
             append_event(base, "review-backpressure", project, goal_id,
                          detail={"backlog": len(review_backlog), "limit": budget["max_review_queue"]})
@@ -1010,6 +1491,13 @@ def reconcile(base: Path, project: str, goal_id: str) -> None:
         if not all(task.get("status") == "passed" for _, task in tasks):
             return
 
+        evidence = goal_evidence(base, goal_id)
+        if evidence and evidence.get("verdict") == "consumed" \
+                and not consumed_evidence_has_new_task_graph(evidence, tasks):
+            # The failed exact-commit evidence has already reopened this exact task graph.
+            # Wait for a bounded remediation task instead of bouncing active->verifying forever.
+            return
+
         repo = Path(str(config["repo"]))
         for _, task in tasks:
             valid, reason, exact = task_evidence(base, repo, task, runs)
@@ -1051,6 +1539,15 @@ def schedule(base: Path, project: str | None, goal_id: str | None) -> int:
         if not IDENT.fullmatch(gid) or not IDENT.fullmatch(pid):
             continue
         if project and pid != project:
+            continue
+        if goal.get("status") in TERMINAL_GOALS:
+            try:
+                with goal_lock(base, gid):
+                    current = read_fields(path)
+                    if current.get("status") in TERMINAL_GOALS:
+                        ensure_terminal_events(base, pid, gid, current)
+            except ReconcileError:
+                pass
             continue
         if goal.get("status") not in ACTIVE_GOALS:
             continue
@@ -1097,6 +1594,12 @@ def main() -> int:
     publish_cmd.add_argument("project")
     publish_cmd.add_argument("goal")
     publish_cmd.add_argument("task")
+    review_cmd = sub.add_parser("accept-review")
+    review_cmd.add_argument("project")
+    review_cmd.add_argument("goal")
+    review_cmd.add_argument("task")
+    review_cmd.add_argument("commit")
+    review_cmd.add_argument("reviewed_by")
     args = parser.parse_args()
     base = root()
     try:
@@ -1113,6 +1616,10 @@ def main() -> int:
             raise ReconcileError("PAUSE blocks Phase 6 actuation")
         if args.command == "admit-work":
             print(json.dumps(admit_work(base, args.task), sort_keys=True, separators=(",", ":")))
+        elif args.command == "accept-review":
+            print(json.dumps(accept_review(base, args.project, args.goal, args.task,
+                                           args.commit, args.reviewed_by),
+                             sort_keys=True, separators=(",", ":")))
         elif args.command == "reconcile":
             require_window(base, args.project, args.goal)
             reconcile(base, args.project, args.goal)

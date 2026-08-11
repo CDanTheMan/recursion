@@ -13,9 +13,7 @@ import sys
 from pathlib import Path, PurePosixPath
 
 
-VACUOUS = re.compile(
-    r"^(?:true|:|/bin/true|exit\s+0|test\s+1\s*(?:=|-eq)\s*1|\[\s*1\s*=\s*1\s*\])$"
-)
+VACUOUS = re.compile(r"^(?:true|:|/bin/true|exit\s+0)$")
 
 
 def fail(message: str) -> None:
@@ -36,6 +34,31 @@ def under(path: str, roots: list[str]) -> bool:
     return "." in roots or any(path == root.rstrip("/") or path.startswith(root.rstrip("/") + "/") for root in roots)
 
 
+def vacuous_success(words: list[str]) -> bool:
+    """Recognize commands whose success is independent of the code under review."""
+    if not words:
+        return True
+    if words[0] in {"true", ":", "/bin/true"}:
+        return True
+    if words[:2] == ["exit", "0"]:
+        return True
+    if words[0] in {"echo", "printf"}:
+        return True
+    test = words
+    if words[0] == "[" and words[-1:] == ["]"]:
+        test = ["test", *words[1:-1]]
+    if test[:1] != ["test"]:
+        return False
+    args = test[1:]
+    if len(args) == 2 and args[0] in {"-e", "-d"} and args[1] == "/":
+        return True
+    if len(args) == 3 and args[1] in {"=", "==", "-eq"} and args[0] == args[2]:
+        return True
+    if len(args) == 2 and args[0] == "-n" and args[1] and not any(ch in args[1] for ch in "$*?["):
+        return True
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--acceptance", required=True)
@@ -48,17 +71,28 @@ def main() -> int:
         if not gate or len(gate) > 4096 or any(ord(ch) < 32 and ch not in "\t" for ch in gate):
             fail("acceptance gate must be bounded, single-line, and non-empty")
         compact = re.sub(r"\s+", " ", gate)
-        if VACUOUS.fullmatch(compact) or re.search(r"(?:\|\||;)\s*(?:true|:|exit\s+0)\s*$", compact):
+        raw_segments = re.split(r"\s*(?:&&|\|\||;)\s*", gate)
+        operators = re.findall(r"&&|\|\||;", gate)
+        parsed_segments: list[list[str]] = []
+        for segment in raw_segments:
+            try:
+                parsed_segments.append(shlex.split(segment))
+            except ValueError as exc:
+                fail(f"acceptance gate cannot be parsed: {exc}")
+        vacuous = [vacuous_success(words) for words in parsed_segments]
+        hides_prior_result = any(op in {"||", ";"} and vacuous[index + 1]
+                                 for index, op in enumerate(operators))
+        vacuous_or_branch = any(
+            op == "||" and (vacuous[index] or vacuous[index + 1])
+            for index, op in enumerate(operators)
+        )
+        if VACUOUS.fullmatch(compact) or all(vacuous) or hides_prior_result or vacuous_or_branch:
             fail("acceptance gate is structurally vacuous")
         if ".recursion-result.json" in gate:
             fail("acceptance gate may not grade the worker's own result report")
         allowed = [p.rstrip("/") for p in args.allowed_paths.replace(",", " ").split() if p]
         gate_files = paths(args.gate_files)
-        for segment in re.split(r"\s*(?:&&|\|\||;)\s*", gate):
-            try:
-                words = shlex.split(segment)
-            except ValueError as exc:
-                fail(f"acceptance gate cannot be parsed: {exc}")
+        for words in parsed_segments:
             if len(words) >= 2 and words[0] in {"bash", "sh", "python", "python3", "node"}:
                 candidate = words[1].replace("\\", "/")
                 if under(candidate, allowed) and candidate not in gate_files:

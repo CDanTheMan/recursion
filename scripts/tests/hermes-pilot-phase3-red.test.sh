@@ -8,6 +8,19 @@ fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+normalize_head_decision(){ # root file
+  local root="$1" file="$2" temporary="$2.normalized"
+  python3 - "$file" <<'PY' | RECURSION_ROOT="$root" python3 "$root/scripts/decision-queue.py" normalize > "$temporary"
+import json,sys
+row=json.load(open(sys.argv[1],encoding='utf-8'))
+row.setdefault('actor','head-hermes')
+row.setdefault('decision_source','hermes-model')
+row.setdefault('routed_decider','head-hermes')
+row.setdefault('why',row.get('reason') or 'Phase 3 red control')
+print(json.dumps(row,separators=(',',':')))
+PY
+  mv -f "$temporary" "$file"
+}
 
 # 1. The Telegram-facing gateway must have no direct execution path. A message is recorded once;
 # only the durable actuator may later act. The current gateway skill explicitly authorizes both.
@@ -24,7 +37,10 @@ fi
 A="$TMP/author-text"; mkdir -p "$A/scripts" "$A/state" "$A/loop/logs"
 cp "$SRC/scripts/conduct-hermes.sh" "$A/scripts/"
 cp "$SRC/scripts/taskctl.sh" "$A/scripts/"
-cp "$SRC/scripts/validate-decision.py" "$A/scripts/"
+cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
+  "$SRC/scripts/runtime-state.py" "$A/scripts/"
+cp "$SRC/scripts/decision-queue.py" "$SRC/scripts/validate-control-state.py" \
+  "$SRC/scripts/validate-decision.py" "$A/scripts/"
 cat > "$A/scripts/author.sh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s|%s|%s\n' "$1" "$2" "$3" > "$AUTHOR_LOG"
@@ -33,6 +49,7 @@ chmod +x "$A/scripts/"*.sh
 cat > "$TMP/author.json" <<'J'
 {"id":"author-1","verb":"roadmap-add","args":["chiron"],"text":"add a reviewed pilot control","goal":"g","wrong_if":"text lost"}
 J
+normalize_head_decision "$A" "$TMP/author.json"
 ( cd "$A" && AUTHOR_LOG="$TMP/author.log" RECURSION_ROOT="$A" \
     bash scripts/conduct-hermes.sh --file "$TMP/author.json" ) >"$TMP/author.out" 2>&1
 author_rc=$?
@@ -45,6 +62,7 @@ fi
 # 3. An instruction cannot become handled without a link to a succeeded durable action.
 I="$TMP/intake"; mkdir -p "$I/scripts" "$I/state/instructions"
 cp "$SRC/scripts/intake.sh" "$I/scripts/"
+cp "$SRC/scripts/runtime-state.py" "$I/scripts/"
 cat > "$I/state/instructions/00000042.md" <<'T'
 id: 42
 received: 2026-08-06T00:00:00Z
@@ -108,7 +126,7 @@ done
 
 # 6. Restart must preserve every pending decision. A singleton latest file drops the older one.
 DROOT="$TMP/pending"; mkdir -p "$DROOT/scripts" "$DROOT/state/tasks" "$DROOT/loop/logs"
-for helper in conduct-hermes.sh taskctl.sh decision-queue.py validate-control-state.py validate-decision.py; do
+for helper in conduct-hermes.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py decision-queue.py validate-control-state.py validate-decision.py; do
   cp "$SRC/scripts/$helper" "$DROOT/scripts/"
 done
 cat > "$DROOT/scripts/work.sh" <<'STUB'
@@ -117,10 +135,14 @@ printf '%s\n' "$1" >> "$PENDING_LOG"
 STUB
 chmod +x "$DROOT/scripts/"*.sh
 for id in first second; do printf 'id: %s\ngoal_id: g\nacceptance: true\nstatus: queued\n' "$id" > "$DROOT/state/tasks/$id.md"; done
-cat > "$DROOT/state/decisions.jsonl" <<'J'
-{"id":"d1","verb":"work","args":["first"],"goal":"g","why":"queue control","wrong_if":"lost"}
-{"id":"d2","verb":"work","args":["second"],"goal":"g","why":"queue control","wrong_if":"lost"}
-J
+: > "$DROOT/state/decisions.jsonl"
+for item in d1:first d2:second; do
+  did="${item%%:*}"; task="${item#*:}"
+  printf '{"id":"%s","verb":"work","args":["%s"],"goal":"g","why":"queue control","wrong_if":"lost"}\n' \
+    "$did" "$task" > "$TMP/$did.json"
+  normalize_head_decision "$DROOT" "$TMP/$did.json"
+  cat "$TMP/$did.json" >> "$DROOT/state/decisions.jsonl"
+done
 tail -1 "$DROOT/state/decisions.jsonl" > "$DROOT/state/.decision-latest.json"
 : > "$TMP/pending.log"
 ( cd "$DROOT" && PENDING_LOG="$TMP/pending.log" RECURSION_ROOT="$DROOT" \

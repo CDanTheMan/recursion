@@ -7,6 +7,7 @@ Hermes or Telegram. The controls intentionally fail as a group before Phase 7 ex
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import hashlib
 import os
@@ -36,6 +37,9 @@ CONTROLS = [
     "recovery reconciles events, outbox, acknowledgements, retries, dead letters, and delivery records",
     "a process saying sent without transport evidence cannot acknowledge delivery",
     "ticks after complete acknowledgement cause zero new sends",
+    "real Telegram 429/5xx and pre-send network failures use retryable transport semantics",
+    "a pre-receipt crash is resolved without a blind resend",
+    "failed reconcile and portfolio actions receive bounded fresh retry identities",
 ]
 
 
@@ -246,6 +250,32 @@ print(json.dumps({"ok":True,"accepted":True,"transport":"telegram","message_id":
 '''
 
 
+FAKE_CURL_STUB = r'''#!/usr/bin/env bash
+case "${FAKE_CURL_MODE:-}" in
+  telegram-429)
+    printf '%s\n' '{"ok":false,"error_code":429,"description":"Too Many Requests","parameters":{"retry_after":1}}'
+    exit 0 ;;
+  telegram-503)
+    printf '%s\n' '{"ok":false,"error_code":503,"description":"Service Unavailable"}'
+    exit 0 ;;
+  http-429)
+    printf 'rate limited by edge\n429\n'
+    exit 0 ;;
+  http-503-nonjson)
+    printf '<html>upstream unavailable</html>\n503\n'
+    exit 0 ;;
+  dns-failure) exit 6 ;;
+  connect-failure) exit 7 ;;
+  ambiguous-timeout) exit 28 ;;
+  openrouter-credits)
+    printf '{"data":{"total_usage":%s,"total_credits":%s}}\n' \
+      "${FAKE_OPENROUTER_USAGE:-0}" "${FAKE_OPENROUTER_CREDITS:-100}"
+    exit 0 ;;
+  *) exit 99 ;;
+esac
+'''
+
+
 def event_deliveries(fixture: Fixture, event_type: str) -> list[dict]:
     ids = {row["id"] for row in fixture.events() if row.get("event_type") == event_type}
     return [row for row in fixture.deliveries() if row.get("event_id") in ids]
@@ -278,6 +308,35 @@ def main() -> int:
                CONTROLS[0], results)
         before = len(first.visible()); first.ticks(1)
         report(len(first.visible()) == before == 1, CONTROLS[1], results)
+
+        # Exercise notify.sh's real raw-Telegram branch, not the fixture transport's synthetic
+        # retryable field. DNS/connect failures happen before a request can be sent; a generic
+        # timeout is ambiguous and must not invite a blind resend.
+        shapes = Fixture("telegram-shapes"); fixtures.append(shapes)
+        fake_curl = shapes.root / "bin/curl"
+        fake_curl.write_text(FAKE_CURL_STUB, encoding="utf-8")
+        fake_curl.chmod(0o755)
+        shape_env = {
+            "RECURSION_NOTIFY_TRANSPORT": "",
+            "TELEGRAM_BOT_TOKEN": "fixture-token-never-sent",
+            "PATH": str(shapes.root / "bin") + os.pathsep + shapes.env.get("PATH", ""),
+        }
+        shape_codes = []
+        for number, mode in enumerate((
+            "telegram-429", "telegram-503", "http-429", "http-503-nonjson",
+            "dns-failure", "connect-failure", "ambiguous-timeout",
+        ), 1):
+            evidence = shapes.root / f"state/transport-evidence/shape-{number}.json"
+            result = shapes.run([
+                "bash", "scripts/notify.sh", "--destination", shapes.project_topic,
+                "--delivery-id", f"delivery-shape-{number}", "--event-id", f"event-shape-{number}",
+                "--attempt-token", f"attempt-shape-{number}", "--message-digest", "a" * 64,
+                "--evidence", str(evidence), "fixture message",
+            ], env={**shape_env, "FAKE_CURL_MODE": mode})
+            shape_codes.append(result.returncode)
+        report(shape_codes == [10, 10, 10, 10, 10, 10, 12] and
+               not any((shapes.root / "state/transport-evidence").glob("shape-*.json")),
+               CONTROLS[16], results)
 
         # Terminal fan-out: Head delivery succeeds while an extra portfolio destination retries.
         terminal = Fixture("terminal"); fixtures.append(terminal)
@@ -318,6 +377,80 @@ def main() -> int:
         report(receipt_exists and calls_after_crash == 1 and len(crash.calls()) == 1 and
                len(crash_delivery) == 1 and crash_delivery[0].get("status") == "succeeded" and
                crash_delivery[0].get("acknowledgement"), CONTROLS[4], results)
+
+        # A host/process crash can leave attempt-started durable without a receipt. Recovery must
+        # resolve that ambiguity without calling the transport a second time.
+        pre_receipt = Fixture("pre-receipt"); fixtures.append(pre_receipt)
+        pre_receipt.append_event("source-pre-receipt", "start")
+        pre_receipt.ticks(1)
+        stranded = event_deliveries(pre_receipt, "worker-launched")[0]
+        stranded.update({
+            "status": "running", "attempt": 1,
+            "attempt_token": "attempt-pre-receipt",
+            "attempt_started_at": "2026-08-07T19:00:00Z",
+            "next_attempt_at": None, "receipt_path": None,
+        })
+        pre_receipt.write_json(f"state/deliveries/{stranded['id']}.json", stranded)
+        pre_receipt.ticks(1)
+        resolved = next(row for row in pre_receipt.deliveries() if row["id"] == stranded["id"])
+        ambiguity_events = event_deliveries(pre_receipt, "delivery-dead-letter")
+        report(resolved.get("status") == "dead-letter" and not pre_receipt.calls() and
+               len(ambiguity_events) == 1 and ambiguity_events[0].get("status") == "pending",
+               CONTROLS[17], results)
+
+        # A terminal failed action owns its old idempotency key forever. The scheduler derives one
+        # bounded successor from that canonical failure instead of re-enqueueing the dead identity.
+        action_retry = Fixture("action-retry"); fixtures.append(action_retry)
+        action_retry.append_event("source-action-retry", "start")
+        action_retry.run(["python3", "scripts/notification-outbox.py", "schedule", "--project", "alpha"])
+        initial_pending = list((action_retry.root / "state/decision-queue/pending").glob("*.json"))
+        initial = json.loads(initial_pending[0].read_text(encoding="utf-8"))
+
+        def record_failed_action(key: str) -> None:
+            action_id = "action-" + hashlib.sha256(key.encode()).hexdigest()[:24]
+            action_retry.write_json(f"state/actions/{action_id}.json", {
+                "schema_version": 1, "id": action_id, "decision_id": "fixture-decision",
+                "instruction_id": None, "idempotency_key": key,
+                "verb": "notification-fixture", "arguments": [], "goal_id": "goal-alpha",
+                "status": "failed", "lease_expires": None, "attempts": 1,
+                "result_evidence": "fixture action failure",
+            })
+
+        record_failed_action(initial["idempotency_key"])
+        failed_dir = action_retry.root / "state/decision-queue/failed"
+        failed_dir.mkdir(parents=True, exist_ok=True)
+        initial_pending[0].replace(failed_dir / initial_pending[0].name)
+        action_retry.run(["python3", "scripts/notification-outbox.py", "schedule", "--project", "alpha"])
+        action_retry.run(["python3", "scripts/notification-outbox.py", "schedule", "--project", "alpha"])
+        retried = [json.loads(path.read_text(encoding="utf-8"))
+                   for path in (action_retry.root / "state/decision-queue/pending").glob("*.json")]
+
+        spec = importlib.util.spec_from_file_location(
+            "notification_outbox_action_retry", SOURCE / "scripts/notification-outbox.py",
+        )
+        retry_module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(retry_module)
+        portfolio_base = ["alpha", "goal-alpha", "pilot-terminal-fixture"]
+        portfolio_key = retry_module.decision_key("notification-portfolio", *portfolio_base)
+        record_failed_action(portfolio_key)
+        portfolio_retry = retry_module.retry_key_parts(
+            action_retry.root, "notification-portfolio", portfolio_base,
+        )
+        portfolio_retry_key = retry_module.decision_key("notification-portfolio", *portfolio_retry)
+        record_failed_action(portfolio_retry_key)
+        portfolio_final = retry_module.retry_key_parts(
+            action_retry.root, "notification-portfolio", portfolio_base,
+        )
+        portfolio_final_key = retry_module.decision_key("notification-portfolio", *portfolio_final)
+        record_failed_action(portfolio_final_key)
+        portfolio_bounded = retry_module.retry_key_parts(
+            action_retry.root, "notification-portfolio", portfolio_base,
+        )
+        report(len(retried) == 1 and retried[0]["idempotency_key"] != initial["idempotency_key"] and
+               portfolio_retry != portfolio_base and portfolio_final != portfolio_retry and
+               portfolio_bounded == portfolio_final,
+               CONTROLS[18], results)
 
         permanent = Fixture("permanent"); fixtures.append(permanent)
         permanent.append_event("source-permanent", "start")
@@ -365,9 +498,12 @@ def main() -> int:
             "acknowledgement": None, "status": "pending", "next_attempt_at": 0,
             "max_attempts": 3, "message_digest": rogue_event["message_digest"],
         })
-        rogue.ticks(1)
+        rogue_schedule = rogue.run([
+            "python3", "scripts/notification-outbox.py", "schedule", "--project", "alpha",
+        ])
+        rogue.run(["bash", "scripts/conduct-hermes.sh"])
         rogue_row = next(row for row in rogue.deliveries() if row["id"] == "delivery-rogue")
-        destination_failures &= rogue_row.get("status") == "dead-letter" and all(
+        destination_failures &= rogue_schedule.returncode != 0 and rogue_row.get("status") != "succeeded" and all(
             call.get("destination") != "project-topic:telegram:-999999:99" for call in rogue.calls()
         )
         report(destination_failures, CONTROLS[7], results)
@@ -404,30 +540,83 @@ def main() -> int:
                CONTROLS[12], results)
 
         recovery = Fixture("recovery"); fixtures.append(recovery)
-        recovery.append_event("source-recovery", "start"); recovery.ticks(1)
-        normal = event_deliveries(recovery, "worker-launched")[0]
-        source_event = next(row for row in recovery.events() if row["event_type"] == "worker-launched")
-        missing_event = dict(source_event)
-        missing_event.update({"id": "event-recovery-missing", "source_event_id": "source-recovery-missing",
-                              "event_type": "task-blocked", "message": "Task blocked: recovery fixture"})
-        missing_event["message_digest"] = hashlib.sha256(missing_event["message"].encode()).hexdigest()
-        recovery.write_json("state/notification-events/event-recovery-missing.json", missing_event)
-        (recovery.root / "state/deliveries" / f"{normal['id']}.json").unlink()
-        recovery.write_json("state/deliveries/delivery-retry.json", {
-            **normal, "id": "delivery-retry", "attempt": 1, "status": "failed",
-            "acknowledgement": None, "next_attempt_at": int(time.time()) + 999,
-        })
-        recovery.write_json("state/deliveries/delivery-dead.json", {
-            **normal, "id": "delivery-dead", "destination": recovery.head, "attempt": 3,
-            "status": "dead-letter", "acknowledgement": None,
-        })
+        recovery.append_event("source-recovery-normal", "start", task="task-normal")
+        recovery.append_event("source-recovery-retry", "start", task="task-retry")
+        recovery.append_event("source-recovery-dead", "start", task="task-dead")
+        recovery.append_event("source-recovery-missing", "block", task="task-missing")
+
+        recovery_spec = importlib.util.spec_from_file_location(
+            "notification_outbox_recovery", recovery.root / "scripts/notification-outbox.py",
+        )
+        recovery_module = importlib.util.module_from_spec(recovery_spec)
+        assert recovery_spec.loader is not None
+        recovery_spec.loader.exec_module(recovery_module)
+        mapped_by_source = {
+            row["source_event_id"]: row for row in recovery_module.all_mapped(recovery.root, "alpha")
+        }
+
+        # Simulate the real event-projection -> first-delivery boundary: the event is durable,
+        # then the process dies before create_delivery can commit a deterministic pair.  Do not
+        # delete an already committed projection; that is unrelated post-commit divergence and
+        # must remain fail-closed under the immutable receipt protocol.
+        original_create_delivery = recovery_module.create_delivery
+        missing_pair_crashes = 0
+
+        def crash_before_first_delivery(*_args):
+            raise recovery_module.OutboxError("fixture crash before first delivery projection")
+
+        for source_id in ("source-recovery-normal", "source-recovery-missing"):
+            recovery_module.create_delivery = crash_before_first_delivery
+            try:
+                recovery_module.create_event(recovery.root, mapped_by_source[source_id])
+            except recovery_module.OutboxError as exc:
+                if "fixture crash before first delivery projection" in str(exc):
+                    missing_pair_crashes += 1
+        recovery_module.create_delivery = original_create_delivery
+        for source_id in ("source-recovery-retry", "source-recovery-dead"):
+            recovery_module.create_event(recovery.root, mapped_by_source[source_id])
+
+        events_by_source = {row["source_event_id"]: row for row in recovery.events()}
+        deliveries_by_event = {row["event_id"]: row for row in recovery.deliveries()}
+        normal_event = events_by_source["source-recovery-normal"]
+        retry_event = events_by_source["source-recovery-retry"]
+        dead_event = events_by_source["source-recovery-dead"]
+        missing_event = events_by_source["source-recovery-missing"]
+        retrying = deliveries_by_event[retry_event["id"]]
+        dead = deliveries_by_event[dead_event["id"]]
+
+        # Establish retry and dead-letter truth through the canonical actuator.  These
+        # projections are bound to immutable transition receipts, so rewriting their JSON
+        # directly would correctly be rejected as a receipt/state collision during recovery.
+        recovery.set_modes({recovery.project_topic: "always-fail"})
+        retry_result = recovery.run(
+            ["python3", "scripts/notification-outbox.py", "deliver", "alpha", retrying["id"]],
+            env={
+                "RECURSION_QUEUE_ACTUATION": "1",
+                "RECURSION_DELIVERY_BACKOFF_BASE_S": "999",
+                "RECURSION_DELIVERY_BACKOFF_MAX_S": "999",
+            },
+        )
+        recovery.set_modes({recovery.project_topic: "permanent"})
+        dead_result = recovery.run(
+            ["python3", "scripts/notification-outbox.py", "deliver", "alpha", dead["id"]],
+            env={"RECURSION_QUEUE_ACTUATION": "1"},
+        )
+        recovery.set_modes({})
+
+        retrying = next(row for row in recovery.deliveries() if row["id"] == retrying["id"])
+        dead = next(row for row in recovery.deliveries() if row["id"] == dead["id"])
         recovery.ticks(1)
         snapshot_paths = list((recovery.root / "state/recovery").glob("notification-*.json"))
         pairs = [(row.get("event_id"), row.get("destination")) for row in recovery.deliveries()]
         preserved = {row["id"]: row["status"] for row in recovery.deliveries()}
-        report(bool(snapshot_paths) and len(pairs) == len(set(pairs)) and
-               preserved.get("delivery-retry") == "failed" and preserved.get("delivery-dead") == "dead-letter" and
-               any(row.get("event_id") == "event-recovery-missing" and
+        report(missing_pair_crashes == 2 and retry_result.returncode == 0 and dead_result.returncode == 0 and
+               retrying.get("status") == "failed" and dead.get("status") == "dead-letter" and
+               bool(snapshot_paths) and len(pairs) == len(set(pairs)) and
+               preserved.get(retrying["id"]) == "failed" and preserved.get(dead["id"]) == "dead-letter" and
+               any(row.get("event_id") == normal_event["id"] and
+                   row.get("destination") == recovery.project_topic for row in recovery.deliveries()) and
+               any(row.get("event_id") == missing_event["id"] and
                    row.get("destination") == recovery.project_topic for row in recovery.deliveries()),
                CONTROLS[13], results)
 

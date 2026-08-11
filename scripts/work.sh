@@ -29,6 +29,9 @@ notify(){ [ -n "${PILOT_ID:-}" ] && return 0; [ "${RECURSION_NO_NOTIFY:-0}" = "1
 pause_checkpoint(){
   local stage="${1:-execution}"
   [ ! -f "$ROOT/state/PAUSE" ] || { log "PAUSED during $stage — refusing later gates/state/publication"; return 75; }
+  if [ -n "${PILOT_ID:-}" ] && declare -F window_checkpoint >/dev/null 2>&1; then
+    window_checkpoint "$stage" || return 75
+  fi
 }
 
 terminate_worker_group(){
@@ -47,8 +50,8 @@ terminate_worker_group(){
   return 1
 }
 
-# --- kill switch (architecture.md): state/PAUSE halts the executor like every job. ------
-pause_checkpoint startup || exit 0
+# --- kill switch (architecture.md): state/PAUSE defers the executor without claiming success. --
+pause_checkpoint startup || exit 75
 
 # --- resolve the task -----------------------------------------------------------------
 ARG="${1:-}"
@@ -63,6 +66,7 @@ fi
 
 field(){ sed -n "s/^$1: *//p" "$TASK" | head -1 | tr -d '\r'; }
 ID="$(field id)"; WORKSTREAM="$(field workstream)"; GOAL="$(field goal)"
+PROJECT_ID="$(field project_id)"
 PILOT_ID="$(field pilot_id)"
 ENGINE="$(field engine)"; ACCEPTANCE="$(field acceptance)"; WORKDIR="$(field workdir)"
 AUTONOMY="$(field autonomy)"; MODEL="$(field model)"
@@ -71,6 +75,7 @@ DEADLINE_SECONDS="$(field deadline_seconds)"; VERIFIER_DEADLINE_SECONDS="$(field
 NETWORK_POLICY="$(field network_policy)"; EVIDENCE_CONTRACT="$(field evidence_contract)"
 VERIFICATION_POLICY="$(field verification)"; EXPECTED_CHANGE="$(field expected_change)"
 GATE_FILES="$(field gate_files)"
+GATE_FILES="${GATE_FILES//,/ }"
 WORKDIR="${WORKDIR:-.}"; AUTONOMY="${AUTONOMY:-auto}"; ENGINE="${ENGINE:-claude}"
 ALLOWED_PATHS="$(field allowed_paths)"; ALLOWED_PATHS="${ALLOWED_PATHS:-$WORKDIR}"
 STRICT_PHASE5=0
@@ -104,20 +109,53 @@ gitr(){ if [ -n "$GSSH" ]; then GIT_SSH_COMMAND="$GSSH" git -C "$REPO_DIR" "$@";
 BRANCH="loop/work/$ID"
 BASE_COMMIT=""; CANDIDATE_OID=""; LAST_SCOPE_FILE=""; LAST_RUN_ID=""; LAST_RUN_EVIDENCE=""
 IMPLEMENTER_RUN_ID=""; VERIFIER_RUN_ID=""; RESOLVED_MODEL="$MODEL"; RESOLVED_VERIFIER_MODEL=""
+LAST_USAGE_FILE=""; SEED_DIGEST_BEFORE=""
 
-# --- per-workstream lock (parallel-loops.md): at most one build per workstream; different
-# workstreams run concurrently. mkdir is atomic. Replaces the old global state/.work.lock so
-# conduct.sh can drive several at once. Serial callers (drain/manual/cycle) run one work.sh, so
-# this behaves exactly like the old global lock for them. -------------------------------
+# Pilot windows are an execution capability, not a caller convention. Every path into work.sh
+# (queue actuator, legacy drain, manual continuation, assist resume) reaches this same check.
+window_checkpoint(){
+  local stage="${1:-execution}"
+  [ -z "$PILOT_ID" ] && return 0
+  [ -x "$ROOT/scripts/project-reconcile.py" ] \
+    || { log "pilot task $ID has no window authority checker during $stage"; return 75; }
+  RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" admit-work "$ID" \
+    >/dev/null 2>>"$LOG" \
+    || { log "pilot task $ID lacks exact open-window authority during $stage"; return 75; }
+}
+window_checkpoint startup || exit 75
+
+# --- canonical per-project lock: at most one worker per project; different projects may run
+# concurrently. The project id comes from the task, never the model-authored decision envelope.
+# Legacy non-pilot tasks fall back to their workstream. mkdir is atomic. -------------------
 mkdir -p "$ROOT/state/.locks" 2>/dev/null || true
-WSLOCK="$ROOT/state/.locks/ws-${WORKSTREAM:-none}.lock"
-if ! mkdir "$WSLOCK" 2>/dev/null; then log "workstream ${WORKSTREAM:-none} already building (held $WSLOCK) — exiting."; exit 0; fi
+LOCK_KEY="${PROJECT_ID:-${WORKSTREAM:-none}}"
+case "$LOCK_KEY" in ''|*[!A-Za-z0-9._-]*) log "invalid canonical project/workstream lock identity"; exit 2 ;; esac
+WSLOCK="$ROOT/state/.locks/project-$LOCK_KEY.lock"
+WSLOCK_HELD=0
+project_lock_acquire(){
+  [ -x "$ROOT/scripts/runtime-state.py" ] || { log "witnessed project lock helper is absent"; return 73; }
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$WSLOCK" "$$" >>"$LOG" 2>&1
+}
+project_lock_release(){
+  [ "$WSLOCK_HELD" = 1 ] || return 0
+  if python3 "$ROOT/scripts/runtime-state.py" lock-release "$WSLOCK" "$$" >>"$LOG" 2>&1; then
+    WSLOCK_HELD=0
+    return 0
+  fi
+  log "project lock release failed closed for $WSLOCK"
+  return 74
+}
+if ! project_lock_acquire; then
+  log "project $LOCK_KEY already has an active worker (held $WSLOCK) — deferring without success"
+  exit 75
+fi
+WSLOCK_HELD=1
 # ONE EXIT trap, both cleanups. A second `trap ... EXIT` REPLACES this one rather than
 # adding to it — which is how the heavy-gate release silently disabled the workstream-lock
 # release, leaking a lock per run and wedging the next run of that workstream at
 # "already building". `declare -F` covers the window before release_heavy is defined,
 # since work.sh can exit early (no acceptance test, unprovable base) with the trap armed.
-trap 'declare -F release_heavy >/dev/null 2>&1 && release_heavy; rmdir "$WSLOCK" 2>/dev/null || true' EXIT
+trap 'declare -F release_heavy >/dev/null 2>&1 && release_heavy; project_lock_release || true' EXIT
 ARMLOG="$LOG_DIR/$DATE-arm-$ID-$STAMP.out"
 # body = the detailed spec (everything after the first blank line)
 BODY="$(awk 'f{print} /^[[:space:]]*$/{f=1}' "$TASK")"
@@ -151,6 +189,37 @@ set_status(){
   sed -i "s#^status: .*#status: $st#" "$TASK" 2>/dev/null || true
 }
 
+terminal_status(){ # status note
+  local st="$1" note="${2:-}" rc
+  set_status "$st" "$note"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    log "canonical task transition to $st failed (rc=$rc) — refusing downstream notification/publication/cleanup"
+  fi
+  return "$rc"
+}
+
+terminal_side_effect_allowed(){ # stage
+  [ ! -f "$ROOT/state/PAUSE" ] || {
+    log "PAUSED after canonical terminal transition — suppressing ${1:-terminal side effect} without changing terminal outcome"
+    return 1
+  }
+}
+
+test_pause_after_terminal(){
+  [ "${RECURSION_TEST_PAUSE_AFTER_TERMINAL:-0}" != 1 ] || {
+    : > "$ROOT/state/PAUSE" 2>/dev/null \
+      || log "test failpoint could not create PAUSE after terminal transition"
+  }
+}
+
+terminal_ledger(){
+  local rc
+  if commit_state; then rc=0; else rc=$?; fi
+  [ "$rc" -eq 0 ] \
+    || log "post-terminal ledger commit deferred/failed (rc=$rc); canonical terminal state remains authoritative"
+  return 0
+}
+
 # Claim the task. taskctl refuses a task whose lease is still LIVE, which is the double-run
 # guard: on 2026-08-06 an arm auto-retried into a second hour-long run on the same task and the
 # orphan had to be killed by hand. Refusing here is cheaper than detecting it later.
@@ -171,8 +240,15 @@ claim_task(){
 # ledger writes (task status + BOARD) go to loop/auto, like every other loop write.
 # Under parallel loops several work.sh share this one $ROOT tree/index, so serialize the ledger
 # commit behind a short lock (spin <=30s, then proceed). Serial callers acquire it instantly.
-ledger_lock(){ local i=0; mkdir -p "$ROOT/state/.locks" 2>/dev/null || return 73; while ! mkdir "$ROOT/state/.locks/ledger.lock" 2>/dev/null; do i=$((i+1)); [ "$i" -ge 60 ] && { log "ledger lock contended — refusing unlocked commit"; return 73; }; sleep 0.5; done; return 0; }
-ledger_unlock(){ rmdir "$ROOT/state/.locks/ledger.lock" 2>/dev/null || true; }
+ledger_lock(){
+  mkdir -p "$ROOT/state/.locks" 2>/dev/null || return 73
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ROOT/state/.locks/ledger.lock" "$$" \
+    >>"$LOG" 2>&1 || { log "ledger lock contended — refusing unlocked commit"; return 73; }
+}
+ledger_unlock(){
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ROOT/state/.locks/ledger.lock" "$$" \
+    >>"$LOG" 2>&1 || log "ledger lock release failed closed"
+}
 commit_state(){
   pause_checkpoint "state commit" || return 75
   if git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -q '^loop/auto$'; then
@@ -186,9 +262,9 @@ commit_state(){
 }
 
 # escalation carries the context handle (Workstream + Pointer) — morning-brief.md format.
-escalate(){
+ESCALATION_PENDING=0; ESCALATION_REASON=""; ESCALATION_RC=""
+record_escalation_inbox(){
   local reason="$1" rc="${2:-}"
-  pause_checkpoint "escalation state transition" || return 75
   { echo
     echo "## build escalation — $ID  ($(date -u +%FT%TZ))"
     echo "**Workstream:** ${WORKSTREAM:-unknown}"
@@ -197,32 +273,78 @@ escalate(){
     [ -n "$rc" ] && echo "Acceptance: \`$ACCEPTANCE\` exited $rc"
     echo "Options: inspect the worktree/branch, fix the task or its acceptance, then \`recursion work $ID\` (or \`recursion requeue $ID\`)."
     echo "Close it with: \`recursion resolve $ID \"<what you decided>\"\`."
-  } >> state/INBOX.md
+  } >> state/INBOX.md || { log "durable escalation INBOX append failed"; return 74; }
+  ESCALATION_PENDING=1; ESCALATION_REASON="$reason"; ESCALATION_RC="$rc"
   log "escalated: $reason"
+}
+
+prepare_escalation(){
+  pause_checkpoint "escalation state transition" || return 75
+  record_escalation_inbox "$@"
+}
+
+deliver_prepared_escalation(){
+  [ "$ESCALATION_PENDING" = 1 ] || return 0
+  terminal_side_effect_allowed "escalation notification" || return 0
   # Lead the ping with a [id] tag: there is no reply<->item correlation, so referencing the tag
   # (in a reply or a `recursion resolve <id>`) is how a decision reaches the right escalation.
-  notify "🔔 [$ID] build blocked — $reason
+  notify "🔔 [$ID] build blocked — $ESCALATION_REASON
 Reply referencing [$ID], or on the box: recursion resolve $ID \"...\""
+  ESCALATION_PENDING=0
+}
+
+escalate(){
+  prepare_escalation "$@" || return $?
+  deliver_prepared_escalation
 }
 
 # Timeout and verifier failures carry a stable run identity. Record that identity before the
 # human-facing ask so reconciliation or a repeated caller cannot create duplicate escalations.
-escalate_once(){ # key reason
-  local key="$1" reason="$2" recorded
+prepare_escalation_once(){ # key reason [acceptance-rc]
+  local key="$1" reason="$2" acceptance_rc="${3:-}" recorded record_rc
+  pause_checkpoint "canonical escalation transition" || return 75
   if [ -x "$TASKCTL" ]; then
     recorded="$(RECURSION_ROOT="$ROOT" bash "$TASKCTL" esc-record "$key" "$reason" \
-      "${WORKSTREAM:-unknown}" "state/tasks/$ID.md" 2>>"$LOG" || true)"
-    case "$recorded" in DUP*) log "suppressed duplicate escalation $key ($recorded)"; return 0 ;; esac
+      "${WORKSTREAM:-unknown}" "state/tasks/$ID.md" 2>>"$LOG")"; record_rc=$?
+    [ "$record_rc" -eq 0 ] \
+      || { log "canonical escalation record failed key=$key rc=$record_rc"; return "$record_rc"; }
+    case "$recorded" in
+      DUP*) log "suppressed duplicate escalation $key ($recorded)"; ESCALATION_PENDING=0; return 0 ;;
+      NEW\ *) : ;;
+      *) log "canonical escalation record returned an invalid acknowledgement: ${recorded:-empty}"; return 74 ;;
+    esac
+  elif [ -n "${PILOT_ID:-}" ]; then
+    log "pilot escalation requires taskctl canonical recording"
+    return 74
   fi
-  escalate "$reason"
+  record_escalation_inbox "$reason" "$acceptance_rc"
+}
+
+escalate_once(){ # key reason
+  prepare_escalation_once "$@" || return $?
+  deliver_prepared_escalation
+}
+
+complete_terminal_escalation(){ # status reason [key] [acceptance-rc]
+  local status="$1" reason="$2" key="${3:-}" acceptance_rc="${4:-}" rc
+  if [ -n "$key" ]; then
+    prepare_escalation_once "$key" "$reason" "$acceptance_rc" || return $?
+  else
+    prepare_escalation "$reason" "$acceptance_rc" || return $?
+  fi
+  terminal_status "$status" "$reason"; rc=$?
+  [ "$rc" -eq 0 ] || return "$rc"
+  test_pause_after_terminal
+  terminal_ledger
+  deliver_prepared_escalation
+  return 0
 }
 
 # --- acceptance is the contract: no test -> no autonomy (delegation-design.md) ----------
 if [ -z "$ACCEPTANCE" ]; then
   board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" blocked "no acceptance test"
-  set_status escalated
-  escalate "no machine-checkable acceptance test (autonomy requires one)"
-  commit_state
+  complete_terminal_escalation escalated \
+    "no machine-checkable acceptance test (autonomy requires one)" || exit $?
   exit 0
 fi
 
@@ -233,9 +355,8 @@ if [ -x "$ROOT/scripts/validate-gate.py" ]; then
   if ! GATE_CONTRACT="$(python3 "$ROOT/scripts/validate-gate.py" --acceptance "$ACCEPTANCE" \
       --allowed-paths "${ALLOWED_PATHS:-$WORKDIR}" --gate-files "$GATE_FILES" --repo "$REPO_DIR" 2>>"$LOG")"; then
     board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "invalid acceptance gate"
-    set_status escalated
-    escalate "invalid or structurally vacuous acceptance gate; no worker was launched"
-    commit_state
+    complete_terminal_escalation escalated \
+      "invalid or structurally vacuous acceptance gate; no worker was launched" || exit $?
     exit 0
   fi
 elif [ "$STRICT_PHASE5" = 1 ]; then
@@ -247,9 +368,12 @@ mk_worktree(){
   local wt="$REPO_DIR/.worktrees/$ID" base def
   # per-repo worktree lock (parallel-loops.md): serialize git worktree ops so two workstreams
   # sharing a repo do not race git ref/index locks. Cross-repo streams never contend.
-  local rk wtlock wi=0; rk="$(printf '%s' "$REPO_DIR" | md5sum | cut -c1-12)"
+  local rk wtlock; rk="$(printf '%s' "$REPO_DIR" | md5sum | cut -c1-12)"
   wtlock="$ROOT/state/.locks/wt-$rk.lock"; mkdir -p "$ROOT/state/.locks" 2>/dev/null || true
-  while ! mkdir "$wtlock" 2>/dev/null; do wi=$((wi+1)); [ "$wi" -ge 120 ] && break; sleep 0.5; done
+  if ! python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$wtlock" "$$" >>"$LOG" 2>&1; then
+    log "worktree lock contended — refusing unlocked worktree mutation"
+    return 73
+  fi
   git -C "$REPO_DIR" worktree remove --force "$wt" 2>/dev/null || true
   rm -rf "$wt" 2>/dev/null || true
   git -C "$REPO_DIR" worktree prune 2>/dev/null || true
@@ -270,20 +394,66 @@ mk_worktree(){
   elif git -C "$REPO_DIR" rev-parse --verify "$def" >/dev/null 2>&1; then base="$def"
   else base="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"; fi
   git -C "$REPO_DIR" worktree add -B "$BRANCH" "$wt" "$base" >>"$LOG" 2>&1; local addrc=$?
-  rmdir "$wtlock" 2>/dev/null || true
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$wtlock" "$$" >>"$LOG" 2>&1 \
+    || { log "worktree lock release failed closed"; return 74; }
   [ "$addrc" -eq 0 ] || return 1
   # seed gitignored data the tests need but the worktree did not inherit (see SEED note above).
-  local p
+  local p source repo_real; repo_real="$(realpath -e "$REPO_DIR")" || return 1
   for p in $SEED; do
-    if [ -e "$REPO_DIR/$p" ]; then
-      mkdir -p "$wt/$(dirname "$p")"
-      cp -a "$REPO_DIR/$p" "$wt/$p"
-      log "seeded $p into worktree ($(find "$wt/$p" -type f 2>/dev/null | wc -l | tr -d ' ') files)"
-    else
-      log "WARN seed path missing in repo: $REPO_DIR/$p (task may fail on absent data)"
+    case "$p" in ''|/*|*..*) log "unsafe declared seed path: $p"; return 1 ;; esac
+    source="$(realpath -e "$REPO_DIR/$p" 2>/dev/null || true)"
+    case "$source" in "$repo_real"/*) ;; *) log "declared seed is absent or escapes repo: $p"; return 1 ;; esac
+    if [ -L "$source" ] || find "$source" -type l -print -quit 2>/dev/null | grep -q .; then
+      log "declared seed contains a symlink and cannot be made an immutable oracle: $p"; return 1
     fi
+    mkdir -p "$wt/$(dirname "$p")"
+    cp -a -- "$source" "$wt/$p"
+    log "seeded $p into worktree ($(find "$wt/$p" -type f 2>/dev/null | wc -l | tr -d ' ') files)"
   done
   printf '%s\n' "$wt"
+}
+
+# Hash path, type, mode, and bytes for every declared seed. This controller-owned digest catches
+# a logical/test-mode bypass and any future mount regression in addition to the read-only bind.
+seed_digest(){
+  local wt="$1"
+  [ -n "$SEED" ] || { printf '%s\n' none; return 0; }
+  python3 - "$wt" $SEED <<'PY'
+import hashlib, os, pathlib, stat, sys
+root = pathlib.Path(sys.argv[1]).resolve(strict=True)
+h = hashlib.sha256()
+for raw in sorted(sys.argv[2:]):
+    rel = pathlib.PurePosixPath(raw)
+    if rel.is_absolute() or ".." in rel.parts:
+        raise SystemExit("unsafe seed path")
+    start = root.joinpath(*rel.parts)
+    if not start.exists() or start.is_symlink() or root not in start.resolve().parents:
+        raise SystemExit("seed missing, symlinked, or escaped")
+    paths = [start]
+    if start.is_dir():
+        paths.extend(sorted(start.rglob("*"), key=lambda p: p.as_posix()))
+    for path in paths:
+        info = path.lstat()
+        if stat.S_ISLNK(info.st_mode):
+            raise SystemExit("seed symlink refused")
+        relative = path.relative_to(root).as_posix().encode()
+        kind = b"d" if path.is_dir() else b"f"
+        h.update(len(relative).to_bytes(4, "big") + relative + kind)
+        h.update(stat.S_IMODE(info.st_mode).to_bytes(4, "big"))
+        if path.is_file():
+            with path.open("rb") as src:
+                for chunk in iter(lambda: src.read(1024 * 1024), b""):
+                    h.update(chunk)
+print(h.hexdigest())
+PY
+}
+
+verify_seed_integrity(){
+  [ -n "$SEED" ] || return 0
+  local observed
+  observed="$(seed_digest "$1")" || { SCOPE_FAIL="declared seed integrity could not be measured"; return 1; }
+  [ "$observed" = "$SEED_DIGEST_BEFORE" ] \
+    || { SCOPE_FAIL="worker/gate mutated a declared read-only seed or oracle"; return 1; }
 }
 
 # --- the WORKER ENVELOPE (CONTROL_PLANE.md role 4) ---------------------------------------
@@ -307,6 +477,8 @@ if [ "$STRICT_PHASE5" = 1 ]; then
   case "$NETWORK_POLICY" in provider-only|none) ;; *) log "invalid network policy: $NETWORK_POLICY"; exit 2 ;; esac
   [ "$VERIFICATION_POLICY" = independent ] \
     || { log "Phase 5 generated work requires independent verification"; exit 2; }
+  [ "$ENGINE" != hermes ] \
+    || { log "Phase 5 metered workers are refused until usage is controller-attested"; exit 93; }
   [ -n "$MODEL_ALIAS" ] && [ -n "$VERIFIER_MODEL_ALIAS" ] && [ "$MODEL_ALIAS" != "$VERIFIER_MODEL_ALIAS" ] \
     || { log "implementer and verifier need distinct human-owned model aliases"; exit 2; }
   [ -x "$ROOT/scripts/resolve-model-alias.py" ] || { log "model alias resolver is missing"; exit 95; }
@@ -415,12 +587,27 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
 
   [ "$ENGINE" != hermes ] || [ "${RECURSION_ALLOW_METERED:-0}" = "1" ] || return 93
   [ -x "$ROOT/scripts/worker-sandbox.sh" ] || return 95
+  LAST_USAGE_FILE="$usage"
+  if [ "$ENGINE" = claude ]; then
+    # Claude Code flat-subscription arms have no metered usage receipt. Record that policy fact
+    # explicitly outside the worker's mount namespace; an absent record remains a hard failure.
+    mkdir -p "$(dirname "$usage")"
+    ( umask 077; printf '%s\n' \
+      '{"schema_version":1,"provider":"anthropic-claude-code","billing_basis":"flat-subscription","tokens":0,"cost_usd":0,"evidence_source":"controller-engine-policy-v1"}' \
+      > "$usage" ) || return 98
+  fi
   local -a cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine "$ENGINE" --worktree "$wt"
     --prompt "$prompt" --role "$role" --network-policy "$NETWORK_POLICY")
   [ -n "$resolved_model" ] && cmd+=(--model "$resolved_model")
   [ "$ENGINE" != hermes ] || cmd+=(--usage-file "$usage")
   [ "$readonly" != 1 ] || cmd+=(--read-only-worktree)
   [ -z "$evidence_dir" ] || cmd+=(--evidence-dir "$evidence_dir")
+  local protected_path seen_paths=" "
+  for protected_path in $SEED $GATE_FILES; do
+    case "$seen_paths" in *" $protected_path "*) continue ;; esac
+    seen_paths+="$protected_path "
+    [ ! -e "$wt/$protected_path" ] || cmd+=(--read-only-path "$protected_path")
+  done
 
   pause_checkpoint "worker launch" || return 75
   local worker_pgid rc now_epoch deadline_epoch heartbeat_epoch log_path
@@ -462,12 +649,22 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
         >>"$LOG" 2>&1 || true
       return 97
     fi
-    if [ "$STRICT_PHASE5" = 1 ] && [ "$now_epoch" -ge "$heartbeat_epoch" ]; then
+    if [ "$now_epoch" -ge "$heartbeat_epoch" ]; then
       heartbeat_epoch="$(( now_epoch + ${RECURSION_WORKER_HEARTBEAT_S:-5} ))"
-      python3 "$ROOT/scripts/worker-evidence.py" heartbeat "$LAST_RUN_EVIDENCE" "$deadline_epoch" \
-        >>"$LOG" 2>&1 || true
-      [ "$role" != implementer ] || RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" \
-        bash "$TASKCTL" heartbeat "$ID" >>"$LOG" 2>&1 || true
+      if ! window_checkpoint "$role execution"; then
+        log "pilot-window authority expired with $role process group $worker_pgid in flight"
+        terminate_worker_group "$worker_pgid" || true
+        wait "$worker_pgid" 2>/dev/null || true
+        [ "$STRICT_PHASE5" != 1 ] || python3 "$ROOT/scripts/worker-evidence.py" finish \
+          "$LAST_RUN_EVIDENCE" cancelled window-authority-revoked 75 >>"$LOG" 2>&1 || true
+        return 75
+      fi
+      if [ "$STRICT_PHASE5" = 1 ]; then
+        python3 "$ROOT/scripts/worker-evidence.py" heartbeat "$LAST_RUN_EVIDENCE" "$deadline_epoch" \
+          >>"$LOG" 2>&1 || true
+        [ "$role" != implementer ] || RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" \
+          bash "$TASKCTL" heartbeat "$ID" >>"$LOG" 2>&1 || true
+      fi
     fi
     sleep 0.1
   done
@@ -493,15 +690,18 @@ EXACT BASE COMMIT: $BASE_COMMIT" "$RESOLVED_MODEL" "${MODEL_ALIAS:-legacy}" "$AR
 # Two rules, deny-first:
 #   PROTECTED  never writable, regardless of allowed_paths (tests, fixtures, control plane)
 #   ALLOWED    everything else must sit under the task's declared allowed_paths
-PROTECTED_RE='(^|/)([^/]*\.test\.(cjs|js|mjs)$|scripts/|state/|CONTROL_PLANE\.md$|ANCHOR\.md$|CLAUDE\.md$|\.env|\.github/)|(^|/)(render/data|fixtures|golden|oracle)/|(^|/)[^/]*baseline[^/]*$'
+PROTECTED_RE='(^|/)([^/]*\.test\.(cjs|js|mjs)$|scripts/|state/|CONTROL_PLANE\.md$|ANCHOR\.md$|CLAUDE\.md$|\.env|\.github/)|(^|/)(render/(data|tools)|deploy/systemd|fixtures|golden|oracle)/|(^|/)[^/]*baseline[^/]*$'
 scope_check(){
   local wt="$1" changed outside protected
+  if [ -n "$SEED_DIGEST_BEFORE" ]; then
+    verify_seed_integrity "$wt" || return 1
+  fi
   if [ -n "$BASE_COMMIT" ] && [ -x "$ROOT/scripts/git-scope.py" ]; then
     local scope_id="${LAST_RUN_ID:-$ID-scope-$STAMP-$$}" err rc
     mkdir -p "$ROOT/state/runs"; LAST_SCOPE_FILE="$ROOT/state/runs/$scope_id-scope.json"
     err="$LAST_SCOPE_FILE.err"
     python3 "$ROOT/scripts/git-scope.py" --repo "$wt" --base "$BASE_COMMIT" \
-      --allowed-paths "$ALLOWED_PATHS" --protected-extra "$GATE_FILES" \
+      --allowed-paths "$ALLOWED_PATHS" --protected-extra "$GATE_FILES $SEED" \
       --ignore .recursion-result.json --check >"$LAST_SCOPE_FILE" 2>"$err"; rc=$?
     if [ "$rc" -ne 0 ]; then
       SCOPE_FAIL="$(cat "$err" 2>/dev/null)"; [ -n "$SCOPE_FAIL" ] || SCOPE_FAIL="complete Git scope inspection failed (rc=$rc)"
@@ -565,7 +765,7 @@ phase5_record_run(){ # status outcome rc [commit]
   local -a args=(finish "$LAST_RUN_EVIDENCE" "$status" "$outcome" "$rc")
   [ -z "$result_file" ] || args+=(--result-file "$result_file")
   [ -z "$LAST_SCOPE_FILE" ] || args+=(--scope-file "$LAST_SCOPE_FILE")
-  [ ! -f "$ARM_USAGE" ] || args+=(--usage-file "$ARM_USAGE")
+  [ -z "$LAST_USAGE_FILE" ] || [ ! -f "$LAST_USAGE_FILE" ] || args+=(--usage-file "$LAST_USAGE_FILE")
   [ -z "$commit_oid" ] || args+=(--commit-oid "$commit_oid")
   python3 "$ROOT/scripts/worker-evidence.py" "${args[@]}" >>"$LOG" 2>&1
 }
@@ -604,11 +804,10 @@ Phase-5 evidence contract: $EVIDENCE_CONTRACT" 2>>"$LOG" || return 1
 }
 
 phase5_reject(){ # short board note, evidence-backed reason
-  local note="$1" reason="$2"
+  local note="$1" reason="$2" escalation_key
   board finish "$ID" blocked - "$note"
-  set_status escalated
-  escalate "$reason"
-  commit_state
+  escalation_key="phase5-reject:$ID:${CANDIDATE_OID:-${IMPLEMENTER_RUN_ID:-none}}:$note"
+  complete_terminal_escalation escalated "$reason" "$escalation_key" || exit $?
   log "$reason; worktree retained for inspection: ${WT:-unknown}"
   exit 0
 }
@@ -623,29 +822,42 @@ GATE_CLASS="$(field gate_class)"; GATE_CLASS="${GATE_CLASS:-light}"
 HEAVY_HELD=0
 acquire_heavy(){
   [ "$GATE_CLASS" = "heavy" ] || return 0
-  [ -x "$ROOT/scripts/capacity.sh" ] || return 0
+  [ -x "$ROOT/scripts/capacity.sh" ] \
+    || { log "heavy-gate capacity controller is unavailable — deferring without running unlocked"; return 75; }
   local waited=0 out
   while :; do
     pause_checkpoint "heavy-gate wait" || return 75
-    out="$(RECURSION_ROOT="$ROOT" RECURSION_HEAVY_TAG="$ID" bash "$ROOT/scripts/capacity.sh" heavy acquire "$ID" 2>&1)"
+    out="$(RECURSION_ROOT="$ROOT" RECURSION_HEAVY_TAG="$ID" RECURSION_HEAVY_PID="$$" \
+      bash "$ROOT/scripts/capacity.sh" heavy acquire "$ID" 2>&1)"
     case "$out" in ACQUIRED*) HEAVY_HELD=1; log "heavy-gate lock acquired after ${waited}s"; return 0 ;; esac
     waited=$((waited+10))
     if [ "$waited" -ge "${RECURSION_HEAVY_WAIT_S:-1800}" ]; then
-      log "heavy-gate lock still held after ${waited}s ($out) — running the gate anyway rather than losing the build"
-      return 0
+      log "heavy-gate lock still held after ${waited}s ($out) — deferring without running unlocked"
+      return 75
     fi
     sleep 10
   done
 }
-release_heavy(){ [ "$HEAVY_HELD" = "1" ] && { RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/capacity.sh" heavy release >/dev/null 2>&1; HEAVY_HELD=0; }; return 0; }
+release_heavy(){ [ "$HEAVY_HELD" = "1" ] && { RECURSION_ROOT="$ROOT" RECURSION_HEAVY_PID="$$" bash "$ROOT/scripts/capacity.sh" heavy release >/dev/null 2>&1; HEAVY_HELD=0; }; return 0; }
 
 # --- the gate: run the acceptance command in the app dir; its exit code is the verdict. --
 verify(){
   pause_checkpoint "acceptance gate" || return 75
-  acquire_heavy
-  local wt="$1" adir="$1/$WORKDIR"
-  [ -d "$adir" ] || adir="$wt"
-  ( cd "$adir" && bash -c "$ACCEPTANCE" ) >>"$ARMLOG" 2>&1
+  verify_seed_integrity "$1" || { log "$SCOPE_FAIL"; return 99; }
+  acquire_heavy || return $?
+  local wt="$1" gate_workdir="$WORKDIR" rc protected_path seen_paths=" "
+  [ -d "$wt/$gate_workdir" ] || gate_workdir="."
+  local -a gate_cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine gate --role gate
+    --worktree "$wt" --workdir "$gate_workdir" --network-policy none
+    --gate-command "$ACCEPTANCE")
+  for protected_path in $SEED $GATE_FILES; do
+    case "$seen_paths" in *" $protected_path "*) continue ;; esac
+    seen_paths+="$protected_path "
+    gate_cmd+=(--read-only-path "$protected_path")
+  done
+  if "${gate_cmd[@]}" >>"$ARMLOG" 2>&1; then rc=0; else rc=$?; fi
+  verify_seed_integrity "$wt" || { log "$SCOPE_FAIL"; return 99; }
+  return "$rc"
 }
 
 phase5_record_gate(){ # exit-code
@@ -654,11 +866,21 @@ phase5_record_gate(){ # exit-code
     "$ACCEPTANCE" "$1" "${ARMLOG#$ROOT/}" >>"$LOG" 2>&1
 }
 
+phase5_require_gate_record(){ # exit-code
+  local gate_rc="$1" evidence_rc
+  phase5_record_gate "$gate_rc"; evidence_rc=$?
+  if [ "$evidence_rc" -ne 0 ]; then
+    log "machine-gate evidence could not be committed (rc=$evidence_rc) — refusing retry/pass/publication"
+  fi
+  return "$evidence_rc"
+}
+
 phase5_assert_gate_commit(){
   [ "$STRICT_PHASE5" = 1 ] || return 0
   [ "$(git -C "$1" rev-parse HEAD 2>/dev/null)" = "$CANDIDATE_OID" ] \
     && git -C "$1" diff --quiet --ignore-submodules -- \
-    && git -C "$1" diff --cached --quiet --ignore-submodules --
+    && git -C "$1" diff --cached --quiet --ignore-submodules -- \
+    && verify_seed_integrity "$1"
 }
 
 run_independent_verifier(){
@@ -707,8 +929,11 @@ Explicit non-goals: ${NON_GOALS:-none}."
     return 99
   fi
   mv -f "$evidence_dir/validated-verdict.json" "$verdict"
-  python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" succeeded verified 0 \
-    --result-file "$verdict" --commit-oid "$CANDIDATE_OID" >>"$LOG" 2>&1 || return 98
+  local -a finish_args=(finish "$LAST_RUN_EVIDENCE" succeeded verified 0
+    --result-file "$verdict" --commit-oid "$CANDIDATE_OID")
+  [ -z "$LAST_USAGE_FILE" ] || [ ! -f "$LAST_USAGE_FILE" ] \
+    || finish_args+=(--usage-file "$LAST_USAGE_FILE")
+  python3 "$ROOT/scripts/worker-evidence.py" "${finish_args[@]}" >>"$LOG" 2>&1 || return 98
   python3 "$ROOT/scripts/worker-evidence.py" verify "$LAST_RUN_EVIDENCE" "$CANDIDATE_OID" \
     "$impl_run" "$verdict" >>"$LOG" 2>&1 || return 98
   python3 "$ROOT/scripts/worker-evidence.py" link-verifier "$impl_evidence" "$VERIFIER_RUN_ID" \
@@ -724,10 +949,16 @@ release_heavy   # the gate is over; do not hold the box through publish/merge
 # --- after a GREEN build: optionally PUBLISH the canonical review branch. -----------------
 # RECURSION_ALLOW_PUSH remains human-set and off by default. publish.sh accepts only a direct
 # loop/work/<task-id> source/destination and has no default-branch merge path.
-integrate_remote(){
+REMOTE_INTEGRATION_ADMITTED=0
+admit_remote_integration(){
+  REMOTE_INTEGRATION_ADMITTED=0
   [ -z "${PILOT_ID:-}" ] || return 0  # Phase 6 owns exact-commit pilot publication.
   [ "${RECURSION_ALLOW_PUSH:-0}" = "1" ] || return 0
-  pause_checkpoint "review-branch publication" || return 75
+  pause_checkpoint "review-branch publication admission" || return 75
+  REMOTE_INTEGRATION_ADMITTED=1
+}
+integrate_remote(){
+  [ "$REMOTE_INTEGRATION_ADMITTED" = 1 ] || return 0
   local -a args=(--branch "$BRANCH" --repo "$REPO_DIR")
   [ -z "$SSHKEY" ] || args+=(--key "$SSHKEY")
   if RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/publish.sh" "${args[@]}" >>"$LOG" 2>&1; then
@@ -739,7 +970,7 @@ integrate_remote(){
 }
 
 # ============================ pipeline ============================
-pause_checkpoint "board transition" || exit 0
+pause_checkpoint "board transition" || exit 75
 board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" running "${GOAL:0:40}"
 claim_task; claim_rc=$?
 [ "$claim_rc" -eq 0 ] || exit "$claim_rc"
@@ -772,34 +1003,34 @@ require_fresh_base(){
 
 if ! require_fresh_base; then
   board finish "$ID" blocked - "stale/unprovable base"
-  set_status blocked
-  escalate "$FRESH_WHY"
-  commit_state
+  complete_terminal_escalation blocked "$FRESH_WHY" || exit $?
   exit 0
 fi
 
 if ! WT="$(mk_worktree)"; then
   board finish "$ID" blocked - "worktree create failed"
-  set_status escalated; escalate "could not create git worktree $BRANCH"; commit_state
+  complete_terminal_escalation escalated "could not create git worktree $BRANCH" || exit $?
   exit 0
 fi
 log "worktree: $WT (branch $BRANCH)"
 BASE_COMMIT="$(git -C "$WT" rev-parse HEAD)"
 [ -n "$BASE_COMMIT" ] || phase5_reject "base evidence missing" "exact worker base commit could not be recorded"
+if ! SEED_DIGEST_BEFORE="$(seed_digest "$WT")"; then
+  phase5_reject "seed evidence missing" "declared seed/oracle could not be checksummed before worker launch"
+fi
 
 # --- EXECUTE (attempt 1) --------------------------------------------------------------
 if run_arm_supervised "$WT" 1; then arc=0; else arc=$?; fi
 if [ "$arc" -ne 0 ]; then
   if [ "$arc" = 75 ]; then
-    log "PAUSE cancelled $ID; worktree retained and no gate/state/publication step ran"
-    exit 0
+    log "execution authority cancelled $ID; worktree retained and no gate/state/publication step ran"
+    exit 75
   fi
   if [ "$arc" = 97 ]; then
     board finish "$ID" blocked - "worker timeout"
-    set_status blocked
-    escalate_once "worker-timeout:$ID:$IMPLEMENTER_RUN_ID" \
-      "WORKER TIMEOUT — $ID exceeded ${DEADLINE_SECONDS}s; process group terminated, lease cleared, inspect $LAST_RUN_EVIDENCE"
-    commit_state
+    complete_terminal_escalation blocked \
+      "WORKER TIMEOUT — $ID exceeded ${DEADLINE_SECONDS}s; process group terminated, lease cleared, inspect $LAST_RUN_EVIDENCE" \
+      "worker-timeout:$ID:$IMPLEMENTER_RUN_ID" || exit $?
     log "worker timeout retained worktree for inspection: $WT"
     exit 0
   fi
@@ -814,7 +1045,7 @@ if [ "$arc" -ne 0 ]; then
     *)  msg="arm dispatch error (code $arc)" ;;
   esac
   board finish "$ID" blocked - "$msg"
-  set_status escalated; escalate "$msg"; commit_state
+  complete_terminal_escalation escalated "$msg" || exit $?
   git -C "$REPO_DIR" worktree remove --force "$WT" 2>/dev/null || true
   exit 0
 fi
@@ -823,13 +1054,12 @@ fi
 # Order is the point: a tampered diff that reaches a green gate has already been declared a
 # pass by the time a post-hoc check runs.
 SCOPE_FAIL=""
-pause_checkpoint "scope gate" || exit 0
+pause_checkpoint "scope gate" || exit 75
 if ! scope_check "$WT"; then
   board finish "$ID" blocked - "scope violation"
-  set_status escalated
-  escalate "SCOPE VIOLATION — the arm went outside its boundary, so the acceptance result is not trusted and was not run:
-$SCOPE_FAIL"
-  commit_state
+  complete_terminal_escalation escalated \
+    "SCOPE VIOLATION — the arm went outside its boundary, so the acceptance result is not trusted and was not run:
+$SCOPE_FAIL" || exit $?
   log "SCOPE VIOLATION on $ID — left worktree for inspection: $WT"
   exit 0
 fi
@@ -841,9 +1071,8 @@ fi
 # A deliberate, reasoned block is a GOOD outcome (CLAUDE.md: escalate, don't guess). Record it
 # as blocked with the arm's own question rather than running a gate that is certain to fail.
 if read_result "$WT" && [ "$RESULT_STATUS" = "blocked" ]; then
-  pause_checkpoint "blocked-result transition" || exit 0
+  pause_checkpoint "blocked-result transition" || exit 75
   board finish "$ID" blocked - "arm blocked on ambiguity"
-  set_status blocked
   # Record the ask as an ANSWERABLE item, not just a notification. assist.sh open returns 3 when
   # the arm is re-asking a question a human already answered — that is the answer failing to
   # reach the arm, and it needs a different escalation than "the arm has a question", because
@@ -854,15 +1083,15 @@ if read_result "$WT" && [ "$RESULT_STATUS" = "blocked" ]; then
       "${RESULT_BLOCKER:-<no question given>}" >>"$LOG" 2>&1 || ASSIST_RC=$?
   fi
   if [ "$ASSIST_RC" = "3" ]; then
-    escalate "the arm re-blocked on a question that was ALREADY ANSWERED — the answer is not reaching it:
+    blocked_reason="the arm re-blocked on a question that was ALREADY ANSWERED — the answer is not reaching it:
 ${RESULT_BLOCKER:-<no question given>}"
   else
-  escalate "the arm STOPPED on ambiguity instead of guessing (this is correct behaviour):
+    blocked_reason="the arm STOPPED on ambiguity instead of guessing (this is correct behaviour):
 ${RESULT_BLOCKER:-<no question given>}
 ${RESULT_SUMMARY:+context: $RESULT_SUMMARY}
 Answer it with: recursion assist $ID \"...\"  (that requeues this task with your answer attached)"
   fi
-  commit_state
+  complete_terminal_escalation blocked "$blocked_reason" || exit $?
   log "$ID: arm blocked on ambiguity — escalated with its question"
   exit 0
 fi
@@ -875,14 +1104,16 @@ fi
 PASS=0; rc=0
 if verify "$WT"; then
   if ! phase5_assert_gate_commit "$WT"; then
-    phase5_record_gate 99 || true
+    phase5_require_gate_record 99 || exit $?
     phase5_reject "gate mutated candidate" \
       "MACHINE GATE MUTATED tracked candidate state; exact commit $CANDIDATE_OID was not certified"
   fi
-  PASS=1; rc=0; phase5_record_gate 0 || true
+  phase5_require_gate_record 0 || exit $?
+  PASS=1; rc=0
 else
   rc=$?
-  phase5_record_gate "$rc" || true
+  [ "$rc" -ne 75 ] || { log "acceptance gate deferred before execution; no gate evidence or later step ran"; exit 75; }
+  phase5_require_gate_record "$rc" || exit $?
   log "acceptance FAILED (exit $rc), attempt 1"
   # A deliberate NO-OP (rc=2 no-progress with NO implementation change) will not benefit from a
   # retry — the arm chose not to ship (0x68, overlay-0x6c both did this). Retry only a genuine
@@ -891,13 +1122,12 @@ else
   if [ "$ENGINE" != "none" ] && { [ "$rc" != "2" ] || [ "${impl_changed:-0}" -gt 0 ]; }; then
     log "retry once (design: retry once then escalate)"
     if run_arm_supervised "$WT" 2; then retry_arc=0; else retry_arc=$?; fi
-    [ "$retry_arc" != 75 ] || { log "PAUSE cancelled retry; no later step ran"; exit 0; }
+    [ "$retry_arc" != 75 ] || { log "execution authority cancelled retry; no later step ran"; exit 75; }
     if [ "$retry_arc" = 97 ]; then
       board finish "$ID" blocked - "worker timeout on retry"
-      set_status blocked
-      escalate_once "worker-timeout:$ID:$IMPLEMENTER_RUN_ID" \
-        "WORKER TIMEOUT — $ID retry exceeded ${DEADLINE_SECONDS}s; process group terminated, lease cleared, inspect $LAST_RUN_EVIDENCE"
-      commit_state
+      complete_terminal_escalation blocked \
+        "WORKER TIMEOUT — $ID retry exceeded ${DEADLINE_SECONDS}s; process group terminated, lease cleared, inspect $LAST_RUN_EVIDENCE" \
+        "worker-timeout:$ID:$IMPLEMENTER_RUN_ID" || exit $?
       exit 0
     fi
     if [ "$retry_arc" = 0 ]; then
@@ -916,12 +1146,17 @@ else
       fi
       if verify "$WT"; then
         if ! phase5_assert_gate_commit "$WT"; then
-          phase5_record_gate 99 || true
+          phase5_require_gate_record 99 || exit $?
           phase5_reject "retry gate mutated candidate" \
             "MACHINE GATE MUTATED tracked retry state; exact commit $CANDIDATE_OID was not certified"
         fi
-        PASS=1; rc=0; phase5_record_gate 0 || true
-      else rc=$?; phase5_record_gate "$rc" || true; fi
+        phase5_require_gate_record 0 || exit $?
+        PASS=1; rc=0
+      else
+        rc=$?
+        [ "$rc" -ne 75 ] || { log "retry acceptance gate deferred before execution; no gate evidence or later step ran"; exit 75; }
+        phase5_require_gate_record "$rc" || exit $?
+      fi
     else
       rc="$retry_arc"
     fi
@@ -932,15 +1167,14 @@ fi
 
 # --- INTEGRATE ------------------------------------------------------------------------
 if [ "$PASS" = "1" ]; then
-  pause_checkpoint "post-gate integration" || exit 0
+  pause_checkpoint "post-gate integration" || exit 75
   # Re-check scope AFTER the retry: attempt 2 gets its own chance to wander, and a green gate
   # on an out-of-scope diff is exactly the outcome the scope gate exists to refuse.
   if ! scope_check "$WT"; then
     board finish "$ID" blocked - "scope violation (post-retry)"
-    set_status escalated
-    escalate "SCOPE VIOLATION after retry — the gate went GREEN but the diff left its boundary, so the pass is not accepted:
-$SCOPE_FAIL"
-    commit_state
+    complete_terminal_escalation escalated \
+      "SCOPE VIOLATION after retry — the gate went GREEN but the diff left its boundary, so the pass is not accepted:
+$SCOPE_FAIL" || exit $?
     log "SCOPE VIOLATION (post-gate) on $ID — not committed. Worktree: $WT"
     exit 0
   fi
@@ -975,7 +1209,7 @@ $SCOPE_FAIL"
     if git -C "$WT" diff --cached --quiet 2>/dev/null; then
       NOTE="passed (no file changes)"; log "acceptance green; nothing to commit (verify-only)"
     else
-      pause_checkpoint "build-output commit" || exit 0
+      pause_checkpoint "build-output commit" || exit 75
       git -C "$WT" -c user.name="recursion-loop" -c user.email="loop@recursion.local" \
         commit -q -m "build($ID): $GOAL
 
@@ -984,24 +1218,33 @@ engine: $ENGINE" 2>>"$LOG" || true
       NOTE="passed -> $BRANCH"; COMMITTED=1; log "committed build output to $BRANCH"
     fi
   fi
+  pause_checkpoint "terminal completion admission" || exit 75
+  [ "$COMMITTED" != "1" ] || admit_remote_integration || exit $?
   if [ -f "$ARM_USAGE" ]; then board finish "$ID" done "$ARM_USAGE" "$NOTE"; else board finish "$ID" done - "$NOTE"; fi
-  set_status passed; commit_state
-  notify "✅ Recursion build passed: $ID -> $BRANCH (acceptance green). Review/merge at your pace."
-  [ "$COMMITTED" = "1" ] && integrate_remote   # canonical review publication only; off by default
+  terminal_status passed "$NOTE" || exit $?
+  test_pause_after_terminal
+  terminal_ledger
+  if terminal_side_effect_allowed "success notification"; then
+    notify "✅ Recursion build passed: $ID -> $BRANCH (acceptance green). Review/merge at your pace."
+  fi
+  if [ "$COMMITTED" = "1" ] && terminal_side_effect_allowed "review-branch publication"; then
+    integrate_remote   # publication authority was admitted before the terminal transition
+  fi
   # close the plan->build->done loop: a passed planned task flips its roadmap item [~] -> [x].
   if [ -n "$PLANNED_FROM" ]; then
-    pause_checkpoint "roadmap transition" || exit 0
-    if RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/plan.sh" --complete "$PLANNED_FROM" >>"$LOG" 2>&1; then
+    if terminal_side_effect_allowed "roadmap transition" \
+       && RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/plan.sh" --complete "$PLANNED_FROM" >>"$LOG" 2>&1; then
       log "roadmap $PLANNED_FROM -> done"
     else
       log "roadmap completion refused for $PLANNED_FROM; canonical row was not advanced"
     fi
   fi
-  pause_checkpoint "worktree removal" || exit 0
-  git -C "$REPO_DIR" worktree remove --force "$WT" 2>/dev/null || true   # branch persists for review
+  if terminal_side_effect_allowed "worktree removal"; then
+    git -C "$REPO_DIR" worktree remove --force "$WT" 2>/dev/null || true   # branch persists for review
+  fi
   log "DONE $ID passed"
 else
   board finish "$ID" blocked - "acceptance failed (exit $rc)"
-  set_status failed; escalate "acceptance test failed after retry" "$rc"; commit_state
+  complete_terminal_escalation failed "acceptance test failed after retry" "" "$rc" || exit $?
   log "left worktree for inspection: $WT (branch $BRANCH)"
 fi

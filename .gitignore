@@ -9,6 +9,7 @@ __pycache__/
 loop/logs/
 .DS_Store
 .claude/
+.tmp/
 
 # internal runtime dotfiles (BOARD.md itself IS tracked; its sidecars are not)
 state/.board.tsv
@@ -60,6 +61,8 @@ state/notification-recovery-events.jsonl
 state/transport-evidence/
 state/reports/
 state/event-archive/
+state/jsonl-quarantine/
+state/jsonl-index/
 state/instructions/
 
 # Escalation index (taskctl). Same class as state/events.jsonl above: appended by every cycle

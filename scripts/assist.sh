@@ -131,15 +131,27 @@ answer)
   ST="$(f status "$A")"
   [ "$ST" = "open" ] || { echo "assist: $ID is status=$ST, not open" >&2; exit 4; }
 
-  python3 - "$A" "$TEXT" "$(now)" "${RECURSION_ANSWERED_BY:-lucas}" <<'PY'
-import io,sys
+  python3 - "$A" "$TEXT" "$(now)" "${RECURSION_ANSWERED_BY:-lucas}" <<'PY' || exit $?
+import io,os,sys,tempfile
 path,text,ts,who = sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4]
 s = io.open(path,encoding='utf-8',newline='').read()
 head,_,rest = s.partition('## ANSWER')
-head = head.replace('status: open','status: answered')
 head = head.replace('answered:\n','answered: %s\n' % ts)
 head = head.replace('answered_by:\n','answered_by: %s\n' % who)
-io.open(path,'w',encoding='utf-8',newline='\n').write(head + '## ANSWER\n' + text.rstrip() + '\n')
+directory=os.path.dirname(path)
+fd,tmp=tempfile.mkstemp(prefix='.'+os.path.basename(path)+'.tmp.',dir=directory)
+try:
+    with os.fdopen(fd,'w',encoding='utf-8',newline='\n') as out:
+        out.write(head + '## ANSWER\n' + text.rstrip() + '\n')
+        out.flush(); os.fsync(out.fileno())
+    os.replace(tmp,path)
+    dfd=os.open(directory,os.O_RDONLY)
+    try: os.fsync(dfd)
+    finally: os.close(dfd)
+except BaseException:
+    try: os.unlink(tmp)
+    except FileNotFoundError: pass
+    raise
 PY
 
   # Unblock EXACTLY this task. Other blocked tasks are other questions.
@@ -156,6 +168,28 @@ PY
   else
     echo "answered $ID — recorded (no task file; nothing to requeue)."
   fi
+  python3 - "$A" <<'PY' || exit $?
+import os,re,sys,tempfile
+path=sys.argv[1]; directory=os.path.dirname(path)
+raw=open(path,encoding='utf-8').read()
+if re.search(r'(?m)^status: answered\r?$',raw):
+    raise SystemExit(0)
+value,count=re.subn(r'(?m)^status: open\r?$','status: answered',raw,count=1)
+if count != 1:
+    raise SystemExit('assist status changed before answered commit')
+fd,tmp=tempfile.mkstemp(prefix='.'+os.path.basename(path)+'.tmp.',dir=directory)
+try:
+    with os.fdopen(fd,'w',encoding='utf-8',newline='\n') as out:
+        out.write(value); out.flush(); os.fsync(out.fileno())
+    os.replace(tmp,path)
+    dfd=os.open(directory,os.O_RDONLY)
+    try: os.fsync(dfd)
+    finally: os.close(dfd)
+except BaseException:
+    try: os.unlink(tmp)
+    except FileNotFoundError: pass
+    raise
+PY
   { echo; echo "## ASSIST ANSWERED $(now) — $ID"; printf '%s\n' "$TEXT"; } >> "$ROOT/state/INBOX.md"
   [ -x "$TASKCTL" ] && RECURSION_ROOT="$ROOT" bash "$TASKCTL" esc-resolve \
       "$(RECURSION_ROOT="$ROOT" bash "$TASKCTL" esc-list open 2>/dev/null | awk -F'\t' -v k="assist-loop-$ID" '$2==k{print $1;exit}')" \
@@ -168,7 +202,13 @@ guidance)
   ID="${1:?usage: assist.sh guidance <task-id>}"
   A="$DIR/$ID.md"
   [ -f "$A" ] || exit 0
-  [ "$(f status "$A")" = "answered" ] || exit 0
+  # A crash can occur after the resume CAS but before the final status projection. The durable
+  # answer fields/body are the authority; allow that open intermediate so requeued work never
+  # runs without Lucas's guidance.
+  AST="$(f status "$A")"
+  case "$AST" in answered|open) ;; *) exit 0 ;; esac
+  [ -n "$(f answered "$A")" ] && [ -n "$(f answered_by "$A")" ] || exit 0
+  [ -n "$(sect ANSWER "$A" | sed '/^_(unanswered/d' | tr -d '[:space:]')" ] || exit 0
   echo "HUMAN GUIDANCE — AUTHORITATIVE. You stopped on this task before and asked:"
   sect QUESTION "$A" | sed 's/^/  /'
   echo

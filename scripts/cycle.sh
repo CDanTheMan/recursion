@@ -12,10 +12,29 @@ cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
 
 FORCE="${1:-}"
-DATE="$(date +%F)"
+DATE="${RECURSION_CYCLE_DATE:-$(date +%F)}"
+[[ "$DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] \
+  || { echo "cycle: invalid RECURSION_CYCLE_DATE '$DATE'" >&2; exit 2; }
+export RECURSION_CYCLE_DATE="$DATE"
 LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/$DATE-cycle.log"
 log(){ echo "[$(date -Is)] $*" | tee -a "$LOG"; }
+
+# One cron tick owns the supervisor from first observation through final bookkeeping. Without a
+# whole-cycle lock, the ordinary 06:15 heartbeat and 06:30 forced brief can share model outputs,
+# BOARD and Git state. Refuse overlap without accumulating cron waiters; record it durably.
+mkdir -p "$ROOT/state/.locks"
+exec 9>>"$ROOT/state/.locks/cycle.lock"
+if ! flock -n 9; then
+  log "cycle overlap refused: another cycle holds state/.locks/cycle.lock"
+  if [ -x "$ROOT/scripts/taskctl.sh" ]; then
+    RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/taskctl.sh" esc-record \
+      "cycle-overlap" "Supervisor cycle overlap refused; inspect the active or hung cycle" \
+      supervision "$LOG" >>"$LOG" 2>&1 \
+      || log "cycle overlap escalation could not be recorded; refusal remains in $LOG"
+  fi
+  exit 73
+fi
 
 # Kill switch (D-012/D-014): PAUSE halts EXECUTION and preserves local AWARENESS. ------
 # Heartbeat, brief generation, and durable escalation recording keep running; every external
@@ -30,9 +49,15 @@ if [ -f "$ROOT/state/PAUSE" ]; then
   log "PAUSED (state/PAUSE) — local monitoring only: heartbeat + brief + durable escalations; no notifications or execution. resume.sh to lift."
 fi
 export RECURSION_PAUSED="$PAUSED"   # run.sh labels the brief from this
+board(){
+  # BOARD.md is tracked. Under PAUSE its render would dirty the operator's branch or require a
+  # forbidden commit merely to clean it. Logs preserve monitoring without mutating the board.
+  [ "$PAUSED" = "0" ] || return 0
+  bash scripts/board.sh "$@"
+}
 
 log "cycle start (force=${FORCE:-no}, paused=$PAUSED)"
-bash scripts/board.sh begin
+board begin
 
 # --- 0) Reap dead leases. MONITORING, so it runs even while paused. --------------------
 # A worker that dies leaves `status: running` forever, and the board renders it as live work
@@ -83,7 +108,7 @@ if [ -x scripts/intake.sh ]; then
 fi
 
 # --- 1) Heartbeat (Lua/luna). --------------------------------------------------------
-bash scripts/board.sh add hb supervision heartbeat gpt-5.6-luna running "scanning ledger" >/dev/null
+board add hb supervision heartbeat gpt-5.6-luna running "scanning ledger" >/dev/null
 HB_USAGE="$LOG_DIR/$DATE-heartbeat.usage.json"
 HB_OUT="$LOG_DIR/$DATE-heartbeat.out"
 if bash loop/supervisor/run.sh heartbeat; then
@@ -96,7 +121,7 @@ fi
 if printf '%s' "$SIG_LINE" | grep -q 'brief'; then SIGNAL="brief"; else SIGNAL="quiet"; fi
 REASON="$(printf '%s' "$SIG_LINE" | sed -E 's/.*brief===[[:space:]]*//' | tr -d '\r')"
 [ "$SIGNAL" = "quiet" ] && REASON="quiet"
-bash scripts/board.sh finish hb done "$HB_USAGE" "$SIGNAL: ${REASON:-}" >/dev/null
+board finish hb done "$HB_USAGE" "$SIGNAL: ${REASON:-}" >/dev/null
 log "heartbeat signal=$SIGNAL reason=${REASON:-}"
 
 # --- 2) Brief (Terra) — only on a signal, or when forced. ----------------------------
@@ -110,13 +135,13 @@ if [ "$SIGNAL" = "brief" ] || [ "$FORCE" = "force" ]; then
   else
     DELIVER=0; LBL="intra-day refresh (silent)"
   fi
-  bash scripts/board.sh add br supervision brief gpt-5.6-terra running "$LBL" >/dev/null
+  board add br supervision brief gpt-5.6-terra running "$LBL" >/dev/null
   BR_USAGE="$LOG_DIR/$DATE-morning.usage.json"
   if DELIVER_BRIEF=$DELIVER bash loop/supervisor/run.sh morning; then
-    bash scripts/board.sh finish br done "$BR_USAGE" "$LBL" >/dev/null
+    board finish br done "$BR_USAGE" "$LBL" >/dev/null
     log "brief done (deliver=$DELIVER)"
   else
-    bash scripts/board.sh finish br blocked "$BR_USAGE" "run failed" >/dev/null
+    board finish br blocked "$BR_USAGE" "run failed" >/dev/null
     log "brief FAILED (run.sh alerts separately)"
   fi
 else
@@ -137,7 +162,7 @@ fi
 # --- 3) Commit final cycle state to loop/auto (run.sh already put us on that branch). ---
 # board.sh finishes after run.sh's commit; resumed digests append canonical source events after
 # it. Commit exactly those tracked cycle outputs so neither path leaves the checkout dirty.
-if git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -q '^loop/auto$'; then
+if [ "$PAUSED" = "0" ] && git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -q '^loop/auto$'; then
   git add -A state/BOARD.md state/.board.tsv state/events.jsonl 2>/dev/null || true
   git diff --cached --quiet 2>/dev/null || git commit -q -m "loop: board $DATE $(date -u +%H:%MZ)" 2>/dev/null || true
 fi
@@ -171,10 +196,10 @@ elif [ "${RECURSION_AUTO_DRAIN:-0}" = "1" ]; then
   if grep -lq '^status: *queued' state/tasks/*.md 2>/dev/null; then
     if [ "${RECURSION_CONDUCT:-0}" = "1" ]; then
       log "auto-drain: queued work — kicking PARALLEL conductor in background"
-      nohup bash scripts/conduct.sh >>"$LOG_DIR/$DATE-conduct.log" 2>&1 &
+      nohup bash scripts/conduct.sh >>"$LOG_DIR/$DATE-conduct.log" 2>&1 9>&- &
     else
       log "auto-drain: queued work present — kicking drainer in background"
-      nohup bash scripts/drain.sh >>"$LOG_DIR/$DATE-drain.log" 2>&1 &
+      nohup bash scripts/drain.sh >>"$LOG_DIR/$DATE-drain.log" 2>&1 9>&- &
     fi
   fi
 fi

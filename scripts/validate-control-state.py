@@ -156,6 +156,14 @@ def validate(kind: str, value: object) -> dict:
         key = value["idempotency_key"]
         if not isinstance(key, str) or not key or len(key) > 256:
             fail("idempotency_key must contain 1..256 characters")
+    if "decision_payload_sha256" in value and not re.fullmatch(
+        r"[0-9a-f]{64}", str(value["decision_payload_sha256"])
+    ):
+        fail("decision_payload_sha256 must be sha256")
+    if "action_payload_sha256" in value and not re.fullmatch(
+        r"[0-9a-f]{64}", str(value["action_payload_sha256"])
+    ):
+        fail("action_payload_sha256 must be sha256")
     if kind in {"action", "delivery"}:
         numeric = "attempts" if kind == "action" else "attempt"
         if not isinstance(value[numeric], int) or value[numeric] < 0:
@@ -170,7 +178,9 @@ def validate(kind: str, value: object) -> dict:
             "goal-accepted", "plan-approved", "worker-launched", "task-passed", "task-failed",
             "task-blocked", "human-answer-received", "review-branch-published", "goal-verifying",
             "goal-achieved", "goal-stopped", "pilot-terminal-report", "portfolio-result",
-            "lucas-attention-required", "delivery-dead-letter",
+            "lucas-attention-required", "delivery-dead-letter", "plan-proposed",
+            "pilot-window-armed", "pilot-window-opened", "pilot-window-closed",
+            "portfolio-brief", "project-digest",
         }:
             fail("unknown notification event type")
         if not re.fullmatch(r"[0-9a-f]{64}", str(value["message_digest"])):

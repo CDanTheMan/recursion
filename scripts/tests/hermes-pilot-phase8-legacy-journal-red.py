@@ -28,6 +28,7 @@ CONTROLS = (
     "an unreviewed schema-less noop is not accepted as legacy",
     "an incomplete reviewed legacy prefix is not accepted",
     "a changed legacy marker fails closed instead of rewriting migration evidence",
+    "an unterminated torn tail is quarantined exactly while committed decisions still import",
     "the supervised actuator reports a journal-import failure while preserving pending state",
 )
 
@@ -88,6 +89,7 @@ def current_noop() -> dict:
     return {
         "actor": "head-hermes", "args": [], "arguments": [], "confidence": "high",
         "cost_usd": 0.0, "goal": "architecture-rebase", "goal_id": "architecture-rebase",
+        "decision_source": "hermes-model", "routed_decider": "head-hermes",
         "id": "decision-6f037cbf6fb51a7f641ea9d6",
         "idempotency_key": "decision:44ce5a43f9a48395df055f2614ff65a639bb24761e46a0a4b83dbd77626b8b9e",
         "project": "recursion", "provider": "openai-codex", "reason": reason,
@@ -110,7 +112,7 @@ class Fixture:
             (self.root / relative).mkdir(parents=True, exist_ok=True)
         for name in (
             "conduct-hermes.sh", "decision-queue.py", "hermes-actuator.sh", "taskctl.sh",
-            "validate-control-state.py", "validate-decision.py",
+            "jsonl_durable.py", "transition_receipt.py", "runtime-state.py", "validate-control-state.py", "validate-decision.py",
         ):
             shutil.copy2(SOURCE / "scripts" / name, self.root / "scripts" / name)
         if os.name == "nt":
@@ -132,7 +134,14 @@ class Fixture:
 
     def write_current_projection(self) -> Path:
         path = self.root / "state/decision-queue/pending/decision-6f037cbf6fb51a7f641ea9d6.json"
-        path.write_text(json.dumps(current_noop(), sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+        normalized = subprocess.run(
+            [sys.executable, "scripts/decision-queue.py", "normalize"], cwd=self.root,
+            env=self.env, input=json.dumps(current_noop()), text=True,
+            capture_output=True, check=False,
+        )
+        if normalized.returncode:
+            raise RuntimeError(f"current noop normalization failed: {normalized.stderr.strip()}")
+        path.write_text(normalized.stdout, encoding="utf-8")
         return path
 
     def run_queue(self) -> subprocess.CompletedProcess[str]:
@@ -262,6 +271,32 @@ def test_marker_tamper() -> tuple[bool, str]:
         fixture.close()
 
 
+def test_torn_tail_quarantine() -> tuple[bool, str]:
+    fixture = Fixture()
+    try:
+        committed = (json.dumps(current_noop(), sort_keys=True, separators=(",", ":")) + "\n").encode()
+        torn = b'{"schema_version":1,"id":"decision-torn"'
+        journal = fixture.root / "state/decisions.jsonl"
+        journal.write_bytes(committed + torn)
+        result = fixture.run_queue()
+        pending = fixture.root / "state/decision-queue/pending" / f"{current_noop()['id']}.json"
+        quarantine = fixture.root / "state/decision-queue/quarantine"
+        payloads = sorted(quarantine.glob("*.bin")) if quarantine.exists() else []
+        metadata = sorted(quarantine.glob("*.json")) if quarantine.exists() else []
+        if result.returncode or not pending.is_file() or journal.read_bytes() != committed:
+            return False, f"rc={result.returncode} pending={pending.exists()} stderr={result.stderr[-160:]}"
+        if len(payloads) != 1 or len(metadata) != 1 or payloads[0].read_bytes() != torn:
+            return False, f"payloads={len(payloads)} metadata={len(metadata)}"
+        evidence = json.loads(metadata[0].read_text(encoding="utf-8"))
+        return (
+            evidence.get("tail_sha256") == hashlib.sha256(torn).hexdigest()
+            and evidence.get("tail_bytes") == len(torn)
+            and evidence.get("journal_offset") == len(committed)
+        ), json.dumps(evidence, sort_keys=True)[-200:]
+    finally:
+        fixture.close()
+
+
 def test_actuator_diagnostic() -> tuple[bool, str]:
     fixture = Fixture()
     try:
@@ -294,7 +329,7 @@ def test_actuator_diagnostic() -> tuple[bool, str]:
 def main() -> int:
     tests = (
         test_live_shape, test_new_invalid, test_unreviewed_legacy, test_incomplete_prefix,
-        test_marker_tamper, test_actuator_diagnostic,
+        test_marker_tamper, test_torn_tail_quarantine, test_actuator_diagnostic,
     )
     failed = 0
     for description, test in zip(CONTROLS, tests):

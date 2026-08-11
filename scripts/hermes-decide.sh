@@ -284,12 +284,24 @@ fi
 # the test suite. It was inlined here as a heredoc-fed snippet and was SILENTLY BROKEN:
 # `python3 - <<PY` consumes stdin for the script, so the piped JSON never arrived and every
 # decision was rejected. Passing the payload as an argument removes the stdin ambiguity.
-VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$BLOCK" 2>&1)"
+VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$BLOCK" "$DECIDER_ACTOR" 2>&1)"
 
 case "$VALID" in
   OK\ *) DECISION="${VALID#OK }" ;;
   *) log "REFUSED — ${VALID:-validation produced no output}"; printf '%s\n' "$BLOCK" >>"$LOG"; exit 5 ;;
 esac
+
+# Bind model provenance and the routed authority into the durable record. Deterministic internal
+# reconcilers do not carry this marker; the actuator uses it to distinguish a scoped model
+# decision from a pilot-attributed internal transition.
+DECISION="$(python3 - "$DECISION" "$DECIDER_ACTOR" <<'PY'
+import json,sys
+row=json.loads(sys.argv[1])
+row['decision_source']='hermes-model'
+row['routed_decider']=sys.argv[2]
+print(json.dumps(row,sort_keys=True,separators=(',',':')))
+PY
+)" || { log "REFUSED - could not bind routed decision authority"; exit 5; }
 
 VERB="$(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(json.load(sys.stdin)["verb"])')"
 log "decision: $VERB — $(printf '%s' "$DECISION" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("why",""))' | cut -c1-120)"
