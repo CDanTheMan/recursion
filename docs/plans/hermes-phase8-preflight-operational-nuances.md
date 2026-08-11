@@ -153,6 +153,26 @@ deadlock, but it is also I/O-bound, so wall time varies with the box: an earlier
 recorded roughly 40 minutes for the same phase. Budget for the slower figure and do not
 treat a long Phase 6 as a hang.
 
+### The process-count gate matches the audit suite's own fixture processes
+
+The CAS gate counts `recursion-worker|scripts/cycle.sh|scripts/work.sh|hermes-decide|...`.
+While the audit suite runs, its phase-5 fixtures spawn exactly such processes in fresh
+temporary roots, e.g. `bash scripts/work.sh escalation-record-failure` with a cwd of
+`/tmp/tmp.XXXXXXXX/controller`. A production quiescence check run at that moment reports a
+non-zero count and fails closed for a non-reason.
+
+**Rule:** qualify the count by working directory, not by command name alone. The question is
+"is anything running *against `/opt/recursion`*", which is answered by:
+
+```sh
+for p in $(ls /proc | grep -E '^[0-9]+$'); do
+  case "$(readlink -f /proc/$p/cwd 2>/dev/null)" in /opt/recursion*) echo "$p";; esac
+done
+```
+
+Observed 2026-08-11: a bare count read `1` while the CWD-qualified count read `0`, and the
+`1` was a test fixture.
+
 ## Production-specific facts that invalidate generic runbook steps
 
 ### Production `origin` cannot authenticate — objects must arrive by bundle
@@ -248,3 +268,43 @@ and the gateway running as a hardened non-root service.
 **Rule:** when a long handoff records a state and a later section supersedes it, fix the
 earlier statement rather than relying on the reader reaching the later one. A stale "gate
 open" line reads as current and re-blocks work that is already unblocked.
+
+## Self-repo git authentication
+
+Production `origin` is `git@github.com:NotSkittlz/recursion.git` and failed with
+`Permission denied (publickey)`. The cause was not a missing or revoked key:
+
+- `/root/.ssh/id_deploy` **is** the recursion deploy key. `ssh -i /root/.ssh/id_deploy -T
+  git@github.com` answers `Hi NotSkittlz/recursion!` and `git ls-remote` with it returns 42
+  refs.
+- Git never offered it. The box has **no default-named keys** (`id_rsa`, `id_ed25519`,
+  `id_ecdsa` all absent), no `~/.ssh/config`, and no `core.sshCommand` - so ssh had no
+  identity to present.
+
+Why this is not cosmetic: every cycle runs `resync.sh observe`, which fetches, and
+`work.sh` documents its own historical failure mode in a comment at line 385 - on fetch
+failure it "logged *building on local base* and carried on", so an arm builds on a stale base
+and re-invents already-merged work. `portfolio.tsv`'s header states the same hazard in
+general terms: "a git op run with the wrong key returns EMPTY, and an empty answer reads
+exactly like a true negative."
+
+The fix is repo-local, in untracked `.git/config`:
+
+```sh
+git -C /opt/recursion config core.sshCommand   'ssh -i /root/.ssh/id_deploy -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15'
+```
+
+Two alternatives were rejected for concrete reasons:
+
+- **A `Host github.com` entry in `~/.ssh/config`** would apply to every repo on the box. The
+  nine project clones each have their own deploy key, and a deploy key is scoped to one
+  repository, so forcing `id_deploy` globally would make project fetches authenticate as
+  `recursion` and fail.
+- **Adding a row to `state/portfolio.tsv`** would work mechanically but that file is
+  **tracked**, so it would drift the deployed tree away from the reviewed merge. The
+  self-repo is also deliberately absent from the registry: `portfolio.tsv` is the registry of
+  repos *the control plane is allowed to touch*, not the control plane itself.
+
+`GIT_SSH_COMMAND` (used by `resync.sh`'s `gitk` and by `publish.sh`) takes precedence over
+`core.sshCommand`, so per-project key selection is unaffected. Verified after the change:
+project keys still authenticate as their own repositories.

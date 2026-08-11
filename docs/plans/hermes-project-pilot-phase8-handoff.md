@@ -1193,3 +1193,44 @@ Two operational gaps remain open, both outside this transaction's scope: `cron.s
 state, is the kill switch, and the deployed code is the reviewed code); and about 6 GB of
 unreaped snapshots and `/var/tmp` staging clones sit on a 38 GB disk at 50% use. Both are
 separate reviewed changes.
+
+## Authorized post-deployment maintenance (2026-08-11)
+
+Lucas authorized two follow-up production changes after the hardening deployment. PAUSE
+remained asserted, cron remained stopped, and the deployed tree was re-verified byte-identical
+to the reviewed merge after both (108 executable files, 0 mismatches).
+
+**Self-repo git authentication restored.** `origin` had been failing `Permission denied
+(publickey)` since before Phase 8, which is why the remote-tracking ref was stale and why the
+cron containment note said the normal fetch/resync path was stopped. The key was never
+missing: `/root/.ssh/id_deploy` is the recursion deploy key and authenticates correctly. Git
+simply had no identity to offer, because the box has no default-named keys, no
+`~/.ssh/config`, and no `core.sshCommand`. Fixed repo-locally in untracked `.git/config` so
+the tracked tree does not drift and so per-project deploy keys, which are selected via
+`GIT_SSH_COMMAND` and take precedence, are unaffected. A real `git fetch` then succeeded and
+independently confirmed `origin/master` is `ecc93de7...`, corroborating the tracking ref the
+transaction had set. Full root cause and the rejected alternatives are in
+`docs/plans/hermes-phase8-preflight-operational-nuances.md`.
+
+This closes a prerequisite for cron resume: with fetch broken, `resync.sh observe` fails every
+cycle and `work.sh` falls back to "building on local base", so an arm would build on a stale
+base and re-invent merged work.
+
+**Snapshot and staging prune.** Disk went from 18 GB used (50%) to 13 GB used (35%), freeing
+about 6 GB. `/var/backups/recursion` went 3.6 GB to 495 MB and `/var/tmp` staging went about
+2.4 GB to 19 MB. Only five superseded `phase1-remediation` snapshots were removed, plus fifty
+disposable `/var/tmp` clones. Everything under 20 MB was kept deliberately, since small
+history costs nothing and preserves the record.
+
+Four anchors were hard-protected and verified intact afterwards:
+
+```text
+preflight-20260811T231032Z-ecc93de            (ROLLBACK.sh depends on it; manifest reads 19 files)
+preflight-evidence-20260811T231032Z-ecc93de   (evidence + ROLLBACK.sh/TRANSACTION.sh present)
+hermes-pre-phase8-20260808T224858Z-5a8b2f7464cb  (documented retained drill backup)
+phase1-remediation-20260809T233144Z-498061d8  (the cited successful Phase 1 deployment bundle)
+```
+
+The Phase 1 rollback venv `/usr/local/lib/hermes-agent/venv.pre-phase1-498061d8f1dc` is
+outside `/var/backups` and was not touched. The post-deployment suite was running throughout;
+its staging directory was protected and it was confirmed still running afterwards.
