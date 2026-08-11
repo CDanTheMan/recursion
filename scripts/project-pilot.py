@@ -16,6 +16,15 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+from transition_receipt import (
+    TransitionReceiptError, commit_event, commit_transition, json_mutation, resume_transition,
+    raw_text_mutation, text_mutation,
+)
+
 
 IDENT = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
 PILOT_VERBS = {
@@ -273,20 +282,59 @@ def append_event(base: Path, event: str, project: str, goal: str = "", task: str
              "goal": goal, "task": task, "pid": os.getpid(), "detail": detail}
     if event_id:
         value["id"] = event_id
-    path = base / "state/events.jsonl"; path.parent.mkdir(parents=True, exist_ok=True)
-    if event_id and path.is_file():
-        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-            try:
-                if json.loads(line).get("id") == event_id:
-                    return
-            except (json.JSONDecodeError, AttributeError):
-                continue
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     try:
-        os.write(fd, (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode())
-        os.fsync(fd)
+        commit_event(base, value)
+    except (OSError, TransitionReceiptError) as exc:
+        fail(f"event journal append failed: {exc}", 74)
+
+
+def transition_event(event: str, project: str, goal: str = "", task: str = "",
+                     detail: object = "", event_id: str = "") -> dict:
+    value = {"schema_version": 1, "ts": now_iso(), "event": event, "project": project,
+             "goal": goal, "task": task, "pid": os.getpid(), "detail": detail}
+    if event_id:
+        value["id"] = event_id
+    return value
+
+
+def commit_pilot_transition(base: Path, mutations: list, event: dict,
+                            authoritative_index: int = -1) -> None:
+    try:
+        commit_transition(base, mutations, event, authoritative_index=authoritative_index)
+    except (OSError, TransitionReceiptError) as exc:
+        fail(f"crash-consistent pilot transition failed: {exc}", 74)
+
+
+@contextmanager
+def event_serialization_lock(base: Path):
+    """Share taskctl's mkdir mutex and never append through runtime-state rotation."""
+    lock_dir = base / "state/.locks"; lock_dir.mkdir(parents=True, exist_ok=True)
+    runtime_lock = lock_dir / "runtime-state.lock"; path = lock_dir / "taskctl.lock"
+    try: attempts = max(1, int(os.environ.get("RECURSION_LOCK_ATTEMPTS", "100")))
+    except ValueError: attempts = 100
+    try: delay = max(0.0, float(os.environ.get("RECURSION_LOCK_DELAY_S", "0.1")))
+    except ValueError: delay = 0.1
+    held = False
+    try:
+        for _ in range(attempts):
+            if not runtime_lock.is_dir():
+                try:
+                    path.mkdir(); held = True
+                    (path / "pid").write_text(f"{os.getpid()}\n", encoding="ascii")
+                    if runtime_lock.is_dir():
+                        fail("runtime-state rotation acquired during event lock", 73)
+                    break
+                except FileExistsError:
+                    pass
+            time.sleep(delay)
+        if not held:
+            fail("event journal lock is contended; refusing an unlocked append", 73)
+        yield
     finally:
-        os.close(fd)
+        if held:
+            (path / "start").unlink(missing_ok=True); (path / "pid").unlink(missing_ok=True)
+            try: path.rmdir()
+            except OSError: pass
 
 
 @contextmanager
@@ -341,11 +389,21 @@ def prepare(base: Path, project: str, remote: str, charter: str) -> None:
     if not IDENT.fullmatch(project) or not charter.strip(): fail("pending registration needs a project id and charter", 2)
     if not (remote.startswith("git@github.com:") or remote.startswith("https://github.com/")):
         fail("pending registration remote must be GitHub", 2)
+    event = transition_event(
+        "project-prepared", project,
+        detail={"remote": remote, "charter_sha256": hashlib.sha256(charter.encode()).hexdigest()},
+        event_id="source-project-prepared-" + canonical_digest([project, remote, charter])[:24],
+    )
     with registry_lock(base):
+        try:
+            if resume_transition(base, event):
+                return
+        except (OSError, TransitionReceiptError) as exc:
+            fail(f"pending registration recovery failed: {exc}", 74)
         if any(row["id"] == project for row in rows(base)): fail(f"project {project} already exists", 2)
         repo = f"/opt/{project}"; key = f"~/.ssh/{project}_deploy"; pilot_id = f"pilot-{project}"
         line = f"{project}\t{repo}\t{remote}\tmain\t{key}\t-\t-\tpending\n"
-        reg = base / "state/portfolio.tsv"; atomic_text(reg, reg.read_text(encoding="utf-8") + line)
+        reg = base / "state/portfolio.tsv"; registry_text = reg.read_text(encoding="utf-8") + line
         targets = ["head-hermes", "lucas-direct"]
         cfg = {"schema_version": 1, "id": project, "repo": repo, "remote": remote,
                "default_branch": "main", "deploy_key_ref": key, "charter": charter,
@@ -358,14 +416,29 @@ def prepare(base: Path, project: str, remote: str, charter: str) -> None:
                  "notification_targets": targets, "goal_source": "state/goals",
                  "memory_key": f"telegram-topic:pending:{project}",
                  "worktree_root": f".worktrees/{project}", "status": "pending"}
-        atomic_json(base / "state/project-config" / f"{project}.json", cfg)
-        atomic_json(base / "state/pilots" / f"{pilot_id}.json", pilot)
+        commit_pilot_transition(
+            base,
+            [raw_text_mutation(reg, registry_text),
+             json_mutation(base / "state/pilots" / f"{pilot_id}.json", pilot),
+             json_mutation(base / "state/project-config" / f"{project}.json", cfg)],
+            event,
+            authoritative_index=2,
+        )
 
 
 def bind_topic(base: Path, project: str, topic: str) -> None:
     if not topic.isdigit() or int(topic) < 1:
         fail("topic id must be a positive Telegram thread id", 2)
+    event = transition_event(
+        "project-topic-bound", project, detail={"topic": topic},
+        event_id="source-project-topic-bound-" + canonical_digest([project, topic])[:24],
+    )
     with registry_lock(base):
+        try:
+            if resume_transition(base, event):
+                return
+        except (OSError, TransitionReceiptError) as exc:
+            fail(f"project topic recovery failed: {exc}", 74)
         cfg, pilot, row = records(base, project)
         if row["status"] != "pending": fail("topic binding is allowed only while pending", 2)
         if any(other["topic"] == topic and other["id"] != project for other in rows(base)):
@@ -375,8 +448,6 @@ def bind_topic(base: Path, project: str, topic: str) -> None:
         cfg = dict(cfg); cfg.update(topic=int(topic), notification_targets=targets)
         pilot = dict(pilot); pilot.update(topic=int(topic), memory_key=f"telegram-topic:{topic}",
                                           notification_targets=targets)
-        atomic_json(base / "state/project-config" / f"{project}.json", cfg)
-        atomic_json(base / "state/pilots" / f"{pilot['id']}.json", pilot)
         lines = (base / "state/portfolio.tsv").read_text(encoding="utf-8").splitlines()
         changed = 0
         for index, line in enumerate(lines):
@@ -384,11 +455,31 @@ def bind_topic(base: Path, project: str, topic: str) -> None:
             if len(cols) >= 8 and cols[0] == project and cols[7] == "pending":
                 cols[6] = topic; lines[index] = "\t".join(cols); changed += 1
         if changed != 1: fail("pending topic compare-and-swap failed", 73)
-        atomic_text(base / "state/portfolio.tsv", "\n".join(lines) + "\n")
+        commit_pilot_transition(
+            base,
+            [json_mutation(base / "state/pilots" / f"{pilot['id']}.json", pilot),
+             raw_text_mutation(base / "state/portfolio.tsv", "\n".join(lines) + "\n"),
+             json_mutation(base / "state/project-config" / f"{project}.json", cfg)],
+            event,
+            authoritative_index=2,
+        )
 
 
 def activate(base: Path, project: str) -> dict:
+    event = transition_event(
+        "project-activated", project, detail={"gate": "clone-auth-freshness-v1"},
+        event_id="source-project-activated-" + canonical_digest([project, "clone-auth-freshness-v1"])[:24],
+    )
     with registry_lock(base):
+        try:
+            if resume_transition(base, event):
+                cfg = read_json(base / "state/project-config" / f"{project}.json")
+                proof = cfg.get("activation_proof")
+                if not isinstance(proof, dict):
+                    fail("recovered activation lacks its exact proof", 74)
+                return proof
+        except (OSError, TransitionReceiptError) as exc:
+            fail(f"project activation recovery failed: {exc}", 74)
         cfg, pilot, row = records(base, project)
         if row["status"] != "pending": fail(f"project {project} is not pending", 2)
         if not str(cfg.get("charter", "")).strip(): fail("project charter is absent")
@@ -426,8 +517,6 @@ def activate(base: Path, project: str) -> dict:
                  "credential": "deploy-key", "gate": "clone-auth-freshness-v1"}
         cfg = dict(cfg); cfg["activation_proof"] = proof; cfg["status"] = "active"
         pilot = dict(pilot); pilot["status"] = "active"
-        atomic_json(base / "state/project-config" / f"{project}.json", cfg)
-        atomic_json(base / "state/pilots" / f"{pilot['id']}.json", pilot)
         lines = (base / "state/portfolio.tsv").read_text(encoding="utf-8").splitlines()
         changed = 0
         for index, line in enumerate(lines):
@@ -435,7 +524,14 @@ def activate(base: Path, project: str) -> dict:
             if len(cols) >= 8 and cols[0] == project and cols[7] == "pending":
                 cols[7] = "active"; lines[index] = "\t".join(cols); changed += 1
         if changed != 1: fail("pending registry compare-and-swap failed", 73)
-        atomic_text(base / "state/portfolio.tsv", "\n".join(lines) + "\n")
+        commit_pilot_transition(
+            base,
+            [json_mutation(base / "state/pilots" / f"{pilot['id']}.json", pilot),
+             raw_text_mutation(base / "state/portfolio.tsv", "\n".join(lines) + "\n"),
+             json_mutation(base / "state/project-config" / f"{project}.json", cfg)],
+            event,
+            authoritative_index=2,
+        )
         return proof
 
 
@@ -456,7 +552,13 @@ def goal_for(base: Path, project: str, goal_id: str) -> tuple[Path, dict[str, st
 
 def nonvacuous_gate(value: object, label: str) -> str:
     gate = str(value or "").strip()
-    if not gate or "\n" in gate or gate in {"true", ":", "/bin/true", "exit 0"}:
+    compact = re.sub(r"\s+", " ", gate)
+    obvious = (
+        r"(?:true|:|/bin/true|exit 0|echo(?: .*)?|printf(?: .*)?)",
+        r"(?:test|\[)\s+1\s*(?:=|-eq)\s*1\s*\]?",
+        r"(?:test|\[)\s+-(?:e|d)\s+/\s*\]?",
+    )
+    if not gate or "\n" in gate or any(re.fullmatch(pattern, compact) for pattern in obvious):
         fail(f"{label} acceptance gate is absent or structurally vacuous")
     return gate
 
@@ -496,6 +598,8 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
     if any(isinstance(budget.get(key), bool) or not isinstance(budget.get(key), int)
            or int(budget[key]) < 0 for key in integer_budget):
         fail("pilot plan has an invalid integer budget")
+    if budget.get("max_review_queue", 0) < 1:
+        fail("pilot plan max_review_queue must be at least 1")
     cost = budget.get("max_cost_usd")
     if isinstance(cost, bool) or not isinstance(cost, (int, float)) or cost < 0 \
             or not isinstance(budget.get("publication_required"), bool):
@@ -530,7 +634,8 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
             "expected_change", "gate_files",
         }
         if any(key not in task for key in required): fail(f"pilot plan task {task_id} is schema-incomplete")
-        if task.get("model_alias") not in {"sonnet-routine", "opus-complex"} \
+        if task.get("engine") != "claude" \
+                or task.get("model_alias") not in {"sonnet-routine", "opus-complex"} \
                 or task.get("verifier_model_alias") not in {"opus-review", "opus-complex"} \
                 or task.get("network_policy") not in {"provider-only", "none"} \
                 or task.get("evidence_contract") != "worker-result-v1" \
@@ -581,8 +686,12 @@ def require_lucas_instruction(path: Path, instruction: dict[str, str], terms: li
     allowed = {item.strip() for item in os.environ.get("RECURSION_INTAKE_ALLOW", "8913126684").split(",")}
     if instruction.get("principal") not in allowed or instruction.get("routing_target") != "head-hermes":
         fail("Phase 8 approval is not an authenticated Lucas-to-Head-Hermes instruction")
-    body = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
-    if any(term not in body for term in terms):
+    document = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+    match = re.search(r"(?m)^## INSTRUCTION\s*$\n?", document)
+    body = document[match.end():] if match else ""
+    body = re.split(r"(?m)^##\s+", body, maxsplit=1)[0]
+    tokens = set(re.findall(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", body))
+    if any(str(term) not in tokens for term in terms):
         fail("Lucas instruction does not name the exact Phase 8 object and digest/window bounds")
 
 
@@ -592,14 +701,23 @@ def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
     plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, decision.get("plan"))
     digest = canonical_digest(plan); goal_id = str(plan["goal"]["id"])
     path = base / "state/plans" / str(cfg["id"]) / f"{plan_id}.json"
+    event = transition_event(
+        "pilot-plan-proposed", str(cfg["id"]), goal_id,
+        detail={"plan_id": plan_id, "plan_digest": digest, "instruction_id": instruction_id},
+        event_id="source-plan-proposed-" + canonical_digest(
+            [cfg["id"], plan_id, digest, instruction_id])[:24],
+    )
     with phase8_lock(base, plan_id):
         if path.exists():
             prior = read_json(path)
             if prior.get("plan_digest") != digest or prior.get("instruction_id") != instruction_id:
                 fail("pilot plan id collides with different content or instruction")
-            append_event(base, "pilot-plan-proposed", str(cfg["id"]), goal_id,
-                         detail={"plan_id": plan_id, "plan_digest": digest, "instruction_id": instruction_id},
-                         event_id="source-plan-proposed-" + digest[:24])
+            try:
+                resume_transition(base, event)
+            except (OSError, TransitionReceiptError) as exc:
+                fail(f"pilot plan proposal recovery failed: {exc}", 74)
+            append_event(base, event["event"], event["project"], event["goal"],
+                         detail=event["detail"], event_id=event["id"])
             return {"plan": str(path.relative_to(base)), "status": prior.get("status"), "plan_digest": digest}
         for goal_path in (base / "state/goals").glob("*.md"):
             if fields(goal_path).get("id") == goal_id: fail("fresh pilot plan reuses an existing goal id")
@@ -610,17 +728,14 @@ def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
                   "pilot_id": pilot["id"], "instruction_id": instruction_id,
                   "plan_digest": digest, "plan": plan, "status": "proposed", "proposed_at": now_iso()}
         validate_control_state(base, "plan", record)
-        atomic_json(path, record)
-        append_event(base, "pilot-plan-proposed", str(cfg["id"]), goal_id,
-                     detail={"plan_id": plan_id, "plan_digest": digest, "instruction_id": instruction_id},
-                     event_id="source-plan-proposed-" + digest[:24])
+        commit_pilot_transition(base, [json_mutation(path, record)], event)
     return {"plan": str(path.relative_to(base)), "status": "proposed", "plan_digest": digest}
 
 
 def task_text(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, task: dict) -> str:
     values = {
         "schema_version": "1", "version": "1", "id": task["id"], "project_id": cfg["id"],
-        "project": cfg["id"], "pilot_id": pilot["id"], "goal_id": goal_id,
+        "project": cfg["id"], "workstream": cfg["id"], "pilot_id": pilot["id"], "goal_id": goal_id,
         "plan_id": plan_id, "plan_digest": digest, "dependencies": ",".join(task["dependencies"]),
         "goal": task["intent"], "allowed_paths": ",".join(task["allowed_paths"]),
         "non_goals": ",".join(task["non_goals"]), "worker_class": task["worker_class"],
@@ -651,18 +766,34 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
         digest = canonical_digest(plan)
         if digest != claimed: fail("stored plan bytes do not match the approved digest")
         goal = plan["goal"]; goal_id = str(goal["id"]); goal_path = base / "state/goals" / f"{goal_id}.md"
+        event = transition_event(
+            "pilot-plan-approved", str(cfg["id"]), goal_id,
+            detail={"plan_id": plan_id, "plan_digest": digest, "instruction_id": instruction_id},
+            event_id="source-plan-approved-" + canonical_digest(
+                [cfg["id"], plan_id, digest, instruction_id])[:24],
+        )
+        try:
+            resumed = resume_transition(base, event)
+        except (OSError, TransitionReceiptError) as exc:
+            fail(f"pilot plan approval recovery failed: {exc}", 74)
+        if resumed:
+            proposal = read_json(path)
+            if proposal.get("status") != "approved":
+                fail("resumed approval lacks its authoritative plan marker", 74)
+            return {"plan": str(path.relative_to(base)), "status": "approved", "plan_digest": digest}
         if proposal.get("status") == "approved":
             if proposal.get("approval_instruction_id") != instruction_id or not goal_path.is_file():
                 fail("approved plan projection is incomplete or approval identity changed")
-            append_event(base, "pilot-plan-approved", str(cfg["id"]), goal_id,
-                         detail={"plan_id": plan_id, "plan_digest": digest, "instruction_id": instruction_id},
-                         event_id="source-plan-approved-" + digest[:24])
+            append_event(base, event["event"], event["project"], event["goal"],
+                         detail=event["detail"], event_id=event["id"])
             return {"plan": str(path.relative_to(base)), "status": "approved", "plan_digest": digest}
         if proposal.get("status") != "proposed": fail("pilot plan is not approvable")
+        mutations = []
         if goal_path.exists():
             existing = fields(goal_path)
             if existing.get("plan_id") != plan_id or existing.get("plan_digest") != digest:
                 fail("goal materialization collides with unrelated state")
+            goal_body = goal_path.read_text(encoding="utf-8", errors="surrogateescape")
         else:
             goal_body = (f"schema_version: 1\nversion: 1\nid: {goal_id}\nproject_id: {cfg['id']}\n"
                          f"pilot_id: {pilot['id']}\nplan_id: {plan_id}\nplan_digest: {digest}\n"
@@ -670,25 +801,23 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
                          f"acceptance_suite: {goal['acceptance_suite']}\nfalsifier: {goal['falsifier']}\n"
                          f"budget: {json.dumps(goal['budget'], sort_keys=True, separators=(',', ':'))}\n"
                          f"started_at_epoch: {int(time.time())}\nterminal_reported: 0\n")
-            atomic_text(goal_path, goal_body)
+        goal_body = goal_body.replace("status: draft", "status: active", 1)
+        mutations.append(text_mutation(goal_path, goal_body))
         for task in plan["tasks"]:
             task_path = base / "state/tasks" / f"{task['id']}.md"
             if task_path.exists():
                 existing = fields(task_path)
                 if existing.get("plan_id") != plan_id or existing.get("plan_digest") != digest:
                     fail("task materialization collides with unrelated state")
+                body = task_path.read_text(encoding="utf-8", errors="surrogateescape")
             else:
-                atomic_text(task_path, task_text(cfg, pilot, plan_id, digest, goal_id, task))
-        goal_fields = fields(goal_path)
-        if goal_fields.get("status") == "draft":
-            atomic_text(goal_path, goal_path.read_text(encoding="utf-8").replace("status: draft", "status: active", 1))
+                body = task_text(cfg, pilot, plan_id, digest, goal_id, task)
+            mutations.append(text_mutation(task_path, body))
         proposal = dict(proposal); proposal.update({"status": "approved", "approval_instruction_id": instruction_id,
                                                     "approved_by": instruction.get("principal"), "approved_at": now_iso()})
         validate_control_state(base, "plan", proposal)
-        atomic_json(path, proposal)
-        append_event(base, "pilot-plan-approved", str(cfg["id"]), goal_id,
-                     detail={"plan_id": plan_id, "plan_digest": digest, "instruction_id": instruction_id},
-                     event_id="source-plan-approved-" + digest[:24])
+        mutations.append(json_mutation(path, proposal))
+        commit_pilot_transition(base, mutations, event, authoritative_index=len(mutations) - 1)
     return {"plan": str(path.relative_to(base)), "status": "approved", "plan_digest": digest}
 
 
@@ -720,18 +849,23 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
                       "max_inflight_workers": min(int(pilot.get("concurrency_limit") or 0),
                                                   int((pilot.get("budget") or {}).get("max_inflight_workers") or 0))}
             if record["max_inflight_workers"] < 1: fail("pilot window has zero worker capacity")
+            event = transition_event(
+                "pilot-window-armed", str(cfg["id"]), goal_id,
+                detail={"window_id": window_id, "instruction_id": instruction_id},
+                event_id="source-window-armed-" + canonical_digest(
+                    [cfg["id"], goal_id, window_id, instruction_id])[:24],
+            )
             if path.exists():
                 prior = read_json(path)
                 if prior.get("instruction_id") == instruction_id and prior.get("goal_id") == goal_id:
-                    append_event(base, "pilot-window-armed", str(cfg["id"]), goal_id,
-                                 detail={"window_id": window_id, "instruction_id": instruction_id},
-                                 event_id="source-window-armed-" + canonical_digest([window_id, instruction_id])[:24])
+                    try: resume_transition(base, event)
+                    except (OSError, TransitionReceiptError) as exc:
+                        fail(f"pilot window recovery failed: {exc}", 74)
+                    append_event(base, event["event"], event["project"], event["goal"],
+                                 detail=event["detail"], event_id=event["id"])
                     return prior
                 fail("pilot window id collides with different authority")
-            atomic_json(path, record)
-            append_event(base, "pilot-window-armed", str(cfg["id"]), goal_id,
-                         detail={"window_id": window_id, "instruction_id": instruction_id},
-                         event_id="source-window-armed-" + canonical_digest([window_id, instruction_id])[:24])
+            commit_pilot_transition(base, [json_mutation(path, record)], event)
         return record
     if len(args) != 2: fail("pilot-window-close needs project and window", 2)
     window_id = str(args[1]); require_lucas_instruction(instruction_file, instruction, [window_id])
@@ -739,22 +873,32 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
     with phase8_lock(base, f"window-{cfg['id']}"):
         record = read_json(path)
         if record.get("project_id") != cfg["id"]: fail("pilot window is outside this project")
+        event = transition_event(
+            "pilot-window-closed", str(cfg["id"]), str(record.get("goal_id") or ""),
+            detail={"window_id": window_id, "instruction_id": instruction_id},
+            event_id="source-window-close-" + canonical_digest(
+                [cfg["id"], record.get("goal_id"), window_id, instruction_id])[:24],
+        )
+        try:
+            resumed = resume_transition(base, event)
+        except (OSError, TransitionReceiptError) as exc:
+            fail(f"pilot window close recovery failed: {exc}", 74)
+        if resumed:
+            return read_json(path)
         if record.get("status") == "closed":
-            append_event(base, "pilot-window-closed", str(cfg["id"]), str(record.get("goal_id") or ""),
-                         detail={"window_id": window_id, "instruction_id": instruction_id},
-                         event_id="source-window-close-" + canonical_digest([window_id, instruction_id])[:24])
+            append_event(base, event["event"], event["project"], event["goal"],
+                         detail=event["detail"], event_id=event["id"])
             return record
         record.update({"status": "closed", "closed_at": now_iso(), "close_reason": "lucas-instruction",
                        "close_instruction_id": instruction_id})
-        atomic_json(path, record)
-        append_event(base, "pilot-window-closed", str(cfg["id"]), str(record.get("goal_id") or ""),
-                     detail={"window_id": window_id, "instruction_id": instruction_id},
-                     event_id="source-window-close-" + canonical_digest([window_id, instruction_id])[:24])
+        commit_pilot_transition(base, [json_mutation(path, record)], event)
     return record
 
 
-def execute(base: Path, decision_path: Path) -> dict:
-    decision = read_json(decision_path); args = decision.get("args") or decision.get("arguments") or []
+def execute_value(base: Path, decision: dict) -> dict:
+    if not isinstance(decision, dict):
+        fail("decision is not an object")
+    args = decision.get("args") or decision.get("arguments") or []
     project = str(decision.get("project") or (args[0] if args else "")); verb = str(decision.get("verb") or "")
     cfg, pilot, _ = records(base, project, active=True)
     pilot_authority = verb in PILOT_VERBS and decision.get("actor") == pilot["id"]
@@ -790,7 +934,8 @@ def execute(base: Path, decision_path: Path) -> dict:
             _, goal = goal_for(base, project, goal_id)
             path = base / "state/tasks" / f"{task_id}.md"
             if path.exists(): fail(f"task {task_id} already exists", 2)
-            body = (f"schema_version: 1\nversion: 1\nid: {task_id}\nproject_id: {project}\npilot_id: {pilot['id']}\n"
+            body = (f"schema_version: 1\nversion: 1\nid: {task_id}\nproject_id: {project}\n"
+                    f"workstream: {project}\npilot_id: {pilot['id']}\n"
                     f"goal_id: {goal_id}\ndependencies: {','.join(dependencies)}\nallowed_paths: {scope}\n"
                     f"non_goals: portfolio,policy,credentials,merge,deploy\nworker_class: claude\n"
                     f"engine: claude\nmodel_alias: sonnet-routine\nverifier_model_alias: opus-review\n"
@@ -798,7 +943,14 @@ def execute(base: Path, decision_path: Path) -> dict:
                     f"network_policy: provider-only\nevidence_contract: worker-result-v1\n"
                     f"verification: independent\nexpected_change: required\ngate_files:\n"
                     f"acceptance: {goal['acceptance_suite']}\nstatus: proposed\n\n{text}\n")
-            atomic_text(path, body); return {"created": str(path.relative_to(base)), "status": "proposed"}
+            event = transition_event(
+                "pilot-task-created", project, goal_id, task_id,
+                {"scope": scope, "dependencies": dependencies, "instruction_id": instruction_id},
+                "source-pilot-task-created-" + canonical_digest(
+                    [project, goal_id, task_id, instruction_id])[:24],
+            )
+            commit_pilot_transition(base, [text_mutation(path, body)], event)
+            return {"created": str(path.relative_to(base)), "status": "proposed"}
     if verb in {"pilot-worker-request", "pilot-verifier-request", "pilot-block"}:
         if len(args) != 3:
             fail(f"{verb} needs project, goal, and task")
@@ -816,8 +968,25 @@ def execute(base: Path, decision_path: Path) -> dict:
     identity = str(decision.get("idempotency_key") or json.dumps(payload, sort_keys=True))
     name = hashlib.sha256(identity.encode()).hexdigest()[:24] + ".json"
     path = base / "state/pilot-requests" / project / name
-    if not path.exists(): atomic_json(path, payload)
+    event = transition_event(
+        "pilot-requested", project, goal_id, str(args[2]) if len(args) > 2 else "",
+        {"request_id": payload["id"], "verb": verb, "instruction_id": instruction_id},
+        "source-pilot-request-" + hashlib.sha256(identity.encode()).hexdigest()[:24],
+    )
+    if not path.exists():
+        commit_pilot_transition(base, [json_mutation(path, payload)], event)
+    else:
+        prior = read_json(path)
+        if prior.get("id") != payload["id"] or prior.get("verb") != verb \
+                or prior.get("instruction_id") != instruction_id:
+            fail("pilot request identity collides with different content")
+        append_event(base, event["event"], event["project"], event["goal"], event["task"],
+                     event["detail"], event["id"])
     return {"request": str(path.relative_to(base)), "target": "head-hermes" if verb == "pilot-escalate" else "project-pilot"}
+
+
+def execute(base: Path, decision_path: Path) -> dict:
+    return execute_value(base, read_json(decision_path))
 
 
 def main() -> int:
@@ -835,6 +1004,7 @@ def main() -> int:
     bind = sub.add_parser("bind-topic"); bind.add_argument("project"); bind.add_argument("topic")
     activate_cmd = sub.add_parser("activate"); activate_cmd.add_argument("project")
     execute_cmd = sub.add_parser("execute"); execute_cmd.add_argument("decision")
+    execute_json_cmd = sub.add_parser("execute-json"); execute_json_cmd.add_argument("decision")
     args = parser.parse_args(); base = root()
     if args.command == "verify-registry": verify_registry(base); print("OK")
     elif args.command == "topic":
@@ -859,7 +1029,13 @@ def main() -> int:
     elif args.command == "prepare": prepare(base, args.project, args.remote, args.charter); print("pending")
     elif args.command == "bind-topic": bind_topic(base, args.project, args.topic); print("bound")
     elif args.command == "activate": compact(activate(base, args.project))
-    else: compact(execute(base, Path(args.decision)))
+    elif args.command == "execute": compact(execute(base, Path(args.decision)))
+    else:
+        try:
+            decision = json.loads(args.decision)
+        except json.JSONDecodeError as exc:
+            fail(f"frozen decision JSON is invalid: {exc}")
+        compact(execute_value(base, decision))
     return 0
 
 

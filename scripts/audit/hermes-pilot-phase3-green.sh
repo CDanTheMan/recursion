@@ -14,7 +14,7 @@ echo "ok    Telegram gateway is an authenticated intake/status surface, not an a
 
 # One authenticated Telegram row becomes one inert instruction with the complete Phase 3 identity.
 I="$TMP/intake"; mkdir -p "$I/scripts" "$I/state"
-cp "$SRC/scripts/intake.sh" "$I/scripts/"
+cp "$SRC/scripts/intake.sh" "$SRC/scripts/runtime-state.py" "$I/scripts/"
 printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n' > "$I/state/portfolio.tsv"
 printf 'chiron\t/opt/chiron\tgit@example/chiron\tmain\t-\t-\t10\tactive\n' >> "$I/state/portfolio.tsv"
 DB="$TMP/gateway.db"
@@ -41,7 +41,8 @@ echo "ok    one authenticated message became one inert, fully correlated durable
 # The text-only planner must have real provider/usage evidence and enqueue a schema-v1 decision.
 P="$TMP/planner"; BIN="$TMP/bin"
 mkdir -p "$P/scripts" "$P/state/tasks" "$P/state/roadmaps" "$P/state/.locks" "$P/loop/logs" "$BIN"
-for s in hermes-decide.sh validate-decision.py validate-control-state.py decision-queue.py; do
+for s in hermes-decide.sh validate-decision.py validate-control-state.py decision-queue.py \
+         jsonl_durable.py; do
   cp "$SRC/scripts/$s" "$P/scripts/"
 done
 for s in intake taskctl assist branch-review resync capacity notify; do
@@ -67,7 +68,7 @@ fi
 cat <<'OUT'
 reasoning only
 ===DECISION-START===
-{"verb":"noop","args":[],"project":"recursion","goal":"phase3","why":"queue control","confidence":"high","wrong_if":"a state-changing command ran"}
+{"actor":"head-hermes","verb":"noop","args":[],"project":"recursion","goal":"phase3","why":"queue control","confidence":"high","wrong_if":"a state-changing command ran"}
 ===DECISION-END===
 OUT
 STUB
@@ -100,7 +101,8 @@ echo "ok    planner projection preserved complete authority, scope, and decision
 A="$TMP/actuator"
 mkdir -p "$A/scripts" "$A/state/tasks" "$A/state/instructions" "$A/loop/logs"
 for s in conduct-hermes.sh decision-queue.py validate-control-state.py validate-decision.py \
-         hermes-actuator.sh taskctl.sh intake.sh; do
+         hermes-actuator.sh taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
+         runtime-state.py; do
   cp "$SRC/scripts/$s" "$A/scripts/"
 done
 cat > "$A/scripts/work.sh" <<'STUB'
@@ -124,10 +126,14 @@ action_ids:
 ## INSTRUCTION
 work first
 T
-cat > "$A/state/decisions.jsonl" <<'J'
-{"id":"decision-first","idempotency_key":"instruction-42-work-first","instruction_id":"42","verb":"work","args":["first"],"goal":"phase3","why":"instruction control","wrong_if":"duplicate"}
-{"id":"decision-second","idempotency_key":"phase3-work-second","verb":"work","args":["second"],"goal":"phase3","why":"restart control","wrong_if":"lost"}
-J
+: > "$A/state/decisions.jsonl"
+for raw in \
+  '{"id":"decision-first","actor":"head-hermes","decision_source":"hermes-model","routed_decider":"head-hermes","idempotency_key":"instruction-42-work-first","instruction_id":"42","verb":"work","args":["first"],"goal":"phase3","why":"instruction control","wrong_if":"duplicate"}' \
+  '{"id":"decision-second","actor":"head-hermes","decision_source":"hermes-model","routed_decider":"head-hermes","idempotency_key":"phase3-work-second","verb":"work","args":["second"],"goal":"phase3","why":"restart control","wrong_if":"lost"}'
+do
+  printf '%s\n' "$raw" | RECURSION_ROOT="$A" python3 "$A/scripts/decision-queue.py" normalize \
+    >> "$A/state/decisions.jsonl"
+done
 : > "$TMP/actions.log"; printf 'PAUSED fixture\n' > "$A/state/PAUSE"
 ( cd "$A" && ACTION_LOG="$TMP/actions.log" RECURSION_ROOT="$A" RECURSION_ACTUATOR_INTERVAL_S=0.1 \
   bash scripts/hermes-actuator.sh ) >"$TMP/actuator-1.out" 2>&1 & actuator_pid=$!

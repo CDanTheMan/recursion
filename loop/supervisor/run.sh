@@ -13,7 +13,10 @@ set -euo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 JOB="${1:-morning}"
 LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
-DATE="$(date +%F)"
+DATE="${RECURSION_CYCLE_DATE:-$(date +%F)}"
+[[ "$DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] \
+  || { echo "run: invalid RECURSION_CYCLE_DATE '$DATE'" >&2; exit 2; }
+export RECURSION_CYCLE_DATE="$DATE"
 LOG="$LOG_DIR/$DATE-$JOB.log"
 OUT="$LOG_DIR/$DATE-$JOB.out"
 USAGE="$LOG_DIR/$DATE-$JOB.usage.json"
@@ -45,6 +48,10 @@ case "$JOB" in
 esac
 
 # --- Work on the auto branch. Never the default branch (CLAUDE.md hard rule 2). ----
+# PAUSE permits monitoring but halts merges. In monitor-only mode the complete self-repo Git
+# projection is observation-only: do not discard BOARD, checkout/create a branch, merge, move
+# HEAD, touch the index, or append a reflog entry.
+if [ "$PAUSED" = "0" ]; then
 DEFAULT_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"
 DEFAULT_BRANCH="${DEFAULT_BRANCH:-master}"
 # state/BOARD.md is RENDERED every run and tracked, so it is dirty almost always — and a dirty
@@ -76,6 +83,10 @@ if ! git merge -q --no-edit "$DEFAULT_BRANCH" 2>/dev/null; then
 fi
 BEHIND="$(git rev-list --count "$BRANCH..$DEFAULT_BRANCH" 2>/dev/null || echo 0)"
 [ "${BEHIND:-0}" -gt 0 ] && log "WARNING: $BRANCH is $BEHIND commit(s) behind $DEFAULT_BRANCH — running stale code"
+
+else
+  log "PAUSE preserves self-repo Git state; skipping BOARD discard, branch checkout/create, and default-branch merge."
+fi
 
 mkdir -p state/briefs
 log "start $JOB (model=$MODEL)"
@@ -205,7 +216,14 @@ fi
 cat state/projects/*.md 2>/dev/null > "$SNAP" || true
 
 # --- Commit any state changes (agent output). Never main. -------------------------
-if ! git diff --quiet || ! git diff --cached --quiet; then
+CURRENT_BRANCH="$(git branch --show-current 2>/dev/null || true)"
+if [ "$PAUSED" = "1" ]; then
+  # Monitoring artifacts remain durable local files, but PAUSE must not move HEAD or a reflog.
+  # A later resumed cycle reaches loop/auto and commits through the ordinary reviewed path.
+  log "PAUSE preserves self-repo Git state; monitoring artifacts retained locally without commit."
+elif [ "$CURRENT_BRANCH" != "$BRANCH" ]; then
+  log "REFUSED state commit on branch '${CURRENT_BRANCH:-detached}'; only $BRANCH may receive supervisor state."
+elif ! git diff --quiet || ! git diff --cached --quiet; then
   git add -A state/ || true
   if git commit -q -m "loop: $JOB $DATE"; then
     log "committed to $BRANCH"

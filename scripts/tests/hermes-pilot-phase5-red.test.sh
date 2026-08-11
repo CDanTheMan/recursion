@@ -3,6 +3,7 @@
 # and exact-commit independent verification. Hermetic: no model, network, publisher, or live state.
 set -uo pipefail
 export LC_ALL=C
+export RECURSION_TEST_PROVIDER_NETWORK=logical
 SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
@@ -16,8 +17,9 @@ cleanup(){
 trap cleanup EXIT
 BIN="$TMP/bin"; R="$TMP/controller"; ORIGIN="$TMP/origin.git"
 mkdir -p "$BIN" "$R/scripts/tests" "$R/state/tasks" "$R/state/runs" \
-  "$R/loop/logs" "$R/app" "$R/fixtures" "$R/other"
-for s in work.sh worker-sandbox.sh taskctl.sh board.sh notify.sh resync.sh capacity.sh \
+  "$R/loop/logs" "$R/app" "$R/fixtures" "$R/other" \
+  "$R/user-client/render/data/models"
+for s in work.sh worker-sandbox.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh \
          git-scope.py validate-gate.py validate-worker-result.py validate-verifier-result.py \
          resolve-model-alias.py worker-evidence.py; do
   [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$R/scripts/"
@@ -27,6 +29,8 @@ printf 'protected\n' > "$R/scripts/protected.sh"
 printf 'test\n' > "$R/scripts/tests/existing.test.cjs"
 printf '{"truth":1}\n' > "$R/fixtures/truth.json"
 printf 'seed\n' > "$R/app/seed.txt"
+printf 'immutable oracle\n' > "$R/user-client/render/data/models/oracle.json"
+printf '/user-client/render/data/models/\n' > "$R/.gitignore"
 printf '#!/usr/bin/env bash\nexit 1\n' > "$R/app/gate.sh"; chmod +x "$R/app/gate.sh"
 : > "$R/.env"; : > "$R/state/INBOX.md"
 
@@ -54,7 +58,6 @@ mktask(){ # id acceptance [expected-change] [gate-files]
 schema_version: 1
 id: $1
 project_id: phase5
-pilot_id: pilot-phase5
 workstream: phase5
 goal_id: phase5-goal
 goal: produce the bounded Phase 5 fixture for $1
@@ -82,7 +85,9 @@ T
 }
 status_of(){ sed -n 's/^status: *//p' "$R/state/tasks/$1.md" | head -1 | tr -d '\r'; }
 run_case(){ # id implementer-script [verifier-script]
-  ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 \
+  ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" \
+      RECURSION_NO_NOTIFY="${RECURSION_TEST_NO_NOTIFY:-1}" \
+      RECURSION_ALLOW_PUSH="${RECURSION_TEST_ALLOW_PUSH:-0}" \
       RECURSION_GIT_FETCH=0 RECURSION_TEST_WORKER=logical \
       RECURSION_MODEL_ALIAS_SONNET_ROUTINE=stub-sonnet \
       RECURSION_MODEL_ALIAS_OPUS_REVIEW=stub-opus \
@@ -94,6 +99,7 @@ done_result(){ # summary files-json
 }
 verdict_script='mkdir -p "$RECURSION_EVIDENCE_DIR"; printf "{\"verdict\":\"pass\",\"commit_oid\":\"%s\",\"implementer_run_id\":\"%s\",\"summary\":\"independent review passed\",\"evidence\":[\"diff and machine gate inspected\"],\"risks\":[]}" "$RECURSION_VERIFICATION_COMMIT" "$RECURSION_IMPLEMENTER_RUN_ID" > "$RECURSION_EVIDENCE_DIR/verdict.json"'
 
+if [ "${PHASE5_HARDENING_ONLY:-0}" != 1 ]; then
 # 1. A worker-created commit must not hide a protected-file change from scope verification.
 MARKER1="$TMP/gate-committed-protected"
 mktask committed-protected "test -s app/committed.txt && touch $MARKER1"
@@ -103,6 +109,18 @@ if [ "$(status_of committed-protected)" = escalated ] && [ ! -e "$MARKER1" ]; th
   ok "committed protected-file mutation is rejected before its gate"
 else
   no "a committed protected-file mutation was hidden (status=$(status_of committed-protected) gate=$([ -e "$MARKER1" ] && echo ran || echo blocked))"
+fi
+
+# 1b. A declared ignored oracle is read-only/checksummed and cannot invisibly grade itself.
+MARKER_SEED="$TMP/gate-seed-tamper"
+mktask seed-tamper "test -s app/seed-safe.txt && touch $MARKER_SEED"
+sed -i '/^workdir:/i seed: user-client/render/data/models' "$R/state/tasks/seed-tamper.md"
+result="$(done_result seed '[]')"
+run_case seed-tamper "printf corrupt > user-client/render/data/models/oracle.json; printf '%s' '$result' > .recursion-result.json"
+if [ "$(status_of seed-tamper)" = escalated ] && [ ! -e "$MARKER_SEED" ]; then
+  ok "ignored seed/oracle mutation is rejected before its gate"
+else
+  no "an ignored worker-writable oracle reached its gate (status=$(status_of seed-tamper))"
 fi
 
 # 2. One committed change set exercises test, fixture rename/delete, and out-of-scope paths.
@@ -174,11 +192,14 @@ valid=(len(impl)==1 and len(ver)==1 and impl[0]['id']!=ver[0]['id'] and impl[0][
 if valid:
     valid=(impl[0].get('machine_gate',{}).get('commit_oid')==ver[0].get('verification',{}).get('commit_oid')
            and ver[0].get('verification',{}).get('implementer_run_id')==impl[0]['id']
-           and ver[0].get('verification',{}).get('verdict')=='pass')
+           and ver[0].get('verification',{}).get('verdict')=='pass'
+           and all(r.get('usage',{}).get('tokens')==0 and r.get('usage',{}).get('cost_usd')==0
+                   and r.get('usage',{}).get('evidence_source')=='controller-engine-policy-v1'
+                   for r in (impl[0],ver[0])))
 raise SystemExit(0 if valid else 1)
 PY
 then
-  ok "implementer and verifier are independent runs bound to one exact commit"
+  ok "independent exact-commit runs carry controller-owned flat-sub usage evidence"
 else
   no "independent exact-commit verification evidence is absent or inconsistent"
 fi
@@ -194,6 +215,154 @@ if [ "$(status_of verifier-mutation)" = escalated ] && [ "$branch_value" = origi
 else
   no "verifier mutation was silent (status=$(status_of verifier-mutation) implementer_output=${branch_value:-missing})"
 fi
+fi
+
+# 9. A durable gate-evidence failure must stop before terminal success, publication,
+# notification, or cleanup. The running lease/worktree make the interrupted task recoverable.
+NOTIFY_MARKER="$TMP/notify-called"; PUBLISH_MARKER="$TMP/publish-called"
+cp "$R/scripts/notify.sh" "$R/scripts/notify.real.sh"
+cat > "$R/scripts/notify.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'notify\n' >> "${TEST_NOTIFY_MARKER:?}"
+SH
+cat > "$R/scripts/publish.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'publish\n' >> "${TEST_PUBLISH_MARKER:?}"
+SH
+chmod +x "$R/scripts/notify.sh" "$R/scripts/publish.sh"
+
+mv "$R/scripts/worker-evidence.py" "$R/scripts/worker-evidence.real.py"
+cat > "$R/scripts/worker-evidence.py" <<'PY'
+#!/usr/bin/env python3
+import os, sys
+if len(sys.argv) > 1 and sys.argv[1] == "gate":
+    raise SystemExit(87)
+real = os.path.join(os.path.dirname(__file__), "worker-evidence.real.py")
+os.execv(sys.executable, [sys.executable, real, *sys.argv[1:]])
+PY
+chmod +x "$R/scripts/worker-evidence.py"
+mktask gate-evidence-failure "test -s app/gate-evidence.txt"
+result="$(done_result gate-evidence '["app/gate-evidence.txt"]')"
+RECURSION_TEST_NO_NOTIFY=0 RECURSION_TEST_ALLOW_PUSH=1 \
+  TEST_NOTIFY_MARKER="$NOTIFY_MARKER" TEST_PUBLISH_MARKER="$PUBLISH_MARKER" \
+  run_case gate-evidence-failure \
+    "printf ok > app/gate-evidence.txt; printf '%s' '$result' > .recursion-result.json" "$verdict_script"
+evidence_rc=$?
+evidence_lease="$(sed -n 's/^lease_expires: *//p' "$R/state/tasks/gate-evidence-failure.md" | head -1)"
+if [ "$evidence_rc" = 87 ] && [ "$(status_of gate-evidence-failure)" = running ] \
+   && printf '%s' "$evidence_lease" | grep -qE '^[1-9][0-9]*$' \
+   && [ -d "$R/.worktrees/gate-evidence-failure" ] \
+   && [ ! -e "$NOTIFY_MARKER" ] && [ ! -e "$PUBLISH_MARKER" ]; then
+  ok "gate-evidence failure retains recoverable running state and blocks success side effects"
+else
+  no "gate-evidence failure escaped fail-closed handling (rc=$evidence_rc status=$(status_of gate-evidence-failure) lease=${evidence_lease:-missing})"
+fi
+mv "$R/scripts/worker-evidence.real.py" "$R/scripts/worker-evidence.py"
+
+# 10. Even after every build/verifier gate is green, a failed canonical passed transition
+# is authoritative: the caller sees failure and nothing publishes, notifies, or cleans up.
+mv "$R/scripts/taskctl.sh" "$R/scripts/taskctl.real.sh"
+cat > "$R/scripts/taskctl.sh" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = esc-record ] && [ "${FAIL_ESC_RECORD:-0}" = 1 ]; then
+  exit 85
+fi
+if [ "${1:-}" = finish ] && [ "${3:-}" = "${FAIL_TASKCTL_STATUS:-}" ]; then
+  exit 86
+fi
+exec bash "$(dirname "$0")/taskctl.real.sh" "$@"
+SH
+chmod +x "$R/scripts/taskctl.sh"
+rm -f "$NOTIFY_MARKER" "$PUBLISH_MARKER"
+mktask terminal-state-failure "test -s app/terminal-state.txt"
+result="$(done_result terminal-state '["app/terminal-state.txt"]')"
+RECURSION_TEST_NO_NOTIFY=0 RECURSION_TEST_ALLOW_PUSH=1 FAIL_TASKCTL_STATUS=passed \
+  TEST_NOTIFY_MARKER="$NOTIFY_MARKER" TEST_PUBLISH_MARKER="$PUBLISH_MARKER" \
+  run_case terminal-state-failure \
+    "printf ok > app/terminal-state.txt; printf '%s' '$result' > .recursion-result.json" "$verdict_script"
+terminal_rc=$?
+terminal_lease="$(sed -n 's/^lease_expires: *//p' "$R/state/tasks/terminal-state-failure.md" | head -1)"
+if [ "$terminal_rc" = 86 ] && [ "$(status_of terminal-state-failure)" = running ] \
+   && printf '%s' "$terminal_lease" | grep -qE '^[1-9][0-9]*$' \
+   && [ -d "$R/.worktrees/terminal-state-failure" ] \
+   && [ ! -e "$NOTIFY_MARKER" ] && [ ! -e "$PUBLISH_MARKER" ]; then
+  ok "failed canonical passed transition propagates and blocks publish/notify/cleanup"
+else
+  no "failed canonical passed transition was hidden (rc=$terminal_rc status=$(status_of terminal-state-failure) lease=${terminal_lease:-missing})"
+fi
+
+# 10b. A verifier rejection may terminalize only after its canonical escalation record is
+# durable. An esc-record failure leaves the running task/worktree recoverable and sends nothing.
+rm -f "$NOTIFY_MARKER" "$PUBLISH_MARKER"
+mktask escalation-record-failure "test -s app/escalation-record.txt"
+result="$(done_result escalation-record '["app/escalation-record.txt"]')"
+rejecting_verifier='mkdir -p "$RECURSION_EVIDENCE_DIR"; printf "{\"verdict\":\"fail\",\"commit_oid\":\"%s\",\"implementer_run_id\":\"%s\",\"summary\":\"controlled rejection\",\"evidence\":[\"falsifier\"],\"risks\":[]}" "$RECURSION_VERIFICATION_COMMIT" "$RECURSION_IMPLEMENTER_RUN_ID" > "$RECURSION_EVIDENCE_DIR/verdict.json"'
+RECURSION_TEST_NO_NOTIFY=0 RECURSION_TEST_ALLOW_PUSH=1 FAIL_ESC_RECORD=1 \
+  TEST_NOTIFY_MARKER="$NOTIFY_MARKER" TEST_PUBLISH_MARKER="$PUBLISH_MARKER" \
+  run_case escalation-record-failure \
+    "printf ok > app/escalation-record.txt; printf '%s' '$result' > .recursion-result.json" "$rejecting_verifier"
+escalation_rc=$?
+if [ "$escalation_rc" = 85 ] && [ "$(status_of escalation-record-failure)" = running ] \
+   && [ -d "$R/.worktrees/escalation-record-failure" ] \
+   && [ ! -e "$NOTIFY_MARKER" ] && [ ! -e "$PUBLISH_MARKER" ]; then
+  ok "failed canonical escalation record blocks terminal action success and notification"
+else
+  no "failed canonical escalation record was hidden (rc=$escalation_rc status=$(status_of escalation-record-failure))"
+fi
+
+# 10c. Once passed is durable it is the point of no return. PAUSE arriving at that exact seam
+# suppresses sends/publication/cleanup but does not turn the completed action into a deferral;
+# a subsequent invocation cannot launch the worker again.
+rm -f "$NOTIFY_MARKER" "$PUBLISH_MARKER" "$R/state/PAUSE"
+AFTER_TERMINAL_WORKER="$TMP/after-terminal-worker"
+mktask pause-after-terminal "test -s app/pause-after-terminal.txt"
+result="$(done_result pause-after-terminal '["app/pause-after-terminal.txt"]')"
+RECURSION_TEST_NO_NOTIFY=0 RECURSION_TEST_ALLOW_PUSH=1 RECURSION_TEST_PAUSE_AFTER_TERMINAL=1 \
+  TEST_NOTIFY_MARKER="$NOTIFY_MARKER" TEST_PUBLISH_MARKER="$PUBLISH_MARKER" \
+  run_case pause-after-terminal \
+    "printf 'run\\n' >> '$AFTER_TERMINAL_WORKER'; printf ok > app/pause-after-terminal.txt; printf '%s' '$result' > .recursion-result.json" "$verdict_script"
+after_terminal_rc=$?
+RECURSION_TEST_NO_NOTIFY=0 TEST_NOTIFY_MARKER="$NOTIFY_MARKER" \
+  run_case pause-after-terminal \
+    "printf 'replay\\n' >> '$AFTER_TERMINAL_WORKER'" "$verdict_script"
+after_terminal_replay_rc=$?
+worker_launches="$(wc -l < "$AFTER_TERMINAL_WORKER" 2>/dev/null || echo 0)"
+if [ "$after_terminal_rc" = 0 ] && [ "$after_terminal_replay_rc" = 75 ] \
+   && [ "$(status_of pause-after-terminal)" = passed ] && [ "$worker_launches" = 1 ] \
+   && [ -d "$R/.worktrees/pause-after-terminal" ] \
+   && [ ! -e "$NOTIFY_MARKER" ] && [ ! -e "$PUBLISH_MARKER" ]; then
+  ok "PAUSE after terminal pass preserves one success and suppresses send/publish/replay"
+else
+  no "post-terminal PAUSE changed outcome or leaked side effects (rc=$after_terminal_rc replay=$after_terminal_replay_rc status=$(status_of pause-after-terminal) launches=$worker_launches)"
+fi
+rm -f "$R/state/PAUSE"
+mv "$R/scripts/taskctl.real.sh" "$R/scripts/taskctl.sh"
+
+# 11. A heavy gate that cannot acquire the singleton capacity lock defers with rc75 and
+# never executes its acceptance command without exclusivity.
+mv "$R/scripts/capacity.sh" "$R/scripts/capacity.real.sh"
+cat > "$R/scripts/capacity.sh" <<'SH'
+#!/usr/bin/env bash
+echo 'BUSY fixture-holder'
+exit 75
+SH
+chmod +x "$R/scripts/capacity.sh"
+HEAVY_GATE_MARKER="$TMP/heavy-gate-ran"
+mktask heavy-contention "test -s app/heavy.txt && touch $HEAVY_GATE_MARKER"
+sed -i '/^gate_files:/i gate_class: heavy' "$R/state/tasks/heavy-contention.md"
+result="$(done_result heavy '["app/heavy.txt"]')"
+RECURSION_HEAVY_WAIT_S=0 run_case heavy-contention \
+  "printf ok > app/heavy.txt; printf '%s' '$result' > .recursion-result.json" "$verdict_script"
+heavy_rc=$?
+if [ "$heavy_rc" = 75 ] && [ "$(status_of heavy-contention)" = running ] \
+   && [ -d "$R/.worktrees/heavy-contention" ] && [ ! -e "$HEAVY_GATE_MARKER" ]; then
+  ok "contended heavy gate defers without executing unlocked"
+else
+  no "contended heavy gate did not fail closed (rc=$heavy_rc status=$(status_of heavy-contention) gate=$([ -e "$HEAVY_GATE_MARKER" ] && echo ran || echo held))"
+fi
+mv "$R/scripts/capacity.real.sh" "$R/scripts/capacity.sh"
+mv "$R/scripts/notify.real.sh" "$R/scripts/notify.sh"
+rm -f "$R/scripts/publish.sh"
 
 echo
 [ "$fails" -eq 0 ] && { echo "hermes-pilot-phase5-red: ALL PASS"; exit 0; }

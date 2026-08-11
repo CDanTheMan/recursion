@@ -82,6 +82,25 @@ else
   no "★ CONTROL FAILED — a plain message was not sent (rc=$rc): $(cat "$HERMES_LOG" "$TMP/err")"
 fi
 
+# --- 2b) file truncation never splits a UTF-8 character ---------------------------------------
+python3 - "$TMP/multibyte.txt" <<'PY'
+import sys
+open(sys.argv[1],"wb").write(("a"*3799 + "🦄" + "tail").encode("utf-8"))
+PY
+rc=$(notify -f "$TMP/multibyte.txt")
+if [ "$rc" = 0 ] && HERMES_LOG="$HERMES_LOG" python3 - <<'PY'
+import os
+raw=open(os.environ["HERMES_LOG"],"rb").read()
+text=raw.decode("utf-8")
+raise SystemExit(0 if b"a"*3799 in raw and b"a"*3800 not in raw and
+                 "🦄" not in text and " -f " not in text else 1)
+PY
+then
+  ok "legacy file notification truncates at a complete UTF-8 boundary"
+else
+  no "legacy file notification emitted malformed or unbounded UTF-8 (rc=$rc)"
+fi
+
 # --- 2) a project routes to ITS topic ---------------------------------------------------------
 notify --project gsc "gate result" >/dev/null
 if grep -q -- "-t telegram:$CHAT:4242" "$HERMES_LOG"; then

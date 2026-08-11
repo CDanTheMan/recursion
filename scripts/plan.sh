@@ -26,6 +26,22 @@ try: os.fsync(fd)
 finally: os.close(fd)
 PY
 }
+PLANNER_LOCK_HELD=0; PLANNER_LOCK=""
+planner_lock_acquire(){
+  PLANNER_LOCK="$1"
+  [ -x "$ROOT/scripts/runtime-state.py" ] \
+    || { echo "plan: witnessed planner lock helper is absent" >&2; return 73; }
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$PLANNER_LOCK" "$$" >/dev/null
+}
+planner_lock_release(){
+  [ "$PLANNER_LOCK_HELD" = 1 ] || return 0
+  if python3 "$ROOT/scripts/runtime-state.py" lock-release "$PLANNER_LOCK" "$$" >/dev/null; then
+    PLANNER_LOCK_HELD=0
+    return 0
+  fi
+  echo "plan: planner lock release failed closed: $PLANNER_LOCK" >&2
+  return 74
+}
 
 if [ "${1:-}" = --complete ]; then
   PLANNED="${2:?usage: plan.sh --complete state/roadmaps/<workstream>.md:<line>}"
@@ -34,14 +50,11 @@ if [ "${1:-}" = --complete ]; then
   printf '%s' "$WS" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$' || exit 2
   [ -f "$RM" ] || { echo "plan: no roadmap for completion: $RM" >&2; exit 2; }
   mkdir -p state/.locks
-  LOCK="state/.locks/planner-$WS.lock"; attempts=0
-  while ! mkdir "$LOCK" 2>/dev/null; do
-    attempts=$((attempts+1))
-    [ "$attempts" -lt "${RECURSION_LOCK_ATTEMPTS:-100}" ] \
-      || { echo "plan: planner lock contended; refusing unlocked completion" >&2; exit 73; }
-    sleep "${RECURSION_LOCK_DELAY_S:-0.1}"
-  done
-  trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+  LOCK="state/.locks/planner-$WS.lock"
+  planner_lock_acquire "$LOCK" \
+    || { echo "plan: planner lock contended; refusing unlocked completion" >&2; exit 73; }
+  PLANNER_LOCK_HELD=1
+  trap 'planner_lock_release || true' EXIT
   current="$(sed -n "${LN}p" "$RM")"
   case "$current" in '- [x] '*) echo "roadmap already complete: $PLANNED"; exit 0 ;; '- [~] '*) : ;; *) echo "plan: roadmap row is not reserved: $PLANNED" >&2; exit 75 ;; esac
   tmp_rm="$(mktemp "$(dirname "$RM")/.$(basename "$RM").tmp.XXXXXX")"
@@ -68,14 +81,11 @@ TASKDIR="state/tasks"; mkdir -p "$TASKDIR"
 # sequence let two planners choose the same ID and checklist row. A contended lock never degrades
 # to an unlocked write.
 LOCKDIR="state/.locks"; mkdir -p "$LOCKDIR"
-LOCK="$LOCKDIR/planner-$WS.lock"; attempts=0
-while ! mkdir "$LOCK" 2>/dev/null; do
-  attempts=$((attempts+1))
-  [ "$attempts" -lt "${RECURSION_LOCK_ATTEMPTS:-100}" ] \
-    || { echo "plan: planner lock contended; refusing unlocked allocation" >&2; exit 73; }
-  sleep "${RECURSION_LOCK_DELAY_S:-0.1}"
-done
-trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+LOCK="$LOCKDIR/planner-$WS.lock"
+planner_lock_acquire "$LOCK" \
+  || { echo "plan: planner lock contended; refusing unlocked allocation" >&2; exit 73; }
+PLANNER_LOCK_HELD=1
+trap 'planner_lock_release || true' EXIT
 
 # header defaults: read a key's value from the key:value lines above the first checklist item
 hget(){ awk -v k="$1" -F': *' '/^- \[/{exit} $1==k{sub(/^[^:]+: */,"");print;exit}' "$RM"; }

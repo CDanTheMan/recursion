@@ -49,6 +49,29 @@ ALLOW="${RECURSION_INTAKE_ALLOW:-8913126684}"     # Lucas. A chat is not an auth
 CMD="${1:-poll}"; shift 2>/dev/null || true
 now(){ date -u +%FT%TZ; }
 
+_INTAKE_LOCK_HELD=0; _INTAKE_TMP=""
+intake_unlock(){
+  [ "$_INTAKE_LOCK_HELD" = 1 ] || return 0
+  python3 "$ROOT/scripts/runtime-state.py" lock-release \
+    "$ROOT/state/.locks/taskctl.lock" "$$" >/dev/null || return 74
+  _INTAKE_LOCK_HELD=0
+}
+intake_cleanup(){
+  [ -z "$_INTAKE_TMP" ] || rm -f -- "$_INTAKE_TMP" 2>/dev/null || true
+  intake_unlock || true
+}
+intake_lock(){
+  local lock="$ROOT/state/.locks/taskctl.lock"
+  mkdir -p "$ROOT/state/.locks" || return 70
+  [ -x "$ROOT/scripts/runtime-state.py" ] \
+    || { echo "intake: witnessed lock helper is absent" >&2; return 73; }
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$lock" "$$" >/dev/null \
+    || { echo "intake: state lock is contended; refusing mutation" >&2; return 73; }
+  _INTAKE_LOCK_HELD=1
+  trap 'intake_cleanup' EXIT
+  return 0
+}
+
 atomic_instruction_transition(){ # file status action_csv note
   local file="$1" status="$2" actions="$3" note="$4" d b tmp rc
   [ ! -d "$ROOT/state/.locks/runtime-state.lock" ] \
@@ -107,6 +130,10 @@ PY
     if [ "$required" = failed ] && [ "$status" != failed ] && [ "$status" != cancelled ]; then
       echo "intake: action $aid is $status, not failed/cancelled" >&2; return 2
     fi
+    if [ "$required" = releasable ] && [ "$status" != pending ] \
+       && [ "$status" != failed ] && [ "$status" != cancelled ]; then
+      echo "intake: action $aid is $status, not pending/failed/cancelled" >&2; return 2
+    fi
     csv="${csv:+$csv,}$aid"
   done
   printf '%s' "$csv"
@@ -118,14 +145,31 @@ poll)
   DRY=0; BACKFILL=0
   for a in "$@"; do case "$a" in --dry-run) DRY=1 ;; --backfill) BACKFILL=1 ;; esac; done
   [ -f "$DB" ] || { echo "intake: no gateway store at $DB — nothing to read"; exit 0; }
-  [ -f "$MARK" ] || echo 0 > "$MARK"
-  LAST="$(cat "$MARK" 2>/dev/null || echo 0)"; case "$LAST" in ''|*[!0-9]*) LAST=0 ;; esac
+  intake_lock || exit $?
+  if [ -e "$MARK" ]; then
+    [ -f "$MARK" ] || { echo "intake: watermark is not a regular file; refusing intake" >&2; exit 74; }
+    LAST="$(cat "$MARK" 2>/dev/null)" || { echo "intake: unreadable watermark; refusing intake" >&2; exit 74; }
+    case "$LAST" in
+      ''|*[!0-9]*)
+        mark_sha="$(sha256sum "$MARK" 2>/dev/null | awk '{print $1}')"
+        intake_unlock || exit $?
+        RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/taskctl.sh" esc-record \
+          "intake-watermark-corrupt-${mark_sha:-unknown}" \
+          "Intake watermark is corrupt; authenticated instructions are held" \
+          infra "state/.intake-watermark sha256=${mark_sha:-unknown}" >/dev/null 2>&1 || true
+        echo "intake: existing watermark is empty/corrupt; refusing first-run reseed" >&2
+        exit 74
+        ;;
+    esac
+  else
+    LAST=0
+  fi
 
   # The watermark advances only over messages actually written out, so a crash mid-batch
   # re-reads rather than skips. Losing an instruction silently is the failure that matters;
   # seeing one twice is merely untidy, and the filename is keyed by message id so a repeat
   # overwrites rather than duplicates.
-  TMPOUT="$(mktemp)"; trap 'rm -f "$TMPOUT"' EXIT
+  TMPOUT="$(mktemp)"; _INTAKE_TMP="$TMPOUT"
   python3 - "$DB" "$LAST" "$ALLOW" "$DIR" "$REG" "$DRY" "$(now)" "$BACKFILL" >"$TMPOUT" <<'PY'
 import io, json, os, re, sqlite3, sys, shutil, tempfile
 
@@ -269,7 +313,14 @@ PY
   grep -v '^__WATERMARK__' "$TMPOUT" || true
   if [ "$DRY" = "0" ] && [ -n "$WM" ]; then
     mark_tmp="$(mktemp "$(dirname "$MARK")/.$(basename "$MARK").tmp.XXXXXX")" || exit 70
-    printf '%s\n' "$WM" > "$mark_tmp" && mv -f -- "$mark_tmp" "$MARK" || exit 71
+    printf '%s\n' "$WM" > "$mark_tmp" || { rm -f -- "$mark_tmp"; exit 71; }
+    python3 - "$mark_tmp" <<'PY' >/dev/null 2>&1 || { rm -f -- "$mark_tmp"; exit 72; }
+import os,sys
+fd=os.open(sys.argv[1],os.O_RDONLY)
+try: os.fsync(fd)
+finally: os.close(fd)
+PY
+    mv -f -- "$mark_tmp" "$MARK" || { rm -f -- "$mark_tmp"; exit 71; }
     python3 - "$(dirname "$MARK")" <<'PY' >/dev/null 2>&1 || exit 72
 import os,sys
 fd=os.open(sys.argv[1],os.O_RDONLY)
@@ -283,6 +334,9 @@ PY
   # A quiet poll is a SUCCESS. Without this the trailing grep-for-ingested-lines finds nothing,
   # its exit status becomes the script's, and cycle.sh logs "intake failed" on every normal
   # cycle — an error message that means "nothing happened", which is how real errors get ignored.
+  rm -f -- "$TMPOUT"; _INTAKE_TMP=""
+  intake_unlock || exit $?
+  trap - EXIT
   true
   ;;
 
@@ -307,29 +361,44 @@ open) found=0; TARGET="${1:-}"
 
 handled) echo "intake: handled is forbidden; acknowledge a coupled succeeded action" >&2; exit 2 ;;
 
-consume) ID="${1:?usage: intake.sh consume <id> <action-id>...}"; shift
+consume) intake_lock || exit $?
+      ID="${1:?usage: intake.sh consume <id> <action-id>...}"; shift
       F="$DIR/$(printf '%08d' "$ID").md"
       [ -f "$F" ] || { echo "intake: no instruction $ID" >&2; exit 2; }
       ACTIONS="$(coupled_actions "$ID" any "$@")" || exit $?
       atomic_instruction_transition "$F" consumed "$ACTIONS" "resulting actions: $ACTIONS" || exit $?
       echo "consumed $ID -> $ACTIONS" ;;
 
-acknowledge) ID="${1:?usage: intake.sh acknowledge <id> <action-id>...}"; shift
+acknowledge) intake_lock || exit $?
+      ID="${1:?usage: intake.sh acknowledge <id> <action-id>...}"; shift
       F="$DIR/$(printf '%08d' "$ID").md"
       [ -f "$F" ] || { echo "intake: no instruction $ID" >&2; exit 2; }
-      [ "$(sed -n 's/^status: *//p' "$F" | head -1)" = consumed ] \
-        || { echo "intake: instruction $ID is not consumed" >&2; exit 2; }
       ACTIONS="$(coupled_actions "$ID" succeeded "$@")" || exit $?
+      CURRENT="$(sed -n 's/^status: *//p' "$F" | head -1)"
+      if [ "$CURRENT" = acknowledged ]; then
+        [ "$(sed -n 's/^action_ids: *//p' "$F" | head -1)" = "$ACTIONS" ] \
+          || { echo "intake: acknowledged instruction $ID has different action evidence" >&2; exit 2; }
+        echo "acknowledged $ID -> $ACTIONS (already)"; exit 0
+      fi
+      [ "$CURRENT" = consumed ] \
+        || { echo "intake: instruction $ID is not consumed" >&2; exit 2; }
       atomic_instruction_transition "$F" acknowledged "$ACTIONS" "succeeded actions: $ACTIONS" || exit $?
       echo "acknowledged $ID -> $ACTIONS" ;;
 
-release) ID="${1:?usage: intake.sh release <id> <action-id>...}"; shift
+release) intake_lock || exit $?
+      ID="${1:?usage: intake.sh release <id> <action-id>...}"; shift
       F="$DIR/$(printf '%08d' "$ID").md"
       [ -f "$F" ] || { echo "intake: no instruction $ID" >&2; exit 2; }
-      [ "$(sed -n 's/^status: *//p' "$F" | head -1)" = consumed ] \
+      ACTIONS="$(coupled_actions "$ID" releasable "$@")" || exit $?
+      CURRENT="$(sed -n 's/^status: *//p' "$F" | head -1)"
+      if [ "$CURRENT" = open ]; then
+        [ "$(sed -n 's/^action_ids: *//p' "$F" | head -1)" = "$ACTIONS" ] \
+          || { echo "intake: reopened instruction $ID has different action evidence" >&2; exit 2; }
+        echo "released $ID -> $ACTIONS (already)"; exit 0
+      fi
+      [ "$CURRENT" = consumed ] \
         || { echo "intake: instruction $ID is not consumed" >&2; exit 2; }
-      ACTIONS="$(coupled_actions "$ID" failed "$@")" || exit $?
-      atomic_instruction_transition "$F" open "$ACTIONS" "failed actions reopened instruction: $ACTIONS" || exit $?
+      atomic_instruction_transition "$F" open "$ACTIONS" "deferred/failed actions reopened instruction: $ACTIONS" || exit $?
       echo "released $ID -> $ACTIONS" ;;
 
 *) sed -n '30,34p' "$0"; exit 2 ;;

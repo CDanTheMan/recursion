@@ -19,11 +19,33 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/repo"; mkdir -p "$R/scripts" "$R/state/tasks"
-cp "$SRC/scripts/taskctl.sh" "$R/scripts/"
+cp "$SRC/scripts/taskctl.sh" "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
+  "$SRC/scripts/runtime-state.py" "$R/scripts/"
 chmod +x "$R/scripts/taskctl.sh"
 tc(){ RECURSION_ROOT="$R" bash "$R/scripts/taskctl.sh" "$@"; }
 
 mktask(){ printf 'id: %s\nworkstream: %s\ngoal: %s\nstatus: queued\n\nbody\n' "$1" "${2:-t}" "${3:-a goal}" > "$R/state/tasks/$1.md"; }
+
+# ============================ crash-safe writer lock ============================
+mkdir -p "$R/state/.locks/taskctl.lock"
+printf '%s\n' "$$" > "$R/state/.locks/taskctl.lock/pid"
+if RECURSION_ROOT="$R" RECURSION_LOCK_ATTEMPTS=2 RECURSION_LOCK_DELAY_S=0 \
+     bash "$R/scripts/taskctl.sh" event lock-live '' probe >/dev/null 2>&1; then
+  no "lock: a live owner was reclaimed"
+else
+  [ -d "$R/state/.locks/taskctl.lock" ] \
+    && ok "lock: a live owner remains fail-closed" \
+    || no "lock: live owner evidence was removed"
+fi
+printf '999999999\n' > "$R/state/.locks/taskctl.lock/pid"
+if RECURSION_ROOT="$R" RECURSION_LOCK_ATTEMPTS=3 RECURSION_LOCK_DELAY_S=0 \
+     bash "$R/scripts/taskctl.sh" event lock-recovered '' probe >/dev/null 2>&1 \
+   && [ ! -d "$R/state/.locks/taskctl.lock" ]; then
+  ok "lock: a provably dead owner is reclaimed and the next canonical writer succeeds"
+else
+  no "lock: a dead owner permanently wedged canonical state"
+  rm -rf "$R/state/.locks/taskctl.lock"
+fi
 
 # ============================ leases ============================
 mktask t1
@@ -138,6 +160,14 @@ tc esc-resolve "$EID" "decided" >/dev/null 2>&1
 r3="$(tc esc-record "$K" "same ask, new cycle" cubic-castles ptr)"
 case "$r3" in NEW*) ok "CONTROL — after resolution the ask can be raised again ($r3)" ;;
               *)    no "CONTROL FAILED — a resolved ask can never be re-raised ('$r3')" ;; esac
+
+tabbed="$(tc esc-record $'tab\tkey' $'title\tforged\nrow' $'ws\tbad' $'ptr\nline')"
+tabbed_id="${tabbed#NEW }"
+if [ -n "$tabbed_id" ] && [ "$(awk -F'\t' -v e="$tabbed_id" '$1==e{print NF}' "$R/state/escalations.tsv")" = 9 ]; then
+  ok "esc: model-shaped tabs/newlines cannot forge TSV columns or rows"
+else
+  no "esc: control characters corrupted escalation identity state"
+fi
 
 # resolving an unknown id must fail loudly rather than silently succeed
 if tc esc-resolve "esc-9999" >/dev/null 2>&1; then

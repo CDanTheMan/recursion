@@ -71,13 +71,27 @@ def fixture() -> tuple[Path, dict[str, str]]:
         )
         decision = {
             "schema_version": 1, "id": f"decision-{task}", "actor": f"pilot-{project}",
+            "decision_source": "project-reconciler", "routed_decider": f"pilot-{project}",
             "verb": "work", "args": [task], "arguments": [task], "project": project,
             "goal": f"goal-{project}", "goal_id": f"goal-{project}",
             "why": "parallel admission fixture", "reason": "parallel admission fixture",
             "wrong_if": "worker bounds overlap incorrectly", "idempotency_key": f"parallel:{task}",
             "status": "queued",
         }
-        write_json(root / f"state/decision-queue/pending/decision-{task}.json", decision)
+        normalized = subprocess.run(
+            ["python3", str(root / "scripts/decision-queue.py"), "normalize"],
+            input=json.dumps(decision), env={**os.environ, "RECURSION_ROOT": str(root)},
+            text=True, capture_output=True, check=False,
+        )
+        if normalized.returncode:
+            raise RuntimeError(f"decision normalization failed: {normalized.stderr.strip()}")
+        enqueued = subprocess.run(
+            ["python3", str(root / "scripts/decision-queue.py"), "enqueue"],
+            input=normalized.stdout, env={**os.environ, "RECURSION_ROOT": str(root)},
+            text=True, capture_output=True, check=False,
+        )
+        if enqueued.returncode:
+            raise RuntimeError(f"decision enqueue failed: {enqueued.stderr.strip()}")
     env = os.environ.copy()
     env.update({"RECURSION_ROOT": str(root), "RECURSION_PILOT_GLOBAL_CONCURRENCY": "2",
                 "RECURSION_QUEUE_ACTUATION": "1", "RECURSION_NO_NOTIFY": "1"})
@@ -99,7 +113,11 @@ def linux_overlap(root: Path, env: dict[str, str]) -> bool:
     (root / "scripts/work.sh").write_text(
         "#!/usr/bin/env bash\nset -uo pipefail\n"
         "printf 'start\\t%s\\t%s\\n' \"$1\" \"$(date +%s%N)\" >> \"$RECURSION_ROOT/state/worker-times.tsv\"\n"
-        "sleep 0.35\n"
+        "for _fixture_wait in $(seq 1 100); do\n"
+        "  [ \"$(grep -c '^start' \"$RECURSION_ROOT/state/worker-times.tsv\")\" -ge 2 ] && break\n"
+        "  sleep 0.02\n"
+        "done\n"
+        "sleep 0.10\n"
         "printf 'end\\t%s\\t%s\\n' \"$1\" \"$(date +%s%N)\" >> \"$RECURSION_ROOT/state/worker-times.tsv\"\n",
         encoding="utf-8",
     )

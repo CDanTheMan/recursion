@@ -21,6 +21,15 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+from jsonl_durable import (
+    JsonlDurabilityError, acknowledge_jsonl, append_jsonl as durable_append_jsonl,
+    find_jsonl_objects, read_jsonl_prefix, read_jsonl_since,
+)
+
 
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 TERMINAL_DIRS = ("succeeded", "failed")
@@ -59,8 +68,22 @@ def fsync_dir(path: Path) -> None:
         os.close(fd)
 
 
+def ensure_directory(path: Path) -> None:
+    missing: list[Path] = []
+    current = path
+    while not current.exists():
+        missing.append(current)
+        if current.parent == current:
+            break
+        current = current.parent
+    path.mkdir(parents=True, exist_ok=True)
+    for created in reversed(missing):
+        fsync_dir(created)
+        fsync_dir(created.parent)
+
+
 def atomic_json(path: Path, value: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_directory(path.parent)
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
     tmp = Path(tmp_name)
     try:
@@ -79,10 +102,38 @@ def atomic_json(path: Path, value: dict) -> None:
         raise
 
 
+def atomic_bytes(path: Path, value: bytes) -> None:
+    ensure_directory(path.parent)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as out:
+            out.write(value)
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(tmp, path)
+        fsync_dir(path.parent)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def write_all(fd: int, value: bytes) -> None:
+    view = memoryview(value)
+    while view:
+        written = os.write(fd, view)
+        if written <= 0:
+            raise OSError("short append-only journal write")
+        view = view[written:]
+
+
 @contextmanager
 def queue_lock(base: Path):
     lock_dir = base / "state/.locks"
-    lock_dir.mkdir(parents=True, exist_ok=True)
+    ensure_directory(lock_dir)
     lock_path = lock_dir / "decision-queue.lock"
     with lock_path.open("a+", encoding="utf-8") as lock:
         try:
@@ -95,6 +146,39 @@ def queue_lock(base: Path):
 def digest(value: object) -> str:
     raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(raw).hexdigest()
+
+
+def decision_payload_digest(record: dict) -> str:
+    """Bind an identity to every authority/effect-bearing decision field.
+
+    Queue status, timestamps, provider accounting, and explanatory prose do not change what the
+    actuator is allowed to do.  Everything that can change authority or the resulting effect is
+    frozen here so an existing same-id projection cannot be reused with different content.
+    """
+    payload = {
+        "actor": record.get("actor") or "",
+        "verb": record.get("verb") or "",
+        "args": record.get("args", record.get("arguments", [])) or [],
+        "text": record.get("text") or "",
+        "plan": record.get("plan") or None,
+        "instruction_id": record.get("instruction_id") or None,
+        "project": record.get("project") or "",
+        "goal": record.get("goal", record.get("goal_id", "")) or "",
+        "decision_source": record.get("decision_source") or "",
+        "routed_decider": record.get("routed_decider") or "",
+    }
+    return digest(payload)
+
+
+def assert_same_decision(existing: dict, incoming: dict, where: str) -> None:
+    existing_digest = decision_payload_digest(existing)
+    incoming_digest = decision_payload_digest(incoming)
+    if existing.get("decision_payload_sha256") not in {None, existing_digest}:
+        raise ValueError(f"stored decision authority/effect digest is inconsistent: {where}")
+    if incoming.get("decision_payload_sha256") not in {None, incoming_digest}:
+        raise ValueError(f"incoming decision authority/effect digest is inconsistent: {where}")
+    if existing_digest != incoming_digest:
+        raise ValueError(f"decision id collision with different authority/effect payload: {where}")
 
 
 def normalize(raw: dict, stamp: str | None = None, provider: str | None = None,
@@ -135,6 +219,7 @@ def normalize(raw: dict, stamp: str | None = None, provider: str | None = None,
             "status": "queued",
         }
     )
+    record["decision_payload_sha256"] = decision_payload_digest(record)
     if stamp:
         record["ts"] = stamp
     if provider:
@@ -166,15 +251,54 @@ def existing_path(base: Path, decision_id: str) -> Path | None:
     return None
 
 
-def append_journal(base: Path, record: dict) -> None:
-    journal = base / "state/decisions.jsonl"
-    journal.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(journal, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+def validate_committed_journal_objects(data: bytes) -> list[dict]:
+    """Fail closed on any complete non-object JSONL row without rewriting legacy objects."""
     try:
-        os.write(fd, (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode())
-        os.fsync(fd)
-    finally:
-        os.close(fd)
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"decision journal is not UTF-8: {exc}") from exc
+    values: list[dict] = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid decision journal line {number}: {exc}") from exc
+        if not isinstance(value, dict):
+            raise ValueError(f"invalid decision journal line {number}: JSON object required")
+        values.append(value)
+    return values
+
+
+def append_journal(base: Path, record: dict) -> bool:
+    # enqueue() owns decision-queue.lock across this repair/validate/append boundary. Preserve the
+    # exact reviewed legacy object rows: only an unterminated tail is removed, and complete rows
+    # are inspected without normalization or rewriting.
+    journal = base / "state/decisions.jsonl"
+    ensure_directory(journal.parent)
+    if journal.exists():
+        repair_decision_journal_tail(base, journal)
+    try:
+        matches = find_jsonl_objects(journal, "id", record.get("id"))
+    except JsonlDurabilityError as exc:
+        raise ValueError(str(exc)) from exc
+    if matches:
+        for existing in matches:
+            assert_same_decision(existing, record, f"journal decision {record.get('id')}")
+        # A prior process may have died after fsync(journal) but before projection. Re-durabilize
+        # the directory entry, reuse the semantic row, and let enqueue create the projection once.
+        fsync_dir(journal.parent)
+        return False
+    try:
+        outcome = durable_append_jsonl(journal, record, dedupe_field="id",
+                                       dedupe_value=record.get("id"))
+    except JsonlDurabilityError as exc:
+        raise ValueError(str(exc)) from exc
+    # Retain decision-queue's observable directory durability boundary even though the shared
+    # append helper also persists a newly created journal entry.
+    fsync_dir(journal.parent)
+    return outcome.appended
 
 
 def reviewed_legacy_marker(raw: dict, line: str, number: int, record: dict) -> dict | None:
@@ -220,6 +344,11 @@ def enqueue(base: Path, record: dict, journal: bool) -> Path:
     with queue_lock(base):
         present = existing_path(base, record["id"])
         if present:
+            try:
+                existing = json.loads(present.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ValueError(f"existing decision projection is unreadable: {present}") from exc
+            assert_same_decision(existing, record, str(present))
             return present
         if journal:
             # Journal first: if the process dies before the projection rename, import-journal
@@ -230,6 +359,120 @@ def enqueue(base: Path, record: dict, journal: bool) -> Path:
         return target
 
 
+def quarantine_torn_tail(base: Path, journal: Path, data: bytes) -> bytes:
+    """Preserve and remove only an unterminated final write; committed corruption still fails."""
+    if not data or data.endswith(b"\n"):
+        return data
+    offset = data.rfind(b"\n") + 1
+    committed, tail = data[:offset], data[offset:]
+    tail_sha = hashlib.sha256(tail).hexdigest()
+    before_sha = hashlib.sha256(data).hexdigest()
+    quarantine = queue_root(base) / "quarantine"
+    payload = quarantine / f"decision-journal-tail-{tail_sha[:24]}.bin"
+    metadata_path = quarantine / f"decision-journal-tail-{tail_sha[:24]}.json"
+    metadata = {
+        "schema_version": 1,
+        "source": "state/decisions.jsonl",
+        "classification": "unterminated-final-write",
+        "disposition": "quarantined-before-journal-truncate",
+        "journal_sha256_before": before_sha,
+        "journal_offset": offset,
+        "tail_bytes": len(tail),
+        "tail_sha256": tail_sha,
+        "payload": payload.relative_to(base).as_posix(),
+    }
+    if payload.exists():
+        if payload.read_bytes() != tail:
+            raise ValueError(f"torn-tail quarantine payload mismatch: {payload.name}")
+    else:
+        atomic_bytes(payload, tail)
+    if metadata_path.exists():
+        try:
+            observed = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"invalid torn-tail quarantine metadata: {metadata_path.name}") from exc
+        if observed != metadata:
+            raise ValueError(f"torn-tail quarantine metadata mismatch: {metadata_path.name}")
+    else:
+        atomic_json(metadata_path, metadata)
+    with journal.open("r+b") as source:
+        source.truncate(offset)
+        source.flush()
+        os.fsync(source.fileno())
+    fsync_dir(journal.parent)
+    print(
+        f"decision-queue: quarantined unterminated final journal write "
+        f"sha256={tail_sha} bytes={len(tail)}",
+        file=sys.stderr,
+    )
+    return committed
+
+
+def repair_decision_journal_tail(base: Path, journal: Path) -> None:
+    """Inspect one byte in the steady state; copy the journal only for a torn tail."""
+    if not journal.is_file():
+        return
+    with journal.open("rb") as source:
+        source.seek(0, os.SEEK_END)
+        size = source.tell()
+        if not size:
+            return
+        source.seek(-1, os.SEEK_END)
+        if source.read(1) == b"\n":
+            return
+    quarantine_torn_tail(base, journal, journal.read_bytes())
+
+
+def _line_text(raw: bytes) -> str:
+    payload = raw[:-1] if raw.endswith(b"\n") else raw
+    if payload.endswith(b"\r"):
+        payload = payload[:-1]
+    try:
+        return payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"decision journal is not UTF-8: {exc}") from exc
+
+
+def _expected_legacy_markers(base: Path, journal: Path) -> dict[Path, dict]:
+    """Revalidate the permanently bounded five-row compatibility prefix."""
+    markers: list[dict] = []
+    for line in read_jsonl_prefix(journal, len(LEGACY_PRE_SCHEMA_NOOP_SHA256) + 1):
+        if line.value is None:
+            continue
+        raw = line.value
+        record = normalize(raw)
+        try:
+            validate_record(base, record)
+        except ValueError as exc:
+            marker = reviewed_legacy_marker(raw, _line_text(line.raw), line.sequence, record)
+            if marker is None:
+                raise ValueError(f"invalid decision journal line {line.sequence}: {exc}") from exc
+            markers.append(marker)
+            continue
+        break
+    digests = tuple(marker["source_sha256"] for marker in markers)
+    if digests and digests != LEGACY_PRE_SCHEMA_NOOP_SHA256:
+        raise ValueError("reviewed legacy decision prefix is incomplete or out of order")
+    return {legacy_marker_path(base, marker): marker for marker in markers}
+
+
+def _validate_legacy_marker_store(base: Path, expected_markers: dict[Path, dict]) -> None:
+    legacy_root = queue_root(base) / "legacy"
+    observed_markers = set(legacy_root.glob("*.json")) if legacy_root.exists() else set()
+    unexpected = observed_markers - expected_markers.keys()
+    if unexpected:
+        raise ValueError(f"unexpected legacy decision marker: {sorted(unexpected)[0].name}")
+    for path, expected in expected_markers.items():
+        if not path.exists():
+            continue
+        try:
+            observed = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"invalid legacy decision marker {path.name}: {exc}") from exc
+        if observed != expected:
+            raise ValueError(f"legacy decision marker mismatch: {path.name}")
+
+
 def import_journal(base: Path) -> int:
     journal = base / "state/decisions.jsonl"
     if not journal.exists():
@@ -237,77 +480,102 @@ def import_journal(base: Path) -> int:
         if legacy.exists() and any(legacy.glob("*.json")):
             raise ValueError("legacy decision markers exist without the append-only source journal")
         return 0
-    prepared: list[tuple[str, dict]] = []
-    legacy_prefix = True
     with queue_lock(base):
-        for number, line in enumerate(journal.read_text(encoding="utf-8").splitlines(), 1):
-            if not line.strip():
+        repair_decision_journal_tail(base, journal)
+        expected_markers = _expected_legacy_markers(base, journal)
+        _validate_legacy_marker_store(base, expected_markers)
+        expected_by_digest = {
+            marker["source_sha256"]: marker for marker in expected_markers.values()
+        }
+        batch = read_jsonl_since(journal, "decision-queue-import")
+        prepared: list[tuple[str, dict]] = []
+        for line in batch.lines:
+            if line.value is None:
                 continue
-            raw = None
-            record = None
+            raw = line.value
+            record = normalize(raw)
             try:
-                raw = json.loads(line)
-                record = normalize(raw)
                 validate_record(base, record)
-            except (json.JSONDecodeError, ValueError) as exc:
-                marker = None
-                if legacy_prefix and isinstance(raw, dict) and isinstance(record, dict):
-                    marker = reviewed_legacy_marker(raw, line, number, record)
-                if marker is not None:
+            except ValueError as exc:
+                source_sha256 = hashlib.sha256(_line_text(line.raw).encode()).hexdigest()
+                marker = expected_by_digest.get(source_sha256)
+                if marker is not None and marker.get("source_line") == line.sequence:
                     prepared.append(("legacy", marker))
                     continue
-                raise ValueError(f"invalid decision journal line {number}: {exc}") from exc
-            legacy_prefix = False
+                raise ValueError(f"invalid decision journal line {line.sequence}: {exc}") from exc
             prepared.append(("decision", record))
 
-        # Validate all durable compatibility evidence before writing any marker or projection.
-        legacy_digests = tuple(
-            value["source_sha256"] for kind, value in prepared if kind == "legacy"
-        )
-        if legacy_digests and legacy_digests != LEGACY_PRE_SCHEMA_NOOP_SHA256:
-            raise ValueError("reviewed legacy decision prefix is incomplete or out of order")
-        expected_markers = {
-            legacy_marker_path(base, value): value for kind, value in prepared if kind == "legacy"
-        }
-        legacy_root = queue_root(base) / "legacy"
-        observed_markers = set(legacy_root.glob("*.json")) if legacy_root.exists() else set()
-        unexpected = observed_markers - expected_markers.keys()
-        if unexpected:
-            raise ValueError(f"unexpected legacy decision marker: {sorted(unexpected)[0].name}")
-        for path, expected in expected_markers.items():
-            if not path.exists():
+        # Validate every newly observed repeated identity against all indexed occurrences before
+        # projecting any of the batch. Old rows were already validated before their checkpoint.
+        prepared_decisions: dict[str, dict] = {}
+        for kind, value in prepared:
+            if kind != "decision":
                 continue
-            try:
-                observed = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as exc:
-                raise ValueError(f"invalid legacy decision marker {path.name}: {exc}") from exc
-            if observed != expected:
-                raise ValueError(f"legacy decision marker mismatch: {path.name}")
+            prior = prepared_decisions.get(value["id"])
+            if prior is not None:
+                assert_same_decision(prior, value, f"journal decision {value['id']}")
+            else:
+                prepared_decisions[value["id"]] = value
+            for raw_match in find_jsonl_objects(journal, "id", value["id"]):
+                assert_same_decision(normalize(raw_match), value,
+                                     f"journal decision {value['id']}")
 
         imported = 0
+        seen_decisions: set[str] = set()
         for kind, value in prepared:
             if kind == "legacy":
                 path = legacy_marker_path(base, value)
                 if not path.exists():
                     atomic_json(path, value)
                 continue
-            if existing_path(base, value["id"]):
+            if value["id"] in seen_decisions:
+                continue
+            seen_decisions.add(value["id"])
+            present = existing_path(base, value["id"])
+            if present:
+                try:
+                    existing = json.loads(present.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise ValueError(f"existing decision projection is unreadable: {present}") from exc
+                assert_same_decision(existing, value, str(present))
                 continue
             target = queue_root(base) / "pending" / f"{value['id']}.json"
             atomic_json(target, value)
             imported += 1
-    return imported
+        acknowledge_jsonl(journal, "decision-queue-import", batch)
+        return imported
+
+
+def validate_projection_authority(base: Path, path: Path) -> dict:
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"decision projection is unreadable: {path}") from exc
+    validate_record(base, record)
+    assert_same_decision(record, record, str(path))
+    decision_id = str(record.get("id") or "")
+    try:
+        matches = find_jsonl_objects(base / "state/decisions.jsonl", "id", decision_id)
+    except JsonlDurabilityError as exc:
+        raise ValueError(str(exc)) from exc
+    if not matches:
+        raise ValueError(f"decision projection lacks an authoritative journal row: {path}")
+    for raw_match in matches:
+        assert_same_decision(normalize(raw_match), record, str(path))
+    return record
 
 
 def claim(base: Path) -> Path | None:
     with queue_lock(base):
         running = sorted((queue_root(base) / "running").glob("*.json"))
         if running:
+            validate_projection_authority(base, running[0])
             return running[0]
         pending = sorted((queue_root(base) / "pending").glob("*.json"))
         if not pending:
             return None
         source = pending[0]
+        validate_projection_authority(base, source)
         target = queue_root(base) / "running" / source.name
         target.parent.mkdir(parents=True, exist_ok=True)
         os.replace(source, target)
@@ -332,6 +600,7 @@ def claim_pending(base: Path, kind: str, excluded_projects: set[str], allowed_ve
                 continue
             if str(record.get("project") or "") in excluded_projects:
                 continue
+            validate_projection_authority(base, source)
             target = queue_root(base) / "running" / source.name
             target.parent.mkdir(parents=True, exist_ok=True)
             os.replace(source, target)

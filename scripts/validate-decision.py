@@ -80,7 +80,7 @@ ARITY = {
 }
 
 
-def validate(verbs, raw):
+def validate(verbs, raw, expected_actor=None):
     """Return (ok: bool, message: str)."""
     try:
         d = json.loads(raw)
@@ -92,6 +92,13 @@ def validate(verbs, raw):
     verb = str(d.get("verb", "")).strip()
     if verb not in verbs:
         return False, "verb %r is not on the whitelist" % verb
+
+    actor = str(d.get("actor", ""))
+    if expected_actor:
+        if actor != expected_actor:
+            return False, "actor %r does not match routed decider %r" % (actor, expected_actor)
+        if expected_actor.startswith("pilot-") and verb not in (PILOT_VERBS | {"noop"}):
+            return False, "project-pilot decider may emit only noop or project-pilot verbs"
 
     args = d.get("args", []) or []
     if not isinstance(args, list) or any(not isinstance(a, str) for a in args):
@@ -180,10 +187,11 @@ def validate(verbs, raw):
 
 def main():
     if len(sys.argv) < 3:
-        print("ERR usage: validate-decision.py '<verbs>' '<json>'")
+        print("ERR usage: validate-decision.py '<verbs>' '<json>' [routed-decider]")
         return 1
     verbs = set(sys.argv[1].split())
-    ok, msg = validate(verbs, sys.argv[2])
+    expected_actor = sys.argv[3] if len(sys.argv) > 3 else None
+    ok, msg = validate(verbs, sys.argv[2], expected_actor)
     print(("OK " if ok else "ERR ") + msg)
     return 0 if ok else 1
 

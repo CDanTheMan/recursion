@@ -62,7 +62,13 @@ chmod +x "$BIN/claude"
 
 # --- disposable repo copy (never touch the live tree) --------------------------------------
 R="$TMP/repo"; mkdir -p "$R"
-tar -C "$SRC" -cf - scripts loop state ANCHOR.md CLAUDE.md 2>/dev/null | tar -C "$R" -xf - 2>/dev/null
+# Earlier suites may have populated ignored derived caches in SRC. They are not fixture input:
+# copying them before this fixture's git init would accidentally make them tracked authority.
+tar -C "$SRC" --exclude='scripts/__pycache__' --exclude='loop/logs/*' \
+  --exclude='state/jsonl-index' --exclude='state/recovery/transition-archive' \
+  --exclude='state/recovery/transition-event-index' \
+  -cf - scripts loop state ANCHOR.md CLAUDE.md .gitignore 2>/dev/null \
+  | tar -C "$R" -xf - 2>/dev/null
 mkdir -p "$R/state/briefs" "$R/loop/logs" "$R/state/tasks"
 rm -f "$R"/loop/logs/*
 : > "$R/.env"
@@ -108,6 +114,12 @@ run_cycle(){ # $1=force|""
   rm -f "$R"/state/briefs/*.md
   rm -f "$R"/loop/logs/*
   printf '# Inbox\n\n_(empty)_\n' > "$R/state/INBOX.md"
+  if [ -f "$R/state/PAUSE" ]; then
+    PAUSED_SELF_BRANCH="$($GIT -C "$R" branch --show-current)"
+    PAUSED_SELF_HEAD="$($GIT -C "$R" rev-parse HEAD)"
+    PAUSED_SELF_BOARD="$(sha256sum "$R/state/BOARD.md" | awk '{print $1}')"
+    PAUSED_SELF_REFLOG="$($GIT -C "$R" reflog --format=%H | sha256sum | awk '{print $1}')"
+  fi
   ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" \
       RECURSION_AUTO_DRAIN=1 RECURSION_AUTO_PLAN=1 RECURSION_AUTO_REFLECT=1 \
       RECURSION_PLAN_WORKSTREAMS="" \
@@ -179,10 +191,13 @@ if [ ! -s "$STUB_NOTIFY_LOG" ]; then
 else
   no "paused: HUMAN-VISIBLE SEND LEAKED — $(cat "$STUB_NOTIFY_LOG")"
 fi
-if $GIT -C "$R" diff --quiet && $GIT -C "$R" diff --cached --quiet; then
-  ok "paused: forced monitoring leaves no tracked state dirty after its commits"
+if [ "$($GIT -C "$R" branch --show-current)" = "$PAUSED_SELF_BRANCH" ] \
+    && [ "$($GIT -C "$R" rev-parse HEAD)" = "$PAUSED_SELF_HEAD" ] \
+    && [ "$(sha256sum "$R/state/BOARD.md" | awk '{print $1}')" = "$PAUSED_SELF_BOARD" ] \
+    && [ "$($GIT -C "$R" reflog --format=%H | sha256sum | awk '{print $1}')" = "$PAUSED_SELF_REFLOG" ]; then
+  ok "paused: forced monitoring preserves self-repo branch, HEAD, BOARD, and reflog"
 else
-  no "paused: forced monitoring left tracked state dirty: $($GIT -C "$R" status --short)"
+  no "paused: forced monitoring mutated self-repo Git state (branch=$($GIT -C "$R" branch --show-current), HEAD=$($GIT -C "$R" rev-parse --short HEAD))"
 fi
 
 # --- 5) escalation remains durable locally but is not sent while paused --------------------
@@ -205,6 +220,7 @@ if grep -q 'a decision is needed' "$R/state/INBOX.md" 2>/dev/null && [ ! -s "$ST
   ok "paused: escalation reached durable INBOX without invoking a transport"
 else
   no "paused: escalation was not durable or leaked to transport: $(cat "$STUB_NOTIFY_LOG")"
+  sed 's/^/        /' "$TMP/cycle.out" | tail -20
 fi
 
 # --- 6) no stale brief/digest delivery is queued during PAUSE ------------------------------

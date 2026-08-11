@@ -72,35 +72,18 @@ decide(){ # decide <class> <mem_mb> <load1> <disk_mb> <swap_mb> -> 0 admit / 4 d
   fi
   # A heavy gate is exclusive regardless of headroom: two gates that each FIT still ruin each
   # other's timings, and a gate whose verdict depends on what else was running is not a gate.
-  if [ "$class" = "gate" ] && heavy_held; then
+  if [ "$class" = "gate" ] && ! heavy_available; then
     echo "DEFER gate: the heavy-gate lock is held by $(cat "$HEAVY/holder" 2>/dev/null || echo '?')"; return 4
   fi
   echo "ADMIT $class: ${mem}MB mem, load $load/$lcap, ${disk}MB disk, ${swap}MB swap"; return 0
 }
 
-heavy_held(){
-  [ -d "$HEAVY" ] || return 1
-  local now age pid ttl grace
-  now="$(date +%s)"
-  age=$(( now - $(stat -c %Y "$HEAVY" 2>/dev/null || echo "$now") ))
-  ttl="${RECURSION_HEAVY_TTL_S:-3600}"
-  grace="${RECURSION_HEAVY_GRACE_S:-120}"
-
-  # A crashed gate leaves the directory behind, and without reclaiming it one crash disables
-  # heavy gates permanently — the symptom being "gates stopped running", with nothing pointing at
-  # why. So the lock expires two ways, and BOTH need the age check:
-  #   TTL   — no honest heavy gate runs for an hour.
-  #   dead holder — but only once it is older than a grace window, because the recorded pid may
-  #                 be a short-lived CLI process that exited immediately after acquiring. Judging
-  #                 liveness alone made every holder look dead the instant it returned, and the
-  #                 mutex excluded nobody while appearing to work.
-  [ "$age" -gt "$ttl" ] && { rm -rf "$HEAVY" 2>/dev/null || true; return 1; }
-  pid="$(cat "$HEAVY/pid" 2>/dev/null || echo)"
-  if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null && [ "$age" -gt "$grace" ]; then
-    rm -rf "$HEAVY" 2>/dev/null || true
-    return 1
-  fi
-  return 0
+heavy_held(){ [ -d "$HEAVY" ]; }
+heavy_available(){
+  [ -x "$ROOT/scripts/runtime-state.py" ] || return 1
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$HEAVY" "$$" >/dev/null 2>&1 \
+    || return 1
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$HEAVY" "$$" >/dev/null 2>&1
 }
 
 case "$CMD" in
@@ -126,17 +109,23 @@ heavy)
   SUB="${1:-status}"; TAG="${2:-${RECURSION_HEAVY_TAG:-unnamed}}"
   case "$SUB" in
     acquire)
-      heavy_held && { echo "BUSY $(cat "$HEAVY/holder" 2>/dev/null || echo '?')"; exit 4; }
-      if mkdir "$HEAVY" 2>/dev/null; then
-        # The long-lived holder, not this short-lived CLI: work.sh passes its own $$ so a
-        # crash is detectable. $PPID is the sane fallback for an interactive acquire.
-        printf '%s\n' "${RECURSION_HEAVY_PID:-$PPID}" > "$HEAVY/pid"
-        printf '%s (pid %s, since %s)\n' "$TAG" "$$" "$(date -u +%FT%TZ)" > "$HEAVY/holder"
+      OWNER_PID="${RECURSION_HEAVY_PID:-$PPID}"
+      if python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$HEAVY" "$OWNER_PID" \
+           >/dev/null 2>&1; then
+        if ! printf '%s (pid %s, since %s)\n' "$TAG" "$OWNER_PID" "$(date -u +%FT%TZ)" \
+             > "$HEAVY/holder"; then
+          python3 "$ROOT/scripts/runtime-state.py" lock-release "$HEAVY" "$OWNER_PID" \
+            >/dev/null 2>&1 || true
+          echo "capacity: heavy lock metadata write failed" >&2; exit 3
+        fi
         echo "ACQUIRED $TAG"; exit 0
       fi
-      # Lost a race between the check and the mkdir.
       echo "BUSY $(cat "$HEAVY/holder" 2>/dev/null || echo '?')"; exit 4 ;;
-    release) rm -rf "$HEAVY" 2>/dev/null || true; echo "RELEASED" ;;
+    release)
+      OWNER_PID="${RECURSION_HEAVY_PID:-$PPID}"
+      python3 "$ROOT/scripts/runtime-state.py" lock-release "$HEAVY" "$OWNER_PID" \
+        >/dev/null 2>&1 || { echo "capacity: heavy lock release failed" >&2; exit 3; }
+      echo "RELEASED" ;;
     status)  heavy_held && echo "HELD $(cat "$HEAVY/holder" 2>/dev/null)" || echo "FREE" ;;
     *) echo "usage: capacity.sh heavy <acquire|release|status> [tag]"; exit 2 ;;
   esac ;;
@@ -144,7 +133,7 @@ heavy)
 report)
   MEM="$(mem_avail_mb)"; LOAD="$(load1)"; DISK="$(disk_free_mb)"; SWAP="$(swap_used_mb)"
   echo "cores: $CORES  load: ${LOAD:-?}  mem avail: ${MEM:-?}MB  swap used: ${SWAP:-?}MB  disk free: ${DISK:-?}MB"
-  echo "in-flight arms: $(find "$LOCKDIR" -maxdepth 1 -name 'ws-*.lock' 2>/dev/null | wc -l | tr -d ' ')"
+  echo "in-flight arms: $(find "$LOCKDIR" -maxdepth 1 \( -name 'project-*.lock' -o -name 'ws-*.lock' \) 2>/dev/null | wc -l | tr -d ' ')"
   echo "heavy gate: $(heavy_held && cat "$HEAVY/holder" 2>/dev/null || echo FREE)"
   for c in arm gate; do
     out="$(RECURSION_ROOT="$ROOT" bash "$0" check "$c" 2>&1)"; printf '  %s\n' "$out"

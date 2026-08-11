@@ -2,7 +2,7 @@
 title: Hermes Project Pilot Phase 8 Handoff
 type: handoff
 status: blocked
-last-verified: 2026-08-10
+last-verified: 2026-08-11
 related:
   - CONTROL_PLANE.md
   - docs/architecture.md
@@ -883,3 +883,73 @@ The review branch is therefore ready to commit, but not deployed. After review, 
 and a fresh applicable PAUSE-held preflight, deployment of this interlock must occur before cron
 can safely resume and before the Phase 8 actuator can be installed or tested. PAUSE removal,
 notifications, configuration/capacity changes, and all pilot windows remain separate gates.
+
+## Recovered durability and liveness hardening closure
+
+The August 11 continuation recovered the complete uncommitted hardening tree after two Codex
+client sessions terminated. Git objects, the worktree, the disposable Linux evidence, and the
+production PAUSE sentinel were intact. The first termination stopped mid-tool after the local
+session transcript had grown to about 98.8 MB with roughly 11.7 million cached tokens, so client
+context pressure is the likely cause of that event. The recurrence also exposed a concrete test
+code defect: the new Windows liveness probes used `os.kill(pid, 0)`. Python's Windows
+implementation can use `TerminateProcess` semantics for this call, so a supposedly read-only
+probe could terminate a parent or tool process. `runtime-state.py` and `project-reconcile.py` now
+use `OpenProcess` with `GetExitCodeProcess`, plus `GetProcessTimes` for the PID-start witness; the
+POSIX signal probe remains confined to POSIX. The client remained stable through the subsequent
+long Linux closure runs.
+
+The recovered patch closes five durability gaps without adding another scheduler, executor,
+authority path, or authoritative store:
+
+- Runtime backup/restore now replaces the complete managed state exactly, includes OpenRouter
+  usage, validates a typed confined manifest, resolves interrupted restore transactions before
+  later maintenance, and reclaims only witnessed-dead backup staging.
+- Task, action, ledger, heavy-gate, project, planner, and worktree locks publish a complete
+  PID/start witness atomically. Runtime rotation interlocks both before and after writer lock
+  publication, and stale-lock reclamation remains fail-closed unless owner death is proved.
+- Terminal transition receipts compact in bounded batches to a sharded evidence archive with a
+  direct sharded event index. Recovery returns a retryable backlog instead of performing an
+  unbounded scan in one scheduler tick.
+- Reconciliation identities exclude heartbeat, receipt-sequence, and raw lease timestamp churn
+  while retaining semantic lease expiry, task state, and worker liveness. Heartbeats therefore do
+  not amplify decisions, but an expired lease or dead worker still changes authority once.
+- Authoritative JSONL journals have a rebuildable ignored SQLite verification index bound to file
+  identity, metadata, raw record hashes, and a cumulative chain. Tail consumers durably
+  checkpoint only after projections commit; cache loss causes safe replay; journal mutation or
+  torn tails invalidate/rebuild; and a pending/running decision is rebound to its authoritative
+  journal record immediately before claim.
+
+The exact portable Linux candidate is synthetic recovery commit
+`161977533aa07b14b197910339cc90c0d9aa0709`, tree
+`9c7551a7feff83bf728ac2d281184c3917556fc7`. Its complete Git bundle has SHA-256
+`63677b473eb8be3cdcb603253927c0719ae0583ac029deddfc64f59152b8730a`. Fresh named-branch
+clones from that bundle produced the final closure:
+
+```text
+BASELINE_SUITES=19
+BASELINE_FAILED_SUITES=0
+phase1-audit=ALL PASS
+phase2-audit=ALL PASS
+phase3-audit=ALL PASS
+phase4-audit=ALL PASS
+phase5-audit=ALL PASS
+phase6-audit=ALL PASS
+phase7-audit=ALL PASS
+phase8-audit=ALL PASS
+```
+
+Phase 6 took about 40 minutes because its 20 crash/replay scenarios repeatedly execute
+fsync-backed journal, receipt, and recovery paths in fresh fixture roots. It completed all
+scenarios and left no process behind; the delay was bounded I/O-heavy verification, not a
+deadlock. Phase 7 completed in 312.5 seconds, Phase 8 in 122.3 seconds, and the 19-suite baseline
+in 193.8 seconds. The Phase 8 audit independently passed plan/window authority, parallel project
+capacity, legacy-journal quarantine, notification exact-once behavior, JSONL durability, lock and
+restore crash seams, semantic liveness, and transition-receipt compaction.
+
+All remote execution remained in disposable `/var/tmp/recursion-phase8-316bfba3` clones. No
+production file, Git ref, configuration, service, notification, model/capacity setting, cron,
+actuator, worker, PAUSE state, or pilot window was changed. Final read-only verification retained
+PAUSE SHA-256 `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`, an active
+gateway, inactive cron, inactive/absent actuator, and zero test-launched production work. This
+hardening is ready for local review only; deployment, cron resume, actuator installation, PAUSE
+removal, notifications, and every pilot/soak window remain separately blocked.

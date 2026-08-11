@@ -28,7 +28,8 @@ command -v git >/dev/null 2>&1 || { echo "resync.test: git is required"; exit 3;
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/root"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/roadmaps" "$R/loop/logs" "$TMP/origins"
-for s in resync.sh taskctl.sh notify.sh work.sh board.sh publish.sh; do
+for s in resync.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh work.sh \
+         worker-sandbox.sh board.sh publish.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null
@@ -191,7 +192,8 @@ autonomy: auto
 status: queued
 EOF
 }
-run_work(){ ( cd "$R" && RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 bash scripts/work.sh "$1" ) >"$TMP/w.out" 2>&1; }
+run_work(){ ( cd "$R" && RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 \
+    RECURSION_TEST_WORKER=logical bash scripts/work.sh "$1" ) >"$TMP/w.out" 2>&1; }
 st(){ sed -n 's/^status: *//p' "$R/state/tasks/$1.md" | head -1 | tr -d '\r'; }
 
 # --- 10) ★ CONTROL: against a FRESH repo the build proceeds normally --------------------------
@@ -226,7 +228,7 @@ grep -qi 'current with origin\|cannot prove' "$R/state/INBOX.md" \
 # --- 12) the off-switch is explicit, and says so ---------------------------------------------
 mktask override "$TMP/unreachable"
 ( cd "$R" && RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 RECURSION_REQUIRE_FRESH_BASE=0 \
-    bash scripts/work.sh override ) >"$TMP/w2.out" 2>&1
+    RECURSION_TEST_WORKER=logical bash scripts/work.sh override ) >"$TMP/w2.out" 2>&1
 if [ "$(st override)" != "blocked" ] && grep -q 'FRESH-BASE CHECK DISABLED' "$R/loop/logs/"*.log 2>/dev/null; then
   ok "RECURSION_REQUIRE_FRESH_BASE=0 overrides the gate and LOGS that it did"
 else

@@ -7,7 +7,8 @@ SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 BIN="$TMP/bin"; R="$TMP/controller"; ORIGIN="$TMP/origin.git"
 mkdir -p "$BIN" "$R/scripts" "$R/state/tasks" "$R/loop/logs" "$R/app"
-for s in work.sh worker-sandbox.sh publish.sh taskctl.sh board.sh notify.sh resync.sh capacity.sh; do
+for s in work.sh worker-sandbox.sh publish.sh taskctl.sh jsonl_durable.py transition_receipt.py \
+         runtime-state.py board.sh notify.sh resync.sh capacity.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/"
 done
 chmod +x "$R/scripts/"*.sh
@@ -37,6 +38,7 @@ acceptance: test -f app/ok.txt && test -s app/uid.txt
 workdir: .
 allowed_paths: app
 autonomy: auto
+network_policy: none
 status: queued
 T
 (

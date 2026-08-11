@@ -2,7 +2,7 @@
 title: Hermes Project Pilot Phase 0 Evidence
 type: verification
 status: ready-for-review
-last-verified: 2026-08-10
+last-verified: 2026-08-11
 related:
   - CONTROL_PLANE.md
   - docs/plans/hermes-project-pilot-production-plan.md
@@ -3515,3 +3515,60 @@ manifest verifies, and the manifest file SHA-256 is
 This closes authoring evidence only. The patch, actuator, and pilots remain undeployed. Cron is
 still held inactive as explicit containment; restarting it is the retained one-command rollback,
 not an implicit post-test action.
+
+## August 11 Phase 8 durability hardening evidence
+
+The continuation recovered the complete hardening worktree without repository or production-state
+loss. A synthetic commit was created solely to make the dirty candidate portable and exact:
+
+```text
+commit 161977533aa07b14b197910339cc90c0d9aa0709
+tree   9c7551a7feff83bf728ac2d281184c3917556fc7
+bundle 63677b473eb8be3cdcb603253927c0719ae0583ac029deddfc64f59152b8730a
+```
+
+The patch adds exact runtime restore and crash recovery; PID/start-witnessed atomic directory
+locks with writer/maintenance interlocks; bounded sharded transition-receipt compaction and event
+lookup; semantic reconciliation identities; a rebuildable durable verification index for
+authoritative JSONL journals; bounded consumer checkpoints; and claim-time journal-authority
+validation. Test fixtures were also made hermetic by copying the newly required runtime helpers
+and excluding pre-existing ignored recovery/index state from fixture seeds.
+
+Every positive phase audit was rerun in its own fresh Git-object clone of that exact commit. The
+final Linux result was:
+
+```text
+phase1-green RC=0
+phase2-green RC=0
+phase3-green RC=0
+phase4-green RC=0
+phase5-green RC=0
+phase6-green RC=0
+phase7-green RC=0
+phase8-green RC=0
+BASELINE_SUITES=19
+BASELINE_FAILED_SUITES=0
+```
+
+The four principal retained logs are independently hashed:
+
+```text
+phase6-audit  3785bb79ba4b81ea7ca37a5c126b9bf4ae424e29e2e5772fee8ef7978ad12161
+phase7-audit  8de9bfd4d8b6439541d615fac287967a1d4a43601da1aea54a459992b3c50bce
+phase8-audit  3abb50c353b270666ca7aef838808641270b9522b9e59bb7bcfb1a4b466ec4e4
+phase0-base   5191eeb82c3f0d57fe8de52633d35034ced3223686e5bd3543f8c9947fe20148
+```
+
+The original apparent Phase 6 hang was resolved as slow bounded verification: all 20 scenarios
+completed, including the runtime-rotation race, and no audit process survived. Separately, the
+recurrent local Codex termination was traced to a Windows-only liveness test using
+`os.kill(pid, 0)`, which is not a read-only existence probe on Windows. Replacing it with Win32
+process-query APIs removed that destabilizing path; the earlier oversized session termination is
+still best explained by client context pressure rather than project code or state corruption.
+
+Before and after all disposable remote tests, production PAUSE SHA-256 was
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`; the gateway was active,
+cron inactive, the actuator inactive/absent, and no production worker or pilot was launched. No
+production file, ref, service, configuration, notification, capacity/model setting, PAUSE state,
+or pilot window changed. The evidence closes local hardening authoring only and grants no
+deployment or resume authority.

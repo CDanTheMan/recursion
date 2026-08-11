@@ -84,7 +84,11 @@ fi
 exit 0
 STUB
   chmod +x "$BIN/hermes"
-  ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" bash scripts/cycle.sh force ) >"$TMP/out" 2>&1
+  # branch-review.sh predates portfolio-backed discovery and otherwise scans /opt/* even in
+  # this disposable fixture. Pin its documented override to the fixture repository so this
+  # test cannot fetch or rewrite FETCH_HEAD in any product checkout.
+  ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" \
+      RECURSION_REVIEW_REPOS="fixture|$R|" bash scripts/cycle.sh force ) >"$TMP/out" 2>&1
 }
 
 run_with "$FIX/1"

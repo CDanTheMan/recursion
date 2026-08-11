@@ -44,7 +44,7 @@ def diff_entries(repo: str, source: str, args: list[str]) -> list[dict]:
 def protected(path: str, extras: set[str]) -> bool:
     p = PurePosixPath(path)
     parts = p.parts
-    if path in extras:
+    if any(path == item.rstrip("/") or path.startswith(item.rstrip("/") + "/") for item in extras if item):
         return True
     if path in {"CONTROL_PLANE.md", "ANCHOR.md", "CLAUDE.md", ".env"} or path.startswith(".env."):
         return True
@@ -52,7 +52,10 @@ def protected(path: str, extras: set[str]) -> bool:
         return True
     if any(part in {"tests", "test", "__tests__", "fixtures", "fixture", "golden", "oracle"} for part in parts):
         return True
-    if len(parts) >= 2 and parts[0:2] == ("render", "data"):
+    pairs = set(zip(parts, parts[1:]))
+    if ("render", "data") in pairs or ("render", "tools") in pairs:
+        return True
+    if ("deploy", "systemd") in pairs:
         return True
     return bool(TEST_NAME.search(path) or "baseline" in p.name.lower())
 

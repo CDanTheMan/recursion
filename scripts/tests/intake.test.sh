@@ -26,7 +26,7 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 export RECURSION_NO_NOTIFY=1
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/root"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/state/assists" "$R/loop/logs"
-for s in intake.sh assist.sh taskctl.sh notify.sh publish.sh; do
+for s in intake.sh assist.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh publish.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null
@@ -123,6 +123,63 @@ if [ "$(ingested)" -gt "$before" ]; then
   ok "★ CONTROL — a NEW message after a quiet poll is still picked up (not deaf)"
 else
   no "★ the watermark went deaf: a new message was never ingested"
+fi
+
+# --- 5b) an existing corrupt watermark is damage, not a first-run bootstrap -------------------
+# Coercing this to zero re-enters the seed path and silently skips authenticated messages that
+# arrived after the last durable watermark. Preserve both the marker and the unread instruction.
+good_mark="$(cat "$R/state/.intake-watermark")"
+printf 'torn' > "$R/state/.intake-watermark"
+before="$(ingested)"
+add s-cockpit telegram "$LUCAS" -1003894008732 10 user "[Lucas Guerra] retain this after watermark recovery"
+set +e
+corrupt_rc="$(intake poll)"
+set -e
+if [ "$corrupt_rc" -ne 0 ] && [ "$(cat "$R/state/.intake-watermark")" = torn ] \
+   && [ "$(ingested)" = "$before" ]; then
+  ok "an existing corrupt watermark fails closed without skipping an authenticated instruction"
+else
+  no "corrupt watermark was treated as first-run state (rc=$corrupt_rc marker=$(cat "$R/state/.intake-watermark"))"
+fi
+printf '%s\n' "$good_mark" > "$R/state/.intake-watermark"
+intake poll >/dev/null
+[ "$(ingested)" -gt "$before" ] \
+  && ok "the held instruction is ingested after the last known-good watermark is restored" \
+  || no "watermark recovery lost the held authenticated instruction"
+
+# --- 5c) intake and runtime snapshots share one crash-safe mutation boundary -----------------
+if [ ! -d "$R/state/.locks/taskctl.lock" ]; then
+  ok "successful intake releases the shared runtime-state boundary"
+else
+  no "successful intake leaked taskctl.lock and would block the next backup"
+fi
+intake poll --dry-run >/dev/null
+[ ! -d "$R/state/.locks/taskctl.lock" ] \
+  && ok "dry-run intake releases the shared runtime-state boundary" \
+  || no "dry-run intake leaked taskctl.lock"
+
+mkdir -p "$R/state/.locks/runtime-state.lock"
+runtime_mark="$(cat "$R/state/.intake-watermark")"; runtime_before="$(ingested)"
+set +e
+runtime_rc="$(RECURSION_LOCK_ATTEMPTS=1 RECURSION_LOCK_DELAY_S=0 intake poll)"
+set -e
+if [ "$runtime_rc" -ne 0 ] && [ "$(cat "$R/state/.intake-watermark")" = "$runtime_mark" ] \
+   && [ "$(ingested)" = "$runtime_before" ] && [ ! -d "$R/state/.locks/taskctl.lock" ]; then
+  ok "runtime-state maintenance excludes instruction creation and watermark advance"
+else
+  no "intake overlapped runtime-state maintenance (rc=$runtime_rc) or leaked its lock"
+fi
+rmdir "$R/state/.locks/runtime-state.lock"
+
+mv "$DB" "$DB.good"; printf 'not-sqlite\n' > "$DB"
+set +e
+reader_rc="$(intake poll)"
+set -e
+rm -f "$DB"; mv "$DB.good" "$DB"
+if [ "$reader_rc" -ne 0 ] && [ ! -d "$R/state/.locks/taskctl.lock" ]; then
+  ok "reader failure releases the shared runtime-state boundary"
+else
+  no "reader failure returned rc=$reader_rc or leaked taskctl.lock"
 fi
 
 # --- 6) an instruction carries complete authenticated routing/correlation metadata ---------------

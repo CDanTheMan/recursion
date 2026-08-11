@@ -42,6 +42,9 @@ chmod +x "$R/scripts/worker-sandbox.sh"
 cp "$SRC/scripts/board.sh" "$R/scripts/" 2>/dev/null || true
 cp "$SRC/scripts/notify.sh" "$R/scripts/" 2>/dev/null || true
 cp "$SRC/scripts/taskctl.sh" "$R/scripts/" 2>/dev/null || true
+cp "$SRC/scripts/jsonl_durable.py" "$R/scripts/" 2>/dev/null || true
+cp "$SRC/scripts/transition_receipt.py" "$R/scripts/" 2>/dev/null || true
+cp "$SRC/scripts/runtime-state.py" "$R/scripts/" 2>/dev/null || true
 cp "$SRC/scripts/resync.sh" "$R/scripts/" 2>/dev/null || true
 printf 'seed\n' > "$R/apps/chiron/seed.txt"
 printf 'protected fixture\n' > "$R/scripts/tests/existing.test.cjs"
@@ -71,6 +74,7 @@ id: $1
 workstream: wtest
 goal: a bounded change
 engine: claude
+network_policy: none
 repo: $R
 acceptance: $3
 workdir: .

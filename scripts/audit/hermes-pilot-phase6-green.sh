@@ -10,8 +10,8 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/taskctl.sh \
   scripts/tests/hermes-pilot-phase6-red.test.sh
 python3 -m py_compile scripts/project-reconcile.py scripts/project-pilot.py \
-  scripts/decision-queue.py scripts/validate-decision.py scripts/validate-control-state.py \
-  scripts/runtime-state.py
+  scripts/decision-queue.py scripts/jsonl_durable.py scripts/transition_receipt.py \
+  scripts/validate-decision.py scripts/validate-control-state.py scripts/runtime-state.py
 python3 -m json.tool schemas/control-plane/v1/schema.json >/dev/null
 echo "ok    Phase 6 shell, Python, and schema artifacts parse"
 
@@ -28,13 +28,17 @@ echo "ok    Phase 6 is inside the existing supervised scheduler and sole decisio
 grep -q 'taskctl.sh.*cas' scripts/project-reconcile.py
 grep -q 'CAS expected' scripts/taskctl.sh
 grep -q 'goal compare-and-swap failed' scripts/project-reconcile.py
-grep -q 'event.*goal-transition' scripts/project-reconcile.py
+grep -q '"goal-transition"' scripts/project-reconcile.py
+grep -q 'resume_transition(base, transition)' scripts/project-reconcile.py
 grep -q 'recovery-reconciled' scripts/project-reconcile.py
-echo "ok    task/goal changes are compare-and-swap transitions with append-only recovery/events"
+echo "ok    task/goal changes are compare-and-swap transitions with receipt-backed recovery/events"
 
 grep -q 'goal_state_lock' scripts/project-pilot.py
 grep -q 'verification may reopen a goal only with failing evidence' scripts/project-reconcile.py
 grep -q 'status") not in ACTIVE_GOALS' scripts/project-reconcile.py
+grep -q 'consumed_task_ids' scripts/tests/hermes-pilot-phase6-red.test.sh
+grep -q 'mutation-backed terminal receipt resumes and replays exactly once' \
+  scripts/tests/hermes-pilot-phase6-red.test.sh
 echo "ok    verifying closes task creation; evidence is required to reopen; terminal goals stay closed"
 
 cat > "$TMP/goal.json" <<'JSON'

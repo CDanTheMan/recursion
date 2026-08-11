@@ -19,7 +19,7 @@ echo "ok    durable project/pilot metadata validates and active topics are one-t
 # One direct topic message stays with its pilot; a cross-project priority request in the same
 # topic is forwarded to Head Hermes. Both remain inert durable instructions.
 I="$TMP/intake"; mkdir -p "$I/scripts" "$I/state/project-config" "$I/state/pilots" "$I/state/instructions"
-cp "$SRC/scripts/intake.sh" "$I/scripts/"
+cp "$SRC/scripts/intake.sh" "$SRC/scripts/runtime-state.py" "$I/scripts/"
 printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n' > "$I/state/portfolio.tsv"
 printf 'alpha\t/tmp/alpha\tgit@example/alpha\tmain\t/tmp/key\t-\t11\tactive\n' >> "$I/state/portfolio.tsv"
 printf 'beta\t/tmp/beta\tgit@example/beta\tmain\t/tmp/key\t-\t22\tactive\n' >> "$I/state/portfolio.tsv"
@@ -64,7 +64,9 @@ echo "ok    project-topic intake binds its pilot and forwards portfolio/cross-pr
 P="$TMP/pilot"; mkdir -p "$P/scripts" "$P/state/project-config" "$P/state/pilots" \
   "$P/state/goals" "$P/state/tasks" "$P/state/runs" "$P/state/instructions" "$P/state/actions" \
   "$P/state/.locks" "$P/loop/logs"
-for script in project-pilot.py conduct-hermes.sh validate-decision.py taskctl.sh intake.sh; do
+for script in project-pilot.py conduct-hermes.sh validate-decision.py validate-control-state.py \
+              decision-queue.py taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
+              runtime-state.py; do
   cp "$SRC/scripts/$script" "$P/scripts/"
 done
 printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n' > "$P/state/portfolio.tsv"
@@ -111,10 +113,22 @@ routing_target: pilot-alpha
 status: open
 T
 cat > "$TMP/task-decision.json" <<'J'
-{"schema_version":1,"id":"decision-alpha-task","actor":"pilot-alpha","verb":"pilot-task-create","args":["alpha","goal-alpha","alpha-next","src","alpha-base"],"project":"alpha","goal":"goal-alpha","text":"produce the bounded alpha result","instruction_id":"42","idempotency_key":"alpha-task","wrong_if":"scope escapes"}
+{"schema_version":1,"id":"decision-alpha-task","actor":"pilot-alpha","decision_source":"hermes-model","routed_decider":"pilot-alpha","verb":"pilot-task-create","args":["alpha","goal-alpha","alpha-next","src","alpha-base"],"project":"alpha","goal":"goal-alpha","text":"produce the bounded alpha result","instruction_id":"42","idempotency_key":"alpha-task","why":"materialize one bounded pilot task","wrong_if":"scope escapes"}
 J
+RECURSION_ROOT="$P" python3 "$P/scripts/decision-queue.py" normalize \
+  < "$TMP/task-decision.json" > "$TMP/task-decision.normalized.json"
+mv -f "$TMP/task-decision.normalized.json" "$TMP/task-decision.json"
+set +e
 ( cd "$P" && RECURSION_ROOT="$P" RECURSION_QUEUE_ACTUATION=1 \
-  bash scripts/conduct-hermes.sh --file "$TMP/task-decision.json" ) >/dev/null 2>&1
+  bash scripts/conduct-hermes.sh --file "$TMP/task-decision.json" ) \
+  >"$TMP/pilot-conductor.out" 2>&1
+pilot_rc=$?
+set -e
+if [ "$pilot_rc" -ne 0 ]; then
+  echo "FAIL  pilot task actuation fixture rc=$pilot_rc" >&2
+  sed 's/^/      /' "$TMP/pilot-conductor.out" >&2
+  exit "$pilot_rc"
+fi
 grep -q '^project_id: alpha$' "$P/state/tasks/alpha-next.md"
 grep -q '^dependencies: alpha-base$' "$P/state/tasks/alpha-next.md"
 grep -q '^allowed_paths: src$' "$P/state/tasks/alpha-next.md"
@@ -132,7 +146,8 @@ echo "ok    pilot task verb is charter-, goal-, dependency-, gate-, and action-c
 # Registration's positive direction proves the gate is usable: a complete pending record plus a
 # key, clean clone, and exact remote OID becomes active and records the proof.
 A="$TMP/activation"; mkdir -p "$A/scripts" "$A/state/project-config" "$A/state/pilots" "$A/state/.locks"
-cp "$SRC/scripts/project-pilot.py" "$A/scripts/"
+cp "$SRC/scripts/project-pilot.py" "$SRC/scripts/jsonl_durable.py" \
+   "$SRC/scripts/transition_receipt.py" "$SRC/scripts/runtime-state.py" "$A/scripts/"
 KEY="$TMP/activation-key"; : > "$KEY"; chmod 600 "$KEY"
 ORIGIN="$TMP/activation.git"; SEED="$TMP/activation-seed"; CLONE="$TMP/activation-clone"
 git -c init.defaultBranch=main init -q --bare "$ORIGIN"
