@@ -1069,6 +1069,9 @@ The runbook's read-only proof and the full PAUSE-held preflight both completed. 
 mutation occurred**; the transaction is held at its compare-and-swap gate pending separate
 authorization.
 
+> Lucas authorized the transaction later the same day and it executed successfully. See
+> "Hardening deployment executed under PAUSE" below.
+
 Merge proof: the exact merge commit is `ecc93de7fd5f6d92812d5a89687d6e05326b15fc`
 ("Merge pull request #38"), parents `abdc5928...` and `8901a038...`. Implementation
 `5f41f426...` and the publication/runbook commit `8901a038...` are both ancestors of
@@ -1127,3 +1130,66 @@ The next action remains a separate, explicit authorization for the two-action tr
 fast-forward `master` to the reviewed merge and merge it into `loop/auto`, with PAUSE asserted
 and cron stopped. Cron resume, actuator installation, notifications, model/capacity
 configuration, PAUSE removal and every pilot window remain separately gated.
+
+## Hardening deployment executed under PAUSE (2026-08-11T23:47:51Z)
+
+Lucas authorized the two-action transaction. It ran from the armed
+`TRANSACTION.sh` in the sealed evidence directory and returned `TRANSACTION_OK`.
+PAUSE remained asserted and cron remained stopped throughout.
+
+```text
+pre : loop/auto=bcd65ebc...  master=f7df0d0e...  origin/master=7e6e21f4...
+post: loop/auto=458ee92b63d1250e0704f563b3a4c499e3031289
+      master=ecc93de7...     origin/master=ecc93de7...
+```
+
+Action A fast-forwarded `master` to the reviewed merge under a compare-and-swap on its old
+value. Action B merged that commit into the deployed `loop/auto`, producing merge commit
+`458ee92b63d1250e0704f563b3a4c499e3031289` with zero conflicts. Action C set the
+remote-tracking ref to the truth. Objects arrived by verified bundle because production
+`origin` cannot authenticate.
+
+A pre-flight check before execution confirmed production could actually create a merge
+commit (`user.name`/`user.email` set, no `commit.gpgsign`, no active hooks). Action A moves
+`master` before the merge runs, so a missing commit identity would have failed the
+transaction after a partial ref move.
+
+Independent closure, verified with fresh checks rather than the transaction's own assertions:
+
+```text
+reviewed merge is an ancestor of HEAD      YES
+executable bytes on disk vs reviewed blobs 108 files compared, 0 mismatches
+CONTROL_PLANE.md                           match
+managed runtime vs pre-transaction snapshot 19/19 unchanged, 0 changed, 0 missing
+live Phase 1 on the deployed hardening      ALL PASS, RC=0
+PAUSE 919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db  root:root 0644 189B
+gateway active/running, NRestarts=0
+cron inactive; actuator unit absent; supervisor and timer inactive
+worker units 0; project/worker/cycle processes 0; execution locks 0
+nine pilots all concurrency_limit=0 max_inflight_workers=0 publication=false
+decisions.jsonl and events.jsonl byte-identical to pre-transaction
+open pilot windows 0
+working tree changed vs pre-transaction: exactly the 73 reviewed files
+```
+
+The eight awareness files kept production's content, so no board, brief, inbox, escalation
+or event history was lost to the merge.
+
+Evidence and rollback are retained root-owned mode-`0700` outside `/opt/recursion`:
+snapshot `/var/backups/recursion/preflight-20260811T231032Z-ecc93de`, evidence
+`/var/backups/recursion/preflight-evidence-20260811T231032Z-ecc93de` with manifest root
+`1f4aa3763149d8c0d3df9ac1658893810227a826dfee038a7f46f2b5bc305b01`. `ROLLBACK.sh` remains
+valid against that snapshot; the pre-transaction `loop/auto` tip is additionally recoverable
+from the reflog.
+
+Gate 1 of the ordered list is therefore closed: the hardening is deployed and independently
+verified under unchanged PAUSE. Gates 2 through 7 are untouched and each still requires its
+own separate authorization - cron resume, actuator preflight/installation, bounded
+model/capacity configuration, one exact pilot plan and window, PAUSE removal for that single
+soak, and the observed close-out. Nothing in this deployment implies any of them.
+
+Two operational gaps remain open, both outside this transaction's scope: `cron.service` is
+`inactive` but `enabled`, so a host reboot resumes cron with the new bytes (PAUSE, not cron
+state, is the kill switch, and the deployed code is the reviewed code); and about 6 GB of
+unreaped snapshots and `/var/tmp` staging clones sit on a 38 GB disk at 50% use. Both are
+separate reviewed changes.
