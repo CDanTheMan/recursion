@@ -7,9 +7,10 @@ cd "$ROOT"
 
 bash -n scripts/notify.sh scripts/conduct-hermes.sh scripts/hermes-actuator.sh \
   scripts/tests/hermes-pilot-phase7-red.test.sh
-python3 -m py_compile scripts/notification-outbox.py scripts/validate-decision.py \
+python3 -m py_compile scripts/notification-outbox.py scripts/jsonl_durable.py \
+  scripts/transition_receipt.py scripts/validate-decision.py \
   scripts/validate-control-state.py scripts/runtime-state.py \
-  scripts/tests/hermes-pilot-phase7-red.py
+  scripts/tests/hermes-pilot-phase7-red.py scripts/tests/notification-transition-receipt.test.py
 python3 - <<'PY'
 import json
 json.load(open('schemas/control-plane/v1/schema.json',encoding='utf-8'))
@@ -59,4 +60,5 @@ grep -q 'goal_id}-audit.json' scripts/notification-outbox.py
 echo "ok    pilot-to-Head ordering, one portfolio result, and complete terminal correlation are explicit"
 
 bash scripts/tests/hermes-pilot-phase7-red.test.sh
+python3 scripts/tests/notification-transition-receipt.test.py
 echo "hermes-pilot-phase7-green: ALL PASS"

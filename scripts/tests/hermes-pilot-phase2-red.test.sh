@@ -13,7 +13,23 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/replay"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/loop/logs"
 cp "$SRC/scripts/conduct-hermes.sh" "$R/scripts/"
 cp "$SRC/scripts/taskctl.sh" "$R/scripts/"
-cp "$SRC/scripts/validate-decision.py" "$R/scripts/"
+cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
+  "$SRC/scripts/runtime-state.py" "$R/scripts/"
+cp "$SRC/scripts/decision-queue.py" "$SRC/scripts/validate-control-state.py" \
+  "$SRC/scripts/validate-decision.py" "$R/scripts/"
+normalize_head_decision(){
+  local file="$1" temporary="$1.normalized"
+  python3 - "$file" <<'PY' | RECURSION_ROOT="$R" python3 "$R/scripts/decision-queue.py" normalize > "$temporary"
+import json,sys
+row=json.load(open(sys.argv[1],encoding='utf-8'))
+row.setdefault('actor','head-hermes')
+row.setdefault('decision_source','hermes-model')
+row.setdefault('routed_decider','head-hermes')
+row.setdefault('why',row.get('reason') or 'Phase 2 red control')
+print(json.dumps(row,separators=(',',':')))
+PY
+  mv -f "$temporary" "$file"
+}
 cat > "$R/scripts/work.sh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$1" >> "$ACTION_LOG"
@@ -28,6 +44,7 @@ T
 cat > "$TMP/replay.json" <<'J'
 {"id":"decision-replay","idempotency_key":"same-key","verb":"work","args":["replay-task"],"goal":"goal-1","wrong_if":"more than once"}
 J
+normalize_head_decision "$TMP/replay.json"
 : > "$TMP/replay.log"
 for _ in $(seq 1 10); do
   ( cd "$R" && ACTION_LOG="$TMP/replay.log" RECURSION_ROOT="$R" \
@@ -47,6 +64,7 @@ T
 cat > "$TMP/crash.json" <<'J'
 {"id":"decision-crash","idempotency_key":"crash-key","verb":"work","args":["crash-task"],"goal":"goal-1","wrong_if":"double launch"}
 J
+normalize_head_decision "$TMP/crash.json"
 cat > "$R/scripts/work.sh" <<'STUB'
 #!/usr/bin/env bash
 printf 'launch\n' >> "$CRASH_LOG"
@@ -67,6 +85,7 @@ n="$(wc -l < "$TMP/crash.log" | tr -d ' ')"
 # 3. Two simultaneous planners must reserve different task IDs and roadmap items atomically.
 P="$TMP/planners"; mkdir -p "$P/scripts" "$P/state/tasks" "$P/state/roadmaps" "$TMP/plan-bin" "$TMP/arrivals"
 cp "$SRC/scripts/plan.sh" "$P/scripts/"
+cp "$SRC/scripts/runtime-state.py" "$P/scripts/"
 cat > "$P/state/roadmaps/race.md" <<'RMAP'
 engine: none
 repo: /tmp/repo
@@ -118,6 +137,8 @@ fi
 # 4. Task start must enforce an active parent goal and passed dependencies.
 TROOT="$TMP/taskctl"; mkdir -p "$TROOT/scripts" "$TROOT/state/tasks" "$TROOT/state/goals"
 cp "$SRC/scripts/taskctl.sh" "$TROOT/scripts/"
+cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
+  "$SRC/scripts/runtime-state.py" "$TROOT/scripts/"
 printf 'id: active\nstatus: active\n' > "$TROOT/state/goals/active.md"
 printf 'id: blocked\nstatus: blocked\n' > "$TROOT/state/goals/blocked.md"
 cat > "$TROOT/state/tasks/dep.md" <<'T'
@@ -151,7 +172,8 @@ done
 
 # 5. A contended state lock must fail closed, never time out and write unlocked.
 LROOT="$TMP/lock"; mkdir -p "$LROOT/scripts" "$LROOT/state/.locks"
-cp "$SRC/scripts/taskctl.sh" "$LROOT/scripts/"; mkdir "$LROOT/state/.locks/taskctl.lock"
+cp "$SRC/scripts/taskctl.sh" "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
+  "$SRC/scripts/runtime-state.py" "$LROOT/scripts/"; mkdir "$LROOT/state/.locks/taskctl.lock"
 set +e
 RECURSION_ROOT="$LROOT" timeout 20s bash "$LROOT/scripts/taskctl.sh" event probe '' locked \
   >"$TMP/lock.out" 2>&1; lock_rc=$?
@@ -162,9 +184,13 @@ else
   no "contended task-state lock proceeded unlocked (rc=$lock_rc event_written=$([ -s "$LROOT/state/events.jsonl" ] && echo yes || echo no))"
 fi
 
-# 6. A writer killed during replacement must leave the prior task file intact.
-AROOT="$TMP/atomic"; mkdir -p "$AROOT/scripts" "$AROOT/state/tasks" "$TMP/atomic-bin"
+# 6. A crash after the atomic state write must leave a complete task and one repairable event,
+# never a torn projection or a second state transition.
+AROOT="$TMP/atomic"; mkdir -p "$AROOT/scripts" "$AROOT/state/tasks" "$AROOT/state/goals"
 cp "$SRC/scripts/taskctl.sh" "$AROOT/scripts/"
+cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
+  "$SRC/scripts/runtime-state.py" "$AROOT/scripts/"
+printf 'id: g\nstatus: active\n' > "$AROOT/state/goals/g.md"
 cat > "$AROOT/state/tasks/a.md" <<'T'
 id: a
 goal_id: g
@@ -172,22 +198,22 @@ status: queued
 
 body that must survive
 T
-cp "$AROOT/state/tasks/a.md" "$TMP/a.before"
-REAL_PY="$(command -v python3)"
-cat > "$TMP/atomic-bin/python3" <<STUB
-#!/usr/bin/env bash
-if [ "\${1:-}" = - ] && [ -f "\${2:-}" ]; then printf 'id: partial\n' > "\$2"; exit 137; fi
-exec "$REAL_PY" "\$@"
-STUB
-chmod +x "$TMP/atomic-bin/python3"
 set +e
-PATH="$TMP/atomic-bin:$PATH" RECURSION_ROOT="$AROOT" bash "$AROOT/scripts/taskctl.sh" start a test \
+RECURSION_TRANSITION_FAILPOINT=state-write RECURSION_ROOT="$AROOT" \
+  bash "$AROOT/scripts/taskctl.sh" start a test \
   >/dev/null 2>&1; atomic_rc=$?
 set -e
-if [ "$atomic_rc" -ne 0 ] && cmp -s "$TMP/a.before" "$AROOT/state/tasks/a.md"; then
-  ok "interrupted state update preserved the previous complete file"
+RECURSION_ROOT="$AROOT" bash "$AROOT/scripts/taskctl.sh" event recovery-probe a repaired \
+  >/dev/null 2>&1; repair_rc=$?
+start_events="$(grep -c '"event":"start"' "$AROOT/state/events.jsonl" 2>/dev/null || true)"
+if [ "$atomic_rc" -ne 0 ] && [ "$repair_rc" -eq 0 ] \
+   && grep -q '^id: a$' "$AROOT/state/tasks/a.md" \
+   && grep -q '^status: running$' "$AROOT/state/tasks/a.md" \
+   && grep -q '^body that must survive$' "$AROOT/state/tasks/a.md" \
+   && [ "$start_events" = 1 ]; then
+  ok "interrupted state/event projection preserved one complete state and repaired one event"
 else
-  no "interrupted state update exposed a partial/corrupt task file"
+  no "interrupted state/event projection was partial or unrecoverable (rc=$atomic_rc repair=$repair_rc starts=$start_events)"
 fi
 
 echo

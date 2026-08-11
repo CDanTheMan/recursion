@@ -29,6 +29,7 @@
 #   taskctl.sh get <id> [field]        canonical status, or one field
 #   taskctl.sh reap                    expire dead leases -> stale + event (safe, idempotent)
 #   taskctl.sh event <kind> <task> <detail...>
+#   taskctl.sh notify-event <portfolio-brief|project-digest> <project> <message>
 #   taskctl.sh esc-record <key> <title> [workstream] [pointer]
 #                                      -> "NEW <id>" | "DUP <id> <count>"
 #   taskctl.sh esc-resolve <id> [note]
@@ -51,24 +52,32 @@ mkdir -p "$TASKDIR" "$LOCKDIR" "$(dirname "$EVENTS")" 2>/dev/null
 # never corruption of a half-written record. ------------------------------------------------
 _LOCK_HELD=0
 _lock(){
-  local i=0 limit="${RECURSION_LOCK_ATTEMPTS:-100}" delay="${RECURSION_LOCK_DELAY_S:-0.1}"
-  while :; do
-    if [ ! -d "$LOCKDIR/runtime-state.lock" ] && mkdir "$LOCKDIR/taskctl.lock" 2>/dev/null; then
-      _LOCK_HELD=1
-      return 0
-    fi
-    i=$((i+1))
-    if [ "$i" -ge "$limit" ]; then
-      echo "taskctl: state lock is contended; refusing to write unlocked" >&2
-      return 73
-    fi
-    sleep "$delay"
-  done
+  local lock="$LOCKDIR/taskctl.lock"
+  [ -x "$ROOT/scripts/runtime-state.py" ] \
+    || { echo "taskctl: witnessed lock helper is absent" >&2; return 73; }
+  if ! python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$lock" "$$" >/dev/null; then
+    echo "taskctl: state lock is contended; refusing to write unlocked" >&2
+    return 73
+  fi
+  _LOCK_HELD=1
+  if ! _repair_transition_receipts; then
+    _unlock || true
+    echo "taskctl: transition receipt recovery failed closed" >&2
+    return 74
+  fi
+  return 0
 }
 _unlock(){
   [ "$_LOCK_HELD" = 1 ] || return 0
-  rmdir "$LOCKDIR/taskctl.lock" 2>/dev/null || return 74
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$LOCKDIR/taskctl.lock" "$$" \
+    >/dev/null || return 74
   _LOCK_HELD=0
+}
+
+_repair_transition_receipts(){
+  RECURSION_ROOT="$ROOT" RECURSION_TASKCTL_LOCK_HELD=1 \
+    RECURSION_TASKCTL_LOCK_OWNER_PID="$$" \
+    python3 "$ROOT/scripts/transition_receipt.py" --root "$ROOT" recover >/dev/null
 }
 
 _now(){ date -u +%FT%TZ; }
@@ -219,15 +228,88 @@ emit_event(){ # kind task detail
   fi
   line="$(printf '{"schema_version":1,"ts":"%s","event":"%s","task":"%s","project":"%s","goal":"%s","pid":%s,"detail":"%s"}' \
     "$(_now)" "$(_esc "$kind")" "$(_esc "$task")" "$(_esc "$proj")" "$(_esc "$goal")" "$$" "$(_esc "$detail")")"
-  EVENT_LINE="$line" python3 - "$EVENTS" <<'PY'
-import os,sys
+  EVENT_LINE="$line" RECURSION_TASKCTL_LOCK_HELD=1 RECURSION_TASKCTL_LOCK_OWNER_PID="$$" \
+    python3 - "$EVENTS" "$ROOT/scripts" <<'PY'
+import json,os,sys
+sys.path.insert(0,sys.argv[2])
+from transition_receipt import commit_event
 path=sys.argv[1]
-fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_APPEND,0o600)
-try:
-    os.write(fd,(os.environ['EVENT_LINE']+'\n').encode())
-    os.fsync(fd)
-finally:
-    os.close(fd)
+root=__import__('pathlib').Path(sys.argv[2]).parent
+commit_event(root,json.loads(os.environ['EVENT_LINE']),taskctl_locked=True)
+PY
+}
+
+# Canonical task mutations freeze their event in a receipt before changing the task. The
+# helper embeds event_seq/last_transition_id in the same atomic rewrite and fsyncs the event
+# before marking the receipt projected. External self-test task files retain the legacy path.
+transition_fields(){ # file kind task detail key value [key value ...]
+  local f="$1" kind="$2" task="$3" detail="$4"; shift 4
+  if ! _canonical_task "$f"; then
+    _set_fields "$f" "$@" || return $?
+    emit_event "$kind" "$task" "$detail"
+    return $?
+  fi
+  TRANSITION_KIND="$kind" TRANSITION_TASK="$task" TRANSITION_DETAIL="$detail" \
+    RECURSION_TASKCTL_LOCK_HELD=1 RECURSION_TASKCTL_LOCK_OWNER_PID="$$" \
+    python3 - "$ROOT" "$f" "$@" <<'PY'
+import json,os,sys
+from pathlib import Path
+root=Path(sys.argv[1]); sys.path.insert(0,str(root/'scripts'))
+from transition_receipt import commit_transition,fields_mutation
+path=Path(sys.argv[2]); args=sys.argv[3:]
+if len(args)%2: raise SystemExit(2)
+changes={args[i]:args[i+1] for i in range(0,len(args),2)}
+fields={}
+for line in path.read_text(encoding='utf-8',errors='surrogateescape').splitlines():
+    if ':' in line and not line.startswith((' ','\t')):
+        key,value=line.split(':',1); fields.setdefault(key.strip(),value.strip())
+project=fields.get('project') or fields.get('project_id') or fields.get('workstream') or ''
+event={'schema_version':1,'event':os.environ['TRANSITION_KIND'],
+       'task':os.environ['TRANSITION_TASK'],'project':project,
+       'goal':fields.get('goal_id',''),'pid':os.getpid(),
+       'detail':os.environ['TRANSITION_DETAIL']}
+print(commit_transition(root,[fields_mutation(path,changes)],event,taskctl_locked=True))
+PY
+}
+
+emit_notification_event(){ # kind project message [occurrence-date]
+  local kind="$1" project="$2" message="$3" occurrence="${4:-${RECURSION_CYCLE_DATE:-$(date -u +%F)}}"
+  EVENT_KIND="$kind" EVENT_PROJECT="$project" EVENT_MESSAGE="$message" EVENT_TS="$(_now)" \
+    EVENT_OCCURRENCE_DATE="$occurrence" RECURSION_TASKCTL_LOCK_HELD=1 \
+    RECURSION_TASKCTL_LOCK_OWNER_PID="$$" \
+    python3 - "$EVENTS" "$ROOT/scripts" <<'PY'
+import hashlib,json,os,re,sys
+sys.path.insert(0,sys.argv[2])
+from transition_receipt import commit_event
+path=sys.argv[1]
+kind=os.environ['EVENT_KIND']; project=os.environ['EVENT_PROJECT']; message=os.environ['EVENT_MESSAGE']
+occurrence=os.environ['EVENT_OCCURRENCE_DATE']
+if kind not in {'portfolio-brief','project-digest'}:
+    raise SystemExit(2)
+if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}',project):
+    raise SystemExit(2)
+raw=message.encode('utf-8')
+if not raw:
+    raise SystemExit(2)
+if len(raw)>3800:
+    message=raw[:3800].decode('utf-8',errors='ignore')
+    raw=message.encode('utf-8')
+digest=hashlib.sha256(raw).hexdigest()
+if kind == 'project-digest':
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}',occurrence):
+        raise SystemExit(2)
+    identity=json.dumps([kind,project,occurrence,digest],sort_keys=True,separators=(',',':')).encode()
+else:
+    identity=json.dumps([kind,project,digest],sort_keys=True,separators=(',',':')).encode()
+source_id='source-monitoring-'+hashlib.sha256(identity).hexdigest()[:24]
+value={'schema_version':1,'id':source_id,'ts':os.environ['EVENT_TS'],'event':kind,
+        'task':'','project':project,'goal':'','pid':os.getpid(),
+        'detail':{'message':message,'message_digest':digest}}
+if kind == 'project-digest':
+    value['detail']['occurrence_date']=occurrence
+root=__import__('pathlib').Path(sys.argv[2]).parent
+commit_event(root,value,taskctl_locked=True)
+print(source_id)
 PY
 }
 
@@ -252,18 +334,17 @@ start)
     *) _unlock; echo "taskctl: $ID is status=$cur, not dispatchable" >&2; exit 4 ;;
   esac
   att="$(_field "$F" attempts)"; att="$(( ${att:-0} + 1 ))"
-  _set_fields "$F" status running lease_owner "$OWNER" \
+  transition_fields "$F" start "$ID" "owner=$OWNER attempt=$att" \
+    status running lease_owner "$OWNER" \
     lease_expires "$(( $(_epoch) + LEASE_TTL ))" attempts "$att" started_at "$(_now)" \
     || { rc=$?; _unlock; exit "$rc"; }
-  emit_event start "$ID" "owner=$OWNER attempt=$att" || { rc=$?; _unlock; exit "$rc"; }
   _unlock; echo "started $ID (attempt $att)" ;;
 
 heartbeat)
   ID="${1:?usage: taskctl heartbeat <id>}"; F="$(_taskfile "$ID")"; [ -f "$F" ] || exit 2
   _lock || exit $?
-  _set_fields "$F" lease_expires "$(( $(_epoch) + LEASE_TTL ))" \
+  transition_fields "$F" heartbeat "$ID" "" lease_expires "$(( $(_epoch) + LEASE_TTL ))" \
     || { rc=$?; _unlock; exit "$rc"; }
-  emit_event heartbeat "$ID" "" || { rc=$?; _unlock; exit "$rc"; }
   _unlock ;;
 
 finish)
@@ -271,20 +352,24 @@ finish)
   F="$(_taskfile "$ID")"; [ -f "$F" ] || exit 2
   _lock || exit $?
   if [ -n "$NOTE" ]; then
-    _set_fields "$F" status "$ST" lease_expires 0 finished_at "$(_now)" evidence "$NOTE"
+    # Task files use one-line frontmatter fields. Keep the complete note in the frozen event,
+    # but canonicalize the evidence field so its receipt witness can be read and recovered.
+    NOTE_FIELD="$(printf '%s' "$NOTE" | tr '\r\n\t' '   ')"
+    transition_fields "$F" finish "$ID" "status=$ST $NOTE" \
+      status "$ST" lease_expires 0 finished_at "$(_now)" evidence "$NOTE_FIELD"
   else
-    _set_fields "$F" status "$ST" lease_expires 0 finished_at "$(_now)"
+    transition_fields "$F" finish "$ID" "status=$ST $NOTE" \
+      status "$ST" lease_expires 0 finished_at "$(_now)"
   fi || { rc=$?; _unlock; exit "$rc"; }
-  emit_event finish "$ID" "status=$ST $NOTE" || { rc=$?; _unlock; exit "$rc"; }
   _unlock; echo "finished $ID -> $ST" ;;
 
 block)
   ID="${1:?usage: taskctl block <id> <reason>}"; REASON="${2:-blocked}"
   F="$(_taskfile "$ID")"; [ -f "$F" ] || exit 2
   _lock || exit $?
-  _set_fields "$F" status blocked lease_expires 0 blocker_actor "${BLOCKER_ACTOR:-human}" \
+  transition_fields "$F" block "$ID" "$REASON" \
+    status blocked lease_expires 0 blocker_actor "${BLOCKER_ACTOR:-human}" \
     || { rc=$?; _unlock; exit "$rc"; }
-  emit_event block "$ID" "$REASON" || { rc=$?; _unlock; exit "$rc"; }
   _unlock; echo "blocked $ID" ;;
 
 cas)
@@ -299,10 +384,10 @@ cas)
   CUR="$(_field "$F" status)"
   [ "$CUR" = "$FROM" ] || { _unlock; echo "taskctl: CAS expected $FROM, found $CUR" >&2; exit 73; }
   VER="$(_field "$F" version)"; VER="$(( ${VER:-1} + 1 ))"
-  _set_fields "$F" status "$TO" version "$VER" lease_expires 0 transition_reason "$REASON" \
+  transition_fields "$F" task-transition "$ID" \
+    "from=$FROM to=$TO reason=$REASON version=$VER" \
+    status "$TO" version "$VER" lease_expires 0 transition_reason "$REASON" \
     transition_at "$(_now)" || { rc=$?; _unlock; exit "$rc"; }
-  emit_event task-transition "$ID" "from=$FROM to=$TO reason=$REASON version=$VER" \
-    || { rc=$?; _unlock; exit "$rc"; }
   _unlock; echo "transitioned $ID $FROM -> $TO" ;;
 
 get)
@@ -323,9 +408,9 @@ reap)
     case "$exp" in (*[!0-9]*) continue ;; esac
     [ "$exp" -gt "$now" ] && continue
     ID="$(_field "$F" id)"; [ -n "$ID" ] || ID="$(basename "$F" .md)"
-    _set_fields "$F" status stale lease_expires 0 \
-      || { rc=$?; _unlock; exit "$rc"; }
-    emit_event stale "$ID" "lease expired at $exp (owner $(_field "$F" lease_owner)); worker gone" \
+    transition_fields "$F" stale "$ID" \
+      "lease expired at $exp (owner $(_field "$F" lease_owner)); worker gone" \
+      status stale lease_expires 0 \
       || { rc=$?; _unlock; exit "$rc"; }
     echo "reaped $ID (stale lease)"
     n=$((n+1))
@@ -340,11 +425,27 @@ event)
   emit_event "$K" "$T" "$D" || { rc=$?; _unlock; exit "$rc"; }
   _unlock ;;
 
+notify-event)
+  K="${1:?usage: taskctl notify-event <portfolio-brief|project-digest> <project> <message>}"
+  P="${2:?project}"; M="${3:?message}"; O="${4:-${RECURSION_CYCLE_DATE:-$(date -u +%F)}}"
+  [ ! -f "$ROOT/state/PAUSE" ] || { echo "taskctl: PAUSE blocks notification enqueue" >&2; exit 75; }
+  _lock || exit $?
+  if [ -f "$ROOT/state/PAUSE" ]; then
+    _unlock; echo "taskctl: PAUSE blocks notification enqueue" >&2; exit 75
+  fi
+  emit_notification_event "$K" "$P" "$M" "$O" || { rc=$?; _unlock; exit "$rc"; }
+  _unlock ;;
+
 # --- escalation identity ---------------------------------------------------------------
 # Index columns: id  key  status  first_seen  last_seen  count  workstream  pointer  title
 esc-record)
   KEY="${1:?usage: taskctl esc-record <key> <title> [workstream] [pointer]}"
   TITLE="${2:-}"; WS="${3:-}"; PTR="${4:-}"
+  KEY="$(printf '%s' "$KEY" | tr '\t\r\n' '   ')"
+  TITLE="$(printf '%s' "$TITLE" | tr '\t\r\n' '   ')"
+  WS="$(printf '%s' "$WS" | tr '\t\r\n' '   ')"
+  PTR="$(printf '%s' "$PTR" | tr '\t\r\n' '   ')"
+  [ -n "${KEY//[[:space:]]/}" ] || { echo "taskctl: escalation key is empty after normalization" >&2; exit 2; }
   _lock || exit $?
   _atomic_esc init || { rc=$?; _unlock; exit "$rc"; }
   # An OPEN escalation with this key already exists -> it is the SAME ask. Bump and report

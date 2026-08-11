@@ -4,6 +4,8 @@
 # publisher, notification, or live control-plane state.
 set -uo pipefail
 export LC_ALL=C
+export RECURSION_TEST_WORKER=logical
+export RECURSION_TEST_PROVIDER_NETWORK=logical
 SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
@@ -19,15 +21,23 @@ trap cleanup EXIT
 copy_controller(){
   local r="$1"
   mkdir -p "$r/scripts" "$r/state/tasks" "$r/state/goals" "$r/state/runs" \
-    "$r/state/actions" "$r/state/deliveries" "$r/state/instructions" "$r/state/project-config" "$r/state/pilots" \
+    "$r/state/actions" "$r/state/deliveries" "$r/state/instructions" "$r/state/assists" "$r/state/project-config" "$r/state/pilots" \
     "$r/state/decision-queue/pending" "$r/state/decision-queue/running" \
     "$r/state/decision-queue/succeeded" "$r/state/decision-queue/failed" \
     "$r/state/.locks" "$r/state/evidence" "$r/loop/logs"
   for s in conduct-hermes.sh decision-queue.py validate-decision.py validate-control-state.py \
-           project-pilot.py project-reconcile.py taskctl.sh; do
+           project-pilot.py project-reconcile.py jsonl_durable.py transition_receipt.py runtime-state.py taskctl.sh worker-sandbox.sh; do
     [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$r/scripts/"
   done
   chmod +x "$r/scripts/"* 2>/dev/null || true
+  if ! python3 -c 'import fcntl' >/dev/null 2>&1; then
+    cat > "$r/scripts/fcntl.py" <<'PY'
+LOCK_EX=2
+LOCK_NB=4
+def flock(_file, _flags):
+    return None
+PY
+  fi
   : > "$r/.env"; : > "$r/state/events.jsonl"; : > "$r/state/action-events.jsonl"
   : > "$r/state/decisions.jsonl"; : > "$r/state/INBOX.md"
 }
@@ -155,7 +165,7 @@ if [ -f "$root/state/test-ambiguity" ]; then
 fi
 if [ -f "$root/state/test-gate-fail" ]; then setv status failed; exit 0; fi
 repo="$(get repo)"; wt="$(mktemp -d)"; git -C "$repo" worktree add -q -b "loop/work/$id" "$wt" main
-printf 'verified\n' > "$wt/app/result.txt"
+printf '%s\n' "$id" > "$wt/app/result.txt"
 git -C "$wt" add -A; git -C "$wt" -c user.name=t -c user.email=t@t commit -qm "$id"
 oid="$(git -C "$wt" rev-parse HEAD)"; git -C "$repo" worktree remove --force "$wt"
 setv candidate_commit "$oid"; setv review_status local; setv status passed
@@ -209,25 +219,65 @@ M="$(setup success-mutating-gate)"; write_task "$M" mutation-task proposed 0
 set_field "$M/state/goals/phase6-goal.md" acceptance_suite "printf mutation > app/gate-mutation.txt"
 ticks "$M" 8
 mutation_closed=0
-if [ "$(goal_status "$M")" != achieved ] && [ "$(launch_count "$M")" = 1 ] \
-   && python3 - "$M/state/evidence/phase6-goal.json" <<'PY'
-import json,sys
-try: row=json.load(open(sys.argv[1]))
+if [ "$(goal_status "$M")" = active ] && [ "$(launch_count "$M")" = 1 ] \
+   && python3 - "$M/state/evidence/phase6-goal.json" "$M/state/evidence/history" <<'PY'
+import glob,json,sys
+try: current=json.load(open(sys.argv[1]))
 except Exception: raise SystemExit(1)
-raise SystemExit(0 if row.get('verdict')=='fail' and row.get('worktree_clean') is False else 1)
+rows=[]
+for path in glob.glob(sys.argv[2]+'/phase6-goal-reopen-v*-fail.json'):
+    try: rows.append(json.load(open(path)))
+    except Exception: pass
+ok=(current.get('verdict')=='consumed' and current.get('source_verdict')=='fail'
+    and current.get('consumed_task_ids')==['mutation-task'] and len(rows)==1
+    and rows[0].get('verdict')=='fail' and rows[0].get('worktree_clean') is False)
+raise SystemExit(0 if ok else 1)
 PY
 then mutation_closed=1; fi
+
+# A consumed verdict must hold this exact task graph open for remediation rather than bounce.
+# Once one stacked follow-up changes that graph, a clean exact-commit gate may close the goal.
+mutation_oid="$(field "$M/state/tasks/mutation-task.md" candidate_commit)"
+mutation_repo="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["repo"])' "$M/state/project-config/phase6.json")"
+mutation_origin="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["remote"])' "$M/state/project-config/phase6.json")"
+git -C "$mutation_repo" checkout -q main
+git -C "$mutation_repo" merge -q --ff-only "$mutation_oid"
+git -C "$mutation_repo" push -q "$mutation_origin" main
+mutation_review_rc=0
+RECURSION_ROOT="$M" python3 "$M/scripts/project-reconcile.py" accept-review \
+  phase6 phase6-goal mutation-task "$mutation_oid" lucas \
+  >"$M/state/mutation-review.out" 2>&1 || mutation_review_rc=$?
+set_field "$M/state/goals/phase6-goal.md" acceptance_suite "test -s app/result.txt"
+write_task "$M" remediation-task proposed 0 mutation-task
+ticks "$M" 8
+remediation_clean=0
+if [ "$mutation_review_rc" = 0 ] \
+   && [ "$(field "$M/state/tasks/mutation-task.md" review_status)" = accepted ] \
+   && [ "$(goal_status "$M")" = achieved ] && [ "$(launch_count "$M")" = 2 ] \
+   && [ "$(grep -c '"event":"goal-transition"' "$M/state/events.jsonl" 2>/dev/null || true)" = 4 ] \
+   && [ "$(grep -c '"event":"goal-terminal"' "$M/state/events.jsonl" 2>/dev/null || true)" = 1 ]; then
+  remediation_clean=1
+fi
 if [ "$(goal_status "$R")" = achieved ] && [ "$(task_status "$R" success-task)" = passed ] \
    && [ "$(action_count "$R" work)" = 1 ] \
-   && [ "$mutation_closed" = 1 ] \
+   && [ "$mutation_closed" = 1 ] && [ "$remediation_clean" = 1 ] \
    && python3 - "$R/state/evidence/phase6-goal.json" <<'PY'
 import json,sys
 try: row=json.load(open(sys.argv[1]))
 except Exception: raise SystemExit(1)
 raise SystemExit(0 if row.get('verdict')=='pass' and row.get('commit_oid') and row.get('independent_verifier') else 1)
 PY
-then ok "successful goal reconciled exactly while a mutating final gate failed closed"
-else no "exact goal verification accepted failure or rejected clean success"; fi
+then ok "dirty verification reopens once and a stacked clean remediation closes exactly"
+else
+  printf '      mutation_closed=%s review_rc=%s review_status=%s remediation_status=%s goal_status=%s launches=%s\n' \
+    "$mutation_closed" "$mutation_review_rc" \
+    "$(field "$M/state/tasks/mutation-task.md" review_status)" \
+    "$(task_status "$M" remediation-task)" "$(goal_status "$M")" "$(launch_count "$M")" >&2
+  if [ -s "$M/state/mutation-review.out" ]; then
+    sed 's/^/      accept-review: /' "$M/state/mutation-review.out" >&2
+  fi
+  no "exact goal verification accepted failure or rejected clean success"
+fi
 
 # 2. Machine-gate failure gets one durable retry and no unbounded third launch.
 R="$(setup gate-failure)"; write_task "$R" gate-task ready 0; touch "$R/state/test-gate-fail"
@@ -329,6 +379,26 @@ write_task "$R" review-two ready 0; ticks "$R" 4
   && ok "review-queue backpressure prevents unlimited new work" \
   || no "review backlog did not stop new work"
 
+# 11b. Only Lucas's local exact-commit acceptance releases that backpressure.
+B='{"max_concurrency":2,"max_tokens":1000,"max_cost_usd":5,"max_wall_clock_seconds":3600,"max_task_attempts":2,"max_failures":1,"max_review_queue":1,"max_publish_attempts":1,"publication_required":false}'
+R="$(setup review-release active "$B" 2)"; write_task "$R" review-a ready 0; write_task "$R" review-b ready 0
+ticks "$R" 5
+oid="$(field "$R/state/tasks/review-a.md" candidate_commit)"
+wrong=0; exact=0
+RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" accept-review \
+  phase6 phase6-goal review-a "$oid" automation >/dev/null 2>&1 || wrong=$?
+RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" accept-review \
+  phase6 phase6-goal review-a "$oid" lucas >/dev/null 2>&1 || exact=$?
+ticks "$R" 5
+if [ "$loop_live" = 1 ] && [ "$wrong" != 0 ] && [ "$exact" = 0 ] \
+   && [ "$(field "$R/state/tasks/review-a.md" review_status)" = accepted ] \
+   && [ -f "$R/state/evidence/review-review-a.json" ] \
+   && [ "$(action_count "$R" work)" = 2 ]; then
+  ok "Lucas exact-commit acceptance durably releases review backpressure"
+else
+  no "review acceptance authority/evidence did not release exactly one bounded slot"
+fi
+
 # 12. All terminal/paused goal states are stable and dispatch-closed.
 terminal_ok=1
 for st in achieved blocked abandoned budget-exhausted paused; do
@@ -337,6 +407,28 @@ for st in achieved blocked abandoned budget-exhausted paused; do
 done
 [ "$loop_live" = 1 ] && [ "$terminal_ok" = 1 ] && ok "achieved, blocked, abandoned, budget-exhausted, and paused are deterministic" \
   || no "one or more terminal goal states reopened or dispatched"
+
+# 12b. Explicit review acceptance survives the normal merge-then-prune remote workflow.
+B='{"max_concurrency":1,"max_tokens":1000,"max_cost_usd":5,"max_wall_clock_seconds":3600,"max_task_attempts":2,"max_failures":1,"max_review_queue":1,"max_publish_attempts":2,"publication_required":true}'
+R="$(setup review-merge-prune active "$B")"; write_task "$R" merged-review ready 0; ticks "$R" 8
+repo="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["repo"])' "$R/state/project-config/phase6.json")"
+origin="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["remote"])' "$R/state/project-config/phase6.json")"
+oid="$(field "$R/state/tasks/merged-review.md" candidate_commit)"
+git -C "$repo" checkout -q main
+git -C "$repo" merge -q --ff-only "loop/work/merged-review"
+git -C "$repo" push -q "$origin" main
+git -C "$repo" push -q "$origin" :"loop/work/merged-review"
+git -C "$repo" branch -D "loop/work/merged-review" >/dev/null
+merged_accept_rc=0
+RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" accept-review \
+  phase6 phase6-goal merged-review "$oid" lucas >/dev/null 2>&1 || merged_accept_rc=$?
+proof_kind="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["review_proof"]["kind"])' "$R/state/evidence/review-merged-review.json" 2>/dev/null)"
+if [ "$merged_accept_rc" = 0 ] && [ "$proof_kind" = remote-default-ancestor ] \
+   && [ "$(field "$R/state/tasks/merged-review.md" review_status)" = accepted ]; then
+  ok "explicit exact-commit review accepts a fetched merge proof after review-ref pruning"
+else
+  no "merge-then-prune workflow could not release explicit human review backpressure"
+fi
 
 # 13. Recovery reconciles every named truth source and does not redeliver.
 R="$(setup recovery-sources)"; write_task "$R" recovery-task stale 1
@@ -354,8 +446,10 @@ pilot_task_decision(){ # root instruction-id task-id file
   local r="$1" iid="$2" tid="$3" file="$4"
   printf 'schema_version: 1\nid: %s\nprincipal: test\ntopic: 61\nproject_id: phase6\npilot_id: pilot-phase6\nstatus: open\n' "$iid" > "$r/state/instructions/$(printf '%08d' "$iid").md"
   cat > "$file" <<JSON
-{"schema_version":1,"id":"decision-$iid","actor":"pilot-phase6","verb":"pilot-task-create","args":["phase6","phase6-goal","$tid","app"],"project":"phase6","goal":"phase6-goal","why":"bounded task creation control","wrong_if":"goal state changed","text":"Create one bounded verification follow-up.","instruction_id":"$iid","idempotency_key":"phase6-create-$iid"}
+{"schema_version":1,"id":"decision-$iid","actor":"pilot-phase6","verb":"pilot-task-create","args":["phase6","phase6-goal","$tid","app"],"project":"phase6","goal":"phase6-goal","why":"bounded task creation control","wrong_if":"goal state changed","text":"Create one bounded verification follow-up.","instruction_id":"$iid","idempotency_key":"phase6-create-$iid","decision_source":"hermes-model","routed_decider":"pilot-phase6"}
 JSON
+  RECURSION_ROOT="$r" python3 "$r/scripts/decision-queue.py" normalize < "$file" > "$file.normalized"
+  mv -f "$file.normalized" "$file"
 }
 R="$(setup verifying)"; write_task "$R" verify-task ready 0; ticks "$R" 2
 before="$(find "$R/state/tasks" -type f | wc -l)"
@@ -380,6 +474,115 @@ before="$(action_count "$R" work)"; ticks "$R" 5; after="$(action_count "$R" wor
 if [ "$before" = 1 ] && [ "$after" = 1 ] && [ "$(goal_status "$R")" = achieved ]; then
   ok "repeated scheduler ticks launch zero workers after achieved"
 else no "achieved was vacuous or relaunched work (before=$before after=$after)"; fi
+
+# 16. A mutation-backed terminal receipt committed before its event append is resumed, not
+# re-created as a colliding pure event. The exact operation and its replay both return success.
+R="$(setup terminal-event-repair verifying)"
+terminal_crash_rc=0; terminal_resume_rc=0; terminal_replay_rc=0
+RECURSION_ROOT="$R" RECURSION_TRANSITION_FAILPOINT=state-write \
+  python3 "$R/scripts/project-reconcile.py" transition-goal \
+  phase6 phase6-goal verifying achieved exact-commit-verified >/dev/null 2>&1 || terminal_crash_rc=$?
+RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" transition-goal \
+  phase6 phase6-goal verifying achieved exact-commit-verified >/dev/null 2>&1 || terminal_resume_rc=$?
+RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" transition-goal \
+  phase6 phase6-goal verifying achieved exact-commit-verified >/dev/null 2>&1 || terminal_replay_rc=$?
+terminal_transition_count="$(grep -c '"event":"goal-transition"' "$R/state/events.jsonl" 2>/dev/null || true)"
+terminal_event_count="$(grep -c '"event":"goal-terminal"' "$R/state/events.jsonl" 2>/dev/null || true)"
+if [ "$terminal_crash_rc" != 0 ] && [ "$terminal_resume_rc" = 0 ] && [ "$terminal_replay_rc" = 0 ] \
+   && [ "$(goal_status "$R")" = achieved ] \
+   && [ "$terminal_transition_count" = 1 ] && [ "$terminal_event_count" = 1 ]; then
+  ok "mutation-backed terminal receipt resumes and replays exactly once"
+else
+  no "terminal receipt collided, failed replay, or lost/duplicated report events"
+fi
+
+# 17. PAUSE evidence is a controlled reopen verdict, not a permanent verifying wedge.
+R="$(setup paused-verification verifying)"
+cat > "$R/state/evidence/phase6-goal.json" <<'JSON'
+{"schema_version":1,"id":"goal-evidence-phase6-goal","project_id":"phase6","goal_id":"phase6-goal","verdict":"paused"}
+JSON
+paused_rc=0
+RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" transition-goal \
+  phase6 phase6-goal verifying active verification-reopened >/dev/null 2>&1 || paused_rc=$?
+if [ "$paused_rc" = 0 ] && [ "$(goal_status "$R")" = active ] \
+   && [ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("verdict",""))' "$R/state/evidence/phase6-goal.json")" = consumed ] \
+   && find "$R/state/evidence/history" -name 'phase6-goal-reopen-*-paused.json' -print -quit | grep -q .; then
+  ok "paused verification evidence reopens the goal after resume"
+else
+  no "paused verification evidence wedged the goal in verifying"
+fi
+
+# 18. A queued blocked transition must re-check that its triggering task is still blocked.
+R="$(setup stale-block-cause active)"; write_task "$R" repaired-task queued 1
+stale_rc=0
+RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" transition-goal \
+  phase6 phase6-goal active blocked task-blocked >/dev/null 2>&1 || stale_rc=$?
+if [ "$stale_rc" != 0 ] && [ "$(goal_status "$R")" = active ] \
+   && [ "$(task_status "$R" repaired-task)" = queued ]; then
+  ok "stale task-blocked transition is refused after assist recovery"
+else
+  no "stale task-blocked transition stranded an already repaired task"
+fi
+
+# 19. The durable answer may remain open across resume CAS; replay remains idempotent.
+R="$(setup assist-open-answer blocked)"; write_task "$R" assisted-task blocked 1
+cat > "$R/state/assists/assisted-task.md" <<'ASSIST'
+task: assisted-task
+kind: decision
+status: open
+asked: 2026-08-10T00:00:00Z
+asked_by: worker
+answered: 2026-08-10T00:01:00Z
+answered_by: lucas
+
+## QUESTION
+Which marker?
+
+## ANSWER
+Use the marker after the canonical header.
+ASSIST
+assist_crash=0; assist_first=0; assist_second=0
+# Crash after the non-authoritative task/goal writes but before the assist commit marker/event.
+RECURSION_ROOT="$R" RECURSION_TRANSITION_FAILPOINT=state-write-2 \
+  python3 "$R/scripts/project-reconcile.py" resume-assist \
+  assisted-task 88 >/dev/null 2>&1 || assist_crash=$?
+crash_guidance="$(RECURSION_ROOT="$R" bash "$SRC/scripts/assist.sh" guidance assisted-task)"
+RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" resume-assist \
+  assisted-task 88 >/dev/null 2>&1 || assist_first=$?
+RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" resume-assist \
+  assisted-task 88 >/dev/null 2>&1 || assist_second=$?
+assist_events="$(grep -c '"event":"assist-answer"' "$R/state/events.jsonl" 2>/dev/null || true)"
+if [ "$assist_crash" != 0 ] && [ "$assist_first" = 0 ] && [ "$assist_second" = 0 ] \
+   && [ "$(goal_status "$R")" = active ] && [ "$(task_status "$R" assisted-task)" = queued ] \
+   && [ "$(field "$R/state/assists/assisted-task.md" status)" = answered ] \
+   && printf '%s' "$crash_guidance" | grep -q 'Use the marker after the canonical header' \
+   && [ "$assist_events" = 1 ]; then
+  ok "open durable assist answer survives the resume crash seam and replays idempotently"
+else
+  no "assist answer/CAS ordering remained lossy or non-idempotent"
+fi
+
+# 20. Project event appenders share taskctl's rotation boundary and never append mid-archive.
+R="$(setup event-rotation active)"; mkdir -p "$R/state/.locks/runtime-state.lock"
+RECURSION_ROOT="$R" RECURSION_LOCK_ATTEMPTS=1 RECURSION_LOCK_DELAY_S=0 python3 - <<'PY'
+import importlib.util, os, pathlib, sys
+root = pathlib.Path(os.environ["RECURSION_ROOT"])
+sys.path.insert(0, str(root / "scripts"))
+for name in ("project-reconcile.py", "project-pilot.py"):
+    spec = importlib.util.spec_from_file_location("control", root / "scripts" / name)
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    try:
+        module.append_event(root, "must-not-append", "phase6", "phase6-goal")
+    except (RuntimeError, SystemExit):
+        continue
+    raise SystemExit(f"{name} appended through runtime-state.lock")
+PY
+rotation_rc=$?
+if [ "$rotation_rc" = 0 ] && ! grep -q 'must-not-append' "$R/state/events.jsonl"; then
+  ok "project appenders refuse runtime-state rotation races"
+else
+  no "a project appender crossed the runtime-state/taskctl serialization boundary"
+fi
 
 echo
 [ "$fails" -eq 0 ] && { echo "hermes-pilot-phase6-red: ALL PASS"; exit 0; }

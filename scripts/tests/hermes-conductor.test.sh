@@ -23,7 +23,7 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 export RECURSION_NO_NOTIFY=1
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/repo"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/roadmaps" "$R/loop/logs"
-for s in conduct-hermes.sh hermes-decide.sh validate-decision.py taskctl.sh notify.sh plan.sh publish.sh work.sh conduct.sh; do
+for s in conduct-hermes.sh hermes-decide.sh validate-decision.py validate-control-state.py decision-queue.py taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh plan.sh publish.sh work.sh conduct.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null
@@ -63,7 +63,20 @@ status: queued
 body
 T
 
-decide(){ printf '%s' "$1" > "$TMP/d.json"; }
+decide(){
+  local raw="$1" bound
+  bound="$(python3 - "$raw" <<'PY' 2>/dev/null
+import json,sys
+row=json.loads(sys.argv[1])
+row.setdefault('actor','head-hermes')
+row.setdefault('decision_source','hermes-model')
+row.setdefault('routed_decider',row['actor'])
+print(json.dumps(row,separators=(',',':')))
+PY
+)" || { printf '%s' "$raw" > "$TMP/d.json"; return; }
+  printf '%s' "$bound" | RECURSION_ROOT="$R" python3 "$R/scripts/decision-queue.py" normalize \
+    > "$TMP/d.json" 2>/dev/null || printf '%s' "$bound" > "$TMP/d.json"
+}
 conduct(){ ( cd "$R" && RECURSION_ROOT="$R" bash scripts/conduct-hermes.sh --file "$TMP/d.json" ) >"$TMP/out" 2>&1; echo $?; }
 ran(){ grep -q "$1" "$TMP/ran.log" 2>/dev/null; }
 
@@ -134,12 +147,13 @@ decide '{"verb":"plan","args":["no-such-ws"],"goal":"g","wrong_if":"w"}'
 # --- 8) ★ PAUSE: acting is halted, and the decision is preserved not discarded --------------
 : > "$TMP/ran.log"
 printf 'PAUSED\nreason: test\n' > "$R/state/PAUSE"
-decide '{"verb":"work","args":["good-001"],"goal":"g","wrong_if":"w"}'
+decide '{"verb":"work","args":["good-001"],"goal":"g","wrong_if":"w","why":"because"}'
 rc=$(conduct)
-if [ ! -s "$TMP/ran.log" ] && grep -q 'PAUSED' "$TMP/out"; then
+if [ "$rc" = 75 ] && [ ! -s "$TMP/ran.log" ]; then
   ok "★ under PAUSE the decision is DEFERRED, not executed (and not discarded)"
 else
-  no "★ a decision executed while paused"
+  no "★ PAUSE did not return the deferred contract (rc=$rc, executor_bytes=$(wc -c < "$TMP/ran.log"))"
+  sed 's/^/        /' "$TMP/out" | tail -4
 fi
 # noop must still be allowed while paused — deciding is awareness
 decide '{"verb":"noop","args":[],"goal":"g","wrong_if":"w","why":"nothing to do"}'
@@ -165,6 +179,18 @@ val(){ python3 "$R/scripts/validate-decision.py" "noop plan work conduct publish
   && ok "validator rejects a decision with no FALSIFIER" || no "falsifier-less decision accepted"
 [ "$(val '{"verb":"deploy","args":[],"goal":"g","wrong_if":"w"}')" = "ERR" ] \
   && ok "validator rejects an off-whitelist verb" || no "off-whitelist verb accepted"
+
+pilot_val(){ python3 "$R/scripts/validate-decision.py" \
+  "noop plan work conduct publish escalate pilot-plan-propose" "$1" pilot-chiron 2>&1 | cut -d' ' -f1; }
+[ "$(pilot_val '{"actor":"pilot-chiron","verb":"conduct","args":[],"goal":"g","wrong_if":"w"}')" = ERR ] \
+  && ok "a routed project pilot cannot validate a Head-Hermes verb" \
+  || no "project-pilot authority escaped through advisory prompting"
+[ "$(pilot_val '{"actor":"pilot-chiron","verb":"noop","args":[],"goal":"g","wrong_if":"w"}')" = OK ] \
+  && ok "a routed project pilot retains the safe noop control" \
+  || no "project-pilot authority gate rejected noop"
+decide '{"actor":"pilot-chiron","routed_decider":"pilot-chiron","decision_source":"hermes-model","verb":"conduct","args":[],"goal":"g","wrong_if":"w"}'
+[ "$(conduct)" != 0 ] && ok "the actuator independently rejects a project-pilot Head-Hermes verb" \
+                       || no "the actuator trusted a project pilot to drain the portfolio"
 
 echo
 [ "$fails" -eq 0 ] && { echo "hermes-conductor: ALL PASS"; exit 0; }

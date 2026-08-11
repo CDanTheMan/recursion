@@ -13,7 +13,10 @@ set -euo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 JOB="${1:-morning}"
 LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
-DATE="$(date +%F)"
+DATE="${RECURSION_CYCLE_DATE:-$(date +%F)}"
+[[ "$DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] \
+  || { echo "run: invalid RECURSION_CYCLE_DATE '$DATE'" >&2; exit 2; }
+export RECURSION_CYCLE_DATE="$DATE"
 LOG="$LOG_DIR/$DATE-$JOB.log"
 OUT="$LOG_DIR/$DATE-$JOB.out"
 USAGE="$LOG_DIR/$DATE-$JOB.usage.json"
@@ -45,6 +48,10 @@ case "$JOB" in
 esac
 
 # --- Work on the auto branch. Never the default branch (CLAUDE.md hard rule 2). ----
+# PAUSE permits monitoring but halts merges. In monitor-only mode the complete self-repo Git
+# projection is observation-only: do not discard BOARD, checkout/create a branch, merge, move
+# HEAD, touch the index, or append a reflog entry.
+if [ "$PAUSED" = "0" ]; then
 DEFAULT_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"
 DEFAULT_BRANCH="${DEFAULT_BRANCH:-master}"
 # state/BOARD.md is RENDERED every run and tracked, so it is dirty almost always — and a dirty
@@ -76,6 +83,10 @@ if ! git merge -q --no-edit "$DEFAULT_BRANCH" 2>/dev/null; then
 fi
 BEHIND="$(git rev-list --count "$BRANCH..$DEFAULT_BRANCH" 2>/dev/null || echo 0)"
 [ "${BEHIND:-0}" -gt 0 ] && log "WARNING: $BRANCH is $BEHIND commit(s) behind $DEFAULT_BRANCH — running stale code"
+
+else
+  log "PAUSE preserves self-repo Git state; skipping BOARD discard, branch checkout/create, and default-branch merge."
+fi
 
 mkdir -p state/briefs
 log "start $JOB (model=$MODEL)"
@@ -172,23 +183,47 @@ if [ -n "${ESC//[[:space:]]/}" ]; then
     *)
       { echo; printf '%s\n' "$ESC" | sed "1s/^## /## [$EID] /"; } >> state/INBOX.md
       log "escalation $EID appended to state/INBOX.md"
-      # Tag the ping when paused: an escalation that will NOT be acted on until you resume is
-      # a materially different message from one the box is about to work on.
       PFX="🔔 Recursion needs a decision [$EID]:"
-      [ "$PAUSED" = "1" ] && PFX="⏸🔔 Recursion needs a decision [$EID] (box is PAUSED — nothing will act on this until you resume):"
-      bash "$ROOT/scripts/notify.sh" "$PFX
+      if [ "$PAUSED" = "1" ]; then
+        log "escalation $EID retained in INBOX; PAUSE suppresses human-visible delivery"
+      else
+        bash "$ROOT/scripts/notify.sh" "$PFX
 $ESC
 
 Resolve with: recursion resolve-esc $EID \"<what you decided>\"" || true
+      fi
       ;;
   esac
+fi
+
+# Build the complete brief before the state commit. Delivery is represented by one canonical
+# source event; the Phase 7 scheduler/decision/action/actuator/outbox path owns the eventual send.
+# PAUSE queues nothing stale for replay into a later production window.
+if [ "${DELIVER_BRIEF:-1}" = "1" ] && [ -f "$BRIEF" ]; then
+  { echo; echo; bash "$ROOT/scripts/branch-review.sh" 2>/dev/null; } >> "$BRIEF"
+  if [ "$PAUSED" = "1" ]; then
+    log "PAUSE suppresses portfolio brief notification enqueue"
+  elif [ -x "$ROOT/scripts/taskctl.sh" ]; then
+    BODY="$(<"$BRIEF")"
+    bash "$ROOT/scripts/taskctl.sh" notify-event portfolio-brief recursion "$BODY" >/dev/null \
+      || log "portfolio brief notification enqueue failed"
+  else
+    log "portfolio brief notification enqueue unavailable — taskctl missing"
+  fi
 fi
 
 # --- Save today's snapshot for tomorrow's diff. -----------------------------------
 cat state/projects/*.md 2>/dev/null > "$SNAP" || true
 
 # --- Commit any state changes (agent output). Never main. -------------------------
-if ! git diff --quiet || ! git diff --cached --quiet; then
+CURRENT_BRANCH="$(git branch --show-current 2>/dev/null || true)"
+if [ "$PAUSED" = "1" ]; then
+  # Monitoring artifacts remain durable local files, but PAUSE must not move HEAD or a reflog.
+  # A later resumed cycle reaches loop/auto and commits through the ordinary reviewed path.
+  log "PAUSE preserves self-repo Git state; monitoring artifacts retained locally without commit."
+elif [ "$CURRENT_BRANCH" != "$BRANCH" ]; then
+  log "REFUSED state commit on branch '${CURRENT_BRANCH:-detached}'; only $BRANCH may receive supervisor state."
+elif ! git diff --quiet || ! git diff --cached --quiet; then
   git add -A state/ || true
   if git commit -q -m "loop: $JOB $DATE"; then
     log "committed to $BRANCH"
@@ -199,16 +234,6 @@ else
   log "no changes"
 fi
 
-# --- Deliver the brief to Telegram (daily digest only). ---------------------------
-# Intra-day heartbeat-triggered briefs set DELIVER_BRIEF=0: they still write the brief,
-# update the board, and fire escalation pings above — but don't push a full digest every
-# few hours. Escalations always reach you; routine intra-day briefs stay silent.
-if [ "${DELIVER_BRIEF:-1}" = "1" ] && [ -f "$BRIEF" ]; then
-  # Append the review-branch tracker VERBATIM so the digest always carries the exact branch list,
-  # merge status, and review order (the loop pushes branches; you merge on GitHub).
-  { echo; echo; bash "$ROOT/scripts/branch-review.sh" 2>/dev/null; } >> "$BRIEF"
-  bash "$ROOT/scripts/notify.sh" -f "$BRIEF" || true
-fi
 fi   # end brief-mode block
 
 # --- Per-job fallback check: did this run drop off the sub onto metered billing? ---

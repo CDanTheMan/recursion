@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # pause-semantics.test.sh — PAUSE halts EXECUTION and preserves AWARENESS (D-012).
 #
-# WHY. Three documents and pause.sh's own message promised "heartbeat + escalation still
-# reach you" while cycle.sh and run.sh both exited before the heartbeat. Docs and code
-# disagreed for as long as the kill switch existed, and nothing could catch it because
-# nothing tested the paused path. This is that test.
+# WHY. PAUSE preserves local awareness but must prohibit every human-visible send. The 2026-08-10
+# 06:30Z forced cycle proved that setting DELIVER_BRIEF=1 and invoking digest.sh under PAUSE could
+# bypass the Phase 7 outbox, make nine legacy transport calls, and leave the brief tracked dirty.
 #
 # HOW. It runs the REAL cycle.sh against a disposable copy of the repo, with a stub `hermes`
 # earlier on PATH. No model is called, no Telegram message is sent, no spend. The stub also
@@ -63,7 +62,13 @@ chmod +x "$BIN/claude"
 
 # --- disposable repo copy (never touch the live tree) --------------------------------------
 R="$TMP/repo"; mkdir -p "$R"
-tar -C "$SRC" -cf - scripts loop state ANCHOR.md CLAUDE.md 2>/dev/null | tar -C "$R" -xf - 2>/dev/null
+# Earlier suites may have populated ignored derived caches in SRC. They are not fixture input:
+# copying them before this fixture's git init would accidentally make them tracked authority.
+tar -C "$SRC" --exclude='scripts/__pycache__' --exclude='loop/logs/*' \
+  --exclude='state/jsonl-index' --exclude='state/recovery/transition-archive' \
+  --exclude='state/recovery/transition-event-index' \
+  -cf - scripts loop state ANCHOR.md CLAUDE.md .gitignore 2>/dev/null \
+  | tar -C "$R" -xf - 2>/dev/null
 mkdir -p "$R/state/briefs" "$R/loop/logs" "$R/state/tasks"
 rm -f "$R"/loop/logs/*
 : > "$R/.env"
@@ -109,6 +114,12 @@ run_cycle(){ # $1=force|""
   rm -f "$R"/state/briefs/*.md
   rm -f "$R"/loop/logs/*
   printf '# Inbox\n\n_(empty)_\n' > "$R/state/INBOX.md"
+  if [ -f "$R/state/PAUSE" ]; then
+    PAUSED_SELF_BRANCH="$($GIT -C "$R" branch --show-current)"
+    PAUSED_SELF_HEAD="$($GIT -C "$R" rev-parse HEAD)"
+    PAUSED_SELF_BOARD="$(sha256sum "$R/state/BOARD.md" | awk '{print $1}')"
+    PAUSED_SELF_REFLOG="$($GIT -C "$R" reflog --format=%H | sha256sum | awk '{print $1}')"
+  fi
   ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" \
       RECURSION_AUTO_DRAIN=1 RECURSION_AUTO_PLAN=1 RECURSION_AUTO_REFLECT=1 \
       RECURSION_PLAN_WORKSTREAMS="" \
@@ -174,7 +185,22 @@ else
   no "paused: no brief written (escalations ride in the brief path)"
 fi
 
-# --- 4) escalation delivery still works while paused ---------------------------------------
+# --- 4) ★ PAUSE produces no transport call and leaves the tracked tree clean ----------------
+if [ ! -s "$STUB_NOTIFY_LOG" ]; then
+  ok "paused: no brief, digest, escalation, or fallback transport was invoked"
+else
+  no "paused: HUMAN-VISIBLE SEND LEAKED — $(cat "$STUB_NOTIFY_LOG")"
+fi
+if [ "$($GIT -C "$R" branch --show-current)" = "$PAUSED_SELF_BRANCH" ] \
+    && [ "$($GIT -C "$R" rev-parse HEAD)" = "$PAUSED_SELF_HEAD" ] \
+    && [ "$(sha256sum "$R/state/BOARD.md" | awk '{print $1}')" = "$PAUSED_SELF_BOARD" ] \
+    && [ "$($GIT -C "$R" reflog --format=%H | sha256sum | awk '{print $1}')" = "$PAUSED_SELF_REFLOG" ]; then
+  ok "paused: forced monitoring preserves self-repo branch, HEAD, BOARD, and reflog"
+else
+  no "paused: forced monitoring mutated self-repo Git state (branch=$($GIT -C "$R" branch --show-current), HEAD=$($GIT -C "$R" rev-parse --short HEAD))"
+fi
+
+# --- 5) escalation remains durable locally but is not sent while paused --------------------
 # Feed the stub an escalation block by making the brief prompt emit one.
 cat > "$BIN/hermes" <<'STUB'
 #!/usr/bin/env bash
@@ -190,23 +216,25 @@ STUB
 chmod +x "$BIN/hermes"
 : > "$STUB_NOTIFY_LOG"
 run_cycle force
-if grep -q 'a decision is needed' "$R/state/INBOX.md" 2>/dev/null && [ -s "$STUB_NOTIFY_LOG" ]; then
-  ok "paused: escalation reached BOTH the durable INBOX and the notifier"
+if grep -q 'a decision is needed' "$R/state/INBOX.md" 2>/dev/null && [ ! -s "$STUB_NOTIFY_LOG" ]; then
+  ok "paused: escalation reached durable INBOX without invoking a transport"
 else
-  no "paused: escalation did not reach INBOX and/or notifier while paused"
+  no "paused: escalation was not durable or leaked to transport: $(cat "$STUB_NOTIFY_LOG")"
+  sed 's/^/        /' "$TMP/cycle.out" | tail -20
 fi
 
-# --- 5) the paused ping is tagged so it cannot be mistaken for actionable ------------------
-if grep -q 'PAUSED' "$STUB_NOTIFY_LOG"; then
-  ok "paused: escalation ping is tagged PAUSED"
+# --- 6) no stale brief/digest delivery is queued during PAUSE ------------------------------
+if ! grep -Eq '"event":"(portfolio-brief|project-digest)"' "$R/state/events.jsonl" 2>/dev/null; then
+  ok "paused: no stale brief or digest source event is queued for a later window"
 else
-  no "paused: escalation ping is untagged — reads as though the box will act on it"
+  no "paused: a brief/digest event was queued for replay after PAUSE"
 fi
 
 # =========================== RESUMED (the control) ===========================
 # Without this, every assertion above would also pass on a build that simply never executes.
 rm -f "$R/state/PAUSE"
 : > "$STUB_ARM_LOG"
+: > "$STUB_NOTIFY_LOG"
 run_cycle force
 if grep -q 'auto-drain: queued work' "$TMP/cycle.out"; then
   ok "CONTROL — resumed: the drainer DOES run (the gates above are not vacuous)"
@@ -219,6 +247,18 @@ if [ "$($GIT -C "$PORT_REPO" rev-parse main)" = "$PORT_REMOTE" ] \
   ok "CONTROL — resumed: portfolio sync DOES fast-forward the branch and executable tree"
 else
   no "CONTROL FAILED — resumed portfolio sync did not fast-forward; the paused no-change assertion is vacuous"
+fi
+if grep -q '"event":"portfolio-brief"' "$R/state/events.jsonl" 2>/dev/null \
+    && grep -q '"event":"project-digest"' "$R/state/events.jsonl" 2>/dev/null \
+    && [ ! -s "$STUB_NOTIFY_LOG" ]; then
+  ok "CONTROL — resumed: brief and digest enter the canonical event/outbox path with no direct send"
+else
+  no "CONTROL FAILED — resumed brief/digest did not use the canonical event path or called notify directly"
+fi
+if $GIT -C "$R" diff --quiet && $GIT -C "$R" diff --cached --quiet; then
+  ok "CONTROL — resumed forced cycle also leaves tracked state clean"
+else
+  no "CONTROL FAILED — resumed forced cycle left tracked state dirty: $($GIT -C "$R" status --short)"
 fi
 
 echo

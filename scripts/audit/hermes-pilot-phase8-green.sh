@@ -6,12 +6,17 @@ ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "$ROOT"
 
 bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/hermes-decide.sh \
-  scripts/assist.sh scripts/taskctl.sh scripts/work.sh scripts/tests/hermes-pilot-phase8-red.test.sh
+  scripts/assist.sh scripts/taskctl.sh scripts/work.sh scripts/notify.sh scripts/digest.sh \
+  scripts/cycle.sh loop/supervisor/run.sh scripts/tests/hermes-pilot-phase8-red.test.sh
 python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scripts/decision-queue.py \
-  scripts/notification-outbox.py scripts/validate-decision.py scripts/validate-control-state.py \
+  scripts/notification-outbox.py scripts/jsonl_durable.py scripts/transition_receipt.py scripts/validate-decision.py scripts/validate-control-state.py \
   scripts/runtime-state.py scripts/tests/hermes-pilot-phase8-red.py \
   scripts/tests/hermes-pilot-phase8-parallel.py \
-  scripts/tests/hermes-pilot-phase8-legacy-journal-red.py
+  scripts/tests/hermes-pilot-phase8-legacy-journal-red.py \
+  scripts/tests/hermes-pilot-phase8-notification-red.py scripts/tests/jsonl-durability.test.py \
+  scripts/tests/decision-identity.test.py scripts/tests/runtime-state-locks.test.py \
+  scripts/tests/runtime-state-recovery.test.py scripts/tests/reconcile-liveness.test.py \
+  scripts/tests/transition-receipt.test.py scripts/tests/notification-transition-receipt.test.py
 python3 - <<'PY'
 import json
 json.load(open('schemas/control-plane/v1/schema.json',encoding='utf-8'))
@@ -57,11 +62,16 @@ grep -q 'assist-answer' scripts/notification-outbox.py
 echo "ok    one answered assist reopens the same goal/task and all pilot notices use the Phase 7 outbox"
 
 for state_path in state/decisions.jsonl state/decision-queue state/goals state/tasks state/assists \
-  state/plans state/pilot-windows; do
+  state/plans state/pilot-windows state/jsonl-quarantine; do
   grep -qF "\"$state_path\"" scripts/runtime-state.py
 done
-for ignored in state/plans state/pilot-windows; do grep -qF "$ignored/" .gitignore; done
+for ignored in state/plans state/pilot-windows state/jsonl-quarantine state/jsonl-index; do grep -qF "$ignored/" .gitignore; done
 echo "ok    plan/window/queue/goal/task/assist state is backup-covered and runtime projections stay untracked"
+
+grep -q 'read_jsonl_since' scripts/decision-queue.py
+grep -q 'validate_projection_authority' scripts/decision-queue.py
+grep -q 'INDEX_AUTHORITY = "jsonl-verification-index-v1"' scripts/jsonl_durable.py
+echo "ok    decision/event journals use durable tail verification and claims rebind to journal authority"
 
 for event in plan-proposed plan-approved pilot-window-armed pilot-window-opened pilot-window-closed \
   lucas-attention-required human-answer-received; do
@@ -77,5 +87,22 @@ grep -q 'decision journal import failed rc=' scripts/conduct-hermes.sh
 grep -q 'PAUSE-safe queue pass failed rc=' scripts/hermes-actuator.sh
 echo "ok    exact reviewed legacy noops are non-executable and journal failures are observable"
 
+grep -q 'PAUSE asserted; transport refused' scripts/notify.sh
+grep -q 'notify-event portfolio-brief' loop/supervisor/run.sh
+grep -q 'notify-event project-digest' scripts/digest.sh
+! grep -q 'notify.sh' scripts/digest.sh
+grep -q 'paused: skipping per-project notification enqueue' scripts/cycle.sh
+grep -q 'state/.board.tsv state/events.jsonl' scripts/cycle.sh
+for event in portfolio-brief project-digest; do grep -q "$event" scripts/notification-outbox.py; done
+echo "ok    PAUSE interlocks the sole sender and resumed brief/digest delivery enters the Phase 7 outbox"
+
 bash scripts/tests/hermes-pilot-phase8-red.test.sh
+python3 scripts/tests/hermes-pilot-phase8-notification-red.py
+python3 scripts/tests/decision-identity.test.py
+python3 scripts/tests/jsonl-durability.test.py
+python3 scripts/tests/runtime-state-locks.test.py
+python3 scripts/tests/runtime-state-recovery.test.py
+python3 scripts/tests/reconcile-liveness.test.py
+python3 scripts/tests/transition-receipt.test.py
+python3 scripts/tests/notification-transition-receipt.test.py
 echo "hermes-pilot-phase8-green: ALL PASS"

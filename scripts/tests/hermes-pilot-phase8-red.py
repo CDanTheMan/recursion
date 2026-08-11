@@ -212,21 +212,23 @@ def test_fresh_plan(f: Fixture) -> bool:
 
 
 def test_invalid_plan(f: Fixture) -> bool:
-    bad = json.loads(json.dumps(f.plan))
-    bad["id"] = "chiron-phase8-invalid"
-    bad["tasks"][0]["acceptance"] = "true"
-    decision = f.decision(
-        verb="pilot-plan-propose", args=["chiron", bad["id"]], iid="101",
-        actor="pilot-chiron", goal=str(bad["goal"]["id"]), text="Propose an invalid plan.",
-        extra={"plan": bad, "id": "decision-invalid-plan", "idempotency_key": "phase8:invalid"},
-    )
-    result = f.run("python3", "scripts/project-pilot.py", "execute", str(decision))
-    diagnostic = (result.stderr + result.stdout).lower()
-    return (
-        result.returncode != 0
-        and ("vacuous" in diagnostic or "acceptance" in diagnostic)
-        and not (f.root / "state/plans/chiron/chiron-phase8-invalid.json").exists()
-    )
+    def refused(suffix: str, mutate) -> bool:
+        bad = json.loads(json.dumps(f.plan)); bad["id"] = f"chiron-phase8-invalid-{suffix}"
+        mutate(bad)
+        decision = f.decision(
+            verb="pilot-plan-propose", args=["chiron", bad["id"]], iid="101",
+            actor="pilot-chiron", goal=str(bad["goal"]["id"]), text="Propose an invalid plan.",
+            extra={"plan": bad, "id": f"decision-invalid-{suffix}",
+                   "idempotency_key": f"phase8:invalid:{suffix}"},
+        )
+        result = f.run("python3", "scripts/project-pilot.py", "execute", str(decision))
+        return result.returncode != 0 and not (f.root / f"state/plans/chiron/{bad['id']}.json").exists()
+
+    return all((
+        refused("gate", lambda p: p["tasks"][0].__setitem__("acceptance", "true")),
+        refused("review-zero", lambda p: p["goal"]["budget"].__setitem__("max_review_queue", 0)),
+        refused("metered", lambda p: p["tasks"][0].__setitem__("engine", "hermes")),
+    ))
 
 
 def test_approval(f: Fixture) -> bool:
@@ -248,6 +250,7 @@ def test_approval(f: Fixture) -> bool:
         and fields(goal_path).get("instruction_id") == "101"
         and fields(goal_path).get("plan_id") == f.plan_id
         and fields(task_path).get("status") == "proposed"
+        and fields(task_path).get("workstream") == "chiron"
         and fields(task_path).get("acceptance") == "npm run build"
         and proposal.get("status") == "approved"
         and proposal.get("approval_instruction_id") == "102"
@@ -274,8 +277,32 @@ def open_window(f: Fixture) -> bool:
 
 
 def test_window_admission(f: Fixture) -> bool:
+    bash = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe" \
+        if os.name == "nt" else Path("bash")
+    sink = f.run(str(bash), "scripts/work.sh", "chiron-phase8-smoke")
+    if sink.returncode != 75:
+        return False
     before = f.run("python3", "scripts/project-reconcile.py", "schedule")
     if before.returncode or before.stdout.strip() != "0" or list((f.root / "state/decision-queue/pending").glob("*.json")):
+        return False
+    # A matching duration in metadata is not human authority. The exact bound must be a
+    # token in the instruction body itself.
+    f._write_instruction("109", "head-hermes", "authorize goal-chiron-phase8-smoke chiron-window-bad")
+    bad_instruction = f.root / "state/instructions/00000109.md"
+    bad_instruction.write_text(
+        bad_instruction.read_text(encoding="utf-8").replace("topic: 10", "topic: 900"),
+        encoding="utf-8",
+    )
+    bad_decision = f.decision(
+        verb="pilot-window-open",
+        args=["chiron", "goal-chiron-phase8-smoke", "chiron-window-bad", "900"], iid="109",
+        actor="head-hermes", goal="goal-chiron-phase8-smoke",
+        text="Metadata must not satisfy an omitted instruction-body bound.",
+    )
+    (f.root / "state/PAUSE").write_text("phase8-preflight\n", encoding="utf-8")
+    bad = f.run("python3", "scripts/project-pilot.py", "execute", str(bad_decision))
+    (f.root / "state/PAUSE").unlink(missing_ok=True)
+    if bad.returncode == 0 or (f.root / "state/pilot-windows/chiron-window-bad.json").exists():
         return False
     if not open_window(f):
         return False
@@ -315,8 +342,11 @@ def test_assist_resume(f: Fixture) -> bool:
     )
     assist_path = f.root / "state/assists/chiron-phase8-smoke.md"
     assist_path.write_text(
-        assist_path.read_text(encoding="utf-8").replace("status: open", "status: answered")
-        .replace("answered_by:\n", "answered_by: 8913126684\n"), encoding="utf-8",
+        assist_path.read_text(encoding="utf-8")
+        .replace("answered:\n", "answered: 2026-08-10T00:00:00Z\n")
+        .replace("answered_by:\n", "answered_by: 8913126684\n")
+        .replace("_(unanswered)_", "Use the marker after the canonical header."),
+        encoding="utf-8",
     )
     first = f.run("python3", "scripts/project-reconcile.py", "resume-assist", "chiron-phase8-smoke", "104")
     second = f.run("python3", "scripts/project-reconcile.py", "resume-assist", "chiron-phase8-smoke", "104")
@@ -335,7 +365,8 @@ def test_assist_resume(f: Fixture) -> bool:
         and len(events) == 1
         and events[0].get("project") == "chiron"
         and events[0].get("goal") == "goal-chiron-phase8-smoke"
-        and "[ \"$DURABLE_REPORTING\" = 1 ] && return 0" in (f.root / "scripts/assist.sh").read_text(encoding="utf-8")
+        and fields(assist_path).get("status") == "answered"
+        and fields(assist_path).get("resume_applied") == "1"
     )
 
 

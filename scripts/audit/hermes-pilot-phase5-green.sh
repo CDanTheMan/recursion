@@ -6,10 +6,11 @@ ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "$ROOT"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
-bash -n scripts/work.sh scripts/worker-sandbox.sh scripts/tests/hermes-pilot-phase5-red.test.sh
+bash -n scripts/work.sh scripts/worker-sandbox.sh scripts/tests/hermes-pilot-phase5-red.test.sh \
+  scripts/tests/worker-gate-authority.test.sh
 python3 -m py_compile scripts/resolve-model-alias.py scripts/validate-gate.py scripts/git-scope.py \
   scripts/validate-worker-result.py scripts/validate-verifier-result.py scripts/worker-evidence.py \
-  scripts/validate-control-state.py scripts/project-pilot.py
+  scripts/validate-control-state.py scripts/project-pilot.py scripts/jsonl_durable.py scripts/transition_receipt.py
 echo "ok    Phase 5 shell and Python artifacts parse"
 
 if python3 scripts/resolve-model-alias.py sonnet-routine implementer >/dev/null 2>&1; then
@@ -83,4 +84,5 @@ grep -q 'PrivateNetwork=yes' scripts/worker-sandbox.sh
 echo "ok    pilot tasks, run schemas, read-only verification, and network policy are explicit"
 
 bash scripts/tests/hermes-pilot-phase5-red.test.sh
+bash scripts/tests/worker-gate-authority.test.sh
 echo "hermes-pilot-phase5-green: ALL PASS"

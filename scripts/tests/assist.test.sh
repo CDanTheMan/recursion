@@ -25,7 +25,7 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 BIN="$TMP/bin"; mkdir -p "$BIN"
 R="$TMP/repo"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/assists" "$R/loop/logs" "$R/app"
-for s in work.sh worker-sandbox.sh assist.sh taskctl.sh notify.sh board.sh resync.sh publish.sh; do
+for s in work.sh worker-sandbox.sh assist.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh board.sh resync.sh publish.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null
@@ -58,6 +58,7 @@ id: $1
 workstream: atest
 goal: ${2:-a task that will need help}
 engine: claude
+network_policy: none
 acceptance: test -s app/seed.txt
 allowed_paths: app
 workdir: .

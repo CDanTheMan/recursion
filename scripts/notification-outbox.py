@@ -18,7 +18,20 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import date
 from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+from jsonl_durable import JsonlDurabilityError, append_jsonl as durable_append_jsonl, read_jsonl_objects
+from transition_receipt import (
+    TransitionReceiptError,
+    commit_transition,
+    json_mutation,
+    recover_transitions,
+)
 
 
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -30,7 +43,7 @@ PROJECT_EVENTS = {
     "plan-proposed", "goal-accepted", "plan-approved", "pilot-window-armed", "pilot-window-opened",
     "pilot-window-closed", "worker-launched", "task-passed", "task-failed",
     "task-blocked", "human-answer-received", "review-branch-published", "goal-verifying",
-    "goal-achieved", "goal-stopped",
+    "goal-achieved", "goal-stopped", "project-digest",
 }
 TERMINAL_EVENT_TYPES = {"goal-achieved", "goal-stopped"}
 
@@ -78,13 +91,15 @@ def atomic_json(path: Path, value: dict) -> None:
 
 
 def append_jsonl(path: Path, value: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     try:
-        os.write(descriptor, (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode())
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+        outcome = durable_append_jsonl(path, value)
+    except (JsonlDurabilityError, OSError) as exc:
+        raise OutboxError(f"JSONL append failed: {exc}") from exc
+    if outcome.quarantine is not None:
+        raise OutboxError(
+            "JSONL append repaired a torn tail; human review required: "
+            f"{outcome.quarantine.get('escalation_id')}"
+        )
 
 
 def read_json(path: Path) -> dict:
@@ -110,6 +125,39 @@ def read_fields(path: Path) -> dict[str, str]:
 def stable_id(prefix: str, *parts: object) -> str:
     raw = json.dumps(parts, sort_keys=True, separators=(",", ":"), default=str).encode()
     return f"{prefix}-{hashlib.sha256(raw).hexdigest()[:24]}"
+
+
+def canonical_event_seq(value: dict) -> int:
+    try:
+        sequence = int(value.get("event_seq") or 0)
+    except (TypeError, ValueError) as exc:
+        raise OutboxError("canonical notification event sequence is invalid") from exc
+    if sequence < 0:
+        raise OutboxError("canonical notification event sequence is invalid")
+    return sequence
+
+
+def commit_json_projection(base: Path, path: Path, value: dict, event: dict,
+                           journal: str) -> dict:
+    """Atomically bind one canonical notification projection to its audit row."""
+    canonical = dict(value)
+    canonical.pop("event_seq", None)
+    canonical.pop("last_transition_id", None)
+    try:
+        commit_transition(base, [json_mutation(path, canonical)], event, journal=journal)
+        committed = read_json(path)
+    except (TransitionReceiptError, OSError, ValueError, json.JSONDecodeError) as exc:
+        raise OutboxError(f"notification transition failed: {exc}") from exc
+    value.clear()
+    value.update(committed)
+    return value
+
+
+def recover_notification_transitions(base: Path) -> None:
+    try:
+        recover_transitions(base)
+    except (TransitionReceiptError, OSError, ValueError, json.JSONDecodeError) as exc:
+        raise OutboxError(f"notification transition recovery failed: {exc}") from exc
 
 
 def configured(base: Path, project: str) -> tuple[dict, dict, list[str]]:
@@ -159,6 +207,8 @@ def policy_destinations(base: Path, project: str, event_type: str) -> list[str]:
         raise OutboxError("exactly one configured Lucas direct destination is required")
     if event_type in PROJECT_EVENTS:
         return by_kind["project-topic"]
+    if event_type == "portfolio-brief":
+        return by_kind["head-hermes"]
     if event_type == "pilot-terminal-report":
         return by_kind["head-hermes"]
     if event_type == "portfolio-result":
@@ -173,13 +223,11 @@ def raw_events(base: Path) -> list[dict]:
     result: list[dict] = []
     if not path.is_file():
         return result
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(value, dict):
-            continue
+    try:
+        rows = read_jsonl_objects(path)
+    except JsonlDurabilityError as exc:
+        raise OutboxError(f"source event journal is corrupt: {exc}") from exc
+    for value in rows:
         source_id = str(value.get("id") or "")
         if not IDENT.fullmatch(source_id):
             # The identity survives event rotation/restore; line number and file position are not
@@ -193,6 +241,20 @@ def raw_events(base: Path) -> list[dict]:
 
 def detail_object(value: object) -> dict:
     return value if isinstance(value, dict) else {}
+
+
+def digest_occurrence_date(raw: dict) -> str:
+    detail = detail_object(raw.get("detail"))
+    explicit = detail.get("occurrence_date")
+    candidate = explicit if explicit is not None else str(raw.get("ts") or "")[:10]
+    if not isinstance(candidate, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", candidate):
+        raise OutboxError("project digest occurrence_date is absent or invalid")
+    try:
+        if date.fromisoformat(candidate).isoformat() != candidate:
+            raise ValueError
+    except ValueError as exc:
+        raise OutboxError("project digest occurrence_date is absent or invalid") from exc
+    return candidate
 
 
 def mapped_events(raw: dict) -> list[dict]:
@@ -235,15 +297,26 @@ def mapped_events(raw: dict) -> list[dict]:
         event_types.append("human-answer-received")
     elif kind in {"review-published", "review-branch-published"}:
         event_types.append("review-branch-published")
+    elif kind in {"portfolio-brief", "project-digest"}:
+        event_types.append(kind)
     result = []
     for event_type in event_types:
-        event_id = stable_id("event", raw["_source_id"], event_type)
-        result.append({
+        occurrence_date = digest_occurrence_date(raw) if event_type == "project-digest" else None
+        identity = [raw["_source_id"], event_type]
+        # Preserve the pre-occurrence identity for legacy source rows so deployment cannot replay
+        # an already-delivered digest. Newly emitted rows carry the explicit date and use it.
+        if occurrence_date and detail_object(raw.get("detail")).get("occurrence_date") is not None:
+            identity.append(occurrence_date)
+        event_id = stable_id("event", *identity)
+        event = {
             "id": event_id, "source_event_id": raw["_source_id"], "event_type": event_type,
             "project_id": str(raw.get("project") or ""), "goal_id": str(raw.get("goal") or ""),
             "task_id": str(raw.get("task") or ""), "occurred_at": str(raw.get("ts") or now_iso()),
             "source": raw,
-        })
+        }
+        if occurrence_date:
+            event["occurrence_date"] = occurrence_date
+        result.append(event)
     return result
 
 
@@ -271,12 +344,25 @@ def message_for(event: dict) -> str:
         "portfolio-result": "Head Hermes portfolio result",
         "lucas-attention-required": "Lucas attention required",
         "delivery-dead-letter": "Delivery dead letter",
+        "portfolio-brief": "Portfolio brief", "project-digest": "Project digest",
     }
     label = labels[event["event_type"]]
+    detail = detail_object((event.get("source") or {}).get("detail"))
+    if event["event_type"] in {"portfolio-brief", "project-digest"}:
+        if event["event_type"] == "project-digest":
+            occurrence_date = digest_occurrence_date(event.get("source") or {})
+            if event.get("occurrence_date") != occurrence_date:
+                raise OutboxError("project digest occurrence_date does not match its source")
+        message = detail.get("message")
+        digest = detail.get("message_digest")
+        if not isinstance(message, str) or not message or len(message.encode()) > 3800:
+            raise OutboxError("monitoring notification message is absent or oversized")
+        if digest != hashlib.sha256(message.encode()).hexdigest():
+            raise OutboxError("monitoring notification message digest is invalid")
+        return message
     suffix = f" goal={event.get('goal_id') or '-'}"
     if event.get("task_id"):
         suffix += f" task={event['task_id']}"
-    detail = detail_object((event.get("source") or {}).get("detail"))
     if event["event_type"] in {"plan-proposed", "plan-approved"}:
         suffix += f" plan={detail.get('plan_id') or '-'} digest={detail.get('plan_digest') or '-'}"
     if event["event_type"] in {"pilot-window-armed", "pilot-window-opened", "pilot-window-closed"}:
@@ -313,34 +399,57 @@ def notification_events(base: Path, project: str | None = None) -> list[tuple[Pa
     return result
 
 
-def append_delivery_event(base: Path, record: dict, transition: str, **extra: object) -> None:
-    value = {
-        "schema_version": 1, "ts": now_iso(), "delivery_id": record["id"],
+def delivery_event(record: dict, transition: str, timestamp: str,
+                   **extra: object) -> dict:
+    next_sequence = canonical_event_seq(record) + 1
+    return {
+        "schema_version": 1,
+        "id": stable_id("delivery-event", record["id"], next_sequence, transition),
+        "ts": timestamp, "delivery_id": record["id"],
         "event_id": record["event_id"], "destination": record["destination"],
         "status": record["status"], "attempt": record.get("attempt", 0),
         "transition": transition, **extra,
     }
-    append_jsonl(base / "state/delivery-events.jsonl", value)
 
 
 def write_delivery(base: Path, record: dict, transition: str, **extra: object) -> None:
-    record["updated_at"] = now_iso()
-    atomic_json(base / "state/deliveries" / f"{record['id']}.json", record)
-    append_delivery_event(base, record, transition, **extra)
+    timestamp = now_iso()
+    record["updated_at"] = timestamp
+    event = delivery_event(record, transition, timestamp, **extra)
+    commit_json_projection(
+        base,
+        base / "state/deliveries" / f"{record['id']}.json",
+        record,
+        event,
+        "state/delivery-events.jsonl",
+    )
 
 
 def existing_pair(base: Path, event_id: str, destination: str) -> dict | None:
-    matches = [value for _, value in delivery_records(base)
+    matches = [(path, value) for path, value in delivery_records(base)
                if value.get("event_id") == event_id and value.get("destination") == destination]
     if not matches:
         return None
-    matches.sort(key=lambda row: (row.get("status") != "succeeded", str(row.get("id"))))
-    return matches[0]
+    if len(matches) != 1:
+        raise OutboxError("duplicate delivery records exist for one event/destination pair")
+    path, value = matches[0]
+    expected_id = stable_id("delivery", event_id, destination)
+    if value.get("id") != expected_id or path.name != f"{expected_id}.json":
+        raise OutboxError("delivery pair does not use its deterministic canonical identity")
+    return value
 
 
 def create_delivery(base: Path, event: dict, destination: str) -> dict:
     prior = existing_pair(base, event["id"], destination)
     if prior:
+        expected = {
+            "id": stable_id("delivery", event["id"], destination),
+            "event_id": event["id"], "project_id": event["project_id"],
+            "goal_id": event.get("goal_id") or None, "task_id": event.get("task_id") or None,
+            "destination": destination, "message_digest": event["message_digest"],
+        }
+        if any(prior.get(key) != value for key, value in expected.items()):
+            raise OutboxError("existing delivery pair disagrees with canonical event/routing content")
         return prior
     delivery_id = stable_id("delivery", event["id"], destination)
     maximum = int(os.environ.get("RECURSION_DELIVERY_MAX_ATTEMPTS", "3"))
@@ -360,34 +469,126 @@ def create_delivery(base: Path, event: dict, destination: str) -> dict:
 
 
 def escalate(base: Path, key: str, title: str, pointer: str, project: str) -> None:
-    subprocess.run(
+    process = subprocess.run(
         ["bash", str(base / "scripts/taskctl.sh"), "esc-record", key, title, project, pointer],
         cwd=base, env={**os.environ, "RECURSION_ROOT": str(base)},
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        text=True, capture_output=True, check=False,
     )
+    if process.returncode:
+        detail = (process.stderr or process.stdout or "taskctl escalation failed").strip()
+        raise OutboxError(f"durable escalation failed: {detail}")
+    if not escalation_is_open(base, key):
+        raise OutboxError("taskctl reported escalation success without one durable OPEN identity")
 
 
-def create_event(base: Path, event: dict) -> dict:
-    path = base / "state/notification-events" / f"{event['id']}.json"
-    if path.is_file():
-        return read_json(path)
+def escalation_is_open(base: Path, key: str) -> bool:
+    path = base / "state/escalations.tsv"
+    if not path.is_file():
+        return False
+    lines = path.read_text(encoding="utf-8", errors="strict").splitlines()
+    header = "#id\tkey\tstatus\tfirst_seen\tlast_seen\tcount\tworkstream\tpointer\ttitle"
+    if not lines or lines[0] != header:
+        raise OutboxError("escalation index schema is invalid")
+    matches: list[str] = []
+    for line in lines[1:]:
+        if not line:
+            continue
+        fields = line.split("\t")
+        if len(fields) != 9 or fields[2] not in {"open", "resolved"} \
+                or not fields[0].startswith("esc-") or not fields[5].isdigit():
+            raise OutboxError("escalation index contains a malformed record")
+        if fields[1] == key:
+            matches.append(fields[2])
+    if len(matches) > 1:
+        raise OutboxError("escalation index contains duplicate routing identities")
+    return matches == ["open"]
+
+
+def event_input_from_projection(value: dict) -> dict:
+    excluded = {
+        "schema_version", "message", "message_digest", "created_at", "status", "routing_error",
+        "event_seq", "last_transition_id",
+    }
+    return {key: item for key, item in value.items() if key not in excluded}
+
+
+def expected_event_projection(base: Path, event: dict, created_at: str) -> tuple[dict, list[str]]:
     value = dict(event)
-    value.update({"schema_version": 1, "message": message_for(event), "created_at": now_iso(),
-                  "status": "recorded",
-                  "routing_error": None})
+    value.update({"schema_version": 1, "message": message_for(event), "created_at": created_at,
+                  "status": "recorded", "routing_error": None})
     value["message_digest"] = hashlib.sha256(value["message"].encode()).hexdigest()
     try:
         destinations = policy_destinations(base, value["project_id"], value["event_type"])
     except (OSError, json.JSONDecodeError, OutboxError) as exc:
         value["routing_error"] = str(exc)
         destinations = []
-    atomic_json(path, value)
-    append_jsonl(base / "state/notification-event-events.jsonl", {
-        "schema_version": 1, "ts": now_iso(), "event_id": value["id"],
+    return value, destinations
+
+
+def inspect_event_projection(base: Path, event: dict) -> tuple[dict, list[str], list[str]]:
+    path = base / "state/notification-events" / f"{event['id']}.json"
+    value = read_json(path)
+    if value.get("id") != event.get("id") or path.name != f"{event['id']}.json":
+        raise OutboxError("notification projection identity is inconsistent")
+    created_at = value.get("created_at")
+    if not isinstance(created_at, str) or not created_at:
+        raise OutboxError("notification projection lacks its canonical creation time")
+    expected, destinations = expected_event_projection(base, event, created_at)
+    comparable = dict(value)
+    comparable.pop("event_seq", None)
+    comparable.pop("last_transition_id", None)
+    if comparable != expected:
+        raise OutboxError("notification projection disagrees with exact event content or routing")
+    records = [(path, row) for path, row in delivery_records(base)
+               if row.get("event_id") == value["id"]]
+    if value.get("routing_error") and records:
+        raise OutboxError("routing-error notification unexpectedly owns delivery records")
+    allowed = set(destinations)
+    if any(str(row.get("destination") or "") not in allowed for _, row in records):
+        raise OutboxError("notification projection has a delivery outside its exact routing policy")
+    present: set[str] = set()
+    for record_path, record in records:
+        destination = str(record.get("destination") or "")
+        if destination in present:
+            raise OutboxError("notification projection has duplicate delivery routing pairs")
+        present.add(destination)
+        expected_id = stable_id("delivery", value["id"], destination)
+        expected_fields = {
+            "id": expected_id, "event_id": value["id"], "project_id": value["project_id"],
+            "goal_id": value.get("goal_id") or None, "task_id": value.get("task_id") or None,
+            "destination": destination, "message_digest": value["message_digest"],
+        }
+        if record_path.name != f"{expected_id}.json" \
+                or any(record.get(key) != item for key, item in expected_fields.items()):
+            raise OutboxError("notification delivery disagrees with exact projection identity/content")
+    missing = [destination for destination in destinations if destination not in present]
+    return value, destinations, missing
+
+
+def create_event(base: Path, event: dict) -> dict:
+    path = base / "state/notification-events" / f"{event['id']}.json"
+    if path.is_file():
+        value, destinations, missing = inspect_event_projection(base, event)
+        if value["routing_error"]:
+            key = f"notification-routing:{value['id']}"
+            if not escalation_is_open(base, key):
+                escalate(base, key, f"Notification routing failed for {value['event_type']}",
+                         str(path), value["project_id"])
+            return value
+        for destination in missing:
+            create_delivery(base, value, destination)
+        return value
+    value, destinations = expected_event_projection(base, event, now_iso())
+    event = {
+        "schema_version": 1,
+        "id": stable_id("notification-event-event", value["id"], canonical_event_seq(value) + 1,
+                        "created"),
+        "ts": now_iso(), "event_id": value["id"],
         "event_type": value["event_type"], "project_id": value["project_id"],
         "goal_id": value.get("goal_id"), "source_event_id": value.get("source_event_id"),
         "transition": "created", "routing_error": value.get("routing_error"),
-    })
+    }
+    commit_json_projection(base, path, value, event, "state/notification-event-events.jsonl")
     if value["routing_error"]:
         escalate(base, f"notification-routing:{value['id']}",
                  f"Notification routing failed for {value['event_type']}", str(path), value["project_id"])
@@ -395,6 +596,20 @@ def create_event(base: Path, event: dict) -> dict:
     for destination in destinations:
         create_delivery(base, value, destination)
     return value
+
+
+def event_reconciliation_needed(base: Path, event: dict) -> bool:
+    path = base / "state/notification-events" / f"{event['id']}.json"
+    if not path.is_file():
+        return True
+    value, _, missing = inspect_event_projection(base, event)
+    if value.get("routing_error"):
+        return not escalation_is_open(base, f"notification-routing:{value['id']}")
+    if missing:
+        return True
+    if value.get("event_type") in TERMINAL_EVENT_TYPES:
+        return terminal_report_reconciliation_needed(base, value)
+    return False
 
 
 def find_mapped(base: Path, project: str, event_id: str) -> dict:
@@ -510,38 +725,69 @@ def build_chain(base: Path, project: str, goal_id: str) -> dict:
     }
 
 
-def create_terminal_reports(base: Path, terminal: dict) -> None:
+def terminal_report_event(base: Path, terminal: dict, create: bool) -> dict | None:
     project, goal_id = terminal["project_id"], terminal["goal_id"]
-    chain = build_chain(base, project, goal_id)
-    prerequisites = bool(
-        chain["instruction"]["id"] and chain["instruction"]["record"] and chain["plan"] and chain["actions"] and
-        chain["tasks"] and chain["workers"] and chain["commits"] and chain["gates"] and chain["verifier"]
-    )
-    if any("plan_digest" in row for row in chain["plan"]):
-        prerequisites = prerequisites and bool(chain["plan_approval"] and chain["pilot_windows"])
-    if terminal["event_type"] == "goal-achieved":
-        prerequisites = prerequisites and bool(chain["review_branch"])
-    if not prerequisites:
-        escalate(base, f"terminal-trace:{goal_id}", "Terminal goal lacks a complete pre-delivery trace",
-                 f"state/goals/{goal_id}.md", project)
-        return
-    report = {
-        "schema_version": 1, "id": f"pilot-report-{goal_id}", "project_id": project,
-        "goal_id": goal_id, "terminal_event_id": terminal["id"], "terminal_status": terminal["event_type"],
-        "created_at": now_iso(), "evidence": {key: value for key, value in chain.items() if not key.startswith("_")},
-    }
-    atomic_json(base / "state/reports" / f"{goal_id}-pilot.json", report)
-    pilot_event = {
+    report_path = base / "state/reports" / f"{goal_id}-pilot.json"
+    if report_path.is_file():
+        report = read_json(report_path)
+        expected = {
+            "id": f"pilot-report-{goal_id}", "project_id": project, "goal_id": goal_id,
+            "terminal_event_id": terminal["id"], "terminal_status": terminal["event_type"],
+        }
+        if any(report.get(key) != value for key, value in expected.items()) \
+                or not isinstance(report.get("created_at"), str) or not report.get("created_at") \
+                or not isinstance(report.get("evidence"), dict):
+            raise OutboxError("pilot terminal report disagrees with its canonical terminal event")
+    else:
+        if not create:
+            return None
+        chain = build_chain(base, project, goal_id)
+        prerequisites = bool(
+            chain["instruction"]["id"] and chain["instruction"]["record"] and chain["plan"] and chain["actions"] and
+            chain["tasks"] and chain["workers"] and chain["commits"] and chain["gates"] and chain["verifier"]
+        )
+        if any("plan_digest" in row for row in chain["plan"]):
+            prerequisites = prerequisites and bool(chain["plan_approval"] and chain["pilot_windows"])
+        if terminal["event_type"] == "goal-achieved":
+            prerequisites = prerequisites and bool(chain["review_branch"])
+        if not prerequisites:
+            key = f"terminal-trace:{goal_id}"
+            if not escalation_is_open(base, key):
+                escalate(base, key, "Terminal goal lacks a complete pre-delivery trace",
+                         f"state/goals/{goal_id}.md", project)
+            return None
+        report = {
+            "schema_version": 1, "id": f"pilot-report-{goal_id}", "project_id": project,
+            "goal_id": goal_id, "terminal_event_id": terminal["id"],
+            "terminal_status": terminal["event_type"], "created_at": now_iso(),
+            "evidence": {key: value for key, value in chain.items() if not key.startswith("_")},
+        }
+        atomic_json(report_path, report)
+    return {
         "id": stable_id("event", goal_id, "pilot-terminal-report"),
         "source_event_id": terminal["id"], "event_type": "pilot-terminal-report",
-        "project_id": project, "goal_id": goal_id, "task_id": "", "occurred_at": now_iso(),
+        "project_id": project, "goal_id": goal_id, "task_id": "",
+        "occurred_at": report["created_at"],
         "report_id": report["id"],
     }
-    create_event(base, pilot_event)
+
+
+def terminal_report_reconciliation_needed(base: Path, terminal: dict) -> bool:
+    pilot_event = terminal_report_event(base, terminal, create=False)
+    if pilot_event is None:
+        return True
+    return event_reconciliation_needed(base, pilot_event)
+
+
+def create_terminal_reports(base: Path, terminal: dict) -> None:
+    pilot_event = terminal_report_event(base, terminal, create=True)
+    if pilot_event is not None:
+        create_event(base, pilot_event)
 
 
 def reconcile_event(base: Path, project: str, event_id: str) -> None:
     require_actuator()
+    recover_notification_transitions(base)
     event = find_mapped(base, project, event_id)
     value = create_event(base, event)
     if value["event_type"] in TERMINAL_EVENT_TYPES and not value.get("routing_error"):
@@ -586,40 +832,67 @@ def backoff(attempt: int) -> int:
     return min(maximum, base * (2 ** max(0, attempt - 1)))
 
 
+def dead_letter_attention_event(base: Path, record: dict, source: dict) -> dict | None:
+    if source.get("id") != record.get("event_id") \
+            or source.get("project_id") != record.get("project_id") \
+            or source.get("message_digest") != record.get("message_digest"):
+        raise OutboxError("dead-letter source projection disagrees with the failed delivery")
+    if source.get("event_type") == "delivery-dead-letter":
+        return None
+    event_id = stable_id("event", record["id"], "delivery-dead-letter")
+    path = base / "state/notification-events" / f"{event_id}.json"
+    occurred_at = record.get("updated_at") or now_iso()
+    if path.is_file():
+        occurred_at = read_json(path).get("occurred_at") or occurred_at
+    return {
+        "id": event_id, "source_event_id": str(record["event_id"]),
+        "event_type": "delivery-dead-letter", "project_id": str(record["project_id"]),
+        "goal_id": str(record.get("goal_id") or ""), "task_id": str(record.get("task_id") or ""),
+        "occurred_at": occurred_at, "failed_delivery_id": record["id"],
+    }
+
+
+def reconcile_dead_letter(base: Path, record: dict) -> None:
+    if record.get("status") != "dead-letter":
+        raise OutboxError("dead-letter reconciliation requires terminal delivery state")
+    key = f"delivery-dead-letter:{record['id']}"
+    if not escalation_is_open(base, key):
+        escalate(base, key, f"Permanent notification failure for {record['destination']}",
+                 f"state/deliveries/{record['id']}.json",
+                 str(record.get("project_id") or "recursion"))
+    source = read_json(base / "state/notification-events" / f"{record.get('event_id')}.json")
+    attention = dead_letter_attention_event(base, record, source)
+    if attention is not None:
+        create_event(base, attention)
+
+
+def dead_letter_reconciliation_needed(base: Path, record: dict) -> bool:
+    key = f"delivery-dead-letter:{record['id']}"
+    if not escalation_is_open(base, key):
+        return True
+    source = read_json(base / "state/notification-events" / f"{record.get('event_id')}.json")
+    attention = dead_letter_attention_event(base, record, source)
+    return attention is not None and event_reconciliation_needed(base, attention)
+
+
 def dead_letter(base: Path, record: dict, error: str) -> None:
     record.update({"status": "dead-letter", "acknowledgement": None, "next_attempt_at": None,
                    "last_error": error, "attempt_token": None})
     write_delivery(base, record, "dead-letter", error=error)
-    escalate(base, f"delivery-dead-letter:{record['id']}",
-             f"Permanent notification failure for {record['destination']}",
-             f"state/deliveries/{record['id']}.json", str(record.get("project_id") or "recursion"))
-    # A permanent project/portfolio delivery failure requires Lucas's attention. Materialize that
-    # escalation through the same durable event/outbox policy, but never recurse if the direct
-    # escalation delivery itself is the one that failed.
-    try:
-        source = read_json(base / "state/notification-events" / f"{record.get('event_id')}.json")
-        if source.get("event_type") != "delivery-dead-letter":
-            dead_event = {
-                "id": stable_id("event", record["id"], "delivery-dead-letter"),
-                "source_event_id": str(record["event_id"]), "event_type": "delivery-dead-letter",
-                "project_id": str(record["project_id"]), "goal_id": str(record.get("goal_id") or ""),
-                "task_id": str(record.get("task_id") or ""), "occurred_at": now_iso(),
-                "failed_delivery_id": record["id"],
-            }
-            create_event(base, dead_event)
-    except (OSError, ValueError, json.JSONDecodeError, OutboxError):
-        # The escalation index above is the fail-closed last resort. Do not let malformed source
-        # state turn a terminal delivery transition into an unbounded retry or recursive alert.
-        pass
+    reconcile_dead_letter(base, record)
 
 
 def deliver(base: Path, project: str, delivery_id: str) -> None:
     require_actuator()
+    recover_notification_transitions(base)
     path = base / "state/deliveries" / f"{delivery_id}.json"
     record = read_json(path)
     if record.get("id") != delivery_id or record.get("project_id") != project:
         raise OutboxError("delivery identity or project is inconsistent")
-    if record.get("status") in {"succeeded", "dead-letter", "cancelled"}:
+    if record.get("status") in {"succeeded", "cancelled"}:
+        return
+    if record.get("status") == "dead-letter":
+        reconcile_dead_letter(base, record)
         return
     event = read_json(base / "state/notification-events" / f"{record.get('event_id')}.json")
     try:
@@ -675,6 +948,13 @@ def deliver(base: Path, project: str, delivery_id: str) -> None:
                        "next_attempt_at": None, "last_error": None, "attempt_token": None})
         write_delivery(base, record, "acknowledged", transport_message_id=receipt["message_id"])
         return
+    if process.returncode == 75:
+        record.update({"status": "pending", "attempt": max(0, attempt - 1),
+                       "acknowledgement": None, "next_attempt_at": 0, "backoff_seconds": 0,
+                       "last_error": "PAUSE held delivery before transport acceptance",
+                       "attempt_token": None, "attempt_started_at": None, "receipt_path": None})
+        write_delivery(base, record, "pause-held")
+        raise OutboxError("PAUSE interrupted notification delivery; pending state preserved")
     if process.returncode == 10 and attempt < maximum:
         delay = backoff(attempt)
         record.update({"status": "failed", "acknowledgement": None,
@@ -691,6 +971,7 @@ def deliver(base: Path, project: str, delivery_id: str) -> None:
 
 def portfolio_report(base: Path, project: str, goal_id: str) -> None:
     require_actuator()
+    recover_notification_transitions(base)
     pilot_event_id = stable_id("event", goal_id, "pilot-terminal-report")
     pilot_event = read_json(base / "state/notification-events" / f"{pilot_event_id}.json")
     pilot_deliveries = [value for _, value in delivery_records(base, project)
@@ -715,6 +996,7 @@ def portfolio_report(base: Path, project: str, goal_id: str) -> None:
 
 def audit_goal(base: Path, project: str, goal_id: str) -> None:
     require_actuator()
+    recover_notification_transitions(base)
     chain = build_chain(base, project, goal_id)
     required = bool(
         chain["instruction"]["id"] and chain["instruction"]["record"] and chain["plan"] and chain["actions"] and
@@ -726,39 +1008,39 @@ def audit_goal(base: Path, project: str, goal_id: str) -> None:
                       if value.get("goal_id") == goal_id and value.get("event_type") in TERMINAL_EVENT_TYPES}
     if "goal-achieved" in terminal_types:
         required = required and bool(chain["review_branch"])
+    path = base / "state/reports" / f"{goal_id}-audit.json"
+    prior = read_json(path) if path.is_file() else {}
+    prior_sequence = canonical_event_seq(prior)
     audit = {
         "schema_version": 1, "id": f"goal-audit-{goal_id}", "project_id": project,
         "goal_id": goal_id, "complete": required, "updated_at": now_iso(),
         "chain": {key: value for key, value in chain.items() if not key.startswith("_")},
     }
-    atomic_json(base / "state/reports" / f"{goal_id}-audit.json", audit)
-    append_jsonl(base / "state/notification-audit-events.jsonl", {
-        "schema_version": 1, "ts": now_iso(), "goal_id": goal_id,
+    event = {
+        "schema_version": 1,
+        "id": stable_id("notification-audit-event", goal_id, prior_sequence + 1),
+        "ts": now_iso(), "goal_id": goal_id,
         "project_id": project, "complete": required,
         "delivery_acknowledgements": len(chain["delivery_acknowledgements"]),
-    })
+    }
+    commit_json_projection(base, path, audit, event, "state/notification-audit-events.jsonl")
 
 
 def recover(base: Path, project: str, goal_id: str) -> None:
     require_actuator()
+    recover_notification_transitions(base)
     events = [value for _, value in notification_events(base, project)
               if not goal_id or value.get("goal_id") == goal_id]
     records = [value for _, value in delivery_records(base, project)
                if not goal_id or value.get("goal_id") == goal_id]
     for event in events:
-        if event.get("routing_error"):
-            continue
-        try:
-            destinations = policy_destinations(base, project, str(event.get("event_type") or ""))
-        except Exception:
-            continue
-        for destination in destinations:
-            if not existing_pair(base, str(event["id"]), destination):
-                create_delivery(base, event, destination)
+        create_event(base, event_input_from_projection(event))
     records = [value for _, value in delivery_records(base, project)
                if not goal_id or value.get("goal_id") == goal_id]
     for record in records:
-        if record.get("status") == "running" and valid_receipt(base, record):
+        if record.get("status") == "dead-letter":
+            reconcile_dead_letter(base, record)
+        elif record.get("status") == "running" and valid_receipt(base, record):
             record.update({"status": "succeeded", "acknowledgement": valid_receipt(base, record)["message_id"],
                            "next_attempt_at": None, "last_error": None, "attempt_token": None})
             write_delivery(base, record, "recovery-acknowledged")
@@ -767,6 +1049,9 @@ def recover(base: Path, project: str, goal_id: str) -> None:
     records = [value for _, value in delivery_records(base, project)
                if not goal_id or value.get("goal_id") == goal_id]
     pairs = [(row.get("event_id"), row.get("destination")) for row in records]
+    path = base / "state/recovery" / f"notification-{project}-{goal_id or 'all'}.json"
+    prior = read_json(path) if path.is_file() else {}
+    prior_sequence = canonical_event_seq(prior)
     snapshot = {
         "schema_version": 1, "id": stable_id("notification-recovery", project, goal_id, pairs,
                                                [(row.get("id"), row.get("status"), row.get("attempt")) for row in records]),
@@ -778,8 +1063,12 @@ def recover(base: Path, project: str, goal_id: str) -> None:
         "transport_evidence": sum(valid_receipt(base, row) is not None for row in records),
         "existing_delivery_records": len(records), "duplicate_pairs": len(pairs) - len(set(pairs)),
     }
-    atomic_json(base / "state/recovery" / f"notification-{project}-{goal_id or 'all'}.json", snapshot)
-    append_jsonl(base / "state/notification-recovery-events.jsonl", snapshot)
+    event = dict(snapshot)
+    event["id"] = stable_id("notification-recovery-event", project, goal_id,
+                            prior_sequence + 1)
+    event["ts"] = snapshot["observed_at"]
+    commit_json_projection(base, path, snapshot, event,
+                           "state/notification-recovery-events.jsonl")
 
 
 def require_actuator() -> None:
@@ -791,12 +1080,46 @@ def decision_key(*parts: object) -> str:
     return "phase7:" + hashlib.sha256(json.dumps(parts, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def retry_key_parts(base: Path, verb: str, key_parts: list[object]) -> list[object]:
+    """Derive a bounded retry identity from the canonical terminal action chain."""
+    maximum = int(os.environ.get("RECURSION_NOTIFICATION_ACTION_MAX_ATTEMPTS", "3"))
+    if not 1 <= maximum <= 10:
+        raise OutboxError("notification action attempt budget must be 1..10")
+    original = list(key_parts)
+    candidate = list(original)
+    for attempt_number in range(1, maximum + 1):
+        key = decision_key(verb, *candidate)
+        action_id = "action-" + hashlib.sha256(key.encode()).hexdigest()[:24]
+        path = base / "state/actions" / f"{action_id}.json"
+        if not path.is_file():
+            return candidate
+        record = read_json(path)
+        if record.get("id") != action_id or record.get("idempotency_key") != key:
+            raise OutboxError(f"notification action identity is inconsistent: {action_id}")
+        if record.get("status") != "failed":
+            return candidate
+        if attempt_number >= maximum:
+            # Reuse the final failed identity so decision-queue deduplication enforces the bound.
+            return candidate
+        try:
+            attempts = int(record.get("attempts") or 0)
+        except (TypeError, ValueError) as exc:
+            raise OutboxError(f"notification action attempts are invalid: {action_id}") from exc
+        failure_nonce = stable_id(
+            "notification-action-failure", action_id, record["status"], attempts,
+            record.get("result_evidence"),
+        )
+        candidate = [*original, "failed-attempt", attempt_number, failure_nonce]
+    return candidate
+
+
 def enqueue(base: Path, actor: str, verb: str, args: list[str], goal_id: str,
             reason: str, key_parts: list[object]) -> None:
     raw = {
         "actor": actor, "verb": verb, "args": args, "project": args[0], "goal": goal_id,
         "why": reason, "wrong_if": "canonical event, policy, delivery, receipt, or report state changes",
         "idempotency_key": decision_key(verb, *key_parts),
+        "decision_source": "notification-reconciler", "routed_decider": actor,
     }
     process = subprocess.run(
         [sys.executable, str(base / "scripts/decision-queue.py"), "enqueue"],
@@ -812,6 +1135,10 @@ def state_digest(base: Path, project: str, goal_id: str) -> str:
     paths = []
     for directory in ("state/notification-events", "state/deliveries", "state/transport-evidence", "state/reports"):
         for path in sorted((base / directory).glob("*.json")):
+            # The audit report is the derived output of this fingerprint. Hashing it would make
+            # each successful audit manufacture a new idempotency key for another audit forever.
+            if directory == "state/reports" and path.name == f"{goal_id}-audit.json":
+                continue
             try:
                 text = path.read_text(encoding="utf-8")
             except OSError:
@@ -861,21 +1188,32 @@ def schedule(base: Path, project: str | None) -> int:
             continue
         actor = str(pilot["id"])
         for event in all_mapped(base, project_id):
-            if not (base / "state/notification-events" / f"{event['id']}.json").is_file():
+            if event_reconciliation_needed(base, event):
+                retry_parts = retry_key_parts(
+                    base, "notification-reconcile", [project_id, event["id"]],
+                )
                 enqueue(base, actor, "notification-reconcile", [project_id, event["id"]],
                         event.get("goal_id") or f"goal-{project_id}", "reconcile append-only event into outbox",
-                        [project_id, event["id"]])
+                        retry_parts)
                 count += 1
         for _, record in delivery_records(base, project_id):
             status = record.get("status")
             due = int(record.get("next_attempt_at") or 0)
-            if status in {"pending", "failed"} and due <= now_epoch() or (
-                status == "running" and valid_receipt(base, record)
-            ):
+            receipt = valid_receipt(base, record) if status == "running" else None
+            if (status in {"pending", "failed"} and due <= now_epoch()) or status == "running":
                 enqueue(base, actor, "notification-deliver", [project_id, str(record["id"])],
                         str(record.get("goal_id") or f"goal-{project_id}"), "advance one durable delivery",
                         [record["id"], status, record.get("attempt"), record.get("next_attempt_at"),
-                         bool(valid_receipt(base, record))])
+                         bool(receipt)])
+                count += 1
+            elif status == "dead-letter" and dead_letter_reconciliation_needed(base, record):
+                retry_parts = retry_key_parts(
+                    base, "notification-deliver",
+                    [record["id"], status, record.get("attempt"), "repair"],
+                )
+                enqueue(base, actor, "notification-deliver", [project_id, str(record["id"])],
+                        str(record.get("goal_id") or f"goal-{project_id}"),
+                        "repair durable dead-letter escalation and attention event", retry_parts)
                 count += 1
         terminal_goals: set[str] = set()
         for _, event in notification_events(base, project_id):
@@ -889,8 +1227,11 @@ def schedule(base: Path, project: str | None) -> int:
                                 if row.get("event_id") == pilot_id]
             pilot_acked = len(pilot_deliveries) == 1 and pilot_deliveries[0].get("status") == "succeeded" and bool(valid_receipt(base, pilot_deliveries[0]))
             if pilot_acked and not (base / "state/notification-events" / f"{portfolio_id}.json").is_file():
+                retry_parts = retry_key_parts(
+                    base, "notification-portfolio", [project_id, goal_id, pilot_id],
+                )
                 enqueue(base, "head-hermes", "notification-portfolio", [project_id, goal_id], goal_id,
-                        "emit one portfolio result after acknowledged pilot evidence", [project_id, goal_id, pilot_id])
+                        "emit one portfolio result after acknowledged pilot evidence", retry_parts)
                 count += 1
             fingerprint = state_digest(base, project_id, goal_id)
             if recovery_needed(base, project_id, goal_id):
@@ -903,7 +1244,12 @@ def schedule(base: Path, project: str | None) -> int:
                 count += 1
         # Non-terminal delivery state still receives a recovery projection.
         if not terminal_goals and (notification_events(base, project_id) or delivery_records(base, project_id)):
-            goal_ids = sorted({str(row.get("goal_id") or "") for _, row in delivery_records(base, project_id) if IDENT.fullmatch(str(row.get("goal_id") or ""))})
+            goal_ids = sorted({
+                str(row.get("goal_id") or "")
+                for collection in (notification_events(base, project_id), delivery_records(base, project_id))
+                for _, row in collection
+                if IDENT.fullmatch(str(row.get("goal_id") or ""))
+            })
             for goal_id in goal_ids:
                 if recovery_needed(base, project_id, goal_id):
                     fingerprint = state_digest(base, project_id, goal_id)

@@ -27,12 +27,14 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/root"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/state/.locks" "$R/loop/logs"
-for s in capacity.sh conduct.sh work.sh notify.sh board.sh taskctl.sh; do
+for s in capacity.sh conduct.sh work.sh notify.sh board.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null
 : > "$R/.env"
-cap(){ ( cd "$R" && RECURSION_ROOT="$R" bash scripts/capacity.sh "$@" ) >"$TMP/out" 2>&1; echo $?; }
+HEAVY_TEST_OWNER_PID="$$"
+cap(){ ( cd "$R" && RECURSION_ROOT="$R" RECURSION_HEAVY_PID="$HEAVY_TEST_OWNER_PID" \
+  bash scripts/capacity.sh "$@" ) >"$TMP/out" 2>&1; echo $?; }
 
 # mem_mb load1 disk_mb swap_mb — a comfortable box and several kinds of full one.
 HEALTHY="2900 0.30 25000 0"

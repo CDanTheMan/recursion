@@ -7,9 +7,10 @@ through four levers, lowest-attention first.
 Box: `ssh gs-recursion` · repo: `/opt/recursion` (`RECURSION_ROOT`) · times are UTC.
 
 ## 1. Async — Telegram (default, low attention)
-- The daily **brief** arrives in your Telegram at the scheduled time.
+- While resumed, the daily **brief** arrives through the durable outbox at the scheduled time.
 - **Escalations** arrive as a separate `🔔 Recursion needs a decision` message and are also
-  appended to `state/INBOX.md` (the durable queue — a ping you miss isn't lost).
+  appended to `state/INBOX.md` (the durable queue — a ping you miss isn't lost). Under PAUSE,
+  only the durable INBOX write occurs; no notification is attempted or queued for replay.
 - You can message the bot directly any time; it answers on your $200 sub (`gpt-5.6-terra`).
 - **Answer an escalation** by replying in Telegram, or edit `state/INBOX.md` and record the
   call in `state/DECISIONS.md` — the loop reads both next run.
@@ -33,9 +34,11 @@ Edit locally, commit, push; the box pulls. (Automated runs only ever touch `loop
 
 ## 4. Kill switch — PAUSE (the safety valve)
 Halts **execution** instantly and preserves **awareness**: heartbeat, status answering,
-escalation delivery, and a PAUSED-labelled brief all keep running. Build arms, planning,
-drain/conduct, reflection, pushes, and merges all stop. Ratified and implemented 2026-08-06
-(D-012) — before that the code exited before the heartbeat, contradicting this page.
+durable escalation recording, and a PAUSED-labelled local brief all keep running. Every
+human-visible notification enqueue and transport call stops, as do build arms, planning,
+drain/conduct, reflection, pushes, and merges. D-012 (2026-08-06) preserved awareness instead of
+exiting before the heartbeat; D-014 (2026-08-10) corrected its unsafe equation of awareness with
+external delivery after a forced cycle bypassed the Phase 7 outbox under PAUSE.
 ```bash
 ssh gs-recursion "cd /opt/recursion && bash scripts/pause.sh 'reason'"   # stop
 ssh gs-recursion "cd /opt/recursion && bash scripts/resume.sh"           # resume
