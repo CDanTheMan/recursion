@@ -104,6 +104,55 @@ ssh host 'bash -s' <<'REMOTE'
 REMOTE
 ```
 
+### `RECURSION_ROOT` means the opposite thing in the green and red audits
+
+Three conventions coexist, and exporting one value for a whole sweep silently misdirects a
+check:
+
+| script | `RECURSION_ROOT` means | live root comes from |
+|---|---|---|
+| `hermes-pilot-phase0-baseline.sh` | code root (defaults to its own repo) | `RECURSION_LIVE_ROOT`, default `/opt/recursion` |
+| `hermes-pilot-phase*-green.sh` | code root (defaults to its own repo) | n/a |
+| `hermes-pilot-live-phase1-red.sh` | **live root**, default `/opt/recursion` | same variable |
+
+A driver that does `export RECURSION_ROOT="$CLONE"` for the whole sequence points the live
+audit at the clone, which has no `state/PAUSE`, and it exits `90` with:
+
+```text
+FATAL remote PAUSE is absent
+```
+
+That message reads like a production PAUSE emergency. It is not: it is a harness
+misconfiguration, and the audit is behaving correctly by failing closed. Observed exactly
+this way on 2026-08-11; the same audit had returned `ALL PASS` minutes earlier and returned
+`ALL PASS` again when re-run with `RECURSION_ROOT=/opt/recursion`.
+
+**Rule:** run the live audit with the live root explicit, from the reviewed clone, so the
+reviewed audit code is what examines production:
+
+```sh
+cd "$CLONE" && RECURSION_ROOT=/opt/recursion bash scripts/audit/hermes-pilot-live-phase1-red.sh
+```
+
+Never infer a production fault from a harness exit code without first confirming which root
+the script actually read.
+
+### Observed audit timing envelope
+
+From the 2026-08-11 preflight on `gs-recursion`, in a `/var/tmp` clone:
+
+```text
+baseline 19/19 suites, 0 failed
+phase1=4s  phase2=30s  phase3=18s  phase4=8s  phase5=71s
+phase6=969s  phase7=307s  phase8=113s   (whole run 23:11Z to 23:40Z)
+```
+
+Phase 6 dominates because its 20 crash/replay scenarios repeatedly exercise fsync-backed
+journal, receipt and recovery paths in fresh fixture roots. It is bounded I/O, not a
+deadlock, but it is also I/O-bound, so wall time varies with the box: an earlier closure run
+recorded roughly 40 minutes for the same phase. Budget for the slower figure and do not
+treat a long Phase 6 as a hang.
+
 ## Production-specific facts that invalidate generic runbook steps
 
 ### Production `origin` cannot authenticate — objects must arrive by bundle

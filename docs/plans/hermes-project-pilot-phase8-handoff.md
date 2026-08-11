@@ -1019,6 +1019,13 @@ authorizes the exact transaction. The preflight must:
 - acquire the canonical control lock and prove cron remains inactive, the gateway remains healthy,
   PAUSE is exact, the actuator is inactive/absent, and no cycle, resync, worker, or project process
   exists;
+
+> **CLARIFIED 2026-08-11.** "Acquire the canonical control lock" is not executable with the
+> deployed pre-hardening code: `lock-acquire`/`lock-release` ship *in* this patch, and
+> `backup()`/`restore()` already take `RuntimeLock` plus the `taskctl` `EmptyLock` themselves.
+> Pre-holding either makes the snapshot fail closed as contended. Let the tool take the lock
+> and verify it was released. See
+> `docs/plans/hermes-phase8-preflight-operational-nuances.md`.
 - seal Git, unit, configuration, queue/outbox, journal, and complete managed-runtime evidence in a
   root-owned mode-`0700` directory outside `/opt/recursion`;
 - restore the runtime snapshot into disposable staging and compare it exactly before mutation;
@@ -1055,3 +1062,68 @@ Suggested next-session kickoff:
 > post-merge runbook.” Lucas has reviewed, merged, and pruned the Phase 8 hardening PR. Begin with
 > read-only merge, protection, and production-state proof. Do not mutate production; return the
 > exact PAUSE-held preflight and proposed transaction for authorization first.
+
+## Post-merge proof and PAUSE-held preflight (2026-08-11)
+
+The runbook's read-only proof and the full PAUSE-held preflight both completed. **No production
+mutation occurred**; the transaction is held at its compare-and-swap gate pending separate
+authorization.
+
+Merge proof: the exact merge commit is `ecc93de7fd5f6d92812d5a89687d6e05326b15fc`
+("Merge pull request #38"), parents `abdc5928...` and `8901a038...`. Implementation
+`5f41f426...` and the publication/runbook commit `8901a038...` are both ancestors of
+`origin/master`, the remote review branch is absent after pruning, and the merge introduced no
+extra change: its tree `9a6cdea2...` is identical to the reviewed branch tip's tree. All eight
+classic branch-protection rules persist and field-audit as recorded.
+
+Production matched the recorded `17:33:03Z` starting point exactly, and still did after every
+preflight step: `loop/auto` at `bcd65ebc...`, `master` `f7df0d0e...`, `origin/master`
+`7e6e21f4...` (legitimately stale), PAUSE
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`, status exactly
+`?? .env.bak.1786014440`, gateway active, cron inactive, actuator unit absent, zero processes,
+zero execution locks, all nine pilots at `concurrency_limit=0`, `max_inflight_workers=0`,
+`publication=false`, routing variables unset, no open windows, and journals unchanged.
+
+Preflight results:
+
+```text
+bundle=fc49e3f705a1f3791ebd7eb15d02f080848e55fe2f2ccb5ec478f95dada1ad5b (identical on arrival)
+clone HEAD=ecc93de7... tree=9a6cdea2...  worktree clean
+BASELINE_SUITES=19  BASELINE_FAILED_SUITES=0
+phase1..phase8 audits = ALL PASS, RC=0
+live-phase1 = ALL PASS, RC=0 (104 packages, hardened non-root gateway)
+runtime snapshot = 19 files, root-owned 0700, manifest 7672f897...
+restore-compare = EXACT (19/19 byte- and mode-identical vs live, all matching manifest hashes)
+simulation = 0 conflicts; executable-surface diff 0; diff vs reviewed merge = the 8 awareness files
+CAS gate dry-run = PASS 11/11, zero mutation
+```
+
+The live Phase 1 audit first returned `90` because the driver exported `RECURSION_ROOT` at the
+clone for the whole sweep; that variable is the *live* root for the red audit. Re-run correctly
+it is `ALL PASS`. That was a harness defect, not a production fault.
+
+Retained root-owned mode-`0700` artifacts, outside `/opt/recursion`:
+
+- runtime snapshot `/var/backups/recursion/preflight-20260811T231032Z-ecc93de`
+- sealed evidence `/var/backups/recursion/preflight-evidence-20260811T231032Z-ecc93de`
+  (git, units, configuration, queues/outboxes, journals, audit log and summary, manifest root
+  `d2d4496a7b1caa964516aaf48a373228c0caaa54a131feea88ea36c53c8769a3`; no secrets, variable
+  names only)
+- armed `ROLLBACK.sh` and `TRANSACTION.sh` in that evidence directory, both syntax-checked
+
+The reconciliation is conflict-free by construction, not merely by trial: production's 74
+local-only commits touch exactly 8 awareness files and zero code, and the incoming range
+touches 73 files with zero intersection. The transaction therefore carries a parameter-free
+post-condition - the diff against the reviewed merge must equal exactly those 8 files, and the
+diff over `scripts/`, `loop/`, `schemas/` and `CONTROL_PLANE.md` must be empty, which is what
+proves the deployed executable bytes equal the reviewed bytes.
+
+Two operational gaps remain open and are not blockers: `cron.service` is `inactive` but
+`enabled`, so a host reboot resumes cron (PAUSE, not cron state, is the kill switch); and
+`/var/backups/recursion` plus `/var/tmp` hold about 6 GB of unreaped snapshots and staging
+clones on a 38 GB disk at 50% use.
+
+The next action remains a separate, explicit authorization for the two-action transaction:
+fast-forward `master` to the reviewed merge and merge it into `loop/auto`, with PAUSE asserted
+and cron stopped. Cron resume, actuator installation, notifications, model/capacity
+configuration, PAUSE removal and every pilot window remain separately gated.
