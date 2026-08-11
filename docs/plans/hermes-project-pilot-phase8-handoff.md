@@ -953,3 +953,89 @@ PAUSE SHA-256 `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`
 gateway, inactive cron, inactive/absent actuator, and zero test-launched production work. This
 hardening is ready for local review only; deployment, cron resume, actuator installation, PAUSE
 removal, notifications, and every pilot/soak window remain separately blocked.
+
+## Next-session post-merge runbook
+
+### Review handoff
+
+Implementation and evidence commit `5f41f4261f0aa96eedb6ac742ee0ad22f4f91b28` is on
+`review/hermes-phase8-hardening`. Lucas will open the PR, review it, merge it, and prune the remote
+review branch. The publication commit containing this runbook follows that implementation on the
+same branch; use the remote branch tip as the PR head. Do not infer deployment authority from the
+merge.
+
+Start the next session by reading this section and the preceding recovered-hardening closure, then
+prove all of the following read-only:
+
+1. fetch/prune the review repository and identify the exact merge commit;
+2. prove `5f41f426...` and the publication/handoff commit are ancestors of `origin/master`;
+3. prove the remote review branch is absent after Lucas prunes it;
+4. recheck authenticated branch protection without changing it; and
+5. re-read production PAUSE, Git/status, service, process, queue, outbox, and retained-backup state.
+
+At `2026-08-11T17:33:03Z`, the immutable production starting point was:
+
+```text
+BRANCH=loop/auto
+HEAD=bcd65ebcc7c1af3f56be1bb3b7530a837793eaf6
+MASTER=f7df0d0e8ba7cbfc4109581cfbb62ed37b54813a
+ORIGIN_MASTER=7e6e21f41c3da8914322ac352fabcd4bf95b38a4
+STATUS=?? .env.bak.1786014440
+PAUSE=919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db
+GATEWAY=active
+CRON=inactive
+ACTUATOR=inactive
+PROJECT_OR_WORKER_PROCESSES=0
+```
+
+The production remote-tracking ref is intentionally stale because cron containment stopped the
+normal fetch/resync path. Do not silently fast-forward or merge it. Treat reconciliation of
+`master`, `origin/master`, and `loop/auto` as part of a fresh, explicitly authorized, PAUSE-held
+production transaction with exact compare-and-swap parents and an armed rollback.
+
+### Next admissible production transaction
+
+After merge proof, prepare a new preflight but make no production mutation until Lucas separately
+authorizes the exact transaction. The preflight must:
+
+- use a fresh complete Git bundle/clone of the merged commit and repeat the applicable baseline,
+  Phase 1-8 controls/audits, and live Phase 1 checks;
+- acquire the canonical control lock and prove cron remains inactive, the gateway remains healthy,
+  PAUSE is exact, the actuator is inactive/absent, and no cycle, resync, worker, or project process
+  exists;
+- seal Git, unit, configuration, queue/outbox, journal, and complete managed-runtime evidence in a
+  root-owned mode-`0700` directory outside `/opt/recursion`;
+- restore the runtime snapshot into disposable staging and compare it exactly before mutation;
+- simulate the exact Git reconciliation from the observed live parents and prove reviewed runtime
+  bytes, no conflict, and no protected-state loss; and
+- arm rollback before the final immutable-live-state compare-and-swap gate.
+
+The first authorized deployment must do only two things: reconcile the production Git refs to the
+exact reviewed merge and deploy the hardening interlock while PAUSE remains asserted and cron
+remains stopped. It must not resume cron, install/start the Phase 8 actuator, send a notification,
+change model/capacity/configuration, remove PAUSE, open a pilot window, or touch a product repo.
+Independent closure must then prove exact runtime restoration, reviewed executable bytes, live
+Phase 1, PAUSE, gateway health, inactive cron/actuator, zero workers, and unchanged queues/outboxes.
+
+### Remaining gates after hardening deployment
+
+Do not collapse these into one authorization:
+
+1. deploy and independently verify the hardening under PAUSE;
+2. separately authorize and verify cron resume;
+3. separately preflight, authorize, install, and verify the Phase 8 actuator under PAUSE;
+4. separately configure bounded model/capacity limits;
+5. synthesize and approve one exact pilot plan and bounded pilot window;
+6. separately authorize PAUSE removal for that one soak; and
+7. observe, close the window, reassert the safe state, and record the result before widening scope.
+
+The hardening saga is closed only when the reviewed patch is merged, production is reconciled and
+running the exact hardening bytes under unchanged PAUSE, and independent closure passes. Full
+Phase 8 activation is a later sequence and is not implied by that closure.
+
+Suggested next-session kickoff:
+
+> Resume from `docs/plans/hermes-project-pilot-phase8-handoff.md`, section “Next-session
+> post-merge runbook.” Lucas has reviewed, merged, and pruned the Phase 8 hardening PR. Begin with
+> read-only merge, protection, and production-state proof. Do not mutate production; return the
+> exact PAUSE-held preflight and proposed transaction for authorization first.
