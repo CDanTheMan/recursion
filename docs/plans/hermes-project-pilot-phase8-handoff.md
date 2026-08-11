@@ -11,6 +11,7 @@ related:
   - docs/plans/hermes-project-pilot-production-plan.md
   - docs/plans/hermes-project-pilot-phase0-evidence.md
   - docs/plans/hermes-project-pilot-phase7-handoff.md
+  - docs/plans/hermes-phase8-preflight-operational-nuances.md
 ---
 # Hermes project pilot Phase 8 handoff
 
@@ -173,6 +174,15 @@ The two live Phase 1 findings, unverified default-branch protection, absent prod
 backup/restore drill, unset pilot model alias, zero configured capacity, and unpublished/unmerged
 Phase 8 implementation are deployment and pilot gates, not waivers.
 
+> **SUPERSEDED 2026-08-11 (post-merge preflight).** Two rows of the table above and this
+> paragraph were accurate when captured on 2026-08-08 and are retained for that reason.
+> Both have since been closed and re-verified read-only: the live Phase 1 audit now returns
+> `ALL PASS` with `rc=0` (104 packages audited, gateway hardened non-root) per "Corrected
+> Phase 1 deployment succeeded under PAUSE" below, and all eight classic branch-protection
+> rules are active and field-audited per "Branch-protection follow-up" below. The remaining
+> gates are the unset pilot model alias, zero configured capacity, and the undeployed
+> Phase 8 code.
+
 ## Santa Clara repository evidence
 
 GitHub reports `NotSkittlz/santa-clara-construction` as a private, unarchived repository with
@@ -291,6 +301,12 @@ two unchanged live Phase 1 findings. After those are remediated through a review
 deployment action, the exact merged Phase 8 code can be proposed for its own PAUSE-held deployment;
 model/capacity configuration and every pilot window still require their applicable separate
 authorization.
+
+> **SUPERSEDED 2026-08-11 (post-merge preflight).** "Remaining pre-deployment gates are the
+> two unchanged live Phase 1 findings" was true when written and is retained as the record.
+> Those two findings were closed by the corrected Phase 1 deployment recorded below, and the
+> live audit was re-run read-only on 2026-08-11 returning `ALL PASS` / `rc=0`. Phase 1 no
+> longer gates the Phase 8 hardening deployment.
 
 ### Phase 1 remediation blocker
 
