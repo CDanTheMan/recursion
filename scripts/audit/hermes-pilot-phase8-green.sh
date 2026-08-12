@@ -179,6 +179,44 @@ print('    (%d enforced literals, all present in the prompt)' % len(required))
 PY
 echo "ok    the plan prompt states every key and enum value that validate_plan enforces"
 
+# The validator requires non-empty prose in 'text' for every AUTHORING_TEXT_VERBS member, but the
+# prompt's text rule named only one example verb. The model read "authoring" narrowly and omitted
+# 'text' on pilot-plan-approve, 2/2, on 2026-08-12 -- a valid approval refused twice. The verb set
+# is read from the validator's own AST; the check is anchored on the text-rule PARAGRAPH because
+# most verb names already appear elsewhere in the prompt, which would make a whole-prompt scan
+# pass vacuously against the broken bytes.
+python3 - <<'PY8'
+import ast, re, sys
+tree = ast.parse(open('scripts/validate-decision.py', encoding='utf-8').read())
+verbs = set()
+for node in ast.walk(tree):
+    if isinstance(node, ast.Assign):
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == 'AUTHORING_TEXT_VERBS':
+                for elt in ast.walk(node.value):
+                    if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                        verbs.add(elt.value)
+if not verbs:
+    print('FAIL AUTHORING_TEXT_VERBS not found in validate-decision.py', file=sys.stderr)
+    raise SystemExit(1)
+lines = open('scripts/hermes-decide.sh', encoding='utf-8').read().splitlines()
+starts = [i for i, l in enumerate(lines) if "is REQUIRED and must be NON-EMPTY" in l]
+if len(starts) != 1:
+    print('FAIL expected exactly one text-rule paragraph, found %d' % len(starts), file=sys.stderr)
+    raise SystemExit(1)
+i = starts[0]; para = []
+while i < len(lines) and lines[i].strip():
+    para.append(lines[i]); i += 1
+tokens = set(re.findall(r'[A-Za-z0-9][A-Za-z0-9-]*', ' '.join(para)))
+missing = sorted(v for v in verbs if v not in tokens)
+if missing:
+    print('FAIL the text rule paragraph never names %d text-requiring verb(s): %s'
+          % (len(missing), ', '.join(missing)), file=sys.stderr)
+    raise SystemExit(1)
+print('    (%d authoring verbs, all named in the text-rule paragraph)' % len(verbs))
+PY8
+echo "ok    the prompt text rule names every verb the validator holds to it"
+
 # A caller-supplied RECURSION_ROOT must survive .env. These scripts compute ROOT from
 # ${RECURSION_ROOT:-<script dir>} and THEN source .env with `set -a`; production's .env pins
 # RECURSION_ROOT=/opt/recursion, so from that line on the shell's ROOT and the exported
