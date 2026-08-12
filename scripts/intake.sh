@@ -415,7 +415,19 @@ release) intake_lock || exit $?
       fi
       [ "$CURRENT" = consumed ] \
         || { echo "intake: instruction $ID is not consumed" >&2; exit 2; }
-      atomic_instruction_transition "$F" open "$ACTIONS" "deferred/failed actions reopened instruction: $ACTIONS" || exit $?
+      # Surface WHY the actions failed: the reopen annotation is the only channel through
+      # which the next decide turn can learn the refusal reason, and without it the model
+      # re-emits the same refused decision forever (observed on instruction 573, 2026-08-12).
+      EVID=""
+      for _a in $ACTIONS; do
+        _e="$(python3 -c "import json,sys
+try:
+    v=json.load(open('state/actions/%s.json'%sys.argv[1],encoding='utf-8'))
+    print((v.get('result_evidence') or '').replace(chr(10),' ')[:240])
+except Exception: pass" "$_a" 2>/dev/null)"
+        [ -n "$_e" ] && EVID="$_e"
+      done
+      atomic_instruction_transition "$F" open "$ACTIONS" "deferred/failed actions reopened instruction: $ACTIONS${EVID:+ | last failure: $EVID}" || exit $?
       echo "released $ID -> $ACTIONS" ;;
 
 *) sed -n '30,34p' "$0"; exit 2 ;;
