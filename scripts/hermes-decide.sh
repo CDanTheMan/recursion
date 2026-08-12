@@ -290,7 +290,8 @@ an argument, so it is filtered like a command line. All of the following are enf
   - required and non-empty for authoring verbs, at most 500 characters
   - ONE line: no newlines, no control characters
   - may not begin with a '-'
-  - none of these characters ANYWHERE:  ;  &  |  <  >  \`  \$(  \${
+  - none of these characters ANYWHERE:  ;  &  |  <  >
+  - no backticks, and no dollar sign immediately followed by an open parenthesis or open brace
   - no Markdown: no leading #, no **bold**, no __underline__, no [label](link)
 The character rule catches ordinary punctuation. A semicolon joining two clauses, or a pipe in a
 metric name like Sum|per-slot error|, refuses the ENTIRE decision, not just the field. Write
