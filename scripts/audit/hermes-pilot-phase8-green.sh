@@ -179,6 +179,37 @@ print('    (%d enforced literals, all present in the prompt)' % len(required))
 PY
 echo "ok    the plan prompt states every key and enum value that validate_plan enforces"
 
+# A caller-supplied RECURSION_ROOT must survive .env. These scripts compute ROOT from
+# ${RECURSION_ROOT:-<script dir>} and THEN source .env with `set -a`; production's .env pins
+# RECURSION_ROOT=/opt/recursion, so from that line on the shell's ROOT and the exported
+# RECURSION_ROOT disagree, and every python child reads the environment. On 2026-08-12 that made
+# rehearsals run against a copy enqueue TEN decisions into production, with nothing to warn:
+# the parent's own file writes went to the copy, so the split was invisible until the live queue
+# was inspected. ROOT and RECURSION_ROOT must agree after .env is sourced.
+python3 - <<'PY'
+import glob, re, sys
+# Assembled, not spelled: a checker that writes out its own pattern matches itself.
+ENV_SRC = re.compile(r'^\[ -f \.env \]', re.M)
+ROOT_FROM_ENV = '{RECURSION_ROOT:-'
+REASSERT = 'RECURSION_ROOT="' + '$ROOT"; export RECURSION_ROOT'
+bad = []
+for path in sorted(set(glob.glob('scripts/**/*.sh', recursive=True))):
+    text = open(path, encoding='utf-8', errors='replace').read()
+    m = ENV_SRC.search(text)
+    if not m or ROOT_FROM_ENV not in text:
+        continue
+    tail = text[m.end():]
+    if REASSERT not in tail:
+        bad.append(path)
+for path in bad:
+    print('FAIL %s sources .env without re-asserting the caller root after it' % path,
+          file=sys.stderr)
+if bad:
+    raise SystemExit(1)
+print('    (every .env-sourcing script re-asserts the caller root)')
+PY
+echo "ok    sourcing .env cannot retarget a caller-supplied root"
+
 grep -q 'claim-pending --kind work' scripts/conduct-hermes.sh
 grep -q 'RECURSION_PILOT_GLOBAL_CONCURRENCY' scripts/conduct-hermes.sh
 grep -q -- '--exclude-project' scripts/conduct-hermes.sh

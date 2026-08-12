@@ -22,6 +22,10 @@ export LC_ALL=C
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
+# .env pins RECURSION_ROOT for the deployed checkout. Sourcing it must never RETARGET a
+# caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
+# into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
+RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 
 MODE="${1:-}"
 DATE="$(date +%F)"; STAMP="$(date -u +%FT%TZ)"; RUN_TAG="$(date -u +%Y%m%dT%H%M%SZ)-$$"
@@ -306,7 +310,19 @@ the whole decision is DISCARDED, silently, so the run reads as if you never deci
 =================== STATE (ground truth, re-derived this run) ===================
 $(build_brief)"
 
-log "deciding (model=$MODEL)"
+# A malformed reply is retried; nothing else is. Roughly one run in four emitted an unbalanced
+# brace in the nested plan object, and with no retry the whole turn was discarded until the next
+# cron six hours later. The COST FENCE below stays inside the loop deliberately: each attempt
+# proves its own provider and cost, so a metered fallback still refuses on the attempt that
+# caused it and is never retried into a second billed call.
+DECIDE_ATTEMPTS="${RECURSION_DECIDE_ATTEMPTS:-3}"
+case "$DECIDE_ATTEMPTS" in ''|*[!0-9]*) log "invalid RECURSION_DECIDE_ATTEMPTS"; exit 4 ;; esac
+[ "$DECIDE_ATTEMPTS" -ge 1 ] || { log "RECURSION_DECIDE_ATTEMPTS must be at least 1"; exit 4; }
+DECIDE_ATTEMPT=0
+while :; do
+DECIDE_ATTEMPT=$((DECIDE_ATTEMPT+1))
+
+log "deciding (model=$MODEL, attempt $DECIDE_ATTEMPT/$DECIDE_ATTEMPTS)"
 if ! hermes -z "$PROMPT" -m "$MODEL" --usage-file "$USAGE" >"$OUT" 2>>"$LOG"; then
   log "FAILED — hermes returned non-zero; see $LOG"
   exit 1
@@ -345,7 +361,11 @@ fi
 # --- extract + validate the decision ------------------------------------------------------
 BLOCK="$(awk '/^===DECISION-START===/{f=1;next} /^===DECISION-END===/{f=0} f' "$OUT")"
 if [ -z "${BLOCK//[[:space:]]/}" ]; then
-  log "REFUSED — no decision block in the reply"; exit 4
+  if [ "$DECIDE_ATTEMPT" -lt "$DECIDE_ATTEMPTS" ]; then
+    log "no decision block in the reply; retrying"
+    continue
+  fi
+  log "REFUSED — no decision block in the reply after $DECIDE_ATTEMPT attempts"; exit 4
 fi
 
 # Validation lives in scripts/validate-decision.py — one definition, exercised directly by
@@ -355,9 +375,23 @@ fi
 VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$BLOCK" "$DECIDER_ACTOR" 2>&1)"
 
 case "$VALID" in
-  OK\ *) DECISION="${VALID#OK }" ;;
-  *) log "REFUSED — ${VALID:-validation produced no output}"; printf '%s\n' "$BLOCK" >>"$LOG"; exit 5 ;;
+  OK\ *) DECISION="${VALID#OK }"; break ;;
 esac
+# Only a MALFORMED reply is the model's slip to retake. A decision that parsed and was refused on
+# its content is a real refusal and must stay terminal, or a retry loop would grind against the
+# same objection until the budget runs out.
+case "$VALID" in
+  *"malformed JSON"*|*"is not an object"*|*"produced no output"*)
+    if [ "$DECIDE_ATTEMPT" -lt "$DECIDE_ATTEMPTS" ]; then
+      log "malformed decision (${VALID:-no output}); retrying"
+      printf '%s\n' "$BLOCK" >>"$LOG"
+      continue
+    fi
+    log "REFUSED — ${VALID:-validation produced no output} after $DECIDE_ATTEMPT attempts"
+    printf '%s\n' "$BLOCK" >>"$LOG"; exit 5 ;;
+esac
+log "REFUSED — ${VALID:-validation produced no output}"; printf '%s\n' "$BLOCK" >>"$LOG"; exit 5
+done
 
 # Bind model provenance and the routed authority into the durable record. Deterministic internal
 # reconcilers do not carry this marker; the actuator uses it to distinguish a scoped model

@@ -14,6 +14,10 @@ set -euo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
+# .env pins RECURSION_ROOT for the deployed checkout. Sourcing it must never RETARGET a
+# caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
+# into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
+RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 
 WS="${1:?workstream}"; ENGINE="${2:?engine}"; PROMPT_FILE="${3:?prompt_file}"
 MODEL="${4:-}"; LABEL="${5:-$ENGINE arm}"
