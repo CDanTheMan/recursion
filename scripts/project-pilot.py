@@ -691,6 +691,11 @@ def require_lucas_instruction(path: Path, instruction: dict[str, str], terms: li
     body = document[match.end():] if match else ""
     body = re.split(r"(?m)^##\s+", body, maxsplit=1)[0]
     tokens = set(re.findall(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", body))
+    # A digest or id at the end of a sentence tokenizes WITH its trailing period ("." is
+    # in the token class), and exact-membership then refuses a correct human approval --
+    # observed 2026-08-12 on instruction 573. Sentence punctuation is not ambiguity: the
+    # bound value must still appear contiguously and exactly, so admit the stripped form.
+    tokens |= {t.rstrip('.') for t in tokens}
     if any(str(term) not in tokens for term in terms):
         fail("Lucas instruction does not name the exact Phase 8 object and digest/window bounds")
 
