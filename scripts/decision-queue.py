@@ -59,6 +59,14 @@ LEGACY_PRE_PROVENANCE_NOOP_SHA256 = (
     "17e365c897961b6699ffc868b42e9ba469a1c6b5797798686224d6a4bb73165b",
 )
 LEGACY_REVIEWED_NOOP_SHA256 = LEGACY_PRE_SCHEMA_NOOP_SHA256 + LEGACY_PRE_PROVENANCE_NOOP_SHA256
+# A journal may hold the pre-schema block alone, or that block followed by the
+# pre-provenance record. Nothing else is a reviewed set: comparing against an arbitrary
+# PREFIX would silently accept a truncated migration, which is the failure
+# hermes-pilot-phase8-legacy-journal-red::test_incomplete_prefix exists to catch.
+COMPLETE_REVIEWED_NOOP_PREFIXES = (
+    LEGACY_PRE_SCHEMA_NOOP_SHA256,
+    LEGACY_REVIEWED_NOOP_SHA256,
+)
 LEGACY_PRE_PROVENANCE_NOOP_KEYS = frozenset({
     "actor", "args", "arguments", "confidence", "cost_usd", "goal", "goal_id", "id",
     "idempotency_key", "project", "provider", "reason", "schema_version", "status", "ts",
@@ -496,7 +504,7 @@ def _expected_legacy_markers(base: Path, journal: Path) -> dict[Path, dict]:
             continue
         break
     digests = tuple(marker["source_sha256"] for marker in markers)
-    if digests and digests != LEGACY_REVIEWED_NOOP_SHA256[: len(digests)]:
+    if digests and digests not in COMPLETE_REVIEWED_NOOP_PREFIXES:
         raise ValueError("reviewed legacy decision prefix is incomplete or out of order")
     return {legacy_marker_path(base, marker): marker for marker in markers}
 
