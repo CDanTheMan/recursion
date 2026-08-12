@@ -1389,3 +1389,93 @@ neither was made here:
 Until both land, installing the actuator gives a service that spins forever on an undrainable
 record while reporting healthy. That is a worse failure than the one it replaces, because it is
 silent.
+
+## Gate 3 root cause corrected, and Fix 2 landed (2026-08-12T01:00Z)
+
+**The previous section's root cause was wrong in its first half and is corrected here.** It
+said the digest check was the blocker and that the legacy compat cutoff was drawn at the wrong
+place. Measurement refutes that:
+
+- `decision-queue.py` `normalize()` already computes `decision_payload_sha256` (line 222), and
+  the equality checks tolerate `None` and recompute (lines 176/178). A **fresh** import of the
+  real journal produces a projection carrying
+  `decision_payload_sha256=e29cf20c1b1067e1b12fa43c82e52fbf326d293a498e60195ccacc9e53cd74cf`.
+- The projection on production lacked the field only because it was written by **pre-hardening
+  code and never re-normalized**; `import-journal` does not overwrite an existing projection.
+  That is stale state, not a code defect, and needs no compat change.
+
+**The actual blocker is provenance, one layer further on.** With a freshly imported projection
+the same record is still refused, for a different reason:
+
+```text
+conduct-hermes: REFUSED - missing or unknown decision provenance ''
+```
+
+`conduct-hermes.sh` requires `decision_source` to be `hermes-model`, `project-reconciler`, or
+`notification-reconciler`. The 2026-08-09 record has neither `decision_source` nor
+`routed_decider` - it predates the provenance model. `normalize()` computes a payload digest but
+does not synthesize provenance, and it must not: inventing a `decision_source` would forge
+authority, which is precisely what that check exists to prevent. So the record cannot execute,
+and no amount of digest work changes that.
+
+The lesson is the one already in the nuances note, applied to my own analysis: an arithmetic
+result that closes ("the digest is absent, the check requires it") describes the objects it
+measured, not the cause. The first refusal encountered was not the only refusal.
+
+### Fix 2 landed: a refusal is no longer relabelled as a deferral
+
+`finalize_claim`'s `absent` branch read:
+
+```sh
+if [ "$result_rc" -eq 75 ] || [ -f "$ROOT/state/PAUSE" ]; then   # defer, return 75
+```
+
+A genuine PAUSE decline already returns 75 through the first clause, so `|| [ -f PAUSE ]` only
+ever caught **other** failures and relabelled them as deferrals for as long as PAUSE was
+asserted. The actuator whitelisted `0|4|75` and logged nothing, which is why the service
+reported healthy for ninety seconds while the queue oscillated and two separate hard refusals
+went unreported.
+
+The patch keeps the disposition identical - pending is still preserved under PAUSE, which is the
+conservative behaviour - and changes only visibility: a non-75 child rc under PAUSE now logs
+`REFUSED under PAUSE - child rc=N ...; pending preserved, NOT a deferral` and returns a distinct
+`76`. `hermes-actuator.sh` handles `76` explicitly and points at
+`loop/logs/<date>-conduct-hermes.log` for the specific reason, latched so a two-second loop
+reports once rather than flooding.
+
+Measured on the real journal in a disposable fixture: `CONDUCT_RC=76` (was 75), both the
+provenance refusal and the new refusal line present, and `pending=1 running=0 failed=0
+succeeded=0` - disposition unchanged.
+
+Worth recording: the specific reason was **always on disk**. `conduct-hermes` tees to
+`loop/logs/<date>-conduct-hermes.log`, so `REFUSED - missing or unknown decision provenance`
+was being written every pass. Only the systemd journal was silent, because the actuator sends
+the child's stdout to `/dev/null` and the exit code carried no distinction. Evidence existing
+somewhere is not the same as evidence reaching the person reading the service.
+
+### Fix 1 is a genuine fork and is NOT implemented
+
+The record must be dispositioned, and there are three materially different ways to do it. They
+differ in blast radius, so this is escalated rather than chosen:
+
+1. **Quarantine it via the reviewed exact-hash allowlist**, as the five pre-schema records were.
+   Its stripped line digest is
+   `17e365c897961b6699ffc868b42e9ba469a1c6b5797798686224d6a4bb73165b`. Obstacle:
+   `_expected_legacy_markers` only reaches the allowlist for records that FAIL
+   `validate_record`, and this one passes, so the loop breaks before quarantine. Making it
+   reachable means changing what "valid" means.
+2. **Make provenance a validation requirement** in `decision-queue.py`, so any record without
+   `decision_source` fails validation and the allowlist then handles this one historical
+   exception. Principled and fails earlier, but it changes validity for every producer and
+   needs proof that no current emitter omits provenance.
+3. **Treat an allowlisted pre-provenance noop as a terminal success in `conduct-hermes`.**
+   Semantically exact - the record's own verb is `noop`, and doing nothing needs no authority -
+   but it puts a bypass inside the authority checker, the most security-sensitive point in the
+   file.
+
+Option 2 is the most principled and option 1 the most conservative; option 3 is cheapest and
+carries the worst failure mode if ever generalised. The choice determines what "a valid
+decision" means going forward, so Lucas picks it.
+
+Gate 3 therefore remains open. Production is untouched by all of the above: the patch exists
+only on the review branch and in disposable fixtures.
