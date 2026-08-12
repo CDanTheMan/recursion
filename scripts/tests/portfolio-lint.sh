@@ -11,6 +11,7 @@
 #
 #   run: bash scripts/tests/portfolio-lint.sh
 set -uo pipefail
+HOME="${HOME:-/root}"   # systemd gives a service no HOME; `set -u` then kills the script
 export LC_ALL=C
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0

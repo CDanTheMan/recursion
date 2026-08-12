@@ -15,6 +15,7 @@
 #   work.sh <id|path>   run a specific task (state/tasks/<id>.md, or a file path)
 #   work.sh             pull the first queued task in state/tasks/ (alpha order)
 set -euo pipefail
+HOME="${HOME:-/root}"   # systemd gives a service no HOME; `set -u` then kills the script
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a

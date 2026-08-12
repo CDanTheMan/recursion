@@ -31,6 +31,7 @@
 # EXIT CODES ARE THE INTERFACE. 3 means "the answer is unknown" and 4 means "the answer is no".
 # Collapsing those two is what produced failure (1) above: an unknown that reads as a clean no.
 set -uo pipefail
+HOME="${HOME:-/root}"   # systemd gives a service no HOME; `set -u` then kills the script
 export LC_ALL=C
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 REG="${RECURSION_PORTFOLIO:-$ROOT/state/portfolio.tsv}"
