@@ -19,7 +19,7 @@ samples={
 'goal':{'schema_version':1,'id':'g','project_id':'p','outcome':'o','acceptance_suite':'true','falsifier':'false green','budget':{},'status':'active'},
 'task':{'schema_version':1,'id':'t','goal_id':'g','dependencies':[],'allowed_paths':['app'],'non_goals':['tests'],'worker_class':'claude','acceptance':'true','status':'ready'},
 'run':{'schema_version':1,'id':'r','task_id':'t','worker':'w','worktree':'/tmp/w','base_commit':'0'*40,'pid':1,'lease_expires':'later','deadline':'later','usage':{},'result':{},'status':'pending'},
-'decision':{'schema_version':1,'id':'d','actor':'head-hermes','verb':'work','arguments':['t'],'reason':'r','goal_id':'g','idempotency_key':'k','status':'accepted'},
+'decision':{'schema_version':1,'id':'d','actor':'head-hermes','verb':'work','arguments':['t'],'reason':'r','goal_id':'g','idempotency_key':'k','status':'accepted','decision_source':'hermes-model'},
 'escalation':{'schema_version':1,'id':'e','goal_id':'g','required_actor':'Lucas','question':'q','evidence':{},'status':'open'},
 'delivery':{'schema_version':1,'id':'delivery','event_id':'event','destination':'topic:1','attempt':0,'acknowledgement':None,'status':'pending'},
 'instruction':{'schema_version':1,'id':'i','principal':'Lucas','topic':1,'project_id':'p','deduplication_key':'k','status':'open','action_ids':[]},
