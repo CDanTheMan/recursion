@@ -197,12 +197,43 @@ goes in the "text" field, not in args.
 
 PROJECT-PILOT PLAN SYNTHESIS - a fresh project instruction becomes a new bounded plan; never
 reuse a historical goal merely because it already exists.
-  pilot-plan-propose <project> <plan-id> + text and a top-level "plan" object containing:
-    schema_version=1, id, project_id; one goal with a NEW id, outcome, acceptance_suite,
-    falsifier, and complete Phase 6 budget; and 1..16 tasks with NEW ids, intent, dependencies,
-    allowed_paths, non_goals including credentials/merge/deploy, acceptance, model_alias,
-    verifier_model_alias, deadlines, network_policy, worker-result-v1 evidence_contract,
-    independent verification, expected_change, and gate_files.
+  pilot-plan-propose <project> <plan-id> + text and a top-level \"plan\" object.
+    THE SCHEMA BELOW IS EXACT. Every key is required, and where alternatives are listed those are
+    the ONLY accepted values. Validation happens later, in the actuator, and rejects the plan
+    WHOLE -- a near-miss produces nothing anyone will see, so copy the key names literally.
+
+    plan: {\"schema_version\":1, \"id\":\"<the plan-id in your args>\", \"project_id\":\"<project>\",
+           \"goal\":{...}, \"tasks\":[ 1..16 of them ]}        serialized under 64 KiB
+
+    goal: {\"id\":\"<a NEW goal id, never one that already exists>\",
+           \"outcome\":\"<one line>\", \"falsifier\":\"<one line>\",
+           \"acceptance_suite\":\"<a real command; true, :, exit 0 are refused as vacuous>\",
+           \"budget\":{\"max_concurrency\":0+, \"max_tokens\":0+, \"max_cost_usd\":0+,
+                     \"max_wall_clock_seconds\":0+, \"max_task_attempts\":0+, \"max_failures\":0+,
+                     \"max_review_queue\":1+, \"max_publish_attempts\":0+,
+                     \"publication_required\":true or false}}
+      ALL NINE budget keys are required and are NUMBERS; publication_required is a boolean.
+      They are not phase descriptions -- narrative belongs in \"text\".
+
+    task: {\"id\":\"<NEW>\", \"intent\":\"<one line>\",
+           \"dependencies\":[ids of OTHER tasks in this plan; may be empty],
+           \"allowed_paths\":[paths inside the project charter],
+           \"non_goals\":[must contain the literal strings credentials, merge, deploy],
+           \"acceptance\":\"<a real command>\",
+           \"worker_class\":\"<string>\",
+           \"engine\":\"claude\",
+           \"model_alias\":\"sonnet-routine\" or \"opus-complex\",
+           \"verifier_model_alias\":\"opus-review\" or \"opus-complex\",
+           \"deadline_seconds\":1+, \"verifier_deadline_seconds\":1+,
+           \"network_policy\":\"provider-only\" or \"none\",
+           \"evidence_contract\":\"worker-result-v1\",
+           \"verification\":\"independent\",
+           \"expected_change\":\"required\" or \"optional\",
+           \"gate_files\":[unique paths]}
+      The keys are deadline_seconds and verifier_deadline_seconds, NOT \"deadlines\".
+      The key is verification with the value \"independent\", NOT \"independent_verification\".
+      \"deployment\" is not \"deploy\". model_alias and verifier_model_alias name the ROLE ALIAS,
+      never an underlying model: \"claude\", \"codex\", \"sonnet\", \"opus\" are all invalid there.
   pilot-plan-approve <project> <plan-id> <sha256>  materialize only when Lucas's correlated
     instruction itself names that exact plan id and digest.
   pilot-window-open <project> <goal-id> <window-id> <seconds>  admit that exact approved goal;
@@ -247,6 +278,20 @@ Reply with reasoning first, then EXACTLY this block and nothing after it:
 ===DECISION-START===
 {\"actor\":\"head-hermes or the exact bound pilot id\",\"verb\":\"...\",\"args\":[\"...\"],\"text\":\"prose, for the authoring verbs only\",\"plan\":\"complete object for pilot-plan-propose only; omit otherwise\",\"instruction_id\":\"exact open instruction id, or omit\",\"project\":\"...\",\"goal\":\"goal-slug-like-this\",\"why\":\"one or two sentences\",\"confidence\":\"high|medium|low\",\"wrong_if\":\"the specific observable that would mean this was the wrong call\"}
 ===DECISION-END===
+
+
+'text' is REQUIRED and must be NON-EMPTY for every authoring verb, pilot-plan-propose included.
+Omitting it refuses the decision just as surely as malforming it. It is handed to those verbs as
+an argument, so it is filtered like a command line. All of the following are enforced:
+  - required and non-empty for authoring verbs, at most 500 characters
+  - ONE line: no newlines, no control characters
+  - may not begin with a '-'
+  - none of these characters ANYWHERE:  ;  &  |  <  >  \`  \$(  \${
+  - no Markdown: no leading #, no **bold**, no __underline__, no [label](link)
+The character rule catches ordinary punctuation. A semicolon joining two clauses, or a pipe in a
+metric name like Sum|per-slot error|, refuses the ENTIRE decision, not just the field. Write
+\"and\" instead of a semicolon and name the metric in words. Only 'text' is filtered this way --
+'why', 'wrong_if' and the plan object are not.
 
 'goal' and 'wrong_if' are mandatory. A decision that cannot name the goal it serves, or what
 would make it wrong, is a guess — choose 'escalate' instead of writing one.
