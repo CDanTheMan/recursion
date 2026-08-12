@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Review-only publisher. This is the sole push path for worker output.
 set -euo pipefail
+HOME="${HOME:-/root}"   # systemd gives a service no HOME; `set -u` then kills the script
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a

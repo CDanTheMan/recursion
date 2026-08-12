@@ -1808,3 +1808,47 @@ needed, and the repair is verified against the real failure rather than a recons
 
 `intake.test.sh` gains three behavioural cases with their own control. Against the unpatched
 script all three fail; with it, all three pass.
+
+## Root cause of the wedge: systemd gives a service no HOME (2026-08-12T05:45Z)
+
+The lock-contention explanation offered earlier for the 04:31:33 coupling failure was **wrong**.
+It was flagged at the time as inferred rather than measured, which is the only reason it did not
+become the recorded cause. Side by side, one file different, same sandbox, same root:
+
+```text
+FIXED    intake.sh, unit sandbox, real root:  rc=0  released 486 -> action-... (already)
+UNFIXED  intake.sh, unit sandbox, real root:  rc=1  intake.sh: line 44: HOME: unbound variable
+```
+
+`hermes-actuator.service` sets only `RECURSION_ROOT`. systemd supplies no `HOME`. `intake.sh`
+runs under `set -u`, so line 44 -
+
+```sh
+DB="${RECURSION_HERMES_DB:-$HOME/.hermes/state.db}"
+```
+
+- was a fatal error **before any subcommand ran**. `consume`, `release` and `acknowledge` were
+all equally dead, and none of them even uses `DB`. The actuator has therefore never been able to
+couple an instruction to an action, for the entire life of the service. The decision that wedged
+did so because its `consume` died here; the release could then not reconcile it, and the retry
+loop followed.
+
+It looked like lock contention because every successful run was from an interactive shell, which
+has `HOME`.
+
+### The class assertion found three more, and two are worse
+
+`work.sh:106` and `publish.sh:62` expand `~` against `$HOME` under `set -euo pipefail`, and
+`conduct-hermes.sh` invokes both (lines 700, 712), so they run under the actuator too. Both are
+conditional - `work.sh` only touches `$HOME` when the repo has an ssh key configured, which is
+every real repo - so they would not have failed until work actually dispatched. **That is gate
+6/7.** `resync.sh:55,170` and `tests/portfolio-lint.sh:52` complete the set.
+
+All five now carry `branch-review.sh`'s existing `HOME="${HOME:-/root}"` idiom in the same
+position. That file had already been fixed for this once, which is why this ships as a class
+assertion rather than five spot fixes.
+
+The checker had two bugs of its own, both found by running it: it matched its own file because
+its failure message contained a literal `$HOME`, and overlapping globs double-counted every
+top-level script. Against `origin/master` it now reports exactly the five; against the branch,
+zero.

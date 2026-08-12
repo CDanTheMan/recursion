@@ -515,3 +515,43 @@ invoking shell carries it too. The real count was zero.
 Put the pattern where it cannot be its own argument (a heredoc on stdin), escape it so it does not
 match literally (`work\.sh`), or resolve every hit with `ps -eo pid,cmd` before believing a count.
 This has now caused a false alarm and, in an earlier session, a self-kill with `pkill -f`.
+
+## systemd services have no HOME, and `set -u` turns that into instant death
+
+A service unit's environment is not a login environment. `hermes-actuator.service` sets
+`RECURSION_ROOT` and nothing else, so `$HOME` is unset - and under `set -u` the first line that
+mentions it aborts the script **before any argument is parsed**. The script is not degraded, it
+is entirely dead, and only under systemd.
+
+This is invisible to every ordinary test path. Interactive shells have `HOME`. Cron has `HOME`,
+set from `/etc/passwd`. Only the service lacks it - so a script that was 100% non-functional
+under the actuator passed 19 baseline suites and eight phase audits for that service's whole
+life.
+
+**Test the environment, not only the code.** `env -u HOME` in one test case is the entire guard,
+and no existing test had ever run any script without it.
+
+## Reproduce under the real sandbox, not an approximation of it
+
+Two attempts to reproduce this failed for reasons belonging to the harness rather than the
+subject:
+
+- copying the root under `/var/tmp` and running with `--property=PrivateTmp=yes` returns `rc=200`
+  and no output, because PrivateTmp makes `/var/tmp` private too and systemd cannot `chdir` into
+  the copy. Nothing to do with the defect.
+- an earlier sandbox copy inherited production's `state/.locks` through `cp -a` and failed on
+  stale lock state.
+
+What settled it was running the **fixed and unfixed scripts side by side**, under the unit's own
+properties, against the real root, differing in exactly one file. Anything less compares two
+harnesses rather than two versions.
+
+## A checker that names the thing it checks will find itself
+
+The audit for unguarded `$HOME` reported `hermes-pilot-phase8-green.sh` - itself - because its
+failure message contained the literal string it searches for. The repair was to drop the sigil
+from the prose, not to exclude the file: excluding it would leave a hole in the very file most
+likely to accumulate string literals.
+
+Same shape as `pgrep -f` matching its own argv, which produced a false `workers: 2` earlier the
+same night. **When a tool searches for a pattern, check whether the tool contains the pattern.**

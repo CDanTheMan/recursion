@@ -101,6 +101,33 @@ grep -qE '^flock -w "\$CONTROL_LOCK_WAIT_S" 9' scripts/hermes-decide.sh
 grep -q 'RECURSION_CONTROL_LOCK_WAIT_S' scripts/hermes-decide.sh
 echo "ok    the decision turn waits for the shared control lock instead of failing on first contention"
 
+# A systemd service inherits no HOME. Under `set -u` an unguarded $HOME is a fatal error on the
+# FIRST line that mentions it, before any subcommand runs -- so the script is not "degraded", it
+# is entirely dead, and only under systemd. intake.sh was dead this way for the whole life of
+# hermes-actuator.service while every suite stayed green, because no test ran without HOME.
+# Guard the class: branch-review.sh had already been fixed for this once, and resync.sh carried
+# the same latent defect, which is the signature of something that comes back.
+python3 - <<'PY'
+import glob, re, sys
+bad = []
+# ONE glob: scripts/*.sh and scripts/**/*.sh overlap and reported every top-level script twice.
+for path in sorted(set(glob.glob('scripts/**/*.sh', recursive=True))):
+    text = open(path, encoding='utf-8', errors='replace').read()
+    if not re.search(r'(?m)^set -[a-z]*u', text):
+        continue
+    uses = [n for n, line in enumerate(text.split('\n'), 1)
+            if re.search(r'\$\{?HOME\b', line) and not line.lstrip().startswith('#')]
+    if not uses:
+        continue
+    if not re.search(r'HOME="\$\{HOME:-', text):
+        bad.append((path, uses[:3]))
+for path, lines in bad:
+    print('FAIL unguarded HOME under set -u: %s lines %s' % (path, lines), file=sys.stderr)
+if bad:
+    raise SystemExit(1)
+PY
+echo "ok    no set -u script dereferences HOME unguarded (systemd services have none)"
+
 grep -q 'claim-pending --kind work' scripts/conduct-hermes.sh
 grep -q 'RECURSION_PILOT_GLOBAL_CONCURRENCY' scripts/conduct-hermes.sh
 grep -q -- '--exclude-project' scripts/conduct-hermes.sh
