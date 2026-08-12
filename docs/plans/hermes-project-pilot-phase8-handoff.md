@@ -1268,3 +1268,46 @@ Evidence manifest root for the complete preflight, transaction, closure and re-r
 
 Gate 1 is closed and independently re-verified. Gate 2 (cron resume) is now unblocked, its
 prerequisite having been the self-repo fetch. Gates 3 through 7 are untouched.
+
+## Gate 2: cron resumed under PAUSE (2026-08-12T00:33:27Z)
+
+Lucas authorized cron resume. Before starting the service, the corrected quiescence gate was
+built and validated with a positive control, and **one supervised cycle was run by hand** -
+the same command cron invokes - so the behaviour was observed before it could fire
+unattended.
+
+The supervised cycle was correct on every axis:
+
+```text
+PAUSED (state/PAUSE) — local monitoring only: heartbeat + brief + durable escalations;
+                       no notifications or execution
+portfolio observed (PAUSE: fetch/status only; no branch maintenance)
+brief done (deliver=0)
+paused: skipping plan/drain/conduct (execution)
+cycle done (signal=brief)                                          CYCLE_RC=0
+```
+
+`deliver=0` is the notification proof: zero sends. `new_commits_on_loop_auto=0` is the
+board-commit proof - the hardened `board()` returns early under PAUSE, so the 74 `loop: board`
+commits the old code produced will not recur. `portfolio observed` is the auth fix proving
+itself: the fetch succeeded where it had been failing every cycle.
+
+Unchanged across the cycle: HEAD, `loop/auto`, `master`, PAUSE hash, `state/BOARD.md`,
+`events.jsonl` (16 lines), `decisions.jsonl` (6 lines). Written, as designed: a new
+`state/briefs/2026-08-12.md` labelled `PAUSED — execution is halted; this brief is monitoring
+only`, and `last_seen`/`count` bumps on three pre-existing escalation rows (33 to 34) with no
+new row.
+
+`cron.service` is now `active/running`, PID 608533, PAUSE intact, crontab unmodified (four job
+lines, mtime still 2026-08-07), actuator still absent, quiescence 0. Next fires are 03:00Z
+(`fallback-watch`), 03:15Z (`cycle` and `hermes-decide`), and 06:30Z (the forced brief).
+Rollback is `systemctl stop cron.service`.
+
+Gate 2 is closed. Gates 3 through 7 - actuator preflight/installation, bounded model/capacity
+configuration, one exact pilot plan and window, PAUSE removal for that single soak, and the
+observed close-out - remain untouched and separately gated. PAUSE remains asserted; nothing
+executes.
+
+One consequence to carry forward: with cron running, the working tree now legitimately holds
+uncommitted monitoring artifacts, so a future gate must not assert an exact
+`git status --porcelain` string. See the nuances note.

@@ -314,3 +314,57 @@ Two alternatives were rejected for concrete reasons:
 `GIT_SSH_COMMAND` (used by `resync.sh`'s `gitk` and by `publish.sh`) takes precedence over
 `core.sshCommand`, so per-project key selection is unaffected. Verified after the change:
 project keys still authenticate as their own repositories.
+
+## The quiescence gate, corrected
+
+Getting "is anything running against production?" right took three attempts, each failing
+closed for a different non-reason. The corrected probe lives at
+`/var/backups/recursion/gates/quiescence.sh`.
+
+1. `pgrep -c -f X 2>/dev/null || echo 0` returns `"0
+0"` (see above).
+2. Matching by command name alone counts the audit suite's own phase-5 fixtures -
+   `scripts/work.sh` running under `/tmp/tmp.XXXXXXXX/controller`. Those are not production
+   work. Qualifying by working directory fixes it.
+3. The CWD-qualified probe then counts **the observer**. `cd /` inside the script is not
+   enough, because the *caller's* shell is still sitting in the checkout. Invoked from a
+   shell that had `cd /opt/recursion`, an idle box reported `1`.
+
+The probe must therefore stand outside the directory it measures **and** exclude its own
+process ancestry:
+
+```sh
+cd /
+self=$$; ancestors=" $self "; p=$self
+while :; do
+  [ -r "/proc/$p/stat" ] || break
+  p=$(awk '{print $4}' "/proc/$p/stat" 2>/dev/null)
+  case "$p" in ''|0|1) break ;; esac
+  ancestors="$ancestors$p "
+done
+# then skip any pid in $ancestors while scanning /proc/*/cwd
+```
+
+**Validated with a positive control, not just a zero.** A gate that always returns `0` looks
+identical to a correct one on an idle box. Measured: `0` invoked from inside the checkout
+(was `1`), `2` with a deliberately planted process whose cwd is in `ROOT`, and `0` again
+after it exits. Any quiescence check that has only ever returned zero is unverified.
+
+## Cron resume changes the steady-state `git status`
+
+Under PAUSE the loop writes monitoring artifacts and deliberately does not commit them
+("PAUSE preserves self-repo Git state; monitoring artifacts retained locally without
+commit"). After one cycle the tree carries a modified `state/escalations.tsv` and a new
+untracked `state/briefs/<date>.md` on top of the pre-existing untracked `.env.bak.*`.
+
+A CAS gate that asserts an exact `git status --porcelain` string - as the Phase 8 deployment
+gate did - will therefore fail once cron is running. That assertion was correct while cron
+was contained and is wrong afterwards. Gate on the absence of *unexpected* entries instead of
+on an exact string.
+
+Related: `escalations.tsv` rows are keyed and deduplicated, so a recurring condition bumps
+`last_seen` and `count` rather than adding a row. A changed file with an unchanged line count
+is the normal shape, not a lost record. `esc-0002` (`recursion: 1 local branch(es) hold
+commits on no remote`) and `esc-0003` (`recursion: uncommitted changes in the working tree`)
+are both permanently true for the deployed checkout and will keep incrementing every cycle.
+That is expected noise, open since 2026-08-07.
