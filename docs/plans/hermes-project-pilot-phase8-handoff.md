@@ -1852,3 +1852,77 @@ The checker had two bugs of its own, both found by running it: it matched its ow
 its failure message contained a literal `$HOME`, and overlapping globs double-counted every
 top-level script. Against `origin/master` it now reports exactly the five; against the branch,
 zero.
+
+## Gate 5 rehearsal contaminated production, and the root cause (2026-08-12T07:05Z)
+
+**A sandbox was never a sandbox.** Every script that sources `.env` computes
+`ROOT="${RECURSION_ROOT:-<script dir>}"` FIRST and sources `.env` with `set -a` AFTER.
+Production's `.env` pins `RECURSION_ROOT=/opt/recursion`, so from that line on the shell's `ROOT`
+and the exported `RECURSION_ROOT` disagree - and every Python child reads the environment.
+
+Six gate 5 rehearsals run with `RECURSION_ROOT=/var/tmp/gate5rehearse` enqueued **ten decisions
+into production**. `bash -x` showed it in one line:
+
+```text
++ QUEUE_PATH=/opt/recursion/state/decision-queue/pending/decision-d845985b12c9b12075a9fa5a.json
+```
+
+The tell was visible for an hour and was misread: the sandbox's journal never grew, and that was
+recorded twice as "an unexplained sandbox artifact" instead of prompting the question *where are
+the writes going instead*. An empty destination is a routing symptom, not an inert one.
+
+### What it did and did not do
+
+`validate_plan` rejected the malformed plans exactly as designed, so **no plan, goal, window or
+commit was ever created**. The blast radius was the queue and the append-only journal. One
+injected decision re-wedged the actuator because its action referenced instruction `999`, which
+exists only in the sandbox - a further variant of the never-consumed release: an action coupled
+to an instruction that is *absent* cannot be released either.
+
+### Cleanup, and the control that mattered
+
+The journal is append-only and is the recovery source, so deleting projections would only have
+`import-journal` recreate them. The supported path was used instead: `claim-pending --verb
+pilot-plan-propose` then `decision-queue.py fail <path> "<reason>"`, moving each to `failed/`
+with an explicit operator reason. `pending -> failed` is not a legal direct transition; a
+decision must be claimed first.
+
+**The inventory control caught that one queued decision was not mine** - the legitimate `06:45`
+cron `noop`, `actor=head-hermes`, `goal_id=pause-safety`, matching the decide log. Cleaning by
+"everything currently pending" would have destroyed it. Provenance was asserted per record
+(`verb` starts with `pilot-` AND `instruction_id=999`), not by position or timestamp.
+
+That legitimate decision is also the unattended proof of B0/B1/B2: the decide cron fired on its
+new `45 */6` schedule and produced a normalizable decision with a canonical `goal_id`.
+
+### The fix
+
+All fifteen `.env`-sourcing scripts now re-assert `RECURSION_ROOT="$ROOT"` immediately after the
+source. A caller-supplied root wins over `.env` - otherwise no copy of this system can be tested
+against - and when the caller supplied none, the exported value matches the derived `ROOT`
+instead of drifting. Proven side by side, one file different:
+
+```text
+before   ROOT=[/var/tmp/isotest]   RECURSION_ROOT=[/opt/recursion]
+after    ROOT=[/var/tmp/isotest]   RECURSION_ROOT=[/var/tmp/isotest]
+```
+
+End-to-end: a decide turn in a sandbox left production's journal and queue unchanged while the
+sandbox's grew. `phase8-green` guards the class; control against `origin/master` reports 15
+unguarded there and 0 after.
+
+## Malformed decisions are now retried, bounded (2026-08-12T07:14Z)
+
+About one rehearsal in four emitted a syntactically broken decision block - one closing brace too
+many in a 2.2 KB nested plan. With no retry the whole turn was discarded and the next attempt was
+six hours away on cron, which during gate 5 reads as Hermes ignoring an instruction.
+
+Only a MALFORMED reply is retried. A decision that parsed and was refused on its CONTENT stays
+terminal, or the loop would grind against the same objection. The cost fence stays INSIDE the
+loop so every attempt proves its own provider and cost and a metered fallback is never retried
+into a second billed call. Bounded by `RECURSION_DECIDE_ATTEMPTS` (default 3).
+
+Both branches were exercised with a stub model rather than trusted by shape: malformed-then-valid
+gave 2 calls and a recorded decision; always-malformed gave 3 calls, a refusal, and nothing
+recorded. **Making that stub test permanent is the top open follow-up** - it exists only as a
+manual proof in the commit message.

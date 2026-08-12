@@ -555,3 +555,47 @@ likely to accumulate string literals.
 
 Same shape as `pgrep -f` matching its own argv, which produced a false `workers: 2` earlier the
 same night. **When a tool searches for a pattern, check whether the tool contains the pattern.**
+
+## Prove isolation BEFORE the first write, not after the queue looks wrong
+
+A directory is not a sandbox because it was copied. `.env` re-exported `RECURSION_ROOT` and every
+Python child in a "sandboxed" run wrote to production for an hour.
+
+The check is two lines and costs nothing:
+
+```sh
+head -N <script> > /tmp/hdr.sh          # through the .env source
+printf 'echo "ROOT=[$ROOT] RECURSION_ROOT=[$RECURSION_ROOT]"\n' >> /tmp/hdr.sh
+RECURSION_ROOT=<sandbox> bash /tmp/hdr.sh
+```
+
+**Run it before the first write of any isolated run**, and re-run it whenever the harness copies
+a config file. A sandbox that inherits production's configuration inherits production's targets.
+
+## An empty destination is a routing symptom, not an inert one
+
+The sandbox's journal not growing was recorded twice as an unexplained artifact. It was the
+symptom: the writes were landing somewhere else. "Nothing happened here" and "something happened
+elsewhere" are indistinguishable until you go and look at the elsewhere.
+
+**When a write appears to have vanished, find where it went before calling it a no-op.** `bash -x`
+answered in one line what an hour of reading the code did not.
+
+## Clean up by asserted provenance, never by position
+
+Ten contaminating decisions sat in the queue beside one legitimate scheduled decision. Deleting
+"everything pending" would have destroyed real operator state, and nothing about the queue
+distinguished them.
+
+Every record was tested for a positive provenance signature before being touched, and a control
+counted anything that failed the test. That control found the one genuine record. **A cleanup
+without a foreign-record control is a deletion with extra steps.**
+
+## Use the supported transition, even when a file move would be faster
+
+The decision journal is append-only and is the recovery source: deleting projections just has
+`import-journal` recreate them. `pending -> failed` is not a legal direct transition either - a
+decision must be claimed first, then failed with a reason.
+
+Going through `claim-pending` then `fail` leaves an auditable trail that says an operator did
+this and why. Hand-moving files would have left state that looked like the system's own work.
