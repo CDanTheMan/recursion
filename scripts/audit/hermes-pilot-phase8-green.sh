@@ -71,6 +71,36 @@ grep -q 'goal.\+MUST BE AN IDENTIFIER, never a sentence' scripts/hermes-decide.s
 grep -qF '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$' scripts/hermes-decide.sh
 echo "ok    the decision prompt states the goal identifier constraint that normalization enforces"
 
+# The prompt is one double-quoted shell string, so anything the shell expands inside it is
+# deleted from what the model reads. Backticks around two verb names silently emptied them:
+# the model received "only Lucas can, on GitHub.  prepares a repo and  completes it". Guard the
+# CLASS, not those two words -- the only substitution the prompt may contain is $(build_brief).
+python3 - <<'PY'
+import re, sys
+lines = open('scripts/hermes-decide.sh', encoding='utf-8').read().split('\n')
+start = next(i for i, l in enumerate(lines) if l.startswith('PROMPT="'))
+end = next(i for i, l in enumerate(lines) if l.strip() == '$(build_brief)"')
+body = lines[start:end + 1]
+bad = [(start + i + 1, l) for i, l in enumerate(body) if '`' in l]
+subs = [(start + i + 1, m) for i, l in enumerate(body) for m in re.findall(r'\$\([^)]*\)', l)]
+unexpected = [(n, m) for n, m in subs if m != '$(build_brief)']
+if bad or unexpected:
+    for n, l in bad:
+        print('FAIL backtick in prompt line %d: %s' % (n, l.strip()[:90]), file=sys.stderr)
+    for n, m in unexpected:
+        print('FAIL unexpected substitution in prompt line %d: %s' % (n, m), file=sys.stderr)
+    raise SystemExit(1)
+PY
+echo "ok    the prompt string contains no shell expansion that would delete its own text"
+
+# conduct-hermes.sh takes this same lock on fd 8 and the actuator runs it on a 2s poll, so a
+# single non-blocking attempt loses roughly a third of all scheduled decision turns. Production
+# measured the lock held for 18 of 60 half-second samples.
+grep -qE '^flock -w "\$CONTROL_LOCK_WAIT_S" 9' scripts/hermes-decide.sh
+! grep -qE '^flock -n 9' scripts/hermes-decide.sh
+grep -q 'RECURSION_CONTROL_LOCK_WAIT_S' scripts/hermes-decide.sh
+echo "ok    the decision turn waits for the shared control lock instead of failing on first contention"
+
 grep -q 'claim-pending --kind work' scripts/conduct-hermes.sh
 grep -q 'RECURSION_PILOT_GLOBAL_CONCURRENCY' scripts/conduct-hermes.sh
 grep -q -- '--exclude-project' scripts/conduct-hermes.sh

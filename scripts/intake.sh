@@ -392,7 +392,19 @@ release) intake_lock || exit $?
       ACTIONS="$(coupled_actions "$ID" releasable "$@")" || exit $?
       CURRENT="$(sed -n 's/^status: *//p' "$F" | head -1)"
       if [ "$CURRENT" = open ]; then
-        [ "$(sed -n 's/^action_ids: *//p' "$F" | head -1)" = "$ACTIONS" ] \
+        EXISTING="$(sed -n 's/^action_ids: *//p' "$F" | head -1)"
+        # An open instruction with NO action evidence was never consumed: the action failed
+        # before its consume handshake, so there is nothing to reopen. Record the evidence and
+        # succeed -- refusing here strands the action, and the caller retries it forever
+        # (52 iterations at ~6s in production before the actuator was stopped). Nobody has
+        # claimed this instruction, so adopting the first claimant overwrites no evidence, and
+        # a release by a DIFFERENT action still mismatches below and still fails closed.
+        if [ -z "$EXISTING" ]; then
+          atomic_instruction_transition "$F" open "$ACTIONS" \
+            "action failed before consume; instruction never left open: $ACTIONS" || exit $?
+          echo "released $ID -> $ACTIONS (never consumed)"; exit 0
+        fi
+        [ "$EXISTING" = "$ACTIONS" ] \
           || { echo "intake: reopened instruction $ID has different action evidence" >&2; exit 2; }
         echo "released $ID -> $ACTIONS (already)"; exit 0
       fi

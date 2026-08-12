@@ -35,9 +35,18 @@ log(){ echo "[$(date -Is)] decide: $*" | tee -a "$LOG" >&2; }
 
 # Decision-time resync reads and fetches git truth. The actuator may mutate the same repos, so
 # both halves take one fail-closed lock instead of colliding through independent schedules.
+#
+# WAIT for it, do not try once. conduct-hermes.sh takes this same lock on fd 8, and since the
+# Phase 8 actuator became a persistent service it runs on a 2s poll: production measured the
+# lock held for 18 of 60 half-second samples, a ~30% duty cycle. With `flock -n` that lost
+# roughly a third of all scheduled decision turns outright, silently, one log line each.
+# The actuator holds it for well under a second; cycle.sh's longest observed hold is ~32s.
+# A timeout still fails closed here, on the same path and the same exit code.
 mkdir -p "$ROOT/state/.locks" || exit 70
+CONTROL_LOCK_WAIT_S="${RECURSION_CONTROL_LOCK_WAIT_S:-120}"
 exec 9>>"$ROOT/state/.locks/hermes-control.lock"
-flock -n 9 || { log "control lock contended; refusing overlapping planner/sync work"; exit 73; }
+flock -w "$CONTROL_LOCK_WAIT_S" 9 \
+  || { log "control lock still held after ${CONTROL_LOCK_WAIT_S}s; refusing overlapping planner/sync work"; exit 73; }
 
 # The verbs Hermes may choose. This list is the contract: conduct-hermes.sh refuses anything
 # else, so adding a verb here without adding it there is inert, and vice versa.
@@ -203,8 +212,8 @@ Set "actor" to the project's bound pilot id for pilot-plan-propose and other pro
 verbs. Set it to "head-hermes" for approval/window verbs; those additionally require a separate
 authenticated Lucas instruction that names the exact object.
 
-You CANNOT provision a deploy key; only Lucas can, on GitHub. `portfolio-add` prepares a repo and
-`register` completes it, and when the key is missing the honest answer is 'escalate' asking him
+You CANNOT provision a deploy key; only Lucas can, on GitHub. 'portfolio-add' prepares a repo and
+'register' completes it, and when the key is missing the honest answer is 'escalate' asking him
 for one. Never report a repo as ready because you wrote a row about it.
 
 HARD RULES
