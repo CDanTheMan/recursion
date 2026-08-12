@@ -19,6 +19,10 @@ HOME="${HOME:-/root}"   # systemd gives a service no HOME; `set -u` then kills t
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
+# .env pins RECURSION_ROOT for the deployed checkout. Sourcing it must never RETARGET a
+# caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
+# into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
+RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 
 DATE="$(date +%F)"; STAMP="$(date +%H%M%S)"
 LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
