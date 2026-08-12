@@ -368,3 +368,96 @@ is the normal shape, not a lost record. `esc-0002` (`recursion: 1 local branch(e
 commits on no remote`) and `esc-0003` (`recursion: uncommitted changes in the working tree`)
 are both permanently true for the deployed checkout and will keep incrementing every cycle.
 That is expected noise, open since 2026-08-07.
+
+## An open instruction cannot be answered while PAUSE holds delivery at zero
+
+Instruction 486 ("Hey Hermes, is the box still paused?", 2026-08-09) is still `status: open`.
+It is what drives `heartbeat signal=brief reason=unanswered inbox escalation` on every cycle.
+Answering it means delivering a reply, and PAUSE forces `deliver=0`, so the escalation is
+structurally unresolvable until PAUSE lifts. Expected noise; not a fault, and not evidence
+that intake is broken.
+
+## Two crons on the same minute is a permanent loss, not a race
+
+`recursion-cycle` and `recursion-decide` were both installed at `15 */3 * * *`. They share
+`state/.locks/hermes-control.lock`, taken with `flock -n`, so the loser exits 73 immediately.
+Because the schedules are identical rather than merely close, the same one loses every time --
+the decision turn is not "occasionally skipped", it never runs. The symptom is a single log
+line in a file nobody reads, and an executive that appears to be ignoring its operator.
+
+**Check `loop/logs/<date>-decide.log` for `control lock contended` before concluding the model
+is idle or unresponsive.**
+
+## A prompt statement is load-bearing state, and it goes stale like any other
+
+Two of the four gate 5 blockers were sentences, not code. The RUNTIME/PAUSE block asserted a
+verb set that Phase 8 had widened, and the decision-block spec named a field without its
+constraint. Both were true when written. Both silently produced exactly the behaviour they
+described -- the model reasoned back the stale sentence nearly verbatim.
+
+The machinery had been tested and was correct in both cases. **A green audit of the executable
+path says nothing about whether the prompt describes it accurately**, and the model cannot
+discover the discrepancy from inside the prompt. When a verb set, a field constraint or a
+permission changes, grep the prompts for the old claim.
+
+## A grep assertion over wrapped shell text passes vacuously
+
+The obvious check for the stale PAUSE claim -- `grep -q "only executable verb while paused is
+'noop'"` -- could never match, because the sentence was split across two `echo` lines:
+
+```sh
+echo "PAUSED - execution is halted. You may still decide; the only"
+echo "executable verb while paused is 'noop'. Say what you WOULD do and why."
+```
+
+It passed against both the fixed and the broken file. Running the assertions against
+`git show origin/master:<file>` showed 3 of 4 failing where 4 were expected, which is the only
+reason it was caught.
+
+**Run every new assertion against the pre-fix bytes and count the failures.** A test that
+cannot fail is not evidence, and prose assertions over shell heredocs and multi-line `echo`
+blocks are unusually prone to this.
+
+## Replay a real failed artifact rather than building a fixture for it
+
+The four days of `could not be normalized` gave no cause -- the message names the step, not the
+field. Piping the exact model output from `loop/logs/*-decide-*.out` through
+`decision-queue.py normalize` in a clone returned `ERR goal_id is not a canonical identifier`
+in one command. A hand-built fixture would have carried whatever `goal` value the author
+thought was normal, and would most likely have passed.
+
+## `&` in a sed replacement expands to the whole match
+
+Replacing a crontab line whose text contains `&&` with `sed "s|old|$NEW|"` installed a doubled,
+malformed line, because sed treats an unescaped `&` in the replacement as "everything that
+matched". Shell command lines are full of `&&`, so this fires exactly where it does the most
+damage - service definitions, cron entries, systemd `ExecStart` lines.
+
+Use a literal replacement instead, and assert the match count:
+
+```python
+n = sum(1 for l in lines if l == OLD)
+assert n == 1
+out = [NEW if l == OLD else l for l in lines]
+```
+
+## Three of five structural checks passed on the corrupted line
+
+The malformed crontab entry still satisfied "exactly one line changed", "no longer shares a
+minute with the cycle", and "still five recursion lines". Every one of those is a *property* of
+the result, and the corruption preserved all three. What caught it was comparing the line to its
+**exact expected bytes**.
+
+**A post-condition that describes a shape cannot detect a wrong value of that shape.** At least
+one check per mutated object must be full-value equality against the literal you intended to
+write.
+
+## Take the backup before the apply, not after the verify
+
+The corruption was live in production's crontab for the duration of one command. Recovery was
+uneventful only because the backup, its manifest and an armed `ROLLBACK.sh` were already on disk
+before the first byte was written. Restoring the crontab alone, and leaving the pilot change
+that had verified correctly, was possible because the two objects were backed up separately.
+
+**Back up each mutated object as its own artifact**, so a partial failure can be partially
+reverted instead of forcing an all-or-nothing rollback of work that succeeded.

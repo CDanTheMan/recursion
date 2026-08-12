@@ -1527,3 +1527,210 @@ reaches empty instead of oscillating on an undrainable record.
 Both fixes exist only on the review branch. Production still runs the merged `ecc93de` bytes with
 PAUSE asserted, cron active, and no actuator installed. A gate 3 retry needs this branch reviewed
 and merged first, then a fresh PAUSE-held preflight and its own authorization.
+
+## Gate 4 closed: bounded model and capacity limits (2026-08-12T03:40Z)
+
+Lucas authorized the gate 4 configuration. Four keys were appended to `/opt/recursion/.env`
+(mode 600, root:root, gitignored, 12 keys -> 16), backed up first:
+
+```text
+RECURSION_PILOT_MODEL=gpt-5.6-terra
+RECURSION_PILOT_GLOBAL_CONCURRENCY=3
+RECURSION_MODEL_ALIAS_SONNET_ROUTINE=sonnet
+RECURSION_MODEL_ALIAS_OPUS_REVIEW=opus
+```
+
+The full regression suite ran against the merged tree (`6349d4f2`, PR #40) and is green
+end to end:
+
+```text
+START=03:13:07Z  END=03:40:34Z
+BASELINE_SUITES=19  BASELINE_FAILED_SUITES=0  baseline RC=0
+phase1..phase8 RC=0     live-phase1 RC=0
+```
+
+Phase 8, which failed before the reviewed-prefix repair, is RC=0. Gate 4 is closed.
+
+The first unattended cron cycle fired at `03:15:25Z` with the actuator live and behaved as
+designed: `portfolio observed (PAUSE: fetch/status only)`, `intake 0 ingested, watermark
+486 -> 486`, `brief done (deliver=0)`, `paused: skipping plan/drain/conduct (execution)`, no
+`loop: board` commit, journals unchanged.
+
+## Gate 5 preflight: four blockers, three of them new (2026-08-12T03:45Z)
+
+Gate 5 is "synthesize and approve one exact pilot plan and bounded pilot window". Its
+machinery is proven by phase8-green. What the preflight measured is that **the inputs never
+reach it**. All four blockers below fail silently -- each one presents as "Hermes ignored the
+instruction", which is the hardest failure mode to diagnose and the same species that cost
+gate 3 an attempt.
+
+### B0 - every model decision has been discarded at normalization for four days
+
+`loop/logs/<date>-decide.log` for 2026-08-07, 08-08, 08-09 and 08-10 each end:
+
+```text
+decide: decision: noop - <reasoning>
+decide: REFUSED - decision could not be normalized to schema v1
+```
+
+Replaying the real 08-10 model output through `scripts/decision-queue.py normalize` in a
+clone gives the exact cause:
+
+```text
+decision-queue: ERR goal_id is not a canonical identifier
+```
+
+The model wrote `"goal": "PAUSE safety: preserve operational awareness while execution
+remains halted"` -- a purpose sentence. Substituting `"goal": "goal-pause-safety"` and
+changing nothing else, normalize returns RC=0 with a complete canonical record. The
+identifier was the only fault.
+
+The trusted artifact agrees: production's `state/decisions.jsonl` holds six records, all
+`noop`, and record 6 carries `goal_id='architecture-rebase'` -- the shape that works. The
+five earlier ones are the pre-schema legacy noops with no `goal_id` at all.
+
+Cause: the prompt's decision block said `"goal":"existing goal, or the fresh proposed goal
+id"` and never stated the constraint (`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$` -- no spaces, no
+colons). **Not** a structural impossibility: `noop` normalizes fine with an identifier, and
+has before. It is a prompt-precision defect with a 100% failure rate over the observed
+window.
+
+### B1 - the decide cron never runs while the cycle cron runs
+
+Both are scheduled on the same minute:
+
+```text
+15 */3 * * *  scripts/cycle.sh          # recursion-cycle
+15 */3 * * *  scripts/hermes-decide.sh  # recursion-decide
+```
+
+`hermes-decide.sh` takes `state/.locks/hermes-control.lock` with `flock -n` and exits 73 on
+contention. The only fire since cron resumed at gate 2:
+
+```text
+[2026-08-12T03:15:01Z] decide: control lock contended; refusing overlapping planner/sync work
+```
+
+This is systematic, not intermittent -- the cycle wins the lock every time because the two
+entries share a minute. The decision turn has produced nothing since cron came back.
+A cron edit is Lucas's under rule 3.
+
+### B2 - the prompt told the model noop was its only option under PAUSE
+
+`scripts/hermes-decide.sh` RUNTIME/PAUSE block, pre-fix:
+
+```text
+PAUSED - execution is halted. You may still decide; the only
+executable verb while paused is 'noop'. Say what you WOULD do and why.
+```
+
+`conduct-hermes.sh` admits six verbs under PAUSE (`noop`, `pilot-plan-propose`,
+`pilot-plan-approve`, `pilot-window-open`, `pilot-window-close`, `assist-answer`), and gate 5
+*requires* `pilot-plan-propose` to be emitted while PAUSE is still asserted -- `project-pilot.py`
+refuses a window unless PAUSE is present. The model obeyed the stale line verbatim; its 08-10
+reasoning reads "no execution-capable verb is permitted".
+
+`build_pilot_brief`'s own PAUSE block ("no worker may run") was already correct. Only the Head
+Hermes one was stale.
+
+### B3 - the chosen pilot has zero worker capacity in two places, not one
+
+`project-pilot.py` window_action:
+
+```python
+"max_inflight_workers": min(int(pilot.get("concurrency_limit") or 0),
+                            int((pilot.get("budget") or {}).get("max_inflight_workers") or 0))}
+if record["max_inflight_workers"] < 1: fail("pilot window has zero worker capacity")
+```
+
+`pilot-golden-stallion-client.json` has `concurrency_limit: 0` **and**
+`budget.max_inflight_workers: 0`. The earlier note in this document ("raise that pilot's
+`max_inflight_workers` to 1") is half the fix -- the `min()` still yields 0. A third bound
+applies at dispatch: `project-reconcile.py` takes `min(concurrency_limit, max_inflight_workers,
+goal.budget.max_concurrency)`, so the plan's own goal budget must carry `max_concurrency >= 1`
+as well.
+
+### B4 - the approval instructions must go to #general, not the project topic
+
+`require_lucas_instruction` demands `principal in RECURSION_INTAKE_ALLOW` (default
+`8913126684`) **and** `routing_target == "head-hermes"`. It then reads only the body under a
+`## INSTRUCTION` heading, up to the next `##`, tokenized on
+`[A-Za-z0-9][A-Za-z0-9._/-]{0,127}`, and requires every bound to appear as a bare token.
+
+So the approve and window instructions go to **Head Hermes, topic 1 (#general)** -- posting
+them in the project topic fails closed -- and must literally contain the plan id, the sha256,
+the goal id, the window id and the seconds.
+
+### Fixes written
+
+B0 and B2 are on `review/hermes-phase8-gate5-decide-turn` (`4f4aca5`). `phase8-green` gains
+both assertions. The stale-claim assertion is anchored on the single-line substring present in
+the pre-fix bytes: the natural phrasing spanned two `echo` lines and **passed vacuously** until
+a control against `origin/master`'s file showed only 3 of 4 assertions could fail. Re-run after
+the fix: 4/4 fail on the pre-fix file, 4/4 pass on the patched one.
+
+B1 (cron) and B3 (pilot capacity) are Lucas's, and neither is code.
+
+## Gate 5 preconditions B1 and B3 applied (2026-08-12T03:52Z)
+
+Lucas authorized the cron fix and the recommended capacity settings. Both are live and
+verified 18/18. Backup and armed rollback:
+`/var/backups/recursion/gate5-preconditions-20260812T035216Z` (root-owned 0700, manifest
+verifies, `ROLLBACK.sh` restores both).
+
+**B1.** The decide entry was restored to `install-cron.sh`'s reviewed default. Production had
+drifted to the cycle's own minute; the installer's default exists precisely to keep the two off
+the same lock:
+
+```text
+before: 15 */3 * * *  ... scripts/hermes-decide.sh  # recursion-decide
+after:  45 */6 * * *  ... scripts/hermes-decide.sh  # recursion-decide
+```
+
+One line changed; the brief, cycle and watch entries are byte-identical to the backup. Next
+fire is `06:45Z`. **Restoring the reviewed value was preferred over inventing a third schedule**
+- the drift is what caused the defect.
+
+**B3.** `pilot-golden-stallion-client.json`, the two fields the `min()` reads:
+
+```diff
+-  "concurrency_limit": 0,
++  "concurrency_limit": 1,
+-    "max_inflight_workers": 0,
++    "max_inflight_workers": 1,
+```
+
+The whole diff is those four lines. The file still validates as a `pilot` control-plane object,
+and the other eight pilots remain at `0/0` - verified by re-reading all nine, not by inspecting
+the one that changed.
+
+Unchanged throughout: PAUSE `919371834778def8...`, gateway active, actuator active, zero open
+windows, zero pending queue entries.
+
+### The apply step corrupted the crontab on the first attempt
+
+The transaction's `sed` replacement used the new crontab line as the replacement text. That line
+contains `&&`, and **`&` in a sed replacement expands to the entire match**, so the installed
+line became a doubled, malformed entry:
+
+```text
+45 */6 * * * cd /opt/recursion 15 */3 * * * cd /opt/recursion && ... # recursion-decide15 */3 ...
+```
+
+Three of the verify checks passed on that corrupt line - "exactly one crontab line changed",
+"decide no longer shares a minute with cycle", and "still 5 recursion lines" were all true of
+it. **Only the exact-value comparison caught it.** It was restored from the backup taken
+seconds earlier and re-applied with a literal Python line replacement that asserts it matched
+exactly one line, then re-verified 18/18 from scratch.
+
+## Deployment path for the gate 5 prompt fix
+
+Production is a git checkout on `loop/auto`, and its HEAD `59b13c61` is
+`Merge commit '6349d4f2' into loop/auto` - the merged master. Its `scripts/hermes-decide.sh`
+hashes identical to its own HEAD, so the checkout is clean.
+
+The B0/B2 prompt fix therefore reaches production as: push
+`review/hermes-phase8-gate5-decide-turn` -> Lucas merges to `master` -> merge `master` into
+`loop/auto` on the box under the usual CAS gate. **Until that merge lands, production still runs
+the old prompt**, so a decide turn would keep discarding its output at normalization. Gate 5
+should not begin before the deploy.

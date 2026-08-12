@@ -103,8 +103,15 @@ build_brief(){
   echo; echo "===== DECISIONS (open calls you must honour) ====="
   cat state/DECISIONS.md 2>/dev/null || echo "(DECISIONS.md absent)"
   echo; echo "===== RUNTIME: PAUSE ====="
-  if [ -f state/PAUSE ]; then echo "PAUSED — execution is halted. You may still decide; the only"
-    echo "executable verb while paused is 'noop'. Say what you WOULD do and why."
+  if [ -f state/PAUSE ]; then echo "PAUSED — worker dispatch, gates, publication and every"
+    echo "other execution verb are halted. Deciding is awareness and continues. These six verbs"
+    echo "REMAIN EXECUTABLE while paused and are the only ones that are:"
+    echo "  noop  pilot-plan-propose  pilot-plan-approve  pilot-window-open  pilot-window-close"
+    echo "  assist-answer"
+    echo "So an open Lucas instruction asking for a bounded pilot plan is ANSWERABLE right now:"
+    echo "propose the plan. Opening a window while paused arms it; it does not lift PAUSE, and"
+    echo "pilot-window-open REQUIRES PAUSE to still be present. For anything else, say what you"
+    echo "WOULD do and why, and choose noop."
     cat state/PAUSE; else echo "not paused"; fi
   echo; echo "===== TASKS (canonical state) ====="
   for f in state/tasks/*.md; do
@@ -229,11 +236,18 @@ HARD RULES
 Reply with reasoning first, then EXACTLY this block and nothing after it:
 
 ===DECISION-START===
-{\"actor\":\"head-hermes or the exact bound pilot id\",\"verb\":\"...\",\"args\":[\"...\"],\"text\":\"prose, for the authoring verbs only\",\"plan\":\"complete object for pilot-plan-propose only; omit otherwise\",\"instruction_id\":\"exact open instruction id, or omit\",\"project\":\"...\",\"goal\":\"existing goal, or the fresh proposed goal id\",\"why\":\"one or two sentences\",\"confidence\":\"high|medium|low\",\"wrong_if\":\"the specific observable that would mean this was the wrong call\"}
+{\"actor\":\"head-hermes or the exact bound pilot id\",\"verb\":\"...\",\"args\":[\"...\"],\"text\":\"prose, for the authoring verbs only\",\"plan\":\"complete object for pilot-plan-propose only; omit otherwise\",\"instruction_id\":\"exact open instruction id, or omit\",\"project\":\"...\",\"goal\":\"goal-slug-like-this\",\"why\":\"one or two sentences\",\"confidence\":\"high|medium|low\",\"wrong_if\":\"the specific observable that would mean this was the wrong call\"}
 ===DECISION-END===
 
 'goal' and 'wrong_if' are mandatory. A decision that cannot name the goal it serves, or what
 would make it wrong, is a guess — choose 'escalate' instead of writing one.
+
+'goal' MUST BE AN IDENTIFIER, never a sentence. It has to match ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$
+- no spaces, no colons, no punctuation beyond . _ and -. Name the existing goal id, or the new
+goal id you are proposing. A purpose statement in this field is rejected at normalization and
+the whole decision is DISCARDED, silently, so the run reads as if you never decided.
+  good: architecture-rebase   goal-gsc-client-reconstruction   goal-pause-safety
+  bad:  PAUSE safety: preserve operational awareness while execution remains halted
 
 =================== STATE (ground truth, re-derived this run) ===================
 $(build_brief)"
