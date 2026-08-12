@@ -48,6 +48,22 @@ LEGACY_PRE_SCHEMA_NOOP_KEYS = frozenset({
     "args", "confidence", "cost_usd", "goal", "project", "provider", "text", "ts",
     "verb", "why", "wrong_if",
 })
+LEGACY_PRE_PROVENANCE_NOOP_SHA256 = (
+    # Second reviewed compatibility entry, same rule as the block above: an exact immutable
+    # line digest, never a shape match. This 2026-08-09 record carries schema_version 1 and
+    # a normalized id, so it clears the pre-schema quarantine, but it predates the
+    # decision_source/routed_decider provenance model. normalize() can recompute its payload
+    # digest; it cannot invent an authority, and forging one is exactly what the provenance
+    # check exists to prevent. The record is a noop that can never actuate, so it is
+    # recorded and never replayed.
+    "17e365c897961b6699ffc868b42e9ba469a1c6b5797798686224d6a4bb73165b",
+)
+LEGACY_REVIEWED_NOOP_SHA256 = LEGACY_PRE_SCHEMA_NOOP_SHA256 + LEGACY_PRE_PROVENANCE_NOOP_SHA256
+LEGACY_PRE_PROVENANCE_NOOP_KEYS = frozenset({
+    "actor", "args", "arguments", "confidence", "cost_usd", "goal", "goal_id", "id",
+    "idempotency_key", "project", "provider", "reason", "schema_version", "status", "ts",
+    "usage", "verb", "why", "wrong_if",
+})
 
 
 def root() -> Path:
@@ -304,19 +320,48 @@ def append_journal(base: Path, record: dict) -> bool:
 def reviewed_legacy_marker(raw: dict, line: str, number: int, record: dict) -> dict | None:
     """Return a non-executable marker only for an exact reviewed pre-schema PAUSE noop."""
     source_sha256 = hashlib.sha256(line.encode()).hexdigest()
-    if source_sha256 not in LEGACY_PRE_SCHEMA_NOOP_SHA256:
-        return None
-    if (
-        set(raw) != LEGACY_PRE_SCHEMA_NOOP_KEYS
-        or raw.get("verb") != "noop"
-        or raw.get("args") != []
-        or raw.get("confidence") != "high"
-        or raw.get("cost_usd") != "0.0"
-        or raw.get("provider") != "openai-codex"
-        or raw.get("text") != ""
-        or raw.get("project") not in {"recursion", "gsc"}
-        or not all(isinstance(raw.get(field), str) and raw[field] for field in ("goal", "ts", "why", "wrong_if"))
-    ):
+    if source_sha256 in LEGACY_PRE_PROVENANCE_NOOP_SHA256:
+        # Post-schema, pre-provenance. Requiring the provenance fields to be ABSENT is what
+        # keeps this from ever matching a record that merely carries a WRONG authority: such
+        # a record must keep failing closed, not become legacy state.
+        if (
+            set(raw) != LEGACY_PRE_PROVENANCE_NOOP_KEYS
+            or raw.get("verb") != "noop"
+            or raw.get("args") != []
+            or raw.get("arguments") != []
+            or raw.get("actor") != "head-hermes"
+            or raw.get("schema_version") != 1
+            or raw.get("provider") != "openai-codex"
+            or raw.get("project") != "recursion"
+            or raw.get("decision_source") is not None
+            or raw.get("routed_decider") is not None
+            or not all(
+                isinstance(raw.get(field), str) and raw[field]
+                for field in ("goal", "goal_id", "id", "ts", "why", "wrong_if")
+            )
+        ):
+            return None
+        classification = "reviewed-pre-provenance-noop"
+        disposition_reason = (
+            "reviewed historical PAUSE noop predates the decision-provenance model and must"
+            " not be replayed"
+        )
+    elif source_sha256 in LEGACY_PRE_SCHEMA_NOOP_SHA256:
+        if (
+            set(raw) != LEGACY_PRE_SCHEMA_NOOP_KEYS
+            or raw.get("verb") != "noop"
+            or raw.get("args") != []
+            or raw.get("confidence") != "high"
+            or raw.get("cost_usd") != "0.0"
+            or raw.get("provider") != "openai-codex"
+            or raw.get("text") != ""
+            or raw.get("project") not in {"recursion", "gsc"}
+            or not all(isinstance(raw.get(field), str) and raw[field] for field in ("goal", "ts", "why", "wrong_if"))
+        ):
+            return None
+        classification = "reviewed-pre-schema-noop"
+        disposition_reason = "reviewed historical PAUSE noop predates schema-v1 and must not be replayed"
+    else:
         return None
     marker_id = f"legacy-decision-{source_sha256[:24]}"
     return {
@@ -329,9 +374,9 @@ def reviewed_legacy_marker(raw: dict, line: str, number: int, record: dict) -> d
         "normalized_decision_id": record["id"],
         "project": raw["project"],
         "verb": "noop",
-        "classification": "reviewed-pre-schema-noop",
+        "classification": classification,
         "disposition": "not-enqueued",
-        "reason": "reviewed historical PAUSE noop predates schema-v1 and must not be replayed",
+        "reason": disposition_reason,
     }
 
 
@@ -434,9 +479,9 @@ def _line_text(raw: bytes) -> str:
 
 
 def _expected_legacy_markers(base: Path, journal: Path) -> dict[Path, dict]:
-    """Revalidate the permanently bounded five-row compatibility prefix."""
+    """Revalidate the permanently bounded reviewed compatibility prefix."""
     markers: list[dict] = []
-    for line in read_jsonl_prefix(journal, len(LEGACY_PRE_SCHEMA_NOOP_SHA256) + 1):
+    for line in read_jsonl_prefix(journal, len(LEGACY_REVIEWED_NOOP_SHA256) + 1):
         if line.value is None:
             continue
         raw = line.value
@@ -451,7 +496,7 @@ def _expected_legacy_markers(base: Path, journal: Path) -> dict[Path, dict]:
             continue
         break
     digests = tuple(marker["source_sha256"] for marker in markers)
-    if digests and digests != LEGACY_PRE_SCHEMA_NOOP_SHA256:
+    if digests and digests != LEGACY_REVIEWED_NOOP_SHA256[: len(digests)]:
         raise ValueError("reviewed legacy decision prefix is incomplete or out of order")
     return {legacy_marker_path(base, marker): marker for marker in markers}
 

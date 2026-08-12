@@ -1479,3 +1479,51 @@ decision" means going forward, so Lucas picks it.
 
 Gate 3 therefore remains open. Production is untouched by all of the above: the patch exists
 only on the review branch and in disposable fixtures.
+
+## Fix 1 landed: decision provenance is a validation requirement (option 2)
+
+Lucas chose option 2. The precondition stated when proposing it - that no current emitter omits
+provenance - was audited first, and it holds. The three live producers all set the field, and
+they set exactly the three values `conduct-hermes` accepts:
+
+```text
+scripts/hermes-decide.sh:300        decision_source = hermes-model
+scripts/notification-outbox.py:1122 decision_source = notification-reconciler
+scripts/project-reconcile.py:697    decision_source = project-reconciler
+```
+
+The change is in three places, kept in sync:
+
+- `scripts/validate-control-state.py` - `decision_source` added to `REQUIRED["decision"]` and to
+  the non-empty set, plus a closed `DECISION_SOURCES` enum. A decision that cannot actuate is now
+  rejected at validation instead of at actuation, where the failure was invisible.
+- `schemas/control-plane/v1/schema.json` - the published contract gains the same required field
+  and enum. Patched textually: re-serialising with `json.dumps` reformatted all 245 lines and made
+  the change unreviewable, so the edit is two anchored strings and the diff is five lines.
+- `scripts/decision-queue.py` - a second reviewed exact-hash allowlist entry,
+  `LEGACY_PRE_PROVENANCE_NOOP_SHA256`, holding the one historical record's stripped line digest
+  `17e365c897961b6699ffc868b42e9ba469a1c6b5797798686224d6a4bb73165b`, with its own key set,
+  classification `reviewed-pre-provenance-noop`, and shape assertions that require the provenance
+  fields to be **absent**. That last condition is the load-bearing one: a record carrying a
+  *wrong* authority must keep failing closed rather than being promoted to legacy state. The
+  prefix validator now spans both reviewed blocks in exact order.
+
+Measured in a disposable fixture against the real journal:
+
+```text
+import-journal            rc=0   pending=0   legacy=6
+new marker                id=legacy-decision-17e365c897961b6699ffc868
+                          classification=reviewed-pre-provenance-noop  disposition=not-enqueued
+positive control          decision WITH valid provenance          -> VALID
+negative control          decision_source='made-up-authority'     -> ERR invalid decision provenance
+negative control          decision_source absent                  -> ERR missing required field(s)
+conduct-hermes --paused-safe                                      -> RC=0, empty queue
+```
+
+The positive control matters as much as the negatives: it proves the schema change does not
+reject what the live emitters actually produce. The gate 3 blocker is resolved - the queue now
+reaches empty instead of oscillating on an undrainable record.
+
+Both fixes exist only on the review branch. Production still runs the merged `ecc93de` bytes with
+PAUSE asserted, cron active, and no actuator installed. A gate 3 retry needs this branch reviewed
+and merged first, then a fresh PAUSE-held preflight and its own authorization.
