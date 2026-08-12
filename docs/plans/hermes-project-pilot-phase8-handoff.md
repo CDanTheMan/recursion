@@ -1234,3 +1234,37 @@ phase1-remediation-20260809T233144Z-498061d8  (the cited successful Phase 1 depl
 The Phase 1 rollback venv `/usr/local/lib/hermes-agent/venv.pre-phase1-498061d8f1dc` is
 outside `/var/backups` and was not touched. The post-deployment suite was running throughout;
 its staging directory was protected and it was confirmed still running afterwards.
+
+## Post-deployment suite re-run (2026-08-12T00:20:34Z)
+
+The full suite was re-run against the **deployed** tree rather than the reviewed commit: a
+disposable `--no-hardlinks` clone pinned to `458ee92b63d1250e0704f563b3a4c499e3031289`, whose
+tree was first confirmed identical to production's. This validates the merge result including
+the eight awareness files, not only `ecc93de`.
+
+```text
+BASELINE_SUITES=19   BASELINE_FAILED_SUITES=0
+phase1=4s  phase2=26s  phase3=16s  phase4=8s  phase5=65s
+phase6=972s  phase7=300s  phase8=111s      all RC=0
+live-phase1 RC=0
+run 2026-08-11T23:52:25Z to 2026-08-12T00:20:34Z
+```
+
+Timings track the pre-deployment run closely (phase6 972s vs 969s, phase7 300s vs 307s,
+phase8 111s vs 113s), so the deployment introduced no performance regression. The live Phase 1
+audit passed this time because the driver was corrected to pass `RECURSION_ROOT=/opt/recursion`
+for the red audit specifically; that variable is the live root there and the code root
+everywhere else.
+
+Final state: `loop/auto` at `458ee92b...`, `master` and `origin/master` both at `ecc93de7...`
+and now genuinely in sync over a working fetch, status exactly `?? .env.bak.1786014440`, PAUSE
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`, gateway `active/running`
+with zero restarts, cron inactive, actuator absent, zero execution locks, zero processes with a
+working directory inside the checkout, and disk at 13 GB used of 38 GB (35%).
+
+Evidence manifest root for the complete preflight, transaction, closure and re-run record is
+`f7b0318a40f84b045f10a6f033b2773c87cf1d54c123510f93e58ab4be73a651` in
+`/var/backups/recursion/preflight-evidence-20260811T231032Z-ecc93de`.
+
+Gate 1 is closed and independently re-verified. Gate 2 (cron resume) is now unblocked, its
+prerequisite having been the self-repo fetch. Gates 3 through 7 are untouched.

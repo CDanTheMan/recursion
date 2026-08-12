@@ -173,6 +173,12 @@ done
 Observed 2026-08-11: a bare count read `1` while the CWD-qualified count read `0`, and the
 `1` was a test fixture.
 
+The CWD-qualified probe then has its own trap: it counts **itself**. Run from a shell that
+has `cd /opt/recursion`, it reports `2` (the script and its command substitution subshell)
+on an entirely idle box. Run the probe from outside the checkout - the same box reported
+`0`. A quiescence measurement taken from inside the directory being measured is measuring
+the observer.
+
 ## Production-specific facts that invalidate generic runbook steps
 
 ### Production `origin` cannot authenticate — objects must arrive by bundle
