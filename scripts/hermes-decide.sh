@@ -284,7 +284,9 @@ Reply with reasoning first, then EXACTLY this block and nothing after it:
 ===DECISION-END===
 
 
-'text' is REQUIRED and must be NON-EMPTY for every authoring verb, pilot-plan-propose included.
+'text' is REQUIRED and must be NON-EMPTY for every authoring verb -- exactly these eleven:
+roadmap-add, note, assist-answer, portfolio-add, pilot-plan-propose, pilot-plan-approve,
+pilot-window-open, pilot-window-close, pilot-task-create, pilot-block, pilot-escalate.
 Omitting it refuses the decision just as surely as malforming it. It is handed to those verbs as
 an argument, so it is filtered like a command line. All of the following are enforced:
   - required and non-empty for authoring verbs, at most 500 characters
