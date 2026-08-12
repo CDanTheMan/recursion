@@ -305,7 +305,7 @@ would make it wrong, is a guess — choose 'escalate' instead of writing one.
 
 AN INSTRUCTION THAT CANNOT BIND: the instruction's own history (its annotation lines) may show
 repeated failed actions with the SAME refusal — especially an authority or ownership refusal such
-as "instruction is not owned by this project pilot". That property comes from WHERE the message
+as \"instruction is not owned by this project pilot\". That property comes from WHERE the message
 was posted, not from your verb or actor choice, so NO decision you emit can ever satisfy it, and
 re-emitting the same verb loops forever. When you see two or more identical refusals in the
 instruction history: choose 'noop', and in 'text' state that the instruction cannot bind as
