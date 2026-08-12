@@ -44,8 +44,15 @@ drain_queue(){
   [ -x "$ROOT/scripts/decision-queue.py" ] \
     || { log "durable decision queue helper is absent"; return 74; }
   mkdir -p "$ROOT/state/.locks" || return 70
+  # WAIT, do not give up. hermes-decide.sh holds this same lock for its entire model call
+  # (~40s observed). An actuator that returns 73 during that window still leaves a claimed
+  # action behind, and its instruction coupling then fails before dispatch -- which is how a
+  # decision wedged in production on 2026-08-12. Skipping a poll is free; failing an action
+  # is not.
+  CONTROL_LOCK_WAIT_S="${RECURSION_CONTROL_LOCK_WAIT_S:-120}"
   exec 8>>"$ROOT/state/.locks/hermes-control.lock"
-  flock -n 8 || { log "control lock contended; refusing overlapping actuation"; return 73; }
+  flock -w "$CONTROL_LOCK_WAIT_S" 8 \
+    || { log "control lock still held after ${CONTROL_LOCK_WAIT_S}s; refusing overlapping actuation"; return 73; }
   import_error="$(python3 "$ROOT/scripts/decision-queue.py" import-journal 2>&1 >/dev/null)"
   import_rc=$?
   if [ "$import_rc" -ne 0 ]; then
