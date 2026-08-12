@@ -303,6 +303,15 @@ metric name like Sum|per-slot error|, refuses the ENTIRE decision, not just the 
 'goal' and 'wrong_if' are mandatory. A decision that cannot name the goal it serves, or what
 would make it wrong, is a guess — choose 'escalate' instead of writing one.
 
+AN INSTRUCTION THAT CANNOT BIND: the instruction's own history (its annotation lines) may show
+repeated failed actions with the SAME refusal — especially an authority or ownership refusal such
+as "instruction is not owned by this project pilot". That property comes from WHERE the message
+was posted, not from your verb or actor choice, so NO decision you emit can ever satisfy it, and
+re-emitting the same verb loops forever. When you see two or more identical refusals in the
+instruction history: choose 'noop', and in 'text' state that the instruction cannot bind as
+posted and where the corrected message should go. A successful noop closes the instruction and
+lets the queue reach the corrected one behind it.
+
 'goal' MUST BE AN IDENTIFIER, never a sentence. It has to match ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$
 - no spaces, no colons, no punctuation beyond . _ and -. Name the existing goal id, or the new
 goal id you are proposing. A purpose statement in this field is rejected at normalization and
