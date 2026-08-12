@@ -128,6 +128,88 @@ if bad:
 PY
 echo "ok    no set -u script dereferences HOME unguarded (systemd services have none)"
 
+# THE PROMPT MUST TEACH WHAT THE VALIDATOR ENFORCES. Rehearsed against the live model: every
+# rejected plan failed on a literal the prompt never stated. "complete Phase 6 budget" did not
+# name the nine budget keys, so the model wrote prose. The prompt said "deadlines" and
+# "independent verification" -- not the key names -- and the model copied them. Six fields are
+# enum-constrained and the prompt listed no values, so the model guessed plausibly and wrongly
+# every time (model_alias "claude", verifier_model_alias "codex", network_policy "offline-deny").
+#
+# Read the contract out of validate_plan's AST rather than spot-checking today's strings, so a
+# field added to the validator fails this audit until the prompt teaches it.
+python3 - <<'PY'
+import ast, sys
+
+src = open('scripts/project-pilot.py', encoding='utf-8').read()
+fn = next(n for n in ast.walk(ast.parse(src))
+          if isinstance(n, ast.FunctionDef) and n.name == 'validate_plan')
+
+def strings(node):
+    if isinstance(node, ast.Set):
+        return {e.value for e in node.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)}
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return {node.value}
+    return set()
+
+required = set()
+for node in ast.walk(fn):
+    # required = {...} and required_budget = {...}
+    if isinstance(node, ast.Assign):
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id in ('required', 'required_budget'):
+                required |= strings(node.value)
+    # task.get("field") != "value"   /   task.get("field") not in {"a", "b"}
+    if isinstance(node, ast.Compare):
+        left = node.left
+        if (isinstance(left, ast.Call) and isinstance(left.func, ast.Attribute)
+                and left.func.attr == 'get'
+                and isinstance(left.func.value, ast.Name) and left.func.value.id == 'task'
+                and left.args and isinstance(left.args[0], ast.Constant)):
+            required.add(left.args[0].value)
+            for comparator in node.comparators:
+                required |= strings(comparator)
+
+prompt = open('scripts/hermes-decide.sh', encoding='utf-8').read()
+missing = sorted(term for term in required if term not in prompt)
+if missing:
+    print('FAIL the plan prompt never states %d enforced literal(s): %s'
+          % (len(missing), ', '.join(missing)), file=sys.stderr)
+    raise SystemExit(1)
+print('    (%d enforced literals, all present in the prompt)' % len(required))
+PY
+echo "ok    the plan prompt states every key and enum value that validate_plan enforces"
+
+# A caller-supplied RECURSION_ROOT must survive .env. These scripts compute ROOT from
+# ${RECURSION_ROOT:-<script dir>} and THEN source .env with `set -a`; production's .env pins
+# RECURSION_ROOT=/opt/recursion, so from that line on the shell's ROOT and the exported
+# RECURSION_ROOT disagree, and every python child reads the environment. On 2026-08-12 that made
+# rehearsals run against a copy enqueue TEN decisions into production, with nothing to warn:
+# the parent's own file writes went to the copy, so the split was invisible until the live queue
+# was inspected. ROOT and RECURSION_ROOT must agree after .env is sourced.
+python3 - <<'PY'
+import glob, re, sys
+# Assembled, not spelled: a checker that writes out its own pattern matches itself.
+ENV_SRC = re.compile(r'^\[ -f \.env \]', re.M)
+ROOT_FROM_ENV = '{RECURSION_ROOT:-'
+REASSERT = 'RECURSION_ROOT="' + '$ROOT"; export RECURSION_ROOT'
+bad = []
+for path in sorted(set(glob.glob('scripts/**/*.sh', recursive=True))):
+    text = open(path, encoding='utf-8', errors='replace').read()
+    m = ENV_SRC.search(text)
+    if not m or ROOT_FROM_ENV not in text:
+        continue
+    tail = text[m.end():]
+    if REASSERT not in tail:
+        bad.append(path)
+for path in bad:
+    print('FAIL %s sources .env without re-asserting the caller root after it' % path,
+          file=sys.stderr)
+if bad:
+    raise SystemExit(1)
+print('    (every .env-sourcing script re-asserts the caller root)')
+PY
+echo "ok    sourcing .env cannot retarget a caller-supplied root"
+
 grep -q 'claim-pending --kind work' scripts/conduct-hermes.sh
 grep -q 'RECURSION_PILOT_GLOBAL_CONCURRENCY' scripts/conduct-hermes.sh
 grep -q -- '--exclude-project' scripts/conduct-hermes.sh

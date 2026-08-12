@@ -22,6 +22,10 @@ export LC_ALL=C
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
+# .env pins RECURSION_ROOT for the deployed checkout. Sourcing it must never RETARGET a
+# caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
+# into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
+RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 
 MODE="${1:-}"
 DATE="$(date +%F)"; STAMP="$(date -u +%FT%TZ)"; RUN_TAG="$(date -u +%Y%m%dT%H%M%SZ)-$$"
@@ -197,12 +201,43 @@ goes in the "text" field, not in args.
 
 PROJECT-PILOT PLAN SYNTHESIS - a fresh project instruction becomes a new bounded plan; never
 reuse a historical goal merely because it already exists.
-  pilot-plan-propose <project> <plan-id> + text and a top-level "plan" object containing:
-    schema_version=1, id, project_id; one goal with a NEW id, outcome, acceptance_suite,
-    falsifier, and complete Phase 6 budget; and 1..16 tasks with NEW ids, intent, dependencies,
-    allowed_paths, non_goals including credentials/merge/deploy, acceptance, model_alias,
-    verifier_model_alias, deadlines, network_policy, worker-result-v1 evidence_contract,
-    independent verification, expected_change, and gate_files.
+  pilot-plan-propose <project> <plan-id> + text and a top-level \"plan\" object.
+    THE SCHEMA BELOW IS EXACT. Every key is required, and where alternatives are listed those are
+    the ONLY accepted values. Validation happens later, in the actuator, and rejects the plan
+    WHOLE -- a near-miss produces nothing anyone will see, so copy the key names literally.
+
+    plan: {\"schema_version\":1, \"id\":\"<the plan-id in your args>\", \"project_id\":\"<project>\",
+           \"goal\":{...}, \"tasks\":[ 1..16 of them ]}        serialized under 64 KiB
+
+    goal: {\"id\":\"<a NEW goal id, never one that already exists>\",
+           \"outcome\":\"<one line>\", \"falsifier\":\"<one line>\",
+           \"acceptance_suite\":\"<a real command; true, :, exit 0 are refused as vacuous>\",
+           \"budget\":{\"max_concurrency\":0+, \"max_tokens\":0+, \"max_cost_usd\":0+,
+                     \"max_wall_clock_seconds\":0+, \"max_task_attempts\":0+, \"max_failures\":0+,
+                     \"max_review_queue\":1+, \"max_publish_attempts\":0+,
+                     \"publication_required\":true or false}}
+      ALL NINE budget keys are required and are NUMBERS; publication_required is a boolean.
+      They are not phase descriptions -- narrative belongs in \"text\".
+
+    task: {\"id\":\"<NEW>\", \"intent\":\"<one line>\",
+           \"dependencies\":[ids of OTHER tasks in this plan; may be empty],
+           \"allowed_paths\":[paths inside the project charter],
+           \"non_goals\":[must contain the literal strings credentials, merge, deploy],
+           \"acceptance\":\"<a real command>\",
+           \"worker_class\":\"<string>\",
+           \"engine\":\"claude\",
+           \"model_alias\":\"sonnet-routine\" or \"opus-complex\",
+           \"verifier_model_alias\":\"opus-review\" or \"opus-complex\",
+           \"deadline_seconds\":1+, \"verifier_deadline_seconds\":1+,
+           \"network_policy\":\"provider-only\" or \"none\",
+           \"evidence_contract\":\"worker-result-v1\",
+           \"verification\":\"independent\",
+           \"expected_change\":\"required\" or \"optional\",
+           \"gate_files\":[unique paths]}
+      The keys are deadline_seconds and verifier_deadline_seconds, NOT \"deadlines\".
+      The key is verification with the value \"independent\", NOT \"independent_verification\".
+      \"deployment\" is not \"deploy\". model_alias and verifier_model_alias name the ROLE ALIAS,
+      never an underlying model: \"claude\", \"codex\", \"sonnet\", \"opus\" are all invalid there.
   pilot-plan-approve <project> <plan-id> <sha256>  materialize only when Lucas's correlated
     instruction itself names that exact plan id and digest.
   pilot-window-open <project> <goal-id> <window-id> <seconds>  admit that exact approved goal;
@@ -248,6 +283,21 @@ Reply with reasoning first, then EXACTLY this block and nothing after it:
 {\"actor\":\"head-hermes or the exact bound pilot id\",\"verb\":\"...\",\"args\":[\"...\"],\"text\":\"prose, for the authoring verbs only\",\"plan\":\"complete object for pilot-plan-propose only; omit otherwise\",\"instruction_id\":\"exact open instruction id, or omit\",\"project\":\"...\",\"goal\":\"goal-slug-like-this\",\"why\":\"one or two sentences\",\"confidence\":\"high|medium|low\",\"wrong_if\":\"the specific observable that would mean this was the wrong call\"}
 ===DECISION-END===
 
+
+'text' is REQUIRED and must be NON-EMPTY for every authoring verb, pilot-plan-propose included.
+Omitting it refuses the decision just as surely as malforming it. It is handed to those verbs as
+an argument, so it is filtered like a command line. All of the following are enforced:
+  - required and non-empty for authoring verbs, at most 500 characters
+  - ONE line: no newlines, no control characters
+  - may not begin with a '-'
+  - none of these characters ANYWHERE:  ;  &  |  <  >
+  - no backticks, and no dollar sign immediately followed by an open parenthesis or open brace
+  - no Markdown: no leading #, no **bold**, no __underline__, no [label](link)
+The character rule catches ordinary punctuation. A semicolon joining two clauses, or a pipe in a
+metric name like Sum|per-slot error|, refuses the ENTIRE decision, not just the field. Write
+\"and\" instead of a semicolon and name the metric in words. Only 'text' is filtered this way --
+'why', 'wrong_if' and the plan object are not.
+
 'goal' and 'wrong_if' are mandatory. A decision that cannot name the goal it serves, or what
 would make it wrong, is a guess — choose 'escalate' instead of writing one.
 
@@ -261,7 +311,19 @@ the whole decision is DISCARDED, silently, so the run reads as if you never deci
 =================== STATE (ground truth, re-derived this run) ===================
 $(build_brief)"
 
-log "deciding (model=$MODEL)"
+# A malformed reply is retried; nothing else is. Roughly one run in four emitted an unbalanced
+# brace in the nested plan object, and with no retry the whole turn was discarded until the next
+# cron six hours later. The COST FENCE below stays inside the loop deliberately: each attempt
+# proves its own provider and cost, so a metered fallback still refuses on the attempt that
+# caused it and is never retried into a second billed call.
+DECIDE_ATTEMPTS="${RECURSION_DECIDE_ATTEMPTS:-3}"
+case "$DECIDE_ATTEMPTS" in ''|*[!0-9]*) log "invalid RECURSION_DECIDE_ATTEMPTS"; exit 4 ;; esac
+[ "$DECIDE_ATTEMPTS" -ge 1 ] || { log "RECURSION_DECIDE_ATTEMPTS must be at least 1"; exit 4; }
+DECIDE_ATTEMPT=0
+while :; do
+DECIDE_ATTEMPT=$((DECIDE_ATTEMPT+1))
+
+log "deciding (model=$MODEL, attempt $DECIDE_ATTEMPT/$DECIDE_ATTEMPTS)"
 if ! hermes -z "$PROMPT" -m "$MODEL" --usage-file "$USAGE" >"$OUT" 2>>"$LOG"; then
   log "FAILED — hermes returned non-zero; see $LOG"
   exit 1
@@ -300,7 +362,11 @@ fi
 # --- extract + validate the decision ------------------------------------------------------
 BLOCK="$(awk '/^===DECISION-START===/{f=1;next} /^===DECISION-END===/{f=0} f' "$OUT")"
 if [ -z "${BLOCK//[[:space:]]/}" ]; then
-  log "REFUSED — no decision block in the reply"; exit 4
+  if [ "$DECIDE_ATTEMPT" -lt "$DECIDE_ATTEMPTS" ]; then
+    log "no decision block in the reply; retrying"
+    continue
+  fi
+  log "REFUSED — no decision block in the reply after $DECIDE_ATTEMPT attempts"; exit 4
 fi
 
 # Validation lives in scripts/validate-decision.py — one definition, exercised directly by
@@ -310,9 +376,23 @@ fi
 VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$BLOCK" "$DECIDER_ACTOR" 2>&1)"
 
 case "$VALID" in
-  OK\ *) DECISION="${VALID#OK }" ;;
-  *) log "REFUSED — ${VALID:-validation produced no output}"; printf '%s\n' "$BLOCK" >>"$LOG"; exit 5 ;;
+  OK\ *) DECISION="${VALID#OK }"; break ;;
 esac
+# Only a MALFORMED reply is the model's slip to retake. A decision that parsed and was refused on
+# its content is a real refusal and must stay terminal, or a retry loop would grind against the
+# same objection until the budget runs out.
+case "$VALID" in
+  *"malformed JSON"*|*"is not an object"*|*"produced no output"*)
+    if [ "$DECIDE_ATTEMPT" -lt "$DECIDE_ATTEMPTS" ]; then
+      log "malformed decision (${VALID:-no output}); retrying"
+      printf '%s\n' "$BLOCK" >>"$LOG"
+      continue
+    fi
+    log "REFUSED — ${VALID:-validation produced no output} after $DECIDE_ATTEMPT attempts"
+    printf '%s\n' "$BLOCK" >>"$LOG"; exit 5 ;;
+esac
+log "REFUSED — ${VALID:-validation produced no output}"; printf '%s\n' "$BLOCK" >>"$LOG"; exit 5
+done
 
 # Bind model provenance and the routed authority into the durable record. Deterministic internal
 # reconcilers do not carry this marker; the actuator uses it to distinguish a scoped model

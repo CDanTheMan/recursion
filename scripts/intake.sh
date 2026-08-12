@@ -41,6 +41,10 @@ export LC_ALL=C
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT" 2>/dev/null || { echo "intake: RECURSION_ROOT '$ROOT' is not a directory" >&2; exit 3; }
 [ -f .env ] && { set -a; . ./.env; set +a; }
+# .env pins RECURSION_ROOT for the deployed checkout. Sourcing it must never RETARGET a
+# caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
+# into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
+RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 
 DB="${RECURSION_HERMES_DB:-$HOME/.hermes/state.db}"
 DIR="$ROOT/state/instructions"; mkdir -p "$DIR"

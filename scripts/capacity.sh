@@ -37,6 +37,10 @@ ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 # and df measured a filesystem nobody asked about — a confident answer about the wrong box.
 cd "$ROOT" 2>/dev/null || { echo "CANNOT TELL: RECURSION_ROOT '$ROOT' is not a directory"; exit 3; }
 [ -f .env ] && { set -a; . ./.env; set +a; }
+# .env pins RECURSION_ROOT for the deployed checkout. Sourcing it must never RETARGET a
+# caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
+# into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
+RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 LOCKDIR="$ROOT/state/.locks"; mkdir -p "$LOCKDIR" 2>/dev/null || true
 HEAVY="$LOCKDIR/heavy-gate.lock"
 CMD="${1:-report}"; shift 2>/dev/null || true
