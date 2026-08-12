@@ -1670,3 +1670,67 @@ a control against `origin/master`'s file showed only 3 of 4 assertions could fai
 the fix: 4/4 fail on the pre-fix file, 4/4 pass on the patched one.
 
 B1 (cron) and B3 (pilot capacity) are Lucas's, and neither is code.
+
+## Gate 5 preconditions B1 and B3 applied (2026-08-12T03:52Z)
+
+Lucas authorized the cron fix and the recommended capacity settings. Both are live and
+verified 18/18. Backup and armed rollback:
+`/var/backups/recursion/gate5-preconditions-20260812T035216Z` (root-owned 0700, manifest
+verifies, `ROLLBACK.sh` restores both).
+
+**B1.** The decide entry was restored to `install-cron.sh`'s reviewed default. Production had
+drifted to the cycle's own minute; the installer's default exists precisely to keep the two off
+the same lock:
+
+```text
+before: 15 */3 * * *  ... scripts/hermes-decide.sh  # recursion-decide
+after:  45 */6 * * *  ... scripts/hermes-decide.sh  # recursion-decide
+```
+
+One line changed; the brief, cycle and watch entries are byte-identical to the backup. Next
+fire is `06:45Z`. **Restoring the reviewed value was preferred over inventing a third schedule**
+- the drift is what caused the defect.
+
+**B3.** `pilot-golden-stallion-client.json`, the two fields the `min()` reads:
+
+```diff
+-  "concurrency_limit": 0,
++  "concurrency_limit": 1,
+-    "max_inflight_workers": 0,
++    "max_inflight_workers": 1,
+```
+
+The whole diff is those four lines. The file still validates as a `pilot` control-plane object,
+and the other eight pilots remain at `0/0` - verified by re-reading all nine, not by inspecting
+the one that changed.
+
+Unchanged throughout: PAUSE `919371834778def8...`, gateway active, actuator active, zero open
+windows, zero pending queue entries.
+
+### The apply step corrupted the crontab on the first attempt
+
+The transaction's `sed` replacement used the new crontab line as the replacement text. That line
+contains `&&`, and **`&` in a sed replacement expands to the entire match**, so the installed
+line became a doubled, malformed entry:
+
+```text
+45 */6 * * * cd /opt/recursion 15 */3 * * * cd /opt/recursion && ... # recursion-decide15 */3 ...
+```
+
+Three of the verify checks passed on that corrupt line - "exactly one crontab line changed",
+"decide no longer shares a minute with cycle", and "still 5 recursion lines" were all true of
+it. **Only the exact-value comparison caught it.** It was restored from the backup taken
+seconds earlier and re-applied with a literal Python line replacement that asserts it matched
+exactly one line, then re-verified 18/18 from scratch.
+
+## Deployment path for the gate 5 prompt fix
+
+Production is a git checkout on `loop/auto`, and its HEAD `59b13c61` is
+`Merge commit '6349d4f2' into loop/auto` - the merged master. Its `scripts/hermes-decide.sh`
+hashes identical to its own HEAD, so the checkout is clean.
+
+The B0/B2 prompt fix therefore reaches production as: push
+`review/hermes-phase8-gate5-decide-turn` -> Lucas merges to `master` -> merge `master` into
+`loop/auto` on the box under the usual CAS gate. **Until that merge lands, production still runs
+the old prompt**, so a decide turn would keep discarding its output at normalization. Gate 5
+should not begin before the deploy.

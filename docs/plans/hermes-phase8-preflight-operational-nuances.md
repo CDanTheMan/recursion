@@ -425,3 +425,39 @@ field. Piping the exact model output from `loop/logs/*-decide-*.out` through
 `decision-queue.py normalize` in a clone returned `ERR goal_id is not a canonical identifier`
 in one command. A hand-built fixture would have carried whatever `goal` value the author
 thought was normal, and would most likely have passed.
+
+## `&` in a sed replacement expands to the whole match
+
+Replacing a crontab line whose text contains `&&` with `sed "s|old|$NEW|"` installed a doubled,
+malformed line, because sed treats an unescaped `&` in the replacement as "everything that
+matched". Shell command lines are full of `&&`, so this fires exactly where it does the most
+damage - service definitions, cron entries, systemd `ExecStart` lines.
+
+Use a literal replacement instead, and assert the match count:
+
+```python
+n = sum(1 for l in lines if l == OLD)
+assert n == 1
+out = [NEW if l == OLD else l for l in lines]
+```
+
+## Three of five structural checks passed on the corrupted line
+
+The malformed crontab entry still satisfied "exactly one line changed", "no longer shares a
+minute with the cycle", and "still five recursion lines". Every one of those is a *property* of
+the result, and the corruption preserved all three. What caught it was comparing the line to its
+**exact expected bytes**.
+
+**A post-condition that describes a shape cannot detect a wrong value of that shape.** At least
+one check per mutated object must be full-value equality against the literal you intended to
+write.
+
+## Take the backup before the apply, not after the verify
+
+The corruption was live in production's crontab for the duration of one command. Recovery was
+uneventful only because the backup, its manifest and an armed `ROLLBACK.sh` were already on disk
+before the first byte was written. Restoring the crontab alone, and leaving the pilot change
+that had verified correctly, was possible because the two objects were backed up separately.
+
+**Back up each mutated object as its own artifact**, so a partial failure can be partially
+reverted instead of forcing an all-or-nothing rollback of work that succeeded.
