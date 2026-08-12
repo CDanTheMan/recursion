@@ -291,6 +291,22 @@ else
   no "release is not idempotent on replay (rc=$rel3_rc)"
 fi
 
+# --- 10) ★ intake must survive a systemd service environment, which has no HOME ---------------
+# hermes-actuator.service sets only RECURSION_ROOT. systemd supplies no HOME, and intake.sh runs
+# under `set -u`, so `DB="${RECURSION_HERMES_DB:-$HOME/.hermes/state.db}"` killed the script at
+# line 44 -- BEFORE any subcommand ran. consume, release and acknowledge were all equally dead,
+# and none of them even uses DB. That is why the actuator could never couple an instruction to an
+# action, and why one decision retried forever on 2026-08-12.
+#
+# Every suite passed while this was broken because nothing ever ran a script without HOME.
+nohome_out="$( (cd "$R" && env -u HOME RECURSION_ROOT="$R" bash scripts/intake.sh release "$REL_ID" "$A1") 2>&1 )"
+nohome_rc=$?
+if [ "$nohome_rc" = 0 ] && ! printf '%s' "$nohome_out" | grep -q 'HOME: unbound variable'; then
+  ok "★ intake runs with HOME unset — the environment a systemd service actually has"
+else
+  no "★ intake dies without HOME (rc=$nohome_rc): $(printf '%s' "$nohome_out" | head -1)"
+fi
+
 echo
 [ "$fails" -eq 0 ] && { echo "intake: ALL PASS"; exit 0; }
 echo "intake: $fails FAILED"; exit 1

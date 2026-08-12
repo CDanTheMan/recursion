@@ -36,6 +36,7 @@
 #   intake.sh acknowledge <id> <action-id>...  close only when those actions succeeded
 #   intake.sh release <id> <action-id>...      reopen only after those actions failed
 set -uo pipefail
+HOME="${HOME:-/root}"   # systemd gives a service no HOME; `set -u` then kills the script
 export LC_ALL=C
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT" 2>/dev/null || { echo "intake: RECURSION_ROOT '$ROOT' is not a directory" >&2; exit 3; }
