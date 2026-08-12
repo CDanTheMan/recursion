@@ -45,6 +45,32 @@ grep -q 'close-paused-windows' scripts/hermes-actuator.sh
 grep -q 'admit-work' scripts/conduct-hermes.sh
 echo "ok    exact-goal admission is rechecked at actuation and PAUSE revokes stale authority"
 
+# The machinery admitting six verbs under PAUSE is worthless if the prompt tells the model only
+# one of them exists. It did, for four days: every decide run chose noop citing "no
+# execution-capable verb is permitted", which is the RUNTIME/PAUSE block quoted back verbatim.
+# A paused box must still be able to PROPOSE a plan -- that is the whole of gate 5.
+# NOTE: there are two RUNTIME/PAUSE blocks. The first belongs to build_pilot_brief and is
+# correct as written ("no worker may run"); this asserts only the Head Hermes one, anchored on
+# text unique to it.
+PAUSE_BLOCK="$(awk '/REMAIN EXECUTABLE while paused/{f=1} f{print} f&&/cat state\/PAUSE/{exit}' \
+  scripts/hermes-decide.sh)"
+[ -n "$PAUSE_BLOCK" ]
+for verb in noop pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close assist-answer; do
+  printf '%s\n' "$PAUSE_BLOCK" | grep -q -- "$verb"
+done
+# Matched against the pre-fix bytes: the stale claim wrapped across two echo lines, so a grep
+# spanning "the only executable verb" could never match and would have passed vacuously.
+! grep -q "executable verb while paused is 'noop'" scripts/hermes-decide.sh
+echo "ok    the paused Head Hermes prompt names every PAUSE-safe verb and claims no others"
+
+# 'goal' is normalized into goal_id, which must be a canonical identifier. Every decision from
+# 2026-08-07 to 2026-08-10 was discarded at normalize with "goal_id is not a canonical
+# identifier" because the model wrote a purpose sentence there. The rejection is silent from the
+# operator's side -- the run simply produces nothing -- so the constraint must be in the prompt.
+grep -q 'goal.\+MUST BE AN IDENTIFIER, never a sentence' scripts/hermes-decide.sh
+grep -qF '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$' scripts/hermes-decide.sh
+echo "ok    the decision prompt states the goal identifier constraint that normalization enforces"
+
 grep -q 'claim-pending --kind work' scripts/conduct-hermes.sh
 grep -q 'RECURSION_PILOT_GLOBAL_CONCURRENCY' scripts/conduct-hermes.sh
 grep -q -- '--exclude-project' scripts/conduct-hermes.sh
