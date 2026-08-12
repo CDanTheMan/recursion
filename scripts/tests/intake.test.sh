@@ -234,6 +234,63 @@ else
   no "★ assist text bypassed intake (instruction=$(sed -n 's/^status: *//p' "$latest_instruction" | head -1) assist=$ast task=$tst)"
 fi
 
+# --- 9) ★ a FAILED action must be able to release an instruction it never consumed ------------
+# Production wedge, 2026-08-12: an action failed BEFORE its consume handshake, so its instruction
+# was still `open` with EMPTY action_ids. `release` read `open` as "a previous release already
+# reopened this" and demanded the stored ids equal the ones being released. They could not match.
+# release exited 2, recover-only returned 74 where the actuator needs 1, and the same decision was
+# retried every ~6s -- 52 iterations before the service was stopped by hand.
+mkdir -p "$R/state/actions"
+mk_action(){ # mk_action <action-id> <instruction-id> <status>
+  python3 - "$R/state/actions/$1.json" "$1" "$2" "$3" <<'PY'
+import json, sys
+path, aid, iid, status = sys.argv[1:5]
+json.dump({"schema_version": 1, "id": aid, "instruction_id": iid, "status": status,
+           "verb": "noop", "arguments": [], "goal_id": "g", "attempts": 1,
+           "idempotency_key": "k-" + aid, "lease_expires": None,
+           "result_evidence": "instruction coupling failed before dispatch"},
+          open(path, "w", encoding="utf-8"))
+PY
+}
+rel_field(){ sed -n "s/^$2: *//p" "$R/state/instructions/$(printf '%08d' "$1").md" | head -1; }
+rel_run(){ ( cd "$R" && RECURSION_ROOT="$R" bash scripts/intake.sh release "$1" "$2" ) >"$3" 2>&1; echo $?; }
+
+add s-rel telegram "$LUCAS" "$LUCAS" - user "[Lucas Guerra] a question whose action dies before consume"
+intake poll >/dev/null
+REL_ID="$(basename "$(ls -1 "$R/state/instructions"/*.md | tail -1)" .md | sed 's/^0*//')"
+A1=action-1111111111111111111111aa
+A2=action-2222222222222222222222bb
+mk_action "$A1" "$REL_ID" failed
+mk_action "$A2" "$REL_ID" failed
+
+before_ids="$(rel_field "$REL_ID" action_ids)"
+rel_rc="$(rel_run "$REL_ID" "$A1" "$TMP/rel1")"
+after_ids="$(rel_field "$REL_ID" action_ids)"
+after_status="$(rel_field "$REL_ID" status)"
+if [ -z "$before_ids" ] && [ "$rel_rc" = 0 ] && [ "$after_ids" = "$A1" ] && [ "$after_status" = open ]; then
+  ok "★ a never-consumed instruction is releasable, and records the action that failed"
+else
+  no "★ never-consumed release (rc=$rel_rc before=[$before_ids] after=[$after_ids] status=$after_status)"
+fi
+
+# ★ CONTROL: the refusal this branch exists for must still fire. If admitting the empty case also
+# admitted a DIFFERENT action, the fix would have deleted the invariant instead of narrowing it.
+rel2_rc="$(rel_run "$REL_ID" "$A2" "$TMP/rel2")"
+still_ids="$(rel_field "$REL_ID" action_ids)"
+if [ "$rel2_rc" != 0 ] && [ "$still_ids" = "$A1" ] && grep -q 'different action evidence' "$TMP/rel2"; then
+  ok "★ CONTROL: a different action still cannot claim an already-released instruction"
+else
+  no "★ CONTROL leaked — a foreign action claimed the instruction (rc=$rel2_rc ids=[$still_ids])"
+fi
+
+# Replay safety: the actuator retries, so the same release must stay a no-op success.
+rel3_rc="$(rel_run "$REL_ID" "$A1" "$TMP/rel3")"
+if [ "$rel3_rc" = 0 ] && [ "$(rel_field "$REL_ID" action_ids)" = "$A1" ]; then
+  ok "releasing the same action again is an idempotent no-op"
+else
+  no "release is not idempotent on replay (rc=$rel3_rc)"
+fi
+
 echo
 [ "$fails" -eq 0 ] && { echo "intake: ALL PASS"; exit 0; }
 echo "intake: $fails FAILED"; exit 1

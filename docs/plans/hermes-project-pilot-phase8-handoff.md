@@ -1734,3 +1734,77 @@ The B0/B2 prompt fix therefore reaches production as: push
 `loop/auto` on the box under the usual CAS gate. **Until that merge lands, production still runs
 the old prompt**, so a decide turn would keep discarding its output at normalization. Gate 5
 should not begin before the deploy.
+
+## B0/B2 deployed, and the first successful decision in five days (2026-08-12T04:31Z)
+
+PR #41 (`78c0ed6`) merged to master and was merged into production's `loop/auto` under a CAS
+gate: 16/16 gate, 31/31 verify, production HEAD `1a870639`. Snapshot and armed rollback at
+`/var/backups/recursion/gate5-deploy-20260812T042801Z`. Correctness was asserted on **blob OIDs**
+rather than file hashes so no line-ending filter could launder a mismatch, and the merge was
+simulated in a throwaway clone first: zero conflicts, exactly four files, the two script blobs
+identical to the reviewed ones.
+
+A supervised decide turn was then run rather than waiting for the unattended `06:45Z` fire. B0 is
+fixed, measured on production:
+
+```json
+{"goal_id":"goal-pause-safety","status":"queued","decision_source":"hermes-model",
+ "verb":"noop","instruction_id":"486","provider":"openai-codex","cost_usd":0.0}
+```
+
+The model used the identifier example the prompt now carries. `notify: PAUSE asserted; transport
+refused` confirmed delivery stayed suppressed. It still chose `noop`, which is correct -- 486 asks
+whether the box is paused; it is not a plan request. B2's effect will only show against a real
+plan instruction.
+
+## The decision wedged, and the actuator was stopped (2026-08-12T04:34Z)
+
+The action failed one second after creation with `result_evidence: "instruction coupling failed
+before dispatch"`, and was then retried **every ~6 seconds, 52 times**, until
+`hermes-actuator` was stopped by hand. Containment mutated no state; the loop count froze.
+
+The wedge mechanism is certain, read from the code and matching the observed exit codes exactly:
+
+1. The failed action reconciles by calling `intake.sh release 486 <action>`.
+2. 486 is still `open` with **empty** `action_ids` -- it was never consumed.
+3. `intake.sh:396` treats `open` as "a previous release already reopened this" and requires the
+   stored ids to equal the ones being released. Empty never matches, so it exits 2.
+4. `--recover-only` therefore returns 74, where `finalize_claim` needs **1** for a `failed`
+   action (`succeeded:0|failed:1|cancelled:1|pending:75`).
+5. The parent preserves the decision in `running/` and retries forever.
+
+**What triggered the initial coupling failure was not proven.** It occurred during heavy lock
+contention -- the actuator was refused the control lock six times between 04:31:17 and 04:31:28
+because the decide run holds it for its entire ~40s model call -- and `intake.sh consume` does
+return 73 on state-lock contention. That is consistent but inferred. A first sandbox replay was
+**invalid** (the operator lock namespace is pinned, so it reproduced the copy rather than
+production) and its error was discarded rather than reported.
+
+### Both halves fixed, verified against the real wedge
+
+`review/hermes-phase8-decide-lock-and-backticks`:
+
+- `fc5abee` -- `hermes-decide.sh`: `flock -n` to `flock -w ${RECURSION_CONTROL_LOCK_WAIT_S:-120}`,
+  and the prompt's backticks to single quotes.
+- `5ffa1bc` -- `intake.sh` release admits the never-consumed case; `conduct-hermes.sh` takes the
+  same `flock -w` treatment.
+
+Fixing only the decider was half a fix: it holds the lock longer, and an actuator that gives up
+instead of waiting is how the coupling lost its race. **Losing here corrupts an action rather
+than skipping a turn**, so the actuator was the more damaging half.
+
+Proof against the actual production wedge, in a faithful sandbox copy:
+
+```text
+before fix:  intake: reopened instruction 486 has different action evidence   rc=74
+after fix:   released 486 -> action-002beb5c411a2688dc9ec7db (never consumed)  rc=1
+instruction: status open (unchanged), action_ids now records the failed action
+replay:      rc=1, rc=1  (idempotent)
+```
+
+`rc=1` is what `finalize_claim` accepts, so **the fix is also the unwedge** -- the stuck decision
+drains itself when the actuator restarts on the fixed code. No hand-edit of control state was
+needed, and the repair is verified against the real failure rather than a reconstruction.
+
+`intake.test.sh` gains three behavioural cases with their own control. Against the unpatched
+script all three fail; with it, all three pass.
