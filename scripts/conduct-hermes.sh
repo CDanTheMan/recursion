@@ -592,6 +592,7 @@ run(){ # execute an argv array, or print it under --dry-run
 # --- the whitelist. A fixed case list: there is no path from an unrecognised verb to
 # execution, and nothing here reaches auth, cron, .env, flags, merges, or deploys. --------
 rc=0
+VERB_STDERR_TAIL=""
 # Prose for the authoring verbs. Held to the same rules validate-decision.py applied, because
 # this file is a separate boundary and the decision sat on disk in between.
 TEXT="$(read_field text)"
@@ -624,7 +625,16 @@ case "$VERB" in
   pilot-plan-propose|pilot-plan-approve|pilot-window-open|pilot-window-close|pilot-task-create|pilot-worker-request|pilot-verifier-request|pilot-block|pilot-escalate|pilot-goal-verify)
     # Project-pilot authority is rechecked against the durable topic/pilot/charter records here.
     # The helper may create scoped proposal/task state; it never launches a worker or publishes.
-    run python3 scripts/project-pilot.py execute-json "$DECISION_JSON"; rc=$? ;;
+    # Keep the stderr tail: the refusal reason must reach the action record and the instruction
+    # annotation, or a refused verb presents as a bare rc and gets re-decided identically
+    # forever. Three rc=4 refusals were debugged blind this way on 2026-08-12 because the
+    # actuator discards child streams.
+    _pilot_err="$(mktemp "${TMPDIR:-/tmp}/pilot-stderr.XXXXXX")"
+    run python3 scripts/project-pilot.py execute-json "$DECISION_JSON" 2>"$_pilot_err"; rc=$?
+    VERB_STDERR_TAIL="$(tail -c 240 "$_pilot_err" | tr '
+' ' ' | sed 's/  */ /g')"
+    cat "$_pilot_err" >&2; rm -f "$_pilot_err"
+    [ "$rc" -eq 0 ] || log "pilot verb refused: ${VERB_STDERR_TAIL:-<no stderr>}" ;;
 
   reconcile-goal|task-transition|goal-transition|verify-goal|publish-task)
     # These are not model-callable verbs: project-reconcile.py emits them from canonical
@@ -740,7 +750,7 @@ esac
     fi
   elif [ "$rc" -eq 75 ]; then
     action_transition pending "log=$LOG deferred rc=75"
-  else action_transition failed "log=$LOG rc=$rc"
+  else action_transition failed "log=$LOG rc=$rc${VERB_STDERR_TAIL:+ | $VERB_STDERR_TAIL}"
   fi || rc=74
   if [ "$rc" -ne 0 ] && [ "$INSTRUCTION_CONSUMED" = 1 ]; then
     if release_consumed_instruction; then
