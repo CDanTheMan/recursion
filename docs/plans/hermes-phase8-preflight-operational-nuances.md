@@ -461,3 +461,57 @@ that had verified correctly, was possible because the two objects were backed up
 
 **Back up each mutated object as its own artifact**, so a partial failure can be partially
 reverted instead of forcing an all-or-nothing rollback of work that succeeded.
+
+## Verifying a fix by running the thing is how you find the next defect
+
+Deploying the prompt fix proved nothing on its own. Running one supervised decide turn proved B0
+fixed **and** surfaced two further defects that no audit had caught, one of which wedged a
+decision into an infinite retry. The unattended alternative was the same run at 06:45Z with
+nobody watching.
+
+**Run the first post-fix execution of anything under supervision, deliberately, at a time you
+choose.** The defect it finds is the same one it would have found alone; the difference is
+whether anyone is there.
+
+## A discarded sandbox result is a result
+
+The first attempt to replay the failing `intake.sh consume` against a copy of the root failed
+with `operator lock path is outside the supported lock namespace` -- an artefact of the copy, not
+the production fault. Reporting it would have published a confident wrong cause for a live
+incident.
+
+The copy was fixable (`rm -rf state/.locks/*`; the stale lock state came across with `cp -a`),
+and the corrected sandbox reproduced the real wedge exactly. **A replay that fails for a reason
+belonging to the replay tells you nothing about the target.** Check whether the harness or the
+subject failed before quoting the message.
+
+## An idempotent fast-path can encode an assumption about how you got there
+
+`release` short-circuits when the instruction is already `open`, on the reasoning that a previous
+release must have reopened it -- so the stored action ids should match. That is true for every
+path the author had in mind and false for the one that mattered: an instruction that was **never
+consumed** is also `open`, with no ids at all, and can never satisfy the comparison.
+
+**When a fast-path says "already done", ask what else produces the state it is keying on.** Here
+"open" meant both *reopened by a prior release* and *never left open in the first place*, and only
+the first was handled.
+
+## A retry loop with no backoff and no dead-letter is a wedge, not resilience
+
+The failing reconciliation returned 74 and the parent preserved the decision and tried again on
+the next 2-second poll -- indefinitely, at ~6s per iteration, writing one identical log line each
+time. Nothing escalated, nothing backed off, nothing gave up.
+
+**A terminal-looking failure that the caller retries unchanged will retry forever.** Either the
+failure must be able to reach a dead-letter state, or the retry needs a bound. Watch for
+`preserving <path>` style log lines repeating at a fixed interval -- that shape is the signature.
+
+## pgrep matches its own command line
+
+A production health check reported `workers: 2` under `pgrep -f 'recursion-worker|work.sh'`. Both
+matches were the checking command itself: the pattern appears in its own argv, and over SSH the
+invoking shell carries it too. The real count was zero.
+
+Put the pattern where it cannot be its own argument (a heredoc on stdin), escape it so it does not
+match literally (`work\.sh`), or resolve every hit with `ps -eo pid,cmd` before believing a count.
+This has now caused a false alarm and, in an earlier session, a self-kill with `pkill -f`.
