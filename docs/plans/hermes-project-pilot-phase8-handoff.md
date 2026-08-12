@@ -1311,3 +1311,81 @@ executes.
 One consequence to carry forward: with cron running, the working tree now legitimately holds
 uncommitted monitoring artifacts, so a future gate must not assert an exact
 `git status --porcelain` string. See the nuances note.
+
+## Gate 3 attempted: actuator failed closed again, new root cause found (2026-08-12T00:47Z)
+
+Lucas authorized gate 3. The reviewed unit was installed, observed, and **rolled back**. The
+terminal condition is the same as 2026-08-10 - the PAUSE-safe no-op is still pending - but the
+cause is different, and it is one layer deeper than last time.
+
+**What is genuinely fixed.** The legacy-journal import defect is closed. Verified first in a
+disposable fixture against the real journal and then live: `import-journal` returned 0, the five
+pre-schema records were quarantined to `state/decision-queue/legacy/`, and the valid record
+moved `pending` to `running`. It had never been claimable before; on 2026-08-10 import failed on
+line 1 and returned before line 6 could be reached. That bug is real, was real, and is gone.
+
+**What fixing it exposed.** With the claim now reachable, `conduct-hermes.sh --paused-safe`
+refuses the record deterministically:
+
+```text
+conduct-hermes: REFUSED - decision authority/effect digest is absent or inconsistent
+```
+
+The check at `scripts/conduct-hermes.sh` recomputes an action payload digest and requires the
+record to carry a matching `decision_payload_sha256`:
+
+```sh
+[ -n "$DECISION_PAYLOAD_SHA256" ] && [ "$DECISION_PAYLOAD_SHA256" = "$ACTION_PAYLOAD_SHA256" ]   || { log "REFUSED - decision authority/effect digest is absent or inconsistent"; exit 5; }
+```
+
+`decision-6f037cbf6fb51a7f641ea9d6` does not have that field. Its keys are `actor, args,
+arguments, confidence, cost_usd, goal, goal_id, id, idempotency_key, project, provider, reason,
+schema_version, status, ts, usage, verb, why, wrong_if`. It was written `2026-08-09T15:15:01Z`,
+before the hardening introduced the digest. **It can never validate, under PAUSE or otherwise.**
+
+This is the same class of defect as the legacy-journal bug and the compat patch does not cover
+it. That patch quarantines records with no `id` (pre-schema). This record has an `id` and
+`schema_version: 1`, so it passes quarantine and reaches a validator that requires a field
+added after it was written. The compat cutoff is drawn at the wrong place.
+
+**A second, independent defect makes the first one invisible.** `rc=75` means two different
+things. `scripts/conduct-hermes.sh` uses it for "deferred, pending intentionally restored"
+(`succeeded:0|failed:1|cancelled:1|pending:75`, and the comment "rc=75 intentionally restores
+pending before the decision claim is deferred"), and the actuator therefore whitelists it:
+
+```sh
+case "$paused_rc" in
+  0|4|75) : ;;
+  *) log "PAUSE-safe queue pass failed rc=$paused_rc; pending state was preserved" ;;
+esac
+```
+
+So a permanent refusal is indistinguishable from a normal PAUSE deferral, and the actuator logs
+nothing at all. Across roughly ninety seconds of two-second passes the journal contained exactly
+one line - `started`. The queue visibly oscillated `pending` to `running` to `pending` while the
+service reported healthy. This is the 2026-08-10 "the actuator suppresses that command's
+diagnostic" defect in a new form: not suppressed by `>/dev/null` any more, but by an exit code
+that conflates a deferral with a refusal.
+
+**Rollback.** `GATE3-ROLLBACK.sh` ran clean against snapshot
+`/var/backups/recursion/gate3-20260812T004315Z` (20 files). The unit was stopped, disabled and
+removed; the managed runtime was restored exactly. Verified after: actuator unit absent and
+inactive, PAUSE `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`, gateway
+active, **cron still active so gate 2 was preserved**, queue back to one pending and zero
+quarantined, `decisions.jsonl` 6 lines and `events.jsonl` 16 lines unchanged, zero outbox files,
+zero worker units, quiescence 0, and the deployed tree still byte-identical to the reviewed merge
+(108 files, 0 mismatches). No notification, execution, worker, or pilot occurred.
+
+**Gate 3 is blocked, not merely deferred.** Two reviewed changes are needed before a retry, and
+neither was made here:
+
+1. Extend the legacy compat cutoff to cover records that carry an `id` and `schema_version` but
+   predate `decision_payload_sha256` - quarantine or migrate them the same way, and prove the
+   valid path still fails closed for a genuinely inconsistent digest.
+2. Separate "deferred" from "refused" in the actuator's accounting. A permanent refusal must be
+   visible in the journal and must not read as a healthy pass. Whitelisting `75` is correct for a
+   deferral and wrong for a refusal; they need different codes or an explicit reason.
+
+Until both land, installing the actuator gives a service that spins forever on an undrainable
+record while reporting healthy. That is a worse failure than the one it replaces, because it is
+silent.
