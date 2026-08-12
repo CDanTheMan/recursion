@@ -130,7 +130,7 @@
     },
     "decision": {
       "type": "object",
-      "required": ["schema_version", "id", "actor", "verb", "arguments", "reason", "goal_id", "idempotency_key", "status"],
+      "required": ["schema_version", "id", "actor", "verb", "arguments", "reason", "goal_id", "idempotency_key", "status", "decision_source"],
       "properties": {
         "schema_version": {"const": 1},
         "id": {"$ref": "#/$defs/identifier"},
@@ -140,7 +140,8 @@
         "reason": {"type": "string", "minLength": 1},
         "goal_id": {"$ref": "#/$defs/identifier"},
         "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 256},
-        "status": {"enum": ["proposed", "accepted", "queued", "executed", "refused", "cancelled"]}
+        "status": {"enum": ["proposed", "accepted", "queued", "executed", "refused", "cancelled"]},
+        "decision_source": {"enum": ["hermes-model", "project-reconciler", "notification-reconciler"]}
       },
       "additionalProperties": true
     },

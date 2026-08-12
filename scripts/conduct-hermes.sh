@@ -92,9 +92,19 @@ drain_queue(){
         ;;
       running) log "decision remains coupled to a running action"; return 75 ;;
       absent)
-        if [ "$result_rc" -eq 75 ] || [ -f "$ROOT/state/PAUSE" ]; then
+        if [ "$result_rc" -eq 75 ]; then
           python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "execution deferred" >/dev/null
           return 75
+        fi
+        if [ -f "$ROOT/state/PAUSE" ]; then
+          # PAUSE preserves pending state, but it must not RELABEL a refusal as a deferral.
+          # A genuine PAUSE decline returns 75 above; any other rc here means the child refused
+          # (bad provenance, inconsistent digest, unsafe argument...). Masking those as
+          # deferrals is how an undrainable record spins forever while the actuator reports
+          # healthy -- observed 2026-08-12. Disposition is unchanged; visibility is not.
+          log "REFUSED under PAUSE - child rc=$result_rc for ${claimed#$ROOT/}; pending preserved, NOT a deferral"
+          python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "refused under pause rc=$result_rc" >/dev/null
+          return 76
         fi
         python3 "$ROOT/scripts/decision-queue.py" fail "$claimed" "no action record rc=$result_rc" >/dev/null
         aggregate=1 ;;

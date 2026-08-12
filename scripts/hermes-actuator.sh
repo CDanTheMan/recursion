@@ -7,6 +7,7 @@ INTERVAL="${RECURSION_ACTUATOR_INTERVAL_S:-2}"
 STOP=0
 trap 'STOP=1' INT TERM
 log(){ echo "[$(date -Is)] hermes-actuator: $*" >&2; }
+refusal_seen=0
 
 cd "$ROOT" || exit 3
 log "started; durable queue consumer is supervised"
@@ -24,9 +25,18 @@ while [ "$STOP" = 0 ]; do
     RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/conduct-hermes.sh" --paused-safe >/dev/null 2>&1
     paused_rc=$?
     set -e
+    [ "$paused_rc" = 76 ] || refusal_seen=0
     case "$paused_rc" in
       0|4|75) : ;;
-      *) log "PAUSE-safe queue pass failed rc=$paused_rc; pending state was preserved" ;;
+      76)
+        # A decision was REFUSED, not deferred. Pending state is intact, but this record will
+        # never drain on its own, so the loop must say so instead of looking healthy forever.
+        # conduct-hermes tees the specific reason to loop/logs/<date>-conduct-hermes.log.
+        if [ "$refusal_seen" = 0 ]; then
+          refusal_seen=1
+          log "PAUSE-safe queue pass REFUSED a decision (rc=76); pending preserved and NOT draining. Reason: loop/logs/$(date -u +%Y-%m-%d)-conduct-hermes.log"
+        fi ;;
+      *) refusal_seen=0; log "PAUSE-safe queue pass failed rc=$paused_rc; pending state was preserved" ;;
     esac
     sleep "$INTERVAL" & wait $! 2>/dev/null || true
     continue

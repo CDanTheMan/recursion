@@ -30,6 +30,7 @@ STATUSES = {
     "instruction": {"open", "consumed", "acknowledged", "cancelled"},
     "action": {"pending", "running", "succeeded", "failed", "cancelled"},
 }
+DECISION_SOURCES = frozenset({"hermes-model", "project-reconciler", "notification-reconciler"})
 REQUIRED = {
     "project": ("schema_version", "id", "repo", "default_branch", "deploy_key_ref", "charter", "topic", "pilot_id", "status"),
     "pilot": ("schema_version", "id", "project_id", "charter", "model_policy", "status"),
@@ -37,7 +38,7 @@ REQUIRED = {
     "goal": ("schema_version", "id", "project_id", "outcome", "acceptance_suite", "falsifier", "budget", "status"),
     "task": ("schema_version", "id", "goal_id", "dependencies", "allowed_paths", "non_goals", "worker_class", "acceptance", "status"),
     "run": ("schema_version", "id", "task_id", "worker", "worktree", "base_commit", "pid", "lease_expires", "deadline", "usage", "result", "status"),
-    "decision": ("schema_version", "id", "actor", "verb", "arguments", "reason", "goal_id", "idempotency_key", "status"),
+    "decision": ("schema_version", "id", "actor", "verb", "arguments", "reason", "goal_id", "idempotency_key", "status", "decision_source"),
     "escalation": ("schema_version", "id", "goal_id", "required_actor", "question", "evidence", "status"),
     "delivery": ("schema_version", "id", "event_id", "destination", "attempt", "acknowledgement", "status"),
     "notification_event": ("schema_version", "id", "source_event_id", "event_type", "project_id", "goal_id", "message", "message_digest", "status"),
@@ -70,9 +71,15 @@ def validate(kind: str, value: object) -> dict:
         fail(f"invalid {kind} status: {value.get('status')!r}")
 
     non_empty = {
-        "decision": ("actor", "reason", "goal_id", "idempotency_key"),
+        "decision": ("actor", "reason", "goal_id", "idempotency_key", "decision_source"),
         "instruction": ("principal", "deduplication_key"),
     }
+    # Provenance binds a decision to an authority. conduct-hermes refuses any decision whose
+    # decision_source is not one of these, so accepting a record here that can never actuate
+    # only defers the failure to a point where it is invisible. Keep this set identical to
+    # the provenance case arms in scripts/conduct-hermes.sh.
+    if kind == "decision" and value.get("decision_source") not in DECISION_SOURCES:
+        fail(f"invalid decision provenance: {value.get('decision_source')!r}")
     for field in non_empty.get(kind, ()):
         if not isinstance(value.get(field), str) or not value[field].strip():
             fail(f"{field} must be a non-empty string")

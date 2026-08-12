@@ -11,6 +11,7 @@ related:
   - docs/plans/hermes-project-pilot-production-plan.md
   - docs/plans/hermes-project-pilot-phase0-evidence.md
   - docs/plans/hermes-project-pilot-phase7-handoff.md
+  - docs/plans/hermes-phase8-preflight-operational-nuances.md
 ---
 # Hermes project pilot Phase 8 handoff
 
@@ -173,6 +174,15 @@ The two live Phase 1 findings, unverified default-branch protection, absent prod
 backup/restore drill, unset pilot model alias, zero configured capacity, and unpublished/unmerged
 Phase 8 implementation are deployment and pilot gates, not waivers.
 
+> **SUPERSEDED 2026-08-11 (post-merge preflight).** Two rows of the table above and this
+> paragraph were accurate when captured on 2026-08-08 and are retained for that reason.
+> Both have since been closed and re-verified read-only: the live Phase 1 audit now returns
+> `ALL PASS` with `rc=0` (104 packages audited, gateway hardened non-root) per "Corrected
+> Phase 1 deployment succeeded under PAUSE" below, and all eight classic branch-protection
+> rules are active and field-audited per "Branch-protection follow-up" below. The remaining
+> gates are the unset pilot model alias, zero configured capacity, and the undeployed
+> Phase 8 code.
+
 ## Santa Clara repository evidence
 
 GitHub reports `NotSkittlz/santa-clara-construction` as a private, unarchived repository with
@@ -291,6 +301,12 @@ two unchanged live Phase 1 findings. After those are remediated through a review
 deployment action, the exact merged Phase 8 code can be proposed for its own PAUSE-held deployment;
 model/capacity configuration and every pilot window still require their applicable separate
 authorization.
+
+> **SUPERSEDED 2026-08-11 (post-merge preflight).** "Remaining pre-deployment gates are the
+> two unchanged live Phase 1 findings" was true when written and is retained as the record.
+> Those two findings were closed by the corrected Phase 1 deployment recorded below, and the
+> live audit was re-run read-only on 2026-08-11 returning `ALL PASS` / `rc=0`. Phase 1 no
+> longer gates the Phase 8 hardening deployment.
 
 ### Phase 1 remediation blocker
 
@@ -1003,6 +1019,13 @@ authorizes the exact transaction. The preflight must:
 - acquire the canonical control lock and prove cron remains inactive, the gateway remains healthy,
   PAUSE is exact, the actuator is inactive/absent, and no cycle, resync, worker, or project process
   exists;
+
+> **CLARIFIED 2026-08-11.** "Acquire the canonical control lock" is not executable with the
+> deployed pre-hardening code: `lock-acquire`/`lock-release` ship *in* this patch, and
+> `backup()`/`restore()` already take `RuntimeLock` plus the `taskctl` `EmptyLock` themselves.
+> Pre-holding either makes the snapshot fail closed as contended. Let the tool take the lock
+> and verify it was released. See
+> `docs/plans/hermes-phase8-preflight-operational-nuances.md`.
 - seal Git, unit, configuration, queue/outbox, journal, and complete managed-runtime evidence in a
   root-owned mode-`0700` directory outside `/opt/recursion`;
 - restore the runtime snapshot into disposable staging and compare it exactly before mutation;
@@ -1039,3 +1062,468 @@ Suggested next-session kickoff:
 > post-merge runbook.” Lucas has reviewed, merged, and pruned the Phase 8 hardening PR. Begin with
 > read-only merge, protection, and production-state proof. Do not mutate production; return the
 > exact PAUSE-held preflight and proposed transaction for authorization first.
+
+## Post-merge proof and PAUSE-held preflight (2026-08-11)
+
+The runbook's read-only proof and the full PAUSE-held preflight both completed. **No production
+mutation occurred**; the transaction is held at its compare-and-swap gate pending separate
+authorization.
+
+> Lucas authorized the transaction later the same day and it executed successfully. See
+> "Hardening deployment executed under PAUSE" below.
+
+Merge proof: the exact merge commit is `ecc93de7fd5f6d92812d5a89687d6e05326b15fc`
+("Merge pull request #38"), parents `abdc5928...` and `8901a038...`. Implementation
+`5f41f426...` and the publication/runbook commit `8901a038...` are both ancestors of
+`origin/master`, the remote review branch is absent after pruning, and the merge introduced no
+extra change: its tree `9a6cdea2...` is identical to the reviewed branch tip's tree. All eight
+classic branch-protection rules persist and field-audit as recorded.
+
+Production matched the recorded `17:33:03Z` starting point exactly, and still did after every
+preflight step: `loop/auto` at `bcd65ebc...`, `master` `f7df0d0e...`, `origin/master`
+`7e6e21f4...` (legitimately stale), PAUSE
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`, status exactly
+`?? .env.bak.1786014440`, gateway active, cron inactive, actuator unit absent, zero processes,
+zero execution locks, all nine pilots at `concurrency_limit=0`, `max_inflight_workers=0`,
+`publication=false`, routing variables unset, no open windows, and journals unchanged.
+
+Preflight results:
+
+```text
+bundle=fc49e3f705a1f3791ebd7eb15d02f080848e55fe2f2ccb5ec478f95dada1ad5b (identical on arrival)
+clone HEAD=ecc93de7... tree=9a6cdea2...  worktree clean
+BASELINE_SUITES=19  BASELINE_FAILED_SUITES=0
+phase1..phase8 audits = ALL PASS, RC=0
+live-phase1 = ALL PASS, RC=0 (104 packages, hardened non-root gateway)
+runtime snapshot = 19 files, root-owned 0700, manifest 7672f897...
+restore-compare = EXACT (19/19 byte- and mode-identical vs live, all matching manifest hashes)
+simulation = 0 conflicts; executable-surface diff 0; diff vs reviewed merge = the 8 awareness files
+CAS gate dry-run = PASS 11/11, zero mutation
+```
+
+The live Phase 1 audit first returned `90` because the driver exported `RECURSION_ROOT` at the
+clone for the whole sweep; that variable is the *live* root for the red audit. Re-run correctly
+it is `ALL PASS`. That was a harness defect, not a production fault.
+
+Retained root-owned mode-`0700` artifacts, outside `/opt/recursion`:
+
+- runtime snapshot `/var/backups/recursion/preflight-20260811T231032Z-ecc93de`
+- sealed evidence `/var/backups/recursion/preflight-evidence-20260811T231032Z-ecc93de`
+  (git, units, configuration, queues/outboxes, journals, audit log and summary, manifest root
+  `d2d4496a7b1caa964516aaf48a373228c0caaa54a131feea88ea36c53c8769a3`; no secrets, variable
+  names only)
+- armed `ROLLBACK.sh` and `TRANSACTION.sh` in that evidence directory, both syntax-checked
+
+The reconciliation is conflict-free by construction, not merely by trial: production's 74
+local-only commits touch exactly 8 awareness files and zero code, and the incoming range
+touches 73 files with zero intersection. The transaction therefore carries a parameter-free
+post-condition - the diff against the reviewed merge must equal exactly those 8 files, and the
+diff over `scripts/`, `loop/`, `schemas/` and `CONTROL_PLANE.md` must be empty, which is what
+proves the deployed executable bytes equal the reviewed bytes.
+
+Two operational gaps remain open and are not blockers: `cron.service` is `inactive` but
+`enabled`, so a host reboot resumes cron (PAUSE, not cron state, is the kill switch); and
+`/var/backups/recursion` plus `/var/tmp` hold about 6 GB of unreaped snapshots and staging
+clones on a 38 GB disk at 50% use.
+
+The next action remains a separate, explicit authorization for the two-action transaction:
+fast-forward `master` to the reviewed merge and merge it into `loop/auto`, with PAUSE asserted
+and cron stopped. Cron resume, actuator installation, notifications, model/capacity
+configuration, PAUSE removal and every pilot window remain separately gated.
+
+## Hardening deployment executed under PAUSE (2026-08-11T23:47:51Z)
+
+Lucas authorized the two-action transaction. It ran from the armed
+`TRANSACTION.sh` in the sealed evidence directory and returned `TRANSACTION_OK`.
+PAUSE remained asserted and cron remained stopped throughout.
+
+```text
+pre : loop/auto=bcd65ebc...  master=f7df0d0e...  origin/master=7e6e21f4...
+post: loop/auto=458ee92b63d1250e0704f563b3a4c499e3031289
+      master=ecc93de7...     origin/master=ecc93de7...
+```
+
+Action A fast-forwarded `master` to the reviewed merge under a compare-and-swap on its old
+value. Action B merged that commit into the deployed `loop/auto`, producing merge commit
+`458ee92b63d1250e0704f563b3a4c499e3031289` with zero conflicts. Action C set the
+remote-tracking ref to the truth. Objects arrived by verified bundle because production
+`origin` cannot authenticate.
+
+A pre-flight check before execution confirmed production could actually create a merge
+commit (`user.name`/`user.email` set, no `commit.gpgsign`, no active hooks). Action A moves
+`master` before the merge runs, so a missing commit identity would have failed the
+transaction after a partial ref move.
+
+Independent closure, verified with fresh checks rather than the transaction's own assertions:
+
+```text
+reviewed merge is an ancestor of HEAD      YES
+executable bytes on disk vs reviewed blobs 108 files compared, 0 mismatches
+CONTROL_PLANE.md                           match
+managed runtime vs pre-transaction snapshot 19/19 unchanged, 0 changed, 0 missing
+live Phase 1 on the deployed hardening      ALL PASS, RC=0
+PAUSE 919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db  root:root 0644 189B
+gateway active/running, NRestarts=0
+cron inactive; actuator unit absent; supervisor and timer inactive
+worker units 0; project/worker/cycle processes 0; execution locks 0
+nine pilots all concurrency_limit=0 max_inflight_workers=0 publication=false
+decisions.jsonl and events.jsonl byte-identical to pre-transaction
+open pilot windows 0
+working tree changed vs pre-transaction: exactly the 73 reviewed files
+```
+
+The eight awareness files kept production's content, so no board, brief, inbox, escalation
+or event history was lost to the merge.
+
+Evidence and rollback are retained root-owned mode-`0700` outside `/opt/recursion`:
+snapshot `/var/backups/recursion/preflight-20260811T231032Z-ecc93de`, evidence
+`/var/backups/recursion/preflight-evidence-20260811T231032Z-ecc93de` with manifest root
+`1f4aa3763149d8c0d3df9ac1658893810227a826dfee038a7f46f2b5bc305b01`. `ROLLBACK.sh` remains
+valid against that snapshot; the pre-transaction `loop/auto` tip is additionally recoverable
+from the reflog.
+
+Gate 1 of the ordered list is therefore closed: the hardening is deployed and independently
+verified under unchanged PAUSE. Gates 2 through 7 are untouched and each still requires its
+own separate authorization - cron resume, actuator preflight/installation, bounded
+model/capacity configuration, one exact pilot plan and window, PAUSE removal for that single
+soak, and the observed close-out. Nothing in this deployment implies any of them.
+
+Two operational gaps remain open, both outside this transaction's scope: `cron.service` is
+`inactive` but `enabled`, so a host reboot resumes cron with the new bytes (PAUSE, not cron
+state, is the kill switch, and the deployed code is the reviewed code); and about 6 GB of
+unreaped snapshots and `/var/tmp` staging clones sit on a 38 GB disk at 50% use. Both are
+separate reviewed changes.
+
+## Authorized post-deployment maintenance (2026-08-11)
+
+Lucas authorized two follow-up production changes after the hardening deployment. PAUSE
+remained asserted, cron remained stopped, and the deployed tree was re-verified byte-identical
+to the reviewed merge after both (108 executable files, 0 mismatches).
+
+**Self-repo git authentication restored.** `origin` had been failing `Permission denied
+(publickey)` since before Phase 8, which is why the remote-tracking ref was stale and why the
+cron containment note said the normal fetch/resync path was stopped. The key was never
+missing: `/root/.ssh/id_deploy` is the recursion deploy key and authenticates correctly. Git
+simply had no identity to offer, because the box has no default-named keys, no
+`~/.ssh/config`, and no `core.sshCommand`. Fixed repo-locally in untracked `.git/config` so
+the tracked tree does not drift and so per-project deploy keys, which are selected via
+`GIT_SSH_COMMAND` and take precedence, are unaffected. A real `git fetch` then succeeded and
+independently confirmed `origin/master` is `ecc93de7...`, corroborating the tracking ref the
+transaction had set. Full root cause and the rejected alternatives are in
+`docs/plans/hermes-phase8-preflight-operational-nuances.md`.
+
+This closes a prerequisite for cron resume: with fetch broken, `resync.sh observe` fails every
+cycle and `work.sh` falls back to "building on local base", so an arm would build on a stale
+base and re-invent merged work.
+
+**Snapshot and staging prune.** Disk went from 18 GB used (50%) to 13 GB used (35%), freeing
+about 6 GB. `/var/backups/recursion` went 3.6 GB to 495 MB and `/var/tmp` staging went about
+2.4 GB to 19 MB. Only five superseded `phase1-remediation` snapshots were removed, plus fifty
+disposable `/var/tmp` clones. Everything under 20 MB was kept deliberately, since small
+history costs nothing and preserves the record.
+
+Four anchors were hard-protected and verified intact afterwards:
+
+```text
+preflight-20260811T231032Z-ecc93de            (ROLLBACK.sh depends on it; manifest reads 19 files)
+preflight-evidence-20260811T231032Z-ecc93de   (evidence + ROLLBACK.sh/TRANSACTION.sh present)
+hermes-pre-phase8-20260808T224858Z-5a8b2f7464cb  (documented retained drill backup)
+phase1-remediation-20260809T233144Z-498061d8  (the cited successful Phase 1 deployment bundle)
+```
+
+The Phase 1 rollback venv `/usr/local/lib/hermes-agent/venv.pre-phase1-498061d8f1dc` is
+outside `/var/backups` and was not touched. The post-deployment suite was running throughout;
+its staging directory was protected and it was confirmed still running afterwards.
+
+## Post-deployment suite re-run (2026-08-12T00:20:34Z)
+
+The full suite was re-run against the **deployed** tree rather than the reviewed commit: a
+disposable `--no-hardlinks` clone pinned to `458ee92b63d1250e0704f563b3a4c499e3031289`, whose
+tree was first confirmed identical to production's. This validates the merge result including
+the eight awareness files, not only `ecc93de`.
+
+```text
+BASELINE_SUITES=19   BASELINE_FAILED_SUITES=0
+phase1=4s  phase2=26s  phase3=16s  phase4=8s  phase5=65s
+phase6=972s  phase7=300s  phase8=111s      all RC=0
+live-phase1 RC=0
+run 2026-08-11T23:52:25Z to 2026-08-12T00:20:34Z
+```
+
+Timings track the pre-deployment run closely (phase6 972s vs 969s, phase7 300s vs 307s,
+phase8 111s vs 113s), so the deployment introduced no performance regression. The live Phase 1
+audit passed this time because the driver was corrected to pass `RECURSION_ROOT=/opt/recursion`
+for the red audit specifically; that variable is the live root there and the code root
+everywhere else.
+
+Final state: `loop/auto` at `458ee92b...`, `master` and `origin/master` both at `ecc93de7...`
+and now genuinely in sync over a working fetch, status exactly `?? .env.bak.1786014440`, PAUSE
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`, gateway `active/running`
+with zero restarts, cron inactive, actuator absent, zero execution locks, zero processes with a
+working directory inside the checkout, and disk at 13 GB used of 38 GB (35%).
+
+Evidence manifest root for the complete preflight, transaction, closure and re-run record is
+`f7b0318a40f84b045f10a6f033b2773c87cf1d54c123510f93e58ab4be73a651` in
+`/var/backups/recursion/preflight-evidence-20260811T231032Z-ecc93de`.
+
+Gate 1 is closed and independently re-verified. Gate 2 (cron resume) is now unblocked, its
+prerequisite having been the self-repo fetch. Gates 3 through 7 are untouched.
+
+## Gate 2: cron resumed under PAUSE (2026-08-12T00:33:27Z)
+
+Lucas authorized cron resume. Before starting the service, the corrected quiescence gate was
+built and validated with a positive control, and **one supervised cycle was run by hand** -
+the same command cron invokes - so the behaviour was observed before it could fire
+unattended.
+
+The supervised cycle was correct on every axis:
+
+```text
+PAUSED (state/PAUSE) — local monitoring only: heartbeat + brief + durable escalations;
+                       no notifications or execution
+portfolio observed (PAUSE: fetch/status only; no branch maintenance)
+brief done (deliver=0)
+paused: skipping plan/drain/conduct (execution)
+cycle done (signal=brief)                                          CYCLE_RC=0
+```
+
+`deliver=0` is the notification proof: zero sends. `new_commits_on_loop_auto=0` is the
+board-commit proof - the hardened `board()` returns early under PAUSE, so the 74 `loop: board`
+commits the old code produced will not recur. `portfolio observed` is the auth fix proving
+itself: the fetch succeeded where it had been failing every cycle.
+
+Unchanged across the cycle: HEAD, `loop/auto`, `master`, PAUSE hash, `state/BOARD.md`,
+`events.jsonl` (16 lines), `decisions.jsonl` (6 lines). Written, as designed: a new
+`state/briefs/2026-08-12.md` labelled `PAUSED — execution is halted; this brief is monitoring
+only`, and `last_seen`/`count` bumps on three pre-existing escalation rows (33 to 34) with no
+new row.
+
+`cron.service` is now `active/running`, PID 608533, PAUSE intact, crontab unmodified (four job
+lines, mtime still 2026-08-07), actuator still absent, quiescence 0. Next fires are 03:00Z
+(`fallback-watch`), 03:15Z (`cycle` and `hermes-decide`), and 06:30Z (the forced brief).
+Rollback is `systemctl stop cron.service`.
+
+Gate 2 is closed. Gates 3 through 7 - actuator preflight/installation, bounded model/capacity
+configuration, one exact pilot plan and window, PAUSE removal for that single soak, and the
+observed close-out - remain untouched and separately gated. PAUSE remains asserted; nothing
+executes.
+
+One consequence to carry forward: with cron running, the working tree now legitimately holds
+uncommitted monitoring artifacts, so a future gate must not assert an exact
+`git status --porcelain` string. See the nuances note.
+
+## Gate 3 attempted: actuator failed closed again, new root cause found (2026-08-12T00:47Z)
+
+Lucas authorized gate 3. The reviewed unit was installed, observed, and **rolled back**. The
+terminal condition is the same as 2026-08-10 - the PAUSE-safe no-op is still pending - but the
+cause is different, and it is one layer deeper than last time.
+
+**What is genuinely fixed.** The legacy-journal import defect is closed. Verified first in a
+disposable fixture against the real journal and then live: `import-journal` returned 0, the five
+pre-schema records were quarantined to `state/decision-queue/legacy/`, and the valid record
+moved `pending` to `running`. It had never been claimable before; on 2026-08-10 import failed on
+line 1 and returned before line 6 could be reached. That bug is real, was real, and is gone.
+
+**What fixing it exposed.** With the claim now reachable, `conduct-hermes.sh --paused-safe`
+refuses the record deterministically:
+
+```text
+conduct-hermes: REFUSED - decision authority/effect digest is absent or inconsistent
+```
+
+The check at `scripts/conduct-hermes.sh` recomputes an action payload digest and requires the
+record to carry a matching `decision_payload_sha256`:
+
+```sh
+[ -n "$DECISION_PAYLOAD_SHA256" ] && [ "$DECISION_PAYLOAD_SHA256" = "$ACTION_PAYLOAD_SHA256" ]   || { log "REFUSED - decision authority/effect digest is absent or inconsistent"; exit 5; }
+```
+
+`decision-6f037cbf6fb51a7f641ea9d6` does not have that field. Its keys are `actor, args,
+arguments, confidence, cost_usd, goal, goal_id, id, idempotency_key, project, provider, reason,
+schema_version, status, ts, usage, verb, why, wrong_if`. It was written `2026-08-09T15:15:01Z`,
+before the hardening introduced the digest. **It can never validate, under PAUSE or otherwise.**
+
+This is the same class of defect as the legacy-journal bug and the compat patch does not cover
+it. That patch quarantines records with no `id` (pre-schema). This record has an `id` and
+`schema_version: 1`, so it passes quarantine and reaches a validator that requires a field
+added after it was written. The compat cutoff is drawn at the wrong place.
+
+**A second, independent defect makes the first one invisible.** `rc=75` means two different
+things. `scripts/conduct-hermes.sh` uses it for "deferred, pending intentionally restored"
+(`succeeded:0|failed:1|cancelled:1|pending:75`, and the comment "rc=75 intentionally restores
+pending before the decision claim is deferred"), and the actuator therefore whitelists it:
+
+```sh
+case "$paused_rc" in
+  0|4|75) : ;;
+  *) log "PAUSE-safe queue pass failed rc=$paused_rc; pending state was preserved" ;;
+esac
+```
+
+So a permanent refusal is indistinguishable from a normal PAUSE deferral, and the actuator logs
+nothing at all. Across roughly ninety seconds of two-second passes the journal contained exactly
+one line - `started`. The queue visibly oscillated `pending` to `running` to `pending` while the
+service reported healthy. This is the 2026-08-10 "the actuator suppresses that command's
+diagnostic" defect in a new form: not suppressed by `>/dev/null` any more, but by an exit code
+that conflates a deferral with a refusal.
+
+**Rollback.** `GATE3-ROLLBACK.sh` ran clean against snapshot
+`/var/backups/recursion/gate3-20260812T004315Z` (20 files). The unit was stopped, disabled and
+removed; the managed runtime was restored exactly. Verified after: actuator unit absent and
+inactive, PAUSE `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`, gateway
+active, **cron still active so gate 2 was preserved**, queue back to one pending and zero
+quarantined, `decisions.jsonl` 6 lines and `events.jsonl` 16 lines unchanged, zero outbox files,
+zero worker units, quiescence 0, and the deployed tree still byte-identical to the reviewed merge
+(108 files, 0 mismatches). No notification, execution, worker, or pilot occurred.
+
+**Gate 3 is blocked, not merely deferred.** Two reviewed changes are needed before a retry, and
+neither was made here:
+
+1. Extend the legacy compat cutoff to cover records that carry an `id` and `schema_version` but
+   predate `decision_payload_sha256` - quarantine or migrate them the same way, and prove the
+   valid path still fails closed for a genuinely inconsistent digest.
+2. Separate "deferred" from "refused" in the actuator's accounting. A permanent refusal must be
+   visible in the journal and must not read as a healthy pass. Whitelisting `75` is correct for a
+   deferral and wrong for a refusal; they need different codes or an explicit reason.
+
+Until both land, installing the actuator gives a service that spins forever on an undrainable
+record while reporting healthy. That is a worse failure than the one it replaces, because it is
+silent.
+
+## Gate 3 root cause corrected, and Fix 2 landed (2026-08-12T01:00Z)
+
+**The previous section's root cause was wrong in its first half and is corrected here.** It
+said the digest check was the blocker and that the legacy compat cutoff was drawn at the wrong
+place. Measurement refutes that:
+
+- `decision-queue.py` `normalize()` already computes `decision_payload_sha256` (line 222), and
+  the equality checks tolerate `None` and recompute (lines 176/178). A **fresh** import of the
+  real journal produces a projection carrying
+  `decision_payload_sha256=e29cf20c1b1067e1b12fa43c82e52fbf326d293a498e60195ccacc9e53cd74cf`.
+- The projection on production lacked the field only because it was written by **pre-hardening
+  code and never re-normalized**; `import-journal` does not overwrite an existing projection.
+  That is stale state, not a code defect, and needs no compat change.
+
+**The actual blocker is provenance, one layer further on.** With a freshly imported projection
+the same record is still refused, for a different reason:
+
+```text
+conduct-hermes: REFUSED - missing or unknown decision provenance ''
+```
+
+`conduct-hermes.sh` requires `decision_source` to be `hermes-model`, `project-reconciler`, or
+`notification-reconciler`. The 2026-08-09 record has neither `decision_source` nor
+`routed_decider` - it predates the provenance model. `normalize()` computes a payload digest but
+does not synthesize provenance, and it must not: inventing a `decision_source` would forge
+authority, which is precisely what that check exists to prevent. So the record cannot execute,
+and no amount of digest work changes that.
+
+The lesson is the one already in the nuances note, applied to my own analysis: an arithmetic
+result that closes ("the digest is absent, the check requires it") describes the objects it
+measured, not the cause. The first refusal encountered was not the only refusal.
+
+### Fix 2 landed: a refusal is no longer relabelled as a deferral
+
+`finalize_claim`'s `absent` branch read:
+
+```sh
+if [ "$result_rc" -eq 75 ] || [ -f "$ROOT/state/PAUSE" ]; then   # defer, return 75
+```
+
+A genuine PAUSE decline already returns 75 through the first clause, so `|| [ -f PAUSE ]` only
+ever caught **other** failures and relabelled them as deferrals for as long as PAUSE was
+asserted. The actuator whitelisted `0|4|75` and logged nothing, which is why the service
+reported healthy for ninety seconds while the queue oscillated and two separate hard refusals
+went unreported.
+
+The patch keeps the disposition identical - pending is still preserved under PAUSE, which is the
+conservative behaviour - and changes only visibility: a non-75 child rc under PAUSE now logs
+`REFUSED under PAUSE - child rc=N ...; pending preserved, NOT a deferral` and returns a distinct
+`76`. `hermes-actuator.sh` handles `76` explicitly and points at
+`loop/logs/<date>-conduct-hermes.log` for the specific reason, latched so a two-second loop
+reports once rather than flooding.
+
+Measured on the real journal in a disposable fixture: `CONDUCT_RC=76` (was 75), both the
+provenance refusal and the new refusal line present, and `pending=1 running=0 failed=0
+succeeded=0` - disposition unchanged.
+
+Worth recording: the specific reason was **always on disk**. `conduct-hermes` tees to
+`loop/logs/<date>-conduct-hermes.log`, so `REFUSED - missing or unknown decision provenance`
+was being written every pass. Only the systemd journal was silent, because the actuator sends
+the child's stdout to `/dev/null` and the exit code carried no distinction. Evidence existing
+somewhere is not the same as evidence reaching the person reading the service.
+
+### Fix 1 is a genuine fork and is NOT implemented
+
+The record must be dispositioned, and there are three materially different ways to do it. They
+differ in blast radius, so this is escalated rather than chosen:
+
+1. **Quarantine it via the reviewed exact-hash allowlist**, as the five pre-schema records were.
+   Its stripped line digest is
+   `17e365c897961b6699ffc868b42e9ba469a1c6b5797798686224d6a4bb73165b`. Obstacle:
+   `_expected_legacy_markers` only reaches the allowlist for records that FAIL
+   `validate_record`, and this one passes, so the loop breaks before quarantine. Making it
+   reachable means changing what "valid" means.
+2. **Make provenance a validation requirement** in `decision-queue.py`, so any record without
+   `decision_source` fails validation and the allowlist then handles this one historical
+   exception. Principled and fails earlier, but it changes validity for every producer and
+   needs proof that no current emitter omits provenance.
+3. **Treat an allowlisted pre-provenance noop as a terminal success in `conduct-hermes`.**
+   Semantically exact - the record's own verb is `noop`, and doing nothing needs no authority -
+   but it puts a bypass inside the authority checker, the most security-sensitive point in the
+   file.
+
+Option 2 is the most principled and option 1 the most conservative; option 3 is cheapest and
+carries the worst failure mode if ever generalised. The choice determines what "a valid
+decision" means going forward, so Lucas picks it.
+
+Gate 3 therefore remains open. Production is untouched by all of the above: the patch exists
+only on the review branch and in disposable fixtures.
+
+## Fix 1 landed: decision provenance is a validation requirement (option 2)
+
+Lucas chose option 2. The precondition stated when proposing it - that no current emitter omits
+provenance - was audited first, and it holds. The three live producers all set the field, and
+they set exactly the three values `conduct-hermes` accepts:
+
+```text
+scripts/hermes-decide.sh:300        decision_source = hermes-model
+scripts/notification-outbox.py:1122 decision_source = notification-reconciler
+scripts/project-reconcile.py:697    decision_source = project-reconciler
+```
+
+The change is in three places, kept in sync:
+
+- `scripts/validate-control-state.py` - `decision_source` added to `REQUIRED["decision"]` and to
+  the non-empty set, plus a closed `DECISION_SOURCES` enum. A decision that cannot actuate is now
+  rejected at validation instead of at actuation, where the failure was invisible.
+- `schemas/control-plane/v1/schema.json` - the published contract gains the same required field
+  and enum. Patched textually: re-serialising with `json.dumps` reformatted all 245 lines and made
+  the change unreviewable, so the edit is two anchored strings and the diff is five lines.
+- `scripts/decision-queue.py` - a second reviewed exact-hash allowlist entry,
+  `LEGACY_PRE_PROVENANCE_NOOP_SHA256`, holding the one historical record's stripped line digest
+  `17e365c897961b6699ffc868b42e9ba469a1c6b5797798686224d6a4bb73165b`, with its own key set,
+  classification `reviewed-pre-provenance-noop`, and shape assertions that require the provenance
+  fields to be **absent**. That last condition is the load-bearing one: a record carrying a
+  *wrong* authority must keep failing closed rather than being promoted to legacy state. The
+  prefix validator now spans both reviewed blocks in exact order.
+
+Measured in a disposable fixture against the real journal:
+
+```text
+import-journal            rc=0   pending=0   legacy=6
+new marker                id=legacy-decision-17e365c897961b6699ffc868
+                          classification=reviewed-pre-provenance-noop  disposition=not-enqueued
+positive control          decision WITH valid provenance          -> VALID
+negative control          decision_source='made-up-authority'     -> ERR invalid decision provenance
+negative control          decision_source absent                  -> ERR missing required field(s)
+conduct-hermes --paused-safe                                      -> RC=0, empty queue
+```
+
+The positive control matters as much as the negatives: it proves the schema change does not
+reject what the live emitters actually produce. The gate 3 blocker is resolved - the queue now
+reaches empty instead of oscillating on an undrainable record.
+
+Both fixes exist only on the review branch. Production still runs the merged `ecc93de` bytes with
+PAUSE asserted, cron active, and no actuator installed. A gate 3 retry needs this branch reviewed
+and merged first, then a fresh PAUSE-held preflight and its own authorization.
