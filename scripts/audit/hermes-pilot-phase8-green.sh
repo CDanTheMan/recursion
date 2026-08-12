@@ -84,11 +84,30 @@ body = lines[start:end + 1]
 bad = [(start + i + 1, l) for i, l in enumerate(body) if '`' in l]
 subs = [(start + i + 1, m) for i, l in enumerate(body) for m in re.findall(r'\$\([^)]*\)', l)]
 unexpected = [(n, m) for n, m in subs if m != '$(build_brief)']
-if bad or unexpected:
+# Unescaped quotes around one word only delete the quotes. If they expose a shell separator,
+# they end the assignment word and can turn the remaining prose into a command; bash -n accepts it.
+stream = '\n'.join(body)[len('PROMPT="'):].rstrip()
+in_q, split, i = True, [], 0
+while i < len(stream):
+    c = stream[i]
+    if c == '\\':
+        i += 2; continue
+    if c == '"':
+        in_q = not in_q
+    elif not in_q and c in ' \t\n;&|()<>':
+        split.append(start + 1 + stream.count('\n', 0, i))
+    i += 1
+split = sorted(set(split))
+if bad or unexpected or split or in_q:
     for n, l in bad:
         print('FAIL backtick in prompt line %d: %s' % (n, l.strip()[:90]), file=sys.stderr)
     for n, m in unexpected:
         print('FAIL unexpected substitution in prompt line %d: %s' % (n, m), file=sys.stderr)
+    for n in split:
+        print('FAIL PROMPT assignment ends at unquoted whitespace, line %d: %s'
+              % (n, lines[n - 1].strip()[:90]), file=sys.stderr)
+    if in_q:
+        print('FAIL PROMPT string is never closed', file=sys.stderr)
     raise SystemExit(1)
 PY
 echo "ok    the prompt string contains no shell expansion that would delete its own text"
