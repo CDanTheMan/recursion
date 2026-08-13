@@ -116,6 +116,10 @@ def fixture() -> tuple[Path, Path, Path, dict[str, Any], dict[str, dict[str, Any
         "commit", "-qm", "reviewed base")
 
     profile = json.loads((SOURCE / "scripts/gates/gsc-shade-tops-v1.json").read_text())
+    # The production profile pins the reviewed committed gate bytes. The hermetic fixture may
+    # be authored from a CRLF checkout, so bind its exact local executable without weakening the
+    # production profile or runtime verification.
+    profile["controller_gate"]["sha256"] = file_hash(SOURCE / "scripts/gsc-shade-tops-gate.py")
     profile["base_commit"] = git(repo, "rev-parse", "HEAD")
     profile["seed_contract"] = inspect_repository(repo)
     profile["native_diff"]["sha256"] = file_hash(tools / "native-diff.cjs")
