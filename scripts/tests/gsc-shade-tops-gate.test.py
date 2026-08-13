@@ -158,7 +158,7 @@ def main() -> int:
             "node", "user-client/render/tools/native-diff.cjs", "--world=furys_storage",
             "--shade-tops", "--metric",
         ]
-        shape_ok = unchanged.commands[1] == expected_native and evidence is not None \
+        shape_ok = len(unchanged.commands) > 1 and unchanged.commands[1] == expected_native and evidence is not None \
             and evidence["query"]["overrides"] == ["shadeTops"]
         check("invocation forces exactly --shade-tops --metric", int(not shape_ok), 0)
 

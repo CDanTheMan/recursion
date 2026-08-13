@@ -395,7 +395,8 @@ def admit_work(base: Path, task_id: str) -> dict:
 CONTRACT_REJECTION_CATEGORIES = {
     "acceptance-missing", "acceptance-invalid", "deadline-invalid", "network-policy-invalid",
     "verification-policy-invalid", "worker-engine-invalid", "model-alias-invalid",
-    "verifier-model-alias-invalid", "model-separation-invalid",
+    "verifier-model-alias-invalid", "model-separation-invalid", "contract-projection-invalid",
+    "gate-contract-drift", "source-head-drift", "seed-contract-invalid",
 }
 
 

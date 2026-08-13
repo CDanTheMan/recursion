@@ -116,7 +116,7 @@ class Fixture:
         )
         config = {
             "schema_version": 1, "id": "chiron", "repo": str(self.repo),
-            "remote": "origin", "default_branch": "main", "deploy_key_ref": "-",
+            "remote": str(self.repo), "default_branch": "main", "deploy_key_ref": "-",
             "charter": "Build-verifiable Chiron application changes only.",
             "allowed_paths": ["user-client/render"],
             "required_non_goals": [

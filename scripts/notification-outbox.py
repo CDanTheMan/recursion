@@ -50,7 +50,8 @@ TERMINAL_EVENT_TYPES = {"goal-achieved", "goal-stopped"}
 CONTRACT_REJECTION_CATEGORIES = {
     "acceptance-missing", "acceptance-invalid", "deadline-invalid", "network-policy-invalid",
     "verification-policy-invalid", "worker-engine-invalid", "model-alias-invalid",
-    "verifier-model-alias-invalid", "model-separation-invalid",
+    "verifier-model-alias-invalid", "model-separation-invalid", "contract-projection-invalid",
+    "gate-contract-drift", "source-head-drift", "seed-contract-invalid",
 }
 
 
@@ -327,6 +328,24 @@ def authenticated_contract_rejection(base: Path, raw: dict,
     return result
 
 
+def authenticated_window_refusal(base: Path, raw: dict) -> None:
+    event_id = str(raw.get("id") or "")
+    try:
+        prepared = authenticated_transition(base, event_id, journal="state/events.jsonl")
+    except (OSError, TransitionReceiptError) as exc:
+        raise OutboxError(f"pilot-window refusal receipt is invalid: {exc}") from exc
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    detail = detail_object(event.get("detail"))
+    if prepared.get("mutations") != [] or event.get("event") != "pilot-window-refused" \
+            or event_id != raw.get("id") or event.get("project") != raw.get("project") \
+            or event.get("goal") != raw.get("goal") \
+            or set(detail) != {"window_id", "reason", "error_sha256"} \
+            or detail.get("reason") != "approved-contract-invalid" \
+            or not IDENT.fullmatch(str(detail.get("window_id") or "")) \
+            or re.fullmatch(r"[0-9a-f]{64}", str(detail.get("error_sha256") or "")) is None:
+        raise OutboxError("pilot-window refusal event contract is invalid")
+
+
 def detail_object(value: object) -> dict:
     return value if isinstance(value, dict) else {}
 
@@ -373,6 +392,8 @@ def mapped_events(raw: dict) -> list[dict]:
         event_types.append("pilot-window-armed")
     elif kind == "pilot-window-closed":
         event_types.append("pilot-window-closed")
+    elif kind == "pilot-window-refused":
+        event_types.append("lucas-attention-required")
     elif kind == "assist-open":
         event_types.append("lucas-attention-required")
     elif kind == "finish":
@@ -418,6 +439,11 @@ def all_mapped(base: Path, project: str | None = None) -> list[dict]:
         if raw.get("event") == "task-contract-invalid":
             try:
                 authenticated_contract_rejection(base, raw, require_failed_action=False)
+            except OutboxError:
+                continue
+        if raw.get("event") == "pilot-window-refused":
+            try:
+                authenticated_window_refusal(base, raw)
             except OutboxError:
                 continue
         for event in mapped_events(raw):
@@ -467,6 +493,9 @@ def message_for(event: dict) -> str:
     if event["event_type"] == "lucas-attention-required" and event.get("task_id"):
         raw_detail = str((event.get("source") or {}).get("detail") or "")[:300]
         suffix += f" question={raw_detail} reply='assist {event['task_id']} <answer>'"
+    elif event["event_type"] == "lucas-attention-required" \
+            and (event.get("source") or {}).get("event") == "pilot-window-refused":
+        suffix += f" window={detail.get('window_id') or '-'} reason=approved-contract-invalid"
     return f"{label}: project={event['project_id']}{suffix} event={event['id']}"
 
 

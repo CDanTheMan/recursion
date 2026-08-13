@@ -117,6 +117,8 @@ def main() -> int:
     forged_receipt = phase7.Fixture("contract-forged-receipt")
     forged_action = phase7.Fixture("contract-forged-action")
     compatibility = phase7.Fixture("attention-compatibility")
+    window_lawful = phase7.Fixture("window-refusal-lawful")
+    window_forged = phase7.Fixture("window-refusal-forged")
     try:
         source = prepare_rejection(lawful)
         outbox = reconcile_source(lawful)
@@ -178,8 +180,34 @@ def main() -> int:
         assert json.loads((compatibility.root / "state/notification-events" /
                            f"{attention_id}.json").read_text())["occurred_at"] == "2026-01-01T00:00:00Z"
         print("ok    replay preserves a pre-hardening attention projection timestamp")
+
+        receipt = load(window_lawful.root / "scripts/transition_receipt.py", "window_refusal_receipt")
+        refusal = {
+            "schema_version": 1, "id": "source-window-contract-refused-fixture",
+            "ts": "2026-08-07T19:00:02Z", "event": "pilot-window-refused",
+            "project": "alpha", "goal": "goal-alpha", "task": "", "pid": 1,
+            "detail": {"window_id": "window-alpha-2", "reason": "approved-contract-invalid",
+                       "error_sha256": "f" * 64},
+        }
+        receipt.commit_event(window_lawful.root, refusal)
+        window_outbox = load(window_lawful.root / "scripts/notification-outbox.py", "window_outbox")
+        mapped = [event for event in window_outbox.all_mapped(window_lawful.root, "alpha")
+                  if event.get("source", {}).get("event") == "pilot-window-refused"]
+        assert len(mapped) == 1 and mapped[0]["event_type"] == "lucas-attention-required"
+        print("ok    receipt-backed window contract refusal maps to one Lucas attention event")
+
+        window_forged.append_event("source-window-contract-refused-forged", "pilot-window-refused",
+                                   detail={"window_id": "window-alpha-2",
+                                           "reason": "approved-contract-invalid",
+                                           "error_sha256": "f" * 64})
+        forged_window_outbox = load(window_forged.root / "scripts/notification-outbox.py",
+                                    "window_forged_outbox")
+        assert not [event for event in forged_window_outbox.all_mapped(window_forged.root, "alpha")
+                    if event.get("source", {}).get("event") == "pilot-window-refused"]
+        print("ok    raw window refusal without indexed receipt projects no attention event")
     finally:
-        for fixture in (lawful, raw_only, forged_receipt, forged_action, compatibility):
+        for fixture in (lawful, raw_only, forged_receipt, forged_action, compatibility,
+                        window_lawful, window_forged):
             fixture.close()
     print("invalid-task-contract-notification: ALL PASS")
     return 0

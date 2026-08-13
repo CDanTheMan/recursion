@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -639,11 +640,31 @@ def live_authority_contract(cfg: dict) -> dict:
         fail("project repository must be exactly clean before a plan contract is bound")
     if not re.fullmatch(r"[0-9a-f]{40,64}", head) or current != branch or branch_head != head:
         fail("project repository HEAD is not the configured default-branch tip")
+    env = os.environ.copy(); remote = str(cfg.get("remote") or "origin")
+    if remote.startswith("git@"):
+        key = os.path.expanduser(str(cfg.get("deploy_key_ref") or ""))
+        if not key or not Path(key).is_file():
+            fail("project remote freshness credential is absent")
+        env["GIT_SSH_COMMAND"] = (
+            f"ssh -i {shlex.quote(key)} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
+        )
+    try:
+        remote_result = subprocess.run(
+            ["git", "ls-remote", remote, f"refs/heads/{branch}"], env=env,
+            text=True, capture_output=True, timeout=20, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        fail("project remote freshness could not be measured", 74)
+    remote_head = remote_result.stdout.split()[0] \
+        if remote_result.returncode == 0 and remote_result.stdout.split() else ""
+    if remote_head != head:
+        fail("project default branch is not equal to its authenticated remote tip")
     required = project_required_non_goals(cfg)
     return {
         "charter_sha256": hashlib.sha256(str(cfg.get("charter") or "").encode()).hexdigest(),
         "default_branch": branch,
         "required_non_goals": required,
+        "remote_head": remote_head,
         "source_head": head,
     }
 

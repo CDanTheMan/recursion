@@ -129,9 +129,11 @@ import hashlib,json,sys
 text=open(sys.argv[1],encoding='utf-8',errors='surrogateescape').read()
 header,sep,body=text.partition('\n\n')
 keys={'id','project_id','pilot_id','goal_id','goal','engine','repo','acceptance','workdir',
-      'allowed_paths','non_goals','worker_class','model_alias','verifier_model_alias',
-      'deadline_seconds','verifier_deadline_seconds','network_policy','evidence_contract',
-      'verification','expected_change','gate_files','autonomy','seed'}
+       'allowed_paths','non_goals','worker_class','model_alias','verifier_model_alias',
+       'deadline_seconds','verifier_deadline_seconds','network_policy','evidence_contract',
+       'verification','expected_change','gate_class','gate_files','controller_gate_files',
+       'gate_contract','source_head','source_branch','charter_sha256','plan_id','plan_digest',
+       'autonomy','seed','seed_manifest','seed_manifest_sha256','seed_digest'}
 fields={}
 for line in header.splitlines():
     if ':' in line and not line[:1].isspace():
@@ -422,7 +424,7 @@ if [ -x "$ROOT/scripts/validate-gate.py" ]; then
   fi
   if [ -n "$PILOT_ID" ]; then
     [ -n "$APPROVED_GATE_CONTRACT" ] && [ -n "$SOURCE_HEAD" ] && [ -n "$SOURCE_BRANCH" ] \
-      || { log "Phase 8 task lacks approved gate/source identity"; exit 78; }
+      || { reject_preworker_contract contract-projection-invalid; exit $?; }
     python3 - "$APPROVED_GATE_CONTRACT" "$GATE_CONTRACT" <<'PY' || {
 import json,sys
 try:
@@ -432,18 +434,14 @@ except json.JSONDecodeError:
 raise SystemExit(0 if approved == observed else 1)
 PY
       log "Phase 8 approved gate contract differs from execution bytes"
-      RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" \
-        reject-task-contract "$ID" >>"$LOG" 2>&1 || exit $?
-      exit 78
+      reject_preworker_contract gate-contract-drift; exit $?
     }
     observed_head="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || true)"
     observed_branch="$(git -C "$REPO_DIR" branch --show-current 2>/dev/null || true)"
     [ "$observed_head" = "$SOURCE_HEAD" ] && [ "$observed_branch" = "$SOURCE_BRANCH" ] \
       || {
         log "Phase 8 approved source HEAD differs before worker admission"
-        RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" \
-          reject-task-contract "$ID" >>"$LOG" 2>&1 || exit $?
-        exit 78
+        reject_preworker_contract source-head-drift; exit $?
       }
   fi
 elif [ "$STRICT_PHASE5" = 1 ]; then
@@ -1092,6 +1090,15 @@ integrate_remote(){
 }
 
 # ============================ pipeline ============================
+if ! validate_seed_source; then
+  if [ -n "$PILOT_ID" ]; then
+    reject_preworker_contract seed-contract-invalid; exit $?
+  fi
+  board finish "$ID" blocked - "seed contract invalid"
+  complete_terminal_escalation escalated \
+    "approved seed manifest or content digest is absent, unsafe, or stale; no worker was launched" || exit $?
+  exit 0
+fi
 pause_checkpoint "board transition" || exit 75
 board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" running "${GOAL:0:40}"
 claim_task; claim_rc=$?
@@ -1105,6 +1112,12 @@ commit_state
 # observed failures this closes.
 FRESH_WHY=""
 require_fresh_base(){
+  if [ -n "$PILOT_ID" ] && [ -n "$SOURCE_HEAD" ]; then
+    [ "$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || true)" = "$SOURCE_HEAD" ] \
+      || { FRESH_WHY="project HEAD moved after exact Phase 8 admission"; return 1; }
+    log "base freshness: exact approved Phase 8 source $SOURCE_HEAD"
+    return 0
+  fi
   if [ "${RECURSION_REQUIRE_FRESH_BASE:-1}" != "1" ]; then
     log "FRESH-BASE CHECK DISABLED (RECURSION_REQUIRE_FRESH_BASE=0) — building on whatever base is local"
     return 0
@@ -1126,13 +1139,6 @@ require_fresh_base(){
 if ! require_fresh_base; then
   board finish "$ID" blocked - "stale/unprovable base"
   complete_terminal_escalation blocked "$FRESH_WHY" || exit $?
-  exit 0
-fi
-
-if ! validate_seed_source; then
-  board finish "$ID" blocked - "seed contract invalid"
-  complete_terminal_escalation escalated \
-    "approved seed manifest or content digest is absent, unsafe, or stale; no worker was launched" || exit $?
   exit 0
 fi
 
