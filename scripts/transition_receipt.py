@@ -375,7 +375,7 @@ def authenticated_transition(base: Path, event_id: str,
             or marker.get("event_id") != event_id:
         raise TransitionReceiptError(f"transition projected marker is invalid: {event_id}")
     states = [_witness_state(base, mutation) for mutation in prepared.get("mutations", [])]
-    if not states or any(state != "expected" for state in states):
+    if any(state != "expected" for state in states):
         raise TransitionReceiptError(
             f"transition canonical witnesses disagree: {event_id} states={states}"
         )
