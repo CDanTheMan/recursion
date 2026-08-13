@@ -40,6 +40,7 @@ CONTROLS = [
     "real Telegram 429/5xx and pre-send network failures use retryable transport semantics",
     "a pre-receipt crash is resolved without a blind resend",
     "failed reconcile and portfolio actions receive bounded fresh retry identities",
+    "pre-worker contract rejection reports task stop, goal stop, and Lucas attention exactly once",
 ]
 
 
@@ -526,6 +527,72 @@ def main() -> int:
                attention_deliveries[0]["destination"] == attention.direct and
                len(stopped_deliveries) == 1 and stopped_deliveries[0]["destination"] == attention.project_topic,
                CONTROLS[10], results)
+
+        rejection = Fixture("contract-rejection"); fixtures.append(rejection)
+        transition_id = "transition-" + "c" * 32
+        (rejection.root / "state/tasks/task-alpha.md").write_text(
+            "schema_version: 1\nversion: 4\nid: task-alpha\nproject_id: alpha\n"
+            "pilot_id: pilot-alpha\ngoal_id: goal-alpha\ndependencies:\nallowed_paths: app\n"
+            "acceptance: true\nstatus: blocked\nattempts: 0\nlease_expires: 0\n"
+            "transition_reason: task-contract-invalid\nblocker_actor: controller\n"
+            "blocked_on: invalid-acceptance-gate\n"
+            "contract_rejection_event_id: source-contract-invalid\n"
+            f"last_transition_id: {transition_id}\n",
+            encoding="utf-8",
+        )
+        (rejection.root / "state/goals/goal-alpha.md").write_text(
+            "schema_version: 1\nversion: 5\nid: goal-alpha\nproject_id: alpha\n"
+            "pilot_id: pilot-alpha\ninstruction_id: 00000001\nplan_id: plan-alpha\n"
+            "acceptance_suite: bash -n app/main.sh\nstatus: blocked\nterminal_reported: 1\n"
+            "last_transition_reason: task-contract-invalid\nlast_transition_from: active\n"
+            "last_transition_task: task-alpha\n"
+            f"last_transition_id: {transition_id}\n",
+            encoding="utf-8",
+        )
+        for path in (rejection.root / "state/runs").glob("*.json"):
+            path.unlink()
+        for path in (rejection.root / "state/evidence").glob("*.json"):
+            path.unlink()
+        rejection.write_json("state/actions/action-contract-work.json", {
+            "schema_version": 1, "id": "action-contract-work", "decision_id": "decision-contract-work",
+            "instruction_id": None, "idempotency_key": "fixture:contract-work", "verb": "work",
+            "arguments": ["task-alpha"], "goal_id": "goal-alpha", "status": "failed",
+            "lease_expires": None, "attempts": 1, "result_evidence": "log=fixture rc=78",
+        })
+        raw_rejection = {
+            "schema_version": 1, "id": "source-contract-invalid", "ts": "2026-08-07T19:00:00Z",
+            "event": "task-contract-invalid", "project": "alpha", "goal": "goal-alpha",
+            "task": "task-alpha", "pid": 1, "transition_id": transition_id,
+            "detail": {"attempts": 0, "reason": "invalid-acceptance-gate",
+                       "stage": "controller-pre-worker"},
+        }
+        with (rejection.root / "state/events.jsonl").open("a", encoding="utf-8") as output:
+            output.write(json.dumps(raw_rejection, sort_keys=True) + "\n")
+        rejection.ticks(12)
+        rejection_types = [row.get("event_type") for row in rejection.events()]
+        rejection_report_path = rejection.root / "state/reports/goal-alpha-pilot.json"
+        rejection_audit_path = rejection.root / "state/reports/goal-alpha-audit.json"
+        rejection_report = json.loads(rejection_report_path.read_text(encoding="utf-8")) \
+            if rejection_report_path.exists() else {}
+        rejection_audit = json.loads(rejection_audit_path.read_text(encoding="utf-8")) \
+            if rejection_audit_path.exists() else {}
+        rejection_evidence = rejection_report.get("evidence", {})
+        report(
+            rejection_types.count("task-blocked") == 1
+            and rejection_types.count("goal-stopped") == 1
+            and rejection_types.count("lucas-attention-required") == 1
+            and len(event_deliveries(rejection, "task-blocked")) == 1
+            and len(event_deliveries(rejection, "goal-stopped")) == 1
+            and len(event_deliveries(rejection, "lucas-attention-required")) == 1
+            and len(rejection_evidence.get("controller_rejections", [])) == 1
+            and rejection_evidence["controller_rejections"][0].get("id") == "source-contract-invalid"
+            and rejection_evidence.get("workers") == []
+            and rejection_evidence.get("commits") == []
+            and rejection_evidence.get("gates") == []
+            and rejection_evidence.get("verifier") == []
+            and rejection_audit.get("complete") is True,
+            CONTROLS[19], results,
+        )
         portfolio_events = [row for row in terminal.events() if row.get("event_type") == "portfolio-result"]
         pilot_events = [row for row in terminal.events() if row.get("event_type") == "pilot-terminal-report"]
         report(len(portfolio_events) == 1 and len(pilot_events) == 1 and

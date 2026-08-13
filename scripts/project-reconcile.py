@@ -351,6 +351,96 @@ def admit_work(base: Path, task_id: str) -> dict:
     return {"project_id": project, "goal_id": goal_id, "window_id": window.get("id")}
 
 
+def task_contract_event_id(project: str, goal_id: str, task_id: str) -> str:
+    identity = f"{project}\0{goal_id}\0{task_id}\0pre-worker-contract-v1".encode()
+    return "source-task-contract-invalid-" + hashlib.sha256(identity).hexdigest()[:24]
+
+
+def task_contract_event(project: str, goal_id: str, task_id: str) -> dict:
+    return transition_event(
+        "task-contract-invalid", project, goal_id, task_id,
+        {
+            "reason": "invalid-acceptance-gate",
+            "stage": "controller-pre-worker",
+            "attempts": 0,
+        },
+        task_contract_event_id(project, goal_id, task_id),
+    )
+
+
+def reject_task_contract(base: Path, task_id: str) -> dict:
+    """Atomically stop a pilot task and its goal before a worker can be leased.
+
+    Gate validation runs inside work.sh after dispatch authority has been admitted but before
+    taskctl increments attempts.  A controller rejection at that seam is terminal evidence,
+    not a worker escalation: task and goal therefore share one mutation-backed receipt.  The
+    stable source event also lets an exact retry finish a partial multi-file transition.
+    """
+    task_path = base / "state/tasks" / f"{task_id}.md"
+    task = read_fields(task_path)
+    project, goal_id = task.get("project_id", ""), task.get("goal_id", "")
+    if not IDENT.fullmatch(task_id) or not IDENT.fullmatch(project) or not IDENT.fullmatch(goal_id):
+        raise ReconcileError("contract rejection lacks canonical task/project/goal identity")
+    if not task.get("pilot_id"):
+        raise ReconcileError("contract rejection is reserved for project-pilot work")
+    event = task_contract_event(project, goal_id, task_id)
+    goal_file = goal_path(base, goal_id)
+    with goal_lock(base, goal_id):
+        try:
+            resumed = resume_transition(base, event)
+        except (OSError, TransitionReceiptError) as exc:
+            raise ReconcileError(f"task-contract rejection recovery failed: {exc}") from exc
+        if resumed:
+            ensure_terminal_events(base, project, goal_id, read_fields(goal_file))
+            return {
+                "project_id": project, "goal_id": goal_id, "task_id": task_id,
+                "event_id": event["id"], "status": "blocked", "replayed": True,
+            }
+
+        # A new rejection inherits the exact execution capability already checked by work.sh.
+        # Only recovery of an existing receipt is allowed after PAUSE/window revocation.
+        if (base / "state/PAUSE").exists():
+            raise ReconcileError("PAUSE permits only exact task-contract rejection recovery")
+        require_window(base, project, goal_id)
+
+        task = read_fields(task_path)
+        goal = read_fields(goal_file)
+        if task.get("project_id") != project or task.get("goal_id") != goal_id \
+                or goal.get("project_id") != project:
+            raise ReconcileError("contract rejection crossed project or goal scope")
+        if task.get("status") not in {"ready", "queued"} or goal.get("status") != "active":
+            raise ReconcileError("contract rejection compare-and-swap found unrelated task or goal state")
+        if safe_int(task.get("attempts")) != 0 or task.get("candidate_commit") \
+                or run_records(base, {task_id}):
+            raise ReconcileError("contract rejection is not pre-worker: execution evidence exists")
+
+        timestamp = now_iso()
+        task_version = safe_int(task.get("version"), 1) + 1
+        goal_version = safe_int(goal.get("version"), 1) + 1
+        task_changes = {
+            "status": "blocked", "version": str(task_version), "lease_expires": "0",
+            "transition_reason": "task-contract-invalid", "transition_at": timestamp,
+            "blocker_actor": "controller", "blocked_on": "invalid-acceptance-gate",
+            "contract_rejection_event_id": str(event["id"]),
+        }
+        goal_changes = {
+            "status": "blocked", "version": str(goal_version),
+            "last_transition_at": timestamp, "last_transition_reason": "task-contract-invalid",
+            "last_transition_from": "active", "last_transition_task": task_id,
+            "terminal_reported": "1", "finished_at": timestamp,
+        }
+        commit_reconcile_transition(
+            base,
+            [fields_mutation(task_path, task_changes), fields_mutation(goal_file, goal_changes)],
+            event, authoritative_index=1,
+        )
+        ensure_terminal_events(base, project, goal_id, read_fields(goal_file))
+    return {
+        "project_id": project, "goal_id": goal_id, "task_id": task_id,
+        "event_id": event["id"], "status": "blocked", "replayed": False,
+    }
+
+
 def resume_assist(base: Path, task_id: str, instruction_id: str) -> dict:
     task_path = base / "state/tasks" / f"{task_id}.md"
     assist_path = base / "state/assists" / f"{task_id}.md"
@@ -984,11 +1074,17 @@ def ensure_terminal_events(base: Path, project: str, goal_id: str, goal: dict[st
         # Legacy terminal goals do not carry enough information to synthesize an honest
         # transition.  New transitions always persist both fields before projection.
         return
-    transition = transition_event(
-        "goal-transition", project, goal_id,
-        detail={"from": expected, "to": target, "reason": reason, "version": version},
-        event_id=terminal_event_id(project, goal_id, expected, target, version, "transition"),
-    )
+    if expected == "active" and target == "blocked" and reason == "task-contract-invalid":
+        task_id = goal.get("last_transition_task", "")
+        if not IDENT.fullmatch(task_id):
+            raise ReconcileError("terminal contract rejection lacks its task identity")
+        transition = task_contract_event(project, goal_id, task_id)
+    else:
+        transition = transition_event(
+            "goal-transition", project, goal_id,
+            detail={"from": expected, "to": target, "reason": reason, "version": version},
+            event_id=terminal_event_id(project, goal_id, expected, target, version, "transition"),
+        )
     try:
         # The state-changing CAS already owns this identity. Reuse its mutation-backed receipt;
         # treating the same event as a new pure event would collide after a successful commit.
@@ -1580,6 +1676,8 @@ def main() -> int:
     resume_cmd = sub.add_parser("resume-assist")
     resume_cmd.add_argument("task")
     resume_cmd.add_argument("instruction")
+    reject_cmd = sub.add_parser("reject-task-contract")
+    reject_cmd.add_argument("task")
     for name in ("reconcile", "verify-goal"):
         cmd = sub.add_parser(name)
         cmd.add_argument("project")
@@ -1610,6 +1708,10 @@ def main() -> int:
             return 0
         if args.command == "resume-assist":
             print(json.dumps(resume_assist(base, args.task, args.instruction),
+                             sort_keys=True, separators=(",", ":")))
+            return 0
+        if args.command == "reject-task-contract":
+            print(json.dumps(reject_task_contract(base, args.task),
                              sort_keys=True, separators=(",", ":")))
             return 0
         if (base / "state/PAUSE").exists():

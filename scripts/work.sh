@@ -359,6 +359,20 @@ GATE_CONTRACT=""
 if [ -x "$ROOT/scripts/validate-gate.py" ]; then
   if ! GATE_CONTRACT="$(python3 "$ROOT/scripts/validate-gate.py" --acceptance "$ACCEPTANCE" \
       --allowed-paths "${ALLOWED_PATHS:-$WORKDIR}" --gate-files "$GATE_FILES" --repo "$REPO_DIR" 2>>"$LOG")"; then
+    if [ -n "${PILOT_ID:-}" ] && [ -x "$ROOT/scripts/project-reconcile.py" ]; then
+      # This is a controller contract rejection before taskctl start: attempts must remain zero.
+      # Task and parent goal close under one receipt so PAUSE/window revocation cannot strand an
+      # active goal, and nonzero makes the enclosing work action durably fail rather than succeed.
+      if RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" \
+          reject-task-contract "$ID" >>"$LOG" 2>&1; then
+        log "pilot task contract rejected before worker launch; task and goal are blocked"
+        exit 78
+      else
+        rc=$?
+        log "pilot task contract rejection failed closed (rc=$rc)"
+        exit "$rc"
+      fi
+    fi
     board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "invalid acceptance gate"
     complete_terminal_escalation escalated \
       "invalid or structurally vacuous acceptance gate; no worker was launched" || exit $?

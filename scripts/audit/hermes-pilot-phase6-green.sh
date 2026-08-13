@@ -39,6 +39,7 @@ grep -q 'status") not in ACTIVE_GOALS' scripts/project-reconcile.py
 grep -q 'consumed_task_ids' scripts/tests/hermes-pilot-phase6-red.test.sh
 grep -q 'mutation-backed terminal receipt resumes and replays exactly once' \
   scripts/tests/hermes-pilot-phase6-red.test.sh
+grep -q 'invalid pilot gate atomically blocks task+goal' scripts/tests/hermes-pilot-phase6-red.test.sh
 echo "ok    verifying closes task creation; evidence is required to reopen; terminal goals stay closed"
 
 cat > "$TMP/goal.json" <<'JSON'

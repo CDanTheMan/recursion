@@ -293,6 +293,10 @@ def mapped_events(raw: dict) -> list[dict]:
             event_types.append(f"task-{match.group(1)}")
     elif kind in {"block", "task-blocked"}:
         event_types.append("task-blocked")
+    elif kind == "task-contract-invalid":
+        # One receipt owns both canonical mutations.  Fan it out as the task stop and goal stop;
+        # goal-stopped reconciliation already creates the one Lucas-attention event.
+        event_types.extend(("task-blocked", "goal-stopped"))
     elif kind == "assist-answer":
         event_types.append("human-answer-received")
     elif kind in {"review-published", "review-branch-published"}:
@@ -693,11 +697,14 @@ def build_chain(base: Path, project: str, goal_id: str) -> dict:
                      | {str(row.get("commit_oid") or "") for row in runs if row.get("commit_oid")})
     gates = [row.get("machine_gate") for row in implementers if isinstance(row.get("machine_gate"), dict)]
     review = []
+    controller_rejections = []
     for raw in raw_events(base):
-        if raw.get("project") == project and raw.get("goal") == goal_id and raw.get("event") in {
-            "review-published", "review-branch-published"
-        }:
+        if raw.get("project") != project or raw.get("goal") != goal_id:
+            continue
+        if raw.get("event") in {"review-published", "review-branch-published"}:
             review.append(raw)
+        if raw.get("event") == "task-contract-invalid":
+            controller_rejections.append(raw)
     pilot_path = base / "state/reports" / f"{goal_id}-pilot.json"
     head_path = base / "state/reports" / f"{goal_id}-head.json"
     pilot_report = read_json(pilot_path) if pilot_path.is_file() else None
@@ -714,14 +721,45 @@ def build_chain(base: Path, project: str, goal_id: str) -> dict:
                 "destination": row["destination"], "transport": receipt["transport"],
                 "transport_message_id": receipt["message_id"], "acknowledged_at": receipt["acknowledged_at"],
             })
+    rejection_complete = False
+    if len(controller_rejections) == 1:
+        rejection = controller_rejections[0]
+        rejection_task_id = str(rejection.get("task") or "")
+        rejection_task = next((row for row in tasks if row.get("id") == rejection_task_id), {})
+        transition_id = str(rejection.get("transition_id") or "")
+        detail = detail_object(rejection.get("detail"))
+        failed_work = [
+            row for row in actions
+            if row.get("verb") == "work" and row.get("status") == "failed"
+            and rejection_task_id in [str(item) for item in (row.get("arguments") or [])]
+        ]
+        rejection_complete = bool(
+            re.fullmatch(r"transition-[0-9a-f]{32}", transition_id)
+            and goal.get("status") == "blocked"
+            and goal.get("last_transition_reason") == "task-contract-invalid"
+            and goal.get("last_transition_task") == rejection_task_id
+            and goal.get("last_transition_id") == transition_id
+            and rejection_task.get("status") == "blocked"
+            and rejection_task.get("transition_reason") == "task-contract-invalid"
+            and rejection_task.get("contract_rejection_event_id") == rejection.get("id")
+            and rejection_task.get("last_transition_id") == transition_id
+            and int(rejection_task.get("attempts") or 0) == 0
+            and detail == {"attempts": 0, "reason": "invalid-acceptance-gate",
+                           "stage": "controller-pre-worker"}
+            and len(failed_work) == 1
+            and not runs and not commits and not gates and not verifiers and not review
+        )
     return {
+        "goal": goal,
         "instruction": {"id": instruction_id, "record": instruction, "action_ids": instruction.get("action_ids")},
         "plan": plans, "plan_approval": approval_instructions, "pilot_windows": windows,
         "actions": actions, "tasks": tasks, "workers": runs, "commits": commits, "gates": gates,
-        "verifier": verifiers, "review_branch": review, "pilot_report": pilot_report,
+        "verifier": verifiers, "review_branch": review, "controller_rejections": controller_rejections,
+        "pilot_report": pilot_report,
         "head_report": head_report, "delivery_acknowledgements": acknowledgements,
         "_delivery_count": len(relevant_deliveries),
         "_all_acknowledged": bool(relevant_deliveries) and len(acknowledgements) == len(relevant_deliveries),
+        "_controller_rejection_complete": rejection_complete,
     }
 
 
@@ -742,10 +780,18 @@ def terminal_report_event(base: Path, terminal: dict, create: bool) -> dict | No
         if not create:
             return None
         chain = build_chain(base, project, goal_id)
-        prerequisites = bool(
+        execution_prerequisites = bool(
             chain["instruction"]["id"] and chain["instruction"]["record"] and chain["plan"] and chain["actions"] and
             chain["tasks"] and chain["workers"] and chain["commits"] and chain["gates"] and chain["verifier"]
         )
+        rejection_source = str((terminal.get("source") or {}).get("event") or "") \
+            == "task-contract-invalid"
+        rejection_prerequisites = bool(
+            rejection_source and chain["instruction"]["id"] and chain["instruction"]["record"]
+            and chain["plan"] and chain["actions"] and chain["tasks"]
+            and chain.get("_controller_rejection_complete", False)
+        )
+        prerequisites = execution_prerequisites or rejection_prerequisites
         if any("plan_digest" in row for row in chain["plan"]):
             prerequisites = prerequisites and bool(chain["plan_approval"] and chain["pilot_windows"])
         if terminal["event_type"] == "goal-achieved":
@@ -797,7 +843,9 @@ def reconcile_event(base: Path, project: str, event_id: str) -> None:
             "id": stable_id("event", value["id"], "lucas-attention-required"),
             "source_event_id": value["id"], "event_type": "lucas-attention-required",
             "project_id": project, "goal_id": value.get("goal_id") or "", "task_id": "",
-            "occurred_at": now_iso(),
+            # This projection is replayable.  A fresh wall-clock value made an exact retry
+            # disagree with the already-recorded attention event even though its id was stable.
+            "occurred_at": value.get("occurred_at") or value.get("created_at") or now_iso(),
         }
         create_event(base, attention)
 
@@ -998,12 +1046,18 @@ def audit_goal(base: Path, project: str, goal_id: str) -> None:
     require_actuator()
     recover_notification_transitions(base)
     chain = build_chain(base, project, goal_id)
-    required = bool(
+    execution_required = bool(
         chain["instruction"]["id"] and chain["instruction"]["record"] and chain["plan"] and chain["actions"] and
         chain["tasks"] and chain["workers"] and chain["commits"] and chain["gates"] and
         chain["verifier"] and chain["pilot_report"] and chain["head_report"] and
         chain["_all_acknowledged"]
     )
+    rejection_required = bool(
+        chain["instruction"]["id"] and chain["instruction"]["record"] and chain["plan"] and chain["actions"]
+        and chain["tasks"] and chain.get("_controller_rejection_complete", False)
+        and chain["pilot_report"] and chain["head_report"] and chain["_all_acknowledged"]
+    )
+    required = execution_required or rejection_required
     terminal_types = {value.get("event_type") for _, value in notification_events(base, project)
                       if value.get("goal_id") == goal_id and value.get("event_type") in TERMINAL_EVENT_TYPES}
     if "goal-achieved" in terminal_types:

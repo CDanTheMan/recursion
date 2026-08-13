@@ -584,6 +584,60 @@ else
   no "a project appender crossed the runtime-state/taskctl serialization boundary"
 fi
 
+# 21. A structurally invalid pilot gate is a controller rejection, not a successful worker
+# action.  Task+goal close under one receipt before attempts/worktrees/runs exist; exact replay
+# (including recovery after PAUSE lands between the two state writes) cannot duplicate evidence.
+R="$(setup invalid-task-contract active)"; write_task "$R" contract-task ready 0
+set_field "$R/state/tasks/contract-task.md" acceptance true
+cp "$SRC/scripts/work.sh" "$SRC/scripts/validate-gate.py" "$R/scripts/"
+chmod +x "$R/scripts/work.sh" "$R/scripts/validate-gate.py"
+ticks "$R" 4
+first_work_rc=0
+RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 RECURSION_GIT_FETCH=0 \
+  bash "$R/scripts/work.sh" contract-task >/dev/null 2>&1 || first_work_rc=$?
+contract_events="$(grep -c '"event":"task-contract-invalid"' "$R/state/events.jsonl" 2>/dev/null || true)"
+terminal_events="$(grep -c '"event":"goal-terminal"' "$R/state/events.jsonl" 2>/dev/null || true)"
+failed_work_actions="$(python3 - "$R/state/actions" <<'PY'
+import glob,json,sys
+rows=[]
+for path in glob.glob(sys.argv[1]+'/*.json'):
+    try: row=json.load(open(path))
+    except Exception: continue
+    if row.get('verb')=='work': rows.append(row)
+print(sum(row.get('status')=='failed' for row in rows))
+PY
+)"
+if [ "$first_work_rc" = 78 ] && [ "$(task_status "$R" contract-task)" = blocked ] \
+   && [ "$(goal_status "$R")" = blocked ] \
+   && [ "$(field "$R/state/tasks/contract-task.md" attempts)" = 0 ] \
+   && [ "$failed_work_actions" = 1 ] && [ "$contract_events" = 1 ] && [ "$terminal_events" = 1 ] \
+   && ! find "$R/state/runs" -type f -print -quit | grep -q . \
+   && [ ! -d "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["repo"])' "$R/state/project-config/phase6.json")/.worktrees/contract-task" ]; then
+  ok "invalid pilot gate atomically blocks task+goal, fails work action, and launches nothing"
+else
+  no "invalid pilot gate succeeded, stranded the goal, incremented attempts, or launched execution"
+fi
+
+C="$(setup invalid-contract-crash active)"; write_task "$C" crash-contract ready 0
+crash_rc=0; paused_replay_rc=0
+RECURSION_ROOT="$C" RECURSION_TRANSITION_FAILPOINT=state-write-1 \
+  python3 "$C/scripts/project-reconcile.py" reject-task-contract crash-contract \
+  >/dev/null 2>&1 || crash_rc=$?
+touch "$C/state/PAUSE"
+RECURSION_ROOT="$C" python3 "$C/scripts/project-reconcile.py" reject-task-contract crash-contract \
+  >/dev/null 2>&1 || paused_replay_rc=$?
+crash_events="$(grep -c '"event":"task-contract-invalid"' "$C/state/events.jsonl" 2>/dev/null || true)"
+task_receipt="$(field "$C/state/tasks/crash-contract.md" last_transition_id)"
+goal_receipt="$(field "$C/state/goals/phase6-goal.md" last_transition_id)"
+if [ "$crash_rc" != 0 ] && [ "$paused_replay_rc" = 0 ] \
+   && [ "$(task_status "$C" crash-contract)" = blocked ] && [ "$(goal_status "$C")" = blocked ] \
+   && [ "$(field "$C/state/tasks/crash-contract.md" attempts)" = 0 ] \
+   && [ -n "$task_receipt" ] && [ "$task_receipt" = "$goal_receipt" ] && [ "$crash_events" = 1 ]; then
+  ok "PAUSE-time exact replay completes one partial task-contract rejection receipt"
+else
+  no "partial contract rejection was not safely recoverable after PAUSE"
+fi
+
 echo
 [ "$fails" -eq 0 ] && { echo "hermes-pilot-phase6-red: ALL PASS"; exit 0; }
 echo "hermes-pilot-phase6-red: $fails FAILED (expected on the pre-Phase 6 base)"; exit 1
