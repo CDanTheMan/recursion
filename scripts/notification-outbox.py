@@ -672,7 +672,7 @@ def authenticated_assist_open_projection(base: Path, raw: dict, prepared: dict) 
     kind = str(assist.get("kind") or "")
     if assist.get("task") != task_id or kind not in {"decision", "evidence", "access", "in-game"} \
             or assist.get("status") not in {"open", "answered"} \
-            or task.get("project_id") != event.get("project") \
+            or not task.get("pilot_id") or task.get("project_id") != event.get("project") \
             or task.get("goal_id") != event.get("goal"):
         raise OutboxError("assist-open projection lacks its durable task/assist witness")
     document = assist_path.read_text(encoding="utf-8", errors="strict")
@@ -682,7 +682,7 @@ def authenticated_assist_open_projection(base: Path, raw: dict, prepared: dict) 
     if question_match is None:
         raise OutboxError("assist-open projection lacks its exact durable question")
     question = question_match.group(1).rstrip("\n")
-    truncated = question.encode("utf-8")[:240].decode("utf-8", errors="replace")
+    truncated = question.encode("utf-8")[:240].decode("utf-8", errors="ignore")
     if event.get("detail") != f"{kind}: {truncated}":
         raise OutboxError("assist-open projection disagrees with its durable question")
 

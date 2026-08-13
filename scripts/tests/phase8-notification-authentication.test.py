@@ -571,14 +571,17 @@ def test_pure_receipt_rows_project_nothing() -> tuple[bool, str]:
 def test_receipt_bound_assist_open_projects_once() -> tuple[bool, str]:
     fixture = Fixture("lawful-assist", lawful=False)
     try:
+        question = "x" * 239 + "🐎"
+        snippet = question.encode("utf-8")[:240].decode("utf-8", errors="ignore")
         (fixture.root / "state/tasks/task-assist.md").write_text(
-            "id: task-assist\nproject_id: alpha\ngoal_id: goal-alpha\nstatus: blocked\n",
+            "id: task-assist\nproject_id: alpha\npilot_id: pilot-alpha\n"
+            "goal_id: goal-alpha\nstatus: blocked\n",
             encoding="utf-8",
         )
         (fixture.root / "state/assists/task-assist.md").write_text(
             "task: task-assist\nkind: decision\nstatus: open\n"
             "asked: 2026-08-10T00:00:03Z\nasked_by: work.sh\nanswered:\nanswered_by:\n\n"
-            "## QUESTION\nChoose the reviewed option.\n\n"
+            f"## QUESTION\n{question}\n\n"
             "## WHAT WOULD SATISFY THIS\nA bounded decision.\n\n"
             "## ANSWER\n_(unanswered)_\n",
             encoding="utf-8",
@@ -587,13 +590,41 @@ def test_receipt_bound_assist_open_projects_once() -> tuple[bool, str]:
             "schema_version": 1, "id": "source-lawful-assist", "ts": "2026-08-10T00:00:03Z",
             "event": "assist-open", "project": "alpha", "goal": "goal-alpha",
             "task": "task-assist", "pid": 1,
-            "detail": "decision: Choose the reviewed option.",
+            "detail": f"decision: {snippet}",
         })
         first = fixture.mapped_types()
         second = fixture.mapped_types()
         if first.count("lucas-attention-required") != 1 or second != first:
             return False, f"receipt-bound assist projection was absent or duplicated: {first} / {second}"
         return True, "a receipt plus exact durable assist question projects one attention notice"
+    finally:
+        fixture.close()
+
+
+def test_legacy_assist_does_not_enter_durable_outbox() -> tuple[bool, str]:
+    fixture = Fixture("legacy-assist", lawful=False)
+    try:
+        (fixture.root / "state/tasks/task-legacy-assist.md").write_text(
+            "id: task-legacy-assist\nworkstream: alpha\ngoal_id: goal-alpha\nstatus: blocked\n",
+            encoding="utf-8",
+        )
+        (fixture.root / "state/assists/task-legacy-assist.md").write_text(
+            "task: task-legacy-assist\nkind: decision\nstatus: open\n"
+            "asked: 2026-08-10T00:00:04Z\nasked_by: work.sh\nanswered:\nanswered_by:\n\n"
+            "## QUESTION\nUse the legacy direct notification path.\n\n"
+            "## WHAT WOULD SATISFY THIS\nA bounded decision.\n\n"
+            "## ANSWER\n_(unanswered)_\n",
+            encoding="utf-8",
+        )
+        fixture.commit_event({
+            "schema_version": 1, "id": "source-legacy-assist", "ts": "2026-08-10T00:00:04Z",
+            "event": "assist-open", "project": "alpha", "goal": "goal-alpha",
+            "task": "task-legacy-assist", "pid": 1,
+            "detail": "decision: Use the legacy direct notification path.",
+        })
+        if fixture.mapped_types():
+            return False, "a legacy direct-notify assist also entered the durable outbox"
+        return True, "only pilot-bound tasks use durable assist notification projection"
     finally:
         fixture.close()
 
@@ -789,6 +820,7 @@ def main() -> int:
         ("forged raw Phase 8 journal rows project no notification", test_forged_raw_rows_project_nothing),
         ("pure receipt rows without canonical transitions project nothing", test_pure_receipt_rows_project_nothing),
         ("receipt-bound durable assist projects exactly one notice", test_receipt_bound_assist_open_projects_once),
+        ("legacy direct assists do not duplicate into the durable outbox", test_legacy_assist_does_not_enter_durable_outbox),
         ("archived witnesses require a same-object authenticated successor", test_unrelated_successor_cannot_authenticate_archived_witness),
         ("archived witnesses cannot cross journal authority", test_cross_journal_successor_cannot_authenticate_archived_witness),
         ("forged nonempty plan/window/goal/action objects fail closed", test_forged_objects_fail_closed),

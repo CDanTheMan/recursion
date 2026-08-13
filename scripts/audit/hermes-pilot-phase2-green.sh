@@ -428,6 +428,7 @@ printf '' > "$RR/state/events.jsonl"
 cat > "$RR/state/tasks/t.md" <<'J'
 id: t
 project_id: p
+pilot_id: pilot-p
 goal_id: g
 status: blocked
 J

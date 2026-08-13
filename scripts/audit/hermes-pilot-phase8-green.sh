@@ -304,6 +304,7 @@ grep -q 'resume_event_id' scripts/project-reconcile.py
 grep -q 'DURABLE_REPORTING' scripts/assist.sh
 grep -q 'PILOT_ID' scripts/work.sh
 grep -q 'assist-open' scripts/notification-outbox.py
+grep -q 'question_snippet' scripts/assist.sh
 grep -q 'assist-answer' scripts/notification-outbox.py
 echo "ok    one answered assist reopens the same goal/task and all pilot notices use the Phase 7 outbox"
 
