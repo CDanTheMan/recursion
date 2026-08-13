@@ -10,6 +10,7 @@ bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/hermes-deci
   scripts/cycle.sh loop/supervisor/run.sh scripts/tests/hermes-pilot-phase8-red.test.sh
 python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scripts/decision-queue.py \
   scripts/notification-outbox.py scripts/jsonl_durable.py scripts/transition_receipt.py scripts/validate-decision.py scripts/validate-control-state.py \
+  scripts/validate-gate.py \
   scripts/runtime-state.py scripts/tests/hermes-pilot-phase8-red.py \
   scripts/tests/hermes-pilot-phase8-parallel.py \
   scripts/tests/hermes-pilot-phase8-legacy-journal-red.py \
@@ -32,6 +33,14 @@ grep -q 'canonical_digest(plan)' scripts/project-pilot.py
 grep -q 'fresh pilot plan reuses an existing goal id' scripts/project-pilot.py
 grep -q 'Lucas instruction does not name the exact Phase 8 object' scripts/project-pilot.py
 echo "ok    fresh synthesis, schema bounds, collision refusal, and exact Lucas digest/window approval are mechanical"
+
+grep -q 'project_required_non_goals' scripts/project-pilot.py
+grep -q 'repo_gate_contract' scripts/project-pilot.py
+grep -q 'repository gate changed after proposal' scripts/project-pilot.py
+grep -q 'gate_files are immutable grading code' scripts/hermes-decide.sh
+grep -q -- '--network-policy none' scripts/work.sh
+grep -q -- '--network-policy", "none"' scripts/project-reconcile.py
+echo "ok    canonical project exclusions and immutable repo gates are rebound at every authority seam while gates stay offline"
 
 grep -q 'build_pilot_brief' scripts/hermes-decide.sh
 grep -q 'RECURSION_PILOT_MODEL' scripts/hermes-decide.sh

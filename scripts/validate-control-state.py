@@ -94,7 +94,7 @@ def validate(kind: str, value: object) -> dict:
                 fail(f"{field} must be a unique array")
             for item in items:
                 require_identifier(item, field)
-    for field in ("arguments", "allowed_paths", "non_goals", "notification_targets"):
+    for field in ("arguments", "allowed_paths", "non_goals", "required_non_goals", "notification_targets"):
         if field in value and not isinstance(value[field], list):
             fail(f"{field} must be an array")
     if "concurrency_limit" in value and (
@@ -147,8 +147,23 @@ def validate(kind: str, value: object) -> dict:
             fail("generated work requires independent verification")
         if value["expected_change"] not in {"required", "optional"}:
             fail("invalid expected_change policy")
-        if not isinstance(value["gate_files"], list):
-            fail("gate_files must be an array")
+        # Historical Phase 5 task projections predate gate_class/gate_contract. New Phase 8
+        # plans require and materialize them, but this generic reader must still admit durable
+        # v1 evidence written before that hardening deployment.
+        if "gate_class" in value and value["gate_class"] not in {"light", "heavy"}:
+            fail("invalid gate_class policy")
+        if not isinstance(value["gate_files"], list) \
+                or len(value["gate_files"]) != len(set(value["gate_files"])):
+            fail("gate_files must be a unique array")
+        if "gate_contract" in value:
+            contract = value["gate_contract"]
+            hashes = contract.get("gate_files") if isinstance(contract, dict) else None
+            if not isinstance(contract, dict) \
+                    or not re.fullmatch(r"[0-9a-f]{64}", str(contract.get("acceptance_sha256") or "")) \
+                    or not isinstance(hashes, dict) or set(hashes) != set(value["gate_files"]) \
+                    or any(not re.fullmatch(r"[0-9a-f]{64}", str(digest))
+                           for digest in hashes.values()):
+                fail("gate_contract must contain acceptance and tracked-file hashes")
         for field in ("deadline_seconds", "verifier_deadline_seconds"):
             if not isinstance(value[field], int) or value[field] < 1:
                 fail(f"{field} must be a positive integer")

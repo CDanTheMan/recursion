@@ -222,22 +222,31 @@ reuse a historical goal merely because it already exists.
     task: {\"id\":\"<NEW>\", \"intent\":\"<one line>\",
            \"dependencies\":[ids of OTHER tasks in this plan; may be empty],
            \"allowed_paths\":[paths inside the project charter],
-           \"non_goals\":[must contain the literal strings credentials, merge, deploy],
+           \"non_goals\":[unique task-specific exclusions; include credentials, merge, deploy],
            \"acceptance\":\"<a real command>\",
            \"worker_class\":\"<string>\",
            \"engine\":\"claude\",
            \"model_alias\":\"sonnet-routine\" or \"opus-complex\",
            \"verifier_model_alias\":\"opus-review\" or \"opus-complex\",
            \"deadline_seconds\":1+, \"verifier_deadline_seconds\":1+,
-           \"network_policy\":\"provider-only\" or \"none\",
+           \"network_policy\":\"provider-only\",
            \"evidence_contract\":\"worker-result-v1\",
            \"verification\":\"independent\",
            \"expected_change\":\"required\" or \"optional\",
-           \"gate_files\":[unique paths]}
+           \"gate_class\":\"light\" or \"heavy\",
+           \"gate_files\":[unique tracked immutable grading programs and their dependencies]}
       The keys are deadline_seconds and verifier_deadline_seconds, NOT \"deadlines\".
       The key is verification with the value \"independent\", NOT \"independent_verification\".
       \"deployment\" is not \"deploy\". model_alias and verifier_model_alias name the ROLE ALIAS,
       never an underlying model: \"claude\", \"codex\", \"sonnet\", \"opus\" are all invalid there.
+      The controller appends the project's structured required_non_goals to each task before
+      computing the canonical plan digest. It also derives gate_contract hashes from the live
+      tracked repo; do not invent gate_contract. gate_files are immutable grading code, never
+      implementation targets. If acceptance invokes python, python3, node, bash, or sh under an
+      allowed path, that grading program must be in gate_files. Use gate_class heavy for corpus,
+      renderer-diff, or full-suite compute; otherwise use light. Cloud engines claude and hermes
+      with network_policy none are refused because the worker cannot reach its provider. This
+      policy does not grant product network: acceptance gates always run controller-fixed none.
   pilot-plan-approve <project> <plan-id> <sha256>  materialize only when Lucas's correlated
     instruction itself names that exact plan id and digest.
   pilot-window-open <project> <goal-id> <window-id> <seconds>  admit that exact approved goal;

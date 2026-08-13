@@ -60,20 +60,23 @@ assert value['protected_paths']==[] and value['outside_paths']==[]
 PY
 echo "ok    scope evidence covers base..HEAD, staged, unstaged, untracked, rename, and delete state"
 
-python3 - "$TMP/task.json" "$TMP/run.json" <<'PY'
+python3 - "$TMP/task.json" "$TMP/run.json" "$TMP/task-legacy.json" <<'PY'
 import json,sys
 task={'schema_version':1,'id':'t','goal_id':'g','dependencies':[],'allowed_paths':['app'],
       'non_goals':['tests'],'worker_class':'claude','acceptance':'test -s app/out','status':'ready',
       'model_alias':'sonnet-routine','verifier_model_alias':'opus-review','deadline_seconds':60,
       'verifier_deadline_seconds':60,'network_policy':'provider-only','evidence_contract':'worker-result-v1',
-      'verification':'independent','expected_change':'required','gate_files':[]}
+      'verification':'independent','expected_change':'required','gate_class':'light','gate_files':[]}
 run={'schema_version':1,'id':'r','task_id':'t','worker':'implementer:sonnet-routine','role':'implementer',
      'model_alias':'sonnet-routine','network_policy':'provider-only','worktree':'/tmp/w',
      'base_commit':'0'*40,'pid':1,'process_group':1,'lease_expires':'later','deadline':'later',
      'usage':{},'result':{},'status':'running'}
+legacy=dict(task); legacy.pop('gate_class'); legacy['engine']='claude'; legacy['network_policy']='none'
 json.dump(task,open(sys.argv[1],'w')); json.dump(run,open(sys.argv[2],'w'))
+json.dump(legacy,open(sys.argv[3],'w'))
 PY
 python3 scripts/validate-control-state.py task "$TMP/task.json" >/dev/null
+python3 scripts/validate-control-state.py task "$TMP/task-legacy.json" >/dev/null
 python3 scripts/validate-control-state.py run "$TMP/run.json" >/dev/null
 for phrase in 'model_alias: sonnet-routine' 'verifier_model_alias: opus-review' \
   'evidence_contract: worker-result-v1' 'verification: independent'; do

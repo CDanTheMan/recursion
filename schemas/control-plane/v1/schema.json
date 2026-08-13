@@ -20,6 +20,7 @@
         "deploy_key_ref": {"type": "string", "minLength": 1},
         "charter": {"type": "string", "minLength": 1},
         "allowed_paths": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
+        "required_non_goals": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
         "topic": {"type": ["string", "integer"]},
         "pilot_id": {"$ref": "#/$defs/identifier"},
         "activation_gate": {"const": "clone-auth-freshness-v1"},
@@ -100,6 +101,15 @@
         "evidence_contract": {"const": "worker-result-v1"},
         "verification": {"const": "independent"},
         "expected_change": {"enum": ["required", "optional"]},
+        "gate_class": {"enum": ["light", "heavy"]},
+        "gate_contract": {
+          "type": "object",
+          "required": ["acceptance_sha256", "gate_files"],
+          "properties": {
+            "acceptance_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "gate_files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+          }
+        },
         "gate_files": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
         "status": {"enum": ["proposed", "ready", "queued", "leased", "running", "verifying", "passed", "failed", "blocked", "stale", "cancelled", "moot", "resolved", "escalated"]}
       },

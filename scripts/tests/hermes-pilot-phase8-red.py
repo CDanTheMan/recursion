@@ -14,9 +14,9 @@ from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[2]
 CONTROLS = [
-    "a fresh instruction produces a new schema-complete plan without reusing legacy Chiron state",
-    "a malformed or structurally vacuous autonomous plan is rejected without partial state",
-    "Lucas exact-digest approval materializes one new goal DAG idempotently",
+    "a fresh instruction produces a canonical charter-inheriting repo-bound plan without reusing legacy Chiron state",
+    "a malformed, unsafe-network, or invalid repo gate plan is rejected without partial state",
+    "Lucas exact-digest approval revalidates the repo contract and materializes one new goal DAG idempotently",
     "only the exact goal in an open bounded pilot window is schedulable",
     "observing PAUSE closes the window so resume cannot replay its authority",
     "an answered assist reopens the same goal and task once through the durable outbox path",
@@ -35,6 +35,13 @@ def fields(path: Path) -> dict[str, str]:
             key, value = line.split(":", 1)
             result.setdefault(key.strip(), value.strip())
     return result
+
+
+def required_non_goals(fixture: "Fixture") -> set[str]:
+    config = json.loads(
+        (fixture.root / "state/project-config/chiron.json").read_text(encoding="utf-8")
+    )
+    return set(config["required_non_goals"])
 
 
 class Fixture:
@@ -69,27 +76,48 @@ class Fixture:
             "RECURSION_INTAKE_ALLOW": "8913126684",
             "RECURSION_NO_NOTIFY": "0",
         })
+        self._write_repo()
         self._write_project()
         self._write_legacy_state()
         self._write_instruction("101", "pilot-chiron")
-        self.plan = self._plan()
+        self.planner_plan = self._plan()
+        self.plan = json.loads(json.dumps(self.planner_plan))
         self.plan_id = str(self.plan["id"])
         self.digest = canonical_digest(self.plan)
 
     def close(self) -> None:
         shutil.rmtree(self.temp, ignore_errors=True)
 
+    def _write_repo(self) -> None:
+        self.repo = self.temp / "chiron-repo"
+        self.gate_path = self.repo / "user-client/render/tools/native-diff.cjs"
+        implementation = self.repo / "user-client/render/shade-tops.js"
+        self.gate_path.parent.mkdir(parents=True, exist_ok=True)
+        self.gate_path.write_text("process.exit(0);\n", encoding="utf-8")
+        implementation.write_text("export const shadeTops = false;\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Phase 8 Test"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.email", "phase8@example.invalid"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-q", "-m", "fixture"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "branch", "-M", "main"], check=True)
+
     def _write_project(self) -> None:
         (self.root / "state/portfolio.tsv").write_text(
             "#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n"
-            "chiron\t/fixture/chiron\torigin\tmain\t-\t-\t10\tactive\n",
+            f"chiron\t{self.repo}\torigin\tmain\t-\t-\t10\tactive\n",
             encoding="utf-8",
         )
         config = {
-            "schema_version": 1, "id": "chiron", "repo": "/fixture/chiron",
+            "schema_version": 1, "id": "chiron", "repo": str(self.repo),
             "remote": "origin", "default_branch": "main", "deploy_key_ref": "-",
             "charter": "Build-verifiable Chiron application changes only.",
-            "allowed_paths": ["src", "tests"], "topic": 10, "pilot_id": "pilot-chiron",
+            "allowed_paths": ["user-client/render"],
+            "required_non_goals": [
+                "tests", "fixtures", "oracles", "baselines", "live-game-access",
+                "credentials", "merge", "deploy",
+            ],
+            "topic": 10, "pilot_id": "pilot-chiron",
             "activation_gate": "clone-auth-freshness-v1",
             "notification_targets": ["project-topic:telegram:-100:10", "head-hermes:telegram:-100:1"],
             "goal_source": "state/goals", "status": "active",
@@ -140,7 +168,7 @@ class Fixture:
             "goal": {
                 "id": "goal-chiron-phase8-smoke",
                 "outcome": "Add one reversible build-verifiable Chiron smoke marker.",
-                "acceptance_suite": "npm run build",
+                "acceptance_suite": "node user-client/render/tools/native-diff.cjs --metric",
                 "falsifier": "The exact candidate commit does not pass the clean Chiron build.",
                 "budget": {
                     "max_concurrency": 1, "max_tokens": 12000, "max_cost_usd": 5,
@@ -151,14 +179,15 @@ class Fixture:
             },
             "tasks": [{
                 "id": "chiron-phase8-smoke", "intent": "Add the bounded smoke marker.",
-                "dependencies": [], "allowed_paths": ["src", "tests"],
+                "dependencies": [], "allowed_paths": ["user-client/render"],
                 "non_goals": ["learning-loop", "credentials", "merge", "deploy"],
                 "worker_class": "claude", "engine": "claude", "model_alias": "sonnet-routine",
                 "verifier_model_alias": "opus-review", "deadline_seconds": 1800,
                 "verifier_deadline_seconds": 900, "network_policy": "provider-only",
                 "evidence_contract": "worker-result-v1", "verification": "independent",
-                "expected_change": "required", "gate_files": ["package.json"],
-                "acceptance": "npm run build",
+                "expected_change": "required", "gate_class": "heavy",
+                "gate_files": ["user-client/render/tools/native-diff.cjs"],
+                "acceptance": "node user-client/render/tools/native-diff.cjs --metric",
             }],
         }
 
@@ -202,18 +231,26 @@ def test_fresh_plan(f: Fixture) -> bool:
     if result.returncode or not path.is_file() or not f.legacy_unchanged():
         return False
     record = json.loads(path.read_text(encoding="utf-8"))
+    canonical = record.get("plan") or {}
+    task = (canonical.get("tasks") or [{}])[0]
+    required = required_non_goals(f)
+    f.plan = canonical
+    f.digest = str(record.get("plan_digest") or "")
     return (
         record.get("status") == "proposed"
-        and record.get("plan_digest") == f.digest
+        and record.get("plan_digest") == canonical_digest(canonical)
         and record.get("instruction_id") == "101"
-        and record.get("plan") == f.plan
+        and required <= set(task.get("non_goals") or [])
+        and task.get("gate_class") == "heavy"
+        and set((task.get("gate_contract") or {}).get("gate_files") or {})
+            == {"user-client/render/tools/native-diff.cjs"}
         and not (f.root / "state/goals/goal-chiron-phase8-smoke.md").exists()
     )
 
 
 def test_invalid_plan(f: Fixture) -> bool:
     def refused(suffix: str, mutate) -> bool:
-        bad = json.loads(json.dumps(f.plan)); bad["id"] = f"chiron-phase8-invalid-{suffix}"
+        bad = json.loads(json.dumps(f.planner_plan)); bad["id"] = f"chiron-phase8-invalid-{suffix}"
         mutate(bad)
         decision = f.decision(
             verb="pilot-plan-propose", args=["chiron", bad["id"]], iid="101",
@@ -226,6 +263,12 @@ def test_invalid_plan(f: Fixture) -> bool:
 
     return all((
         refused("gate", lambda p: p["tasks"][0].__setitem__("acceptance", "true")),
+        refused("gate-class", lambda p: p["tasks"][0].pop("gate_class")),
+        refused("cloud-offline", lambda p: p["tasks"][0].__setitem__("network_policy", "none")),
+        refused("wrong-gate-file", lambda p: p["tasks"][0].__setitem__(
+            "gate_files", ["user-client/render/shade-tops.js"])),
+        refused("absent-gate-file", lambda p: p["tasks"][0].__setitem__(
+            "gate_files", ["user-client/render/tools/native-diff.cjs", "user-client/render/tools/absent.cjs"])),
         refused("review-zero", lambda p: p["goal"]["budget"].__setitem__("max_review_queue", 0)),
         refused("metered", lambda p: p["tasks"][0].__setitem__("engine", "hermes")),
     ))
@@ -238,6 +281,12 @@ def test_approval(f: Fixture) -> bool:
         actor="head-hermes", goal=str(f.plan["goal"]["id"]),
         text="Approve exactly this plan digest for materialization.",
     )
+    gate_bytes = f.gate_path.read_bytes()
+    f.gate_path.write_bytes(gate_bytes + b"// drift before approval\n")
+    drifted = f.run("python3", "scripts/project-pilot.py", "execute", str(decision))
+    f.gate_path.write_bytes(gate_bytes)
+    if drifted.returncode == 0 or (f.root / "state/goals/goal-chiron-phase8-smoke.md").exists():
+        return False
     first = f.run("python3", "scripts/project-pilot.py", "execute", str(decision))
     second = f.run("python3", "scripts/project-pilot.py", "execute", str(decision))
     goal_path = f.root / "state/goals/goal-chiron-phase8-smoke.md"
@@ -251,7 +300,9 @@ def test_approval(f: Fixture) -> bool:
         and fields(goal_path).get("plan_id") == f.plan_id
         and fields(task_path).get("status") == "proposed"
         and fields(task_path).get("workstream") == "chiron"
-        and fields(task_path).get("acceptance") == "npm run build"
+        and fields(task_path).get("acceptance") == "node user-client/render/tools/native-diff.cjs --metric"
+        and fields(task_path).get("gate_class") == "heavy"
+        and required_non_goals(f) <= set(fields(task_path).get("non_goals", "").split(","))
         and proposal.get("status") == "approved"
         and proposal.get("approval_instruction_id") == "102"
         and len(list((f.root / "state/goals").glob("goal-chiron-phase8-smoke.md"))) == 1
@@ -303,6 +354,13 @@ def test_window_admission(f: Fixture) -> bool:
     bad = f.run("python3", "scripts/project-pilot.py", "execute", str(bad_decision))
     (f.root / "state/PAUSE").unlink(missing_ok=True)
     if bad.returncode == 0 or (f.root / "state/pilot-windows/chiron-window-bad.json").exists():
+        return False
+    gate_bytes = f.gate_path.read_bytes()
+    f.gate_path.write_bytes(gate_bytes + b"// drift before window\n")
+    drift_refused = open_window(f)
+    f.gate_path.write_bytes(gate_bytes)
+    (f.root / "state/PAUSE").unlink(missing_ok=True)
+    if drift_refused or (f.root / "state/pilot-windows/chiron-window-1.json").exists():
         return False
     if not open_window(f):
         return False

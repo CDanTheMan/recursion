@@ -407,7 +407,9 @@ def prepare(base: Path, project: str, remote: str, charter: str) -> None:
         targets = ["head-hermes", "lucas-direct"]
         cfg = {"schema_version": 1, "id": project, "repo": repo, "remote": remote,
                "default_branch": "main", "deploy_key_ref": key, "charter": charter,
-               "allowed_paths": ["."], "topic": "-", "pilot_id": pilot_id,
+               "allowed_paths": ["."],
+               "required_non_goals": ["credentials", "merge", "deploy"],
+               "topic": "-", "pilot_id": pilot_id,
                "activation_gate": "clone-auth-freshness-v1", "notification_targets": targets,
                "goal_source": "state/goals", "status": "pending"}
         pilot = {"schema_version": 1, "id": pilot_id, "project_id": project, "topic": "-",
@@ -570,11 +572,57 @@ def bounded_line(value: object, label: str, maximum: int = 2000) -> str:
     return text
 
 
-def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: object) -> dict:
+def project_required_non_goals(cfg: dict) -> list[str]:
+    """Return the structured project contract, with the legacy global floor."""
+    legacy = ["credentials", "merge", "deploy"]
+    configured = cfg.get("required_non_goals")
+    if configured is None:
+        # Compatibility for project records written before required_non_goals existed.
+        return legacy
+    if not isinstance(configured, list) or not configured \
+            or not all(isinstance(item, str) for item in configured) \
+            or len(configured) != len(set(configured)):
+        fail("project required_non_goals must be a non-empty unique string array")
+    for item in configured:
+        bounded_line(item, "project required non-goal", 512)
+    if not set(legacy) <= set(configured):
+        fail("project required_non_goals omits a global control-plane non-goal")
+    return list(configured)
+
+
+def repo_gate_contract(base: Path, cfg: dict, task_id: str, task: dict) -> dict:
+    """Use the execution validator and bind its tracked-file hashes into the plan."""
+    command = [
+        sys.executable, str(base / "scripts/validate-gate.py"),
+        "--acceptance", str(task["acceptance"]),
+        "--allowed-paths", ",".join(task["allowed_paths"]),
+        "--gate-files", ",".join(task["gate_files"]),
+        "--repo", str(cfg["repo"]),
+    ]
+    proc = subprocess.run(command, text=True, capture_output=True, check=False)
+    if proc.returncode:
+        detail = (proc.stderr or proc.stdout or "gate validation failed").strip()
+        fail(f"pilot plan task {task_id} has an invalid repository gate: {detail}")
+    try:
+        contract = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        fail(f"pilot plan task {task_id} gate validator returned malformed evidence")
+    hashes = contract.get("gate_files") if isinstance(contract, dict) else None
+    if not re.fullmatch(r"[0-9a-f]{64}", str(contract.get("acceptance_sha256") or "")) \
+            or not isinstance(hashes, dict) or set(hashes) != set(task["gate_files"]) \
+            or any(not re.fullmatch(r"[0-9a-f]{64}", str(digest)) for digest in hashes.values()):
+        fail(f"pilot plan task {task_id} gate validator returned incomplete evidence")
+    return contract
+
+
+def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: object,
+                  bind_gate_contract: bool = False) -> dict:
     if not isinstance(value, dict) or value.get("schema_version") != 1:
         fail("pilot plan must be a schema_version 1 object")
     if len(json.dumps(value, sort_keys=True, separators=(",", ":"))) > 65536:
         fail("pilot plan exceeds the 64 KiB bound")
+    # Return a canonical value without mutating the model decision or stored record in memory.
+    value = json.loads(json.dumps(value))
     if value.get("id") != plan_id or value.get("project_id") != project or not IDENT.fullmatch(plan_id):
         fail("pilot plan identity does not match its decision")
     goal = value.get("goal")
@@ -624,24 +672,28 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
             fail(f"pilot plan task {task_id} escapes the project charter")
         for path in paths: bounded_line(path, f"task {task_id} allowed path", 512)
         if not isinstance(non_goals, list) or not all(isinstance(item, str) for item in non_goals) \
-                or not {"credentials", "merge", "deploy"} <= set(non_goals):
+                or len(non_goals) != len(set(non_goals)):
             fail(f"pilot plan task {task_id} lacks required non-goals")
         for item in non_goals: bounded_line(item, f"task {task_id} non-goal", 512)
+        task["non_goals"] = list(dict.fromkeys([*non_goals, *project_required_non_goals(cfg)]))
         nonvacuous_gate(task.get("acceptance"), f"task {task_id}")
         required = {
             "worker_class", "engine", "model_alias", "verifier_model_alias", "deadline_seconds",
             "verifier_deadline_seconds", "network_policy", "evidence_contract", "verification",
-            "expected_change", "gate_files",
+            "expected_change", "gate_class", "gate_files",
         }
         if any(key not in task for key in required): fail(f"pilot plan task {task_id} is schema-incomplete")
         if task.get("engine") != "claude" \
                 or task.get("model_alias") not in {"sonnet-routine", "opus-complex"} \
                 or task.get("verifier_model_alias") not in {"opus-review", "opus-complex"} \
                 or task.get("network_policy") not in {"provider-only", "none"} \
+                or task.get("gate_class") not in {"light", "heavy"} \
                 or task.get("evidence_contract") != "worker-result-v1" \
                 or task.get("verification") != "independent" \
                 or task.get("expected_change") not in {"required", "optional"}:
             fail(f"pilot plan task {task_id} has an invalid Phase 5 policy")
+        if task.get("engine") in {"claude", "hermes"} and task.get("network_policy") == "none":
+            fail(f"pilot plan task {task_id} gives a cloud worker no provider network")
         if any(isinstance(task.get(key), bool) or not isinstance(task.get(key), int) or task[key] < 1
                for key in ("deadline_seconds", "verifier_deadline_seconds")):
             fail(f"pilot plan task {task_id} has an invalid deadline")
@@ -649,6 +701,14 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
                 or len(task["gate_files"]) != len(set(task["gate_files"])):
             fail(f"pilot plan task {task_id} has invalid gate files")
         for item in task["gate_files"]: bounded_line(item, f"task {task_id} gate file", 512)
+        expected_contract = repo_gate_contract(base, cfg, task_id, task)
+        supplied_contract = task.get("gate_contract")
+        if bind_gate_contract:
+            if supplied_contract is not None:
+                fail(f"pilot plan task {task_id} supplied controller-derived gate_contract")
+            task["gate_contract"] = expected_contract
+        elif supplied_contract != expected_contract:
+            fail(f"pilot plan task {task_id} repository gate changed after proposal")
         source_task_id = str(task.get("source_task_id") or "")
         if source_task_id:
             if not IDENT.fullmatch(source_task_id): fail(f"pilot plan task {task_id} has invalid source task")
@@ -674,6 +734,8 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
         for dep in edges[task_id]: walk(dep)
         visiting.remove(task_id); visited.add(task_id)
     for task_id in task_ids: walk(task_id)
+    if len(json.dumps(value, sort_keys=True, separators=(",", ":"))) > 65536:
+        fail("canonical pilot plan exceeds the 64 KiB bound")
     return value
 
 
@@ -703,7 +765,8 @@ def require_lucas_instruction(path: Path, instruction: dict[str, str], terms: li
 def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction_id: str) -> dict:
     args = decision.get("args") or decision.get("arguments") or []
     plan_id = str(args[1]) if len(args) > 1 else ""
-    plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, decision.get("plan"))
+    plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, decision.get("plan"),
+                         bind_gate_contract=True)
     digest = canonical_digest(plan); goal_id = str(plan["goal"]["id"])
     path = base / "state/plans" / str(cfg["id"]) / f"{plan_id}.json"
     event = transition_event(
@@ -749,6 +812,8 @@ def task_text(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, t
         "verifier_deadline_seconds": str(task["verifier_deadline_seconds"]),
         "network_policy": task["network_policy"], "evidence_contract": task["evidence_contract"],
         "verification": task["verification"], "expected_change": task["expected_change"],
+        "gate_class": task["gate_class"],
+        "gate_contract": json.dumps(task["gate_contract"], sort_keys=True, separators=(",", ":")),
         "gate_files": ",".join(task["gate_files"]), "acceptance": task["acceptance"],
         "repo": str(cfg["repo"]), "workdir": ".", "autonomy": "auto", "status": "proposed",
     }
@@ -838,8 +903,13 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
         require_lucas_instruction(instruction_file, instruction, [goal_id, window_id, raw_seconds])
         goal = fields(goal_for(base, str(cfg["id"]), goal_id)[0]); plan_id = goal.get("plan_id", "")
         plan_path = base / "state/plans" / str(cfg["id"]) / f"{plan_id}.json"
-        if not plan_id or read_json(plan_path).get("status") != "approved":
+        proposal = read_json(plan_path) if plan_id else {}
+        if not plan_id or proposal.get("status") != "approved":
             fail("pilot window goal does not come from an approved Phase 8 plan")
+        plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, proposal.get("plan"))
+        digest = canonical_digest(plan)
+        if proposal.get("plan_digest") != digest or goal.get("plan_digest") != digest:
+            fail("pilot window goal does not match the live repository-bound plan contract")
         path = base / "state/pilot-windows" / f"{window_id}.json"
         with phase8_lock(base, f"window-{cfg['id']}"):
             for other in (base / "state/pilot-windows").glob("*.json"):
@@ -939,14 +1009,17 @@ def execute_value(base: Path, decision: dict) -> dict:
             _, goal = goal_for(base, project, goal_id)
             path = base / "state/tasks" / f"{task_id}.md"
             if path.exists(): fail(f"task {task_id} already exists", 2)
+            required_non_goals = ",".join(dict.fromkeys(
+                ["portfolio", "policy", *project_required_non_goals(cfg)]
+            ))
             body = (f"schema_version: 1\nversion: 1\nid: {task_id}\nproject_id: {project}\n"
                     f"workstream: {project}\npilot_id: {pilot['id']}\n"
                     f"goal_id: {goal_id}\ndependencies: {','.join(dependencies)}\nallowed_paths: {scope}\n"
-                    f"non_goals: portfolio,policy,credentials,merge,deploy\nworker_class: claude\n"
+                    f"non_goals: {required_non_goals}\nworker_class: claude\n"
                     f"engine: claude\nmodel_alias: sonnet-routine\nverifier_model_alias: opus-review\n"
                     f"deadline_seconds: 3600\nverifier_deadline_seconds: 1800\n"
                     f"network_policy: provider-only\nevidence_contract: worker-result-v1\n"
-                    f"verification: independent\nexpected_change: required\ngate_files:\n"
+                    f"verification: independent\nexpected_change: required\ngate_class: light\ngate_files:\n"
                     f"acceptance: {goal['acceptance_suite']}\nstatus: proposed\n\n{text}\n")
             event = transition_event(
                 "pilot-task-created", project, goal_id, task_id,
