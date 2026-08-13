@@ -29,6 +29,7 @@ copy_controller(){
            project-pilot.py project-reconcile.py jsonl_durable.py transition_receipt.py runtime-state.py taskctl.sh worker-sandbox.sh; do
     [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$r/scripts/"
   done
+  [ ! -f "$SRC/scripts/seed_contract.py" ] || cp "$SRC/scripts/seed_contract.py" "$r/scripts/"
   chmod +x "$r/scripts/"* 2>/dev/null || true
   if ! python3 -c 'import fcntl' >/dev/null 2>&1; then
     cat > "$r/scripts/fcntl.py" <<'PY'
@@ -131,6 +132,7 @@ install_stubs(){
   local r="$1"
   cat > "$r/scripts/capacity.sh" <<'SH'
 #!/usr/bin/env bash
+printf '%s\n' "$*" >> "$RECURSION_ROOT/state/capacity-calls"
 [ ! -f "$RECURSION_ROOT/state/test-capacity-deny" ]
 SH
   cat > "$r/scripts/notify.sh" <<'SH'
@@ -171,10 +173,10 @@ oid="$(git -C "$wt" rev-parse HEAD)"; git -C "$repo" worktree remove --force "$w
 setv candidate_commit "$oid"; setv review_status local; setv status passed
 mkdir -p "$root/state/runs"
 cat > "$root/state/runs/$id-impl.json" <<JSON
-{"schema_version":1,"id":"$id-impl","task_id":"$id","worker":"implementer:test","role":"implementer","worktree":"fixture","base_commit":"$(git -C "$repo" rev-parse main)","pid":1,"process_group":1,"lease_expires":"0","deadline":"0","usage":{"tokens":10,"cost_usd":0.01},"result":{"status":"done"},"machine_gate":{"commit_oid":"$oid","exit_code":0},"verification":{"verifier_run_id":"$id-verify","commit_oid":"$oid","verdict":"pass"},"status":"succeeded"}
+{"schema_version":1,"id":"$id-impl","task_id":"$id","worker":"implementer:test","role":"implementer","worktree":"fixture","base_commit":"$(git -C "$repo" rev-parse main)","pid":1,"process_group":1,"lease_expires":"0","deadline":"0","usage":{"tokens":10,"cost_usd":0.01},"result":{"status":"done"},"seed_evidence":{"manifest_sha256":"$(get seed_manifest_sha256)","content_sha256":"$(get seed_digest)","verified_before":true,"verified_after":true},"machine_gate":{"commit_oid":"$oid","exit_code":0},"verification":{"verifier_run_id":"$id-verify","commit_oid":"$oid","verdict":"pass"},"status":"succeeded"}
 JSON
 cat > "$root/state/runs/$id-verify.json" <<JSON
-{"schema_version":1,"id":"$id-verify","task_id":"$id","worker":"verifier:test","role":"verifier","worktree":"fixture","base_commit":"$(git -C "$repo" rev-parse main)","pid":2,"process_group":2,"lease_expires":"0","deadline":"0","usage":{"tokens":5,"cost_usd":0.01},"result":{"verdict":"pass"},"verification":{"commit_oid":"$oid","implementer_run_id":"$id-impl","verdict":"pass"},"status":"succeeded"}
+{"schema_version":1,"id":"$id-verify","task_id":"$id","worker":"verifier:test","role":"verifier","worktree":"fixture","base_commit":"$(git -C "$repo" rev-parse main)","pid":2,"process_group":2,"lease_expires":"0","deadline":"0","usage":{"tokens":5,"cost_usd":0.01},"result":{"verdict":"pass"},"seed_evidence":{"manifest_sha256":"$(get seed_manifest_sha256)","content_sha256":"$(get seed_digest)","verified_before":true,"verified_after":true},"verification":{"commit_oid":"$oid","implementer_run_id":"$id-impl","verdict":"pass"},"status":"succeeded"}
 JSON
 SH
   chmod +x "$r/scripts/"*.sh 2>/dev/null || true
@@ -210,6 +212,27 @@ print(n)
 PY
 }
 launch_count(){ [ -f "$1/state/worker-launches" ] && wc -l < "$1/state/worker-launches" || echo 0; }
+install_seed(){ # controller-root task-id
+  local r="$1" task="$2" repo contract manifest digest
+  repo="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["repo"])' "$r/state/project-config/phase6.json")"
+  mkdir -p "$repo/data/corpus"
+  printf 'immutable goal oracle\n' > "$repo/data/corpus/oracle.bin"
+  printf '/data/corpus/\n' > "$repo/.gitignore"
+  printf 'data/corpus\n' > "$repo/.seedlist"
+  git -C "$repo" add .gitignore .seedlist
+  git -C "$repo" -c user.name=t -c user.email=t@t commit -qm 'seed contract'
+  git -C "$repo" push -q origin main
+  contract="$(python3 "$r/scripts/seed_contract.py" inspect --repo "$repo")"
+  manifest="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["manifest_sha256"])' "$contract")"
+  digest="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["content_sha256"])' "$contract")"
+  for file in "$r/state/goals/phase6-goal.md" "$r/state/tasks/$task.md"; do
+    set_field "$file" seed_manifest .seedlist
+    set_field "$file" seed_manifest_sha256 "$manifest"
+    set_field "$file" seed data/corpus
+    set_field "$file" seed_digest "$digest"
+  done
+  printf '%s\n' "$digest"
+}
 
 # 1. Full success: proposed -> ready -> work -> exact-commit goal verification -> achieved.
 R="$(setup success)"; write_task "$R" success-task proposed 0
@@ -277,6 +300,55 @@ else
     sed 's/^/      accept-review: /' "$M/state/mutation-review.out" >&2
   fi
   no "exact goal verification accepted failure or rejected clean success"
+fi
+
+# 1b. Exact-commit goal verification receives the same approved ignored corpus, protects it,
+# records before/after digest evidence, and serializes a declared heavy gate.
+R="$(setup seeded-goal)"; write_task "$R" seeded-task proposed 0
+SEED_DIGEST="$(install_seed "$R" seeded-task)"
+set_field "$R/state/goals/phase6-goal.md" acceptance_suite \
+  "test -s app/result.txt && test -s data/corpus/oracle.bin"
+set_field "$R/state/goals/phase6-goal.md" gate_class heavy
+set_field "$R/state/tasks/seeded-task.md" gate_class heavy
+ticks "$R" 8
+if [ "$(goal_status "$R")" = achieved ] \
+   && grep -q '^heavy acquire goal-phase6-goal$' "$R/state/capacity-calls" \
+   && grep -q '^heavy release$' "$R/state/capacity-calls" \
+   && python3 - "$R/state/evidence/phase6-goal.json" "$SEED_DIGEST" <<'PY'
+import json,sys
+row=json.load(open(sys.argv[1])); seed=row.get('seed_evidence',{})
+valid=(row.get('verdict')=='pass' and row.get('gate_class')=='heavy'
+       and seed.get('content_sha256')==sys.argv[2]
+       and seed.get('verified_before') is True and seed.get('verified_after') is True)
+raise SystemExit(0 if valid else 1)
+PY
+then
+  ok "heavy exact-commit goal gate receives and records the approved ignored seed"
+else
+  no "goal verification omitted seed evidence, post-gate integrity, or heavy exclusivity"
+fi
+
+# Source drift after work passed is not silently re-baselined by exact-commit verification.
+R="$(setup seed-drift)"; write_task "$R" drift-task proposed 0
+install_seed "$R" drift-task >/dev/null
+set_field "$R/state/goals/phase6-goal.md" acceptance_suite \
+  "test -s app/result.txt && test -s data/corpus/oracle.bin"
+for _ in $(seq 1 12); do
+  tick "$R" || true
+  [ "$(goal_status "$R")" != verifying ] || break
+done
+repo="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["repo"])' "$R/state/project-config/phase6.json")"
+printf 'drifted after task pass\n' > "$repo/data/corpus/oracle.bin"
+tick "$R" || true
+if python3 - "$R/state/evidence/phase6-goal.json" <<'PY'
+import json,sys
+row=json.load(open(sys.argv[1]))
+raise SystemExit(0 if row.get('verdict')=='fail' and str(row.get('reason','')).startswith('seed-contract:') else 1)
+PY
+then
+  ok "goal verification refuses seed drift instead of deriving a new trusted digest"
+else
+  no "changed seed bytes were silently accepted or left no durable goal evidence"
 fi
 
 # 2. Machine-gate failure gets one durable retry and no unbounded third launch.

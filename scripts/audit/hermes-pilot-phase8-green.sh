@@ -9,6 +9,7 @@ bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/hermes-deci
   scripts/assist.sh scripts/taskctl.sh scripts/work.sh scripts/notify.sh scripts/digest.sh \
   scripts/cycle.sh loop/supervisor/run.sh scripts/tests/hermes-pilot-phase8-red.test.sh
 python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scripts/decision-queue.py \
+  scripts/seed_contract.py scripts/tests/seed-contract.test.py \
   scripts/notification-outbox.py scripts/jsonl_durable.py scripts/transition_receipt.py scripts/validate-decision.py scripts/validate-control-state.py \
   scripts/validate-gate.py \
   scripts/runtime-state.py scripts/tests/hermes-pilot-phase8-red.py \
@@ -333,6 +334,7 @@ for event in portfolio-brief project-digest; do grep -q "$event" scripts/notific
 echo "ok    PAUSE interlocks the sole sender and resumed brief/digest delivery enters the Phase 7 outbox"
 
 bash scripts/tests/hermes-pilot-phase8-red.test.sh
+python3 scripts/tests/seed-contract.test.py
 python3 scripts/tests/hermes-pilot-phase8-notification-red.py
 python3 scripts/tests/decision-identity.test.py
 python3 scripts/tests/jsonl-durability.test.py

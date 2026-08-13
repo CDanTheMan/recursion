@@ -97,6 +97,9 @@ REPO_DIR="$(field repo)"; REPO_DIR="${REPO_DIR:-$ROOT}"
 # corpus (e.g. the GSC block-model corpus user-client/render/data/models) is absent in a new
 # worktree and every test that needs it fails. Declaring it here makes the dependency explicit.
 SEED="$(field seed)"; SEED="${SEED//,/ }"
+SEED_MANIFEST="$(field seed_manifest)"
+SEED_MANIFEST_SHA256="$(field seed_manifest_sha256)"
+SEED_DIGEST_EXPECTED="$(field seed_digest)"
 # Git authority. sshkey proves read freshness and is handed only to the review-only publisher.
 # The worker sandbox never mounts this key. There is no autonomous default-branch merge path.
 SSHKEY="$(field sshkey)"
@@ -115,6 +118,7 @@ BRANCH="loop/work/$ID"
 BASE_COMMIT=""; CANDIDATE_OID=""; LAST_SCOPE_FILE=""; LAST_RUN_ID=""; LAST_RUN_EVIDENCE=""
 IMPLEMENTER_RUN_ID=""; VERIFIER_RUN_ID=""; RESOLVED_MODEL="$MODEL"; RESOLVED_VERIFIER_MODEL=""
 LAST_USAGE_FILE=""; SEED_DIGEST_BEFORE=""
+SEED_EVIDENCE_FILE="$ROOT/state/runs/$ID-seed-$STAMP-$$.json"
 
 # Pilot windows are an execution capability, not a caller convention. Every path into work.sh
 # (queue actuator, legacy drain, manual continuation, assist resume) reaches this same check.
@@ -416,19 +420,7 @@ mk_worktree(){
   python3 "$ROOT/scripts/runtime-state.py" lock-release "$wtlock" "$$" >>"$LOG" 2>&1 \
     || { log "worktree lock release failed closed"; return 74; }
   [ "$addrc" -eq 0 ] || return 1
-  # seed gitignored data the tests need but the worktree did not inherit (see SEED note above).
-  local p source repo_real; repo_real="$(realpath -e "$REPO_DIR")" || return 1
-  for p in $SEED; do
-    case "$p" in ''|/*|*..*) log "unsafe declared seed path: $p"; return 1 ;; esac
-    source="$(realpath -e "$REPO_DIR/$p" 2>/dev/null || true)"
-    case "$source" in "$repo_real"/*) ;; *) log "declared seed is absent or escapes repo: $p"; return 1 ;; esac
-    if [ -L "$source" ] || find "$source" -type l -print -quit 2>/dev/null | grep -q .; then
-      log "declared seed contains a symlink and cannot be made an immutable oracle: $p"; return 1
-    fi
-    mkdir -p "$wt/$(dirname "$p")"
-    cp -a -- "$source" "$wt/$p"
-    log "seeded $p into worktree ($(find "$wt/$p" -type f 2>/dev/null | wc -l | tr -d ' ') files)"
-  done
+  copy_seed_into_worktree "$wt" || return 1
   printf '%s\n' "$wt"
 }
 
@@ -437,41 +429,66 @@ mk_worktree(){
 seed_digest(){
   local wt="$1"
   [ -n "$SEED" ] || { printf '%s\n' none; return 0; }
-  python3 - "$wt" $SEED <<'PY'
-import hashlib, os, pathlib, stat, sys
-root = pathlib.Path(sys.argv[1]).resolve(strict=True)
-h = hashlib.sha256()
-for raw in sorted(sys.argv[2:]):
-    rel = pathlib.PurePosixPath(raw)
-    if rel.is_absolute() or ".." in rel.parts:
-        raise SystemExit("unsafe seed path")
-    start = root.joinpath(*rel.parts)
-    if not start.exists() or start.is_symlink() or root not in start.resolve().parents:
-        raise SystemExit("seed missing, symlinked, or escaped")
-    paths = [start]
-    if start.is_dir():
-        paths.extend(sorted(start.rglob("*"), key=lambda p: p.as_posix()))
-    for path in paths:
-        info = path.lstat()
-        if stat.S_ISLNK(info.st_mode):
-            raise SystemExit("seed symlink refused")
-        relative = path.relative_to(root).as_posix().encode()
-        kind = b"d" if path.is_dir() else b"f"
-        h.update(len(relative).to_bytes(4, "big") + relative + kind)
-        h.update(stat.S_IMODE(info.st_mode).to_bytes(4, "big"))
-        if path.is_file():
-            with path.open("rb") as src:
-                for chunk in iter(lambda: src.read(1024 * 1024), b""):
-                    h.update(chunk)
-print(h.hexdigest())
+  [ -x "$ROOT/scripts/seed_contract.py" ] || { log "seed contract helper is absent"; return 1; }
+  local -a args=(digest --root "$wt")
+  local p result
+  for p in $SEED; do args+=(--path "$p"); done
+  result="$(python3 "$ROOT/scripts/seed_contract.py" "${args[@]}" 2>>"$LOG")" || return 1
+  python3 -c 'import json,sys; print(json.loads(sys.argv[1])["content_sha256"])' "$result"
+}
+
+validate_seed_source(){
+  [ -n "$SEED" ] || return 0
+  if [ -n "$PILOT_ID" ] || [ -n "$SEED_MANIFEST$SEED_MANIFEST_SHA256$SEED_DIGEST_EXPECTED" ]; then
+    [ -n "$SEED_MANIFEST" ] && [ -n "$SEED_MANIFEST_SHA256" ] && [ -n "$SEED_DIGEST_EXPECTED" ] \
+      || { log "Phase-8 seed is not bound to an approved manifest and digest"; return 1; }
+    case "$SEED_MANIFEST_SHA256:$SEED_DIGEST_EXPECTED" in
+      *[!0-9a-f:]*) log "Phase-8 seed digest metadata is malformed"; return 1 ;;
+    esac
+    [ "${#SEED_MANIFEST_SHA256}" = 64 ] && [ "${#SEED_DIGEST_EXPECTED}" = 64 ] \
+      || { log "Phase-8 seed digest metadata is malformed"; return 1; }
+    local observed
+    observed="$(python3 "$ROOT/scripts/seed_contract.py" inspect --repo "$REPO_DIR" \
+      --manifest "$SEED_MANIFEST" 2>>"$LOG")" || return 1
+    mkdir -p "$ROOT/state/runs"
+    python3 - "$observed" "$SEED_MANIFEST" "$SEED_MANIFEST_SHA256" \
+      "$SEED_DIGEST_EXPECTED" "${SEED// /,}" "$SEED_EVIDENCE_FILE" <<'PY'
+import json, os, sys, tempfile
+row=json.loads(sys.argv[1]); expected_paths=[p for p in sys.argv[5].split(',') if p]
+valid=(row.get('manifest_path')==sys.argv[2]
+       and row.get('manifest_sha256')==sys.argv[3]
+       and row.get('content_sha256')==sys.argv[4]
+       and row.get('paths')==expected_paths)
+if not valid: raise SystemExit('approved seed contract disagrees with live repository')
+evidence={'schema_version':1,'manifest_path':row['manifest_path'],
+          'manifest_sha256':row['manifest_sha256'],'content_sha256':row['content_sha256'],
+          'path_count':len(row['paths']),'file_count':row.get('file_count',0),'verified_before':True}
+target=sys.argv[6]; os.makedirs(os.path.dirname(target),exist_ok=True)
+fd,name=tempfile.mkstemp(prefix='.seed.',dir=os.path.dirname(target))
+with os.fdopen(fd,'w',encoding='utf-8') as out:
+    json.dump(evidence,out,sort_keys=True,separators=(',',':')); out.write('\n'); out.flush(); os.fsync(out.fileno())
+os.replace(name,target)
 PY
+  fi
+  return 0
+}
+
+copy_seed_into_worktree(){
+  local wt="$1"
+  [ -n "$SEED" ] || return 0
+  local expected="$SEED_DIGEST_EXPECTED" p result
+  [ -n "$expected" ] || expected="$(seed_digest "$REPO_DIR")" || return 1
+  local -a args=(copy --source "$REPO_DIR" --target "$wt" --expected-digest "$expected")
+  for p in $SEED; do args+=(--path "$p"); done
+  result="$(python3 "$ROOT/scripts/seed_contract.py" "${args[@]}" 2>>"$LOG")" || return 1
+  log "seed contract copied and verified ($(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("file_count",0))' "$result") files)"
 }
 
 verify_seed_integrity(){
   [ -n "$SEED" ] || return 0
   local observed
   observed="$(seed_digest "$1")" || { SCOPE_FAIL="declared seed integrity could not be measured"; return 1; }
-  [ "$observed" = "$SEED_DIGEST_BEFORE" ] \
+  [ "$observed" = "${SEED_DIGEST_EXPECTED:-$SEED_DIGEST_BEFORE}" ] \
     || { SCOPE_FAIL="worker/gate mutated a declared read-only seed or oracle"; return 1; }
 }
 
@@ -622,7 +639,7 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
   [ "$readonly" != 1 ] || cmd+=(--read-only-worktree)
   [ -z "$evidence_dir" ] || cmd+=(--evidence-dir "$evidence_dir")
   local protected_path seen_paths=" "
-  for protected_path in $SEED $GATE_FILES; do
+  for protected_path in $SEED $SEED_MANIFEST $GATE_FILES; do
     case "$seen_paths" in *" $protected_path "*) continue ;; esac
     seen_paths+="$protected_path "
     [ ! -e "$wt/$protected_path" ] || cmd+=(--read-only-path "$protected_path")
@@ -643,6 +660,7 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
       --task-id "$ID" --role "$role" --model-alias "$alias" --worktree "$wt" \
       --base-commit "$BASE_COMMIT" --pid "$worker_pgid" --process-group "$worker_pgid" \
       --deadline-epoch "$deadline_epoch" --log "${log_path#$ROOT/}" --network-policy "$NETWORK_POLICY" \
+      ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} \
       ${implementer_run:+--implementer-run-id "$implementer_run"} ${commit_oid:+--commit-oid "$commit_oid"} \
       >>"$LOG" 2>&1 || { terminate_worker_group "$worker_pgid"; wait "$worker_pgid" 2>/dev/null || true; return 98; }
   fi
@@ -720,7 +738,7 @@ scope_check(){
     mkdir -p "$ROOT/state/runs"; LAST_SCOPE_FILE="$ROOT/state/runs/$scope_id-scope.json"
     err="$LAST_SCOPE_FILE.err"
     python3 "$ROOT/scripts/git-scope.py" --repo "$wt" --base "$BASE_COMMIT" \
-      --allowed-paths "$ALLOWED_PATHS" --protected-extra "$GATE_FILES $SEED" \
+      --allowed-paths "$ALLOWED_PATHS" --protected-extra "$GATE_FILES $SEED_MANIFEST $SEED" \
       --ignore .recursion-result.json --check >"$LAST_SCOPE_FILE" 2>"$err"; rc=$?
     if [ "$rc" -ne 0 ]; then
       SCOPE_FAIL="$(cat "$err" 2>/dev/null)"; [ -n "$SCOPE_FAIL" ] || SCOPE_FAIL="complete Git scope inspection failed (rc=$rc)"
@@ -786,6 +804,7 @@ phase5_record_run(){ # status outcome rc [commit]
   [ -z "$LAST_SCOPE_FILE" ] || args+=(--scope-file "$LAST_SCOPE_FILE")
   [ -z "$LAST_USAGE_FILE" ] || [ ! -f "$LAST_USAGE_FILE" ] || args+=(--usage-file "$LAST_USAGE_FILE")
   [ -z "$commit_oid" ] || args+=(--commit-oid "$commit_oid")
+  [ ! -f "$SEED_EVIDENCE_FILE" ] || args+=(--seed-evidence "$SEED_EVIDENCE_FILE" --seed-verified-after)
   python3 "$ROOT/scripts/worker-evidence.py" "${args[@]}" >>"$LOG" 2>&1
 }
 
@@ -869,7 +888,7 @@ verify(){
   local -a gate_cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine gate --role gate
     --worktree "$wt" --workdir "$gate_workdir" --network-policy none
     --gate-command "$ACCEPTANCE")
-  for protected_path in $SEED $GATE_FILES; do
+  for protected_path in $SEED $SEED_MANIFEST $GATE_FILES; do
     case "$seen_paths" in *" $protected_path "*) continue ;; esac
     seen_paths+="$protected_path "
     gate_cmd+=(--read-only-path "$protected_path")
@@ -912,6 +931,11 @@ run_independent_verifier(){
   local prompt rc head dirty
   rm -rf "$evidence_dir"; mkdir -p "$evidence_dir"
   git -C "$REPO_DIR" worktree add --detach "$verify_wt" "$CANDIDATE_OID" >>"$LOG" 2>&1 || return 99
+  if ! copy_seed_into_worktree "$verify_wt" || ! verify_seed_integrity "$verify_wt"; then
+    git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
+    LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
+    return 99
+  fi
   prompt="You are an INDEPENDENT VERIFIER, not the implementer. Review task $ID for goal ${GOAL_ID:-unknown}.
 The checkout is an isolated read-only worktree at exact commit $CANDIDATE_OID, based on $BASE_COMMIT.
 Inspect the complete base..commit diff, the task boundary, and the machine gate evidence.
@@ -932,9 +956,10 @@ Explicit non-goals: ${NON_GOALS:-none}."
   fi
   head="$(git -C "$verify_wt" rev-parse HEAD 2>/dev/null || true)"
   dirty="$(git -C "$verify_wt" status --porcelain --untracked-files=all 2>/dev/null || true)"
-  if [ "$head" != "$CANDIDATE_OID" ] || [ -n "$dirty" ]; then
+  if [ "$head" != "$CANDIDATE_OID" ] || [ -n "$dirty" ] || ! verify_seed_integrity "$verify_wt"; then
     python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed verifier-mutated-source 99 \
-      --commit-oid "$CANDIDATE_OID" >>"$LOG" 2>&1 || true
+      --commit-oid "$CANDIDATE_OID" \
+      ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} >>"$LOG" 2>&1 || true
     git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
     LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
     return 99
@@ -950,6 +975,8 @@ Explicit non-goals: ${NON_GOALS:-none}."
   mv -f "$evidence_dir/validated-verdict.json" "$verdict"
   local -a finish_args=(finish "$LAST_RUN_EVIDENCE" succeeded verified 0
     --result-file "$verdict" --commit-oid "$CANDIDATE_OID")
+  [ ! -f "$SEED_EVIDENCE_FILE" ] \
+    || finish_args+=(--seed-evidence "$SEED_EVIDENCE_FILE" --seed-verified-after)
   [ -z "$LAST_USAGE_FILE" ] || [ ! -f "$LAST_USAGE_FILE" ] \
     || finish_args+=(--usage-file "$LAST_USAGE_FILE")
   python3 "$ROOT/scripts/worker-evidence.py" "${finish_args[@]}" >>"$LOG" 2>&1 || return 98
@@ -1023,6 +1050,13 @@ require_fresh_base(){
 if ! require_fresh_base; then
   board finish "$ID" blocked - "stale/unprovable base"
   complete_terminal_escalation blocked "$FRESH_WHY" || exit $?
+  exit 0
+fi
+
+if ! validate_seed_source; then
+  board finish "$ID" blocked - "seed contract invalid"
+  complete_terminal_escalation escalated \
+    "approved seed manifest or content digest is absent, unsafe, or stale; no worker was launched" || exit $?
   exit 0
 fi
 

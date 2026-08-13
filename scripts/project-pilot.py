@@ -24,6 +24,7 @@ from transition_receipt import (
     TransitionReceiptError, commit_event, commit_transition, json_mutation, resume_transition,
     raw_text_mutation, text_mutation,
 )
+from seed_contract import SeedContractError, inspect_repository, validate_contract
 
 
 IDENT = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
@@ -615,6 +616,45 @@ def repo_gate_contract(base: Path, cfg: dict, task_id: str, task: dict) -> dict:
     return contract
 
 
+def bind_seed_contract(cfg: dict, value: object) -> dict:
+    """Add controller-observed seed identity before the plan receives its canonical digest."""
+    if not isinstance(value, dict):
+        fail("pilot plan must be an object")
+    plan = json.loads(json.dumps(value))
+    try:
+        observed = inspect_repository(Path(str(cfg["repo"])))
+    except (OSError, SeedContractError) as exc:
+        fail(f"project seed contract is invalid: {exc}")
+    claimed = plan.get("seed_contract")
+    if observed is None:
+        if claimed not in (None, {}):
+            fail("pilot plan claims a seed contract but the tracked manifest is absent")
+        plan.pop("seed_contract", None)
+        return plan
+    if claimed not in (None, observed):
+        fail("model-authored seed identity disagrees with controller evidence")
+    plan["seed_contract"] = observed
+    return plan
+
+
+def validate_seed_binding(cfg: dict, value: dict) -> dict | None:
+    claimed = value.get("seed_contract")
+    if claimed is None:
+        try:
+            observed = inspect_repository(Path(str(cfg["repo"])))
+        except (OSError, SeedContractError) as exc:
+            fail(f"project seed contract is invalid: {exc}")
+        if observed is not None:
+            fail("pilot plan does not bind the tracked project seed manifest")
+        return None
+    if not isinstance(claimed, dict):
+        fail("pilot plan seed contract is not an object")
+    try:
+        return validate_contract(Path(str(cfg["repo"])), claimed)
+    except (OSError, SeedContractError) as exc:
+        fail(f"pilot plan seed contract is stale or invalid: {exc}")
+
+
 def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: object,
                   bind_gate_contract: bool = False) -> dict:
     if not isinstance(value, dict) or value.get("schema_version") != 1:
@@ -625,6 +665,7 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
     value = json.loads(json.dumps(value))
     if value.get("id") != plan_id or value.get("project_id") != project or not IDENT.fullmatch(plan_id):
         fail("pilot plan identity does not match its decision")
+    validate_seed_binding(cfg, value)
     goal = value.get("goal")
     tasks = value.get("tasks")
     if not isinstance(goal, dict) or not isinstance(tasks, list) or not 1 <= len(tasks) <= 16:
@@ -634,6 +675,8 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
         fail("pilot plan goal identity, outcome, or falsifier is absent")
     bounded_line(goal.get("outcome"), "goal outcome"); bounded_line(goal.get("falsifier"), "goal falsifier")
     nonvacuous_gate(goal.get("acceptance_suite"), "goal")
+    if goal.get("gate_class", "light") not in {"light", "heavy"}:
+        fail("pilot plan goal has an invalid gate class")
     budget = goal.get("budget")
     required_budget = {
         "max_concurrency", "max_tokens", "max_cost_usd", "max_wall_clock_seconds",
@@ -722,6 +765,15 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
                 fail(f"pilot plan source task {source_task_id} is absent, terminal, or cross-project")
             if task.get("acceptance") != source.get("acceptance"):
                 fail(f"pilot plan task {task_id} changed its source task machine gate")
+            contract = value.get("seed_contract") if isinstance(value.get("seed_contract"), dict) else None
+            expected_seed = {
+                "seed_manifest": contract["manifest_path"] if contract else "",
+                "seed_manifest_sha256": contract["manifest_sha256"] if contract else "",
+                "seed": ",".join(contract["paths"]) if contract else "",
+                "seed_digest": contract["content_sha256"] if contract else "",
+            }
+            if any(source.get(key, "") != expected for key, expected in expected_seed.items()):
+                fail(f"pilot plan task {task_id} changed its source task seed contract")
             source_paths = {item for item in source.get("allowed_paths", "").replace(",", " ").split() if item}
             if not set(paths) <= source_paths:
                 fail(f"pilot plan task {task_id} broadens its source task write scope")
@@ -765,8 +817,8 @@ def require_lucas_instruction(path: Path, instruction: dict[str, str], terms: li
 def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction_id: str) -> dict:
     args = decision.get("args") or decision.get("arguments") or []
     plan_id = str(args[1]) if len(args) > 1 else ""
-    plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, decision.get("plan"),
-                         bind_gate_contract=True)
+    plan = bind_seed_contract(cfg, decision.get("plan"))
+    plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, plan, bind_gate_contract=True)
     digest = canonical_digest(plan); goal_id = str(plan["goal"]["id"])
     path = base / "state/plans" / str(cfg["id"]) / f"{plan_id}.json"
     event = transition_event(
@@ -800,7 +852,8 @@ def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
     return {"plan": str(path.relative_to(base)), "status": "proposed", "plan_digest": digest}
 
 
-def task_text(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, task: dict) -> str:
+def task_text(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, task: dict,
+              seed_contract: dict | None = None) -> str:
     values = {
         "schema_version": "1", "version": "1", "id": task["id"], "project_id": cfg["id"],
         "project": cfg["id"], "workstream": cfg["id"], "pilot_id": pilot["id"], "goal_id": goal_id,
@@ -819,6 +872,13 @@ def task_text(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, t
     }
     if task.get("source_task_id"):
         values["source_task_id"] = task["source_task_id"]
+    if seed_contract:
+        values.update({
+            "seed_manifest": seed_contract["manifest_path"],
+            "seed_manifest_sha256": seed_contract["manifest_sha256"],
+            "seed": ",".join(seed_contract["paths"]),
+            "seed_digest": seed_contract["content_sha256"],
+        })
     return "".join(f"{key}: {value}\n" for key, value in values.items()) + f"\n{task['intent']}\n"
 
 
@@ -836,6 +896,7 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
         digest = canonical_digest(plan)
         if digest != claimed: fail("stored plan bytes do not match the approved digest")
         goal = plan["goal"]; goal_id = str(goal["id"]); goal_path = base / "state/goals" / f"{goal_id}.md"
+        seed_contract = plan.get("seed_contract")
         event = transition_event(
             "pilot-plan-approved", str(cfg["id"]), goal_id,
             detail={"plan_id": plan_id, "plan_digest": digest, "instruction_id": instruction_id},
@@ -869,8 +930,14 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
                          f"pilot_id: {pilot['id']}\nplan_id: {plan_id}\nplan_digest: {digest}\n"
                          f"instruction_id: {proposal['instruction_id']}\nstatus: draft\noutcome: {goal['outcome']}\n"
                          f"acceptance_suite: {goal['acceptance_suite']}\nfalsifier: {goal['falsifier']}\n"
+                         f"gate_class: {goal.get('gate_class', 'light')}\n"
                          f"budget: {json.dumps(goal['budget'], sort_keys=True, separators=(',', ':'))}\n"
                          f"started_at_epoch: {int(time.time())}\nterminal_reported: 0\n")
+            if seed_contract:
+                goal_body += (f"seed_manifest: {seed_contract['manifest_path']}\n"
+                              f"seed_manifest_sha256: {seed_contract['manifest_sha256']}\n"
+                              f"seed: {','.join(seed_contract['paths'])}\n"
+                              f"seed_digest: {seed_contract['content_sha256']}\n")
         goal_body = goal_body.replace("status: draft", "status: active", 1)
         mutations.append(text_mutation(goal_path, goal_body))
         for task in plan["tasks"]:
@@ -881,7 +948,7 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
                     fail("task materialization collides with unrelated state")
                 body = task_path.read_text(encoding="utf-8", errors="surrogateescape")
             else:
-                body = task_text(cfg, pilot, plan_id, digest, goal_id, task)
+                body = task_text(cfg, pilot, plan_id, digest, goal_id, task, seed_contract)
             mutations.append(text_mutation(task_path, body))
         proposal = dict(proposal); proposal.update({"status": "approved", "approval_instruction_id": instruction_id,
                                                     "approved_by": instruction.get("principal"), "approved_at": now_iso()})

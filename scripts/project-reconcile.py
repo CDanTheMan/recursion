@@ -35,6 +35,7 @@ from transition_receipt import (
     TransitionReceiptError, commit_event, commit_transition, fields_mutation, json_mutation,
     resume_transition,
 )
+from seed_contract import SeedContractError, copy_seed_paths, validate_contract
 
 
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -701,6 +702,19 @@ def task_evidence(base: Path, repo: Path, task: dict[str, str], runs: list[dict]
     )
     if not valid:
         return False, "machine gate and independent verifier disagree", {"commit_oid": commit}
+    expected_seed = task.get("seed_digest", "")
+    if expected_seed:
+        seed_rows = []
+        for row in (implementer, verifier):
+            evidence = row.get("seed_evidence") if isinstance(row.get("seed_evidence"), dict) else {}
+            seed_rows.append(bool(
+                evidence.get("content_sha256") == expected_seed
+                and evidence.get("manifest_sha256") == task.get("seed_manifest_sha256")
+                and evidence.get("verified_before") is True
+                and evidence.get("verified_after") is True
+            ))
+        if not all(seed_rows):
+            return False, "implementer/verifier seed evidence is absent or disagrees", {"commit_oid": commit}
     try:
         branch_commit = git_output(repo, "rev-parse", f"refs/heads/loop/work/{task_id}")
     except ReconcileError:
@@ -1269,11 +1283,14 @@ def terminate_group(pgid: int) -> None:
 
 
 def run_gate_interruptibly(base: Path, cwd: Path, command: str, deadline: int,
-                           network_policy: str) -> tuple[str, int]:
+                           network_policy: str, read_only_paths: Iterable[str] = ()) -> tuple[str, int]:
+    argv = ["bash", str(base / "scripts/worker-sandbox.sh"), "--engine", "gate", "--role", "gate",
+            "--worktree", str(cwd), "--workdir", ".", "--network-policy", "none",
+            "--gate-command", command]
+    for path in read_only_paths:
+        argv.extend(("--read-only-path", path))
     process = subprocess.Popen(
-        ["bash", str(base / "scripts/worker-sandbox.sh"), "--engine", "gate", "--role", "gate",
-         "--worktree", str(cwd), "--workdir", ".", "--network-policy", "none",
-         "--gate-command", command],
+        argv,
         cwd=base, start_new_session=True,
     )
     while process.poll() is None:
@@ -1289,6 +1306,49 @@ def run_gate_interruptibly(base: Path, cwd: Path, command: str, deadline: int,
     return ("pass", 0) if process.returncode == 0 else ("fail", int(process.returncode or 1))
 
 
+def goal_seed_contract(goal: dict[str, str]) -> dict | None:
+    seed = goal.get("seed", "").replace(",", " ").split()
+    values = (goal.get("seed_manifest", ""), goal.get("seed_manifest_sha256", ""),
+              goal.get("seed_digest", ""))
+    if not seed and not any(values):
+        return None
+    if not seed or not all(values) or any(not re.fullmatch(r"[0-9a-f]{64}", item) for item in values[1:]):
+        raise SeedContractError("goal seed metadata is incomplete or malformed")
+    return {"schema_version": 1, "manifest_path": values[0], "manifest_sha256": values[1],
+            "content_sha256": values[2], "paths": seed}
+
+
+def acquire_goal_heavy(base: Path, tag: str, deadline: int) -> tuple[str, int, bool]:
+    env = os.environ.copy()
+    env.update({"RECURSION_ROOT": str(base), "RECURSION_HEAVY_TAG": tag,
+                "RECURSION_HEAVY_PID": str(os.getpid())})
+    while True:
+        if (base / "state/PAUSE").exists():
+            return "paused", 75, False
+        if time.time() >= deadline:
+            return "timeout", 124, False
+        attempt = subprocess.run(
+            ["bash", str(base / "scripts/capacity.sh"), "heavy", "acquire", tag],
+            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        )
+        if attempt.returncode == 0:
+            return "pass", 0, True
+        if attempt.returncode != 4:
+            raise ReconcileError("heavy goal gate capacity controller failed closed")
+        time.sleep(0.05)
+
+
+def release_goal_heavy(base: Path) -> None:
+    env = os.environ.copy()
+    env.update({"RECURSION_ROOT": str(base), "RECURSION_HEAVY_PID": str(os.getpid())})
+    released = subprocess.run(
+        ["bash", str(base / "scripts/capacity.sh"), "heavy", "release"], env=env,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    if released.returncode:
+        raise ReconcileError("heavy goal gate lock release failed closed")
+
+
 def verify_goal(base: Path, project: str, goal_id: str) -> None:
     config, pilot = project_records(base, project)
     goal = read_fields(goal_path(base, goal_id))
@@ -1299,6 +1359,28 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
     if not tasks or any(task.get("status") != "passed" for _, task in tasks):
         raise ReconcileError("goal verification requires every task passed")
     repo = Path(str(config["repo"]))
+    try:
+        seed_contract = goal_seed_contract(goal)
+        seed_live = validate_contract(repo, seed_contract) if seed_contract else None
+    except (OSError, SeedContractError) as exc:
+        value = {"schema_version": 1, "id": f"goal-evidence-{goal_id}", "project_id": project,
+                 "goal_id": goal_id, "verdict": "fail", "reason": f"seed-contract: {exc}",
+                 "checked_at": now_iso()}
+        event = transition_event(
+            "goal-verification", project, goal_id, detail=value,
+            event_id="source-goal-verification-" + hashlib.sha256(
+                json.dumps([project, goal_id, value], sort_keys=True,
+                           separators=(",", ":")).encode()).hexdigest()[:24],
+        )
+        with goal_lock(base, goal_id):
+            commit_reconcile_transition(
+                base, [json_mutation(base / "state/evidence" / f"{goal_id}.json", value)], event,
+            )
+        return
+    for _, task in tasks:
+        if any(task.get(key, "") != goal.get(key, "")
+               for key in ("seed_manifest", "seed_manifest_sha256", "seed", "seed_digest")):
+            raise ReconcileError("task and goal seed contracts disagree")
     runs = run_records(base, {task.get("id", "") for _, task in tasks})
     sink_ids = {task.get("id", "") for _, task in tasks}
     for _, task in tasks:
@@ -1353,12 +1435,58 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
         raise ReconcileError((proc.stderr or proc.stdout or "goal verification worktree failed").strip())
     started = int(time.time())
     wall_deadline = safe_int(goal.get("started_at_epoch"), started) + int(budget["max_wall_clock_seconds"])
+    heavy_held = False
     try:
         network_policy = sink.get("network_policy", "none")
         if network_policy not in {"provider-only", "none"}:
             raise ReconcileError("goal gate inherited an invalid network policy")
-        outcome, rc = run_gate_interruptibly(base, worktree, goal["acceptance_suite"],
-                                             wall_deadline, network_policy)
+        gate_class = goal.get("gate_class", "light")
+        if gate_class not in {"light", "heavy"}:
+            raise ReconcileError("goal gate has an invalid gate class")
+        seed_evidence = None
+        try:
+            if seed_contract and seed_live:
+                copied = copy_seed_paths(repo, worktree, seed_contract["paths"],
+                                         seed_contract["content_sha256"])
+                copied_contract = validate_contract(worktree, seed_contract)
+                seed_evidence = {
+                    "manifest_path": seed_contract["manifest_path"],
+                    "manifest_sha256": seed_contract["manifest_sha256"],
+                    "content_sha256": copied["content_sha256"],
+                    "path_count": copied["path_count"], "file_count": copied["file_count"],
+                    "verified_before": copied_contract["content_sha256"] == copied["content_sha256"],
+                }
+        except (OSError, SeedContractError):
+            seed_evidence = {
+                "manifest_path": seed_contract["manifest_path"] if seed_contract else "",
+                "manifest_sha256": seed_contract["manifest_sha256"] if seed_contract else "",
+                "content_sha256": seed_contract["content_sha256"] if seed_contract else "",
+                "verified_before": False, "verified_after": False,
+                "error": "copy-or-validation-failed",
+            } if seed_contract else None
+            outcome, rc = "fail", 99
+        else:
+            if gate_class == "heavy":
+                outcome, rc, heavy_held = acquire_goal_heavy(base, f"goal-{goal_id}", wall_deadline)
+            else:
+                outcome, rc = "pass", 0
+            if outcome == "pass":
+                outcome, rc = run_gate_interruptibly(
+                    base, worktree, goal["acceptance_suite"], wall_deadline, network_policy,
+                    ([seed_contract["manifest_path"], *seed_contract["paths"]]
+                     if seed_contract else ()),
+                )
+        if seed_contract and seed_evidence:
+            try:
+                after = validate_contract(worktree, seed_contract)
+                seed_evidence["verified_after"] = (
+                    after["content_sha256"] == seed_contract["content_sha256"]
+                    and after["file_count"] == seed_evidence["file_count"]
+                )
+            except (OSError, SeedContractError):
+                seed_evidence["verified_after"] = False
+            if not seed_evidence["verified_after"]:
+                outcome, rc = "fail", 99
         head = git_output(worktree, "rev-parse", "HEAD")
         dirty = git_output(worktree, "status", "--porcelain", "--untracked-files=all")
         if outcome == "pass" and rc == 0 and head == commit and not dirty:
@@ -1374,7 +1502,10 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
                  "verifier_run_id": exact["verifier_run_id"],
                  "machine_gate": exact["machine_gate"],
                  "independent_verifier": exact["independent_verifier"],
-                 "checked_at": now_iso(), "worktree_clean": not bool(dirty)}
+                 "checked_at": now_iso(), "worktree_clean": not bool(dirty),
+                 "gate_class": gate_class}
+        if seed_evidence:
+            value["seed_evidence"] = seed_evidence
         event = transition_event(
             "goal-verification", project, goal_id, detail=value,
             event_id="source-goal-verification-" + hashlib.sha256(
@@ -1386,8 +1517,16 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
         if outcome == "paused":
             raise ReconcileError("PAUSE interrupted exact-commit goal verification")
     finally:
+        release_error = None
+        if heavy_held:
+            try:
+                release_goal_heavy(base)
+            except ReconcileError as exc:
+                release_error = exc
         subprocess.run(["git", "-C", str(repo), "worktree", "remove", "--force", str(worktree)],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        if release_error:
+            raise release_error
 
 
 def goal_evidence(base: Path, goal_id: str) -> dict | None:

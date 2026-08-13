@@ -20,6 +20,7 @@ CONTROLS = [
     "only the exact goal in an open bounded pilot window is schedulable",
     "observing PAUSE closes the window so resume cannot replay its authority",
     "an answered assist reopens the same goal and task once through the durable outbox path",
+    "a tracked .seedlist is controller-bound into the approved plan, goal, and task",
 ]
 
 
@@ -48,6 +49,7 @@ class Fixture:
     def __init__(self) -> None:
         self.temp = Path(tempfile.mkdtemp(prefix="phase8-red-"))
         self.root = self.temp / "root"
+        self.project = self.temp / "project"
         shutil.copytree(SOURCE / "scripts", self.root / "scripts")
         shutil.copytree(SOURCE / "schemas", self.root / "schemas")
         if os.name == "nt":
@@ -90,6 +92,7 @@ class Fixture:
 
     def _write_repo(self) -> None:
         self.repo = self.temp / "chiron-repo"
+        self.project = self.repo
         self.gate_path = self.repo / "user-client/render/tools/native-diff.cjs"
         implementation = self.repo / "user-client/render/shade-tops.js"
         self.gate_path.parent.mkdir(parents=True, exist_ok=True)
@@ -132,6 +135,19 @@ class Fixture:
         }
         self.write_json("state/project-config/chiron.json", config)
         self.write_json("state/pilots/pilot-chiron.json", pilot)
+
+    def install_seed_contract(self, manifest: str = "data/corpus\n") -> None:
+        (self.project / "data/corpus").mkdir(parents=True, exist_ok=True)
+        (self.project / "data/corpus/oracle.bin").write_bytes(b"controller-owned fixture\n")
+        (self.project / ".gitignore").write_text("/data/corpus/\n", encoding="utf-8")
+        (self.project / ".seedlist").write_text(manifest, encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(self.project), "add", ".gitignore", ".seedlist"], check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(self.project), "-c", "user.name=fixture", "-c",
+             "user.email=fixture@example.invalid", "commit", "-qm", "seed contract"], check=True,
+        )
 
     def _write_legacy_state(self) -> None:
         (self.root / "state/goals/goal-chiron-legacy.md").write_text(
@@ -398,6 +414,8 @@ def test_assist_resume(f: Fixture) -> bool:
         "\n## ANSWER\n_(unanswered)_\n",
         encoding="utf-8",
     )
+
+
     assist_path = f.root / "state/assists/chiron-phase8-smoke.md"
     assist_path.write_text(
         assist_path.read_text(encoding="utf-8")
@@ -428,10 +446,89 @@ def test_assist_resume(f: Fixture) -> bool:
     )
 
 
+def test_seed_binding(_fixture: Fixture) -> bool:
+    good = Fixture()
+    stale = Fixture()
+    hostile = Fixture()
+    try:
+        good.install_seed_contract()
+        propose = good.decision(
+            verb="pilot-plan-propose", args=["chiron", good.plan_id], iid="101",
+            actor="pilot-chiron", goal=str(good.plan["goal"]["id"]), text="Bind the seed contract.",
+            extra={"plan": good.plan},
+        )
+        result = good.run("python3", "scripts/project-pilot.py", "execute", str(propose))
+        if result.returncode:
+            return False
+        record = json.loads((good.root / f"state/plans/chiron/{good.plan_id}.json").read_text(encoding="utf-8"))
+        contract = record.get("plan", {}).get("seed_contract", {})
+        digest = record.get("plan_digest", "")
+        if not (
+            digest == canonical_digest(record["plan"])
+            and contract.get("manifest_path") == ".seedlist"
+            and contract.get("paths") == ["data/corpus"]
+            and len(contract.get("manifest_sha256", "")) == 64
+            and len(contract.get("content_sha256", "")) == 64
+        ):
+            return False
+        good._write_instruction("102", "head-hermes", f"approve {good.plan_id} {digest}")
+        approve = good.decision(
+            verb="pilot-plan-approve", args=["chiron", good.plan_id, digest], iid="102",
+            actor="head-hermes", goal=str(good.plan["goal"]["id"]), text="Approve the bound seed plan.",
+        )
+        approved = good.run("python3", "scripts/project-pilot.py", "execute", str(approve))
+        goal = fields(good.root / "state/goals/goal-chiron-phase8-smoke.md")
+        task = fields(good.root / "state/tasks/chiron-phase8-smoke.md")
+        materialized = (
+            approved.returncode == 0
+            and goal.get("seed") == "data/corpus" == task.get("seed")
+            and goal.get("seed_digest") == contract["content_sha256"] == task.get("seed_digest")
+            and goal.get("seed_manifest_sha256") == contract["manifest_sha256"]
+            and task.get("seed_manifest_sha256") == contract["manifest_sha256"]
+        )
+
+        stale.install_seed_contract()
+        stale_propose = stale.decision(
+            verb="pilot-plan-propose", args=["chiron", stale.plan_id], iid="101",
+            actor="pilot-chiron", goal=str(stale.plan["goal"]["id"]), text="Bind stale seed.",
+            extra={"plan": stale.plan},
+        )
+        if stale.run("python3", "scripts/project-pilot.py", "execute", str(stale_propose)).returncode:
+            return False
+        stale_record = json.loads(
+            (stale.root / f"state/plans/chiron/{stale.plan_id}.json").read_text(encoding="utf-8")
+        )
+        stale_digest = stale_record["plan_digest"]
+        (stale.project / "data/corpus/oracle.bin").write_bytes(b"changed after proposal\n")
+        stale._write_instruction("102", "head-hermes", f"approve {stale.plan_id} {stale_digest}")
+        stale_approve = stale.decision(
+            verb="pilot-plan-approve", args=["chiron", stale.plan_id, stale_digest], iid="102",
+            actor="head-hermes", goal=str(stale.plan["goal"]["id"]), text="Must refuse drift.",
+        )
+        drift_refused = (
+            stale.run("python3", "scripts/project-pilot.py", "execute", str(stale_approve)).returncode != 0
+            and not (stale.root / "state/goals/goal-chiron-phase8-smoke.md").exists()
+        )
+
+        hostile.install_seed_contract("data/corpus\ndata/corpus\n")
+        hostile_plan = hostile.decision(
+            verb="pilot-plan-propose", args=["chiron", hostile.plan_id], iid="101",
+            actor="pilot-chiron", goal=str(hostile.plan["goal"]["id"]), text="Must refuse duplicate seed.",
+            extra={"plan": hostile.plan},
+        )
+        duplicate_refused = (
+            hostile.run("python3", "scripts/project-pilot.py", "execute", str(hostile_plan)).returncode != 0
+            and not (hostile.root / f"state/plans/chiron/{hostile.plan_id}.json").exists()
+        )
+        return materialized and drift_refused and duplicate_refused
+    finally:
+        good.close(); stale.close(); hostile.close()
+
+
 def main() -> int:
     fixture = Fixture()
     tests = [test_fresh_plan, test_invalid_plan, test_approval, test_window_admission,
-             test_pause_closes_window, test_assist_resume]
+             test_pause_closes_window, test_assist_resume, test_seed_binding]
     failures = 0
     try:
         for label, test in zip(CONTROLS, tests):

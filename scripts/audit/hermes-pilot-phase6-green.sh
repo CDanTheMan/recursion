@@ -10,6 +10,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/taskctl.sh \
   scripts/tests/hermes-pilot-phase6-red.test.sh
 python3 -m py_compile scripts/project-reconcile.py scripts/project-pilot.py \
+  scripts/seed_contract.py \
   scripts/decision-queue.py scripts/jsonl_durable.py scripts/transition_receipt.py \
   scripts/validate-decision.py scripts/validate-control-state.py scripts/runtime-state.py
 python3 -m json.tool schemas/control-plane/v1/schema.json >/dev/null
@@ -64,4 +65,5 @@ grep -q 'deliveries' scripts/project-reconcile.py
 echo "ok    crash/reboot recovery covers ignored task/process/worktree/ref/event/delivery state"
 
 bash scripts/tests/hermes-pilot-phase6-red.test.sh
+python3 scripts/tests/seed-contract.test.py
 echo "hermes-pilot-phase6-green: ALL PASS"

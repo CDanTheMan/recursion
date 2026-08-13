@@ -21,7 +21,7 @@ mkdir -p "$BIN" "$R/scripts/tests" "$R/state/tasks" "$R/state/runs" \
   "$R/user-client/render/data/models"
 for s in work.sh worker-sandbox.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh \
          git-scope.py validate-gate.py validate-worker-result.py validate-verifier-result.py \
-         resolve-model-alias.py worker-evidence.py; do
+         resolve-model-alias.py worker-evidence.py seed_contract.py; do
   [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$R/scripts/"
 done
 chmod +x "$R/scripts/"* 2>/dev/null || true
@@ -31,6 +31,7 @@ printf '{"truth":1}\n' > "$R/fixtures/truth.json"
 printf 'seed\n' > "$R/app/seed.txt"
 printf 'immutable oracle\n' > "$R/user-client/render/data/models/oracle.json"
 printf '/user-client/render/data/models/\n' > "$R/.gitignore"
+printf 'user-client/render/data/models\n' > "$R/.seedlist"
 printf '#!/usr/bin/env bash\nexit 1\n' > "$R/app/gate.sh"; chmod +x "$R/app/gate.sh"
 : > "$R/.env"; : > "$R/state/INBOX.md"
 
@@ -122,6 +123,64 @@ if [ "$(status_of seed-tamper)" = escalated ] && [ ! -e "$MARKER_SEED" ]; then
 else
   no "an ignored worker-writable oracle reached its gate (status=$(status_of seed-tamper))"
 fi
+
+# 1c. Phase-8 seeds are compared to the approved manifest/content digest, copied into the
+# verifier checkout too, and represented in both run records without corpus bytes.
+SEED_CONTRACT="$(python3 "$R/scripts/seed_contract.py" inspect --repo "$R")"
+eval "$(python3 - "$SEED_CONTRACT" <<'PY'
+import json,shlex,sys
+row=json.loads(sys.argv[1])
+for key,name in [('manifest_sha256','BOUND_MANIFEST'),('content_sha256','BOUND_SEED')]:
+    print(f'{name}={shlex.quote(row[key])}')
+PY
+)"
+mktask seed-bound-pass "test -s app/seed-bound.txt && test -s user-client/render/data/models/oracle.json"
+sed -i "/^workdir:/i seed_manifest: .seedlist\nseed_manifest_sha256: $BOUND_MANIFEST\nseed: user-client/render/data/models\nseed_digest: $BOUND_SEED" \
+  "$R/state/tasks/seed-bound-pass.md"
+result="$(done_result seed-bound '["app/seed-bound.txt"]')"
+seeded_verdict='test "$(cat user-client/render/data/models/oracle.json)" = "immutable oracle" || exit 42; '"$verdict_script"
+run_case seed-bound-pass "printf ok > app/seed-bound.txt; printf '%s' '$result' > .recursion-result.json" "$seeded_verdict"
+if [ "$(status_of seed-bound-pass)" = passed ] && python3 - "$R/state/runs" "$BOUND_SEED" <<'PY'
+import glob,json,sys
+rows=[]
+for path in glob.glob(sys.argv[1]+'/*.json'):
+    try: row=json.load(open(path))
+    except Exception: continue
+    if row.get('task_id')=='seed-bound-pass': rows.append(row)
+roles={row.get('role') for row in rows}
+valid=(roles=={'implementer','verifier'} and all(
+    row.get('seed_evidence',{}).get('content_sha256')==sys.argv[2]
+    and row.get('seed_evidence',{}).get('verified_before') is True
+    and row.get('seed_evidence',{}).get('verified_after') is True for row in rows))
+raise SystemExit(0 if valid else 1)
+PY
+then
+  ok "approved seed digest reaches implementer and independent verifier evidence"
+else
+  no "approved seed was absent, self-derived, or missing from verifier evidence"
+fi
+
+mktask seed-wrong-digest "test -s app/never-seeded.txt"
+WRONG_SEED="0${BOUND_SEED#?}"
+[ "$WRONG_SEED" != "$BOUND_SEED" ] || WRONG_SEED="1${BOUND_SEED#?}"
+sed -i "/^workdir:/i seed_manifest: .seedlist\nseed_manifest_sha256: $BOUND_MANIFEST\nseed: user-client/render/data/models\nseed_digest: $WRONG_SEED" \
+  "$R/state/tasks/seed-wrong-digest.md"
+result="$(done_result wrong '["app/never-seeded.txt"]')"
+run_case seed-wrong-digest "printf reached > app/never-seeded.txt; printf '%s' '$result' > .recursion-result.json" "$verdict_script"
+[ "$(status_of seed-wrong-digest)" = escalated ] \
+  && ok "copied seed is compared with the approved digest before worker launch" \
+  || no "a task ran against seed bytes that disagreed with its approved digest"
+
+mktask verifier-seed-tamper "test -s app/verifier-seed.txt"
+sed -i "/^workdir:/i seed_manifest: .seedlist\nseed_manifest_sha256: $BOUND_MANIFEST\nseed: user-client/render/data/models\nseed_digest: $BOUND_SEED" \
+  "$R/state/tasks/verifier-seed-tamper.md"
+result="$(done_result verifier-seed '["app/verifier-seed.txt"]')"
+run_case verifier-seed-tamper \
+  "printf original > app/verifier-seed.txt; printf '%s' '$result' > .recursion-result.json" \
+  'printf corrupt > user-client/render/data/models/oracle.json; '"$verdict_script"
+[ "$(status_of verifier-seed-tamper)" = escalated ] \
+  && ok "independent verifier cannot mutate an ignored seeded oracle" \
+  || no "verifier seed mutation escaped integrity enforcement"
 
 # 2. One committed change set exercises test, fixture rename/delete, and out-of-scope paths.
 MARKER2="$TMP/gate-committed-mutations"

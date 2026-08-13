@@ -60,10 +60,13 @@ def main() -> int:
     start.add_argument("--deadline-epoch", required=True, type=int)
     start.add_argument("--implementer-run-id", default="")
     start.add_argument("--commit-oid", default="")
+    start.add_argument("--seed-evidence", default="")
     heartbeat = sub.add_parser("heartbeat"); heartbeat.add_argument("path"); heartbeat.add_argument("lease_epoch", type=int)
     finish = sub.add_parser("finish"); finish.add_argument("path"); finish.add_argument("status")
     finish.add_argument("outcome"); finish.add_argument("exit_code", type=int)
     finish.add_argument("--result-file"); finish.add_argument("--scope-file"); finish.add_argument("--usage-file")
+    finish.add_argument("--seed-evidence")
+    finish.add_argument("--seed-verified-after", action="store_true")
     finish.add_argument("--commit-oid", default="")
     gate = sub.add_parser("gate"); gate.add_argument("path"); gate.add_argument("commit_oid")
     gate.add_argument("acceptance"); gate.add_argument("exit_code", type=int); gate.add_argument("log")
@@ -88,6 +91,9 @@ def main() -> int:
             value["implementer_run_id"] = args.implementer_run_id
         if args.commit_oid:
             value["verification_commit"] = args.commit_oid
+        seed = maybe_json(args.seed_evidence)
+        if isinstance(seed, dict) and seed:
+            value["seed_evidence"] = seed
         atomic(path, value); return 0
 
     value = load(path)
@@ -105,6 +111,12 @@ def main() -> int:
             value["usage"] = usage
         if args.commit_oid:
             value["commit_oid"] = args.commit_oid
+        seed = maybe_json(args.seed_evidence)
+        if isinstance(seed, dict) and seed:
+            seed = dict(seed)
+            if args.seed_verified_after:
+                seed["verified_after"] = True
+            value["seed_evidence"] = seed
     elif args.command == "gate":
         value["machine_gate"] = {"commit_oid": args.commit_oid,
                                   "acceptance_sha256": hashlib.sha256(args.acceptance.encode()).hexdigest(),
