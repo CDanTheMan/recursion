@@ -21,6 +21,7 @@ spec.loader.exec_module(outbox)
 from jsonl_durable import read_jsonl_objects  # noqa: E402
 from transition_receipt import (  # noqa: E402
     TransitionReceiptError,
+    commit_event,
     commit_transition,
     json_mutation,
     recover_transitions,
@@ -409,7 +410,7 @@ class NotificationReceiptTests(unittest.TestCase):
             "event": "goal-transition", "project": "alpha", "goal": "goal-alpha", "task": "",
             "detail": {"from": "verifying", "to": "achieved", "reason": "verified", "version": 2},
         }
-        (self.base / "state/events.jsonl").write_text(json.dumps(source) + "\n", encoding="utf-8")
+        commit_event(self.base, source)
         terminal = outbox.all_mapped(self.base, "alpha")[0]
         outbox.create_event(self.base, terminal)
         chain = {

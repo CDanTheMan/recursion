@@ -28,6 +28,7 @@ if str(_SCRIPT_DIR) not in sys.path:
 from jsonl_durable import JsonlDurabilityError, append_jsonl as durable_append_jsonl, read_jsonl_objects
 from transition_receipt import (
     TransitionReceiptError,
+    authenticated_chain_transition,
     authenticated_transition,
     commit_transition,
     json_mutation,
@@ -47,6 +48,14 @@ PROJECT_EVENTS = {
     "goal-achieved", "goal-stopped", "project-digest",
 }
 TERMINAL_EVENT_TYPES = {"goal-achieved", "goal-stopped"}
+# Reviewed legacy allowlist: source kinds whose legitimate rows predate durable transition
+# receipts and that the pre-hardening suites pin as raw rows (the daily digest/journal brief
+# reuse one stable source id across occurrences, and the rotation suite writes a legacy
+# assist-open row directly).  These keep projecting raw ONLY under their exact content
+# contracts (message digest, occurrence date, stable source identity) -- never by permissive
+# shape.  Every Phase 8 projection (plan, window, task, goal, attention, terminal) is excluded
+# and therefore strictly receipt-gated.
+LEGACY_SOURCE_KINDS = frozenset({"assist-open", "project-digest", "portfolio-brief"})
 CONTRACT_REJECTION_CATEGORIES = {
     "acceptance-missing", "acceptance-invalid", "deadline-invalid", "network-policy-invalid",
     "verification-policy-invalid", "worker-engine-invalid", "model-alias-invalid",
@@ -132,6 +141,11 @@ def read_fields(path: Path) -> dict[str, str]:
 def stable_id(prefix: str, *parts: object) -> str:
     raw = json.dumps(parts, sort_keys=True, separators=(",", ":"), default=str).encode()
     return f"{prefix}-{hashlib.sha256(raw).hexdigest()[:24]}"
+
+
+def canonical_digest(value: object) -> str:
+    raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(raw).hexdigest()
 
 
 def canonical_event_seq(value: dict) -> int:
@@ -346,6 +360,274 @@ def authenticated_window_refusal(base: Path, raw: dict) -> None:
         raise OutboxError("pilot-window refusal event contract is invalid")
 
 
+def authenticated_source_event(base: Path, raw: dict) -> dict:
+    """Require a durable receipt, exact journal evidence, and current-or-archived witnesses.
+
+    This is the single gate every non-legacy projection crosses.  A raw row without an indexed,
+    projected, journal-matched receipt is dropped; the frozen receipt event must carry the same
+    canonical identity as the row it produced.
+    """
+    event_id = str(raw.get("id") or "")
+    try:
+        prepared = authenticated_chain_transition(base, event_id, journal="state/events.jsonl")
+    except (OSError, TransitionReceiptError) as exc:
+        raise OutboxError(f"source event receipt is invalid: {exc}") from exc
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    if event.get("id") != event_id or event.get("event") != raw.get("event") \
+            or event.get("project") != raw.get("project"):
+        raise OutboxError("source event receipt identity disagrees with the journal")
+    return prepared
+
+
+def authenticated_instruction(base: Path, project: str, instruction_id: str,
+                              terms: list[str]) -> dict[str, str]:
+    """Require one durable Lucas-to-Head-Hermes instruction naming every exact bound term."""
+    if not IDENT.fullmatch(str(instruction_id or "")):
+        raise OutboxError("coupled Phase 8 instruction identity is invalid")
+    path = base / "state/instructions" / (
+        f"{int(instruction_id):08d}.md" if instruction_id.isdigit() else f"{instruction_id}.md"
+    )
+    instruction = read_fields(path)
+    allowed = {item.strip() for item in os.environ.get("RECURSION_INTAKE_ALLOW", "8913126684").split(",")}
+    if instruction.get("principal") not in allowed or instruction.get("routing_target") != "head-hermes" \
+            or instruction.get("project_id") != project:
+        raise OutboxError("coupled Phase 8 instruction is not authenticated Lucas-to-Head-Hermes")
+    document = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+    match = re.search(r"(?m)^## INSTRUCTION\s*$\n?", document)
+    body = document[match.end():] if match else ""
+    body = re.split(r"(?m)^##\s+", body, maxsplit=1)[0]
+    tokens = set(re.findall(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", body))
+    tokens |= {t.rstrip('.') for t in tokens}
+    if any(str(term) not in tokens for term in terms):
+        raise OutboxError("coupled Phase 8 instruction does not name its exact object and bound")
+    return instruction
+
+
+def authenticated_approval_action(base: Path, project: str, plan_id: str, digest: str,
+                                  instruction_id: str, goal_id: str) -> None:
+    """Require exactly one succeeded, receipt-authenticated pilot-plan-approve action."""
+    candidates = []
+    for path in sorted((base / "state/actions").glob("*.json")):
+        try:
+            action = read_json(path)
+        except Exception:
+            continue
+        if action.get("verb") == "pilot-plan-approve" and action.get("status") == "succeeded" \
+                and action.get("arguments") == [project, plan_id, digest] \
+                and action.get("goal_id") == goal_id \
+                and action.get("instruction_id") == instruction_id:
+            candidates.append((path, action))
+    if len(candidates) != 1:
+        raise OutboxError("plan approval lacks exactly one succeeded authenticated action")
+    action_path, action = candidates[0]
+    action_transition_id = str(action.get("last_transition_id") or "")
+    try:
+        action_prepared = authenticated_transition(
+            base, action_transition_id, journal="state/action-events.jsonl")
+    except (OSError, TransitionReceiptError) as exc:
+        raise OutboxError(f"plan approval action receipt is invalid: {exc}") from exc
+    action_event = action_prepared.get("event") if isinstance(action_prepared.get("event"), dict) else {}
+    if action_path.name != f"{action.get('id')}.json" \
+            or action.get("actor") != "head-hermes" \
+            or action_event.get("action_id") != action.get("id") \
+            or action_event.get("status") != "succeeded" \
+            or action_event.get("attempt") != 1 \
+            or {str(item.get("path") or "") for item in action_prepared.get("mutations", [])} \
+               != {action_path.relative_to(base).as_posix()}:
+        raise OutboxError("plan approval action is not an authenticated succeeded conductor result")
+
+
+def authenticated_plan_projection(base: Path, raw: dict, prepared: dict) -> None:
+    """Bind a plan-proposed/approved projection to its exact approved plan record and digest."""
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    detail = detail_object(event.get("detail"))
+    project, goal_id = str(event.get("project") or ""), str(event.get("goal") or "")
+    plan_id, digest = str(detail.get("plan_id") or ""), str(detail.get("plan_digest") or "")
+    instruction_id = str(detail.get("instruction_id") or "")
+    if not IDENT.fullmatch(plan_id) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise OutboxError("plan projection identity or digest is invalid")
+    if event.get("event") not in {"pilot-plan-proposed", "pilot-plan-approved"}:
+        raise OutboxError("plan projection is not receipt-bound to its source kind")
+    path = base / "state/plans" / project / f"{plan_id}.json"
+    record = read_json(path)
+    plan = record.get("plan")
+    goal = plan.get("goal") if isinstance(plan, dict) else None
+    if record.get("id") != plan_id or record.get("project_id") != project \
+            or record.get("plan_digest") != digest \
+            or not isinstance(goal, dict) or goal.get("id") != goal_id \
+            or canonical_digest(plan) != digest:
+        raise OutboxError("plan projection disagrees with the exact stored plan digest")
+    if event.get("event") == "pilot-plan-approved":
+        if record.get("status") != "approved" or record.get("approval_instruction_id") != instruction_id:
+            raise OutboxError("plan approval projection disagrees with the approved plan record")
+        authenticated_instruction(base, project, instruction_id, [plan_id, digest])
+        authenticated_approval_action(base, project, plan_id, digest, instruction_id, goal_id)
+    else:
+        if record.get("instruction_id") != instruction_id:
+            raise OutboxError("plan proposal projection disagrees with its instructing record")
+
+
+def authenticated_window_projection(base: Path, raw: dict, prepared: dict) -> None:
+    """Bind pilot-window projections to their exact frozen window record, instruction, bounds."""
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    detail = detail_object(event.get("detail"))
+    project, goal_id = str(event.get("project") or ""), str(event.get("goal") or "")
+    window_id = str(detail.get("window_id") or "")
+    instruction_id = str(detail.get("instruction_id") or "")
+    if not IDENT.fullmatch(window_id):
+        raise OutboxError("pilot-window projection identity is invalid")
+    path = base / "state/pilot-windows" / f"{window_id}.json"
+    record = read_json(path)
+    relative = path.relative_to(base).as_posix()
+    frozen = None
+    for mutation in prepared.get("mutations", []):
+        if mutation.get("path") == relative and mutation.get("kind") == "json":
+            frozen = mutation.get("value") or {}
+    if frozen is None:
+        raise OutboxError("pilot-window projection is not receipt-bound to its window record")
+    if record.get("id") != window_id or record.get("project_id") != project \
+            or record.get("goal_id") != goal_id \
+            or record.get("plan_digest") != frozen.get("plan_digest") \
+            or record.get("instruction_id") != frozen.get("instruction_id"):
+        raise OutboxError("pilot-window projection disagrees with its canonical window record")
+    kind = str(event.get("event") or "")
+    status = str(frozen.get("status") or "")
+    if kind == "pilot-window-armed":
+        if status != "armed" or str(frozen.get("instruction_id") or "") != instruction_id:
+            raise OutboxError("pilot-window arm projection disagrees with the frozen armed record")
+        authenticated_instruction(base, project, instruction_id, [window_id])
+    elif kind == "pilot-window-opened":
+        if status != "open" or str(frozen.get("instruction_id") or "") != instruction_id:
+            raise OutboxError("pilot-window open projection disagrees with the frozen open record")
+        authenticated_instruction(base, project, instruction_id, [window_id])
+    elif kind == "pilot-window-closed":
+        if status != "closed":
+            raise OutboxError("pilot-window close projection disagrees with the closed record")
+        if instruction_id:
+            if str(frozen.get("close_instruction_id") or "") != instruction_id:
+                raise OutboxError("pilot-window close projection disagrees with its instruction")
+        elif str(frozen.get("close_reason") or "") not in {"pause-observed", "expired"}:
+            raise OutboxError("pilot-window close projection lacks a reviewed closing authority")
+    else:
+        raise OutboxError("pilot-window projection is not receipt-bound to a window kind")
+    plan_digest = str(record.get("plan_digest") or "")
+    goal_path = base / "state/goals" / f"{goal_id}.md"
+    goal = read_fields(goal_path)
+    plan_id = str(goal.get("plan_id") or "")
+    plan_record = read_json(base / "state/plans" / project / f"{plan_id}.json") if plan_id else {}
+    if re.fullmatch(r"[0-9a-f]{64}", plan_digest) is None or goal.get("plan_digest") != plan_digest \
+            or plan_record.get("plan_digest") != plan_digest:
+        raise OutboxError("pilot-window projection disagrees with the exact approved plan digest")
+    if kind in {"pilot-window-armed", "pilot-window-opened"}:
+        duration = int(frozen.get("expires_at_epoch") or 0) - int(frozen.get("opened_at_epoch") or 0)
+        authenticated_instruction(base, project, instruction_id, [window_id, str(duration)])
+
+
+def authenticated_source_event_kind(base: Path, raw: dict, prepared: dict) -> None:
+    """Route the canonical-witness and coupled-evidence checks for one mapped source row."""
+    kind = str(raw.get("event") or "")
+    if kind == "pilot-plan-proposed":
+        authenticated_plan_projection(base, raw, prepared)
+    elif kind == "pilot-plan-approved":
+        authenticated_plan_projection(base, raw, prepared)
+    elif kind == "pilot-window-armed":
+        authenticated_window_projection(base, raw, prepared)
+    elif kind == "pilot-window-opened":
+        authenticated_window_projection(base, raw, prepared)
+    elif kind == "pilot-window-closed":
+        authenticated_window_projection(base, raw, prepared)
+    elif kind == "assist-answer":
+        authenticated_assist_projection(base, raw, prepared)
+    elif kind == "goal-transition":
+        authenticated_goal_projection(base, raw, prepared)
+    elif kind in {"start", "finish", "block", "task-blocked"}:
+        authenticated_task_projection(base, raw, prepared)
+    elif kind in {"review-published", "review-branch-published"}:
+        authenticated_review_projection(base, raw, prepared)
+
+
+def authenticated_goal_projection(base: Path, raw: dict, prepared: dict) -> None:
+    """Bind a goal transition to its lawful canonical state when the receipt is current."""
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    detail = detail_object(event.get("detail"))
+    source, target = str(detail.get("from") or ""), str(detail.get("to") or "")
+    goal_id = str(event.get("goal") or "")
+    if not IDENT.fullmatch(goal_id) or source not in {"approved", "active", "verifying", "blocked", "paused"} \
+            or target not in {"active", "verifying", "achieved", "blocked", "abandoned",
+                              "budget-exhausted", "paused"}:
+        raise OutboxError("goal transition projection carries an unlawful canonical bound")
+    for mutation in prepared.get("mutations", []):
+        if mutation.get("kind") != "fields":
+            continue
+        expect = mutation.get("expect") or {}
+        if expect.get("status") == target and expect.get("last_transition_from") == source:
+            break
+    else:
+        # A pure audit transition (no mutation) is receipt-authenticated by identity alone;
+        # a mutation-backed transition must freeze the exact from/to it projects.
+        if prepared.get("mutations"):
+            raise OutboxError("goal transition receipt does not freeze its projected bound")
+    if any(mutation.get("kind") == "fields" for mutation in prepared.get("mutations", [])):
+        goal_path = base / "state/goals" / f"{goal_id}.md"
+        transition_id = str(prepared.get("id") or "")
+        if read_fields(goal_path).get("last_transition_id") == transition_id \
+                and read_fields(goal_path).get("status") != target:
+            raise OutboxError("goal transition projection disagrees with its canonical goal")
+
+
+def authenticated_task_projection(base: Path, raw: dict, prepared: dict) -> None:
+    """Bind a task start/finish/block projection to its canonical task when current."""
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    task_id = str(event.get("task") or "")
+    if not IDENT.fullmatch(task_id):
+        raise OutboxError("task projection carries no canonical task identity")
+    for mutation in prepared.get("mutations", []):
+        if mutation.get("kind") != "fields":
+            continue
+        expect = mutation.get("expect") or {}
+        status = expect.get("status")
+        if status not in {"running", "passed", "failed", "blocked", "stale"}:
+            continue
+        task_path = base / "state/tasks" / f"{task_id}.md"
+        transition_id = str(prepared.get("id") or "")
+        if read_fields(task_path).get("last_transition_id") == transition_id \
+                and read_fields(task_path).get("status") != status:
+            raise OutboxError("task projection disagrees with its canonical task status")
+
+
+def authenticated_assist_projection(base: Path, raw: dict, prepared: dict) -> None:
+    """Bind an answered assist to its durably answered task assist record."""
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    task_id = str(event.get("task") or "")
+    if not IDENT.fullmatch(task_id):
+        raise OutboxError("assist projection carries no canonical task identity")
+    assist = read_fields(base / "state/assists" / f"{task_id}.md")
+    if assist.get("task") != task_id or assist.get("status") not in {"open", "answered"} \
+            or not assist.get("answered") or not assist.get("answered_by"):
+        raise OutboxError("assist projection lacks its durably answered assist witness")
+
+
+def authenticated_review_projection(base: Path, raw: dict, prepared: dict) -> None:
+    """Bind a review publication to its canonical task review witnesses when current."""
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    task_id = str(event.get("task") or "")
+    if not IDENT.fullmatch(task_id):
+        raise OutboxError("review projection carries no canonical task identity")
+    detail = detail_object(event.get("detail"))
+    branch = str(detail.get("branch") or "")
+    commit = str(detail.get("commit_oid") or detail.get("commit") or "")
+    if re.fullmatch(r"[0-9a-f]{40,64}", commit) is None:
+        raise OutboxError("review projection lacks an exact published commit oid")
+    task = read_fields(base / "state/tasks" / f"{task_id}.md")
+    if task.get("review_status") == "published" \
+            and (task.get("review_commit") != commit or task.get("id") != task_id):
+        raise OutboxError("review projection disagrees with its canonical review witnesses")
+    if branch:
+        task_id_in_branch = re.search(r"loop/work/([A-Za-z0-9][A-Za-z0-9._-]{0,127})$", branch)
+        if task_id_in_branch is None or task_id_in_branch.group(1) != task_id:
+            raise OutboxError("review projection branch does not name its canonical task")
+
+
 def detail_object(value: object) -> dict:
     return value if isinstance(value, dict) else {}
 
@@ -441,9 +723,15 @@ def all_mapped(base: Path, project: str | None = None) -> list[dict]:
                 authenticated_contract_rejection(base, raw, require_failed_action=False)
             except OutboxError:
                 continue
-        if raw.get("event") == "pilot-window-refused":
+        elif raw.get("event") == "pilot-window-refused":
             try:
                 authenticated_window_refusal(base, raw)
+            except OutboxError:
+                continue
+        elif str(raw.get("event") or "") not in LEGACY_SOURCE_KINDS:
+            try:
+                prepared = authenticated_source_event(base, raw)
+                authenticated_source_event_kind(base, raw, prepared)
             except OutboxError:
                 continue
         for event in mapped_events(raw):
@@ -824,6 +1112,10 @@ def build_chain(base: Path, project: str, goal_id: str) -> dict:
         if raw.get("project") != project or raw.get("goal") != goal_id:
             continue
         if raw.get("event") in {"review-published", "review-branch-published"}:
+            try:
+                authenticated_source_event_kind(base, raw, authenticated_source_event(base, raw))
+            except OutboxError:
+                continue
             review.append(raw)
         if raw.get("event") == "task-contract-invalid":
             try:

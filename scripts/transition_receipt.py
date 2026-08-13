@@ -360,9 +360,9 @@ def _indexed_prepared(base: Path, event_id: str) -> dict | None:
     return prepared
 
 
-def authenticated_transition(base: Path, event_id: str,
-                             *, journal: str | None = None) -> dict:
-    """Read one fully projected indexed receipt and verify every durable witness."""
+def _authenticated_prepared(base: Path, event_id: str,
+                            *, journal: str | None) -> dict:
+    """Read one fully projected indexed receipt and verify its durable identity evidence."""
     prepared = _indexed_prepared(base, event_id)
     if prepared is None:
         raise TransitionReceiptError(f"transition event index is absent: {event_id}")
@@ -374,11 +374,6 @@ def authenticated_transition(base: Path, event_id: str,
             or marker.get("schema_version") != 1 or marker.get("status") != "projected" \
             or marker.get("event_id") != event_id:
         raise TransitionReceiptError(f"transition projected marker is invalid: {event_id}")
-    states = [_witness_state(base, mutation) for mutation in prepared.get("mutations", [])]
-    if any(state != "expected" for state in states):
-        raise TransitionReceiptError(
-            f"transition canonical witnesses disagree: {event_id} states={states}"
-        )
     source = base / str(prepared.get("journal") or "state/events.jsonl")
     try:
         from jsonl_durable import read_jsonl_objects
@@ -387,6 +382,83 @@ def authenticated_transition(base: Path, event_id: str,
         raise TransitionReceiptError(f"transition journal is unreadable: {event_id}") from exc
     if matches != [prepared["event"]]:
         raise TransitionReceiptError(f"transition journal evidence disagrees: {event_id}")
+    return prepared
+
+
+def _require_archived_witness(base: Path, mutation: dict, event_seq: int) -> None:
+    """Require that a moved-on canonical witness advanced through the receipt chain.
+
+    ``_witness_state`` returns ``other`` (or ``before``) when the object no longer matches this
+    mutation's frozen post/pre snapshots.  That is legitimate only when a *later* receipt owns
+    the object's current state: the object must carry a strictly newer ``event_seq`` and its
+    current ``last_transition_id`` must itself authenticate.  A hand-edited object, or one that
+    drifted without a receipt, cannot name such a successor and fails closed.
+    """
+    path = base / mutation["path"]
+    if mutation["kind"] == "json":
+        current = _read_json(path)
+    else:
+        # Fields, text, and raw-text witnesses carry their sequence markers in frontmatter.
+        current = _read_fields(path)
+    try:
+        observed_seq = int(current.get("event_seq") or 0)
+    except (TypeError, ValueError) as exc:
+        raise TransitionReceiptError(
+            f"archived transition witness event_seq is invalid: {mutation['path']}"
+        ) from exc
+    if observed_seq <= event_seq:
+        raise TransitionReceiptError(
+            f"transition canonical witnesses disagree (archived): {mutation['path']}"
+        )
+    successor = str(current.get("last_transition_id") or "")
+    if TRANSITION_ID.fullmatch(successor) is None:
+        raise TransitionReceiptError(
+            f"archived transition witness lacks a canonical successor: {mutation['path']}"
+        )
+    successor_directory = _receipt_directory(base, successor)
+    successor_prepared = _load_prepared(successor_directory / "prepared.json")
+    successor_event_id = str((successor_prepared.get("event") or {}).get("id") or "")
+    if not successor_event_id:
+        raise TransitionReceiptError(
+            f"archived transition witness successor lacks an event id: {mutation['path']}"
+        )
+    try:
+        authenticated_chain_transition(base, successor_event_id)
+    except TransitionReceiptError as exc:
+        raise TransitionReceiptError(
+            f"archived transition witness successor is invalid: {mutation['path']}"
+        ) from exc
+
+
+def authenticated_transition(base: Path, event_id: str,
+                             *, journal: str | None = None) -> dict:
+    """Read one fully projected indexed receipt and verify every durable witness."""
+    prepared = _authenticated_prepared(base, event_id, journal=journal)
+    states = [_witness_state(base, mutation) for mutation in prepared.get("mutations", [])]
+    if any(state != "expected" for state in states):
+        raise TransitionReceiptError(
+            f"transition canonical witnesses disagree: {event_id} states={states}"
+        )
+    return prepared
+
+
+def authenticated_chain_transition(base: Path, event_id: str,
+                                   *, journal: str | None = None) -> dict:
+    """Authenticate a receipt whose canonical witnesses are current OR archived.
+
+    The index entry, projected marker, exact journal evidence, and unmodified receipt bytes are
+    always required.  A mutation witness still matching the current canonical state is
+    ``expected``; a witness the state has since moved past must have been superseded by an
+    authenticated successor receipt (see ``_require_archived_witness``).  Pure audit events
+    carry no mutations and authenticate on their identity evidence alone.
+    """
+    prepared = _authenticated_prepared(base, event_id, journal=journal)
+    event_seq = int(prepared.get("event_seq") or 0)
+    for mutation in prepared.get("mutations", []):
+        state = _witness_state(base, mutation)
+        if state == "expected":
+            continue
+        _require_archived_witness(base, mutation, event_seq)
     return prepared
 
 

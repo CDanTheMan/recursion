@@ -130,7 +130,7 @@ def main() -> int:
         assert report["evidence"]["workers"] == report["evidence"]["gates"] == []
         print("ok    receipt-backed task+goal rejection and failed rc=78 action report exactly once")
 
-        raw_only.append_event("source-forged-contract", "task-contract-invalid", detail={
+        raw_only.append_raw_event("source-forged-contract", "task-contract-invalid", detail={
             "attempts": 0, "reason": "task-contract-invalid", "category": "acceptance-invalid",
             "contract_digest": "d" * 64, "stage": "controller-pre-worker",
         })
@@ -196,10 +196,10 @@ def main() -> int:
         assert len(mapped) == 1 and mapped[0]["event_type"] == "lucas-attention-required"
         print("ok    receipt-backed window contract refusal maps to one Lucas attention event")
 
-        window_forged.append_event("source-window-contract-refused-forged", "pilot-window-refused",
-                                   detail={"window_id": "window-alpha-2",
-                                           "reason": "approved-contract-invalid",
-                                           "error_sha256": "f" * 64})
+        window_forged.append_raw_event("source-window-contract-refused-forged", "pilot-window-refused",
+                                       detail={"window_id": "window-alpha-2",
+                                               "reason": "approved-contract-invalid",
+                                               "error_sha256": "f" * 64})
         forged_window_outbox = load(window_forged.root / "scripts/notification-outbox.py",
                                     "window_forged_outbox")
         assert not [event for event in forged_window_outbox.all_mapped(window_forged.root, "alpha")

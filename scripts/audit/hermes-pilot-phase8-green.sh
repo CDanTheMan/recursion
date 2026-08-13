@@ -22,6 +22,7 @@ python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scri
   scripts/tests/decision-identity.test.py scripts/tests/runtime-state-locks.test.py \
   scripts/tests/runtime-state-recovery.test.py scripts/tests/reconcile-liveness.test.py \
   scripts/tests/transition-receipt.test.py scripts/tests/notification-transition-receipt.test.py \
+  scripts/tests/phase8-notification-authentication.test.py \
   scripts/provider-connect-proxy.py scripts/tests/provider-connect-proxy.test.py \
   scripts/gsc-shade-tops-gate.py scripts/tests/gsc-shade-tops-gate.test.py \
   scripts/tests/validate-gate.test.py scripts/tests/allowed-path.test.py
@@ -349,6 +350,7 @@ python3 scripts/tests/runtime-state-recovery.test.py
 python3 scripts/tests/reconcile-liveness.test.py
 python3 scripts/tests/transition-receipt.test.py
 python3 scripts/tests/notification-transition-receipt.test.py
+python3 scripts/tests/phase8-notification-authentication.test.py
 python3 scripts/tests/provider-connect-proxy.test.py
 python3 scripts/tests/gsc-shade-tops-gate.test.py
 python3 scripts/tests/validate-gate.test.py

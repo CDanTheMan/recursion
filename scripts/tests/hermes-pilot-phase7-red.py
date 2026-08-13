@@ -13,6 +13,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -20,6 +21,23 @@ from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[2]
 OUTBOX = SOURCE / "scripts/notification-outbox.py"
+
+
+def load_script(name: str, path: Path):
+    sys.path.insert(0, str(path.parent))
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+# Every source event a fixture appends is emitted through the durable receipt machinery so the
+# hardened outbox authenticates it exactly as production writers do.  The receipt module is the
+# fixture copy of the controller under test, identical to SOURCE on the box that runs the gate.
+TRANSITION_RECEIPT = load_script("phase7_transition_receipt", SOURCE / "scripts/transition_receipt.py")
 CONTROLS = [
     "simulated Telegram failure eventually delivers exactly once",
     "repeated delivery ticks produce no duplicate human-visible report",
@@ -176,6 +194,15 @@ class Fixture:
         path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
 
     def append_event(self, event_id: str, event: str, *, detail=None, task="task-alpha") -> None:
+        value = {
+            "schema_version": 1, "id": event_id, "ts": "2026-08-07T19:00:00Z",
+            "event": event, "project": "alpha", "goal": "goal-alpha", "task": task,
+            "pid": 1, "detail": detail if detail is not None else "fixture",
+        }
+        TRANSITION_RECEIPT.commit_event(self.root, value)
+
+    def append_raw_event(self, event_id: str, event: str, *, detail=None, task="task-alpha") -> None:
+        """Adversarial seam: forge a journal row that no receipt ever authorized."""
         value = {
             "schema_version": 1, "id": event_id, "ts": "2026-08-07T19:00:00Z",
             "event": event, "project": "alpha", "goal": "goal-alpha", "task": task,
