@@ -25,7 +25,7 @@ export RECURSION_NO_NOTIFY=1
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/root"; mkdir -p "$R/scripts" "$R/state/roadmaps" "$R/state/projects" "$R/state/project-config" \
   "$R/state/pilots" "$R/state/instructions" "$R/state/.locks" "$R/loop/logs"
-for s in author.sh project-pilot.py seed_contract.py taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh resync.sh intake.sh conduct-hermes.sh validate-decision.py; do
+for s in author.sh project-pilot.py pilot_instruction.py seed_contract.py taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh resync.sh intake.sh conduct-hermes.sh validate-decision.py; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null

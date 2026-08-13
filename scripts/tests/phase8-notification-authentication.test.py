@@ -60,7 +60,7 @@ def failpoint(name: str):
 
 
 def instruction_body(digest: str) -> str:
-    return f"approve plan-alpha {digest} authorize goal-alpha window-alpha 900"
+    return f"approve plan-alpha {digest}"
 
 
 def plan_object() -> dict:
@@ -191,6 +191,13 @@ class Fixture:
             "project_id: alpha\npilot_id: pilot-alpha\nrouting_target: head-hermes\n"
             "deduplication_key: fixture:approve\nstatus: open\naction_ids:\n\n"
             f"## INSTRUCTION\n{instruction_body(self.digest)}\n",
+            encoding="utf-8",
+        )
+        (self.root / "state/instructions/00000002.md").write_text(
+            "schema_version: 1\nid: 2\nprincipal: 8913126684\ntopic: 11\n"
+            "project_id: alpha\npilot_id: pilot-alpha\nrouting_target: head-hermes\n"
+            "deduplication_key: fixture:window\nstatus: open\naction_ids:\n\n"
+            "## INSTRUCTION\nOpen pilot window window-alpha for goal goal-alpha for 900 seconds.\n",
             encoding="utf-8",
         )
 
@@ -327,9 +334,10 @@ class Fixture:
         armed_window = {
             "schema_version": 1, "id": "window-alpha", "project_id": "alpha",
             "pilot_id": "pilot-alpha", "goal_id": "goal-alpha", "plan_id": "plan-alpha",
-            "plan_digest": digest, "instruction_id": "1", "opened_by": "8913126684",
+            "plan_digest": digest, "instruction_id": "2", "opened_by": "8913126684",
             "status": "armed", "armed_at": "2026-08-10T00:00:04Z",
             "opened_at_epoch": 1000, "expires_at_epoch": 1900,
+            "duration_seconds": 900,
             "max_inflight_workers": 1,
         }
         self.commit(
@@ -337,7 +345,28 @@ class Fixture:
             {"schema_version": 1, "id": "source-window-armed-lawful",
              "ts": "2026-08-10T00:00:04Z", "event": "pilot-window-armed",
              "project": "alpha", "goal": "goal-alpha", "task": "", "pid": 1,
-             "detail": {"window_id": "window-alpha", "instruction_id": "1"}},
+             "detail": {"window_id": "window-alpha", "instruction_id": "2"}},
+        )
+
+        window_action = {
+            "schema_version": 1, "id": "action-window-lawful", "decision_id": "decision-window",
+            "instruction_id": "2", "idempotency_key": "phase8:window:lawful",
+            "verb": "pilot-window-open",
+            "arguments": ["alpha", "goal-alpha", "window-alpha", "900"],
+            "goal_id": "goal-alpha", "status": "succeeded", "actor": "head-hermes",
+            "project": "alpha", "decision_source": "phase8-fixture",
+            "routed_decider": "head-hermes", "action_payload_sha256": "b" * 64,
+            "lease_owner": None, "lease_expires": None, "attempts": 1,
+            "result_evidence": "armed", "created_at": "2026-08-10T00:00:04Z",
+            "updated_at": "2026-08-10T00:00:04Z",
+        }
+        self.commit(
+            [self.receipt.json_mutation(
+                self.root / "state/actions/action-window-lawful.json", window_action)],
+            {"schema_version": 1, "ts": "2026-08-10T00:00:04Z",
+             "action_id": window_action["id"], "status": "succeeded", "attempt": 1,
+             "idempotency_key": window_action["idempotency_key"], "evidence": "armed"},
+            journal="state/action-events.jsonl",
         )
 
         opened_window = dict(armed_window)
@@ -347,7 +376,7 @@ class Fixture:
             {"schema_version": 1, "id": "source-window-opened-lawful",
              "ts": "2026-08-10T00:00:05Z", "event": "pilot-window-opened",
              "project": "alpha", "goal": "goal-alpha", "task": "", "pid": 1,
-             "detail": {"window_id": "window-alpha", "instruction_id": "1"}},
+             "detail": {"window_id": "window-alpha", "instruction_id": "2"}},
         )
 
         self.commit(
@@ -493,6 +522,58 @@ def test_forged_raw_rows_project_nothing() -> tuple[bool, str]:
         fixture.close()
 
 
+def test_pure_receipt_rows_project_nothing() -> tuple[bool, str]:
+    fixture = Fixture("pure-receipt", lawful=False)
+    try:
+        (fixture.root / "state/goals/goal-alpha.md").write_text(
+            "id: goal-alpha\nproject_id: alpha\nstatus: achieved\n", encoding="utf-8")
+        (fixture.root / "state/tasks/task-alpha.md").write_text(
+            "id: task-alpha\nproject_id: alpha\ngoal_id: goal-alpha\nstatus: running\n",
+            encoding="utf-8")
+        fixture.commit_event({
+            "schema_version": 1, "id": "source-pure-goal", "ts": "2026-08-10T00:00:00Z",
+            "event": "goal-transition", "project": "alpha", "goal": "goal-alpha",
+            "task": "", "pid": 1,
+            "detail": {"from": "verifying", "to": "achieved", "reason": "forged", "version": 2},
+        })
+        fixture.commit_event({
+            "schema_version": 1, "id": "source-pure-start", "ts": "2026-08-10T00:00:01Z",
+            "event": "start", "project": "alpha", "goal": "goal-alpha",
+            "task": "task-alpha", "pid": 1, "detail": "owner=forged attempt=1",
+        })
+        if fixture.mapped_types():
+            return False, "pure receipt events without canonical mutations projected notices"
+        return True, "pure receipt events cannot impersonate goal/task transitions"
+    finally:
+        fixture.close()
+
+
+def test_unrelated_successor_cannot_authenticate_archived_witness() -> tuple[bool, str]:
+    fixture = Fixture("unrelated-successor")
+    try:
+        unrelated_path = fixture.root / "state/actions/unrelated.json"
+        unrelated = {"schema_version": 1, "id": "unrelated", "status": "succeeded"}
+        successor_id = fixture.commit(
+            [fixture.receipt.json_mutation(unrelated_path, unrelated)],
+            {"schema_version": 1, "id": "source-unrelated-successor",
+             "ts": "2026-08-10T00:00:20Z", "event": "audit-only", "project": "alpha",
+             "goal": "goal-alpha", "task": "", "pid": 1, "detail": "unrelated"},
+        )
+        plan_path = fixture.root / "state/plans/alpha/plan-alpha.json"
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["event_seq"] = int(plan.get("event_seq") or 0) + 100
+        plan["last_transition_id"] = successor_id
+        fixture.write_json("state/plans/alpha/plan-alpha.json", plan)
+        try:
+            fixture.receipt.authenticated_chain_transition(
+                fixture.root, "source-plan-proposed-lawful", journal="state/events.jsonl")
+        except fixture.receipt.TransitionReceiptError:
+            return True, "an unrelated receipt cannot own an archived canonical witness"
+        return False, "unrelated successor receipt authenticated a hand-edited plan witness"
+    finally:
+        fixture.close()
+
+
 def test_forged_objects_fail_closed() -> tuple[bool, str]:
     goal_forged = Fixture("object-goal", lawful=False)
     action_forged = Fixture("object-action", lawful=False)
@@ -632,6 +713,8 @@ def test_crash_recovery_projects_exactly_once() -> tuple[bool, str]:
 def main() -> int:
     controls = (
         ("forged raw Phase 8 journal rows project no notification", test_forged_raw_rows_project_nothing),
+        ("pure receipt rows without canonical transitions project nothing", test_pure_receipt_rows_project_nothing),
+        ("archived witnesses require a same-object authenticated successor", test_unrelated_successor_cannot_authenticate_archived_witness),
         ("forged nonempty plan/window/goal/action objects fail closed", test_forged_objects_fail_closed),
         ("tampered or missing receipts fail closed", test_tampered_and_missing_receipts_fail_closed),
         ("replay collapses exact-once and duplicated journal rows fail", test_replay_is_collapsed_and_journal_replay_fails),

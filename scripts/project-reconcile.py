@@ -1572,6 +1572,10 @@ def verify_phase8_goal_projection(base: Path, config: dict, pilot: dict,
     to its approved digest, fails closed before any worktree or gate runs.  Historical
     non-Phase-8 goals carry no plan_id and are not affected.
     """
+    # Reuse the admission controller's canonical validator first. It rebinds the live project
+    # charter, exact source HEAD, seed, gate hashes, and materialized DAG; this local mirror then
+    # remains an independent fail-closed projection check rather than a weaker parallel source.
+    verify_phase8_goal_contract(base, project, goal_id)
     plan_id = str(goal.get("plan_id") or "")
     if not plan_id:
         return

@@ -957,7 +957,15 @@ acquire_heavy(){
     sleep 10
   done
 }
-release_heavy(){ [ "$HEAVY_HELD" = "1" ] && { RECURSION_ROOT="$ROOT" RECURSION_HEAVY_PID="$$" bash "$ROOT/scripts/capacity.sh" heavy release >/dev/null 2>&1; HEAVY_HELD=0; }; return 0; }
+release_heavy(){
+  [ "$HEAVY_HELD" = "1" ] || return 0
+  if ! RECURSION_ROOT="$ROOT" RECURSION_HEAVY_PID="$$" \
+      bash "$ROOT/scripts/capacity.sh" heavy release >/dev/null 2>&1; then
+    log "heavy-gate lock release failed closed"
+    return 76
+  fi
+  HEAVY_HELD=0
+}
 
 # --- the gate: run the acceptance command in the app dir; its exit code is the verdict. --
 verify(){
@@ -981,8 +989,10 @@ verify(){
   # run and the independent verifier do not need it, and a second verify() on the retry path
   # would spin re-acquiring a lock this same process still holds. Release in every outcome here;
   # the EXIT trap is only the panic safety net.
-  release_heavy
+  local release_rc=0
+  release_heavy || release_rc=$?
   [ "$integrity_rc" = 0 ] || return 99
+  [ "$release_rc" = 0 ] || return "$release_rc"
   return "$rc"
 }
 

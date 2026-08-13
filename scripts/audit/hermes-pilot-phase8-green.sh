@@ -9,7 +9,7 @@ bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/hermes-deci
   scripts/assist.sh scripts/taskctl.sh scripts/work.sh scripts/notify.sh scripts/digest.sh \
   scripts/cycle.sh scripts/provider-network.sh scripts/worker-sandbox.sh loop/supervisor/run.sh \
   scripts/tests/hermes-pilot-phase8-red.test.sh scripts/tests/provider-network-root.test.sh
-python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scripts/decision-queue.py \
+python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scripts/project-reconcile.py scripts/decision-queue.py \
   scripts/seed_contract.py scripts/tests/seed-contract.test.py \
   scripts/notification-outbox.py scripts/jsonl_durable.py scripts/transition_receipt.py scripts/validate-decision.py scripts/validate-control-state.py \
   scripts/validate-gate.py \
@@ -23,6 +23,7 @@ python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scri
   scripts/tests/runtime-state-recovery.test.py scripts/tests/reconcile-liveness.test.py \
   scripts/tests/transition-receipt.test.py scripts/tests/notification-transition-receipt.test.py \
   scripts/tests/phase8-notification-authentication.test.py \
+  scripts/tests/pilot-instruction.test.py \
   scripts/provider-connect-proxy.py scripts/tests/provider-connect-proxy.test.py \
   scripts/gsc-shade-tops-gate.py scripts/tests/gsc-shade-tops-gate.test.py \
   scripts/tests/validate-gate.test.py scripts/tests/allowed-path.test.py
@@ -351,6 +352,7 @@ python3 scripts/tests/reconcile-liveness.test.py
 python3 scripts/tests/transition-receipt.test.py
 python3 scripts/tests/notification-transition-receipt.test.py
 python3 scripts/tests/phase8-notification-authentication.test.py
+python3 scripts/tests/pilot-instruction.test.py
 python3 scripts/tests/provider-connect-proxy.test.py
 python3 scripts/tests/gsc-shade-tops-gate.test.py
 python3 scripts/tests/validate-gate.test.py

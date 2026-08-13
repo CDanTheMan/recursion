@@ -25,6 +25,7 @@ from transition_receipt import (
     TransitionReceiptError, commit_event, commit_transition, json_mutation, resume_transition,
     raw_text_mutation, text_mutation,
 )
+from pilot_instruction import require_affirmative_command
 from seed_contract import SeedContractError, inspect_repository, validate_contract
 
 
@@ -988,53 +989,6 @@ def instruction_path(base: Path, instruction_id: str) -> Path:
 # A negated or reversed instruction must never authorize the opposite operation just because it
 # still mentions the same ids/bounds. Reject any negating marker and any verb that names the
 # opposite operation, in addition to requiring the exact canonical affirmative command.
-_NEGATION_PATTERN = re.compile(
-    r"\b(?:do\s+not|don'?t|doesn'?t|never|not|cannot|can'?t|won'?t|"
-    r"shouldn'?t|must\s+not|shall\s+not)\b",
-    re.IGNORECASE,
-)
-_OPPOSITE_PATTERN = {
-    "pilot-plan-approve": re.compile(
-        r"\b(?:reject\w*|refus\w*|revok\w*|deny\w*|denied|declin\w*|unapprov\w*)\b",
-        re.IGNORECASE,
-    ),
-    "pilot-window-open": re.compile(
-        r"\b(?:clos\w*|revok\w*|withdraw\w*|rescind\w*)\b",
-        re.IGNORECASE,
-    ),
-    "pilot-window-close": re.compile(
-        r"\b(?:open\w*|authoriz\w*|arm\w*)\b",
-        re.IGNORECASE,
-    ),
-}
-_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}")
-
-
-def _affirmative_sequences(verb: str, terms: list[str]) -> list[list[str]]:
-    """Return the small reviewed grammar for authenticated Lucas pilot commands."""
-    if verb == "pilot-plan-approve" and len(terms) == 2:
-        plan_id, digest = terms
-        return [
-            ["@approve", plan_id, digest],
-            ["@approve", "@pilot", "@plan", plan_id, "@with", "@digest", digest],
-            ["@approve", "@plan", plan_id, "@digest", digest],
-        ]
-    if verb == "pilot-window-open" and len(terms) == 3:
-        goal_id, window_id, seconds = terms
-        return [
-            ["@authorize", goal_id, window_id, seconds],
-            ["@open", goal_id, window_id, seconds],
-            ["@authorize", "@pilot", "@window", window_id, "@for", "@goal", goal_id,
-             "@for", seconds, "@seconds"],
-            ["@open", "@pilot", "@window", window_id, "@for", "@goal", goal_id,
-             "@for", seconds, "@seconds"],
-        ]
-    if verb == "pilot-window-close" and len(terms) == 1:
-        window_id = terms[0]
-        return [["@close", window_id], ["@close", "@pilot", "@window", window_id]]
-    return []
-
-
 def _instruction_body(path: Path) -> str:
     document = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
     match = re.search(r"(?m)^## INSTRUCTION\s*$\n?", document)
@@ -1048,25 +1002,12 @@ def require_lucas_instruction(path: Path, instruction: dict[str, str], verb: str
     if instruction.get("principal") not in allowed or instruction.get("routing_target") != "head-hermes":
         fail("Phase 8 approval is not an authenticated Lucas-to-Head-Hermes instruction")
     body = _instruction_body(path)
-    # Sentence punctuation is not ambiguity: a digest or id at the end of a sentence tokenizes
-    # WITH its trailing period ("." is in the token class), and exact-membership then refused a
-    # correct human approval -- observed 2026-08-12 on instruction 573. Match the affirmative
-    # verb and the exact bound values contiguously and in order, admitting a stripped trailing
-    # period on any token. Never accept a mere set-membership: the object and bounds must form
-    # one canonical command.
-    tokens = [t.rstrip(".") for t in _TOKEN.findall(body)]
-    sequences = _affirmative_sequences(verb, [str(term) for term in terms])
-    found = any(
-        all(actual.lower() == expected[1:] if expected.startswith("@") else actual == expected
-            for actual, expected in zip(tokens[index:index + len(sequence)], sequence))
-        for sequence in sequences
-        for index in range(len(tokens) - len(sequence) + 1)
-    )
-    if not found:
-        fail("Lucas instruction does not name the exact Phase 8 object and digest/window bounds")
-    normalized = re.sub(r"\s+", " ", body).strip()
-    if _NEGATION_PATTERN.search(normalized) or _OPPOSITE_PATTERN[verb].search(normalized):
-        fail("Lucas instruction is negated or ambiguous for the requested Phase 8 operation")
+    # Sentence punctuation is not ambiguity, but mere set membership is: the shared grammar
+    # requires the affirmative verb and every authority-bound value contiguously and in order.
+    try:
+        require_affirmative_command(body, verb, [str(term) for term in terms])
+    except ValueError as exc:
+        fail(f"Lucas {exc}")
 
 
 def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction_id: str) -> dict:

@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""Adversarial controls for the shared Phase-8 Lucas instruction grammar."""
+
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from pilot_instruction import require_affirmative_command  # noqa: E402
+
+
+class PilotInstructionTest(unittest.TestCase):
+    def assert_allowed(self, body: str, verb: str, terms: list[str]) -> None:
+        require_affirmative_command(body, verb, terms)
+
+    def assert_refused(self, body: str, verb: str, terms: list[str]) -> None:
+        with self.assertRaises(ValueError):
+            require_affirmative_command(body, verb, terms)
+
+    def test_reviewed_natural_commands_are_allowed(self):
+        digest = "a" * 64
+        self.assert_allowed(
+            f"Approve pilot plan plan-gsc-v2 with digest {digest}.",
+            "pilot-plan-approve", ["plan-gsc-v2", digest])
+        self.assert_allowed(
+            "Open pilot window window-gsc-pilot-2 for goal goal-gsc-v2 for 14400 seconds.",
+            "pilot-window-open", ["goal-gsc-v2", "window-gsc-pilot-2", "14400"])
+        self.assert_allowed(
+            "Close pilot window window-gsc-pilot-1 in golden-stallion-client",
+            "pilot-window-close", ["window-gsc-pilot-1"])
+
+    def test_negated_reversed_or_reordered_commands_are_refused(self):
+        digest = "b" * 64
+        cases = (
+            (f"Do not approve plan-gsc-v2 {digest}", "pilot-plan-approve",
+             ["plan-gsc-v2", digest]),
+            (f"Reject plan-gsc-v2 {digest}", "pilot-plan-approve",
+             ["plan-gsc-v2", digest]),
+            ("Authorize window-gsc-pilot-2 goal-gsc-v2 14400", "pilot-window-open",
+             ["goal-gsc-v2", "window-gsc-pilot-2", "14400"]),
+            ("Close window-gsc-pilot-2", "pilot-window-open",
+             ["goal-gsc-v2", "window-gsc-pilot-2", "14400"]),
+            ("Open window-gsc-pilot-1", "pilot-window-close", ["window-gsc-pilot-1"]),
+        )
+        for body, verb, terms in cases:
+            with self.subTest(body=body):
+                self.assert_refused(body, verb, terms)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
