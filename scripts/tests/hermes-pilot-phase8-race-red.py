@@ -27,6 +27,7 @@ CONTROLS = [
     "a PAUSE lifted between arm authorization and arm commit is rechecked and refused",
     "a PAUSE observed between armed read and open commit is rechecked and refuses the open",
     "an authenticated close racing the armed->open commit is rechecked and refuses the open",
+    "provider capability loss before the armed->open commit refuses the open",
 ]
 
 
@@ -56,6 +57,12 @@ class Fixture:
                 "LOCK_EX=2\nLOCK_NB=4\ndef flock(_file, _flags):\n    return None\n",
                 encoding="utf-8",
             )
+        (self.root / "scripts/provider-network.sh").write_text(
+            "#!/usr/bin/env bash\n"
+            "[ ! -f \"${RECURSION_ROOT:?}/state/test-provider-down\" ]\n",
+            encoding="utf-8",
+        )
+        (self.root / "scripts/provider-network.sh").chmod(0o755)
         for relative in (
             "state/project-config", "state/pilots", "state/goals", "state/tasks",
             "state/plans/chiron", "state/pilot-windows", "state/instructions",
@@ -394,6 +401,21 @@ def test_open_close_race() -> bool:
         f.close()
 
 
+def test_open_capability_loss_race() -> bool:
+    f = Fixture()
+    try:
+        window = "chiron-window-open-capability"
+        if not f.materialize_and_arm(window):
+            return False
+        (f.root / "state/PAUSE").unlink(missing_ok=True)
+        result = f.run("python3", "scripts/project-reconcile.py", "schedule",
+                       env_extra={"RECURSION_TEST_WINDOW_OPEN_RACE": "capability"})
+        return result.returncode == 0 and result.stdout.strip() == "0" \
+            and window_status(f, window) == "armed"
+    finally:
+        f.close()
+
+
 def test_project_wide_window_singleton() -> bool:
     f = Fixture()
     try:
@@ -422,6 +444,7 @@ def main() -> int:
         test_approve_guards, test_open_guards, test_duration_binding, test_close_guards,
         test_project_wide_window_singleton,
         test_arm_pause_lift_race, test_open_pause_race, test_open_close_race,
+        test_open_capability_loss_race,
     ]
     failures = 0
     for label, test in zip(CONTROLS, tests):

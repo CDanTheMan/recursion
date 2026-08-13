@@ -453,6 +453,34 @@ if [ "$(status_of heavy-retry)" = passed ] && [ "$heavy_retry_launches" = 2 ]; t
 else
   no "heavy retry could not re-acquire after the failed gate (status=$(status_of heavy-retry) launches=$heavy_retry_launches)"
 fi
+
+mv "$R/scripts/capacity.sh" "$R/scripts/capacity.release-real.sh"
+cat > "$R/scripts/capacity.sh" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}:${2:-}" in
+  heavy:acquire) echo 'ACQUIRED release-failure-fixture'; exit 0 ;;
+  heavy:release) exit 76 ;;
+  heavy:status) echo 'HELD release-failure-fixture'; exit 0 ;;
+esac
+exit 4
+SH
+chmod +x "$R/scripts/capacity.sh"
+RELEASE_FAIL_LAUNCHES="$TMP/heavy-release-fail-launches"
+mktask heavy-release-fail "test -s app/heavy-release-fail.txt"
+sed -i '/^gate_files:/i gate_class: heavy' "$R/state/tasks/heavy-release-fail.md"
+result="$(done_result heavy-release-fail '["app/heavy-release-fail.txt"]')"
+RELEASE_FAIL_LAUNCHES="$RELEASE_FAIL_LAUNCHES" run_case heavy-release-fail \
+  "printf 'launch\n' >> '$RELEASE_FAIL_LAUNCHES'; printf ok > app/heavy-release-fail.txt; printf '%s' '$result' > .recursion-result.json" \
+  "$verdict_script"
+heavy_release_rc=$?
+heavy_release_launches="$(wc -l < "$RELEASE_FAIL_LAUNCHES" 2>/dev/null || echo 0)"
+if [ "$heavy_release_rc" = 76 ] && [ "$(status_of heavy-release-fail)" = running ] \
+   && [ "$heavy_release_launches" = 1 ]; then
+  ok "heavy lock release failure stops before retry/verifier/later actuation"
+else
+  no "heavy lock release failure was hidden or retried (rc=$heavy_release_rc status=$(status_of heavy-release-fail) launches=$heavy_release_launches)"
+fi
+mv "$R/scripts/capacity.release-real.sh" "$R/scripts/capacity.sh"
 unset RECURSION_HEAVY_WAIT_S LOCK_FREE_MARKER RETRY_LAUNCHES
 
 # 13. Gate rc=2 is treated as unchanged no-progress ONLY when BASE_COMMIT == CANDIDATE_OID.

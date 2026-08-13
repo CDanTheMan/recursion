@@ -391,8 +391,17 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
                     closed.update({"status": "closed", "closed_at": now_iso(),
                                    "close_reason": "race-close"})
                     atomic_json(path, closed)
+                elif race == "capability":
+                    (base / "state/test-provider-down").write_text("down\n", encoding="utf-8")
                 if (base / "state/PAUSE").exists():
                     raise TransitionReceiptError("PAUSE revokes an armed window before it opens")
+                try:
+                    current_contract = verify_phase8_goal_contract(base, project, goal_id)
+                    require_provider_capability(base, current_contract)
+                except ReconcileError as exc:
+                    raise TransitionReceiptError(
+                        f"pilot contract/capability changed before its open commit: {exc}"
+                    ) from exc
                 current = read_json(path)
                 if current.get("status") != "armed" or canonical_sha(current) != canonical_sha(armed):
                     raise TransitionReceiptError("armed window changed before it opened")
