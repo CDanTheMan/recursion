@@ -26,7 +26,7 @@ copy_controller(){
     "$r/state/decision-queue/succeeded" "$r/state/decision-queue/failed" \
     "$r/state/.locks" "$r/state/evidence" "$r/loop/logs"
   for s in conduct-hermes.sh decision-queue.py validate-decision.py validate-control-state.py \
-           project-pilot.py project-reconcile.py jsonl_durable.py transition_receipt.py runtime-state.py taskctl.sh worker-sandbox.sh; do
+           project-pilot.py project-reconcile.py jsonl_durable.py transition_receipt.py runtime-state.py taskctl.sh worker-sandbox.sh validate-gate.py; do
     [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$r/scripts/"
   done
   [ ! -f "$SRC/scripts/seed_contract.py" ] || cp "$SRC/scripts/seed_contract.py" "$r/scripts/"
@@ -253,7 +253,7 @@ for path in glob.glob(sys.argv[2]+'/phase6-goal-reopen-v*-fail.json'):
     except Exception: pass
 ok=(current.get('verdict')=='consumed' and current.get('source_verdict')=='fail'
     and current.get('consumed_task_ids')==['mutation-task'] and len(rows)==1
-    and rows[0].get('verdict')=='fail' and rows[0].get('worktree_clean') is False)
+    and rows[0].get('verdict')=='fail' and rows[0].get('exit_code') != 0)
 raise SystemExit(0 if ok else 1)
 PY
 then mutation_closed=1; fi
@@ -775,6 +775,148 @@ if [ "$transient_rc" = 74 ] && [ "$(task_status "$T" transient-task)" = ready ] 
   ok "transient validator I/O fails closed without falsely terminalizing metadata"
 else
   no "transient controller failure was mislabeled as invalid task metadata"
+fi
+
+# 22. Terminal goal grading runs against an OS read-only exact-commit worktree. A conformance
+# that reversibly tampers with its own declared gate file (write + restore inside one command)
+# cannot write it, so the gate fails and the goal reopens instead of silently achieving.
+R="$(setup toctou)"; write_task "$R" toctou-task proposed 0
+toctou_repo="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["repo"])' "$R/state/project-config/phase6.json")"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$toctou_repo/app/gate.sh"
+git -C "$toctou_repo" add app/gate.sh
+git -C "$toctou_repo" -c user.name=t -c user.email=t@t commit -qm 'declared gate file'
+git -C "$toctou_repo" push -q origin main
+set_field "$R/state/goals/phase6-goal.md" acceptance_suite \
+  "printf 'exit 0\n' > app/gate.sh && git checkout -- app/gate.sh && test -s app/result.txt"
+set_field "$R/state/goals/phase6-goal.md" gate_files app/gate.sh
+ticks "$R" 12
+toctou_closed=0
+if [ "$(goal_status "$R")" = active ] && [ "$(launch_count "$R")" = 1 ] \
+   && python3 - "$R/state/evidence/phase6-goal.json" <<'PY'
+import json,sys
+try: row=json.load(open(sys.argv[1]))
+except Exception: raise SystemExit(1)
+raise SystemExit(0 if row.get('verdict')=='fail' and row.get('exit_code') != 0 else 1)
+PY
+then toctou_closed=1; fi
+if [ "$toctou_closed" = 1 ]; then
+  ok "reversible gate-file tampering fails against the OS read-only grading worktree"
+else
+  no "reversible gate-file tampering escaped the terminal gate (status=$(goal_status "$R") launches=$(launch_count "$R"))"
+fi
+
+# 23. A Phase-8 goal is terminal-graded only against its exact approved plan projection: the
+# materialized goal/task immutable contract is re-proven before any worktree or gate runs, so
+# tampering with the materialized projection fails closed, while the restored projection
+# revalidates cleanly and grades pass.
+R="$(setup phase8-projection)"; write_task "$R" phase8-task proposed 0
+phase8_repo="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["repo"])' "$R/state/project-config/phase6.json")"
+printf ok > "$phase8_repo/app/result.txt"
+git -C "$phase8_repo" add app/result.txt
+git -C "$phase8_repo" -c user.name=t -c user.email=t@t commit -qm result
+git -C "$phase8_repo" push -q origin main
+source_head="$(git -C "$phase8_repo" rev-parse HEAD)"
+python3 - "$R" "$phase8_repo" "$source_head" <<'PY'
+import hashlib, json, subprocess, sys, time
+from pathlib import Path
+root, repo = Path(sys.argv[1]), Path(sys.argv[2])
+source_head = sys.argv[3]
+contract = json.loads(subprocess.run(
+    [sys.executable, str(root / "scripts/validate-gate.py"), "--acceptance",
+     "test -s app/result.txt", "--allowed-paths", "app", "--gate-files", "",
+     "--repo", str(repo), "--controller-root", str(root),
+     "--controller-gate-files", "", "--strict-direct"],
+    text=True, capture_output=True, check=True).stdout.strip())
+budget = {"max_concurrency":1,"max_tokens":1000,"max_cost_usd":5,"max_wall_clock_seconds":3600,
+          "max_task_attempts":2,"max_failures":1,"max_review_queue":1,"max_publish_attempts":1,
+          "publication_required":False}
+charter = hashlib.sha256(b"fixture").hexdigest()
+plan = {"schema_version":1,"id":"plan-phase8-projection","project_id":"phase6",
+        "authority_contract":{"source_head":source_head,"default_branch":"main","charter_sha256":charter},
+        "goal":{"id":"phase6-goal","outcome":"Projection fixture.","acceptance_suite":"test -s app/result.txt",
+                "falsifier":"The projection disagrees.","gate_class":"light","gate_files":[],
+                "controller_gate_files":[],"gate_contract":contract,"budget":budget},
+        "tasks":[{"id":"phase8-task","intent":"Produce the projection fixture.","dependencies":[],
+                  "allowed_paths":["app"],"non_goals":["credentials","merge","deploy"],
+                  "worker_class":"claude","engine":"claude","model_alias":"sonnet-routine",
+                  "verifier_model_alias":"opus-review","deadline_seconds":60,
+                  "verifier_deadline_seconds":60,"network_policy":"provider-only",
+                  "evidence_contract":"worker-result-v1","verification":"independent",
+                  "expected_change":"required","gate_class":"light","gate_files":[],
+                  "controller_gate_files":[],"gate_contract":contract,
+                  "acceptance":"test -s app/result.txt"}]}
+def raw(value): return json.dumps(value, sort_keys=True, separators=(",", ":"))
+digest = hashlib.sha256(raw(plan).encode()).hexdigest()
+(root / "state/plans/phase6").mkdir(parents=True, exist_ok=True)
+(root / "state/plans/phase6/plan-phase8-projection.json").write_text(raw({
+    "schema_version":1,"id":"plan-phase8-projection","project_id":"phase6","instruction_id":"101",
+    "plan_digest":digest,"plan":plan,"status":"approved"}) + "\n", encoding="utf-8")
+(root / "state/goals/phase6-goal.md").write_text(
+    "schema_version: 1\nversion: 1\nid: phase6-goal\nproject_id: phase6\npilot_id: pilot-phase6\n"
+    f"plan_id: plan-phase8-projection\nplan_digest: {digest}\ninstruction_id: 101\nstatus: verifying\n"
+    "outcome: Projection fixture.\nacceptance_suite: test -s app/result.txt\n"
+    "falsifier: The projection disagrees.\ngate_class: light\ngate_files: \ncontroller_gate_files: \n"
+    f"gate_contract: {raw(contract)}\nsource_head: {source_head}\nsource_branch: main\n"
+    f"charter_sha256: {charter}\nbudget: {raw(budget)}\nstarted_at_epoch: {int(time.time())}\n"
+    "terminal_reported: 0\n", encoding="utf-8")
+task = {"schema_version":"1","version":"1","id":"phase8-task","project_id":"phase6","project":"phase6",
+        "workstream":"phase6","pilot_id":"pilot-phase6","goal_id":"phase6-goal",
+        "plan_id":"plan-phase8-projection","plan_digest":digest,"dependencies":"",
+        "goal":"Produce the projection fixture.","allowed_paths":"app",
+        "non_goals":"credentials,merge,deploy","worker_class":"claude","engine":"claude",
+        "model_alias":"sonnet-routine","verifier_model_alias":"opus-review","deadline_seconds":"60",
+        "verifier_deadline_seconds":"60","network_policy":"provider-only",
+        "evidence_contract":"worker-result-v1","verification":"independent","expected_change":"required",
+        "gate_class":"light","gate_contract":raw(contract),"gate_files":"",
+        "acceptance":"test -s app/result.txt","controller_gate_files":"","source_head":source_head,
+        "source_branch":"main","charter_sha256":charter,"repo":str(repo),"workdir":".","autonomy":"auto",
+        "status":"passed","candidate_commit":source_head}
+(root / "state/tasks/phase8-task.md").write_text(
+    "".join(f"{key}: {value}\n" for key, value in task.items()), encoding="utf-8")
+def run_record(rid, role):
+    return {"schema_version":1,"id":rid,"task_id":"phase8-task","worker":f"{role}:test","role":role,
+            "worktree":"fixture","base_commit":source_head,"pid":1,"process_group":1,
+            "lease_expires":"0","deadline":"0","usage":{"tokens":10,"cost_usd":0.01},
+            "result":{"status":"done"},"seed_evidence":{},
+            "machine_gate":{"commit_oid":source_head,"exit_code":0},
+            "verification":{"verifier_run_id":"phase8-task-verify","commit_oid":source_head,"verdict":"pass"},
+            "status":"succeeded"}
+(root / "state/runs/phase8-task-impl.json").write_text(raw(run_record("phase8-task-impl","implementer")) + "\n")
+verifier = run_record("phase8-task-verify","verifier")
+verifier["verification"] = {"commit_oid":source_head,"implementer_run_id":"phase8-task-impl","verdict":"pass"}
+(root / "state/runs/phase8-task-verify.json").write_text(raw(verifier) + "\n")
+PY
+git -C "$phase8_repo" branch loop/work/phase8-task "$source_head"
+sed -i 's#^acceptance: test -s app/result.txt#acceptance: true#' "$R/state/tasks/phase8-task.md"
+first_rc=0
+RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" verify-goal phase6 phase6-goal \
+  >/dev/null 2>&1 || first_rc=$?
+first_ok=0
+if [ "$first_rc" = 0 ] && python3 - "$R/state/evidence/phase6-goal.json" "$phase8_repo" <<'PY'
+import json,sys
+from pathlib import Path
+row=json.load(open(sys.argv[1],encoding="utf-8"))
+verify_root=Path(sys.argv[2],".worktrees")
+worktrees=list(verify_root.glob("goal-phase6-goal-verify-*")) if verify_root.is_dir() else []
+raise SystemExit(0 if row.get('verdict')=='fail'
+                 and str(row.get('reason','')).startswith('phase8-contract') and not worktrees else 1)
+PY
+then first_ok=1; fi
+sed -i 's#^acceptance: true#acceptance: test -s app/result.txt#' "$R/state/tasks/phase8-task.md"
+second_rc=0
+RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" verify-goal phase6 phase6-goal \
+  >/dev/null 2>&1 || second_rc=$?
+second_ok=0
+if [ "$second_rc" = 0 ] && python3 - "$R/state/evidence/phase6-goal.json" <<'PY'
+import json,sys
+row=json.load(open(sys.argv[1],encoding="utf-8"))
+raise SystemExit(0 if row.get('verdict')=='pass' and not str(row.get('reason','')).startswith('phase8-contract') else 1)
+PY
+then second_ok=1; fi
+if [ "$first_ok" = 1 ] && [ "$second_ok" = 1 ]; then
+  ok "Phase-8 goal grading revalidates the approved plan projection before the gate"
+else
+  no "Phase-8 projection tampering was not caught or restore did not revalidate (first=$first_ok second=$second_ok rc=$first_rc/$second_rc)"
 fi
 
 echo

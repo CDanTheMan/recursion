@@ -423,6 +423,65 @@ mv "$R/scripts/capacity.real.sh" "$R/scripts/capacity.sh"
 mv "$R/scripts/notify.real.sh" "$R/scripts/notify.sh"
 rm -f "$R/scripts/publish.sh"
 
+# 12. The heavy-gate lock is exclusive for the GATE only. Every verify() releases it in all
+# outcomes, so a passing heavy gate runs its independent verifier with the box-wide lock FREE,
+# and a failing heavy gate can re-acquire for the one bounded retry instead of spinning on a
+# lock this same process still holds.
+export RECURSION_HEAVY_WAIT_S=0
+LOCK_FREE_MARKER="$TMP/heavy-lock-free"
+mktask heavy-pass "test -s app/heavy-pass.txt"
+sed -i '/^gate_files:/i gate_class: heavy' "$R/state/tasks/heavy-pass.md"
+result="$(done_result heavy-pass '["app/heavy-pass.txt"]')"
+verifier_lock_check='h="$(RECURSION_ROOT="$RECURSION_ROOT" bash "$RECURSION_ROOT/scripts/capacity.sh" heavy status)"; [ "$h" = FREE ] && : > "$HEAVY_LOCK_FREE_MARKER"; '"$verdict_script"
+HEAVY_LOCK_FREE_MARKER="$LOCK_FREE_MARKER" run_case heavy-pass \
+  "printf ok > app/heavy-pass.txt; printf '%s' '$result' > .recursion-result.json" "$verifier_lock_check"
+if [ "$(status_of heavy-pass)" = passed ] && [ -e "$LOCK_FREE_MARKER" ]; then
+  ok "heavy gate releases the box-wide lock before the independent verifier"
+else
+  no "heavy lock was still held across the independent verifier (status=$(status_of heavy-pass) lock_free=$([ -e "$LOCK_FREE_MARKER" ] && echo yes || echo no))"
+fi
+
+RETRY_LAUNCHES="$TMP/heavy-retry-launches"
+mktask heavy-retry "if [ -e app/retry-second.txt ]; then exit 0; else exit 1; fi"
+sed -i '/^gate_files:/i gate_class: heavy' "$R/state/tasks/heavy-retry.md"
+first_result='{"status":"done","summary":"first heavy attempt","files_changed":["app/heavy-retry.txt"],"tests_run":"fixture gate","risks":[],"blocker":""}'
+second_result='{"status":"done","summary":"second heavy attempt","files_changed":["app/heavy-retry.txt","app/retry-second.txt"],"tests_run":"fixture gate","risks":[],"blocker":""}'
+RETRY_LAUNCHES="$RETRY_LAUNCHES" run_case heavy-retry "n=\$(wc -l < \"\$RETRY_LAUNCHES\" 2>/dev/null || echo 0); n=\$((n+1)); echo \"launch \$n\" >> \"\$RETRY_LAUNCHES\"; if [ \"\$n\" = 1 ]; then printf ok > app/heavy-retry.txt; printf '%s' '$first_result' > .recursion-result.json; else printf ok > app/heavy-retry.txt; printf ok > app/retry-second.txt; printf '%s' '$second_result' > .recursion-result.json; fi" "$verdict_script"
+heavy_retry_launches="$(wc -l < "$RETRY_LAUNCHES" 2>/dev/null || echo 0)"
+if [ "$(status_of heavy-retry)" = passed ] && [ "$heavy_retry_launches" = 2 ]; then
+  ok "a failed heavy gate releases its lock so the one bounded retry reruns"
+else
+  no "heavy retry could not re-acquire after the failed gate (status=$(status_of heavy-retry) launches=$heavy_retry_launches)"
+fi
+unset RECURSION_HEAVY_WAIT_S LOCK_FREE_MARKER RETRY_LAUNCHES
+
+# 13. Gate rc=2 is treated as unchanged no-progress ONLY when BASE_COMMIT == CANDIDATE_OID.
+# A changed rc2 candidate (the arm committed something) is "tried but failed" and gets the one
+# bounded retry; a genuinely unchanged rc2 candidate is a deliberate no-op and does not.
+RC2_LAUNCHES="$TMP/rc2-changed-launches"
+mktask rc2-changed "if [ -e app/rc2-second.txt ]; then exit 0; else exit 2; fi"
+first_rc2='{"status":"done","summary":"changed rc2 attempt","files_changed":["app/rc2-changed.txt"],"tests_run":"fixture gate","risks":[],"blocker":""}'
+second_rc2='{"status":"done","summary":"changed rc2 second","files_changed":["app/rc2-changed.txt","app/rc2-second.txt"],"tests_run":"fixture gate","risks":[],"blocker":""}'
+RC2_LAUNCHES="$RC2_LAUNCHES" run_case rc2-changed "n=\$(wc -l < \"\$RC2_LAUNCHES\" 2>/dev/null || echo 0); n=\$((n+1)); echo \"launch \$n\" >> \"\$RC2_LAUNCHES\"; if [ \"\$n\" = 1 ]; then printf ok > app/rc2-changed.txt; printf '%s' '$first_rc2' > .recursion-result.json; else printf ok > app/rc2-changed.txt; printf ok > app/rc2-second.txt; printf '%s' '$second_rc2' > .recursion-result.json; fi" "$verdict_script"
+rc2_launches="$(wc -l < "$RC2_LAUNCHES" 2>/dev/null || echo 0)"
+if [ "$(status_of rc2-changed)" = passed ] && [ "$rc2_launches" = 2 ]; then
+  ok "a changed rc2 candidate receives the one bounded retry"
+else
+  no "a changed rc2 candidate was misread as no-progress (status=$(status_of rc2-changed) launches=$rc2_launches)"
+fi
+
+NOOP_LAUNCHES="$TMP/rc2-noop-launches"
+mktask rc2-noop "if [ -e app/rc2-noop.txt ]; then exit 0; else exit 2; fi" optional
+noop_result='{"status":"no-op","summary":"deliberate no progress","files_changed":[],"tests_run":"fixture gate","risks":[],"blocker":""}'
+NOOP_LAUNCHES="$NOOP_LAUNCHES" run_case rc2-noop "n=\$(wc -l < \"\$NOOP_LAUNCHES\" 2>/dev/null || echo 0); n=\$((n+1)); echo \"launch \$n\" >> \"\$NOOP_LAUNCHES\"; printf '%s' '$noop_result' > .recursion-result.json"
+rc2_noop_launches="$(wc -l < "$NOOP_LAUNCHES" 2>/dev/null || echo 0)"
+if [ "$(status_of rc2-noop)" = failed ] && [ "$rc2_noop_launches" = 1 ]; then
+  ok "an unchanged rc2 candidate (base==candidate) is a deliberate no-op with no retry"
+else
+  no "an unchanged rc2 no-progress was retried (status=$(status_of rc2-noop) launches=$rc2_noop_launches)"
+fi
+unset RC2_LAUNCHES NOOP_LAUNCHES
+
 echo
 [ "$fails" -eq 0 ] && { echo "hermes-pilot-phase5-red: ALL PASS"; exit 0; }
 echo "hermes-pilot-phase5-red: $fails FAILED (expected on the pre-Phase 5 base)"; exit 1

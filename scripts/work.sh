@@ -975,7 +975,14 @@ verify(){
     gate_cmd+=(--read-only-path "$protected_path")
   done
   if "${gate_cmd[@]}" >>"$ARMLOG" 2>&1; then rc=0; else rc=$?; fi
-  verify_seed_integrity "$wt" || { log "$SCOPE_FAIL"; return 99; }
+  local integrity_rc=0
+  verify_seed_integrity "$wt" || { log "$SCOPE_FAIL"; integrity_rc=99; }
+  # The heavy-gate lock is exclusive for the GATE, not for what follows a verdict: the retry arm
+  # run and the independent verifier do not need it, and a second verify() on the retry path
+  # would spin re-acquiring a lock this same process still holds. Release in every outcome here;
+  # the EXIT trap is only the panic safety net.
+  release_heavy
+  [ "$integrity_rc" = 0 ] || return 99
   return "$rc"
 }
 
@@ -1070,8 +1077,6 @@ Explicit non-goals: ${NON_GOALS:-none}."
   LAST_RUN_EVIDENCE="$impl_evidence"; LAST_RUN_ID="$impl_run"; IMPLEMENTER_RUN_ID="$impl_run"
   [ "$verdict_value" = pass ]
 }
-
-release_heavy   # the gate is over; do not hold the box through publish/merge
 
 # --- after a GREEN build: optionally PUBLISH the canonical review branch. -----------------
 # RECURSION_ALLOW_PUSH remains human-set and off by default. publish.sh accepts only a direct
@@ -1258,10 +1263,20 @@ else
   phase5_require_gate_record "$rc" || exit $?
   log "acceptance FAILED (exit $rc), attempt 1"
   # A deliberate NO-OP (rc=2 no-progress with NO implementation change) will not benefit from a
-  # retry — the arm chose not to ship (0x68, overlay-0x6c both did this). Retry only a genuine
-  # "tried but failed": impl files changed, or a non-no-progress failure. Saves a wasted ~1h run.
+  # retry — the arm chose not to ship (0x68, overlay-0x6c both did this). "No change" is proven
+  # by commit identity, not by a working-tree snapshot: rc2 is treated as unchanged no-progress
+  # ONLY when BASE_COMMIT == CANDIDATE_OID, i.e. the arm committed no candidate at all. A changed
+  # rc2 candidate (CANDIDATE_OID != BASE_COMMIT) is exactly "tried but failed" and receives the
+  # one bounded retry. Legacy runs never set CANDIDATE_OID, so they keep the working-tree
+  # snapshot as their no-op signal; otherwise their uncommitted changes would read as a no-op.
   impl_changed=$(git -C "$WT" status --porcelain -- . ":(exclude)docs" 2>/dev/null | grep -c . || true)
-  if [ "$ENGINE" != "none" ] && { [ "$rc" != "2" ] || [ "${impl_changed:-0}" -gt 0 ]; }; then
+  candidate_changed=0
+  if [ -n "$CANDIDATE_OID" ]; then
+    [ "$BASE_COMMIT" != "$CANDIDATE_OID" ] && candidate_changed=1
+  else
+    [ "${impl_changed:-0}" -gt 0 ] && candidate_changed=1
+  fi
+  if [ "$ENGINE" != "none" ] && { [ "$rc" != "2" ] || [ "$candidate_changed" = 1 ]; }; then
     log "retry once (design: retry once then escalate)"
     if run_arm_supervised "$WT" 2; then retry_arc=0; else retry_arc=$?; fi
     [ "$retry_arc" != 75 ] || { log "execution authority cancelled retry; no later step ran"; exit 75; }
@@ -1303,7 +1318,7 @@ else
       rc="$retry_arc"
     fi
   else
-    log "no retry: deliberate no-op (rc=$rc, impl-files-changed=${impl_changed:-0})"
+    log "no retry: deliberate no-op (rc=$rc, candidate_changed=$candidate_changed)"
   fi
 fi
 
