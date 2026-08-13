@@ -305,12 +305,16 @@ def close_paused_windows(base: Path) -> int:
     return closed
 
 
-def verify_phase8_goal_contract(base: Path, project: str, goal_id: str) -> dict:
+def verify_phase8_goal_contract(base: Path, project: str, goal_id: str, *,
+                                terminal: bool = False) -> dict:
     helper = base / "scripts/project-pilot.py"
     if not helper.is_file():
         raise ReconcileError("Phase 8 contract verifier is absent")
+    argv = [sys.executable, str(helper), "verify-approved-goal", project, goal_id]
+    if terminal:
+        argv.append("--terminal")
     proc = subprocess.run(
-        [sys.executable, str(helper), "verify-approved-goal", project, goal_id],
+        argv,
         env={**os.environ, "RECURSION_ROOT": str(base)}, text=True,
         capture_output=True, check=False,
     )
@@ -1584,7 +1588,7 @@ def verify_phase8_goal_projection(base: Path, config: dict, pilot: dict,
     # Reuse the admission controller's canonical validator first. It rebinds the live project
     # charter, exact source HEAD, seed, gate hashes, and materialized DAG; this local mirror then
     # remains an independent fail-closed projection check rather than a weaker parallel source.
-    verify_phase8_goal_contract(base, project, goal_id)
+    verify_phase8_goal_contract(base, project, goal_id, terminal=True)
     plan_id = str(goal.get("plan_id") or "")
     if not plan_id:
         return

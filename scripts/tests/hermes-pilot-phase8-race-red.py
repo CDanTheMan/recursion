@@ -264,10 +264,14 @@ class Fixture:
 
     def materialize_and_arm(self, window: str) -> bool:
         if not self.propose_and_approve():
+            print(f"diag  {window}: proposal/approval setup failed")
             return False
         (self.root / "state/PAUSE").write_text("phase8-race\n", encoding="utf-8")
         result = self.open_window("103", f"authorize {self.goal_id} {window} 900", window, "900")
-        return result.returncode == 0 and (self.root / f"state/pilot-windows/{window}.json").is_file()
+        passed = result.returncode == 0 and (self.root / f"state/pilot-windows/{window}.json").is_file()
+        if not passed:
+            print(f"diag  {window}: arm rc={result.returncode} stderr={result.stderr.strip()!r}")
+        return passed
 
 
 def window_status(f: Fixture, window: str) -> str:
@@ -330,12 +334,19 @@ def test_duration_binding() -> bool:
             actor="head-hermes", goal=f.goal_id, text="Replay with a different duration.",
         )
         different = f.run("python3", "scripts/project-pilot.py", "execute", str(decision))
-        return (
+        passed = (
             replay.returncode == 0 and record.get("duration_seconds") == 900
             and different.returncode != 0
             and window_status(f, window) == "armed"
             and json.loads(path.read_text(encoding="utf-8")).get("duration_seconds") == 900
         )
+        if not passed:
+            print("diag  duration replay:", json.dumps({
+                "replay_rc": replay.returncode, "replay_stderr": replay.stderr,
+                "different_rc": different.returncode, "different_stderr": different.stderr,
+                "record": record, "final_status": window_status(f, window),
+            }, sort_keys=True))
+        return passed
     finally:
         f.close()
 
@@ -348,10 +359,21 @@ def test_close_guards() -> bool:
             return False
         opposite = f.close_window("111", f"open {window}", window)
         if opposite.returncode == 0 or window_status(f, window) != "armed":
+            print("diag  close opposite:", json.dumps({
+                "rc": opposite.returncode, "stderr": opposite.stderr,
+                "status": window_status(f, window),
+            }, sort_keys=True))
             return False
         control = f.close_window(
             "112", f"Close pilot window {window} in chiron.", window)
-        return control.returncode == 0 and window_status(f, window) == "closed"
+        passed = control.returncode == 0 and window_status(f, window) == "closed"
+        if not passed:
+            print("diag  close guard:", json.dumps({
+                "opposite_rc": opposite.returncode, "opposite_stderr": opposite.stderr,
+                "control_rc": control.returncode, "control_stderr": control.stderr,
+                "status": window_status(f, window),
+            }, sort_keys=True))
+        return passed
     finally:
         f.close()
 
@@ -415,8 +437,14 @@ def test_open_close_race() -> bool:
         (f.root / "state/PAUSE").unlink(missing_ok=True)
         result = f.run("python3", "scripts/project-reconcile.py", "schedule",
                        env_extra={"RECURSION_TEST_WINDOW_OPEN_RACE": "close"})
-        return result.returncode == 0 and result.stdout.strip() == "0" \
+        passed = result.returncode == 0 and result.stdout.strip() == "0" \
             and window_status(f, window) == "closed"
+        if not passed:
+            print("diag  open/close race:", json.dumps({
+                "rc": result.returncode, "stdout": result.stdout, "stderr": result.stderr,
+                "status": window_status(f, window),
+            }, sort_keys=True))
+        return passed
     finally:
         f.close()
 

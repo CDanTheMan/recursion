@@ -31,6 +31,15 @@ class PilotInstructionTest(unittest.TestCase):
         self.assert_allowed(
             "Close pilot window window-gsc-pilot-1 in golden-stallion-client",
             "pilot-window-close", ["window-gsc-pilot-1"])
+        self.assert_allowed(
+            "Authorize goal-gsc-v2 chiron-window-close 900",
+            "pilot-window-open", ["goal-gsc-v2", "chiron-window-close", "900"])
+        self.assert_allowed(
+            "Close pilot window chiron-window-open",
+            "pilot-window-close", ["chiron-window-open"])
+        self.assert_allowed(
+            f"Approve pilot plan reject-plan with digest {digest}",
+            "pilot-plan-approve", ["reject-plan", digest])
 
     def test_negated_reversed_or_reordered_commands_are_refused(self):
         digest = "b" * 64
@@ -43,7 +52,37 @@ class PilotInstructionTest(unittest.TestCase):
              ["goal-gsc-v2", "window-gsc-pilot-2", "14400"]),
             ("Close window-gsc-pilot-2", "pilot-window-open",
              ["goal-gsc-v2", "window-gsc-pilot-2", "14400"]),
+            ("Authorize goal-gsc-v2 chiron-window-close 900 then close it", "pilot-window-open",
+             ["goal-gsc-v2", "chiron-window-close", "900"]),
+            ("Authorize goal-gsc-v2 chiron-window-close 900 then re-close it", "pilot-window-open",
+             ["goal-gsc-v2", "chiron-window-close", "900"]),
+            ("Authorize goal-gsc-v2 win-900 900 do-not close", "pilot-window-open",
+             ["goal-gsc-v2", "win-900", "900"]),
+            ("Authorize goal-gsc-v2 win-900 900 close2", "pilot-window-open",
+             ["goal-gsc-v2", "win-900", "900"]),
+            ("Authorize goal-gsc-v2 win-900 900 then reclose it", "pilot-window-open",
+             ["goal-gsc-v2", "win-900", "900"]),
+            ("Authorize goal-gsc-v2 win-900 900 then shut it", "pilot-window-open",
+             ["goal-gsc-v2", "win-900", "900"]),
             ("Open window-gsc-pilot-1", "pilot-window-close", ["window-gsc-pilot-1"]),
+            ("Close pilot window chiron-window-open then open it", "pilot-window-close",
+             ["chiron-window-open"]),
+            ("Close pilot window chiron-window-open then re-open it", "pilot-window-close",
+             ["chiron-window-open"]),
+            ("Close pilot window win-900 after chiron-window-open", "pilot-window-close",
+             ["win-900"]),
+            ("Close pilot window win-900 then reopen it", "pilot-window-close",
+             ["win-900"]),
+            ("Close pilot window win-900 then open's it", "pilot-window-close",
+             ["win-900"]),
+            (f"Approve pilot plan reject-plan with digest {digest} then reject-it",
+             "pilot-plan-approve", ["reject-plan", digest]),
+            (f"Approve pilot plan reject-plan with digest {digest} then reject's it",
+             "pilot-plan-approve", ["reject-plan", digest]),
+            (f"Approve pilot plan reject-plan with digest {digest} then denial",
+             "pilot-plan-approve", ["reject-plan", digest]),
+            (f"Don\u2019t approve pilot plan reject-plan with digest {digest}",
+             "pilot-plan-approve", ["reject-plan", digest]),
         )
         for body, verb, terms in cases:
             with self.subTest(body=body):

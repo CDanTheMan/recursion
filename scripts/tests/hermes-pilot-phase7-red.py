@@ -193,13 +193,67 @@ class Fixture:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
 
+    def _ensure_task(self, task: str) -> Path:
+        path = self.root / "state/tasks" / f"{task}.md"
+        if not path.exists():
+            path.write_text(
+                "schema_version: 1\nversion: 1\nid: " + task + "\nproject_id: alpha\n"
+                "pilot_id: pilot-alpha\ngoal_id: goal-alpha\ndependencies:\nallowed_paths: app\n"
+                "acceptance: bash -n app/main.sh\nstatus: proposed\n",
+                encoding="utf-8",
+            )
+        return path
+
     def append_event(self, event_id: str, event: str, *, detail=None, task="task-alpha") -> None:
         value = {
             "schema_version": 1, "id": event_id, "ts": "2026-08-07T19:00:00Z",
             "event": event, "project": "alpha", "goal": "goal-alpha", "task": task,
             "pid": 1, "detail": detail if detail is not None else "fixture",
         }
-        TRANSITION_RECEIPT.commit_event(self.root, value)
+        mutation = None
+        if event == "start":
+            mutation = TRANSITION_RECEIPT.fields_mutation(
+                self._ensure_task(task),
+                {"status": "running", "lease_owner": "fixture", "lease_expires": "2000",
+                 "attempts": "1", "started_at": value["ts"]},
+            )
+        elif event == "finish":
+            terminal = next(
+                (status for status in ("passed", "failed", "blocked")
+                 if f"status={status}" in str(value["detail"])),
+                None,
+            )
+            if terminal:
+                mutation = TRANSITION_RECEIPT.fields_mutation(
+                    self._ensure_task(task),
+                    {"status": terminal, "lease_expires": "0", "finished_at": value["ts"]},
+                )
+        elif event in {"block", "task-blocked"}:
+            mutation = TRANSITION_RECEIPT.fields_mutation(
+                self._ensure_task(task),
+                {"status": "blocked", "lease_expires": "0", "finished_at": value["ts"]},
+            )
+        elif event in {"review-published", "review-branch-published"}:
+            review = value["detail"] if isinstance(value["detail"], dict) else {}
+            commit = str(review.get("commit_oid") or review.get("commit") or "")
+            mutation = TRANSITION_RECEIPT.fields_mutation(
+                self._ensure_task(task),
+                {"review_status": "published", "review_commit": commit,
+                 "review_published_at": value["ts"]},
+            )
+        elif event == "goal-transition" and isinstance(value["detail"], dict):
+            source = str(value["detail"].get("from") or "")
+            target = str(value["detail"].get("to") or "")
+            mutation = TRANSITION_RECEIPT.fields_mutation(
+                self.root / "state/goals/goal-alpha.md",
+                {"status": target, "version": str(value["detail"].get("version") or "5"),
+                 "last_transition_from": source, "last_transition_at": value["ts"],
+                 "last_transition_reason": str(value["detail"].get("reason") or "fixture")},
+            )
+        if mutation is None:
+            TRANSITION_RECEIPT.commit_event(self.root, value)
+        else:
+            TRANSITION_RECEIPT.commit_transition(self.root, [mutation], value)
 
     def append_raw_event(self, event_id: str, event: str, *, detail=None, task="task-alpha") -> None:
         """Adversarial seam: forge a journal row that no receipt ever authorized."""

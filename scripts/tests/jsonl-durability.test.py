@@ -24,6 +24,7 @@ from jsonl_durable import (  # noqa: E402
     JsonlDurabilityError, acknowledge_jsonl, append_jsonl, read_jsonl_objects,
     read_jsonl_since,
 )
+from transition_receipt import commit_event  # noqa: E402
 
 
 def control_torn_tail() -> tuple[bool, str]:
@@ -299,7 +300,10 @@ def load_script(name: str, path: Path):
 
 def notification_root(parent: Path, *, configured: bool) -> Path:
     root = parent / ("configured" if configured else "routing-error")
-    for relative in ("scripts", "state/.locks", "state/project-config", "state/pilots"):
+    for relative in (
+        "scripts", "state/.locks", "state/project-config", "state/pilots",
+        "state/tasks", "state/assists",
+    ):
         (root / relative).mkdir(parents=True, exist_ok=True)
     taskctl = root / "scripts/taskctl.sh"
     taskctl.write_text("""#!/usr/bin/env bash
@@ -324,11 +328,19 @@ printf 'esc-0001\\t%s\\topen\\t2026-08-10T00:00:00Z\\t2026-08-10T00:00:00Z\\t1\\
     source = {
         "schema_version": 1, "id": "source-assist", "ts": "2026-08-10T00:00:00Z",
         "event": "assist-open", "task": "task-one", "project": "chiron",
-        "goal": "goal-one", "pid": 1, "detail": "needs Lucas",
+        "goal": "goal-one", "pid": 1, "detail": "decision: needs Lucas",
     }
-    (root / "state/events.jsonl").write_text(
-        json.dumps(source, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8"
+    (root / "state/tasks/task-one.md").write_text(
+        "schema_version: 1\nid: task-one\nproject_id: chiron\n"
+        "pilot_id: pilot-chiron\ngoal_id: goal-one\nstatus: blocked\n",
+        encoding="utf-8",
     )
+    (root / "state/assists/task-one.md").write_text(
+        "schema_version: 1\ntask: task-one\nkind: decision\nstatus: open\n\n"
+        "## QUESTION\nneeds Lucas\n## WHAT WOULD SATISFY THIS\nA bounded fixture answer.\n",
+        encoding="utf-8",
+    )
+    commit_event(root, source)
     if configured:
         targets = [
             "project-topic:telegram:-100:11",

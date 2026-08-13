@@ -399,6 +399,46 @@ if [ -z "$ACCEPTANCE" ]; then
   exit 0
 fi
 
+# Refuse deterministic task-envelope defects before validating the gate projection.  Otherwise
+# an independently malformed deadline/model/network field can be hidden behind a secondary
+# missing/stale gate contract and terminalized under the wrong controller category.
+validate_worker_metadata(){
+  case "$DEADLINE_SECONDS:$VERIFIER_DEADLINE_SECONDS" in
+    *[!0-9:]*|:*|*:) reject_preworker_contract deadline-invalid 2; exit $? ;;
+  esac
+  [ "$DEADLINE_SECONDS" -ge 1 ] && [ "$DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
+    || { reject_preworker_contract deadline-invalid 2; exit $?; }
+  [ "$VERIFIER_DEADLINE_SECONDS" -ge 1 ] && [ "$VERIFIER_DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
+    || { reject_preworker_contract deadline-invalid 2; exit $?; }
+  case "$NETWORK_POLICY" in provider-only|none) ;; *) reject_preworker_contract network-policy-invalid 2; exit $? ;; esac
+  [ "$VERIFICATION_POLICY" = independent ] \
+    || { reject_preworker_contract verification-policy-invalid 2; exit $?; }
+  [ "$ENGINE" != hermes ] \
+    || { reject_preworker_contract worker-engine-invalid 93; exit $?; }
+  [ -n "$MODEL_ALIAS" ] || { reject_preworker_contract model-alias-invalid 2; exit $?; }
+  [ -n "$VERIFIER_MODEL_ALIAS" ] || { reject_preworker_contract verifier-model-alias-invalid 2; exit $?; }
+  [ -n "$MODEL_ALIAS" ] && [ -n "$VERIFIER_MODEL_ALIAS" ] && [ "$MODEL_ALIAS" != "$VERIFIER_MODEL_ALIAS" ] \
+    || { reject_preworker_contract model-separation-invalid 2; exit $?; }
+  [ -x "$ROOT/scripts/resolve-model-alias.py" ] || { log "model alias resolver is missing"; exit 95; }
+  if RESOLVED_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$MODEL_ALIAS" implementer 2>>"$LOG")"; then
+    alias_rc=0
+  else alias_rc=$?; fi
+  if [ "$alias_rc" -ne 0 ]; then
+    case "$alias_rc" in 2|3) reject_preworker_contract model-alias-invalid 95; exit $? ;;
+      *) log "implementer model resolver controller failure rc=$alias_rc"; exit 95 ;; esac
+  fi
+  if RESOLVED_VERIFIER_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$VERIFIER_MODEL_ALIAS" verifier 2>>"$LOG")"; then
+    alias_rc=0
+  else alias_rc=$?; fi
+  if [ "$alias_rc" -ne 0 ]; then
+    case "$alias_rc" in 2|3) reject_preworker_contract verifier-model-alias-invalid 95; exit $? ;;
+      *) log "verifier model resolver controller failure rc=$alias_rc"; exit 95 ;; esac
+  fi
+}
+if [ "$STRICT_PHASE5" = 1 ] && [ -n "${PILOT_ID:-}" ]; then
+  validate_worker_metadata
+fi
+
 # Validate the gate before leasing a worker. The validator rejects literal/no-op success and
 # records any declared gate files whose hashes become part of the exact-commit evidence.
 GATE_CONTRACT=""
@@ -449,6 +489,13 @@ PY
   fi
 elif [ "$STRICT_PHASE5" = 1 ]; then
   log "Phase 5 gate validator is missing"; exit 95
+fi
+
+# Preserve the historical non-pilot precedence: an invalid gate remains the primary durable
+# escalation when a legacy task also has malformed envelope metadata.  Exact-digest pilots use
+# the category-precise early check above.
+if [ "$STRICT_PHASE5" = 1 ] && [ -z "${PILOT_ID:-}" ]; then
+  validate_worker_metadata
 fi
 
 # --- create the isolated worktree on loop/work/<id> (never touches the main tree) -------
@@ -571,40 +618,6 @@ verify_seed_integrity(){
 # The arm is told to STOP on ambiguity rather than choose. A stopped job with a precise
 # question beats hours of plausible wrong work — and the 0x68 run already proved the arm will
 # honour that: it refused to narrow scope to manufacture a green, and no-op'd honestly.
-if [ "$STRICT_PHASE5" = 1 ]; then
-  case "$DEADLINE_SECONDS:$VERIFIER_DEADLINE_SECONDS" in
-    *[!0-9:]*|:*|*:) reject_preworker_contract deadline-invalid 2; exit $? ;;
-  esac
-  [ "$DEADLINE_SECONDS" -ge 1 ] && [ "$DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
-    || { reject_preworker_contract deadline-invalid 2; exit $?; }
-  [ "$VERIFIER_DEADLINE_SECONDS" -ge 1 ] && [ "$VERIFIER_DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
-    || { reject_preworker_contract deadline-invalid 2; exit $?; }
-  case "$NETWORK_POLICY" in provider-only|none) ;; *) reject_preworker_contract network-policy-invalid 2; exit $? ;; esac
-  [ "$VERIFICATION_POLICY" = independent ] \
-    || { reject_preworker_contract verification-policy-invalid 2; exit $?; }
-  [ "$ENGINE" != hermes ] \
-    || { reject_preworker_contract worker-engine-invalid 93; exit $?; }
-  [ -n "$MODEL_ALIAS" ] || { reject_preworker_contract model-alias-invalid 2; exit $?; }
-  [ -n "$VERIFIER_MODEL_ALIAS" ] || { reject_preworker_contract verifier-model-alias-invalid 2; exit $?; }
-  [ -n "$MODEL_ALIAS" ] && [ -n "$VERIFIER_MODEL_ALIAS" ] && [ "$MODEL_ALIAS" != "$VERIFIER_MODEL_ALIAS" ] \
-    || { reject_preworker_contract model-separation-invalid 2; exit $?; }
-  [ -x "$ROOT/scripts/resolve-model-alias.py" ] || { log "model alias resolver is missing"; exit 95; }
-  if RESOLVED_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$MODEL_ALIAS" implementer 2>>"$LOG")"; then
-    alias_rc=0
-  else alias_rc=$?; fi
-  if [ "$alias_rc" -ne 0 ]; then
-    case "$alias_rc" in 2|3) reject_preworker_contract model-alias-invalid 95; exit $? ;;
-      *) log "implementer model resolver controller failure rc=$alias_rc"; exit 95 ;; esac
-  fi
-  if RESOLVED_VERIFIER_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$VERIFIER_MODEL_ALIAS" verifier 2>>"$LOG")"; then
-    alias_rc=0
-  else alias_rc=$?; fi
-  if [ "$alias_rc" -ne 0 ]; then
-    case "$alias_rc" in 2|3) reject_preworker_contract verifier-model-alias-invalid 95; exit $? ;;
-      *) log "verifier model resolver controller failure rc=$alias_rc"; exit 95 ;; esac
-  fi
-fi
-
 # A human answer to THIS task's blocker, if one was given. Without this the seam is one-way:
 # the arm stops with a precise question, a human answers into state/INBOX.md — a file the arm
 # never reads — and the next run receives the identical prompt and blocks on the identical

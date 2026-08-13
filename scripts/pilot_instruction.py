@@ -13,19 +13,21 @@ NEGATION_PATTERN = re.compile(
 )
 OPPOSITE_PATTERN = {
     "pilot-plan-approve": re.compile(
-        r"\b(?:reject\w*|refus\w*|revok\w*|deny\w*|denied|declin\w*|unapprov\w*)\b",
+        r"\b(?:reject\w*|refus\w*|revok\w*|deni\w*|declin\w*|unapprov\w*)\b",
         re.IGNORECASE,
     ),
     "pilot-window-open": re.compile(
-        r"\b(?:clos\w*|revok\w*|withdraw\w*|rescind\w*)\b",
+        r"\b(?:clos\w*|reclos\w*|unopen\w*|shut\w*|revok\w*|withdraw\w*|rescind\w*)\b",
         re.IGNORECASE,
     ),
     "pilot-window-close": re.compile(
-        r"\b(?:open\w*|authoriz\w*|arm\w*)\b",
+        r"\b(?:open\w*|reopen\w*|unclos\w*|authoriz\w*|arm\w*)\b",
         re.IGNORECASE,
     ),
 }
-TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}")
+# Apostrophes keep contractions intact. Dots, slashes, and hyphens keep authority identifiers
+# intact so a word embedded in (for example) ``chiron-window-close`` is never treated as prose.
+TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/'-]{0,127}")
 
 
 def _sequences(verb: str, terms: list[str]) -> list[list[str]]:
@@ -58,16 +60,33 @@ def require_affirmative_command(body: str, verb: str, terms: list[str]) -> None:
     """Require one exact affirmative command and reject negated/opposite language."""
     if verb not in OPPOSITE_PATTERN:
         raise ValueError("unsupported Phase 8 authority verb")
-    tokens = [token.rstrip(".") for token in TOKEN.findall(body)]
+    # Telegram/user input commonly carries typographic apostrophes. Fold them before both the
+    # command match and ambiguity scan so a pasted ``don’t`` cannot bypass fail-closed negation.
+    normalized_body = body.replace("\u2018", "'").replace("\u2019", "'")
+    token_matches = list(TOKEN.finditer(normalized_body))
+    tokens = [match.group(0).rstrip(".") for match in token_matches]
     sequences = _sequences(verb, [str(term) for term in terms])
-    found = any(
-        all(actual.lower() == expected[1:] if expected.startswith("@") else actual == expected
-            for actual, expected in zip(tokens[index:index + len(sequence)], sequence))
-        for sequence in sequences
-        for index in range(len(tokens) - len(sequence) + 1)
-    )
-    if not found:
+    match: tuple[int, list[str]] | None = None
+    for sequence in sequences:
+        for index in range(len(tokens) - len(sequence) + 1):
+            if all(actual.lower() == expected[1:] if expected.startswith("@") else actual == expected
+                   for actual, expected in zip(tokens[index:index + len(sequence)], sequence)):
+                match = (index, sequence)
+                break
+        if match is not None:
+            break
+    if match is None:
         raise ValueError("instruction does not name the exact Phase 8 command and bounds")
-    normalized = re.sub(r"\s+", " ", body).strip()
-    if NEGATION_PATTERN.search(normalized) or OPPOSITE_PATTERN[verb].search(normalized):
+
+    # Do not scan authority values as natural-language verbs. Mask only the exact token spans
+    # occupying the matched command; repeated ids and every other byte of prose remain visible
+    # to the original whole-language fail-closed regexes.
+    scan = list(normalized_body)
+    start, sequence = match
+    for offset, expected in enumerate(sequence):
+        if not expected.startswith("@"):
+            span_start, span_end = token_matches[start + offset].span()
+            scan[span_start:span_end] = " " * (span_end - span_start)
+    ambiguity_text = "".join(scan)
+    if NEGATION_PATTERN.search(ambiguity_text) or OPPOSITE_PATTERN[verb].search(ambiguity_text):
         raise ValueError("instruction is negated or ambiguous for the requested Phase 8 operation")

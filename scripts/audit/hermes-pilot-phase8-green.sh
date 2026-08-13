@@ -40,7 +40,10 @@ for verb in pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window
 done
 grep -q 'canonical_digest(plan)' scripts/project-pilot.py
 grep -q 'fresh pilot plan reuses an existing goal id' scripts/project-pilot.py
-grep -q 'Lucas instruction does not name the exact Phase 8 object' scripts/project-pilot.py
+grep -q 'require_affirmative_command(body, verb' scripts/project-pilot.py
+grep -q 'fail(f"Lucas {exc}")' scripts/project-pilot.py
+grep -q 'instruction does not name the exact Phase 8 command and bounds' scripts/pilot_instruction.py
+grep -q 'instruction is negated or ambiguous for the requested Phase 8 operation' scripts/pilot_instruction.py
 echo "ok    fresh synthesis, schema bounds, collision refusal, and exact Lucas digest/window approval are mechanical"
 
 grep -q 'project_required_non_goals' scripts/project-pilot.py

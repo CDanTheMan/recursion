@@ -569,11 +569,13 @@ def activate(base: Path, project: str) -> dict:
         return proof
 
 
-def goal_for(base: Path, project: str, goal_id: str) -> tuple[Path, dict[str, str]]:
+def goal_for(base: Path, project: str, goal_id: str, *,
+             allowed_statuses: frozenset[str] = frozenset({"approved", "active"})) \
+        -> tuple[Path, dict[str, str]]:
     for path in (base / "state/goals").glob("*.md"):
         value = fields(path)
         if value.get("id") == goal_id:
-            if value.get("project_id") != project or value.get("status") not in {"approved", "active"}:
+            if value.get("project_id") != project or value.get("status") not in allowed_statuses:
                 fail("goal is not approved for this project")
             acceptance = value.get("acceptance_suite", "").strip()
             if not acceptance:
@@ -1031,11 +1033,12 @@ def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
             if prior.get("plan_digest") != digest or prior.get("instruction_id") != instruction_id:
                 fail("pilot plan id collides with different content or instruction")
             try:
-                resume_transition(base, event)
+                resumed = resume_transition(base, event)
             except (OSError, TransitionReceiptError) as exc:
                 fail(f"pilot plan proposal recovery failed: {exc}", 74)
-            append_event(base, event["event"], event["project"], event["goal"],
-                         detail=event["detail"], event_id=event["id"])
+            if not resumed:
+                append_event(base, event["event"], event["project"], event["goal"],
+                             detail=event["detail"], event_id=event["id"])
             return {"plan": str(path.relative_to(base)), "status": prior.get("status"), "plan_digest": digest}
         for goal_path in (base / "state/goals").glob("*.md"):
             if fields(goal_path).get("id") == goal_id: fail("fresh pilot plan reuses an existing goal id")
@@ -1089,10 +1092,17 @@ def task_text(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, t
     return "".join(f"{key}: {value}\n" for key, value in values.items()) + f"\n{task['intent']}\n"
 
 
-def verify_approved_goal(base: Path, project: str, goal_id: str) -> dict:
+def verify_approved_goal(base: Path, project: str, goal_id: str, *, terminal: bool = False) -> dict:
     """Re-prove the digest-bound source, gates, seeds, and immutable DAG projection."""
     cfg, pilot, _ = records(base, project, active=True)
-    goal_path, goal_fields = goal_for(base, project, goal_id)
+    # Terminal verification deliberately runs while the goal is `verifying`.  Keep the common
+    # lookup's default narrower so task creation/window arming still cannot treat that closed
+    # state as ordinary active authority.
+    goal_path, goal_fields = goal_for(
+        base, project, goal_id,
+        allowed_statuses=(frozenset({"verifying"}) if terminal
+                          else frozenset({"approved", "active"})),
+    )
     plan_id = goal_fields.get("plan_id", "")
     if not plan_id:
         fail("goal is not materialized from a Phase 8 plan")
@@ -1281,11 +1291,12 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
                 prior = read_json(path)
                 if prior.get("instruction_id") == instruction_id and prior.get("goal_id") == goal_id \
                         and prior.get("duration_seconds") == int(raw_seconds):
-                    try: resume_transition(base, event)
+                    try: resumed = resume_transition(base, event)
                     except (OSError, TransitionReceiptError) as exc:
                         fail(f"pilot window recovery failed: {exc}", 74)
-                    append_event(base, event["event"], event["project"], event["goal"],
-                                 detail=event["detail"], event_id=event["id"])
+                    if not resumed:
+                        append_event(base, event["event"], event["project"], event["goal"],
+                                     detail=event["detail"], event_id=event["id"])
                     return prior
                 fail("pilot window id collides with different authority")
 
@@ -1455,6 +1466,7 @@ def main() -> int:
     execute_json_cmd = sub.add_parser("execute-json"); execute_json_cmd.add_argument("decision")
     verify_goal_cmd = sub.add_parser("verify-approved-goal")
     verify_goal_cmd.add_argument("project"); verify_goal_cmd.add_argument("goal")
+    verify_goal_cmd.add_argument("--terminal", action="store_true")
     args = parser.parse_args(); base = root()
     if args.command == "verify-registry": verify_registry(base); print("OK")
     elif args.command == "topic":
@@ -1480,7 +1492,8 @@ def main() -> int:
     elif args.command == "bind-topic": bind_topic(base, args.project, args.topic); print("bound")
     elif args.command == "activate": compact(activate(base, args.project))
     elif args.command == "execute": compact(execute(base, Path(args.decision)))
-    elif args.command == "verify-approved-goal": compact(verify_approved_goal(base, args.project, args.goal))
+    elif args.command == "verify-approved-goal":
+        compact(verify_approved_goal(base, args.project, args.goal, terminal=args.terminal))
     else:
         try:
             decision = json.loads(args.decision)

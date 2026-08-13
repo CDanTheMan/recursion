@@ -124,8 +124,21 @@ goal_status(){ field "$1/state/goals/phase6-goal.md" status; }
 task_status(){ field "$1/state/tasks/$2.md" status; }
 set_field(){
   local file="$1" key="$2" value="$3"
-  if grep -q "^$key:" "$file"; then sed -i "s#^$key:.*#$key: $value#" "$file"
-  else printf '%s: %s\n' "$key" "$value" >> "$file"; fi
+  python3 - "$file" "$key" "$value" <<'PY'
+import sys
+from pathlib import Path
+
+path, key, value = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+lines = path.read_text(encoding="utf-8").splitlines()
+replacement = f"{key}: {value}"
+for index, line in enumerate(lines):
+    if line.startswith(f"{key}:"):
+        lines[index] = replacement
+        break
+else:
+    lines.append(replacement)
+path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
 }
 
 install_stubs(){
@@ -661,11 +674,13 @@ fi
 # (including recovery after PAUSE lands between the two state writes) cannot duplicate evidence.
 R="$(setup invalid-task-contract active)"; write_task "$R" contract-task ready 0
 set_field "$R/state/tasks/contract-task.md" acceptance true
-cp "$SRC/scripts/work.sh" "$SRC/scripts/validate-gate.py" "$R/scripts/"
-chmod +x "$R/scripts/work.sh" "$R/scripts/validate-gate.py"
-ticks "$R" 4
+cp "$SRC/scripts/work.sh" "$SRC/scripts/validate-gate.py" "$SRC/scripts/resolve-model-alias.py" "$R/scripts/"
+chmod +x "$R/scripts/work.sh" "$R/scripts/validate-gate.py" "$R/scripts/resolve-model-alias.py"
+RECURSION_MODEL_ALIAS_SONNET_ROUTINE=stub-sonnet RECURSION_MODEL_ALIAS_OPUS_REVIEW=stub-opus \
+  ticks "$R" 4
 first_work_rc=0
 RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 RECURSION_GIT_FETCH=0 \
+  RECURSION_MODEL_ALIAS_SONNET_ROUTINE=stub-sonnet RECURSION_MODEL_ALIAS_OPUS_REVIEW=stub-opus \
   bash "$R/scripts/work.sh" contract-task >/dev/null 2>&1 || first_work_rc=$?
 contract_events="$(grep -c '"event":"task-contract-invalid"' "$R/state/events.jsonl" 2>/dev/null || true)"
 terminal_events="$(grep -c '"event":"goal-terminal"' "$R/state/events.jsonl" 2>/dev/null || true)"
@@ -761,7 +776,8 @@ preworker_case same-model model-separation-invalid 'set_field "$r/state/tasks/$n
   && ok "non-independent model aliases use the atomic pre-worker rejection" || no "same models stranded state"
 
 T="$(setup preworker-transient active)"; write_task "$T" transient-task ready 0
-cp "$SRC/scripts/work.sh" "$SRC/scripts/resolve-model-alias.py" "$T/scripts/"; chmod +x "$T/scripts/work.sh"
+cp "$SRC/scripts/work.sh" "$SRC/scripts/resolve-model-alias.py" "$T/scripts/"
+chmod +x "$T/scripts/work.sh" "$T/scripts/resolve-model-alias.py"
 cat > "$T/scripts/validate-gate.py" <<'PY'
 #!/usr/bin/env python3
 raise SystemExit(74)
@@ -769,6 +785,7 @@ PY
 chmod +x "$T/scripts/validate-gate.py"
 transient_rc=0
 RECURSION_ROOT="$T" RECURSION_NO_NOTIFY=1 RECURSION_GIT_FETCH=0 \
+  RECURSION_MODEL_ALIAS_SONNET_ROUTINE=stub-sonnet RECURSION_MODEL_ALIAS_OPUS_REVIEW=stub-opus \
   bash "$T/scripts/work.sh" transient-task >/dev/null 2>&1 || transient_rc=$?
 if [ "$transient_rc" = 74 ] && [ "$(task_status "$T" transient-task)" = ready ] \
    && [ "$(goal_status "$T")" = active ] && ! grep -q 'task-contract-invalid' "$T/state/events.jsonl"; then
@@ -789,14 +806,32 @@ git -C "$toctou_repo" push -q origin main
 set_field "$R/state/goals/phase6-goal.md" acceptance_suite \
   "printf 'exit 0\n' > app/gate.sh && git checkout -- app/gate.sh && test -s app/result.txt"
 set_field "$R/state/goals/phase6-goal.md" gate_files app/gate.sh
+# This falsifier is specifically about the OS mount boundary.  The suite-wide logical mode
+# intentionally bypasses that boundary and therefore cannot be authority for this one control.
+sandbox_proven=0
+if RECURSION_ROOT="$R" RECURSION_TEST_WORKER=sandbox \
+     bash "$R/scripts/worker-sandbox.sh" --engine gate --role gate \
+       --worktree "$toctou_repo" --workdir . --network-policy none --read-only-worktree \
+       --gate-command '[ "$(id -u)" -ne 0 ] && ! touch .recursion-ro-probe' \
+       >/dev/null 2>&1 \
+   && [ ! -e "$toctou_repo/.recursion-ro-probe" ]; then
+  sandbox_proven=1
+fi
+prior_test_worker="$RECURSION_TEST_WORKER"
+export RECURSION_TEST_WORKER=sandbox
 ticks "$R" 12
+export RECURSION_TEST_WORKER="$prior_test_worker"
 toctou_closed=0
-if [ "$(goal_status "$R")" = active ] && [ "$(launch_count "$R")" = 1 ] \
-   && python3 - "$R/state/evidence/phase6-goal.json" <<'PY'
-import json,sys
-try: row=json.load(open(sys.argv[1]))
-except Exception: raise SystemExit(1)
-raise SystemExit(0 if row.get('verdict')=='fail' and row.get('exit_code') != 0 else 1)
+if [ "$sandbox_proven" = 1 ] && [ "$(goal_status "$R")" = active ] \
+   && [ "$(launch_count "$R")" = 1 ] \
+   && python3 - "$R/state/evidence/history" <<'PY'
+import glob,json,sys
+rows=[]
+for path in glob.glob(sys.argv[1] + '/phase6-goal-reopen-v*-fail.json'):
+    try: rows.append(json.load(open(path)))
+    except Exception: pass
+raise SystemExit(0 if len(rows)==1 and rows[0].get('verdict')=='fail'
+                 and rows[0].get('exit_code') != 0 else 1)
 PY
 then toctou_closed=1; fi
 if [ "$toctou_closed" = 1 ]; then
@@ -830,9 +865,12 @@ contract = json.loads(subprocess.run(
 budget = {"max_concurrency":1,"max_tokens":1000,"max_cost_usd":5,"max_wall_clock_seconds":3600,
           "max_task_attempts":2,"max_failures":1,"max_review_queue":1,"max_publish_attempts":1,
           "publication_required":False}
-charter = hashlib.sha256(b"fixture").hexdigest()
+charter = hashlib.sha256(b"Bounded Phase 6 fixture only.").hexdigest()
+authority = {"source_head":source_head,"remote_head":source_head,"default_branch":"main",
+             "charter_sha256":charter,
+             "required_non_goals":["credentials","merge","deploy"]}
 plan = {"schema_version":1,"id":"plan-phase8-projection","project_id":"phase6",
-        "authority_contract":{"source_head":source_head,"default_branch":"main","charter_sha256":charter},
+        "authority_contract":authority,
         "goal":{"id":"phase6-goal","outcome":"Projection fixture.","acceptance_suite":"test -s app/result.txt",
                 "falsifier":"The projection disagrees.","gate_class":"light","gate_files":[],
                 "controller_gate_files":[],"gate_contract":contract,"budget":budget},
@@ -887,6 +925,9 @@ verifier["verification"] = {"commit_oid":source_head,"implementer_run_id":"phase
 (root / "state/runs/phase8-task-verify.json").write_text(raw(verifier) + "\n")
 PY
 git -C "$phase8_repo" branch loop/work/phase8-task "$source_head"
+nonterminal_rc=0
+RECURSION_ROOT="$R" python3 "$R/scripts/project-pilot.py" \
+  verify-approved-goal phase6 phase6-goal >/dev/null 2>&1 || nonterminal_rc=$?
 sed -i 's#^acceptance: test -s app/result.txt#acceptance: true#' "$R/state/tasks/phase8-task.md"
 first_rc=0
 RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" verify-goal phase6 phase6-goal \
@@ -913,7 +954,7 @@ row=json.load(open(sys.argv[1],encoding="utf-8"))
 raise SystemExit(0 if row.get('verdict')=='pass' and not str(row.get('reason','')).startswith('phase8-contract') else 1)
 PY
 then second_ok=1; fi
-if [ "$first_ok" = 1 ] && [ "$second_ok" = 1 ]; then
+if [ "$nonterminal_rc" != 0 ] && [ "$first_ok" = 1 ] && [ "$second_ok" = 1 ]; then
   ok "Phase-8 goal grading revalidates the approved plan projection before the gate"
 else
   no "Phase-8 projection tampering was not caught or restore did not revalidate (first=$first_ok second=$second_ok rc=$first_rc/$second_rc)"
