@@ -246,7 +246,9 @@ reuse a historical goal merely because it already exists.
       The controller appends the project's structured required_non_goals and binds its clean
       default-branch source HEAD before computing the canonical plan digest. It derives task and
       goal gate_contract hashes from committed project/controller bytes; do not invent
-      gate_contract. gate_files are immutable grading code, never
+      gate_contract. If the live project state contains required_gate_profile, copy all four of
+      its values EXACTLY into the goal and every task: acceptance (as acceptance_suite for the
+      goal), gate_class, gate_files, and controller_gate_files. gate_files are immutable grading code, never
       implementation targets. If acceptance invokes python, python3, node, bash, or sh under an
       allowed path, that grading program must be in gate_files. Use gate_class heavy for corpus,
       renderer-diff, or full-suite compute; otherwise use light. Cloud engines claude and hermes

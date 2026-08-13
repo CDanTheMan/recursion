@@ -300,7 +300,7 @@ def require_candidate_scope(repo: Path, base_commit: str, implementation_area: s
     prefix = implementation_area.rstrip("/") + "/"
     outside = [path for path in paths if not path.startswith(prefix)]
     protected = [path for path in paths if (
-        path.endswith(".test.cjs")
+        path.endswith((".test.cjs", ".test.js", ".test.mjs"))
         or path.startswith("user-client/render/data/")
         or path.startswith("user-client/render/tools/")
     )]

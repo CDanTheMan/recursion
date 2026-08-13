@@ -242,6 +242,17 @@ def main() -> int:
             "conformance must be green",
             verdict(repo, profile_path, StubRunner(metrics, conformance_rc=1))[0], 1,
         )
+
+        protected_js = repo / "user-client/render/forged.test.js"
+        protected_mjs = repo / "user-client/render/forged.test.mjs"
+        protected_js.write_text("// worker-authored test\n", encoding="utf-8")
+        protected_mjs.write_text("// worker-authored test\n", encoding="utf-8")
+        git(repo, "add", protected_js.relative_to(repo).as_posix(),
+            protected_mjs.relative_to(repo).as_posix())
+        git(repo, "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+            "commit", "-qm", "attempt protected test change")
+        check("all protected JavaScript test suffixes are rejected", verdict(
+            repo, profile_path, StubRunner(metrics))[0], 4)
     finally:
         shutil.rmtree(temp, ignore_errors=True)
 

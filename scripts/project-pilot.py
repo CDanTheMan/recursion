@@ -1292,8 +1292,20 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
             def arm_precondition() -> None:
                 if os.environ.get("RECURSION_TEST_PAUSE_LIFT_BEFORE_ARM") == "1":
                     (base / "state/PAUSE").unlink(missing_ok=True)
+                if os.environ.get("RECURSION_TEST_WINDOW_ARM_RACE") == "singleton":
+                    atomic_json(base / "state/pilot-windows/test-arm-race.json", {
+                        "schema_version": 1, "id": "test-arm-race", "project_id": cfg["id"],
+                        "goal_id": "test-arm-race-goal", "status": "armed",
+                    })
                 if not (base / "state/PAUSE").is_file():
                     raise TransitionReceiptError("PAUSE was lifted before the pilot window arm commit")
+                for other in (base / "state/pilot-windows").glob("*.json"):
+                    value = read_json(other)
+                    if value.get("project_id") == cfg["id"] \
+                            and value.get("status") in {"armed", "open"} and other != path:
+                        raise TransitionReceiptError(
+                            "project pilot window singleton changed before the arm commit"
+                        )
 
             commit_pilot_transition(base, [json_mutation(path, record)], event,
                                     precondition=arm_precondition)

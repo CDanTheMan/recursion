@@ -386,7 +386,7 @@ def _authenticated_prepared(base: Path, event_id: str,
 
 
 def _require_archived_witness(base: Path, mutation: dict, event_seq: int,
-                              visited: set[str]) -> None:
+                              visited: set[str], journal: str) -> None:
     """Require that a moved-on canonical witness advanced through the receipt chain.
 
     ``_witness_state`` returns ``other`` (or ``before``) when the object no longer matches this
@@ -418,6 +418,10 @@ def _require_archived_witness(base: Path, mutation: dict, event_seq: int,
         )
     successor_directory = _receipt_directory(base, successor)
     successor_prepared = _load_prepared(successor_directory / "prepared.json")
+    if successor_prepared.get("journal") != journal:
+        raise TransitionReceiptError(
+            f"archived transition successor crossed journals: {mutation['path']}"
+        )
     if not any(item.get("path") == mutation.get("path")
                for item in successor_prepared.get("mutations", [])):
         raise TransitionReceiptError(
@@ -429,7 +433,7 @@ def _require_archived_witness(base: Path, mutation: dict, event_seq: int,
             f"archived transition witness successor lacks an event id: {mutation['path']}"
         )
     try:
-        _authenticated_chain_transition(base, successor_event_id, journal=None, visited=visited)
+        _authenticated_chain_transition(base, successor_event_id, journal=journal, visited=visited)
     except TransitionReceiptError as exc:
         raise TransitionReceiptError(
             f"archived transition witness successor is invalid: {mutation['path']}"
@@ -465,16 +469,17 @@ def _authenticated_chain_transition(base: Path, event_id: str, *, journal: str |
                                     visited: set[str]) -> dict:
     if event_id in visited:
         raise TransitionReceiptError(f"transition successor chain contains a cycle: {event_id}")
-    if len(visited) >= 1024:
+    if len(visited) >= 256:
         raise TransitionReceiptError("transition successor chain exceeds its bounded depth")
     visited.add(event_id)
     prepared = _authenticated_prepared(base, event_id, journal=journal)
     event_seq = int(prepared.get("event_seq") or 0)
+    prepared_journal = str(prepared.get("journal") or "state/events.jsonl")
     for mutation in prepared.get("mutations", []):
         state = _witness_state(base, mutation)
         if state == "expected":
             continue
-        _require_archived_witness(base, mutation, event_seq, visited)
+        _require_archived_witness(base, mutation, event_seq, visited, prepared_journal)
     visited.remove(event_id)
     return prepared
 

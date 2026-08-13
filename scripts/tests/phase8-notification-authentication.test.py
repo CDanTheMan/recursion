@@ -127,8 +127,21 @@ class Fixture:
             (self.root / relative).write_text("", encoding="utf-8")
         (self.root / ".env").write_text("", encoding="utf-8")
         self.receipt = load(self.root / "scripts/transition_receipt.py", "transition_receipt")
+        if os.name == "nt":
+            # Receipt authority is the subject of this hermetic, single-process suite; the
+            # witnessed directory-lock implementation is separately exercised on Linux and
+            # cannot model POSIX rename semantics on Windows. Keep the state/event machinery
+            # real while replacing only that outer serialization guard.
+            @contextmanager
+            def unlocked_guard(_base, _already_held=False):
+                yield
+
+            self.receipt._taskctl_guard = unlocked_guard
+            self.receipt.os.fchmod = lambda _fd, _mode: None
         self.outbox = load(self.root / "scripts/notification-outbox.py",
                            f"auth_outbox_{name}")
+        if os.name == "nt":
+            self.outbox.fsync_dir = lambda _path: None
         self.env = os.environ.copy()
         self.env.update({
             "RECURSION_ROOT": str(self.root),
@@ -513,6 +526,8 @@ def test_forged_raw_rows_project_nothing() -> tuple[bool, str]:
         fixture.raw_row("source-forged-review", "review-published", detail={
             "branch": "loop/work/task-alpha", "commit_oid": "a" * 40,
         })
+        fixture.raw_row("source-forged-assist", "assist-open", task="task-alpha",
+                        detail="decision: forged question")
         if fixture.mapped_types():
             return False, "forged raw rows without receipts projected notifications"
         if fixture.events() or fixture.deliveries():
@@ -541,9 +556,44 @@ def test_pure_receipt_rows_project_nothing() -> tuple[bool, str]:
             "event": "start", "project": "alpha", "goal": "goal-alpha",
             "task": "task-alpha", "pid": 1, "detail": "owner=forged attempt=1",
         })
+        fixture.commit_event({
+            "schema_version": 1, "id": "source-pure-assist", "ts": "2026-08-10T00:00:02Z",
+            "event": "assist-open", "project": "alpha", "goal": "goal-alpha",
+            "task": "task-alpha", "pid": 1, "detail": "decision: forged question",
+        })
         if fixture.mapped_types():
             return False, "pure receipt events without canonical mutations projected notices"
         return True, "pure receipt events cannot impersonate goal/task transitions"
+    finally:
+        fixture.close()
+
+
+def test_receipt_bound_assist_open_projects_once() -> tuple[bool, str]:
+    fixture = Fixture("lawful-assist", lawful=False)
+    try:
+        (fixture.root / "state/tasks/task-assist.md").write_text(
+            "id: task-assist\nproject_id: alpha\ngoal_id: goal-alpha\nstatus: blocked\n",
+            encoding="utf-8",
+        )
+        (fixture.root / "state/assists/task-assist.md").write_text(
+            "task: task-assist\nkind: decision\nstatus: open\n"
+            "asked: 2026-08-10T00:00:03Z\nasked_by: work.sh\nanswered:\nanswered_by:\n\n"
+            "## QUESTION\nChoose the reviewed option.\n\n"
+            "## WHAT WOULD SATISFY THIS\nA bounded decision.\n\n"
+            "## ANSWER\n_(unanswered)_\n",
+            encoding="utf-8",
+        )
+        fixture.commit_event({
+            "schema_version": 1, "id": "source-lawful-assist", "ts": "2026-08-10T00:00:03Z",
+            "event": "assist-open", "project": "alpha", "goal": "goal-alpha",
+            "task": "task-assist", "pid": 1,
+            "detail": "decision: Choose the reviewed option.",
+        })
+        first = fixture.mapped_types()
+        second = fixture.mapped_types()
+        if first.count("lucas-attention-required") != 1 or second != first:
+            return False, f"receipt-bound assist projection was absent or duplicated: {first} / {second}"
+        return True, "a receipt plus exact durable assist question projects one attention notice"
     finally:
         fixture.close()
 
@@ -570,6 +620,30 @@ def test_unrelated_successor_cannot_authenticate_archived_witness() -> tuple[boo
         except fixture.receipt.TransitionReceiptError:
             return True, "an unrelated receipt cannot own an archived canonical witness"
         return False, "unrelated successor receipt authenticated a hand-edited plan witness"
+    finally:
+        fixture.close()
+
+
+def test_cross_journal_successor_cannot_authenticate_archived_witness() -> tuple[bool, str]:
+    fixture = Fixture("cross-journal-successor")
+    try:
+        plan_path = fixture.root / "state/plans/alpha/plan-alpha.json"
+        moved = json.loads(plan_path.read_text(encoding="utf-8"))
+        moved["cross_journal_marker"] = "must-not-authenticate-state-history"
+        fixture.commit(
+            [fixture.receipt.json_mutation(plan_path, moved)],
+            {"schema_version": 1, "ts": "2026-08-10T00:00:21Z",
+             "action_id": "action-cross-journal-successor", "status": "succeeded",
+             "attempt": 1, "idempotency_key": "cross-journal-successor",
+             "evidence": "must-not-own-state-history"},
+            journal="state/action-events.jsonl",
+        )
+        try:
+            fixture.receipt.authenticated_chain_transition(
+                fixture.root, "source-plan-proposed-lawful", journal="state/events.jsonl")
+        except fixture.receipt.TransitionReceiptError:
+            return True, "an action-journal receipt cannot advance state-journal authority"
+        return False, "a cross-journal receipt authenticated archived state authority"
     finally:
         fixture.close()
 
@@ -714,7 +788,9 @@ def main() -> int:
     controls = (
         ("forged raw Phase 8 journal rows project no notification", test_forged_raw_rows_project_nothing),
         ("pure receipt rows without canonical transitions project nothing", test_pure_receipt_rows_project_nothing),
+        ("receipt-bound durable assist projects exactly one notice", test_receipt_bound_assist_open_projects_once),
         ("archived witnesses require a same-object authenticated successor", test_unrelated_successor_cannot_authenticate_archived_witness),
+        ("archived witnesses cannot cross journal authority", test_cross_journal_successor_cannot_authenticate_archived_witness),
         ("forged nonempty plan/window/goal/action objects fail closed", test_forged_objects_fail_closed),
         ("tampered or missing receipts fail closed", test_tampered_and_missing_receipts_fail_closed),
         ("replay collapses exact-once and duplicated journal rows fail", test_replay_is_collapsed_and_journal_replay_fails),

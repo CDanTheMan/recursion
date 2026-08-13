@@ -422,13 +422,46 @@ echo "ok    action/maintenance lock handshake closes the post-publish interleavi
 # Rotation plus manifest-hashed backup/restore of ignored runtime state. The fixture PAUSE is
 # never removed; production is not addressed by this audit.
 RR="$TMP/runtime"; SNAP="$TMP/runtime-snapshot"
-mkdir -p "$RR/state/actions" "$RR/state/instructions"
+mkdir -p "$RR/state/actions" "$RR/state/instructions" "$RR/state/tasks" "$RR/state/assists"
 printf 'PAUSED test\n' > "$RR/state/PAUSE"
-cat > "$RR/state/events.jsonl" <<'J'
-{"schema_version":1,"id":"source-assist-rotation","ts":"2026-08-10T00:00:00Z","event":"assist-open","task":"t","project":"p","goal":"g","pid":1,"detail":"needs Lucas"}
+printf '' > "$RR/state/events.jsonl"
+cat > "$RR/state/tasks/t.md" <<'J'
+id: t
+project_id: p
+goal_id: g
+status: blocked
+J
+cat > "$RR/state/assists/t.md" <<'J'
+task: t
+kind: decision
+status: open
+asked: 2026-08-10T00:00:00Z
+asked_by: test
+answered:
+answered_by:
+
+## QUESTION
+needs Lucas
+
+## WHAT WOULD SATISFY THIS
+A reviewed answer.
+
+## ANSWER
+_(unanswered)_
 J
 printf '{"schema_version":1,"id":"action-a"}\n' > "$RR/state/actions/action-a.json"
 printf 'id: 1\nstatus: open\n' > "$RR/state/instructions/00000001.md"
+python3 - "$SRC/scripts" "$RR" <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0,sys.argv[1])
+from transition_receipt import commit_event
+commit_event(Path(sys.argv[2]), {
+    "schema_version":1,"id":"source-assist-rotation","ts":"2026-08-10T00:00:00Z",
+    "event":"assist-open","task":"t","project":"p","goal":"g","pid":1,
+    "detail":"decision: needs Lucas",
+})
+PY
 before_rotation="$(sha256sum "$RR/state/events.jsonl" | awk '{print $1}')"
 if RECURSION_ROOT="$RR" python3 "$SRC/scripts/runtime-state.py" rotate-events --max-bytes 1 \
      >"$TMP/rotation-refusal.out" 2>&1; then

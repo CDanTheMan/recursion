@@ -43,6 +43,9 @@ class DirectGateAdmissionTest(unittest.TestCase):
             with self.subTest(gate=gate):
                 self.assertEqual(run_gate(gate, gate_files=gate_file), 0)
 
+    def test_posix_absolute_controller_program_is_never_treated_as_a_worktree_path(self):
+        self.assertNotEqual(run_gate("/opt/recursion/scripts/reviewed-gate.py"), 0)
+
     def test_shell_reserved_words_and_wrappers_are_refused(self):
         refused = (
             "! test -s app/result.txt",

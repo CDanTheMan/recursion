@@ -44,6 +44,7 @@ grep -q 'Lucas instruction does not name the exact Phase 8 object' scripts/proje
 echo "ok    fresh synthesis, schema bounds, collision refusal, and exact Lucas digest/window approval are mechanical"
 
 grep -q 'project_required_non_goals' scripts/project-pilot.py
+grep -q 'If the live project state contains required_gate_profile' scripts/hermes-decide.sh
 grep -q 'repo_gate_contract' scripts/project-pilot.py
 grep -q 'repository gate changed after proposal' scripts/project-pilot.py
 grep -q 'gate_files are immutable grading code' scripts/hermes-decide.sh

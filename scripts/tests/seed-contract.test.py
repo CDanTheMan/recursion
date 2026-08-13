@@ -48,6 +48,35 @@ def refused(repo: Path) -> bool:
 
 def main() -> int:
     failures = 0
+    observed_timeout: list[object] = []
+    original_run = SEED.subprocess.run
+    try:
+        def capture_timeout(*args, **kwargs):
+            observed_timeout.append(kwargs.get("timeout"))
+            return subprocess.CompletedProcess(args[0], 0, b"", b"")
+
+        SEED.subprocess.run = capture_timeout
+        SEED._git(Path("."), "status")
+    finally:
+        SEED.subprocess.run = original_run
+    bounded_git = observed_timeout == [30]
+    print(("ok   " if bounded_git else "FAIL ") + "controller git probes have a bounded timeout")
+    failures += int(not bounded_git)
+    try:
+        SEED.subprocess.run = lambda *args, **kwargs: (_ for _ in ()).throw(
+            subprocess.TimeoutExpired(args[0], kwargs.get("timeout")),
+        )
+        try:
+            SEED._git(Path("."), "status")
+        except SEED.SeedContractError:
+            timeout_closed = True
+        else:
+            timeout_closed = False
+    finally:
+        SEED.subprocess.run = original_run
+    print(("ok   " if timeout_closed else "FAIL ") + "timed-out git probes fail closed")
+    failures += int(not timeout_closed)
+
     temp, repo = repository()
     try:
         contract = SEED.inspect_repository(repo)

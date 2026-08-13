@@ -50,13 +50,13 @@ PROJECT_EVENTS = {
 }
 TERMINAL_EVENT_TYPES = {"goal-achieved", "goal-stopped"}
 # Reviewed legacy allowlist: source kinds whose legitimate rows predate durable transition
-# receipts and that the pre-hardening suites pin as raw rows (the daily digest/journal brief
-# reuse one stable source id across occurrences, and the rotation suite writes a legacy
-# assist-open row directly).  These keep projecting raw ONLY under their exact content
-# contracts (message digest, occurrence date, stable source identity) -- never by permissive
-# shape.  Every Phase 8 projection (plan, window, task, goal, attention, terminal) is excluded
-# and therefore strictly receipt-gated.
-LEGACY_SOURCE_KINDS = frozenset({"assist-open", "project-digest", "portfolio-brief"})
+# receipts and that the pre-hardening suites pin as raw rows. The daily digest/journal brief
+# reuse one stable source id across occurrences and keep projecting raw ONLY under their exact
+# message-digest/occurrence-date contracts. Human-visible assist attention is excluded: current
+# taskctl already emits it through commit_event, so it must cross the receipt and assist-witness
+# gates below. Every Phase 8 projection (plan, window, task, goal, attention, terminal) is
+# therefore strictly receipt-gated.
+LEGACY_SOURCE_KINDS = frozenset({"project-digest", "portfolio-brief"})
 CONTRACT_REJECTION_CATEGORIES = {
     "acceptance-missing", "acceptance-invalid", "deadline-invalid", "network-policy-invalid",
     "verification-policy-invalid", "worker-engine-invalid", "model-alias-invalid",
@@ -563,6 +563,8 @@ def authenticated_source_event_kind(base: Path, raw: dict, prepared: dict) -> No
         authenticated_window_projection(base, raw, prepared)
     elif kind == "pilot-window-closed":
         authenticated_window_projection(base, raw, prepared)
+    elif kind == "assist-open":
+        authenticated_assist_open_projection(base, raw, prepared)
     elif kind == "assist-answer":
         authenticated_assist_projection(base, raw, prepared)
     elif kind == "goal-transition":
@@ -656,6 +658,33 @@ def authenticated_assist_projection(base: Path, raw: dict, prepared: dict) -> No
                 and (mutation.get("expect") or {}).get("resume_event_id") == event.get("id")]
     if len(matching) != 1 or prepared.get("authoritative_path") != relative:
         raise OutboxError("assist projection receipt does not own its answered assist")
+
+
+def authenticated_assist_open_projection(base: Path, raw: dict, prepared: dict) -> None:
+    """Bind one receipt-authenticated assist alert to its exact durable question and task."""
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    task_id = str(event.get("task") or "")
+    if not IDENT.fullmatch(task_id) or prepared.get("mutations") != []:
+        raise OutboxError("assist-open projection is not a receipt-bound audit event")
+    assist_path = base / "state/assists" / f"{task_id}.md"
+    task_path = base / "state/tasks" / f"{task_id}.md"
+    assist, task = read_fields(assist_path), read_fields(task_path)
+    kind = str(assist.get("kind") or "")
+    if assist.get("task") != task_id or kind not in {"decision", "evidence", "access", "in-game"} \
+            or assist.get("status") not in {"open", "answered"} \
+            or task.get("project_id") != event.get("project") \
+            or task.get("goal_id") != event.get("goal"):
+        raise OutboxError("assist-open projection lacks its durable task/assist witness")
+    document = assist_path.read_text(encoding="utf-8", errors="strict")
+    question_match = re.search(
+        r"(?ms)^## QUESTION\s*$\n(.*?)\n^## WHAT WOULD SATISFY THIS\s*$", document,
+    )
+    if question_match is None:
+        raise OutboxError("assist-open projection lacks its exact durable question")
+    question = question_match.group(1).rstrip("\n")
+    truncated = question.encode("utf-8")[:240].decode("utf-8", errors="replace")
+    if event.get("detail") != f"{kind}: {truncated}":
+        raise OutboxError("assist-open projection disagrees with its durable question")
 
 
 def authenticated_review_projection(base: Path, raw: dict, prepared: dict) -> None:

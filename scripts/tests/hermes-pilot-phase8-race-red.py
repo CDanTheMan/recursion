@@ -24,6 +24,7 @@ CONTROLS = [
     "a requested window duration is bound into the arm replay identity and equality",
     "an affirmative window-close command closes once while open/authorize text is refused",
     "an armed/open window for another goal prevents a second window in the same project from opening",
+    "a competing project window appearing before the arm commit is rechecked and refuses the arm",
     "a PAUSE lifted between arm authorization and arm commit is rechecked and refused",
     "a PAUSE observed between armed read and open commit is rechecked and refuses the open",
     "an authenticated close racing the armed->open commit is rechecked and refuses the open",
@@ -370,6 +371,25 @@ def test_arm_pause_lift_race() -> bool:
         f.close()
 
 
+def test_arm_singleton_race() -> bool:
+    f = Fixture()
+    try:
+        if not f.propose_and_approve():
+            return False
+        (f.root / "state/PAUSE").write_text("phase8-race\n", encoding="utf-8")
+        window = "chiron-window-arm-singleton-race"
+        result = f.open_window(
+            "114", f"authorize {f.goal_id} {window} 900", window, "900",
+            env_extra={"RECURSION_TEST_WINDOW_ARM_RACE": "singleton"},
+        )
+        competing = f.root / "state/pilot-windows/test-arm-race.json"
+        return result.returncode != 0 \
+            and not (f.root / f"state/pilot-windows/{window}.json").is_file() \
+            and competing.is_file()
+    finally:
+        f.close()
+
+
 def test_open_pause_race() -> bool:
     f = Fixture()
     try:
@@ -443,7 +463,8 @@ def main() -> int:
     tests = [
         test_approve_guards, test_open_guards, test_duration_binding, test_close_guards,
         test_project_wide_window_singleton,
-        test_arm_pause_lift_race, test_open_pause_race, test_open_close_race,
+        test_arm_singleton_race, test_arm_pause_lift_race,
+        test_open_pause_race, test_open_close_race,
         test_open_capability_loss_race,
     ]
     failures = 0

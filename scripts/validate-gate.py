@@ -168,7 +168,7 @@ def main() -> int:
         controller_gate_files = paths(args.controller_gate_files)
         for words in parsed_segments:
             candidate = entrypoint(words, args.strict_direct)
-            if candidate and Path(candidate).is_absolute():
+            if candidate and PurePosixPath(candidate).is_absolute():
                 if not args.controller_root:
                     fail("absolute acceptance program lacks a controller root")
                 try:

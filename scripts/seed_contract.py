@@ -25,9 +25,13 @@ class SeedContractError(RuntimeError):
 
 
 def _git(repo: Path, *args: str, input_bytes: bytes | None = None) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(
-        ["git", "-C", str(repo), *args], input=input_bytes, capture_output=True, check=False,
-    )
+    command = ["git", "-C", str(repo), *args]
+    try:
+        return subprocess.run(
+            command, input=input_bytes, capture_output=True, check=False, timeout=30,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise SeedContractError("seed-contract git probe timed out") from exc
 
 
 def _inside(root: Path, candidate: Path) -> bool:
