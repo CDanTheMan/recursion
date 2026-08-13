@@ -12,13 +12,21 @@ PROVIDER_AUTHORITY=api.anthropic.com:443
 command -v ip >/dev/null 2>&1 || { echo "provider-network: iproute2 is required" >&2; exit 95; }
 
 namespace_check(){
+  local interfaces
+  command -v nsenter >/dev/null 2>&1 \
+    || { echo "provider-network: util-linux nsenter is required" >&2; return 95; }
+  command -v awk >/dev/null 2>&1 \
+    || { echo "provider-network: awk is required" >&2; return 95; }
   [ -e "$NS_PATH" ] && mountpoint -q "$NS_PATH" \
     || { echo "provider-network: namespace capability is absent" >&2; return 96; }
   [ "$(stat -c %u "$NS_PATH")" = 0 ] \
     && [ $((8#$(stat -c %a "$NS_PATH") & 022)) -eq 0 ] \
     || { echo "provider-network: namespace capability ownership is invalid" >&2; return 96; }
-  [ "$(ip -n "$NS" -o link show | wc -l)" = 1 ] \
-    && ip -n "$NS" -o link show lo >/dev/null \
+  interfaces="$(nsenter --net="$NS_PATH" -- awk -F: '
+    NR > 2 { name=$1; gsub(/^[[:space:]]+|[[:space:]]+$/, "", name); print name }
+  ' /proc/self/net/dev)" \
+    || { echo "provider-network: namespace interfaces are unreadable" >&2; return 96; }
+  [ "$interfaces" = lo ] \
     || { echo "provider-network: namespace has a non-loopback interface" >&2; return 96; }
 }
 
