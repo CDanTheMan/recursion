@@ -150,12 +150,13 @@ reject_preworker_contract(){ # stable controller-owned category
   [ -n "${PILOT_ID:-}" ] || return "$fallback"
   [ -x "$ROOT/scripts/project-reconcile.py" ] || { log "pilot contract rejector is absent"; return 95; }
   pause_checkpoint "pre-worker contract rejection" || return $?
-  if RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" \
-      reject-task-contract "$ID" "$category" "$CONTRACT_DIGEST" >>"$LOG" 2>&1; then
+  RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" \
+      reject-task-contract "$ID" "$category" "$CONTRACT_DIGEST" >>"$LOG" 2>&1; rc=$?
+  if [ "$rc" -eq 0 ]; then
     log "pilot task contract rejected before worker launch category=$category; task and goal are blocked"
     return 78
   fi
-  rc=$?; log "pilot task contract rejection failed closed category=$category rc=$rc"; return "$rc"
+  log "pilot task contract rejection failed closed category=$category rc=$rc"; return "$rc"
 }
 
 # Pilot windows are an execution capability, not a caller convention. Every path into work.sh

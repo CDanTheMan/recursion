@@ -16,6 +16,8 @@ python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scri
   scripts/runtime-state.py scripts/tests/hermes-pilot-phase8-red.py \
   scripts/tests/hermes-pilot-phase8-parallel.py \
   scripts/tests/hermes-pilot-phase8-legacy-journal-red.py \
+  scripts/tests/hermes-pilot-phase8-race-red.py \
+  scripts/tests/hermes-pilot-phase8-reject-red.py \
   scripts/tests/hermes-pilot-phase8-notification-red.py scripts/tests/jsonl-durability.test.py \
   scripts/tests/decision-identity.test.py scripts/tests/runtime-state-locks.test.py \
   scripts/tests/runtime-state-recovery.test.py scripts/tests/reconcile-liveness.test.py \

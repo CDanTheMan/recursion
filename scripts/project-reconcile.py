@@ -90,6 +90,12 @@ def now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+def canonical_sha(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
 def fsync_dir(path: Path) -> None:
     if os.name == "nt":
         return
@@ -370,6 +376,37 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
                                  event_id=event_id)
                     raise
                 verified = True
+            # An authenticated close (or a newly observed PAUSE) may commit between the read
+            # above and this open commit. Re-prove the exact armed bytes, expiry, singleton
+            # authority, and PAUSE immediately before committing, under the same taskctl lock
+            # the close transition takes -- otherwise the open would silently overwrite it.
+            armed = dict(value)
+
+            def open_precondition() -> None:
+                race = os.environ.get("RECURSION_TEST_WINDOW_OPEN_RACE", "")
+                if race == "pause":
+                    (base / "state/PAUSE").write_text("race pause\n", encoding="utf-8")
+                elif race == "close":
+                    closed = dict(armed)
+                    closed.update({"status": "closed", "closed_at": now_iso(),
+                                   "close_reason": "race-close"})
+                    atomic_json(path, closed)
+                if (base / "state/PAUSE").exists():
+                    raise TransitionReceiptError("PAUSE revokes an armed window before it opens")
+                current = read_json(path)
+                if current.get("status") != "armed" or canonical_sha(current) != canonical_sha(armed):
+                    raise TransitionReceiptError("armed window changed before it opened")
+                if safe_int(current.get("expires_at_epoch")) <= int(time.time()):
+                    raise TransitionReceiptError("armed window expired before it opened")
+                armed_or_open = 0
+                for other in sorted((base / "state/pilot-windows").glob("*.json")):
+                    other_value = read_json(other)
+                    if other_value.get("project_id") == project and other_value.get("goal_id") == goal_id \
+                            and other_value.get("status") in {"armed", "open"}:
+                        armed_or_open += 1
+                if armed_or_open != 1:
+                    raise TransitionReceiptError("pilot window singleton authority changed before it opened")
+
             event_id = "source-window-open-" + hashlib.sha256(
                 f"{value.get('id')}:{value.get('instruction_id')}".encode()).hexdigest()[:24]
             value.update({"status": "open", "opened_at": now_iso()})
@@ -377,7 +414,8 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
                                      detail={"window_id": value.get("id"),
                                              "instruction_id": value.get("instruction_id")},
                                      event_id=event_id)
-            commit_reconcile_transition(base, [json_mutation(path, value)], event)
+            commit_reconcile_transition(base, [json_mutation(path, value)], event,
+                                        precondition=open_precondition)
         elif not verified:
             contract = verify_phase8_goal_contract(base, project, goal_id)
             require_provider_capability(base, contract)

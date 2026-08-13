@@ -328,9 +328,10 @@ def transition_event(event: str, project: str, goal: str = "", task: str = "",
 
 
 def commit_pilot_transition(base: Path, mutations: list, event: dict,
-                            authoritative_index: int = -1) -> None:
+                            authoritative_index: int = -1, precondition=None) -> None:
     try:
-        commit_transition(base, mutations, event, authoritative_index=authoritative_index)
+        commit_transition(base, mutations, event, authoritative_index=authoritative_index,
+                          precondition=precondition)
     except (OSError, TransitionReceiptError) as exc:
         fail(f"crash-consistent pilot transition failed: {exc}", 74)
 
@@ -984,22 +985,72 @@ def instruction_path(base: Path, instruction_id: str) -> Path:
     return base / "state/instructions" / name
 
 
-def require_lucas_instruction(path: Path, instruction: dict[str, str], terms: list[str]) -> None:
-    allowed = {item.strip() for item in os.environ.get("RECURSION_INTAKE_ALLOW", "8913126684").split(",")}
-    if instruction.get("principal") not in allowed or instruction.get("routing_target") != "head-hermes":
-        fail("Phase 8 approval is not an authenticated Lucas-to-Head-Hermes instruction")
+_AFFIRMATIVE_COMMANDS = {
+    "pilot-plan-approve": ("approve",),
+    "pilot-window-open": ("open", "authorize"),
+    "pilot-window-close": ("close",),
+}
+
+# A negated or reversed instruction must never authorize the opposite operation just because it
+# still mentions the same ids/bounds. Reject any negating marker and any verb that names the
+# opposite operation, in addition to requiring the exact canonical affirmative command.
+_NEGATION_PATTERN = re.compile(
+    r"\b(?:do\s+not|don'?t|doesn'?t|never|not|cannot|can'?t|won'?t|"
+    r"shouldn'?t|must\s+not|shall\s+not)\b",
+    re.IGNORECASE,
+)
+_OPPOSITE_PATTERN = {
+    "pilot-plan-approve": re.compile(
+        r"\b(?:reject\w*|refus\w*|revok\w*|deny\w*|denied|declin\w*|unapprov\w*)\b",
+        re.IGNORECASE,
+    ),
+    "pilot-window-open": re.compile(
+        r"\b(?:clos\w*|revok\w*|withdraw\w*|rescind\w*)\b",
+        re.IGNORECASE,
+    ),
+    "pilot-window-close": re.compile(
+        r"\b(?:open\w*|authoriz\w*|arm\w*)\b",
+        re.IGNORECASE,
+    ),
+}
+_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}")
+
+
+def _instruction_body(path: Path) -> str:
     document = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
     match = re.search(r"(?m)^## INSTRUCTION\s*$\n?", document)
     body = document[match.end():] if match else ""
-    body = re.split(r"(?m)^##\s+", body, maxsplit=1)[0]
-    tokens = set(re.findall(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", body))
-    # A digest or id at the end of a sentence tokenizes WITH its trailing period ("." is
-    # in the token class), and exact-membership then refuses a correct human approval --
-    # observed 2026-08-12 on instruction 573. Sentence punctuation is not ambiguity: the
-    # bound value must still appear contiguously and exactly, so admit the stripped form.
-    tokens |= {t.rstrip('.') for t in tokens}
-    if any(str(term) not in tokens for term in terms):
+    return re.split(r"(?m)^##\s+", body, maxsplit=1)[0]
+
+
+def require_lucas_instruction(path: Path, instruction: dict[str, str], verb: str,
+                              terms: list[str]) -> None:
+    allowed = {item.strip() for item in os.environ.get("RECURSION_INTAKE_ALLOW", "8913126684").split(",")}
+    if instruction.get("principal") not in allowed or instruction.get("routing_target") != "head-hermes":
+        fail("Phase 8 approval is not an authenticated Lucas-to-Head-Hermes instruction")
+    body = _instruction_body(path)
+    # Sentence punctuation is not ambiguity: a digest or id at the end of a sentence tokenizes
+    # WITH its trailing period ("." is in the token class), and exact-membership then refused a
+    # correct human approval -- observed 2026-08-12 on instruction 573. Match the affirmative
+    # verb and the exact bound values contiguously and in order, admitting a stripped trailing
+    # period on any token. Never accept a mere set-membership: the object and bounds must form
+    # one canonical command.
+    tokens = [t.rstrip(".") for t in _TOKEN.findall(body)]
+    term_list = [str(term) for term in terms]
+    found = False
+    for affirmative in _AFFIRMATIVE_COMMANDS[verb]:
+        for index in range(len(tokens) - len(term_list)):
+            if tokens[index].lower() == affirmative and \
+                    tokens[index + 1:index + 1 + len(term_list)] == term_list:
+                found = True
+                break
+        if found:
+            break
+    if not found:
         fail("Lucas instruction does not name the exact Phase 8 object and digest/window bounds")
+    normalized = re.sub(r"\s+", " ", body).strip()
+    if _NEGATION_PATTERN.search(normalized) or _OPPOSITE_PATTERN[verb].search(normalized):
+        fail("Lucas instruction is negated or ambiguous for the requested Phase 8 operation")
 
 
 def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction_id: str) -> dict:
@@ -1141,7 +1192,8 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
                  instruction_file: Path, instruction: dict[str, str]) -> dict:
     args = decision.get("args") or decision.get("arguments") or []
     if len(args) != 3: fail("pilot-plan-approve needs project, plan id, and digest", 2)
-    plan_id, claimed = str(args[1]), str(args[2]); require_lucas_instruction(instruction_file, instruction, [plan_id, claimed])
+    plan_id, claimed = str(args[1]), str(args[2])
+    require_lucas_instruction(instruction_file, instruction, "pilot-plan-approve", [plan_id, claimed])
     path = base / "state/plans" / str(cfg["id"]) / f"{plan_id}.json"
     with phase8_lock(base, plan_id):
         proposal = read_json(path)
@@ -1226,7 +1278,8 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
         if not (base / "state/PAUSE").is_file(): fail("a pilot window may be authorized only while PAUSE is observed")
         if not IDENT.fullmatch(window_id) or not raw_seconds.isdigit() or not 1 <= int(raw_seconds) <= 86400:
             fail("pilot window identity or duration is invalid")
-        require_lucas_instruction(instruction_file, instruction, [goal_id, window_id, raw_seconds])
+        require_lucas_instruction(instruction_file, instruction, "pilot-window-open",
+                                  [goal_id, window_id, raw_seconds])
         goal = fields(goal_for(base, str(cfg["id"]), goal_id)[0]); plan_id = goal.get("plan_id", "")
         plan_path = base / "state/plans" / str(cfg["id"]) / f"{plan_id}.json"
         proposal = read_json(plan_path) if plan_id else {}
@@ -1255,19 +1308,22 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
                       "goal_id": goal_id, "plan_id": plan_id, "plan_digest": goal["plan_digest"],
                       "instruction_id": instruction_id, "opened_by": instruction["principal"], "status": "armed",
                       "armed_at": now_iso(), "opened_at_epoch": int(time.time()),
+                      "duration_seconds": int(raw_seconds),
                       "expires_at_epoch": int(time.time()) + int(raw_seconds),
                       "max_inflight_workers": min(int(pilot.get("concurrency_limit") or 0),
                                                   int((pilot.get("budget") or {}).get("max_inflight_workers") or 0))}
             if record["max_inflight_workers"] < 1: fail("pilot window has zero worker capacity")
             event = transition_event(
                 "pilot-window-armed", str(cfg["id"]), goal_id,
-                detail={"window_id": window_id, "instruction_id": instruction_id},
+                detail={"window_id": window_id, "instruction_id": instruction_id,
+                        "duration_seconds": int(raw_seconds)},
                 event_id="source-window-armed-" + canonical_digest(
-                    [cfg["id"], goal_id, window_id, instruction_id])[:24],
+                    [cfg["id"], goal_id, window_id, instruction_id, raw_seconds])[:24],
             )
             if path.exists():
                 prior = read_json(path)
-                if prior.get("instruction_id") == instruction_id and prior.get("goal_id") == goal_id:
+                if prior.get("instruction_id") == instruction_id and prior.get("goal_id") == goal_id \
+                        and prior.get("duration_seconds") == int(raw_seconds):
                     try: resume_transition(base, event)
                     except (OSError, TransitionReceiptError) as exc:
                         fail(f"pilot window recovery failed: {exc}", 74)
@@ -1275,10 +1331,18 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
                                  detail=event["detail"], event_id=event["id"])
                     return prior
                 fail("pilot window id collides with different authority")
-            commit_pilot_transition(base, [json_mutation(path, record)], event)
+
+            def arm_precondition() -> None:
+                if os.environ.get("RECURSION_TEST_PAUSE_LIFT_BEFORE_ARM") == "1":
+                    (base / "state/PAUSE").unlink(missing_ok=True)
+                if not (base / "state/PAUSE").is_file():
+                    raise TransitionReceiptError("PAUSE was lifted before the pilot window arm commit")
+
+            commit_pilot_transition(base, [json_mutation(path, record)], event,
+                                    precondition=arm_precondition)
         return record
     if len(args) != 2: fail("pilot-window-close needs project and window", 2)
-    window_id = str(args[1]); require_lucas_instruction(instruction_file, instruction, [window_id])
+    window_id = str(args[1]); require_lucas_instruction(instruction_file, instruction, "pilot-window-close", [window_id])
     path = base / "state/pilot-windows" / f"{window_id}.json"
     with phase8_lock(base, f"window-{cfg['id']}"):
         record = read_json(path)
