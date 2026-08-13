@@ -401,7 +401,7 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
                 armed_or_open = 0
                 for other in sorted((base / "state/pilot-windows").glob("*.json")):
                     other_value = read_json(other)
-                    if other_value.get("project_id") == project and other_value.get("goal_id") == goal_id \
+                    if other_value.get("project_id") == project \
                             and other_value.get("status") in {"armed", "open"}:
                         armed_or_open += 1
                 if armed_or_open != 1:

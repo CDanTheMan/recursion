@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -20,8 +21,9 @@ SOURCE = Path(__file__).resolve().parents[2]
 CONTROLS = [
     "an affirmative approve command materializes exactly once while negated or reversed text is refused",
     "an affirmative window-open command arms exactly once while negated or opposite text is refused",
-    "an affirmative window-close command closes once while open/authorize text is refused",
     "a requested window duration is bound into the arm replay identity and equality",
+    "an affirmative window-close command closes once while open/authorize text is refused",
+    "an armed/open window for another goal prevents a second window in the same project from opening",
     "a PAUSE lifted between arm authorization and arm commit is rechecked and refused",
     "a PAUSE observed between armed read and open commit is rechecked and refuses the open",
     "an authenticated close racing the armed->open commit is rechecked and refuses the open",
@@ -339,7 +341,8 @@ def test_close_guards() -> bool:
         opposite = f.close_window("111", f"open {window}", window)
         if opposite.returncode == 0 or window_status(f, window) != "armed":
             return False
-        control = f.close_window("112", f"close {window}", window)
+        control = f.close_window(
+            "112", f"Close pilot window {window} in chiron.", window)
         return control.returncode == 0 and window_status(f, window) == "closed"
     finally:
         f.close()
@@ -391,9 +394,33 @@ def test_open_close_race() -> bool:
         f.close()
 
 
+def test_project_wide_window_singleton() -> bool:
+    f = Fixture()
+    try:
+        window = "chiron-window-singleton"
+        if not f.materialize_and_arm(window):
+            return False
+        competing = {
+            "schema_version": 1, "id": "chiron-other-goal-window", "project_id": "chiron",
+            "pilot_id": "pilot-chiron", "goal_id": "goal-chiron-other",
+            "plan_id": "other-plan", "plan_digest": "f" * 64,
+            "instruction_id": "999", "status": "armed",
+            "expires_at_epoch": int(time.time()) + 900,
+        }
+        path = f.root / "state/pilot-windows/chiron-other-goal-window.json"
+        path.write_text(json.dumps(competing), encoding="utf-8")
+        (f.root / "state/PAUSE").unlink(missing_ok=True)
+        result = f.run("python3", "scripts/project-reconcile.py", "schedule")
+        return result.returncode == 0 and result.stdout.strip() == "0" \
+            and window_status(f, window) == "armed"
+    finally:
+        f.close()
+
+
 def main() -> int:
     tests = [
         test_approve_guards, test_open_guards, test_duration_binding, test_close_guards,
+        test_project_wide_window_singleton,
         test_arm_pause_lift_race, test_open_pause_race, test_open_close_race,
     ]
     failures = 0
