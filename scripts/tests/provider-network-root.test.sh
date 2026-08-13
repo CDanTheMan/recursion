@@ -3,16 +3,22 @@
 set -euo pipefail
 
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-if [ "$(id -u)" != 0 ] || ! command -v ip >/dev/null 2>&1; then
-  echo "provider-network-root: SKIP (root and iproute2 required)"
+if [ "$(id -u)" != 0 ] || ! command -v ip >/dev/null 2>&1 \
+    || ! command -v mountpoint >/dev/null 2>&1 \
+    || ! command -v systemd-run >/dev/null 2>&1 \
+    || ! systemctl show-environment >/dev/null 2>&1; then
+  echo "provider-network-root: SKIP (root, iproute2, util-linux, and live systemd required)"
   exit 0
 fi
 
 NS="recursion-provider-test-$$"
+NETWORK_UNIT="recursion-provider-test-network-$$.service"
 UNIT="recursion-provider-test-proxy-$$.service"
 TMP="$(mktemp -d)"
 proxy_pid=""; proxy_unit=0; upstream_pid=""
 cleanup(){
+  systemctl stop "$NETWORK_UNIT" >/dev/null 2>&1 || true
+  systemctl reset-failed "$NETWORK_UNIT" >/dev/null 2>&1 || true
   if [ "$proxy_unit" = 1 ]; then
     systemctl stop "$UNIT" >/dev/null 2>&1 || true
     systemctl reset-failed "$UNIT" >/dev/null 2>&1 || true
@@ -27,9 +33,27 @@ cleanup(){
 }
 trap cleanup EXIT
 
-ip netns add "$NS"
-ip -n "$NS" link set lo up
-chmod 0444 "/run/netns/$NS"
+test "$(grep -cx 'NS=recursion-provider-only' "$ROOT/scripts/provider-network.sh")" = 1
+sed "s/^NS=recursion-provider-only$/NS=$NS/" \
+  "$ROOT/scripts/provider-network.sh" >"$TMP/provider-network.sh"
+grep -qx "NS=$NS" "$TMP/provider-network.sh"
+if grep -qx 'NS=recursion-provider-only' "$TMP/provider-network.sh"; then
+  echo "provider-network-root: namespace rewrite did not take effect" >&2
+  exit 1
+fi
+systemd-run --wait --collect --unit "$NETWORK_UNIT" --service-type=oneshot \
+  --property NoNewPrivileges=yes \
+  --property 'CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN' \
+  --property 'AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_ADMIN' \
+  --property 'RestrictAddressFamilies=AF_UNIX AF_NETLINK' \
+  --property RestrictSUIDSGID=yes --property LockPersonality=yes \
+  --property MemoryDenyWriteExecute=yes --property UMask=0077 \
+  --setenv "RECURSION_ROOT=$ROOT" \
+  bash "$TMP/provider-network.sh" create
+[ -e "/run/netns/$NS" ] && mountpoint -q "/run/netns/$NS" \
+  || { echo "provider-network-root: namespace handle is absent" >&2; exit 1; }
+[ "$(stat -c %u "/run/netns/$NS")" = 0 ]
+[ $((8#$(stat -c %a "/run/netns/$NS") & 022)) -eq 0 ]
 
 # Root-owned local echo fixture represents the provider side of the tunnel.
 python3 - "$TMP/port" <<'PY' &
@@ -49,34 +73,26 @@ for _ in $(seq 1 50); do [ -s "$TMP/port" ] && break; sleep 0.05; done
 [ -s "$TMP/port" ] || { echo "provider-network-root: fixture failed" >&2; exit 1; }
 port="$(cat "$TMP/port")"
 
-if command -v systemd-run >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1; then
-  systemd-run --quiet --collect --unit "$UNIT" --service-type=exec \
-    --property NoNewPrivileges=yes \
-    --property 'CapabilityBoundingSet=CAP_SYS_ADMIN CAP_SETUID CAP_SETGID CAP_SETPCAP' \
-    --property 'AmbientCapabilities=CAP_SYS_ADMIN CAP_SETUID CAP_SETGID CAP_SETPCAP' \
-    --property PrivateDevices=yes --property ProtectSystem=strict --property ProtectHome=yes \
-    --property ProtectKernelTunables=yes --property ProtectKernelModules=yes \
-    --property ProtectKernelLogs=yes --property ProtectControlGroups=yes \
-    --property ProtectClock=yes --property ProtectHostname=yes \
-    --property ProtectProc=invisible --property ProcSubset=pid \
-    --property 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6' \
-    --property RestrictSUIDSGID=yes --property LockPersonality=yes \
-    --property MemoryDenyWriteExecute=yes --property RemoveIPC=yes --property UMask=0077 \
-    --property "StandardOutput=append:$TMP/proxy.out" \
-    --property "StandardError=append:$TMP/proxy.err" \
-    --setenv RECURSION_PROVIDER_PROXY_TEST=1 \
-    python3 "$ROOT/scripts/provider-connect-proxy.py" serve \
-      --namespace "/run/netns/$NS" --listen-port 18080 \
-      --allow "fixture.invalid:$port" --resolve "fixture.invalid=127.0.0.1" \
-      --drop-user nobody
-  proxy_unit=1
-else
-  RECURSION_PROVIDER_PROXY_TEST=1 python3 "$ROOT/scripts/provider-connect-proxy.py" serve \
+systemd-run --quiet --collect --unit "$UNIT" --service-type=exec \
+  --property NoNewPrivileges=yes \
+  --property 'CapabilityBoundingSet=CAP_SYS_ADMIN CAP_SETUID CAP_SETGID CAP_SETPCAP' \
+  --property 'AmbientCapabilities=CAP_SYS_ADMIN CAP_SETUID CAP_SETGID CAP_SETPCAP' \
+  --property PrivateDevices=yes --property ProtectSystem=strict --property ProtectHome=yes \
+  --property ProtectKernelTunables=yes --property ProtectKernelModules=yes \
+  --property ProtectKernelLogs=yes --property ProtectControlGroups=yes \
+  --property ProtectClock=yes --property ProtectHostname=yes \
+  --property ProtectProc=invisible --property ProcSubset=pid \
+  --property 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6' \
+  --property RestrictSUIDSGID=yes --property LockPersonality=yes \
+  --property MemoryDenyWriteExecute=yes --property RemoveIPC=yes --property UMask=0077 \
+  --property "StandardOutput=append:$TMP/proxy.out" \
+  --property "StandardError=append:$TMP/proxy.err" \
+  --setenv RECURSION_PROVIDER_PROXY_TEST=1 \
+  python3 "$ROOT/scripts/provider-connect-proxy.py" serve \
     --namespace "/run/netns/$NS" --listen-port 18080 \
     --allow "fixture.invalid:$port" --resolve "fixture.invalid=127.0.0.1" \
-    --drop-user nobody >"$TMP/proxy.out" 2>"$TMP/proxy.err" &
-  proxy_pid=$!
-fi
+    --drop-user nobody
+proxy_unit=1
 
 for _ in $(seq 1 50); do
   ip netns exec "$NS" python3 - <<'PY' >/dev/null 2>&1 && break || true
@@ -151,5 +167,4 @@ PY
 grep -q 'must-not-appear-in-proxy-output' "$TMP/proxy.out" "$TMP/proxy.err" && {
   echo "provider-network-root: proxy logged a request secret" >&2; exit 1;
 }
-if [ "$proxy_unit" = 1 ]; then boundary=systemd-transient; else boundary=direct; fi
-echo "provider-network-root: ALL PASS ($boundary, unprivileged, zero effective capabilities)"
+echo "provider-network-root: ALL PASS (systemd-transient, unprivileged, zero effective capabilities)"
