@@ -5,6 +5,8 @@ set -euo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 if [ "$(id -u)" != 0 ] || ! command -v ip >/dev/null 2>&1 \
     || ! command -v mountpoint >/dev/null 2>&1 \
+    || ! command -v nsenter >/dev/null 2>&1 \
+    || ! command -v awk >/dev/null 2>&1 \
     || ! command -v systemd-run >/dev/null 2>&1 \
     || ! systemctl show-environment >/dev/null 2>&1; then
   echo "provider-network-root: SKIP (root, iproute2, util-linux, and live systemd required)"
@@ -14,17 +16,16 @@ fi
 NS="recursion-provider-test-$$"
 NETWORK_UNIT="recursion-provider-test-network-$$.service"
 UNIT="recursion-provider-test-proxy-$$.service"
-TMP="$(mktemp -d)"
-proxy_pid=""; proxy_unit=0; upstream_pid=""
+PROXY_FAMILIES="$(grep '^RestrictAddressFamilies=' \
+  "$ROOT/deploy/systemd/recursion-provider-proxy.service")"
+test "$PROXY_FAMILIES" = 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6'
+TMP="$(mktemp -d /run/recursion-provider-test.XXXXXX)"
+proxy_pid=""; upstream_pid=""
 cleanup(){
   systemctl stop "$NETWORK_UNIT" >/dev/null 2>&1 || true
   systemctl reset-failed "$NETWORK_UNIT" >/dev/null 2>&1 || true
-  if [ "$proxy_unit" = 1 ]; then
-    systemctl stop "$UNIT" >/dev/null 2>&1 || true
-    systemctl reset-failed "$UNIT" >/dev/null 2>&1 || true
-  else
-    [ -z "$proxy_pid" ] || kill "$proxy_pid" >/dev/null 2>&1 || true
-  fi
+  systemctl stop "$UNIT" >/dev/null 2>&1 || true
+  systemctl reset-failed "$UNIT" >/dev/null 2>&1 || true
   [ -z "$upstream_pid" ] || kill "$upstream_pid" >/dev/null 2>&1 || true
   wait "$proxy_pid" >/dev/null 2>&1 || true
   wait "$upstream_pid" >/dev/null 2>&1 || true
@@ -36,6 +37,7 @@ trap cleanup EXIT
 test "$(grep -cx 'NS=recursion-provider-only' "$ROOT/scripts/provider-network.sh")" = 1
 sed "s/^NS=recursion-provider-only$/NS=$NS/" \
   "$ROOT/scripts/provider-network.sh" >"$TMP/provider-network.sh"
+cp "$ROOT/scripts/provider-connect-proxy.py" "$TMP/provider-connect-proxy.py"
 grep -qx "NS=$NS" "$TMP/provider-network.sh"
 if grep -qx 'NS=recursion-provider-only' "$TMP/provider-network.sh"; then
   echo "provider-network-root: namespace rewrite did not take effect" >&2
@@ -54,6 +56,38 @@ systemd-run --wait --collect --unit "$NETWORK_UNIT" --service-type=oneshot \
   || { echo "provider-network-root: namespace handle is absent" >&2; exit 1; }
 [ "$(stat -c %u "/run/netns/$NS")" = 0 ]
 [ $((8#$(stat -c %a "/run/netns/$NS") & 022)) -eq 0 ]
+
+# A second interface must be rejected before the proxy can start.
+ip -n "$NS" link add forbidden0 type dummy
+set +e
+negative="$(RECURSION_ROOT="$ROOT" bash "$TMP/provider-network.sh" namespace-check 2>&1)"
+negative_rc=$?
+set -e
+[ "$negative_rc" = 96 ] \
+  || { echo "provider-network-root: wrong extra-interface rc=$negative_rc" >&2; exit 1; }
+grep -Fxq 'provider-network: namespace has a non-loopback interface' <<<"$negative" \
+  || { echo "provider-network-root: wrong extra-interface reason" >&2; exit 1; }
+ip -n "$NS" link delete forbidden0
+
+cat >"$TMP/proxy-precheck.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+python3 - <<'PY'
+import errno, socket
+try:
+    handle = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, socket.NETLINK_ROUTE)
+except OSError as exc:
+    if exc.errno not in {errno.EPERM, errno.EAFNOSUPPORT}:
+        raise
+    print(f"AF_NETLINK_DENIED errno={exc.errno}")
+else:
+    handle.close()
+    raise SystemExit("provider-network-root: AF_NETLINK is unexpectedly available")
+PY
+RECURSION_ROOT="$ROOT" bash "$TMP/provider-network.sh" namespace-check
+echo PROXY_PRECHECK_OK
+EOF
+chmod 0755 "$TMP/proxy-precheck.sh"
 
 # Root-owned local echo fixture represents the provider side of the tunnel.
 python3 - "$TMP/port" <<'PY' &
@@ -74,25 +108,28 @@ for _ in $(seq 1 50); do [ -s "$TMP/port" ] && break; sleep 0.05; done
 port="$(cat "$TMP/port")"
 
 systemd-run --quiet --collect --unit "$UNIT" --service-type=exec \
+  --property "ExecStartPre=/bin/bash $TMP/proxy-precheck.sh" \
   --property NoNewPrivileges=yes \
   --property 'CapabilityBoundingSet=CAP_SYS_ADMIN CAP_SETUID CAP_SETGID CAP_SETPCAP' \
   --property 'AmbientCapabilities=CAP_SYS_ADMIN CAP_SETUID CAP_SETGID CAP_SETPCAP' \
-  --property PrivateDevices=yes --property ProtectSystem=strict --property ProtectHome=yes \
+  --property PrivateTmp=yes --property PrivateDevices=yes \
+  --property ProtectSystem=strict --property ProtectHome=yes \
   --property ProtectKernelTunables=yes --property ProtectKernelModules=yes \
   --property ProtectKernelLogs=yes --property ProtectControlGroups=yes \
   --property ProtectClock=yes --property ProtectHostname=yes \
   --property ProtectProc=invisible --property ProcSubset=pid \
-  --property 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6' \
+  --property "$PROXY_FAMILIES" \
   --property RestrictSUIDSGID=yes --property LockPersonality=yes \
   --property MemoryDenyWriteExecute=yes --property RemoveIPC=yes --property UMask=0077 \
+  --property LimitNOFILE=256 --property TasksMax=64 \
+  --property MemoryHigh=128M --property MemoryMax=256M \
   --property "StandardOutput=append:$TMP/proxy.out" \
   --property "StandardError=append:$TMP/proxy.err" \
   --setenv RECURSION_PROVIDER_PROXY_TEST=1 \
-  python3 "$ROOT/scripts/provider-connect-proxy.py" serve \
+  python3 "$TMP/provider-connect-proxy.py" serve \
     --namespace "/run/netns/$NS" --listen-port 18080 \
     --allow "fixture.invalid:$port" --resolve "fixture.invalid=127.0.0.1" \
     --drop-user nobody
-proxy_unit=1
 
 for _ in $(seq 1 50); do
   ip netns exec "$NS" python3 - <<'PY' >/dev/null 2>&1 && break || true
@@ -104,13 +141,14 @@ PY
   sleep 0.05
 done
 
-if [ "$proxy_unit" = 1 ]; then
-  proxy_pid="$(systemctl show --property MainPID --value "$UNIT")"
-fi
+proxy_pid="$(systemctl show --property MainPID --value "$UNIT")"
 [ -n "$proxy_pid" ] && [ "$proxy_pid" != 0 ] && [ -r "/proc/$proxy_pid/status" ]
 awk '$1 == "Uid:" { exit !($2 != 0 && $2 == $3 && $3 == $4 && $4 == $5) }' "/proc/$proxy_pid/status"
 grep -Eq '^CapEff:[[:space:]]+0+$' "/proc/$proxy_pid/status"
 grep -Eq '^NoNewPrivs:[[:space:]]+1$' "/proc/$proxy_pid/status"
+[ -f "$TMP/proxy.out" ] && [ -f "$TMP/proxy.err" ]
+grep -Eq '^AF_NETLINK_DENIED errno=(1|97)$' "$TMP/proxy.out"
+grep -Fxq PROXY_PRECHECK_OK "$TMP/proxy.out"
 
 PROVIDER_FIXTURE_PORT="$port" ip netns exec "$NS" python3 - <<'PY'
 import os, socket
