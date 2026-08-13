@@ -320,6 +320,18 @@ def verify_phase8_goal_contract(base: Path, project: str, goal_id: str) -> dict:
     return value
 
 
+def require_provider_capability(base: Path, contract: dict) -> None:
+    if contract.get("provider_only_required") is not True:
+        return
+    helper = base / "scripts/provider-network.sh"
+    proc = subprocess.run(
+        ["bash", str(helper), "check"], env={**os.environ, "RECURSION_ROOT": str(base)},
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    ) if helper.is_file() else None
+    if proc is None or proc.returncode:
+        raise ReconcileError("provider-only capability is absent or unhealthy")
+
+
 def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = None) -> dict | None:
     if pilot is None:
         _, pilot = project_records(base, project)
@@ -346,7 +358,8 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
                 continue
             if not verified:
                 try:
-                    verify_phase8_goal_contract(base, project, goal_id)
+                    contract = verify_phase8_goal_contract(base, project, goal_id)
+                    require_provider_capability(base, contract)
                 except ReconcileError as exc:
                     event_id = "source-window-contract-refused-" + hashlib.sha256(
                         f"{value.get('id')}:{value.get('plan_digest')}".encode()).hexdigest()[:24]
@@ -366,7 +379,8 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
                                      event_id=event_id)
             commit_reconcile_transition(base, [json_mutation(path, value)], event)
         elif not verified:
-            verify_phase8_goal_contract(base, project, goal_id)
+            contract = verify_phase8_goal_contract(base, project, goal_id)
+            require_provider_capability(base, contract)
             verified = True
         matches.append((path, value))
     if len(matches) > 1:

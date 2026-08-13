@@ -438,7 +438,9 @@ PY
     }
     observed_head="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || true)"
     observed_branch="$(git -C "$REPO_DIR" branch --show-current 2>/dev/null || true)"
+    observed_dirty="$(git -C "$REPO_DIR" status --porcelain --untracked-files=all 2>/dev/null || true)"
     [ "$observed_head" = "$SOURCE_HEAD" ] && [ "$observed_branch" = "$SOURCE_BRANCH" ] \
+      && [ -z "$observed_dirty" ] \
       || {
         log "Phase 8 approved source HEAD differs before worker admission"
         reject_preworker_contract source-head-drift; exit $?
@@ -470,14 +472,18 @@ mk_worktree(){
   # badly: on failure it logged "building on local base" and carried on, so the arm built on a
   # stale tree, the gate passed (it was testing the old tree), and merging the result REVERTED
   # whatever had been fixed upstream in the meantime.
-  if [ "${RECURSION_GIT_FETCH:-1}" = "1" ]; then
+  if [ -z "$PILOT_ID" ] && [ "${RECURSION_GIT_FETCH:-1}" = "1" ]; then
     gitr fetch --prune --quiet origin >>"$LOG" 2>&1 && log "fetched origin" || log "fetch failed at worktree time (freshness was proven moments ago)"
   fi
-  def="$(git -C "$REPO_DIR" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"; def="${def:-master}"
-  # prefer the remote-tracking tip (freshest merged main); fall back to local, then current HEAD.
-  if git -C "$REPO_DIR" rev-parse --verify "origin/$def" >/dev/null 2>&1; then base="origin/$def"
-  elif git -C "$REPO_DIR" rev-parse --verify "$def" >/dev/null 2>&1; then base="$def"
-  else base="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"; fi
+  if [ -n "$PILOT_ID" ] && [ -n "$SOURCE_HEAD" ]; then
+    base="$SOURCE_HEAD"
+  else
+    def="$(git -C "$REPO_DIR" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"; def="${def:-master}"
+    # prefer the remote-tracking tip (freshest merged main); fall back to local, then current HEAD.
+    if git -C "$REPO_DIR" rev-parse --verify "origin/$def" >/dev/null 2>&1; then base="origin/$def"
+    elif git -C "$REPO_DIR" rev-parse --verify "$def" >/dev/null 2>&1; then base="$def"
+    else base="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"; fi
+  fi
   git -C "$REPO_DIR" worktree add -B "$BRANCH" "$wt" "$base" >>"$LOG" 2>&1; local addrc=$?
   python3 "$ROOT/scripts/runtime-state.py" lock-release "$wtlock" "$$" >>"$LOG" 2>&1 \
     || { log "worktree lock release failed closed"; return 74; }

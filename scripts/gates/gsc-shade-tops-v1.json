@@ -5,7 +5,7 @@
   "implementation_area": "user-client/render",
   "controller_gate": {
     "path": "scripts/gsc-shade-tops-gate.py",
-    "sha256": "3e286251b631bd6a0708f6026b10aaa2a9d25dab2f869843c7dfd9e9a8bb7d43"
+    "sha256": "3deb4618d1f61096cd470d240ec29a82bd31d39933bc39da0156dad4808e16db"
   },
   "seed_contract": {
     "schema_version": 1,

@@ -287,6 +287,9 @@ def _safe_profile(path: Path) -> dict[str, Any]:
 
 
 def require_candidate_scope(repo: Path, base_commit: str, implementation_area: str) -> None:
+    dirty = git(repo, "status", "--porcelain", "--untracked-files=all")
+    if dirty.returncode or dirty.stdout.strip():
+        raise GateError("candidate worktree is not clean at its measured commit", 4)
     changed = git(repo, "diff", "--name-only", base_commit, "--")
     untracked = git(repo, "ls-files", "--others", "--exclude-standard")
     if changed.returncode or untracked.returncode:

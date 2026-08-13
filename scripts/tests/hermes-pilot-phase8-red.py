@@ -21,6 +21,8 @@ CONTROLS = [
     "observing PAUSE closes the window so resume cannot replay its authority",
     "an answered assist reopens the same goal and task once through the durable outbox path",
     "a tracked .seedlist is controller-bound into the approved plan, goal, and task",
+    "source-head drift and an absent provider capability refuse approval or window authority",
+    "a project-required semantic gate profile cannot be omitted or substituted",
 ]
 
 
@@ -78,6 +80,11 @@ class Fixture:
             "RECURSION_INTAKE_ALLOW": "8913126684",
             "RECURSION_NO_NOTIFY": "0",
         })
+        self.provider_calls = self.root / "provider-network.calls"
+        (self.root / "scripts/provider-network.sh").write_text(
+            "#!/usr/bin/env bash\nprintf '%s\\n' \"${1:-}\" >> \"$RECURSION_ROOT/provider-network.calls\"\n",
+            encoding="utf-8",
+        )
         self._write_repo()
         self._write_project()
         self._write_legacy_state()
@@ -404,6 +411,8 @@ def test_window_admission(f: Fixture) -> bool:
         return False
     if not open_window(f):
         return False
+    if "probe" not in f.provider_calls.read_text(encoding="utf-8").splitlines():
+        return False
     task_path = f.root / "state/tasks/chiron-phase8-smoke.md"
     original_task = task_path.read_text(encoding="utf-8")
     task_path.write_text(original_task.replace(
@@ -419,6 +428,7 @@ def test_window_admission(f: Fixture) -> bool:
     rows = [json.loads(path.read_text(encoding="utf-8")) for path in (f.root / "state/decision-queue/pending").glob("*.json")]
     return (
         scheduled.returncode == 0 and scheduled.stdout.strip() == "1" and len(rows) == 1
+        and "check" in f.provider_calls.read_text(encoding="utf-8").splitlines()
         and rows[0].get("verb") == "reconcile-goal"
         and rows[0].get("args") == ["chiron", "goal-chiron-phase8-smoke"]
         and rows[0].get("project") == "chiron"
@@ -560,10 +570,93 @@ def test_seed_binding(_fixture: Fixture) -> bool:
         good.close(); stale.close(); hostile.close()
 
 
+def test_source_and_provider_admission(_fixture: Fixture) -> bool:
+    stale = Fixture(); provider = Fixture()
+    try:
+        proposed = stale.decision(
+            verb="pilot-plan-propose", args=["chiron", stale.plan_id], iid="101",
+            actor="pilot-chiron", goal=str(stale.plan["goal"]["id"]), text="Bind source HEAD.",
+            extra={"plan": stale.plan},
+        )
+        if stale.run("python3", "scripts/project-pilot.py", "execute", str(proposed)).returncode:
+            return False
+        record = json.loads((stale.root / f"state/plans/chiron/{stale.plan_id}.json").read_text())
+        digest = record["plan_digest"]
+        implementation = stale.repo / "user-client/render/shade-tops.js"
+        implementation.write_text("export const shadeTops = true;\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(stale.repo), "add",
+                        "user-client/render/shade-tops.js"], check=True)
+        subprocess.run(["git", "-C", str(stale.repo), "-c", "user.name=fixture", "-c",
+                        "user.email=fixture@example.invalid", "commit", "-qm", "source drift"], check=True)
+        stale._write_instruction("102", "head-hermes", f"approve {stale.plan_id} {digest}")
+        approval = stale.decision(
+            verb="pilot-plan-approve", args=["chiron", stale.plan_id, digest], iid="102",
+            actor="head-hermes", goal=str(stale.plan["goal"]["id"]), text="Refuse stale source.",
+        )
+        source_refused = stale.run(
+            "python3", "scripts/project-pilot.py", "execute", str(approval),
+        ).returncode != 0 and not (stale.root / "state/goals/goal-chiron-phase8-smoke.md").exists()
+
+        if not test_fresh_plan(provider) or not test_approval(provider):
+            return False
+        (provider.root / "scripts/provider-network.sh").write_text(
+            "#!/usr/bin/env bash\nexit 96\n", encoding="utf-8",
+        )
+        capability_refused = not open_window(provider) \
+            and not (provider.root / "state/pilot-windows/chiron-window-1.json").exists()
+        return source_refused and capability_refused
+    finally:
+        stale.close(); provider.close()
+
+
+def test_required_gate_profile(_fixture: Fixture) -> bool:
+    fixture = Fixture()
+    try:
+        config_path = fixture.root / "state/project-config/chiron.json"
+        pilot_path = fixture.root / "state/pilots/pilot-chiron.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        pilot = json.loads(pilot_path.read_text(encoding="utf-8"))
+        required = {
+            "acceptance": fixture.plan["goal"]["acceptance_suite"],
+            "gate_class": fixture.plan["goal"]["gate_class"],
+            "gate_files": fixture.plan["goal"]["gate_files"],
+            "controller_gate_files": fixture.plan["goal"]["controller_gate_files"],
+        }
+        config["required_gate_profile"] = required
+        pilot["required_gate_profile"] = required
+        fixture.write_json("state/project-config/chiron.json", config)
+        fixture.write_json("state/pilots/pilot-chiron.json", pilot)
+
+        substitute = json.loads(json.dumps(fixture.plan))
+        substitute["goal"]["acceptance_suite"] = "node user-client/render/tools/native-diff.cjs --other-profile"
+        substitute["tasks"][0]["acceptance"] = substitute["goal"]["acceptance_suite"]
+        decision = fixture.decision(
+            verb="pilot-plan-propose", args=["chiron", fixture.plan_id], iid="101",
+            actor="pilot-chiron", goal=str(substitute["goal"]["id"]), text="Try a substitute gate.",
+            extra={"plan": substitute},
+        )
+        refused = fixture.run(
+            "python3", "scripts/project-pilot.py", "execute", str(decision),
+        ).returncode != 0 and not (fixture.root / f"state/plans/chiron/{fixture.plan_id}.json").exists()
+
+        good = fixture.decision(
+            verb="pilot-plan-propose", args=["chiron", fixture.plan_id], iid="101",
+            actor="pilot-chiron", goal=str(fixture.plan["goal"]["id"]), text="Use the exact gate.",
+            extra={"plan": fixture.plan},
+        )
+        accepted = fixture.run(
+            "python3", "scripts/project-pilot.py", "execute", str(good),
+        ).returncode == 0 and (fixture.root / f"state/plans/chiron/{fixture.plan_id}.json").is_file()
+        return refused and accepted
+    finally:
+        fixture.close()
+
+
 def main() -> int:
     fixture = Fixture()
     tests = [test_fresh_plan, test_invalid_plan, test_approval, test_window_admission,
-             test_pause_closes_window, test_assist_resume, test_seed_binding]
+             test_pause_closes_window, test_assist_resume, test_seed_binding,
+             test_source_and_provider_admission, test_required_gate_profile]
     failures = 0
     try:
         for label, test in zip(CONTROLS, tests):

@@ -232,6 +232,12 @@ def main() -> int:
         check("missing corpus is a harness failure", verdict(repo, profile_path, StubRunner(metrics))[0], 3)
         seed_file.write_bytes(original)
 
+        dirty = repo / "user-client/render/dirty-candidate.js"
+        dirty.write_text("// uncommitted candidate\n", encoding="utf-8")
+        check("dirty candidate bytes cannot be measured", verdict(
+            repo, profile_path, StubRunner(metrics))[0], 4)
+        dirty.unlink()
+
         check(
             "conformance must be green",
             verdict(repo, profile_path, StubRunner(metrics, conformance_rc=1))[0], 1,

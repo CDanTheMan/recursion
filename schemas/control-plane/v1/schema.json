@@ -21,6 +21,7 @@
         "charter": {"type": "string", "minLength": 1},
         "allowed_paths": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
         "required_non_goals": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
+        "required_gate_profile": {"$ref": "#/$defs/requiredGateProfile"},
         "topic": {"type": ["string", "integer"]},
         "pilot_id": {"$ref": "#/$defs/identifier"},
         "activation_gate": {"const": "clone-auth-freshness-v1"},
@@ -42,6 +43,7 @@
         "charter": {"type": "string", "minLength": 1},
         "model_policy": {"type": "string", "minLength": 1},
         "required_non_goals": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
+        "required_gate_profile": {"$ref": "#/$defs/requiredGateProfile"},
         "concurrency_limit": {"type": "integer", "minimum": 0},
         "budget": {"type": "object"},
         "notification_targets": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
@@ -51,6 +53,17 @@
         "status": {"enum": ["pending", "active", "paused", "retired"]}
       },
       "additionalProperties": true
+    },
+    "requiredGateProfile": {
+      "type": "object",
+      "required": ["acceptance", "gate_class", "gate_files", "controller_gate_files"],
+      "properties": {
+        "acceptance": {"type": "string", "minLength": 1},
+        "gate_class": {"enum": ["light", "heavy"]},
+        "gate_files": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "controller_gate_files": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+      },
+      "additionalProperties": false
     },
     "plan": {
       "type": "object",

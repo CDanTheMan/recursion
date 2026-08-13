@@ -20,7 +20,8 @@ python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scri
   scripts/tests/decision-identity.test.py scripts/tests/runtime-state-locks.test.py \
   scripts/tests/runtime-state-recovery.test.py scripts/tests/reconcile-liveness.test.py \
   scripts/tests/transition-receipt.test.py scripts/tests/notification-transition-receipt.test.py \
-  scripts/provider-connect-proxy.py scripts/tests/provider-connect-proxy.test.py
+  scripts/provider-connect-proxy.py scripts/tests/provider-connect-proxy.test.py \
+  scripts/gsc-shade-tops-gate.py scripts/tests/gsc-shade-tops-gate.test.py
 python3 - <<'PY'
 import json
 json.load(open('schemas/control-plane/v1/schema.json',encoding='utf-8'))
@@ -346,4 +347,5 @@ python3 scripts/tests/reconcile-liveness.test.py
 python3 scripts/tests/transition-receipt.test.py
 python3 scripts/tests/notification-transition-receipt.test.py
 python3 scripts/tests/provider-connect-proxy.test.py
+python3 scripts/tests/gsc-shade-tops-gate.test.py
 echo "hermes-pilot-phase8-green: ALL PASS"

@@ -115,11 +115,16 @@ def records(base: Path, project: str, active: bool = False) -> tuple[dict, dict,
         fail(f"project/pilot identity mismatch for {project}")
     if str(cfg.get("topic")) != row["topic"] or str(pilot.get("topic")) != row["topic"]:
         fail(f"topic projection mismatch for {project}")
+    if cfg.get("charter") != pilot.get("charter"):
+        fail(f"project/pilot charter projection mismatch for {project}")
     if active and (row["status"] != "active" or cfg.get("status") != "active" or pilot.get("status") != "active"):
         fail(f"project pilot {project} is not active")
     if "required_non_goals" in cfg or "required_non_goals" in pilot:
         if cfg.get("required_non_goals") != pilot.get("required_non_goals"):
             fail(f"project/pilot required_non_goals projection mismatch for {project}")
+    if "required_gate_profile" in cfg or "required_gate_profile" in pilot:
+        if cfg.get("required_gate_profile") != pilot.get("required_gate_profile"):
+            fail(f"project/pilot required_gate_profile projection mismatch for {project}")
     return cfg, pilot, row
 
 
@@ -595,6 +600,43 @@ def project_required_non_goals(cfg: dict) -> list[str]:
     return list(configured)
 
 
+def project_required_gate_profile(cfg: dict) -> dict | None:
+    """Validate an exact project-specific semantic gate profile, when one is configured."""
+    profile = cfg.get("required_gate_profile")
+    if profile is None:
+        return None
+    required = {"acceptance", "gate_class", "gate_files", "controller_gate_files"}
+    if not isinstance(profile, dict) or set(profile) != required:
+        fail("project required_gate_profile is malformed")
+    acceptance = nonvacuous_gate(profile.get("acceptance"), "project required")
+    if profile.get("gate_class") not in {"light", "heavy"}:
+        fail("project required_gate_profile has an invalid gate_class")
+    result = {"acceptance": acceptance, "gate_class": profile["gate_class"]}
+    for name in ("gate_files", "controller_gate_files"):
+        items = profile.get(name)
+        if not isinstance(items, list) or len(items) != len(set(items)) \
+                or not all(isinstance(item, str) for item in items):
+            fail(f"project required_gate_profile has invalid {name}")
+        for item in items:
+            bounded_line(item, f"project required gate {name}", 512)
+        result[name] = list(items)
+    return result
+
+
+def enforce_required_gate_profile(cfg: dict, label: str, gate: dict) -> None:
+    required = project_required_gate_profile(cfg)
+    if required is None:
+        return
+    observed = {
+        "acceptance": str(gate.get("acceptance") or "").strip(),
+        "gate_class": gate.get("gate_class"),
+        "gate_files": gate.get("gate_files"),
+        "controller_gate_files": gate.get("controller_gate_files"),
+    }
+    if observed != required:
+        fail(f"pilot plan {label} does not use the project's exact required gate profile")
+
+
 def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict) -> dict:
     """Use the execution validator and bind its tracked-file hashes into the plan."""
     command = [
@@ -627,7 +669,7 @@ def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict) -> dict:
     return contract
 
 
-def live_authority_contract(cfg: dict) -> dict:
+def live_authority_contract(cfg: dict, *, check_remote: bool) -> dict:
     repo = Path(str(cfg["repo"])); branch = str(cfg["default_branch"])
     def git(*args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(["git", "-C", str(repo), *args], text=True,
@@ -640,48 +682,56 @@ def live_authority_contract(cfg: dict) -> dict:
         fail("project repository must be exactly clean before a plan contract is bound")
     if not re.fullmatch(r"[0-9a-f]{40,64}", head) or current != branch or branch_head != head:
         fail("project repository HEAD is not the configured default-branch tip")
-    env = os.environ.copy(); remote = str(cfg.get("remote") or "origin")
-    if remote.startswith("git@"):
-        key = os.path.expanduser(str(cfg.get("deploy_key_ref") or ""))
-        if not key or not Path(key).is_file():
-            fail("project remote freshness credential is absent")
-        env["GIT_SSH_COMMAND"] = (
-            f"ssh -i {shlex.quote(key)} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
-        )
-    try:
-        remote_result = subprocess.run(
-            ["git", "ls-remote", remote, f"refs/heads/{branch}"], env=env,
-            text=True, capture_output=True, timeout=20, check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        fail("project remote freshness could not be measured", 74)
-    remote_head = remote_result.stdout.split()[0] \
-        if remote_result.returncode == 0 and remote_result.stdout.split() else ""
-    if remote_head != head:
-        fail("project default branch is not equal to its authenticated remote tip")
     required = project_required_non_goals(cfg)
-    return {
+    result = {
         "charter_sha256": hashlib.sha256(str(cfg.get("charter") or "").encode()).hexdigest(),
         "default_branch": branch,
         "required_non_goals": required,
-        "remote_head": remote_head,
         "source_head": head,
     }
+    if check_remote:
+        env = os.environ.copy(); remote = str(cfg.get("remote") or "origin")
+        if remote.startswith("git@"):
+            key = os.path.expanduser(str(cfg.get("deploy_key_ref") or ""))
+            if not key or not Path(key).is_file():
+                fail("project remote freshness credential is absent")
+            env["GIT_SSH_COMMAND"] = (
+                f"ssh -i {shlex.quote(key)} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
+            )
+        try:
+            remote_result = subprocess.run(
+                ["git", "ls-remote", remote, f"refs/heads/{branch}"], env=env,
+                text=True, capture_output=True, timeout=20, check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            fail("project remote freshness could not be measured", 74)
+        remote_head = remote_result.stdout.split()[0] \
+            if remote_result.returncode == 0 and remote_result.stdout.split() else ""
+        if remote_head != head:
+            fail("project default branch is not equal to its authenticated remote tip")
+        result["remote_head"] = remote_head
+    return result
 
 
 def bind_authority_contract(cfg: dict, value: object) -> dict:
     if not isinstance(value, dict):
         fail("pilot plan must be an object")
-    plan = json.loads(json.dumps(value)); observed = live_authority_contract(cfg)
+    plan = json.loads(json.dumps(value)); observed = live_authority_contract(cfg, check_remote=True)
     if plan.get("authority_contract") not in (None, observed):
         fail("model-authored authority contract disagrees with controller evidence")
     plan["authority_contract"] = observed
     return plan
 
 
-def validate_authority_binding(cfg: dict, value: dict) -> dict:
+def validate_authority_binding(cfg: dict, value: dict, *, check_remote: bool) -> dict:
     claimed = value.get("authority_contract")
-    observed = live_authority_contract(cfg)
+    if not isinstance(claimed, dict) or set(claimed) != {
+        "charter_sha256", "default_branch", "required_non_goals", "remote_head", "source_head"
+    } or claimed.get("remote_head") != claimed.get("source_head"):
+        fail("pilot plan authority contract is malformed")
+    observed = live_authority_contract(cfg, check_remote=check_remote)
+    if not check_remote:
+        observed["remote_head"] = claimed.get("remote_head")
     if claimed != observed:
         fail("pilot plan authority, source HEAD, or structured scope is stale")
     return observed
@@ -690,6 +740,21 @@ def validate_authority_binding(cfg: dict, value: dict) -> dict:
 def requires_heavy_gate(plan: dict, acceptance: str) -> bool:
     markers = ("native-diff", "conformance", "node --test", "pytest", "cargo test")
     return bool(plan.get("seed_contract")) or any(marker in acceptance.lower() for marker in markers)
+
+
+def require_provider_capability(base: Path, plan: dict, *, live: bool) -> None:
+    if not any(task.get("network_policy") == "provider-only" for task in plan.get("tasks", [])):
+        return
+    helper = base / "scripts/provider-network.sh"
+    if not helper.is_file():
+        fail("provider-only capability controller is absent", 74)
+    proc = subprocess.run(
+        ["bash", str(helper), "probe" if live else "check"],
+        env={**os.environ, "RECURSION_ROOT": str(base)}, text=True,
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False,
+    )
+    if proc.returncode:
+        fail("provider-only capability is not proven for this pilot window", 74)
 
 
 def bind_seed_contract(cfg: dict, value: object) -> dict:
@@ -732,7 +797,7 @@ def validate_seed_binding(cfg: dict, value: dict) -> dict | None:
 
 
 def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: object,
-                  bind_gate_contract: bool = False) -> dict:
+                  bind_gate_contract: bool = False, check_remote: bool = False) -> dict:
     if not isinstance(value, dict) or value.get("schema_version") != 1:
         fail("pilot plan must be a schema_version 1 object")
     if len(json.dumps(value, sort_keys=True, separators=(",", ":"))) > 65536:
@@ -741,7 +806,7 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
     value = json.loads(json.dumps(value))
     if value.get("id") != plan_id or value.get("project_id") != project or not IDENT.fullmatch(plan_id):
         fail("pilot plan identity does not match its decision")
-    validate_authority_binding(cfg, value)
+    validate_authority_binding(cfg, value, check_remote=check_remote)
     validate_seed_binding(cfg, value)
     goal = value.get("goal")
     tasks = value.get("tasks")
@@ -765,6 +830,7 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
                  "allowed_paths": list(cfg.get("allowed_paths") or []),
                  "gate_files": goal["gate_files"],
                  "controller_gate_files": goal["controller_gate_files"]}
+    enforce_required_gate_profile(cfg, "goal", {**goal, "acceptance": goal_acceptance})
     expected_goal_contract = repo_gate_contract(base, cfg, "goal", goal_gate)
     if requires_heavy_gate(value, goal_acceptance) and goal.get("gate_class") != "heavy":
         fail("pilot plan goal understates a controller-classified heavy gate")
@@ -843,6 +909,7 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
                     or len(items) != len(set(items)):
                 fail(f"pilot plan task {task_id} has invalid {name}")
             for item in items: bounded_line(item, f"task {task_id} {name}", 512)
+        enforce_required_gate_profile(cfg, f"task {task_id}", task)
         expected_contract = repo_gate_contract(base, cfg, f"task {task_id}", task)
         if requires_heavy_gate(value, str(task["acceptance"])) and task.get("gate_class") != "heavy":
             fail(f"pilot plan task {task_id} understates a controller-classified heavy gate")
@@ -920,7 +987,8 @@ def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
     plan_id = str(args[1]) if len(args) > 1 else ""
     plan = bind_authority_contract(cfg, decision.get("plan"))
     plan = bind_seed_contract(cfg, plan)
-    plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, plan, bind_gate_contract=True)
+    plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, plan,
+                         bind_gate_contract=True, check_remote=True)
     digest = canonical_digest(plan); goal_id = str(plan["goal"]["id"])
     path = base / "state/plans" / str(cfg["id"]) / f"{plan_id}.json"
     event = transition_event(
@@ -1044,7 +1112,9 @@ def verify_approved_goal(base: Path, project: str, goal_id: str) -> dict:
             fail(f"materialized task {task['id']} immutable contract differs from its approved plan")
     return {"project_id": project, "goal_id": goal_id, "plan_id": plan_id,
             "plan_digest": digest, "source_head": authority["source_head"],
-            "task_ids": sorted(planned_ids)}
+            "task_ids": sorted(planned_ids),
+            "provider_only_required": any(task.get("network_policy") == "provider-only"
+                                          for task in plan["tasks"])}
 
 
 def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction_id: str,
@@ -1057,7 +1127,8 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
         proposal = read_json(path)
         if proposal.get("project_id") != cfg["id"] or proposal.get("plan_digest") != claimed:
             fail("Lucas approval digest does not match the stored plan")
-        plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, proposal.get("plan"))
+        plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, proposal.get("plan"),
+                             check_remote=True)
         digest = canonical_digest(plan)
         if digest != claimed: fail("stored plan bytes do not match the approved digest")
         goal = plan["goal"]; goal_id = str(goal["id"]); goal_path = base / "state/goals" / f"{goal_id}.md"
@@ -1141,11 +1212,13 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
         proposal = read_json(plan_path) if plan_id else {}
         if not plan_id or proposal.get("status") != "approved":
             fail("pilot window goal does not come from an approved Phase 8 plan")
-        plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, proposal.get("plan"))
+        plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, proposal.get("plan"),
+                             check_remote=True)
         digest = canonical_digest(plan)
         if proposal.get("plan_digest") != digest or goal.get("plan_digest") != digest:
             fail("pilot window goal does not match the live repository-bound plan contract")
         verify_approved_goal(base, str(cfg["id"]), goal_id)
+        require_provider_capability(base, plan, live=True)
         planned_ids = {str(task["id"]) for task in plan["tasks"]}
         if goal.get("status") != "active" or any(
             fields(base / "state/tasks" / f"{task_id}.md").get("status") != "proposed"
