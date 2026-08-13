@@ -191,9 +191,11 @@ def transition_event(event: str, project: str, goal: str, task: str = "", detail
 
 
 def commit_reconcile_transition(base: Path, mutations: list, event: dict,
-                                authoritative_index: int = -1) -> None:
+                                authoritative_index: int = -1,
+                                precondition=None) -> None:
     try:
-        commit_transition(base, mutations, event, authoritative_index=authoritative_index)
+        commit_transition(base, mutations, event, authoritative_index=authoritative_index,
+                          precondition=precondition)
     except (OSError, TransitionReceiptError) as exc:
         raise ReconcileError(f"crash-consistent transition failed: {exc}") from exc
 
@@ -390,24 +392,35 @@ def admit_work(base: Path, task_id: str) -> dict:
     return {"project_id": project, "goal_id": goal_id, "window_id": window.get("id")}
 
 
-def task_contract_event_id(project: str, goal_id: str, task_id: str) -> str:
-    identity = f"{project}\0{goal_id}\0{task_id}\0pre-worker-contract-v1".encode()
+CONTRACT_REJECTION_CATEGORIES = {
+    "acceptance-missing", "acceptance-invalid", "deadline-invalid", "network-policy-invalid",
+    "verification-policy-invalid", "worker-engine-invalid", "model-alias-invalid",
+    "verifier-model-alias-invalid", "model-separation-invalid",
+}
+
+
+def task_contract_event_id(project: str, goal_id: str, task_id: str,
+                           category: str, contract_digest: str) -> str:
+    identity = f"{project}\0{goal_id}\0{task_id}\0{category}\0{contract_digest}\0pre-worker-contract-v2".encode()
     return "source-task-contract-invalid-" + hashlib.sha256(identity).hexdigest()[:24]
 
 
-def task_contract_event(project: str, goal_id: str, task_id: str) -> dict:
+def task_contract_event(project: str, goal_id: str, task_id: str,
+                        category: str, contract_digest: str) -> dict:
     return transition_event(
         "task-contract-invalid", project, goal_id, task_id,
         {
-            "reason": "invalid-acceptance-gate",
+            "reason": "task-contract-invalid",
+            "category": category,
+            "contract_digest": contract_digest,
             "stage": "controller-pre-worker",
             "attempts": 0,
         },
-        task_contract_event_id(project, goal_id, task_id),
+        task_contract_event_id(project, goal_id, task_id, category, contract_digest),
     )
 
 
-def reject_task_contract(base: Path, task_id: str) -> dict:
+def reject_task_contract(base: Path, task_id: str, category: str, contract_digest: str) -> dict:
     """Atomically stop a pilot task and its goal before a worker can be leased.
 
     Gate validation runs inside work.sh after dispatch authority has been admitted but before
@@ -422,7 +435,11 @@ def reject_task_contract(base: Path, task_id: str) -> dict:
         raise ReconcileError("contract rejection lacks canonical task/project/goal identity")
     if not task.get("pilot_id"):
         raise ReconcileError("contract rejection is reserved for project-pilot work")
-    event = task_contract_event(project, goal_id, task_id)
+    if category not in CONTRACT_REJECTION_CATEGORIES:
+        raise ReconcileError("contract rejection category is not controller-defined")
+    if re.fullmatch(r"[0-9a-f]{64}", contract_digest) is None:
+        raise ReconcileError("contract rejection digest is invalid")
+    event = task_contract_event(project, goal_id, task_id, category, contract_digest)
     goal_file = goal_path(base, goal_id)
     with goal_lock(base, goal_id):
         try:
@@ -435,12 +452,6 @@ def reject_task_contract(base: Path, task_id: str) -> dict:
                 "project_id": project, "goal_id": goal_id, "task_id": task_id,
                 "event_id": event["id"], "status": "blocked", "replayed": True,
             }
-
-        # A new rejection inherits the exact execution capability already checked by work.sh.
-        # Only recovery of an existing receipt is allowed after PAUSE/window revocation.
-        if (base / "state/PAUSE").exists():
-            raise ReconcileError("PAUSE permits only exact task-contract rejection recovery")
-        require_window(base, project, goal_id)
 
         task = read_fields(task_path)
         goal = read_fields(goal_file)
@@ -459,19 +470,40 @@ def reject_task_contract(base: Path, task_id: str) -> dict:
         task_changes = {
             "status": "blocked", "version": str(task_version), "lease_expires": "0",
             "transition_reason": "task-contract-invalid", "transition_at": timestamp,
-            "blocker_actor": "controller", "blocked_on": "invalid-acceptance-gate",
+            "blocker_actor": "controller", "blocked_on": category,
+            "contract_rejection_category": category,
+            "contract_digest": contract_digest,
             "contract_rejection_event_id": str(event["id"]),
         }
         goal_changes = {
             "status": "blocked", "version": str(goal_version),
             "last_transition_at": timestamp, "last_transition_reason": "task-contract-invalid",
             "last_transition_from": "active", "last_transition_task": task_id,
+            "last_transition_category": category, "contract_digest": contract_digest,
             "terminal_reported": "1", "finished_at": timestamp,
         }
+
+        def authority_precondition() -> None:
+            if os.environ.get("RECURSION_TEST_PAUSE_BEFORE_CONTRACT_COMMIT") == "1":
+                (base / "state/PAUSE").write_text("test pause before contract commit\n", encoding="utf-8")
+            if (base / "state/PAUSE").exists():
+                raise TransitionReceiptError("PAUSE blocks a new task-contract rejection")
+            _, pilot = project_records(base, project)
+            if not pilot.get("window_required"):
+                return
+            matches = []
+            for window_path in sorted((base / "state/pilot-windows").glob("*.json")):
+                window = read_json(window_path)
+                if window.get("project_id") == project and window.get("goal_id") == goal_id \
+                        and window.get("status") == "open" \
+                        and safe_int(window.get("expires_at_epoch")) > int(time.time()):
+                    matches.append(window)
+            if len(matches) != 1:
+                raise TransitionReceiptError("exact open pilot-window authority changed before commit")
         commit_reconcile_transition(
             base,
             [fields_mutation(task_path, task_changes), fields_mutation(goal_file, goal_changes)],
-            event, authoritative_index=1,
+            event, authoritative_index=1, precondition=authority_precondition,
         )
         ensure_terminal_events(base, project, goal_id, read_fields(goal_file))
     return {
@@ -1128,9 +1160,11 @@ def ensure_terminal_events(base: Path, project: str, goal_id: str, goal: dict[st
         return
     if expected == "active" and target == "blocked" and reason == "task-contract-invalid":
         task_id = goal.get("last_transition_task", "")
+        category = goal.get("last_transition_category", "")
+        contract_digest = goal.get("contract_digest", "")
         if not IDENT.fullmatch(task_id):
             raise ReconcileError("terminal contract rejection lacks its task identity")
-        transition = task_contract_event(project, goal_id, task_id)
+        transition = task_contract_event(project, goal_id, task_id, category, contract_digest)
     else:
         transition = transition_event(
             "goal-transition", project, goal_id,
@@ -1880,6 +1914,8 @@ def main() -> int:
     resume_cmd.add_argument("instruction")
     reject_cmd = sub.add_parser("reject-task-contract")
     reject_cmd.add_argument("task")
+    reject_cmd.add_argument("category")
+    reject_cmd.add_argument("contract_digest")
     for name in ("reconcile", "verify-goal"):
         cmd = sub.add_parser(name)
         cmd.add_argument("project")
@@ -1913,7 +1949,7 @@ def main() -> int:
                              sort_keys=True, separators=(",", ":")))
             return 0
         if args.command == "reject-task-contract":
-            print(json.dumps(reject_task_contract(base, args.task),
+            print(json.dumps(reject_task_contract(base, args.task, args.category, args.contract_digest),
                              sort_keys=True, separators=(",", ":")))
             return 0
         if (base / "state/PAUSE").exists():

@@ -172,9 +172,12 @@ def main() -> int:
         print(json.dumps({"acceptance_sha256": hashlib.sha256(gate.encode()).hexdigest(),
                           "gate_files": hashes,
                           "controller_gate_files": controller_hashes}, sort_keys=True))
-    except (OSError, ValueError) as exc:
+    except ValueError as exc:
         print(f"ERR {exc}", file=sys.stderr)
         return 2
+    except OSError as exc:
+        print(f"ERR controller I/O while validating gate: {exc}", file=sys.stderr)
+        return 74
     return 0
 
 

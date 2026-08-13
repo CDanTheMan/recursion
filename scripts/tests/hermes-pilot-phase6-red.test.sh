@@ -691,12 +691,13 @@ else
 fi
 
 C="$(setup invalid-contract-crash active)"; write_task "$C" crash-contract ready 0
+DIGEST="$(printf contract | sha256sum | cut -d' ' -f1)"
 crash_rc=0; paused_replay_rc=0
 RECURSION_ROOT="$C" RECURSION_TRANSITION_FAILPOINT=state-write-1 \
-  python3 "$C/scripts/project-reconcile.py" reject-task-contract crash-contract \
+  python3 "$C/scripts/project-reconcile.py" reject-task-contract crash-contract acceptance-invalid "$DIGEST" \
   >/dev/null 2>&1 || crash_rc=$?
 touch "$C/state/PAUSE"
-RECURSION_ROOT="$C" python3 "$C/scripts/project-reconcile.py" reject-task-contract crash-contract \
+RECURSION_ROOT="$C" python3 "$C/scripts/project-reconcile.py" reject-task-contract crash-contract acceptance-invalid "$DIGEST" \
   >/dev/null 2>&1 || paused_replay_rc=$?
 crash_events="$(grep -c '"event":"task-contract-invalid"' "$C/state/events.jsonl" 2>/dev/null || true)"
 task_receipt="$(field "$C/state/tasks/crash-contract.md" last_transition_id)"
@@ -708,6 +709,72 @@ if [ "$crash_rc" != 0 ] && [ "$paused_replay_rc" = 0 ] \
   ok "PAUSE-time exact replay completes one partial task-contract rejection receipt"
 else
   no "partial contract rejection was not safely recoverable after PAUSE"
+fi
+
+P="$(setup invalid-contract-pause-race active)"; write_task "$P" pause-contract ready 0
+pause_race_rc=0
+RECURSION_ROOT="$P" RECURSION_TEST_PAUSE_BEFORE_CONTRACT_COMMIT=1 \
+  python3 "$P/scripts/project-reconcile.py" reject-task-contract pause-contract acceptance-invalid "$DIGEST" \
+  >/dev/null 2>&1 || pause_race_rc=$?
+if [ "$pause_race_rc" != 0 ] && [ "$(task_status "$P" pause-contract)" = ready ] \
+   && [ "$(goal_status "$P")" = active ] \
+   && ! grep -q '"event":"task-contract-invalid"' "$P/state/events.jsonl"; then
+  ok "PAUSE at the receipt commit boundary prevents a new contract rejection"
+else
+  no "PAUSE/window authority changed before commit but a new rejection mutated state"
+fi
+
+# Every deterministic pre-worker metadata refusal shares the same attempts-zero lifecycle.
+preworker_case(){ # name category mutation
+  local name="$1" category="$2" mutation="$3" r rc=0 observed
+  r="$(setup "preworker-$name" active)"; write_task "$r" "$name-task" ready 0
+  cp "$SRC/scripts/work.sh" "$SRC/scripts/validate-gate.py" "$SRC/scripts/resolve-model-alias.py" "$r/scripts/"
+  chmod +x "$r/scripts/work.sh" "$r/scripts/validate-gate.py" "$r/scripts/resolve-model-alias.py"
+  eval "$mutation"
+  RECURSION_ROOT="$r" RECURSION_NO_NOTIFY=1 RECURSION_GIT_FETCH=0 \
+    RECURSION_MODEL_ALIAS_SONNET_ROUTINE=stub-sonnet RECURSION_MODEL_ALIAS_OPUS_REVIEW=stub-opus \
+    bash "$r/scripts/work.sh" "$name-task" >/dev/null 2>&1 || rc=$?
+  observed="$(field "$r/state/tasks/$name-task.md" contract_rejection_category)"
+  [ "$rc" = 78 ] && [ "$observed" = "$category" ] \
+    && [ "$(task_status "$r" "$name-task")" = blocked ] && [ "$(goal_status "$r")" = blocked ] \
+    && [ "$(field "$r/state/tasks/$name-task.md" attempts)" = 0 ] \
+    && [ -n "$(field "$r/state/tasks/$name-task.md" contract_digest)" ] \
+    && ! find "$r/state/runs" -type f -print -quit | grep -q .
+}
+
+preworker_case missing acceptance-missing 'set_field "$r/state/tasks/$name-task.md" acceptance ""' \
+  && ok "missing acceptance uses the atomic pre-worker rejection" \
+  || no "missing acceptance retained the stranded legacy lifecycle"
+preworker_case deadline deadline-invalid 'set_field "$r/state/tasks/$name-task.md" deadline_seconds nope' \
+  && ok "invalid deadline uses the atomic pre-worker rejection" || no "invalid deadline stranded state"
+preworker_case network network-policy-invalid 'set_field "$r/state/tasks/$name-task.md" network_policy live' \
+  && ok "invalid network policy uses the atomic pre-worker rejection" || no "invalid network policy stranded state"
+preworker_case verification verification-policy-invalid 'set_field "$r/state/tasks/$name-task.md" verification self' \
+  && ok "invalid verifier policy uses the atomic pre-worker rejection" || no "invalid verifier policy stranded state"
+preworker_case engine worker-engine-invalid 'set_field "$r/state/tasks/$name-task.md" engine hermes' \
+  && ok "invalid worker engine uses the atomic pre-worker rejection" || no "invalid worker engine stranded state"
+preworker_case model model-alias-invalid 'set_field "$r/state/tasks/$name-task.md" model_alias unknown-model' \
+  && ok "invalid implementer model uses the atomic pre-worker rejection" || no "invalid implementer model stranded state"
+preworker_case verifier-model verifier-model-alias-invalid 'set_field "$r/state/tasks/$name-task.md" verifier_model_alias unknown-model' \
+  && ok "invalid verifier model uses the atomic pre-worker rejection" || no "invalid verifier model stranded state"
+preworker_case same-model model-separation-invalid 'set_field "$r/state/tasks/$name-task.md" verifier_model_alias sonnet-routine' \
+  && ok "non-independent model aliases use the atomic pre-worker rejection" || no "same models stranded state"
+
+T="$(setup preworker-transient active)"; write_task "$T" transient-task ready 0
+cp "$SRC/scripts/work.sh" "$SRC/scripts/resolve-model-alias.py" "$T/scripts/"; chmod +x "$T/scripts/work.sh"
+cat > "$T/scripts/validate-gate.py" <<'PY'
+#!/usr/bin/env python3
+raise SystemExit(74)
+PY
+chmod +x "$T/scripts/validate-gate.py"
+transient_rc=0
+RECURSION_ROOT="$T" RECURSION_NO_NOTIFY=1 RECURSION_GIT_FETCH=0 \
+  bash "$T/scripts/work.sh" transient-task >/dev/null 2>&1 || transient_rc=$?
+if [ "$transient_rc" = 74 ] && [ "$(task_status "$T" transient-task)" = ready ] \
+   && [ "$(goal_status "$T")" = active ] && ! grep -q 'task-contract-invalid' "$T/state/events.jsonl"; then
+  ok "transient validator I/O fails closed without falsely terminalizing metadata"
+else
+  no "transient controller failure was mislabeled as invalid task metadata"
 fi
 
 echo

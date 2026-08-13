@@ -124,6 +124,38 @@ IMPLEMENTER_RUN_ID=""; VERIFIER_RUN_ID=""; RESOLVED_MODEL="$MODEL"; RESOLVED_VER
 LAST_USAGE_FILE=""; SEED_DIGEST_BEFORE=""
 SEED_EVIDENCE_FILE="$ROOT/state/runs/$ID-seed-$STAMP-$$.json"
 
+CONTRACT_DIGEST="$(python3 - "$TASK" <<'PY'
+import hashlib,json,sys
+text=open(sys.argv[1],encoding='utf-8',errors='surrogateescape').read()
+header,sep,body=text.partition('\n\n')
+keys={'id','project_id','pilot_id','goal_id','goal','engine','repo','acceptance','workdir',
+      'allowed_paths','non_goals','worker_class','model_alias','verifier_model_alias',
+      'deadline_seconds','verifier_deadline_seconds','network_policy','evidence_contract',
+      'verification','expected_change','gate_files','autonomy','seed'}
+fields={}
+for line in header.splitlines():
+    if ':' in line and not line[:1].isspace():
+        key,value=line.split(':',1)
+        if key.strip() in keys: fields[key.strip()]=value.strip()
+raw=json.dumps({'fields':fields,'body':body if sep else ''},sort_keys=True,
+               separators=(',',':'),ensure_ascii=False).encode()
+print(hashlib.sha256(raw).hexdigest())
+PY
+)" || { log "task contract digest could not be measured"; exit 74; }
+
+reject_preworker_contract(){ # stable controller-owned category
+  local category="$1" fallback="${2:-2}" rc
+  [ -n "${PILOT_ID:-}" ] || return "$fallback"
+  [ -x "$ROOT/scripts/project-reconcile.py" ] || { log "pilot contract rejector is absent"; return 95; }
+  pause_checkpoint "pre-worker contract rejection" || return $?
+  if RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" \
+      reject-task-contract "$ID" "$category" "$CONTRACT_DIGEST" >>"$LOG" 2>&1; then
+    log "pilot task contract rejected before worker launch category=$category; task and goal are blocked"
+    return 78
+  fi
+  rc=$?; log "pilot task contract rejection failed closed category=$category rc=$rc"; return "$rc"
+}
+
 # Pilot windows are an execution capability, not a caller convention. Every path into work.sh
 # (queue actuator, legacy drain, manual continuation, assist resume) reaches this same check.
 window_checkpoint(){
@@ -355,6 +387,9 @@ complete_terminal_escalation(){ # status reason [key] [acceptance-rc]
 
 # --- acceptance is the contract: no test -> no autonomy (delegation-design.md) ----------
 if [ -z "$ACCEPTANCE" ]; then
+  if [ -n "${PILOT_ID:-}" ]; then
+    reject_preworker_contract acceptance-missing; exit $?
+  fi
   board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" blocked "no acceptance test"
   complete_terminal_escalation escalated \
     "no machine-checkable acceptance test (autonomy requires one)" || exit $?
@@ -367,24 +402,19 @@ GATE_CONTRACT=""
 if [ -x "$ROOT/scripts/validate-gate.py" ]; then
   GATE_STRICT_ARGS=()
   [ -z "$PILOT_ID" ] || GATE_STRICT_ARGS+=(--strict-direct)
-  if ! GATE_CONTRACT="$(python3 "$ROOT/scripts/validate-gate.py" --acceptance "$ACCEPTANCE" \
+  GATE_ERR="$(mktemp "${TMPDIR:-/tmp}/validate-gate.XXXXXX")" || exit 74
+  if GATE_CONTRACT="$(python3 "$ROOT/scripts/validate-gate.py" --acceptance "$ACCEPTANCE" \
       --allowed-paths "${ALLOWED_PATHS:-$WORKDIR}" --gate-files "$GATE_FILES" --repo "$REPO_DIR" \
       --controller-root "$ROOT" --controller-gate-files "$CONTROLLER_GATE_FILES" \
-      "${GATE_STRICT_ARGS[@]}" 2>>"$LOG")"; then
-    if [ -n "${PILOT_ID:-}" ] && [ -x "$ROOT/scripts/project-reconcile.py" ]; then
-      # This is a controller contract rejection before taskctl start: attempts must remain zero.
-      # Task and parent goal close under one receipt so PAUSE/window revocation cannot strand an
-      # active goal, and nonzero makes the enclosing work action durably fail rather than succeed.
-      if RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" \
-          reject-task-contract "$ID" >>"$LOG" 2>&1; then
-        log "pilot task contract rejected before worker launch; task and goal are blocked"
-        exit 78
-      else
-        rc=$?
-        log "pilot task contract rejection failed closed (rc=$rc)"
-        exit "$rc"
-      fi
+      "${GATE_STRICT_ARGS[@]}" 2>"$GATE_ERR")"; then
+    gate_rc=0
+  else gate_rc=$?; fi
+  cat "$GATE_ERR" >>"$LOG"; rm -f "$GATE_ERR"
+  if [ "$gate_rc" -ne 0 ]; then
+    if [ "$gate_rc" -eq 2 ] && [ -n "${PILOT_ID:-}" ]; then
+      reject_preworker_contract acceptance-invalid; exit $?
     fi
+    [ "$gate_rc" -eq 2 ] || { log "gate validator controller failure rc=$gate_rc"; exit "$gate_rc"; }
     board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "invalid acceptance gate"
     complete_terminal_escalation escalated \
       "invalid or structurally vacuous acceptance gate; no worker was launched" || exit $?
@@ -538,24 +568,36 @@ verify_seed_integrity(){
 # honour that: it refused to narrow scope to manufacture a green, and no-op'd honestly.
 if [ "$STRICT_PHASE5" = 1 ]; then
   case "$DEADLINE_SECONDS:$VERIFIER_DEADLINE_SECONDS" in
-    *[!0-9:]*|:*|*:) log "invalid Phase 5 worker deadline"; exit 2 ;;
+    *[!0-9:]*|:*|*:) reject_preworker_contract deadline-invalid 2; exit $? ;;
   esac
   [ "$DEADLINE_SECONDS" -ge 1 ] && [ "$DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
-    || { log "worker deadline is outside the human-owned budget"; exit 2; }
+    || { reject_preworker_contract deadline-invalid 2; exit $?; }
   [ "$VERIFIER_DEADLINE_SECONDS" -ge 1 ] && [ "$VERIFIER_DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
-    || { log "verifier deadline is outside the human-owned budget"; exit 2; }
-  case "$NETWORK_POLICY" in provider-only|none) ;; *) log "invalid network policy: $NETWORK_POLICY"; exit 2 ;; esac
+    || { reject_preworker_contract deadline-invalid 2; exit $?; }
+  case "$NETWORK_POLICY" in provider-only|none) ;; *) reject_preworker_contract network-policy-invalid 2; exit $? ;; esac
   [ "$VERIFICATION_POLICY" = independent ] \
-    || { log "Phase 5 generated work requires independent verification"; exit 2; }
+    || { reject_preworker_contract verification-policy-invalid 2; exit $?; }
   [ "$ENGINE" != hermes ] \
-    || { log "Phase 5 metered workers are refused until usage is controller-attested"; exit 93; }
+    || { reject_preworker_contract worker-engine-invalid 93; exit $?; }
+  [ -n "$MODEL_ALIAS" ] || { reject_preworker_contract model-alias-invalid 2; exit $?; }
+  [ -n "$VERIFIER_MODEL_ALIAS" ] || { reject_preworker_contract verifier-model-alias-invalid 2; exit $?; }
   [ -n "$MODEL_ALIAS" ] && [ -n "$VERIFIER_MODEL_ALIAS" ] && [ "$MODEL_ALIAS" != "$VERIFIER_MODEL_ALIAS" ] \
-    || { log "implementer and verifier need distinct human-owned model aliases"; exit 2; }
+    || { reject_preworker_contract model-separation-invalid 2; exit $?; }
   [ -x "$ROOT/scripts/resolve-model-alias.py" ] || { log "model alias resolver is missing"; exit 95; }
-  RESOLVED_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$MODEL_ALIAS" implementer 2>>"$LOG")" \
-    || { log "implementer model alias is not human-configured"; exit 95; }
-  RESOLVED_VERIFIER_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$VERIFIER_MODEL_ALIAS" verifier 2>>"$LOG")" \
-    || { log "verifier model alias is not human-configured"; exit 95; }
+  if RESOLVED_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$MODEL_ALIAS" implementer 2>>"$LOG")"; then
+    alias_rc=0
+  else alias_rc=$?; fi
+  if [ "$alias_rc" -ne 0 ]; then
+    case "$alias_rc" in 2|3) reject_preworker_contract model-alias-invalid 95; exit $? ;;
+      *) log "implementer model resolver controller failure rc=$alias_rc"; exit 95 ;; esac
+  fi
+  if RESOLVED_VERIFIER_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$VERIFIER_MODEL_ALIAS" verifier 2>>"$LOG")"; then
+    alias_rc=0
+  else alias_rc=$?; fi
+  if [ "$alias_rc" -ne 0 ]; then
+    case "$alias_rc" in 2|3) reject_preworker_contract verifier-model-alias-invalid 95; exit $? ;;
+      *) log "verifier model resolver controller failure rc=$alias_rc"; exit 95 ;; esac
+  fi
 fi
 
 # A human answer to THIS task's blocker, if one was given. Without this the seam is one-way:

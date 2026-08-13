@@ -23,7 +23,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from jsonl_durable import JsonlDurabilityError, append_jsonl
 
@@ -360,6 +360,36 @@ def _indexed_prepared(base: Path, event_id: str) -> dict | None:
     return prepared
 
 
+def authenticated_transition(base: Path, event_id: str,
+                             *, journal: str | None = None) -> dict:
+    """Read one fully projected indexed receipt and verify every durable witness."""
+    prepared = _indexed_prepared(base, event_id)
+    if prepared is None:
+        raise TransitionReceiptError(f"transition event index is absent: {event_id}")
+    if journal is not None and prepared.get("journal") != journal:
+        raise TransitionReceiptError(f"transition receipt journal disagrees: {event_id}")
+    directory = _receipt_directory(base, str(prepared["id"]))
+    marker = _read_json(directory / "projected.json")
+    if set(marker) != {"schema_version", "status", "at", "event_id"} \
+            or marker.get("schema_version") != 1 or marker.get("status") != "projected" \
+            or marker.get("event_id") != event_id:
+        raise TransitionReceiptError(f"transition projected marker is invalid: {event_id}")
+    states = [_witness_state(base, mutation) for mutation in prepared.get("mutations", [])]
+    if not states or any(state != "expected" for state in states):
+        raise TransitionReceiptError(
+            f"transition canonical witnesses disagree: {event_id} states={states}"
+        )
+    source = base / str(prepared.get("journal") or "state/events.jsonl")
+    try:
+        from jsonl_durable import read_jsonl_objects
+        matches = [row for row in read_jsonl_objects(source) if row.get("id") == event_id]
+    except (JsonlDurabilityError, OSError) as exc:
+        raise TransitionReceiptError(f"transition journal is unreadable: {event_id}") from exc
+    if matches != [prepared["event"]]:
+        raise TransitionReceiptError(f"transition journal evidence disagrees: {event_id}")
+    return prepared
+
+
 def _archive_receipt(base: Path, prepared: dict) -> None:
     transition_id = str(prepared["id"])
     _index_event(base, prepared)
@@ -693,7 +723,8 @@ def commit_event(base: Path, event: dict, *, journal: str = "state/events.jsonl"
 def commit_transition(base: Path, mutations: list[Mutation], event: dict,
                       *, authoritative_index: int = -1,
                       journal: str = "state/events.jsonl",
-                      taskctl_locked: bool = False) -> str:
+                      taskctl_locked: bool = False,
+                      precondition: Callable[[], None] | None = None) -> str:
     """Commit state then its frozen event, with the authoritative witness written last.
 
     An interrupted partial multi-file transaction is safely retryable only by calling this
@@ -703,7 +734,7 @@ def commit_transition(base: Path, mutations: list[Mutation], event: dict,
     with _taskctl_guard(base, taskctl_locked):
         return _commit_transition_locked(base, mutations, event,
                                          authoritative_index=authoritative_index,
-                                         journal=journal)
+                                         journal=journal, precondition=precondition)
 
 
 def _retry_prepared_transition(base: Path, prior: dict, event: dict,
@@ -762,7 +793,8 @@ def _retry_prepared_transition(base: Path, prior: dict, event: dict,
 
 def _commit_transition_locked(base: Path, mutations: list[Mutation], event: dict,
                               *, authoritative_index: int,
-                              journal: str) -> str:
+                              journal: str,
+                              precondition: Callable[[], None] | None = None) -> str:
     if not mutations:
         raise TransitionReceiptError("transition requires at least one canonical mutation")
     if authoritative_index < 0:
@@ -788,6 +820,11 @@ def _commit_transition_locked(base: Path, mutations: list[Mutation], event: dict
             return _retry_prepared_transition(
                 base, prior, event, mutations, authoritative_index, requested_id
             )
+
+    # Linearize new authority under taskctl.lock. Exact receipt retries above remain lawful
+    # after revocation because completing their frozen multi-file mutation is recovery.
+    if precondition is not None:
+        precondition()
 
     # Before advancing any canonical sequence, repair every fully committed receipt and
     # reject any mixed-witness transaction.  Exact-ID retry above remains the sole path that

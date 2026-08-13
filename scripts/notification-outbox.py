@@ -28,6 +28,7 @@ if str(_SCRIPT_DIR) not in sys.path:
 from jsonl_durable import JsonlDurabilityError, append_jsonl as durable_append_jsonl, read_jsonl_objects
 from transition_receipt import (
     TransitionReceiptError,
+    authenticated_transition,
     commit_transition,
     json_mutation,
     recover_transitions,
@@ -46,6 +47,11 @@ PROJECT_EVENTS = {
     "goal-achieved", "goal-stopped", "project-digest",
 }
 TERMINAL_EVENT_TYPES = {"goal-achieved", "goal-stopped"}
+CONTRACT_REJECTION_CATEGORIES = {
+    "acceptance-missing", "acceptance-invalid", "deadline-invalid", "network-policy-invalid",
+    "verification-policy-invalid", "worker-engine-invalid", "model-alias-invalid",
+    "verifier-model-alias-invalid", "model-separation-invalid",
+}
 
 
 class OutboxError(RuntimeError):
@@ -239,6 +245,88 @@ def raw_events(base: Path) -> list[dict]:
     return result
 
 
+def authenticated_contract_rejection(base: Path, raw: dict,
+                                     *, require_failed_action: bool) -> dict:
+    """Authenticate receipt, canonical witnesses, and (for reporting) conductor failure."""
+    event_id = str(raw.get("id") or "")
+    try:
+        prepared = authenticated_transition(base, event_id, journal="state/events.jsonl")
+    except (OSError, TransitionReceiptError) as exc:
+        raise OutboxError(f"task-contract rejection receipt is invalid: {exc}") from exc
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    detail = detail_object(event.get("detail"))
+    project, goal_id, task_id = (str(event.get(key) or "") for key in ("project", "goal", "task"))
+    category, digest = str(detail.get("category") or ""), str(detail.get("contract_digest") or "")
+    if event.get("event") != "task-contract-invalid" or event_id != raw.get("id") \
+            or category not in CONTRACT_REJECTION_CATEGORIES \
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None \
+            or detail != {"attempts": 0, "reason": "task-contract-invalid", "category": category,
+                          "contract_digest": digest, "stage": "controller-pre-worker"}:
+        raise OutboxError("task-contract rejection event contract is invalid")
+    task_path = base / "state/tasks" / f"{task_id}.md"
+    goal_path = base / "state/goals" / f"{goal_id}.md"
+    task, goal = read_fields(task_path), read_fields(goal_path)
+    transition_id = str(prepared.get("id") or "")
+    paths = {str(item.get("path") or "") for item in prepared.get("mutations", [])}
+    if paths != {task_path.relative_to(base).as_posix(), goal_path.relative_to(base).as_posix()} \
+            or prepared.get("authoritative_path") != goal_path.relative_to(base).as_posix() \
+            or task.get("project_id") != project or task.get("goal_id") != goal_id \
+            or task.get("pilot_id") == "" or task.get("status") != "blocked" \
+            or task.get("attempts") != "0" \
+            or task.get("transition_reason") != "task-contract-invalid" \
+            or task.get("contract_rejection_category") != category \
+            or task.get("contract_digest") != digest \
+            or task.get("contract_rejection_event_id") != event_id \
+            or task.get("last_transition_id") != transition_id \
+            or goal.get("project_id") != project or goal.get("status") != "blocked" \
+            or goal.get("last_transition_reason") != "task-contract-invalid" \
+            or goal.get("last_transition_task") != task_id \
+            or goal.get("last_transition_category") != category \
+            or goal.get("contract_digest") != digest \
+            or goal.get("last_transition_id") != transition_id:
+        raise OutboxError("task-contract rejection canonical witnesses disagree")
+    result = {"event": event, "prepared": prepared, "task": task, "goal": goal}
+    if not require_failed_action:
+        return result
+    candidates = []
+    for path in sorted((base / "state/actions").glob("*.json")):
+        try:
+            action = read_json(path)
+        except Exception:
+            continue
+        if action.get("verb") == "work" and action.get("arguments") == [task_id] \
+                and action.get("goal_id") == goal_id:
+            candidates.append((path, action))
+    if len(candidates) != 1:
+        raise OutboxError("task-contract rejection lacks exactly one conductor work action")
+    action_path, action = candidates[0]
+    action_transition_id = str(action.get("last_transition_id") or "")
+    try:
+        action_prepared = authenticated_transition(
+            base, action_transition_id, journal="state/action-events.jsonl")
+    except (OSError, TransitionReceiptError) as exc:
+        raise OutboxError(f"failed work action receipt is invalid: {exc}") from exc
+    action_event = action_prepared.get("event") if isinstance(action_prepared.get("event"), dict) else {}
+    evidence = str(action.get("result_evidence") or "")
+    pilot_id = task.get("pilot_id")
+    if action_path.name != f"{action.get('id')}.json" \
+            or action.get("schema_version") != 1 or action.get("status") != "failed" \
+            or action.get("attempts") != 1 or action.get("instruction_id") is not None \
+            or action.get("project") != project or action.get("actor") != pilot_id \
+            or action.get("routed_decider") != pilot_id \
+            or action.get("decision_source") != "project-reconciler" \
+            or re.fullmatch(r"[0-9a-f]{64}", str(action.get("action_payload_sha256") or "")) is None \
+            or re.search(r"(?:^|\s)rc=78(?:\s|$)", evidence) is None \
+            or action_event.get("action_id") != action.get("id") \
+            or action_event.get("status") != "failed" \
+            or action_event.get("attempt") != 1 or action_event.get("evidence") != evidence \
+            or {str(item.get("path") or "") for item in action_prepared.get("mutations", [])} \
+               != {action_path.relative_to(base).as_posix()}:
+        raise OutboxError("failed work action is not an authenticated rc=78 conductor result")
+    result.update({"action": action, "action_receipt": action_prepared})
+    return result
+
+
 def detail_object(value: object) -> dict:
     return value if isinstance(value, dict) else {}
 
@@ -327,6 +415,11 @@ def mapped_events(raw: dict) -> list[dict]:
 def all_mapped(base: Path, project: str | None = None) -> list[dict]:
     result: list[dict] = []
     for raw in raw_events(base):
+        if raw.get("event") == "task-contract-invalid":
+            try:
+                authenticated_contract_rejection(base, raw, require_failed_action=False)
+            except OutboxError:
+                continue
         for event in mapped_events(raw):
             if not project or event["project_id"] == project:
                 result.append(event)
@@ -704,6 +797,10 @@ def build_chain(base: Path, project: str, goal_id: str) -> dict:
         if raw.get("event") in {"review-published", "review-branch-published"}:
             review.append(raw)
         if raw.get("event") == "task-contract-invalid":
+            try:
+                authenticated_contract_rejection(base, raw, require_failed_action=True)
+            except OutboxError:
+                continue
             controller_rejections.append(raw)
     pilot_path = base / "state/reports" / f"{goal_id}-pilot.json"
     head_path = base / "state/reports" / f"{goal_id}-head.json"
@@ -728,11 +825,6 @@ def build_chain(base: Path, project: str, goal_id: str) -> dict:
         rejection_task = next((row for row in tasks if row.get("id") == rejection_task_id), {})
         transition_id = str(rejection.get("transition_id") or "")
         detail = detail_object(rejection.get("detail"))
-        failed_work = [
-            row for row in actions
-            if row.get("verb") == "work" and row.get("status") == "failed"
-            and rejection_task_id in [str(item) for item in (row.get("arguments") or [])]
-        ]
         rejection_complete = bool(
             re.fullmatch(r"transition-[0-9a-f]{32}", transition_id)
             and goal.get("status") == "blocked"
@@ -744,9 +836,8 @@ def build_chain(base: Path, project: str, goal_id: str) -> dict:
             and rejection_task.get("contract_rejection_event_id") == rejection.get("id")
             and rejection_task.get("last_transition_id") == transition_id
             and int(rejection_task.get("attempts") or 0) == 0
-            and detail == {"attempts": 0, "reason": "invalid-acceptance-gate",
-                           "stage": "controller-pre-worker"}
-            and len(failed_work) == 1
+            and detail.get("attempts") == 0 and detail.get("reason") == "task-contract-invalid"
+            and detail.get("stage") == "controller-pre-worker"
             and not runs and not commits and not gates and not verifiers and not review
         )
     return {
@@ -839,13 +930,21 @@ def reconcile_event(base: Path, project: str, event_id: str) -> None:
     if value["event_type"] in TERMINAL_EVENT_TYPES and not value.get("routing_error"):
         create_terminal_reports(base, value)
     if value["event_type"] == "goal-stopped" and not value.get("routing_error"):
+        attention_id = stable_id("event", value["id"], "lucas-attention-required")
+        attention_path = base / "state/notification-events" / f"{attention_id}.json"
+        if attention_path.is_file():
+            # Upgrade compatibility: a pre-hardening projection froze reconciliation time.
+            # Preserve that already-durable value while exact identity/content checks run.
+            attention_occurred_at = read_json(attention_path).get("occurred_at")
+        else:
+            attention_occurred_at = value.get("occurred_at") or value.get("created_at") or now_iso()
         attention = {
-            "id": stable_id("event", value["id"], "lucas-attention-required"),
+            "id": attention_id,
             "source_event_id": value["id"], "event_type": "lucas-attention-required",
             "project_id": project, "goal_id": value.get("goal_id") or "", "task_id": "",
             # This projection is replayable.  A fresh wall-clock value made an exact retry
             # disagree with the already-recorded attention event even though its id was stable.
-            "occurred_at": value.get("occurred_at") or value.get("created_at") or now_iso(),
+            "occurred_at": attention_occurred_at,
         }
         create_event(base, attention)
 
