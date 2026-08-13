@@ -297,6 +297,27 @@ def close_paused_windows(base: Path) -> int:
     return closed
 
 
+def verify_phase8_goal_contract(base: Path, project: str, goal_id: str) -> dict:
+    helper = base / "scripts/project-pilot.py"
+    if not helper.is_file():
+        raise ReconcileError("Phase 8 contract verifier is absent")
+    proc = subprocess.run(
+        [sys.executable, str(helper), "verify-approved-goal", project, goal_id],
+        env={**os.environ, "RECURSION_ROOT": str(base)}, text=True,
+        capture_output=True, check=False,
+    )
+    if proc.returncode:
+        detail = (proc.stderr or proc.stdout or "contract verification failed").strip()[:500]
+        raise ReconcileError(f"Phase 8 approved contract is invalid: {detail}")
+    try:
+        value = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise ReconcileError("Phase 8 contract verifier returned malformed evidence") from exc
+    if value.get("project_id") != project or value.get("goal_id") != goal_id:
+        raise ReconcileError("Phase 8 contract verifier returned mismatched authority")
+    return value
+
+
 def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = None) -> dict | None:
     if pilot is None:
         _, pilot = project_records(base, project)
@@ -304,6 +325,7 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
         return {"id": "legacy-unwindowed", "project_id": project, "goal_id": goal_id,
                 "status": "open", "max_inflight_workers": int(pilot.get("concurrency_limit") or 0)}
     now = int(time.time()); matches: list[tuple[Path, dict]] = []
+    verified = False
     for path in sorted((base / "state/pilot-windows").glob("*.json")):
         value = read_json(path)
         if value.get("project_id") != project or value.get("goal_id") != goal_id \
@@ -320,6 +342,19 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
         if value.get("status") == "armed":
             if (base / "state/PAUSE").is_file():
                 continue
+            if not verified:
+                try:
+                    verify_phase8_goal_contract(base, project, goal_id)
+                except ReconcileError as exc:
+                    event_id = "source-window-contract-refused-" + hashlib.sha256(
+                        f"{value.get('id')}:{value.get('plan_digest')}".encode()).hexdigest()[:24]
+                    append_event(base, "pilot-window-refused", project, goal_id,
+                                 detail={"window_id": value.get("id"),
+                                         "reason": "approved-contract-invalid",
+                                         "error_sha256": hashlib.sha256(str(exc).encode()).hexdigest()},
+                                 event_id=event_id)
+                    raise
+                verified = True
             event_id = "source-window-open-" + hashlib.sha256(
                 f"{value.get('id')}:{value.get('instruction_id')}".encode()).hexdigest()[:24]
             value.update({"status": "open", "opened_at": now_iso()})
@@ -328,6 +363,9 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
                                              "instruction_id": value.get("instruction_id")},
                                      event_id=event_id)
             commit_reconcile_transition(base, [json_mutation(path, value)], event)
+        elif not verified:
+            verify_phase8_goal_contract(base, project, goal_id)
+            verified = True
         matches.append((path, value))
     if len(matches) > 1:
         raise ReconcileError("multiple open pilot windows target one goal")
@@ -1437,12 +1475,31 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
     wall_deadline = safe_int(goal.get("started_at_epoch"), started) + int(budget["max_wall_clock_seconds"])
     heavy_held = False
     try:
-        network_policy = sink.get("network_policy", "none")
-        if network_policy not in {"provider-only", "none"}:
-            raise ReconcileError("goal gate inherited an invalid network policy")
+        # Model calls may use provider-only capability. Acceptance never inherits it: product
+        # and terminal gates are deterministic offline controller executions.
+        network_policy = "none"
         gate_class = goal.get("gate_class", "light")
         if gate_class not in {"light", "heavy"}:
             raise ReconcileError("goal gate has an invalid gate class")
+        try:
+            approved_gate = json.loads(goal.get("gate_contract", ""))
+        except json.JSONDecodeError as exc:
+            raise ReconcileError("goal gate lacks its approved contract") from exc
+        validator = subprocess.run(
+            [sys.executable, str(base / "scripts/validate-gate.py"),
+             "--acceptance", goal["acceptance_suite"],
+             "--allowed-paths", ",".join(config.get("allowed_paths") or []),
+             "--gate-files", goal.get("gate_files", ""), "--repo", str(worktree),
+             "--controller-root", str(base),
+             "--controller-gate-files", goal.get("controller_gate_files", ""),
+             "--strict-direct"],
+            text=True, capture_output=True, check=False,
+        )
+        try:
+            observed_gate = json.loads(validator.stdout) if validator.returncode == 0 else None
+        except json.JSONDecodeError:
+            observed_gate = None
+        gate_contract_valid = observed_gate == approved_gate
         seed_evidence = None
         try:
             if seed_contract and seed_live:
@@ -1466,7 +1523,9 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
             } if seed_contract else None
             outcome, rc = "fail", 99
         else:
-            if gate_class == "heavy":
+            if not gate_contract_valid:
+                outcome, rc = "fail", 98
+            elif gate_class == "heavy":
                 outcome, rc, heavy_held = acquire_goal_heavy(base, f"goal-{goal_id}", wall_deadline)
             else:
                 outcome, rc = "pass", 0
@@ -1793,8 +1852,12 @@ def schedule(base: Path, project: str | None, goal_id: str | None) -> int:
             continue
         if safe_int(pilot.get("concurrency_limit")) <= 0:
             continue
-        if pilot.get("window_required") and not open_window(base, pid, gid, pilot):
-            continue
+        if pilot.get("window_required"):
+            try:
+                if not open_window(base, pid, gid, pilot):
+                    continue
+            except ReconcileError:
+                continue
         fingerprint = snapshot_digest(base, config, gid)
         enqueue_decision(base, str(pilot["id"]), "reconcile-goal", [pid, gid], gid,
                          "event-driven canonical truth reconciliation", [pid, gid, fingerprint])

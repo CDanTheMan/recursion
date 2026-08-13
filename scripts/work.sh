@@ -81,6 +81,10 @@ NETWORK_POLICY="$(field network_policy)"; EVIDENCE_CONTRACT="$(field evidence_co
 VERIFICATION_POLICY="$(field verification)"; EXPECTED_CHANGE="$(field expected_change)"
 GATE_FILES="$(field gate_files)"
 GATE_FILES="${GATE_FILES//,/ }"
+CONTROLLER_GATE_FILES="$(field controller_gate_files)"
+CONTROLLER_GATE_FILES="${CONTROLLER_GATE_FILES//,/ }"
+APPROVED_GATE_CONTRACT="$(field gate_contract)"
+SOURCE_HEAD="$(field source_head)"; SOURCE_BRANCH="$(field source_branch)"
 WORKDIR="${WORKDIR:-.}"; AUTONOMY="${AUTONOMY:-auto}"; ENGINE="${ENGINE:-claude}"
 ALLOWED_PATHS="$(field allowed_paths)"; ALLOWED_PATHS="${ALLOWED_PATHS:-$WORKDIR}"
 STRICT_PHASE5=0
@@ -361,8 +365,12 @@ fi
 # records any declared gate files whose hashes become part of the exact-commit evidence.
 GATE_CONTRACT=""
 if [ -x "$ROOT/scripts/validate-gate.py" ]; then
+  GATE_STRICT_ARGS=()
+  [ -z "$PILOT_ID" ] || GATE_STRICT_ARGS+=(--strict-direct)
   if ! GATE_CONTRACT="$(python3 "$ROOT/scripts/validate-gate.py" --acceptance "$ACCEPTANCE" \
-      --allowed-paths "${ALLOWED_PATHS:-$WORKDIR}" --gate-files "$GATE_FILES" --repo "$REPO_DIR" 2>>"$LOG")"; then
+      --allowed-paths "${ALLOWED_PATHS:-$WORKDIR}" --gate-files "$GATE_FILES" --repo "$REPO_DIR" \
+      --controller-root "$ROOT" --controller-gate-files "$CONTROLLER_GATE_FILES" \
+      "${GATE_STRICT_ARGS[@]}" 2>>"$LOG")"; then
     if [ -n "${PILOT_ID:-}" ] && [ -x "$ROOT/scripts/project-reconcile.py" ]; then
       # This is a controller contract rejection before taskctl start: attempts must remain zero.
       # Task and parent goal close under one receipt so PAUSE/window revocation cannot strand an
@@ -381,6 +389,32 @@ if [ -x "$ROOT/scripts/validate-gate.py" ]; then
     complete_terminal_escalation escalated \
       "invalid or structurally vacuous acceptance gate; no worker was launched" || exit $?
     exit 0
+  fi
+  if [ -n "$PILOT_ID" ]; then
+    [ -n "$APPROVED_GATE_CONTRACT" ] && [ -n "$SOURCE_HEAD" ] && [ -n "$SOURCE_BRANCH" ] \
+      || { log "Phase 8 task lacks approved gate/source identity"; exit 78; }
+    python3 - "$APPROVED_GATE_CONTRACT" "$GATE_CONTRACT" <<'PY' || {
+import json,sys
+try:
+    approved=json.loads(sys.argv[1]); observed=json.loads(sys.argv[2])
+except json.JSONDecodeError:
+    raise SystemExit(1)
+raise SystemExit(0 if approved == observed else 1)
+PY
+      log "Phase 8 approved gate contract differs from execution bytes"
+      RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" \
+        reject-task-contract "$ID" >>"$LOG" 2>&1 || exit $?
+      exit 78
+    }
+    observed_head="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || true)"
+    observed_branch="$(git -C "$REPO_DIR" branch --show-current 2>/dev/null || true)"
+    [ "$observed_head" = "$SOURCE_HEAD" ] && [ "$observed_branch" = "$SOURCE_BRANCH" ] \
+      || {
+        log "Phase 8 approved source HEAD differs before worker admission"
+        RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" \
+          reject-task-contract "$ID" >>"$LOG" 2>&1 || exit $?
+        exit 78
+      }
   fi
 elif [ "$STRICT_PHASE5" = 1 ]; then
   log "Phase 5 gate validator is missing"; exit 95

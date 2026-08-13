@@ -96,7 +96,10 @@ class Fixture:
         self.gate_path = self.repo / "user-client/render/tools/native-diff.cjs"
         implementation = self.repo / "user-client/render/shade-tops.js"
         self.gate_path.parent.mkdir(parents=True, exist_ok=True)
-        self.gate_path.write_text("process.exit(0);\n", encoding="utf-8")
+        self.gate_path.write_text(
+            "const fs=require('fs'); const s=fs.readFileSync('user-client/render/shade-tops.js','utf8'); "
+            "process.exit(s.includes('shadeTops') ? 0 : 1);\n", encoding="utf-8",
+        )
         implementation.write_text("export const shadeTops = false;\n", encoding="utf-8")
         subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
         subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Phase 8 Test"], check=True)
@@ -128,6 +131,7 @@ class Fixture:
         pilot = {
             "schema_version": 1, "id": "pilot-chiron", "project_id": "chiron", "topic": 10,
             "charter": config["charter"], "model_policy": "project-pilot",
+            "required_non_goals": config["required_non_goals"],
             "concurrency_limit": 1, "budget": {"max_inflight_workers": 1},
             "notification_targets": config["notification_targets"], "goal_source": "state/goals",
             "memory_key": "telegram-topic:10", "worktree_root": ".worktrees/chiron",
@@ -185,6 +189,9 @@ class Fixture:
                 "id": "goal-chiron-phase8-smoke",
                 "outcome": "Add one reversible build-verifiable Chiron smoke marker.",
                 "acceptance_suite": "node user-client/render/tools/native-diff.cjs --metric",
+                "gate_class": "heavy",
+                "gate_files": ["user-client/render/tools/native-diff.cjs"],
+                "controller_gate_files": [],
                 "falsifier": "The exact candidate commit does not pass the clean Chiron build.",
                 "budget": {
                     "max_concurrency": 1, "max_tokens": 12000, "max_cost_usd": 5,
@@ -203,6 +210,7 @@ class Fixture:
                 "evidence_contract": "worker-result-v1", "verification": "independent",
                 "expected_change": "required", "gate_class": "heavy",
                 "gate_files": ["user-client/render/tools/native-diff.cjs"],
+                "controller_gate_files": [],
                 "acceptance": "node user-client/render/tools/native-diff.cjs --metric",
             }],
         }
@@ -280,7 +288,10 @@ def test_invalid_plan(f: Fixture) -> bool:
     return all((
         refused("gate", lambda p: p["tasks"][0].__setitem__("acceptance", "true")),
         refused("gate-class", lambda p: p["tasks"][0].pop("gate_class")),
+        refused("goal-gate-files", lambda p: p["goal"].pop("gate_files")),
         refused("cloud-offline", lambda p: p["tasks"][0].__setitem__("network_policy", "none")),
+        refused("indirect-gate", lambda p: p["tasks"][0].__setitem__(
+            "acceptance", "env node user-client/render/tools/native-diff.cjs --metric")),
         refused("wrong-gate-file", lambda p: p["tasks"][0].__setitem__(
             "gate_files", ["user-client/render/shade-tops.js"])),
         refused("absent-gate-file", lambda p: p["tasks"][0].__setitem__(
@@ -310,6 +321,14 @@ def test_approval(f: Fixture) -> bool:
     if first.returncode or second.returncode or not goal_path.is_file() or not task_path.is_file():
         return False
     proposal = json.loads((f.root / f"state/plans/chiron/{f.plan_id}.json").read_text(encoding="utf-8"))
+    f._write_instruction("110", "pilot-chiron", "add an extra task")
+    extra = f.decision(
+        verb="pilot-task-create",
+        args=["chiron", "goal-chiron-phase8-smoke", "unapproved-extra", "user-client/render"],
+        iid="110", actor="pilot-chiron", goal="goal-chiron-phase8-smoke",
+        text="Try to mutate the approved DAG.",
+    )
+    frozen = f.run("python3", "scripts/project-pilot.py", "execute", str(extra))
     return (
         fields(goal_path).get("status") == "active"
         and fields(goal_path).get("instruction_id") == "101"
@@ -318,11 +337,16 @@ def test_approval(f: Fixture) -> bool:
         and fields(task_path).get("workstream") == "chiron"
         and fields(task_path).get("acceptance") == "node user-client/render/tools/native-diff.cjs --metric"
         and fields(task_path).get("gate_class") == "heavy"
+        and fields(task_path).get("source_head") == proposal["plan"]["authority_contract"]["source_head"]
+        and fields(goal_path).get("gate_contract")
+            == json.dumps(proposal["plan"]["goal"]["gate_contract"], sort_keys=True, separators=(",", ":"))
         and required_non_goals(f) <= set(fields(task_path).get("non_goals", "").split(","))
         and proposal.get("status") == "approved"
         and proposal.get("approval_instruction_id") == "102"
         and len(list((f.root / "state/goals").glob("goal-chiron-phase8-smoke.md"))) == 1
         and len(list((f.root / "state/tasks").glob("chiron-phase8-smoke.md"))) == 1
+        and frozen.returncode != 0
+        and not (f.root / "state/tasks/unapproved-extra.md").exists()
         and f.legacy_unchanged()
     )
 
@@ -379,6 +403,17 @@ def test_window_admission(f: Fixture) -> bool:
     if drift_refused or (f.root / "state/pilot-windows/chiron-window-1.json").exists():
         return False
     if not open_window(f):
+        return False
+    task_path = f.root / "state/tasks/chiron-phase8-smoke.md"
+    original_task = task_path.read_text(encoding="utf-8")
+    task_path.write_text(original_task.replace(
+        "acceptance: node user-client/render/tools/native-diff.cjs --metric",
+        "acceptance: true"), encoding="utf-8")
+    projection_refused = f.run("python3", "scripts/project-reconcile.py", "schedule")
+    armed = json.loads((f.root / "state/pilot-windows/chiron-window-1.json").read_text(encoding="utf-8"))
+    task_path.write_text(original_task, encoding="utf-8")
+    if projection_refused.returncode or projection_refused.stdout.strip() != "0" \
+            or armed.get("status") != "armed":
         return False
     scheduled = f.run("python3", "scripts/project-reconcile.py", "schedule")
     rows = [json.loads(path.read_text(encoding="utf-8")) for path in (f.root / "state/decision-queue/pending").glob("*.json")]

@@ -158,11 +158,14 @@ def validate(kind: str, value: object) -> dict:
         if "gate_contract" in value:
             contract = value["gate_contract"]
             hashes = contract.get("gate_files") if isinstance(contract, dict) else None
+            controller_hashes = contract.get("controller_gate_files", {}) if isinstance(contract, dict) else None
             if not isinstance(contract, dict) \
                     or not re.fullmatch(r"[0-9a-f]{64}", str(contract.get("acceptance_sha256") or "")) \
                     or not isinstance(hashes, dict) or set(hashes) != set(value["gate_files"]) \
+                    or not isinstance(controller_hashes, dict) \
+                    or set(controller_hashes) != set(value.get("controller_gate_files") or []) \
                     or any(not re.fullmatch(r"[0-9a-f]{64}", str(digest))
-                           for digest in hashes.values()):
+                           for digest in [*hashes.values(), *controller_hashes.values()]):
                 fail("gate_contract must contain acceptance and tracked-file hashes")
         for field in ("deadline_seconds", "verifier_deadline_seconds"):
             if not isinstance(value[field], int) or value[field] < 1:

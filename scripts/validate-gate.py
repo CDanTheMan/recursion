@@ -34,6 +34,51 @@ def under(path: str, roots: list[str]) -> bool:
     return "." in roots or any(path == root.rstrip("/") or path.startswith(root.rstrip("/") + "/") for root in roots)
 
 
+def clean_tracked_bytes(repo: Path, item: str) -> bytes:
+    """Return the committed gate bytes and reject index/worktree substitution."""
+    tracked = subprocess.run(
+        ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", item],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    if tracked.returncode:
+        fail(f"gate file is not tracked: {item}")
+    committed = subprocess.run(
+        ["git", "-C", str(repo), "show", f"HEAD:{item}"], capture_output=True, check=False,
+    )
+    if committed.returncode:
+        fail(f"gate file is absent from HEAD: {item}")
+    path = repo / item
+    dirty = subprocess.run(
+        ["git", "-C", str(repo), "diff", "--quiet", "HEAD", "--", item], check=False,
+    )
+    if not path.is_file() or dirty.returncode:
+        fail(f"gate file differs from clean HEAD: {item}")
+    return committed.stdout
+
+
+def entrypoint(words: list[str], strict: bool) -> str | None:
+    """Identify the only executable source file in the admitted direct-command class."""
+    if not words:
+        return None
+    command = words[0].replace("\\", "/")
+    name = PurePosixPath(command).name
+    if name in {"env", "npm", "npx", "yarn", "pnpm", "xargs", "find", "make"}:
+        if strict:
+            fail(f"indirect acceptance launcher is not admitted: {name}")
+        return None
+    if name not in {"bash", "sh", "python", "python3", "node"}:
+        return command if "/" in command else None
+    for word in words[1:]:
+        if word in {"-c", "-e", "--eval", "-m"}:
+            if strict:
+                fail(f"dynamic {name} acceptance programs are not admitted")
+            return None
+        if word.startswith("-"):
+            continue
+        return word.replace("\\", "/")
+    fail(f"{name} acceptance has no explicit grading program")
+
+
 def vacuous_success(words: list[str]) -> bool:
     """Recognize commands whose success is independent of the code under review."""
     if not words:
@@ -65,12 +110,18 @@ def main() -> int:
     parser.add_argument("--allowed-paths", default=".")
     parser.add_argument("--gate-files", default="")
     parser.add_argument("--repo")
+    parser.add_argument("--controller-gate-files", default="")
+    parser.add_argument("--controller-root")
+    parser.add_argument("--strict-direct", action="store_true")
     args = parser.parse_args()
     try:
         gate = args.acceptance.strip()
         if not gate or len(gate) > 4096 or any(ord(ch) < 32 and ch not in "\t" for ch in gate):
             fail("acceptance gate must be bounded, single-line, and non-empty")
         compact = re.sub(r"\s+", " ", gate)
+        if args.strict_direct and (any(token in gate for token in ("`", "$(", "<(", ">("))
+                                   or re.search(r"(?<!\|)\|(?!\|)", gate)):
+            fail("acceptance gate uses unreviewable shell indirection")
         raw_segments = re.split(r"\s*(?:&&|\|\||;)\s*", gate)
         operators = re.findall(r"&&|\|\||;", gate)
         parsed_segments: list[list[str]] = []
@@ -92,29 +143,35 @@ def main() -> int:
             fail("acceptance gate may not grade the worker's own result report")
         allowed = [p.rstrip("/") for p in args.allowed_paths.replace(",", " ").split() if p]
         gate_files = paths(args.gate_files)
+        controller_gate_files = paths(args.controller_gate_files)
         for words in parsed_segments:
-            if len(words) >= 2 and words[0] in {"bash", "sh", "python", "python3", "node"}:
-                candidate = words[1].replace("\\", "/")
-                if under(candidate, allowed) and candidate not in gate_files:
-                    fail(f"worker-modifiable gate program must be declared in gate_files: {candidate}")
+            candidate = entrypoint(words, args.strict_direct)
+            if candidate and Path(candidate).is_absolute():
+                if not args.controller_root:
+                    fail("absolute acceptance program lacks a controller root")
+                try:
+                    relative = Path(candidate).resolve().relative_to(Path(args.controller_root).resolve()).as_posix()
+                except ValueError:
+                    fail(f"acceptance program is outside the controller root: {candidate}")
+                if relative not in controller_gate_files:
+                    fail(f"controller acceptance program must be declared: {relative}")
+            elif candidate and under(candidate, allowed) and candidate not in gate_files:
+                fail(f"worker-modifiable gate program must be declared in gate_files: {candidate}")
         hashes: dict[str, str] = {}
         if args.repo:
             repo = Path(args.repo)
             for item in gate_files:
-                path = repo / item
-                if not path.is_file():
-                    fail(f"gate file is absent: {item}")
-                tracked = subprocess.run(
-                    ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", item],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                )
-                if tracked.returncode:
-                    fail(f"gate file is not tracked: {item}")
-                hashes[item] = hashlib.sha256(path.read_bytes()).hexdigest()
+                hashes[item] = hashlib.sha256(clean_tracked_bytes(repo, item)).hexdigest()
+        controller_hashes: dict[str, str] = {}
+        if controller_gate_files:
+            if not args.controller_root:
+                fail("controller gate files require --controller-root")
+            controller = Path(args.controller_root)
+            for item in controller_gate_files:
+                controller_hashes[item] = hashlib.sha256(clean_tracked_bytes(controller, item)).hexdigest()
         print(json.dumps({"acceptance_sha256": hashlib.sha256(gate.encode()).hexdigest(),
-                          "gate_files": hashes}, sort_keys=True))
+                          "gate_files": hashes,
+                          "controller_gate_files": controller_hashes}, sort_keys=True))
     except (OSError, ValueError) as exc:
         print(f"ERR {exc}", file=sys.stderr)
         return 2

@@ -41,6 +41,7 @@
         "topic": {"type": ["string", "integer"]},
         "charter": {"type": "string", "minLength": 1},
         "model_policy": {"type": "string", "minLength": 1},
+        "required_non_goals": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
         "concurrency_limit": {"type": "integer", "minimum": 0},
         "budget": {"type": "object"},
         "notification_targets": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
@@ -107,10 +108,12 @@
           "required": ["acceptance_sha256", "gate_files"],
           "properties": {
             "acceptance_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "gate_files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+            "gate_files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+            "controller_gate_files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
           }
         },
         "gate_files": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "controller_gate_files": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
         "status": {"enum": ["proposed", "ready", "queued", "leased", "running", "verifying", "passed", "failed", "blocked", "stale", "cancelled", "moot", "resolved", "escalated"]}
       },
       "additionalProperties": true

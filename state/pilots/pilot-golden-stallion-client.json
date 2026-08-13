@@ -5,6 +5,18 @@
   "topic": 6,
   "charter": "Advance only the approved offline golden-stallion-client reconstruction goal through its existing conformance and native-diff gates. Tests, fixtures, oracles, baselines, live game access, portfolio policy, merge, and deployment are excluded.",
   "model_policy": "project-pilot",
+  "required_non_goals": [
+    "tests",
+    "fixtures",
+    "oracles",
+    "baselines",
+    "corpus",
+    "live-game-access",
+    "portfolio-policy",
+    "credentials",
+    "merge",
+    "deploy"
+  ],
   "concurrency_limit": 0,
   "budget": {
     "max_decisions_per_turn": 1,

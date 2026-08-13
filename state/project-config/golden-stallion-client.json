@@ -9,6 +9,18 @@
   "allowed_paths": [
     "."
   ],
+  "required_non_goals": [
+    "tests",
+    "fixtures",
+    "oracles",
+    "baselines",
+    "corpus",
+    "live-game-access",
+    "portfolio-policy",
+    "credentials",
+    "merge",
+    "deploy"
+  ],
   "topic": 6,
   "pilot_id": "pilot-golden-stallion-client",
   "activation_gate": "clone-auth-freshness-v1",

@@ -212,6 +212,9 @@ reuse a historical goal merely because it already exists.
     goal: {\"id\":\"<a NEW goal id, never one that already exists>\",
            \"outcome\":\"<one line>\", \"falsifier\":\"<one line>\",
            \"acceptance_suite\":\"<a real command; true, :, exit 0 are refused as vacuous>\",
+           \"gate_class\":\"light\" or \"heavy\",
+           \"gate_files\":[unique tracked immutable project grading programs],
+           \"controller_gate_files\":[unique tracked Recursion grading programs/profiles; may be empty],
            \"budget\":{\"max_concurrency\":0+, \"max_tokens\":0+, \"max_cost_usd\":0+,
                      \"max_wall_clock_seconds\":0+, \"max_task_attempts\":0+, \"max_failures\":0+,
                      \"max_review_queue\":1+, \"max_publish_attempts\":0+,
@@ -234,14 +237,16 @@ reuse a historical goal merely because it already exists.
            \"verification\":\"independent\",
            \"expected_change\":\"required\" or \"optional\",
            \"gate_class\":\"light\" or \"heavy\",
-           \"gate_files\":[unique tracked immutable grading programs and their dependencies]}
+           \"gate_files\":[unique tracked immutable grading programs and their dependencies],
+           \"controller_gate_files\":[unique tracked Recursion grading programs/profiles; may be empty]}
       The keys are deadline_seconds and verifier_deadline_seconds, NOT \"deadlines\".
       The key is verification with the value \"independent\", NOT \"independent_verification\".
       \"deployment\" is not \"deploy\". model_alias and verifier_model_alias name the ROLE ALIAS,
       never an underlying model: \"claude\", \"codex\", \"sonnet\", \"opus\" are all invalid there.
-      The controller appends the project's structured required_non_goals to each task before
-      computing the canonical plan digest. It also derives gate_contract hashes from the live
-      tracked repo; do not invent gate_contract. gate_files are immutable grading code, never
+      The controller appends the project's structured required_non_goals and binds its clean
+      default-branch source HEAD before computing the canonical plan digest. It derives task and
+      goal gate_contract hashes from committed project/controller bytes; do not invent
+      gate_contract. gate_files are immutable grading code, never
       implementation targets. If acceptance invokes python, python3, node, bash, or sh under an
       allowed path, that grading program must be in gate_files. Use gate_class heavy for corpus,
       renderer-diff, or full-suite compute; otherwise use light. Cloud engines claude and hermes

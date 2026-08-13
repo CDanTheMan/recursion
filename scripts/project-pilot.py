@@ -116,6 +116,9 @@ def records(base: Path, project: str, active: bool = False) -> tuple[dict, dict,
         fail(f"topic projection mismatch for {project}")
     if active and (row["status"] != "active" or cfg.get("status") != "active" or pilot.get("status") != "active"):
         fail(f"project pilot {project} is not active")
+    if "required_non_goals" in cfg or "required_non_goals" in pilot:
+        if cfg.get("required_non_goals") != pilot.get("required_non_goals"):
+            fail(f"project/pilot required_non_goals projection mismatch for {project}")
     return cfg, pilot, row
 
 
@@ -591,29 +594,81 @@ def project_required_non_goals(cfg: dict) -> list[str]:
     return list(configured)
 
 
-def repo_gate_contract(base: Path, cfg: dict, task_id: str, task: dict) -> dict:
+def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict) -> dict:
     """Use the execution validator and bind its tracked-file hashes into the plan."""
     command = [
         sys.executable, str(base / "scripts/validate-gate.py"),
-        "--acceptance", str(task["acceptance"]),
-        "--allowed-paths", ",".join(task["allowed_paths"]),
-        "--gate-files", ",".join(task["gate_files"]),
+        "--acceptance", str(gate["acceptance"]),
+        "--allowed-paths", ",".join(gate["allowed_paths"]),
+        "--gate-files", ",".join(gate["gate_files"]),
         "--repo", str(cfg["repo"]),
+        "--controller-root", str(base),
+        "--controller-gate-files", ",".join(gate.get("controller_gate_files") or []),
+        "--strict-direct",
     ]
     proc = subprocess.run(command, text=True, capture_output=True, check=False)
     if proc.returncode:
         detail = (proc.stderr or proc.stdout or "gate validation failed").strip()
-        fail(f"pilot plan task {task_id} has an invalid repository gate: {detail}")
+        fail(f"pilot plan {label} has an invalid repository gate: {detail}")
     try:
         contract = json.loads(proc.stdout)
     except json.JSONDecodeError:
-        fail(f"pilot plan task {task_id} gate validator returned malformed evidence")
+        fail(f"pilot plan {label} gate validator returned malformed evidence")
     hashes = contract.get("gate_files") if isinstance(contract, dict) else None
+    controller_hashes = contract.get("controller_gate_files") if isinstance(contract, dict) else None
     if not re.fullmatch(r"[0-9a-f]{64}", str(contract.get("acceptance_sha256") or "")) \
-            or not isinstance(hashes, dict) or set(hashes) != set(task["gate_files"]) \
-            or any(not re.fullmatch(r"[0-9a-f]{64}", str(digest)) for digest in hashes.values()):
-        fail(f"pilot plan task {task_id} gate validator returned incomplete evidence")
+            or not isinstance(hashes, dict) or set(hashes) != set(gate["gate_files"]) \
+            or not isinstance(controller_hashes, dict) \
+            or set(controller_hashes) != set(gate.get("controller_gate_files") or []) \
+            or any(not re.fullmatch(r"[0-9a-f]{64}", str(digest))
+                   for digest in [*hashes.values(), *controller_hashes.values()]):
+        fail(f"pilot plan {label} gate validator returned incomplete evidence")
     return contract
+
+
+def live_authority_contract(cfg: dict) -> dict:
+    repo = Path(str(cfg["repo"])); branch = str(cfg["default_branch"])
+    def git(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(["git", "-C", str(repo), *args], text=True,
+                              capture_output=True, check=False)
+    head = git("rev-parse", "HEAD").stdout.strip()
+    current = git("branch", "--show-current").stdout.strip()
+    branch_head = git("rev-parse", f"refs/heads/{branch}").stdout.strip()
+    dirty = git("status", "--porcelain", "--untracked-files=all")
+    if dirty.returncode or dirty.stdout.strip():
+        fail("project repository must be exactly clean before a plan contract is bound")
+    if not re.fullmatch(r"[0-9a-f]{40,64}", head) or current != branch or branch_head != head:
+        fail("project repository HEAD is not the configured default-branch tip")
+    required = project_required_non_goals(cfg)
+    return {
+        "charter_sha256": hashlib.sha256(str(cfg.get("charter") or "").encode()).hexdigest(),
+        "default_branch": branch,
+        "required_non_goals": required,
+        "source_head": head,
+    }
+
+
+def bind_authority_contract(cfg: dict, value: object) -> dict:
+    if not isinstance(value, dict):
+        fail("pilot plan must be an object")
+    plan = json.loads(json.dumps(value)); observed = live_authority_contract(cfg)
+    if plan.get("authority_contract") not in (None, observed):
+        fail("model-authored authority contract disagrees with controller evidence")
+    plan["authority_contract"] = observed
+    return plan
+
+
+def validate_authority_binding(cfg: dict, value: dict) -> dict:
+    claimed = value.get("authority_contract")
+    observed = live_authority_contract(cfg)
+    if claimed != observed:
+        fail("pilot plan authority, source HEAD, or structured scope is stale")
+    return observed
+
+
+def requires_heavy_gate(plan: dict, acceptance: str) -> bool:
+    markers = ("native-diff", "conformance", "node --test", "pytest", "cargo test")
+    return bool(plan.get("seed_contract")) or any(marker in acceptance.lower() for marker in markers)
 
 
 def bind_seed_contract(cfg: dict, value: object) -> dict:
@@ -665,6 +720,7 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
     value = json.loads(json.dumps(value))
     if value.get("id") != plan_id or value.get("project_id") != project or not IDENT.fullmatch(plan_id):
         fail("pilot plan identity does not match its decision")
+    validate_authority_binding(cfg, value)
     validate_seed_binding(cfg, value)
     goal = value.get("goal")
     tasks = value.get("tasks")
@@ -674,9 +730,29 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
     if not IDENT.fullmatch(goal_id):
         fail("pilot plan goal identity, outcome, or falsifier is absent")
     bounded_line(goal.get("outcome"), "goal outcome"); bounded_line(goal.get("falsifier"), "goal falsifier")
-    nonvacuous_gate(goal.get("acceptance_suite"), "goal")
-    if goal.get("gate_class", "light") not in {"light", "heavy"}:
-        fail("pilot plan goal has an invalid gate class")
+    goal_acceptance = nonvacuous_gate(goal.get("acceptance_suite"), "goal")
+    goal_required = {"gate_class", "gate_files", "controller_gate_files"}
+    if any(key not in goal for key in goal_required) or goal.get("gate_class") not in {"light", "heavy"}:
+        fail("pilot plan goal gate contract is incomplete")
+    for name in ("gate_files", "controller_gate_files"):
+        items = goal.get(name)
+        if not isinstance(items, list) or not all(isinstance(item, str) for item in items) \
+                or len(items) != len(set(items)):
+            fail(f"pilot plan goal has invalid {name}")
+        for item in items: bounded_line(item, f"goal {name}", 512)
+    goal_gate = {"acceptance": goal_acceptance,
+                 "allowed_paths": list(cfg.get("allowed_paths") or []),
+                 "gate_files": goal["gate_files"],
+                 "controller_gate_files": goal["controller_gate_files"]}
+    expected_goal_contract = repo_gate_contract(base, cfg, "goal", goal_gate)
+    if requires_heavy_gate(value, goal_acceptance) and goal.get("gate_class") != "heavy":
+        fail("pilot plan goal understates a controller-classified heavy gate")
+    if bind_gate_contract:
+        if goal.get("gate_contract") is not None:
+            fail("pilot plan goal supplied controller-derived gate_contract")
+        goal["gate_contract"] = expected_goal_contract
+    elif goal.get("gate_contract") != expected_goal_contract:
+        fail("pilot plan goal repository gate changed after proposal")
     budget = goal.get("budget")
     required_budget = {
         "max_concurrency", "max_tokens", "max_cost_usd", "max_wall_clock_seconds",
@@ -723,7 +799,7 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
         required = {
             "worker_class", "engine", "model_alias", "verifier_model_alias", "deadline_seconds",
             "verifier_deadline_seconds", "network_policy", "evidence_contract", "verification",
-            "expected_change", "gate_class", "gate_files",
+            "expected_change", "gate_class", "gate_files", "controller_gate_files",
         }
         if any(key not in task for key in required): fail(f"pilot plan task {task_id} is schema-incomplete")
         if task.get("engine") != "claude" \
@@ -740,11 +816,15 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
         if any(isinstance(task.get(key), bool) or not isinstance(task.get(key), int) or task[key] < 1
                for key in ("deadline_seconds", "verifier_deadline_seconds")):
             fail(f"pilot plan task {task_id} has an invalid deadline")
-        if not isinstance(task.get("gate_files"), list) or not all(isinstance(item, str) for item in task["gate_files"]) \
-                or len(task["gate_files"]) != len(set(task["gate_files"])):
-            fail(f"pilot plan task {task_id} has invalid gate files")
-        for item in task["gate_files"]: bounded_line(item, f"task {task_id} gate file", 512)
-        expected_contract = repo_gate_contract(base, cfg, task_id, task)
+        for name in ("gate_files", "controller_gate_files"):
+            items = task.get(name)
+            if not isinstance(items, list) or not all(isinstance(item, str) for item in items) \
+                    or len(items) != len(set(items)):
+                fail(f"pilot plan task {task_id} has invalid {name}")
+            for item in items: bounded_line(item, f"task {task_id} {name}", 512)
+        expected_contract = repo_gate_contract(base, cfg, f"task {task_id}", task)
+        if requires_heavy_gate(value, str(task["acceptance"])) and task.get("gate_class") != "heavy":
+            fail(f"pilot plan task {task_id} understates a controller-classified heavy gate")
         supplied_contract = task.get("gate_contract")
         if bind_gate_contract:
             if supplied_contract is not None:
@@ -817,7 +897,8 @@ def require_lucas_instruction(path: Path, instruction: dict[str, str], terms: li
 def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction_id: str) -> dict:
     args = decision.get("args") or decision.get("arguments") or []
     plan_id = str(args[1]) if len(args) > 1 else ""
-    plan = bind_seed_contract(cfg, decision.get("plan"))
+    plan = bind_authority_contract(cfg, decision.get("plan"))
+    plan = bind_seed_contract(cfg, plan)
     plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, plan, bind_gate_contract=True)
     digest = canonical_digest(plan); goal_id = str(plan["goal"]["id"])
     path = base / "state/plans" / str(cfg["id"]) / f"{plan_id}.json"
@@ -852,8 +933,8 @@ def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
     return {"plan": str(path.relative_to(base)), "status": "proposed", "plan_digest": digest}
 
 
-def task_text(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, task: dict,
-              seed_contract: dict | None = None) -> str:
+def task_values(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, task: dict,
+                authority: dict, seed_contract: dict | None = None) -> dict[str, str]:
     values = {
         "schema_version": "1", "version": "1", "id": task["id"], "project_id": cfg["id"],
         "project": cfg["id"], "workstream": cfg["id"], "pilot_id": pilot["id"], "goal_id": goal_id,
@@ -868,6 +949,9 @@ def task_text(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, t
         "gate_class": task["gate_class"],
         "gate_contract": json.dumps(task["gate_contract"], sort_keys=True, separators=(",", ":")),
         "gate_files": ",".join(task["gate_files"]), "acceptance": task["acceptance"],
+        "controller_gate_files": ",".join(task["controller_gate_files"]),
+        "source_head": authority["source_head"], "source_branch": authority["default_branch"],
+        "charter_sha256": authority["charter_sha256"],
         "repo": str(cfg["repo"]), "workdir": ".", "autonomy": "auto", "status": "proposed",
     }
     if task.get("source_task_id"):
@@ -879,7 +963,67 @@ def task_text(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, t
             "seed": ",".join(seed_contract["paths"]),
             "seed_digest": seed_contract["content_sha256"],
         })
+    return values
+
+
+def task_text(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, task: dict,
+              authority: dict, seed_contract: dict | None = None) -> str:
+    values = task_values(cfg, pilot, plan_id, digest, goal_id, task, authority, seed_contract)
     return "".join(f"{key}: {value}\n" for key, value in values.items()) + f"\n{task['intent']}\n"
+
+
+def verify_approved_goal(base: Path, project: str, goal_id: str) -> dict:
+    """Re-prove the digest-bound source, gates, seeds, and immutable DAG projection."""
+    cfg, pilot, _ = records(base, project, active=True)
+    goal_path, goal_fields = goal_for(base, project, goal_id)
+    plan_id = goal_fields.get("plan_id", "")
+    if not plan_id:
+        fail("goal is not materialized from a Phase 8 plan")
+    proposal = read_json(base / "state/plans" / project / f"{plan_id}.json")
+    if proposal.get("status") != "approved":
+        fail("goal plan is not approved")
+    plan = validate_plan(base, cfg, project, plan_id, proposal.get("plan"))
+    digest = canonical_digest(plan)
+    if proposal.get("plan_digest") != digest or goal_fields.get("plan_digest") != digest \
+            or str(plan["goal"]["id"]) != goal_id:
+        fail("approved plan/goal digest projection differs")
+    authority = plan["authority_contract"]; goal = plan["goal"]
+    expected_goal = {
+        "id": goal_id, "project_id": project, "pilot_id": str(pilot["id"]),
+        "plan_id": plan_id, "plan_digest": digest, "outcome": str(goal["outcome"]),
+        "acceptance_suite": str(goal["acceptance_suite"]), "falsifier": str(goal["falsifier"]),
+        "gate_class": str(goal["gate_class"]), "gate_files": ",".join(goal["gate_files"]),
+        "controller_gate_files": ",".join(goal["controller_gate_files"]),
+        "gate_contract": json.dumps(goal["gate_contract"], sort_keys=True, separators=(",", ":")),
+        "source_head": authority["source_head"], "source_branch": authority["default_branch"],
+        "charter_sha256": authority["charter_sha256"],
+        "budget": json.dumps(goal["budget"], sort_keys=True, separators=(",", ":")),
+    }
+    seed = plan.get("seed_contract")
+    if seed:
+        expected_goal.update({"seed_manifest": seed["manifest_path"],
+                              "seed_manifest_sha256": seed["manifest_sha256"],
+                              "seed": ",".join(seed["paths"]),
+                              "seed_digest": seed["content_sha256"]})
+    if any(goal_fields.get(key, "") != str(value) for key, value in expected_goal.items()):
+        fail("materialized goal immutable contract differs from its approved plan")
+    actual_tasks = {}
+    for path in (base / "state/tasks").glob("*.md"):
+        value = fields(path)
+        if value.get("goal_id") == goal_id:
+            actual_tasks[value.get("id", "")] = value
+    planned_ids = {str(task["id"]) for task in plan["tasks"]}
+    if set(actual_tasks) != planned_ids:
+        fail("materialized task DAG differs from the exact approved plan")
+    for task in plan["tasks"]:
+        expected = task_values(cfg, pilot, plan_id, digest, goal_id, task, authority, seed)
+        expected.pop("status", None)
+        actual = actual_tasks[str(task["id"])]
+        if any(actual.get(key, "") != str(value) for key, value in expected.items()):
+            fail(f"materialized task {task['id']} immutable contract differs from its approved plan")
+    return {"project_id": project, "goal_id": goal_id, "plan_id": plan_id,
+            "plan_digest": digest, "source_head": authority["source_head"],
+            "task_ids": sorted(planned_ids)}
 
 
 def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction_id: str,
@@ -896,6 +1040,7 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
         digest = canonical_digest(plan)
         if digest != claimed: fail("stored plan bytes do not match the approved digest")
         goal = plan["goal"]; goal_id = str(goal["id"]); goal_path = base / "state/goals" / f"{goal_id}.md"
+        authority = plan["authority_contract"]
         seed_contract = plan.get("seed_contract")
         event = transition_event(
             "pilot-plan-approved", str(cfg["id"]), goal_id,
@@ -911,26 +1056,30 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
             proposal = read_json(path)
             if proposal.get("status") != "approved":
                 fail("resumed approval lacks its authoritative plan marker", 74)
+            verify_approved_goal(base, str(cfg["id"]), goal_id)
             return {"plan": str(path.relative_to(base)), "status": "approved", "plan_digest": digest}
         if proposal.get("status") == "approved":
             if proposal.get("approval_instruction_id") != instruction_id or not goal_path.is_file():
                 fail("approved plan projection is incomplete or approval identity changed")
+            verify_approved_goal(base, str(cfg["id"]), goal_id)
             append_event(base, event["event"], event["project"], event["goal"],
                          detail=event["detail"], event_id=event["id"])
             return {"plan": str(path.relative_to(base)), "status": "approved", "plan_digest": digest}
         if proposal.get("status") != "proposed": fail("pilot plan is not approvable")
         mutations = []
         if goal_path.exists():
-            existing = fields(goal_path)
-            if existing.get("plan_id") != plan_id or existing.get("plan_digest") != digest:
-                fail("goal materialization collides with unrelated state")
-            goal_body = goal_path.read_text(encoding="utf-8", errors="surrogateescape")
+            fail("goal materialization exists without the approval transition receipt")
         else:
             goal_body = (f"schema_version: 1\nversion: 1\nid: {goal_id}\nproject_id: {cfg['id']}\n"
                          f"pilot_id: {pilot['id']}\nplan_id: {plan_id}\nplan_digest: {digest}\n"
                          f"instruction_id: {proposal['instruction_id']}\nstatus: draft\noutcome: {goal['outcome']}\n"
                          f"acceptance_suite: {goal['acceptance_suite']}\nfalsifier: {goal['falsifier']}\n"
-                         f"gate_class: {goal.get('gate_class', 'light')}\n"
+                         f"gate_class: {goal['gate_class']}\n"
+                         f"gate_files: {','.join(goal['gate_files'])}\n"
+                         f"controller_gate_files: {','.join(goal['controller_gate_files'])}\n"
+                         f"gate_contract: {json.dumps(goal['gate_contract'], sort_keys=True, separators=(',', ':'))}\n"
+                         f"source_head: {authority['source_head']}\nsource_branch: {authority['default_branch']}\n"
+                         f"charter_sha256: {authority['charter_sha256']}\n"
                          f"budget: {json.dumps(goal['budget'], sort_keys=True, separators=(',', ':'))}\n"
                          f"started_at_epoch: {int(time.time())}\nterminal_reported: 0\n")
             if seed_contract:
@@ -943,18 +1092,16 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
         for task in plan["tasks"]:
             task_path = base / "state/tasks" / f"{task['id']}.md"
             if task_path.exists():
-                existing = fields(task_path)
-                if existing.get("plan_id") != plan_id or existing.get("plan_digest") != digest:
-                    fail("task materialization collides with unrelated state")
-                body = task_path.read_text(encoding="utf-8", errors="surrogateescape")
+                fail("task materialization exists without the approval transition receipt")
             else:
-                body = task_text(cfg, pilot, plan_id, digest, goal_id, task, seed_contract)
+                body = task_text(cfg, pilot, plan_id, digest, goal_id, task, authority, seed_contract)
             mutations.append(text_mutation(task_path, body))
         proposal = dict(proposal); proposal.update({"status": "approved", "approval_instruction_id": instruction_id,
                                                     "approved_by": instruction.get("principal"), "approved_at": now_iso()})
         validate_control_state(base, "plan", proposal)
         mutations.append(json_mutation(path, proposal))
         commit_pilot_transition(base, mutations, event, authoritative_index=len(mutations) - 1)
+        verify_approved_goal(base, str(cfg["id"]), goal_id)
     return {"plan": str(path.relative_to(base)), "status": "approved", "plan_digest": digest}
 
 
@@ -977,6 +1124,13 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
         digest = canonical_digest(plan)
         if proposal.get("plan_digest") != digest or goal.get("plan_digest") != digest:
             fail("pilot window goal does not match the live repository-bound plan contract")
+        verify_approved_goal(base, str(cfg["id"]), goal_id)
+        planned_ids = {str(task["id"]) for task in plan["tasks"]}
+        if goal.get("status") != "active" or any(
+            fields(base / "state/tasks" / f"{task_id}.md").get("status") != "proposed"
+            for task_id in planned_ids
+        ):
+            fail("pilot window requires an untouched active goal and proposed task DAG")
         path = base / "state/pilot-windows" / f"{window_id}.json"
         with phase8_lock(base, f"window-{cfg['id']}"):
             for other in (base / "state/pilot-windows").glob("*.json"):
@@ -1074,6 +1228,8 @@ def execute_value(base: Path, decision: dict) -> dict:
             # Re-read under the same lock Phase 6 uses to enter verifying. A task creation
             # that raced that transition must lose; remembered pilot state is not authority.
             _, goal = goal_for(base, project, goal_id)
+            if goal.get("plan_id"):
+                fail("an exact-digest Phase 8 goal has an immutable task DAG")
             path = base / "state/tasks" / f"{task_id}.md"
             if path.exists(): fail(f"task {task_id} already exists", 2)
             required_non_goals = ",".join(dict.fromkeys(
@@ -1150,6 +1306,8 @@ def main() -> int:
     activate_cmd = sub.add_parser("activate"); activate_cmd.add_argument("project")
     execute_cmd = sub.add_parser("execute"); execute_cmd.add_argument("decision")
     execute_json_cmd = sub.add_parser("execute-json"); execute_json_cmd.add_argument("decision")
+    verify_goal_cmd = sub.add_parser("verify-approved-goal")
+    verify_goal_cmd.add_argument("project"); verify_goal_cmd.add_argument("goal")
     args = parser.parse_args(); base = root()
     if args.command == "verify-registry": verify_registry(base); print("OK")
     elif args.command == "topic":
@@ -1175,6 +1333,7 @@ def main() -> int:
     elif args.command == "bind-topic": bind_topic(base, args.project, args.topic); print("bound")
     elif args.command == "activate": compact(activate(base, args.project))
     elif args.command == "execute": compact(execute(base, Path(args.decision)))
+    elif args.command == "verify-approved-goal": compact(verify_approved_goal(base, args.project, args.goal))
     else:
         try:
             decision = json.loads(args.decision)
