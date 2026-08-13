@@ -30,7 +30,8 @@ case "${1:-}" in
       created=1
       trap '[ "$created" = 0 ] || ip netns delete "$NS" >/dev/null 2>&1 || true' EXIT
       ip -n "$NS" link set lo up
-      chmod 0600 "$NS_PATH"
+      # nsfs fixes namespace-handle metadata and rejects chmod with EPERM;
+      # namespace_check rejects any group/other-writable capability.
     fi
     namespace_check
     created=0
