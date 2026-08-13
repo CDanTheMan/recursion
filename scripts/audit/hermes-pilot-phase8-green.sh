@@ -71,6 +71,11 @@ grep -q 'goal.\+MUST BE AN IDENTIFIER, never a sentence' scripts/hermes-decide.s
 grep -qF '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$' scripts/hermes-decide.sh
 echo "ok    the decision prompt states the goal identifier constraint that normalization enforces"
 
+grep -q "ONLY THIS INSTRUCTION'S OWN DURABLE HISTORY COUNTS" scripts/hermes-decide.sh
+grep -q 'instruction_noop_bind_evidence' scripts/conduct-hermes.sh
+grep -qF 'project-pilot: instruction is not owned by this project pilot' scripts/conduct-hermes.sh
+echo "ok    instruction-coupled noop requires exact same-instruction durable refusal evidence"
+
 # The prompt is one double-quoted shell string, so anything the shell expands inside it is
 # deleted from what the model reads. Backticks around two verb names silently emptied them:
 # the model received "only Lucas can, on GitHub.  prepares a repo and  completes it". Guard the

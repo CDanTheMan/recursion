@@ -121,6 +121,105 @@ set -e
 grep -q 'identity collision' "$TMP/collision.out"
 echo "ok    idempotency-key collision cannot change authority, evidence, or dispatch argv"
 
+# A noop can terminalize an authenticated instruction, so it is an action, not an opinion. The
+# only admitted case is the poisoned-topic escape hatch: two distinct failed pilot actions for
+# THIS instruction, both visible in OPEN annotations and both carrying the exact durable refusal.
+# Three guard failures must not manufacture their own proof and eventually acknowledge the input.
+cat > "$R/state/instructions/00000048.md" <<'T'
+schema_version: 1
+id: 48
+status: open
+action_ids:
+
+## INSTRUCTION
+Approve the exact plan.
+T
+for attempt in 1 2 3; do
+  cat > "$TMP/unsupported-noop-$attempt.json" <<J
+{"id":"d-unsupported-noop-$attempt","idempotency_key":"unsupported-noop-$attempt","instruction_id":"48","verb":"noop","args":[],"text":"Instruction cannot bind as posted.","goal":"g","wrong_if":"the approval can bind"}
+J
+  normalize_head_decision "$TMP/unsupported-noop-$attempt.json"
+  set +e
+  ( cd "$R" && RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$R" \
+      bash scripts/conduct-hermes.sh --file "$TMP/unsupported-noop-$attempt.json" ) \
+    >"$TMP/unsupported-noop-$attempt.out" 2>&1
+  unsupported_rc=$?
+  set -e
+  [ "$unsupported_rc" -eq 4 ]
+  UNSUPPORTED_ID="action-$(printf '%s' "unsupported-noop-$attempt" | sha256sum | cut -c1-24)"
+  [ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["status"])' \
+      "$R/state/actions/$UNSUPPORTED_ID.json")" = failed ]
+  grep -q '^status: open$' "$R/state/instructions/00000048.md"
+done
+[ "$(grep -c 'cannot-bind noop evidence is absent' "$R/state/instructions/00000048.md")" = 3 ]
+! grep -q 'project-pilot: instruction is not owned by this project pilot' \
+  "$R/state/instructions/00000048.md"
+echo "ok    unsupported instruction noop fails and repeated guard failures cannot self-authorize"
+
+REFUSAL='project-pilot: instruction is not owned by this project pilot'
+for aid in action-aaaaaaaaaaaaaaaaaaaaaaaa action-bbbbbbbbbbbbbbbbbbbbbbbb; do
+  cat > "$R/state/actions/$aid.json" <<J
+{"schema_version":1,"id":"$aid","decision_id":"prior-$aid","instruction_id":"49","idempotency_key":"prior-$aid","verb":"pilot-plan-approve","arguments":[],"goal_id":"g","action_payload_sha256":"$(printf '%064d' 0)","status":"failed","lease_owner":null,"lease_expires":null,"attempts":1,"result_evidence":"log=fixture rc=4 | $REFUSAL","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:01Z"}
+J
+done
+cat > "$R/state/instructions/00000049.md" <<T
+schema_version: 1
+id: 49
+status: open
+action_ids: action-bbbbbbbbbbbbbbbbbbbbbbbb
+
+## INSTRUCTION
+Approve the exact plan.
+
+## OPEN 2026-01-01T00:00:01Z
+deferred/failed actions reopened instruction: action-aaaaaaaaaaaaaaaaaaaaaaaa | last failure: log=fixture rc=4 | $REFUSAL
+
+## OPEN 2026-01-01T00:00:02Z
+deferred/failed actions reopened instruction: action-bbbbbbbbbbbbbbbbbbbbbbbb | last failure: log=fixture rc=4 | $REFUSAL
+T
+cat > "$TMP/supported-noop.json" <<'J'
+{"id":"d-supported-noop","idempotency_key":"supported-noop","instruction_id":"49","verb":"noop","args":[],"text":"Instruction cannot bind as posted.","goal":"g","wrong_if":"the ownership refusal changes"}
+J
+normalize_head_decision "$TMP/supported-noop.json"
+( cd "$R" && RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$R" \
+    bash scripts/conduct-hermes.sh --file "$TMP/supported-noop.json" ) >/dev/null 2>&1
+SUPPORTED_ID="action-$(printf '%s' supported-noop | sha256sum | cut -c1-24)"
+[ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["status"])' \
+    "$R/state/actions/$SUPPORTED_ID.json")" = succeeded ]
+grep -q '^status: acknowledged$' "$R/state/instructions/00000049.md"
+echo "ok    two annotated same-instruction pilot ownership refusals admit the closing noop"
+
+cat > "$R/state/instructions/00000050.md" <<T
+schema_version: 1
+id: 50
+status: open
+action_ids:
+
+## INSTRUCTION
+Approve another exact plan.
+
+## OPEN 2026-01-01T00:00:01Z
+deferred/failed actions reopened instruction: action-aaaaaaaaaaaaaaaaaaaaaaaa | last failure: log=fixture rc=4 | $REFUSAL
+
+## OPEN 2026-01-01T00:00:02Z
+deferred/failed actions reopened instruction: action-bbbbbbbbbbbbbbbbbbbbbbbb | last failure: log=fixture rc=4 | $REFUSAL
+T
+cat > "$TMP/foreign-noop.json" <<'J'
+{"id":"d-foreign-noop","idempotency_key":"foreign-noop","instruction_id":"50","verb":"noop","args":[],"text":"Instruction cannot bind as posted.","goal":"g","wrong_if":"another instruction's evidence is borrowed"}
+J
+normalize_head_decision "$TMP/foreign-noop.json"
+set +e
+( cd "$R" && RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$R" \
+    bash scripts/conduct-hermes.sh --file "$TMP/foreign-noop.json" ) >/dev/null 2>&1
+foreign_rc=$?
+set -e
+[ "$foreign_rc" -eq 4 ]
+FOREIGN_ID="action-$(printf '%s' foreign-noop | sha256sum | cut -c1-24)"
+[ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["status"])' \
+    "$R/state/actions/$FOREIGN_ID.json")" = failed ]
+grep -q '^status: open$' "$R/state/instructions/00000050.md"
+echo "ok    one instruction cannot borrow another instruction's ownership failures"
+
 # Freeze the validator-approved JSON. The validator shim swaps the on-disk projection after it
 # returns OK; the actuator must still execute/record the original noop, never the replacement work.
 cp "$R/scripts/validate-decision.py" "$R/scripts/validate-decision-real.py"
