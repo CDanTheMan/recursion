@@ -8,7 +8,6 @@ import os
 import shutil
 import subprocess
 import tempfile
-import time
 from pathlib import Path
 
 
@@ -37,7 +36,6 @@ def fixture() -> tuple[Path, dict[str, str]]:
     for relative in ("state/decisions.jsonl", "state/action-events.jsonl", "state/events.jsonl"):
         (root / relative).write_text("", encoding="utf-8")
     (root / ".env").write_text("", encoding="utf-8")
-    expiry = int(time.time()) + 600
     for project in ("alpha", "beta"):
         config = {
             "schema_version": 1, "id": project, "repo": f"/fixture/{project}", "remote": "origin",
@@ -49,15 +47,13 @@ def fixture() -> tuple[Path, dict[str, str]]:
         pilot = {
             "schema_version": 1, "id": f"pilot-{project}", "project_id": project,
             "charter": "Parallel fixture.", "model_policy": "project-pilot", "concurrency_limit": 1,
-            "budget": {"max_inflight_workers": 1}, "window_required": True, "status": "active",
+            # Exact Phase-8 window/contract admission has its own controls. Keep this fixture
+            # unwindowed so it isolates global/per-project process overlap without inventing a
+            # partial approved-plan authority that production must correctly reject.
+            "budget": {"max_inflight_workers": 1}, "window_required": False, "status": "active",
         }
         write_json(root / f"state/project-config/{project}.json", config)
         write_json(root / f"state/pilots/pilot-{project}.json", pilot)
-        write_json(root / f"state/pilot-windows/window-{project}.json", {
-            "schema_version": 1, "id": f"window-{project}", "project_id": project,
-            "pilot_id": f"pilot-{project}", "goal_id": f"goal-{project}", "status": "open",
-            "expires_at_epoch": expiry, "max_inflight_workers": 1,
-        })
         (root / f"state/goals/goal-{project}.md").write_text(
             f"schema_version: 1\nid: goal-{project}\nproject_id: {project}\nstatus: active\n",
             encoding="utf-8",
@@ -125,6 +121,11 @@ def linux_overlap(root: Path, env: dict[str, str]) -> bool:
     run = subprocess.run(["bash", str(root / "scripts/conduct-hermes.sh")], cwd=root, env=env,
                          text=True, capture_output=True, check=False, timeout=30)
     if run.returncode or not log.is_file():
+        print(f"parallel fixture conductor rc={run.returncode}", file=__import__("sys").stderr)
+        if run.stdout.strip():
+            print(run.stdout.strip(), file=__import__("sys").stderr)
+        if run.stderr.strip():
+            print(run.stderr.strip(), file=__import__("sys").stderr)
         return False
     times: dict[str, dict[str, int]] = {}
     for line in log.read_text(encoding="utf-8").splitlines():
@@ -137,8 +138,18 @@ def linux_overlap(root: Path, env: dict[str, str]) -> bool:
     isolated = times["alpha-2"]["start"] >= times["alpha-1"]["end"]
     decisions = list((root / "state/decision-queue/succeeded").glob("*.json"))
     actions = [json.loads(path.read_text(encoding="utf-8")) for path in (root / "state/actions").glob("*.json")]
-    return overlap and isolated and len(decisions) == 3 and len(actions) == 3 \
+    passed = overlap and isolated and len(decisions) == 3 and len(actions) == 3 \
         and all(row.get("status") == "succeeded" and row.get("attempts") == 1 for row in actions)
+    if not passed:
+        print(json.dumps({
+            "times": times, "overlap": overlap, "isolated": isolated,
+            "succeeded_decisions": len(decisions),
+            "actions": [{"id": row.get("id"), "status": row.get("status"),
+                         "attempts": row.get("attempts"), "result": row.get("result_evidence")}
+                        for row in actions],
+            "stdout": run.stdout, "stderr": run.stderr,
+        }, sort_keys=True), file=__import__("sys").stderr)
+    return passed
 
 
 def main() -> int:

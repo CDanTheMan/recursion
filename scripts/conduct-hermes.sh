@@ -753,7 +753,8 @@ PY
     ID="${ARGS[0]:-}"; [ -n "$ID" ] || { log "work needs a task id"; exit 2; }
     [ -f "state/tasks/$ID.md" ] || { log "REFUSED — no such task: $ID"; exit 5; }
     # The gate is the contract (delegation-design.md): no acceptance command, no autonomy.
-    if [ -z "$(sed -n 's/^acceptance: *//p' "state/tasks/$ID.md" | head -1)" ]; then
+    if [ -z "$(sed -n 's/^acceptance: *//p' "state/tasks/$ID.md" | head -1)" ] \
+       && ! grep -q '^pilot_id: ' "state/tasks/$ID.md"; then
       log "REFUSED — task $ID has no acceptance gate; it must escalate, not run"; exit 5
     fi
     if grep -q '^pilot_id: ' "state/tasks/$ID.md" && [ -x scripts/project-reconcile.py ]; then

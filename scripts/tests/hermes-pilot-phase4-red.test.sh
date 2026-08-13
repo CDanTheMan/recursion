@@ -13,7 +13,7 @@ R="$TMP/root"
 mkdir -p "$R/scripts" "$R/state/project-config" "$R/state/pilots" "$R/state/goals" \
   "$R/state/tasks" "$R/state/runs" "$R/state/instructions" "$R/state/.locks" \
   "$R/loop/logs" "$R/.worktrees"
-for s in project-pilot.py intake.sh author.sh resync.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh validate-control-state.py; do
+for s in project-pilot.py pilot_instruction.py seed_contract.py intake.sh author.sh resync.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh validate-control-state.py; do
   [ -f "$SRC/scripts/$s" ] && cp "$SRC/scripts/$s" "$R/scripts/$s"
 done
 chmod +x "$R/scripts/"* 2>/dev/null || true

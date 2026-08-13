@@ -13,6 +13,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -20,6 +21,23 @@ from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[2]
 OUTBOX = SOURCE / "scripts/notification-outbox.py"
+
+
+def load_script(name: str, path: Path):
+    sys.path.insert(0, str(path.parent))
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+# Every source event a fixture appends is emitted through the durable receipt machinery so the
+# hardened outbox authenticates it exactly as production writers do.  The receipt module is the
+# fixture copy of the controller under test, identical to SOURCE on the box that runs the gate.
+TRANSITION_RECEIPT = load_script("phase7_transition_receipt", SOURCE / "scripts/transition_receipt.py")
 CONTROLS = [
     "simulated Telegram failure eventually delivers exactly once",
     "repeated delivery ticks produce no duplicate human-visible report",
@@ -175,7 +193,70 @@ class Fixture:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
 
+    def _ensure_task(self, task: str) -> Path:
+        path = self.root / "state/tasks" / f"{task}.md"
+        if not path.exists():
+            path.write_text(
+                "schema_version: 1\nversion: 1\nid: " + task + "\nproject_id: alpha\n"
+                "pilot_id: pilot-alpha\ngoal_id: goal-alpha\ndependencies:\nallowed_paths: app\n"
+                "acceptance: bash -n app/main.sh\nstatus: proposed\n",
+                encoding="utf-8",
+            )
+        return path
+
     def append_event(self, event_id: str, event: str, *, detail=None, task="task-alpha") -> None:
+        value = {
+            "schema_version": 1, "id": event_id, "ts": "2026-08-07T19:00:00Z",
+            "event": event, "project": "alpha", "goal": "goal-alpha", "task": task,
+            "pid": 1, "detail": detail if detail is not None else "fixture",
+        }
+        mutation = None
+        if event == "start":
+            mutation = TRANSITION_RECEIPT.fields_mutation(
+                self._ensure_task(task),
+                {"status": "running", "lease_owner": "fixture", "lease_expires": "2000",
+                 "attempts": "1", "started_at": value["ts"]},
+            )
+        elif event == "finish":
+            terminal = next(
+                (status for status in ("passed", "failed", "blocked")
+                 if f"status={status}" in str(value["detail"])),
+                None,
+            )
+            if terminal:
+                mutation = TRANSITION_RECEIPT.fields_mutation(
+                    self._ensure_task(task),
+                    {"status": terminal, "lease_expires": "0", "finished_at": value["ts"]},
+                )
+        elif event in {"block", "task-blocked"}:
+            mutation = TRANSITION_RECEIPT.fields_mutation(
+                self._ensure_task(task),
+                {"status": "blocked", "lease_expires": "0", "finished_at": value["ts"]},
+            )
+        elif event in {"review-published", "review-branch-published"}:
+            review = value["detail"] if isinstance(value["detail"], dict) else {}
+            commit = str(review.get("commit_oid") or review.get("commit") or "")
+            mutation = TRANSITION_RECEIPT.fields_mutation(
+                self._ensure_task(task),
+                {"review_status": "published", "review_commit": commit,
+                 "review_published_at": value["ts"]},
+            )
+        elif event == "goal-transition" and isinstance(value["detail"], dict):
+            source = str(value["detail"].get("from") or "")
+            target = str(value["detail"].get("to") or "")
+            mutation = TRANSITION_RECEIPT.fields_mutation(
+                self.root / "state/goals/goal-alpha.md",
+                {"status": target, "version": str(value["detail"].get("version") or "5"),
+                 "last_transition_from": source, "last_transition_at": value["ts"],
+                 "last_transition_reason": str(value["detail"].get("reason") or "fixture")},
+            )
+        if mutation is None:
+            TRANSITION_RECEIPT.commit_event(self.root, value)
+        else:
+            TRANSITION_RECEIPT.commit_transition(self.root, [mutation], value)
+
+    def append_raw_event(self, event_id: str, event: str, *, detail=None, task="task-alpha") -> None:
+        """Adversarial seam: forge a journal row that no receipt ever authorized."""
         value = {
             "schema_version": 1, "id": event_id, "ts": "2026-08-07T19:00:00Z",
             "event": event, "project": "alpha", "goal": "goal-alpha", "task": task,
@@ -526,6 +607,7 @@ def main() -> int:
                attention_deliveries[0]["destination"] == attention.direct and
                len(stopped_deliveries) == 1 and stopped_deliveries[0]["destination"] == attention.project_topic,
                CONTROLS[10], results)
+
         portfolio_events = [row for row in terminal.events() if row.get("event_type") == "portfolio-result"]
         pilot_events = [row for row in terminal.events() if row.get("event_type") == "pilot-terminal-report"]
         report(len(portfolio_events) == 1 and len(pilot_events) == 1 and

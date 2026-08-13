@@ -62,6 +62,9 @@ sect(){ awk -v s="## $1" 'index($0,s)==1{f=1;next} /^## /{f=0} f' "$2" 2>/dev/nu
 # A question is "the same question" up to whitespace and case. Comparing raw text would let a
 # reflowed line masquerade as a new ask, which is exactly how a loop hides.
 norm(){ tr 'A-Z' 'a-z' | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//'; }
+question_snippet(){
+  python3 -c 'import sys; print(sys.stdin.buffer.read(65536)[:240].decode("utf-8", "ignore"), end="")'
+}
 
 case "$CMD" in
 
@@ -69,6 +72,7 @@ open)
   ID="${1:?usage: assist.sh open <task-id> <kind> <question>}"
   is_durable_task "$ID" && DURABLE_REPORTING=1
   KIND="${2:-decision}"; QUESTION="${3:-}"
+  QUESTION_SNIPPET="$(printf '%s' "$QUESTION" | question_snippet)"
   A="$DIR/$ID.md"
   [ -n "${QUESTION//[[:space:]]/}" ] || { echo "assist: refusing to open an assist with no question" >&2; exit 2; }
   case "$KIND" in decision|evidence|access|in-game) : ;; *) echo "assist: unknown kind '$KIND'" >&2; exit 2 ;; esac
@@ -114,9 +118,9 @@ open)
     echo "## ANSWER"
     echo "_(unanswered — reply with: recursion assist $ID \"...\")_"
   } > "$A"
-  event assist-open "$ID" "$KIND: $(printf '%s' "$QUESTION" | head -c 240)"
+  event assist-open "$ID" "$KIND: $QUESTION_SNIPPET"
   echo "NEW $ID"
-  notify "🙋 [$ID] needs you ($KIND): $(printf '%s' "$QUESTION" | head -c 240)
+  notify "🙋 [$ID] needs you ($KIND): $QUESTION_SNIPPET
 Answer with: recursion assist $ID \"...\"" ;;
 
 answer)

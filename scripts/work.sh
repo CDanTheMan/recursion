@@ -81,6 +81,10 @@ NETWORK_POLICY="$(field network_policy)"; EVIDENCE_CONTRACT="$(field evidence_co
 VERIFICATION_POLICY="$(field verification)"; EXPECTED_CHANGE="$(field expected_change)"
 GATE_FILES="$(field gate_files)"
 GATE_FILES="${GATE_FILES//,/ }"
+CONTROLLER_GATE_FILES="$(field controller_gate_files)"
+CONTROLLER_GATE_FILES="${CONTROLLER_GATE_FILES//,/ }"
+APPROVED_GATE_CONTRACT="$(field gate_contract)"
+SOURCE_HEAD="$(field source_head)"; SOURCE_BRANCH="$(field source_branch)"
 WORKDIR="${WORKDIR:-.}"; AUTONOMY="${AUTONOMY:-auto}"; ENGINE="${ENGINE:-claude}"
 ALLOWED_PATHS="$(field allowed_paths)"; ALLOWED_PATHS="${ALLOWED_PATHS:-$WORKDIR}"
 STRICT_PHASE5=0
@@ -97,6 +101,9 @@ REPO_DIR="$(field repo)"; REPO_DIR="${REPO_DIR:-$ROOT}"
 # corpus (e.g. the GSC block-model corpus user-client/render/data/models) is absent in a new
 # worktree and every test that needs it fails. Declaring it here makes the dependency explicit.
 SEED="$(field seed)"; SEED="${SEED//,/ }"
+SEED_MANIFEST="$(field seed_manifest)"
+SEED_MANIFEST_SHA256="$(field seed_manifest_sha256)"
+SEED_DIGEST_EXPECTED="$(field seed_digest)"
 # Git authority. sshkey proves read freshness and is handed only to the review-only publisher.
 # The worker sandbox never mounts this key. There is no autonomous default-branch merge path.
 SSHKEY="$(field sshkey)"
@@ -115,6 +122,42 @@ BRANCH="loop/work/$ID"
 BASE_COMMIT=""; CANDIDATE_OID=""; LAST_SCOPE_FILE=""; LAST_RUN_ID=""; LAST_RUN_EVIDENCE=""
 IMPLEMENTER_RUN_ID=""; VERIFIER_RUN_ID=""; RESOLVED_MODEL="$MODEL"; RESOLVED_VERIFIER_MODEL=""
 LAST_USAGE_FILE=""; SEED_DIGEST_BEFORE=""
+SEED_EVIDENCE_FILE="$ROOT/state/runs/$ID-seed-$STAMP-$$.json"
+
+CONTRACT_DIGEST="$(python3 - "$TASK" <<'PY'
+import hashlib,json,sys
+text=open(sys.argv[1],encoding='utf-8',errors='surrogateescape').read()
+header,sep,body=text.partition('\n\n')
+keys={'id','project_id','pilot_id','goal_id','goal','engine','repo','acceptance','workdir',
+       'allowed_paths','non_goals','worker_class','model_alias','verifier_model_alias',
+       'deadline_seconds','verifier_deadline_seconds','network_policy','evidence_contract',
+       'verification','expected_change','gate_class','gate_files','controller_gate_files',
+       'gate_contract','source_head','source_branch','charter_sha256','plan_id','plan_digest',
+       'autonomy','seed','seed_manifest','seed_manifest_sha256','seed_digest'}
+fields={}
+for line in header.splitlines():
+    if ':' in line and not line[:1].isspace():
+        key,value=line.split(':',1)
+        if key.strip() in keys: fields[key.strip()]=value.strip()
+raw=json.dumps({'fields':fields,'body':body if sep else ''},sort_keys=True,
+               separators=(',',':'),ensure_ascii=False).encode()
+print(hashlib.sha256(raw).hexdigest())
+PY
+)" || { log "task contract digest could not be measured"; exit 74; }
+
+reject_preworker_contract(){ # stable controller-owned category
+  local category="$1" fallback="${2:-2}" rc
+  [ -n "${PILOT_ID:-}" ] || return "$fallback"
+  [ -x "$ROOT/scripts/project-reconcile.py" ] || { log "pilot contract rejector is absent"; return 95; }
+  pause_checkpoint "pre-worker contract rejection" || return $?
+  RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" \
+      reject-task-contract "$ID" "$category" "$CONTRACT_DIGEST" >>"$LOG" 2>&1; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    log "pilot task contract rejected before worker launch category=$category; task and goal are blocked"
+    return 78
+  fi
+  log "pilot task contract rejection failed closed category=$category rc=$rc"; return "$rc"
+}
 
 # Pilot windows are an execution capability, not a caller convention. Every path into work.sh
 # (queue actuator, legacy drain, manual continuation, assist resume) reaches this same check.
@@ -347,25 +390,112 @@ complete_terminal_escalation(){ # status reason [key] [acceptance-rc]
 
 # --- acceptance is the contract: no test -> no autonomy (delegation-design.md) ----------
 if [ -z "$ACCEPTANCE" ]; then
+  if [ -n "${PILOT_ID:-}" ]; then
+    reject_preworker_contract acceptance-missing; exit $?
+  fi
   board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" blocked "no acceptance test"
   complete_terminal_escalation escalated \
     "no machine-checkable acceptance test (autonomy requires one)" || exit $?
   exit 0
 fi
 
+# Refuse deterministic task-envelope defects before validating the gate projection.  Otherwise
+# an independently malformed deadline/model/network field can be hidden behind a secondary
+# missing/stale gate contract and terminalized under the wrong controller category.
+validate_worker_metadata(){
+  case "$DEADLINE_SECONDS:$VERIFIER_DEADLINE_SECONDS" in
+    *[!0-9:]*|:*|*:) reject_preworker_contract deadline-invalid 2; exit $? ;;
+  esac
+  [ "$DEADLINE_SECONDS" -ge 1 ] && [ "$DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
+    || { reject_preworker_contract deadline-invalid 2; exit $?; }
+  [ "$VERIFIER_DEADLINE_SECONDS" -ge 1 ] && [ "$VERIFIER_DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
+    || { reject_preworker_contract deadline-invalid 2; exit $?; }
+  case "$NETWORK_POLICY" in provider-only|none) ;; *) reject_preworker_contract network-policy-invalid 2; exit $? ;; esac
+  [ "$VERIFICATION_POLICY" = independent ] \
+    || { reject_preworker_contract verification-policy-invalid 2; exit $?; }
+  [ "$ENGINE" != hermes ] \
+    || { reject_preworker_contract worker-engine-invalid 93; exit $?; }
+  [ -n "$MODEL_ALIAS" ] || { reject_preworker_contract model-alias-invalid 2; exit $?; }
+  [ -n "$VERIFIER_MODEL_ALIAS" ] || { reject_preworker_contract verifier-model-alias-invalid 2; exit $?; }
+  [ -n "$MODEL_ALIAS" ] && [ -n "$VERIFIER_MODEL_ALIAS" ] && [ "$MODEL_ALIAS" != "$VERIFIER_MODEL_ALIAS" ] \
+    || { reject_preworker_contract model-separation-invalid 2; exit $?; }
+  [ -x "$ROOT/scripts/resolve-model-alias.py" ] || { log "model alias resolver is missing"; exit 95; }
+  if RESOLVED_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$MODEL_ALIAS" implementer 2>>"$LOG")"; then
+    alias_rc=0
+  else alias_rc=$?; fi
+  if [ "$alias_rc" -ne 0 ]; then
+    case "$alias_rc" in 2|3) reject_preworker_contract model-alias-invalid 95; exit $? ;;
+      *) log "implementer model resolver controller failure rc=$alias_rc"; exit 95 ;; esac
+  fi
+  if RESOLVED_VERIFIER_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$VERIFIER_MODEL_ALIAS" verifier 2>>"$LOG")"; then
+    alias_rc=0
+  else alias_rc=$?; fi
+  if [ "$alias_rc" -ne 0 ]; then
+    case "$alias_rc" in 2|3) reject_preworker_contract verifier-model-alias-invalid 95; exit $? ;;
+      *) log "verifier model resolver controller failure rc=$alias_rc"; exit 95 ;; esac
+  fi
+}
+if [ "$STRICT_PHASE5" = 1 ] && [ -n "${PILOT_ID:-}" ]; then
+  validate_worker_metadata
+fi
+
 # Validate the gate before leasing a worker. The validator rejects literal/no-op success and
 # records any declared gate files whose hashes become part of the exact-commit evidence.
 GATE_CONTRACT=""
 if [ -x "$ROOT/scripts/validate-gate.py" ]; then
-  if ! GATE_CONTRACT="$(python3 "$ROOT/scripts/validate-gate.py" --acceptance "$ACCEPTANCE" \
-      --allowed-paths "${ALLOWED_PATHS:-$WORKDIR}" --gate-files "$GATE_FILES" --repo "$REPO_DIR" 2>>"$LOG")"; then
+  GATE_STRICT_ARGS=()
+  [ -z "$PILOT_ID" ] || GATE_STRICT_ARGS+=(--strict-direct)
+  GATE_ERR="$(mktemp "${TMPDIR:-/tmp}/validate-gate.XXXXXX")" || exit 74
+  if GATE_CONTRACT="$(python3 "$ROOT/scripts/validate-gate.py" --acceptance "$ACCEPTANCE" \
+      --allowed-paths "${ALLOWED_PATHS:-$WORKDIR}" --gate-files "$GATE_FILES" --repo "$REPO_DIR" \
+      --controller-root "$ROOT" --controller-gate-files "$CONTROLLER_GATE_FILES" \
+      "${GATE_STRICT_ARGS[@]}" 2>"$GATE_ERR")"; then
+    gate_rc=0
+  else gate_rc=$?; fi
+  cat "$GATE_ERR" >>"$LOG"; rm -f "$GATE_ERR"
+  if [ "$gate_rc" -ne 0 ]; then
+    if [ "$gate_rc" -eq 2 ] && [ -n "${PILOT_ID:-}" ]; then
+      reject_preworker_contract acceptance-invalid; exit $?
+    fi
+    [ "$gate_rc" -eq 2 ] || { log "gate validator controller failure rc=$gate_rc"; exit "$gate_rc"; }
     board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "invalid acceptance gate"
     complete_terminal_escalation escalated \
       "invalid or structurally vacuous acceptance gate; no worker was launched" || exit $?
     exit 0
   fi
+  if [ -n "$PILOT_ID" ]; then
+    [ -n "$APPROVED_GATE_CONTRACT" ] && [ -n "$SOURCE_HEAD" ] && [ -n "$SOURCE_BRANCH" ] \
+      || { reject_preworker_contract contract-projection-invalid; exit $?; }
+    python3 - "$APPROVED_GATE_CONTRACT" "$GATE_CONTRACT" <<'PY' || {
+import json,sys
+try:
+    approved=json.loads(sys.argv[1]); observed=json.loads(sys.argv[2])
+except json.JSONDecodeError:
+    raise SystemExit(1)
+raise SystemExit(0 if approved == observed else 1)
+PY
+      log "Phase 8 approved gate contract differs from execution bytes"
+      reject_preworker_contract gate-contract-drift; exit $?
+    }
+    observed_head="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || true)"
+    observed_branch="$(git -C "$REPO_DIR" branch --show-current 2>/dev/null || true)"
+    observed_dirty="$(git -C "$REPO_DIR" status --porcelain --untracked-files=all 2>/dev/null || true)"
+    [ "$observed_head" = "$SOURCE_HEAD" ] && [ "$observed_branch" = "$SOURCE_BRANCH" ] \
+      && [ -z "$observed_dirty" ] \
+      || {
+        log "Phase 8 approved source HEAD differs before worker admission"
+        reject_preworker_contract source-head-drift; exit $?
+      }
+  fi
 elif [ "$STRICT_PHASE5" = 1 ]; then
   log "Phase 5 gate validator is missing"; exit 95
+fi
+
+# Preserve the historical non-pilot precedence: an invalid gate remains the primary durable
+# escalation when a legacy task also has malformed envelope metadata.  Exact-digest pilots use
+# the category-precise early check above.
+if [ "$STRICT_PHASE5" = 1 ] && [ -z "${PILOT_ID:-}" ]; then
+  validate_worker_metadata
 fi
 
 # --- create the isolated worktree on loop/work/<id> (never touches the main tree) -------
@@ -390,31 +520,23 @@ mk_worktree(){
   # badly: on failure it logged "building on local base" and carried on, so the arm built on a
   # stale tree, the gate passed (it was testing the old tree), and merging the result REVERTED
   # whatever had been fixed upstream in the meantime.
-  if [ "${RECURSION_GIT_FETCH:-1}" = "1" ]; then
+  if [ -z "$PILOT_ID" ] && [ "${RECURSION_GIT_FETCH:-1}" = "1" ]; then
     gitr fetch --prune --quiet origin >>"$LOG" 2>&1 && log "fetched origin" || log "fetch failed at worktree time (freshness was proven moments ago)"
   fi
-  def="$(git -C "$REPO_DIR" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"; def="${def:-master}"
-  # prefer the remote-tracking tip (freshest merged main); fall back to local, then current HEAD.
-  if git -C "$REPO_DIR" rev-parse --verify "origin/$def" >/dev/null 2>&1; then base="origin/$def"
-  elif git -C "$REPO_DIR" rev-parse --verify "$def" >/dev/null 2>&1; then base="$def"
-  else base="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"; fi
+  if [ -n "$PILOT_ID" ] && [ -n "$SOURCE_HEAD" ]; then
+    base="$SOURCE_HEAD"
+  else
+    def="$(git -C "$REPO_DIR" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)"; def="${def:-master}"
+    # prefer the remote-tracking tip (freshest merged main); fall back to local, then current HEAD.
+    if git -C "$REPO_DIR" rev-parse --verify "origin/$def" >/dev/null 2>&1; then base="origin/$def"
+    elif git -C "$REPO_DIR" rev-parse --verify "$def" >/dev/null 2>&1; then base="$def"
+    else base="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"; fi
+  fi
   git -C "$REPO_DIR" worktree add -B "$BRANCH" "$wt" "$base" >>"$LOG" 2>&1; local addrc=$?
   python3 "$ROOT/scripts/runtime-state.py" lock-release "$wtlock" "$$" >>"$LOG" 2>&1 \
     || { log "worktree lock release failed closed"; return 74; }
   [ "$addrc" -eq 0 ] || return 1
-  # seed gitignored data the tests need but the worktree did not inherit (see SEED note above).
-  local p source repo_real; repo_real="$(realpath -e "$REPO_DIR")" || return 1
-  for p in $SEED; do
-    case "$p" in ''|/*|*..*) log "unsafe declared seed path: $p"; return 1 ;; esac
-    source="$(realpath -e "$REPO_DIR/$p" 2>/dev/null || true)"
-    case "$source" in "$repo_real"/*) ;; *) log "declared seed is absent or escapes repo: $p"; return 1 ;; esac
-    if [ -L "$source" ] || find "$source" -type l -print -quit 2>/dev/null | grep -q .; then
-      log "declared seed contains a symlink and cannot be made an immutable oracle: $p"; return 1
-    fi
-    mkdir -p "$wt/$(dirname "$p")"
-    cp -a -- "$source" "$wt/$p"
-    log "seeded $p into worktree ($(find "$wt/$p" -type f 2>/dev/null | wc -l | tr -d ' ') files)"
-  done
+  copy_seed_into_worktree "$wt" || return 1
   printf '%s\n' "$wt"
 }
 
@@ -423,41 +545,66 @@ mk_worktree(){
 seed_digest(){
   local wt="$1"
   [ -n "$SEED" ] || { printf '%s\n' none; return 0; }
-  python3 - "$wt" $SEED <<'PY'
-import hashlib, os, pathlib, stat, sys
-root = pathlib.Path(sys.argv[1]).resolve(strict=True)
-h = hashlib.sha256()
-for raw in sorted(sys.argv[2:]):
-    rel = pathlib.PurePosixPath(raw)
-    if rel.is_absolute() or ".." in rel.parts:
-        raise SystemExit("unsafe seed path")
-    start = root.joinpath(*rel.parts)
-    if not start.exists() or start.is_symlink() or root not in start.resolve().parents:
-        raise SystemExit("seed missing, symlinked, or escaped")
-    paths = [start]
-    if start.is_dir():
-        paths.extend(sorted(start.rglob("*"), key=lambda p: p.as_posix()))
-    for path in paths:
-        info = path.lstat()
-        if stat.S_ISLNK(info.st_mode):
-            raise SystemExit("seed symlink refused")
-        relative = path.relative_to(root).as_posix().encode()
-        kind = b"d" if path.is_dir() else b"f"
-        h.update(len(relative).to_bytes(4, "big") + relative + kind)
-        h.update(stat.S_IMODE(info.st_mode).to_bytes(4, "big"))
-        if path.is_file():
-            with path.open("rb") as src:
-                for chunk in iter(lambda: src.read(1024 * 1024), b""):
-                    h.update(chunk)
-print(h.hexdigest())
+  [ -x "$ROOT/scripts/seed_contract.py" ] || { log "seed contract helper is absent"; return 1; }
+  local -a args=(digest --root "$wt")
+  local p result
+  for p in $SEED; do args+=(--path "$p"); done
+  result="$(python3 "$ROOT/scripts/seed_contract.py" "${args[@]}" 2>>"$LOG")" || return 1
+  python3 -c 'import json,sys; print(json.loads(sys.argv[1])["content_sha256"])' "$result"
+}
+
+validate_seed_source(){
+  [ -n "$SEED" ] || return 0
+  if [ -n "$PILOT_ID" ] || [ -n "$SEED_MANIFEST$SEED_MANIFEST_SHA256$SEED_DIGEST_EXPECTED" ]; then
+    [ -n "$SEED_MANIFEST" ] && [ -n "$SEED_MANIFEST_SHA256" ] && [ -n "$SEED_DIGEST_EXPECTED" ] \
+      || { log "Phase-8 seed is not bound to an approved manifest and digest"; return 1; }
+    case "$SEED_MANIFEST_SHA256:$SEED_DIGEST_EXPECTED" in
+      *[!0-9a-f:]*) log "Phase-8 seed digest metadata is malformed"; return 1 ;;
+    esac
+    [ "${#SEED_MANIFEST_SHA256}" = 64 ] && [ "${#SEED_DIGEST_EXPECTED}" = 64 ] \
+      || { log "Phase-8 seed digest metadata is malformed"; return 1; }
+    local observed
+    observed="$(python3 "$ROOT/scripts/seed_contract.py" inspect --repo "$REPO_DIR" \
+      --manifest "$SEED_MANIFEST" 2>>"$LOG")" || return 1
+    mkdir -p "$ROOT/state/runs"
+    python3 - "$observed" "$SEED_MANIFEST" "$SEED_MANIFEST_SHA256" \
+      "$SEED_DIGEST_EXPECTED" "${SEED// /,}" "$SEED_EVIDENCE_FILE" <<'PY'
+import json, os, sys, tempfile
+row=json.loads(sys.argv[1]); expected_paths=[p for p in sys.argv[5].split(',') if p]
+valid=(row.get('manifest_path')==sys.argv[2]
+       and row.get('manifest_sha256')==sys.argv[3]
+       and row.get('content_sha256')==sys.argv[4]
+       and row.get('paths')==expected_paths)
+if not valid: raise SystemExit('approved seed contract disagrees with live repository')
+evidence={'schema_version':1,'manifest_path':row['manifest_path'],
+          'manifest_sha256':row['manifest_sha256'],'content_sha256':row['content_sha256'],
+          'path_count':len(row['paths']),'file_count':row.get('file_count',0),'verified_before':True}
+target=sys.argv[6]; os.makedirs(os.path.dirname(target),exist_ok=True)
+fd,name=tempfile.mkstemp(prefix='.seed.',dir=os.path.dirname(target))
+with os.fdopen(fd,'w',encoding='utf-8') as out:
+    json.dump(evidence,out,sort_keys=True,separators=(',',':')); out.write('\n'); out.flush(); os.fsync(out.fileno())
+os.replace(name,target)
 PY
+  fi
+  return 0
+}
+
+copy_seed_into_worktree(){
+  local wt="$1"
+  [ -n "$SEED" ] || return 0
+  local expected="$SEED_DIGEST_EXPECTED" p result
+  [ -n "$expected" ] || expected="$(seed_digest "$REPO_DIR")" || return 1
+  local -a args=(copy --source "$REPO_DIR" --target "$wt" --expected-digest "$expected")
+  for p in $SEED; do args+=(--path "$p"); done
+  result="$(python3 "$ROOT/scripts/seed_contract.py" "${args[@]}" 2>>"$LOG")" || return 1
+  log "seed contract copied and verified ($(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("file_count",0))' "$result") files)"
 }
 
 verify_seed_integrity(){
   [ -n "$SEED" ] || return 0
   local observed
   observed="$(seed_digest "$1")" || { SCOPE_FAIL="declared seed integrity could not be measured"; return 1; }
-  [ "$observed" = "$SEED_DIGEST_BEFORE" ] \
+  [ "$observed" = "${SEED_DIGEST_EXPECTED:-$SEED_DIGEST_BEFORE}" ] \
     || { SCOPE_FAIL="worker/gate mutated a declared read-only seed or oracle"; return 1; }
 }
 
@@ -471,28 +618,6 @@ verify_seed_integrity(){
 # The arm is told to STOP on ambiguity rather than choose. A stopped job with a precise
 # question beats hours of plausible wrong work — and the 0x68 run already proved the arm will
 # honour that: it refused to narrow scope to manufacture a green, and no-op'd honestly.
-if [ "$STRICT_PHASE5" = 1 ]; then
-  case "$DEADLINE_SECONDS:$VERIFIER_DEADLINE_SECONDS" in
-    *[!0-9:]*|:*|*:) log "invalid Phase 5 worker deadline"; exit 2 ;;
-  esac
-  [ "$DEADLINE_SECONDS" -ge 1 ] && [ "$DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
-    || { log "worker deadline is outside the human-owned budget"; exit 2; }
-  [ "$VERIFIER_DEADLINE_SECONDS" -ge 1 ] && [ "$VERIFIER_DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
-    || { log "verifier deadline is outside the human-owned budget"; exit 2; }
-  case "$NETWORK_POLICY" in provider-only|none) ;; *) log "invalid network policy: $NETWORK_POLICY"; exit 2 ;; esac
-  [ "$VERIFICATION_POLICY" = independent ] \
-    || { log "Phase 5 generated work requires independent verification"; exit 2; }
-  [ "$ENGINE" != hermes ] \
-    || { log "Phase 5 metered workers are refused until usage is controller-attested"; exit 93; }
-  [ -n "$MODEL_ALIAS" ] && [ -n "$VERIFIER_MODEL_ALIAS" ] && [ "$MODEL_ALIAS" != "$VERIFIER_MODEL_ALIAS" ] \
-    || { log "implementer and verifier need distinct human-owned model aliases"; exit 2; }
-  [ -x "$ROOT/scripts/resolve-model-alias.py" ] || { log "model alias resolver is missing"; exit 95; }
-  RESOLVED_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$MODEL_ALIAS" implementer 2>>"$LOG")" \
-    || { log "implementer model alias is not human-configured"; exit 95; }
-  RESOLVED_VERIFIER_MODEL="$(python3 "$ROOT/scripts/resolve-model-alias.py" "$VERIFIER_MODEL_ALIAS" verifier 2>>"$LOG")" \
-    || { log "verifier model alias is not human-configured"; exit 95; }
-fi
-
 # A human answer to THIS task's blocker, if one was given. Without this the seam is one-way:
 # the arm stops with a precise question, a human answers into state/INBOX.md — a file the arm
 # never reads — and the next run receives the identical prompt and blocks on the identical
@@ -608,7 +733,7 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
   [ "$readonly" != 1 ] || cmd+=(--read-only-worktree)
   [ -z "$evidence_dir" ] || cmd+=(--evidence-dir "$evidence_dir")
   local protected_path seen_paths=" "
-  for protected_path in $SEED $GATE_FILES; do
+  for protected_path in $SEED $SEED_MANIFEST $GATE_FILES; do
     case "$seen_paths" in *" $protected_path "*) continue ;; esac
     seen_paths+="$protected_path "
     [ ! -e "$wt/$protected_path" ] || cmd+=(--read-only-path "$protected_path")
@@ -629,6 +754,7 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
       --task-id "$ID" --role "$role" --model-alias "$alias" --worktree "$wt" \
       --base-commit "$BASE_COMMIT" --pid "$worker_pgid" --process-group "$worker_pgid" \
       --deadline-epoch "$deadline_epoch" --log "${log_path#$ROOT/}" --network-policy "$NETWORK_POLICY" \
+      ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} \
       ${implementer_run:+--implementer-run-id "$implementer_run"} ${commit_oid:+--commit-oid "$commit_oid"} \
       >>"$LOG" 2>&1 || { terminate_worker_group "$worker_pgid"; wait "$worker_pgid" 2>/dev/null || true; return 98; }
   fi
@@ -706,7 +832,7 @@ scope_check(){
     mkdir -p "$ROOT/state/runs"; LAST_SCOPE_FILE="$ROOT/state/runs/$scope_id-scope.json"
     err="$LAST_SCOPE_FILE.err"
     python3 "$ROOT/scripts/git-scope.py" --repo "$wt" --base "$BASE_COMMIT" \
-      --allowed-paths "$ALLOWED_PATHS" --protected-extra "$GATE_FILES $SEED" \
+      --allowed-paths "$ALLOWED_PATHS" --protected-extra "$GATE_FILES $SEED_MANIFEST $SEED" \
       --ignore .recursion-result.json --check >"$LAST_SCOPE_FILE" 2>"$err"; rc=$?
     if [ "$rc" -ne 0 ]; then
       SCOPE_FAIL="$(cat "$err" 2>/dev/null)"; [ -n "$SCOPE_FAIL" ] || SCOPE_FAIL="complete Git scope inspection failed (rc=$rc)"
@@ -772,6 +898,7 @@ phase5_record_run(){ # status outcome rc [commit]
   [ -z "$LAST_SCOPE_FILE" ] || args+=(--scope-file "$LAST_SCOPE_FILE")
   [ -z "$LAST_USAGE_FILE" ] || [ ! -f "$LAST_USAGE_FILE" ] || args+=(--usage-file "$LAST_USAGE_FILE")
   [ -z "$commit_oid" ] || args+=(--commit-oid "$commit_oid")
+  [ ! -f "$SEED_EVIDENCE_FILE" ] || args+=(--seed-evidence "$SEED_EVIDENCE_FILE" --seed-verified-after)
   python3 "$ROOT/scripts/worker-evidence.py" "${args[@]}" >>"$LOG" 2>&1
 }
 
@@ -843,7 +970,15 @@ acquire_heavy(){
     sleep 10
   done
 }
-release_heavy(){ [ "$HEAVY_HELD" = "1" ] && { RECURSION_ROOT="$ROOT" RECURSION_HEAVY_PID="$$" bash "$ROOT/scripts/capacity.sh" heavy release >/dev/null 2>&1; HEAVY_HELD=0; }; return 0; }
+release_heavy(){
+  [ "$HEAVY_HELD" = "1" ] || return 0
+  if ! RECURSION_ROOT="$ROOT" RECURSION_HEAVY_PID="$$" \
+      bash "$ROOT/scripts/capacity.sh" heavy release >/dev/null 2>&1; then
+    log "heavy-gate lock release failed closed"
+    return 76
+  fi
+  HEAVY_HELD=0
+}
 
 # --- the gate: run the acceptance command in the app dir; its exit code is the verdict. --
 verify(){
@@ -855,13 +990,22 @@ verify(){
   local -a gate_cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine gate --role gate
     --worktree "$wt" --workdir "$gate_workdir" --network-policy none
     --gate-command "$ACCEPTANCE")
-  for protected_path in $SEED $GATE_FILES; do
+  for protected_path in $SEED $SEED_MANIFEST $GATE_FILES; do
     case "$seen_paths" in *" $protected_path "*) continue ;; esac
     seen_paths+="$protected_path "
     gate_cmd+=(--read-only-path "$protected_path")
   done
   if "${gate_cmd[@]}" >>"$ARMLOG" 2>&1; then rc=0; else rc=$?; fi
-  verify_seed_integrity "$wt" || { log "$SCOPE_FAIL"; return 99; }
+  local integrity_rc=0
+  verify_seed_integrity "$wt" || { log "$SCOPE_FAIL"; integrity_rc=99; }
+  # The heavy-gate lock is exclusive for the GATE, not for what follows a verdict: the retry arm
+  # run and the independent verifier do not need it, and a second verify() on the retry path
+  # would spin re-acquiring a lock this same process still holds. Release in every outcome here;
+  # the EXIT trap is only the panic safety net.
+  local release_rc=0
+  release_heavy || release_rc=$?
+  [ "$integrity_rc" = 0 ] || return 99
+  [ "$release_rc" = 0 ] || return "$release_rc"
   return "$rc"
 }
 
@@ -898,6 +1042,11 @@ run_independent_verifier(){
   local prompt rc head dirty
   rm -rf "$evidence_dir"; mkdir -p "$evidence_dir"
   git -C "$REPO_DIR" worktree add --detach "$verify_wt" "$CANDIDATE_OID" >>"$LOG" 2>&1 || return 99
+  if ! copy_seed_into_worktree "$verify_wt" || ! verify_seed_integrity "$verify_wt"; then
+    git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
+    LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
+    return 99
+  fi
   prompt="You are an INDEPENDENT VERIFIER, not the implementer. Review task $ID for goal ${GOAL_ID:-unknown}.
 The checkout is an isolated read-only worktree at exact commit $CANDIDATE_OID, based on $BASE_COMMIT.
 Inspect the complete base..commit diff, the task boundary, and the machine gate evidence.
@@ -918,9 +1067,10 @@ Explicit non-goals: ${NON_GOALS:-none}."
   fi
   head="$(git -C "$verify_wt" rev-parse HEAD 2>/dev/null || true)"
   dirty="$(git -C "$verify_wt" status --porcelain --untracked-files=all 2>/dev/null || true)"
-  if [ "$head" != "$CANDIDATE_OID" ] || [ -n "$dirty" ]; then
+  if [ "$head" != "$CANDIDATE_OID" ] || [ -n "$dirty" ] || ! verify_seed_integrity "$verify_wt"; then
     python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed verifier-mutated-source 99 \
-      --commit-oid "$CANDIDATE_OID" >>"$LOG" 2>&1 || true
+      --commit-oid "$CANDIDATE_OID" \
+      ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} >>"$LOG" 2>&1 || true
     git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
     LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
     return 99
@@ -936,6 +1086,8 @@ Explicit non-goals: ${NON_GOALS:-none}."
   mv -f "$evidence_dir/validated-verdict.json" "$verdict"
   local -a finish_args=(finish "$LAST_RUN_EVIDENCE" succeeded verified 0
     --result-file "$verdict" --commit-oid "$CANDIDATE_OID")
+  [ ! -f "$SEED_EVIDENCE_FILE" ] \
+    || finish_args+=(--seed-evidence "$SEED_EVIDENCE_FILE" --seed-verified-after)
   [ -z "$LAST_USAGE_FILE" ] || [ ! -f "$LAST_USAGE_FILE" ] \
     || finish_args+=(--usage-file "$LAST_USAGE_FILE")
   python3 "$ROOT/scripts/worker-evidence.py" "${finish_args[@]}" >>"$LOG" 2>&1 || return 98
@@ -948,8 +1100,6 @@ Explicit non-goals: ${NON_GOALS:-none}."
   LAST_RUN_EVIDENCE="$impl_evidence"; LAST_RUN_ID="$impl_run"; IMPLEMENTER_RUN_ID="$impl_run"
   [ "$verdict_value" = pass ]
 }
-
-release_heavy   # the gate is over; do not hold the box through publish/merge
 
 # --- after a GREEN build: optionally PUBLISH the canonical review branch. -----------------
 # RECURSION_ALLOW_PUSH remains human-set and off by default. publish.sh accepts only a direct
@@ -975,6 +1125,15 @@ integrate_remote(){
 }
 
 # ============================ pipeline ============================
+if ! validate_seed_source; then
+  if [ -n "$PILOT_ID" ]; then
+    reject_preworker_contract seed-contract-invalid; exit $?
+  fi
+  board finish "$ID" blocked - "seed contract invalid"
+  complete_terminal_escalation escalated \
+    "approved seed manifest or content digest is absent, unsafe, or stale; no worker was launched" || exit $?
+  exit 0
+fi
 pause_checkpoint "board transition" || exit 75
 board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" running "${GOAL:0:40}"
 claim_task; claim_rc=$?
@@ -988,6 +1147,12 @@ commit_state
 # observed failures this closes.
 FRESH_WHY=""
 require_fresh_base(){
+  if [ -n "$PILOT_ID" ] && [ -n "$SOURCE_HEAD" ]; then
+    [ "$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || true)" = "$SOURCE_HEAD" ] \
+      || { FRESH_WHY="project HEAD moved after exact Phase 8 admission"; return 1; }
+    log "base freshness: exact approved Phase 8 source $SOURCE_HEAD"
+    return 0
+  fi
   if [ "${RECURSION_REQUIRE_FRESH_BASE:-1}" != "1" ]; then
     log "FRESH-BASE CHECK DISABLED (RECURSION_REQUIRE_FRESH_BASE=0) — building on whatever base is local"
     return 0
@@ -1118,13 +1283,24 @@ if verify "$WT"; then
 else
   rc=$?
   [ "$rc" -ne 75 ] || { log "acceptance gate deferred before execution; no gate evidence or later step ran"; exit 75; }
+  [ "$rc" -ne 76 ] || { log "heavy-gate release failed; refusing retry or later actuation"; exit 76; }
   phase5_require_gate_record "$rc" || exit $?
   log "acceptance FAILED (exit $rc), attempt 1"
   # A deliberate NO-OP (rc=2 no-progress with NO implementation change) will not benefit from a
-  # retry — the arm chose not to ship (0x68, overlay-0x6c both did this). Retry only a genuine
-  # "tried but failed": impl files changed, or a non-no-progress failure. Saves a wasted ~1h run.
+  # retry — the arm chose not to ship (0x68, overlay-0x6c both did this). "No change" is proven
+  # by commit identity, not by a working-tree snapshot: rc2 is treated as unchanged no-progress
+  # ONLY when BASE_COMMIT == CANDIDATE_OID, i.e. the arm committed no candidate at all. A changed
+  # rc2 candidate (CANDIDATE_OID != BASE_COMMIT) is exactly "tried but failed" and receives the
+  # one bounded retry. Legacy runs never set CANDIDATE_OID, so they keep the working-tree
+  # snapshot as their no-op signal; otherwise their uncommitted changes would read as a no-op.
   impl_changed=$(git -C "$WT" status --porcelain -- . ":(exclude)docs" 2>/dev/null | grep -c . || true)
-  if [ "$ENGINE" != "none" ] && { [ "$rc" != "2" ] || [ "${impl_changed:-0}" -gt 0 ]; }; then
+  candidate_changed=0
+  if [ -n "$CANDIDATE_OID" ]; then
+    [ "$BASE_COMMIT" != "$CANDIDATE_OID" ] && candidate_changed=1
+  else
+    [ "${impl_changed:-0}" -gt 0 ] && candidate_changed=1
+  fi
+  if [ "$ENGINE" != "none" ] && { [ "$rc" != "2" ] || [ "$candidate_changed" = 1 ]; }; then
     log "retry once (design: retry once then escalate)"
     if run_arm_supervised "$WT" 2; then retry_arc=0; else retry_arc=$?; fi
     [ "$retry_arc" != 75 ] || { log "execution authority cancelled retry; no later step ran"; exit 75; }
@@ -1160,13 +1336,14 @@ else
       else
         rc=$?
         [ "$rc" -ne 75 ] || { log "retry acceptance gate deferred before execution; no gate evidence or later step ran"; exit 75; }
+        [ "$rc" -ne 76 ] || { log "heavy-gate release failed after retry; refusing later actuation"; exit 76; }
         phase5_require_gate_record "$rc" || exit $?
       fi
     else
       rc="$retry_arc"
     fi
   else
-    log "no retry: deliberate no-op (rc=$rc, impl-files-changed=${impl_changed:-0})"
+    log "no retry: deliberate no-op (rc=$rc, candidate_changed=$candidate_changed)"
   fi
 fi
 

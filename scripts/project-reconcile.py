@@ -35,6 +35,7 @@ from transition_receipt import (
     TransitionReceiptError, commit_event, commit_transition, fields_mutation, json_mutation,
     resume_transition,
 )
+from seed_contract import SeedContractError, copy_seed_paths, validate_contract
 
 
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -87,6 +88,12 @@ def fail(message: str, code: int = 4) -> None:
 
 def now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def canonical_sha(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 def fsync_dir(path: Path) -> None:
@@ -190,9 +197,11 @@ def transition_event(event: str, project: str, goal: str, task: str = "", detail
 
 
 def commit_reconcile_transition(base: Path, mutations: list, event: dict,
-                                authoritative_index: int = -1) -> None:
+                                authoritative_index: int = -1,
+                                precondition=None) -> None:
     try:
-        commit_transition(base, mutations, event, authoritative_index=authoritative_index)
+        commit_transition(base, mutations, event, authoritative_index=authoritative_index,
+                          precondition=precondition)
     except (OSError, TransitionReceiptError) as exc:
         raise ReconcileError(f"crash-consistent transition failed: {exc}") from exc
 
@@ -296,6 +305,43 @@ def close_paused_windows(base: Path) -> int:
     return closed
 
 
+def verify_phase8_goal_contract(base: Path, project: str, goal_id: str, *,
+                                terminal: bool = False) -> dict:
+    helper = base / "scripts/project-pilot.py"
+    if not helper.is_file():
+        raise ReconcileError("Phase 8 contract verifier is absent")
+    argv = [sys.executable, str(helper), "verify-approved-goal", project, goal_id]
+    if terminal:
+        argv.append("--terminal")
+    proc = subprocess.run(
+        argv,
+        env={**os.environ, "RECURSION_ROOT": str(base)}, text=True,
+        capture_output=True, check=False,
+    )
+    if proc.returncode:
+        detail = (proc.stderr or proc.stdout or "contract verification failed").strip()[:500]
+        raise ReconcileError(f"Phase 8 approved contract is invalid: {detail}")
+    try:
+        value = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise ReconcileError("Phase 8 contract verifier returned malformed evidence") from exc
+    if value.get("project_id") != project or value.get("goal_id") != goal_id:
+        raise ReconcileError("Phase 8 contract verifier returned mismatched authority")
+    return value
+
+
+def require_provider_capability(base: Path, contract: dict) -> None:
+    if contract.get("provider_only_required") is not True:
+        return
+    helper = base / "scripts/provider-network.sh"
+    proc = subprocess.run(
+        ["bash", str(helper), "check"], env={**os.environ, "RECURSION_ROOT": str(base)},
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    ) if helper.is_file() else None
+    if proc is None or proc.returncode:
+        raise ReconcileError("provider-only capability is absent or unhealthy")
+
+
 def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = None) -> dict | None:
     if pilot is None:
         _, pilot = project_records(base, project)
@@ -303,6 +349,7 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
         return {"id": "legacy-unwindowed", "project_id": project, "goal_id": goal_id,
                 "status": "open", "max_inflight_workers": int(pilot.get("concurrency_limit") or 0)}
     now = int(time.time()); matches: list[tuple[Path, dict]] = []
+    verified = False
     for path in sorted((base / "state/pilot-windows").glob("*.json")):
         value = read_json(path)
         if value.get("project_id") != project or value.get("goal_id") != goal_id \
@@ -319,6 +366,60 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
         if value.get("status") == "armed":
             if (base / "state/PAUSE").is_file():
                 continue
+            if not verified:
+                try:
+                    contract = verify_phase8_goal_contract(base, project, goal_id)
+                    require_provider_capability(base, contract)
+                except ReconcileError as exc:
+                    event_id = "source-window-contract-refused-" + hashlib.sha256(
+                        f"{value.get('id')}:{value.get('plan_digest')}".encode()).hexdigest()[:24]
+                    append_event(base, "pilot-window-refused", project, goal_id,
+                                 detail={"window_id": value.get("id"),
+                                         "reason": "approved-contract-invalid",
+                                         "error_sha256": hashlib.sha256(str(exc).encode()).hexdigest()},
+                                 event_id=event_id)
+                    raise
+                verified = True
+            # An authenticated close (or a newly observed PAUSE) may commit between the read
+            # above and this open commit. Re-prove the exact armed bytes, expiry, singleton
+            # authority, and PAUSE immediately before committing, under the same taskctl lock
+            # the close transition takes -- otherwise the open would silently overwrite it.
+            armed = dict(value)
+
+            def open_precondition() -> None:
+                race = os.environ.get("RECURSION_TEST_WINDOW_OPEN_RACE", "")
+                if race == "pause":
+                    (base / "state/PAUSE").write_text("race pause\n", encoding="utf-8")
+                elif race == "close":
+                    closed = dict(armed)
+                    closed.update({"status": "closed", "closed_at": now_iso(),
+                                   "close_reason": "race-close"})
+                    atomic_json(path, closed)
+                elif race == "capability":
+                    (base / "state/test-provider-down").write_text("down\n", encoding="utf-8")
+                if (base / "state/PAUSE").exists():
+                    raise TransitionReceiptError("PAUSE revokes an armed window before it opens")
+                try:
+                    current_contract = verify_phase8_goal_contract(base, project, goal_id)
+                    require_provider_capability(base, current_contract)
+                except ReconcileError as exc:
+                    raise TransitionReceiptError(
+                        f"pilot contract/capability changed before its open commit: {exc}"
+                    ) from exc
+                current = read_json(path)
+                if current.get("status") != "armed" or canonical_sha(current) != canonical_sha(armed):
+                    raise TransitionReceiptError("armed window changed before it opened")
+                if safe_int(current.get("expires_at_epoch")) <= int(time.time()):
+                    raise TransitionReceiptError("armed window expired before it opened")
+                armed_or_open = 0
+                for other in sorted((base / "state/pilot-windows").glob("*.json")):
+                    other_value = read_json(other)
+                    if other_value.get("project_id") == project \
+                            and other_value.get("status") in {"armed", "open"}:
+                        armed_or_open += 1
+                if armed_or_open != 1:
+                    raise TransitionReceiptError("pilot window singleton authority changed before it opened")
+
             event_id = "source-window-open-" + hashlib.sha256(
                 f"{value.get('id')}:{value.get('instruction_id')}".encode()).hexdigest()[:24]
             value.update({"status": "open", "opened_at": now_iso()})
@@ -326,7 +427,12 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
                                      detail={"window_id": value.get("id"),
                                              "instruction_id": value.get("instruction_id")},
                                      event_id=event_id)
-            commit_reconcile_transition(base, [json_mutation(path, value)], event)
+            commit_reconcile_transition(base, [json_mutation(path, value)], event,
+                                        precondition=open_precondition)
+        elif not verified:
+            contract = verify_phase8_goal_contract(base, project, goal_id)
+            require_provider_capability(base, contract)
+            verified = True
         matches.append((path, value))
     if len(matches) > 1:
         raise ReconcileError("multiple open pilot windows target one goal")
@@ -349,6 +455,127 @@ def admit_work(base: Path, task_id: str) -> dict:
         raise ReconcileError("work task lacks canonical project/goal identity")
     window = require_window(base, project, goal_id)
     return {"project_id": project, "goal_id": goal_id, "window_id": window.get("id")}
+
+
+CONTRACT_REJECTION_CATEGORIES = {
+    "acceptance-missing", "acceptance-invalid", "deadline-invalid", "network-policy-invalid",
+    "verification-policy-invalid", "worker-engine-invalid", "model-alias-invalid",
+    "verifier-model-alias-invalid", "model-separation-invalid", "contract-projection-invalid",
+    "gate-contract-drift", "source-head-drift", "seed-contract-invalid",
+}
+
+
+def task_contract_event_id(project: str, goal_id: str, task_id: str,
+                           category: str, contract_digest: str) -> str:
+    identity = f"{project}\0{goal_id}\0{task_id}\0{category}\0{contract_digest}\0pre-worker-contract-v2".encode()
+    return "source-task-contract-invalid-" + hashlib.sha256(identity).hexdigest()[:24]
+
+
+def task_contract_event(project: str, goal_id: str, task_id: str,
+                        category: str, contract_digest: str) -> dict:
+    return transition_event(
+        "task-contract-invalid", project, goal_id, task_id,
+        {
+            "reason": "task-contract-invalid",
+            "category": category,
+            "contract_digest": contract_digest,
+            "stage": "controller-pre-worker",
+            "attempts": 0,
+        },
+        task_contract_event_id(project, goal_id, task_id, category, contract_digest),
+    )
+
+
+def reject_task_contract(base: Path, task_id: str, category: str, contract_digest: str) -> dict:
+    """Atomically stop a pilot task and its goal before a worker can be leased.
+
+    Gate validation runs inside work.sh after dispatch authority has been admitted but before
+    taskctl increments attempts.  A controller rejection at that seam is terminal evidence,
+    not a worker escalation: task and goal therefore share one mutation-backed receipt.  The
+    stable source event also lets an exact retry finish a partial multi-file transition.
+    """
+    task_path = base / "state/tasks" / f"{task_id}.md"
+    task = read_fields(task_path)
+    project, goal_id = task.get("project_id", ""), task.get("goal_id", "")
+    if not IDENT.fullmatch(task_id) or not IDENT.fullmatch(project) or not IDENT.fullmatch(goal_id):
+        raise ReconcileError("contract rejection lacks canonical task/project/goal identity")
+    if not task.get("pilot_id"):
+        raise ReconcileError("contract rejection is reserved for project-pilot work")
+    if category not in CONTRACT_REJECTION_CATEGORIES:
+        raise ReconcileError("contract rejection category is not controller-defined")
+    if re.fullmatch(r"[0-9a-f]{64}", contract_digest) is None:
+        raise ReconcileError("contract rejection digest is invalid")
+    event = task_contract_event(project, goal_id, task_id, category, contract_digest)
+    goal_file = goal_path(base, goal_id)
+    with goal_lock(base, goal_id):
+        try:
+            resumed = resume_transition(base, event)
+        except (OSError, TransitionReceiptError) as exc:
+            raise ReconcileError(f"task-contract rejection recovery failed: {exc}") from exc
+        if resumed:
+            ensure_terminal_events(base, project, goal_id, read_fields(goal_file))
+            return {
+                "project_id": project, "goal_id": goal_id, "task_id": task_id,
+                "event_id": event["id"], "status": "blocked", "replayed": True,
+            }
+
+        task = read_fields(task_path)
+        goal = read_fields(goal_file)
+        if task.get("project_id") != project or task.get("goal_id") != goal_id \
+                or goal.get("project_id") != project:
+            raise ReconcileError("contract rejection crossed project or goal scope")
+        if task.get("status") not in {"ready", "queued"} or goal.get("status") != "active":
+            raise ReconcileError("contract rejection compare-and-swap found unrelated task or goal state")
+        if safe_int(task.get("attempts")) != 0 or task.get("candidate_commit") \
+                or run_records(base, {task_id}):
+            raise ReconcileError("contract rejection is not pre-worker: execution evidence exists")
+
+        timestamp = now_iso()
+        task_version = safe_int(task.get("version"), 1) + 1
+        goal_version = safe_int(goal.get("version"), 1) + 1
+        task_changes = {
+            "status": "blocked", "version": str(task_version), "lease_expires": "0",
+            "transition_reason": "task-contract-invalid", "transition_at": timestamp,
+            "blocker_actor": "controller", "blocked_on": category,
+            "contract_rejection_category": category,
+            "contract_digest": contract_digest,
+            "contract_rejection_event_id": str(event["id"]),
+        }
+        goal_changes = {
+            "status": "blocked", "version": str(goal_version),
+            "last_transition_at": timestamp, "last_transition_reason": "task-contract-invalid",
+            "last_transition_from": "active", "last_transition_task": task_id,
+            "last_transition_category": category, "contract_digest": contract_digest,
+            "terminal_reported": "1", "finished_at": timestamp,
+        }
+
+        def authority_precondition() -> None:
+            if os.environ.get("RECURSION_TEST_PAUSE_BEFORE_CONTRACT_COMMIT") == "1":
+                (base / "state/PAUSE").write_text("test pause before contract commit\n", encoding="utf-8")
+            if (base / "state/PAUSE").exists():
+                raise TransitionReceiptError("PAUSE blocks a new task-contract rejection")
+            _, pilot = project_records(base, project)
+            if not pilot.get("window_required"):
+                return
+            matches = []
+            for window_path in sorted((base / "state/pilot-windows").glob("*.json")):
+                window = read_json(window_path)
+                if window.get("project_id") == project and window.get("goal_id") == goal_id \
+                        and window.get("status") == "open" \
+                        and safe_int(window.get("expires_at_epoch")) > int(time.time()):
+                    matches.append(window)
+            if len(matches) != 1:
+                raise TransitionReceiptError("exact open pilot-window authority changed before commit")
+        commit_reconcile_transition(
+            base,
+            [fields_mutation(task_path, task_changes), fields_mutation(goal_file, goal_changes)],
+            event, authoritative_index=1, precondition=authority_precondition,
+        )
+        ensure_terminal_events(base, project, goal_id, read_fields(goal_file))
+    return {
+        "project_id": project, "goal_id": goal_id, "task_id": task_id,
+        "event_id": event["id"], "status": "blocked", "replayed": False,
+    }
 
 
 def resume_assist(base: Path, task_id: str, instruction_id: str) -> dict:
@@ -611,6 +838,19 @@ def task_evidence(base: Path, repo: Path, task: dict[str, str], runs: list[dict]
     )
     if not valid:
         return False, "machine gate and independent verifier disagree", {"commit_oid": commit}
+    expected_seed = task.get("seed_digest", "")
+    if expected_seed:
+        seed_rows = []
+        for row in (implementer, verifier):
+            evidence = row.get("seed_evidence") if isinstance(row.get("seed_evidence"), dict) else {}
+            seed_rows.append(bool(
+                evidence.get("content_sha256") == expected_seed
+                and evidence.get("manifest_sha256") == task.get("seed_manifest_sha256")
+                and evidence.get("verified_before") is True
+                and evidence.get("verified_after") is True
+            ))
+        if not all(seed_rows):
+            return False, "implementer/verifier seed evidence is absent or disagrees", {"commit_oid": commit}
     try:
         branch_commit = git_output(repo, "rev-parse", f"refs/heads/loop/work/{task_id}")
     except ReconcileError:
@@ -984,11 +1224,19 @@ def ensure_terminal_events(base: Path, project: str, goal_id: str, goal: dict[st
         # Legacy terminal goals do not carry enough information to synthesize an honest
         # transition.  New transitions always persist both fields before projection.
         return
-    transition = transition_event(
-        "goal-transition", project, goal_id,
-        detail={"from": expected, "to": target, "reason": reason, "version": version},
-        event_id=terminal_event_id(project, goal_id, expected, target, version, "transition"),
-    )
+    if expected == "active" and target == "blocked" and reason == "task-contract-invalid":
+        task_id = goal.get("last_transition_task", "")
+        category = goal.get("last_transition_category", "")
+        contract_digest = goal.get("contract_digest", "")
+        if not IDENT.fullmatch(task_id):
+            raise ReconcileError("terminal contract rejection lacks its task identity")
+        transition = task_contract_event(project, goal_id, task_id, category, contract_digest)
+    else:
+        transition = transition_event(
+            "goal-transition", project, goal_id,
+            detail={"from": expected, "to": target, "reason": reason, "version": version},
+            event_id=terminal_event_id(project, goal_id, expected, target, version, "transition"),
+        )
     try:
         # The state-changing CAS already owns this identity. Reuse its mutation-backed receipt;
         # treating the same event as a new pure event would collide after a successful commit.
@@ -1173,11 +1421,17 @@ def terminate_group(pgid: int) -> None:
 
 
 def run_gate_interruptibly(base: Path, cwd: Path, command: str, deadline: int,
-                           network_policy: str) -> tuple[str, int]:
+                           network_policy: str, read_only_paths: Iterable[str] = (),
+                           read_only_worktree: bool = False) -> tuple[str, int]:
+    argv = ["bash", str(base / "scripts/worker-sandbox.sh"), "--engine", "gate", "--role", "gate",
+            "--worktree", str(cwd), "--workdir", ".", "--network-policy", "none",
+            "--gate-command", command]
+    if read_only_worktree:
+        argv.append("--read-only-worktree")
+    for path in read_only_paths:
+        argv.extend(("--read-only-path", path))
     process = subprocess.Popen(
-        ["bash", str(base / "scripts/worker-sandbox.sh"), "--engine", "gate", "--role", "gate",
-         "--worktree", str(cwd), "--workdir", ".", "--network-policy", "none",
-         "--gate-command", command],
+        argv,
         cwd=base, start_new_session=True,
     )
     while process.poll() is None:
@@ -1193,6 +1447,211 @@ def run_gate_interruptibly(base: Path, cwd: Path, command: str, deadline: int,
     return ("pass", 0) if process.returncode == 0 else ("fail", int(process.returncode or 1))
 
 
+def goal_seed_contract(goal: dict[str, str]) -> dict | None:
+    seed = goal.get("seed", "").replace(",", " ").split()
+    values = (goal.get("seed_manifest", ""), goal.get("seed_manifest_sha256", ""),
+              goal.get("seed_digest", ""))
+    if not seed and not any(values):
+        return None
+    if not seed or not all(values) or any(not re.fullmatch(r"[0-9a-f]{64}", item) for item in values[1:]):
+        raise SeedContractError("goal seed metadata is incomplete or malformed")
+    return {"schema_version": 1, "manifest_path": values[0], "manifest_sha256": values[1],
+            "content_sha256": values[2], "paths": seed}
+
+
+def acquire_goal_heavy(base: Path, tag: str, deadline: int) -> tuple[str, int, bool]:
+    env = os.environ.copy()
+    env.update({"RECURSION_ROOT": str(base), "RECURSION_HEAVY_TAG": tag,
+                "RECURSION_HEAVY_PID": str(os.getpid())})
+    while True:
+        if (base / "state/PAUSE").exists():
+            return "paused", 75, False
+        if time.time() >= deadline:
+            return "timeout", 124, False
+        attempt = subprocess.run(
+            ["bash", str(base / "scripts/capacity.sh"), "heavy", "acquire", tag],
+            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        )
+        if attempt.returncode == 0:
+            return "pass", 0, True
+        if attempt.returncode != 4:
+            raise ReconcileError("heavy goal gate capacity controller failed closed")
+        time.sleep(0.05)
+
+
+def release_goal_heavy(base: Path) -> None:
+    env = os.environ.copy()
+    env.update({"RECURSION_ROOT": str(base), "RECURSION_HEAVY_PID": str(os.getpid())})
+    released = subprocess.run(
+        ["bash", str(base / "scripts/capacity.sh"), "heavy", "release"], env=env,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    if released.returncode:
+        raise ReconcileError("heavy goal gate lock release failed closed")
+
+
+def canonical_digest(value: object) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _observed_goal_gate(base: Path, worktree: Path, goal: dict[str, str],
+                        config: dict) -> dict | None:
+    """Run the execution validator against the goal worktree and parse its contract."""
+    validator = subprocess.run(
+        [sys.executable, str(base / "scripts/validate-gate.py"),
+         "--acceptance", goal["acceptance_suite"],
+         "--allowed-paths", ",".join(config.get("allowed_paths") or []),
+         "--gate-files", goal.get("gate_files", ""), "--repo", str(worktree),
+         "--controller-root", str(base),
+         "--controller-gate-files", goal.get("controller_gate_files", ""),
+         "--strict-direct"],
+        text=True, capture_output=True, check=False,
+    )
+    if validator.returncode != 0:
+        return None
+    try:
+        value = json.loads(validator.stdout)
+    except json.JSONDecodeError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def make_worktree_read_only(worktree: Path) -> None:
+    """Make the terminal-gate worktree OS read-only before the conformance executes."""
+    proc = subprocess.run(["chmod", "-R", "a-w", str(worktree)], stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL, check=False)
+    if proc.returncode:
+        raise ReconcileError("terminal gate worktree could not be made OS read-only")
+
+
+def restore_worktree_permissions(worktree: Path) -> None:
+    subprocess.run(["chmod", "-R", "u+w", str(worktree)], stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL, check=False)
+
+
+def log_terminal_gate_refused(base: Path, project: str, goal_id: str, exc: Exception) -> None:
+    append_event(base, "terminal-gate-refused", project, goal_id,
+                 detail={"goal_id": goal_id,
+                         "reason": "read-only-grading-unavailable",
+                         "error_sha256": hashlib.sha256(str(exc).encode()).hexdigest()},
+                 event_id="source-terminal-gate-refused-" + hashlib.sha256(
+                     f"{project}\0{goal_id}".encode()).hexdigest()[:24])
+
+
+def _phase8_expected_task_values(config: dict, pilot: dict, plan: dict, plan_id: str,
+                                 digest: str, goal_id: str, task: dict) -> dict[str, str]:
+    """Mirror project-pilot.task_values so the materialized DAG can be re-proven exactly."""
+    authority = plan.get("authority_contract") if isinstance(plan.get("authority_contract"), dict) else {}
+    seed = plan.get("seed_contract") if isinstance(plan.get("seed_contract"), dict) else None
+    values = {
+        "schema_version": "1", "version": "1", "id": task["id"], "project_id": config["id"],
+        "project": config["id"], "workstream": config["id"], "pilot_id": pilot["id"],
+        "goal_id": goal_id, "plan_id": plan_id, "plan_digest": digest,
+        "dependencies": ",".join(task.get("dependencies") or []), "goal": task["intent"],
+        "allowed_paths": ",".join(task.get("allowed_paths") or []),
+        "non_goals": ",".join(task.get("non_goals") or []), "worker_class": task["worker_class"],
+        "engine": task["engine"], "model_alias": task["model_alias"],
+        "verifier_model_alias": task["verifier_model_alias"],
+        "deadline_seconds": str(task["deadline_seconds"]),
+        "verifier_deadline_seconds": str(task["verifier_deadline_seconds"]),
+        "network_policy": task["network_policy"], "evidence_contract": task["evidence_contract"],
+        "verification": task["verification"], "expected_change": task["expected_change"],
+        "gate_class": task["gate_class"],
+        "gate_contract": json.dumps(task["gate_contract"], sort_keys=True, separators=(",", ":")),
+        "gate_files": ",".join(task.get("gate_files") or []), "acceptance": task["acceptance"],
+        "controller_gate_files": ",".join(task.get("controller_gate_files") or []),
+        "source_head": str(authority.get("source_head") or ""),
+        "source_branch": str(authority.get("default_branch") or ""),
+        "charter_sha256": str(authority.get("charter_sha256") or ""),
+        "repo": str(config.get("repo") or ""), "workdir": ".", "autonomy": "auto",
+    }
+    if task.get("source_task_id"):
+        values["source_task_id"] = task["source_task_id"]
+    if seed:
+        values.update({
+            "seed_manifest": seed["manifest_path"], "seed_manifest_sha256": seed["manifest_sha256"],
+            "seed": ",".join(seed["paths"]), "seed_digest": seed["content_sha256"],
+        })
+    return values
+
+
+def verify_phase8_goal_projection(base: Path, config: dict, pilot: dict,
+                                  goal: dict[str, str], project: str, goal_id: str) -> None:
+    """Re-prove the exact approved plan and its materialized goal/task projection.
+
+    Terminal grading is authority only over the plan Lucas approved by digest.  The materialized
+    goal/task files are controller-derived from that plan, so their immutable contract must still
+    equal the plan's projection: a tampered goal or task, or a plan file that no longer re-hashes
+    to its approved digest, fails closed before any worktree or gate runs.  Historical
+    non-Phase-8 goals carry no plan_id and are not affected.
+    """
+    # Reuse the admission controller's canonical validator first. It rebinds the live project
+    # charter, exact source HEAD, seed, gate hashes, and materialized DAG; this local mirror then
+    # remains an independent fail-closed projection check rather than a weaker parallel source.
+    verify_phase8_goal_contract(base, project, goal_id, terminal=True)
+    plan_id = str(goal.get("plan_id") or "")
+    if not plan_id:
+        return
+    if str(goal.get("project_id")) != project or str(goal.get("id") or "") != goal_id:
+        raise ReconcileError("Phase 8 goal identity disagrees with its revalidation scope")
+    try:
+        proposal = read_json(base / "state/plans" / project / f"{plan_id}.json")
+    except ReconcileError as exc:
+        raise ReconcileError(f"approved plan is absent or unreadable: {exc}") from exc
+    if proposal.get("project_id") != project or proposal.get("status") != "approved":
+        raise ReconcileError("goal plan is not approved")
+    plan = proposal.get("plan")
+    if not isinstance(plan, dict) or str(plan.get("id") or "") != plan_id:
+        raise ReconcileError("approved plan record lacks its canonical plan object")
+    digest = canonical_digest(plan)
+    planned_goal = plan.get("goal")
+    if proposal.get("plan_digest") != digest or goal.get("plan_digest") != digest \
+            or not isinstance(planned_goal, dict) or str(planned_goal.get("id") or "") != goal_id:
+        raise ReconcileError("approved plan/goal digest projection differs")
+    authority = plan.get("authority_contract") if isinstance(plan.get("authority_contract"), dict) else {}
+    seed = plan.get("seed_contract") if isinstance(plan.get("seed_contract"), dict) else None
+    expected_goal = {
+        "id": goal_id, "project_id": project, "pilot_id": str(pilot.get("id") or ""),
+        "plan_id": plan_id, "plan_digest": digest,
+        "outcome": str(planned_goal.get("outcome") or ""),
+        "acceptance_suite": str(planned_goal.get("acceptance_suite") or ""),
+        "falsifier": str(planned_goal.get("falsifier") or ""),
+        "gate_class": str(planned_goal.get("gate_class") or ""),
+        "gate_files": ",".join(planned_goal.get("gate_files") or []),
+        "controller_gate_files": ",".join(planned_goal.get("controller_gate_files") or []),
+        "gate_contract": json.dumps(planned_goal.get("gate_contract"),
+                                    sort_keys=True, separators=(",", ":")),
+        "source_head": str(authority.get("source_head") or ""),
+        "source_branch": str(authority.get("default_branch") or ""),
+        "charter_sha256": str(authority.get("charter_sha256") or ""),
+        "budget": json.dumps(planned_goal.get("budget"), sort_keys=True, separators=(",", ":")),
+    }
+    if seed:
+        expected_goal.update({"seed_manifest": seed["manifest_path"],
+                              "seed_manifest_sha256": seed["manifest_sha256"],
+                              "seed": ",".join(seed["paths"]),
+                              "seed_digest": seed["content_sha256"]})
+    if any(goal.get(key, "") != str(value) for key, value in expected_goal.items()):
+        raise ReconcileError("materialized goal immutable contract differs from its approved plan")
+    planned = list(plan.get("tasks") or [])
+    planned_ids = {str(task.get("id") or "") for task in planned}
+    actual_ids = {value.get("id", "") for _, value in goal_tasks(base, goal_id)}
+    if planned_ids != actual_ids:
+        raise ReconcileError("materialized task DAG differs from the exact approved plan")
+    for task in planned:
+        task_id = str(task.get("id") or "")
+        try:
+            expected = _phase8_expected_task_values(config, pilot, plan, plan_id, digest, goal_id, task)
+        except (KeyError, TypeError) as exc:
+            raise ReconcileError("approved plan task is schema-incomplete") from exc
+        expected.pop("status", None)
+        actual = read_fields(base / "state/tasks" / f"{task_id}.md")
+        if any(actual.get(key, "") != str(value) for key, value in expected.items()):
+            raise ReconcileError(
+                f"materialized task {task_id} immutable contract differs from its approved plan"
+            )
+
+
 def verify_goal(base: Path, project: str, goal_id: str) -> None:
     config, pilot = project_records(base, project)
     goal = read_fields(goal_path(base, goal_id))
@@ -1202,7 +1661,50 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
     tasks = goal_tasks(base, goal_id)
     if not tasks or any(task.get("status") != "passed" for _, task in tasks):
         raise ReconcileError("goal verification requires every task passed")
+    evidence_path = base / "state/evidence" / f"{goal_id}.json"
+    # Phase 8 goals are graded only against the plan Lucas approved by digest. Re-prove the
+    # exact approved plan and the materialized goal/task projection BEFORE any worktree or gate
+    # runs: a tampered projection fails closed here. Historical non-Phase-8 goals carry no
+    # plan_id and are not affected.
+    if goal.get("plan_id"):
+        try:
+            verify_phase8_goal_projection(base, config, pilot, goal, project, goal_id)
+        except ReconcileError as exc:
+            value = {"schema_version": 1, "id": f"goal-evidence-{goal_id}", "project_id": project,
+                     "goal_id": goal_id, "verdict": "fail",
+                     "reason": f"phase8-contract: {exc}", "checked_at": now_iso()}
+            event = transition_event(
+                "goal-verification", project, goal_id, detail=value,
+                event_id="source-goal-verification-" + hashlib.sha256(
+                    json.dumps([project, goal_id, value], sort_keys=True,
+                               separators=(",", ":")).encode()).hexdigest()[:24],
+            )
+            with goal_lock(base, goal_id):
+                commit_reconcile_transition(base, [json_mutation(evidence_path, value)], event)
+            return
     repo = Path(str(config["repo"]))
+    try:
+        seed_contract = goal_seed_contract(goal)
+        seed_live = validate_contract(repo, seed_contract) if seed_contract else None
+    except (OSError, SeedContractError) as exc:
+        value = {"schema_version": 1, "id": f"goal-evidence-{goal_id}", "project_id": project,
+                 "goal_id": goal_id, "verdict": "fail", "reason": f"seed-contract: {exc}",
+                 "checked_at": now_iso()}
+        event = transition_event(
+            "goal-verification", project, goal_id, detail=value,
+            event_id="source-goal-verification-" + hashlib.sha256(
+                json.dumps([project, goal_id, value], sort_keys=True,
+                           separators=(",", ":")).encode()).hexdigest()[:24],
+        )
+        with goal_lock(base, goal_id):
+            commit_reconcile_transition(
+                base, [json_mutation(base / "state/evidence" / f"{goal_id}.json", value)], event,
+            )
+        return
+    for _, task in tasks:
+        if any(task.get(key, "") != goal.get(key, "")
+               for key in ("seed_manifest", "seed_manifest_sha256", "seed", "seed_digest")):
+            raise ReconcileError("task and goal seed contracts disagree")
     runs = run_records(base, {task.get("id", "") for _, task in tasks})
     sink_ids = {task.get("id", "") for _, task in tasks}
     for _, task in tasks:
@@ -1231,7 +1733,6 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
                 valid = False
                 reason = f"verified dependency commit {task_id} is absent from the final review commit"
                 break
-    evidence_path = base / "state/evidence" / f"{goal_id}.json"
     if not valid:
         value = {"schema_version": 1, "id": f"goal-evidence-{goal_id}", "project_id": project,
                  "goal_id": goal_id, "verdict": "fail", "reason": reason,
@@ -1257,12 +1758,90 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
         raise ReconcileError((proc.stderr or proc.stdout or "goal verification worktree failed").strip())
     started = int(time.time())
     wall_deadline = safe_int(goal.get("started_at_epoch"), started) + int(budget["max_wall_clock_seconds"])
+    heavy_held = False
     try:
-        network_policy = sink.get("network_policy", "none")
-        if network_policy not in {"provider-only", "none"}:
-            raise ReconcileError("goal gate inherited an invalid network policy")
-        outcome, rc = run_gate_interruptibly(base, worktree, goal["acceptance_suite"],
-                                             wall_deadline, network_policy)
+        # Model calls may use provider-only capability. Acceptance never inherits it: product
+        # and terminal gates are deterministic offline controller executions.
+        network_policy = "none"
+        gate_class = goal.get("gate_class", "light")
+        if gate_class not in {"light", "heavy"}:
+            raise ReconcileError("goal gate has an invalid gate class")
+        try:
+            approved_gate = json.loads(goal.get("gate_contract", "")) if goal.get("gate_contract") else None
+        except json.JSONDecodeError as exc:
+            raise ReconcileError("goal gate lacks its approved contract") from exc
+        # Re-prove the repository/controller gate hashes BEFORE the gate.  A goal that declares no
+        # approved contract (historical non-Phase-8 goal) still has its observed contract proven
+        # structurally and, after the gate, proven byte-stable.
+        gate_before = _observed_goal_gate(base, worktree, goal, config)
+        gate_contract_valid = bool(
+            gate_before is not None and (approved_gate is None or gate_before == approved_gate)
+        )
+        seed_evidence = None
+        try:
+            if seed_contract and seed_live:
+                copied = copy_seed_paths(repo, worktree, seed_contract["paths"],
+                                         seed_contract["content_sha256"])
+                copied_contract = validate_contract(worktree, seed_contract)
+                seed_evidence = {
+                    "manifest_path": seed_contract["manifest_path"],
+                    "manifest_sha256": seed_contract["manifest_sha256"],
+                    "content_sha256": copied["content_sha256"],
+                    "path_count": copied["path_count"], "file_count": copied["file_count"],
+                    "verified_before": copied_contract["content_sha256"] == copied["content_sha256"],
+                }
+        except (OSError, SeedContractError):
+            seed_evidence = {
+                "manifest_path": seed_contract["manifest_path"] if seed_contract else "",
+                "manifest_sha256": seed_contract["manifest_sha256"] if seed_contract else "",
+                "content_sha256": seed_contract["content_sha256"] if seed_contract else "",
+                "verified_before": False, "verified_after": False,
+                "error": "copy-or-validation-failed",
+            } if seed_contract else None
+            outcome, rc = "fail", 99
+        else:
+            if not gate_contract_valid:
+                outcome, rc = "fail", 98
+            elif gate_class == "heavy":
+                outcome, rc, heavy_held = acquire_goal_heavy(base, f"goal-{goal_id}", wall_deadline)
+            else:
+                outcome, rc = "pass", 0
+            if outcome == "pass":
+                # The whole gate runs against the exact-commit worktree made OS read-only: a
+                # conformance that reversibly tampers with a gate file cannot write it, so the
+                # tampering fails the gate instead of passing silently between two hash checks.
+                try:
+                    make_worktree_read_only(worktree)
+                except ReconcileError as exc:
+                    restore_worktree_permissions(worktree)
+                    log_terminal_gate_refused(base, project, goal_id, exc)
+                    outcome, rc = "fail", 99
+                else:
+                    try:
+                        outcome, rc = run_gate_interruptibly(
+                            base, worktree, goal["acceptance_suite"], wall_deadline, network_policy,
+                            ([seed_contract["manifest_path"], *seed_contract["paths"]]
+                             if seed_contract else ()),
+                            read_only_worktree=True,
+                        )
+                    finally:
+                        restore_worktree_permissions(worktree)
+                    # Re-prove repository/controller gate hashes AFTER the gate too.  Combined
+                    # with the read-only run, before == after closes the TOCTOU window.
+                    gate_after = _observed_goal_gate(base, worktree, goal, config)
+                    if gate_after is None or gate_after != gate_before:
+                        outcome, rc = "fail", 99
+        if seed_contract and seed_evidence:
+            try:
+                after = validate_contract(worktree, seed_contract)
+                seed_evidence["verified_after"] = (
+                    after["content_sha256"] == seed_contract["content_sha256"]
+                    and after["file_count"] == seed_evidence["file_count"]
+                )
+            except (OSError, SeedContractError):
+                seed_evidence["verified_after"] = False
+            if not seed_evidence["verified_after"]:
+                outcome, rc = "fail", 99
         head = git_output(worktree, "rev-parse", "HEAD")
         dirty = git_output(worktree, "status", "--porcelain", "--untracked-files=all")
         if outcome == "pass" and rc == 0 and head == commit and not dirty:
@@ -1278,7 +1857,10 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
                  "verifier_run_id": exact["verifier_run_id"],
                  "machine_gate": exact["machine_gate"],
                  "independent_verifier": exact["independent_verifier"],
-                 "checked_at": now_iso(), "worktree_clean": not bool(dirty)}
+                 "checked_at": now_iso(), "worktree_clean": not bool(dirty),
+                 "gate_class": gate_class}
+        if seed_evidence:
+            value["seed_evidence"] = seed_evidence
         event = transition_event(
             "goal-verification", project, goal_id, detail=value,
             event_id="source-goal-verification-" + hashlib.sha256(
@@ -1290,8 +1872,16 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
         if outcome == "paused":
             raise ReconcileError("PAUSE interrupted exact-commit goal verification")
     finally:
+        release_error = None
+        if heavy_held:
+            try:
+                release_goal_heavy(base)
+            except ReconcileError as exc:
+                release_error = exc
         subprocess.run(["git", "-C", str(repo), "worktree", "remove", "--force", str(worktree)],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        if release_error:
+            raise release_error
 
 
 def goal_evidence(base: Path, goal_id: str) -> dict | None:
@@ -1558,8 +2148,12 @@ def schedule(base: Path, project: str | None, goal_id: str | None) -> int:
             continue
         if safe_int(pilot.get("concurrency_limit")) <= 0:
             continue
-        if pilot.get("window_required") and not open_window(base, pid, gid, pilot):
-            continue
+        if pilot.get("window_required"):
+            try:
+                if not open_window(base, pid, gid, pilot):
+                    continue
+            except ReconcileError:
+                continue
         fingerprint = snapshot_digest(base, config, gid)
         enqueue_decision(base, str(pilot["id"]), "reconcile-goal", [pid, gid], gid,
                          "event-driven canonical truth reconciliation", [pid, gid, fingerprint])
@@ -1580,6 +2174,10 @@ def main() -> int:
     resume_cmd = sub.add_parser("resume-assist")
     resume_cmd.add_argument("task")
     resume_cmd.add_argument("instruction")
+    reject_cmd = sub.add_parser("reject-task-contract")
+    reject_cmd.add_argument("task")
+    reject_cmd.add_argument("category")
+    reject_cmd.add_argument("contract_digest")
     for name in ("reconcile", "verify-goal"):
         cmd = sub.add_parser(name)
         cmd.add_argument("project")
@@ -1610,6 +2208,10 @@ def main() -> int:
             return 0
         if args.command == "resume-assist":
             print(json.dumps(resume_assist(base, args.task, args.instruction),
+                             sort_keys=True, separators=(",", ":")))
+            return 0
+        if args.command == "reject-task-contract":
+            print(json.dumps(reject_task_contract(base, args.task, args.category, args.contract_digest),
                              sort_keys=True, separators=(",", ":")))
             return 0
         if (base / "state/PAUSE").exists():
