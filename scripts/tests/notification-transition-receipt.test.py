@@ -21,7 +21,9 @@ spec.loader.exec_module(outbox)
 from jsonl_durable import read_jsonl_objects  # noqa: E402
 from transition_receipt import (  # noqa: E402
     TransitionReceiptError,
+    commit_event,
     commit_transition,
+    fields_mutation,
     json_mutation,
     recover_transitions,
 )
@@ -404,17 +406,32 @@ class NotificationReceiptTests(unittest.TestCase):
         self.assertEqual(event["id"], record["event_id"])
 
     def test_terminal_report_crash_is_reenqueued_and_repaired_exactly_once(self) -> None:
+        goal_path = self.base / "state/goals/goal-alpha.md"
+        goal_path.parent.mkdir(parents=True, exist_ok=True)
+        goal_path.write_text(
+            "schema_version: 1\nversion: 1\nid: goal-alpha\nproject_id: alpha\n"
+            "pilot_id: pilot-alpha\nstatus: verifying\nterminal_reported: 0\n",
+            encoding="utf-8",
+        )
         source = {
             "schema_version": 1, "id": "source-terminal-repair", "ts": "2026-08-10T04:00:00Z",
             "event": "goal-transition", "project": "alpha", "goal": "goal-alpha", "task": "",
             "detail": {"from": "verifying", "to": "achieved", "reason": "verified", "version": 2},
         }
-        (self.base / "state/events.jsonl").write_text(json.dumps(source) + "\n", encoding="utf-8")
+        commit_transition(
+            self.base,
+            [fields_mutation(goal_path, {
+                "status": "achieved", "version": "2", "last_transition_from": "verifying",
+                "last_transition_at": source["ts"], "last_transition_reason": "verified",
+            })],
+            source,
+        )
         terminal = outbox.all_mapped(self.base, "alpha")[0]
         outbox.create_event(self.base, terminal)
         chain = {
             "instruction": {"id": "1", "record": {"id": "1"}}, "plan": [{"id": "plan"}],
             "plan_approval": [], "pilot_windows": [], "actions": [{"id": "action"}],
+            "goal": {"id": "goal-alpha", "budget": '{"publication_required":true}'},
             "tasks": [{"id": "task"}], "workers": [{"id": "worker"}],
             "commits": [{"id": "commit"}], "gates": [{"id": "gate"}],
             "verifier": [{"id": "verify"}], "review_branch": {"name": "review/alpha"},

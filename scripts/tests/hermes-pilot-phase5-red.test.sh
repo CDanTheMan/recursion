@@ -21,7 +21,7 @@ mkdir -p "$BIN" "$R/scripts/tests" "$R/state/tasks" "$R/state/runs" \
   "$R/user-client/render/data/models"
 for s in work.sh worker-sandbox.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh \
          git-scope.py validate-gate.py validate-worker-result.py validate-verifier-result.py \
-         resolve-model-alias.py worker-evidence.py; do
+         resolve-model-alias.py worker-evidence.py seed_contract.py; do
   [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$R/scripts/"
 done
 chmod +x "$R/scripts/"* 2>/dev/null || true
@@ -31,6 +31,7 @@ printf '{"truth":1}\n' > "$R/fixtures/truth.json"
 printf 'seed\n' > "$R/app/seed.txt"
 printf 'immutable oracle\n' > "$R/user-client/render/data/models/oracle.json"
 printf '/user-client/render/data/models/\n' > "$R/.gitignore"
+printf 'user-client/render/data/models\n' > "$R/.seedlist"
 printf '#!/usr/bin/env bash\nexit 1\n' > "$R/app/gate.sh"; chmod +x "$R/app/gate.sh"
 : > "$R/.env"; : > "$R/state/INBOX.md"
 
@@ -122,6 +123,64 @@ if [ "$(status_of seed-tamper)" = escalated ] && [ ! -e "$MARKER_SEED" ]; then
 else
   no "an ignored worker-writable oracle reached its gate (status=$(status_of seed-tamper))"
 fi
+
+# 1c. Phase-8 seeds are compared to the approved manifest/content digest, copied into the
+# verifier checkout too, and represented in both run records without corpus bytes.
+SEED_CONTRACT="$(python3 "$R/scripts/seed_contract.py" inspect --repo "$R")"
+eval "$(python3 - "$SEED_CONTRACT" <<'PY'
+import json,shlex,sys
+row=json.loads(sys.argv[1])
+for key,name in [('manifest_sha256','BOUND_MANIFEST'),('content_sha256','BOUND_SEED')]:
+    print(f'{name}={shlex.quote(row[key])}')
+PY
+)"
+mktask seed-bound-pass "test -s app/seed-bound.txt && test -s user-client/render/data/models/oracle.json"
+sed -i "/^workdir:/i seed_manifest: .seedlist\nseed_manifest_sha256: $BOUND_MANIFEST\nseed: user-client/render/data/models\nseed_digest: $BOUND_SEED" \
+  "$R/state/tasks/seed-bound-pass.md"
+result="$(done_result seed-bound '["app/seed-bound.txt"]')"
+seeded_verdict='test "$(cat user-client/render/data/models/oracle.json)" = "immutable oracle" || exit 42; '"$verdict_script"
+run_case seed-bound-pass "printf ok > app/seed-bound.txt; printf '%s' '$result' > .recursion-result.json" "$seeded_verdict"
+if [ "$(status_of seed-bound-pass)" = passed ] && python3 - "$R/state/runs" "$BOUND_SEED" <<'PY'
+import glob,json,sys
+rows=[]
+for path in glob.glob(sys.argv[1]+'/*.json'):
+    try: row=json.load(open(path))
+    except Exception: continue
+    if row.get('task_id')=='seed-bound-pass': rows.append(row)
+roles={row.get('role') for row in rows}
+valid=(roles=={'implementer','verifier'} and all(
+    row.get('seed_evidence',{}).get('content_sha256')==sys.argv[2]
+    and row.get('seed_evidence',{}).get('verified_before') is True
+    and row.get('seed_evidence',{}).get('verified_after') is True for row in rows))
+raise SystemExit(0 if valid else 1)
+PY
+then
+  ok "approved seed digest reaches implementer and independent verifier evidence"
+else
+  no "approved seed was absent, self-derived, or missing from verifier evidence"
+fi
+
+mktask seed-wrong-digest "test -s app/never-seeded.txt"
+WRONG_SEED="0${BOUND_SEED#?}"
+[ "$WRONG_SEED" != "$BOUND_SEED" ] || WRONG_SEED="1${BOUND_SEED#?}"
+sed -i "/^workdir:/i seed_manifest: .seedlist\nseed_manifest_sha256: $BOUND_MANIFEST\nseed: user-client/render/data/models\nseed_digest: $WRONG_SEED" \
+  "$R/state/tasks/seed-wrong-digest.md"
+result="$(done_result wrong '["app/never-seeded.txt"]')"
+run_case seed-wrong-digest "printf reached > app/never-seeded.txt; printf '%s' '$result' > .recursion-result.json" "$verdict_script"
+[ "$(status_of seed-wrong-digest)" = escalated ] \
+  && ok "copied seed is compared with the approved digest before worker launch" \
+  || no "a task ran against seed bytes that disagreed with its approved digest"
+
+mktask verifier-seed-tamper "test -s app/verifier-seed.txt"
+sed -i "/^workdir:/i seed_manifest: .seedlist\nseed_manifest_sha256: $BOUND_MANIFEST\nseed: user-client/render/data/models\nseed_digest: $BOUND_SEED" \
+  "$R/state/tasks/verifier-seed-tamper.md"
+result="$(done_result verifier-seed '["app/verifier-seed.txt"]')"
+run_case verifier-seed-tamper \
+  "printf original > app/verifier-seed.txt; printf '%s' '$result' > .recursion-result.json" \
+  'printf corrupt > user-client/render/data/models/oracle.json; '"$verdict_script"
+[ "$(status_of verifier-seed-tamper)" = escalated ] \
+  && ok "independent verifier cannot mutate an ignored seeded oracle" \
+  || no "verifier seed mutation escaped integrity enforcement"
 
 # 2. One committed change set exercises test, fixture rename/delete, and out-of-scope paths.
 MARKER2="$TMP/gate-committed-mutations"
@@ -363,6 +422,93 @@ fi
 mv "$R/scripts/capacity.real.sh" "$R/scripts/capacity.sh"
 mv "$R/scripts/notify.real.sh" "$R/scripts/notify.sh"
 rm -f "$R/scripts/publish.sh"
+
+# 12. The heavy-gate lock is exclusive for the GATE only. Every verify() releases it in all
+# outcomes, so a passing heavy gate runs its independent verifier with the box-wide lock FREE,
+# and a failing heavy gate can re-acquire for the one bounded retry instead of spinning on a
+# lock this same process still holds.
+export RECURSION_HEAVY_WAIT_S=0
+LOCK_FREE_MARKER="$TMP/heavy-lock-free"
+mktask heavy-pass "test -s app/heavy-pass.txt"
+sed -i '/^gate_files:/i gate_class: heavy' "$R/state/tasks/heavy-pass.md"
+result="$(done_result heavy-pass '["app/heavy-pass.txt"]')"
+verifier_lock_check='h="$(RECURSION_ROOT="$RECURSION_ROOT" bash "$RECURSION_ROOT/scripts/capacity.sh" heavy status)"; [ "$h" = FREE ] && : > "$HEAVY_LOCK_FREE_MARKER"; '"$verdict_script"
+HEAVY_LOCK_FREE_MARKER="$LOCK_FREE_MARKER" run_case heavy-pass \
+  "printf ok > app/heavy-pass.txt; printf '%s' '$result' > .recursion-result.json" "$verifier_lock_check"
+if [ "$(status_of heavy-pass)" = passed ] && [ -e "$LOCK_FREE_MARKER" ]; then
+  ok "heavy gate releases the box-wide lock before the independent verifier"
+else
+  no "heavy lock was still held across the independent verifier (status=$(status_of heavy-pass) lock_free=$([ -e "$LOCK_FREE_MARKER" ] && echo yes || echo no))"
+fi
+
+RETRY_LAUNCHES="$TMP/heavy-retry-launches"
+mktask heavy-retry "if [ -e app/retry-second.txt ]; then exit 0; else exit 1; fi"
+sed -i '/^gate_files:/i gate_class: heavy' "$R/state/tasks/heavy-retry.md"
+first_result='{"status":"done","summary":"first heavy attempt","files_changed":["app/heavy-retry.txt"],"tests_run":"fixture gate","risks":[],"blocker":""}'
+second_result='{"status":"done","summary":"second heavy attempt","files_changed":["app/heavy-retry.txt","app/retry-second.txt"],"tests_run":"fixture gate","risks":[],"blocker":""}'
+RETRY_LAUNCHES="$RETRY_LAUNCHES" run_case heavy-retry "n=\$(wc -l < \"\$RETRY_LAUNCHES\" 2>/dev/null || echo 0); n=\$((n+1)); echo \"launch \$n\" >> \"\$RETRY_LAUNCHES\"; if [ \"\$n\" = 1 ]; then printf ok > app/heavy-retry.txt; printf '%s' '$first_result' > .recursion-result.json; else printf ok > app/heavy-retry.txt; printf ok > app/retry-second.txt; printf '%s' '$second_result' > .recursion-result.json; fi" "$verdict_script"
+heavy_retry_launches="$(wc -l < "$RETRY_LAUNCHES" 2>/dev/null || echo 0)"
+if [ "$(status_of heavy-retry)" = passed ] && [ "$heavy_retry_launches" = 2 ]; then
+  ok "a failed heavy gate releases its lock so the one bounded retry reruns"
+else
+  no "heavy retry could not re-acquire after the failed gate (status=$(status_of heavy-retry) launches=$heavy_retry_launches)"
+fi
+
+mv "$R/scripts/capacity.sh" "$R/scripts/capacity.release-real.sh"
+cat > "$R/scripts/capacity.sh" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}:${2:-}" in
+  heavy:acquire) echo 'ACQUIRED release-failure-fixture'; exit 0 ;;
+  heavy:release) exit 76 ;;
+  heavy:status) echo 'HELD release-failure-fixture'; exit 0 ;;
+esac
+exit 4
+SH
+chmod +x "$R/scripts/capacity.sh"
+RELEASE_FAIL_LAUNCHES="$TMP/heavy-release-fail-launches"
+mktask heavy-release-fail "test -s app/heavy-release-fail.txt"
+sed -i '/^gate_files:/i gate_class: heavy' "$R/state/tasks/heavy-release-fail.md"
+result="$(done_result heavy-release-fail '["app/heavy-release-fail.txt"]')"
+RELEASE_FAIL_LAUNCHES="$RELEASE_FAIL_LAUNCHES" run_case heavy-release-fail \
+  "printf 'launch\n' >> '$RELEASE_FAIL_LAUNCHES'; printf ok > app/heavy-release-fail.txt; printf '%s' '$result' > .recursion-result.json" \
+  "$verdict_script"
+heavy_release_rc=$?
+heavy_release_launches="$(wc -l < "$RELEASE_FAIL_LAUNCHES" 2>/dev/null || echo 0)"
+if [ "$heavy_release_rc" = 76 ] && [ "$(status_of heavy-release-fail)" = running ] \
+   && [ "$heavy_release_launches" = 1 ]; then
+  ok "heavy lock release failure stops before retry/verifier/later actuation"
+else
+  no "heavy lock release failure was hidden or retried (rc=$heavy_release_rc status=$(status_of heavy-release-fail) launches=$heavy_release_launches)"
+fi
+mv "$R/scripts/capacity.release-real.sh" "$R/scripts/capacity.sh"
+unset RECURSION_HEAVY_WAIT_S LOCK_FREE_MARKER RETRY_LAUNCHES
+
+# 13. Gate rc=2 is treated as unchanged no-progress ONLY when BASE_COMMIT == CANDIDATE_OID.
+# A changed rc2 candidate (the arm committed something) is "tried but failed" and gets the one
+# bounded retry; a genuinely unchanged rc2 candidate is a deliberate no-op and does not.
+RC2_LAUNCHES="$TMP/rc2-changed-launches"
+mktask rc2-changed "if [ -e app/rc2-second.txt ]; then exit 0; else exit 2; fi"
+first_rc2='{"status":"done","summary":"changed rc2 attempt","files_changed":["app/rc2-changed.txt"],"tests_run":"fixture gate","risks":[],"blocker":""}'
+second_rc2='{"status":"done","summary":"changed rc2 second","files_changed":["app/rc2-changed.txt","app/rc2-second.txt"],"tests_run":"fixture gate","risks":[],"blocker":""}'
+RC2_LAUNCHES="$RC2_LAUNCHES" run_case rc2-changed "n=\$(wc -l < \"\$RC2_LAUNCHES\" 2>/dev/null || echo 0); n=\$((n+1)); echo \"launch \$n\" >> \"\$RC2_LAUNCHES\"; if [ \"\$n\" = 1 ]; then printf ok > app/rc2-changed.txt; printf '%s' '$first_rc2' > .recursion-result.json; else printf ok > app/rc2-changed.txt; printf ok > app/rc2-second.txt; printf '%s' '$second_rc2' > .recursion-result.json; fi" "$verdict_script"
+rc2_launches="$(wc -l < "$RC2_LAUNCHES" 2>/dev/null || echo 0)"
+if [ "$(status_of rc2-changed)" = passed ] && [ "$rc2_launches" = 2 ]; then
+  ok "a changed rc2 candidate receives the one bounded retry"
+else
+  no "a changed rc2 candidate was misread as no-progress (status=$(status_of rc2-changed) launches=$rc2_launches)"
+fi
+
+NOOP_LAUNCHES="$TMP/rc2-noop-launches"
+mktask rc2-noop "if [ -e app/rc2-noop.txt ]; then exit 0; else exit 2; fi" optional
+noop_result='{"status":"no-op","summary":"deliberate no progress","files_changed":[],"tests_run":"fixture gate","risks":[],"blocker":""}'
+NOOP_LAUNCHES="$NOOP_LAUNCHES" run_case rc2-noop "n=\$(wc -l < \"\$NOOP_LAUNCHES\" 2>/dev/null || echo 0); n=\$((n+1)); echo \"launch \$n\" >> \"\$NOOP_LAUNCHES\"; printf '%s' '$noop_result' > .recursion-result.json"
+rc2_noop_launches="$(wc -l < "$NOOP_LAUNCHES" 2>/dev/null || echo 0)"
+if [ "$(status_of rc2-noop)" = failed ] && [ "$rc2_noop_launches" = 1 ]; then
+  ok "an unchanged rc2 candidate (base==candidate) is a deliberate no-op with no retry"
+else
+  no "an unchanged rc2 no-progress was retried (status=$(status_of rc2-noop) launches=$rc2_noop_launches)"
+fi
+unset RC2_LAUNCHES NOOP_LAUNCHES
 
 echo
 [ "$fails" -eq 0 ] && { echo "hermes-pilot-phase5-red: ALL PASS"; exit 0; }

@@ -7,16 +7,26 @@ cd "$ROOT"
 
 bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/hermes-decide.sh \
   scripts/assist.sh scripts/taskctl.sh scripts/work.sh scripts/notify.sh scripts/digest.sh \
-  scripts/cycle.sh loop/supervisor/run.sh scripts/tests/hermes-pilot-phase8-red.test.sh
-python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scripts/decision-queue.py \
+  scripts/cycle.sh scripts/provider-network.sh scripts/worker-sandbox.sh loop/supervisor/run.sh \
+  scripts/tests/hermes-pilot-phase8-red.test.sh scripts/tests/provider-network-root.test.sh
+python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scripts/project-reconcile.py scripts/decision-queue.py \
+  scripts/seed_contract.py scripts/tests/seed-contract.test.py \
   scripts/notification-outbox.py scripts/jsonl_durable.py scripts/transition_receipt.py scripts/validate-decision.py scripts/validate-control-state.py \
+  scripts/validate-gate.py \
   scripts/runtime-state.py scripts/tests/hermes-pilot-phase8-red.py \
   scripts/tests/hermes-pilot-phase8-parallel.py \
   scripts/tests/hermes-pilot-phase8-legacy-journal-red.py \
+  scripts/tests/hermes-pilot-phase8-race-red.py \
+  scripts/tests/hermes-pilot-phase8-reject-red.py \
   scripts/tests/hermes-pilot-phase8-notification-red.py scripts/tests/jsonl-durability.test.py \
   scripts/tests/decision-identity.test.py scripts/tests/runtime-state-locks.test.py \
   scripts/tests/runtime-state-recovery.test.py scripts/tests/reconcile-liveness.test.py \
-  scripts/tests/transition-receipt.test.py scripts/tests/notification-transition-receipt.test.py
+  scripts/tests/transition-receipt.test.py scripts/tests/notification-transition-receipt.test.py \
+  scripts/tests/phase8-notification-authentication.test.py \
+  scripts/tests/pilot-instruction.test.py \
+  scripts/provider-connect-proxy.py scripts/tests/provider-connect-proxy.test.py \
+  scripts/gsc-shade-tops-gate.py scripts/tests/gsc-shade-tops-gate.test.py \
+  scripts/tests/validate-gate.test.py scripts/tests/allowed-path.test.py
 python3 - <<'PY'
 import json
 json.load(open('schemas/control-plane/v1/schema.json',encoding='utf-8'))
@@ -30,8 +40,20 @@ for verb in pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window
 done
 grep -q 'canonical_digest(plan)' scripts/project-pilot.py
 grep -q 'fresh pilot plan reuses an existing goal id' scripts/project-pilot.py
-grep -q 'Lucas instruction does not name the exact Phase 8 object' scripts/project-pilot.py
+grep -q 'require_affirmative_command(body, verb' scripts/project-pilot.py
+grep -q 'fail(f"Lucas {exc}")' scripts/project-pilot.py
+grep -q 'instruction does not name the exact Phase 8 command and bounds' scripts/pilot_instruction.py
+grep -q 'instruction is negated or ambiguous for the requested Phase 8 operation' scripts/pilot_instruction.py
 echo "ok    fresh synthesis, schema bounds, collision refusal, and exact Lucas digest/window approval are mechanical"
+
+grep -q 'project_required_non_goals' scripts/project-pilot.py
+grep -q 'If the live project state contains required_gate_profile' scripts/hermes-decide.sh
+grep -q 'repo_gate_contract' scripts/project-pilot.py
+grep -q 'repository gate changed after proposal' scripts/project-pilot.py
+grep -q 'gate_files are immutable grading code' scripts/hermes-decide.sh
+grep -q -- '--network-policy none' scripts/work.sh
+grep -q -- '--network-policy", "none"' scripts/project-reconcile.py
+echo "ok    canonical project exclusions and immutable repo gates are rebound at every authority seam while gates stay offline"
 
 grep -q 'build_pilot_brief' scripts/hermes-decide.sh
 grep -q 'RECURSION_PILOT_MODEL' scripts/hermes-decide.sh
@@ -285,6 +307,7 @@ grep -q 'resume_event_id' scripts/project-reconcile.py
 grep -q 'DURABLE_REPORTING' scripts/assist.sh
 grep -q 'PILOT_ID' scripts/work.sh
 grep -q 'assist-open' scripts/notification-outbox.py
+grep -q 'question_snippet' scripts/assist.sh
 grep -q 'assist-answer' scripts/notification-outbox.py
 echo "ok    one answered assist reopens the same goal/task and all pilot notices use the Phase 7 outbox"
 
@@ -324,6 +347,7 @@ for event in portfolio-brief project-digest; do grep -q "$event" scripts/notific
 echo "ok    PAUSE interlocks the sole sender and resumed brief/digest delivery enters the Phase 7 outbox"
 
 bash scripts/tests/hermes-pilot-phase8-red.test.sh
+python3 scripts/tests/seed-contract.test.py
 python3 scripts/tests/hermes-pilot-phase8-notification-red.py
 python3 scripts/tests/decision-identity.test.py
 python3 scripts/tests/jsonl-durability.test.py
@@ -332,4 +356,10 @@ python3 scripts/tests/runtime-state-recovery.test.py
 python3 scripts/tests/reconcile-liveness.test.py
 python3 scripts/tests/transition-receipt.test.py
 python3 scripts/tests/notification-transition-receipt.test.py
+python3 scripts/tests/phase8-notification-authentication.test.py
+python3 scripts/tests/pilot-instruction.test.py
+python3 scripts/tests/provider-connect-proxy.test.py
+python3 scripts/tests/gsc-shade-tops-gate.test.py
+python3 scripts/tests/validate-gate.test.py
+python3 scripts/tests/allowed-path.test.py
 echo "hermes-pilot-phase8-green: ALL PASS"
