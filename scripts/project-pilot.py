@@ -29,6 +29,7 @@ from seed_contract import SeedContractError, inspect_repository, validate_contra
 
 
 IDENT = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
+ALLOWED_PATH_COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 PILOT_VERBS = {
     "pilot-plan-propose", "pilot-task-create", "pilot-worker-request",
     "pilot-verifier-request", "pilot-block", "pilot-escalate", "pilot-goal-verify",
@@ -128,8 +129,27 @@ def records(base: Path, project: str, active: bool = False) -> tuple[dict, dict,
     return cfg, pilot, row
 
 
+def valid_allowed_path(scope: str) -> bool:
+    """A materializable charter path: relative, no dot/dotdot, no delimiters or control bytes.
+
+    The value is later joined with commas and re-split on comma/whitespace before it reaches the
+    shell and the Git scope gate, so any byte that could become a second path or a shell operator
+    must be refused before it is written.
+    """
+    if not isinstance(scope, str) or not scope:
+        return False
+    if any(ord(ch) < 32 for ch in scope):
+        return False
+    if scope in {".", ".."} or scope.startswith(("/", "\\")):
+        return False
+    if "\\" in scope:
+        return False
+    parts = scope.split("/")
+    return all(part and part != ".." and ALLOWED_PATH_COMPONENT.fullmatch(part) for part in parts)
+
+
 def scope_allowed(cfg: dict, scope: str) -> bool:
-    if not scope or scope.startswith(("/", "\\")) or ".." in Path(scope).parts:
+    if not valid_allowed_path(scope):
         return False
     allowed = cfg.get("allowed_paths")
     if not isinstance(allowed, list) or not allowed:

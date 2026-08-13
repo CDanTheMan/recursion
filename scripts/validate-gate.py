@@ -15,6 +15,16 @@ from pathlib import Path, PurePosixPath
 
 VACUOUS = re.compile(r"^(?:true|:|/bin/true|exit\s+0)$")
 
+# Shell reserved words and wrapper/detaching launchers that would let an admission string hide,
+# invert, or detach the actual direct grading program. `env`/`npm`/etc. are already rejected as
+# indirect launchers below; this set is the remaining reserved-word and privilege/detach class.
+RESERVED = {
+    "!", "command", "exec", "builtin", "source", ".", "time", "nohup", "setsid",
+    "nice", "sudo", "su", "doas", "timeout", "chroot", "unshare", "nsenter",
+    "runuser", "script", "eval", "trap", "set", "coproc", "systemd-run",
+    "disown", "jobs", "wait", "bg", "fg", "ulimit", "prlimit", "strace", "gdb",
+}
+
 
 def fail(message: str) -> None:
     raise ValueError(message)
@@ -62,6 +72,8 @@ def entrypoint(words: list[str], strict: bool) -> str | None:
         return None
     command = words[0].replace("\\", "/")
     name = PurePosixPath(command).name
+    if strict and command in RESERVED:
+        fail(f"shell reserved word or wrapper is not admitted: {command}")
     if name in {"env", "npm", "npx", "yarn", "pnpm", "xargs", "find", "make"}:
         if strict:
             fail(f"indirect acceptance launcher is not admitted: {name}")
@@ -119,8 +131,12 @@ def main() -> int:
         if not gate or len(gate) > 4096 or any(ord(ch) < 32 and ch not in "\t" for ch in gate):
             fail("acceptance gate must be bounded, single-line, and non-empty")
         compact = re.sub(r"\s+", " ", gate)
-        if args.strict_direct and (any(token in gate for token in ("`", "$(", "<(", ">("))
-                                   or re.search(r"(?<!\|)\|(?!\|)", gate)):
+        if args.strict_direct and (
+            any(token in gate for token in ("`", "$(", "<(", ">("))
+            or re.search(r"(?<!\|)\|(?!\|)", gate)
+            or re.search(r"(?<![&])&(?![&])", gate)
+            or "<" in gate or ">" in gate
+        ):
             fail("acceptance gate uses unreviewable shell indirection")
         raw_segments = re.split(r"\s*(?:&&|\|\||;)\s*", gate)
         operators = re.findall(r"&&|\|\||;", gate)

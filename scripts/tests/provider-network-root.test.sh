@@ -99,15 +99,43 @@ grep -Eq '^NoNewPrivs:[[:space:]]+1$' "/proc/$proxy_pid/status"
 PROVIDER_FIXTURE_PORT="$port" ip netns exec "$NS" python3 - <<'PY'
 import os, socket
 port = int(os.environ["PROVIDER_FIXTURE_PORT"])
+
+def client_hello(sni):
+    host = sni.encode("ascii")
+    server_name = b"\x00" + len(host).to_bytes(2, "big") + host
+    ext = (0).to_bytes(2, "big") + (len(server_name) + 2).to_bytes(2, "big") \
+        + len(server_name).to_bytes(2, "big") + server_name
+    body = (0x0303).to_bytes(2, "big") + b"\x00" * 32 + b"\x00" \
+        + (2).to_bytes(2, "big") + b"\x13\x01" + b"\x01\x00" \
+        + len(ext).to_bytes(2, "big") + ext
+    handshake = b"\x01" + len(body).to_bytes(3, "big") + body
+    return b"\x16\x03\x01" + len(handshake).to_bytes(2, "big") + handshake
+
 secret = b"must-not-appear-in-proxy-output"
+hello = client_hello("fixture.invalid")
 with socket.create_connection(("127.0.0.1", 18080), timeout=2) as s:
     request = (f"CONNECT fixture.invalid:{port} HTTP/1.1\r\n".encode()
                + b"Proxy-Authorization: " + secret + b"\r\n\r\n")
     s.sendall(request)
     response = s.recv(4096)
     assert response.startswith(b"HTTP/1.1 200"), response
-    s.sendall(b"provider-tunnel-ok")
-    assert s.recv(64) == b"provider-tunnel-ok"
+    s.sendall(hello)
+    echoed = b""
+    while len(echoed) < len(hello):
+        block = s.recv(4096)
+        assert block, "tunnel closed before the pinned ClientHello was echoed"
+        echoed += block
+    assert echoed == hello, echoed
+with socket.create_connection(("127.0.0.1", 18080), timeout=2) as s:
+    s.sendall(f"CONNECT fixture.invalid:{port} HTTP/1.1\r\n\r\n".encode())
+    assert s.recv(64).startswith(b"HTTP/1.1 200")
+    s.sendall(client_hello("wrong.example.com"))
+    assert s.recv(64) == b"", "wrong-SNI tunnel was not failed closed"
+with socket.create_connection(("127.0.0.1", 18080), timeout=2) as s:
+    s.sendall(f"CONNECT fixture.invalid:{port} HTTP/1.1\r\n\r\n".encode())
+    assert s.recv(64).startswith(b"HTTP/1.1 200")
+    s.sendall(b"not-a-tls-record")
+    assert s.recv(64) == b"", "non-TLS tunnel was not failed closed"
 with socket.create_connection(("127.0.0.1", 18080), timeout=2) as s:
     s.sendall(b"CONNECT example.com:443 HTTP/1.1\r\n\r\n")
     assert s.recv(64).startswith(b"HTTP/1.1 403")

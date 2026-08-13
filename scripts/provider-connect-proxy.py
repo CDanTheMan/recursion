@@ -34,7 +34,12 @@ PR_SET_NO_NEW_PRIVS = 38
 MAX_REQUEST = 8192
 HEADER_TIMEOUT = 5.0
 CONNECT_TIMEOUT = 15.0
+CLIENT_HELLO_TIMEOUT = 15.0
 IDLE_TIMEOUT = 300.0
+MAX_CLIENT_HELLO = 65536
+TLS_HANDSHAKE = 0x16
+TLS_CLIENT_HELLO = 0x01
+SERVER_NAME_EXTENSION = 0x0000
 HOST_RE = re.compile(r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 HEADER_RE = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+\Z")
 
@@ -45,6 +50,14 @@ class MalformedConnect(ValueError):
 
 class ConnectDenied(PermissionError):
     """The requested authority is not controller-authorized."""
+
+
+class MalformedClientHello(ValueError):
+    """The tunnel's first bytes are not one pinned TLS ClientHello."""
+
+
+class ClientHelloMismatch(ValueError):
+    """The ClientHello SNI does not match the CONNECT authority."""
 
 
 def parse_authority(value: str) -> tuple[str, int]:
@@ -108,6 +121,151 @@ def parse_connect_request(request: bytes, allowed: set[tuple[str, int]]) -> tupl
     if authority not in allowed:
         raise ConnectDenied("authority is not allowed")
     return authority
+
+
+def _u16(data: bytes, offset: int) -> int:
+    return (data[offset] << 8) | data[offset + 1]
+
+
+def parse_client_hello(data: bytes) -> tuple[str, int] | None:
+    """Return ``(sni, consumed)`` for a complete ClientHello, or ``None`` if more bytes are needed.
+
+    Raises ``MalformedClientHello`` the moment the accumulated bytes cannot be a TLS ClientHello,
+    so the proxy fails closed on non-TLS input, a non-ClientHello handshake, truncation, or
+    oversize. ``sni`` is lower-cased; no payload byte is ever reflected into an error message.
+    """
+    if len(data) < 5:
+        return None
+    if data[0] != TLS_HANDSHAKE or data[1] != 3 or data[2] not in (1, 2, 3, 4):
+        raise MalformedClientHello("first record is not a supported TLS handshake")
+    handshake = b""
+    pos = 0
+    while True:
+        if len(data) < pos + 5:
+            return None
+        if data[pos] != TLS_HANDSHAKE:
+            raise MalformedClientHello("interleaved non-handshake record")
+        record_len = _u16(data, pos + 3)
+        if record_len == 0:
+            raise MalformedClientHello("empty TLS record")
+        if len(data) < pos + 5 + record_len:
+            return None
+        handshake += data[pos + 5:pos + 5 + record_len]
+        pos += 5 + record_len
+        if len(handshake) > MAX_CLIENT_HELLO:
+            raise MalformedClientHello("ClientHello exceeds the 64 KiB bound")
+        if len(handshake) >= 4:
+            message_len = int.from_bytes(handshake[1:4], "big")
+            if message_len == 0:
+                raise MalformedClientHello("empty handshake message")
+            if 4 + message_len > MAX_CLIENT_HELLO:
+                raise MalformedClientHello("handshake message exceeds the 64 KiB bound")
+            if len(handshake) >= 4 + message_len:
+                break
+    if handshake[0] != TLS_CLIENT_HELLO:
+        raise MalformedClientHello("first handshake message is not a ClientHello")
+    body = handshake[4:4 + int.from_bytes(handshake[1:4], "big")]
+    return _client_hello_sni(body), pos
+
+
+def _client_hello_sni(body: bytes) -> str:
+    if len(body) < 2 + 32 + 1:
+        raise MalformedClientHello("truncated ClientHello")
+    pos = 2 + 32
+    session_len = body[pos]
+    pos += 1
+    if len(body) < pos + session_len:
+        raise MalformedClientHello("truncated session id")
+    pos += session_len
+    if len(body) < pos + 2:
+        raise MalformedClientHello("truncated cipher suites")
+    cipher_len = _u16(body, pos)
+    pos += 2
+    if len(body) < pos + cipher_len:
+        raise MalformedClientHello("truncated cipher suites")
+    pos += cipher_len
+    if len(body) < pos + 1:
+        raise MalformedClientHello("truncated compression methods")
+    compression_len = body[pos]
+    pos += 1
+    if len(body) < pos + compression_len:
+        raise MalformedClientHello("truncated compression methods")
+    pos += compression_len
+    if len(body) < pos + 2:
+        raise MalformedClientHello("ClientHello has no extensions")
+    extensions_len = _u16(body, pos)
+    pos += 2
+    end = pos + extensions_len
+    if len(body) < end:
+        raise MalformedClientHello("truncated extensions")
+    while pos < end:
+        if len(body) < pos + 4:
+            raise MalformedClientHello("truncated extension")
+        ext_type = _u16(body, pos)
+        ext_len = _u16(body, pos + 2)
+        pos += 4
+        if len(body) < pos + ext_len:
+            raise MalformedClientHello("truncated extension")
+        if ext_type == SERVER_NAME_EXTENSION:
+            return _parse_server_name(body[pos:pos + ext_len])
+        pos += ext_len
+    raise MalformedClientHello("ClientHello lacks a server_name extension")
+
+
+def _parse_server_name(data: bytes) -> str:
+    if len(data) < 2:
+        raise MalformedClientHello("truncated server_name extension")
+    list_len = _u16(data, 0)
+    if len(data) < 2 + list_len:
+        raise MalformedClientHello("truncated server_name list")
+    pos = 2
+    end = 2 + list_len
+    host_name: str | None = None
+    while pos < end:
+        if len(data) < pos + 3:
+            raise MalformedClientHello("truncated server name")
+        name_type = data[pos]
+        name_len = _u16(data, pos + 1)
+        pos += 3
+        if len(data) < pos + name_len:
+            raise MalformedClientHello("truncated server name value")
+        value = data[pos:pos + name_len]
+        pos += name_len
+        if name_type == 0:
+            try:
+                host_name = value.decode("ascii", "strict")
+            except UnicodeDecodeError as exc:
+                raise MalformedClientHello("server_name is not ASCII") from exc
+    if host_name is None:
+        raise MalformedClientHello("server_name extension has no host_name")
+    if not host_name or "\x00" in host_name or len(host_name) > 253:
+        raise MalformedClientHello("server_name is invalid")
+    return host_name.lower()
+
+
+async def read_client_hello(reader: asyncio.StreamReader, expected_sni: str) -> tuple[bytes, bytes]:
+    """Read and pin the client's TLS ClientHello to the CONNECT authority, forwarding nothing else.
+
+    Returns ``(initial, trailing)`` where ``initial`` is the complete ClientHello record stream and
+    ``trailing`` is any already-read bytes beyond it (normally empty). Raises
+    ``MalformedClientHello`` or ``ClientHelloMismatch`` to fail closed before any tunnel payload is
+    forwarded.
+    """
+    data = b""
+    while True:
+        chunk = await asyncio.wait_for(reader.read(4096), CLIENT_HELLO_TIMEOUT)
+        if not chunk:
+            raise MalformedClientHello("connection closed before a TLS ClientHello")
+        data += chunk
+        parsed = parse_client_hello(data)
+        if parsed is None:
+            if len(data) > MAX_CLIENT_HELLO:
+                raise MalformedClientHello("ClientHello exceeds the 64 KiB bound")
+            continue
+        sni, consumed = parsed
+        if sni != expected_sni:
+            raise ClientHelloMismatch()
+        return data[:consumed], data[consumed:]
 
 
 def _libc_call(name: str, *args: object) -> None:
@@ -240,10 +398,18 @@ class ConnectProxy:
                 return
             writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
             await writer.drain()
+            initial, trailing = await read_client_hello(reader, host)
+            if initial:
+                upstream_writer.write(initial)
+            if trailing:
+                upstream_writer.write(trailing)
+            await upstream_writer.drain()
             await asyncio.gather(
                 _pipe(reader, upstream_writer),
                 _pipe(upstream_reader, writer),
             )
+        except (MalformedClientHello, ClientHelloMismatch):
+            pass
         except (ConnectionError, OSError):
             pass
         finally:

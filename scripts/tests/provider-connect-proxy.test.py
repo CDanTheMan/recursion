@@ -75,6 +75,80 @@ class ConnectContractTest(unittest.TestCase):
                     self.proxy.parse_allowlist([value])
 
 
+def build_client_hello(sni: str) -> bytes:
+    """Assemble one TLS handshake record carrying a single ClientHello with the given SNI."""
+    host = sni.encode("ascii")
+    server_name = b"\x00" + len(host).to_bytes(2, "big") + host
+    ext = (
+        (0).to_bytes(2, "big")
+        + (len(server_name) + 2).to_bytes(2, "big")
+        + len(server_name).to_bytes(2, "big")
+        + server_name
+    )
+    body = (0x0303).to_bytes(2, "big") + b"\x00" * 32  # legacy version + random
+    body += b"\x00"  # empty session id
+    body += (2).to_bytes(2, "big") + b"\x13\x01"  # one cipher suite
+    body += b"\x01\x00"  # one compression method
+    body += len(ext).to_bytes(2, "big") + ext
+    handshake = b"\x01" + len(body).to_bytes(3, "big") + body
+    return b"\x16\x03\x01" + len(handshake).to_bytes(2, "big") + handshake
+
+
+def record(payload: bytes) -> bytes:
+    return b"\x16\x03\x01" + len(payload).to_bytes(2, "big") + payload
+
+
+class ClientHelloContractTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.proxy = load_proxy()
+
+    def test_pinned_sni_is_extracted_case_insensitively(self):
+        hello = build_client_hello("API.ANTHROPIC.COM")
+        sni, consumed = self.proxy.parse_client_hello(hello)
+        self.assertEqual(sni, "api.anthropic.com")
+        self.assertEqual(consumed, len(hello))
+
+    def test_fragmented_client_hello_is_reassembled(self):
+        hello = build_client_hello("api.anthropic.com")
+        handshake = hello[5:]
+        half = len(handshake) // 2
+        fragmented = record(handshake[:half]) + record(handshake[half:])
+        sni, consumed = self.proxy.parse_client_hello(fragmented)
+        self.assertEqual(sni, "api.anthropic.com")
+        self.assertEqual(consumed, len(fragmented))
+
+    def test_wrong_sni_is_visible_for_fail_closed_comparison(self):
+        hello = build_client_hello("evil.example.com")
+        self.assertEqual(self.proxy.parse_client_hello(hello)[0], "evil.example.com")
+
+    def test_non_tls_non_client_hello_and_empty_record_are_malformed(self):
+        for data in (
+            b"GET / HTTP/1.1\r\n\r\n",  # not TLS
+            record(b"\x02\x00\x00\x00"),  # ServerHello, not ClientHello
+            b"\x16\x03\x01\x00\x00",  # zero-length handshake record
+        ):
+            with self.subTest(data=data[:12]):
+                with self.assertRaises(self.proxy.MalformedClientHello):
+                    self.proxy.parse_client_hello(data)
+
+    def test_incomplete_client_hello_returns_none_not_malformed(self):
+        hello = build_client_hello("api.anthropic.com")
+        self.assertIsNone(self.proxy.parse_client_hello(hello[:4]))
+
+    def test_client_hello_without_server_name_is_malformed(self):
+        host = b""
+        server_name = b"\x00" + len(host).to_bytes(2, "big")
+        ext = (0).to_bytes(2, "big") + (len(server_name) + 2).to_bytes(2, "big") \
+            + len(server_name).to_bytes(2, "big") + server_name
+        body = (0x0303).to_bytes(2, "big") + b"\x00" * 32 + b"\x00" \
+            + (2).to_bytes(2, "big") + b"\x13\x01" + b"\x01\x00" \
+            + len(ext).to_bytes(2, "big") + ext
+        handshake = b"\x01" + len(body).to_bytes(3, "big") + body
+        with self.assertRaises(self.proxy.MalformedClientHello):
+            self.proxy.parse_client_hello(record(handshake))
+
+
 class DeploymentContractTest(unittest.TestCase):
     def test_production_unit_has_one_anthropic_authority_and_no_test_override(self):
         unit = (ROOT / "deploy/systemd/recursion-provider-proxy.service").read_text()
@@ -98,6 +172,19 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn("HTTPS_PROXY=http://127.0.0.1:18080", worker)
         self.assertIn("HTTP_PROXY=http://127.0.0.1:18080", worker)
         self.assertIn("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", worker)
+
+    def test_worker_sandbox_masks_host_run_sockets_for_gate_and_model_arms(self):
+        worker = (ROOT / "scripts/worker-sandbox.sh").read_text()
+        inaccessible_lines = [line for line in worker.splitlines() if "InaccessiblePaths=" in line]
+        self.assertEqual(len(inaccessible_lines), 2)
+        for line in inaccessible_lines:
+            self.assertIn("/run", line)
+            self.assertIn("/var/run", line)
+        # The shared base line covers the gate arm; the model-arm branch repeats the mask.
+        self.assertIn("InaccessiblePaths=", inaccessible_lines[0])
+        self.assertIn("/opt", inaccessible_lines[1])
+        # The provider egress is the loopback CONNECT proxy over TCP, not a host socket.
+        self.assertIn("HTTPS_PROXY=http://127.0.0.1:18080", worker)
 
 
 if __name__ == "__main__":

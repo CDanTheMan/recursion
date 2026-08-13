@@ -181,7 +181,7 @@ RUN=(systemd-run --quiet --wait --collect --pipe --service-type=exec --unit "$UN
   --property ProtectKernelLogs=yes --property ProtectControlGroups=yes
   --property RestrictSUIDSGID=yes --property LockPersonality=yes
   --property UMask=0077 --property KillMode=control-group
-  --property "InaccessiblePaths=-/workspace/.env -/workspace/state -/workspace/CONTROL_PLANE.md -/workspace/ANCHOR.md -/workspace/CLAUDE.md"
+  --property "InaccessiblePaths=-/workspace/.env -/workspace/state -/workspace/CONTROL_PLANE.md -/workspace/ANCHOR.md -/workspace/CLAUDE.md /run /var/run"
   --property "ReadOnlyPaths=-/workspace/scripts -/workspace/.github"
   --setenv HOME=/home/runner --setenv USER="$RUNNER_USER" --setenv LOGNAME="$RUNNER_USER"
   --setenv LANG=C.UTF-8 --setenv PATH=/usr/local/bin:/usr/bin:/bin
@@ -190,8 +190,11 @@ RUN=(systemd-run --quiet --wait --collect --pipe --service-type=exec --unit "$UN
 # Model workers need only their checkout and provider executable. Gates additionally need the
 # repository's read-only git metadata and controller-owned gate scripts/baselines, so they retain
 # a read-only view of /opt while still running non-root under ProtectSystem=strict.
+# /run and /var/run carry host Unix sockets (systemd's private bus, Docker, journald) and other
+# confused deputies. Masking them per-arm here (and in the shared base above) keeps every arm from
+# reaching host sockets; Claude's provider egress is the TCP loopback CONNECT proxy, never a socket.
 if [ "$ENGINE" != gate ]; then
-  RUN+=(--property "InaccessiblePaths=/opt /srv -/workspace/.git")
+  RUN+=(--property "InaccessiblePaths=/opt /srv -/workspace/.git /run /var/run")
 else
   # Git must remain readable to acceptance suites, but the suite is worker-authored code.
   # Protect the worktree pointer itself; ProtectSystem=strict separately keeps its controller
