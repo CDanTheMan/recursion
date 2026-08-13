@@ -7,7 +7,8 @@ cd "$ROOT"
 
 bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/hermes-decide.sh \
   scripts/assist.sh scripts/taskctl.sh scripts/work.sh scripts/notify.sh scripts/digest.sh \
-  scripts/cycle.sh loop/supervisor/run.sh scripts/tests/hermes-pilot-phase8-red.test.sh
+  scripts/cycle.sh scripts/provider-network.sh scripts/worker-sandbox.sh loop/supervisor/run.sh \
+  scripts/tests/hermes-pilot-phase8-red.test.sh scripts/tests/provider-network-root.test.sh
 python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scripts/decision-queue.py \
   scripts/seed_contract.py scripts/tests/seed-contract.test.py \
   scripts/notification-outbox.py scripts/jsonl_durable.py scripts/transition_receipt.py scripts/validate-decision.py scripts/validate-control-state.py \
@@ -18,7 +19,8 @@ python3 -m py_compile scripts/project-pilot.py scripts/project-reconcile.py scri
   scripts/tests/hermes-pilot-phase8-notification-red.py scripts/tests/jsonl-durability.test.py \
   scripts/tests/decision-identity.test.py scripts/tests/runtime-state-locks.test.py \
   scripts/tests/runtime-state-recovery.test.py scripts/tests/reconcile-liveness.test.py \
-  scripts/tests/transition-receipt.test.py scripts/tests/notification-transition-receipt.test.py
+  scripts/tests/transition-receipt.test.py scripts/tests/notification-transition-receipt.test.py \
+  scripts/provider-connect-proxy.py scripts/tests/provider-connect-proxy.test.py
 python3 - <<'PY'
 import json
 json.load(open('schemas/control-plane/v1/schema.json',encoding='utf-8'))
@@ -343,4 +345,5 @@ python3 scripts/tests/runtime-state-recovery.test.py
 python3 scripts/tests/reconcile-liveness.test.py
 python3 scripts/tests/transition-receipt.test.py
 python3 scripts/tests/notification-transition-receipt.test.py
+python3 scripts/tests/provider-connect-proxy.test.py
 echo "hermes-pilot-phase8-green: ALL PASS"
