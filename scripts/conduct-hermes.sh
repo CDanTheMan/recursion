@@ -589,6 +589,44 @@ run(){ # execute an argv array, or print it under --dry-run
   "$@"
 }
 
+instruction_noop_bind_evidence(){
+  python3 - "$ROOT" "$INSTRUCTION_ID" <<'PY'
+import json,re,sys
+from pathlib import Path
+
+root,iid=Path(sys.argv[1]),sys.argv[2]
+name=f"{int(iid):08d}.md" if iid.isdigit() else f"{iid}.md"
+path=root/'state/instructions'/name
+try:
+    lines=path.read_text(encoding='utf-8',errors='surrogateescape').splitlines()
+except OSError:
+    raise SystemExit(1)
+refusal='project-pilot: instruction is not owned by this project pilot'
+annotated=set()
+for i,line in enumerate(lines[:-1]):
+    if not re.fullmatch(r'## OPEN \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z',line.strip()):
+        continue
+    note=lines[i+1].strip()
+    if note.startswith('deferred/failed actions reopened instruction:') and refusal in note:
+        annotated.update(re.findall(r'action-[0-9a-f]{24}',note))
+proven=[]
+for aid in sorted(annotated):
+    action_path=root/'state/actions'/f'{aid}.json'
+    try:
+        action=json.loads(action_path.read_text(encoding='utf-8'))
+    except (OSError,json.JSONDecodeError):
+        continue
+    if (action.get('id') == aid and str(action.get('instruction_id') or '') == iid
+            and action.get('status') == 'failed'
+            and str(action.get('verb') or '').startswith('pilot-')
+            and refusal in str(action.get('result_evidence') or '')):
+        proven.append(aid)
+if len(proven) < 2:
+    raise SystemExit(1)
+print(','.join(proven))
+PY
+}
+
 # --- the whitelist. A fixed case list: there is no path from an unrecognised verb to
 # execution, and nothing here reaches auth, cron, .env, flags, merges, or deploys. --------
 rc=0
@@ -690,7 +728,18 @@ PY
     RECURSION_INSTRUCTION_ID="$INSTRUCTION_ID" run bash scripts/assist.sh answer "$A0" "$TEXT"; rc=$? ;;
 
   noop)
-    log "noop — nothing to run${WHY:+ ($WHY)}" ;;
+    if [ "$DRY" = 0 ] && [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ]; then
+      NOOP_BIND_EVIDENCE="$(instruction_noop_bind_evidence)"
+      if [ "$?" -ne 0 ]; then
+        VERB_STDERR_TAIL="cannot-bind noop evidence is absent"
+        log "REFUSED - instruction-coupled noop lacks two corroborated prior ownership refusals"
+        rc=4
+      else
+        log "noop — cannot-bind evidence=$NOOP_BIND_EVIDENCE${WHY:+ ($WHY)}"
+      fi
+    else
+      log "noop — nothing to run${WHY:+ ($WHY)}"
+    fi ;;
 
   reap)
     run bash scripts/taskctl.sh reap; rc=$? ;;
