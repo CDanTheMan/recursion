@@ -72,22 +72,28 @@ def entrypoint(words: list[str], strict: bool) -> str | None:
         return None
     command = words[0].replace("\\", "/")
     name = PurePosixPath(command).name
-    if strict and command in RESERVED:
+    if strict and name in RESERVED:
         fail(f"shell reserved word or wrapper is not admitted: {command}")
     if name in {"env", "npm", "npx", "yarn", "pnpm", "xargs", "find", "make"}:
         if strict:
             fail(f"indirect acceptance launcher is not admitted: {name}")
         return None
+    if name in {"test", "["}:
+        return None
     if name not in {"bash", "sh", "python", "python3", "node"}:
-        return command if "/" in command else None
+        if strict and "/" not in command:
+            fail(f"bare acceptance launcher is not admitted: {name}")
+        return PurePosixPath(command).as_posix() if "/" in command else None
     for word in words[1:]:
         if word in {"-c", "-e", "--eval", "-m"}:
             if strict:
                 fail(f"dynamic {name} acceptance programs are not admitted")
             return None
         if word.startswith("-"):
+            if strict:
+                fail(f"option-bearing {name} acceptance programs are not admitted: {word}")
             continue
-        return word.replace("\\", "/")
+        return PurePosixPath(word.replace("\\", "/")).as_posix()
     fail(f"{name} acceptance has no explicit grading program")
 
 
@@ -132,7 +138,7 @@ def main() -> int:
             fail("acceptance gate must be bounded, single-line, and non-empty")
         compact = re.sub(r"\s+", " ", gate)
         if args.strict_direct and (
-            any(token in gate for token in ("`", "$(", "<(", ">("))
+            any(token in gate for token in ("`", "$", "<(", ">(", "||", ";"))
             or re.search(r"(?<!\|)\|(?!\|)", gate)
             or re.search(r"(?<![&])&(?![&])", gate)
             or "<" in gate or ">" in gate

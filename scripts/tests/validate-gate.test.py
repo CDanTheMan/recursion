@@ -56,8 +56,11 @@ class DirectGateAdmissionTest(unittest.TestCase):
             "setsid python3 app/check.py",
             "sudo python3 app/check.py",
             "timeout 5 python3 app/check.py",
+            "/usr/bin/timeout 5 python3 app/check.py",
             "bash -c 'test -s app/result.txt'",
+            "node --require app/loader.cjs app/check.cjs",
             "env python3 app/check.py",
+            "pytest app/check.py",
         )
         for gate in refused:
             with self.subTest(gate=gate):
@@ -86,7 +89,10 @@ class DirectGateAdmissionTest(unittest.TestCase):
     def test_pipelines_and_substitutions_are_refused(self):
         for gate in (
             "cat app/result.txt | grep -q x",
+            "test -s app/result.txt || true",
+            "test -s app/result.txt; true",
             "test -s \"$(echo app/result.txt)\"",
+            "test -s $RESULT_PATH",
             "test -s `echo app/result.txt`",
             "test -s <(echo app/result.txt)",
         ):
