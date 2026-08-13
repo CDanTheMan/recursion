@@ -311,6 +311,9 @@ re-emitting the same verb loops forever. When you see two or more identical refu
 instruction history: choose 'noop', and in 'text' state that the instruction cannot bind as
 posted and where the corrected message should go. A successful noop closes the instruction and
 lets the queue reach the corrected one behind it.
+ONLY THIS INSTRUCTION'S OWN DURABLE HISTORY COUNTS. Never borrow or remember failures from another
+instruction. The actuator accepts an instruction-coupled noop only when two distinct failed pilot
+actions are both annotated here and contain the exact ownership refusal stated above.
 
 'goal' MUST BE AN IDENTIFIER, never a sentence. It has to match ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$
 - no spaces, no colons, no punctuation beyond . _ and -. Name the existing goal id, or the new
