@@ -90,7 +90,11 @@ HISTORICAL_INSTRUCTIONS = {
                 "6572b4c5115f499258da36663c9c5a697a9a41049758a53cb080a65c35243db7",
             "action-4a90005df9c9dfe6cbb7fbad":
                 "b65903d93da048083a255ed647b9e226cc140ebf7cd672bcab3ecb4c62544db4",
+            "action-cbba158e3295fb82bdf6e06c":
+                "270478743ba73a2a54f30c1a918aaff9c5fe579b9015a0a015f45bbc96d4fa70",
         },
+        "initial_document_sha256":
+            "402aa9aea90a4d9c7dbedfcaff0cd34b1388f8d52ddc72dd57b94983d048d677",
     },
     "732": {
         "fields": {
@@ -253,6 +257,18 @@ def validate_historical(base: Path, record: dict, *, require_dependency: bool) -
             raise RoutingError(f"historical action evidence is absent: {action_id}") from exc
         if observed != digest:
             raise RoutingError(f"historical action evidence changed: {action_id}")
+    if iid == "707":
+        observed_noops = set()
+        for path in sorted((base / "state/actions").glob("*.json")):
+            try:
+                action = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if str(action.get("instruction_id") or "") == "707" \
+                    and action.get("verb") == "noop":
+                observed_noops.add(path.stem)
+        if observed_noops != set(expected.get("failed_actions", {})):
+            raise RoutingError("historical instruction 707 failed noop evidence set differs")
     if iid == "732" and require_dependency:
         require_707_terminal(base)
 
@@ -264,13 +280,26 @@ def validate_initial_recovery(record: dict) -> None:
     if iid == "707":
         first = "action-bb38398a6e0e3859a1a7d263"
         second = "action-4a90005df9c9dfe6cbb7fbad"
-        if fields.get("status") != "open" or fields.get("action_ids") != second \
-                or document.count("## CONSUMED ") != 2 or document.count("## OPEN ") != 2 \
+        third = "action-cbba158e3295fb82bdf6e06c"
+        document_sha256 = hashlib.sha256(
+            document.encode("utf-8", errors="surrogateescape")
+        ).hexdigest()
+        expected_sha256 = HISTORICAL_INSTRUCTIONS["707"]["initial_document_sha256"]
+        resulting = re.findall(r"(?m)^resulting actions: (action-[0-9a-f]{24})$", document)
+        reopened = re.findall(
+            r"(?m)^deferred/failed actions reopened instruction: (action-[0-9a-f]{24})", document
+        )
+        if fields.get("status") != "open" or fields.get("action_ids") != third \
+                or document_sha256 != expected_sha256 \
+                or document.count("## CONSUMED ") != 3 or document.count("## OPEN ") != 3 \
                 or document.count(f"resulting actions: {first}") != 1 \
                 or document.count(f"resulting actions: {second}") != 1 \
+                or document.count(f"resulting actions: {third}") != 1 \
                 or document.count(f"reopened instruction: {first}") != 1 \
                 or document.count(f"reopened instruction: {second}") != 1 \
-                or document.count("cannot-bind noop evidence is absent") != 2:
+                or document.count(f"reopened instruction: {third}") != 1 \
+                or document.count("cannot-bind noop evidence is absent") != 3 \
+                or resulting != [first, second, third] or reopened != [first, second, third]:
             raise RoutingError("historical instruction 707 recovery annotations differ")
     elif iid == "732":
         if fields.get("status") != "open" or fields.get("action_ids") != "" \
