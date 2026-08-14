@@ -25,6 +25,11 @@ BIN="$TMP/bin"; mkdir -p "$BIN"
 R="$TMP/repo"; mkdir -p "$R"
 tar -C "$SRC" -cf - scripts loop state ANCHOR.md CLAUDE.md 2>/dev/null | tar -C "$R" -xf - 2>/dev/null
 mkdir -p "$R/state/briefs" "$R/loop/logs" "$R/state/tasks"
+# state/PAUSE is ignored runtime state, so a test launched from the deployed checkout can inherit
+# it through the broad state/ fixture copy above. This scenario is specifically proving one live
+# notifier call; an inherited kill switch turns it into a PAUSE suppression test and passes no
+# signal through the assertion. The disposable fixture owns this removal, never the source tree.
+rm -f -- "$R/state/PAUSE"
 # ★ NEUTRALISE THE PORTFOLIO. The tar above copies the live state/, including
 # state/portfolio.tsv with ABSOLUTE paths to the real repos under /opt. This test runs cycle.sh
 # three times, and cycle.sh resyncs the portfolio every run — so without this the test fetched
