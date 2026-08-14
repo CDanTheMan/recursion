@@ -179,9 +179,15 @@ class Fixture:
 
     def _write_instruction(self, iid: str, target: str, body: str = "fixture instruction") -> None:
         name = f"{int(iid):08d}.md"
+        # Head-Hermes approvals and window commands arrive through General/topic 1. Intake
+        # intentionally leaves their project/pilot projection empty; the authority-bearing
+        # identifiers live in the authenticated command body and the validated decision.
+        topic = "1" if target == "head-hermes" else "10"
+        project = "" if target == "head-hermes" else "chiron"
+        pilot = "" if target == "head-hermes" else "pilot-chiron"
         (self.root / "state/instructions" / name).write_text(
-            f"schema_version: 1\nid: {iid}\nprincipal: 8913126684\ntopic: 10\n"
-            f"project_id: chiron\npilot_id: pilot-chiron\nrouting_target: {target}\n"
+            f"schema_version: 1\nid: {iid}\nprincipal: 8913126684\ntopic: {topic}\n"
+            f"project_id: {project}\npilot_id: {pilot}\nrouting_target: {target}\n"
             f"deduplication_key: fixture\nstatus: open\naction_ids:\n\n## INSTRUCTION\n{body}\n",
             encoding="utf-8",
         )
@@ -328,6 +334,22 @@ def test_approval(f: Fixture) -> bool:
     if first.returncode or second.returncode or not goal_path.is_file() or not task_path.is_file():
         return False
     proposal = json.loads((f.root / f"state/plans/chiron/{f.plan_id}.json").read_text(encoding="utf-8"))
+    f._write_instruction("111", "head-hermes", f"approve {f.plan_id} {f.digest}")
+    conflicting_instruction = f.root / "state/instructions/00000111.md"
+    conflicting_instruction.write_text(
+        conflicting_instruction.read_text(encoding="utf-8")
+        .replace("project_id: ", "project_id: another-project")
+        .replace("pilot_id: ", "pilot_id: pilot-another-project"),
+        encoding="utf-8",
+    )
+    conflicting = f.decision(
+        verb="pilot-plan-approve", args=["chiron", f.plan_id, f.digest], iid="111",
+        actor="head-hermes", goal=str(f.plan["goal"]["id"]),
+        text="Conflicting projected ownership must not authorize approval.",
+    )
+    conflicting_refused = f.run(
+        "python3", "scripts/project-pilot.py", "execute", str(conflicting),
+    ).returncode != 0
     f._write_instruction("110", "pilot-chiron", "add an extra task")
     extra = f.decision(
         verb="pilot-task-create",
@@ -352,6 +374,7 @@ def test_approval(f: Fixture) -> bool:
         and proposal.get("approval_instruction_id") == "102"
         and len(list((f.root / "state/goals").glob("goal-chiron-phase8-smoke.md"))) == 1
         and len(list((f.root / "state/tasks").glob("chiron-phase8-smoke.md"))) == 1
+        and conflicting_refused
         and frozen.returncode != 0
         and not (f.root / "state/tasks/unapproved-extra.md").exists()
         and f.legacy_unchanged()
@@ -388,7 +411,7 @@ def test_window_admission(f: Fixture) -> bool:
     f._write_instruction("109", "head-hermes", "authorize goal-chiron-phase8-smoke chiron-window-bad")
     bad_instruction = f.root / "state/instructions/00000109.md"
     bad_instruction.write_text(
-        bad_instruction.read_text(encoding="utf-8").replace("topic: 10", "topic: 900"),
+        bad_instruction.read_text(encoding="utf-8").replace("topic: 1", "topic: 900"),
         encoding="utf-8",
     )
     bad_decision = f.decision(

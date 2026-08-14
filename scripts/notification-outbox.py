@@ -456,8 +456,14 @@ def authenticated_instruction(base: Path, project: str, instruction_id: str,
     )
     instruction = read_fields(path)
     allowed = {item.strip() for item in os.environ.get("RECURSION_INTAKE_ALLOW", "8913126684").split(",")}
+    config = read_json(base / "state/project-config" / f"{project}.json")
+    pilot_id = str(config.get("pilot_id") or "")
+    instruction_project = instruction.get("project_id", "")
+    instruction_pilot = instruction.get("pilot_id", "")
     if instruction.get("principal") not in allowed or instruction.get("routing_target") != "head-hermes" \
-            or instruction.get("project_id") != project:
+            or config.get("id") != project or not IDENT.fullmatch(pilot_id) \
+            or instruction_project not in {"", project} \
+            or instruction_pilot not in {"", pilot_id}:
         raise OutboxError("coupled Phase 8 instruction is not authenticated Lucas-to-Head-Hermes")
     document = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
     match = re.search(r"(?m)^## INSTRUCTION\s*$\n?", document)
