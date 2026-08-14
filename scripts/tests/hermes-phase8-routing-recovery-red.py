@@ -283,9 +283,23 @@ def require_recovery_rejected(label: str, mutate, expected: str) -> None:
             "python3", "scripts/instruction_routing.py", "--root", str(fixture.root),
             "admit", "state/instructions/00000707.md", "--enqueue",
         ])
-        require(result.returncode == 4 and not fixture.queue("pending"),
+        require(result.returncode == 4 and not fixture.queue("pending")
+                and not fixture.model_marker.exists(),
                 f"{label} did not fail closed rc={result.returncode}: {result.stderr}")
         require(expected in result.stderr, f"{label} returned the wrong refusal: {result.stderr}")
+    finally:
+        fixture.close()
+
+
+def require_decider_rejected(label: str, mutate) -> None:
+    fixture = Fixture()
+    try:
+        mutate(fixture)
+        result = fixture.decide()
+        require(result.returncode == 5 and not fixture.queue("pending")
+                and not fixture.model_marker.exists(),
+                f"{label} reached the model or queued work rc={result.returncode}: "
+                f"{result.stdout} {result.stderr}")
     finally:
         fixture.close()
 
@@ -336,6 +350,20 @@ def negative_recovery_evidence() -> None:
         "extra fourth noop", extra_action,
         "historical instruction 707 failed noop evidence set differs",
     )
+    for label, old, new, expected in (
+        ("unclassified historical body", "Propose a fresh offline", "Describe a fresh offline",
+         "historical instruction 707 differs from reviewed recovery evidence"),
+        ("changed header id", "id: 707", "id: 708",
+         "instruction filename and header id differ"),
+        ("noncanonical header id", "id: 707", "id: 00000707",
+         "instruction id is not canonical"),
+    ):
+        def mutate_identity(fixture: Fixture, old=old, new=new) -> None:
+            path = fixture.root / instruction
+            path.write_text(path.read_text(encoding="utf-8").replace(old, new, 1),
+                            encoding="utf-8", newline="\n")
+        require_recovery_rejected(label, mutate_identity, expected)
+        require_decider_rejected(label, mutate_identity)
     for label, old, new in (
         ("wrong latest action", "action_ids: action-cbba158e3295fb82bdf6e06c",
          "action_ids: action-4a90005df9c9dfe6cbb7fbad"),
