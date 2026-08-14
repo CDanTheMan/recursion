@@ -45,6 +45,19 @@ ACTION_707_SECOND = (
     'cannot-bind noop evidence is absent","routed_decider":"head-hermes","schema_version":1,'
     '"status":"failed","updated_at":"2026-08-13T22:17:10Z","verb":"noop"}\n'
 )
+ACTION_707_THIRD = (
+    '{"action_payload_sha256":"2938c7242e7a5f66f06e0703dba76ff1c2556212c36b306984c22585719a9b7e",'
+    '"actor":"head-hermes","arguments":[],"attempts":1,"created_at":"2026-08-14T00:45:55Z",'
+    '"decision_id":"decision-db7b86c61e0572226894eb6e","decision_source":"hermes-model",'
+    '"event_seq":3,"goal_id":"goal-gsc-0x6c-shadetops-underemission-v2",'
+    '"id":"action-cbba158e3295fb82bdf6e06c",'
+    '"idempotency_key":"decision:8bb029a137ffa1a4e213a9661c1058a815af2ec35ebf92e8c1ba968ba0116a98",'
+    '"instruction_id":"707","last_transition_id":"transition-2c867d3b748c1b23ecc07ba12531944e",'
+    '"lease_expires":null,"lease_owner":null,"project":"golden-stallion-client",'
+    '"result_evidence":"log=/opt/recursion/loop/logs/2026-08-14-conduct-hermes.log rc=4 | '
+    'cannot-bind noop evidence is absent","routed_decider":"head-hermes","schema_version":1,'
+    '"status":"failed","updated_at":"2026-08-14T00:45:56Z","verb":"noop"}\n'
+)
 INSTRUCTION_707 = """schema_version: 1
 id: 707
 received: 2026-08-13T22:07:26Z
@@ -61,7 +74,7 @@ chat: -1003894008732
 thread: 6
 project: golden-stallion-client
 status: open
-action_ids: action-4a90005df9c9dfe6cbb7fbad
+action_ids: action-cbba158e3295fb82bdf6e06c
 
 ## INSTRUCTION
 Propose a fresh offline golden-stallion-client pilot plan to reduce the verified 0x6c shade-tops under-emission in user-client/render, using new v2 plan, goal, and task identities and the deployed required seed, scope, provider, and forced-on gate contracts. Do not reuse or edit the closed v1 plan, goal, task, or window.
@@ -78,7 +91,12 @@ resulting actions: action-4a90005df9c9dfe6cbb7fbad
 
 ## OPEN 2026-08-13T22:17:10Z
 deferred/failed actions reopened instruction: action-4a90005df9c9dfe6cbb7fbad | last failure: log=/opt/recursion/loop/logs/2026-08-13-conduct-hermes.log rc=4 | cannot-bind noop evidence is absent
-"""
+
+## CONSUMED 2026-08-14T00:45:56Z
+resulting actions: action-cbba158e3295fb82bdf6e06c
+
+## OPEN 2026-08-14T00:45:57Z
+deferred/failed actions reopened instruction: action-cbba158e3295fb82bdf6e06c | last failure: log=/opt/recursion/loop/logs/2026-08-14-conduct-hermes.log rc=4 | cannot-bind noop evidence is absent"""
 INSTRUCTION_732 = """schema_version: 1
 id: 732
 received: 2026-08-13T22:11:01Z
@@ -164,6 +182,9 @@ class Fixture:
             "goal_source": "state/goals", "memory_key": "telegram-topic:6",
             "worktree_root": ".worktrees/gsc", "status": "active",
         })
+        observed_instruction = hashlib.sha256(INSTRUCTION_707.encode()).hexdigest()
+        if observed_instruction != "402aa9aea90a4d9c7dbedfcaff0cd34b1388f8d52ddc72dd57b94983d048d677":
+            raise AssertionError(f"fixture instruction 707 digest mismatch: {observed_instruction}")
         (self.root / "state/instructions/00000707.md").write_text(INSTRUCTION_707, encoding="utf-8", newline="\n")
         (self.root / "state/instructions/00000732.md").write_text(INSTRUCTION_732, encoding="utf-8", newline="\n")
         retained = (
@@ -176,6 +197,8 @@ class Fixture:
                                 "6572b4c5115f499258da36663c9c5a697a9a41049758a53cb080a65c35243db7")
         self.write_exact_action("action-4a90005df9c9dfe6cbb7fbad", ACTION_707_SECOND,
                                 "b65903d93da048083a255ed647b9e226cc140ebf7cd672bcab3ecb4c62544db4")
+        self.write_exact_action("action-cbba158e3295fb82bdf6e06c", ACTION_707_THIRD,
+                                "270478743ba73a2a54f30c1a918aaff9c5fe579b9015a0a015f45bbc96d4fa70")
         self.model_marker = self.temp / "model-called"
         hermes = self.root / "bin/hermes"
         hermes.write_text(
@@ -252,7 +275,101 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def require_recovery_rejected(label: str, mutate, expected: str) -> None:
+    fixture = Fixture()
+    try:
+        mutate(fixture)
+        result = fixture.run([
+            "python3", "scripts/instruction_routing.py", "--root", str(fixture.root),
+            "admit", "state/instructions/00000707.md", "--enqueue",
+        ])
+        require(result.returncode == 4 and not fixture.queue("pending"),
+                f"{label} did not fail closed rc={result.returncode}: {result.stderr}")
+        require(expected in result.stderr, f"{label} returned the wrong refusal: {result.stderr}")
+    finally:
+        fixture.close()
+
+
+def negative_recovery_evidence() -> None:
+    instruction = "state/instructions/00000707.md"
+    third = "state/actions/action-cbba158e3295fb82bdf6e06c.json"
+
+    def old_two_action(fixture: Fixture) -> None:
+        path = fixture.root / instruction
+        marker = "\n\n## CONSUMED 2026-08-14T00:45:56Z"
+        path.write_text(
+            INSTRUCTION_707.split(marker, 1)[0].replace(
+                "action_ids: action-cbba158e3295fb82bdf6e06c",
+                "action_ids: action-4a90005df9c9dfe6cbb7fbad",
+            ) + "\n",
+            encoding="utf-8", newline="\n",
+        )
+        (fixture.root / third).unlink()
+
+    require_recovery_rejected(
+        "old two-action projection", old_two_action,
+        "historical action evidence is absent: action-cbba158e3295fb82bdf6e06c",
+    )
+    require_recovery_rejected(
+        "missing third action", lambda fixture: (fixture.root / third).unlink(),
+        "historical action evidence is absent: action-cbba158e3295fb82bdf6e06c",
+    )
+
+    def tamper_action(fixture: Fixture) -> None:
+        path = fixture.root / third
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            '"updated_at":"2026-08-14T00:45:56Z"',
+            '"updated_at":"2026-08-14T00:45:57Z"',
+        ), encoding="utf-8", newline="\n")
+
+    require_recovery_rejected(
+        "tampered third action", tamper_action,
+        "historical action evidence changed: action-cbba158e3295fb82bdf6e06c",
+    )
+
+    def extra_action(fixture: Fixture) -> None:
+        value = json.loads(ACTION_707_THIRD)
+        value["id"] = "action-dddddddddddddddddddddddd"
+        fixture.write_json("state/actions/action-dddddddddddddddddddddddd.json", value)
+
+    require_recovery_rejected(
+        "extra fourth noop", extra_action,
+        "historical instruction 707 failed noop evidence set differs",
+    )
+    for label, old, new in (
+        ("wrong latest action", "action_ids: action-cbba158e3295fb82bdf6e06c",
+         "action_ids: action-4a90005df9c9dfe6cbb7fbad"),
+        ("altered annotation timestamp", "## OPEN 2026-08-14T00:45:57Z",
+         "## OPEN 2026-08-14T00:45:58Z"),
+        ("altered annotation evidence", "2026-08-14-conduct-hermes.log rc=4",
+         "2026-08-14-conduct-hermes.log rc=5"),
+    ):
+        def mutate(fixture: Fixture, old=old, new=new) -> None:
+            path = fixture.root / instruction
+            path.write_text(path.read_text(encoding="utf-8").replace(old, new, 1),
+                            encoding="utf-8", newline="\n")
+        require_recovery_rejected(label, mutate, "historical instruction 707 recovery annotations differ")
+
+    def duplicate_annotation(fixture: Fixture) -> None:
+        path = fixture.root / instruction
+        path.write_text(path.read_text(encoding="utf-8") +
+                        "\n\n## CONSUMED 2026-08-14T00:45:56Z\n"
+                        "resulting actions: action-cbba158e3295fb82bdf6e06c",
+                        encoding="utf-8", newline="\n")
+
+    require_recovery_rejected(
+        "duplicate annotation", duplicate_annotation,
+        "historical instruction 707 recovery annotations differ",
+    )
+    print("ok    only the exact reviewed three-action recovery projection is admissible")
+
+
 def main() -> int:
+    try:
+        negative_recovery_evidence()
+    except AssertionError as exc:
+        print(f"FAIL  {exc}")
+        return 1
     fixture = Fixture()
     try:
         # 732 is not independently recoverable: the reviewed ordering requires 707 first.
