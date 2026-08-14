@@ -343,6 +343,34 @@ else
   no "deployment/policy authority leaked to a project pilot: $(sed -n 's/^routing_target: *//p' "$control_file")"
 fi
 
+# The route is grammar-shaped, not a keyword blacklist: project plan prose may describe Head-owned
+# concerns, while command and requirement forms (including deploy inflections) remain Head-owned.
+incidental='Propose a fresh pilot plan documenting assist workflow, escalation policy, portfolio reporting, and previously merged/deployed evidence.'
+add s-gsc telegram "$LUCAS" -1003894008732 6 user "[Lucas Guerra] $incidental"
+intake poll >/dev/null
+incidental_file="$(ls -1 "$R/state/instructions"/*.md | tail -1)"
+if grep -q '^routing_target: pilot-golden-stallion-client$' "$incidental_file"; then
+  ok "incidental Head-owned nouns in project-plan prose do not hijack pilot routing"
+else
+  no "incidental authority prose hijacked pilot routing: $(sed -n 's/^routing_target: *//p' "$incidental_file")"
+fi
+
+for command in \
+  'Deployments must preserve the reviewed production gate.' \
+  'Redeploy the reviewed renderer fix.' \
+  'Deploys the reviewed provider change after Lucas approval.' \
+  'Deployed the reviewed fix; inspect the production result.' \
+  'Review the credential policy for this project.'; do
+  add s-gsc telegram "$LUCAS" -1003894008732 6 user "[Lucas Guerra] $command"
+  intake poll >/dev/null
+  command_file="$(ls -1 "$R/state/instructions"/*.md | tail -1)"
+  if grep -q '^routing_target: head-hermes$' "$command_file"; then
+    ok "Head-Hermes command form remains Head-routed: $command"
+  else
+    no "Head-Hermes command leaked to pilot: $command"
+  fi
+done
+
 echo
 [ "$fails" -eq 0 ] && { echo "intake: ALL PASS"; exit 0; }
 echo "intake: $fails FAILED"; exit 1

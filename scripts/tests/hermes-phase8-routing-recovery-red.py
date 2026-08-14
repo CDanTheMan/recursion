@@ -326,14 +326,31 @@ def main() -> int:
         second = fixture.decide()
         require(second.returncode == 0 and len(fixture.queue("pending", "routing-refuse")) == 1,
                 f"732 admission failed after 707: {second.stderr}")
+
+        record_error = fixture.drain(failpoint="record-error")
+        require(record_error.returncode == 74,
+                f"permanent refusal-record error was not preserved: {record_error.stderr}")
+        require(fields(fixture.root / "state/instructions/00000732.md")["status"] == "consumed"
+                and len([row for row in json_rows(fixture.root / "state/events.jsonl")
+                         if row.get("event") == "instruction-routing-refused"]) == 1,
+                "record error acknowledged 732 or fabricated refusal evidence")
+
+        before_event = fixture.drain(failpoint="before-event")
+        require(before_event.returncode == 74,
+                f"pre-event interruption was not preserved: {before_event.stderr}")
+        require(fields(fixture.root / "state/instructions/00000732.md")["status"] == "consumed"
+                and len([row for row in json_rows(fixture.root / "state/events.jsonl")
+                         if row.get("event") == "instruction-routing-refused"]) == 1,
+                "pre-event interruption terminalized 732 or committed an event")
+
         interrupted = fixture.drain(failpoint="after-event")
         require(interrupted.returncode == 74, f"routing tail failure was not preserved: {interrupted.stderr}")
-        require(fields(fixture.root / "state/instructions/00000732.md")["status"] == "acknowledged",
-                "durably succeeded recovery action did not acknowledge 732")
+        require(fields(fixture.root / "state/instructions/00000732.md")["status"] == "consumed",
+                "post-event interruption acknowledged 732 before record returned success")
         require(len([row for row in json_rows(fixture.root / "state/events.jsonl")
                      if row.get("event") == "instruction-routing-refused"]) == 2,
                 "post-event interruption lost or duplicated refusal evidence")
-        print("ok    interruption after refusal receipt preserves one recoverable terminal tail")
+        print("ok    record failure and before/after-event interruptions preserve one recoverable tail")
         completed_732 = fixture.drain()
         require(completed_732.returncode == 0 
                 and fields(fixture.root / "state/instructions/00000732.md")["status"] == "acknowledged",

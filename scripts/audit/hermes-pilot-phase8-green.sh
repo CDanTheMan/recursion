@@ -60,7 +60,8 @@ grep -q 'RECURSION_PILOT_MODEL' scripts/hermes-decide.sh
 grep -q 'DECIDER_ACTOR="$route"' scripts/hermes-decide.sh
 grep -q 'from instruction_routing import route_for' scripts/intake.sh
 grep -q 'instruction_routing.py' scripts/hermes-decide.sh
-grep -q '"plan-approval"' scripts/instruction_routing.py
+grep -q '"head-object-command"' scripts/instruction_routing.py
+grep -q 'PILOT_PLAN_INTENT' scripts/instruction_routing.py
 echo "ok    event-invoked logical GPT pilots receive a scoped brief and shared boundary-safe authority routing"
 
 grep -q 'a pilot window may be authorized only while PAUSE is observed' scripts/project-pilot.py

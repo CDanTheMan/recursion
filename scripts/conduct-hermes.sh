@@ -472,12 +472,13 @@ reconcile_terminal_instruction(){ # succeeded|failed
   [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ] || return 0
   case "$disposition" in
     succeeded)
-      RECURSION_ROOT="$ROOT" bash scripts/intake.sh acknowledge "$INSTRUCTION_ID" "$ACTION_ID" \
-        || return $?
       if [ "$VERB" = routing-refuse ]; then
         RECURSION_ROOT="$ROOT" python3 scripts/instruction_routing.py --root "$ROOT" \
-          record "$DECISION_JSON"
-      fi ;;
+          record "$DECISION_JSON" || return $?
+      fi
+      # Receipt first, acknowledgement second: a failed refusal-event commit must leave the
+      # instruction recoverably consumed, never silently terminal with zero attention evidence.
+      RECURSION_ROOT="$ROOT" bash scripts/intake.sh acknowledge "$INSTRUCTION_ID" "$ACTION_ID" ;;
     failed)
       RECURSION_ROOT="$ROOT" bash scripts/intake.sh release "$INSTRUCTION_ID" "$ACTION_ID" ;;
     *) return 2 ;;

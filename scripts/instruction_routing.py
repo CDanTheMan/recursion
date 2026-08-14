@@ -28,29 +28,40 @@ STATIC_FIELDS = (
     "pilot_memory_key", "routing_target", "reply_correlation", "deduplication_key", "from",
     "chat", "thread", "project",
 )
+# A Head-Hermes route needs authority-bearing grammar, not the mere presence of a policy word.
+# Project plans routinely describe deployed contracts, assist workflows, escalation paths, and
+# portfolio reporting.  Treating those nouns as commands reproduces the instruction-707 bug.
+_BOUNDARY = r"(?:^\s*|[.!?;]\s*|\b(?:please|then|and)\s+)"
+_HEAD_OBJECT = (
+    r"(?:portfolio|priorit(?:y|ies|i[sz]ation)|polic(?:y|ies)|spend(?:ing)?|budget|"
+    r"credentials?|deployments?|cron|model\s+policy|control[- ]plane|deploy\s+keys?|"
+    r"plans?(?:\s+digest)?|pilot\s+windows?|go\s*/?\s*no-go)"
+)
 HEAD_INTENTS = (
     ("head-hermes-explicit", re.compile(r"\bhead\s+hermes\b", re.I)),
-    ("portfolio", re.compile(r"\bportfolio\b", re.I)),
-    ("priority", re.compile(r"\bpriorit(?:y|ies|i[sz]e|i[sz]es|i[sz]ation)\b", re.I)),
-    ("policy", re.compile(r"\bpolicy\b", re.I)),
-    ("spending", re.compile(r"\bspend(?:ing)?\b", re.I)),
-    ("credentials", re.compile(r"\bcredentials?\b", re.I)),
-    # Command/noun forms are authority-bearing.  Past-participle adjectives such as
-    # "deployed required contracts" and "merged evidence" are deliberately excluded.
-    ("deployment", re.compile(r"\bdeploy(?:ment|ing)?\b", re.I)),
-    ("merge", re.compile(r"\bmerge(?:s)?\b", re.I)),
-    ("pause", re.compile(r"\b(?:pause|resume)\b", re.I)),
-    ("cron", re.compile(r"\bcron\b", re.I)),
-    ("model-policy", re.compile(r"\bmodel\s+policy\b", re.I)),
-    ("control-plane", re.compile(r"\bcontrol\s+plane\b", re.I)),
-    ("deploy-key", re.compile(r"\bdeploy\s+key\b", re.I)),
-    ("assist", re.compile(r"\bassist\b", re.I)),
-    ("plan-approval", re.compile(r"\bapprov(?:e|es|ed|ing|al)\s+plan\b", re.I)),
-    ("plan-digest", re.compile(r"\bplan\s+digest\b", re.I)),
-    ("window-authorization", re.compile(r"\bauthoriz(?:e|es|ed|ing|ation)\b.{0,160}\bwindow\b", re.I | re.S)),
-    ("pilot-window", re.compile(r"\bpilot\s+window\b", re.I)),
-    ("go-no-go", re.compile(r"\bgo\s*/?\s*no-go\b", re.I)),
-    ("escalation", re.compile(r"\bescalat(?:e|es|ed|ing|ion)\b", re.I)),
+    ("deployment-command", re.compile(
+        _BOUNDARY + r"(?:re)?deploy(?:s|ed|ing)?\b", re.I
+    )),
+    ("merge-command", re.compile(_BOUNDARY + r"merge(?:s|d|ing)?\b", re.I)),
+    ("pause-command", re.compile(_BOUNDARY + r"(?:pause|resume)(?:s|d|ing)?\b", re.I)),
+    ("priority-command", re.compile(_BOUNDARY + r"prioriti[sz]e(?:s|d|ing)?\b", re.I)),
+    ("spend-command", re.compile(_BOUNDARY + r"spend(?:s|ing)?\b", re.I)),
+    ("assist-command", re.compile(_BOUNDARY + r"assist\b", re.I)),
+    ("escalation-command", re.compile(_BOUNDARY + r"escalat(?:e|es|ed|ing)\b", re.I)),
+    ("head-object-command", re.compile(
+        _BOUNDARY
+        + r"(?:review|change|set|update|approve|authorize|rotate|revoke|audit|inspect|"
+          r"configure|preserve|reduce|increase|open|close)\b.{0,160}\b"
+        + _HEAD_OBJECT + r"\b", re.I | re.S
+    )),
+    ("head-object-proposal", re.compile(
+        r"^\s*(?:propose|draft|prepare|create)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?"
+        + _HEAD_OBJECT + r"\b", re.I
+    )),
+    ("head-object-requirement", re.compile(
+        r"^\s*(?:the\s+)?" + _HEAD_OBJECT
+        + r"\s+(?:must|should|shall|needs?\s+to|requires?)\b", re.I
+    )),
 )
 PILOT_PLAN_INTENT = re.compile(
     r"\b(?:propose|prepare|draft|create|synthesi[sz]e|author)\b.{0,240}\b(?:pilot\s+)?plan\b",
@@ -137,6 +148,21 @@ def instruction_path(base: Path, instruction_id: str) -> Path:
     return base / "state/instructions" / f"{instruction_id}.md"
 
 
+def configured_project_ids(base: Path) -> list[str]:
+    """Read only canonical project identifiers needed to classify cross-project requests."""
+    values = {path.stem for path in (base / "state/project-config").glob("*.json")}
+    portfolio = base / "state/portfolio.tsv"
+    try:
+        for line in portfolio.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line and not line.startswith("#"):
+                project = line.split("\t", 1)[0].strip()
+                if IDENT.fullmatch(project):
+                    values.add(project)
+    except OSError:
+        pass
+    return sorted(values)
+
+
 def instruction_signature(record: dict) -> str:
     fields = record["fields"]
     snapshot = {"fields": {key: fields.get(key, "") for key in STATIC_FIELDS}, "body": record["body"]}
@@ -169,11 +195,15 @@ def route_for(body: str, binding: dict, project_ids: list[str]) -> str:
     return str(binding["pilot_id"])
 
 
-def requested_authority(record: dict) -> tuple[str | None, str | None, str | None]:
+def requested_authority(record: dict, project_ids: list[str] | None = None) \
+        -> tuple[str | None, str | None, str | None]:
     fields, body = record["fields"], record["body"]
+    if project_ids and cross_project(body, fields.get("project_id") or "", project_ids):
+        return "head-hermes", "head-control", "cross-project"
     reason = head_intent(body)
     if reason is not None:
-        verb = "escalate" if reason in {"head-hermes-explicit", "escalation"} else "head-control"
+        verb = "escalate" if reason in {"head-hermes-explicit", "escalation-command"} \
+            else "head-control"
         return "head-hermes", verb, reason
     if PILOT_PLAN_INTENT.search(body):
         pilot_id = fields.get("pilot_id") or ""
@@ -181,10 +211,10 @@ def requested_authority(record: dict) -> tuple[str | None, str | None, str | Non
     return None, None, None
 
 
-def routing_mismatch(record: dict) -> dict | None:
+def routing_mismatch(record: dict, project_ids: list[str] | None = None) -> dict | None:
     fields = record["fields"]
     routed = fields.get("routing_target") or "head-hermes"
-    required, verb, reason = requested_authority(record)
+    required, verb, reason = requested_authority(record, project_ids)
     if required is None or required == routed:
         return None
     if not IDENT.fullmatch(routed) or not IDENT.fullmatch(required):
@@ -299,7 +329,7 @@ def refusal_decision(base: Path, record: dict) -> dict:
     validate_authenticated(record)
     validate_historical(base, record, require_dependency=True)
     validate_initial_recovery(record)
-    mismatch = routing_mismatch(record)
+    mismatch = routing_mismatch(record, configured_project_ids(base))
     if mismatch is None:
         raise RoutingError("instruction has no deterministic actor/verb mismatch")
     fields = record["fields"]
@@ -322,7 +352,7 @@ def refusal_decision(base: Path, record: dict) -> dict:
 
 def admit(base: Path, path: Path, *, enqueue: bool) -> tuple[int, dict | None]:
     record = read_instruction(path)
-    if routing_mismatch(record) is None:
+    if routing_mismatch(record, configured_project_ids(base)) is None:
         return 0, None
     decision = refusal_decision(base, record)
     queue_path = None
@@ -343,7 +373,7 @@ def refusal_event(base: Path, decision: dict) -> dict:
     record = read_instruction(instruction_path(base, iid))
     validate_authenticated(record)
     validate_historical(base, record, require_dependency=True)
-    mismatch = routing_mismatch(record)
+    mismatch = routing_mismatch(record, configured_project_ids(base))
     if mismatch is None:
         raise RoutingError("routing-refusal no longer has an actor/verb mismatch")
     signature = instruction_signature(record)
@@ -376,6 +406,8 @@ def perform(base: Path, decision: dict) -> tuple[int, str]:
 def record_refusal(base: Path, decision: dict) -> tuple[int, str]:
     try:
         event = refusal_event(base, decision)
+        if os.environ.get("RECURSION_ROUTING_FAILPOINT") == "record-error":
+            return 4, "routing failpoint: record-error"
         if os.environ.get("RECURSION_ROUTING_FAILPOINT") == "before-event":
             return 75, "routing failpoint: before-event"
         commit_event(base, event)

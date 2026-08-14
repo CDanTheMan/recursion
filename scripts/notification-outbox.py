@@ -26,7 +26,10 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from jsonl_durable import JsonlDurabilityError, append_jsonl as durable_append_jsonl, read_jsonl_objects
-from instruction_routing import instruction_path, instruction_signature, read_instruction, routing_mismatch
+from instruction_routing import (
+    configured_project_ids, instruction_path, instruction_signature, read_instruction,
+    routing_mismatch,
+)
 from pilot_instruction import require_affirmative_command
 from transition_receipt import (
     TransitionReceiptError,
@@ -399,7 +402,7 @@ def authenticated_routing_refusal(base: Path, raw: dict, prepared: dict) -> None
     instruction = read_instruction(instruction_path(base, iid))
     fields = instruction["fields"]
     allowed = {item.strip() for item in os.environ.get("RECURSION_INTAKE_ALLOW", "8913126684").split(",")}
-    mismatch = routing_mismatch(instruction)
+    mismatch = routing_mismatch(instruction, configured_project_ids(base))
     if fields.get("principal") not in allowed or fields.get("status") != "acknowledged" \
             or fields.get("project_id") != event.get("project") \
             or instruction_signature(instruction) != signature or mismatch is None \

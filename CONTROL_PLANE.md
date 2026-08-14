@@ -123,12 +123,17 @@ originating blocker.
 | brief | generated and labelled PAUSED; notification enqueue/delivery halted |
 | notification outbox | status/pending work visible; delivery halted |
 | build arms, planning, drain, conduct, reflection | halted |
+| reviewed deterministic recovery | only an explicitly allowlisted, receipt-backed recovery verb may drain; no model, worker, publisher, sender, or external effect may run |
 | pushes, merges, deployments | halted |
 
 A paused box that cannot tell you it is paused is a failure, not a safety feature. The
 prior behaviour — exiting before the heartbeat — is superseded; see D-012. Awareness is
 local/durable truth, not permission to change an external system: the 2026-08-10 forced-cycle
 incident proved legacy brief/digest calls could otherwise bypass the Phase 7 outbox. See D-014.
+The Phase 8 routing incident adds one narrow instance: `routing-refuse` may validate immutable
+instruction/action evidence, record a durable Lucas-attention source receipt, and acknowledge its
+coupled instruction while PAUSE remains present. It is internal recovery, never a model-emittable
+verb, and does not authorize ordinary conduct or any external side effect.
 
 ## Git is the transport
 
