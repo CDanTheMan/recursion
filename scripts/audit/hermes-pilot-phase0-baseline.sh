@@ -11,14 +11,41 @@ branch="$(git branch --show-current 2>/dev/null)"
 ROOT_PHYSICAL="$(pwd -P)"
 LIVE_ROOT_PHYSICAL="$(cd "$LIVE_ROOT" 2>/dev/null && pwd -P)" \
   || { echo "BASELINE HARNESS: live root is absent" >&2; exit 90; }
-[ "$ROOT_PHYSICAL" != "$LIVE_ROOT_PHYSICAL" ] || {
-  echo "BASELINE HARNESS: use a fresh reviewed clone separate from the deployed checkout" >&2
+ROOT_ID="$(stat -Lc '%d:%i' -- "$ROOT_PHYSICAL" 2>/dev/null)" \
+  || { echo "BASELINE HARNESS: reviewed root identity is unreadable" >&2; exit 3; }
+LIVE_ROOT_ID="$(stat -Lc '%d:%i' -- "$LIVE_ROOT_PHYSICAL" 2>/dev/null)" \
+  || { echo "BASELINE HARNESS: live root identity is unreadable" >&2; exit 90; }
+refuse_shared_checkout(){
+  echo "BASELINE HARNESS: use a fresh independent reviewed clone separate from the deployed checkout" >&2
   exit 3
 }
+[ "$ROOT_PHYSICAL" != "$LIVE_ROOT_PHYSICAL" ] || refuse_shared_checkout
+[ "$ROOT_ID" != "$LIVE_ROOT_ID" ] || refuse_shared_checkout
+
+# Freeze symlink resolution before later PAUSE and Git reads, and refuse linked worktrees that
+# have distinct directories but share the deployed checkout's refs and object authority.
+ROOT="$ROOT_PHYSICAL"
+LIVE_ROOT="$LIVE_ROOT_PHYSICAL"
+git_common_physical(){
+  local repo="$1" common
+  common="$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+    || return 1
+  (cd "$common" 2>/dev/null && pwd -P)
+}
+ROOT_GIT_COMMON="$(git_common_physical "$ROOT")" \
+  || { echo "BASELINE HARNESS: reviewed root is not a Git checkout" >&2; exit 3; }
+LIVE_ROOT_GIT_COMMON="$(git_common_physical "$LIVE_ROOT")" \
+  || { echo "BASELINE HARNESS: live root is not a Git checkout" >&2; exit 90; }
+[ "$ROOT_GIT_COMMON" != "$LIVE_ROOT_GIT_COMMON" ] || refuse_shared_checkout
+
 [ -f "$LIVE_ROOT/state/PAUSE" ] || { echo "BASELINE HARNESS: live PAUSE missing" >&2; exit 90; }
-echo "BASELINE_COMMIT=$(git rev-parse HEAD)"
+BASELINE_COMMIT="$(git -C "$ROOT" rev-parse --verify HEAD 2>/dev/null)" \
+  || { echo "BASELINE HARNESS: reviewed commit evidence is unavailable" >&2; exit 3; }
+DEPLOYED_COMMIT="$(git -C "$LIVE_ROOT" rev-parse --verify HEAD 2>/dev/null)" \
+  || { echo "BASELINE HARNESS: deployed commit evidence is unavailable" >&2; exit 90; }
+echo "BASELINE_COMMIT=$BASELINE_COMMIT"
 echo "BASELINE_BRANCH=$branch"
-echo "DEPLOYED_COMMIT=$(git -C "$LIVE_ROOT" rev-parse HEAD)"
+echo "DEPLOYED_COMMIT=$DEPLOYED_COMMIT"
 
 failed=0; count=0
 for test_file in scripts/tests/*.sh; do
