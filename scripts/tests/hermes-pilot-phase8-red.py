@@ -411,7 +411,7 @@ def test_window_admission(f: Fixture) -> bool:
     f._write_instruction("109", "head-hermes", "authorize goal-chiron-phase8-smoke chiron-window-bad")
     bad_instruction = f.root / "state/instructions/00000109.md"
     bad_instruction.write_text(
-        bad_instruction.read_text(encoding="utf-8").replace("topic: 10", "topic: 900"),
+        bad_instruction.read_text(encoding="utf-8").replace("topic: 1", "topic: 900"),
         encoding="utf-8",
     )
     bad_decision = f.decision(

@@ -200,15 +200,15 @@ class Fixture:
 
     def _write_instruction(self) -> None:
         (self.root / "state/instructions/00000001.md").write_text(
-            "schema_version: 1\nid: 1\nprincipal: 8913126684\ntopic: 11\n"
-            "project_id: alpha\npilot_id: pilot-alpha\nrouting_target: head-hermes\n"
+            "schema_version: 1\nid: 1\nprincipal: 8913126684\ntopic: 1\n"
+            "project_id: \npilot_id: \nrouting_target: head-hermes\n"
             "deduplication_key: fixture:approve\nstatus: open\naction_ids:\n\n"
             f"## INSTRUCTION\n{instruction_body(self.digest)}\n",
             encoding="utf-8",
         )
         (self.root / "state/instructions/00000002.md").write_text(
-            "schema_version: 1\nid: 2\nprincipal: 8913126684\ntopic: 11\n"
-            "project_id: alpha\npilot_id: pilot-alpha\nrouting_target: head-hermes\n"
+            "schema_version: 1\nid: 2\nprincipal: 8913126684\ntopic: 1\n"
+            "project_id: \npilot_id: \nrouting_target: head-hermes\n"
             "deduplication_key: fixture:window\nstatus: open\naction_ids:\n\n"
             "## INSTRUCTION\nOpen pilot window window-alpha for goal goal-alpha for 900 seconds.\n",
             encoding="utf-8",
@@ -716,6 +716,26 @@ def test_forged_objects_fail_closed() -> tuple[bool, str]:
         goal_forged.close(); action_forged.close(); window_forged.close()
 
 
+def test_conflicting_head_instruction_projection_fails_closed() -> tuple[bool, str]:
+    fixture = Fixture("instruction-project-conflict")
+    try:
+        instruction = fixture.root / "state/instructions/00000002.md"
+        document = instruction.read_text(encoding="utf-8")
+        instruction.write_text(
+            document.replace("project_id: \n", "project_id: another-project\n", 1)
+                    .replace("pilot_id: \n", "pilot_id: pilot-another-project\n", 1),
+            encoding="utf-8",
+        )
+        mapped = fixture.mapped_types()
+        if "pilot-window-armed" in mapped or "pilot-window-opened" in mapped:
+            return False, f"conflicting Head instruction ownership projected window notices: {mapped}"
+        if "plan-approved" not in mapped:
+            return False, f"unrelated lawful Head approval was suppressed: {mapped}"
+        return True, "conflicting nonempty Head instruction ownership fails closed"
+    finally:
+        fixture.close()
+
+
 def test_tampered_and_missing_receipts_fail_closed() -> tuple[bool, str]:
     tampered = Fixture("receipt-tampered", lawful=False)
     missing = Fixture("receipt-missing", lawful=False)
@@ -824,6 +844,7 @@ def main() -> int:
         ("archived witnesses require a same-object authenticated successor", test_unrelated_successor_cannot_authenticate_archived_witness),
         ("archived witnesses cannot cross journal authority", test_cross_journal_successor_cannot_authenticate_archived_witness),
         ("forged nonempty plan/window/goal/action objects fail closed", test_forged_objects_fail_closed),
+        ("conflicting Head instruction ownership fails closed", test_conflicting_head_instruction_projection_fails_closed),
         ("tampered or missing receipts fail closed", test_tampered_and_missing_receipts_fail_closed),
         ("replay collapses exact-once and duplicated journal rows fail", test_replay_is_collapsed_and_journal_replay_fails),
         ("mid-projection crash recovers the receipt exactly once", test_crash_recovery_projects_exactly_once),
