@@ -187,9 +187,12 @@ class Fixture:
 
     def write_instruction(self, iid: str, target: str, body: str) -> Path:
         path = self.root / "state/instructions" / f"{int(iid):08d}.md"
+        topic = "1" if target == "head-hermes" else "10"
+        project = "" if target == "head-hermes" else "chiron"
+        pilot = "" if target == "head-hermes" else "pilot-chiron"
         path.write_text(
-            f"schema_version: 1\nid: {iid}\nprincipal: 8913126684\ntopic: 10\n"
-            f"project_id: chiron\npilot_id: pilot-chiron\nrouting_target: {target}\n"
+            f"schema_version: 1\nid: {iid}\nprincipal: 8913126684\ntopic: {topic}\n"
+            f"project_id: {project}\npilot_id: {pilot}\nrouting_target: {target}\n"
             f"deduplication_key: fixture\nstatus: open\naction_ids:\n\n## INSTRUCTION\n{body}\n",
             encoding="utf-8",
         )
