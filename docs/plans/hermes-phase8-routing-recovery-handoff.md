@@ -11,9 +11,66 @@ related:
 ---
 # Hermes Phase 8 routing recovery handoff
 
-## Current authoritative state — 2026-08-14T03:00:23Z
+## Current authoritative closure — 2026-08-14T03:44:13Z
 
-This section supersedes every older point-in-time state block below. PR #57 was merged at
+This section supersedes every older point-in-time state block below. Lucas merged PR #58 as
+`61643959600a2f2bafc986b91bb6131d9fda12bd` and explicitly authorized the next deployment,
+testing, and bug-fix pass. The reviewed tree is
+`a9e7028347931cffeb7dab5b6e65233d26ec1209`. It was deployed under PAUSE through state
+checkpoint `b336883a76dfb698d82deb36e09d696e76125b15` and merge commit
+`0669455f213ba531bc94a01cc23c7a9677243b8e` on `loop/auto`; PR #58 is the merge commit's
+second parent. Production's non-state diff from the reviewed target is empty, and both
+`master` and `origin/master` resolve to the reviewed merge.
+
+The PAUSE-held transaction verified a 515-file runtime snapshot and restore drill, rehearsed
+the state checkpoint and merge in a disposable clone, and preserved the pre-existing,
+user-owned `.env.bak.1786014440` by metadata without reading or changing it. Focused deployed-
+commit routing/recovery passed from `2026-08-14T03:29:23Z` through `03:30:27Z`; complete Phase-8
+red passed through `03:33:25Z`; and the complete positive audit reported
+`hermes-pilot-phase8-green: ALL PASS` at `03:38:18Z`.
+
+Read-only live readiness then returned exactly `rc=10` and deterministic routing-refusal
+decision `decision-bb17f923260cd217b3297772` for instruction 707, with no queue mutation. The
+controlled recovery stopped only the actuator to remove races, prepended a deny-model shim
+outside the repository, and terminalized the records in required order:
+
+- instruction 707 is `acknowledged` through succeeded, one-attempt action
+  `action-80239787d6c200a34cebbc96` and source event
+  `source-routing-refused-b9aa6b1b74de7c14dfc50bac`;
+- instruction 732 is `acknowledged` through succeeded, one-attempt action
+  `action-ee25ba5f4db1629c842773db` and source event
+  `source-routing-refused-1d6a05b3199c65b41eb26c21`; and
+- decisions `decision-bb17f923260cd217b3297772` and
+  `decision-592ec7da52da9b4e8de658bd` are succeeded, with pending/running queues empty.
+
+No model call occurred. Exact replay of both succeeded decisions produced no dispatch and no
+duplicate action or source event. PAUSE-held notification scheduling returned `0`; no recovery
+notification-event or delivery record exists yet. Instruction 618 remained byte-identical at
+SHA-256 `6cc42f7ecb6aa98c8f62d3f6407d655e50f1c540556e1d9092abcf7d5025ed5c`, and plan, goal,
+task, and pilot-window state remained byte-identical. All five services are active/enabled with
+`NRestarts=0`; workers are zero. The only non-state status entry remains the known
+`.env.bak.1786014440`; all other status entries are PAUSE-awareness/runtime state.
+
+PAUSE remained `root:root`, mode `0644`, 189 bytes, at exact SHA-256
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db` before and after every
+operation. The sealed 560-file evidence tree is
+`/var/backups/recursion/pr58-deploy-20260814T032450Z`, whose `MANIFEST.sha256` root is
+`39fb887be91a681ea998841b3f6e875ff6e869ff79abc5aa9e6d7833c8043131`. Program SHA-256 values
+are transaction `33b3f543e2b907300234fac5ab171d9a777957e0d8f0e9968040714e26ea984b`, rollback
+`1d99f0a0eb0db04239d77ca6062f78a2928bb588d36ce5ef4cc3609aa87822e4`, and recovery
+`8397f72cebf74b1ad15f71f49448512d3a15cb4d7dac4f82918d689aa3ed51f6`.
+
+The routing incident is closed. The next gate is a fresh operator-authored project-topic
+instruction using the recommended wording below. Do not fabricate that instruction, run a
+project-pilot decide turn before its intake route is verified, reuse v1 identities, or lift
+PAUSE. The two authenticated refusal source events are expected to become two direct Lucas
+attention records only after a future authorized PAUSE lift; include that expected reconciliation
+in the Gate-6 observation plan.
+
+## Superseded pre-PR58 state — 2026-08-14T03:00:23Z
+
+This historical section superseded blocks older than it; the closure above now supersedes it.
+PR #57 was merged at
 `4aa66c2c0af84a425f696eb9df74a8ce3b28d98c` and, after Lucas's explicit authorization, was
 deployed under PAUSE through state-preserving merge commit
 `8d7338c7f7b2c8126f770bde48b6b89194fe931a` on `loop/auto`. Production's resulting tree is
@@ -86,10 +143,10 @@ edit either record.
 
 ## Authority and stop condition
 
-Lucas subsequently authorized and completed the PR #57 deployment/test pass, then authorized
-the follow-up bug-fix and PR-preparation pass described above. That authority does not permit
-deploying the unmerged action-3 branch, running another Hermes decision turn, manually editing
-runtime records, or removing PAUSE.
+Lucas subsequently authorized PR #57 and PR #58 deployment/test passes plus the reviewed 707/732
+recovery described above. Those operations are complete. There is no authorization to remove
+PAUSE, change configuration, run another Head Hermes turn for 707, fabricate a new project-topic
+instruction, or run a new project-pilot model turn before Lucas supplies and authorizes it.
 
 The production control plane is `/opt/recursion` on `ssh gs-recursion`. Preserve these rules:
 
@@ -312,12 +369,17 @@ Boot by measuring. Verify PAUSE SHA-256
 production operation. Do not deploy, lift PAUSE, change config/model/capacity/cron/auth, or
 manually edit runtime records. Do not run another Head Hermes turn for instruction 707.
 
-The follow-up correction is prepared on `review/phase8-routing-recovery-action3`; do not amend
-production from an unmerged review branch. If Lucas has not merged its PR, report that gate and
-stop. After Lucas merges it and separately authorizes deployment of the exact merge, repeat the
-snapshot/restore rehearsal and PAUSE-held deployment controls, byte-bind deployed executable
-state to the reviewed target, and rerun focused plus complete Phase-8 tests in a disposable
-clone. Only then use the reviewed coupled recovery path to terminalize instruction 707 before
-732. Never manually edit the records and never run another Head Hermes turn for 707. Stop and
-report if any fresh measurement contradicts this handoff.
+PR #58 is deployed as `0669455f213ba531bc94a01cc23c7a9677243b8e`; instructions 707 and 732 are
+lawfully acknowledged through the exact succeeded routing-refusal actions recorded in the
+authoritative closure. Verify those facts and the sealed evidence before proceeding. Do not
+rerun either recovery or another Head Hermes turn.
+
+The next operator gate is a genuinely new project-topic instruction from Lucas using the
+recommended wording in this handoff. If it has not arrived, report that gate and stop. If it has
+arrived, poll intake and prove it routes to `pilot-golden-stallion-client` before requesting
+separate authority for any model turn. Require fresh v2 plan/goal/task identities, the deployed
+seed/scope/provider/heavy-gate contracts, source HEAD binding, and publication disabled. Present
+the exact canonical plan digest to Lucas for separate approval. Keep PAUSE asserted; account for
+the two pending authenticated routing-attention reconciliations in any later Gate-6 observation
+plan. Stop and report if any fresh measurement contradicts this handoff.
 ```
