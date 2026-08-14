@@ -90,7 +90,11 @@ HISTORICAL_INSTRUCTIONS = {
                 "6572b4c5115f499258da36663c9c5a697a9a41049758a53cb080a65c35243db7",
             "action-4a90005df9c9dfe6cbb7fbad":
                 "b65903d93da048083a255ed647b9e226cc140ebf7cd672bcab3ecb4c62544db4",
+            "action-cbba158e3295fb82bdf6e06c":
+                "270478743ba73a2a54f30c1a918aaff9c5fe579b9015a0a015f45bbc96d4fa70",
         },
+        "initial_document_sha256":
+            "402aa9aea90a4d9c7dbedfcaff0cd34b1388f8d52ddc72dd57b94983d048d677",
     },
     "732": {
         "fields": {
@@ -125,9 +129,13 @@ def now_iso() -> str:
 
 def read_instruction(path: Path) -> dict:
     try:
-        document = path.read_text(encoding="utf-8", errors="surrogateescape")
+        raw = path.read_bytes()
     except OSError as exc:
         raise RoutingError(f"instruction is unreadable: {path}") from exc
+    document = raw.decode("utf-8", errors="surrogateescape")
+    # Preserve the historical parser's universal-newline behavior for fields/body while
+    # retaining the raw digest needed to bind reviewed recovery evidence byte-for-byte.
+    document = document.replace("\r\n", "\n").replace("\r", "\n")
     lines = document.splitlines()
     fields: dict[str, str] = {}
     for line in lines:
@@ -139,7 +147,10 @@ def read_instruction(path: Path) -> dict:
     match = re.search(r"(?m)^## INSTRUCTION\s*$\n?", document)
     body = document[match.end():] if match else ""
     body = re.split(r"(?m)^##\s+", body, maxsplit=1)[0].strip()
-    return {"path": path, "document": document, "fields": fields, "body": body}
+    return {
+        "path": path, "document": document, "document_sha256": hashlib.sha256(raw).hexdigest(),
+        "fields": fields, "body": body,
+    }
 
 
 def instruction_path(base: Path, instruction_id: str) -> Path:
@@ -237,6 +248,15 @@ def validate_authenticated(record: dict) -> None:
             raise RoutingError(f"instruction {key} is not canonical")
 
 
+def validate_instruction_identity(base: Path, record: dict) -> None:
+    """Bind the parsed header identity to the canonical instruction filename."""
+    iid = record["fields"].get("id") or ""
+    if not IDENT.fullmatch(iid) or (iid.isdigit() and iid != str(int(iid))):
+        raise RoutingError("instruction id is not canonical")
+    if record["path"].resolve() != instruction_path(base, iid).resolve():
+        raise RoutingError("instruction filename and header id differ")
+
+
 def validate_historical(base: Path, record: dict, *, require_dependency: bool) -> None:
     iid = record["fields"].get("id") or ""
     expected = HISTORICAL_INSTRUCTIONS.get(iid)
@@ -253,6 +273,18 @@ def validate_historical(base: Path, record: dict, *, require_dependency: bool) -
             raise RoutingError(f"historical action evidence is absent: {action_id}") from exc
         if observed != digest:
             raise RoutingError(f"historical action evidence changed: {action_id}")
+    if iid == "707":
+        observed_noops = set()
+        for path in sorted((base / "state/actions").glob("*.json")):
+            try:
+                action = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if str(action.get("instruction_id") or "") == "707" \
+                    and action.get("verb") == "noop":
+                observed_noops.add(path.stem)
+        if observed_noops != set(expected.get("failed_actions", {})):
+            raise RoutingError("historical instruction 707 failed noop evidence set differs")
     if iid == "732" and require_dependency:
         require_707_terminal(base)
 
@@ -264,13 +296,23 @@ def validate_initial_recovery(record: dict) -> None:
     if iid == "707":
         first = "action-bb38398a6e0e3859a1a7d263"
         second = "action-4a90005df9c9dfe6cbb7fbad"
-        if fields.get("status") != "open" or fields.get("action_ids") != second \
-                or document.count("## CONSUMED ") != 2 or document.count("## OPEN ") != 2 \
+        third = "action-cbba158e3295fb82bdf6e06c"
+        expected_sha256 = HISTORICAL_INSTRUCTIONS["707"]["initial_document_sha256"]
+        resulting = re.findall(r"(?m)^resulting actions: (action-[0-9a-f]{24})$", document)
+        reopened = re.findall(
+            r"(?m)^deferred/failed actions reopened instruction: (action-[0-9a-f]{24})", document
+        )
+        if fields.get("status") != "open" or fields.get("action_ids") != third \
+                or record["document_sha256"] != expected_sha256 \
+                or document.count("## CONSUMED ") != 3 or document.count("## OPEN ") != 3 \
                 or document.count(f"resulting actions: {first}") != 1 \
                 or document.count(f"resulting actions: {second}") != 1 \
+                or document.count(f"resulting actions: {third}") != 1 \
                 or document.count(f"reopened instruction: {first}") != 1 \
                 or document.count(f"reopened instruction: {second}") != 1 \
-                or document.count("cannot-bind noop evidence is absent") != 2:
+                or document.count(f"reopened instruction: {third}") != 1 \
+                or document.count("cannot-bind noop evidence is absent") != 3 \
+                or resulting != [first, second, third] or reopened != [first, second, third]:
             raise RoutingError("historical instruction 707 recovery annotations differ")
     elif iid == "732":
         if fields.get("status") != "open" or fields.get("action_ids") != "" \
@@ -352,6 +394,12 @@ def refusal_decision(base: Path, record: dict) -> dict:
 
 def admit(base: Path, path: Path, *, enqueue: bool) -> tuple[int, dict | None]:
     record = read_instruction(path)
+    # A classifier change must never bypass pinned recovery evidence. Bind identity and validate
+    # every known historical record before the ordinary no-mismatch success path is available.
+    validate_instruction_identity(base, record)
+    validate_historical(base, record, require_dependency=True)
+    if (record["fields"].get("id") or "") in HISTORICAL_INSTRUCTIONS:
+        validate_initial_recovery(record)
     if routing_mismatch(record, configured_project_ids(base)) is None:
         return 0, None
     decision = refusal_decision(base, record)
