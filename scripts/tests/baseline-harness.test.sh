@@ -27,7 +27,7 @@ printf 'fixture pause\n' > "$R/state/PAUSE"
 same_out="$(RECURSION_ROOT="$R" RECURSION_LIVE_ROOT="$R" \
   bash "$SRC/scripts/audit/hermes-pilot-phase0-baseline.sh" 2>&1)"
 same_rc=$?
-if [ "$same_rc" = 3 ] && printf '%s' "$same_out" | grep -q 'fresh reviewed clone'; then
+if [ "$same_rc" = 3 ] && printf '%s' "$same_out" | grep -q 'independent reviewed clone'; then
   ok "baseline refuses to audit the deployed runtime checkout as its reviewed source"
 else
   no "baseline accepted the deployed runtime checkout (rc=$same_rc): $same_out"
