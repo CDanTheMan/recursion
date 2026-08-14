@@ -1,7 +1,7 @@
 ---
 title: Hermes Phase 8 routing recovery handoff
 type: handoff
-status: blocked
+status: review
 last-verified: 2026-08-13
 related:
   - CONTROL_PLANE.md
@@ -53,6 +53,55 @@ The final read-only snapshot on 2026-08-13 found:
 
 The merged/deployed hardening includes the Phase-8 seed/scope/gate contracts and provider-only
 capability. Post-deployment provider integration and the complete Phase-8 Linux audit passed.
+
+## Review implementation evidence
+
+The routing/recovery correction is prepared for Lucas on review branch
+`review/phase8-routing-recovery` at
+`c72a65db7e16a6e6c4e090cdd08cac6b3d28b9b6`. It is not deployed. The branch retains the
+handoff commit, the isolated red commit
+`df062d6e115f9ef915c165d0e7ca228cfd6df293`, implementation commit
+`293233a5bbe77019da6b4282d178387ad017d46e`, and the adversarial-review correction.
+
+The pre-implementation red proof ran against the exact deployed executable blobs in a fresh
+root-owned mode-0700 clone. Exact instruction-707 wording failed by routing to `head-hermes`;
+the genuine deployment/policy positive control stayed green and no unrelated intake control
+failed. The final implementation proves:
+
+- shared command-shaped intake/admission routing sends exact 707 and incidental policy/assist/
+  portfolio prose to the bound pilot, while deploy/redeploy/deploys/deployed/deployments and
+  genuine credential/policy commands stay with Head Hermes;
+- a routed-actor/requested-verb mismatch enqueues one deterministic `routing-refuse` decision
+  before any model call;
+- the succeeded action records its authenticated refusal source event before instruction
+  acknowledgement, so `record-error`, before-event, after-event, SIGKILL, restart, and replay
+  retain one recoverable tail rather than a silently terminal instruction;
+- 707 terminalizes before 732 through two distinct coupled actions, one attempt each, and their
+  authenticated source events become direct Lucas-attention deliveries only after PAUSE is
+  absent; and
+- replay leaves no pending/running decision, creates no plan/goal/task/window/worker state, and
+  preserves instruction 618 byte-identically.
+
+OpenCode Go `opencode-go/deepseek-v4-pro` session
+`ses_0027ebec3ffe2DocQgHuSQwpVu` and `opencode-go/deepseek-v4-flash` session
+`ses_00276b576ffeOxzQGSJNJpd77h` independently reviewed the final diff read-only. Their material
+findings produced the event-before-acknowledgement ordering, permanent/pre/post-event recovery
+falsifiers, command-shaped routing grammar, cross-project admission binding, and the narrow
+PAUSE-safe recovery statement in `CONTROL_PLANE.md`. The exact historical failed-action hashes
+were separately measured against production and match the reviewed constants:
+`6572b4c5115f499258da36663c9c5a697a9a41049758a53cb080a65c35243db7` and
+`b65903d93da048083a255ed647b9e226cc140ebf7cd672bcab3ecb4c62544db4`.
+
+Linux validation at the final commit used only immutable bundles and fresh root-owned mode-0700
+`/var/tmp` clones. Focused intake, conductor, Phase-8 red, and the complete Phase-8 green audit
+passed. The complete Phase-5 through Phase-8 command set also passed: Phase-5, Phase-6, and
+Phase-7 red/green plus Phase-8 red completed in one guarded serial clone; the local one-hour
+wrapper expired while the final Phase-8 green repeat continued remotely, so its result is bound
+to the separate same-commit `rc=0` Phase-8 green run rather than inferred from buffered output.
+The surviving repeat was observed through its late receipt/authentication tail and then cleaned
+its clone and bundle. Every production-host operation verified PAUSE before and after; the final
+2026-08-14T01:16:27Z observation still matched
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`.
 The evidence bundle is `/var/backups/recursion/pr56-deploy-20260813T202056Z`, manifest root
 `d5ec7a7eaaa5bae8c0818afb85730b7a89fe93449a36638732f121a22fb4d538`.
 
