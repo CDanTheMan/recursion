@@ -53,7 +53,7 @@ import sqlite3, sys
 c = sqlite3.connect(sys.argv[1])
 c.execute("create table sessions(id text primary key, source text, user_id text, chat_id text, thread_id text)")
 c.execute("""create table messages(id integer primary key autoincrement, session_id text,
-             role text, content text, timestamp real)""")
+             role text, content text, timestamp real, platform_message_id text)""")
 c.commit()
 PY
 
@@ -64,15 +64,53 @@ db, sess, source, uid, chat, thread, role, text = sys.argv[1:9]
 c = sqlite3.connect(db)
 c.execute("insert or ignore into sessions(id,source,user_id,chat_id,thread_id) values(?,?,?,?,?)",
           (sess, source, uid, chat, None if thread == "-" else thread))
-c.execute("insert into messages(session_id,role,content,timestamp) values(?,?,?,?)",
-          (sess, role, text, time.time()))
+c.execute("insert into messages(session_id,role,content,timestamp,platform_message_id) values(?,?,?,?,?)",
+          (sess, role, text, int(time.time()) if source == "telegram" else time.time(), None))
 c.commit()
+PY
+}
+replay(){ # replay <source-message-id> <exact|fractional>
+  python3 - "$DB" "$@" <<'PY'
+import sqlite3, sys, time
+db, source_id, mode = sys.argv[1:4]
+c = sqlite3.connect(db)
+row = c.execute("select session_id,role,content,timestamp,platform_message_id from messages where id=?",
+                (source_id,)).fetchone()
+if not row:
+    raise SystemExit("missing replay source %s" % source_id)
+session, role, content, stamp, platform_id = row
+if mode == "fractional":
+    stamp = time.time() + 0.125
+if len(sys.argv) > 4:
+    platform_id = sys.argv[4]
+cur = c.execute("insert into messages(session_id,role,content,timestamp,platform_message_id) values(?,?,?,?,?)",
+                (session, role, content, stamp, platform_id))
+c.commit()
+print(cur.lastrowid)
 PY
 }
 intake(){ ( cd "$R" && RECURSION_ROOT="$R" RECURSION_HERMES_DB="$DB" \
     RECURSION_INTAKE_ALLOW="$LUCAS" bash scripts/intake.sh "$@" ) >"$TMP/out" 2>&1; echo $?; }
 ingested(){ ls "$R/state/instructions"/*.md 2>/dev/null | wc -l | tr -d ' '; }
 body_of(){ awk '/^## INSTRUCTION/{f=1;next} f' "$R/state/instructions/$1.md" 2>/dev/null; }
+
+# --- empty first run: marker existence, not numeric zero, distinguishes initialization -------
+intake poll >/dev/null
+add s-empty telegram "$LUCAS" -1003894008732 10 user "[Lucas Guerra] first message after an empty bootstrap"
+intake poll >/dev/null
+if [ "$(cat "$R/state/.intake-watermark")" = 1 ] \
+   && [ -f "$R/state/instructions/00000001.md" ]; then
+  ok "an empty first run does not reseed away the first later Telegram instruction"
+else
+  no "empty bootstrap dropped the first later instruction (marker=$(cat "$R/state/.intake-watermark") files=$(ingested))"
+fi
+python3 - "$DB" <<'PY'
+import sqlite3,sys
+c=sqlite3.connect(sys.argv[1]); c.execute('delete from messages'); c.execute('delete from sessions')
+c.execute("delete from sqlite_sequence where name='messages'"); c.commit()
+PY
+rm -f "$R/state/.intake-watermark" "$R/state/instructions"/*.md \
+  "$R/state/instructions"/.intake-anchor-*.json
 
 # --- first run seeds rather than resurrecting history --------------------------------------
 add s-dm telegram "$LUCAS" "$LUCAS" - user "[Lucas Guerra] an old message from before intake existed"
@@ -370,6 +408,222 @@ for command in \
     no "Head-Hermes command leaked to pilot: $command"
   fi
 done
+
+# --- 12) gateway-store selection and session replay canonicalisation ------------------------
+# The production gateway runs with HERMES_HOME=/var/lib/hermes-gateway and writes state.db at
+# that root. Root cron has a different HOME. After a gateway compaction, historical Telegram
+# rows are copied back into the active session with new database ids; the real platform rows
+# retain integral Telegram timestamps, while internal rehydration can also append a fractional
+# timestamp copy. Intake must select the gateway store, suppress both replay shapes, and preserve
+# the first real post-watermark row as the one durable instruction.
+prior_file="$(ls -1 "$R/state/instructions"/*.md | head -1)"
+prior_id="$(basename "$prior_file" .md | sed 's/^0*//')"
+stale_replay_id="$(replay "$prior_id" exact)"
+fresh_request='Propose one fresh bounded offline renderer plan for golden-stallion-client with one renderer-only task and new v2 identities.'
+add s-gsc telegram "$LUCAS" -1003894008732 6 user "[Lucas Guerra] $fresh_request"
+fresh_id="$(python3 - "$DB" <<'PY'
+import sqlite3,sys
+print(sqlite3.connect(sys.argv[1]).execute("select max(id) from messages").fetchone()[0])
+PY
+)"
+fractional_replay_id="$(replay "$fresh_id" fractional)"
+replay_before="$(ingested)"
+intake poll >/dev/null
+replay_after="$(ingested)"
+fresh_file="$R/state/instructions/$(printf '%08d' "$fresh_id").md"
+stale_file="$R/state/instructions/$(printf '%08d' "$stale_replay_id").md"
+fractional_file="$R/state/instructions/$(printf '%08d' "$fractional_replay_id").md"
+if [ "$replay_after" -eq $((replay_before + 1)) ] \
+   && [ -f "$fresh_file" ] && [ ! -e "$stale_file" ] && [ ! -e "$fractional_file" ] \
+   && grep -q '^routing_target: pilot-golden-stallion-client$' "$fresh_file" \
+   && [ "$(cat "$R/state/.intake-watermark")" = "$fractional_replay_id" ]; then
+  ok "gateway compaction replay yields exactly one canonical project instruction"
+else
+  no "gateway replay was not canonical (before=$replay_before after=$replay_after fresh=$fresh_id stale=$stale_replay_id fractional=$fractional_replay_id watermark=$(cat "$R/state/.intake-watermark"))"
+fi
+
+anchor_file="$R/state/instructions/.intake-anchor-$(printf '%08d' "$fractional_replay_id").json"
+WRONGDB="$TMP/wrong-store.db"
+cp "$DB" "$WRONGDB"
+python3 - "$WRONGDB" "$fractional_replay_id" <<'PY'
+import sqlite3,sys
+c=sqlite3.connect(sys.argv[1]); c.execute("update messages set content='different source row' where id=?",(sys.argv[2],)); c.commit()
+PY
+anchor_mark_before="$(cat "$R/state/.intake-watermark")"
+set +e
+( cd "$R" && RECURSION_ROOT="$R" RECURSION_HERMES_DB="$WRONGDB" \
+  RECURSION_INTAKE_ALLOW="$LUCAS" bash scripts/intake.sh poll --dry-run ) >"$TMP/wrong-store.out" 2>&1
+wrong_store_rc=$?
+set -e
+if [ -f "$anchor_file" ] && [ "$wrong_store_rc" -ne 0 ] \
+   && [ "$(cat "$R/state/.intake-watermark")" = "$anchor_mark_before" ]; then
+  ok "a skipped high-water row still leaves a durable store-identity witness"
+else
+  no "skipped watermark row did not bind the source store (anchor=$([ -f "$anchor_file" ] && echo yes || echo no) rc=$wrong_store_rc)"
+fi
+
+# Compatibility control: legacy gateway schemas without platform_message_id remain readable.
+R_NO_PLATFORM="$TMP/root-no-platform"; cp -a "$R" "$R_NO_PLATFORM"
+NO_PLATFORM_DB="$TMP/no-platform.db"
+no_platform_id="$(python3 - "$DB" "$NO_PLATFORM_DB" <<'PY'
+import sqlite3,sys,time
+src=sqlite3.connect(sys.argv[1]); dst=sqlite3.connect(sys.argv[2])
+dst.execute("create table sessions(id text primary key, source text, user_id text, chat_id text, thread_id text)")
+dst.execute("create table messages(id integer primary key autoincrement, session_id text, role text, content text, timestamp real)")
+dst.executemany("insert into sessions(id,source,user_id,chat_id,thread_id) values(?,?,?,?,?)",
+                src.execute("select id,source,user_id,chat_id,thread_id from sessions"))
+dst.executemany("insert into messages(id,session_id,role,content,timestamp) values(?,?,?,?,?)",
+                src.execute("select id,session_id,role,content,timestamp from messages"))
+cur=dst.execute("insert into messages(session_id,role,content,timestamp) values(?,?,?,?)",
+                ('s-gsc','user','[Lucas Guerra] schema compatibility control',int(time.time())+3))
+dst.commit(); print(cur.lastrowid)
+PY
+)"
+set +e
+( cd "$R_NO_PLATFORM" && RECURSION_ROOT="$R_NO_PLATFORM" RECURSION_HERMES_DB="$NO_PLATFORM_DB" \
+  RECURSION_INTAKE_ALLOW="$LUCAS" bash scripts/intake.sh poll ) >"$TMP/no-platform.out" 2>&1
+no_platform_rc=$?
+set -e
+if [ "$no_platform_rc" = 0 ] \
+   && [ -f "$R_NO_PLATFORM/state/instructions/$(printf '%08d' "$no_platform_id").md" ]; then
+  ok "legacy gateway schema without platform_message_id remains supported"
+else
+  no "legacy gateway schema compatibility failed (rc=$no_platform_rc id=$no_platform_id)"
+fi
+
+# Stable platform ids deduplicate directly. During a schema transition, a populated replay also
+# carries the legacy timestamp/content alias so it cannot duplicate an earlier NULL-id row.
+add s-gsc telegram "$LUCAS" -1003894008732 6 user "[Lucas Guerra] stable platform replay control"
+platform_id="$(python3 - "$DB" <<'PY'
+import sqlite3,sys
+c=sqlite3.connect(sys.argv[1]); mid=c.execute('select max(id) from messages').fetchone()[0]
+c.execute("update messages set platform_message_id='telegram-message-1001' where id=?",(mid,)); c.commit(); print(mid)
+PY
+)"
+platform_replay_id="$(replay "$platform_id" exact)"
+platform_before="$(ingested)"; intake poll >/dev/null; platform_after="$(ingested)"
+if [ "$platform_after" -eq $((platform_before + 1)) ] \
+   && [ -f "$R/state/instructions/$(printf '%08d' "$platform_id").md" ] \
+   && [ ! -e "$R/state/instructions/$(printf '%08d' "$platform_replay_id").md" ]; then
+  ok "a non-null platform message id is exact-once across replay"
+else
+  no "stable platform id replay duplicated (before=$platform_before after=$platform_after)"
+fi
+
+add s-gsc telegram "$LUCAS" -1003894008732 6 user "[Lucas Guerra] mixed platform replay control"
+mixed_id="$(python3 - "$DB" <<'PY'
+import sqlite3,sys
+print(sqlite3.connect(sys.argv[1]).execute('select max(id) from messages').fetchone()[0])
+PY
+)"
+mixed_replay_id="$(replay "$mixed_id" exact telegram-message-1002)"
+mixed_before="$(ingested)"; intake poll >/dev/null; mixed_after="$(ingested)"
+if [ "$mixed_after" -eq $((mixed_before + 1)) ] \
+   && [ -f "$R/state/instructions/$(printf '%08d' "$mixed_id").md" ] \
+   && [ ! -e "$R/state/instructions/$(printf '%08d' "$mixed_replay_id").md" ]; then
+  ok "mixed NULL/non-null platform ids share a legacy replay alias"
+else
+  no "mixed platform-id replay duplicated (before=$mixed_before after=$mixed_after)"
+fi
+
+# Two authoritative platform ids are two messages even when Telegram timestamps/content match.
+add s-gsc telegram "$LUCAS" -1003894008732 6 user "[Lucas Guerra] two distinct same-second platform messages"
+distinct_platform_one="$(python3 - "$DB" <<'PY'
+import sqlite3,sys
+c=sqlite3.connect(sys.argv[1]); mid=c.execute('select max(id) from messages').fetchone()[0]
+c.execute("update messages set platform_message_id='telegram-message-2001' where id=?",(mid,)); c.commit(); print(mid)
+PY
+)"
+distinct_platform_two="$(replay "$distinct_platform_one" exact telegram-message-2002)"
+distinct_before="$(ingested)"; intake poll >/dev/null; distinct_after="$(ingested)"
+if [ "$distinct_after" -eq $((distinct_before + 2)) ] \
+   && [ -f "$R/state/instructions/$(printf '%08d' "$distinct_platform_one").md" ] \
+   && [ -f "$R/state/instructions/$(printf '%08d' "$distinct_platform_two").md" ]; then
+  ok "distinct non-null platform ids survive same-second identical content"
+else
+  no "authoritative platform ids collapsed distinct messages (before=$distinct_before after=$distinct_after)"
+fi
+
+mkdir -p "$TMP/gateway-home" "$TMP/cron-home"
+GWDB="$TMP/gateway-home/state.db"
+cp "$DB" "$GWDB"
+R_GATEWAY_DEFAULT="$TMP/root-gateway-default"; cp -a "$R" "$R_GATEWAY_DEFAULT"
+gateway_fresh_id="$(python3 - "$GWDB" "$LUCAS" <<'PY'
+import sqlite3,sys,time
+db,uid=sys.argv[1:3]
+c=sqlite3.connect(db)
+c.execute("insert or ignore into sessions(id,source,user_id,chat_id,thread_id) values(?,?,?,?,?)",
+          ('s-gateway-live','telegram',uid,'-1003894008732','6'))
+cur=c.execute("insert into messages(session_id,role,content,timestamp,platform_message_id) values(?,?,?,?,?)",
+              ('s-gateway-live','user','[Lucas Guerra] verify the live gateway store',int(time.time())+2,None))
+c.commit(); print(cur.lastrowid)
+PY
+)"
+gateway_file="$R_GATEWAY_DEFAULT/state/instructions/$(printf '%08d' "$gateway_fresh_id").md"
+gateway_rc="$( ( cd "$R_GATEWAY_DEFAULT" && HOME="$TMP/cron-home" HERMES_HOME="$TMP/gateway-home" \
+  RECURSION_ROOT="$R_GATEWAY_DEFAULT" RECURSION_INTAKE_ALLOW="$LUCAS" env -u RECURSION_HERMES_DB \
+  bash scripts/intake.sh poll ) >"$TMP/gateway-default.out" 2>&1; echo $? )"
+if [ "$gateway_rc" = 0 ] && [ -f "$gateway_file" ]; then
+  ok "default intake follows HERMES_HOME/state.db instead of root cron HOME"
+else
+  no "default intake missed the live gateway store (rc=$gateway_rc id=$gateway_fresh_id): $(head -1 "$TMP/gateway-default.out")"
+fi
+
+# A crash after the instruction fsync but before watermark commit leaves a valid durable file.
+# Retry must verify its immutable source identity and preserve lifecycle changes byte-for-byte.
+crash_mark="$(cat "$R/state/.intake-watermark")"
+add s-gsc telegram "$LUCAS" -1003894008732 6 user "[Lucas Guerra] preserve this instruction across intake crash replay"
+crash_id="$(python3 - "$DB" <<'PY'
+import sqlite3,sys
+print(sqlite3.connect(sys.argv[1]).execute('select max(id) from messages').fetchone()[0])
+PY
+)"
+crash_rc="$(RECURSION_INTAKE_FAILPOINT=after-instruction-fsync intake poll)"
+crash_file="$R/state/instructions/$(printf '%08d' "$crash_id").md"
+# Old implementations lack the failpoint. Rewind only the disposable fixture to reproduce the
+# same crash boundary so the overwrite assertion below still proves red.
+[ "$crash_rc" != 0 ] || printf '%s\n' "$crash_mark" > "$R/state/.intake-watermark"
+if [ -f "$crash_file" ]; then
+  python3 - "$crash_file" <<'PY'
+import sys
+p=sys.argv[1]; text=open(p,encoding='utf-8').read()
+text=text.replace('status: open','status: consumed',1)
+text=text.replace('action_ids: ','action_ids: action-aaaaaaaaaaaaaaaaaaaaaaaa',1)
+text += '\n## CONSUMED 2026-08-14T09:00:00Z\nresulting actions: action-aaaaaaaaaaaaaaaaaaaaaaaa\n'
+open(p,'w',encoding='utf-8',newline='\n').write(text)
+PY
+fi
+crash_sha_before="$(sha256sum "$crash_file" 2>/dev/null | awk '{print $1}')"
+retry_rc="$(intake poll)"
+crash_sha_after="$(sha256sum "$crash_file" 2>/dev/null | awk '{print $1}')"
+if [ "$crash_rc" -ne 0 ] && [ "$retry_rc" = 0 ] \
+   && [ "$(cat "$R/state/.intake-watermark")" = "$crash_id" ] \
+   && [ -n "$crash_sha_before" ] && [ "$crash_sha_after" = "$crash_sha_before" ]; then
+  ok "crash replay preserves an existing instruction and its lifecycle byte-for-byte"
+else
+  no "crash replay overwrote durable state (crash_rc=$crash_rc retry_rc=$retry_rc marker=$(cat "$R/state/.intake-watermark") hashes=$crash_sha_before/$crash_sha_after)"
+fi
+
+# A conflicting same-id file is corruption, never permission to overwrite source evidence.
+conflict_mark="$(cat "$R/state/.intake-watermark")"
+add s-gsc telegram "$LUCAS" -1003894008732 6 user "[Lucas Guerra] conflicting source identity control"
+conflict_id="$(python3 - "$DB" <<'PY'
+import sqlite3,sys
+print(sqlite3.connect(sys.argv[1]).execute('select max(id) from messages').fetchone()[0])
+PY
+)"
+conflict_file="$R/state/instructions/$(printf '%08d' "$conflict_id").md"
+printf 'schema_version: 1\nid: %s\nprincipal: 8913126684\nchat: -1003894008732\nthread: 6\nstatus: acknowledged\n\n## INSTRUCTION\ndifferent body\n' \
+  "$conflict_id" > "$conflict_file"
+conflict_sha_before="$(sha256sum "$conflict_file" | awk '{print $1}')"
+conflict_rc="$(intake poll)"
+conflict_sha_after="$(sha256sum "$conflict_file" | awk '{print $1}')"
+if [ "$conflict_rc" -ne 0 ] && [ "$(cat "$R/state/.intake-watermark")" = "$conflict_mark" ] \
+   && [ "$conflict_sha_after" = "$conflict_sha_before" ]; then
+  ok "conflicting pre-existing instruction fails closed without watermark movement"
+else
+  no "conflicting instruction was overwritten or skipped (rc=$conflict_rc marker=$(cat "$R/state/.intake-watermark") hashes=$conflict_sha_before/$conflict_sha_after)"
+fi
 
 echo
 [ "$fails" -eq 0 ] && { echo "intake: ALL PASS"; exit 0; }
