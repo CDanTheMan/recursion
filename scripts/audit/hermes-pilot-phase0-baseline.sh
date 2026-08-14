@@ -8,6 +8,13 @@ cd "$ROOT"
 
 branch="$(git branch --show-current 2>/dev/null)"
 [ -n "$branch" ] || { echo "BASELINE HARNESS: use a named branch, not detached HEAD" >&2; exit 3; }
+ROOT_PHYSICAL="$(pwd -P)"
+LIVE_ROOT_PHYSICAL="$(cd "$LIVE_ROOT" 2>/dev/null && pwd -P)" \
+  || { echo "BASELINE HARNESS: live root is absent" >&2; exit 90; }
+[ "$ROOT_PHYSICAL" != "$LIVE_ROOT_PHYSICAL" ] || {
+  echo "BASELINE HARNESS: use a fresh reviewed clone separate from the deployed checkout" >&2
+  exit 3
+}
 [ -f "$LIVE_ROOT/state/PAUSE" ] || { echo "BASELINE HARNESS: live PAUSE missing" >&2; exit 90; }
 echo "BASELINE_COMMIT=$(git rev-parse HEAD)"
 echo "BASELINE_BRANCH=$branch"

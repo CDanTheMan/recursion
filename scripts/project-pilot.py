@@ -437,16 +437,18 @@ def prepare(base: Path, project: str, remote: str, charter: str) -> None:
         line = f"{project}\t{repo}\t{remote}\tmain\t{key}\t-\t-\tpending\n"
         reg = base / "state/portfolio.tsv"; registry_text = reg.read_text(encoding="utf-8") + line
         targets = ["head-hermes", "lucas-direct"]
+        required_non_goals = ["credentials", "merge", "deploy"]
         cfg = {"schema_version": 1, "id": project, "repo": repo, "remote": remote,
                "default_branch": "main", "deploy_key_ref": key, "charter": charter,
                "allowed_paths": ["."],
-               "required_non_goals": ["credentials", "merge", "deploy"],
+               "required_non_goals": required_non_goals,
                "topic": "-", "pilot_id": pilot_id,
                "activation_gate": "clone-auth-freshness-v1", "notification_targets": targets,
                "goal_source": "state/goals", "status": "pending"}
         pilot = {"schema_version": 1, "id": pilot_id, "project_id": project, "topic": "-",
                  "charter": charter, "model_policy": "project-pilot", "concurrency_limit": 0,
                  "budget": {"max_inflight_workers": 0, "max_decisions_per_turn": 1},
+                 "required_non_goals": required_non_goals,
                  "notification_targets": targets, "goal_source": "state/goals",
                  "memory_key": f"telegram-topic:pending:{project}",
                  "worktree_root": f".worktrees/{project}", "status": "pending"}
