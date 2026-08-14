@@ -1366,8 +1366,19 @@ def execute_value(base: Path, decision: dict) -> dict:
     if not instruction_id: fail("project-pilot decision lacks topic instruction correlation")
     source_instruction = instruction_path(base, instruction_id)
     instruction = fields(source_instruction)
-    if instruction.get("project_id") != project or instruction.get("pilot_id") != pilot["id"]:
+    instruction_project = instruction.get("project_id", "")
+    instruction_pilot = instruction.get("pilot_id", "")
+    if pilot_authority and (instruction_project != project or instruction_pilot != pilot["id"]):
         fail("instruction is not owned by this project pilot")
+    # Approval/window authority originates in Head Hermes General/topic 1, whose intake
+    # projection deliberately has no project or pilot owner. The authenticated command body
+    # supplies the exact plan/goal/window bounds and the verb handler revalidates them below.
+    # Still fail closed if a head-routed instruction carries conflicting scoped metadata.
+    if head_authority and (
+        instruction_project not in {"", project}
+        or instruction_pilot not in {"", pilot["id"]}
+    ):
+        fail("Head Hermes instruction carries conflicting project-pilot ownership")
     if verb == "pilot-plan-propose":
         return propose_plan(base, cfg, pilot, decision, instruction_id)
     if verb == "pilot-plan-approve":

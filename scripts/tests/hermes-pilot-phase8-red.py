@@ -334,6 +334,22 @@ def test_approval(f: Fixture) -> bool:
     if first.returncode or second.returncode or not goal_path.is_file() or not task_path.is_file():
         return False
     proposal = json.loads((f.root / f"state/plans/chiron/{f.plan_id}.json").read_text(encoding="utf-8"))
+    f._write_instruction("111", "head-hermes", f"approve {f.plan_id} {f.digest}")
+    conflicting_instruction = f.root / "state/instructions/00000111.md"
+    conflicting_instruction.write_text(
+        conflicting_instruction.read_text(encoding="utf-8")
+        .replace("project_id: ", "project_id: another-project")
+        .replace("pilot_id: ", "pilot_id: pilot-another-project"),
+        encoding="utf-8",
+    )
+    conflicting = f.decision(
+        verb="pilot-plan-approve", args=["chiron", f.plan_id, f.digest], iid="111",
+        actor="head-hermes", goal=str(f.plan["goal"]["id"]),
+        text="Conflicting projected ownership must not authorize approval.",
+    )
+    conflicting_refused = f.run(
+        "python3", "scripts/project-pilot.py", "execute", str(conflicting),
+    ).returncode != 0
     f._write_instruction("110", "pilot-chiron", "add an extra task")
     extra = f.decision(
         verb="pilot-task-create",
@@ -358,6 +374,7 @@ def test_approval(f: Fixture) -> bool:
         and proposal.get("approval_instruction_id") == "102"
         and len(list((f.root / "state/goals").glob("goal-chiron-phase8-smoke.md"))) == 1
         and len(list((f.root / "state/tasks").glob("chiron-phase8-smoke.md"))) == 1
+        and conflicting_refused
         and frozen.returncode != 0
         and not (f.root / "state/tasks/unapproved-extra.md").exists()
         and f.legacy_unchanged()
