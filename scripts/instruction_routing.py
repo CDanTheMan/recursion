@@ -248,6 +248,15 @@ def validate_authenticated(record: dict) -> None:
             raise RoutingError(f"instruction {key} is not canonical")
 
 
+def validate_instruction_identity(base: Path, record: dict) -> None:
+    """Bind the parsed header identity to the canonical instruction filename."""
+    iid = record["fields"].get("id") or ""
+    if not IDENT.fullmatch(iid) or (iid.isdigit() and iid != str(int(iid))):
+        raise RoutingError("instruction id is not canonical")
+    if record["path"].resolve() != instruction_path(base, iid).resolve():
+        raise RoutingError("instruction filename and header id differ")
+
+
 def validate_historical(base: Path, record: dict, *, require_dependency: bool) -> None:
     iid = record["fields"].get("id") or ""
     expected = HISTORICAL_INSTRUCTIONS.get(iid)
@@ -385,6 +394,12 @@ def refusal_decision(base: Path, record: dict) -> dict:
 
 def admit(base: Path, path: Path, *, enqueue: bool) -> tuple[int, dict | None]:
     record = read_instruction(path)
+    # A classifier change must never bypass pinned recovery evidence. Bind identity and validate
+    # every known historical record before the ordinary no-mismatch success path is available.
+    validate_instruction_identity(base, record)
+    validate_historical(base, record, require_dependency=True)
+    if (record["fields"].get("id") or "") in HISTORICAL_INSTRUCTIONS:
+        validate_initial_recovery(record)
     if routing_mismatch(record, configured_project_ids(base)) is None:
         return 0, None
     decision = refusal_decision(base, record)
