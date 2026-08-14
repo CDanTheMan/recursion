@@ -14,7 +14,7 @@
 # 0 updates with pending=0, because the gateway had already taken them.
 #
 # The gateway persists what it receives, so intake READS that store instead of competing for it:
-#   ~/.hermes/state.db  messages(role,content,timestamp) JOIN sessions(source,chat_id,thread_id,user_id)
+#   $HERMES_HOME/state.db  messages(role,content,timestamp) JOIN sessions(source,chat_id,thread_id,user_id)
 # Read-only, no second bot, no metered call, nothing taken away from the gateway.
 #
 # ★ AND THE TRAP INSIDE THAT TABLE: most role='user' rows are NOT from a human. The heartbeat,
@@ -46,7 +46,12 @@ cd "$ROOT" 2>/dev/null || { echo "intake: RECURSION_ROOT '$ROOT' is not a direct
 # into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
 RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 
-DB="${RECURSION_HERMES_DB:-$HOME/.hermes/state.db}"
+# The systemd gateway has a dedicated HOME and writes state.db at HERMES_HOME itself. Root cron
+# intentionally has a different HOME and does not inherit the gateway service environment, so
+# deriving this path from cron's HOME silently reads a stale, unrelated CLI store. Keep the
+# explicit test/operator override, otherwise follow the checked-in gateway service contract.
+HERMES_STATE_HOME="${HERMES_HOME:-/var/lib/hermes-gateway}"
+DB="${RECURSION_HERMES_DB:-$HERMES_STATE_HOME/state.db}"
 DIR="$ROOT/state/instructions"; mkdir -p "$DIR"
 MARK="$ROOT/state/.intake-watermark"
 REG="${RECURSION_PORTFOLIO:-$ROOT/state/portfolio.tsv}"
@@ -152,6 +157,7 @@ poll)
   [ -f "$DB" ] || { echo "intake: no gateway store at $DB — nothing to read"; exit 0; }
   intake_lock || exit $?
   if [ -e "$MARK" ]; then
+    INITIALIZED=1
     [ -f "$MARK" ] || { echo "intake: watermark is not a regular file; refusing intake" >&2; exit 74; }
     LAST="$(cat "$MARK" 2>/dev/null)" || { echo "intake: unreadable watermark; refusing intake" >&2; exit 74; }
     case "$LAST" in
@@ -167,20 +173,20 @@ poll)
         ;;
     esac
   else
+    INITIALIZED=0
     LAST=0
   fi
 
-  # The watermark advances only over messages actually written out, so a crash mid-batch
-  # re-reads rather than skips. Losing an instruction silently is the failure that matters;
-  # seeing one twice is merely untidy, and the filename is keyed by message id so a repeat
-  # overwrites rather than duplicates.
+  # The watermark advances only after every instruction and the source-store anchor are durable.
+  # A crash re-reads the batch; an existing same-id instruction is verified and preserved, never
+  # overwritten, so lifecycle state written between the crash and retry cannot be reopened.
   TMPOUT="$(mktemp)"; _INTAKE_TMP="$TMPOUT"
-  python3 - "$DB" "$LAST" "$ALLOW" "$DIR" "$REG" "$DRY" "$(now)" "$BACKFILL" \
+  python3 - "$DB" "$LAST" "$ALLOW" "$DIR" "$REG" "$DRY" "$(now)" "$BACKFILL" "$INITIALIZED" \
     "$ROOT/scripts" >"$TMPOUT" <<'PY'
-import io, json, os, re, sqlite3, sys, shutil, tempfile
+import hashlib, io, json, math, os, re, sqlite3, sys, shutil, tempfile
 
-db, last, allow, outdir, reg, dry, stamp, backfill, scripts = sys.argv[1:10]
-last = int(last); dry = dry == "1"; backfill = backfill == "1"
+db, last, allow, outdir, reg, dry, stamp, backfill, initialized, scripts = sys.argv[1:11]
+last = int(last); dry = dry == "1"; backfill = backfill == "1"; initialized = initialized == "1"
 allowed = set(x for x in allow.replace(",", " ").split() if x)
 sys.path.insert(0, scripts)
 from instruction_routing import route_for
@@ -201,6 +207,116 @@ def connect(path):
         return sqlite3.connect(os.path.join(tmp, os.path.basename(path)), timeout=5), tmp
 
 conn, tmp = connect(db)
+
+def stop(message):
+    if tmp:
+        shutil.rmtree(tmp, ignore_errors=True)
+    raise SystemExit(message)
+
+message_columns = {row[1] for row in conn.execute("pragma table_info(messages)")}
+platform_expr = "m.platform_message_id" if "platform_message_id" in message_columns else "NULL"
+
+def source_row(mid):
+    sql = """
+        select m.id, m.content, m.timestamp, s.chat_id, s.thread_id, s.user_id,
+               s.source, %s
+          from messages m join sessions s on s.id = m.session_id
+         where m.id = ? and m.role = 'user' and s.source = 'telegram'
+    """ % platform_expr
+    return conn.execute(sql, (mid,)).fetchone()
+
+def display_body(content):
+    text = (content or "").strip()
+    return re.sub(r"^\[[A-Za-z][A-Za-z .'-]{0,40}\]\s*", "", text)
+
+def source_sha256(row):
+    mid, content, timestamp, chat, thread, uid, source, platform_message_id = row
+    identity = {
+        "chat_id": str(chat or ""), "content": content or "", "id": int(mid),
+        "platform_message_id": str(platform_message_id or ""), "source": str(source or ""),
+        "thread_id": str(thread or ""), "timestamp": timestamp, "user_id": str(uid or ""),
+    }
+    raw = json.dumps(identity, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+def anchor_bytes(row):
+    mid, content, timestamp, chat, thread, uid, source, platform_message_id = row
+    anchor = {
+        "chat_id": str(chat or ""), "id": int(mid), "schema_version": 1,
+        "source_sha256": source_sha256(row), "thread_id": str(thread or ""),
+        "user_id": str(uid or ""),
+    }
+    return (json.dumps(anchor, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
+
+def anchor_path(mid):
+    return os.path.join(outdir, ".intake-anchor-%08d.json" % int(mid))
+
+def persist_anchor(row):
+    path = anchor_path(row[0]); payload = anchor_bytes(row)
+    if os.path.lexists(path):
+        if os.path.islink(path) or not os.path.isfile(path):
+            stop("intake: source anchor %d is not a regular file" % row[0])
+        if open(path, "rb").read() != payload:
+            stop("intake: conflicting source anchor %d" % row[0])
+        return
+    descriptor, temporary = tempfile.mkstemp(prefix=".intake-anchor.tmp.", dir=outdir)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(payload); output.flush(); os.fsync(output.fileno())
+        os.replace(temporary, path)
+        dfd = os.open(outdir, os.O_RDONLY)
+        try: os.fsync(dfd)
+        finally: os.close(dfd)
+    except BaseException:
+        try: os.unlink(temporary)
+        except FileNotFoundError: pass
+        raise
+
+def durable_instruction_source(path):
+    raw = io.open(path, encoding="utf-8", errors="surrogateescape").read()
+    header, marker, section = raw.partition("\n## INSTRUCTION\n")
+    if not marker:
+        stop("intake: existing instruction lacks its source section: %s" % path)
+    fields = {}
+    for line in header.splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1); fields[key.strip()] = value.strip()
+    transition = re.search(
+        r"\n## (?:OPEN|CONSUMED|ACKNOWLEDGED) \d{4}-\d{2}-\d{2}T[^\n]*Z\n", section)
+    body = section[:transition.start() if transition else len(section)].rstrip("\n")
+    return fields, body
+
+def verify_instruction_source(path, mid, uid, chat, thread, body):
+    if os.path.islink(path) or not os.path.isfile(path):
+        stop("intake: existing instruction %d is not a regular file" % mid)
+    fields, durable_body = durable_instruction_source(path)
+    correlation = "telegram:%s:%s:%s" % (chat, thread or "root", mid)
+    expected = {
+        "id": str(mid), "principal": str(uid or ""), "from": str(uid or ""),
+        "chat": str(chat or ""), "thread": str(thread or "-"),
+        "reply_correlation": correlation, "deduplication_key": correlation,
+    }
+    if any(fields.get(key) != value for key, value in expected.items()) or durable_body != body:
+        stop("intake: conflicting pre-existing instruction %d" % mid)
+
+def validate_store_anchor(mid):
+    row = source_row(mid)
+    if row is None:
+        stop("intake: gateway store does not contain Telegram watermark row %d" % mid)
+    witnessed = anchor_path(mid)
+    if os.path.lexists(witnessed):
+        if os.path.islink(witnessed) or not os.path.isfile(witnessed):
+            stop("intake: source anchor %d is not a regular file" % mid)
+        if open(witnessed, "rb").read() != anchor_bytes(row):
+            stop("intake: gateway store watermark source does not match anchor %d" % mid)
+        return row
+    instruction = os.path.join(outdir, "%08d.md" % mid)
+    if os.path.lexists(instruction):
+        verify_instruction_source(instruction, mid, row[5], row[3], row[4], display_body(row[1]))
+    return row
+
+watermark_row = validate_store_anchor(last) if last else None
 
 # Thread id -> durable project pilot. The Telegram session history is a cache; these files are
 # the authority for which logical pilot, memory namespace, and project own a topic.
@@ -225,28 +341,82 @@ try:
 except Exception:
     pass
 
-rows = list(conn.execute("""
-    select m.id, m.content, m.timestamp, s.chat_id, s.thread_id, s.user_id, s.source
+def telegram_identities(content, timestamp, chat, thread, uid, platform_message_id):
+    # New gateway schemas expose the transport id directly. Legacy rows do not, but genuine
+    # Telegram update timestamps are integral Unix seconds. Compaction copies preserve that
+    # timestamp. Emit both aliases when possible so a NULL/non-NULL schema transition cannot
+    # duplicate one update. Internal rehydration with only a fractional process clock has no key.
+    platform_key = None
+    if platform_message_id not in (None, ""):
+        platform_key = (str(chat or ""), str(thread or ""), str(uid or ""),
+                        str(platform_message_id))
+    legacy_key = None
+    try:
+        stamp = float(timestamp)
+    except (TypeError, ValueError):
+        return platform_key, legacy_key
+    if math.isfinite(stamp) and stamp.is_integer():
+        legacy_key = (str(chat or ""), str(thread or ""), str(uid or ""),
+                      int(stamp), content or "")
+    return platform_key, legacy_key
+
+seen_platform = set()
+seen_legacy_without_platform = set()
+seen_legacy_with_platform = set()
+
+def remember_identity(platform_key, legacy_key):
+    if platform_key is not None:
+        seen_platform.add(platform_key)
+        if legacy_key is not None:
+            seen_legacy_with_platform.add(legacy_key)
+    elif legacy_key is not None:
+        seen_legacy_without_platform.add(legacy_key)
+
+def identity_seen(platform_key, legacy_key):
+    if platform_key is not None:
+        # Distinct authoritative platform ids stay distinct. The legacy alias is consulted only
+        # against rows that lacked a platform id, which preserves mixed-schema replay matching.
+        return platform_key in seen_platform \
+            or (legacy_key is not None and legacy_key in seen_legacy_without_platform)
+    if legacy_key is None:
+        return True
+    return legacy_key in seen_legacy_without_platform or legacy_key in seen_legacy_with_platform
+
+prior_sql = """
+    select m.content, m.timestamp, s.chat_id, s.thread_id, s.user_id, %s
+      from messages m join sessions s on s.id = m.session_id
+     where m.role = 'user' and s.source = 'telegram' and m.id <= ?
+""" % platform_expr
+for content, timestamp, chat, thread, uid, platform_message_id in conn.execute(prior_sql, (last,)):
+    remember_identity(*telegram_identities(content, timestamp, chat, thread, uid,
+                                           platform_message_id))
+
+rows_sql = """
+    select m.id, m.content, m.timestamp, s.chat_id, s.thread_id, s.user_id, s.source, %s
       from messages m join sessions s on s.id = m.session_id
      where m.role = 'user' and s.source = 'telegram' and m.id > ?
      order by m.id asc
-""", (last,)))
+""" % platform_expr
+rows = list(conn.execute(rows_sql, (last,)))
 
 # ★ FIRST RUN SEEDS, IT DOES NOT BACKFILL. The gateway store predates intake by days, and
 # ingesting that history would place stale DMs in front of Hermes as instructions to act on now —
 # old context wearing a current timestamp. Seed the watermark to the present and say what was
 # skipped; `--backfill` is there when the history is actually wanted.
-if last == 0 and not backfill:
+if not initialized and not backfill:
     high = max([r[0] for r in rows], default=0)
     sys.stderr.write("intake: FIRST RUN — seeding the watermark at %d, skipping %d historical "
                      "message(s). Use --backfill to ingest them.\n" % (high, len(rows)))
+    if not dry and rows:
+        persist_anchor(rows[-1])
     print("__WATERMARK__%d" % high)
     if tmp:
         shutil.rmtree(tmp, ignore_errors=True)
     raise SystemExit(0)
 
 written, skipped, high = 0, 0, last
-for mid, content, ts, chat, thread, uid, source in rows:
+high_row = rows[-1] if rows else watermark_row
+for mid, content, ts, chat, thread, uid, source, platform_message_id in rows:
     high = max(high, mid)
     if str(uid) not in allowed:
         skipped += 1
@@ -262,6 +432,12 @@ for mid, content, ts, chat, thread, uid, source in rows:
     if re.match(r"^\[(ASYNC|SYSTEM|AUTO)\b", text):
         skipped += 1
         continue
+    platform_key, legacy_key = telegram_identities(content, ts, chat, thread, uid,
+                                                    platform_message_id)
+    if identity_seen(platform_key, legacy_key):
+        skipped += 1
+        continue
+    remember_identity(platform_key, legacy_key)
     # Only strip a leading bracket that actually looks like a sender name: a few words, no
     # SHOUTING marker. A greedy strip is what caused the bug above.
     body = re.sub(r"^\[[A-Za-z][A-Za-z .'-]{0,40}\]\s*", "", text)
@@ -270,11 +446,17 @@ for mid, content, ts, chat, thread, uid, source in rows:
     pilot_id = binding.get("pilot_id", "")
     memory_key = binding.get("memory_key", "")
     routing_target = route_for(body, binding, project_ids)
+    path = os.path.join(outdir, "%08d.md" % mid)
+    if os.path.lexists(path):
+        verify_instruction_source(path, mid, uid, chat, thread, body)
+        print(("WOULD preserve" if dry else "PRESERVED") +
+              " %s project=%s %r" % (mid, project or "-", body[:70]))
+        written += 1
+        continue
     if dry:
         print("WOULD ingest %s thread=%s project=%s %r" % (mid, thread, project or "-", body[:70]))
         written += 1
         continue
-    path = os.path.join(outdir, "%08d.md" % mid)
     tmppath = path + ".tmp.%d" % os.getpid()
     with io.open(tmppath, "w", encoding="utf-8", newline="\n") as output:
         correlation = "telegram:%s:%s:%s" % (chat, thread or "root", mid)
@@ -294,7 +476,11 @@ for mid, content, ts, chat, thread, uid, source in rows:
     finally: os.close(dfd)
     print("INGESTED %d project=%s %r" % (mid, project or "-", body[:70]))
     written += 1
+    if os.environ.get("RECURSION_INTAKE_FAILPOINT") == "after-instruction-fsync":
+        stop("intake: failpoint after-instruction-fsync")
 
+if not dry and high_row is not None:
+    persist_anchor(high_row)
 if tmp:
     shutil.rmtree(tmp, ignore_errors=True)
 sys.stderr.write("intake: %d ingested, %d skipped, watermark %d -> %d\n" % (written, skipped, last, high))
