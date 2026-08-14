@@ -350,6 +350,29 @@ def negative_recovery_evidence() -> None:
                             encoding="utf-8", newline="\n")
         require_recovery_rejected(label, mutate, "historical instruction 707 recovery annotations differ")
 
+    def crlf_document(fixture: Fixture) -> None:
+        path = fixture.root / instruction
+        path.write_bytes(INSTRUCTION_707.replace("\n", "\r\n").encode())
+
+    require_recovery_rejected(
+        "CRLF-normalized instruction", crlf_document,
+        "historical instruction 707 recovery annotations differ",
+    )
+
+    def reorder_annotations(fixture: Fixture) -> None:
+        path = fixture.root / instruction
+        second_marker = "\n\n## CONSUMED 2026-08-13T22:17:09Z"
+        third_marker = "\n\n## CONSUMED 2026-08-14T00:45:56Z"
+        prefix, tail = INSTRUCTION_707.split(second_marker, 1)
+        second, third = tail.split(third_marker, 1)
+        path.write_text(prefix + third_marker + third + second_marker + second,
+                        encoding="utf-8", newline="\n")
+
+    require_recovery_rejected(
+        "reordered annotations", reorder_annotations,
+        "historical instruction 707 recovery annotations differ",
+    )
+
     def duplicate_annotation(fixture: Fixture) -> None:
         path = fixture.root / instruction
         path.write_text(path.read_text(encoding="utf-8") +

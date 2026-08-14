@@ -129,9 +129,13 @@ def now_iso() -> str:
 
 def read_instruction(path: Path) -> dict:
     try:
-        document = path.read_text(encoding="utf-8", errors="surrogateescape")
+        raw = path.read_bytes()
     except OSError as exc:
         raise RoutingError(f"instruction is unreadable: {path}") from exc
+    document = raw.decode("utf-8", errors="surrogateescape")
+    # Preserve the historical parser's universal-newline behavior for fields/body while
+    # retaining the raw digest needed to bind reviewed recovery evidence byte-for-byte.
+    document = document.replace("\r\n", "\n").replace("\r", "\n")
     lines = document.splitlines()
     fields: dict[str, str] = {}
     for line in lines:
@@ -143,7 +147,10 @@ def read_instruction(path: Path) -> dict:
     match = re.search(r"(?m)^## INSTRUCTION\s*$\n?", document)
     body = document[match.end():] if match else ""
     body = re.split(r"(?m)^##\s+", body, maxsplit=1)[0].strip()
-    return {"path": path, "document": document, "fields": fields, "body": body}
+    return {
+        "path": path, "document": document, "document_sha256": hashlib.sha256(raw).hexdigest(),
+        "fields": fields, "body": body,
+    }
 
 
 def instruction_path(base: Path, instruction_id: str) -> Path:
@@ -281,16 +288,13 @@ def validate_initial_recovery(record: dict) -> None:
         first = "action-bb38398a6e0e3859a1a7d263"
         second = "action-4a90005df9c9dfe6cbb7fbad"
         third = "action-cbba158e3295fb82bdf6e06c"
-        document_sha256 = hashlib.sha256(
-            document.encode("utf-8", errors="surrogateescape")
-        ).hexdigest()
         expected_sha256 = HISTORICAL_INSTRUCTIONS["707"]["initial_document_sha256"]
         resulting = re.findall(r"(?m)^resulting actions: (action-[0-9a-f]{24})$", document)
         reopened = re.findall(
             r"(?m)^deferred/failed actions reopened instruction: (action-[0-9a-f]{24})", document
         )
         if fields.get("status") != "open" or fields.get("action_ids") != third \
-                or document_sha256 != expected_sha256 \
+                or record["document_sha256"] != expected_sha256 \
                 or document.count("## CONSUMED ") != 3 or document.count("## OPEN ") != 3 \
                 or document.count(f"resulting actions: {first}") != 1 \
                 or document.count(f"resulting actions: {second}") != 1 \
