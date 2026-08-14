@@ -45,14 +45,15 @@ fi
 
 rm -f -- "$R/state/PAUSE"
 printf 'fixture pause\n' > "$LIVE/state/PAUSE"
-separate_out="$(RECURSION_ROOT="$R" RECURSION_LIVE_ROOT="$LIVE" \
+separate_out="$(GIT_DIR="$R/.git" GIT_COMMON_DIR="$R/.git" GIT_WORK_TREE="$R" \
+  RECURSION_ROOT="$R" RECURSION_LIVE_ROOT="$LIVE" \
   bash "$SRC/scripts/audit/hermes-pilot-phase0-baseline.sh" 2>&1)"
 separate_rc=$?
 live_head="$(git -C "$LIVE" rev-parse HEAD)"
 if [ "$separate_rc" = 0 ] \
   && printf '%s' "$separate_out" | grep -q "DEPLOYED_COMMIT=$live_head" \
   && printf '%s' "$separate_out" | grep -q 'BASELINE_FAILED_SUITES=0'; then
-  ok "control: a separate named reviewed clone runs the baseline"
+  ok "control: a separate named reviewed clone ignores inherited Git overrides"
 else
   no "baseline rejected a separate reviewed clone (rc=$separate_rc): $separate_out"
 fi

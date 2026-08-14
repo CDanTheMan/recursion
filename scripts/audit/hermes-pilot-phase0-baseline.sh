@@ -5,6 +5,9 @@ export LC_ALL=C
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 LIVE_ROOT="${RECURSION_LIVE_ROOT:-/opt/recursion}"
 cd "$ROOT"
+# Every repository probe below is explicitly rooted with git -C. Caller-level overrides could
+# otherwise redirect both probes to one unrelated repository and manufacture a false refusal.
+unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE
 
 branch="$(git branch --show-current 2>/dev/null)"
 [ -n "$branch" ] || { echo "BASELINE HARNESS: use a named branch, not detached HEAD" >&2; exit 3; }
@@ -28,8 +31,9 @@ ROOT="$ROOT_PHYSICAL"
 LIVE_ROOT="$LIVE_ROOT_PHYSICAL"
 git_common_physical(){
   local repo="$1" common
-  common="$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+  common="$(git -C "$repo" rev-parse --git-common-dir 2>/dev/null)" \
     || return 1
+  case "$common" in /*) ;; *) common="$repo/$common" ;; esac
   (cd "$common" 2>/dev/null && pwd -P)
 }
 ROOT_GIT_COMMON="$(git_common_physical "$ROOT")" \
