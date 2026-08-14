@@ -25,14 +25,23 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 
 export RECURSION_NO_NOTIFY=1
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-R="$TMP/root"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/state/assists" "$R/loop/logs"
-for s in intake.sh assist.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh publish.sh; do
+R="$TMP/root"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/state/assists" \
+  "$R/state/project-config" "$R/state/pilots" "$R/loop/logs"
+for s in intake.sh instruction_routing.py assist.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh publish.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null
 : > "$R/.env"; : > "$R/state/INBOX.md"
 printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n' > "$R/state/portfolio.tsv"
 printf 'chiron\t/opt/chiron\tgit@github.com:x/c.git\tmain\t-\t-\t10\tactive\n' >> "$R/state/portfolio.tsv"
+printf 'golden-stallion-client\t/opt/golden-stallion-client\tgit@github.com:x/gsc.git\tmain\t-\t-\t6\tactive\n' \
+  >> "$R/state/portfolio.tsv"
+cat > "$R/state/project-config/golden-stallion-client.json" <<'JSON'
+{"id":"golden-stallion-client","pilot_id":"pilot-golden-stallion-client","status":"active","topic":"6"}
+JSON
+cat > "$R/state/pilots/pilot-golden-stallion-client.json" <<'JSON'
+{"id":"pilot-golden-stallion-client","project_id":"golden-stallion-client","status":"active","topic":"6","memory_key":"telegram-topic:6"}
+JSON
 
 DB="$TMP/state.db"
 LUCAS=8913126684
@@ -306,6 +315,61 @@ if [ "$nohome_rc" = 0 ] && ! printf '%s' "$nohome_out" | grep -q 'HOME: unbound 
 else
   no "★ intake dies without HOME (rc=$nohome_rc): $(printf '%s' "$nohome_out" | head -1)"
 fi
+
+# --- 11) project intent wins over incidental inflections of control-plane verbs -------------
+# Production instruction 707 contained the adjective "deployed" in an otherwise canonical
+# project-pilot plan request. The old deploy\w* expression treated that adjective as a deployment
+# command and routed the instruction to Head Hermes, which cannot emit pilot-plan-propose.
+exact_707='Propose a fresh offline golden-stallion-client pilot plan to reduce the verified 0x6c shade-tops under-emission in user-client/render, using new v2 plan, goal, and task identities and the deployed required seed, scope, provider, and forced-on gate contracts. Do not reuse or edit the closed v1 plan, goal, task, or window.'
+add s-gsc telegram "$LUCAS" -1003894008732 6 user "[Lucas Guerra] $exact_707"
+intake poll >/dev/null
+route_file="$(ls -1 "$R/state/instructions"/*.md | tail -1)"
+if grep -q '^project_id: golden-stallion-client$' "$route_file" \
+   && grep -q '^routing_target: pilot-golden-stallion-client$' "$route_file"; then
+  ok "exact instruction 707 wording routes to the bound project pilot"
+else
+  no "exact instruction 707 wording was hijacked by incidental 'deployed' text: $(sed -n 's/^routing_target: *//p' "$route_file")"
+fi
+
+# Positive control: tightening adjective handling must not send real deployment/policy commands
+# to a project pilot. These remain Head-Hermes authority.
+add s-gsc telegram "$LUCAS" -1003894008732 6 user \
+  "[Lucas Guerra] Deploy the reviewed recursion change and preserve deployment policy."
+intake poll >/dev/null
+control_file="$(ls -1 "$R/state/instructions"/*.md | tail -1)"
+if grep -q '^routing_target: head-hermes$' "$control_file"; then
+  ok "genuine deployment and policy intent still routes to Head Hermes"
+else
+  no "deployment/policy authority leaked to a project pilot: $(sed -n 's/^routing_target: *//p' "$control_file")"
+fi
+
+# The route is grammar-shaped, not a keyword blacklist: project plan prose may describe Head-owned
+# concerns, while command and requirement forms (including deploy inflections) remain Head-owned.
+incidental='Propose a fresh pilot plan documenting assist workflow, escalation policy, portfolio reporting, and previously merged/deployed evidence.'
+add s-gsc telegram "$LUCAS" -1003894008732 6 user "[Lucas Guerra] $incidental"
+intake poll >/dev/null
+incidental_file="$(ls -1 "$R/state/instructions"/*.md | tail -1)"
+if grep -q '^routing_target: pilot-golden-stallion-client$' "$incidental_file"; then
+  ok "incidental Head-owned nouns in project-plan prose do not hijack pilot routing"
+else
+  no "incidental authority prose hijacked pilot routing: $(sed -n 's/^routing_target: *//p' "$incidental_file")"
+fi
+
+for command in \
+  'Deployments must preserve the reviewed production gate.' \
+  'Redeploy the reviewed renderer fix.' \
+  'Deploys the reviewed provider change after Lucas approval.' \
+  'Deployed the reviewed fix; inspect the production result.' \
+  'Review the credential policy for this project.'; do
+  add s-gsc telegram "$LUCAS" -1003894008732 6 user "[Lucas Guerra] $command"
+  intake poll >/dev/null
+  command_file="$(ls -1 "$R/state/instructions"/*.md | tail -1)"
+  if grep -q '^routing_target: head-hermes$' "$command_file"; then
+    ok "Head-Hermes command form remains Head-routed: $command"
+  else
+    no "Head-Hermes command leaked to pilot: $command"
+  fi
+done
 
 echo
 [ "$fails" -eq 0 ] && { echo "intake: ALL PASS"; exit 0; }

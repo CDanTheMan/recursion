@@ -266,7 +266,7 @@ def control_runtime_rotation_rejects_malformed() -> tuple[bool, str]:
             (root / relative).mkdir(parents=True, exist_ok=True)
         for name in (
             "runtime-state.py", "notification-outbox.py", "jsonl_durable.py",
-            "transition_receipt.py", "pilot_instruction.py",
+            "transition_receipt.py", "pilot_instruction.py", "instruction_routing.py",
         ):
             shutil.copy2(SOURCE / "scripts" / name, root / "scripts" / name)
         (root / "state/PAUSE").write_text("test pause\n", encoding="utf-8")

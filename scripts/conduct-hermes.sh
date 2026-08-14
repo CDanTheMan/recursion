@@ -149,7 +149,7 @@ drain_queue(){
     if [ "$PAUSED_SAFE" = 1 ]; then
       queue_file="$(python3 "$ROOT/scripts/decision-queue.py" claim-pending --kind non-work \
         --verb noop --verb pilot-plan-propose --verb pilot-plan-approve --verb pilot-window-open \
-        --verb pilot-window-close --verb assist-answer)"
+        --verb pilot-window-close --verb assist-answer --verb routing-refuse)"
     else
       queue_file="$(python3 "$ROOT/scripts/decision-queue.py" claim-pending --kind non-work)"
     fi
@@ -225,7 +225,7 @@ fi
 
 [ -f "$FILE" ] || { log "no decision file at $FILE"; exit 2; }
 
-VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify reconcile-goal task-transition goal-transition verify-goal publish-task notification-reconcile notification-deliver notification-portfolio notification-audit notification-recover"
+VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify reconcile-goal task-transition goal-transition verify-goal publish-task notification-reconcile notification-deliver notification-portfolio notification-audit notification-recover routing-refuse"
 RAW_DECISION="$(cat "$FILE" 2>/dev/null || true)"
 VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$RAW_DECISION" 2>&1)"
 case "$VALID" in
@@ -305,6 +305,13 @@ case "$DECISION_SOURCE" in
       pilot-*:notification-reconcile|pilot-*:notification-deliver|pilot-*:notification-audit|pilot-*:notification-recover|head-hermes:notification-portfolio) : ;;
       *) log "REFUSED - notification reconciler cannot emit '$VERB' as '$ACTOR'"; exit 5 ;;
     esac ;;
+  routing-reconciler)
+    [ -n "$ROUTED_DECIDER" ] && [ "$ACTOR" = "$ROUTED_DECIDER" ] \
+      || { log "REFUSED - routing reconciler actor does not match routed authority"; exit 5; }
+    case "$ACTOR:$VERB" in
+      head-hermes:routing-refuse|pilot-*:routing-refuse) : ;;
+      *) log "REFUSED - routing reconciler cannot emit '$VERB' as '$ACTOR'"; exit 5 ;;
+    esac ;;
   *) log "REFUSED - missing or unknown decision provenance '$DECISION_SOURCE'"; exit 5 ;;
 esac
 
@@ -323,7 +330,7 @@ fi
 # --- PAUSE: deciding is awareness, acting is not (D-012). --------------------------------
 if [ "$RECOVER_ONLY" = 0 ] && [ -f "$ROOT/state/PAUSE" ]; then
   case "$VERB" in
-    noop|pilot-plan-propose|pilot-plan-approve|pilot-window-open|pilot-window-close|assist-answer) : ;;
+    noop|pilot-plan-propose|pilot-plan-approve|pilot-window-open|pilot-window-close|assist-answer|routing-refuse) : ;;
     *)
   log "PAUSED — refusing to execute '$VERB'. The decision is recorded; it will not run until resume."
   ev decision-deferred "paused: $VERB"
@@ -465,6 +472,12 @@ reconcile_terminal_instruction(){ # succeeded|failed
   [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ] || return 0
   case "$disposition" in
     succeeded)
+      if [ "$VERB" = routing-refuse ]; then
+        RECURSION_ROOT="$ROOT" python3 scripts/instruction_routing.py --root "$ROOT" \
+          record "$DECISION_JSON" || return $?
+      fi
+      # Receipt first, acknowledgement second: a failed refusal-event commit must leave the
+      # instruction recoverably consumed, never silently terminal with zero attention evidence.
       RECURSION_ROOT="$ROOT" bash scripts/intake.sh acknowledge "$INSTRUCTION_ID" "$ACTION_ID" ;;
     failed)
       RECURSION_ROOT="$ROOT" bash scripts/intake.sh release "$INSTRUCTION_ID" "$ACTION_ID" ;;
@@ -516,6 +529,20 @@ if [ "$DRY" = 0 ]; then
         reconcile_terminal_instruction failed || { action_unlock; trap - EXIT; exit 74; }
         action_unlock; trap - EXIT; exit 1 ;;
       running)
+        if [ "$VERB" = routing-refuse ]; then
+          # routing-refuse validates only immutable evidence before terminal action state. It is
+          # therefore the one verb a fresh actuator may finish after a crash without relaunching
+          # an external effect or creating a second action.
+          RECURSION_ROOT="$ROOT" python3 scripts/instruction_routing.py --root "$ROOT" \
+            perform "$DECISION_JSON" >/dev/null || {
+              action_unlock; trap - EXIT; exit 4;
+            }
+          action_transition succeeded "routing refusal recovered after interrupted dispatch" || {
+            action_unlock; trap - EXIT; exit 74;
+          }
+          reconcile_terminal_instruction succeeded || { action_unlock; trap - EXIT; exit 75; }
+          action_unlock; trap - EXIT; exit 0
+        fi
         lease="$(action_field lease_expires)"
         if printf '%s' "$lease" | grep -qE '^[0-9]+$' && [ "$lease" -le "$(date +%s)" ]; then
           action_transition failed "stale dispatch lease expired; recovery refused relaunch" || {
@@ -529,6 +556,21 @@ if [ "$DRY" = 0 ]; then
         action_unlock; trap - EXIT; exit 75
         ;;
       pending)
+        if [ "$VERB" = routing-refuse ]; then
+          action_transition running "routing refusal recovery claimed" || {
+            action_unlock; trap - EXIT; exit 74;
+          }
+          RECURSION_ROOT="$ROOT" python3 scripts/instruction_routing.py --root "$ROOT" \
+            perform "$DECISION_JSON" >/dev/null || {
+              action_transition failed "routing refusal recovery validation failed" || true
+              action_unlock; trap - EXIT; exit 1;
+            }
+          action_transition succeeded "routing refusal recovered from pending state" || {
+            action_unlock; trap - EXIT; exit 74;
+          }
+          reconcile_terminal_instruction succeeded || { action_unlock; trap - EXIT; exit 75; }
+          action_unlock; trap - EXIT; exit 0
+        fi
         # rc=75 intentionally restores pending before the decision claim is deferred. A crash in
         # that narrow interval must finish the defer/reopen handshake, not terminalize the action.
         reconcile_terminal_instruction failed || { action_unlock; trap - EXIT; exit 74; }
@@ -674,6 +716,18 @@ case "$VERB" in
     cat "$_pilot_err" >&2; rm -f "$_pilot_err"
     [ "$rc" -eq 0 ] || log "pilot verb refused: ${VERB_STDERR_TAIL:-<no stderr>}" ;;
 
+  routing-refuse)
+    # This verb is never model-callable. The deterministic helper re-authenticates the current
+    # instruction, exact historical recovery witnesses (707/732), and the actor/verb mismatch,
+    # then emits one receipt-backed refusal event. Generic action coupling performs the only
+    # instruction state transition.
+    _routing_err="$(mktemp "${TMPDIR:-/tmp}/routing-stderr.XXXXXX")"
+    run python3 scripts/instruction_routing.py --root "$ROOT" perform "$DECISION_JSON" \
+      2>"$_routing_err"; rc=$?
+    VERB_STDERR_TAIL="$(tail -c 240 "$_routing_err" | tr '\n' ' ' | sed 's/  */ /g')"
+    cat "$_routing_err" >&2; rm -f "$_routing_err"
+    [ "$rc" -eq 0 ] || log "routing refusal deferred/refused: ${VERB_STDERR_TAIL:-<no stderr>}" ;;
+
   reconcile-goal|task-transition|goal-transition|verify-goal|publish-task)
     # These are not model-callable verbs: project-reconcile.py emits them from canonical
     # truth, and the pilot identity is rechecked at this final actuator boundary.
@@ -795,7 +849,7 @@ esac
   if [ "$rc" -eq 0 ]; then
     action_transition succeeded "log=$LOG rc=0"
     if [ "$?" -eq 0 ] && [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ]; then
-      RECURSION_ROOT="$ROOT" bash scripts/intake.sh acknowledge "$INSTRUCTION_ID" "$ACTION_ID" \
+      reconcile_terminal_instruction succeeded \
         || { rc=74; INSTRUCTION_CONSUMED=0; log "instruction acknowledgement failed after durable success"; }
     fi
   elif [ "$rc" -eq 75 ]; then

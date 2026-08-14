@@ -9,11 +9,11 @@ bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/hermes-deci
   scripts/assist.sh scripts/taskctl.sh scripts/work.sh scripts/notify.sh scripts/digest.sh \
   scripts/cycle.sh scripts/provider-network.sh scripts/worker-sandbox.sh loop/supervisor/run.sh \
   scripts/tests/hermes-pilot-phase8-red.test.sh scripts/tests/provider-network-root.test.sh
-python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scripts/project-reconcile.py scripts/decision-queue.py \
+python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scripts/instruction_routing.py scripts/project-reconcile.py scripts/decision-queue.py \
   scripts/seed_contract.py scripts/tests/seed-contract.test.py \
   scripts/notification-outbox.py scripts/jsonl_durable.py scripts/transition_receipt.py scripts/validate-decision.py scripts/validate-control-state.py \
   scripts/validate-gate.py \
-  scripts/runtime-state.py scripts/tests/hermes-pilot-phase8-red.py \
+  scripts/runtime-state.py scripts/tests/hermes-pilot-phase8-red.py scripts/tests/hermes-phase8-routing-recovery-red.py \
   scripts/tests/hermes-pilot-phase8-parallel.py \
   scripts/tests/hermes-pilot-phase8-legacy-journal-red.py \
   scripts/tests/hermes-pilot-phase8-race-red.py \
@@ -58,8 +58,11 @@ echo "ok    canonical project exclusions and immutable repo gates are rebound at
 grep -q 'build_pilot_brief' scripts/hermes-decide.sh
 grep -q 'RECURSION_PILOT_MODEL' scripts/hermes-decide.sh
 grep -q 'DECIDER_ACTOR="$route"' scripts/hermes-decide.sh
-grep -q 'approve.*plan' scripts/intake.sh
-echo "ok    event-invoked logical GPT pilots receive a scoped brief and approval/assist authority routes to Head Hermes"
+grep -q 'from instruction_routing import route_for' scripts/intake.sh
+grep -q 'instruction_routing.py' scripts/hermes-decide.sh
+grep -q '"head-object-command"' scripts/instruction_routing.py
+grep -q 'PILOT_PLAN_INTENT' scripts/instruction_routing.py
+echo "ok    event-invoked logical GPT pilots receive a scoped brief and shared boundary-safe authority routing"
 
 grep -q 'a pilot window may be authorized only while PAUSE is observed' scripts/project-pilot.py
 grep -q 'exact open pilot window authority is absent' scripts/project-reconcile.py
