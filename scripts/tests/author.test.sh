@@ -96,6 +96,17 @@ if [ "$rc" = "0" ] && printf '%s' "$row" | grep -q 'pending$'; then
 else
   no "portfolio-add produced: $row"
 fi
+projection="$(python3 - "$R/state/project-config/santa-clara.json" \
+  "$R/state/pilots/pilot-santa-clara.json" <<'PY'
+import json,sys
+project=json.load(open(sys.argv[1],encoding='utf-8')).get('required_non_goals')
+pilot=json.load(open(sys.argv[2],encoding='utf-8')).get('required_non_goals')
+print('match' if project == pilot == ['credentials','merge','deploy'] else 'mismatch')
+PY
+)"
+[ "$projection" = match ] \
+  && ok "pending project and pilot share the exact default non-goal projection" \
+  || no "pending project/pilot default non-goals differ"
 rc=$(au project-topic-bind santa-clara 33)
 [ "$rc" = "0" ] && grep '^santa-clara' "$R/state/portfolio.tsv" | cut -f7 | grep -qx 33 \
   && ok "pending project binds one explicit Telegram topic before activation" \

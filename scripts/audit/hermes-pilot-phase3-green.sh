@@ -14,7 +14,9 @@ echo "ok    Telegram gateway is an authenticated intake/status surface, not an a
 
 # One authenticated Telegram row becomes one inert instruction with the complete Phase 3 identity.
 I="$TMP/intake"; mkdir -p "$I/scripts" "$I/state"
-cp "$SRC/scripts/intake.sh" "$SRC/scripts/runtime-state.py" "$I/scripts/"
+cp "$SRC/scripts/intake.sh" "$SRC/scripts/instruction_routing.py" \
+   "$SRC/scripts/transition_receipt.py" "$SRC/scripts/jsonl_durable.py" \
+   "$SRC/scripts/runtime-state.py" "$I/scripts/"
 printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n' > "$I/state/portfolio.tsv"
 printf 'chiron\t/opt/chiron\tgit@example/chiron\tmain\t-\t-\t10\tactive\n' >> "$I/state/portfolio.tsv"
 DB="$TMP/gateway.db"
@@ -102,7 +104,7 @@ A="$TMP/actuator"
 mkdir -p "$A/scripts" "$A/state/tasks" "$A/state/instructions" "$A/loop/logs"
 for s in conduct-hermes.sh decision-queue.py validate-control-state.py validate-decision.py \
          hermes-actuator.sh taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
-         runtime-state.py; do
+         instruction_routing.py runtime-state.py; do
   cp "$SRC/scripts/$s" "$A/scripts/"
 done
 cat > "$A/scripts/work.sh" <<'STUB'
