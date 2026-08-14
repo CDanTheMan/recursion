@@ -175,12 +175,15 @@ poll)
   # seeing one twice is merely untidy, and the filename is keyed by message id so a repeat
   # overwrites rather than duplicates.
   TMPOUT="$(mktemp)"; _INTAKE_TMP="$TMPOUT"
-  python3 - "$DB" "$LAST" "$ALLOW" "$DIR" "$REG" "$DRY" "$(now)" "$BACKFILL" >"$TMPOUT" <<'PY'
+  python3 - "$DB" "$LAST" "$ALLOW" "$DIR" "$REG" "$DRY" "$(now)" "$BACKFILL" \
+    "$ROOT/scripts" >"$TMPOUT" <<'PY'
 import io, json, os, re, sqlite3, sys, shutil, tempfile
 
-db, last, allow, outdir, reg, dry, stamp, backfill = sys.argv[1:9]
+db, last, allow, outdir, reg, dry, stamp, backfill, scripts = sys.argv[1:10]
 last = int(last); dry = dry == "1"; backfill = backfill == "1"
 allowed = set(x for x in allow.replace(",", " ").split() if x)
+sys.path.insert(0, scripts)
+from instruction_routing import route_for
 
 def connect(path):
     # The gateway holds this in WAL mode. Read-only is enough and never blocks it; if the
@@ -221,19 +224,6 @@ try:
             topics[c[6]] = binding
 except Exception:
     pass
-
-def route_for(body, binding):
-    if not binding or not binding.get("pilot_id"):
-        return "head-hermes"
-    # Project pilots do not own portfolio/policy, credentials, production, PAUSE, model routing,
-    # or another project's priority. Conservative forwarding is safer than a local guess.
-    if re.search(r"\b(portfolio|priorit\w*|policy|spend\w*|credential\w*|deploy\w*|merge\w*|pause|resume|cron|model\s+policy|control\s+plane|deploy\s+key|assist\b|approve\w*\s+plan|plan\s+digest|authoriz\w*\s+.*window|pilot\s+window|go\s*/?\s*no-go)\b", body, re.I):
-        return "head-hermes"
-    current = binding["project"]
-    for other in project_ids:
-        if other != current and re.search(r"(?<![A-Za-z0-9_-])"+re.escape(other)+r"(?![A-Za-z0-9_-])", body, re.I):
-            return "head-hermes"
-    return binding["pilot_id"]
 
 rows = list(conn.execute("""
     select m.id, m.content, m.timestamp, s.chat_id, s.thread_id, s.user_id, s.source
@@ -279,7 +269,7 @@ for mid, content, ts, chat, thread, uid, source in rows:
     project = binding.get("project", "")
     pilot_id = binding.get("pilot_id", "")
     memory_key = binding.get("memory_key", "")
-    routing_target = route_for(body, binding)
+    routing_target = route_for(body, binding, project_ids)
     if dry:
         print("WOULD ingest %s thread=%s project=%s %r" % (mid, thread, project or "-", body[:70]))
         written += 1

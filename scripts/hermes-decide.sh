@@ -161,6 +161,26 @@ build_brief(){
 
 if [ "$MODE" = "--brief" ]; then build_brief; exit 0; fi
 
+# Refuse a provable actor/verb mismatch before assembling a model prompt or spending a model
+# turn. The deterministic reconciler records one durable decision; the sole actuator still owns
+# the coupled action, refusal event, and instruction acknowledgement.
+if [ -n "$SELECTED_INSTRUCTION" ]; then
+  ADMISSION_ARGS=(--root "$ROOT" admit "$SELECTED_INSTRUCTION")
+  [ "$MODE" = "--dry-run" ] || ADMISSION_ARGS+=(--enqueue)
+  ADMISSION_OUT="$(python3 "$ROOT/scripts/instruction_routing.py" "${ADMISSION_ARGS[@]}" 2>&1)"
+  admission_rc=$?
+  case "$admission_rc" in
+    0) : ;;
+    10)
+      log "REFUSED - instruction actor/verb mismatch recorded without a model call"
+      printf '%s\n' "$ADMISSION_OUT"
+      exit 0 ;;
+    *)
+      log "REFUSED - deterministic instruction admission failed: ${ADMISSION_OUT:0:240}"
+      exit 5 ;;
+  esac
+fi
+
 if [ "$DECIDER_ACTOR" = head-hermes ]; then
   ROLE_PROMPT="You are HEAD HERMES, the executive control plane for the Recursion system.
 Lucas is the principal. You own portfolio decisions and delegate bounded project work."

@@ -2,7 +2,7 @@
 title: Hermes Project Pilot Phase 8 Handoff
 type: handoff
 status: blocked
-last-verified: 2026-08-11
+last-verified: 2026-08-13
 related:
   - CONTROL_PLANE.md
   - docs/architecture.md
@@ -12,10 +12,38 @@ related:
   - docs/plans/hermes-project-pilot-phase0-evidence.md
   - docs/plans/hermes-project-pilot-phase7-handoff.md
   - docs/plans/hermes-phase8-preflight-operational-nuances.md
+  - docs/plans/hermes-phase8-routing-recovery-handoff.md
 ---
 # Hermes project pilot Phase 8 handoff
 
 ## Current state
+
+> **SUPERSEDING SNAPSHOT — 2026-08-13.** The historical snapshots below remain incident
+> evidence, but they are not the current deployment state. Continue from
+> `docs/plans/hermes-phase8-routing-recovery-handoff.md`.
+
+- The reviewed hardening series through PRs #54-#56 is merged at `origin/master`
+  `73bfc402822c1b43841e8b715fe8f8c446ad709f` and deployed under PAUSE as production
+  merge `0561bca6294a1eae2b3d31765ac3a3f7fb248c5b`.
+- The exact PAUSE file remains present, `root:root`, mode `0644`, 189 bytes, SHA-256
+  `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`.
+- `hermes-actuator`, `hermes-gateway`, `cron`, `recursion-provider-network`, and
+  `recursion-provider-proxy` are active and enabled with zero restarts. Pending/running
+  decisions, worker units, and matching worker processes are all zero.
+- Expired `window-gsc-pilot-1` was lawfully closed by instruction 699 and remains closed.
+  It must never be reused.
+- Fresh-plan instruction 707 was accidentally routed to Head Hermes because incidental
+  wording matched the broad deployment routing expression. Two supervised Head Hermes
+  turns emitted unsupported noops; the hardened noop guard failed both actions safely.
+  Instruction 707 remains open. Recovery instruction 732 is also open and has not run.
+- Do not run another identical model turn, manually edit either instruction, or lift PAUSE.
+  The next work is a reviewed routing/recovery fix, followed by lawful coupled closure of
+  707 and 732. Gate 6 has not started.
+
+### Historical Phase 8 snapshots
+
+The bullets below are retained in chronological order. Statements such as "Phase 8 is not
+deployed" describe their capture time and are superseded by the snapshot above.
 
 - The Phase 7 merge gate passed before Phase 8 authoring. Phase 7 implementation
   `b4d3a30317e7d11f8e31b5e2578eb53aaeb5155c` is an ancestor of merged
