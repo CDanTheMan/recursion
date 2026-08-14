@@ -2,7 +2,7 @@
 title: Hermes Phase 8 routing recovery handoff
 type: handoff
 status: review
-last-verified: 2026-08-13
+last-verified: 2026-08-14
 related:
   - CONTROL_PLANE.md
   - CLAUDE.md
@@ -11,11 +11,85 @@ related:
 ---
 # Hermes Phase 8 routing recovery handoff
 
+## Current authoritative state — 2026-08-14T03:00:23Z
+
+This section supersedes every older point-in-time state block below. PR #57 was merged at
+`4aa66c2c0af84a425f696eb9df74a8ce3b28d98c` and, after Lucas's explicit authorization, was
+deployed under PAUSE through state-preserving merge commit
+`8d7338c7f7b2c8126f770bde48b6b89194fe931a` on `loop/auto`. Production's resulting tree is
+`83a54364230c70cc98923f03e7d4f34864e74ed8`; its non-state diff from the reviewed target is
+empty. The final fresh measurement found `hermes-gateway`, `hermes-actuator`, `cron`, and
+`recursion-provider-network` active and enabled, zero unexpected non-state dirt, and PAUSE
+exact before and after at
+`919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`.
+
+The successful deployment transaction is
+`/var/backups/recursion/pr57-retry2-20260814T015700Z`. Its rollback program SHA-256 is
+`1c244af81f8aafef3e73c881809b1fb07c7f8149828f68c69c1ad8b031432939`; its transaction
+program SHA-256 is
+`6616cf6c28c6627756c59bd7d6b099f53304e2c01c73d3b8a8f9153abc5fbb90`. The transaction
+verified 512 snapshot/restore files, ran the rehearsal, created state checkpoint
+`0add445008f0673b713554f492bfe1bf7cd91445`, and retained PAUSE. Fresh-clone deployed-commit
+intake, conductor, routing/recovery, Phase-8 red, and Phase-8 green tests all passed. Earlier
+attempts stopped safely and restored the exact pre-deploy patch; they exposed and corrected a
+quiescence assumption that treated a deliberately stopped gateway only as `inactive` even
+though systemd can report `failed`, plus the same assumption in the rollback program.
+
+PR #57 cannot yet recover the live records because a third, later failed Head Hermes action was
+created before deployment and was not part of its reviewed historical evidence:
+
+- action `action-cbba158e3295fb82bdf6e06c`;
+- exact action-file SHA-256
+  `270478743ba73a2a54f30c1a918aaff9c5fe579b9015a0a015f45bbc96d4fa70`;
+- exact open instruction-707 document SHA-256
+  `402aa9aea90a4d9c7dbedfcaff0cd34b1388f8d52ddc72dd57b94983d048d677`; and
+- guarded read-only admission exits `4` with
+  `historical instruction 707 recovery annotations differ`.
+
+The follow-up executable correction is on fresh branch
+`review/phase8-routing-recovery-action3` at code commit
+`f0df671f502182bb11e3755558ee72041517450a`, based directly on PR #57's merge. Its five
+commits are the isolated action-3 red fixture (`1db10b5`), implementation (`7f4464f`), raw-byte
+review hardening (`f7d19df`), historical-admission bypass red control (`852232b`), and its
+fail-closed implementation (`f0df671`). It pins the exact third action, requires equality of the
+complete 707 failed-noop action set, binds the initial instruction to its raw-byte digest, and
+requires the exact three annotation pairs in order. Before returning ordinary no-mismatch
+success, admission now binds the canonical filename to the header ID and validates every known
+historical record. Negative controls cover the old two-action state, missing/tampered/extra
+actions, wrong latest action, changed timestamp/evidence, duplicate or reordered annotations,
+CRLF byte substitution, classifier removal, changed header identity, and a zero-padded
+noncanonical identity.
+
+The pre-implementation Linux proof showed the deployed two-action validator incorrectly
+admitting the obsolete projection. The first independent review then found that classifier or
+header-ID tampering could reach `admit()`'s old no-mismatch return before historical validation;
+the isolated `852232b` red proof reproduced that fail-open with `rc=0`. On final commit
+`f0df671`, the focused routing/recovery suite passed from `2026-08-14T02:51:34Z` through
+`02:52:36Z`, the complete Phase-8 red suite passed through `02:55:40Z`, and the complete positive
+audit reported `hermes-pilot-phase8-green: ALL PASS` at `03:00:23Z`. The final immutable bundle
+SHA-256 is `0758546b8d874cc986c454a451d6e2479c7fd8411a28fd3d48494007915d5fa7`.
+All tests used fresh disposable clones; production runtime records were not test inputs.
+Evidence is under `/var/backups/recursion/action3-review-20260814T021400Z`; its 16-file
+`MANIFEST.sha256` root is
+`93ab5d516d525ee46204b7a25f7e399f54053e5d12146e9f1e83b6b0b211b66b`. OpenCode Go
+`opencode-go/deepseek-v4-pro` and `opencode-go/deepseek-v4-flash` supplied bounded read-only
+pre-implementation review. Final calls to both exact identifiers were blocked by provider
+`Insufficient balance`, so a separate Codex adversarial reviewer was used for the final diff.
+That reviewer found the CRLF-normalization issue and then the pre-validation no-mismatch bypass;
+after both corrections, its exact-`f0df671` final re-review reported **no findings**.
+
+The next gate is a review PR for Lucas. Do not deploy this branch or run live recovery until
+Lucas merges it and the exact merged commit receives a fresh deployment authorization. After
+that deployment, re-measure and byte-bind production, then use only the reviewed recovery path
+to terminalize 707 before 732. Do not run another Head Hermes turn for 707 and do not manually
+edit either record.
+
 ## Authority and stop condition
 
-Lucas authorized documentation of the current stopped state and a fresh-session handoff.
-This is not authorization to deploy another change, run another Hermes decision turn, edit
-runtime records, or remove PAUSE.
+Lucas subsequently authorized and completed the PR #57 deployment/test pass, then authorized
+the follow-up bug-fix and PR-preparation pass described above. That authority does not permit
+deploying the unmerged action-3 branch, running another Hermes decision turn, manually editing
+runtime records, or removing PAUSE.
 
 The production control plane is `/opt/recursion` on `ssh gs-recursion`. Preserve these rules:
 
@@ -34,7 +108,7 @@ Every production read or operation must verify the exact PAUSE file before and a
 required SHA-256 is
 `919371834778def8b6b79bb640d44933296a0e912f606e0738a23c166f4ee0db`.
 
-## Fresh measured production state
+## Superseded pre-PR57 production state
 
 The final read-only snapshot on 2026-08-13 found:
 
@@ -54,12 +128,12 @@ The final read-only snapshot on 2026-08-13 found:
 The merged/deployed hardening includes the Phase-8 seed/scope/gate contracts and provider-only
 capability. Post-deployment provider integration and the complete Phase-8 Linux audit passed.
 
-## Review implementation evidence
+## PR #57 review implementation evidence (now merged and deployed)
 
 The routing/recovery correction is prepared for Lucas on review branch
 `review/phase8-routing-recovery` at
-`c72a65db7e16a6e6c4e090cdd08cac6b3d28b9b6`. It is not deployed. The branch retains the
-handoff commit, the isolated red commit
+`c72a65db7e16a6e6c4e090cdd08cac6b3d28b9b6`. That branch was merged as PR #57 and is deployed
+as described in the authoritative state above. It retains the handoff commit, the isolated red commit
 `df062d6e115f9ef915c165d0e7ca228cfd6df293`, implementation commit
 `293233a5bbe77019da6b4282d178387ad017d46e`, and the adversarial-review correction.
 
@@ -238,9 +312,12 @@ Boot by measuring. Verify PAUSE SHA-256
 production operation. Do not deploy, lift PAUSE, change config/model/capacity/cron/auth, or
 manually edit runtime records. Do not run another Head Hermes turn for instruction 707.
 
-Implement the routing/recovery correction described in the latest handoff on a fresh review
-branch. Prove red-to-green, obtain independent adversarial review, and prepare a PR for Lucas.
-Use OpenCode Go DeepSeek V4 Pro/Flash agents for bounded development/review work if their exact
-CLI model identifiers are available; never place those choices in production configuration.
-Stop and report if any fresh measurement contradicts the handoff.
+The follow-up correction is prepared on `review/phase8-routing-recovery-action3`; do not amend
+production from an unmerged review branch. If Lucas has not merged its PR, report that gate and
+stop. After Lucas merges it and separately authorizes deployment of the exact merge, repeat the
+snapshot/restore rehearsal and PAUSE-held deployment controls, byte-bind deployed executable
+state to the reviewed target, and rerun focused plus complete Phase-8 tests in a disposable
+clone. Only then use the reviewed coupled recovery path to terminalize instruction 707 before
+732. Never manually edit the records and never run another Head Hermes turn for 707. Stop and
+report if any fresh measurement contradicts this handoff.
 ```
