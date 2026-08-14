@@ -167,7 +167,7 @@
         "goal_id": {"$ref": "#/$defs/identifier"},
         "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 256},
         "status": {"enum": ["proposed", "accepted", "queued", "executed", "refused", "cancelled"]},
-        "decision_source": {"enum": ["hermes-model", "project-reconciler", "notification-reconciler"]}
+        "decision_source": {"enum": ["hermes-model", "project-reconciler", "notification-reconciler", "routing-reconciler"]}
       },
       "additionalProperties": true
     },

@@ -39,6 +39,7 @@ PHASE7_VERBS = {
     "notification-audit", "notification-recover",
 }
 PHASE8_HEAD_VERBS = {"pilot-plan-approve", "pilot-window-open", "pilot-window-close"}
+ROUTING_RECONCILER_VERBS = {"routing-refuse"}
 ARITY = {
     "noop": (0, 0),
     "conduct": (0, 0),
@@ -76,6 +77,7 @@ ARITY = {
     "notification-portfolio": (2, 2),
     "notification-audit": (2, 2),
     "notification-recover": (2, 2),
+    "routing-refuse": (2, 2),
     "escalate": (1, 3),
 }
 
@@ -174,6 +176,17 @@ def validate(verbs, raw, expected_actor=None):
                 return False, "portfolio result must be emitted by Head Hermes"
         elif not actor.startswith("pilot-") or not ID_RE.fullmatch(actor):
             return False, "Phase 7 project action requires a canonical pilot actor"
+    if verb in ROUTING_RECONCILER_VERBS:
+        actor = str(d.get("actor", ""))
+        project = str(d.get("project", ""))
+        if actor != "head-hermes" and (not actor.startswith("pilot-") or not ID_RE.fullmatch(actor)):
+            return False, "routing refusal requires a canonical routed actor"
+        if not ID_RE.fullmatch(project) or len(args) != 2 or args[0] != project:
+            return False, "routing refusal must target its declared project"
+        if re.fullmatch(r"[0-9a-f]{64}", args[1]) is None:
+            return False, "routing refusal requires an exact instruction signature"
+        if not instruction_id:
+            return False, "routing refusal requires instruction correlation"
 
     for req in ("goal", "wrong_if"):
         if not str(d.get(req, "")).strip():

@@ -26,6 +26,7 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from jsonl_durable import JsonlDurabilityError, append_jsonl as durable_append_jsonl, read_jsonl_objects
+from instruction_routing import instruction_path, instruction_signature, read_instruction, routing_mismatch
 from pilot_instruction import require_affirmative_command
 from transition_receipt import (
     TransitionReceiptError,
@@ -380,6 +381,68 @@ def authenticated_source_event(base: Path, raw: dict) -> dict:
     return prepared
 
 
+def authenticated_routing_refusal(base: Path, raw: dict, prepared: dict) -> None:
+    """Bind one attention event to its instruction, succeeded action, and receipt chain."""
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    detail = detail_object(event.get("detail"))
+    required_detail = {
+        "instruction_id", "instruction_signature", "routed_actor", "required_actor",
+        "requested_verb", "reason",
+    }
+    iid = str(detail.get("instruction_id") or "")
+    signature = str(detail.get("instruction_signature") or "")
+    if prepared.get("mutations") != [] or event.get("event") != "instruction-routing-refused" \
+            or event.get("id") != raw.get("id") or set(detail) != required_detail \
+            or detail.get("reason") != "actor-verb-mismatch" \
+            or not IDENT.fullmatch(iid) or re.fullmatch(r"[0-9a-f]{64}", signature) is None:
+        raise OutboxError("routing-refusal event contract is invalid")
+    instruction = read_instruction(instruction_path(base, iid))
+    fields = instruction["fields"]
+    allowed = {item.strip() for item in os.environ.get("RECURSION_INTAKE_ALLOW", "8913126684").split(",")}
+    mismatch = routing_mismatch(instruction)
+    if fields.get("principal") not in allowed or fields.get("status") != "acknowledged" \
+            or fields.get("project_id") != event.get("project") \
+            or instruction_signature(instruction) != signature or mismatch is None \
+            or mismatch.get("routed_actor") != detail.get("routed_actor") \
+            or mismatch.get("required_actor") != detail.get("required_actor") \
+            or mismatch.get("requested_verb") != detail.get("requested_verb"):
+        raise OutboxError("routing-refusal instruction evidence disagrees")
+    candidates = []
+    for path in sorted((base / "state/actions").glob("*.json")):
+        try:
+            action = read_json(path)
+        except Exception:
+            continue
+        if action.get("verb") == "routing-refuse" and action.get("instruction_id") == iid \
+                and action.get("arguments") == [event.get("project"), signature]:
+            candidates.append((path, action))
+    if len(candidates) != 1:
+        raise OutboxError("routing refusal lacks exactly one coupled action")
+    action_path, action = candidates[0]
+    try:
+        action_prepared = authenticated_transition(
+            base, str(action.get("last_transition_id") or ""), journal="state/action-events.jsonl"
+        )
+    except (OSError, TransitionReceiptError) as exc:
+        raise OutboxError(f"routing-refusal action receipt is invalid: {exc}") from exc
+    action_event = action_prepared.get("event") if isinstance(action_prepared.get("event"), dict) else {}
+    action_ids = {item.strip() for item in (fields.get("action_ids") or "").split(",") if item.strip()}
+    attempts = int(action.get("attempts") or 0)
+    if action_path.name != f"{action.get('id')}.json" or action.get("status") != "succeeded" \
+            or action.get("actor") != detail.get("routed_actor") \
+            or action.get("routed_decider") != detail.get("routed_actor") \
+            or action.get("decision_source") != "routing-reconciler" \
+            or action.get("project") != event.get("project") or action.get("goal_id") != "routing-integrity" \
+            or re.fullmatch(r"[0-9a-f]{64}", str(action.get("action_payload_sha256") or "")) is None \
+            or action.get("id") not in action_ids or attempts != 1 \
+            or action_event.get("action_id") != action.get("id") \
+            or action_event.get("status") != "succeeded" or action_event.get("attempt") != attempts \
+            or action_event.get("evidence") != action.get("result_evidence") \
+            or {str(item.get("path") or "") for item in action_prepared.get("mutations", [])} \
+               != {action_path.relative_to(base).as_posix()}:
+        raise OutboxError("routing refusal is not an authenticated succeeded conductor action")
+
+
 def authenticated_instruction(base: Path, project: str, instruction_id: str,
                               verb: str, terms: list[str]) -> dict[str, str]:
     """Require one durable Lucas-to-Head-Hermes instruction naming every exact bound term."""
@@ -573,6 +636,8 @@ def authenticated_source_event_kind(base: Path, raw: dict, prepared: dict) -> No
         authenticated_task_projection(base, raw, prepared)
     elif kind in {"review-published", "review-branch-published"}:
         authenticated_review_projection(base, raw, prepared)
+    elif kind == "instruction-routing-refused":
+        authenticated_routing_refusal(base, raw, prepared)
 
 
 def authenticated_goal_projection(base: Path, raw: dict, prepared: dict) -> None:
@@ -766,6 +831,8 @@ def mapped_events(raw: dict) -> list[dict]:
         event_types.append("lucas-attention-required")
     elif kind == "assist-open":
         event_types.append("lucas-attention-required")
+    elif kind == "instruction-routing-refused":
+        event_types.append("lucas-attention-required")
     elif kind == "finish":
         match = re.search(r"(?:^|\s)status=(passed|failed|blocked)(?:\s|$)", detail_text)
         if match:
@@ -872,6 +939,12 @@ def message_for(event: dict) -> str:
     elif event["event_type"] == "lucas-attention-required" \
             and (event.get("source") or {}).get("event") == "pilot-window-refused":
         suffix += f" window={detail.get('window_id') or '-'} reason=approved-contract-invalid"
+    elif event["event_type"] == "lucas-attention-required" \
+            and (event.get("source") or {}).get("event") == "instruction-routing-refused":
+        suffix += (
+            f" instruction={detail.get('instruction_id') or '-'} reason=actor-verb-mismatch"
+            f" routed={detail.get('routed_actor') or '-'} required={detail.get('required_actor') or '-'}"
+        )
     return f"{label}: project={event['project_id']}{suffix} event={event['id']}"
 
 

@@ -1,0 +1,430 @@
+#!/usr/bin/env python3
+"""Deterministic instruction routing, pre-model admission, and refusal evidence.
+
+The gateway records operator prose.  This module classifies only authority-bearing intent; it
+never interprets prose as an implementation command.  A proven actor/verb mismatch becomes one
+durable internal refusal decision, which the sole actuator couples back to the instruction.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import os
+import re
+import sys
+import time
+from pathlib import Path
+
+from transition_receipt import TransitionReceiptError, authenticated_transition, commit_event
+
+
+IDENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+SHA256 = re.compile(r"[0-9a-f]{64}")
+STATIC_FIELDS = (
+    "schema_version", "id", "received", "principal", "topic", "project_id", "pilot_id",
+    "pilot_memory_key", "routing_target", "reply_correlation", "deduplication_key", "from",
+    "chat", "thread", "project",
+)
+HEAD_INTENTS = (
+    ("head-hermes-explicit", re.compile(r"\bhead\s+hermes\b", re.I)),
+    ("portfolio", re.compile(r"\bportfolio\b", re.I)),
+    ("priority", re.compile(r"\bpriorit(?:y|ies|i[sz]e|i[sz]es|i[sz]ation)\b", re.I)),
+    ("policy", re.compile(r"\bpolicy\b", re.I)),
+    ("spending", re.compile(r"\bspend(?:ing)?\b", re.I)),
+    ("credentials", re.compile(r"\bcredentials?\b", re.I)),
+    # Command/noun forms are authority-bearing.  Past-participle adjectives such as
+    # "deployed required contracts" and "merged evidence" are deliberately excluded.
+    ("deployment", re.compile(r"\bdeploy(?:ment|ing)?\b", re.I)),
+    ("merge", re.compile(r"\bmerge(?:s)?\b", re.I)),
+    ("pause", re.compile(r"\b(?:pause|resume)\b", re.I)),
+    ("cron", re.compile(r"\bcron\b", re.I)),
+    ("model-policy", re.compile(r"\bmodel\s+policy\b", re.I)),
+    ("control-plane", re.compile(r"\bcontrol\s+plane\b", re.I)),
+    ("deploy-key", re.compile(r"\bdeploy\s+key\b", re.I)),
+    ("assist", re.compile(r"\bassist\b", re.I)),
+    ("plan-approval", re.compile(r"\bapprov(?:e|es|ed|ing|al)\s+plan\b", re.I)),
+    ("plan-digest", re.compile(r"\bplan\s+digest\b", re.I)),
+    ("window-authorization", re.compile(r"\bauthoriz(?:e|es|ed|ing|ation)\b.{0,160}\bwindow\b", re.I | re.S)),
+    ("pilot-window", re.compile(r"\bpilot\s+window\b", re.I)),
+    ("go-no-go", re.compile(r"\bgo\s*/?\s*no-go\b", re.I)),
+    ("escalation", re.compile(r"\bescalat(?:e|es|ed|ing|ion)\b", re.I)),
+)
+PILOT_PLAN_INTENT = re.compile(
+    r"\b(?:propose|prepare|draft|create|synthesi[sz]e|author)\b.{0,240}\b(?:pilot\s+)?plan\b",
+    re.I | re.S,
+)
+
+
+HISTORICAL_INSTRUCTIONS = {
+    "707": {
+        "fields": {
+            "schema_version": "1", "id": "707", "received": "2026-08-13T22:07:26Z",
+            "principal": "8913126684", "topic": "6", "project_id": "golden-stallion-client",
+            "pilot_id": "pilot-golden-stallion-client", "pilot_memory_key": "telegram-topic:6",
+            "routing_target": "head-hermes", "reply_correlation": "telegram:-1003894008732:6:707",
+            "deduplication_key": "telegram:-1003894008732:6:707", "from": "8913126684",
+            "chat": "-1003894008732", "thread": "6", "project": "golden-stallion-client",
+        },
+        "body": (
+            "Propose a fresh offline golden-stallion-client pilot plan to reduce the verified "
+            "0x6c shade-tops under-emission in user-client/render, using new v2 plan, goal, and "
+            "task identities and the deployed required seed, scope, provider, and forced-on gate "
+            "contracts. Do not reuse or edit the closed v1 plan, goal, task, or window."
+        ),
+        "failed_actions": {
+            "action-bb38398a6e0e3859a1a7d263":
+                "6572b4c5115f499258da36663c9c5a697a9a41049758a53cb080a65c35243db7",
+            "action-4a90005df9c9dfe6cbb7fbad":
+                "b65903d93da048083a255ed647b9e226cc140ebf7cd672bcab3ecb4c62544db4",
+        },
+    },
+    "732": {
+        "fields": {
+            "schema_version": "1", "id": "732", "received": "2026-08-13T22:11:01Z",
+            "principal": "8913126684", "topic": "6", "project_id": "golden-stallion-client",
+            "pilot_id": "pilot-golden-stallion-client", "pilot_memory_key": "telegram-topic:6",
+            "routing_target": "pilot-golden-stallion-client",
+            "reply_correlation": "telegram:-1003894008732:6:732",
+            "deduplication_key": "telegram:-1003894008732:6:732", "from": "8913126684",
+            "chat": "-1003894008732", "thread": "6", "project": "golden-stallion-client",
+        },
+        "body": "Authorize one Head Hermes turn to escalate instruction 707 as a routing blocker.",
+    },
+}
+
+
+class RoutingError(ValueError):
+    pass
+
+
+def compact(value: object) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+
+
+def stable_id(prefix: str, *parts: object) -> str:
+    return prefix + hashlib.sha256(compact(parts)).hexdigest()[:24]
+
+
+def now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def read_instruction(path: Path) -> dict:
+    try:
+        document = path.read_text(encoding="utf-8", errors="surrogateescape")
+    except OSError as exc:
+        raise RoutingError(f"instruction is unreadable: {path}") from exc
+    lines = document.splitlines()
+    fields: dict[str, str] = {}
+    for line in lines:
+        if not line.strip():
+            break
+        if ":" in line and not line.startswith((" ", "\t")):
+            key, value = line.split(":", 1)
+            fields.setdefault(key.strip(), value.strip())
+    match = re.search(r"(?m)^## INSTRUCTION\s*$\n?", document)
+    body = document[match.end():] if match else ""
+    body = re.split(r"(?m)^##\s+", body, maxsplit=1)[0].strip()
+    return {"path": path, "document": document, "fields": fields, "body": body}
+
+
+def instruction_path(base: Path, instruction_id: str) -> Path:
+    if instruction_id.isdigit():
+        return base / "state/instructions" / f"{int(instruction_id):08d}.md"
+    return base / "state/instructions" / f"{instruction_id}.md"
+
+
+def instruction_signature(record: dict) -> str:
+    fields = record["fields"]
+    snapshot = {"fields": {key: fields.get(key, "") for key in STATIC_FIELDS}, "body": record["body"]}
+    return hashlib.sha256(compact(snapshot)).hexdigest()
+
+
+def head_intent(body: str) -> str | None:
+    for reason, pattern in HEAD_INTENTS:
+        if pattern.search(body):
+            return reason
+    return None
+
+
+def cross_project(body: str, current: str, project_ids: list[str]) -> bool:
+    for other in project_ids:
+        if other != current and re.search(
+            r"(?<![A-Za-z0-9_-])" + re.escape(other) + r"(?![A-Za-z0-9_-])", body, re.I
+        ):
+            return True
+    return False
+
+
+def route_for(body: str, binding: dict, project_ids: list[str]) -> str:
+    if not binding or not binding.get("pilot_id"):
+        return "head-hermes"
+    if head_intent(body) is not None:
+        return "head-hermes"
+    if cross_project(body, str(binding.get("project") or ""), project_ids):
+        return "head-hermes"
+    return str(binding["pilot_id"])
+
+
+def requested_authority(record: dict) -> tuple[str | None, str | None, str | None]:
+    fields, body = record["fields"], record["body"]
+    reason = head_intent(body)
+    if reason is not None:
+        verb = "escalate" if reason in {"head-hermes-explicit", "escalation"} else "head-control"
+        return "head-hermes", verb, reason
+    if PILOT_PLAN_INTENT.search(body):
+        pilot_id = fields.get("pilot_id") or ""
+        return (pilot_id or None), "pilot-plan-propose", "project-plan-proposal"
+    return None, None, None
+
+
+def routing_mismatch(record: dict) -> dict | None:
+    fields = record["fields"]
+    routed = fields.get("routing_target") or "head-hermes"
+    required, verb, reason = requested_authority(record)
+    if required is None or required == routed:
+        return None
+    if not IDENT.fullmatch(routed) or not IDENT.fullmatch(required):
+        raise RoutingError("instruction routing authority is not canonical")
+    return {"routed_actor": routed, "required_actor": required,
+            "requested_verb": verb, "reason": reason}
+
+
+def allowed_principals() -> set[str]:
+    return {part.strip() for part in os.environ.get("RECURSION_INTAKE_ALLOW", "8913126684").split(",")
+            if part.strip()}
+
+
+def validate_authenticated(record: dict) -> None:
+    fields = record["fields"]
+    if fields.get("principal") not in allowed_principals():
+        raise RoutingError("instruction principal is not authenticated")
+    for key in ("id", "project_id", "pilot_id", "routing_target"):
+        if not IDENT.fullmatch(fields.get(key) or ""):
+            raise RoutingError(f"instruction {key} is not canonical")
+
+
+def validate_historical(base: Path, record: dict, *, require_dependency: bool) -> None:
+    iid = record["fields"].get("id") or ""
+    expected = HISTORICAL_INSTRUCTIONS.get(iid)
+    if expected is None:
+        return
+    if any(record["fields"].get(key) != value for key, value in expected["fields"].items()) \
+            or record["body"] != expected["body"]:
+        raise RoutingError(f"historical instruction {iid} differs from reviewed recovery evidence")
+    for action_id, digest in expected.get("failed_actions", {}).items():
+        path = base / "state/actions" / f"{action_id}.json"
+        try:
+            observed = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError as exc:
+            raise RoutingError(f"historical action evidence is absent: {action_id}") from exc
+        if observed != digest:
+            raise RoutingError(f"historical action evidence changed: {action_id}")
+    if iid == "732" and require_dependency:
+        require_707_terminal(base)
+
+
+def validate_initial_recovery(record: dict) -> None:
+    """Require the reviewed pre-recovery projection before minting its sole decision."""
+    fields, document = record["fields"], record["document"]
+    iid = fields.get("id") or ""
+    if iid == "707":
+        first = "action-bb38398a6e0e3859a1a7d263"
+        second = "action-4a90005df9c9dfe6cbb7fbad"
+        if fields.get("status") != "open" or fields.get("action_ids") != second \
+                or document.count("## CONSUMED ") != 2 or document.count("## OPEN ") != 2 \
+                or document.count(f"resulting actions: {first}") != 1 \
+                or document.count(f"resulting actions: {second}") != 1 \
+                or document.count(f"reopened instruction: {first}") != 1 \
+                or document.count(f"reopened instruction: {second}") != 1 \
+                or document.count("cannot-bind noop evidence is absent") != 2:
+            raise RoutingError("historical instruction 707 recovery annotations differ")
+    elif iid == "732":
+        if fields.get("status") != "open" or fields.get("action_ids") != "" \
+                or re.search(r"(?m)^## (?:CONSUMED|OPEN|ACKNOWLEDGED) ", document):
+            raise RoutingError("historical instruction 732 is not the reviewed untouched open record")
+
+
+def require_707_terminal(base: Path) -> None:
+    prior = read_instruction(instruction_path(base, "707"))
+    if prior["fields"].get("status") != "acknowledged":
+        raise RoutingError("instruction 732 recovery requires instruction 707 to be acknowledged first")
+    matches = []
+    for path in sorted((base / "state/actions").glob("*.json")):
+        try:
+            action = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if str(action.get("instruction_id") or "") == "707" and action.get("verb") == "routing-refuse" \
+                and action.get("decision_source") == "routing-reconciler" \
+                and action.get("status") == "succeeded":
+            matches.append(action)
+    if len(matches) != 1:
+        raise RoutingError("instruction 707 lacks exactly one succeeded routing-refusal action")
+    action = matches[0]
+    coupled = {part.strip() for part in prior["fields"].get("action_ids", "").split(",") if part.strip()}
+    if action.get("id") not in coupled or action.get("actor") != "head-hermes" \
+            or action.get("routed_decider") != "head-hermes" or action.get("project") != "golden-stallion-client" \
+            or action.get("goal_id") != "routing-integrity" or action.get("attempts") != 1:
+        raise RoutingError("instruction 707 routing-refusal action is not coupled to reviewed authority")
+    path = base / "state/actions" / f"{action['id']}.json"
+    try:
+        prepared = authenticated_transition(
+            base, str(action.get("last_transition_id") or ""), journal="state/action-events.jsonl"
+        )
+    except (OSError, TransitionReceiptError) as exc:
+        raise RoutingError(f"instruction 707 routing-refusal action receipt is invalid: {exc}") from exc
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    if event.get("action_id") != action.get("id") or event.get("status") != "succeeded" \
+            or event.get("attempt") != 1 or event.get("evidence") != action.get("result_evidence") \
+            or {str(item.get("path") or "") for item in prepared.get("mutations", [])} \
+               != {path.relative_to(base).as_posix()}:
+        raise RoutingError("instruction 707 routing-refusal action receipt disagrees")
+
+
+def load_decision_queue(base: Path):
+    path = base / "scripts/decision-queue.py"
+    spec = importlib.util.spec_from_file_location("recursion_decision_queue", path)
+    if spec is None or spec.loader is None:
+        raise RoutingError("decision queue module is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def refusal_decision(base: Path, record: dict) -> dict:
+    validate_authenticated(record)
+    validate_historical(base, record, require_dependency=True)
+    validate_initial_recovery(record)
+    mismatch = routing_mismatch(record)
+    if mismatch is None:
+        raise RoutingError("instruction has no deterministic actor/verb mismatch")
+    fields = record["fields"]
+    iid, project = fields["id"], fields["project_id"]
+    signature = instruction_signature(record)
+    why = (
+        f"Instruction {iid} requests {mismatch['requested_verb']} but is routed to "
+        f"{mismatch['routed_actor']}; refuse and escalate without a model call."
+    )
+    raw = {
+        "actor": mismatch["routed_actor"], "verb": "routing-refuse",
+        "args": [project, signature], "project": project, "goal": "routing-integrity",
+        "instruction_id": iid, "why": why,
+        "wrong_if": "the authenticated instruction routing or requested authority changes",
+        "decision_source": "routing-reconciler", "routed_decider": mismatch["routed_actor"],
+        "idempotency_key": f"routing-refusal:{iid}:{signature}",
+    }
+    return load_decision_queue(base).normalize(raw, stamp=now_iso())
+
+
+def admit(base: Path, path: Path, *, enqueue: bool) -> tuple[int, dict | None]:
+    record = read_instruction(path)
+    if routing_mismatch(record) is None:
+        return 0, None
+    decision = refusal_decision(base, record)
+    queue_path = None
+    if enqueue:
+        queue_path = load_decision_queue(base).enqueue(base, decision, journal=True)
+    return 10, {"decision": decision, "queue_path": str(queue_path) if queue_path else None}
+
+
+def refusal_event(base: Path, decision: dict) -> dict:
+    if decision.get("decision_source") != "routing-reconciler" \
+            or decision.get("verb") != "routing-refuse" \
+            or decision.get("actor") != decision.get("routed_decider"):
+        raise RoutingError("routing-refusal decision provenance is invalid")
+    iid = str(decision.get("instruction_id") or "")
+    args = decision.get("args", decision.get("arguments", [])) or []
+    if len(args) != 2 or not IDENT.fullmatch(str(args[0])) or not SHA256.fullmatch(str(args[1])):
+        raise RoutingError("routing-refusal decision arguments are invalid")
+    record = read_instruction(instruction_path(base, iid))
+    validate_authenticated(record)
+    validate_historical(base, record, require_dependency=True)
+    mismatch = routing_mismatch(record)
+    if mismatch is None:
+        raise RoutingError("routing-refusal no longer has an actor/verb mismatch")
+    signature = instruction_signature(record)
+    if args != [record["fields"].get("project_id"), signature] \
+            or decision.get("actor") != mismatch["routed_actor"]:
+        raise RoutingError("routing-refusal decision disagrees with current instruction evidence")
+    detail = {
+        "instruction_id": iid, "instruction_signature": signature,
+        "routed_actor": mismatch["routed_actor"], "required_actor": mismatch["required_actor"],
+        "requested_verb": mismatch["requested_verb"], "reason": "actor-verb-mismatch",
+    }
+    return {
+        "schema_version": 1, "id": stable_id("source-routing-refused-", iid, signature),
+        "ts": now_iso(), "event": "instruction-routing-refused", "task": "",
+        "project": record["fields"]["project_id"], "goal": "routing-integrity",
+        "pid": os.getpid(), "detail": detail,
+    }
+
+
+def perform(base: Path, decision: dict) -> tuple[int, str]:
+    try:
+        event = refusal_event(base, decision)
+        if os.environ.get("RECURSION_ROUTING_FAILPOINT") == "perform-hang":
+            time.sleep(300)
+        return 0, str(event["id"])
+    except (RoutingError, OSError, ValueError, json.JSONDecodeError) as exc:
+        return 4, str(exc)
+
+
+def record_refusal(base: Path, decision: dict) -> tuple[int, str]:
+    try:
+        event = refusal_event(base, decision)
+        if os.environ.get("RECURSION_ROUTING_FAILPOINT") == "before-event":
+            return 75, "routing failpoint: before-event"
+        commit_event(base, event)
+        if os.environ.get("RECURSION_ROUTING_FAILPOINT") == "after-event":
+            return 75, "routing failpoint: after-event"
+        return 0, str(event["id"])
+    except TransitionReceiptError as exc:
+        if "transition failpoint:" in str(exc):
+            return 75, str(exc)
+        return 4, str(exc)
+    except (RoutingError, OSError, ValueError, json.JSONDecodeError) as exc:
+        return 4, str(exc)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", default=os.environ.get("RECURSION_ROOT"))
+    sub = parser.add_subparsers(dest="command", required=True)
+    route = sub.add_parser("route")
+    route.add_argument("body")
+    route.add_argument("binding_json")
+    route.add_argument("project_ids_json")
+    admission = sub.add_parser("admit")
+    admission.add_argument("instruction")
+    admission.add_argument("--enqueue", action="store_true")
+    execute = sub.add_parser("perform")
+    execute.add_argument("decision_json")
+    record = sub.add_parser("record")
+    record.add_argument("decision_json")
+    args = parser.parse_args()
+    base = Path(args.root or Path(__file__).resolve().parents[1]).resolve()
+    try:
+        if args.command == "route":
+            print(route_for(args.body, json.loads(args.binding_json), json.loads(args.project_ids_json)))
+            return 0
+        if args.command == "admit":
+            rc, result = admit(base, Path(args.instruction).resolve(), enqueue=args.enqueue)
+            if result is not None:
+                print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+            return rc
+        decision = json.loads(args.decision_json)
+        rc, evidence = (perform if args.command == "perform" else record_refusal)(base, decision)
+        stream = sys.stdout if rc == 0 else sys.stderr
+        print(evidence, file=stream)
+        return rc
+    except (RoutingError, OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"instruction-routing: {exc}", file=sys.stderr)
+        return 4
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
