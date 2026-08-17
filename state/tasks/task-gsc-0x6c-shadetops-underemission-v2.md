@@ -1,5 +1,5 @@
 schema_version: 1
-version: 1
+version: 2
 id: task-gsc-0x6c-shadetops-underemission-v2
 project_id: golden-stallion-client
 project: golden-stallion-client
@@ -33,12 +33,15 @@ charter_sha256: 006bef38a57a453b25ec56fb7c76bb8e0f4782fe4f7a8655881c58cc3fc547ed
 repo: /opt/golden-stallion-client
 workdir: .
 autonomy: auto
-status: proposed
+status: ready
 seed_manifest: .seedlist
 seed_manifest_sha256: 924ff916e705ba96689fe3ebc901c63c40d89c273ed10858e2109ab7c7630dc4
 seed: user-client/render/data/models
 seed_digest: fe5df2007ef8b345c7218a26c72e0f30510a05213c389b1465853643d3ee62dd
-event_seq: 2
-last_transition_id: transition-136910b065ea601ed6b96a1704148d01
+event_seq: 3
+last_transition_id: transition-3512f1ad25e433fe63edce9e20487d4a
+lease_expires: 0
+transition_reason: dependencies-passed
+transition_at: 2026-08-17T13:49:58Z
 
 Adjust only renderer implementation to reduce verified 0x6c shade-tops under-emission under the required forced-on native-diff gate.
