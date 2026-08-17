@@ -40,6 +40,13 @@ def _sequences(verb: str, terms: list[str]) -> list[list[str]]:
             ["@approve", "@pilot", "@plan", plan_id, "@with", "@digest", digest],
             ["@approve", "@plan", plan_id, "@digest", digest],
         ]
+    if verb == "pilot-window-open" and len(terms) == 4:
+        project_id, goal_id, window_id, seconds = terms
+        return [
+            ["@open", "@pilot", "@window", window_id, "@for", project_id,
+             "@goal", goal_id, "@for", seconds, "@seconds"],
+            *_sequences(verb, [goal_id, window_id, seconds]),
+        ]
     if verb == "pilot-window-open" and len(terms) == 3:
         goal_id, window_id, seconds = terms
         return [
@@ -69,6 +76,13 @@ def require_affirmative_command(body: str, verb: str, terms: list[str]) -> None:
     match: tuple[int, list[str]] | None = None
     for sequence in sequences:
         for index in range(len(tokens) - len(sequence) + 1):
+            # The four-term form has the canonical project available. Preserve historical
+            # three-term commands only when the entire instruction is exactly one reviewed
+            # command shape; otherwise stray prose could smuggle a conflicting project claim
+            # around a legacy subsequence.
+            if verb == "pilot-window-open" and len(terms) == 4 \
+                    and (index != 0 or len(tokens) != len(sequence)):
+                continue
             if all(actual.lower() == expected[1:] if expected.startswith("@") else actual == expected
                    for actual, expected in zip(tokens[index:index + len(sequence)], sequence)):
                 match = (index, sequence)

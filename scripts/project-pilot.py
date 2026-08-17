@@ -1327,7 +1327,7 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
         if not IDENT.fullmatch(window_id) or not raw_seconds.isdigit() or not 1 <= int(raw_seconds) <= 86400:
             fail("pilot window identity or duration is invalid")
         require_lucas_instruction(instruction_file, instruction, "pilot-window-open",
-                                  [goal_id, window_id, raw_seconds])
+                                  [str(cfg["id"]), goal_id, window_id, raw_seconds])
         goal = fields(goal_for(base, str(cfg["id"]), goal_id)[0]); plan_id = goal.get("plan_id", "")
         plan_path = base / "state/plans" / str(cfg["id"]) / f"{plan_id}.json"
         proposal = read_json(plan_path) if plan_id else {}
