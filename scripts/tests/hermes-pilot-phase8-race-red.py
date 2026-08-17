@@ -29,6 +29,12 @@ CONTROLS = [
     "a PAUSE observed between armed read and open commit is rechecked and refuses the open",
     "an authenticated close racing the armed->open commit is rechecked and refuses the open",
     "provider capability loss before the armed->open commit refuses the open",
+    "a PAUSE-held goal starts its wall-clock budget only when the authorized window activates",
+    "the terminal heavy-gate deadline uses the same authenticated activation anchor",
+    "activation timestamp drift or post-activation materialization fails closed",
+    "terminal gate execution stops when its authenticated window closes",
+    "legacy non-windowed pilots retain terminal gate authority without a synthetic window",
+    "window-revoked verification evidence reopens and retains same-commit retry eligibility",
 ]
 
 
@@ -284,6 +290,18 @@ def window_status(f: Fixture, window: str) -> str:
     return str(json.loads(path.read_text(encoding="utf-8")).get("status") or "")
 
 
+def set_field(path: Path, key: str, value: str) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    replacement = f"{key}: {value}"
+    for index, line in enumerate(lines):
+        if line.startswith(f"{key}:"):
+            lines[index] = replacement
+            break
+    else:
+        lines.append(replacement)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def test_approve_guards() -> bool:
     f = Fixture()
     try:
@@ -467,6 +485,275 @@ def test_open_capability_loss_race() -> bool:
         f.close()
 
 
+def test_window_activation_budget_anchor() -> bool:
+    f = Fixture()
+    try:
+        window = "chiron-window-budget-anchor"
+        if not f.materialize_and_arm(window):
+            return False
+        goal_path = f.root / f"state/goals/{f.goal_id}.md"
+        set_field(goal_path, "started_at_epoch", "1")
+        (f.root / "state/PAUSE").unlink(missing_ok=True)
+        before = int(time.time())
+        result = f.run(
+            "python3", "scripts/project-reconcile.py", "reconcile", "chiron", f.goal_id,
+        )
+        after = int(time.time())
+        window_record = json.loads(
+            (f.root / f"state/pilot-windows/{window}.json").read_text(encoding="utf-8")
+        )
+        pending = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted((f.root / "state/decision-queue/pending").glob("*.json"))
+        ]
+        activation = window_record.get("activated_at_epoch")
+        passed = (
+            result.returncode == 0
+            and window_record.get("status") == "open"
+            and isinstance(activation, int) and before <= activation <= after
+            and len(pending) == 1
+            and pending[0].get("verb") == "task-transition"
+            and pending[0].get("args")
+                == ["chiron", f.goal_id, "chiron-phase8-race-task",
+                    "proposed", "ready", "dependencies-passed"]
+        )
+        if not passed:
+            print("diag  activation budget anchor:", json.dumps({
+                "rc": result.returncode, "stdout": result.stdout, "stderr": result.stderr,
+                "window": window_record, "pending": pending,
+            }, sort_keys=True))
+        return passed
+    finally:
+        f.close()
+
+
+def test_terminal_gate_budget_anchor() -> bool:
+    f = Fixture()
+    try:
+        window = "chiron-window-terminal-deadline"
+        if not f.materialize_and_arm(window):
+            return False
+        goal_path = f.root / f"state/goals/{f.goal_id}.md"
+        set_field(goal_path, "started_at_epoch", "1")
+        (f.root / "state/PAUSE").unlink(missing_ok=True)
+        opened = f.run(
+            "python3", "scripts/project-reconcile.py", "reconcile", "chiron", f.goal_id,
+        )
+        probe = r"""
+import importlib.util, json, sys, time
+from pathlib import Path
+base, goal_id = Path(sys.argv[1]), sys.argv[2]
+spec = importlib.util.spec_from_file_location("phase8_reconcile", base / "scripts/project-reconcile.py")
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+goal = module.read_fields(base / "state/goals" / f"{goal_id}.md")
+_, pilot = module.project_records(base, "chiron")
+window = module.require_window(base, "chiron", goal_id)
+budget = module.parse_budget(goal)
+observed = int(time.time())
+deadline = module.goal_wall_clock_deadline(
+    base, "chiron", goal_id, goal, pilot, budget, window, observed,
+)
+print(json.dumps({"deadline": deadline, "activation": window["activated_at_epoch"]}))
+"""
+        deadline = f.run("python3", "-c", probe, str(f.root), f.goal_id)
+        value = json.loads(deadline.stdout) if deadline.returncode == 0 else {}
+        return (
+            opened.returncode == 0 and deadline.returncode == 0
+            and value.get("deadline") == value.get("activation") + 3600
+        )
+    finally:
+        f.close()
+
+
+def test_window_activation_anchor_tamper() -> bool:
+    activation = Fixture()
+    future_goal = Fixture()
+    try:
+        window = "chiron-window-activation-tamper"
+        if not activation.materialize_and_arm(window):
+            return False
+        (activation.root / "state/PAUSE").unlink(missing_ok=True)
+        opened = activation.run(
+            "python3", "scripts/project-reconcile.py", "reconcile",
+            "chiron", activation.goal_id,
+        )
+        pending_dir = activation.root / "state/decision-queue/pending"
+        for path in pending_dir.glob("*.json"):
+            path.unlink()
+        window_path = activation.root / f"state/pilot-windows/{window}.json"
+        record = json.loads(window_path.read_text(encoding="utf-8"))
+        record["activated_at_epoch"] = int(record["activated_at_epoch"]) + 1
+        record["opened_at"] = time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(record["activated_at_epoch"]),
+        )
+        activation.write_json(f"state/pilot-windows/{window}.json", record)
+        drift = activation.run(
+            "python3", "scripts/project-reconcile.py", "reconcile",
+            "chiron", activation.goal_id,
+        )
+
+        future_window = "chiron-window-future-materialization"
+        if not future_goal.materialize_and_arm(future_window):
+            return False
+        future_path = future_goal.root / f"state/goals/{future_goal.goal_id}.md"
+        set_field(future_path, "started_at_epoch", str(int(time.time()) + 60))
+        (future_goal.root / "state/PAUSE").unlink(missing_ok=True)
+        future = future_goal.run(
+            "python3", "scripts/project-reconcile.py", "reconcile",
+            "chiron", future_goal.goal_id,
+        )
+        passed = (
+            opened.returncode == 0
+            and drift.returncode != 0 and not list(pending_dir.glob("*.json"))
+            and future.returncode != 0
+            and not list((future_goal.root / "state/decision-queue/pending").glob("*.json"))
+        )
+        if not passed:
+            print("diag  activation anchor tamper:", json.dumps({
+                "opened_rc": opened.returncode,
+                "drift_rc": drift.returncode, "drift_stderr": drift.stderr,
+                "future_rc": future.returncode, "future_stderr": future.stderr,
+            }, sort_keys=True))
+        return passed
+    finally:
+        activation.close()
+        future_goal.close()
+
+
+def test_terminal_gate_window_revocation() -> bool:
+    f = Fixture()
+    try:
+        window_id = "chiron-window-terminal-revocation"
+        if not f.materialize_and_arm(window_id):
+            return False
+        (f.root / "state/PAUSE").unlink(missing_ok=True)
+        opened = f.run(
+            "python3", "scripts/project-reconcile.py", "reconcile", "chiron", f.goal_id,
+        )
+        window_path = f.root / f"state/pilot-windows/{window_id}.json"
+        (f.root / "scripts/worker-sandbox.sh").write_text(
+            "#!/usr/bin/env bash\nsleep 20\n", encoding="utf-8",
+        )
+        (f.root / "scripts/worker-sandbox.sh").chmod(0o755)
+        probe = r"""
+import importlib.util, json, sys, threading, time
+from pathlib import Path
+base, repo, window_path = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
+spec = importlib.util.spec_from_file_location("phase8_reconcile", base / "scripts/project-reconcile.py")
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+window = json.loads(window_path.read_text(encoding="utf-8"))
+def close_window():
+    time.sleep(0.2)
+    closed = dict(window); closed["status"] = "closed"
+    window_path.write_text(json.dumps(closed) + "\n", encoding="utf-8")
+threading.Thread(target=close_window, daemon=True).start()
+outcome, rc = module.run_gate_interruptibly(
+    base, repo, "sleep 20", int(time.time()) + 10, "none", window=window,
+)
+print(json.dumps({"outcome": outcome, "rc": rc}))
+"""
+        revoked = f.run("python3", "-c", probe, str(f.root), str(f.repo), str(window_path))
+        value = json.loads(revoked.stdout) if revoked.returncode == 0 else {}
+        return (
+            opened.returncode == 0 and revoked.returncode == 0
+            and value == {"outcome": "authority-revoked", "rc": 75}
+        )
+    finally:
+        f.close()
+
+
+def test_legacy_terminal_gate_authority() -> bool:
+    f = Fixture()
+    try:
+        pilot_path = f.root / "state/pilots/pilot-chiron.json"
+        pilot = json.loads(pilot_path.read_text(encoding="utf-8"))
+        pilot["window_required"] = False
+        f.write_json("state/pilots/pilot-chiron.json", pilot)
+        (f.root / "scripts/worker-sandbox.sh").write_text(
+            "#!/usr/bin/env bash\nexit 0\n", encoding="utf-8",
+        )
+        (f.root / "scripts/worker-sandbox.sh").chmod(0o755)
+        probe = r"""
+import importlib.util, json, sys, time
+from pathlib import Path
+base, repo = Path(sys.argv[1]), Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("phase8_reconcile", base / "scripts/project-reconcile.py")
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+_, pilot = module.project_records(base, "chiron")
+synthetic = module.require_window(base, "chiron", "goal-chiron-phase8-race")
+authority = module.terminal_window_authority(pilot, synthetic)
+outcome, rc = module.run_gate_interruptibly(
+    base, repo, "true", int(time.time()) + 5, "none", window=authority,
+)
+print(json.dumps({"authority": authority, "outcome": outcome, "rc": rc}))
+"""
+        result = f.run("python3", "-c", probe, str(f.root), str(f.repo))
+        value = json.loads(result.stdout) if result.returncode == 0 else {}
+        return result.returncode == 0 and value == {
+            "authority": None, "outcome": "pass", "rc": 0,
+        }
+    finally:
+        f.close()
+
+
+def test_revoked_verification_reopens() -> bool:
+    f = Fixture()
+    try:
+        if not f.propose_and_approve():
+            return False
+        goal_path = f.root / f"state/goals/{f.goal_id}.md"
+        set_field(goal_path, "status", "verifying")
+        f.write_json(f"state/evidence/{f.goal_id}.json", {
+            "schema_version": 1,
+            "id": f"goal-evidence-{f.goal_id}-authority-revoked",
+            "project_id": "chiron",
+            "goal_id": f.goal_id,
+            "verdict": "authority-revoked",
+        })
+        probe = r"""
+import importlib.util, sys
+from pathlib import Path
+base, goal_id = Path(sys.argv[1]), sys.argv[2]
+spec = importlib.util.spec_from_file_location("phase8_reconcile", base / "scripts/project-reconcile.py")
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+module.transition_goal(
+    base, "chiron", goal_id, "verifying", "active", "verification-reopened",
+)
+"""
+        result = f.run("python3", "-c", probe, str(f.root), f.goal_id)
+        evidence = json.loads(
+            (f.root / f"state/evidence/{f.goal_id}.json").read_text(encoding="utf-8")
+        )
+        history = list((f.root / "state/evidence/history").glob(
+            f"{f.goal_id}-reopen-*-authority-revoked.json",
+        ))
+        probe_retry = r"""
+import importlib.util, json, sys
+from pathlib import Path
+base, goal_id = Path(sys.argv[1]), sys.argv[2]
+spec = importlib.util.spec_from_file_location("phase8_reconcile", base / "scripts/project-reconcile.py")
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+evidence = module.goal_evidence(base, goal_id)
+tasks = module.goal_tasks(base, goal_id)
+print(json.dumps({
+    "same_graph_retry": module.consumed_revocation_allows_same_graph_retry(evidence),
+    "new_task_graph": module.consumed_evidence_has_new_task_graph(evidence, tasks),
+}))
+"""
+        retry = f.run("python3", "-c", probe_retry, str(f.root), f.goal_id)
+        retry_value = json.loads(retry.stdout) if retry.returncode == 0 else {}
+        return (
+            result.returncode == 0
+            and fields(goal_path).get("status") == "active"
+            and evidence.get("verdict") == "consumed"
+            and evidence.get("source_verdict") == "authority-revoked"
+            and len(history) == 1
+            and retry_value == {"same_graph_retry": True, "new_task_graph": False}
+        )
+    finally:
+        f.close()
+
+
 def test_project_wide_window_singleton() -> bool:
     f = Fixture()
     try:
@@ -497,6 +784,12 @@ def main() -> int:
         test_arm_singleton_race, test_arm_pause_lift_race,
         test_open_pause_race, test_open_close_race,
         test_open_capability_loss_race,
+        test_window_activation_budget_anchor,
+        test_terminal_gate_budget_anchor,
+        test_window_activation_anchor_tamper,
+        test_terminal_gate_window_revocation,
+        test_legacy_terminal_gate_authority,
+        test_revoked_verification_reopens,
     ]
     failures = 0
     for label, test in zip(CONTROLS, tests):

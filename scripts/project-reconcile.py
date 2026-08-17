@@ -32,8 +32,8 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from transition_receipt import (
-    TransitionReceiptError, commit_event, commit_transition, fields_mutation, json_mutation,
-    resume_transition,
+    TransitionReceiptError, authenticated_transition, commit_event, commit_transition,
+    fields_mutation, json_mutation, resume_transition,
 )
 from seed_contract import SeedContractError, copy_seed_paths, validate_contract
 
@@ -422,13 +422,20 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
 
             event_id = "source-window-open-" + hashlib.sha256(
                 f"{value.get('id')}:{value.get('instruction_id')}".encode()).hexdigest()[:24]
-            value.update({"status": "open", "opened_at": now_iso()})
+            activation_epoch = int(time.time())
+            value.update({
+                "status": "open",
+                "opened_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(activation_epoch)),
+                "activated_at_epoch": activation_epoch,
+            })
             event = transition_event("pilot-window-opened", project, goal_id,
                                      detail={"window_id": value.get("id"),
-                                             "instruction_id": value.get("instruction_id")},
+                                             "instruction_id": value.get("instruction_id"),
+                                             "activated_at_epoch": activation_epoch},
                                      event_id=event_id)
             commit_reconcile_transition(base, [json_mutation(path, value)], event,
                                         precondition=open_precondition)
+            value = read_json(path)
         elif not verified:
             contract = verify_phase8_goal_contract(base, project, goal_id)
             require_provider_capability(base, contract)
@@ -445,6 +452,133 @@ def require_window(base: Path, project: str, goal_id: str) -> dict:
     if not window:
         raise ReconcileError("exact open pilot window authority is absent")
     return window
+
+
+def authenticated_open_window(base: Path, window: dict, project: str,
+                              goal_id: str) -> dict:
+    """Rebind a caller snapshot to the exact current pilot-window-opened receipt."""
+    window_id = str(window.get("id") or "")
+    if not IDENT.fullmatch(window_id):
+        raise ReconcileError("wall-clock budget window identity is invalid")
+    path = base / "state/pilot-windows" / f"{window_id}.json"
+    current = read_json(path)
+    if canonical_sha(current) != canonical_sha(window):
+        raise ReconcileError("wall-clock budget window changed after authority admission")
+    event_id = "source-window-open-" + hashlib.sha256(
+        f"{window_id}:{current.get('instruction_id')}".encode()
+    ).hexdigest()[:24]
+    try:
+        prepared = authenticated_transition(base, event_id, journal="state/events.jsonl")
+    except TransitionReceiptError as exc:
+        raise ReconcileError("wall-clock budget window receipt is invalid") from exc
+    event = prepared.get("event") if isinstance(prepared.get("event"), dict) else {}
+    detail = event.get("detail") if isinstance(event.get("detail"), dict) else {}
+    relative = path.relative_to(base).as_posix()
+    matching = [
+        mutation for mutation in prepared.get("mutations", [])
+        if mutation.get("kind") == "json" and mutation.get("path") == relative
+    ]
+    if prepared.get("authoritative_path") != relative or len(matching) != 1 \
+            or event.get("event") != "pilot-window-opened" \
+            or event.get("project") != project or event.get("goal") != goal_id \
+            or detail.get("window_id") != window_id \
+            or str(detail.get("instruction_id") or "") != str(current.get("instruction_id") or ""):
+        raise ReconcileError("wall-clock budget window receipt has mismatched authority")
+    activation = current.get("activated_at_epoch")
+    if activation is not None and detail.get("activated_at_epoch") != activation:
+        raise ReconcileError("wall-clock budget activation differs from its receipt")
+    return current
+
+
+def window_activation_epoch(base: Path, window: dict, project: str, goal_id: str,
+                            goal: dict[str, str], observed_epoch: int | None = None) -> int:
+    """Return the authenticated execution start, never the earlier arm/materialization time."""
+    observed = int(time.time()) if observed_epoch is None else observed_epoch
+    window = authenticated_open_window(base, window, project, goal_id)
+    if window.get("status") != "open" or window.get("project_id") != project \
+            or window.get("goal_id") != goal_id:
+        raise ReconcileError("wall-clock budget lacks exact open window authority")
+    for key in ("plan_id", "plan_digest"):
+        if goal.get(key) and window.get(key) != goal.get(key):
+            raise ReconcileError("wall-clock budget window disagrees with approved goal authority")
+
+    opened_at = str(window.get("opened_at") or "")
+    try:
+        opened_epoch = int(datetime.datetime.strptime(
+            opened_at, "%Y-%m-%dT%H:%M:%SZ"
+        ).replace(tzinfo=datetime.timezone.utc).timestamp())
+    except (ValueError, OverflowError) as exc:
+        raise ReconcileError("open window lacks a valid activation timestamp") from exc
+
+    raw_activation = window.get("activated_at_epoch")
+    if raw_activation is None:
+        # Compatibility for windows opened before activation epochs were persisted. Their
+        # opened_at string was written only by the armed->open transition and is receipt-bound.
+        activation = opened_epoch
+    elif isinstance(raw_activation, bool) or not isinstance(raw_activation, int):
+        raise ReconcileError("open window activation epoch is invalid")
+    else:
+        activation = raw_activation
+        if activation != opened_epoch:
+            raise ReconcileError("open window activation timestamps disagree")
+
+    armed_epoch = safe_int(window.get("opened_at_epoch"))
+    expires_epoch = safe_int(window.get("expires_at_epoch"))
+    if activation < 1 or (armed_epoch > 0 and activation < armed_epoch) \
+            or expires_epoch <= activation or activation > observed:
+        raise ReconcileError("open window activation lies outside its authenticated bounds")
+    return activation
+
+
+def goal_wall_clock_anchor(base: Path, project: str, goal_id: str,
+                           goal: dict[str, str], pilot: dict,
+                           window: dict | None = None,
+                           observed_epoch: int | None = None) -> int:
+    """Anchor windowed goal time to activation; retain legacy goal-start semantics otherwise."""
+    observed = int(time.time()) if observed_epoch is None else observed_epoch
+    if not pilot.get("window_required"):
+        return safe_int(goal.get("started_at_epoch"), observed)
+    raw_materialized = goal.get("started_at_epoch")
+    if not str(raw_materialized or "").isdigit() or safe_int(raw_materialized) < 1:
+        raise ReconcileError("windowed goal materialization timestamp is invalid")
+    materialized = safe_int(raw_materialized)
+    authority = window if window is not None else require_window(base, project, goal_id)
+    activated = window_activation_epoch(base, authority, project, goal_id, goal, observed)
+    if materialized > activated:
+        raise ReconcileError("goal materialization timestamp follows window activation")
+    return activated
+
+
+def goal_wall_clock_deadline(base: Path, project: str, goal_id: str,
+                             goal: dict[str, str], pilot: dict, budget: dict,
+                             window: dict | None = None,
+                             observed_epoch: int | None = None) -> int:
+    return goal_wall_clock_anchor(
+        base, project, goal_id, goal, pilot, window, observed_epoch,
+    ) + int(budget["max_wall_clock_seconds"])
+
+
+def window_authority_current(base: Path, window: dict | None,
+                             observed_epoch: int | None = None) -> bool:
+    if window is None:
+        return True
+    try:
+        path = base / "state/pilot-windows" / f"{window['id']}.json"
+        current = read_json(path)
+    except (KeyError, OSError, ReconcileError):
+        return False
+    observed = int(time.time()) if observed_epoch is None else observed_epoch
+    return bool(
+        not (base / "state/PAUSE").exists()
+        and canonical_sha(current) == canonical_sha(window)
+        and current.get("status") == "open"
+        and safe_int(current.get("expires_at_epoch")) > observed
+    )
+
+
+def terminal_window_authority(pilot: dict, window: dict | None) -> dict | None:
+    """Only explicitly windowed pilots carry revocable window authority into terminal gates."""
+    return window if pilot.get("window_required") else None
 
 
 def admit_work(base: Path, task_id: str) -> dict:
@@ -1159,7 +1293,9 @@ def transition_goal(base: Path, project: str, goal_id: str, expected: str, targe
         mutations = []
         if expected == "verifying" and target == "active":
             evidence = goal_evidence(base, goal_id)
-            if not evidence or evidence.get("verdict") not in {"fail", "blocked", "timeout", "corrupt", "paused"}:
+            if not evidence or evidence.get("verdict") not in {
+                "fail", "blocked", "timeout", "corrupt", "paused", "authority-revoked",
+            }:
                 raise ReconcileError("verification may reopen a goal only with failing evidence")
             # Reopen evidence is single-use. Preserve it in immutable history before changing
             # goal state; otherwise the same stale verdict makes active->verifying bounce forever.
@@ -1422,7 +1558,8 @@ def terminate_group(pgid: int) -> None:
 
 def run_gate_interruptibly(base: Path, cwd: Path, command: str, deadline: int,
                            network_policy: str, read_only_paths: Iterable[str] = (),
-                           read_only_worktree: bool = False) -> tuple[str, int]:
+                           read_only_worktree: bool = False,
+                           window: dict | None = None) -> tuple[str, int]:
     argv = ["bash", str(base / "scripts/worker-sandbox.sh"), "--engine", "gate", "--role", "gate",
             "--worktree", str(cwd), "--workdir", ".", "--network-policy", "none",
             "--gate-command", command]
@@ -1439,6 +1576,10 @@ def run_gate_interruptibly(base: Path, cwd: Path, command: str, deadline: int,
             terminate_group(process.pid)
             process.wait()
             return "paused", 75
+        if not window_authority_current(base, window):
+            terminate_group(process.pid)
+            process.wait()
+            return "authority-revoked", 75
         if time.time() >= deadline:
             terminate_group(process.pid)
             process.wait()
@@ -1459,13 +1600,16 @@ def goal_seed_contract(goal: dict[str, str]) -> dict | None:
             "content_sha256": values[2], "paths": seed}
 
 
-def acquire_goal_heavy(base: Path, tag: str, deadline: int) -> tuple[str, int, bool]:
+def acquire_goal_heavy(base: Path, tag: str, deadline: int,
+                       window: dict | None = None) -> tuple[str, int, bool]:
     env = os.environ.copy()
     env.update({"RECURSION_ROOT": str(base), "RECURSION_HEAVY_TAG": tag,
                 "RECURSION_HEAVY_PID": str(os.getpid())})
     while True:
         if (base / "state/PAUSE").exists():
             return "paused", 75, False
+        if not window_authority_current(base, window):
+            return "authority-revoked", 75, False
         if time.time() >= deadline:
             return "timeout", 124, False
         attempt = subprocess.run(
@@ -1652,8 +1796,10 @@ def verify_phase8_goal_projection(base: Path, config: dict, pilot: dict,
             )
 
 
-def verify_goal(base: Path, project: str, goal_id: str) -> None:
+def verify_goal(base: Path, project: str, goal_id: str,
+                window: dict | None = None) -> None:
     config, pilot = project_records(base, project)
+    window = terminal_window_authority(pilot, window)
     goal = read_fields(goal_path(base, goal_id))
     if goal.get("status") != "verifying":
         raise ReconcileError("goal verification requires status=verifying")
@@ -1749,6 +1895,12 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
     if budget["publication_required"] and remote_review_commit(config, str(sink["id"])) != exact["commit_oid"]:
         raise ReconcileError("goal verification requires the exact published review ref")
     commit = exact["commit_oid"]
+    if pilot.get("window_required") and window is None:
+        window = require_window(base, project, goal_id)
+    started = int(time.time())
+    wall_deadline = goal_wall_clock_deadline(
+        base, project, goal_id, goal, pilot, budget, window, started,
+    )
     verify_root = repo / ".worktrees"
     verify_root.mkdir(parents=True, exist_ok=True)
     worktree = verify_root / f"goal-{goal_id}-verify-{commit[:12]}-{os.getpid()}"
@@ -1756,8 +1908,6 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
                           text=True, capture_output=True, check=False)
     if proc.returncode:
         raise ReconcileError((proc.stderr or proc.stdout or "goal verification worktree failed").strip())
-    started = int(time.time())
-    wall_deadline = safe_int(goal.get("started_at_epoch"), started) + int(budget["max_wall_clock_seconds"])
     heavy_held = False
     try:
         # Model calls may use provider-only capability. Acceptance never inherits it: product
@@ -1803,7 +1953,9 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
             if not gate_contract_valid:
                 outcome, rc = "fail", 98
             elif gate_class == "heavy":
-                outcome, rc, heavy_held = acquire_goal_heavy(base, f"goal-{goal_id}", wall_deadline)
+                outcome, rc, heavy_held = acquire_goal_heavy(
+                    base, f"goal-{goal_id}", wall_deadline, window,
+                )
             else:
                 outcome, rc = "pass", 0
             if outcome == "pass":
@@ -1823,6 +1975,7 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
                             ([seed_contract["manifest_path"], *seed_contract["paths"]]
                              if seed_contract else ()),
                             read_only_worktree=True,
+                            window=window,
                         )
                     finally:
                         restore_worktree_permissions(worktree)
@@ -1869,8 +2022,8 @@ def verify_goal(base: Path, project: str, goal_id: str) -> None:
         )
         with goal_lock(base, goal_id):
             commit_reconcile_transition(base, [json_mutation(evidence_path, value)], event)
-        if outcome == "paused":
-            raise ReconcileError("PAUSE interrupted exact-commit goal verification")
+        if outcome in {"paused", "authority-revoked"}:
+            raise ReconcileError("execution authority interrupted exact-commit goal verification")
     finally:
         release_error = None
         if heavy_held:
@@ -1905,6 +2058,14 @@ def consumed_evidence_has_new_task_graph(evidence: dict | None,
         and sorted(prior) != current
 
 
+def consumed_revocation_allows_same_graph_retry(evidence: dict | None) -> bool:
+    """Revoked authority did not judge the commit, so it may be retried unchanged."""
+    return bool(
+        evidence and evidence.get("verdict") == "consumed"
+        and evidence.get("source_verdict") == "authority-revoked"
+    )
+
+
 def enqueue_transition(base: Path, pilot: dict, project: str, goal_id: str, expected: str,
                        target: str, reason: str, version: str) -> None:
     enqueue_decision(base, str(pilot["id"]), "goal-transition",
@@ -1912,7 +2073,8 @@ def enqueue_transition(base: Path, pilot: dict, project: str, goal_id: str, expe
                      [project, goal_id, expected, target, reason, version])
 
 
-def reconcile(base: Path, project: str, goal_id: str) -> None:
+def reconcile(base: Path, project: str, goal_id: str,
+              window: dict | None = None) -> None:
     config, pilot = project_records(base, project)
     goal_file = goal_path(base, goal_id)
     with goal_lock(base, goal_id):
@@ -1959,19 +2121,26 @@ def reconcile(base: Path, project: str, goal_id: str) -> None:
                 enqueue_transition(base, pilot, project, goal_id, "verifying", "achieved",
                                    "exact-commit-verified", version)
             elif evidence.get("verdict") == "consumed":
-                if consumed_evidence_has_new_task_graph(evidence, tasks):
+                authority_retry = consumed_revocation_allows_same_graph_retry(evidence)
+                if authority_retry or consumed_evidence_has_new_task_graph(evidence, tasks):
                     enqueue_decision(
                         base, str(pilot["id"]), "verify-goal", [project, goal_id], goal_id,
-                        "re-run exact-commit acceptance after remediation changed the task graph",
-                        [project, goal_id, snapshot_digest(base, config, goal_id), "remediated"],
+                        ("re-run exact-commit acceptance after execution authority returned"
+                         if authority_retry else
+                         "re-run exact-commit acceptance after remediation changed the task graph"),
+                        [project, goal_id, snapshot_digest(base, config, goal_id),
+                         "authority-retry" if authority_retry else "remediated"],
                     )
             else:
                 enqueue_transition(base, pilot, project, goal_id, "verifying", "active",
                                    "verification-reopened", version)
             return
 
-        started = safe_int(goal.get("started_at_epoch"), int(time.time()))
-        if int(time.time()) - started > budget["max_wall_clock_seconds"]:
+        observed_epoch = int(time.time())
+        started = goal_wall_clock_anchor(
+            base, project, goal_id, goal, pilot, window, observed_epoch,
+        )
+        if observed_epoch - started > budget["max_wall_clock_seconds"]:
             enqueue_transition(base, pilot, project, goal_id, "active", "budget-exhausted",
                                "wall-clock-budget", version)
             return
@@ -2083,6 +2252,7 @@ def reconcile(base: Path, project: str, goal_id: str) -> None:
 
         evidence = goal_evidence(base, goal_id)
         if evidence and evidence.get("verdict") == "consumed" \
+                and not consumed_revocation_allows_same_graph_retry(evidence) \
                 and not consumed_evidence_has_new_task_graph(evidence, tasks):
             # The failed exact-commit evidence has already reopened this exact task graph.
             # Wait for a bounded remediation task instead of bouncing active->verifying forever.
@@ -2223,8 +2393,8 @@ def main() -> int:
                                            args.commit, args.reviewed_by),
                              sort_keys=True, separators=(",", ":")))
         elif args.command == "reconcile":
-            require_window(base, args.project, args.goal)
-            reconcile(base, args.project, args.goal)
+            window = require_window(base, args.project, args.goal)
+            reconcile(base, args.project, args.goal, window)
         elif args.command == "transition-task":
             require_window(base, args.project, args.goal)
             transition_task(base, args.project, args.goal, args.task, args.expected, args.target, args.reason)
@@ -2232,8 +2402,8 @@ def main() -> int:
             require_window(base, args.project, args.goal)
             transition_goal(base, args.project, args.goal, args.expected, args.target, args.reason)
         elif args.command == "verify-goal":
-            require_window(base, args.project, args.goal)
-            verify_goal(base, args.project, args.goal)
+            window = require_window(base, args.project, args.goal)
+            verify_goal(base, args.project, args.goal, window)
         else:
             require_window(base, args.project, args.goal)
             publish_task(base, args.project, args.goal, args.task)
