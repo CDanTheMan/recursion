@@ -583,7 +583,7 @@ def authenticated_window_projection(base: Path, raw: dict, prepared: dict) -> No
         if status != "armed" or str(frozen.get("instruction_id") or "") != instruction_id:
             raise OutboxError("pilot-window arm projection disagrees with the frozen armed record")
         authenticated_instruction(base, project, instruction_id, "pilot-window-open",
-                                  [goal_id, window_id, str(duration)])
+                                  [project, goal_id, window_id, str(duration)])
         authenticated_head_action(base, "pilot-window-open",
                                   [project, goal_id, window_id, str(duration)],
                                   instruction_id, goal_id)
@@ -591,7 +591,7 @@ def authenticated_window_projection(base: Path, raw: dict, prepared: dict) -> No
         if status != "open" or str(frozen.get("instruction_id") or "") != instruction_id:
             raise OutboxError("pilot-window open projection disagrees with the frozen open record")
         authenticated_instruction(base, project, instruction_id, "pilot-window-open",
-                                  [goal_id, window_id, str(duration)])
+                                  [project, goal_id, window_id, str(duration)])
         authenticated_head_action(base, "pilot-window-open",
                                   [project, goal_id, window_id, str(duration)],
                                   instruction_id, goal_id)
