@@ -28,6 +28,38 @@ OPPOSITE_PATTERN = {
 # Apostrophes keep contractions intact. Dots, slashes, and hyphens keep authority identifiers
 # intact so a word embedded in (for example) ``chiron-window-close`` is never treated as prose.
 TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/'-]{0,127}")
+AUTHORITY_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+
+
+def project_window_open_terms(body: str) -> list[str] | None:
+    """Extract the one project-aware window-open form without interpreting prose.
+
+    This is intentionally narrower than :func:`require_affirmative_command`: legacy
+    three-bound commands remain supported at the actuator boundary, but they do not carry a
+    project from which a deterministic Head-Hermes decision can be shaped.  Returning ``None``
+    leaves every near-miss on the existing model-plus-actuator path; it never grants authority.
+    """
+    normalized_body = body.replace("\u2018", "'").replace("\u2019", "'")
+    tokens = [match.group(0).rstrip(".") for match in TOKEN.finditer(normalized_body)]
+    if len(tokens) != 11:
+        return None
+    grammar = {
+        0: "open", 1: "pilot", 2: "window", 4: "for", 6: "goal",
+        8: "for", 10: "seconds",
+    }
+    if any(tokens[index].lower() != expected for index, expected in grammar.items()):
+        return None
+    window_id, project_id, goal_id, seconds = tokens[3], tokens[5], tokens[7], tokens[9]
+    if not all(AUTHORITY_ID.fullmatch(value) for value in (project_id, goal_id, window_id)):
+        return None
+    if not seconds.isdigit() or not 1 <= int(seconds) <= 86400:
+        return None
+    terms = [project_id, goal_id, window_id, seconds]
+    try:
+        require_affirmative_command(normalized_body, "pilot-window-open", terms)
+    except ValueError:
+        return None
+    return terms
 
 
 def _sequences(verb: str, terms: list[str]) -> list[list[str]]:

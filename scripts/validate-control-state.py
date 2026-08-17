@@ -31,7 +31,8 @@ STATUSES = {
     "action": {"pending", "running", "succeeded", "failed", "cancelled"},
 }
 DECISION_SOURCES = frozenset(
-    {"hermes-model", "project-reconciler", "notification-reconciler", "routing-reconciler"}
+    {"hermes-model", "project-reconciler", "notification-reconciler", "routing-reconciler",
+     "instruction-reconciler"}
 )
 REQUIRED = {
     "project": ("schema_version", "id", "repo", "default_branch", "deploy_key_ref", "charter", "topic", "pilot_id", "status"),
