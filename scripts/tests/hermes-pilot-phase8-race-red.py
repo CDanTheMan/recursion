@@ -32,6 +32,7 @@ CONTROLS = [
     "a PAUSE-held goal starts its wall-clock budget only when the authorized window activates",
     "the terminal heavy-gate deadline uses the same authenticated activation anchor",
     "activation timestamp drift or post-activation materialization fails closed",
+    "a lawful task lifecycle version increment preserves the approved immutable contract",
     "terminal gate execution stops when its authenticated window closes",
     "legacy non-windowed pilots retain terminal gate authority without a synthetic window",
     "window-revoked verification evidence reopens and retains same-commit retry eligibility",
@@ -620,6 +621,32 @@ def test_window_activation_anchor_tamper() -> bool:
         future_goal.close()
 
 
+def test_task_lifecycle_version_preserves_contract() -> bool:
+    f = Fixture()
+    try:
+        if not f.propose_and_approve():
+            return False
+        task_id = str(f.plan["tasks"][0]["id"])
+        task_path = f.root / f"state/tasks/{task_id}.md"
+        set_field(task_path, "status", "ready")
+        set_field(task_path, "version", "2")
+        set_field(task_path, "lease_expires", "0")
+        set_field(task_path, "event_seq", "3")
+        set_field(task_path, "last_transition_id", "transition-lifecycle-control")
+        accepted = f.run(
+            "python3", "scripts/project-pilot.py", "verify-approved-goal",
+            "chiron", f.goal_id,
+        )
+        set_field(task_path, "allowed_paths", "tests")
+        immutable_tamper = f.run(
+            "python3", "scripts/project-pilot.py", "verify-approved-goal",
+            "chiron", f.goal_id,
+        )
+        return accepted.returncode == 0 and immutable_tamper.returncode != 0
+    finally:
+        f.close()
+
+
 def test_terminal_gate_window_revocation() -> bool:
     f = Fixture()
     try:
@@ -787,6 +814,7 @@ def main() -> int:
         test_window_activation_budget_anchor,
         test_terminal_gate_budget_anchor,
         test_window_activation_anchor_tamper,
+        test_task_lifecycle_version_preserves_contract,
         test_terminal_gate_window_revocation,
         test_legacy_terminal_gate_authority,
         test_revoked_verification_reopens,
