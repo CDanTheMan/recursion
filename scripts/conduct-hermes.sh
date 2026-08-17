@@ -312,6 +312,11 @@ case "$DECISION_SOURCE" in
       head-hermes:routing-refuse|pilot-*:routing-refuse) : ;;
       *) log "REFUSED - routing reconciler cannot emit '$VERB' as '$ACTOR'"; exit 5 ;;
     esac ;;
+  instruction-reconciler)
+    [ "$ACTOR" = head-hermes ] && [ "$ROUTED_DECIDER" = head-hermes ] \
+      || { log "REFUSED - instruction reconciler lacks exact Head-Hermes authority"; exit 5; }
+    [ "$VERB" = pilot-window-open ] \
+      || { log "REFUSED - instruction reconciler cannot emit '$VERB'"; exit 5; } ;;
   *) log "REFUSED - missing or unknown decision provenance '$DECISION_SOURCE'"; exit 5 ;;
 esac
 
@@ -830,7 +835,7 @@ PY
     run bash scripts/publish.sh --branch "$BR"; rc=$? ;;
 
   escalate)
-    KEY="${ARGS[0]:-}"; TITLE="${ARGS[1]:-$KEY}"
+    KEY="${ARGS[0]:-}"; TITLE="${TEXT:-${ARGS[1]:-$KEY}}"
     [ -n "$KEY" ] || { log "escalate needs a key"; exit 2; }
     run bash scripts/taskctl.sh esc-record "$KEY" "$TITLE" "${ARGS[2]:-}" "hermes-decision"; rc=$? ;;
 

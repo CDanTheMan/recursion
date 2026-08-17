@@ -175,6 +175,16 @@ if [ -n "$SELECTED_INSTRUCTION" ]; then
       log "REFUSED - instruction actor/verb mismatch recorded without a model call"
       printf '%s\n' "$ADMISSION_OUT"
       exit 0 ;;
+    11)
+      log "exact authenticated Head-Hermes window decision recorded without a model call"
+      python3 - "$ADMISSION_OUT" <<'PY'
+import json,sys
+value=json.loads(sys.argv[1])
+decision=value.get('decision')
+if not isinstance(decision,dict): raise SystemExit(5)
+print(json.dumps(decision,sort_keys=True,separators=(',',':')))
+PY
+      exit $? ;;
     *)
       log "REFUSED - deterministic instruction admission failed: ${ADMISSION_OUT:0:240}"
       exit 5 ;;
@@ -204,9 +214,13 @@ Choose exactly one verb:
   work <id>   run a specific queued task through the build loop
   conduct     drain the queue in parallel, under existing bounds
   publish <branch>  push a review branch for Lucas
-  escalate <key> <title>   raise a blocker that needs a human
+  escalate <key>   raise a blocker that needs a human; put its prose title in \"text\"
   resolve-esc <esc-id>     close an escalation that is demonstrably settled
   reap        reclaim dead task leases
+
+EVERY element of \"args\" is a process argument and MUST match
+^[A-Za-z0-9][A-Za-z0-9._/-]{0,80}$ exactly: no spaces and no prose. Put human language in
+\"text\" only where the verb permits text. Never turn a sentence into one args element.
 
 AUTHORING — how an instruction from Lucas becomes work the loop can actually do. These WRITE, so
 they are deliberately small: append-only, into state/ only, never code and never a gate. Prose
@@ -347,6 +361,10 @@ re-emitting the same verb loops forever. When you see two or more identical refu
 instruction history: choose 'noop', and in 'text' state that the instruction cannot bind as
 posted and where the corrected message should go. A successful noop closes the instruction and
 lets the queue reach the corrected one behind it.
+One failed action is NEVER this proof. An exact-command-and-bounds refusal is not an ownership
+refusal and may reflect older actuator bytes; do not choose noop or escalate from that annotation.
+For an exact authenticated project-aware pilot-window-open command, deterministic admission shapes
+the four bounds before this prompt and no model decision is requested.
 ONLY THIS INSTRUCTION'S OWN DURABLE HISTORY COUNTS. Never borrow or remember failures from another
 instruction. The actuator accepts an instruction-coupled noop only when two distinct failed pilot
 actions are both annotated here and contain the exact ownership refusal stated above.

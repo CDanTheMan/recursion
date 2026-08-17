@@ -18,6 +18,7 @@ import sys
 import time
 from pathlib import Path
 
+from pilot_instruction import project_window_open_terms
 from transition_receipt import TransitionReceiptError, authenticated_transition, commit_event
 
 
@@ -367,6 +368,59 @@ def load_decision_queue(base: Path):
     return module
 
 
+def exact_head_window_decision(base: Path, record: dict) -> dict | None:
+    """Shape one exact authenticated project-aware window command without a model call."""
+    terms = project_window_open_terms(record["body"])
+    if terms is None:
+        return None
+    project, goal_id, window_id, seconds = terms
+    fields = record["fields"]
+    if fields.get("principal") not in allowed_principals():
+        raise RoutingError("exact Head window instruction principal is not authenticated")
+    if fields.get("routing_target") != "head-hermes":
+        raise RoutingError("exact Head window instruction is not routed to Head Hermes")
+    if fields.get("status") != "open":
+        raise RoutingError("exact Head window instruction is not open")
+    if not all(IDENT.fullmatch(value) for value in (project, goal_id, window_id)):
+        raise RoutingError("exact Head window instruction bounds are not canonical")
+    if not seconds.isdigit() or not 1 <= int(seconds) <= 86400:
+        raise RoutingError("exact Head window instruction duration is outside bounds")
+    config_path = base / "state/project-config" / f"{project}.json"
+    if config_path.is_symlink() or not config_path.is_file():
+        raise RoutingError("exact Head window instruction project is not configured")
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RoutingError("exact Head window instruction project configuration is unreadable") from exc
+    pilot_id = str(config.get("pilot_id") or "")
+    if config.get("id") != project or config.get("status") != "active" \
+            or not IDENT.fullmatch(pilot_id):
+        raise RoutingError("exact Head window instruction project binding is invalid")
+    if fields.get("project_id") not in {"", project} \
+            or fields.get("pilot_id") not in {"", pilot_id}:
+        raise RoutingError("exact Head window instruction carries conflicting scoped ownership")
+    pause = base / "state/PAUSE"
+    if pause.is_symlink() or not pause.is_file():
+        raise RoutingError("exact Head window instruction requires PAUSE")
+    iid = fields.get("id") or ""
+    signature = instruction_signature(record)
+    raw = {
+        "actor": "head-hermes",
+        "verb": "pilot-window-open",
+        "args": terms,
+        "text": "Authorize the exact authenticated bounded pilot window while PAUSE remains asserted.",
+        "instruction_id": iid,
+        "project": project,
+        "goal": goal_id,
+        "why": f"Instruction {iid} exactly authorizes the named bounded pilot window while PAUSE is asserted.",
+        "wrong_if": "the authenticated instruction, project binding, goal, window, duration, or PAUSE changes",
+        "decision_source": "instruction-reconciler",
+        "routed_decider": "head-hermes",
+        "idempotency_key": f"instruction-window-open:{iid}:{signature}",
+    }
+    return load_decision_queue(base).normalize(raw, stamp=now_iso())
+
+
 def refusal_decision(base: Path, record: dict) -> dict:
     validate_authenticated(record)
     validate_historical(base, record, require_dependency=True)
@@ -401,7 +455,13 @@ def admit(base: Path, path: Path, *, enqueue: bool) -> tuple[int, dict | None]:
     if (record["fields"].get("id") or "") in HISTORICAL_INSTRUCTIONS:
         validate_initial_recovery(record)
     if routing_mismatch(record, configured_project_ids(base)) is None:
-        return 0, None
+        decision = exact_head_window_decision(base, record)
+        if decision is None:
+            return 0, None
+        queue_path = None
+        if enqueue:
+            queue_path = load_decision_queue(base).enqueue(base, decision, journal=True)
+        return 11, {"decision": decision, "queue_path": str(queue_path) if queue_path else None}
     decision = refusal_decision(base, record)
     queue_path = None
     if enqueue:
