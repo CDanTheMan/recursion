@@ -1187,7 +1187,10 @@ def verify_approved_goal(base: Path, project: str, goal_id: str, *, terminal: bo
         fail("materialized task DAG differs from the exact approved plan")
     for task in plan["tasks"]:
         expected = task_values(cfg, pilot, plan_id, digest, goal_id, task, authority, seed)
+        # status and version are lifecycle/CAS fields.  Both change through reviewed task
+        # transitions; neither is part of the digest-bound implementation contract.
         expected.pop("status", None)
+        expected.pop("version", None)
         actual = actual_tasks[str(task["id"])]
         if any(actual.get(key, "") != str(value) for key, value in expected.items()):
             fail(f"materialized task {task['id']} immutable contract differs from its approved plan")
@@ -1279,6 +1282,41 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
     return {"plan": str(path.relative_to(base)), "status": "approved", "plan_digest": digest}
 
 
+def preworker_window_state(base: Path, project: str, pilot_id: str, goal_id: str,
+                           plan_id: str, plan_digest: str,
+                           planned_ids: set[str]) -> bool:
+    """Prove initial or resumed window authority cannot launder worker execution.
+
+    The first window requires the pristine proposed DAG.  Once a matching window has closed,
+    a controller transition may lawfully have moved a task to ready/queued before PAUSE was
+    observed.  That state is resumable only while every execution witness remains absent.
+    """
+    prior_closed = False
+    for path in status_files(base / "state/pilot-windows", ".json", None):
+        value = read_json(path, unavailable_code=74)
+        if value.get("project_id") != project or value.get("goal_id") != goal_id:
+            continue
+        if value.get("pilot_id") != pilot_id or value.get("plan_id") != plan_id \
+                or value.get("plan_digest") != plan_digest:
+            return False
+        if value.get("status") == "closed":
+            prior_closed = True
+
+    allowed_statuses = {"proposed", "ready", "queued"} if prior_closed else {"proposed"}
+    for task_id in planned_ids:
+        task = fields(base / "state/tasks" / f"{task_id}.md", unavailable_code=74)
+        raw_attempts = task.get("attempts", "0")
+        if task.get("status") not in allowed_statuses \
+                or not re.fullmatch(r"[0-9]+", raw_attempts) or int(raw_attempts) != 0 \
+                or bool(task.get("candidate_commit")):
+            return False
+
+    for path in status_files(base / "state/runs", ".json", None):
+        if str(read_json(path, unavailable_code=74).get("task_id") or "") in planned_ids:
+            return False
+    return True
+
+
 def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instruction_id: str,
                   instruction_file: Path, instruction: dict[str, str]) -> dict:
     args = decision.get("args") or decision.get("arguments") or []; verb = str(decision.get("verb") or "")
@@ -1303,11 +1341,10 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
         verify_approved_goal(base, str(cfg["id"]), goal_id)
         require_provider_capability(base, plan, live=True)
         planned_ids = {str(task["id"]) for task in plan["tasks"]}
-        if goal.get("status") != "active" or any(
-            fields(base / "state/tasks" / f"{task_id}.md").get("status") != "proposed"
-            for task_id in planned_ids
+        if goal.get("status") != "active" or not preworker_window_state(
+            base, str(cfg["id"]), str(pilot["id"]), goal_id, plan_id, digest, planned_ids,
         ):
-            fail("pilot window requires an untouched active goal and proposed task DAG")
+            fail("pilot window requires an active goal with a pristine or unexecuted resumable task DAG")
         path = base / "state/pilot-windows" / f"{window_id}.json"
         with phase8_lock(base, f"window-{cfg['id']}"):
             for other in (base / "state/pilot-windows").glob("*.json"):
@@ -1353,6 +1390,13 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
                     })
                 if not (base / "state/PAUSE").is_file():
                     raise TransitionReceiptError("PAUSE was lifted before the pilot window arm commit")
+                if not preworker_window_state(
+                    base, str(cfg["id"]), str(pilot["id"]), goal_id,
+                    plan_id, digest, planned_ids,
+                ):
+                    raise TransitionReceiptError(
+                        "goal or task execution state changed before the pilot window arm commit"
+                    )
                 for other in (base / "state/pilot-windows").glob("*.json"):
                     value = read_json(other)
                     if value.get("project_id") == cfg["id"] \
