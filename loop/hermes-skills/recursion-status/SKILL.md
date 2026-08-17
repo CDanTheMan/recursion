@@ -13,8 +13,8 @@ metadata:
 
 # Recursion box status
 
-This agent runs as root **on the Recursion control-plane box** (`/opt/recursion`), a meta-supervisor
-that runs a build-loop, a daily brief, and a self-reflection tier. When the user (Lucas) asks
+The Recursion cron/operator control plane runs as root on `/opt/recursion`, but the Telegram gateway
+deliberately runs as the unprivileged `hermes-gateway` user. When the user (Lucas) asks
 anything like *"what's the box doing?"*, *"status"*, *"how's chiron / the golden-stallion-client
 renderer going?"*, *"any escalations?"*, *"what did you build?"* — you answer from **live CLI output,
 never from memory and never a guess.** A wrong status costs trust; an honest "the command returned X"
@@ -50,6 +50,11 @@ Project-specific legacy details (use only after the scoped pilot status above):
 ## Rules
 
 - **Report the command's real output.** If a command errors or is empty, say exactly that.
+- **STATUS UNAVAILABLE:** a nonzero status command or an unavailable/unreadable control-state
+  source never proves that plans, goals, tasks, or windows are absent. Do not translate a
+  permission error or incomplete snapshot into an empty authoritative state.
+- State-changing requests are durable intake, not status questions. Do not use this skill to
+  adjudicate or reject them; `recursion-ops` acknowledges receipt for the root-owned pipeline.
 - Is the box paused? `ls /opt/recursion/state/PAUSE` (present = halted). Mention it if so.
 - Keep it short — a few lines, like the brief. Lead with anything that needs Lucas's decision.
 - Do **not** run `recursion pause/resume/work/drain/reflect/dispatch` or edit any file when merely
