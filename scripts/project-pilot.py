@@ -1187,7 +1187,10 @@ def verify_approved_goal(base: Path, project: str, goal_id: str, *, terminal: bo
         fail("materialized task DAG differs from the exact approved plan")
     for task in plan["tasks"]:
         expected = task_values(cfg, pilot, plan_id, digest, goal_id, task, authority, seed)
+        # status and version are lifecycle/CAS fields.  Both change through reviewed task
+        # transitions; neither is part of the digest-bound implementation contract.
         expected.pop("status", None)
+        expected.pop("version", None)
         actual = actual_tasks[str(task["id"])]
         if any(actual.get(key, "") != str(value) for key, value in expected.items()):
             fail(f"materialized task {task['id']} immutable contract differs from its approved plan")
