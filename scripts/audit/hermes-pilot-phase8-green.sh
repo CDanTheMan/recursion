@@ -24,6 +24,7 @@ python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scri
   scripts/tests/transition-receipt.test.py scripts/tests/notification-transition-receipt.test.py \
   scripts/tests/phase8-notification-authentication.test.py \
   scripts/tests/pilot-instruction.test.py \
+  scripts/tests/phase8-head-window-admission.test.py \
   scripts/tests/project-pilot-status-fail-closed.test.py \
   scripts/provider-connect-proxy.py scripts/tests/provider-connect-proxy.test.py \
   scripts/gsc-shade-tops-gate.py scripts/tests/gsc-shade-tops-gate.test.py \
@@ -64,6 +65,16 @@ grep -q 'instruction_routing.py' scripts/hermes-decide.sh
 grep -q '"head-object-command"' scripts/instruction_routing.py
 grep -q 'PILOT_PLAN_INTENT' scripts/instruction_routing.py
 echo "ok    event-invoked logical GPT pilots receive a scoped brief and shared boundary-safe authority routing"
+
+grep -q 'project_window_open_terms' scripts/pilot_instruction.py
+grep -q 'exact_head_window_decision' scripts/instruction_routing.py
+grep -q 'instruction-reconciler)' scripts/conduct-hermes.sh
+grep -q '"instruction-reconciler"' scripts/validate-control-state.py
+grep -q '"instruction-reconciler"' schemas/control-plane/v1/schema.json
+grep -q 'admission_rc' scripts/hermes-decide.sh
+grep -q 'One failed action is NEVER this proof' scripts/hermes-decide.sh
+grep -qF '^[A-Za-z0-9][A-Za-z0-9._/-]{0,80}$' scripts/hermes-decide.sh
+echo "ok    exact authenticated project-aware window commands are shaped before model output while stale single failures and unsafe prose args stay non-authoritative"
 
 grep -q 'a pilot window may be authorized only while PAUSE is observed' scripts/project-pilot.py
 grep -q 'exact open pilot window authority is absent' scripts/project-reconcile.py
@@ -367,6 +378,7 @@ python3 scripts/tests/transition-receipt.test.py
 python3 scripts/tests/notification-transition-receipt.test.py
 python3 scripts/tests/phase8-notification-authentication.test.py
 python3 scripts/tests/pilot-instruction.test.py
+python3 scripts/tests/phase8-head-window-admission.test.py
 python3 scripts/tests/provider-connect-proxy.test.py
 python3 scripts/tests/gsc-shade-tops-gate.test.py
 python3 scripts/tests/validate-gate.test.py
