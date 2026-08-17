@@ -32,6 +32,8 @@ CONTROLS = [
     "a PAUSE-held goal starts its wall-clock budget only when the authorized window activates",
     "the terminal heavy-gate deadline uses the same authenticated activation anchor",
     "activation timestamp drift or post-activation materialization fails closed",
+    "a lawful task lifecycle version increment preserves the approved immutable contract",
+    "a fresh window re-arms a PAUSE-closed pre-worker ready task but refuses execution evidence",
     "terminal gate execution stops when its authenticated window closes",
     "legacy non-windowed pilots retain terminal gate authority without a synthetic window",
     "window-revoked verification evidence reopens and retains same-commit retry eligibility",
@@ -620,6 +622,95 @@ def test_window_activation_anchor_tamper() -> bool:
         future_goal.close()
 
 
+def test_task_lifecycle_version_preserves_contract() -> bool:
+    f = Fixture()
+    try:
+        if not f.propose_and_approve():
+            return False
+        task_id = str(f.plan["tasks"][0]["id"])
+        task_path = f.root / f"state/tasks/{task_id}.md"
+        set_field(task_path, "status", "ready")
+        set_field(task_path, "version", "2")
+        set_field(task_path, "lease_expires", "0")
+        set_field(task_path, "event_seq", "3")
+        set_field(task_path, "last_transition_id", "transition-lifecycle-control")
+        accepted = f.run(
+            "python3", "scripts/project-pilot.py", "verify-approved-goal",
+            "chiron", f.goal_id,
+        )
+        set_field(task_path, "allowed_paths", "tests")
+        immutable_tamper = f.run(
+            "python3", "scripts/project-pilot.py", "verify-approved-goal",
+            "chiron", f.goal_id,
+        )
+        return accepted.returncode == 0 and immutable_tamper.returncode != 0
+    finally:
+        f.close()
+
+
+def test_fresh_window_rearms_only_preworker_ready() -> bool:
+    def close_after_ready(f: Fixture, window: str) -> bool:
+        if not f.materialize_and_arm(window):
+            return False
+        (f.root / "state/PAUSE").unlink(missing_ok=True)
+        opened = f.run("python3", "scripts/project-reconcile.py", "schedule")
+        if opened.returncode != 0 or window_status(f, window) != "open":
+            return False
+        task_id = str(f.plan["tasks"][0]["id"])
+        task_path = f.root / f"state/tasks/{task_id}.md"
+        set_field(task_path, "status", "ready")
+        set_field(task_path, "version", "2")
+        set_field(task_path, "lease_expires", "0")
+        (f.root / "state/PAUSE").write_text("phase8-race\n", encoding="utf-8")
+        closed = f.run("python3", "scripts/project-reconcile.py", "close-paused-windows")
+        return closed.returncode == 0 and window_status(f, window) == "closed"
+
+    eligible = Fixture()
+    attempted = Fixture()
+    recorded = Fixture()
+    candidate = Fixture()
+    try:
+        if not close_after_ready(eligible, "chiron-window-ready-first"):
+            return False
+        admitted = eligible.open_window(
+            "121", f"authorize {eligible.goal_id} chiron-window-ready-second 900",
+            "chiron-window-ready-second", "900",
+        )
+
+        controls = []
+        for fixture, first, second, mutation in (
+            (attempted, "chiron-window-attempt-first", "chiron-window-attempt-second", "attempt"),
+            (recorded, "chiron-window-run-first", "chiron-window-run-second", "run"),
+            (candidate, "chiron-window-candidate-first", "chiron-window-candidate-second", "candidate"),
+        ):
+            if not close_after_ready(fixture, first):
+                return False
+            task_id = str(fixture.plan["tasks"][0]["id"])
+            task_path = fixture.root / f"state/tasks/{task_id}.md"
+            if mutation == "attempt":
+                set_field(task_path, "attempts", "1")
+            elif mutation == "run":
+                fixture.write_json("state/runs/run-execution-control.json", {
+                    "schema_version": 1, "id": "run-execution-control", "task_id": task_id,
+                    "project_id": "chiron", "status": "failed",
+                })
+            else:
+                set_field(task_path, "candidate_commit", "a" * 40)
+            result = fixture.open_window(
+                "121", f"authorize {fixture.goal_id} {second} 900", second, "900",
+            )
+            controls.append(result.returncode != 0 and window_status(fixture, second) == "absent")
+
+        return admitted.returncode == 0 \
+            and window_status(eligible, "chiron-window-ready-second") == "armed" \
+            and all(controls)
+    finally:
+        eligible.close()
+        attempted.close()
+        recorded.close()
+        candidate.close()
+
+
 def test_terminal_gate_window_revocation() -> bool:
     f = Fixture()
     try:
@@ -787,6 +878,8 @@ def main() -> int:
         test_window_activation_budget_anchor,
         test_terminal_gate_budget_anchor,
         test_window_activation_anchor_tamper,
+        test_task_lifecycle_version_preserves_contract,
+        test_fresh_window_rearms_only_preworker_ready,
         test_terminal_gate_window_revocation,
         test_legacy_terminal_gate_authority,
         test_revoked_verification_reopens,
