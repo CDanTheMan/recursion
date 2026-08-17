@@ -41,6 +41,58 @@ class PilotInstructionTest(unittest.TestCase):
             f"Approve pilot plan reject-plan with digest {digest}",
             "pilot-plan-approve", ["reject-plan", digest])
 
+    def test_project_named_window_command_binds_every_authority_value(self):
+        body = (
+            "Open pilot window window-gsc-pilot-5 for golden-stallion-client, "
+            "goal goal-gsc-0x6c-shadetops-underemission-v2, for 14400 seconds."
+        )
+        terms = [
+            "golden-stallion-client",
+            "goal-gsc-0x6c-shadetops-underemission-v2",
+            "window-gsc-pilot-5",
+            "14400",
+        ]
+        self.assert_allowed(body, "pilot-window-open", terms)
+        self.assert_refused(
+            body,
+            "pilot-window-open",
+            ["chiron", terms[1], terms[2], terms[3]],
+        )
+        self.assert_refused(
+            "For golden-stallion-client: Open pilot window window-gsc-pilot-5 "
+            "for goal goal-gsc-0x6c-shadetops-underemission-v2 for 14400 seconds.",
+            "pilot-window-open",
+            ["chiron", terms[1], terms[2], terms[3]],
+        )
+        self.assert_refused(
+            "Do not " + body[0].lower() + body[1:],
+            "pilot-window-open",
+            terms,
+        )
+        self.assert_refused(
+            body + " Then close it.",
+            "pilot-window-open",
+            terms,
+        )
+        self.assert_allowed(
+            "Open pilot window window-gsc-pilot-5 for goal "
+            "goal-gsc-0x6c-shadetops-underemission-v2 for 14400 seconds.",
+            "pilot-window-open",
+            terms,
+        )
+        self.assert_allowed(
+            "Open pilot window window-gsc-pilot-5 for goal "
+            "goal-gsc-0x6c-shadetops-underemission-v2 for 14400 seconds.",
+            "pilot-window-open",
+            terms[1:],
+        )
+        self.assert_allowed(
+            "Open pilot window window-gsc-pilot-5 for chiron-window-close, "
+            "goal goal-gsc-0x6c-shadetops-underemission-v2, for 14400 seconds.",
+            "pilot-window-open",
+            ["chiron-window-close", terms[1], terms[2], terms[3]],
+        )
+
     def test_negated_reversed_or_reordered_commands_are_refused(self):
         digest = "b" * 64
         cases = (

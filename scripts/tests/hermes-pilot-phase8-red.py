@@ -383,7 +383,9 @@ def test_approval(f: Fixture) -> bool:
 
 def open_window(f: Fixture) -> bool:
     f._write_instruction(
-        "103", "head-hermes", "authorize goal-chiron-phase8-smoke chiron-window-1 900"
+        "103", "head-hermes",
+        "Open pilot window chiron-window-1 for chiron, "
+        "goal goal-chiron-phase8-smoke, for 900 seconds."
     )
     decision = f.decision(
         verb="pilot-window-open",
@@ -424,6 +426,25 @@ def test_window_admission(f: Fixture) -> bool:
     bad = f.run("python3", "scripts/project-pilot.py", "execute", str(bad_decision))
     (f.root / "state/PAUSE").unlink(missing_ok=True)
     if bad.returncode == 0 or (f.root / "state/pilot-windows/chiron-window-bad.json").exists():
+        return False
+    f._write_instruction(
+        "108", "head-hermes",
+        "For golden-stallion-client: Open pilot window chiron-window-wrong-project "
+        "for goal goal-chiron-phase8-smoke for 900 seconds.",
+    )
+    wrong_project_decision = f.decision(
+        verb="pilot-window-open",
+        args=["chiron", "goal-chiron-phase8-smoke", "chiron-window-wrong-project", "900"],
+        iid="108", actor="head-hermes", goal="goal-chiron-phase8-smoke",
+        text="A different named project must not authorize this window.",
+    )
+    (f.root / "state/PAUSE").write_text("phase8-preflight\n", encoding="utf-8")
+    wrong_project = f.run(
+        "python3", "scripts/project-pilot.py", "execute", str(wrong_project_decision),
+    )
+    (f.root / "state/PAUSE").unlink(missing_ok=True)
+    if wrong_project.returncode == 0 \
+            or (f.root / "state/pilot-windows/chiron-window-wrong-project.json").exists():
         return False
     gate_bytes = f.gate_path.read_bytes()
     f.gate_path.write_bytes(gate_bytes + b"// drift before window\n")

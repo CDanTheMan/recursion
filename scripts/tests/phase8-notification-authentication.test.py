@@ -210,7 +210,8 @@ class Fixture:
             "schema_version: 1\nid: 2\nprincipal: 8913126684\ntopic: 1\n"
             "project_id: \npilot_id: \nrouting_target: head-hermes\n"
             "deduplication_key: fixture:window\nstatus: open\naction_ids:\n\n"
-            "## INSTRUCTION\nOpen pilot window window-alpha for goal goal-alpha for 900 seconds.\n",
+            "## INSTRUCTION\nOpen pilot window window-alpha for alpha, "
+            "goal goal-alpha, for 900 seconds.\n",
             encoding="utf-8",
         )
 
@@ -506,6 +507,25 @@ def test_exact_once_lawful_projection() -> tuple[bool, str]:
         if len(deliveries) != len(expected_types) + 1:
             return False, f"delivery fan-out not exactly once: {len(deliveries)}"
         return True, "lawful receipt chain projects every Phase 8 notice exactly once"
+    finally:
+        fixture.close()
+
+
+def test_legacy_window_instruction_reauthenticates() -> tuple[bool, str]:
+    fixture = Fixture("legacy-window")
+    try:
+        instruction = fixture.root / "state/instructions/00000002.md"
+        instruction.write_text(
+            instruction.read_text(encoding="utf-8").replace(
+                "Open pilot window window-alpha for alpha, goal goal-alpha, for 900 seconds.",
+                "Open pilot window window-alpha for goal goal-alpha for 900 seconds.",
+            ),
+            encoding="utf-8",
+        )
+        mapped = fixture.mapped_types()
+        if "pilot-window-armed" not in mapped or "pilot-window-opened" not in mapped:
+            return False, f"legacy window instruction did not reauthenticate: {mapped}"
+        return True, "legacy three-bound window evidence reauthenticates only in the outbox path"
     finally:
         fixture.close()
 
@@ -848,6 +868,8 @@ def main() -> int:
         ("tampered or missing receipts fail closed", test_tampered_and_missing_receipts_fail_closed),
         ("replay collapses exact-once and duplicated journal rows fail", test_replay_is_collapsed_and_journal_replay_fails),
         ("mid-projection crash recovers the receipt exactly once", test_crash_recovery_projects_exactly_once),
+        ("legacy three-bound window evidence reauthenticates in the outbox only",
+         test_legacy_window_instruction_reauthenticates),
         ("exact-once lawful Phase 8 projection", test_exact_once_lawful_projection),
     )
     failures = 0
