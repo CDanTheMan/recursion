@@ -10,6 +10,10 @@ OPS="$SRC/loop/hermes-skills/recursion-ops/SKILL.md"
 ! grep -Eq '`recursion (plan|work|drain|publish|resume)' "$OPS"
 ! grep -qi 'operations (acting)' "$OPS"
 grep -q 'schema-checked decision' "$OPS"
+grep -q 'restricted filesystem view' "$OPS"
+STATUS="$SRC/loop/hermes-skills/recursion-status/SKILL.md"
+grep -q 'unprivileged.*hermes-gateway' "$STATUS"
+grep -q 'STATUS UNAVAILABLE' "$STATUS"
 echo "ok    Telegram gateway is an authenticated intake/status surface, not an actuator"
 
 # One authenticated Telegram row becomes one inert instruction with the complete Phase 3 identity.

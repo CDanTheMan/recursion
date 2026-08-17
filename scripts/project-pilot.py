@@ -56,19 +56,19 @@ def compact(value: object) -> None:
     print(json.dumps(value, sort_keys=True, separators=(",", ":")))
 
 
-def read_json(path: Path) -> dict:
+def read_json(path: Path, unavailable_code: int = 4) -> dict:
     try:
         if path.stat().st_size > 262144:
             fail(f"state record exceeds the 256 KiB read bound: {path}")
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        fail(f"cannot read validated state {path}: {exc}")
+        fail(f"cannot read validated state {path}: {exc}", unavailable_code)
     if not isinstance(value, dict):
         fail(f"state record is not an object: {path}")
     return value
 
 
-def fields(path: Path) -> dict[str, str]:
+def fields(path: Path, unavailable_code: int | None = None) -> dict[str, str]:
     result: dict[str, str] = {}
     try:
         if path.stat().st_size > 131072:
@@ -77,9 +77,27 @@ def fields(path: Path) -> dict[str, str]:
             if ":" in line and not line.startswith((" ", "\t")):
                 key, value = line.split(":", 1)
                 result.setdefault(key.strip(), value.strip())
-    except OSError:
-        pass
+    except OSError as exc:
+        if unavailable_code is not None:
+            fail(f"cannot read status state {path}: {exc}", unavailable_code)
     return result
+
+
+def status_files(directory: Path, suffix: str | None, limit: int,
+                 newest: bool = False) -> list[Path]:
+    """List one status source or fail; an empty result is meaningful only after a readable scan."""
+    try:
+        with os.scandir(directory) as entries:
+            paths = [
+                directory / entry.name
+                for entry in entries
+                if (suffix is None or entry.name.endswith(suffix))
+                and entry.is_file(follow_symlinks=False)
+            ]
+    except OSError as exc:
+        fail(f"cannot enumerate status state {directory}: {exc}", 74)
+    ordered = sorted(paths)
+    return ordered[-limit:] if newest else ordered[:limit]
 
 
 def rows(base: Path) -> list[dict[str, str]]:
@@ -168,44 +186,48 @@ def scope_allowed(cfg: dict, scope: str) -> bool:
 def scoped_state(base: Path, project: str) -> dict:
     cfg, pilot, _ = records(base, project, active=True)
     goals = []
-    for path in sorted((base / "state/goals").glob("*.md"))[:100]:
-        value = fields(path)
+    for path in status_files(base / "state/goals", ".md", 100):
+        value = fields(path, unavailable_code=74)
         if value.get("project_id") == project:
             goals.append({**value, "file": str(path.relative_to(base))})
     goal_ids = {g.get("id") for g in goals}
     tasks = []
-    for path in sorted((base / "state/tasks").glob("*.md"))[:500]:
-        value = fields(path)
+    for path in status_files(base / "state/tasks", ".md", 500):
+        value = fields(path, unavailable_code=74)
         if value.get("project_id") == project or value.get("goal_id") in goal_ids:
             tasks.append({**value, "file": str(path.relative_to(base))})
     task_ids = {t.get("id") for t in tasks}
     runs = []
-    for path in sorted((base / "state/runs").glob("*.json"))[:500]:
-        value = read_json(path)
+    for path in status_files(base / "state/runs", ".json", 500):
+        value = read_json(path, unavailable_code=74)
         if value.get("project_id") == project or value.get("task_id") in task_ids:
             value = dict(value); value["file"] = str(path.relative_to(base)); runs.append(value)
     evidence = []
-    for path in sorted((base / "state/evidence").glob("*"))[:100]:
-        if path.is_file():
-            value = fields(path) if path.suffix == ".md" else read_json(path)
-            if value.get("project_id") == project or value.get("task_id") in task_ids:
-                evidence.append({"file": str(path.relative_to(base)), "id": value.get("id")})
+    for path in status_files(base / "state/evidence", None, 100):
+        value = (fields(path, unavailable_code=74) if path.suffix == ".md"
+                 else read_json(path, unavailable_code=74))
+        if value.get("project_id") == project or value.get("task_id") in task_ids:
+            evidence.append({"file": str(path.relative_to(base)), "id": value.get("id")})
     plans = []
-    for path in sorted((base / "state/plans" / project).glob("*.json"))[:100]:
-        value = read_json(path); value = dict(value); value["file"] = str(path.relative_to(base)); plans.append(value)
+    for path in status_files(base / "state/plans" / project, ".json", 100):
+        value = read_json(path, unavailable_code=74)
+        value = dict(value); value["file"] = str(path.relative_to(base)); plans.append(value)
     windows = []
-    for path in sorted((base / "state/pilot-windows").glob("*.json"))[:100]:
-        value = read_json(path)
+    for path in status_files(base / "state/pilot-windows", ".json", 100):
+        value = read_json(path, unavailable_code=74)
         if value.get("project_id") == project:
             value = dict(value); value["file"] = str(path.relative_to(base)); windows.append(value)
     assists = []
+    assist_paths = {path.name: path for path in status_files(base / "state/assists", ".md", 500)}
     for task_id in task_ids:
-        path = base / "state/assists" / f"{task_id}.md"
-        if path.is_file():
-            assists.append({**fields(path), "file": str(path.relative_to(base))})
+        path = assist_paths.get(f"{task_id}.md")
+        if path is not None:
+            assists.append({**fields(path, unavailable_code=74),
+                            "file": str(path.relative_to(base))})
     needles = {project, *[str(item) for item in task_ids if item]}
-    logs = [str(path.relative_to(base)) for path in sorted((base / "loop/logs").glob("*"))[-100:]
-            if path.is_file() and any(needle in path.name for needle in needles)][-20:]
+    log_paths = status_files(base / "loop/logs", None, 100, newest=True)
+    logs = [str(path.relative_to(base)) for path in log_paths
+            if any(needle in path.name for needle in needles)][-20:]
     return {"project": cfg, "pilot": pilot, "plans": plans, "goals": goals, "tasks": tasks,
             "runs": runs, "assists": assists, "pilot_windows": windows,
             "evidence": evidence, "logs": logs}

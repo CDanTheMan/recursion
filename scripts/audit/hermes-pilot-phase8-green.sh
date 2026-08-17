@@ -24,6 +24,7 @@ python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scri
   scripts/tests/transition-receipt.test.py scripts/tests/notification-transition-receipt.test.py \
   scripts/tests/phase8-notification-authentication.test.py \
   scripts/tests/pilot-instruction.test.py \
+  scripts/tests/project-pilot-status-fail-closed.test.py \
   scripts/provider-connect-proxy.py scripts/tests/provider-connect-proxy.test.py \
   scripts/gsc-shade-tops-gate.py scripts/tests/gsc-shade-tops-gate.test.py \
   scripts/tests/validate-gate.test.py scripts/tests/allowed-path.test.py
@@ -69,6 +70,11 @@ grep -q 'exact open pilot window authority is absent' scripts/project-reconcile.
 grep -q 'close-paused-windows' scripts/hermes-actuator.sh
 grep -q 'admit-work' scripts/conduct-hermes.sh
 echo "ok    exact-goal admission is rechecked at actuation and PAUSE revokes stale authority"
+
+grep -q 'cannot enumerate status state' scripts/project-pilot.py
+grep -q 'STATUS UNAVAILABLE' loop/hermes-skills/recursion-status/SKILL.md
+grep -q 'restricted filesystem view' loop/hermes-skills/recursion-ops/SKILL.md
+echo "ok    an unprivileged gateway cannot translate unreadable root-owned state into false absence"
 
 # The machinery admitting six verbs under PAUSE is worthless if the prompt tells the model only
 # one of them exists. It did, for four days: every decide run chose noop citing "no
