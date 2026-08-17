@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shlex
+import stat
 import subprocess
 import sys
 import tempfile
@@ -59,12 +60,12 @@ def compact(value: object) -> None:
 def read_json(path: Path, unavailable_code: int = 4) -> dict:
     try:
         if path.stat().st_size > 262144:
-            fail(f"state record exceeds the 256 KiB read bound: {path}")
+            fail(f"state record exceeds the 256 KiB read bound: {path}", unavailable_code)
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         fail(f"cannot read validated state {path}: {exc}", unavailable_code)
     if not isinstance(value, dict):
-        fail(f"state record is not an object: {path}")
+        fail(f"state record is not an object: {path}", unavailable_code)
     return value
 
 
@@ -72,7 +73,7 @@ def fields(path: Path, unavailable_code: int | None = None) -> dict[str, str]:
     result: dict[str, str] = {}
     try:
         if path.stat().st_size > 131072:
-            fail(f"state record exceeds the 128 KiB read bound: {path}")
+            fail(f"state record exceeds the 128 KiB read bound: {path}", unavailable_code or 4)
         for line in path.read_text(encoding="utf-8", errors="surrogateescape").splitlines():
             if ":" in line and not line.startswith((" ", "\t")):
                 key, value = line.split(":", 1)
@@ -83,20 +84,38 @@ def fields(path: Path, unavailable_code: int | None = None) -> dict[str, str]:
     return result
 
 
-def status_files(directory: Path, suffix: str | None, limit: int,
+def status_files(directory: Path, suffix: str | None, limit: int | None,
                  newest: bool = False) -> list[Path]:
-    """List one status source or fail; an empty result is meaningful only after a readable scan."""
+    """List one status source, distinguishing a lazy empty directory from unreadable state."""
+    try:
+        mode = os.lstat(directory).st_mode
+    except FileNotFoundError:
+        return []
+    except OSError as exc:
+        fail(f"cannot inspect status state {directory}: {exc}", 74)
+    if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+        fail(f"status state is not a real directory: {directory}", 74)
     try:
         with os.scandir(directory) as entries:
-            paths = [
-                directory / entry.name
-                for entry in entries
-                if (suffix is None or entry.name.endswith(suffix))
-                and entry.is_file(follow_symlinks=False)
-            ]
+            paths = []
+            for entry in entries:
+                if suffix is not None and not entry.name.endswith(suffix):
+                    continue
+                if entry.is_symlink():
+                    fail(f"status state record is a symlink: {directory / entry.name}", 74)
+                if entry.is_file(follow_symlinks=False):
+                    paths.append(directory / entry.name)
+                elif not entry.is_dir(follow_symlinks=False):
+                    fail(f"status state record has an unsupported type: {directory / entry.name}", 74)
+    except FileNotFoundError:
+        # Runtime directories are created lazily; disappearance before the scan proves no records
+        # were readable at this instant and must not be conflated with a permission failure.
+        return []
     except OSError as exc:
         fail(f"cannot enumerate status state {directory}: {exc}", 74)
     ordered = sorted(paths)
+    if limit is None:
+        return ordered
     return ordered[-limit:] if newest else ordered[:limit]
 
 
@@ -218,7 +237,7 @@ def scoped_state(base: Path, project: str) -> dict:
         if value.get("project_id") == project:
             value = dict(value); value["file"] = str(path.relative_to(base)); windows.append(value)
     assists = []
-    assist_paths = {path.name: path for path in status_files(base / "state/assists", ".md", 500)}
+    assist_paths = {path.name: path for path in status_files(base / "state/assists", ".md", None)}
     for task_id in task_ids:
         path = assist_paths.get(f"{task_id}.md")
         if path is not None:

@@ -118,6 +118,31 @@ class StatusFailClosedTest(unittest.TestCase):
         self.assertEqual(len(value["tasks"]), 1)
         self.assertEqual(len(value["pilot_windows"]), 1)
 
+    def test_lazily_absent_status_directories_are_authoritatively_empty(self) -> None:
+        for relative in (
+            "state/goals",
+            "state/tasks",
+            "state/runs",
+            "state/evidence",
+            "state/plans",
+            "state/pilot-windows",
+            "state/assists",
+            "loop/logs",
+        ):
+            shutil.rmtree(self.fixture.root / relative)
+        value = PROJECT_PILOT.scoped_state(self.fixture.root, "chiron")
+        for key in (
+            "plans",
+            "goals",
+            "tasks",
+            "runs",
+            "evidence",
+            "pilot_windows",
+            "assists",
+            "logs",
+        ):
+            self.assertEqual(value[key], [], key)
+
     def test_unlistable_control_directory_is_not_reported_as_empty(self) -> None:
         denied = self.fixture.root / "state/plans/chiron"
         original = os.scandir
@@ -144,6 +169,68 @@ class StatusFailClosedTest(unittest.TestCase):
             with self.assertRaises(SystemExit) as raised:
                 PROJECT_PILOT.scoped_state(self.fixture.root, "chiron")
         self.assertEqual(raised.exception.code, 74)
+
+    def test_wrong_type_status_directory_is_not_reported_as_empty(self) -> None:
+        plans = self.fixture.root / "state/plans/chiron"
+        shutil.rmtree(plans)
+        plans.write_text("not a directory\n", encoding="utf-8")
+        with self.assertRaises(SystemExit) as raised:
+            PROJECT_PILOT.scoped_state(self.fixture.root, "chiron")
+        self.assertEqual(raised.exception.code, 74)
+
+    def test_symlinked_status_record_is_not_silently_omitted(self) -> None:
+        directory = self.fixture.root / "state/goals"
+
+        class SymlinkEntry:
+            name = "goal-linked.md"
+
+            @staticmethod
+            def is_symlink():
+                return True
+
+            @staticmethod
+            def is_file(*, follow_symlinks):
+                return False
+
+            @staticmethod
+            def is_dir(*, follow_symlinks):
+                return False
+
+        class Scan:
+            def __enter__(self):
+                return iter((SymlinkEntry(),))
+
+            def __exit__(self, *_args):
+                return False
+
+        with mock.patch.object(PROJECT_PILOT.os, "scandir", return_value=Scan()):
+            with self.assertRaises(SystemExit) as raised:
+                PROJECT_PILOT.status_files(directory, ".md", 100)
+        self.assertEqual(raised.exception.code, 74)
+
+    def test_oversized_status_record_uses_unavailable_exit(self) -> None:
+        self.fixture.goal.write_text("x" * 131073, encoding="utf-8")
+        with self.assertRaises(SystemExit) as raised:
+            PROJECT_PILOT.scoped_state(self.fixture.root, "chiron")
+        self.assertEqual(raised.exception.code, 74)
+
+    def test_malformed_status_json_uses_unavailable_exit(self) -> None:
+        plan = self.fixture.root / "state/plans/chiron/plan-chiron.json"
+        plan.write_text("{\n", encoding="utf-8")
+        with self.assertRaises(SystemExit) as raised:
+            PROJECT_PILOT.scoped_state(self.fixture.root, "chiron")
+        self.assertEqual(raised.exception.code, 74)
+
+    def test_non_status_fields_call_remains_tolerant(self) -> None:
+        original = pathlib.Path.read_text
+
+        def controlled_read(path, *args, **kwargs):
+            if path == self.fixture.goal:
+                raise PermissionError(13, "permission denied", str(path))
+            return original(path, *args, **kwargs)
+
+        with mock.patch.object(pathlib.Path, "read_text", controlled_read):
+            self.assertEqual(PROJECT_PILOT.fields(self.fixture.goal), {})
 
 
 if __name__ == "__main__":
