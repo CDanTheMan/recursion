@@ -36,3 +36,10 @@
 **Blocked on:** the course, first topic block, and first lecture date from the actual syllabus.
 **Context:** ANCHOR requires a three-week lecture lead; the syllabus rule requires pausing new blocks below one week. Neither can be evaluated without the first block.
 **Options:** provide the official syllabus; provide only the first course/topic/date; explicitly defer physics scheduling until the syllabus is available.
+
+## [esc-0010] 2026-08-18 06:15 — Provide the first Fall 2026 physics lecture block or defer scheduling
+**Workstream:** physics-coursework
+**Pointer:** SYLLABUS LEAD ledger slice contains only `_fill from actual syllabus once posted_`; CURRENT INBOX esc-0004, esc-0005, esc-0006, esc-0008, and esc-0009 are duplicate unresolved instances.
+**Blocked on:** the course, first topic block, and first lecture date from the actual syllabus.
+**Context:** ANCHOR requires a three-week lecture lead, and the syllabus rules require pausing new blocks below one week. Neither can be evaluated from the current ledger.
+**Options:** provide the official syllabus; provide only the first course/topic/date; explicitly defer physics scheduling until the syllabus is available.
