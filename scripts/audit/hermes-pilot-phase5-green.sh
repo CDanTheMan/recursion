@@ -6,6 +6,21 @@ ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "$ROOT"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
+executable_helpers=(
+  scripts/resync.sh scripts/project-reconcile.py scripts/runtime-state.py
+  scripts/resolve-model-alias.py scripts/validate-gate.py scripts/seed_contract.py
+  scripts/assist.sh scripts/worker-sandbox.sh scripts/git-scope.py scripts/capacity.sh
+  scripts/taskctl.sh
+)
+for helper in "${executable_helpers[@]}"; do
+  helper_mode="$(git ls-files --stage -- "$helper" | awk 'NR == 1 { print $1 }')"
+  [ "$helper_mode" = 100755 ] \
+    || { echo "FAIL executable helper $helper repository mode is ${helper_mode:-untracked}, expected 100755"; exit 1; }
+  [ -x "$helper" ] \
+    || { echo "FAIL executable helper $helper is not executable in the Linux checkout"; exit 1; }
+done
+echo "ok    work.sh executable-helper repository and checkout modes are exact"
+
 bash -n scripts/work.sh scripts/worker-sandbox.sh scripts/tests/hermes-pilot-phase5-red.test.sh \
   scripts/tests/worker-gate-authority.test.sh
 python3 -m py_compile scripts/resolve-model-alias.py scripts/validate-gate.py scripts/git-scope.py \
