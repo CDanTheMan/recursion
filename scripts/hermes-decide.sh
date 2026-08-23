@@ -242,6 +242,13 @@ reuse a historical goal merely because it already exists.
 
     plan: {\"schema_version\":1, \"id\":\"<the plan-id in your args>\", \"project_id\":\"<project>\",
            \"goal\":{...}, \"tasks\":[ 1..16 of them ]}        serialized under 64 KiB
+      When and only when PROJECT CHARTER AND LIVE SCOPED STATE advertises an exact
+      gate_profile_promotions entry, a fresh plan may request it with this top-level object:
+        \"gate_profile_selection\":{\"schema\":\"recursion-project-gate-profile-selection/v1\",
+                                  \"promotion_id\":\"<the exact advertised promotion_id>\"}
+      Do not emit binding_path or binding_sha256; the controller derives them. There is no
+      implicit latest profile and \"latest\" is never a valid alias. Omit gate_profile_selection
+      to retain the project's historical required_gate_profile.
 
     goal: {\"id\":\"<a NEW goal id, never one that already exists>\",
            \"outcome\":\"<one line>\", \"falsifier\":\"<one line>\",
@@ -281,8 +288,10 @@ reuse a historical goal merely because it already exists.
       default-branch source HEAD before computing the canonical plan digest. It derives task and
       goal gate_contract hashes from committed project/controller bytes; do not invent
       gate_contract. If the live project state contains required_gate_profile, copy all four of
-      its values EXACTLY into the goal and every task: acceptance (as acceptance_suite for the
-      goal), gate_class, gate_files, and controller_gate_files. gate_files are immutable grading code, never
+      its values EXACTLY into the goal and every task unless this fresh plan explicitly selects
+      an advertised gate_profile_promotions entry; then copy that entry's required_gate_profile
+      values EXACTLY instead: acceptance (as acceptance_suite for the goal), gate_class,
+      gate_files, and controller_gate_files. gate_files are immutable grading code, never
       implementation targets. If acceptance invokes python, python3, node, bash, or sh under an
       allowed path, that grading program must be in gate_files. Use gate_class heavy for corpus,
       renderer-diff, or full-suite compute; otherwise use light. Cloud engines claude and hermes

@@ -32,12 +32,14 @@ python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scri
   scripts/provider-connect-proxy.py scripts/tests/provider-connect-proxy.test.py \
   scripts/gsc-shade-tops-gate.py scripts/tests/gsc-shade-tops-gate.test.py \
   scripts/tests/gsc-profile-immutability.test.py \
+  scripts/tests/gsc-profile-promotion.test.py \
   scripts/tests/validate-gate.test.py scripts/tests/allowed-path.test.py
 python3 - <<'PY'
 import json
 json.load(open('schemas/control-plane/v1/schema.json',encoding='utf-8'))
 PY
 python3 scripts/tests/gsc-profile-immutability.test.py
+python3 scripts/tests/gsc-profile-promotion.test.py
 echo "ok    Phase 8 shell, Python, and schema artifacts parse"
 
 for verb in pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close; do
@@ -57,6 +59,9 @@ grep -q 'project_required_non_goals' scripts/project-pilot.py
 grep -q 'If the live project state contains required_gate_profile' scripts/hermes-decide.sh
 grep -q 'repo_gate_contract' scripts/project-pilot.py
 grep -q 'repository gate changed after proposal' scripts/project-pilot.py
+grep -q 'recursion-project-gate-profile-selection/v1' scripts/project-pilot.py
+grep -q 'no default or latest alias exists' scripts/project-pilot.py
+grep -q 'gate_profile_promotions entry' scripts/hermes-decide.sh
 grep -q 'gate_files are immutable grading code' scripts/hermes-decide.sh
 grep -q -- '--network-policy none' scripts/work.sh
 grep -q -- '--network-policy", "none"' scripts/project-reconcile.py
