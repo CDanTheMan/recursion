@@ -8,6 +8,9 @@ cd "$ROOT"
 bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/hermes-decide.sh \
   scripts/assist.sh scripts/taskctl.sh scripts/work.sh scripts/notify.sh scripts/digest.sh \
   scripts/cycle.sh scripts/provider-network.sh scripts/worker-sandbox.sh loop/supervisor/run.sh \
+  scripts/gsc-conformance-gate.sh scripts/gsc-conformance-gate-v2.sh \
+  scripts/tests/gate-collation.test.sh \
+  scripts/tests/gsc-conformance-reporter.test.sh \
   scripts/tests/hermes-pilot-phase8-red.test.sh scripts/tests/provider-network-root.test.sh
 python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scripts/instruction_routing.py scripts/project-reconcile.py scripts/decision-queue.py \
   scripts/seed_contract.py scripts/tests/seed-contract.test.py \
@@ -28,11 +31,13 @@ python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scri
   scripts/tests/project-pilot-status-fail-closed.test.py \
   scripts/provider-connect-proxy.py scripts/tests/provider-connect-proxy.test.py \
   scripts/gsc-shade-tops-gate.py scripts/tests/gsc-shade-tops-gate.test.py \
+  scripts/tests/gsc-profile-immutability.test.py \
   scripts/tests/validate-gate.test.py scripts/tests/allowed-path.test.py
 python3 - <<'PY'
 import json
 json.load(open('schemas/control-plane/v1/schema.json',encoding='utf-8'))
 PY
+python3 scripts/tests/gsc-profile-immutability.test.py
 echo "ok    Phase 8 shell, Python, and schema artifacts parse"
 
 for verb in pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close; do
@@ -367,6 +372,10 @@ for event in portfolio-brief project-digest; do grep -q "$event" scripts/notific
 echo "ok    PAUSE interlocks the sole sender and resumed brief/digest delivery enters the Phase 7 outbox"
 
 bash scripts/tests/hermes-pilot-phase8-red.test.sh
+bash scripts/tests/gate-collation.test.sh
+GSC_CONFORMANCE_GATE="$ROOT/scripts/gsc-conformance-gate-v2.sh" \
+  bash scripts/tests/gate-collation.test.sh
+bash scripts/tests/gsc-conformance-reporter.test.sh
 python3 scripts/tests/seed-contract.test.py
 python3 scripts/tests/hermes-pilot-phase8-notification-red.py
 python3 scripts/tests/decision-identity.test.py
