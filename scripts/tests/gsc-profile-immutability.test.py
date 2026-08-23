@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -14,6 +15,9 @@ PROFILE_DIR = SOURCE / "scripts/gates"
 EXPECTED_PROFILES = {
     "gsc-shade-tops-v1.json": (
         "8664c1dfb698542032d9dc9d8ce42d8e3eae25b7b498ca3fd326f48f0bcc6aca"
+    ),
+    "gsc-shade-tops-v3.json": (
+        "548e598e0687b4009f50060812f5bd5900bc58ed772e89cf3dc28ad2156ed975"
     ),
 }
 
@@ -86,6 +90,12 @@ def main() -> int:
 
         shutil.rmtree(fixture)
         shutil.copytree(PROFILE_DIR, fixture)
+        profile = fixture / "gsc-shade-tops-v3.json"
+        profile.write_bytes(profile.read_bytes() + b" ")
+        failures += require_rejected(fixture, "changed measured v3 profile bytes")
+
+        shutil.rmtree(fixture)
+        shutil.copytree(PROFILE_DIR, fixture)
         profile = fixture / "gsc-shade-tops-v1.json"
         canonical, line_error = canonical_profile_bytes(profile)
         if line_error or canonical is None:
@@ -109,6 +119,24 @@ def main() -> int:
 
         shutil.rmtree(fixture)
         shutil.copytree(PROFILE_DIR, fixture)
+        profile = fixture / "gsc-shade-tops-v3.json"
+        canonical, line_error = canonical_profile_bytes(profile)
+        if line_error or canonical is None:
+            print(f"FAIL  could not build v3 line-ending controls: {line_error}")
+            failures += 1
+        else:
+            profile.write_bytes(canonical.replace(b"\n", b"\r\n"))
+            if profile_errors(fixture):
+                print("FAIL  portable v3 CRLF checkout rejected")
+                failures += 1
+            else:
+                print("ok    portable v3 CRLF checkout accepted")
+
+            profile.write_bytes(canonical.replace(b"\n", b"\r\n", 1))
+            failures += require_rejected(fixture, "mixed v3 profile line endings")
+
+        shutil.rmtree(fixture)
+        shutil.copytree(PROFILE_DIR, fixture)
         shutil.copy2(
             fixture / "gsc-shade-tops-v1.json",
             fixture / "gsc-shade-tops-v2.json",
@@ -121,6 +149,34 @@ def main() -> int:
             fixture / "gsc-shade-tops-v2.json"
         )
         failures += require_rejected(fixture, "substituted profile name")
+
+        shutil.rmtree(fixture)
+        shutil.copytree(PROFILE_DIR, fixture)
+        v1_bytes = (fixture / "gsc-shade-tops-v1.json").read_bytes()
+        v3_bytes = (fixture / "gsc-shade-tops-v3.json").read_bytes()
+        (fixture / "gsc-shade-tops-v3.json").write_bytes(v1_bytes)
+        failures += require_rejected(fixture, "substituted v1 bytes under the v3 identity")
+
+        shutil.rmtree(fixture)
+        shutil.copytree(PROFILE_DIR, fixture)
+        (fixture / "gsc-shade-tops-v1.json").write_bytes(v3_bytes)
+        failures += require_rejected(fixture, "substituted v3 bytes under the v1 identity")
+
+        shutil.rmtree(fixture)
+        shutil.copytree(PROFILE_DIR, fixture)
+        v3_path = fixture / "gsc-shade-tops-v3.json"
+        reordered = json.loads(v3_path.read_text(encoding="utf-8"))
+        reordered = dict(reversed(list(reordered.items())))
+        v3_path.write_text(json.dumps(reordered, indent=2) + "\n", encoding="utf-8")
+        failures += require_rejected(fixture, "reordered v3 profile fields")
+
+        shutil.rmtree(fixture)
+        shutil.copytree(PROFILE_DIR, fixture)
+        v3_path = fixture / "gsc-shade-tops-v3.json"
+        reordered = json.loads(v3_path.read_text(encoding="utf-8"))
+        reordered["worlds"] = list(reversed(reordered["worlds"]))
+        v3_path.write_text(json.dumps(reordered, indent=2) + "\n", encoding="utf-8")
+        failures += require_rejected(fixture, "reordered v3 measured worlds")
 
     if failures:
         print(f"gsc-profile-immutability: {failures} FAILED")
