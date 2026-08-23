@@ -65,6 +65,17 @@
       },
       "additionalProperties": false
     },
+    "gateProfileSelection": {
+      "type": "object",
+      "required": ["schema", "promotion_id", "binding_path", "binding_sha256"],
+      "properties": {
+        "schema": {"const": "recursion-project-gate-profile-selection/v1"},
+        "promotion_id": {"$ref": "#/$defs/identifier"},
+        "binding_path": {"type": "string", "pattern": "^scripts/gates/promotions/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.json$"},
+        "binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
     "plan": {
       "type": "object",
       "required": ["schema_version", "id", "project_id", "pilot_id", "instruction_id", "plan_digest", "plan", "status"],
@@ -75,7 +86,12 @@
         "pilot_id": {"$ref": "#/$defs/identifier"},
         "instruction_id": {"$ref": "#/$defs/identifier"},
         "plan_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "plan": {"type": "object"},
+        "plan": {
+          "type": "object",
+          "properties": {
+            "gate_profile_selection": {"$ref": "#/$defs/gateProfileSelection"}
+          }
+        },
         "status": {"enum": ["proposed", "approved", "rejected"]}
       },
       "additionalProperties": true

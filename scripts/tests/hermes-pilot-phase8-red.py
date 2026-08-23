@@ -376,6 +376,7 @@ def test_approval(f: Fixture) -> bool:
         and len(list((f.root / "state/tasks").glob("chiron-phase8-smoke.md"))) == 1
         and conflicting_refused
         and frozen.returncode != 0
+        and "an exact-digest Phase 8 goal has an immutable task DAG" in frozen.stderr
         and not (f.root / "state/tasks/unapproved-extra.md").exists()
         and f.legacy_unchanged()
     )

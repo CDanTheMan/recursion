@@ -1716,6 +1716,11 @@ def _phase8_expected_task_values(config: dict, pilot: dict, plan: dict, plan_id:
             "seed_manifest": seed["manifest_path"], "seed_manifest_sha256": seed["manifest_sha256"],
             "seed": ",".join(seed["paths"]), "seed_digest": seed["content_sha256"],
         })
+    selection = plan.get("gate_profile_selection")
+    if isinstance(selection, dict):
+        values["gate_profile_selection"] = json.dumps(
+            selection, sort_keys=True, separators=(",", ":"),
+        )
     return values
 
 
@@ -1775,6 +1780,11 @@ def verify_phase8_goal_projection(base: Path, config: dict, pilot: dict,
                               "seed_manifest_sha256": seed["manifest_sha256"],
                               "seed": ",".join(seed["paths"]),
                               "seed_digest": seed["content_sha256"]})
+    selection = plan.get("gate_profile_selection")
+    if isinstance(selection, dict):
+        expected_goal["gate_profile_selection"] = json.dumps(
+            selection, sort_keys=True, separators=(",", ":"),
+        )
     if any(goal.get(key, "") != str(value) for key, value in expected_goal.items()):
         raise ReconcileError("materialized goal immutable contract differs from its approved plan")
     planned = list(plan.get("tasks") or [])

@@ -16,7 +16,7 @@ import sys
 import tempfile
 import time
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
@@ -38,6 +38,8 @@ PILOT_VERBS = {
 }
 PHASE8_HEAD_VERBS = {"pilot-plan-approve", "pilot-window-open", "pilot-window-close"}
 PILOT_ROUTES = PILOT_VERBS | {"status", "context", "repo", "logs", "evidence"}
+GATE_PROFILE_SELECTION_SCHEMA = "recursion-project-gate-profile-selection/v1"
+GATE_PROFILE_PROMOTION_SCHEMA = "recursion-project-gate-profile-promotion/v1"
 HEAD_ONLY = {
     "priority-set", "reprioritize", "portfolio-add", "register", "policy-set", "spending",
     "credentials", "deploy", "merge", "pause", "resume", "model-policy", "control-plane",
@@ -247,7 +249,9 @@ def scoped_state(base: Path, project: str) -> dict:
     log_paths = status_files(base / "loop/logs", None, 100, newest=True)
     logs = [str(path.relative_to(base)) for path in log_paths
             if any(needle in path.name for needle in needles)][-20:]
-    return {"project": cfg, "pilot": pilot, "plans": plans, "goals": goals, "tasks": tasks,
+    promotions = available_gate_profile_promotions(base, cfg)
+    return {"project": cfg, "pilot": pilot, "gate_profile_promotions": promotions,
+            "plans": plans, "goals": goals, "tasks": tasks,
             "runs": runs, "assists": assists, "pilot_windows": windows,
             "evidence": evidence, "logs": logs}
 
@@ -667,31 +671,258 @@ def project_required_non_goals(cfg: dict) -> list[str]:
     return list(configured)
 
 
-def project_required_gate_profile(cfg: dict) -> dict | None:
-    """Validate an exact project-specific semantic gate profile, when one is configured."""
-    profile = cfg.get("required_gate_profile")
+def validate_required_gate_profile(profile: object, label: str) -> dict:
+    """Validate one exact semantic gate profile without supplying defaults."""
     if profile is None:
-        return None
+        fail(f"{label} required_gate_profile is absent")
     required = {"acceptance", "gate_class", "gate_files", "controller_gate_files"}
     if not isinstance(profile, dict) or set(profile) != required:
-        fail("project required_gate_profile is malformed")
-    acceptance = nonvacuous_gate(profile.get("acceptance"), "project required")
+        fail(f"{label} required_gate_profile is malformed")
+    acceptance = nonvacuous_gate(profile.get("acceptance"), f"{label} required")
     if profile.get("gate_class") not in {"light", "heavy"}:
-        fail("project required_gate_profile has an invalid gate_class")
+        fail(f"{label} required_gate_profile has an invalid gate_class")
     result = {"acceptance": acceptance, "gate_class": profile["gate_class"]}
     for name in ("gate_files", "controller_gate_files"):
         items = profile.get(name)
         if not isinstance(items, list) or len(items) != len(set(items)) \
                 or not all(isinstance(item, str) for item in items):
-            fail(f"project required_gate_profile has invalid {name}")
+            fail(f"{label} required_gate_profile has invalid {name}")
         for item in items:
-            bounded_line(item, f"project required gate {name}", 512)
+            bounded_line(item, f"{label} required gate {name}", 512)
         result[name] = list(items)
     return result
 
 
-def enforce_required_gate_profile(cfg: dict, label: str, gate: dict) -> None:
-    required = project_required_gate_profile(cfg)
+def project_required_gate_profile(cfg: dict) -> dict | None:
+    """Validate the historical project-wide semantic gate profile, when configured."""
+    profile = cfg.get("required_gate_profile")
+    if profile is None:
+        return None
+    return validate_required_gate_profile(profile, "project")
+
+
+def controller_tracked_bytes(base: Path, relative: str, label: str) -> bytes:
+    """Read committed controller bytes and reject path, index, or worktree substitution."""
+    pure = PurePosixPath(relative)
+    if pure.is_absolute() or ".." in pure.parts or not pure.parts \
+            or pure.as_posix() != relative or "\\" in relative:
+        fail(f"{label} path is not a confined controller path")
+    path = base.joinpath(*pure.parts)
+    try:
+        mode = os.lstat(path).st_mode
+    except OSError as exc:
+        fail(f"{label} is unavailable: {exc}")
+    if not stat.S_ISREG(mode) or stat.S_ISLNK(mode):
+        fail(f"{label} is not a regular controller file")
+    tracked = subprocess.run(
+        ["git", "-C", str(base), "ls-files", "--error-unmatch", "--", relative],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    committed = subprocess.run(
+        ["git", "-C", str(base), "show", f"HEAD:{relative}"],
+        capture_output=True, check=False,
+    )
+    clean = subprocess.run(
+        ["git", "-C", str(base), "diff", "--quiet", "HEAD", "--", relative],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    if tracked.returncode or committed.returncode or clean.returncode:
+        fail(f"{label} is untracked, absent from HEAD, or differs from committed bytes")
+    return committed.stdout
+
+
+def load_gate_profile_promotion(base: Path, cfg: dict, promotion_id: str) -> dict:
+    """Resolve one explicit immutable promotion descriptor; no default or latest alias exists."""
+    if not IDENT.fullmatch(promotion_id):
+        fail("pilot plan gate-profile promotion id is invalid")
+    binding_path = f"scripts/gates/promotions/{promotion_id}.json"
+    raw = controller_tracked_bytes(base, binding_path, "gate-profile promotion binding")
+    if len(raw) > 65536:
+        fail("gate-profile promotion binding exceeds the 64 KiB bound")
+    try:
+        binding = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        fail(f"gate-profile promotion binding is malformed: {exc}")
+    expected_keys = {
+        "schema", "promotion_id", "project_id", "source_head", "profile",
+        "required_gate_profile",
+    }
+    if not isinstance(binding, dict) or set(binding) != expected_keys \
+            or binding.get("schema") != GATE_PROFILE_PROMOTION_SCHEMA \
+            or binding.get("promotion_id") != promotion_id \
+            or binding.get("project_id") != cfg.get("id"):
+        fail("gate-profile promotion binding identity or schema is invalid")
+    source_head = str(binding.get("source_head") or "")
+    if not re.fullmatch(r"[0-9a-f]{40,64}", source_head):
+        fail("gate-profile promotion source HEAD is invalid")
+
+    profile_ref = binding.get("profile")
+    if not isinstance(profile_ref, dict) or set(profile_ref) != {"profile_id", "path", "sha256"}:
+        fail("gate-profile promotion profile reference is malformed")
+    profile_id = str(profile_ref.get("profile_id") or "")
+    profile_path = str(profile_ref.get("path") or "")
+    profile_sha256 = str(profile_ref.get("sha256") or "")
+    if not IDENT.fullmatch(profile_id) or not profile_path.startswith("scripts/gates/") \
+            or profile_path.startswith("scripts/gates/promotions/") \
+            or not re.fullmatch(r"[0-9a-f]{64}", profile_sha256):
+        fail("gate-profile promotion profile identity, path, or digest is invalid")
+    profile_raw = controller_tracked_bytes(base, profile_path, "promoted measured profile")
+    if hashlib.sha256(profile_raw).hexdigest() != profile_sha256:
+        fail("promoted measured profile bytes differ from the immutable binding")
+    try:
+        profile = json.loads(profile_raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        fail(f"promoted measured profile is malformed: {exc}")
+    worlds = profile.get("worlds") if isinstance(profile, dict) else None
+    roles = [world.get("role") for world in worlds if isinstance(world, dict)] \
+        if isinstance(worlds, list) else []
+    target_world = (profile.get("target") or {}).get("world") \
+        if isinstance(profile, dict) and isinstance(profile.get("target"), dict) else None
+    measured_target = [world.get("world") for world in worlds or []
+                       if isinstance(world, dict) and world.get("role") == "target"]
+    if not isinstance(profile, dict) \
+            or profile.get("schema") != "recursion-gsc-shade-tops-gate/v1" \
+            or profile.get("profile_id") != profile_id \
+            or profile.get("base_commit") != source_head \
+            or roles.count("target") != 1 or "control" not in roles \
+            or measured_target != [target_world]:
+        fail("promoted profile lacks exact measured identity, target, controls, or source HEAD")
+
+    controller_gate = profile.get("controller_gate")
+    gate_script = "scripts/gsc-shade-tops-gate.py"
+    gate_raw = controller_tracked_bytes(base, gate_script, "promoted profile controller gate")
+    if not isinstance(controller_gate, dict) \
+            or controller_gate.get("path") != gate_script \
+            or controller_gate.get("sha256") != hashlib.sha256(gate_raw).hexdigest():
+        fail("promoted profile controller-gate identity differs from measured bytes")
+
+    required = validate_required_gate_profile(
+        binding.get("required_gate_profile"), "promotion",
+    )
+    expected_controller_files = [gate_script, profile_path, binding_path]
+    expected_acceptance = (
+        f"{(base / gate_script).resolve()} --repo . "
+        f"--profile {(base / profile_path).resolve()}"
+    )
+    if required.get("gate_class") != "heavy" \
+            or required.get("acceptance") != expected_acceptance \
+            or required.get("controller_gate_files") != expected_controller_files:
+        fail("promoted gate profile does not bind the exact measured profile and controller files")
+    return {
+        "selection": {
+            "schema": GATE_PROFILE_SELECTION_SCHEMA,
+            "promotion_id": promotion_id,
+            "binding_path": binding_path,
+            "binding_sha256": hashlib.sha256(raw).hexdigest(),
+        },
+        "source_head": source_head,
+        "profile": profile,
+        "profile_path": profile_path,
+        "profile_sha256": profile_sha256,
+        "required_gate_profile": required,
+    }
+
+
+def available_gate_profile_promotions(base: Path, cfg: dict) -> list[dict]:
+    """Expose exact selectable identities to the pilot without inventing a moving default."""
+    directory = base / "scripts/gates/promotions"
+    if not directory.exists():
+        return []
+    if directory.is_symlink() or not directory.is_dir():
+        fail("gate-profile promotion inventory is not a real controller directory")
+    repository = subprocess.run(
+        ["git", "-C", str(base), "rev-parse", "--verify", "HEAD^{commit}"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    if repository.returncode:
+        # Status-only and pre-repository fixtures have no committed promotion inventory.
+        # Any explicit selection still enters load_gate_profile_promotion and fails closed.
+        return []
+    inventory = subprocess.run(
+        [
+            "git", "-C", str(base), "ls-tree", "-r", "--name-only", "-z", "HEAD", "--",
+            "scripts/gates/promotions",
+        ],
+        capture_output=True, check=False,
+    )
+    if inventory.returncode:
+        fail("gate-profile promotion inventory cannot be read from committed controller state")
+    if not inventory.stdout:
+        return []
+    result = []
+    for encoded in sorted(item for item in inventory.stdout.split(b"\0") if item):
+        try:
+            relative = encoded.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        pure = PurePosixPath(relative)
+        if pure.parent.as_posix() != "scripts/gates/promotions" \
+                or pure.suffix != ".json" or not IDENT.fullmatch(pure.stem):
+            continue
+        committed = subprocess.run(
+            ["git", "-C", str(base), "show", f"HEAD:{relative}"],
+            capture_output=True, check=False,
+        )
+        if committed.returncode or len(committed.stdout) > 65536:
+            continue
+        try:
+            candidate = json.loads(committed.stdout.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        # Inventory discovery must not couple one project's status to another project's
+        # malformed or dirty descriptor. Exact selection remains strict in
+        # load_gate_profile_promotion, including the current project's worktree bytes.
+        if not isinstance(candidate, dict) or candidate.get("project_id") != cfg.get("id"):
+            continue
+        promotion = load_gate_profile_promotion(base, cfg, pure.stem)
+        result.append({
+            **promotion["selection"],
+            "source_head": promotion["source_head"],
+            "profile_path": promotion["profile_path"],
+            "profile_sha256": promotion["profile_sha256"],
+            "required_gate_profile": promotion["required_gate_profile"],
+        })
+    return result
+
+
+def bind_gate_profile_selection(base: Path, cfg: dict, plan: dict) -> dict:
+    """Replace a minimal explicit request with the controller-derived immutable binding."""
+    selection = plan.get("gate_profile_selection")
+    if selection is None:
+        return plan
+    if not isinstance(selection, dict) or set(selection) != {"schema", "promotion_id"} \
+            or selection.get("schema") != GATE_PROFILE_SELECTION_SCHEMA:
+        fail("pilot plan gate_profile_selection must be an exact versioned promotion request")
+    promotion = load_gate_profile_promotion(base, cfg, str(selection.get("promotion_id") or ""))
+    plan["gate_profile_selection"] = promotion["selection"]
+    return plan
+
+
+def selected_required_gate_profile(base: Path, cfg: dict, plan: dict) -> dict | None:
+    """Resolve only an exact canonical selection; selector-less historical plans use the default."""
+    selection = plan.get("gate_profile_selection")
+    if selection is None:
+        return project_required_gate_profile(cfg)
+    if not isinstance(selection, dict) or set(selection) != {
+        "schema", "promotion_id", "binding_path", "binding_sha256"
+    } or selection.get("schema") != GATE_PROFILE_SELECTION_SCHEMA:
+        fail("pilot plan gate_profile_selection is not a canonical immutable binding")
+    promotion = load_gate_profile_promotion(base, cfg, str(selection.get("promotion_id") or ""))
+    if selection != promotion["selection"]:
+        fail("pilot plan gate-profile binding differs from the immutable promotion descriptor")
+    authority = plan.get("authority_contract")
+    if not isinstance(authority, dict) or authority.get("source_head") != promotion["source_head"]:
+        fail("pilot plan promoted gate profile does not match its exact source HEAD")
+    profile_seed = promotion["profile"].get("seed_contract")
+    if profile_seed != plan.get("seed_contract"):
+        fail("pilot plan promoted gate profile does not match its measured seed contract")
+    return promotion["required_gate_profile"]
+
+
+def enforce_required_gate_profile(cfg: dict, label: str, gate: dict,
+                                  required: dict | None = None) -> None:
+    if required is None:
+        required = project_required_gate_profile(cfg)
     if required is None:
         return
     observed = {
@@ -875,6 +1106,7 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
         fail("pilot plan identity does not match its decision")
     validate_authority_binding(cfg, value, check_remote=check_remote)
     validate_seed_binding(cfg, value)
+    required_gate_profile = selected_required_gate_profile(base, cfg, value)
     goal = value.get("goal")
     tasks = value.get("tasks")
     if not isinstance(goal, dict) or not isinstance(tasks, list) or not 1 <= len(tasks) <= 16:
@@ -897,7 +1129,9 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
                  "allowed_paths": list(cfg.get("allowed_paths") or []),
                  "gate_files": goal["gate_files"],
                  "controller_gate_files": goal["controller_gate_files"]}
-    enforce_required_gate_profile(cfg, "goal", {**goal, "acceptance": goal_acceptance})
+    enforce_required_gate_profile(
+        cfg, "goal", {**goal, "acceptance": goal_acceptance}, required_gate_profile,
+    )
     expected_goal_contract = repo_gate_contract(base, cfg, "goal", goal_gate)
     if requires_heavy_gate(value, goal_acceptance) and goal.get("gate_class") != "heavy":
         fail("pilot plan goal understates a controller-classified heavy gate")
@@ -976,7 +1210,7 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
                     or len(items) != len(set(items)):
                 fail(f"pilot plan task {task_id} has invalid {name}")
             for item in items: bounded_line(item, f"task {task_id} {name}", 512)
-        enforce_required_gate_profile(cfg, f"task {task_id}", task)
+        enforce_required_gate_profile(cfg, f"task {task_id}", task, required_gate_profile)
         expected_contract = repo_gate_contract(base, cfg, f"task {task_id}", task)
         if requires_heavy_gate(value, str(task["acceptance"])) and task.get("gate_class") != "heavy":
             fail(f"pilot plan task {task_id} understates a controller-classified heavy gate")
@@ -1060,6 +1294,7 @@ def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
     plan_id = str(args[1]) if len(args) > 1 else ""
     plan = bind_authority_contract(cfg, decision.get("plan"))
     plan = bind_seed_contract(cfg, plan)
+    plan = bind_gate_profile_selection(base, cfg, plan)
     plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, plan,
                          bind_gate_contract=True, check_remote=True)
     digest = canonical_digest(plan); goal_id = str(plan["goal"]["id"])
@@ -1097,7 +1332,8 @@ def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
 
 
 def task_values(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, task: dict,
-                authority: dict, seed_contract: dict | None = None) -> dict[str, str]:
+                authority: dict, seed_contract: dict | None = None,
+                gate_profile_selection: dict | None = None) -> dict[str, str]:
     values = {
         "schema_version": "1", "version": "1", "id": task["id"], "project_id": cfg["id"],
         "project": cfg["id"], "workstream": cfg["id"], "pilot_id": pilot["id"], "goal_id": goal_id,
@@ -1126,12 +1362,20 @@ def task_values(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str,
             "seed": ",".join(seed_contract["paths"]),
             "seed_digest": seed_contract["content_sha256"],
         })
+    if gate_profile_selection:
+        values["gate_profile_selection"] = json.dumps(
+            gate_profile_selection, sort_keys=True, separators=(",", ":"),
+        )
     return values
 
 
 def task_text(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, task: dict,
-              authority: dict, seed_contract: dict | None = None) -> str:
-    values = task_values(cfg, pilot, plan_id, digest, goal_id, task, authority, seed_contract)
+              authority: dict, seed_contract: dict | None = None,
+              gate_profile_selection: dict | None = None) -> str:
+    values = task_values(
+        cfg, pilot, plan_id, digest, goal_id, task, authority, seed_contract,
+        gate_profile_selection,
+    )
     return "".join(f"{key}: {value}\n" for key, value in values.items()) + f"\n{task['intent']}\n"
 
 
@@ -1158,6 +1402,7 @@ def verify_approved_goal(base: Path, project: str, goal_id: str, *, terminal: bo
             or str(plan["goal"]["id"]) != goal_id:
         fail("approved plan/goal digest projection differs")
     authority = plan["authority_contract"]; goal = plan["goal"]
+    gate_profile_selection = plan.get("gate_profile_selection")
     expected_goal = {
         "id": goal_id, "project_id": project, "pilot_id": str(pilot["id"]),
         "plan_id": plan_id, "plan_digest": digest, "outcome": str(goal["outcome"]),
@@ -1175,6 +1420,10 @@ def verify_approved_goal(base: Path, project: str, goal_id: str, *, terminal: bo
                               "seed_manifest_sha256": seed["manifest_sha256"],
                               "seed": ",".join(seed["paths"]),
                               "seed_digest": seed["content_sha256"]})
+    if gate_profile_selection:
+        expected_goal["gate_profile_selection"] = json.dumps(
+            gate_profile_selection, sort_keys=True, separators=(",", ":"),
+        )
     if any(goal_fields.get(key, "") != str(value) for key, value in expected_goal.items()):
         fail("materialized goal immutable contract differs from its approved plan")
     actual_tasks = {}
@@ -1186,7 +1435,10 @@ def verify_approved_goal(base: Path, project: str, goal_id: str, *, terminal: bo
     if set(actual_tasks) != planned_ids:
         fail("materialized task DAG differs from the exact approved plan")
     for task in plan["tasks"]:
-        expected = task_values(cfg, pilot, plan_id, digest, goal_id, task, authority, seed)
+        expected = task_values(
+            cfg, pilot, plan_id, digest, goal_id, task, authority, seed,
+            gate_profile_selection,
+        )
         # status and version are lifecycle/CAS fields.  Both change through reviewed task
         # transitions; neither is part of the digest-bound implementation contract.
         expected.pop("status", None)
@@ -1219,6 +1471,7 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
         goal = plan["goal"]; goal_id = str(goal["id"]); goal_path = base / "state/goals" / f"{goal_id}.md"
         authority = plan["authority_contract"]
         seed_contract = plan.get("seed_contract")
+        gate_profile_selection = plan.get("gate_profile_selection")
         event = transition_event(
             "pilot-plan-approved", str(cfg["id"]), goal_id,
             detail={"plan_id": plan_id, "plan_digest": digest, "instruction_id": instruction_id},
@@ -1264,6 +1517,12 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
                               f"seed_manifest_sha256: {seed_contract['manifest_sha256']}\n"
                               f"seed: {','.join(seed_contract['paths'])}\n"
                               f"seed_digest: {seed_contract['content_sha256']}\n")
+            if gate_profile_selection:
+                goal_body += (
+                    "gate_profile_selection: "
+                    + json.dumps(gate_profile_selection, sort_keys=True, separators=(",", ":"))
+                    + "\n"
+                )
         goal_body = goal_body.replace("status: draft", "status: active", 1)
         mutations.append(text_mutation(goal_path, goal_body))
         for task in plan["tasks"]:
@@ -1271,7 +1530,10 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
             if task_path.exists():
                 fail("task materialization exists without the approval transition receipt")
             else:
-                body = task_text(cfg, pilot, plan_id, digest, goal_id, task, authority, seed_contract)
+                body = task_text(
+                    cfg, pilot, plan_id, digest, goal_id, task, authority, seed_contract,
+                    gate_profile_selection,
+                )
             mutations.append(text_mutation(task_path, body))
         proposal = dict(proposal); proposal.update({"status": "approved", "approval_instruction_id": instruction_id,
                                                     "approved_by": instruction.get("principal"), "approved_at": now_iso()})
@@ -1359,6 +1621,8 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
                       "expires_at_epoch": int(time.time()) + int(raw_seconds),
                       "max_inflight_workers": min(int(pilot.get("concurrency_limit") or 0),
                                                   int((pilot.get("budget") or {}).get("max_inflight_workers") or 0))}
+            if plan.get("gate_profile_selection"):
+                record["gate_profile_selection"] = plan["gate_profile_selection"]
             if record["max_inflight_workers"] < 1: fail("pilot window has zero worker capacity")
             event = transition_event(
                 "pilot-window-armed", str(cfg["id"]), goal_id,
