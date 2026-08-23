@@ -107,6 +107,17 @@ def validate(kind: str, value: object) -> dict:
     if kind == "plan":
         if not isinstance(value.get("plan"), dict) or not re.fullmatch(r"[0-9a-f]{64}", str(value.get("plan_digest") or "")):
             fail("plan payload or digest is malformed")
+        selection = value["plan"].get("gate_profile_selection")
+        if selection is not None:
+            required_selection = {"schema", "promotion_id", "binding_path", "binding_sha256"}
+            if not isinstance(selection, dict) or set(selection) != required_selection \
+                    or selection.get("schema") != "recursion-project-gate-profile-selection/v1":
+                fail("gate_profile_selection is not a canonical versioned binding")
+            require_identifier(selection.get("promotion_id"), "gate_profile_selection.promotion_id")
+            expected_path = f"scripts/gates/promotions/{selection['promotion_id']}.json"
+            if selection.get("binding_path") != expected_path \
+                    or not re.fullmatch(r"[0-9a-f]{64}", str(selection.get("binding_sha256") or "")):
+                fail("gate_profile_selection path or digest is invalid")
     if "budget" in value and kind == "pilot" and not isinstance(value["budget"], dict):
         fail("pilot budget must be an object")
     # Empty Phase 2 goal-budget objects remain a valid pre-Phase-6 projection. A goal is not
