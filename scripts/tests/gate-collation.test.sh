@@ -16,7 +16,7 @@
 set -uo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 BASELINE="${GSC_BASELINE:-$ROOT/state/gsc/baseline-pass.txt}"
-GATE="$ROOT/scripts/gsc-conformance-gate.sh"
+GATE="${GSC_CONFORMANCE_GATE:-$ROOT/scripts/gsc-conformance-gate.sh}"
 fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }

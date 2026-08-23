@@ -16,6 +16,9 @@ from typing import Any, Callable
 
 
 SOURCE = Path(__file__).resolve().parents[2]
+LEGACY_PROFILE = SOURCE / "scripts/gates/gsc-shade-tops-v1.json"
+LEGACY_CONFORMANCE = SOURCE / "scripts/gsc-conformance-gate.sh"
+NODE24_CONFORMANCE = SOURCE / "scripts/gsc-conformance-gate-v2.sh"
 sys.path.insert(0, str(SOURCE / "scripts"))
 SPEC = importlib.util.spec_from_file_location(
     "gsc_shade_tops_gate", SOURCE / "scripts/gsc-shade-tops-gate.py",
@@ -115,7 +118,7 @@ def fixture() -> tuple[Path, Path, Path, dict[str, Any], dict[str, dict[str, Any
     git(repo, "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
         "commit", "-qm", "reviewed base")
 
-    profile = json.loads((SOURCE / "scripts/gates/gsc-shade-tops-v1.json").read_text())
+    profile = json.loads(LEGACY_PROFILE.read_text())
     # The production profile pins the reviewed committed gate bytes. The hermetic fixture may
     # be authored from a CRLF checkout, so bind its exact local executable without weakening the
     # production profile or runtime verification.
@@ -154,6 +157,56 @@ def main() -> int:
             good = actual == expected
             print(("ok   " if good else "FAIL ") + f"{label} (rc={actual}, expected={expected})")
             failures += int(not good)
+
+        def profile_verdict(
+            candidate: dict[str, Any], label: str,
+        ) -> tuple[int, dict[str, Any] | None]:
+            candidate_path = temp / f"profile-{label}.json"
+            candidate_path.write_text(json.dumps(candidate, indent=2) + "\n", encoding="utf-8")
+            return verdict(repo, candidate_path, StubRunner(metrics))
+
+        production_profile = json.loads(LEGACY_PROFILE.read_text())
+        legacy_hash = file_hash(LEGACY_CONFORMANCE)
+        node24_hash = file_hash(NODE24_CONFORMANCE)
+        fixture_preserves_binding = (
+            profile["conformance"]["path"] == production_profile["conformance"]["path"]
+            and profile["conformance"]["sha256"] == production_profile["conformance"]["sha256"]
+        )
+        check("existing profile binds the exact historical conformance gate", int(
+            production_profile["conformance"]["path"] != "scripts/gsc-conformance-gate.sh"
+            or production_profile["conformance"]["sha256"] != legacy_hash
+        ), 0)
+        check("Node 24 conformance gate has a distinct immutable identity", int(
+            node24_hash == legacy_hash
+        ), 0)
+        check("hermetic fixture cannot mask the production conformance binding", int(
+            not fixture_preserves_binding
+        ), 0)
+
+        node24_profile = copy.deepcopy(profile)
+        node24_profile["conformance"]["path"] = "scripts/gsc-conformance-gate-v2.sh"
+        node24_profile["conformance"]["sha256"] = node24_hash
+        check("exact versioned Node 24 gate binding is admitted", profile_verdict(
+            node24_profile, "node24-exact",
+        )[0], 2)
+
+        wrong_legacy_hash = copy.deepcopy(node24_profile)
+        wrong_legacy_hash["conformance"]["sha256"] = legacy_hash
+        check("Node 24 path with the historical hash fails closed", profile_verdict(
+            wrong_legacy_hash, "node24-old-hash",
+        )[0], 3)
+
+        wrong_node24_hash = copy.deepcopy(profile)
+        wrong_node24_hash["conformance"]["sha256"] = node24_hash
+        check("historical path with the Node 24 hash fails closed", profile_verdict(
+            wrong_node24_hash, "legacy-new-hash",
+        )[0], 3)
+
+        unpinned_node24 = copy.deepcopy(node24_profile)
+        unpinned_node24["conformance"]["sha256"] = "0" * 64
+        check("an unpinned Node 24 reporter contract fails closed", profile_verdict(
+            unpinned_node24, "node24-unpinned",
+        )[0], 3)
 
         unchanged = StubRunner(metrics)
         code, evidence = verdict(repo, profile_path, unchanged)
