@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 SOURCE = Path(__file__).resolve().parents[2]
 LEGACY_PROFILE = SOURCE / "scripts/gates/gsc-shade-tops-v1.json"
+V3_PROFILE = SOURCE / "scripts/gates/gsc-shade-tops-v3.json"
 LEGACY_CONFORMANCE = SOURCE / "scripts/gsc-conformance-gate.sh"
 NODE24_CONFORMANCE = SOURCE / "scripts/gsc-conformance-gate-v2.sh"
 sys.path.insert(0, str(SOURCE / "scripts"))
@@ -42,6 +43,16 @@ def git(repo: Path, *args: str) -> str:
 
 def file_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def canonical_text_hash(path: Path) -> str:
+    raw = path.read_bytes()
+    if b"\r" not in raw:
+        return hashlib.sha256(raw).hexdigest()
+    without_crlf = raw.replace(b"\r\n", b"")
+    if b"\r" in without_crlf or b"\n" in without_crlf:
+        raise RuntimeError(f"mixed or bare-CR line endings in {path}")
+    return hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest()
 
 
 def materialize_metric(expected: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
@@ -102,7 +113,9 @@ class StubRunner:
         return GATE.CommandResult(0, "native-diff prelude\n" + output + "\n", "")
 
 
-def fixture() -> tuple[Path, Path, Path, dict[str, Any], dict[str, dict[str, Any]]]:
+def fixture(
+    profile_source: Path = LEGACY_PROFILE,
+) -> tuple[Path, Path, Path, dict[str, Any], dict[str, dict[str, Any]]]:
     temp = Path(tempfile.mkdtemp(prefix="gsc-shade-gate-"))
     repo = temp / "product"
     models = repo / "user-client/render/data/models"
@@ -118,7 +131,7 @@ def fixture() -> tuple[Path, Path, Path, dict[str, Any], dict[str, dict[str, Any
     git(repo, "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
         "commit", "-qm", "reviewed base")
 
-    profile = json.loads(LEGACY_PROFILE.read_text())
+    profile = json.loads(profile_source.read_text())
     # The production profile pins the reviewed committed gate bytes. The hermetic fixture may
     # be authored from a CRLF checkout, so bind its exact local executable without weakening the
     # production profile or runtime verification.
@@ -151,6 +164,7 @@ def verdict(
 def main() -> int:
     failures = 0
     temp, repo, profile_path, profile, metrics = fixture()
+    v3_temp, v3_repo, v3_profile_path, v3_profile, v3_metrics = fixture(V3_PROFILE)
     try:
         def check(label: str, actual: int, expected: int) -> None:
             nonlocal failures
@@ -165,7 +179,15 @@ def main() -> int:
             candidate_path.write_text(json.dumps(candidate, indent=2) + "\n", encoding="utf-8")
             return verdict(repo, candidate_path, StubRunner(metrics))
 
+        def v3_profile_verdict(
+            candidate: dict[str, Any], label: str,
+        ) -> tuple[int, dict[str, Any] | None]:
+            candidate_path = v3_temp / f"profile-{label}.json"
+            candidate_path.write_text(json.dumps(candidate, indent=2) + "\n", encoding="utf-8")
+            return verdict(v3_repo, candidate_path, StubRunner(v3_metrics))
+
         production_profile = json.loads(LEGACY_PROFILE.read_text())
+        production_v3_profile = json.loads(V3_PROFILE.read_text())
         legacy_hash = file_hash(LEGACY_CONFORMANCE)
         node24_hash = file_hash(NODE24_CONFORMANCE)
         fixture_preserves_binding = (
@@ -182,6 +204,44 @@ def main() -> int:
         check("hermetic fixture cannot mask the production conformance binding", int(
             not fixture_preserves_binding
         ), 0)
+        v3_fixture_preserves_binding = (
+            v3_profile["conformance"]["path"]
+            == production_v3_profile["conformance"]["path"]
+            and v3_profile["conformance"]["sha256"]
+            == production_v3_profile["conformance"]["sha256"]
+        )
+        check("v3 profile has a distinct immutable identity", int(not (
+            production_v3_profile["profile_id"] != production_profile["profile_id"]
+            and production_v3_profile["base_commit"] != production_profile["base_commit"]
+            and production_v3_profile["controller_gate"]["sha256"]
+            != production_profile["controller_gate"]["sha256"]
+            and production_v3_profile["native_diff"]["build_defaults_sha256"]
+            != production_profile["native_diff"]["build_defaults_sha256"]
+            and production_v3_profile["conformance"]["path"]
+            != production_profile["conformance"]["path"]
+            and production_v3_profile["conformance"]["sha256"]
+            != production_profile["conformance"]["sha256"]
+        )), 0)
+        check("historical profile retains its exact controller binding", int(
+            production_profile["controller_gate"]["sha256"]
+            != "3deb4618d1f61096cd470d240ec29a82bd31d39933bc39da0156dad4808e16db"
+        ), 0)
+        check("v3 profile binds the canonical current controller bytes", int(
+            production_v3_profile["controller_gate"]["sha256"]
+            != canonical_text_hash(SOURCE / "scripts/gsc-shade-tops-gate.py")
+        ), 0)
+        check("v3 profile binds the exact reporter-aware conformance gate", int(
+            production_v3_profile["conformance"]["path"]
+            != "scripts/gsc-conformance-gate-v2.sh"
+            or production_v3_profile["conformance"]["sha256"]
+            != canonical_text_hash(NODE24_CONFORMANCE)
+        ), 0)
+        check("v3 hermetic fixture cannot mask its production conformance binding", int(
+            not v3_fixture_preserves_binding
+        ), 0)
+        check("unchanged measured v3 base is no-progress", verdict(
+            v3_repo, v3_profile_path, StubRunner(v3_metrics),
+        )[0], 2)
 
         node24_profile = copy.deepcopy(profile)
         node24_profile["conformance"]["path"] = "scripts/gsc-conformance-gate-v2.sh"
@@ -206,6 +266,44 @@ def main() -> int:
         unpinned_node24["conformance"]["sha256"] = "0" * 64
         check("an unpinned Node 24 reporter contract fails closed", profile_verdict(
             unpinned_node24, "node24-unpinned",
+        )[0], 3)
+
+        v3_wrong_controller = copy.deepcopy(v3_profile)
+        v3_wrong_controller["controller_gate"]["sha256"] = production_profile[
+            "controller_gate"
+        ]["sha256"]
+        check("v3 cannot substitute the historical controller binding", v3_profile_verdict(
+            v3_wrong_controller, "v3-old-controller",
+        )[0], 3)
+
+        v3_wrong_conformance = copy.deepcopy(v3_profile)
+        v3_wrong_conformance["conformance"]["sha256"] = legacy_hash
+        check("v3 reporter path cannot substitute the historical gate hash", v3_profile_verdict(
+            v3_wrong_conformance, "v3-old-conformance-hash",
+        )[0], 3)
+
+        v3_missing_reporter = copy.deepcopy(v3_profile)
+        v3_missing_reporter["conformance"]["arguments"] = []
+        check("missing v3 reporter contract fails closed", v3_profile_verdict(
+            v3_missing_reporter, "v3-missing-reporter",
+        )[0], 3)
+
+        v3_reordered_reporter = copy.deepcopy(v3_profile)
+        v3_reordered_reporter["conformance"]["arguments"] = ["--test-reporter=tap", "--no-progress"]
+        check("reordered or injected v3 reporter contract fails closed", v3_profile_verdict(
+            v3_reordered_reporter, "v3-reordered-reporter",
+        )[0], 3)
+
+        v3_unpinned_controller = copy.deepcopy(v3_profile)
+        v3_unpinned_controller["controller_gate"]["sha256"] = "0" * 64
+        check("an unpinned v3 controller fails closed", v3_profile_verdict(
+            v3_unpinned_controller, "v3-unpinned-controller",
+        )[0], 3)
+
+        v3_unpinned_defaults = copy.deepcopy(v3_profile)
+        v3_unpinned_defaults["native_diff"]["build_defaults_sha256"] = "0" * 64
+        check("an unpinned v3 BUILD_DEFAULTS contract fails closed", v3_profile_verdict(
+            v3_unpinned_defaults, "v3-unpinned-defaults",
         )[0], 3)
 
         unchanged = StubRunner(metrics)
@@ -308,6 +406,7 @@ def main() -> int:
             repo, profile_path, StubRunner(metrics))[0], 4)
     finally:
         shutil.rmtree(temp, ignore_errors=True)
+        shutil.rmtree(v3_temp, ignore_errors=True)
 
     print(f"gsc-shade-tops-gate: {failures} failure(s)")
     return int(bool(failures))
