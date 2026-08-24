@@ -50,6 +50,7 @@ RestartPreventExitStatus=78
 KillMode=control-group
 KillSignal=SIGTERM
 ExecReload=/bin/kill -USR1 $MAINPID
+ExecStop=/usr/local/lib/hermes-agent/venv/bin/python /opt/recursion/scripts/hermes-gateway-planned-stop.py $MAINPID
 ExecStopPost=-/usr/local/lib/hermes-agent/venv/bin/python -m gateway.cgroup_cleanup
 TimeoutStopSec=60
 StandardOutput=journal
