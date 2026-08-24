@@ -17,6 +17,8 @@ python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scri
   scripts/notification-outbox.py scripts/jsonl_durable.py scripts/transition_receipt.py scripts/validate-decision.py scripts/validate-control-state.py \
   scripts/validate-gate.py \
   scripts/runtime-state.py scripts/tests/hermes-pilot-phase8-red.py scripts/tests/hermes-phase8-routing-recovery-red.py \
+  scripts/hermes-gateway-planned-stop.py scripts/tests/hermes-gateway-shutdown.test.py \
+  scripts/tests/hermes-gateway-shutdown-systemd.test.py \
   scripts/tests/hermes-pilot-phase8-parallel.py \
   scripts/tests/hermes-pilot-phase8-legacy-journal-red.py \
   scripts/tests/hermes-pilot-phase8-race-red.py \
@@ -40,6 +42,12 @@ json.load(open('schemas/control-plane/v1/schema.json',encoding='utf-8'))
 PY
 python3 scripts/tests/gsc-profile-immutability.test.py
 python3 scripts/tests/gsc-profile-promotion.test.py
+python3 scripts/tests/hermes-gateway-shutdown.test.py
+if [ "${RECURSION_ALLOW_SYSTEMD_SHUTDOWN_SKIP:-0}" = 1 ]; then
+  echo "FAIL complete Phase 8 cannot skip the systemd shutdown contract" >&2
+  exit 1
+fi
+python3 scripts/tests/hermes-gateway-shutdown-systemd.test.py
 echo "ok    Phase 8 shell, Python, and schema artifacts parse"
 
 for verb in pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close; do

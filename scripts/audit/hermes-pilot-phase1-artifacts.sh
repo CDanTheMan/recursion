@@ -20,6 +20,17 @@ need ProtectSystem=strict
 need ProtectHome=yes
 need UMask=0077
 need KillMode=control-group
+need ReadWritePaths=/var/lib/hermes-gateway
+need 'ExecStop=/usr/local/lib/hermes-agent/venv/bin/python /opt/recursion/scripts/hermes-gateway-planned-stop.py $MAINPID'
+reject_exit_one(){
+  local directive="$1"
+  if grep -Eq "^${directive}=([^[:space:]]+[[:space:]]+)*1([[:space:]]|$)" "$UNIT"; then
+    echo "FAIL exit status 1 is broadly accepted by $directive"
+    exit 1
+  fi
+}
+reject_exit_one SuccessExitStatus
+reject_exit_one RestartPreventExitStatus
 grep -q '^u hermes-gateway ' "$SYSUSERS"
 grep -q '^u recursion-runner ' "$SYSUSERS"
 grep -q '^d /var/lib/hermes-gateway 0700 ' "$TMPFILES"
