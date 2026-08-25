@@ -19,6 +19,7 @@ import math
 import os
 import re
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -74,7 +75,13 @@ REQUIRED_BUDGET = {
 
 
 class ReconcileError(RuntimeError):
-    pass
+    def __init__(self, message: str, code: int = 4) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+class ReconcileDeferral(TransitionReceiptError):
+    """A precondition race that revoked authority without proving invalid state."""
 
 
 def root() -> Path:
@@ -127,22 +134,64 @@ def atomic_json(path: Path, value: dict) -> None:
     atomic_text(path, json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n")
 
 
-def read_json(path: Path) -> dict:
+def read_json(path: Path, *, unavailable_code: int | None = None) -> dict:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise ReconcileError(
+            f"cannot read {path}: {exc}", unavailable_code if unavailable_code is not None else 4,
+        ) from exc
+    except OSError as exc:
+        raise ReconcileError(f"cannot read {path}: {exc}", 74) from exc
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
         raise ReconcileError(f"cannot read {path}: {exc}") from exc
     if not isinstance(value, dict):
         raise ReconcileError(f"state record is not an object: {path}")
     return value
 
 
+def state_files(directory: Path, suffix: str) -> list[Path]:
+    """Enumerate one lazy runtime directory without translating I/O failure into emptiness."""
+    try:
+        mode = os.lstat(directory).st_mode
+    except FileNotFoundError:
+        return []
+    except OSError as exc:
+        raise ReconcileError(f"cannot inspect state directory {directory}: {exc}", 74) from exc
+    if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+        raise ReconcileError(f"state path is not a real directory: {directory}", 74)
+    try:
+        with os.scandir(directory) as entries:
+            paths: list[Path] = []
+            for entry in entries:
+                if not entry.name.endswith(suffix):
+                    continue
+                path = directory / entry.name
+                if entry.is_symlink():
+                    raise ReconcileError(f"state record is a symlink: {path}", 74)
+                if entry.is_file(follow_symlinks=False):
+                    paths.append(path)
+                elif not entry.is_dir(follow_symlinks=False):
+                    raise ReconcileError(f"state record has an unsupported type: {path}", 74)
+    except FileNotFoundError:
+        return []
+    except ReconcileError:
+        raise
+    except OSError as exc:
+        raise ReconcileError(f"cannot enumerate state directory {directory}: {exc}", 74) from exc
+    return sorted(paths)
+
+
 def read_fields(path: Path) -> dict[str, str]:
     result: dict[str, str] = {}
     try:
         lines = path.read_text(encoding="utf-8", errors="surrogateescape").splitlines()
-    except OSError as exc:
+    except FileNotFoundError as exc:
         raise ReconcileError(f"cannot read {path}: {exc}") from exc
+    except OSError as exc:
+        raise ReconcileError(f"cannot read {path}: {exc}", 74) from exc
     for line in lines:
         if ":" in line and not line.startswith((" ", "\t")):
             key, value = line.split(":", 1)
@@ -183,7 +232,9 @@ def append_event(base: Path, event: str, project: str, goal: str, task: str = ""
         value["id"] = event_id
     try:
         commit_event(base, value)
-    except (OSError, TransitionReceiptError) as exc:
+    except OSError as exc:
+        raise ReconcileError(f"event journal append unavailable: {exc}", 74) from exc
+    except TransitionReceiptError as exc:
         raise ReconcileError(f"event journal append failed: {exc}") from exc
 
 
@@ -202,7 +253,11 @@ def commit_reconcile_transition(base: Path, mutations: list, event: dict,
     try:
         commit_transition(base, mutations, event, authoritative_index=authoritative_index,
                           precondition=precondition)
-    except (OSError, TransitionReceiptError) as exc:
+    except ReconcileDeferral as exc:
+        raise ReconcileError(f"crash-consistent transition deferred: {exc}", 75) from exc
+    except OSError as exc:
+        raise ReconcileError(f"crash-consistent transition unavailable: {exc}", 74) from exc
+    except TransitionReceiptError as exc:
         raise ReconcileError(f"crash-consistent transition failed: {exc}") from exc
 
 
@@ -256,7 +311,7 @@ def goal_lock(base: Path, goal_id: str):
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
-            raise ReconcileError(f"goal lock contended: {goal_id}") from exc
+            raise ReconcileError(f"goal lock contended: {goal_id}", 75) from exc
         yield
 
 
@@ -306,27 +361,37 @@ def close_paused_windows(base: Path) -> int:
 
 
 def verify_phase8_goal_contract(base: Path, project: str, goal_id: str, *,
-                                terminal: bool = False) -> dict:
+                                 terminal: bool = False, check_remote: bool = False) -> dict:
     helper = base / "scripts/project-pilot.py"
     if not helper.is_file():
-        raise ReconcileError("Phase 8 contract verifier is absent")
+        raise ReconcileError("Phase 8 contract verifier is absent", 74)
     argv = [sys.executable, str(helper), "verify-approved-goal", project, goal_id]
     if terminal:
         argv.append("--terminal")
-    proc = subprocess.run(
-        argv,
-        env={**os.environ, "RECURSION_ROOT": str(base)}, text=True,
-        capture_output=True, check=False,
-    )
+    if check_remote:
+        argv.append("--check-remote")
+    try:
+        proc = subprocess.run(
+            argv,
+            env={**os.environ, "RECURSION_ROOT": str(base)}, text=True,
+            capture_output=True, timeout=300 if check_remote else 60, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ReconcileError("Phase 8 contract verifier is unavailable", 74) from exc
     if proc.returncode:
         detail = (proc.stderr or proc.stdout or "contract verification failed").strip()[:500]
-        raise ReconcileError(f"Phase 8 approved contract is invalid: {detail}")
+        raise ReconcileError(
+            f"Phase 8 approved contract is invalid: {detail}",
+            4 if proc.returncode == 4 else 74,
+        )
     try:
         value = json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
-        raise ReconcileError("Phase 8 contract verifier returned malformed evidence") from exc
+        raise ReconcileError("Phase 8 contract verifier returned malformed evidence", 74) from exc
+    if not isinstance(value, dict):
+        raise ReconcileError("Phase 8 contract verifier returned non-object evidence", 74)
     if value.get("project_id") != project or value.get("goal_id") != goal_id:
-        raise ReconcileError("Phase 8 contract verifier returned mismatched authority")
+        raise ReconcileError("Phase 8 contract verifier returned mismatched authority", 74)
     return value
 
 
@@ -334,12 +399,68 @@ def require_provider_capability(base: Path, contract: dict) -> None:
     if contract.get("provider_only_required") is not True:
         return
     helper = base / "scripts/provider-network.sh"
-    proc = subprocess.run(
-        ["bash", str(helper), "check"], env={**os.environ, "RECURSION_ROOT": str(base)},
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
-    ) if helper.is_file() else None
+    try:
+        proc = subprocess.run(
+            ["bash", str(helper), "check"],
+            env={**os.environ, "RECURSION_ROOT": str(base)},
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, timeout=30, check=False,
+        ) if helper.is_file() else None
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ReconcileError("provider-only capability is unavailable", 74) from exc
     if proc is None or proc.returncode:
-        raise ReconcileError("provider-only capability is absent or unhealthy")
+        raise ReconcileError("provider-only capability is absent or unhealthy", 74)
+
+
+def record_authority_deferral(base: Path, project: str, goal_id: str, reason: str,
+                              error: Exception | str | None = None) -> None:
+    """Leave active authority untouched but make every unavailable proof operator-visible."""
+    print(f"project-reconcile: deferred {project}/{goal_id}: {reason}", file=sys.stderr)
+    event_recorded = False
+    try:
+        detail = {"reason": reason}
+        if error is not None:
+            print(
+                "project-reconcile: deferral diagnostic "
+                f"sha256={hashlib.sha256(str(error).encode()).hexdigest()}",
+                file=sys.stderr,
+            )
+        append_event(
+            base, "authority-proof-deferred", project, goal_id,
+            detail=detail,
+            event_id="source-authority-proof-deferred-" + hashlib.sha256(
+                f"{project}:{goal_id}:{reason}".encode()
+            ).hexdigest()[:24],
+        )
+        event_recorded = True
+    except ReconcileError as exc:
+        print(f"project-reconcile: deferral audit event unavailable: {exc}", file=sys.stderr)
+    helper = base / "scripts/taskctl.sh"
+    if not helper.is_file():
+        print("project-reconcile: deferral escalation controller is absent", file=sys.stderr)
+        if not event_recorded:
+            raise ReconcileError("authority deferral has no durable audit channel", 74)
+        return
+    escalation_recorded = False
+    key = f"phase8-authority-proof:{project}:{goal_id}"
+    title = "Phase 8 remote authority proof is unavailable"
+    pointer = f"state/goals/{goal_id}.md"
+    try:
+        proc = subprocess.run(
+            ["bash", str(helper), "esc-record", key, title, project, pointer],
+            env={**os.environ, "RECURSION_ROOT": str(base)},
+            stdin=subprocess.DEVNULL, text=True, capture_output=True,
+            timeout=30, check=False,
+        )
+        escalation_recorded = proc.returncode == 0
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"project-reconcile: deferral escalation unavailable: {exc}", file=sys.stderr)
+    else:
+        if proc.returncode:
+            detail = (proc.stderr or proc.stdout or "escalation failed").strip()[:300]
+            print(f"project-reconcile: deferral escalation unavailable: {detail}", file=sys.stderr)
+    if not event_recorded and not escalation_recorded:
+        raise ReconcileError("authority deferral has no durable audit channel", 74)
 
 
 def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = None) -> dict | None:
@@ -350,8 +471,9 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
                 "status": "open", "max_inflight_workers": int(pilot.get("concurrency_limit") or 0)}
     now = int(time.time()); matches: list[tuple[Path, dict]] = []
     verified = False
-    for path in sorted((base / "state/pilot-windows").glob("*.json")):
-        value = read_json(path)
+    proved_contract_sha: str | None = None
+    for path in state_files(base / "state/pilot-windows", ".json"):
+        value = read_json(path, unavailable_code=74)
         if value.get("project_id") != project or value.get("goal_id") != goal_id \
                 or value.get("status") not in {"armed", "open"}:
             continue
@@ -366,11 +488,14 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
         if value.get("status") == "armed":
             if (base / "state/PAUSE").is_file():
                 continue
-            if not verified:
+            if proved_contract_sha is None:
                 try:
-                    contract = verify_phase8_goal_contract(base, project, goal_id)
-                    require_provider_capability(base, contract)
+                    contract = verify_phase8_goal_contract(
+                        base, project, goal_id, check_remote=False,
+                    )
                 except ReconcileError as exc:
+                    if exc.code != 4:
+                        raise
                     event_id = "source-window-contract-refused-" + hashlib.sha256(
                         f"{value.get('id')}:{value.get('plan_digest')}".encode()).hexdigest()[:24]
                     append_event(base, "pilot-window-refused", project, goal_id,
@@ -380,10 +505,12 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
                                  event_id=event_id)
                     raise
                 verified = True
+                proved_contract_sha = canonical_sha(contract)
             # An authenticated close (or a newly observed PAUSE) may commit between the read
-            # above and this open commit. Re-prove the exact armed bytes, expiry, singleton
-            # authority, and PAUSE immediately before committing, under the same taskctl lock
-            # the close transition takes -- otherwise the open would silently overwrite it.
+            # above and this open commit. Re-prove the exact local contract, armed bytes,
+            # expiry, singleton authority, and PAUSE immediately before committing, under the
+            # same taskctl lock the close transition takes. Remote and provider I/O belongs at
+            # worker admission, never inside this global transition lock or its heartbeat path.
             armed = dict(value)
 
             def open_precondition() -> None:
@@ -395,30 +522,33 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
                     closed.update({"status": "closed", "closed_at": now_iso(),
                                    "close_reason": "race-close"})
                     atomic_json(path, closed)
-                elif race == "capability":
-                    (base / "state/test-provider-down").write_text("down\n", encoding="utf-8")
                 if (base / "state/PAUSE").exists():
-                    raise TransitionReceiptError("PAUSE revokes an armed window before it opens")
+                    raise ReconcileDeferral("PAUSE revokes an armed window before it opens")
                 try:
-                    current_contract = verify_phase8_goal_contract(base, project, goal_id)
-                    require_provider_capability(base, current_contract)
+                    current_contract = verify_phase8_goal_contract(
+                        base, project, goal_id, check_remote=False,
+                    )
                 except ReconcileError as exc:
-                    raise TransitionReceiptError(
-                        f"pilot contract/capability changed before its open commit: {exc}"
+                    raise ReconcileDeferral(
+                        f"pilot contract changed before its open commit: {exc}"
                     ) from exc
-                current = read_json(path)
+                if canonical_sha(current_contract) != proved_contract_sha:
+                    raise ReconcileDeferral(
+                        "pilot contract bytes changed during local open admission"
+                    )
+                current = read_json(path, unavailable_code=74)
                 if current.get("status") != "armed" or canonical_sha(current) != canonical_sha(armed):
-                    raise TransitionReceiptError("armed window changed before it opened")
+                    raise ReconcileDeferral("armed window changed before it opened")
                 if safe_int(current.get("expires_at_epoch")) <= int(time.time()):
-                    raise TransitionReceiptError("armed window expired before it opened")
+                    raise ReconcileDeferral("armed window expired before it opened")
                 armed_or_open = 0
-                for other in sorted((base / "state/pilot-windows").glob("*.json")):
-                    other_value = read_json(other)
+                for other in state_files(base / "state/pilot-windows", ".json"):
+                    other_value = read_json(other, unavailable_code=74)
                     if other_value.get("project_id") == project \
                             and other_value.get("status") in {"armed", "open"}:
                         armed_or_open += 1
                 if armed_or_open != 1:
-                    raise TransitionReceiptError("pilot window singleton authority changed before it opened")
+                    raise ReconcileDeferral("pilot window singleton authority changed before it opened")
 
             event_id = "source-window-open-" + hashlib.sha256(
                 f"{value.get('id')}:{value.get('instruction_id')}".encode()).hexdigest()[:24]
@@ -435,10 +565,11 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
                                      event_id=event_id)
             commit_reconcile_transition(base, [json_mutation(path, value)], event,
                                         precondition=open_precondition)
-            value = read_json(path)
+            value = read_json(path, unavailable_code=74)
         elif not verified:
-            contract = verify_phase8_goal_contract(base, project, goal_id)
-            require_provider_capability(base, contract)
+            verify_phase8_goal_contract(
+                base, project, goal_id, check_remote=False,
+            )
             verified = True
         matches.append((path, value))
     if len(matches) > 1:
@@ -446,11 +577,11 @@ def open_window(base: Path, project: str, goal_id: str, pilot: dict | None = Non
     return matches[0][1] if matches else None
 
 
-def require_window(base: Path, project: str, goal_id: str) -> dict:
+def require_window(base: Path, project: str, goal_id: str, *, absent_code: int = 4) -> dict:
     _, pilot = project_records(base, project)
     window = open_window(base, project, goal_id, pilot)
     if not window:
-        raise ReconcileError("exact open pilot window authority is absent")
+        raise ReconcileError("exact open pilot window authority is absent", absent_code)
     return window
 
 
@@ -582,12 +713,63 @@ def terminal_window_authority(pilot: dict, window: dict | None) -> dict | None:
 
 
 def admit_work(base: Path, task_id: str) -> dict:
+    if not IDENT.fullmatch(task_id):
+        raise ReconcileError("work task identity is invalid")
     path = base / "state/tasks" / f"{task_id}.md"
     task = read_fields(path)
     project, goal_id = task.get("project_id", ""), task.get("goal_id", "")
     if not IDENT.fullmatch(project) or not IDENT.fullmatch(goal_id):
         raise ReconcileError("work task lacks canonical project/goal identity")
-    window = require_window(base, project, goal_id)
+    if (base / "state/PAUSE").exists():
+        raise ReconcileError("PAUSE blocks Phase 8 worker admission", 75)
+    try:
+        contract = verify_phase8_goal_contract(base, project, goal_id, check_remote=True)
+        require_provider_capability(base, contract)
+    except ReconcileError as exc:
+        if exc.code != 4:
+            try:
+                record_authority_deferral(
+                    base, project, goal_id, "worker-admission-unavailable", exc,
+                )
+            except ReconcileError as audit_exc:
+                print(
+                    f"project-reconcile: worker-admission deferral audit unavailable: {audit_exc}",
+                    file=sys.stderr,
+                )
+        else:
+            try:
+                append_event(
+                    base, "pilot-window-refused", project, goal_id,
+                    detail={"reason": "worker-admission-invalid",
+                            "error_sha256": hashlib.sha256(str(exc).encode()).hexdigest()},
+                    event_id="source-authority-proof-refused-" + hashlib.sha256(
+                        f"{project}:{goal_id}:{exc}".encode()
+                    ).hexdigest()[:24],
+                )
+            except ReconcileError as audit_exc:
+                print(
+                    f"project-reconcile: authority-refusal audit event unavailable: {audit_exc}",
+                    file=sys.stderr,
+                )
+        raise
+    if (base / "state/PAUSE").exists():
+        raise ReconcileError("PAUSE blocks Phase 8 worker admission", 75)
+    window = require_window(base, project, goal_id, absent_code=75)
+    return {"project_id": project, "goal_id": goal_id, "window_id": window.get("id")}
+
+
+def check_work_authority(base: Path, task_id: str) -> dict:
+    """Recheck local revocation state on a previously admitted worker heartbeat."""
+    if not IDENT.fullmatch(task_id):
+        raise ReconcileError("work task identity is invalid")
+    path = base / "state/tasks" / f"{task_id}.md"
+    task = read_fields(path)
+    project, goal_id = task.get("project_id", ""), task.get("goal_id", "")
+    if not IDENT.fullmatch(project) or not IDENT.fullmatch(goal_id):
+        raise ReconcileError("work task lacks canonical project/goal identity")
+    if (base / "state/PAUSE").exists():
+        raise ReconcileError("PAUSE blocks Phase 8 worker authority", 75)
+    window = require_window(base, project, goal_id, absent_code=75)
     return {"project_id": project, "goal_id": goal_id, "window_id": window.get("id")}
 
 
@@ -687,7 +869,7 @@ def reject_task_contract(base: Path, task_id: str, category: str, contract_diges
             if os.environ.get("RECURSION_TEST_PAUSE_BEFORE_CONTRACT_COMMIT") == "1":
                 (base / "state/PAUSE").write_text("test pause before contract commit\n", encoding="utf-8")
             if (base / "state/PAUSE").exists():
-                raise TransitionReceiptError("PAUSE blocks a new task-contract rejection")
+                raise ReconcileDeferral("PAUSE blocks a new task-contract rejection")
             _, pilot = project_records(base, project)
             if not pilot.get("window_required"):
                 return
@@ -699,7 +881,7 @@ def reject_task_contract(base: Path, task_id: str, category: str, contract_diges
                         and safe_int(window.get("expires_at_epoch")) > int(time.time()):
                     matches.append(window)
             if len(matches) != 1:
-                raise TransitionReceiptError("exact open pilot-window authority changed before commit")
+                raise ReconcileDeferral("exact open pilot-window authority changed before commit")
         commit_reconcile_transition(
             base,
             [fields_mutation(task_path, task_changes), fields_mutation(goal_file, goal_changes)],
@@ -935,13 +1117,31 @@ def fresh_base(config: dict) -> tuple[bool, str, str]:
         return False, "", "default-branch-absent"
     proc = subprocess.run(
         ["git", "ls-remote", remote, f"refs/heads/{branch}"],
-        text=True, capture_output=True, check=False, timeout=20, env=git_environment(config),
+        cwd=str(repo), text=True, capture_output=True, check=False, timeout=20,
+        env=git_environment(config),
     )
     words = proc.stdout.split()
     if proc.returncode or not words:
         return False, local, "remote-head-unprovable"
     remote_head = words[0]
     return local == remote_head, local, "fresh" if local == remote_head else "stale-base"
+
+
+def phase8_fresh_base(base: Path, project: str, goal_id: str) \
+        -> tuple[bool | None, str, str]:
+    """Distinguish proof unavailability from a proved immutable-contract failure."""
+    try:
+        contract = verify_phase8_goal_contract(
+            base, project, goal_id, check_remote=True,
+        )
+    except ReconcileError as exc:
+        if exc.code == 4:
+            return False, "", "authority-contract-stale"
+        return None, "", "authority-proof-unavailable"
+    source_head = str(contract.get("source_head") or "")
+    if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", source_head):
+        return None, "", "authority-proof-unavailable"
+    return True, source_head, "fresh"
 
 
 def task_evidence(base: Path, repo: Path, task: dict[str, str], runs: list[dict],
@@ -1003,10 +1203,14 @@ def task_evidence(base: Path, repo: Path, task: dict[str, str], runs: list[dict]
 
 
 def remote_review_commit(config: dict, task_id: str) -> str:
+    repo = Path(str(config.get("repo") or ""))
+    if not (repo / ".git").exists():
+        return ""
     remote = str(config.get("remote") or "origin")
     proc = subprocess.run(
         ["git", "ls-remote", remote, f"refs/heads/loop/work/{task_id}"],
-        text=True, capture_output=True, check=False, timeout=20, env=git_environment(config),
+        cwd=str(repo), text=True, capture_output=True, check=False, timeout=20,
+        env=git_environment(config),
     )
     return proc.stdout.split()[0] if proc.returncode == 0 and proc.stdout.split() else ""
 
@@ -1021,7 +1225,8 @@ def remote_default_ancestor_proof(config: dict, commit: str) -> dict:
         raise ReconcileError("remote default-branch review proof has invalid identity")
     advertised = subprocess.run(
         ["git", "ls-remote", remote, f"refs/heads/{branch}"], text=True,
-        capture_output=True, check=False, timeout=20, env=git_environment(config),
+        cwd=str(repo), capture_output=True, check=False, timeout=20,
+        env=git_environment(config),
     )
     rows = [line.split() for line in advertised.stdout.splitlines() if line.split()]
     if advertised.returncode or len(rows) != 1 or len(rows[0]) != 2 \
@@ -2211,7 +2416,22 @@ def reconcile(base: Path, project: str, goal_id: str,
                          detail={"backlog": len(review_backlog), "limit": budget["max_review_queue"]})
             return
 
-        fresh, base_commit, freshness = fresh_base(config)
+        if goal.get("plan_id"):
+            fresh, base_commit, freshness = phase8_fresh_base(base, project, goal_id)
+            if fresh is None:
+                # Availability is not proof that immutable authority is stale. Leave the
+                # active graph untouched, preserve one canonical event, and durably bump one
+                # escalation identity on each supervised retry.
+                try:
+                    record_authority_deferral(base, project, goal_id, freshness)
+                except ReconcileError as audit_exc:
+                    print(
+                        f"project-reconcile: reconcile deferral audit unavailable: {audit_exc}",
+                        file=sys.stderr,
+                    )
+                return
+        else:
+            fresh, base_commit, freshness = fresh_base(config)
         if ready_or_proposed and not fresh:
             enqueue_transition(base, pilot, project, goal_id, "active", "blocked", freshness, version)
             return
@@ -2303,7 +2523,17 @@ def schedule(base: Path, project: str | None, goal_id: str | None) -> int:
     scheduled = 0
     paths = [goal_path(base, goal_id)] if goal_id else sorted((base / "state/goals").glob("*.md"))
     for path in paths:
-        goal = read_fields(path)
+        try:
+            goal = read_fields(path)
+        except ReconcileError as exc:
+            if goal_id or exc.code != 74:
+                raise
+            print(
+                f"project-reconcile: goal record unavailable for this scheduler tick "
+                f"({path.name}): {exc}",
+                file=sys.stderr,
+            )
+            continue
         gid = goal.get("id", "")
         pid = goal.get("project_id", "")
         if not IDENT.fullmatch(gid) or not IDENT.fullmatch(pid):
@@ -2332,7 +2562,17 @@ def schedule(base: Path, project: str | None, goal_id: str | None) -> int:
             try:
                 if not open_window(base, pid, gid, pilot):
                     continue
-            except ReconcileError:
+            except ReconcileError as exc:
+                if exc.code != 4:
+                    try:
+                        record_authority_deferral(
+                            base, pid, gid, "window-authority-unavailable", exc,
+                        )
+                    except ReconcileError as audit_exc:
+                        print(
+                            f"project-reconcile: window deferral audit unavailable: {audit_exc}",
+                            file=sys.stderr,
+                        )
                 continue
         fingerprint = snapshot_digest(base, config, gid)
         enqueue_decision(base, str(pilot["id"]), "reconcile-goal", [pid, gid], gid,
@@ -2351,6 +2591,8 @@ def main() -> int:
     sub.add_parser("close-paused-windows")
     admit_cmd = sub.add_parser("admit-work")
     admit_cmd.add_argument("task")
+    check_work_cmd = sub.add_parser("check-work-authority")
+    check_work_cmd.add_argument("task")
     resume_cmd = sub.add_parser("resume-assist")
     resume_cmd.add_argument("task")
     resume_cmd.add_argument("instruction")
@@ -2395,9 +2637,12 @@ def main() -> int:
                              sort_keys=True, separators=(",", ":")))
             return 0
         if (base / "state/PAUSE").exists():
-            raise ReconcileError("PAUSE blocks Phase 6 actuation")
+            raise ReconcileError("PAUSE blocks Phase 6 actuation", 75)
         if args.command == "admit-work":
             print(json.dumps(admit_work(base, args.task), sort_keys=True, separators=(",", ":")))
+        elif args.command == "check-work-authority":
+            print(json.dumps(check_work_authority(base, args.task),
+                             sort_keys=True, separators=(",", ":")))
         elif args.command == "accept-review":
             print(json.dumps(accept_review(base, args.project, args.goal, args.task,
                                            args.commit, args.reviewed_by),
@@ -2417,9 +2662,12 @@ def main() -> int:
         else:
             require_window(base, args.project, args.goal)
             publish_task(base, args.project, args.goal, args.task)
-    except (OSError, ReconcileError, subprocess.TimeoutExpired) as exc:
+    except ReconcileError as exc:
         print(f"project-reconcile: {exc}", file=sys.stderr)
-        return 75 if "PAUSE" in str(exc) else 4
+        return exc.code
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"project-reconcile: {exc}", file=sys.stderr)
+        return 74
     return 0
 
 

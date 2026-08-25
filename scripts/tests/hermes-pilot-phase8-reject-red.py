@@ -153,9 +153,16 @@ def test_work_rc_preserved() -> bool:
                        env_extra={"RECURSION_TRANSITION_FAILPOINT": "receipt-fsync"})
         # A reconcile failure must surface as a non-zero exit, never a false success, and it
         # must never leave the task/goal falsely terminal.
-        return result.returncode != 0 \
+        passed = result.returncode != 0 \
             and f.task_status() in {"ready", "queued"} \
             and f.goal_status() == "active"
+        if not passed:
+            print(
+                "work-rc diag "
+                f"rc={result.returncode} task={f.task_status()} goal={f.goal_status()} "
+                f"stderr={result.stderr[-500:]!r}"
+            )
+        return passed
     finally:
         f.close()
 

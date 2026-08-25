@@ -62,6 +62,16 @@ status: queued
 
 body
 T
+cat > "$R/state/tasks/pilot-deferred-001.md" <<'T'
+id: pilot-deferred-001
+pilot_id: pilot-chiron
+workstream: chiron
+goal: a pilot task waiting on final window authority
+acceptance: true
+status: queued
+
+body
+T
 
 decide(){
   local raw="$1" bound
@@ -137,6 +147,66 @@ if [ "$rc" != "0" ] && [ ! -s "$TMP/ran.log" ]; then
 else
   no "a gateless task was dispatched"
 fi
+
+# A final local authority loss is a retryable controller condition.  The conductor must retain
+# rc75 instead of converting it to a generic refusal/failure before work.sh can run.
+cat > "$R/scripts/project-reconcile.py" <<'PY'
+#!/usr/bin/env python3
+import os, sys
+if len(sys.argv) == 3 and sys.argv[1] == "check-work-authority":
+    raise SystemExit(int(os.environ.get("AUTHORITY_RC", "75")))
+raise SystemExit(2)
+PY
+chmod +x "$R/scripts/project-reconcile.py"
+: > "$TMP/ran.log"
+decide '{"verb":"work","args":["pilot-deferred-001"],"goal":"g","wrong_if":"w","why":"because"}'
+mkdir -p "$R/state/actions"
+find "$R/state/actions" -maxdepth 1 -type f -name 'action-*.json' -printf '%f\n' \
+  | sort > "$TMP/actions.before"
+AUTHORITY_RC=75; export AUTHORITY_RC
+rc=$(conduct)
+durable_defer="$(python3 - "$R" "$TMP/actions.before" <<'PY'
+import json,sys
+from pathlib import Path
+root=Path(sys.argv[1]); before=set(Path(sys.argv[2]).read_text(encoding='utf-8').splitlines())
+paths=sorted((root/'state/actions').glob('action-*.json'))
+new=[path for path in paths if path.name not in before]
+if len(new) != 1:
+    print(f'new-actions={len(new)}'); raise SystemExit
+row=json.loads(new[0].read_text(encoding='utf-8'))
+events=[]
+for line in (root/'state/action-events.jsonl').read_text(encoding='utf-8').splitlines():
+    event=json.loads(line)
+    if event.get('action_id') == row.get('id'): events.append(event)
+valid=(row.get('status')=='pending' and row.get('attempts')==1
+       and row.get('lease_owner') is None and row.get('lease_expires') is None
+       and 'deferred before terminal transition rc=75' in str(row.get('result_evidence') or '')
+       and [event.get('status') for event in events] == ['pending','running','pending']
+       and all(event.get('status') != 'failed' for event in events))
+print('OK' if valid else f'bad-action={row!r} events={events!r}')
+PY
+)"
+if [ "$rc" = 75 ] && [ ! -s "$TMP/ran.log" ] && [ "$durable_defer" = OK ]; then
+  ok "final pilot-window revocation remains deferred before worker dispatch"
+else
+  no "pilot-window revocation lost its durable pending action (rc=$rc durable=$durable_defer): $(tail -3 "$TMP/out" | tr '\n' ' ')"
+fi
+AUTHORITY_RC=74
+rc=$(conduct)
+if [ "$rc" = 75 ] && [ ! -s "$TMP/ran.log" ]; then
+  ok "transient local authority I/O remains deferred before worker dispatch"
+else
+  no "transient authority I/O became a hard action failure (rc=$rc): $(tail -3 "$TMP/out" | tr '\n' ' ')"
+fi
+AUTHORITY_RC=4
+rc=$(conduct)
+if [ "$rc" = 5 ] && [ ! -s "$TMP/ran.log" ]; then
+  ok "proved local authority invalidity remains a hard refusal before worker dispatch"
+else
+  no "proved invalid authority was not refused distinctly (rc=$rc): $(tail -3 "$TMP/out" | tr '\n' ' ')"
+fi
+unset AUTHORITY_RC
+rm -f "$R/scripts/project-reconcile.py"
 
 # --- 7) a nonexistent task / roadmap is refused ---------------------------------------------
 decide '{"verb":"work","args":["does-not-exist"],"goal":"g","wrong_if":"w"}'

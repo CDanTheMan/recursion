@@ -162,13 +162,41 @@ reject_preworker_contract(){ # stable controller-owned category
 # Pilot windows are an execution capability, not a caller convention. Every path into work.sh
 # (queue actuator, legacy drain, manual continuation, assist resume) reaches this same check.
 window_checkpoint(){
-  local stage="${1:-execution}"
+  local stage="${1:-execution}" rc
+  WINDOW_AUTHORITY_FAILURE=""
   [ -z "$PILOT_ID" ] && return 0
   [ -x "$ROOT/scripts/project-reconcile.py" ] \
-    || { log "pilot task $ID has no window authority checker during $stage"; return 75; }
+    || { WINDOW_AUTHORITY_FAILURE="window-authority-unavailable";
+         log "pilot task $ID has no window authority checker during $stage"; return 75; }
+  RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" \
+    check-work-authority "$ID" >/dev/null 2>>"$LOG"; rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  case "$rc" in
+    4)
+      WINDOW_AUTHORITY_FAILURE="window-authority-revoked"
+      log "pilot task $ID has proved-invalid open-window authority during $stage" ;;
+    74)
+      WINDOW_AUTHORITY_FAILURE="window-authority-unavailable"
+      log "pilot task $ID open-window authority could not be measured during $stage" ;;
+    75)
+      WINDOW_AUTHORITY_FAILURE="window-authority-deferred"
+      log "pilot task $ID open-window authority is temporarily deferred during $stage" ;;
+    *)
+      WINDOW_AUTHORITY_FAILURE="window-authority-unavailable"
+      log "pilot task $ID window authority checker failed unexpectedly during $stage rc=$rc" ;;
+  esac
+  return 75
+}
+fresh_window_admission(){
+  local rc
+  [ -z "$PILOT_ID" ] && return 0
   RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-reconcile.py" admit-work "$ID" \
-    >/dev/null 2>>"$LOG" \
-    || { log "pilot task $ID lacks exact open-window authority during $stage"; return 75; }
+    >/dev/null 2>>"$LOG"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    log "pilot task $ID failed fresh remote/provider worker admission rc=$rc"
+    [ "$rc" -eq 4 ] && return 4
+    return 75
+  fi
 }
 window_checkpoint startup || exit 75
 
@@ -782,12 +810,14 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
     fi
     if [ "$now_epoch" -ge "$heartbeat_epoch" ]; then
       heartbeat_epoch="$(( now_epoch + ${RECURSION_WORKER_HEARTBEAT_S:-5} ))"
-      if ! window_checkpoint "$role execution"; then
-        log "pilot-window authority expired with $role process group $worker_pgid in flight"
+      window_rc=0
+      window_checkpoint "$role execution" || window_rc=$?
+      if [ "$window_rc" -ne 0 ]; then
+        log "pilot-window checkpoint stopped $role process group $worker_pgid in flight reason=$WINDOW_AUTHORITY_FAILURE"
         terminate_worker_group "$worker_pgid" || true
         wait "$worker_pgid" 2>/dev/null || true
         [ "$STRICT_PHASE5" != 1 ] || python3 "$ROOT/scripts/worker-evidence.py" finish \
-          "$LAST_RUN_EVIDENCE" cancelled window-authority-revoked 75 >>"$LOG" 2>&1 || true
+          "$LAST_RUN_EVIDENCE" cancelled "$WINDOW_AUTHORITY_FAILURE" 75 >>"$LOG" 2>&1 || true
         return 75
       fi
       if [ "$STRICT_PHASE5" = 1 ]; then
@@ -1124,27 +1154,9 @@ integrate_remote(){
   fi
 }
 
-# ============================ pipeline ============================
-if ! validate_seed_source; then
-  if [ -n "$PILOT_ID" ]; then
-    reject_preworker_contract seed-contract-invalid; exit $?
-  fi
-  board finish "$ID" blocked - "seed contract invalid"
-  complete_terminal_escalation escalated \
-    "approved seed manifest or content digest is absent, unsafe, or stale; no worker was launched" || exit $?
-  exit 0
-fi
-pause_checkpoint "board transition" || exit 75
-board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" running "${GOAL:0:40}"
-claim_task; claim_rc=$?
-[ "$claim_rc" -eq 0 ] || exit "$claim_rc"
-commit_state
-
 # --- FRESHNESS IS A PRECONDITION, NOT BEST EFFORT ---------------------------------------
-# "A task may not start against a base older than origin's default." Proving that requires
-# reaching the remote, and a git op with no usable credential fails SILENTLY — so the failure
-# to prove freshness is itself a blocker, not a shrug. See scripts/resync.sh for the two
-# observed failures this closes.
+# Prove the base before board/lease mutation. A healthy active source pin or brief shared-lock
+# contention returns 75 and leaves the queued task and its attempt budget untouched.
 FRESH_WHY=""
 require_fresh_base(){
   if [ -n "$PILOT_ID" ] && [ -n "$SOURCE_HEAD" ]; then
@@ -1166,16 +1178,39 @@ require_fresh_base(){
     0) log "base freshness: $out"; return 0 ;;
     3) FRESH_WHY="cannot prove $REPO_DIR is current with origin — $out" ;;
     4) FRESH_WHY="$REPO_DIR needs a human before more work lands on it — $out" ;;
+    75) FRESH_WHY="base freshness is temporarily deferred for $REPO_DIR — $out"; return 75 ;;
     *) FRESH_WHY="resync check exited $rc — $out" ;;
   esac
   return 1
 }
 
-if ! require_fresh_base; then
+# ============================ pipeline ============================
+if ! validate_seed_source; then
+  if [ -n "$PILOT_ID" ]; then
+    reject_preworker_contract seed-contract-invalid; exit $?
+  fi
+  board finish "$ID" blocked - "seed contract invalid"
+  complete_terminal_escalation escalated \
+    "approved seed manifest or content digest is absent, unsafe, or stale; no worker was launched" || exit $?
+  exit 0
+fi
+fresh_window_admission || exit $?
+fresh_rc=0
+require_fresh_base || fresh_rc=$?
+if [ "$fresh_rc" -eq 75 ]; then
+  log "$FRESH_WHY; deferring before board or task lease mutation"
+  exit 75
+fi
+if [ "$fresh_rc" -ne 0 ]; then
   board finish "$ID" blocked - "stale/unprovable base"
   complete_terminal_escalation blocked "$FRESH_WHY" || exit $?
   exit 0
 fi
+pause_checkpoint "board transition" || exit 75
+board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL:-$ENGINE}" running "${GOAL:0:40}"
+claim_task; claim_rc=$?
+[ "$claim_rc" -eq 0 ] || exit "$claim_rc"
+commit_state
 
 if ! WT="$(mk_worktree)"; then
   board finish "$ID" blocked - "worktree create failed"

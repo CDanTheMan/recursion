@@ -111,6 +111,7 @@ class Fixture:
         subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
         subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Phase 8 Test"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "config", "user.email", "phase8@example.invalid"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "core.autocrlf", "false"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True)
         subprocess.run(["git", "-C", str(self.repo), "commit", "-q", "-m", "fixture"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "branch", "-M", "main"], check=True)
@@ -469,11 +470,26 @@ def test_window_admission(f: Fixture) -> bool:
     if projection_refused.returncode or projection_refused.stdout.strip() != "0" \
             or armed.get("status") != "armed":
         return False
+    provider_before_schedule = f.provider_calls.read_text(encoding="utf-8").splitlines()
     scheduled = f.run("python3", "scripts/project-reconcile.py", "schedule")
     rows = [json.loads(path.read_text(encoding="utf-8")) for path in (f.root / "state/decision-queue/pending").glob("*.json")]
+    provider_after_schedule = f.provider_calls.read_text(encoding="utf-8").splitlines()
+    admitted = f.run(
+        "python3", "scripts/project-reconcile.py", "admit-work", "chiron-phase8-smoke",
+    )
+    provider_after_admit = f.provider_calls.read_text(encoding="utf-8").splitlines()
+    heartbeat = f.run(
+        "python3", "scripts/project-reconcile.py", "check-work-authority",
+        "chiron-phase8-smoke",
+    )
+    provider_after_heartbeat = f.provider_calls.read_text(encoding="utf-8").splitlines()
     return (
         scheduled.returncode == 0 and scheduled.stdout.strip() == "1" and len(rows) == 1
-        and "check" in f.provider_calls.read_text(encoding="utf-8").splitlines()
+        and provider_after_schedule == provider_before_schedule
+        and admitted.returncode == 0
+        and provider_after_admit == provider_after_schedule + ["check"]
+        and heartbeat.returncode == 0
+        and provider_after_heartbeat == provider_after_admit
         and rows[0].get("verb") == "reconcile-goal"
         and rows[0].get("args") == ["chiron", "goal-chiron-phase8-smoke"]
         and rows[0].get("project") == "chiron"

@@ -817,8 +817,13 @@ PY
       log "REFUSED — task $ID has no acceptance gate; it must escalate, not run"; exit 5
     fi
     if grep -q '^pilot_id: ' "state/tasks/$ID.md" && [ -x scripts/project-reconcile.py ]; then
-      RECURSION_ROOT="$ROOT" python3 scripts/project-reconcile.py admit-work "$ID" >/dev/null \
-        || { log "REFUSED - task $ID lacks exact open pilot-window authority"; exit 5; }
+      authority_rc=0
+      RECURSION_ROOT="$ROOT" python3 scripts/project-reconcile.py \
+        check-work-authority "$ID" >/dev/null || authority_rc=$?
+      if [ "$authority_rc" -ne 0 ]; then
+        log "REFUSED - task $ID lacks exact open pilot-window authority rc=$authority_rc"
+        case "$authority_rc" in 74|75) exit 75 ;; *) exit 5 ;; esac
+      fi
     fi
     run bash scripts/work.sh "$ID"; rc=$? ;;
 

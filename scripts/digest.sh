@@ -48,6 +48,12 @@ render(){ # render <project>
     case "$rc" in
       0) echo "repo: $(printf '%s' "$out" | sed 's/^[^:]*: *//')" ;;
       3) echo "repo: ⚠ CANNOT VERIFY — $(printf '%s' "$out" | head -c 120)" ;;
+      4|75)
+        case "$out" in
+          *"is held at an exact active pilot source; ordinary dispatch is refused"*)
+            echo "repo: 🔒 PINNED — exact active pilot source; ordinary dispatch is intentionally held" ;;
+          *) echo "repo: 🛑 NEEDS YOU — $(printf '%s' "$out" | head -c 120)" ;;
+        esac ;;
       *) echo "repo: 🛑 NEEDS YOU — $(printf '%s' "$out" | head -c 120)" ;;
     esac
   fi

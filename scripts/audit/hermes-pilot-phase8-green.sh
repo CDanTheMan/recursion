@@ -8,11 +8,12 @@ cd "$ROOT"
 bash -n scripts/conduct-hermes.sh scripts/hermes-actuator.sh scripts/hermes-decide.sh \
   scripts/assist.sh scripts/taskctl.sh scripts/work.sh scripts/notify.sh scripts/digest.sh \
   scripts/cycle.sh scripts/provider-network.sh scripts/worker-sandbox.sh loop/supervisor/run.sh \
+  scripts/resync.sh scripts/tests/resync.test.sh \
   scripts/gsc-conformance-gate.sh scripts/gsc-conformance-gate-v2.sh \
   scripts/tests/gate-collation.test.sh \
   scripts/tests/gsc-conformance-reporter.test.sh \
   scripts/tests/hermes-pilot-phase8-red.test.sh scripts/tests/provider-network-root.test.sh
-python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scripts/instruction_routing.py scripts/project-reconcile.py scripts/decision-queue.py \
+python3 -m py_compile scripts/project-pilot.py scripts/project_authority.py scripts/pilot_instruction.py scripts/instruction_routing.py scripts/project-reconcile.py scripts/decision-queue.py \
   scripts/seed_contract.py scripts/tests/seed-contract.test.py \
   scripts/notification-outbox.py scripts/jsonl_durable.py scripts/transition_receipt.py scripts/validate-decision.py scripts/validate-control-state.py \
   scripts/validate-gate.py \
@@ -36,6 +37,7 @@ python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scri
   scripts/gsc-shade-tops-gate.py scripts/tests/gsc-shade-tops-gate.test.py \
   scripts/tests/gsc-profile-immutability.test.py \
   scripts/tests/gsc-profile-promotion.test.py \
+  scripts/tests/phase8-authority-availability.test.py \
   scripts/tests/validate-gate.test.py scripts/tests/allowed-path.test.py
 python3 - <<'PY'
 import json
@@ -43,6 +45,8 @@ json.load(open('schemas/control-plane/v1/schema.json',encoding='utf-8'))
 PY
 python3 scripts/tests/gsc-profile-immutability.test.py
 python3 scripts/tests/gsc-profile-promotion.test.py
+python3 scripts/tests/phase8-authority-availability.test.py
+bash scripts/tests/resync.test.sh
 python3 scripts/tests/hermes-gateway-shutdown.test.py
 if [ "${RECURSION_ALLOW_SYSTEMD_SHUTDOWN_SKIP:-0}" = 1 ]; then
   echo "FAIL complete Phase 8 cannot skip the systemd shutdown contract" >&2
@@ -98,8 +102,10 @@ echo "ok    exact authenticated project-aware window commands are shaped before 
 grep -q 'a pilot window may be authorized only while PAUSE is observed' scripts/project-pilot.py
 grep -q 'exact open pilot window authority is absent' scripts/project-reconcile.py
 grep -q 'close-paused-windows' scripts/hermes-actuator.sh
-grep -q 'admit-work' scripts/conduct-hermes.sh
-echo "ok    exact-goal admission is rechecked at actuation and PAUSE revokes stale authority"
+grep -q 'check-work-authority' scripts/conduct-hermes.sh
+grep -qF 'fresh_window_admission || exit $?' scripts/work.sh
+grep -q 'check-work-authority' scripts/work.sh
+echo "ok    fresh worker admission is remote-proven once while local heartbeats recheck revocation"
 
 grep -q 'cannot enumerate status state' scripts/project-pilot.py
 grep -q 'STATUS UNAVAILABLE' loop/hermes-skills/recursion-status/SKILL.md
