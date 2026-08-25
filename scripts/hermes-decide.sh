@@ -14,9 +14,10 @@
 # Carries no state: the brief is re-derived from disk every run (a state block baked into a
 # prompt rots in days and reads as working).
 #
-#   hermes-decide.sh              decide, print the decision, record it
-#   hermes-decide.sh --brief      print the assembled state brief and exit (no model call)
-#   hermes-decide.sh --dry-run    decide and validate, but do not record
+#   hermes-decide.sh                         decide for the oldest open instruction
+#   hermes-decide.sh --brief                 print the assembled state brief and exit
+#   hermes-decide.sh --dry-run               decide and validate, but do not record
+#   hermes-decide.sh --instruction <id>      supervised exact-instruction turn
 set -uo pipefail
 export LC_ALL=C
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -27,7 +28,6 @@ cd "$ROOT"
 # into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
 RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 
-MODE="${1:-}"
 DATE="$(date +%F)"; STAMP="$(date -u +%FT%TZ)"; RUN_TAG="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/$DATE-decide.log"
@@ -36,6 +36,33 @@ USAGE="$LOG_DIR/$DATE-decide-$RUN_TAG.usage.json"
 DECISIONS="$ROOT/state/decisions.jsonl"
 MODEL="${RECURSION_DECIDE_MODEL:-gpt-5.6-terra}"
 log(){ echo "[$(date -Is)] decide: $*" | tee -a "$LOG" >&2; }
+
+# Scheduled turns deliberately take no selector and retain global oldest-open FIFO. An operator
+# may bind one supervised turn to an exact durable instruction without rewriting or temporarily
+# hiding an older instruction owned by another actor. The explicit path still preserves FIFO for
+# the selected actor: it may never jump an older open instruction routed to that same identity.
+MODE=""; EXACT_INSTRUCTION_ID=""; EXACT_INSTRUCTION_SET=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    '')
+      [ "$#" -eq 1 ] && [ -z "$MODE" ] && [ "$EXACT_INSTRUCTION_SET" = 0 ] \
+        || { log "REFUSED - empty decision argument is ambiguous"; exit 2; }
+      shift ;;
+    --brief|--dry-run)
+      [ -z "$MODE" ] || { log "REFUSED - more than one decision mode was supplied"; exit 2; }
+      MODE="$1"; shift ;;
+    --instruction)
+      [ "$EXACT_INSTRUCTION_SET" = 0 ] \
+        || { log "REFUSED - more than one exact instruction was supplied"; exit 2; }
+      [ "$#" -ge 2 ] || { log "REFUSED - --instruction needs a canonical instruction id"; exit 2; }
+      EXACT_INSTRUCTION_ID="$2"; EXACT_INSTRUCTION_SET=1; shift 2 ;;
+    *) log "REFUSED - unknown decision argument"; exit 2 ;;
+  esac
+done
+if [ "$EXACT_INSTRUCTION_SET" = 1 ]; then
+  [[ "$EXACT_INSTRUCTION_ID" =~ ^[1-9][0-9]{0,15}$ ]] \
+    || { log "REFUSED - exact instruction id is not canonical"; exit 2; }
+fi
 
 # Decision-time resync reads and fetches git truth. The actuator may mutate the same repos, so
 # both halves take one fail-closed lock instead of colliding through independent schedules.
@@ -57,16 +84,48 @@ flock -w "$CONTROL_LOCK_WAIT_S" 9 \
 VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify"
 
 # Invoke the durable identity that owns the oldest open instruction. There is still one planner
-# process and one queue; this selects a scoped prompt, not another scheduler or executor.
+# process and one queue; this selects a scoped prompt, not another scheduler or executor. An exact
+# selector is an operator-only binding for one turn, not a change to the no-argument scheduler.
 SELECTED_INSTRUCTION=""; DECIDER_ACTOR="head-hermes"; PILOT_PROJECT=""
-for instruction_file in "$ROOT/state/instructions"/*.md; do
-  [ -f "$instruction_file" ] || continue
-  [ "$(sed -n 's/^status: *//p' "$instruction_file" | head -1)" = open ] || continue
-  SELECTED_INSTRUCTION="$instruction_file"
-  route="$(sed -n 's/^routing_target: *//p' "$instruction_file" | head -1)"
+if [ "$EXACT_INSTRUCTION_SET" = 1 ]; then
+  printf -v exact_instruction_name '%08d.md' "$EXACT_INSTRUCTION_ID"
+  SELECTED_INSTRUCTION="$ROOT/state/instructions/$exact_instruction_name"
+  [ -f "$SELECTED_INSTRUCTION" ] && [ ! -L "$SELECTED_INSTRUCTION" ] \
+    || { log "REFUSED - exact instruction is absent or not a regular durable record"; exit 5; }
+  [ "$(grep -c '^schema_version:' "$SELECTED_INSTRUCTION")" = 1 ] \
+    && [ "$(sed -n 's/^schema_version: *//p' "$SELECTED_INSTRUCTION")" = 1 ] \
+    && [ "$(grep -c '^id:' "$SELECTED_INSTRUCTION")" = 1 ] \
+    && [ "$(sed -n 's/^id: *//p' "$SELECTED_INSTRUCTION")" = "$EXACT_INSTRUCTION_ID" ] \
+    && [ "$(grep -c '^status:' "$SELECTED_INSTRUCTION")" = 1 ] \
+    && [ "$(sed -n 's/^status: *//p' "$SELECTED_INSTRUCTION")" = open ] \
+    && [ "$(grep -c '^routing_target:' "$SELECTED_INSTRUCTION")" = 1 ] \
+    || { log "REFUSED - exact instruction identity, status, or routing metadata is invalid"; exit 5; }
+  exact_route="$(sed -n 's/^routing_target: *//p' "$SELECTED_INSTRUCTION")"
+  case "$exact_route" in head-hermes|pilot-*) : ;; *)
+    log "REFUSED - exact instruction has an unsupported routing target"; exit 5 ;;
+  esac
+  for instruction_file in "$ROOT/state/instructions"/*.md; do
+    [ -f "$instruction_file" ] || continue
+    [ "$instruction_file" != "$SELECTED_INSTRUCTION" ] || break
+    [ "$(sed -n 's/^status: *//p' "$instruction_file" | head -1)" = open ] || continue
+    earlier_route="$(sed -n 's/^routing_target: *//p' "$instruction_file" | head -1)"
+    [ "$earlier_route" != "$exact_route" ] \
+      || { log "REFUSED - an older open instruction is owned by the same routed actor"; exit 5; }
+  done
+else
+  for instruction_file in "$ROOT/state/instructions"/*.md; do
+    [ -f "$instruction_file" ] || continue
+    [ "$(sed -n 's/^status: *//p' "$instruction_file" | head -1)" = open ] || continue
+    SELECTED_INSTRUCTION="$instruction_file"
+    break
+  done
+fi
+
+if [ -n "$SELECTED_INSTRUCTION" ]; then
+  route="$(sed -n 's/^routing_target: *//p' "$SELECTED_INSTRUCTION" | head -1)"
   case "$route" in
     pilot-*)
-      PILOT_PROJECT="$(sed -n 's/^project_id: *//p' "$instruction_file" | head -1)"
+      PILOT_PROJECT="$(sed -n 's/^project_id: *//p' "$SELECTED_INSTRUCTION" | head -1)"
       expected="$(python3 - "$ROOT/state/project-config/$PILOT_PROJECT.json" <<'PY' 2>/dev/null
 import json,sys
 try: print(json.load(open(sys.argv[1],encoding='utf-8')).get('pilot_id',''))
@@ -78,8 +137,7 @@ PY
       DECIDER_ACTOR="$route" ;;
     *) DECIDER_ACTOR="head-hermes" ;;
   esac
-  break
-done
+fi
 
 build_pilot_brief(){
   echo "===== AUTHORITY (project pilot $DECIDER_ACTOR; project $PILOT_PROJECT) ====="
