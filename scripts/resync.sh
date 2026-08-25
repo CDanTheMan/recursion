@@ -24,12 +24,13 @@
 #   resync.sh status [--all]        one line per repo: auth, drift, dirt, unpushed work
 #   resync.sh observe [project ...] fetch + report + escalate; never move a local branch/tree
 #   resync.sh sync [project ...]    fetch + fast-forward the default branch; escalate the rest
-#   resync.sh check <project|path>  dispatch precondition. 0 fresh · 3 cannot prove · 4 needs a human
+#   resync.sh check <project|path>  dispatch precondition. 0 fresh · 3 unknown · 4 invalid · 75 pinned
 #   resync.sh key <project|path>    the deploy key for this repo (single source of truth)
 #   resync.sh list [--all]          registry rows
 #
-# EXIT CODES ARE THE INTERFACE. 3 means "the answer is unknown" and 4 means "the answer is no".
-# Collapsing those two is what produced failure (1) above: an unknown that reads as a clean no.
+# EXIT CODES ARE THE INTERFACE. 3 means "the answer is unknown", 4 means "the answer is no",
+# and 75 is a healthy self-clearing source-pin hold. Collapsing those is what produced failure
+# (1) above: an unknown that reads as a clean no, or temporary authority burned as terminal work.
 set -uo pipefail
 HOME="${HOME:-/root}"   # systemd gives a service no HOME; `set -u` then kills the script
 export LC_ALL=C
@@ -49,6 +50,59 @@ reg_find(){ reg_rows | awk -F'\t' -v q="$1" '$1==q || $2==q {print; exit}'; }
 
 # Every field read goes through here so a short/ragged row cannot silently yield "".
 fld(){ printf '%s' "$1" | cut -f"$2"; }
+
+SOURCE_LOCK_FD=""
+source_lock_acquire(){ # source_lock_acquire <project>
+  local project="$1" lock_dir="$ROOT/state/.locks" wait_seconds="${RECURSION_SOURCE_LOCK_WAIT_SECONDS:-30}" lock_rc
+  case "$project" in ''|*[!a-z0-9._-]*) return 4 ;; esac
+  case "$wait_seconds" in ''|*[!0-9]*) return 3 ;; esac
+  command -v flock >/dev/null 2>&1 || return 3
+  mkdir -p "$lock_dir" 2>/dev/null || return 3
+  exec {SOURCE_LOCK_FD}>"$lock_dir/phase8-window-$project.lock" || return 3
+  flock -E 75 -x -w "$wait_seconds" "$SOURCE_LOCK_FD"; lock_rc=$?
+  if [ "$lock_rc" -ne 0 ]; then
+    exec {SOURCE_LOCK_FD}>&-
+    SOURCE_LOCK_FD=""
+    [ "$lock_rc" -eq 75 ] && return 75
+    return 3
+  fi
+}
+source_lock_release(){
+  [ -n "$SOURCE_LOCK_FD" ] || return 0
+  flock -u "$SOURCE_LOCK_FD" 2>/dev/null || true
+  exec {SOURCE_LOCK_FD}>&-
+  SOURCE_LOCK_FD=""
+}
+trap 'source_lock_release' EXIT
+
+active_source_pin(){ # active_source_pin <project> -> exact source OID or '-'
+  local project="$1" raw rc
+  # Only the typed controller may distinguish an empty window inventory from an unreadable one.
+  # A shell glob that cannot enumerate the directory must never grant a false unpinned state.
+  [ -f "$ROOT/scripts/project-pilot.py" ] || {
+    echo "source-pin controller is absent" >&2; return 3
+  }
+  raw="$(RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/project-pilot.py" \
+    active-source-pin "$project")"; rc=$?
+  case "$rc" in
+    0) ;;
+    4) return 4 ;;
+    74|75) return 75 ;;
+    *) return 3 ;;
+  esac
+  printf '%s' "$raw" | python3 -c '
+import json,re,sys
+project=sys.argv[1]
+try: value=json.load(sys.stdin)
+except (json.JSONDecodeError,OSError): raise SystemExit(1)
+if not isinstance(value,dict) or value.get("schema")!="recursion-project-source-pin/v1" \
+        or value.get("project_id")!=project: raise SystemExit(1)
+source=value.get("source_head")
+if source!="-" and re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})",str(source or "")) is None:
+    raise SystemExit(1)
+print(source)
+' "$project" || return 3
+}
 
 # --- git with the right key, always -------------------------------------------------------
 gitk(){ # gitk <path> <key> <git args...>
@@ -235,11 +289,50 @@ sync)
       4) echo "DIVERGED  $pr — $R_WHY"; fails=$((fails+1))
          esc "resync-diverged-$pr" "$pr: $d has diverged from origin — reconcile before more work lands on it" "$p" "$pr"; continue ;;
     esac
+    source_lock_acquire "$pr"; lock_rc=$?
+    if [ "$lock_rc" -ne 0 ]; then
+      if [ "$lock_rc" -eq 75 ]; then
+        echo "DEFERRED  $pr — exact source/window lock is contended"
+      else
+        echo "FAULT     $pr — exact source/window lock is unavailable"
+      fi
+      fails=$((fails+1)); continue
+    fi
+    pin_error="$(mktemp "${TMPDIR:-/tmp}/recursion-source-pin.XXXXXX")" || {
+      echo "FAULT     $pr — source-pin diagnostic scratch could not be created"
+      source_lock_release; fails=$((fails+1)); continue
+    }
+    pin="$(active_source_pin "$pr" 2>"$pin_error")"; pin_rc=$?
+    pin_why="$(tr '\n' ' ' <"$pin_error" | cut -c1-500)"; rm -f -- "$pin_error"
+    if [ "$pin_rc" -ne 0 ]; then
+      [ -n "$pin_why" ] || pin_why="active source authority could not be proved"
+      if [ "$pin_rc" -eq 75 ]; then
+        echo "DEFERRED  $pr — $pin_why"
+        source_lock_release; fails=$((fails+1)); continue
+      fi
+      echo "FAULT     $pr — $pin_why"
+      fails=$((fails+1))
+      esc "resync-source-pin-$pr" "$pr: $pin_why" "$p" "$pr"
+      source_lock_release; continue
+    fi
+    if [ "$pin" != "-" ]; then
+      local_head="$(gitk "$p" "$k" rev-parse --verify "refs/heads/$d^{commit}" 2>/dev/null || true)"
+      if [ "$local_head" != "$pin" ]; then
+        echo "FAULT     $pr — active source pin differs from $d"
+        fails=$((fails+1))
+        esc "resync-source-drift-$pr" "$pr: active source pin differs from $d" "$p" "$pr"
+        source_lock_release; continue
+      fi
+    fi
     if [ "$R_BEHIND" -gt 0 ]; then
-      if ff_default "$p" "$d" "$R_BEHIND" "$R_AHEAD"; then echo "FF        $pr — $d +$R_BEHIND"
+      if [ "$pin" != "-" ]; then
+        echo "PINNED    $pr — $d remains at exact active pilot source $pin (-$R_BEHIND remote)"
+      elif ff_default "$p" "$d" "$R_BEHIND" "$R_AHEAD"; then echo "FF        $pr — $d +$R_BEHIND"
       else echo "FF-FAILED $pr — $d could not fast-forward"; fails=$((fails+1))
-           esc "resync-ff-$pr" "$pr: $d is behind origin but would not fast-forward" "$p" "$pr"; continue; fi
+           esc "resync-ff-$pr" "$pr: $d is behind origin but would not fast-forward" "$p" "$pr"
+           source_lock_release; continue; fi
     else echo "OK        $pr — $R_WHY"; fi
+    source_lock_release
     # These do not block a build (the arm works in an isolated worktree off origin/<def>), but
     # they are work that exists in exactly one place, so they are never left silent.
     [ "$R_AHEAD"    -gt 0 ] && esc "resync-unpushed-$pr" "$pr: $R_AHEAD commit(s) on $d exist only on this box" "$p" "$pr"
@@ -265,6 +358,30 @@ check)
     3) echo "CANNOT PROVE FRESH: $R_WHY"; exit 3 ;;
     4) echo "NEEDS A HUMAN: $R_WHY"; exit 4 ;;
   esac
+  source_lock_acquire "$pr"; lock_rc=$?
+  if [ "$lock_rc" -ne 0 ]; then
+    if [ "$lock_rc" -eq 75 ]; then
+      echo "DEFERRED: exact source/window lock is contended"; exit 75
+    fi
+    echo "CANNOT PROVE FRESH: exact source/window lock is unavailable"; exit 3
+  fi
+  pin_error="$(mktemp "${TMPDIR:-/tmp}/recursion-source-pin.XXXXXX")" \
+    || { echo "CANNOT PROVE FRESH: source-pin diagnostic scratch could not be created"; exit 3; }
+  pin="$(active_source_pin "$pr" 2>"$pin_error")"; pin_rc=$?
+  pin_why="$(tr '\n' ' ' <"$pin_error" | cut -c1-500)"; rm -f -- "$pin_error"
+  if [ "$pin_rc" -ne 0 ]; then
+    [ -n "$pin_why" ] || pin_why="active source authority could not be proved"
+    if [ "$pin_rc" -eq 4 ]; then echo "NEEDS A HUMAN: $pin_why"; exit 4; fi
+    if [ "$pin_rc" -eq 75 ]; then echo "DEFERRED: $pin_why"; exit 75; fi
+    echo "CANNOT PROVE FRESH: $pin_why"; exit 3
+  fi
+  if [ "$pin" != "-" ]; then
+    local_head="$(gitk "$p" "$k" rev-parse --verify "refs/heads/$d^{commit}" 2>/dev/null || true)"
+    [ "$local_head" = "$pin" ] \
+      || { echo "NEEDS A HUMAN: active source pin differs from $d"; exit 4; }
+    echo "NEEDS A HUMAN: $pr is held at an exact active pilot source; ordinary dispatch is refused"
+    exit 75
+  fi
   echo "$pr fresh: origin/$d @ $(git -C "$p" rev-parse --short "origin/$d") ($R_REFS refs, $R_VERDICT)" ;;
 
 *) sed -n '24,30p' "$0"; exit 2 ;;

@@ -28,7 +28,7 @@ CONTROLS = [
     "a PAUSE lifted between arm authorization and arm commit is rechecked and refused",
     "a PAUSE observed between armed read and open commit is rechecked and refuses the open",
     "an authenticated close racing the armed->open commit is rechecked and refuses the open",
-    "provider capability loss before the armed->open commit refuses the open",
+    "provider loss after open refuses fresh worker admission while local heartbeat remains available",
     "a PAUSE-held goal starts its wall-clock budget only when the authorized window activates",
     "the terminal heavy-gate deadline uses the same authenticated activation anchor",
     "activation timestamp drift or post-activation materialization fails closed",
@@ -479,10 +479,19 @@ def test_open_capability_loss_race() -> bool:
         if not f.materialize_and_arm(window):
             return False
         (f.root / "state/PAUSE").unlink(missing_ok=True)
-        result = f.run("python3", "scripts/project-reconcile.py", "schedule",
-                       env_extra={"RECURSION_TEST_WINDOW_OPEN_RACE": "capability"})
-        return result.returncode == 0 and result.stdout.strip() == "0" \
-            and window_status(f, window) == "armed"
+        opened = f.run("python3", "scripts/project-reconcile.py", "schedule")
+        (f.root / "state/test-provider-down").write_text("down\n", encoding="utf-8")
+        admitted = f.run(
+            "python3", "scripts/project-reconcile.py", "admit-work",
+            "chiron-phase8-race-task",
+        )
+        heartbeat = f.run(
+            "python3", "scripts/project-reconcile.py", "check-work-authority",
+            "chiron-phase8-race-task",
+        )
+        return opened.returncode == 0 and opened.stdout.strip() == "1" \
+            and window_status(f, window) == "open" \
+            and admitted.returncode == 74 and heartbeat.returncode == 0
     finally:
         f.close()
 
