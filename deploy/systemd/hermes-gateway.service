@@ -16,6 +16,7 @@ Environment=LOGNAME=hermes-gateway
 Environment=PATH=/usr/bin:/usr/local/lib/hermes-agent/venv/bin:/usr/local/lib/hermes-agent/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/sbin:/bin
 Environment=VIRTUAL_ENV=/usr/local/lib/hermes-agent/venv
 Environment=HERMES_HOME=/var/lib/hermes-gateway
+Environment=RECURSION_GATEWAY_PLANNED_STOP_WAIT_S=45
 StateDirectory=hermes-gateway
 StateDirectoryMode=0700
 UMask=0077
