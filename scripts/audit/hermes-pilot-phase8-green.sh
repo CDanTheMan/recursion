@@ -30,6 +30,7 @@ python3 -m py_compile scripts/project-pilot.py scripts/pilot_instruction.py scri
   scripts/tests/phase8-notification-authentication.test.py \
   scripts/tests/pilot-instruction.test.py \
   scripts/tests/phase8-head-window-admission.test.py \
+  scripts/tests/phase8-exact-instruction-turn.test.py \
   scripts/tests/project-pilot-status-fail-closed.test.py \
   scripts/provider-connect-proxy.py scripts/tests/provider-connect-proxy.test.py \
   scripts/gsc-shade-tops-gate.py scripts/tests/gsc-shade-tops-gate.test.py \
