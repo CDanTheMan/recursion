@@ -45,6 +45,32 @@ class Fixture:
             "#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n",
             encoding="utf-8",
         )
+        self.fixture_bin = self.temp / "fixture-bin"
+        self.host_trap_bin = self.temp / "host-trap-bin"
+        self.fixture_bin.mkdir()
+        self.host_trap_bin.mkdir()
+        self.fixture_hermes_marker = self.root / "loop/logs/fixture-hermes-invoked"
+        self.host_hermes_marker = self.root / "loop/logs/host-hermes-invoked"
+        fixture_hermes = self.fixture_bin / "hermes"
+        fixture_hermes.write_text(
+            "#!/bin/sh\n"
+            "set -eu\n"
+            "printf 'fixture-hermes\\n' > \"$RECURSION_ROOT/loop/logs/fixture-hermes-invoked\"\n"
+            "exit 97\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        fixture_hermes.chmod(0o755)
+        host_trap = self.host_trap_bin / "hermes"
+        host_trap.write_text(
+            "#!/bin/sh\n"
+            "set -eu\n"
+            "printf 'host-hermes\\n' > \"$RECURSION_ROOT/loop/logs/host-hermes-invoked\"\n"
+            "exit 98\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        host_trap.chmod(0o755)
         self.write_json("state/project-config/golden-stallion-client.json", {
             "schema_version": 1, "id": PROJECT, "repo": "/nonexistent/gsc",
             "remote": "origin", "default_branch": "main", "deploy_key_ref": "-",
@@ -67,6 +93,9 @@ class Fixture:
             "RECURSION_CONTROL_LOCK_WAIT_S": "2",
             "RECURSION_DECIDE_QUIET": "1",
             "RECURSION_PILOT_MODEL": "fixture-model",
+            "PATH": os.pathsep.join((
+                str(self.fixture_bin), str(self.host_trap_bin), self.env.get("PATH", ""),
+            )),
         })
 
     def close(self) -> None:
@@ -112,9 +141,15 @@ def main() -> None:
         require("old-head-marker" in default.stdout and "fresh-pilot-marker" not in default.stdout,
                 "no-argument/default invocation no longer selected the oldest open instruction")
         wrapper_default = fixture.run("")
-        require(wrapper_default.returncode != 2
+        require(wrapper_default.returncode == 1
                 and "unknown decision argument" not in wrapper_default.stderr,
                 "the bin/recursion empty-argument compatibility path was rejected")
+        require(fixture.fixture_hermes_marker.read_text(encoding="utf-8") == "fixture-hermes\n",
+                "the empty-argument compatibility path did not reach the fixture-local Hermes")
+        require(not fixture.host_hermes_marker.exists(),
+                "the empty-argument compatibility path escaped to the host Hermes trap")
+        require(not list((fixture.root / "state/decision-queue").glob("*/*.json")),
+                "the fixture-local failing Hermes created a decision")
 
         exact = fixture.run("--instruction", "934", "--brief")
         require(exact.returncode == 0, f"exact cross-actor selection failed: {exact.stderr}")
