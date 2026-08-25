@@ -9,7 +9,6 @@ import hashlib
 import json
 import os
 import re
-import shlex
 import stat
 import subprocess
 import sys
@@ -23,11 +22,15 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from transition_receipt import (
-    TransitionReceiptError, commit_event, commit_transition, json_mutation, resume_transition,
-    raw_text_mutation, text_mutation,
+    TransitionReceiptError, authenticated_transition, commit_event, commit_transition,
+    json_mutation, resume_transition, raw_text_mutation, text_mutation,
 )
 from pilot_instruction import require_affirmative_command
 from seed_contract import SeedContractError, inspect_repository, validate_contract
+from project_authority import (
+    AUTHORITY_V2_RELATIONSHIPS, AUTHORITY_V2_SCHEMA, OID, AuthorityError,
+    authenticated_remote_head, observe_clean_source, prove_current_remote_lineage,
+)
 
 
 IDENT = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
@@ -40,6 +43,11 @@ PHASE8_HEAD_VERBS = {"pilot-plan-approve", "pilot-window-open", "pilot-window-cl
 PILOT_ROUTES = PILOT_VERBS | {"status", "context", "repo", "logs", "evidence"}
 GATE_PROFILE_SELECTION_SCHEMA = "recursion-project-gate-profile-selection/v1"
 GATE_PROFILE_PROMOTION_SCHEMA = "recursion-project-gate-profile-promotion/v1"
+LEGACY_AUTHORITY_KEYS = {
+    "charter_sha256", "default_branch", "required_non_goals", "remote_head", "source_head",
+}
+PROMOTED_AUTHORITY_KEYS = LEGACY_AUTHORITY_KEYS | {"schema", "remote_relationship"}
+TERMINAL_GOAL_STATUSES = {"achieved", "blocked", "abandoned", "budget-exhausted"}
 HEAD_ONLY = {
     "priority-set", "reprioritize", "portfolio-add", "register", "policy-set", "spending",
     "credentials", "deploy", "merge", "pause", "resume", "model-policy", "control-plane",
@@ -59,16 +67,33 @@ def compact(value: object) -> None:
     print(json.dumps(value, sort_keys=True, separators=(",", ":")))
 
 
-def read_json(path: Path, unavailable_code: int = 4) -> dict:
+def read_json(path: Path, unavailable_code: int = 4,
+              malformed_code: int | None = None) -> dict:
+    invalid_code = unavailable_code if malformed_code is None else malformed_code
     try:
         if path.stat().st_size > 262144:
-            fail(f"state record exceeds the 256 KiB read bound: {path}", unavailable_code)
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+            fail(f"state record exceeds the 256 KiB read bound: {path}", invalid_code)
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
         fail(f"cannot read validated state {path}: {exc}", unavailable_code)
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        fail(f"cannot read validated state {path}: {exc}", invalid_code)
     if not isinstance(value, dict):
-        fail(f"state record is not an object: {path}", unavailable_code)
+        fail(f"state record is not an object: {path}", invalid_code)
     return value
+
+
+def read_required_json(path: Path, absent: str, *, unavailable_code: int = 4) -> dict:
+    """Keep proved absence/malformed bytes distinct from transient read unavailability."""
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        fail(absent)
+    except OSError as exc:
+        fail(f"cannot inspect validated state {path}: {exc}", unavailable_code)
+    return read_json(path, unavailable_code=unavailable_code, malformed_code=4)
 
 
 def fields(path: Path, unavailable_code: int | None = None) -> dict[str, str]:
@@ -121,13 +146,14 @@ def status_files(directory: Path, suffix: str | None, limit: int | None,
     return ordered[-limit:] if newest else ordered[:limit]
 
 
-def rows(base: Path) -> list[dict[str, str]]:
+def rows(base: Path, unavailable_code: int = 4) -> list[dict[str, str]]:
     names = ("id", "path", "remote", "branch", "key", "roadmap", "topic", "status")
     result = []
+    registry = base / "state/portfolio.tsv"
     try:
-        lines = (base / "state/portfolio.tsv").read_text(encoding="utf-8").splitlines()
+        lines = registry.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
-        fail(f"portfolio unavailable: {exc}")
+        fail(f"portfolio unavailable: {exc}", unavailable_code)
     for line in lines:
         if not line or line.startswith("#"):
             continue
@@ -138,20 +164,27 @@ def rows(base: Path) -> list[dict[str, str]]:
     return result
 
 
-def row_for(base: Path, project: str) -> dict[str, str]:
-    matches = [row for row in rows(base) if row["id"] == project]
+def row_for(base: Path, project: str, unavailable_code: int = 4) -> dict[str, str]:
+    matches = [row for row in rows(base, unavailable_code) if row["id"] == project]
     if len(matches) != 1:
         fail(f"project {project!r} is not uniquely registered")
     return matches[0]
 
 
-def records(base: Path, project: str, active: bool = False) -> tuple[dict, dict, dict[str, str]]:
-    row = row_for(base, project)
-    cfg = read_json(base / "state/project-config" / f"{project}.json")
+def records(base: Path, project: str, active: bool = False,
+            unavailable_code: int = 4) -> tuple[dict, dict, dict[str, str]]:
+    row = row_for(base, project, unavailable_code)
+    cfg = read_required_json(
+        base / "state/project-config" / f"{project}.json",
+        f"project configuration is absent for {project}", unavailable_code=unavailable_code,
+    )
     pilot_id = cfg.get("pilot_id")
     if not isinstance(pilot_id, str) or not IDENT.fullmatch(pilot_id):
         fail(f"project {project} has no canonical pilot id")
-    pilot = read_json(base / "state/pilots" / f"{pilot_id}.json")
+    pilot = read_required_json(
+        base / "state/pilots" / f"{pilot_id}.json",
+        f"pilot record is absent for {project}", unavailable_code=unavailable_code,
+    )
     if cfg.get("id") != project or pilot.get("project_id") != project or pilot.get("id") != pilot_id:
         fail(f"project/pilot identity mismatch for {project}")
     if str(cfg.get("topic")) != row["topic"] or str(pilot.get("topic")) != row["topic"]:
@@ -270,7 +303,8 @@ def git_evidence(cfg: dict) -> dict:
     if str(cfg.get("remote", "")).startswith("git@"):
         env["GIT_SSH_COMMAND"] = f"ssh -i {key} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
     remote = subprocess.run(["git", "ls-remote", str(cfg.get("remote") or "origin"), f"refs/heads/{branch}"],
-                            text=True, capture_output=True, timeout=20, check=False, env=env)
+                            cwd=str(repo), text=True, capture_output=True, timeout=20,
+                            check=False, env=env)
     remote_head = remote.stdout.split()[0] if remote.returncode == 0 and remote.stdout.split() else None
     return {"verified": bool(head and current), "repo": str(repo), "branch": current, "head": head,
             "default_branch": branch, "remote_head": remote_head, "fresh": remote_head == head,
@@ -434,11 +468,11 @@ def goal_state_lock(base: Path, goal_id: str):
 
 
 @contextmanager
-def phase8_lock(base: Path, identity: str):
+def phase8_lock(base: Path, identity: str, *, contended_code: int = 73):
     lock_dir = base / "state/.locks"; lock_dir.mkdir(parents=True, exist_ok=True)
     with (lock_dir / f"phase8-{identity}.lock").open("a+", encoding="utf-8") as lock:
         try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError: fail("Phase 8 state lock is contended", 73)
+        except BlockingIOError: fail("Phase 8 state lock is contended", contended_code)
         yield
 
 
@@ -574,8 +608,10 @@ def activate(base: Path, project: str) -> dict:
         env = os.environ.copy()
         if remote.startswith("git@"):
             env["GIT_SSH_COMMAND"] = f"ssh -i {key} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
-        probe = subprocess.run(["git", "ls-remote", remote, f"refs/heads/{branch}"], text=True,
-                               capture_output=True, timeout=25, check=False, env=env)
+        probe = subprocess.run(
+            ["git", "ls-remote", remote, f"refs/heads/{branch}"], cwd=str(base),
+            text=True, capture_output=True, timeout=25, check=False, env=env,
+        )
         if probe.returncode or not probe.stdout.split(): fail("deploy-key authentication or remote branch proof failed")
         remote_head = probe.stdout.split()[0]; repo = Path(row["path"])
         if not (repo / ".git").exists():
@@ -617,10 +653,15 @@ def activate(base: Path, project: str) -> dict:
 
 
 def goal_for(base: Path, project: str, goal_id: str, *,
-             allowed_statuses: frozenset[str] = frozenset({"approved", "active"})) \
+             allowed_statuses: frozenset[str] = frozenset({"approved", "active"}),
+             unavailable_code: int | None = None) \
         -> tuple[Path, dict[str, str]]:
-    for path in (base / "state/goals").glob("*.md"):
-        value = fields(path)
+    paths = (
+        status_files(base / "state/goals", ".md", None)
+        if unavailable_code is not None else (base / "state/goals").glob("*.md")
+    )
+    for path in paths:
+        value = fields(path, unavailable_code=unavailable_code)
         if value.get("id") == goal_id:
             if value.get("project_id") != project or value.get("status") not in allowed_statuses:
                 fail("goal is not approved for this project")
@@ -753,7 +794,7 @@ def load_gate_profile_promotion(base: Path, cfg: dict, promotion_id: str) -> dic
             or binding.get("project_id") != cfg.get("id"):
         fail("gate-profile promotion binding identity or schema is invalid")
     source_head = str(binding.get("source_head") or "")
-    if not re.fullmatch(r"[0-9a-f]{40,64}", source_head):
+    if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", source_head):
         fail("gate-profile promotion source HEAD is invalid")
 
     profile_ref = binding.get("profile")
@@ -967,54 +1008,72 @@ def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict) -> dict:
     return contract
 
 
-def live_authority_contract(cfg: dict, *, check_remote: bool) -> dict:
-    repo = Path(str(cfg["repo"])); branch = str(cfg["default_branch"])
-    def git(*args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(["git", "-C", str(repo), *args], text=True,
-                              capture_output=True, check=False)
-    head = git("rev-parse", "HEAD").stdout.strip()
-    current = git("branch", "--show-current").stdout.strip()
-    branch_head = git("rev-parse", f"refs/heads/{branch}").stdout.strip()
-    dirty = git("status", "--porcelain", "--untracked-files=all")
-    if dirty.returncode or dirty.stdout.strip():
-        fail("project repository must be exactly clean before a plan contract is bound")
-    if not re.fullmatch(r"[0-9a-f]{40,64}", head) or current != branch or branch_head != head:
-        fail("project repository HEAD is not the configured default-branch tip")
-    required = project_required_non_goals(cfg)
-    result = {
+def _local_authority_fields(cfg: dict) -> tuple[Path, dict]:
+    try:
+        repo, branch, head = observe_clean_source(cfg)
+    except AuthorityError as exc:
+        fail(str(exc), exc.code)
+    return repo, {
         "charter_sha256": hashlib.sha256(str(cfg.get("charter") or "").encode()).hexdigest(),
         "default_branch": branch,
-        "required_non_goals": required,
+        "required_non_goals": project_required_non_goals(cfg),
         "source_head": head,
     }
+
+
+def _canonical_promoted_selection(plan: dict) -> bool:
+    selection = plan.get("gate_profile_selection")
+    return bool(
+        isinstance(selection, dict)
+        and set(selection) == {"schema", "promotion_id", "binding_path", "binding_sha256"}
+        and selection.get("schema") == GATE_PROFILE_SELECTION_SCHEMA
+        and IDENT.fullmatch(str(selection.get("promotion_id") or ""))
+        and re.fullmatch(r"[0-9a-f]{64}", str(selection.get("binding_sha256") or ""))
+    )
+
+
+def live_authority_contract(cfg: dict, *, check_remote: bool) -> dict:
+    """Preserve the historical selector-less exact-tip authority contract."""
+    _, result = _local_authority_fields(cfg)
     if check_remote:
-        env = os.environ.copy(); remote = str(cfg.get("remote") or "origin")
-        if remote.startswith("git@"):
-            key = os.path.expanduser(str(cfg.get("deploy_key_ref") or ""))
-            if not key or not Path(key).is_file():
-                fail("project remote freshness credential is absent")
-            env["GIT_SSH_COMMAND"] = (
-                f"ssh -i {shlex.quote(key)} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
-            )
         try:
-            remote_result = subprocess.run(
-                ["git", "ls-remote", remote, f"refs/heads/{branch}"], env=env,
-                text=True, capture_output=True, timeout=20, check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            fail("project remote freshness could not be measured", 74)
-        remote_head = remote_result.stdout.split()[0] \
-            if remote_result.returncode == 0 and remote_result.stdout.split() else ""
-        if remote_head != head:
+            remote_head = authenticated_remote_head(cfg, str(result["default_branch"]))
+        except AuthorityError as exc:
+            fail(str(exc), exc.code)
+        if remote_head != result["source_head"]:
             fail("project default branch is not equal to its authenticated remote tip")
         result["remote_head"] = remote_head
     return result
 
 
+def live_promoted_authority_contract(cfg: dict) -> dict:
+    """Bind a promoted plan to exact source bytes plus authenticated monotonic lineage."""
+    repo, result = _local_authority_fields(cfg)
+    try:
+        remote_head, relationship = prove_current_remote_lineage(
+            cfg, str(result["source_head"]), observed_repo=repo,
+        )
+    except AuthorityError as exc:
+        fail(str(exc), exc.code)
+    return {
+        "schema": AUTHORITY_V2_SCHEMA,
+        **result,
+        "remote_head": remote_head,
+        "remote_relationship": relationship,
+    }
+
+
 def bind_authority_contract(cfg: dict, value: object) -> dict:
     if not isinstance(value, dict):
         fail("pilot plan must be an object")
-    plan = json.loads(json.dumps(value)); observed = live_authority_contract(cfg, check_remote=True)
+    plan = json.loads(json.dumps(value))
+    selection = plan.get("gate_profile_selection")
+    if selection is None:
+        observed = live_authority_contract(cfg, check_remote=True)
+    else:
+        if not _canonical_promoted_selection(plan):
+            fail("promoted authority requires an exact canonical gate-profile selection")
+        observed = live_promoted_authority_contract(cfg)
     if plan.get("authority_contract") not in (None, observed):
         fail("model-authored authority contract disagrees with controller evidence")
     plan["authority_contract"] = observed
@@ -1023,16 +1082,45 @@ def bind_authority_contract(cfg: dict, value: object) -> dict:
 
 def validate_authority_binding(cfg: dict, value: dict, *, check_remote: bool) -> dict:
     claimed = value.get("authority_contract")
-    if not isinstance(claimed, dict) or set(claimed) != {
-        "charter_sha256", "default_branch", "required_non_goals", "remote_head", "source_head"
-    } or claimed.get("remote_head") != claimed.get("source_head"):
-        fail("pilot plan authority contract is malformed")
-    observed = live_authority_contract(cfg, check_remote=check_remote)
-    if not check_remote:
-        observed["remote_head"] = claimed.get("remote_head")
-    if claimed != observed:
-        fail("pilot plan authority, source HEAD, or structured scope is stale")
-    return observed
+    promoted = value.get("gate_profile_selection") is not None
+    if not promoted:
+        if not isinstance(claimed, dict) or set(claimed) != LEGACY_AUTHORITY_KEYS \
+                or claimed.get("remote_head") != claimed.get("source_head"):
+            fail("pilot plan authority contract is malformed")
+        observed = live_authority_contract(cfg, check_remote=check_remote)
+        if not check_remote:
+            observed["remote_head"] = claimed.get("remote_head")
+        if claimed != observed:
+            fail("pilot plan authority, source HEAD, or structured scope is stale")
+        return claimed
+
+    if not _canonical_promoted_selection(value) or not isinstance(claimed, dict) \
+            or set(claimed) != PROMOTED_AUTHORITY_KEYS \
+            or claimed.get("schema") != AUTHORITY_V2_SCHEMA \
+            or claimed.get("remote_relationship") not in AUTHORITY_V2_RELATIONSHIPS:
+        fail("promoted pilot authority contract is malformed or unversioned")
+    repo, local = _local_authority_fields(cfg)
+    if {key: claimed.get(key) for key in local} != local:
+        fail("promoted pilot authority source or charter is stale")
+    source_head = str(claimed.get("source_head") or "")
+    anchored_remote = str(claimed.get("remote_head") or "")
+    if not OID.fullmatch(source_head) or not OID.fullmatch(anchored_remote) \
+            or len(source_head) != len(anchored_remote):
+        fail("promoted pilot authority contains an invalid commit identity")
+    try:
+        if check_remote:
+            _, relationship = prove_current_remote_lineage(
+                cfg, source_head, anchored_remote, observed_repo=repo,
+            )
+        else:
+            relationship = (
+                "equal" if source_head == anchored_remote else "remote-descends-from-source"
+            )
+    except AuthorityError as exc:
+        fail(str(exc), exc.code)
+    if claimed.get("remote_relationship") != relationship:
+        fail("promoted pilot authority relationship is internally stale")
+    return claimed
 
 
 def requires_heavy_gate(plan: dict, acceptance: str) -> bool:
@@ -1292,9 +1380,13 @@ def require_lucas_instruction(path: Path, instruction: dict[str, str], verb: str
 def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction_id: str) -> dict:
     args = decision.get("args") or decision.get("arguments") or []
     plan_id = str(args[1]) if len(args) > 1 else ""
-    plan = bind_authority_contract(cfg, decision.get("plan"))
-    plan = bind_seed_contract(cfg, plan)
+    raw_plan = decision.get("plan")
+    if not isinstance(raw_plan, dict):
+        fail("pilot plan must be an object")
+    plan = json.loads(json.dumps(raw_plan))
     plan = bind_gate_profile_selection(base, cfg, plan)
+    plan = bind_authority_contract(cfg, plan)
+    plan = bind_seed_contract(cfg, plan)
     plan = validate_plan(base, cfg, str(cfg["id"]), plan_id, plan,
                          bind_gate_contract=True, check_remote=True)
     digest = canonical_digest(plan); goal_id = str(plan["goal"]["id"])
@@ -1379,24 +1471,45 @@ def task_text(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str, t
     return "".join(f"{key}: {value}\n" for key, value in values.items()) + f"\n{task['intent']}\n"
 
 
-def verify_approved_goal(base: Path, project: str, goal_id: str, *, terminal: bool = False) -> dict:
+def verify_approved_goal(base: Path, project: str, goal_id: str, *, terminal: bool = False,
+                         check_remote: bool = False, allow_verifying: bool = False,
+                         allow_paused: bool = False,
+                         state_unavailable_code: int | None = None) -> dict:
     """Re-prove the digest-bound source, gates, seeds, and immutable DAG projection."""
-    cfg, pilot, _ = records(base, project, active=True)
+    unavailable_code = (
+        74 if check_remote else
+        4 if state_unavailable_code is None else state_unavailable_code
+    )
+    cfg, pilot, _ = records(
+        base, project, active=True, unavailable_code=unavailable_code,
+    )
     # Terminal verification deliberately runs while the goal is `verifying`.  Keep the common
     # lookup's default narrower so task creation/window arming still cannot treat that closed
     # state as ordinary active authority.
+    allowed_statuses = (
+        frozenset({"verifying"}) if terminal else
+        frozenset({"approved", "active", "verifying"}) if allow_verifying else
+        frozenset({"approved", "active"})
+    )
+    if allow_paused:
+        allowed_statuses |= {"paused"}
     goal_path, goal_fields = goal_for(
         base, project, goal_id,
-        allowed_statuses=(frozenset({"verifying"}) if terminal
-                          else frozenset({"approved", "active"})),
+        allowed_statuses=allowed_statuses,
+        unavailable_code=unavailable_code,
     )
     plan_id = goal_fields.get("plan_id", "")
     if not plan_id:
         fail("goal is not materialized from a Phase 8 plan")
-    proposal = read_json(base / "state/plans" / project / f"{plan_id}.json")
+    proposal = read_required_json(
+        base / "state/plans" / project / f"{plan_id}.json",
+        f"goal plan record is absent for {plan_id}", unavailable_code=unavailable_code,
+    )
     if proposal.get("status") != "approved":
         fail("goal plan is not approved")
-    plan = validate_plan(base, cfg, project, plan_id, proposal.get("plan"))
+    plan = validate_plan(
+        base, cfg, project, plan_id, proposal.get("plan"), check_remote=check_remote,
+    )
     digest = canonical_digest(plan)
     if proposal.get("plan_digest") != digest or goal_fields.get("plan_digest") != digest \
             or str(plan["goal"]["id"]) != goal_id:
@@ -1427,8 +1540,9 @@ def verify_approved_goal(base: Path, project: str, goal_id: str, *, terminal: bo
     if any(goal_fields.get(key, "") != str(value) for key, value in expected_goal.items()):
         fail("materialized goal immutable contract differs from its approved plan")
     actual_tasks = {}
-    for path in (base / "state/tasks").glob("*.md"):
-        value = fields(path)
+    task_paths = status_files(base / "state/tasks", ".md", None)
+    for path in task_paths:
+        value = fields(path, unavailable_code=unavailable_code)
         if value.get("goal_id") == goal_id:
             actual_tasks[value.get("id", "")] = value
     planned_ids = {str(task["id"]) for task in plan["tasks"]}
@@ -1448,9 +1562,109 @@ def verify_approved_goal(base: Path, project: str, goal_id: str, *, terminal: bo
             fail(f"materialized task {task['id']} immutable contract differs from its approved plan")
     return {"project_id": project, "goal_id": goal_id, "plan_id": plan_id,
             "plan_digest": digest, "source_head": authority["source_head"],
+            "authority_contract": authority,
             "task_ids": sorted(planned_ids),
             "provider_only_required": any(task.get("network_policy") == "provider-only"
-                                          for task in plan["tasks"])}
+                                           for task in plan["tasks"])}
+
+
+def active_source_pin(base: Path, project: str) -> dict | None:
+    """Return one armed/open window's controller-validated exact source pin."""
+    windows: list[tuple[Path, dict]] = []
+    for path in status_files(base / "state/pilot-windows", ".json", None):
+        value = read_json(path, unavailable_code=74, malformed_code=4)
+        if value.get("project_id") != project or value.get("status") not in {"armed", "open"}:
+            continue
+        if value.get("schema_version") != 1 \
+                or not IDENT.fullmatch(str(value.get("id") or "")) \
+                or path.stem != value.get("id") \
+                or not IDENT.fullmatch(str(value.get("goal_id") or "")) \
+                or not IDENT.fullmatch(str(value.get("pilot_id") or "")) \
+                or not IDENT.fullmatch(str(value.get("plan_id") or "")):
+            fail("source-pin window identity or schema is invalid")
+        expires = value.get("expires_at_epoch")
+        if isinstance(expires, bool) or not isinstance(expires, int) or expires < 1:
+            fail("source-pin window has an invalid expiry")
+        if expires <= int(time.time()):
+            # Expiry revokes execution authority even if the scheduler has not yet persisted
+            # the normally coupled close transition.  A stale record must not pin resync.
+            continue
+        windows.append((path, value))
+    if not windows:
+        return None
+    if len(windows) != 1:
+        fail("source pin requires exactly one armed/open project window")
+    _, window = windows[0]; goal_id = str(window.get("goal_id") or "")
+    _, goal_fields = goal_for(
+        base, project, goal_id,
+        allowed_statuses=frozenset(
+            {"approved", "active", "verifying", "paused"} | TERMINAL_GOAL_STATUSES
+        ),
+        unavailable_code=74,
+    )
+    # A terminal goal cannot launch again. Its stale armed record must not hold the repository
+    # forever while the controller's eventual close transition catches up. Authenticate the
+    # exact mutation-backed terminal receipt first so a hand-edited status cannot release it.
+    if goal_fields.get("status") in TERMINAL_GOAL_STATUSES:
+        target = str(goal_fields.get("status") or "")
+        expected = str(goal_fields.get("last_transition_from") or "")
+        reason = str(goal_fields.get("last_transition_reason") or "")
+        raw_version = str(goal_fields.get("version") or "")
+        if not IDENT.fullmatch(expected) or not reason or not raw_version.isdigit():
+            fail("terminal source-pin goal lacks canonical transition evidence")
+        version = int(raw_version)
+        if reason == "task-contract-invalid":
+            task_id = str(goal_fields.get("last_transition_task") or "")
+            category = str(goal_fields.get("last_transition_category") or "")
+            digest = str(goal_fields.get("contract_digest") or "")
+            if not IDENT.fullmatch(task_id) or not IDENT.fullmatch(category) \
+                    or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+                fail("terminal source-pin contract rejection evidence is malformed")
+            identity = (
+                f"{project}\0{goal_id}\0{task_id}\0{category}\0{digest}"
+                "\0pre-worker-contract-v2"
+            ).encode()
+            event_id = "source-task-contract-invalid-" + hashlib.sha256(identity).hexdigest()[:24]
+            expected_event = "task-contract-invalid"
+        else:
+            identity = (
+                f"{project}\0{goal_id}\0{expected}\0{target}\0{version}\0transition"
+            ).encode()
+            event_id = "source-goal-transition-" + hashlib.sha256(identity).hexdigest()[:24]
+            expected_event = "goal-transition"
+        try:
+            receipt = authenticated_transition(base, event_id)
+        except OSError as exc:
+            fail(f"terminal source-pin transition is unavailable: {exc}", 74)
+        except TransitionReceiptError as exc:
+            fail(f"terminal source-pin transition is not authenticated: {exc}")
+        event = receipt.get("event") if isinstance(receipt, dict) else None
+        if not isinstance(event, dict) or event.get("event") != expected_event \
+                or event.get("project") != project or event.get("goal") != goal_id:
+            fail("terminal source-pin transition receipt has mismatched authority")
+        return None
+    _, pilot, _ = records(base, project, active=True, unavailable_code=74)
+    if window.get("pilot_id") != pilot.get("id"):
+        fail("source-pin window pilot binding is invalid")
+    contract = verify_approved_goal(
+        base, project, goal_id, check_remote=False, allow_verifying=True,
+        allow_paused=True, state_unavailable_code=74,
+    )
+    authority = contract.get("authority_contract")
+    if not isinstance(authority, dict):
+        fail("source-pin authority is absent", 74)
+    if window.get("plan_id") != contract.get("plan_id") \
+            or window.get("plan_digest") != contract.get("plan_digest"):
+        fail("source-pin window does not match its approved plan")
+    return {
+        "schema": "recursion-project-source-pin/v1",
+        "project_id": project,
+        "goal_id": goal_id,
+        "plan_id": contract["plan_id"],
+        "plan_digest": contract["plan_digest"],
+        "source_head": contract["source_head"],
+        "remote_head": authority["remote_head"],
+    }
 
 
 def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction_id: str,
@@ -1540,7 +1754,9 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
         validate_control_state(base, "plan", proposal)
         mutations.append(json_mutation(path, proposal))
         commit_pilot_transition(base, mutations, event, authoritative_index=len(mutations) - 1)
-        verify_approved_goal(base, str(cfg["id"]), goal_id)
+        verify_approved_goal(
+            base, str(cfg["id"]), goal_id, state_unavailable_code=74,
+        )
     return {"plan": str(path.relative_to(base)), "status": "approved", "plan_digest": digest}
 
 
@@ -1608,9 +1824,9 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
         ):
             fail("pilot window requires an active goal with a pristine or unexecuted resumable task DAG")
         path = base / "state/pilot-windows" / f"{window_id}.json"
-        with phase8_lock(base, f"window-{cfg['id']}"):
-            for other in (base / "state/pilot-windows").glob("*.json"):
-                value = read_json(other)
+        with phase8_lock(base, f"window-{cfg['id']}", contended_code=75):
+            for other in status_files(base / "state/pilot-windows", ".json", None):
+                value = read_json(other, unavailable_code=74, malformed_code=4)
                 if value.get("project_id") == cfg["id"] and value.get("status") in {"armed", "open"} and other != path:
                     fail("project already has an open pilot window")
             record = {"schema_version": 1, "id": window_id, "project_id": cfg["id"], "pilot_id": pilot["id"],
@@ -1661,13 +1877,24 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
                     raise TransitionReceiptError(
                         "goal or task execution state changed before the pilot window arm commit"
                     )
-                for other in (base / "state/pilot-windows").glob("*.json"):
-                    value = read_json(other)
+                for other in status_files(base / "state/pilot-windows", ".json", None):
+                    value = read_json(other, unavailable_code=74, malformed_code=4)
                     if value.get("project_id") == cfg["id"] \
                             and value.get("status") in {"armed", "open"} and other != path:
                         raise TransitionReceiptError(
                             "project pilot window singleton changed before the arm commit"
                         )
+                current_contract = verify_approved_goal(
+                    base, str(cfg["id"]), goal_id, check_remote=False,
+                    state_unavailable_code=74,
+                )
+                if current_contract.get("plan_id") != plan_id \
+                        or current_contract.get("plan_digest") != digest \
+                        or current_contract.get("source_head") \
+                        != plan["authority_contract"]["source_head"]:
+                    raise TransitionReceiptError(
+                        "approved local source contract changed before the arm commit"
+                    )
 
             commit_pilot_transition(base, [json_mutation(path, record)], event,
                                     precondition=arm_precondition)
@@ -1675,7 +1902,7 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
     if len(args) != 2: fail("pilot-window-close needs project and window", 2)
     window_id = str(args[1]); require_lucas_instruction(instruction_file, instruction, "pilot-window-close", [window_id])
     path = base / "state/pilot-windows" / f"{window_id}.json"
-    with phase8_lock(base, f"window-{cfg['id']}"):
+    with phase8_lock(base, f"window-{cfg['id']}", contended_code=75):
         record = read_json(path)
         if record.get("project_id") != cfg["id"]: fail("pilot window is outside this project")
         event = transition_event(
@@ -1826,9 +2053,11 @@ def main() -> int:
     activate_cmd = sub.add_parser("activate"); activate_cmd.add_argument("project")
     execute_cmd = sub.add_parser("execute"); execute_cmd.add_argument("decision")
     execute_json_cmd = sub.add_parser("execute-json"); execute_json_cmd.add_argument("decision")
+    source_pin_cmd = sub.add_parser("active-source-pin"); source_pin_cmd.add_argument("project")
     verify_goal_cmd = sub.add_parser("verify-approved-goal")
     verify_goal_cmd.add_argument("project"); verify_goal_cmd.add_argument("goal")
     verify_goal_cmd.add_argument("--terminal", action="store_true")
+    verify_goal_cmd.add_argument("--check-remote", action="store_true")
     args = parser.parse_args(); base = root()
     if args.command == "verify-registry": verify_registry(base); print("OK")
     elif args.command == "topic":
@@ -1855,7 +2084,14 @@ def main() -> int:
     elif args.command == "activate": compact(activate(base, args.project))
     elif args.command == "execute": compact(execute(base, Path(args.decision)))
     elif args.command == "verify-approved-goal":
-        compact(verify_approved_goal(base, args.project, args.goal, terminal=args.terminal))
+        compact(verify_approved_goal(
+            base, args.project, args.goal, terminal=args.terminal,
+            check_remote=args.check_remote, state_unavailable_code=74,
+        ))
+    elif args.command == "active-source-pin":
+        pin = active_source_pin(base, args.project)
+        compact(pin or {"schema": "recursion-project-source-pin/v1", "project_id": args.project,
+                        "source_head": "-"})
     else:
         try:
             decision = json.loads(args.decision)

@@ -20,6 +20,7 @@ echo "ok    durable project/pilot metadata validates and active topics are one-t
 # topic is forwarded to Head Hermes. Both remain inert durable instructions.
 I="$TMP/intake"; mkdir -p "$I/scripts" "$I/state/project-config" "$I/state/pilots" "$I/state/instructions"
 cp "$SRC/scripts/intake.sh" "$SRC/scripts/instruction_routing.py" \
+   "$SRC/scripts/pilot_instruction.py" \
    "$SRC/scripts/transition_receipt.py" "$SRC/scripts/jsonl_durable.py" \
    "$SRC/scripts/runtime-state.py" "$I/scripts/"
 printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n' > "$I/state/portfolio.tsv"
@@ -66,7 +67,7 @@ echo "ok    project-topic intake binds its pilot and forwards portfolio/cross-pr
 P="$TMP/pilot"; mkdir -p "$P/scripts" "$P/state/project-config" "$P/state/pilots" \
   "$P/state/goals" "$P/state/tasks" "$P/state/runs" "$P/state/instructions" "$P/state/actions" \
   "$P/state/.locks" "$P/loop/logs"
-for script in project-pilot.py conduct-hermes.sh validate-decision.py validate-control-state.py \
+for script in project-pilot.py project_authority.py conduct-hermes.sh validate-decision.py validate-control-state.py \
               decision-queue.py taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
               instruction_routing.py pilot_instruction.py seed_contract.py runtime-state.py; do
   cp "$SRC/scripts/$script" "$P/scripts/"
@@ -148,7 +149,7 @@ echo "ok    pilot task verb is charter-, goal-, dependency-, gate-, and action-c
 # Registration's positive direction proves the gate is usable: a complete pending record plus a
 # key, clean clone, and exact remote OID becomes active and records the proof.
 A="$TMP/activation"; mkdir -p "$A/scripts" "$A/state/project-config" "$A/state/pilots" "$A/state/.locks"
-cp "$SRC/scripts/project-pilot.py" "$SRC/scripts/pilot_instruction.py" \
+cp "$SRC/scripts/project-pilot.py" "$SRC/scripts/project_authority.py" "$SRC/scripts/pilot_instruction.py" \
    "$SRC/scripts/seed_contract.py" "$SRC/scripts/jsonl_durable.py" \
    "$SRC/scripts/transition_receipt.py" "$SRC/scripts/runtime-state.py" "$A/scripts/"
 KEY="$TMP/activation-key"; : > "$KEY"; chmod 600 "$KEY"

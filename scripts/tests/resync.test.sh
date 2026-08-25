@@ -27,14 +27,47 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 command -v git >/dev/null 2>&1 || { echo "resync.test: git is required"; exit 3; }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-R="$TMP/root"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/roadmaps" "$R/loop/logs" "$TMP/origins"
-for s in resync.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh work.sh \
+R="$TMP/root"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/roadmaps" \
+  "$R/state/pilot-windows" "$R/loop/logs" "$TMP/origins"
+for s in resync.sh digest.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh work.sh \
          worker-sandbox.sh board.sh publish.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null
 : > "$R/.env"; : > "$R/state/INBOX.md"; echo "anchor" > "$R/ANCHOR.md"
+# A deliberately tiny controller stub keeps this suite focused on resync's interpretation of
+# an already validated source pin.  The real controller and its Git ancestry proof are covered
+# by gsc-profile-promotion.test.py; malformed stub output still has to fail closed here.
+cat > "$R/scripts/project-pilot.py" <<'PY'
+#!/usr/bin/env python3
+import json, pathlib, sys
+if len(sys.argv) != 3 or sys.argv[1] != "active-source-pin":
+    raise SystemExit(2)
+project = sys.argv[2]
+root = pathlib.Path(__file__).parents[1]
+with (root / "state/controller-calls").open("a", encoding="utf-8") as calls:
+    calls.write(project + "\n")
+path = root / "state/test-source-pins" / project
+source = path.read_text(encoding="utf-8").strip() if path.is_file() else "-"
+if source == "!fail":
+    print("project-pilot: bounded controller failure", file=sys.stderr)
+    raise SystemExit(74)
+if source == "!invalid":
+    print("project-pilot: proved source-pin contradiction", file=sys.stderr)
+    raise SystemExit(4)
+if source == "!malformed":
+    print("{malformed")
+    raise SystemExit(0)
+print(json.dumps({
+    "schema": "recursion-project-source-pin/v1",
+    "project_id": project,
+    "source_head": source,
+}, sort_keys=True, separators=(",", ":")))
+PY
+chmod +x "$R/scripts/project-pilot.py"
+printf '{}\n' > "$R/state/pilot-windows/controller-trigger.json"
 export RECURSION_NO_NOTIFY=1
+unset RECURSION_SOURCE_LOCK_WAIT_SECONDS
 GIT="git -c user.name=t -c user.email=t@t -c init.defaultBranch=main -c advice.detachedHead=false"
 
 # --- fixtures: <name> gets an origin bare repo and a clone --------------------------------
@@ -53,7 +86,7 @@ advance_origin(){ # advance_origin <name> <msg>
   ( cd "$w" && echo "$2" >> f.txt && $GIT add -A && $GIT commit -qm "$2" && $GIT push -q origin main ) >/dev/null 2>&1
   rm -rf "$w"
 }
-for n in insync behind diverged unreachable emptyremote; do mkrepo "$n"; done
+for n in insync behind lockahead pinned armrace badpin pinmoved pinfail pinmalformed diverged unreachable emptyremote; do mkrepo "$n"; done
 
 # 'emptyremote' authenticates perfectly and simply answers with no heads. This is the trap:
 # it is indistinguishable from a successful probe of a repo that has branches, unless someone
@@ -64,12 +97,16 @@ $GIT -C "$TMP/unreachable" remote set-url origin "$TMP/origins/does-not-exist.gi
 
 reg(){ printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$TMP/$1" "file://$TMP/origins/$1.git" main - - - "$2"; }
 { printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n'
-  reg insync active; reg behind active; reg diverged active
+  reg insync active; reg behind active; reg lockahead active; reg pinned active; reg armrace active; reg badpin active; reg pinmoved active
+  reg pinfail active; reg pinmalformed active; reg diverged active
   reg unreachable active; reg emptyremote active
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' notyet "$TMP/notyet" "file://$TMP/origins/notyet.git" main - - - pending
 } > "$R/state/portfolio.tsv"
+export RECURSION_PORTFOLIO="$R/state/portfolio.tsv"
 
-rs(){ ( cd "$R" && RECURSION_ROOT="$R" bash scripts/resync.sh "$@" ) >"$TMP/out" 2>&1; echo $?; }
+rs(){ ( cd "$R" && RECURSION_ROOT="$R" \
+    RECURSION_SOURCE_LOCK_WAIT_SECONDS="${RECURSION_SOURCE_LOCK_WAIT_SECONDS:-30}" \
+    bash scripts/resync.sh "$@" ) >"$TMP/out" 2>&1; echo $?; }
 
 # --- 1) ★ CONTROL: a repo that IS current reports fresh -------------------------------------
 # The refusal text ("CANNOT PROVE FRESH") contains the word 'fresh', so every assertion about
@@ -126,6 +163,127 @@ else
   no "★ CONTROL FAILED — sync did not fast-forward (before=$before after=$after)"
 fi
 
+# 3d) An authenticated promoted source pin is an explicit exception to portfolio fast-forward.
+# The remote is still fetched/measured, but the exact source branch and checkout must not move.
+advance_origin pinned remote-ahead
+mkdir -p "$R/state/test-source-pins"
+pinned_head="$($GIT -C "$TMP/pinned" rev-parse main)"
+printf '%s\n' "$pinned_head" > "$R/state/test-source-pins/pinned"
+rc=$(rs sync pinned)
+after="$($GIT -C "$TMP/pinned" rev-parse main)"
+if [ "$rc" = "0" ] && [ "$after" = "$pinned_head" ] \
+    && [ "$($GIT -C "$TMP/pinned" rev-parse origin/main)" != "$pinned_head" ] \
+    && grep -q 'PINNED.*exact active pilot source' "$TMP/out"; then
+  ok "an active promoted source pin measures remote drift without moving the exact source"
+else
+  no "promoted source pin did not preserve the exact source (rc=$rc before=$pinned_head after=$after)"
+fi
+
+rc=$(rs check pinned)
+if [ "$rc" = "75" ] && grep -q 'exact active pilot source' "$TMP/out"; then
+  ok "ordinary dispatch defers while a repository is held at an active pilot source"
+else
+  no "a non-pilot dispatch check did not preserve the active source-pin hold (rc=$rc)"
+fi
+
+digest_out="$(cd "$R" && RECURSION_ROOT="$R" bash scripts/digest.sh pinned --print 2>&1)"
+if grep -q 'repo: .*PINNED.*exact active pilot source' <<<"$digest_out" \
+    && ! grep -q 'NEEDS YOU.*exact active pilot source' <<<"$digest_out"; then
+  ok "a healthy active source pin renders as intentional hold instead of an operator alarm"
+else
+  no "project digest misclassified an intentional active source pin: $digest_out"
+fi
+
+# 3e) Window arming and portfolio fast-forward share one lock. Hold that lock until resync has
+# fetched the authenticated descendant, materialize the pin while it is waiting, then release.
+# A pre-lock implementation races through the fast-forward and fails the unchanged-source check.
+advance_origin armrace remote-ahead
+armrace_source="$($GIT -C "$TMP/armrace" rev-parse main)"
+armrace_remote="$($GIT --git-dir="$TMP/origins/armrace.git" rev-parse refs/heads/main)"
+mkdir -p "$R/state/.locks"
+exec {armrace_lock_fd}>"$R/state/.locks/phase8-window-armrace.lock"
+flock -x "$armrace_lock_fd"
+(
+  cd "$R" || exit 1
+  RECURSION_ROOT="$R" bash scripts/resync.sh sync armrace >"$TMP/armrace.out" 2>&1
+  printf '%s\n' "$?" >"$TMP/armrace.rc"
+) &
+armrace_pid=$!
+armrace_fetched=0
+for _ in $(seq 1 500); do
+  observed="$($GIT -C "$TMP/armrace" rev-parse --verify origin/main 2>/dev/null || true)"
+  if [ "$observed" = "$armrace_remote" ] && kill -0 "$armrace_pid" 2>/dev/null; then
+    armrace_fetched=1
+    break
+  fi
+  kill -0 "$armrace_pid" 2>/dev/null || break
+  sleep 0.01
+done
+printf '%s\n' "$armrace_source" > "$R/state/test-source-pins/armrace"
+flock -u "$armrace_lock_fd"
+exec {armrace_lock_fd}>&-
+wait "$armrace_pid" 2>/dev/null || true
+armrace_rc="$(cat "$TMP/armrace.rc" 2>/dev/null || printf 'missing')"
+armrace_after="$($GIT -C "$TMP/armrace" rev-parse main)"
+if [ "$armrace_fetched" = 1 ] && [ "$armrace_rc" = 0 ] \
+    && [ "$armrace_after" = "$armrace_source" ] \
+    && grep -q 'PINNED.*exact active pilot source' "$TMP/armrace.out"; then
+  ok "window arming wins the shared lock before resync can fast-forward its source"
+else
+  no "resync crossed a concurrent window arm (fetched=$armrace_fetched rc=$armrace_rc source=$armrace_source after=$armrace_after)"
+fi
+
+# A well-shaped but wrong pin is not permission to move either the checkout or its branch.
+advance_origin badpin remote-ahead
+badpin_head="$($GIT -C "$TMP/badpin" rev-parse main)"
+printf '%040d\n' 0 > "$R/state/test-source-pins/badpin"
+rc=$(rs sync badpin)
+after="$($GIT -C "$TMP/badpin" rev-parse main)"
+if [ "$rc" != "0" ] && [ "$after" = "$badpin_head" ] \
+    && grep -q 'FAULT.*source pin differs' "$TMP/out"; then
+  ok "a mismatched promoted source pin fails closed without moving the checkout"
+else
+  no "a mismatched promoted source pin was accepted or moved the checkout (rc=$rc)"
+fi
+
+# Drift remains visible after a branch has already reached the fetched remote (behind=0).
+advance_origin pinmoved remote-ahead
+$GIT -C "$TMP/pinmoved" fetch -q origin
+pinmoved_source="$($GIT -C "$TMP/pinmoved" rev-parse main)"
+printf '%s\n' "$pinmoved_source" > "$R/state/test-source-pins/pinmoved"
+$GIT -C "$TMP/pinmoved" reset -q --hard origin/main
+pinmoved_tip="$($GIT -C "$TMP/pinmoved" rev-parse main)"
+rc=$(rs sync pinmoved)
+if [ "$rc" != "0" ] && [ "$($GIT -C "$TMP/pinmoved" rev-parse main)" = "$pinmoved_tip" ] \
+    && grep -q 'FAULT.*source pin differs' "$TMP/out"; then
+  ok "source-pin drift fails closed even after the branch is no longer behind"
+else
+  no "source-pin drift was hidden when the branch was already at the remote tip (rc=$rc)"
+fi
+
+# Controller and transport failures retain bounded diagnostics and never fast-forward.
+printf '%s\n' '!fail' > "$R/state/test-source-pins/pinfail"
+rc=$(rs sync pinfail)
+if [ "$rc" != "0" ] && grep -q 'bounded controller failure' "$TMP/out"; then
+  ok "a source-pin controller failure is diagnostic and fail-closed"
+else
+  no "a source-pin controller failure lost its diagnostic or returned success (rc=$rc)"
+fi
+printf '%s\n' '!malformed' > "$R/state/test-source-pins/pinmalformed"
+rc=$(rs sync pinmalformed)
+if [ "$rc" != "0" ] && grep -q 'active source authority could not be proved' "$TMP/out"; then
+  ok "malformed source-pin output fails closed"
+else
+  no "malformed source-pin output was accepted (rc=$rc)"
+fi
+printf '%s\n' '!invalid' > "$R/state/test-source-pins/pinfail"
+rc=$(rs check pinfail)
+if [ "$rc" = "4" ] && grep -q 'NEEDS A HUMAN.*proved source-pin contradiction' "$TMP/out"; then
+  ok "a proved source-pin contradiction remains distinct from proof unavailability"
+else
+  no "a proved source-pin contradiction lost exit-4 classification (rc=$rc)"
+fi
+
 # --- 4) DIVERGED needs a human, and sync must not "fix" it by rewriting anything -------------
 advance_origin diverged remote-side
 ( cd "$TMP/diverged" && echo local-side >> f.txt && $GIT add -A && $GIT commit -qm local-side ) >/dev/null 2>&1
@@ -176,6 +334,97 @@ else
   no "escalation dedup broke: $n item(s), count=${c:-?}"
 fi
 
+# The source-pin controller is a hard dependency only when durable window records exist.
+mv "$R/scripts/project-pilot.py" "$R/scripts/project-pilot.py.saved"
+rc=$(rs check insync)
+if [ "$rc" = "3" ] && grep -q 'source-pin controller is absent' "$TMP/out"; then
+  ok "a window record requires an explicit source-pin controller"
+else
+  no "a missing source-pin controller was not diagnosed with a window present (rc=$rc)"
+fi
+rm -f "$R/state/pilot-windows/controller-trigger.json"
+rc=$(rs check insync)
+if [ "$rc" = "3" ] && grep -q 'source-pin controller is absent' "$TMP/out"; then
+  ok "an absent controller cannot turn an unproved window inventory into no pin"
+else
+  no "an absent controller granted an unproved empty window inventory (rc=$rc)"
+fi
+mv "$R/scripts/project-pilot.py.saved" "$R/scripts/project-pilot.py"
+mkdir -p "$R/state/test-source-pins"
+printf '%s\n' '!fail' > "$R/state/test-source-pins/insync"
+rc=$(rs check insync)
+if [ "$rc" = "75" ] && grep -q '^DEFERRED: .*bounded controller failure' "$TMP/out"; then
+  ok "an empty window inventory still delegates typed controller unavailability"
+else
+  no "empty inventory bypassed controller unavailability (rc=$rc)"
+fi
+printf '%s\n' '!invalid' > "$R/state/test-source-pins/insync"
+rc=$(rs check insync)
+if [ "$rc" = "4" ] && grep -q 'proved source-pin contradiction' "$TMP/out"; then
+  ok "an empty window inventory still delegates typed controller invalidity"
+else
+  no "empty inventory bypassed controller invalidity (rc=$rc)"
+fi
+rm -f "$R/state/test-source-pins/insync"
+calls_before="$(wc -l < "$R/state/controller-calls")"
+rc=$(rs check insync)
+calls_after="$(wc -l < "$R/state/controller-calls")"
+if [ "$rc" = "0" ] && grep -q 'fresh: origin/' "$TMP/out" \
+    && [ "$calls_after" -eq $((calls_before + 1)) ]; then
+  ok "the typed controller proves a genuinely empty window inventory"
+else
+  no "the controller could not prove a genuinely empty window inventory (rc=$rc calls=$calls_before->$calls_after)"
+fi
+
+# A human window action and ordinary resync share one project lock. Exercise the actual mutating
+# sync path against a remote-ahead source: contention may fetch observation refs, but it must not
+# move the local branch or checkout, and the same sync must fast-forward after lock release.
+advance_origin lockahead remote-ahead
+lock_path="$R/state/.locks/phase8-window-lockahead.lock"
+mkdir -p "$(dirname "$lock_path")"
+exec {contention_fd}>"$lock_path"
+flock -x "$contention_fd"
+before_lock_head="$($GIT -C "$TMP/lockahead" rev-parse refs/heads/main)"
+before_lock_heads="$($GIT -C "$TMP/lockahead" for-each-ref --format='%(refname) %(objectname)' refs/heads | sort)"
+before_lock_tree="$(sha256sum "$TMP/lockahead/f.txt" | awk '{print $1}')"
+rc=$(RECURSION_SOURCE_LOCK_WAIT_SECONDS=0 rs sync lockahead)
+after_lock_head="$($GIT -C "$TMP/lockahead" rev-parse refs/heads/main)"
+after_lock_heads="$($GIT -C "$TMP/lockahead" for-each-ref --format='%(refname) %(objectname)' refs/heads | sort)"
+after_lock_tree="$(sha256sum "$TMP/lockahead/f.txt" | awk '{print $1}')"
+flock -u "$contention_fd"
+exec {contention_fd}>&-
+if [ "$rc" = "1" ] && grep -q '^DEFERRED  lockahead .* exact source/window lock is contended$' "$TMP/out" \
+    && [ "$before_lock_head" = "$after_lock_head" ] \
+    && [ "$before_lock_heads" = "$after_lock_heads" ] \
+    && [ "$before_lock_tree" = "$after_lock_tree" ]; then
+  ok "shared source-window lock contention defers the mutating sync without moving the source"
+else
+  no "shared lock contention was not a state-preserving sync deferral (rc=$rc)"
+fi
+rc=$(RECURSION_SOURCE_LOCK_WAIT_SECONDS=0 rs sync lockahead)
+if [ "$rc" = "0" ] && grep -q '^FF        lockahead ' "$TMP/out" \
+    && [ "$($GIT -C "$TMP/lockahead" rev-parse main)" = "$($GIT -C "$TMP/lockahead" rev-parse origin/main)" ]; then
+  ok "the mutating source sync fast-forwards after the shared window lock is released"
+else
+  no "source sync did not recover after shared lock release (rc=$rc)"
+fi
+
+mkdir -p "$TMP/flock-fault"
+cat > "$TMP/flock-fault/flock" <<'SH'
+#!/usr/bin/env bash
+exit 69
+SH
+chmod +x "$TMP/flock-fault/flock"
+rc=$( ( cd "$R" && PATH="$TMP/flock-fault:$PATH" RECURSION_ROOT="$R" \
+    RECURSION_SOURCE_LOCK_WAIT_SECONDS=0 bash scripts/resync.sh check insync \
+    >"$TMP/out" 2>&1 ); echo $? )
+if [ "$rc" = "3" ] && grep -q '^CANNOT PROVE FRESH: exact source/window lock is unavailable$' "$TMP/out"; then
+  ok "an operational flock failure is unavailable, never misreported as contention"
+else
+  no "an operational flock failure was not typed as unavailable (rc=$rc)"
+fi
+printf '{}\n' > "$R/state/pilot-windows/controller-trigger.json"
+
 # ============================================================================================
 # work.sh integration — the actual defect this branch closes.
 # ============================================================================================
@@ -193,6 +442,7 @@ status: queued
 EOF
 }
 run_work(){ ( cd "$R" && RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 \
+    RECURSION_SOURCE_LOCK_WAIT_SECONDS="${RECURSION_SOURCE_LOCK_WAIT_SECONDS:-30}" \
     RECURSION_TEST_WORKER=logical bash scripts/work.sh "$1" ) >"$TMP/w.out" 2>&1; }
 st(){ sed -n 's/^status: *//p' "$R/state/tasks/$1.md" | head -1 | tr -d '\r'; }
 
@@ -207,6 +457,44 @@ if [ "$(st fresh-ok)" = "passed" ] && [ "$(built "$TMP/insync" fresh-ok)" = "yes
 else
   no "★ CONTROL FAILED — a fresh repo did not build (status=$(st fresh-ok)); test 11 proves nothing"
   tail -5 "$TMP/w.out" | sed 's/^/        /'
+fi
+
+mktask lock-defer "$TMP/insync"
+exec {work_lock_fd}>"$R/state/.locks/phase8-window-insync.lock"
+flock -x "$work_lock_fd"
+RECURSION_SOURCE_LOCK_WAIT_SECONDS=0 run_work lock-defer; lock_work_rc=$?
+flock -u "$work_lock_fd"
+exec {work_lock_fd}>&-
+if [ "$lock_work_rc" = 75 ] && [ "$(st lock-defer)" = queued ] \
+    && [ "$(built "$TMP/insync" lock-defer)" = no ] \
+    && grep -q 'base freshness is temporarily deferred.*source/window lock is contended' "$TMP/w.out"; then
+  ok "shared-lock contention defers work before task lease or worker launch"
+else
+  no "shared-lock contention did not preserve queued work (rc=$lock_work_rc status=$(st lock-defer))"
+fi
+
+mktask pin-io-defer "$TMP/insync"
+printf '%s\n' '!fail' > "$R/state/test-source-pins/insync"
+run_work pin-io-defer; pin_io_work_rc=$?
+rm -f "$R/state/test-source-pins/insync"
+if [ "$pin_io_work_rc" = 75 ] && [ "$(st pin-io-defer)" = queued ] \
+    && [ "$(built "$TMP/insync" pin-io-defer)" = no ] \
+    && grep -q 'base freshness is temporarily deferred.*bounded controller failure' "$TMP/w.out"; then
+  ok "transient source-pin controller I/O defers before task lease or worker launch"
+else
+  no "transient source-pin I/O terminalized queued work (rc=$pin_io_work_rc status=$(st pin-io-defer))"
+fi
+
+# A healthy active pin is temporary authority, not a terminally bad base. It must stop before
+# board/lease mutation so the exact queued task and its attempt budget remain retryable.
+mktask pin-defer "$TMP/pinned"
+run_work pin-defer; pin_work_rc=$?
+if [ "$pin_work_rc" = 75 ] && [ "$(st pin-defer)" = queued ] \
+    && [ "$(built "$TMP/pinned" pin-defer)" = no ] \
+    && ! grep -q '^attempts: [1-9]' "$R/state/tasks/pin-defer.md"; then
+  ok "a healthy active source pin defers before task lease or worker launch"
+else
+  no "an active source pin burned or terminalized ordinary work (rc=$pin_work_rc status=$(st pin-defer))"
 fi
 
 # --- 11) ★ the defect: a repo whose freshness cannot be proven must NOT be built on -----------

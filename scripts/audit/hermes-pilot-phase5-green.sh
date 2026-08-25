@@ -25,7 +25,7 @@ bash -n scripts/work.sh scripts/worker-sandbox.sh scripts/tests/hermes-pilot-pha
   scripts/tests/worker-gate-authority.test.sh
 python3 -m py_compile scripts/resolve-model-alias.py scripts/validate-gate.py scripts/git-scope.py \
   scripts/validate-worker-result.py scripts/validate-verifier-result.py scripts/worker-evidence.py \
-  scripts/validate-control-state.py scripts/project-pilot.py scripts/seed_contract.py \
+  scripts/validate-control-state.py scripts/project-pilot.py scripts/project_authority.py scripts/seed_contract.py \
   scripts/jsonl_durable.py scripts/transition_receipt.py
 echo "ok    Phase 5 shell and Python artifacts parse"
 

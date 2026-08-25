@@ -26,7 +26,7 @@ copy_controller(){
     "$r/state/decision-queue/succeeded" "$r/state/decision-queue/failed" \
     "$r/state/.locks" "$r/state/evidence" "$r/loop/logs"
   for s in conduct-hermes.sh decision-queue.py validate-decision.py validate-control-state.py \
-           project-pilot.py pilot_instruction.py project-reconcile.py jsonl_durable.py transition_receipt.py runtime-state.py taskctl.sh worker-sandbox.sh validate-gate.py; do
+           project-pilot.py project_authority.py pilot_instruction.py project-reconcile.py jsonl_durable.py transition_receipt.py runtime-state.py taskctl.sh worker-sandbox.sh validate-gate.py; do
     [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$r/scripts/"
   done
   [ ! -f "$SRC/scripts/seed_contract.py" ] || cp "$SRC/scripts/seed_contract.py" "$r/scripts/"
@@ -504,9 +504,12 @@ git -C "$repo" merge -q --ff-only "loop/work/merged-review"
 git -C "$repo" push -q "$origin" main
 git -C "$repo" push -q "$origin" :"loop/work/merged-review"
 git -C "$repo" branch -D "loop/work/merged-review" >/dev/null
+hostile_cwd="$TMP/review-merge-prune-hostile-cwd"
+mkdir -p "$hostile_cwd"
+printf 'gitdir: /definitely/absent/ambient-gitdir\n' > "$hostile_cwd/.git"
 merged_accept_rc=0
-RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" accept-review \
-  phase6 phase6-goal merged-review "$oid" lucas >/dev/null 2>&1 || merged_accept_rc=$?
+( cd "$hostile_cwd" && RECURSION_ROOT="$R" python3 "$R/scripts/project-reconcile.py" accept-review \
+  phase6 phase6-goal merged-review "$oid" lucas >/dev/null 2>&1 ) || merged_accept_rc=$?
 proof_kind="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["review_proof"]["kind"])' "$R/state/evidence/review-merged-review.json" 2>/dev/null)"
 if [ "$merged_accept_rc" = 0 ] && [ "$proof_kind" = remote-default-ancestor ] \
    && [ "$(field "$R/state/tasks/merged-review.md" review_status)" = accepted ]; then
@@ -731,12 +734,12 @@ pause_race_rc=0
 RECURSION_ROOT="$P" RECURSION_TEST_PAUSE_BEFORE_CONTRACT_COMMIT=1 \
   python3 "$P/scripts/project-reconcile.py" reject-task-contract pause-contract acceptance-invalid "$DIGEST" \
   >/dev/null 2>&1 || pause_race_rc=$?
-if [ "$pause_race_rc" != 0 ] && [ "$(task_status "$P" pause-contract)" = ready ] \
+if [ "$pause_race_rc" = 75 ] && [ "$(task_status "$P" pause-contract)" = ready ] \
    && [ "$(goal_status "$P")" = active ] \
    && ! grep -q '"event":"task-contract-invalid"' "$P/state/events.jsonl"; then
   ok "PAUSE at the receipt commit boundary prevents a new contract rejection"
 else
-  no "PAUSE/window authority changed before commit but a new rejection mutated state"
+  no "PAUSE/window authority change was not a typed deferral or mutated state (rc=$pause_race_rc)"
 fi
 
 # Every deterministic pre-worker metadata refusal shares the same attempts-zero lifecycle.
