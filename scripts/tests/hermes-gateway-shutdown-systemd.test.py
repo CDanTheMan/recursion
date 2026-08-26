@@ -24,6 +24,7 @@ STATUS_SOURCE = r'''\
 import json
 import os
 from pathlib import Path
+import time
 
 
 def _start_time(pid):
@@ -44,6 +45,7 @@ def write_planned_stop_marker(target_pid):
         "target_start_time": _start_time(target_pid),
     }
     _marker_path().write_text(json.dumps(record), encoding="utf-8")
+    time.sleep(float(os.environ.get("FAKE_MARKER_WRITE_DELAY", "0")))
     if os.environ.get("FAKE_MARKER_MODE") == "partial-raise":
         raise RuntimeError("synthetic failure after marker persistence")
     return True
@@ -67,20 +69,48 @@ GATEWAY_SOURCE = r'''\
 import os
 from pathlib import Path
 import signal
+import threading
 import time
 
 from gateway.status import consume_planned_stop_marker_for_self
 
 
+watcher_enabled = os.environ.get("FAKE_ENABLE_MARKER_WATCHER") == "1"
+shutdown = {"exit_code": None, "deadline": None}
+
+
 def stop(_signum, _frame):
-    raise SystemExit(0 if consume_planned_stop_marker_for_self() else 1)
+    planned = consume_planned_stop_marker_for_self()
+    if not watcher_enabled:
+        raise SystemExit(0 if planned else 1)
+    if not planned:
+        shutdown["exit_code"] = 1
+    elif shutdown["exit_code"] is None:
+        shutdown["exit_code"] = 0
+    if shutdown["deadline"] is None:
+        shutdown["deadline"] = time.monotonic() + float(
+            os.environ.get("FAKE_DRAIN_DELAY", "0.4")
+        )
+
+
+def watch_for_marker():
+    marker = Path(os.environ["FAKE_PLANNED_STOP_MARKER"])
+    while shutdown["deadline"] is None:
+        if marker.exists():
+            stop(None, None)
+            return
+        time.sleep(0.005)
 
 
 signal.signal(signal.SIGTERM, stop)
 Path(os.environ["FAKE_READY"]).write_text(str(os.getpid()), encoding="utf-8")
 if os.environ.get("FAKE_RUNTIME_FAILURE") == "1":
     raise SystemExit(1)
+if watcher_enabled:
+    threading.Thread(target=watch_for_marker, daemon=True).start()
 while True:
+    if shutdown["deadline"] is not None and time.monotonic() >= shutdown["deadline"]:
+        raise SystemExit(shutdown["exit_code"])
     time.sleep(0.05)
 '''
 
@@ -131,7 +161,16 @@ def main() -> int:
     names: list[str] = []
     try:
         results: dict[str, dict[str, str]] = {}
-        for case in ("unplanned", "planned", "partial-marker-failure", "runtime-failure"):
+        marker_states: dict[str, bool] = {}
+        for case in (
+            "unplanned",
+            "planned",
+            "watcher-race",
+            "timeout-fallback-no-watcher",
+            "timeout-after-watcher",
+            "partial-marker-failure",
+            "runtime-failure",
+        ):
             suffix = uuid.uuid4().hex[:12]
             unit = f"recursion-gateway-stop-{suffix}.service"
             names.append(unit)
@@ -148,6 +187,26 @@ def main() -> int:
                 if case == "partial-marker-failure"
                 else ""
             )
+            watcher_line = ""
+            if case in (
+                "planned",
+                "watcher-race",
+                "timeout-after-watcher",
+                "partial-marker-failure",
+            ):
+                watcher_line = "Environment=FAKE_ENABLE_MARKER_WATCHER=1\n"
+            if case == "watcher-race":
+                watcher_line += (
+                    "Environment=FAKE_MARKER_WRITE_DELAY=0.2\n"
+                    "Environment=FAKE_DRAIN_DELAY=1.0\n"
+                )
+            if case == "timeout-after-watcher":
+                watcher_line += "Environment=FAKE_DRAIN_DELAY=2.0\n"
+            wait_seconds = (
+                "1"
+                if case in ("timeout-fallback-no-watcher", "timeout-after-watcher")
+                else "5"
+            )
             restart = "no" if case == "runtime-failure" else "always"
             body = (
                 "[Unit]\nDescription=Disposable Hermes gateway shutdown proof\n\n"
@@ -157,7 +216,9 @@ def main() -> int:
                 f"Environment=FAKE_READY={ready}\n"
                 f"{failure_line}"
                 f"{marker_mode_line}"
+                f"{watcher_line}"
                 f"Environment=HERMES_HOME={base}\n"
+                f"Environment=RECURSION_GATEWAY_PLANNED_STOP_WAIT_S={wait_seconds}\n"
                 f"ExecStart=/usr/bin/python3 {gateway}\n"
                 f"{stop_line}"
                 f"Restart={restart}\nKillMode=control-group\nKillSignal=SIGTERM\n"
@@ -180,6 +241,7 @@ def main() -> int:
             else:
                 run("systemctl", "stop", unit, check=False)
             results[case] = properties(unit)
+            marker_states[case] = marker.exists() or marker.is_symlink()
 
         unplanned = results["unplanned"]
         if not (
@@ -201,6 +263,50 @@ def main() -> int:
         ):
             raise AssertionError(f"marked SIGTERM was not a clean manager stop: {planned}")
 
+        watcher_race = results["watcher-race"]
+        if not (
+            watcher_race.get("ActiveState") == "inactive"
+            and watcher_race.get("Result") == "success"
+            and watcher_race.get("ExecMainCode") == "0"
+            and watcher_race.get("ExecMainStatus") == "0"
+            and watcher_race.get("MainPID") == "0"
+        ):
+            raise AssertionError(
+                "marker watcher consumed manager authority before SIGTERM: "
+                f"{watcher_race}"
+            )
+
+        timeout_fallback = results["timeout-fallback-no-watcher"]
+        if not (
+            timeout_fallback.get("ActiveState") == "failed"
+            and timeout_fallback.get("Result") == "exit-code"
+            and timeout_fallback.get("ExecMainStatus") == "0"
+            and "code=exited" in timeout_fallback.get("ExecStop", "")
+            and "status=73" in timeout_fallback.get("ExecStop", "")
+            and timeout_fallback.get("MainPID") == "0"
+            and not marker_states["timeout-fallback-no-watcher"]
+        ):
+            raise AssertionError(
+                "watcher-less timeout did not preserve clean fallback signal and fail unit: "
+                f"{timeout_fallback}"
+            )
+
+        timeout_after_watcher = results["timeout-after-watcher"]
+        if not (
+            timeout_after_watcher.get("ActiveState") == "failed"
+            and timeout_after_watcher.get("Result") == "exit-code"
+            and timeout_after_watcher.get("ExecMainCode") == "1"
+            and timeout_after_watcher.get("ExecMainStatus") == "1"
+            and "code=exited" in timeout_after_watcher.get("ExecStop", "")
+            and "status=73" in timeout_after_watcher.get("ExecStop", "")
+            and timeout_after_watcher.get("MainPID") == "0"
+            and not marker_states["timeout-after-watcher"]
+        ):
+            raise AssertionError(
+                "watcher-consumed timeout did not remain visibly failed: "
+                f"{timeout_after_watcher}"
+            )
+
         runtime_failure = results["runtime-failure"]
         if not (
             runtime_failure.get("ActiveState") == "failed"
@@ -214,10 +320,12 @@ def main() -> int:
         if not (
             partial_marker_failure.get("ActiveState") == "failed"
             and partial_marker_failure.get("Result") == "exit-code"
+            and partial_marker_failure.get("ExecMainCode") == "1"
+            and partial_marker_failure.get("ExecMainStatus") == "0"
             and "code=exited" in partial_marker_failure.get("ExecStop", "")
-            and "status=1" in partial_marker_failure.get("ExecStop", "")
+            and "status=70" in partial_marker_failure.get("ExecStop", "")
             and partial_marker_failure.get("MainPID") == "0"
-            and not any(base.glob("*.json"))
+            and not marker_states["partial-marker-failure"]
         ):
             raise AssertionError(
                 "partial marker persistence did not fail closed: "
