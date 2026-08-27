@@ -51,11 +51,15 @@ mkdir -p "$TASKDIR" "$LOCKDIR" "$(dirname "$EVENTS")" 2>/dev/null
 # loop, and every writer here is append-or-rewrite-single-file, so worst case is interleaving,
 # never corruption of a half-written record. ------------------------------------------------
 _LOCK_HELD=0
+# The witnessed lock resolves the owner via its OS pid. Under Git Bash $$ is the MSYS pid,
+# which Win32 OpenProcess cannot see; /proc/$$/winpid never exists on Linux, so the
+# fallback is byte-identical on the box.
+_TASKCTL_OWNER_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"
 _lock(){
   local lock="$LOCKDIR/taskctl.lock"
   [ -x "$ROOT/scripts/runtime-state.py" ] \
     || { echo "taskctl: witnessed lock helper is absent" >&2; return 73; }
-  if ! python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$lock" "$$" >/dev/null; then
+  if ! python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$lock" "$_TASKCTL_OWNER_PID" >/dev/null; then
     echo "taskctl: state lock is contended; refusing to write unlocked" >&2
     return 73
   fi
@@ -69,14 +73,14 @@ _lock(){
 }
 _unlock(){
   [ "$_LOCK_HELD" = 1 ] || return 0
-  python3 "$ROOT/scripts/runtime-state.py" lock-release "$LOCKDIR/taskctl.lock" "$$" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$LOCKDIR/taskctl.lock" "$_TASKCTL_OWNER_PID" \
     >/dev/null || return 74
   _LOCK_HELD=0
 }
 
 _repair_transition_receipts(){
   RECURSION_ROOT="$ROOT" RECURSION_TASKCTL_LOCK_HELD=1 \
-    RECURSION_TASKCTL_LOCK_OWNER_PID="$$" \
+    RECURSION_TASKCTL_LOCK_OWNER_PID="$_TASKCTL_OWNER_PID" \
     python3 "$ROOT/scripts/transition_receipt.py" --root "$ROOT" recover >/dev/null
 }
 
@@ -227,8 +231,8 @@ emit_event(){ # kind task detail
     [ -z "$proj" ] && proj="$(_field "$f" workstream)"; goal="$(_field "$f" goal_id)"
   fi
   line="$(printf '{"schema_version":1,"ts":"%s","event":"%s","task":"%s","project":"%s","goal":"%s","pid":%s,"detail":"%s"}' \
-    "$(_now)" "$(_esc "$kind")" "$(_esc "$task")" "$(_esc "$proj")" "$(_esc "$goal")" "$$" "$(_esc "$detail")")"
-  EVENT_LINE="$line" RECURSION_TASKCTL_LOCK_HELD=1 RECURSION_TASKCTL_LOCK_OWNER_PID="$$" \
+    "$(_now)" "$(_esc "$kind")" "$(_esc "$task")" "$(_esc "$proj")" "$(_esc "$goal")" "$_TASKCTL_OWNER_PID" "$(_esc "$detail")")"
+  EVENT_LINE="$line" RECURSION_TASKCTL_LOCK_HELD=1 RECURSION_TASKCTL_LOCK_OWNER_PID="$_TASKCTL_OWNER_PID" \
     python3 - "$EVENTS" "$ROOT/scripts" <<'PY'
 import json,os,sys
 sys.path.insert(0,sys.argv[2])
@@ -250,7 +254,7 @@ transition_fields(){ # file kind task detail key value [key value ...]
     return $?
   fi
   TRANSITION_KIND="$kind" TRANSITION_TASK="$task" TRANSITION_DETAIL="$detail" \
-    RECURSION_TASKCTL_LOCK_HELD=1 RECURSION_TASKCTL_LOCK_OWNER_PID="$$" \
+    RECURSION_TASKCTL_LOCK_HELD=1 RECURSION_TASKCTL_LOCK_OWNER_PID="$_TASKCTL_OWNER_PID" \
     python3 - "$ROOT" "$f" "$@" <<'PY'
 import json,os,sys
 from pathlib import Path
@@ -276,7 +280,7 @@ emit_notification_event(){ # kind project message [occurrence-date]
   local kind="$1" project="$2" message="$3" occurrence="${4:-${RECURSION_CYCLE_DATE:-$(date -u +%F)}}"
   EVENT_KIND="$kind" EVENT_PROJECT="$project" EVENT_MESSAGE="$message" EVENT_TS="$(_now)" \
     EVENT_OCCURRENCE_DATE="$occurrence" RECURSION_TASKCTL_LOCK_HELD=1 \
-    RECURSION_TASKCTL_LOCK_OWNER_PID="$$" \
+    RECURSION_TASKCTL_LOCK_OWNER_PID="$_TASKCTL_OWNER_PID" \
     python3 - "$EVENTS" "$ROOT/scripts" <<'PY'
 import hashlib,json,os,re,sys
 sys.path.insert(0,sys.argv[2])

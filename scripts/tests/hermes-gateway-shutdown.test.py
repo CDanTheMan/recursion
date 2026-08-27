@@ -23,6 +23,27 @@ ADAPTER = ROOT / "scripts" / "hermes-gateway-planned-stop.py"
 UNIT = ROOT / "deploy" / "systemd" / "hermes-gateway.service"
 
 
+# The gateway stop contract is systemd plus POSIX process semantics, and on the Windows
+# authoring host neither of its load-bearing facilities exists:
+#
+#   * `os.pidfd_open` is absent and /proc/<pid>/stat does not exist, so
+#     `open_process_witness` takes its `identity is None` branch and reports EVERY live
+#     target as already_exited. The adapter then returns 0 without ever writing a marker,
+#     which is a wrong answer here rather than a valid one.
+#   * `Popen.send_signal(SIGTERM)` is TerminateProcess, so the fake gateway never runs its
+#     SIGTERM handler and dies with exit code 1 regardless. A control asserting "an unmarked
+#     manager SIGTERM reproduces exit 1" therefore passes without exercising anything — a
+#     coincidence, not a control, which is worse than a failure.
+#
+# Controls that depend on either facility are skipped by name below. Argument validation,
+# the wait contract, the distinct error codes, the genuine runtime-failure path and the unit
+# file itself need neither, and run for real on both platforms.
+_POSIX_PROCESS_ONLY = (
+    "requires POSIX process semantics: pidfd/proc identity and real SIGTERM delivery"
+)
+_skip_without_posix_process = unittest.skipIf(os.name == "nt", _POSIX_PROCESS_ONLY)
+
+
 FAKE_STATUS = r'''\
 import json
 import os
@@ -196,6 +217,21 @@ class GatewayShutdownContractTest(unittest.TestCase):
         assert process.returncode is not None
         return process.returncode
 
+    def release_gateway(self, process: subprocess.Popen[str]) -> None:
+        """Tear the fixture gateway down without asserting POSIX signal semantics.
+
+        Controls whose subject is argument or wait-contract validation still need a live pid
+        to point at, and used to end by asserting the unmarked-SIGTERM exit code. On Windows
+        that assertion is satisfied by TerminateProcess rather than by the gateway's own
+        handler, so keeping it here would launder a platform artifact into a passing control.
+        The Linux path is unchanged.
+        """
+        if os.name == "nt":
+            process.kill()
+            process.communicate(timeout=5)
+            return
+        self.assertEqual(self.stop_gateway(process), 1)
+
     def run_adapter(self, *args: str, mode: str = "ok") -> subprocess.CompletedProcess[str]:
         env = dict(self.env)
         env["FAKE_MARKER_MODE"] = mode
@@ -244,11 +280,13 @@ class GatewayShutdownContractTest(unittest.TestCase):
         self.assertLess(wait_seconds, timeout_seconds)
         self.assertLessEqual(wait_seconds, 50)
 
+    @_skip_without_posix_process
     def test_unmarked_manager_sigterm_reproduces_exit_one(self) -> None:
         process = self.start_gateway()
         self.assertEqual(self.stop_gateway(process), 1)
         self.assertFalse(self.marker.exists())
 
+    @_skip_without_posix_process
     def test_exact_marked_watcher_stop_exits_zero(self) -> None:
         process = self.start_gateway(FAKE_ENABLE_MARKER_WATCHER="1")
         marked = self.run_adapter(str(process.pid))
@@ -259,6 +297,7 @@ class GatewayShutdownContractTest(unittest.TestCase):
         self.assertEqual(record["target_pid"], process.pid)
         self.assertFalse(self.marker.exists())
 
+    @_skip_without_posix_process
     def test_marker_watcher_cannot_consume_before_systemd_sigterm(self) -> None:
         process = self.start_gateway(
             FAKE_ENABLE_MARKER_WATCHER="1",
@@ -286,8 +325,9 @@ class GatewayShutdownContractTest(unittest.TestCase):
                     self.assertFalse(self.marker.exists())
         finally:
             self.env["RECURSION_GATEWAY_PLANNED_STOP_WAIT_S"] = "2"
-            self.assertEqual(self.stop_gateway(process), 1)
+            self.release_gateway(process)
 
+    @_skip_without_posix_process
     def test_proc_identity_fallback_tracks_the_exact_process(self) -> None:
         spec = importlib.util.spec_from_file_location("gateway_planned_stop_adapter", ADAPTER)
         self.assertIsNotNone(spec)
@@ -317,6 +357,7 @@ class GatewayShutdownContractTest(unittest.TestCase):
         self.assertEqual(failed.returncode, 1)
         self.assertFalse(self.marker.exists())
 
+    @_skip_without_posix_process
     def test_already_exited_target_needs_no_marker(self) -> None:
         failed = self.start_gateway(FAKE_RUNTIME_FAILURE="1")
         failed.communicate(timeout=5)
@@ -325,6 +366,7 @@ class GatewayShutdownContractTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.marker.exists())
 
+    @_skip_without_posix_process
     def test_timeout_preserves_marker_and_returns_distinct_failure(self) -> None:
         process = self.start_gateway()
         self.env["RECURSION_GATEWAY_PLANNED_STOP_WAIT_S"] = "1"
@@ -381,11 +423,13 @@ class GatewayShutdownContractTest(unittest.TestCase):
             else:
                 sys.modules["gateway.status"] = saved_status
             sys.modules.pop(spec.name, None)
-            self.assertEqual(self.stop_gateway(process), 1)
+            self.release_gateway(process)
 
     def test_marker_failure_and_unsafe_arguments_fail_closed(self) -> None:
         process = self.start_gateway()
         try:
+            # Argument validation precedes `open_process_witness` in the adapter's main(), so
+            # these run for real on both platforms.
             for args in (
                 (),
                 ("0",),
@@ -399,14 +443,21 @@ class GatewayShutdownContractTest(unittest.TestCase):
                     result = self.run_adapter(*args)
                     self.assertEqual(result.returncode, 64)
                     self.assertFalse(self.marker.exists())
+            # The marker-failure modes are reached only after the witness says the target is
+            # live. On Windows the witness reports every target as already_exited, so the
+            # adapter returns 0 before consulting the marker at all and these cannot run.
             for mode in ("false", "raise", "outside"):
                 with self.subTest(mode=mode):
+                    if os.name == "nt":
+                        self.skipTest(
+                            f"marker-failure mode {mode!r} {_POSIX_PROCESS_ONLY}"
+                        )
                     result = self.run_adapter(str(process.pid), mode=mode)
                     self.assertEqual(result.returncode, 70)
                     self.assertFalse(self.marker.exists())
                     self.assertFalse(self.outside_marker.exists())
         finally:
-            self.assertEqual(self.stop_gateway(process), 1)
+            self.release_gateway(process)
 
 
 if __name__ == "__main__":

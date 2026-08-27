@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 import contextlib
 import io
@@ -18,12 +19,75 @@ from pathlib import Path
 
 
 SOURCE = Path(__file__).resolve().parents[2]
-if os.name == "nt":
-    sys.modules.setdefault(
-        "fcntl",
-        type("FcntlStub", (), {"LOCK_EX": 2, "LOCK_NB": 4,
-                                "flock": staticmethod(lambda *_: None)}),
+
+_NT_POSIX_SHIM = '''\
+"""Windows stand-ins for POSIX facilities the Linux controller assumes unconditionally."""
+import os
+import tempfile
+
+if os.name == "nt" and not getattr(os, "_recursion_nt_posix_shim", False):
+    os._recursion_nt_posix_shim = True
+    # The shared `mkstemp -> fchmod -> os.replace` writers raise AttributeError while their
+    # descriptor is still open, and the cleanup `unlink` of that open file then masks it as
+    # `[WinError 32] ... used by another process`, which callers report as a fabricated
+    # "taskctl lock contended". POSIX mode bits carry no meaning on NTFS, so a no-op is exact.
+    os.fchmod = lambda _descriptor, _mode: None
+    _real_open, _scratch = os.open, tempfile.TemporaryFile()
+
+    def _open(path, flags, mode=0o777, **kwargs):
+        # A directory has no openable handle on Windows, so notification-outbox.fsync_dir
+        # cannot take one. Return a syncable duplicate: the call sequence stays valid and the
+        # sync is inert, which is what runtime-state.py and jsonl_durable.py already do on nt
+        # behind their own `os.name` guards.
+        try:
+            inert = not flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT) and os.path.isdir(path)
+        except (TypeError, ValueError, OSError):
+            inert = False
+        return os.dup(_scratch.fileno()) if inert else _real_open(path, flags, mode, **kwargs)
+
+    os.open = _open
+'''
+
+
+def _install_nt_posix_shim() -> None:
+    """Neutralize POSIX-only facilities on the Windows authoring host; production is Linux.
+
+    The `fcntl` half of this was already here, because project-reconcile.py and
+    project-pilot.py import it unconditionally. `os.fchmod` is the other half and was the
+    reason this suite died on a missing state/events.jsonl: every deferral audit append went
+    through a `mkstemp -> fchmod -> os.replace` writer that raised AttributeError with its
+    descriptor still open, whose cleanup `unlink` then masked it as `[WinError 32]`, so the
+    journal was never created. The controls are hermetic and single-process, so no-contention
+    stand-ins let the real state machines run. The shim directory is exported on PYTHONPATH,
+    where `sitecustomize` re-applies it to the child interpreters these controls spawn. On
+    Linux this returns immediately and nothing below it is reachable.
+    """
+    if os.name != "nt":
+        return
+    directory = Path(tempfile.mkdtemp(prefix="nt-posix-shim-"))
+    atexit.register(shutil.rmtree, directory, True)
+    (directory / "fcntl.py").write_text(
+        "LOCK_SH = 1\nLOCK_EX = 2\nLOCK_NB = 4\nLOCK_UN = 8\n"
+        "def flock(_descriptor, _flags):\n    return None\n",
+        encoding="utf-8", newline="\n",
     )
+    (directory / "_recursion_nt_posix.py").write_text(
+        _NT_POSIX_SHIM, encoding="utf-8", newline="\n",
+    )
+    (directory / "sitecustomize.py").write_text(
+        "import _recursion_nt_posix  # noqa: F401\n", encoding="utf-8", newline="\n",
+    )
+    sys.path.insert(0, str(directory))
+    __import__("_recursion_nt_posix")
+    __import__("fcntl")
+    inherited = os.environ.get("PYTHONPATH")
+    os.environ["PYTHONPATH"] = (
+        str(directory) + os.pathsep + inherited if inherited else str(directory)
+    )
+
+
+_install_nt_posix_shim()
+
 RECONCILE = runpy.run_path(str(SOURCE / "scripts/project-reconcile.py"))
 PILOT = runpy.run_path(str(SOURCE / "scripts/project-pilot.py"))
 phase8_fresh_base = RECONCILE["phase8_fresh_base"]

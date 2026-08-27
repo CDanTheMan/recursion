@@ -3,3 +3,5 @@
 loop/supervisor/run.sh text eol=lf
 scripts/notify.sh text eol=lf
 scripts/install-cron.sh text eol=lf
+# Parser-read registry: the last column must not grow a CR on Windows checkouts.
+state/portfolio.tsv text eol=lf

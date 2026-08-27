@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import atexit
 import hashlib
 import importlib.util
 import json
@@ -15,6 +16,70 @@ import types
 from pathlib import Path
 from unittest import mock
 
+
+_NT_POSIX_SHIM = '''\
+"""Windows stand-ins for POSIX facilities the Linux controller assumes unconditionally."""
+import os
+import tempfile
+
+if os.name == "nt" and not getattr(os, "_recursion_nt_posix_shim", False):
+    os._recursion_nt_posix_shim = True
+    # The shared `mkstemp -> fchmod -> os.replace` writers raise AttributeError while their
+    # descriptor is still open, and the cleanup `unlink` of that open file then masks it as
+    # `[WinError 32] ... used by another process`, which callers report as a fabricated
+    # "taskctl lock contended". POSIX mode bits carry no meaning on NTFS, so a no-op is exact.
+    os.fchmod = lambda _descriptor, _mode: None
+    _real_open, _scratch = os.open, tempfile.TemporaryFile()
+
+    def _open(path, flags, mode=0o777, **kwargs):
+        # A directory has no openable handle on Windows, so notification-outbox.fsync_dir
+        # cannot take one. Return a syncable duplicate: the call sequence stays valid and the
+        # sync is inert, which is what runtime-state.py and jsonl_durable.py already do on nt
+        # behind their own `os.name` guards.
+        try:
+            inert = not flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT) and os.path.isdir(path)
+        except (TypeError, ValueError, OSError):
+            inert = False
+        return os.dup(_scratch.fileno()) if inert else _real_open(path, flags, mode, **kwargs)
+
+    os.open = _open
+'''
+
+
+def _install_nt_posix_shim() -> None:
+    """Neutralize POSIX-only facilities on the Windows authoring host; production is Linux.
+
+    `fcntl`, `os.fchmod`, and a read-only `os.open` of a directory are all absent here, and
+    each one fails as if an invariant broke rather than as a missing platform feature. These
+    controls are hermetic and single-process, so no-contention stand-ins let the real state
+    machines run instead of a platform artifact. The shim directory is exported on PYTHONPATH,
+    where `sitecustomize` re-applies it to the child interpreters these controls spawn. On
+    Linux this returns immediately and nothing below it is reachable.
+    """
+    if os.name != "nt":
+        return
+    directory = Path(tempfile.mkdtemp(prefix="nt-posix-shim-"))
+    atexit.register(shutil.rmtree, directory, True)
+    (directory / "fcntl.py").write_text(
+        "LOCK_SH = 1\nLOCK_EX = 2\nLOCK_NB = 4\nLOCK_UN = 8\n"
+        "def flock(_descriptor, _flags):\n    return None\n",
+        encoding="utf-8", newline="\n",
+    )
+    (directory / "_recursion_nt_posix.py").write_text(
+        _NT_POSIX_SHIM, encoding="utf-8", newline="\n",
+    )
+    (directory / "sitecustomize.py").write_text(
+        "import _recursion_nt_posix  # noqa: F401\n", encoding="utf-8", newline="\n",
+    )
+    sys.path.insert(0, str(directory))
+    __import__("_recursion_nt_posix")
+    inherited = os.environ.get("PYTHONPATH")
+    os.environ["PYTHONPATH"] = (
+        str(directory) + os.pathsep + inherited if inherited else str(directory)
+    )
+
+
+_install_nt_posix_shim()
 
 SOURCE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SOURCE / "scripts"))
@@ -258,8 +323,11 @@ def control_project_appenders_fail_closed_on_quarantine() -> tuple[bool, str]:
 
 
 def control_runtime_rotation_rejects_malformed() -> tuple[bool, str]:
-    if os.name == "nt":
-        return True, "skipped: runtime-state process-start witness is Linux-only"
+    # This control used to self-skip on nt as "runtime-state process-start witness is
+    # Linux-only", and the harness reported that skip as a plain `ok`. The real blocker was
+    # the missing `os.fchmod` (see `_install_nt_posix_shim`), which surfaced as an unrelated
+    # lock error; the rotation refusal itself needs no Linux facility, so with the shim in
+    # place the control genuinely runs here instead of silently claiming a pass.
     root = Path(tempfile.mkdtemp(prefix="jsonl-rotation-"))
     try:
         for relative in ("scripts", "state/.locks"):

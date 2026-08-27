@@ -33,7 +33,10 @@ git_common_physical(){
   local repo="$1" common
   common="$(git -C "$repo" rev-parse --git-common-dir 2>/dev/null)" \
     || return 1
-  case "$common" in /*) ;; *) common="$repo/$common" ;; esac
+  # Git Bash answers with a Windows drive-absolute path (C:/...); treating it as relative
+  # concatenates garbage and fails the probe via the wrong path. A git common-dir is never
+  # named X:/... on Linux, so the extra pattern is inert on the box.
+  case "$common" in /*|[A-Za-z]:[/\\]*) ;; *) common="$repo/$common" ;; esac
   (cd "$common" 2>/dev/null && pwd -P)
 }
 ROOT_GIT_COMMON="$(git_common_physical "$ROOT")" \

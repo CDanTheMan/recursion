@@ -60,10 +60,14 @@ CMD="${1:-poll}"; shift 2>/dev/null || true
 now(){ date -u +%FT%TZ; }
 
 _INTAKE_LOCK_HELD=0; _INTAKE_TMP=""
+# The witnessed lock resolves the owner via its OS pid. Under Git Bash $$ is the MSYS pid,
+# which Win32 OpenProcess cannot see; /proc/$$/winpid never exists on Linux, so the
+# fallback is byte-identical on the box.
+_INTAKE_OWNER_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"
 intake_unlock(){
   [ "$_INTAKE_LOCK_HELD" = 1 ] || return 0
   python3 "$ROOT/scripts/runtime-state.py" lock-release \
-    "$ROOT/state/.locks/taskctl.lock" "$$" >/dev/null || return 74
+    "$ROOT/state/.locks/taskctl.lock" "$_INTAKE_OWNER_PID" >/dev/null || return 74
   _INTAKE_LOCK_HELD=0
 }
 intake_cleanup(){
@@ -75,7 +79,7 @@ intake_lock(){
   mkdir -p "$ROOT/state/.locks" || return 70
   [ -x "$ROOT/scripts/runtime-state.py" ] \
     || { echo "intake: witnessed lock helper is absent" >&2; return 73; }
-  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$lock" "$$" >/dev/null \
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$lock" "$_INTAKE_OWNER_PID" >/dev/null \
     || { echo "intake: state lock is contended; refusing mutation" >&2; return 73; }
   _INTAKE_LOCK_HELD=1
   trap 'intake_cleanup' EXIT

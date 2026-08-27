@@ -113,6 +113,7 @@ class Fixture:
         for name in (
             "conduct-hermes.sh", "decision-queue.py", "hermes-actuator.sh", "taskctl.sh",
             "jsonl_durable.py", "transition_receipt.py", "runtime-state.py", "validate-control-state.py", "validate-decision.py",
+            "engine_contract.py",
         ):
             shutil.copy2(SOURCE / "scripts" / name, self.root / "scripts" / name)
         if os.name == "nt":

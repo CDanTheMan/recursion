@@ -17,6 +17,20 @@ ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
+sk(){ printf 'SKIP  %s\n' "$1"; }
+
+# Off the Linux deploy box two things about the REAL registry are environmental rather than wrong:
+# the rows point at box-local clone paths (/opt/..., /root/projects/...) and at deploy keys that
+# only exist in the box's ~/.ssh. Neither says anything about the registry from anywhere else.
+# Guarded on `uname -s` so the Linux box runs exactly the rules it ran before.
+OFFBOX=0; [ "$(uname -s)" = Linux ] || OFFBOX=1
+
+# A linked worktree's `.git` is a FILE containing "gitdir: ...", not a directory, so the original
+# `[ -d "$path/.git" ]` calls a perfectly good checkout "not a git repo" — which is how the ★
+# inverse control started failing once this repo was checked out as a worktree. Ask Git. On an
+# ordinary clone (every row that has ever been on the box) both forms agree, so the Linux verdict
+# is unchanged; this only stops mis-classifying checkout shapes Git itself considers valid.
+is_git_repo(){ [ -e "$1/.git" ] || git -C "$1" rev-parse --git-dir >/dev/null 2>&1; }
 
 # lint <file> -> prints one "<CODE> <detail>" line per problem; exit 0 iff clean
 lint(){
@@ -29,6 +43,11 @@ lint(){
   grep -q '^#project' "$reg" || { echo "NOHEADER no '#project' column header anywhere"; bad=1; }
   while IFS=$'\t' read -r project path remote branch key roadmap topic status; do
     case "$project" in \#*|"") continue ;; esac
+    # A Windows Git checkout materialises tracked text with CRLF (core.autocrlf), so the LAST
+    # tab-separated field arrives as 'active<CR>' and every row reads as BADSTATUS. Stripped off
+    # the Linux box ONLY: there, a CR inside the registry is a genuine defect and must keep
+    # surfacing as BADSTATUS rather than being quietly normalised away.
+    [ "$OFFBOX" = 1 ] && status="${status%$'\r'}"
     [ -n "$status" ] || { echo "SHORTROW $project has fewer than 8 columns"; bad=1; continue; }
     case "$status" in
       active|pending|reference) : ;;
@@ -41,10 +60,10 @@ lint(){
     #   an ACTIVE row is dispatched at, so its repo must exist;
     #   a PENDING row that HAS been cloned is stale — it is silently excluded from every sync,
     #   which is how a live repo stops being watched without anyone noticing.
-    if [ "$status" = "active" ] && [ ! -d "$path/.git" ]; then
+    if [ "$status" = "active" ] && ! is_git_repo "$path"; then
       echo "GHOST $project is active but $path is not a git repo"; bad=1
     fi
-    if [ "$status" = "pending" ] && [ -d "$path/.git" ]; then
+    if [ "$status" = "pending" ] && is_git_repo "$path"; then
       echo "STALE $project is pending but $path already exists — promote it to active"; bad=1
     fi
     # A key that does not exist means every git op on this repo runs with no credential, and a
@@ -70,6 +89,18 @@ lint(){
 
 # --- the real registry ----------------------------------------------------------------------
 out="$(lint "$ROOT/state/portfolio.tsv" 2>&1)"
+if [ "$OFFBOX" = 1 ]; then
+  # GHOST/STALE compare a row against a clone that exists only on the deploy box, and NOKEY
+  # against keys that only exist in the box's ~/.ssh. Off the box those three codes report the
+  # machine, not the registry, so they are withdrawn from THIS assertion and named out loud
+  # rather than being silently tolerated. Everything structural — header, column count, status
+  # vocabulary, branch, remote shape, roadmap pointer (resolved under $ROOT, so portable),
+  # duplicate project and duplicate path — still runs, and so does every ★ CONTROL below,
+  # which exercises GHOST/STALE/NOKEY against fixture paths and a fixture key.
+  boxlocal="$(printf '%s\n' "$out" | grep -cE '^(GHOST|STALE|NOKEY) ')"
+  out="$(printf '%s\n' "$out" | grep -vE '^(GHOST|STALE|NOKEY) ')"
+  sk "GHOST/STALE/NOKEY withdrawn from the real-registry check on $(uname -s): clone paths and ~/.ssh deploy keys exist only on the Linux deploy box ($boxlocal line(s) withheld). The ★ CONTROLs below still prove all three codes fire."
+fi
 if [ -z "$out" ]; then
   ok "state/portfolio.tsv is internally consistent (paths, keys, roadmaps, statuses, uniqueness)"
 else
@@ -79,7 +110,13 @@ fi
 # --- ★ CONTROL: the same rules must REJECT a registry that is wrong in each way ---------------
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 mkrow(){ printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$@"; }
-GOODKEY="$(awk -F'\t' '$1 !~ /^#/ && $5 != "-" {print $5; exit}' "$ROOT/state/portfolio.tsv")"
+# The 'good' rows below used a key lifted from the real registry, which made every control that
+# is supposed to be clean depend on this machine having the deploy keys provisioned — off the box
+# the inverse control could never come back clean, so a lint that rejected everything would still
+# have looked correct. What the NOKEY rule needs from a good row is precisely "a key file that
+# exists", so the fixture supplies one. On the box this produces the identical verdicts, and the
+# NOKEY control below still uses a path that is genuinely absent.
+GOODKEY="$TMP/id_fixture_deploy_key"; : > "$GOODKEY"
 
 check_control(){ # check_control <name> <expected-code> <registry-body>
   local name="$1" code="$2" body="$3" f="$TMP/reg.tsv" o

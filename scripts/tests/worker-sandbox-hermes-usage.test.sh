@@ -11,7 +11,7 @@
 # bind-mounted and hermes received `--property BindPaths=...` as junk argv.
 #
 # APPROACH. The real script requires root + systemd-run to run its sandbox path. Off-box (and even
-# on-box, to keep this hermetic and side-effect-free) we stub `id`, `systemd-run`, and `install` on
+# on-box, to keep this hermetic and side-effect-free) we stub `id`, `systemd-run`, `chown`, and `install` on
 # PATH ahead of any real ones: `id` reports uid 0 for the controller check and a fixed non-root
 # uid/gid for the runner-account lookup; `systemd-run` just records "$@" and exits 0 instead of
 # actually launching a unit; `install` performs the plain mkdir/copy/chmod it's asked for without
@@ -61,6 +61,15 @@ case "${1:-}" in
 esac
 STUB
 chmod +x "$BIN/id"
+
+# --- stub: chown — same reasoning as install below: a non-root test process cannot change
+# ownership, and the real script performs it only as the actual root controller on the box.
+# Succeeding silently keeps the REAL code path running through to the systemd-run capture.
+cat > "$BIN/chown" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+chmod +x "$BIN/chown"
 
 # --- stub: install — mkdir/copy/chmod only; no chown (a non-root test process cannot chown to
 # uid 0, which the real script legitimately does on the box as the actual root controller).

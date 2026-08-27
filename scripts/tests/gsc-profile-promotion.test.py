@@ -3,24 +3,182 @@
 
 from __future__ import annotations
 
+import atexit
 import hashlib
 import json
 import os
 import runpy
 import shutil
+import stat
 import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
 
 
+_NT_FCNTL_SOURCE = '''\
+"""Windows stand-in for fcntl.flock backed by a real cross-process byte-range lock.
+
+The other Windows-shimmed suites use a no-op flock because they are single-process and have
+no contention to express. This suite is different: one control holds the phase-8 window lock
+in the parent and requires the child project-pilot.py to observe it and defer, so a no-op
+would silently turn a contention control into a no-contention one. msvcrt gives real
+cross-process semantics.
+
+Two Windows specifics are load-bearing. Windows byte-range locks are mandatory rather than
+advisory, so the locked region is placed far beyond EOF: locking offset 0 would make the lock
+file itself unreadable and break the byte-tree fingerprints these controls compare. And the
+lock is released by handle close as well as by LOCK_UN, which matches how the callers use it.
+"""
+import msvcrt
+import os
+
+LOCK_SH, LOCK_EX, LOCK_NB, LOCK_UN = 1, 2, 4, 8
+_REGION = 1 << 30
+
+
+def flock(target, flags):
+    descriptor = target if isinstance(target, int) else target.fileno()
+    keep = os.lseek(descriptor, 0, os.SEEK_CUR)
+    os.lseek(descriptor, _REGION, os.SEEK_SET)
+    try:
+        if flags & LOCK_UN:
+            try:
+                msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+            except OSError:
+                pass
+            return None
+        try:
+            msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+        except OSError as exc:
+            raise BlockingIOError(exc.errno, "lock is held by another handle") from exc
+        return None
+    finally:
+        os.lseek(descriptor, keep, os.SEEK_SET)
+'''
+
+_NT_POSIX_SHIM = '''\
+"""Windows stand-ins for POSIX facilities the Linux controller assumes unconditionally."""
+import os
+import tempfile
+
+if os.name == "nt" and not getattr(os, "_recursion_nt_posix_shim", False):
+    os._recursion_nt_posix_shim = True
+    # The shared `mkstemp -> fchmod -> os.replace` writers raise AttributeError while their
+    # descriptor is still open, and the cleanup `unlink` of that open file then masks it as
+    # `[WinError 32] ... used by another process`, which callers report as a fabricated
+    # "taskctl lock contended". POSIX mode bits carry no meaning on NTFS, so a no-op is exact.
+    os.fchmod = lambda _descriptor, _mode: None
+    _real_open, _scratch = os.open, tempfile.TemporaryFile()
+
+    def _open(path, flags, mode=0o777, **kwargs):
+        # A directory has no openable handle on Windows, so notification-outbox.fsync_dir
+        # cannot take one. Return a syncable duplicate: the call sequence stays valid and the
+        # sync is inert, which is what runtime-state.py and jsonl_durable.py already do on nt
+        # behind their own `os.name` guards.
+        try:
+            inert = not flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT) and os.path.isdir(path)
+        except (TypeError, ValueError, OSError):
+            inert = False
+        return os.dup(_scratch.fileno()) if inert else _real_open(path, flags, mode, **kwargs)
+
+    os.open = _open
+
+    import shlex
+    _real_split = shlex.split
+
+    def _split(value, comments=False, posix=True):
+        # validate-gate.py parses the acceptance command line with shlex.split(), which in
+        # POSIX mode treats "\" as an escape character. A native Windows controller path
+        # ("C:\\Users\\...\\gsc-shade-tops-gate.py") therefore arrives as "C:UsersLucas..."
+        # with every separator eaten, and entrypoint() refuses it as a bare launcher. That
+        # normalization was clearly meant to work here -- validate-gate.py:73 and :96 both do
+        # `command.replace("\\", "/")` -- but shlex destroys the backslashes before either
+        # line can see them. Disabling ONLY the escape character makes a Windows drive path
+        # word-split exactly as a POSIX absolute path does on Linux; quoting, comment and
+        # whitespace behaviour are untouched, and for any string without a backslash (which
+        # is every string this suite produces on Linux) the result is identical.
+        if not posix:
+            return _real_split(value, comments, posix)
+        lexer = shlex.shlex(value, posix=True)
+        lexer.whitespace_split = True
+        lexer.escape = ""
+        if not comments:
+            lexer.commenters = ""
+        return list(lexer)
+
+    shlex.split = _split
+'''
+
+
+def _install_nt_posix_shim() -> None:
+    """Neutralize POSIX-only facilities on the Windows authoring host; production is Linux.
+
+    `fcntl`, `os.fchmod`, a read-only `os.open` of a directory, and backslash-safe shell word
+    splitting are all absent or wrong here, and each one fails as if an invariant broke rather
+    than as a missing platform feature. The stand-ins restore the Linux-observable behaviour
+    so the real state machines run. The shim directory is exported on PYTHONPATH, where
+    `sitecustomize` re-applies it to every child interpreter a fixture spawns. On Linux this
+    returns immediately and nothing below it is reachable.
+    """
+    if os.name != "nt":
+        return
+    directory = Path(tempfile.mkdtemp(prefix="nt-posix-shim-"))
+    atexit.register(shutil.rmtree, directory, True)
+    (directory / "fcntl.py").write_text(_NT_FCNTL_SOURCE, encoding="utf-8", newline="\n")
+    (directory / "_recursion_nt_posix.py").write_text(
+        _NT_POSIX_SHIM, encoding="utf-8", newline="\n",
+    )
+    (directory / "sitecustomize.py").write_text(
+        "import _recursion_nt_posix  # noqa: F401\n", encoding="utf-8", newline="\n",
+    )
+    sys.path.insert(0, str(directory))
+    __import__("_recursion_nt_posix")
+    inherited = os.environ.get("PYTHONPATH")
+    os.environ["PYTHONPATH"] = (
+        str(directory) + os.pathsep + inherited if inherited else str(directory)
+    )
+
+
+_install_nt_posix_shim()
+
 SOURCE = Path(__file__).resolve().parents[2]
 PHASE8 = runpy.run_path(str(SOURCE / "scripts/tests/hermes-pilot-phase8-red.py"))
 Fixture = PHASE8["Fixture"]
+
+if os.name == "nt":
+    class Fixture(PHASE8["Fixture"]):  # noqa: F811 - Windows-only refinement of the shared fixture.
+        """Give the staged controller tree a contention-capable `fcntl` on Windows.
+
+        The shared fixture writes its own no-contention `scripts/fcntl.py` into the staged
+        tree. For a child launched as `python3 scripts/project-pilot.py` that file's directory
+        is `sys.path[0]`, so it shadows the copy this suite exports on PYTHONPATH. One control
+        here holds the phase-8 window lock in the parent and requires the child to observe it,
+        which a no-op flock cannot express, so the staged module is replaced with the real
+        byte-range implementation. Linux never reaches this class.
+        """
+
+        def __init__(self) -> None:
+            super().__init__()
+            (self.root / "scripts/fcntl.py").write_text(
+                _NT_FCNTL_SOURCE, encoding="utf-8", newline="\n",
+            )
+
 canonical_digest = PHASE8["canonical_digest"]
 fields = PHASE8["fields"]
 PILOT = runpy.run_path(str(SOURCE / "scripts/project-pilot.py"))
 AUTHORITY = runpy.run_path(str(SOURCE / "scripts/project_authority.py"))
 AuthorityError = AUTHORITY["AuthorityError"]
+
+class PlatformSkip(Exception):
+    """Raised by a control that cannot run here, so the runner reports it as skip, never ok.
+
+    A control that quietly returns True on an unsupported platform is worse than a failing
+    one: it reports a pass for an invariant it never exercised. Controls raise this instead,
+    the runner prints the reason, and the run stays honest about what was and was not proven.
+    """
+
 
 SELECTION_SCHEMA = "recursion-project-gate-profile-selection/v1"
 PROMOTION_SCHEMA = "recursion-project-gate-profile-promotion/v1"
@@ -208,6 +366,10 @@ def install_promotion(fixture: Fixture, *, source_head: str | None = None) -> di
 
     relative_binding = f"scripts/gates/promotions/{PROMOTION_ID}.json"
     relative_profile = "scripts/gates/chiron-shade-tops-v3.json"
+    # This mirrors project-pilot.py's `expected_acceptance`, which the controller rebuilds
+    # with `str((base / gate_script).resolve())` and compares for exact equality. It must stay
+    # native-separator: see PROMOTED_PLAN_UNSATISFIABLE_ON_NT for why that makes the promoted
+    # path unreachable on Windows, and why the fixture cannot paper over it.
     acceptance = (
         f"{fixture.root / 'scripts/gsc-shade-tops-gate.py'} --repo . "
         f"--profile {fixture.root / relative_profile}"
@@ -1000,6 +1162,16 @@ def test_window_lock_contention_defers_exact_action() -> bool:
 
 
 def test_source_pin_window_inventory_is_bounded_and_fail_closed() -> bool:
+    # The first assertion here is that a symlinked window record is refused, so the control
+    # cannot start without creating one. On Windows that needs SeCreateSymbolicLinkPrivilege
+    # (elevation or Developer Mode); without it `Path.symlink_to` raises WinError 1314 in
+    # setup. Host-privilege gap, not a missing OS feature: with Developer Mode enabled on the
+    # authoring box this control runs here.
+    if os.name == "nt":
+        raise PlatformSkip(
+            "creating the symlinked window record needs SeCreateSymbolicLinkPrivilege "
+            "(WinError 1314); enable Developer Mode to run this on Windows"
+        )
     fixture = Fixture()
     try:
         configure_historical_profile(fixture)
@@ -1072,6 +1244,16 @@ def test_source_pin_window_inventory_is_bounded_and_fail_closed() -> bool:
 
 
 def test_named_remote_resolution_and_credential_symlink_fail_closed() -> bool:
+    # The credential half proves a symlinked deploy key is refused, which requires creating a
+    # symlink. On Windows that needs SeCreateSymbolicLinkPrivilege (elevation or Developer
+    # Mode); without it `Path.symlink_to` raises WinError 1314 in fixture setup, before the
+    # controller is ever consulted. This is a host-privilege gap rather than a missing OS
+    # feature: enabling Developer Mode on the authoring box makes this control runnable here.
+    if os.name == "nt":
+        raise PlatformSkip(
+            "creating the symlinked deploy key needs SeCreateSymbolicLinkPrivilege "
+            "(WinError 1314); enable Developer Mode to run this on Windows"
+        )
     named = Fixture()
     credential = Fixture()
     try:
@@ -1478,6 +1660,30 @@ def test_promotion_inventory_is_project_scoped_and_current_project_stays_strict(
 
 
 def test_transport_classifier_and_git_floor_fail_closed() -> bool:
+    # Both halves of this control are Windows-blocked, for unrelated reasons, and neither can
+    # be shimmed without replacing the thing being proven.
+    #
+    # 1. The classifier half asserts that "file:///var/tmp/fixture.git" is admitted. It is not
+    #    admitted here, and that is a real portability defect in production rather than a
+    #    fixture artifact: project_authority.py:101 gates the file:// branch on
+    #    `Path(parsed.path).is_absolute()`. A file:// URL path is POSIX by RFC 8089, but on
+    #    Windows `Path` is `WindowsPath`, and "/var/tmp/fixture.git" has no drive letter, so
+    #    `is_absolute()` is False and the value falls through to "transport is not explicitly
+    #    permitted". Only the UNC-shaped "file:////host/share/..." form passes, by accident.
+    #    `PurePosixPath` is the correct type there; see the report's PROPOSED section. Shimming
+    #    this test-side would mean asserting the opposite of what the control asserts.
+    # 2. The version-floor half shadows git on PATH with an extensionless `#!/usr/bin/env bash`
+    #    wrapper. Windows has no shebang dispatch, and CreateProcess appends only `.exe`
+    #    without consulting PATHEXT, so the wrapper is invisible and the real git.EXE answers
+    #    `--version`. Shadowing a native executable with a script is a POSIX exec-model
+    #    feature; faking it by patching `subprocess` inside `_require_git_version` would
+    #    exercise the version comparison but stop proving the PATH isolation this control names.
+    if os.name == "nt":
+        raise PlatformSkip(
+            "file:// transport admission is blocked by the WindowsPath.is_absolute() defect at "
+            "project_authority.py:101, and the git version floor needs POSIX shebang/PATH "
+            "shadowing of a native executable, which CreateProcess does not provide"
+        )
     fixture = Fixture()
     original_path = os.environ.get("PATH", "")
     try:
@@ -1535,10 +1741,26 @@ def test_transport_classifier_and_git_floor_fail_closed() -> bool:
         fixture.close()
 
 
+def _force_rmtree(path: Path) -> None:
+    """Remove a tree that contains git's read-only loose objects.
+
+    Git writes loose objects mode 0o100444. POSIX unlink only needs write permission on the
+    containing directory, so this is a plain rmtree on Linux and the handler never fires. On
+    Windows the read-only attribute is enforced against the file itself and unlink raises
+    WinError 5, so the entry is made writable and the removal retried. Only fixture teardown
+    is affected; no assertion depends on the mode bits.
+    """
+    def retry(function, target, _excinfo):
+        os.chmod(target, stat.S_IWRITE)
+        function(target)
+
+    shutil.rmtree(path, onexc=retry)
+
+
 def test_sha256_authority_uses_matching_disposable_object_format() -> bool:
     fixture = Fixture()
     try:
-        shutil.rmtree(fixture.repo / ".git")
+        _force_rmtree(fixture.repo / ".git")
         initialized = subprocess.run(
             ["git", "init", "-q", "--object-format=sha256", str(fixture.repo)],
             text=True, capture_output=True, check=False,
@@ -1726,9 +1948,14 @@ def main() -> int:
         ),
     ]
     failures = 0
+    skipped = 0
     for label, control in controls:
         try:
             passed = bool(control())
+        except PlatformSkip as reason:
+            print(f"skip  {label}: {reason}")
+            skipped += 1
+            continue
         except Exception as exc:
             print(f"diag  {label}: {exc}")
             passed = False
@@ -1740,6 +1967,9 @@ def main() -> int:
     if failures:
         print(f"gsc-profile-promotion: {failures} FAILED")
         return 1
+    if skipped:
+        print(f"gsc-profile-promotion: ALL PASS ({skipped} skipped)")
+        return 0
     print("gsc-profile-promotion: ALL PASS")
     return 0
 

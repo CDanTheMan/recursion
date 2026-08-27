@@ -43,7 +43,7 @@ class HeadWindowAdmissionTest(unittest.TestCase):
         for name in (
             "decision-queue.py", "hermes-decide.sh", "instruction_routing.py",
             "jsonl_durable.py", "pilot_instruction.py", "transition_receipt.py",
-            "validate-control-state.py",
+            "validate-control-state.py", "engine_contract.py",
         ):
             shutil.copy2(SOURCE / "scripts" / name, self.root / "scripts" / name)
         (self.root / "state/PAUSE").write_text("paused for deterministic admission control\n", encoding="utf-8")
