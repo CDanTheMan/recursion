@@ -1,5 +1,8 @@
 .env
 .env.local
+# .env backups shaped like .env.bak.<epoch> end in digits, so `*.bak` below misses them — and
+# one was found sitting unignored on the box (2026-08-27), one `git add -A` from a secret leak.
+.env.bak*
 *.local
 node_modules/
 __pycache__/
