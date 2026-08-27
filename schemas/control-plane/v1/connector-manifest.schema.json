@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://recursion.local/schemas/control-plane/v1/connector-manifest.schema.json",
+  "title": "Recursion notification connector manifest v1",
+  "description": "Documentation/box-tooling schema for scripts/connectors/<name>.json. The authoritative, self-contained validation lives in scripts/resolve-connector.py (no jsonschema dependency at runtime); this schema exists to document the contract accurately and to support editor/CI tooling. A connector describes a notification TRANSPORT that scripts/connector-transport.py may exec on behalf of notify.sh. It is inert until a human sets RECURSION_CONNECTORS=1, RECURSION_CONNECTOR_<NAME>_ENABLED=1, RECURSION_CONNECTOR_ACTIVE=<name>, and points RECURSION_NOTIFY_TRANSPORT at the adapter. See docs/plans/engine-plugin-architecture.md Component 6 and scripts/connectors/README.md.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "name",
+    "description",
+    "executable",
+    "transport_argv",
+    "ack_contract",
+    "env_passthrough",
+    "timeout_seconds"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,31}$",
+      "description": "Must equal the manifest filename stem (e.g. telegram-alt.json -> \"telegram-alt\"), and must not collide with a transport notify.sh implements natively (telegram, hermes). Those two names are reserved so a manifest can never shadow the built-in path."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "executable": {
+      "type": "string",
+      "description": "Absolute path to the transport binary. Absolute is the invariant: no PATH search, no cwd-relative resolution, no shell. Two absolute forms are accepted -- POSIX (/usr/local/bin/x), the only form ever used on the box, and Windows drive-absolute (C:\\dir\\x.exe), so the hermetic controls run on a workstation without a test-only bypass in the transport path. No `..` segment and no control characters.",
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "title": "POSIX absolute",
+              "pattern": "^(/[^/\\\\]+)+$"
+            },
+            {
+              "title": "Windows drive-absolute",
+              "pattern": "^[A-Za-z]:[\\\\/]([^\\\\/]+[\\\\/])*[^\\\\/]+$"
+            }
+          ]
+        },
+        {
+          "not": {
+            "pattern": "(^|[/\\\\])\\.\\.([/\\\\]|$)"
+          }
+        },
+        {
+          "not": {
+            "pattern": "[\\u0000-\\u001f\\u007f]"
+          }
+        }
+      ]
+    },
+    "transport_argv": {
+      "type": "array",
+      "minItems": 3,
+      "items": [
+        {
+          "const": "{{EXE}}",
+          "description": "transport_argv[0] must be the literal placeholder {{EXE}}."
+        }
+      ],
+      "additionalItems": {
+        "type": "string",
+        "minLength": 1
+      },
+      "allOf": [
+        {
+          "contains": {
+            "const": "{{DESTINATION}}"
+          }
+        },
+        {
+          "contains": {
+            "const": "{{MESSAGE}}"
+          }
+        }
+      ],
+      "description": "Exactly one element must be {{DESTINATION}} and exactly one must be {{MESSAGE}} (the counts are enforced by the resolver; draft-07 `contains` only guarantees at least one). Any element wholly of the form {{...}} must be one of the three known placeholders ({{EXE}}, {{DESTINATION}}, {{MESSAGE}}); {{EXE}} may appear only at index 0. Substitution is exact-element, never string interpolation, so a destination or message containing spaces, quotes or shell metacharacters arrives as one argv element. There is deliberately no placeholder for delivery_id/event_id: notify.sh passes them to the adapter for correlation only, and widening the substitution set is part of the D-014-gated follow-on."
+    },
+    "ack_contract": {
+      "enum": ["telegram"],
+      "description": "Shape of the acknowledgement the transport must print on stdout. notify.sh is the sole ack validator and today it accepts only a Telegram-shaped ack (transport==\"telegram\", a message_id, and chat/thread echo), so this enum has exactly one member. It widens when D-014 closes and notify.sh's validator is widened with it -- not before, because a non-telegram ack cannot pass the outbox validator and would fail every delivery."
+    },
+    "env_passthrough": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+        "not": {
+          "pattern": "TOKEN|SECRET|KEY|PASSWORD"
+        }
+      },
+      "description": "Env var NAMES (never values) copied from the adapter's environment into the transport child when set. Possibly empty. No duplicates. Any name containing TOKEN, SECRET, KEY or PASSWORD is refused with NO allowlist -- this is stricter than the engine manifest, which permits provider API keys because the sandbox carries them on a root-owned 0600 EnvironmentFile. A connector has no such carrier, and TELEGRAM_BOT_TOKEN in particular must never ride a manifest: notify.sh's token-hygiene contract is that the token never leaves that file. The substring match is deliberately over-broad (MONKEY_URL is refused); pick another name."
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120,
+      "description": "Wall-clock budget for the transport child. On expiry the adapter kills it and exits 10 (retryable), discarding partial stdout: a truncated body is not an acknowledgement."
+    }
+  }
+}
