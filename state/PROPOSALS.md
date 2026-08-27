@@ -66,3 +66,18 @@ convenience of skipping this note.
 **Falsifier:** after both steps, a build message from a chiron task should appear in the `chiron`
 topic and not in General. If it lands in General, the registry has a topic id that `message_thread_id`
 is not receiving.
+
+## 2026-08-26 — [NEEDS-APPROVAL] Declarative engine plugins (Cursor / Gemini / OpenCode / Sentry-local)
+status: IN AUTHORING — Lucas approved the scope in-session (D-015 draft); implementation on a review branch
+
+**Evidence:** worker plane supports only `claude` and `hermes`; `deepseek|openrouter` exit 91
+("no file tools — needs a file-emission protocol"). Subscriptions are moving; Lucas wants
+Cursor + ChatGPT as the drive pair and a toggle-able local Qwen arm on the Sentry PC.
+**Change:** engine manifests under `scripts/engines/`, fail-closed `resolve-engine.py`,
+generalized model aliases, generic sandbox exec path, availability-probe requeue.
+Full plan: `docs/plans/engine-plugin-architecture.md`.
+**Fitness:** engines/models become human-owned configuration; September reshuffle needs no code.
+**Risk:** touches `work.sh`/`worker-sandbox.sh` (protected paths). Mitigated: builtin paths
+byte-identical, plugins inert until `.env` flags a human sets, red controls before green.
+**Human steps after merge:** box CLI/flag verification, provider-allowlist entries, `.env`
+enable flags + alias values, Sentry server + tunnel (deployment section of the plan).

@@ -1,0 +1,272 @@
+---
+title: Declarative engine plugin architecture
+type: implementation-plan
+status: authoring
+last-verified: 2026-08-26
+related:
+  - CONTROL_PLANE.md
+  - docs/plans/hermes-project-pilot-production-plan.md
+  - docs/plans/hermes-phase8-routing-recovery-handoff.md
+  - scripts/work.sh
+  - scripts/worker-sandbox.sh
+  - scripts/resolve-model-alias.py
+  - schemas/control-plane/v1/schema.json
+---
+# Declarative engine plugin architecture
+
+Authorized by Lucas 2026-08-26 as a control-plane authoring session (see D-015 draft).
+Motivation: subscriptions are being cancelled and moved; Recursion must be able to swap
+worker engines (Cursor CLI, Gemini CLI, OpenCode CLI, a local Qwen arm on the Sentry PC)
+and models without code changes, while every existing safety property is preserved.
+
+## Objective
+
+Turn "engine" from a hardcoded case statement into **data**: one JSON manifest per engine,
+validated against a schema, resolved by a fail-closed resolver, executed by a generic
+sandbox path. The machine gate, scope check, and independent verifier never depended on
+the model — this makes the worker plane match that fact.
+
+Inspiration (per Lucas): the DeepSeek harness / plugin methodology — capability as
+declarative manifest + thin adapter, not per-provider code.
+
+## Principles (invariants — violating any of these fails the gate)
+
+1. **Additive and inert by default.** Builtin engines (`claude`, `hermes`, `gate`,
+   `none`) keep their exact current code paths, byte-for-byte behavior. Plugin engines
+   activate only when BOTH `RECURSION_ENGINE_PLUGINS=1` AND
+   `RECURSION_ENGINE_<NAME>_ENABLED=1` are set in the human-owned `.env` on the box.
+   The loop never flips these (CLAUDE.md rule 3). Absent flags → identical rejection to
+   today (exit 92).
+2. **Fail closed everywhere.** Unknown engine, invalid manifest, disabled plugin, missing
+   executable, absent alias mapping, failed availability probe, metered engine without
+   `RECURSION_ALLOW_METERED=1` — each is a distinct, tested refusal.
+3. **No secrets in manifests.** Manifests carry env var *names* only. Credentials come
+   from the runner home mount (already the mechanism for `claude`/`hermes`) or from
+   controller env at launch. Values are never logged.
+4. **Argv, never shell.** Prompt and model are substituted as exact single argv elements.
+   No string interpolation of model output into a shell line, ever.
+5. **The gate does not care who wrote the code.** Acceptance, scope verification, and
+   implementer≠verifier separation are unchanged; cross-*engine* verification becomes
+   possible (implement on Cursor, verify on Gemini) and is encouraged.
+6. **Unavailability is not failure.** A plugin engine whose availability probe fails
+   (e.g., the Sentry PC serving Qwen is off) causes the task to remain queued with a
+   backoff note — never a blocked task, never an escalation. That is the whole
+   "toggle-able local arm" design: the toggle is whether the server answers.
+
+## Component 1 — engine manifests
+
+`scripts/engines/<name>.json`, one per plugin engine. Schema at
+`schemas/control-plane/v1/engine-manifest.schema.json` (new).
+
+```json
+{
+  "schema_version": 1,
+  "name": "gemini",
+  "description": "Google Gemini CLI, headless",
+  "executable": "gemini",
+  "argv": ["{{EXE}}", "-p", "{{PROMPT}}", "--yolo"],
+  "model": { "required": false, "argv_suffix": ["--model", "{{MODEL}}"] },
+  "roles": ["implementer", "verifier"],
+  "billing": { "basis": "metered", "provider": "google-gemini" },
+  "network": { "policy": "provider-only",
+               "endpoints": ["generativelanguage.googleapis.com"] },
+  "availability_probe": null,
+  "concurrency_cap": null,
+  "env_passthrough": []
+}
+```
+
+Field rules:
+
+- `name`: `^[a-z][a-z0-9-]{1,31}$`, must equal the filename stem, must not collide with
+  builtin engine names (`claude`, `hermes`, `gate`, `none`, `deepseek`, `openrouter`).
+- `executable`: basename only (resolved via `command -v` inside the sandbox controller,
+  then bind-mounted read-only exactly like the existing single-executable path).
+- `argv`: array of strings. Placeholders `{{EXE}}`, `{{PROMPT}}`, `{{MODEL}}` are
+  replaced only when a whole element equals the placeholder. `{{EXE}}` must be element 0.
+  `{{PROMPT}}` must appear exactly once. No other templating.
+- `model.required`: if true, launch without a resolved model is refused.
+  `model.argv_suffix` is appended only when a model is present.
+- `billing.basis`: `flat-subscription` | `metered` | `local`. `metered` engines are
+  admitted only under `RECURSION_ALLOW_METERED=1` (same rule as `engine=hermes` today).
+  The usage-evidence policy record is generated from this block (see Component 4).
+- `network.endpoints`: documentation + deployment input for the provider-only
+  allowlist. Enforcement stays in the root-owned provider netns/proxy on the box; a
+  plugin engine enabled before its endpoints are provisioned simply has no egress and
+  fails its run — fail closed, no new capability implied by the manifest.
+- `availability_probe`: `null`, or
+  `{ "type": "http", "url_env": "RECURSION_ENGINE_<NAME>_HEALTH_URL", "timeout_s": 5 }`.
+  The URL itself lives in human-owned env, never in the manifest.
+- `concurrency_cap`: `null` or a positive integer — maximum simultaneous runs for this
+  engine across the box (the Sentry arm ships with 1).
+- `env_passthrough`: array of env var *names* (`^[A-Z][A-Z0-9_]{2,63}$`) copied from the
+  controller environment into the unit when set. For API-key-style engines.
+
+Shipped manifests (all inert until enabled on the box):
+
+| File | Engine | Notes |
+|---|---|---|
+| `gemini.json` | Gemini CLI | headless `-p`; metered (API key) or sub via runner-home OAuth |
+| `cursor.json` | Cursor CLI (`cursor-agent`) | headless print mode; `--model` passthrough gives the multi-model flexibility; billing `metered` until Cursor emits usage evidence |
+| `opencode.json` | OpenCode CLI | fronts OpenRouter/DeepSeek/any OpenAI-compatible provider; supersedes the stubbed `deepseek`/`openrouter` engines |
+| `opencode-local.json` | OpenCode → Sentry PC | Qwen 30B-class via local OpenAI-compatible server over the tunnel; `availability_probe` http; `concurrency_cap` 1; billing `local` |
+
+**Exact CLI flags in these manifests are provisional until verified on the box** (the
+handoff rule: measure, don't assume). Each manifest is inert data until then, so shipping
+provisional argv is safe.
+
+## Component 2 — engine resolver
+
+`scripts/resolve-engine.py` (new). Pure, offline, no side effects except the emitted plan.
+
+```
+resolve-engine.py <engine> --role implementer|verifier [--model-present] --emit-plan <out.json>
+```
+
+- Loads `scripts/engines/<engine>.json`, validates against the schema and the field rules
+  above (self-contained validation — no external jsonschema dependency, matching
+  `resolve-model-alias.py` style).
+- Checks enablement: `RECURSION_ENGINE_PLUGINS` global gate, then per-engine flag.
+- Checks the role is in `roles`.
+- Emits a **plan**: normalized JSON with final argv (placeholders still present as
+  placeholders — substitution happens in the sandbox with exact-element matching),
+  billing, probe spec, concurrency cap, env_passthrough.
+- Exit codes: `0` ok; `2` invalid manifest / role not permitted / usage error;
+  `3` plugins disabled, engine disabled, or manifest absent (human-owned mapping absent —
+  mirrors the alias resolver's 3); nonzero never emits a plan.
+
+## Component 3 — model alias generalization
+
+`scripts/resolve-model-alias.py` v2 plus a data registry
+`scripts/engines/model-aliases.json`:
+
+- The three legacy aliases (`sonnet-routine`, `opus-complex`, `opus-review`) keep their
+  exact env names, role sets, and behavior. Regression-tested byte-identical output.
+- New aliases are **data**: the registry maps alias → `{env, roles}`. Shipped starters:
+  `cursor-primary` (both roles), `gemini-review` (verifier), `opencode-flex` (both),
+  `sentry-local` (implementer). Humans extend the registry by editing the JSON (a
+  reviewed control-plane change), and set the env values in `.env`.
+- Env values may now be `engine:model` (e.g.
+  `RECURSION_MODEL_ALIAS_CURSOR_PRIMARY=cursor:gpt-5.2-codex`). The resolver validates
+  the engine part against `^[a-z][a-z0-9-]{1,31}$` and prints the value through; a bare
+  value (no colon) keeps meaning "model for the task's declared engine" — full backward
+  compatibility.
+- `work.sh` splits an `engine:model` resolution: the engine part must equal the task's
+  `engine:` field or the run is refused pre-worker (`model-alias-engine-mismatch`), so an
+  alias can never silently reroute a task to a different engine.
+- Unsafe-character screening, absent-mapping exit 3, and unknown-alias exit 2 unchanged.
+- `schemas/control-plane/v1/schema.json`: `model_alias` / `verifier_model_alias` become
+  `anyOf` [existing enum, pattern `^[a-z][a-z0-9-]{2,31}$`]. The registry+resolver are
+  the authoritative fail-closed check for non-enum aliases; implementer ≠ verifier
+  remains enforced in `work.sh`.
+
+## Component 4 — work.sh integration
+
+At the engine dispatch (`case "$ENGINE"` in `launch_worker`, and the pre-worker contract
+checks):
+
+- `none`, `claude`, `hermes`, `gate`: unchanged.
+- `deepseek|openrouter`: keep the exit-91 stub, with a comment pointing at the
+  `opencode` manifest as the supported route (raw chat-completion never grew file tools;
+  OpenCode subsumes it).
+- `*`: call `resolve-engine.py`. Exit 3 or 2 → the existing invalid-engine rejection
+  path (externally identical to today's 92). Exit 0 → plugin path:
+  1. **Billing admission**: `basis=metered` requires `RECURSION_ALLOW_METERED=1`
+     (reuse the hermes 93 path). `flat-subscription` and `local` proceed.
+  2. **Usage evidence**: write the policy record from the manifest
+     (`provider`, `billing_basis`, `evidence_source:"engine-manifest-v1"`) exactly the
+     way the claude flat-subscription record is written today. Absent record stays a
+     hard failure.
+  3. **Availability probe**: if the manifest declares one, resolve the URL env; probe
+     with a bounded timeout. Failure → **requeue disposition**: log
+     `engine-unavailable`, emit a board note, leave the task `queued` with a
+     `last_unavailable:` timestamp field, exit without failing the task. No escalation,
+     no `blocked`. (New exit path, distinct from every failure code.)
+  4. **Concurrency cap**: count running `recursion-worker-<engine>-*` units; at cap →
+     same requeue disposition.
+  5. Launch via `worker-sandbox.sh --engine <name> --engine-plan <root-owned plan file>`.
+- Pre-worker contract additions: `model-alias-engine-mismatch` (Component 3), and the
+  existing `model-separation-invalid` check extended so that *engine-level* separation is
+  recorded in run evidence when implementer and verifier resolve to different engines.
+
+## Component 5 — worker-sandbox.sh integration
+
+- Engine validation (`case` at the top): builtin names unchanged; any other name is
+  accepted **only** with `--engine-plan <path>` where the plan file is root-owned,
+  not group/other-writable, and parses as a valid plan. Anything else → 92.
+- Executable resolution: from the plan's `executable` via `command -v` (missing → 90),
+  then the existing single-executable bind-mount path (`$SANDBOX_BIN`) verbatim — plugin
+  engines get the identical mount treatment as a non-`/usr` claude.
+- Exec construction: generic branch builds the systemd-run command from plan argv with
+  exact-element substitution of `{{EXE}}` → mounted executable path, `{{PROMPT}}` →
+  `--prompt` value, `{{MODEL}}` → `--model` value (append `model.argv_suffix` only when
+  a model was passed). `env_passthrough` names present in the controller environment are
+  forwarded via `--setenv`.
+- The claude-only CONNECT-proxy env stays claude-only. Plugin engines run inside the
+  same provider-only netns; their egress works only once the box's provider allowlist
+  includes their endpoints (deployment step below).
+- Logical test mode (`RECURSION_TEST_WORKER=logical`, /tmp-only) gets the same generic
+  branch so hermetic controls can exercise a stub executable on PATH.
+
+## Component 6 — connectors and further pluggability (design only, this session)
+
+The same manifest pattern extends to notification transports (`notify.sh` currently
+hardcodes Telegram): a `scripts/connectors/<name>.json` declaring transport executable,
+destination-id shape, and delivery-receipt contract, consumed by the Phase 7 outbox.
+**Not implemented in this session** — the durable-outbox/PAUSE-interlock surface is
+promotion-critical and D-014 is still open; touching it now would invalidate evidence.
+Recorded here so the scope Lucas asked about ("connectors, and more") has a named,
+bounded follow-on.
+
+Supervisor-plane routing (Hermes `config.yaml`, `loop/config/routing.yaml`) is already
+human-owned configuration and stays out of scope.
+
+## Controls (red before green)
+
+1. `scripts/tests/engine-manifest.test.py` — every shipped manifest validates; mutations
+   (missing field, bad name, argv without `{{PROMPT}}`, `{{EXE}}` not first, secret-like
+   value in `env_passthrough`, builtin-name collision) are each rejected.
+2. `scripts/tests/resolve-engine.test.py` — unknown engine 3; plugins globally disabled
+   3; per-engine disabled 3; role not permitted 2; valid+enabled emits a correct plan;
+   metered basis surfaces in the plan; probe spec and concurrency cap pass through.
+3. `scripts/tests/resolve-model-alias.test.py` — the three legacy aliases resolve
+   byte-identically to v1; registry aliases resolve; `engine:model` values pass through
+   intact; unknown alias 2; absent env 3; unsafe characters 2; role mismatch 2.
+4. `scripts/tests/worker-sandbox-plugin.test.py` — logical-mode stub engine receives
+   prompt/model as single argv elements (quoting/injection control); plan file with wrong
+   ownership/permissions refused; builtin engines still refuse `--engine-plan`.
+   (Ownership/systemd assertions are Linux-only; the test skips them off-box and they
+   re-run in the box suite.)
+5. `work.sh` regressions, box-run: unknown engine with plugins unset rejects exactly as
+   today; metered plugin without the flag hits the 93 path; probe-fail leaves the task
+   queued and unescalated.
+
+Red evidence: each test lands one commit before its implementation and must fail there;
+the implementing commit turns it green. Same discipline as every phase since Phase 0.
+
+## Deployment steps (box, human-gated — none performed this session)
+
+1. Lucas reviews and merges the review branch; box pulls under the normal PAUSE-held
+   procedure.
+2. Verify each CLI's presence, exact headless flags, and auth on the box **as the runner
+   user**; correct manifests if flags drifted; commit corrections.
+3. Provision provider-only egress for each engine to be enabled
+   (`network.endpoints` → the root-owned netns/proxy allowlist).
+4. Set `.env`: `RECURSION_ENGINE_PLUGINS=1`, per-engine `_ENABLED=1`, alias values
+   (`RECURSION_MODEL_ALIAS_*`), and for the Sentry arm
+   `RECURSION_ENGINE_OPENCODE_LOCAL_HEALTH_URL` (tunnel address of the local server).
+5. Sentry PC: serve the local model behind the tunnel (llama.cpp / LM Studio,
+   OpenAI-compatible, quantized KV as desired). Turning the server off is the toggle;
+   Recursion requeues rather than blocks.
+6. Sequencing vs the promotion program: land this before running promotion gates 2–5 so
+   the pilots and soak exercise the engine roster that will actually run in September.
+   Gate-1 GSC window work in flight is unaffected (all plugins inert until step 4).
+
+## Non-goals
+
+- No autonomy widening; no changes to PAUSE, publish, merge, or notification behavior.
+- No `.env` writes, no cron changes, no model-routing changes (rule 3).
+- No default-engine change: `engine: claude` tasks behave identically.
+- No provider-proxy/netns code changes this session (deployment step 3 is config).
+- No live enablement: every plugin engine ships disabled.
+- No notify-transport implementation (Component 6 is design only).
