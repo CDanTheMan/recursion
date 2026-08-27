@@ -231,7 +231,7 @@ WSLOCK_HELD=1
 # release, leaking a lock per run and wedging the next run of that workstream at
 # "already building". `declare -F` covers the window before release_heavy is defined,
 # since work.sh can exit early (no acceptance test, unprovable base) with the trap armed.
-trap 'declare -F release_heavy >/dev/null 2>&1 && release_heavy; project_lock_release || true' EXIT
+trap 'declare -F release_heavy >/dev/null 2>&1 && release_heavy; declare -F engine_slot_release >/dev/null 2>&1 && engine_slot_release; project_lock_release || true' EXIT
 ARMLOG="$LOG_DIR/$DATE-arm-$ID-$STAMP.out"
 # body = the detailed spec (everything after the first blank line)
 BODY="$(awk 'f{print} /^[[:space:]]*$/{f=1}' "$TASK")"
@@ -488,10 +488,20 @@ fi
 # --- Declarative engine plugins (D-015). A non-builtin engine must resolve to a reviewed
 # manifest plan BEFORE any lease, board, or worktree mutation. Refusals fail closed through
 # the existing rejection paths; an unavailable engine (probe/capacity) DEFERS like a held
-# project lock — the task stays queued and no state is touched.
-ENGINE_PLAN_IMPLEMENTER=""; ENGINE_PLAN_VERIFIER=""
-plugin_probe_ok(){ # plan-file: absent probe passes; declared probe needs a 2xx from its URL
-  python3 - "$1" <<'PY'
+# project lock — the task stays queued; only ignored runtime plan files under state/runs are
+# written, and a deferral removes them. Note this also runs before gate validation, so a
+# NON-pilot task that has BOTH a dead engine and an invalid gate now escalates on the engine
+# first — a deliberate narrowing of the historical invalid-gate precedence below.
+ENGINE_PLAN_IMPLEMENTER=""; ENGINE_PLAN_VERIFIER=""; ENGINE_SLOT_LOCK=""
+plugin_probe_ok(){ # plan-file: absent probe passes; a declared probe needs a 2xx from its URL.
+  # Probe from inside the provider-only namespace when it exists, so "reachable" is measured
+  # where the worker will actually run, not on the controller's unrestricted network.
+  local plan="$1"
+  local -a runner=(python3)
+  if [ -e /run/netns/recursion-provider-only ] && command -v ip >/dev/null 2>&1; then
+    runner=(ip netns exec recursion-provider-only python3)
+  fi
+  "${runner[@]}" - "$plan" <<'PY'
 import json, os, sys, urllib.request
 plan = json.load(open(sys.argv[1]))
 probe = plan.get("availability_probe")
@@ -507,28 +517,48 @@ except Exception:
     raise SystemExit(1)
 PY
 }
-plugin_capacity_ok(){ # engine cap: bounded by live worker units; absent systemctl cannot count
-  local engine="$1" cap="$2" active
+engine_slot_release(){
+  [ -n "$ENGINE_SLOT_LOCK" ] || return 0
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ENGINE_SLOT_LOCK" "$$" >>"$LOG" 2>&1 \
+    || log "engine slot release failed closed for $ENGINE_SLOT_LOCK"
+  ENGINE_SLOT_LOCK=""
+}
+plugin_slot_acquire(){ # engine cap: a witnessed per-slot lock, held for the run, is the cap —
+  local engine="$1" cap="$2" slot i   # a unit count is stale by launch time and races projects.
   { [ -n "$cap" ] && [ "$cap" != null ]; } || return 0
-  command -v systemctl >/dev/null 2>&1 || return 0
-  active="$(systemctl list-units --no-legend --plain "recursion-worker-${engine}-*.service" 2>/dev/null | grep -c . || true)"
-  [ "$active" -lt "$cap" ]
+  [ -x "$ROOT/scripts/runtime-state.py" ] || { log "witnessed engine slot helper is absent"; return 95; }
+  for ((i = 0; i < cap; i++)); do
+    slot="$ROOT/state/.locks/engine-$engine-slot-$i.lock"
+    if python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$slot" "$$" >>"$LOG" 2>&1; then
+      ENGINE_SLOT_LOCK="$slot"
+      return 0
+    fi
+  done
+  return 1
 }
 plugin_engine_admission(){
-  local resolver="$ROOT/scripts/resolve-engine.py" rc plan_dir basis cap
+  local resolver="$ROOT/scripts/resolve-engine.py" rc plan_dir basis cap mreq
   [ -f "$resolver" ] || { log "engine plugin resolver is missing"; return 95; }
-  plan_dir="$ROOT/state/runs"; mkdir -p "$plan_dir"
+  plan_dir="$ROOT/state/runs"
+  mkdir -p "$plan_dir" 2>/dev/null || { log "engine plan directory could not be created"; return 95; }
+  mkdir -p "$ROOT/state/.locks" 2>/dev/null || { log "engine slot lock directory could not be created"; return 95; }
   ENGINE_PLAN_IMPLEMENTER="$plan_dir/$ID-engine-plan-implementer-$STAMP.json"
-  if ! python3 "$resolver" "$ENGINE" --role implementer --emit-plan "$ENGINE_PLAN_IMPLEMENTER" 2>>"$LOG"; then
-    rc=$?; ENGINE_PLAN_IMPLEMENTER=""
-    log "engine=$ENGINE refused by the plugin resolver rc=$rc (unknown, disabled, invalid, or role-refused)"
+  if python3 "$resolver" "$ENGINE" --role implementer --emit-plan "$ENGINE_PLAN_IMPLEMENTER" 2>>"$LOG"; then
+    rc=0
+  else rc=$?; fi
+  if [ "$rc" -ne 0 ]; then
+    ENGINE_PLAN_IMPLEMENTER=""
+    log "engine=$ENGINE refused by the plugin resolver rc=$rc (2=invalid manifest/role, 3=disabled or absent)"
     return 92
   fi
   if [ "${VERIFICATION_POLICY:-}" = independent ]; then
     ENGINE_PLAN_VERIFIER="$plan_dir/$ID-engine-plan-verifier-$STAMP.json"
-    if ! python3 "$resolver" "$ENGINE" --role verifier --emit-plan "$ENGINE_PLAN_VERIFIER" 2>>"$LOG"; then
-      rc=$?; ENGINE_PLAN_VERIFIER=""
-      log "engine=$ENGINE refused for the verifier role rc=$rc"
+    if python3 "$resolver" "$ENGINE" --role verifier --emit-plan "$ENGINE_PLAN_VERIFIER" 2>>"$LOG"; then
+      rc=0
+    else rc=$?; fi
+    if [ "$rc" -ne 0 ]; then
+      ENGINE_PLAN_VERIFIER=""
+      log "engine=$ENGINE refused for the verifier role rc=$rc (2=invalid manifest/role, 3=disabled or absent)"
       return 92
     fi
   fi
@@ -537,10 +567,25 @@ plugin_engine_admission(){
   if [ "$basis" = metered ] && [ "${RECURSION_ALLOW_METERED:-0}" != 1 ]; then
     return 93
   fi
+  mreq="$(python3 -c 'import json,sys; print(1 if json.load(open(sys.argv[1]))["model_required"] else 0)' \
+    "$ENGINE_PLAN_IMPLEMENTER" 2>>"$LOG")" || { log "engine plan model requirement could not be read"; return 95; }
+  if [ "$mreq" = 1 ]; then
+    [ -n "${RESOLVED_MODEL:-}" ] \
+      || { log "engine=$ENGINE requires a model and the implementer has none resolved"; return 92; }
+    if [ -n "$ENGINE_PLAN_VERIFIER" ]; then
+      [ -n "${RESOLVED_VERIFIER_MODEL:-}" ] \
+        || { log "engine=$ENGINE requires a model and the verifier has none resolved"; return 92; }
+    fi
+  fi
   cap="$(python3 -c 'import json,sys; v=json.load(open(sys.argv[1]))["concurrency_cap"]; print("" if v is None else v)' \
     "$ENGINE_PLAN_IMPLEMENTER" 2>>"$LOG")" || { log "engine plan capacity could not be read"; return 95; }
   plugin_probe_ok "$ENGINE_PLAN_IMPLEMENTER" || { log "engine=$ENGINE availability probe failed"; return 89; }
-  plugin_capacity_ok "$ENGINE" "$cap" || { log "engine=$ENGINE at concurrency cap ($cap)"; return 89; }
+  if plugin_slot_acquire "$ENGINE" "$cap"; then :; else
+    rc=$?
+    [ "$rc" -ne 95 ] || return 95
+    log "engine=$ENGINE at concurrency cap ($cap)"
+    return 89
+  fi
   return 0
 }
 case "$ENGINE" in
@@ -550,6 +595,8 @@ case "$ENGINE" in
     if [ "$padm" -ne 0 ]; then
       case "$padm" in
         89)
+          rm -f -- ${ENGINE_PLAN_IMPLEMENTER:+"$ENGINE_PLAN_IMPLEMENTER"} \
+                   ${ENGINE_PLAN_VERIFIER:+"$ENGINE_PLAN_VERIFIER"} 2>/dev/null || true
           log "engine=$ENGINE unavailable — deferring without lease or board mutation; task stays queued"
           exit 75 ;;
         93)

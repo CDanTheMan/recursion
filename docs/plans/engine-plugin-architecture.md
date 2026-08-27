@@ -134,6 +134,9 @@ resolve-engine.py <engine> --role implementer|verifier [--model-present] --emit-
 - Exit codes: `0` ok; `2` invalid manifest / role not permitted / usage error;
   `3` plugins disabled, engine disabled, or manifest absent (human-owned mapping absent —
   mirrors the alias resolver's 3); nonzero never emits a plan.
+- `RECURSION_ENGINE_DIR` (manifest directory override) and `RECURSION_ALIAS_REGISTRY`
+  (alias registry override) are **test-only hooks** for hermetic controls. Never set
+  them on the box: the shipped locations under `scripts/` are the reviewed truth.
 
 ## Component 3 — model alias generalization
 
@@ -178,12 +181,20 @@ checks):
      way the claude flat-subscription record is written today. Absent record stays a
      hard failure.
   3. **Availability probe**: if the manifest declares one, resolve the URL env; probe
-     with a bounded timeout. Failure → **requeue disposition**: log
-     `engine-unavailable`, emit a board note, leave the task `queued` with a
-     `last_unavailable:` timestamp field, exit without failing the task. No escalation,
-     no `blocked`. (New exit path, distinct from every failure code.)
-  4. **Concurrency cap**: count running `recursion-worker-<engine>-*` units; at cap →
-     same requeue disposition.
+     with a bounded timeout, from inside the provider-only namespace when it exists (a
+     controller-network probe can be green while the worker has no route). Failure →
+     **defer disposition**: log `engine unavailable`, remove the emitted plan files, and
+     `exit 75` — the same defer callers already handle for a held project lock or a
+     window-authority deferral. The task stays queued; no board entry, no escalation,
+     no `blocked`. (As shipped this reuses the established 75 defer rather than a new
+     exit path; a deferring task is visible in `loop/logs` only.)
+  4. **Concurrency cap**: acquire one witnessed per-slot lock
+     (`state/.locks/engine-<name>-slot-<i>.lock`, held for the run, released by the
+     EXIT trap) — a unit count would be stale by launch time and race across projects.
+     No free slot → same defer disposition.
+  5. **`model.required`**: a plan that requires a model refuses admission (and,
+     independently, sandbox launch) when no model is resolved — otherwise the engine
+     would run on its own configured default, off-alias and off-evidence.
   5. Launch via `worker-sandbox.sh --engine <name> --engine-plan <root-owned plan file>`.
 - Pre-worker contract additions: `model-alias-engine-mismatch` (Component 3), and the
   existing `model-separation-invalid` check extended so that *engine-level* separation is
@@ -200,8 +211,9 @@ checks):
 - Exec construction: generic branch builds the systemd-run command from plan argv with
   exact-element substitution of `{{EXE}}` → mounted executable path, `{{PROMPT}}` →
   `--prompt` value, `{{MODEL}}` → `--model` value (append `model.argv_suffix` only when
-  a model was passed). `env_passthrough` names present in the controller environment are
-  forwarded via `--setenv`.
+  a model was passed). `env_passthrough` values ride a root-owned `0600`
+  `EnvironmentFile` (removed on cleanup), never the systemd-run command line — argv is
+  world-readable in `/proc` for the run's whole duration and these are API keys.
 - The claude-only CONNECT-proxy env stays claude-only. Plugin engines run inside the
   same provider-only netns; their egress works only once the box's provider allowlist
   includes their endpoints (deployment step below).
@@ -249,7 +261,10 @@ the implementing commit turns it green. Same discipline as every phase since Pha
 1. Lucas reviews and merges the review branch; box pulls under the normal PAUSE-held
    procedure.
 2. Verify each CLI's presence, exact headless flags, and auth on the box **as the runner
-   user**; correct manifests if flags drifted; commit corrections.
+   user**; correct manifests if flags drifted; commit corrections. Install each CLI under
+   `/usr/local/bin` (or elsewhere in `/usr`): the sandbox's single-executable copy cannot
+   carry a `~/.local/bin`-style wrapper's sibling runtime tree, and a home-dir install
+   would silently produce a broken exec.
 3. Provision provider-only egress for each engine to be enabled
    (`network.endpoints` → the root-owned netns/proxy allowlist).
 4. Set `.env`: `RECURSION_ENGINE_PLUGINS=1`, per-engine `_ENABLED=1`, alias values

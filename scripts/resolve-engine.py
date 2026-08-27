@@ -19,9 +19,9 @@ from pathlib import Path
 
 PROG = "resolve-engine"
 
-NAME_RE = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
-ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{2,63}$")
-ENDPOINT_RE = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$")
+NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
+ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}")
+ENDPOINT_RE = re.compile(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?")
 
 BUILTIN_ENGINES = {"claude", "hermes", "gate", "none", "deepseek", "openrouter"}
 ROLE_CHOICES = ("implementer", "verifier")
@@ -133,7 +133,7 @@ def validate_network(network: object) -> None:
     if not isinstance(endpoints, list):
         raise ManifestError("network.endpoints must be a list of strings")
     for item in endpoints:
-        if not isinstance(item, str) or not ENDPOINT_RE.match(item):
+        if not isinstance(item, str) or not ENDPOINT_RE.fullmatch(item):
             raise ManifestError(f"network.endpoints contains an invalid hostname {item!r}")
 
 
@@ -143,7 +143,7 @@ def validate_probe(probe: object) -> None:
     obj = require_object_keys(probe, PROBE_KEYS, "availability_probe")
     if obj["type"] != "http":
         raise ManifestError('availability_probe.type must be "http"')
-    if not isinstance(obj["url_env"], str) or not ENV_NAME_RE.match(obj["url_env"]):
+    if not isinstance(obj["url_env"], str) or not ENV_NAME_RE.fullmatch(obj["url_env"]):
         raise ManifestError("availability_probe.url_env is not a valid env var name")
     timeout = obj["timeout_s"]
     if not is_plain_int(timeout) or not (0 < timeout <= 60):
@@ -156,7 +156,7 @@ def validate_env_passthrough(names: object) -> None:
     if len(set(names)) != len(names):
         raise ManifestError("env_passthrough must not contain duplicates")
     for item in names:
-        if not isinstance(item, str) or not ENV_NAME_RE.match(item):
+        if not isinstance(item, str) or not ENV_NAME_RE.fullmatch(item):
             raise ManifestError(f"env_passthrough contains an invalid env var name {item!r}")
 
 
@@ -165,7 +165,7 @@ def validate_manifest(data: object, engine: str) -> dict:
     if not is_plain_int(obj["schema_version"]) or obj["schema_version"] != 1:
         raise ManifestError("schema_version must be 1")
     name = obj["name"]
-    if not isinstance(name, str) or not NAME_RE.match(name):
+    if not isinstance(name, str) or not NAME_RE.fullmatch(name):
         raise ManifestError("name must match ^[a-z][a-z0-9-]{1,31}$")
     if name != engine:
         raise ManifestError(f"name {name!r} does not match manifest filename stem {engine!r}")
@@ -174,7 +174,7 @@ def validate_manifest(data: object, engine: str) -> dict:
     if not isinstance(obj["description"], str) or not obj["description"]:
         raise ManifestError("description must be a nonempty string")
     executable = obj["executable"]
-    if not isinstance(executable, str) or not NAME_RE.match(executable):
+    if not isinstance(executable, str) or not NAME_RE.fullmatch(executable):
         raise ManifestError("executable must be a bare basename matching ^[a-z][a-z0-9-]{1,31}$")
     validate_argv(obj["argv"])
     validate_model(obj["model"])
@@ -271,7 +271,7 @@ def main() -> int:
         return 2
 
     engine = args.engine
-    if not NAME_RE.match(engine):
+    if not NAME_RE.fullmatch(engine):
         diag(f"invalid engine name {engine!r}: must match ^[a-z][a-z0-9-]{{1,31}}$")
         return 2
     if engine in BUILTIN_ENGINES:

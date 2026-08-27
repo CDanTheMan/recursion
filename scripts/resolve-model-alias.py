@@ -17,9 +17,9 @@ ALIASES = {
     "opus-review": ("RECURSION_MODEL_ALIAS_OPUS_REVIEW", {"verifier"}),
 }
 
-ALIAS_NAME_RE = re.compile(r"^[a-z][a-z0-9-]{2,31}$")
-ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{2,63}$")
-ENGINE_RE = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
+ALIAS_NAME_RE = re.compile(r"[a-z][a-z0-9-]{2,31}")
+ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}")
+ENGINE_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
 VALID_ROLES = {"implementer", "verifier"}
 
 
@@ -51,7 +51,7 @@ def load_registry() -> dict[str, tuple[str, set[str]]]:
         raise RegistryError(f"alias registry {path} has an invalid schema")
     resolved: dict[str, tuple[str, set[str]]] = {}
     for name, entry in aliases.items():
-        if not isinstance(name, str) or not ALIAS_NAME_RE.match(name):
+        if not isinstance(name, str) or not ALIAS_NAME_RE.fullmatch(name):
             raise RegistryError(f"alias registry {path} has an invalid alias name {name!r}")
         if name in ALIASES:
             raise RegistryError(f"alias registry {path} redefines reserved alias {name!r}")
@@ -59,7 +59,7 @@ def load_registry() -> dict[str, tuple[str, set[str]]]:
             raise RegistryError(f"alias registry {path} has an invalid entry for {name!r}")
         env_name = entry.get("env")
         roles = entry.get("roles")
-        if not isinstance(env_name, str) or not ENV_NAME_RE.match(env_name):
+        if not isinstance(env_name, str) or not ENV_NAME_RE.fullmatch(env_name):
             raise RegistryError(f"alias registry {path} has an invalid env name for {name!r}")
         if not isinstance(roles, list) or not roles or not set(roles) <= VALID_ROLES:
             raise RegistryError(f"alias registry {path} has invalid roles for {name!r}")
@@ -98,7 +98,7 @@ def main() -> int:
         return 2
     if ":" in value:
         engine, _, model = value.partition(":")
-        if not ENGINE_RE.match(engine) or not model:
+        if not ENGINE_RE.fullmatch(engine) or not model:
             print(f"model-alias: invalid engine-qualified model {value!r}", file=sys.stderr)
             return 2
     print(value)

@@ -192,22 +192,49 @@ def main() -> int:
         else:
             check(False, "stub argv capture file exists for --model case")
 
-        # --- (5) env_passthrough: STUBENG_API_KEY reaches the stub ---
-        env_out_5 = root_local / "env-5.out"
+        # --- (5) env_passthrough plumbing: logical mode declares the passthrough set ---
+        # Logical mode inherits the controller environment, so a value-reaches-the-stub
+        # assertion could never fail; the meaningful hermetic control is that the plan's
+        # env_passthrough names travel plan -> loader -> launch (the --setenv /
+        # EnvironmentFile wiring itself is a box-suite control).
         argv_out_5 = root_local / "argv-5.out"
         env5 = dict(base_env)
         env5["STUB_ARGV_OUT"] = to_posix(argv_out_5)
-        env5["STUB_ENV_OUT"] = to_posix(env_out_5)
         env5["STUBENG_API_KEY"] = "sekret"
         result = invoke(["--engine", "stubeng", "--engine-plan", plan_posix], "hi", env5)
         check(result.returncode == 0, f"plugin engine with env_passthrough executes (got {result.returncode})")
-        if env_out_5.exists():
-            check(
-                env_out_5.read_text(encoding="utf-8") == "sekret",
-                "STUBENG_API_KEY value reaches the stub via env_passthrough",
-            )
-        else:
-            check(False, "stub env capture file exists for passthrough case")
+        check(
+            "worker-sandbox: env-passthrough STUBENG_API_KEY" in result.stderr,
+            "logical mode declares the plan's env_passthrough names on stderr",
+        )
+
+        # --- (6) model_required plan without a model is refused (exit 92) ---
+        mreq_plan = dict(plan)
+        mreq_plan["model_required"] = True
+        mreq_path = root_local / "plan-mreq.json"
+        mreq_path.write_bytes((json.dumps(mreq_plan, indent=2) + "\n").encode("utf-8"))
+        result = invoke(["--engine", "stubeng", "--engine-plan", to_posix(mreq_path)], "hi", dict(base_env))
+        check(
+            result.returncode == 92,
+            f"model_required plan without --model exits 92 (got {result.returncode}, stderr={result.stderr.strip()!r})",
+        )
+        result = invoke(
+            ["--engine", "stubeng", "--engine-plan", to_posix(mreq_path)], "hi", dict(base_env), model="qwen-30b"
+        )
+        check(result.returncode == 0, f"model_required plan with --model executes (got {result.returncode})")
+
+        # --- (7) hostile engine name is refused before any use as a filename (exit 92) ---
+        hostile_plan = dict(plan)
+        hostile_plan["engine"] = "../../../etc/pwn"
+        hostile_path = root_local / "plan-hostile.json"
+        hostile_path.write_bytes((json.dumps(hostile_plan, indent=2) + "\n").encode("utf-8"))
+        result = invoke(
+            ["--engine", "../../../etc/pwn", "--engine-plan", to_posix(hostile_path)], "hi", dict(base_env)
+        )
+        check(
+            result.returncode == 92,
+            f"path-traversal engine name exits 92 (got {result.returncode}, stderr={result.stderr.strip()!r})",
+        )
 
         # --- permission control: plan file ownership/writability (Linux root only) ---
         if os.name == "nt" or not is_linux_root:

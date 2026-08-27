@@ -30,10 +30,14 @@ case "$ENGINE" in
     [ -z "$ENGINE_PLAN" ] || { echo "worker-sandbox: builtin engines take no engine plan" >&2; exit 92; } ;;
   none|deepseek|openrouter|"") echo "worker-sandbox: invalid engine" >&2; exit 92 ;;
   *)
-    # Plugin engines (D-015) run only from a controller-admitted plan file.
-    [ -n "$ENGINE_PLAN" ] || { echo "worker-sandbox: invalid engine" >&2; exit 92; } ;;
+    # Plugin engines (D-015) run only from a controller-admitted plan file, and the name is
+    # revalidated here because it is used as a root-written filename below.
+    [ -n "$ENGINE_PLAN" ] || { echo "worker-sandbox: invalid engine" >&2; exit 92; }
+    [[ "$ENGINE" =~ ^[a-z][a-z0-9-]{1,31}$ ]] \
+      || { echo "worker-sandbox: invalid engine" >&2; exit 92; } ;;
 esac
-PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ENV_PASS=(); PLAN_OK=0
+PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ENV_PASS=(); PLAN_OK=0; PLAN_MREQ=0
+ENGINE_ENV_FILE=""
 if [ -n "$ENGINE_PLAN" ]; then
   [ -f "$ENGINE_PLAN" ] || { echo "worker-sandbox: engine plan is missing" >&2; exit 92; }
   while IFS= read -r plan_line; do
@@ -43,6 +47,7 @@ if [ -n "$ENGINE_PLAN" ]; then
       ARG=*)  PLAN_ARGV+=("${plan_line#ARG=}") ;;
       MSFX=*) PLAN_MODEL_SUFFIX+=("${plan_line#MSFX=}") ;;
       ENVP=*) PLAN_ENV_PASS+=("${plan_line#ENVP=}") ;;
+      MREQ=1) PLAN_MREQ=1 ;;
       OK=1)   PLAN_OK=1 ;;
     esac
   done < <(python3 - "$ENGINE_PLAN" "$ENGINE" <<'PY' || true
@@ -51,17 +56,31 @@ try:
     plan = json.load(open(sys.argv[1]))
 except Exception:
     raise SystemExit(92)
-if plan.get("schema_version") != 1 or plan.get("engine") != sys.argv[2]:
+engine = plan.get("engine")
+if plan.get("schema_version") != 1 or engine != sys.argv[2] \
+        or not isinstance(engine, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", engine):
     raise SystemExit(92)
 exe = plan.get("executable"); argv = plan.get("argv")
 if not isinstance(exe, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", exe):
     raise SystemExit(92)
-if not isinstance(argv, list) or not argv or argv[0] != "{{EXE}}" or argv.count("{{PROMPT}}") != 1:
+if not isinstance(argv, list) or not argv or argv[0] != "{{EXE}}" \
+        or argv.count("{{EXE}}") != 1 or argv.count("{{PROMPT}}") != 1 \
+        or argv.count("{{MODEL}}") > 1:
     raise SystemExit(92)
 suffix = plan.get("model_argv_suffix") or []
+if not isinstance(suffix, list) or suffix.count("{{MODEL}}") > 1:
+    raise SystemExit(92)
 for element in list(argv) + list(suffix):
     if not isinstance(element, str) or any(ord(ch) < 32 for ch in element):
         raise SystemExit(92)
+    if element.startswith("{{") and element.endswith("}}") \
+            and element not in ("{{EXE}}", "{{PROMPT}}", "{{MODEL}}"):
+        raise SystemExit(92)
+for element in suffix:
+    if element in ("{{EXE}}", "{{PROMPT}}"):
+        raise SystemExit(92)
+if plan.get("model_required"):
+    print("MREQ=1")
 print("EXE=" + exe)
 for element in argv:
     print("ARG=" + element)
@@ -75,6 +94,10 @@ print("OK=1")
 PY
 )
   [ "$PLAN_OK" = 1 ] || { echo "worker-sandbox: engine plan is invalid" >&2; exit 92; }
+  # model.required is a launch precondition, not advice: without a model the engine would run
+  # on its own configured default, off-alias and off-evidence.
+  [ "$PLAN_MREQ" != 1 ] || [ -n "$MODEL" ] \
+    || { echo "worker-sandbox: engine plan requires a model and none was given" >&2; exit 92; }
 fi
 build_plan_argv(){ # resolved-exe -> PLAN_RUN: exact-element placeholder substitution only
   local exe="$1" element
@@ -152,6 +175,11 @@ case "${RECURSION_TEST_WORKER:-}" in
         ;;
       *)
         command -v "$PLAN_EXE" >/dev/null 2>&1 || exit 90
+        # Declare the passthrough set so hermetic controls can verify the plan->env plumbing;
+        # the real --setenv/EnvironmentFile wiring is exercised only on the box.
+        for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
+          echo "worker-sandbox: env-passthrough $plan_env_name" >&2
+        done
         build_plan_argv "$(command -v "$PLAN_EXE")"
         cd "$WT"; "${PLAN_RUN[@]}"
         ;;
@@ -250,6 +278,7 @@ stop_unit(){
 cleanup(){
   stop_unit || true
   rm -rf -- "$SANDBOX_BIN"
+  [ -z "$ENGINE_ENV_FILE" ] || rm -f -- "$ENGINE_ENV_FILE"
   chown -R 0:0 "$WT" 2>/dev/null || true
 }
 trap 'cleanup; exit 143' TERM INT
@@ -348,10 +377,21 @@ case "$ENGINE" in
     ;;
   *)
     # Plugin engines (D-015): exec exactly the admitted plan argv; no shell, no interpolation.
-    for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
-      plan_env_value="${!plan_env_name:-}"
-      [ -z "$plan_env_value" ] || RUN+=(--setenv "$plan_env_name=$plan_env_value")
-    done
+    # Passthrough values ride a root-owned 0600 EnvironmentFile, never the systemd-run command
+    # line, so credentials stay out of /proc/*/cmdline and `systemctl show`.
+    if [ "${#PLAN_ENV_PASS[@]}" -gt 0 ]; then
+      ENGINE_ENV_FILE="$(mktemp /tmp/recursion-engine-env.XXXXXX)" || exit 95
+      chmod 0600 "$ENGINE_ENV_FILE"
+      for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
+        plan_env_value="${!plan_env_name:-}"
+        [ -n "$plan_env_value" ] || continue
+        case "$plan_env_value" in
+          *$'\n'*|*$'\r'*) echo "worker-sandbox: engine env value contains a newline" >&2; exit 92 ;;
+        esac
+        printf '%s=%s\n' "$plan_env_name" "$plan_env_value" >> "$ENGINE_ENV_FILE"
+      done
+      RUN+=(--property "EnvironmentFile=$ENGINE_ENV_FILE")
+    fi
     build_plan_argv "$INNER_EXE"
     RUN+=(/usr/bin/env "${PLAN_RUN[@]}")
     ;;
