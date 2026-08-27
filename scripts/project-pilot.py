@@ -1568,6 +1568,12 @@ def verify_approved_goal(base: Path, project: str, goal_id: str, *, terminal: bo
         actual = actual_tasks[str(task["id"])]
         if any(actual.get(key, "") != str(value) for key, value in expected.items()):
             fail(f"materialized task {task['id']} immutable contract differs from its approved plan")
+        # The subset comparison cannot see an injected optional key (verifier_engine would
+        # redirect which vendor verifies) — prove absence for the optional-key family too.
+        for optional_key in ("verifier_engine", "source_task_id", "gate_profile_selection",
+                             "seed_manifest", "seed_manifest_sha256", "seed", "seed_digest"):
+            if optional_key not in expected and actual.get(optional_key, ""):
+                fail(f"materialized task {task['id']} carries an unapproved {optional_key}")
     return {"project_id": project, "goal_id": goal_id, "plan_id": plan_id,
             "plan_digest": digest, "source_head": authority["source_head"],
             "authority_contract": authority,

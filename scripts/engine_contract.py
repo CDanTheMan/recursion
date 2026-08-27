@@ -68,8 +68,9 @@ def _load_registry(registry_path: Path | str) -> dict[str, frozenset[str]] | Non
         roles = spec.get("roles")
         if not isinstance(env_name, str) or not ENV_NAME_RE.fullmatch(env_name):
             return None
-        if not isinstance(roles, list) or not roles or len(roles) != len(set(roles)) \
-                or not set(roles) <= ROLES:
+        # Mirror resolve-model-alias.py's rules exactly (it is the execution authority);
+        # duplicated role entries are tolerated there, so they are tolerated here.
+        if not isinstance(roles, list) or not roles or not set(roles) <= ROLES:
             return None
         loaded[alias] = frozenset(roles)
     return loaded

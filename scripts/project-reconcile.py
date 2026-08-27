@@ -2012,6 +2012,15 @@ def verify_phase8_goal_projection(base: Path, config: dict, pilot: dict,
             raise ReconcileError(
                 f"materialized task {task_id} immutable contract differs from its approved plan"
             )
+        # Optional keys are rendered only when the approved plan carries them, so the subset
+        # comparison above cannot see an injected one. verifier_engine redirects which vendor
+        # verifies, so absence must be proved too — for the whole optional-key family.
+        for optional_key in ("verifier_engine", "source_task_id", "gate_profile_selection",
+                             "seed_manifest", "seed_manifest_sha256", "seed", "seed_digest"):
+            if optional_key not in expected and actual.get(optional_key, ""):
+                raise ReconcileError(
+                    f"materialized task {task_id} carries an unapproved {optional_key}"
+                )
 
 
 def verify_goal(base: Path, project: str, goal_id: str,

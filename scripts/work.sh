@@ -88,7 +88,10 @@ SOURCE_HEAD="$(field source_head)"; SOURCE_BRANCH="$(field source_branch)"
 WORKDIR="${WORKDIR:-.}"; AUTONOMY="${AUTONOMY:-auto}"; ENGINE="${ENGINE:-claude}"
 # Cross-engine verification (D-015): the verifier may run on a different engine than the
 # implementer. Absent field -> the implementer's engine, which is the historical behavior.
-VERIFIER_ENGINE="$(field verifier_engine)"; VERIFIER_ENGINE="${VERIFIER_ENGINE:-$ENGINE}"
+# Header-only read: the contract digest hashes header fields only, and this field is normally
+# absent, so a body line must never be able to supply it.
+VERIFIER_ENGINE="$(sed -n '/^$/q;s/^verifier_engine: *//p' "$TASK" | head -1)"
+VERIFIER_ENGINE="${VERIFIER_ENGINE:-$ENGINE}"
 ALLOWED_PATHS="$(field allowed_paths)"; ALLOWED_PATHS="${ALLOWED_PATHS:-$WORKDIR}"
 STRICT_PHASE5=0
 [ "$EVIDENCE_CONTRACT" != worker-result-v1 ] || STRICT_PHASE5=1
@@ -588,6 +591,11 @@ plugin_engine_gate(){ # engine plan: availability probe + witnessed capacity slo
 }
 plugin_engine_admission(){
   local plan_dir rc
+  # Self-fail-closed: this function only has meaning when at least one role runs a plugin.
+  if engine_is_builtin "$ENGINE" \
+     && { [ "${VERIFICATION_POLICY:-}" != independent ] || engine_is_builtin "$VERIFIER_ENGINE"; }; then
+    log "plugin admission entered with no plugin engine"; return 92
+  fi
   [ -f "$ROOT/scripts/resolve-engine.py" ] || { log "engine plugin resolver is missing"; return 95; }
   plan_dir="$ROOT/state/runs"
   mkdir -p "$plan_dir" 2>/dev/null || { log "engine plan directory could not be created"; return 95; }
@@ -626,13 +634,15 @@ if ! engine_is_builtin "$ENGINE" \
         exit 75 ;;
       93)
         if [ -n "${PILOT_ID:-}" ]; then reject_preworker_contract worker-engine-invalid 93; exit $?; fi
-        board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "metered engine, flag unset"
+        ENGINE_LABEL="$ENGINE"; [ "$VERIFIER_ENGINE" = "$ENGINE" ] || ENGINE_LABEL="$ENGINE/$VERIFIER_ENGINE"
+        board add "$ID" "${WORKSTREAM:-?}" "$ENGINE_LABEL" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "metered engine, flag unset"
         complete_terminal_escalation escalated \
           "a required engine (engine=$ENGINE, verifier_engine=$VERIFIER_ENGINE) bills as metered — a human sets RECURSION_ALLOW_METERED=1 in .env to allow it" || exit $?
         exit 0 ;;
       *)
         if [ -n "${PILOT_ID:-}" ]; then reject_preworker_contract worker-engine-invalid "$padm"; exit $?; fi
-        board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "engine not enabled"
+        ENGINE_LABEL="$ENGINE"; [ "$VERIFIER_ENGINE" = "$ENGINE" ] || ENGINE_LABEL="$ENGINE/$VERIFIER_ENGINE"
+        board add "$ID" "${WORKSTREAM:-?}" "$ENGINE_LABEL" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "engine not enabled"
         complete_terminal_escalation escalated \
           "a required engine (engine=$ENGINE, verifier_engine=$VERIFIER_ENGINE) is not an enabled plugin (plugins disabled, manifest absent/invalid, or role refused) — see the arm log" || exit $?
         exit 0 ;;

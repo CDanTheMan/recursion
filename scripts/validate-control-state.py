@@ -162,6 +162,8 @@ def validate(kind: str, value: object) -> dict:
             fail("invalid verifier model alias")
         if value["model_alias"] == value["verifier_model_alias"]:
             fail("implementer and verifier aliases must be independent")
+        if "engine" in value and not pilot_engine_ok(value["engine"]):
+            fail("invalid engine")
         if "verifier_engine" in value and not pilot_engine_ok(value["verifier_engine"]):
             fail("invalid verifier engine")
         if value["network_policy"] not in {"provider-only", "none"}:
