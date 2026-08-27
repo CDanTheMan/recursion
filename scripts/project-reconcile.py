@@ -776,7 +776,8 @@ def check_work_authority(base: Path, task_id: str) -> dict:
 CONTRACT_REJECTION_CATEGORIES = {
     "acceptance-missing", "acceptance-invalid", "deadline-invalid", "network-policy-invalid",
     "verification-policy-invalid", "worker-engine-invalid", "model-alias-invalid",
-    "verifier-model-alias-invalid", "model-separation-invalid", "contract-projection-invalid",
+    "verifier-model-alias-invalid", "model-separation-invalid", "model-alias-engine-mismatch",
+    "contract-projection-invalid",
     "gate-contract-drift", "source-head-drift", "seed-contract-invalid",
 }
 

@@ -6,10 +6,11 @@ set -euo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 ENGINE=""; WT=""; PROMPT=""; MODEL=""; USAGE_FILE=""; ROLE="implementer"
 NETWORK_POLICY="provider-only"; READ_ONLY_WORKTREE=0; EVIDENCE_DIR=""
-GATE_COMMAND=""; WORKDIR_PATH="."; READ_ONLY_PATHS=()
+GATE_COMMAND=""; WORKDIR_PATH="."; READ_ONLY_PATHS=(); ENGINE_PLAN=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --engine) ENGINE="${2:-}"; shift 2 ;;
+    --engine-plan) ENGINE_PLAN="${2:-}"; shift 2 ;;
     --worktree) WT="${2:-}"; shift 2 ;;
     --prompt) PROMPT="${2:-}"; shift 2 ;;
     --model) MODEL="${2:-}"; shift 2 ;;
@@ -24,7 +25,77 @@ while [ $# -gt 0 ]; do
     *) echo "worker-sandbox: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-case "$ENGINE" in claude|hermes|gate) ;; *) echo "worker-sandbox: invalid engine" >&2; exit 92;; esac
+case "$ENGINE" in
+  claude|hermes|gate)
+    [ -z "$ENGINE_PLAN" ] || { echo "worker-sandbox: builtin engines take no engine plan" >&2; exit 92; } ;;
+  none|deepseek|openrouter|"") echo "worker-sandbox: invalid engine" >&2; exit 92 ;;
+  *)
+    # Plugin engines (D-015) run only from a controller-admitted plan file.
+    [ -n "$ENGINE_PLAN" ] || { echo "worker-sandbox: invalid engine" >&2; exit 92; } ;;
+esac
+PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ENV_PASS=(); PLAN_OK=0
+if [ -n "$ENGINE_PLAN" ]; then
+  [ -f "$ENGINE_PLAN" ] || { echo "worker-sandbox: engine plan is missing" >&2; exit 92; }
+  while IFS= read -r plan_line; do
+    plan_line="${plan_line%$'\r'}"   # a Windows-native python3 emits CRLF; the box's does not
+    case "$plan_line" in
+      EXE=*)  PLAN_EXE="${plan_line#EXE=}" ;;
+      ARG=*)  PLAN_ARGV+=("${plan_line#ARG=}") ;;
+      MSFX=*) PLAN_MODEL_SUFFIX+=("${plan_line#MSFX=}") ;;
+      ENVP=*) PLAN_ENV_PASS+=("${plan_line#ENVP=}") ;;
+      OK=1)   PLAN_OK=1 ;;
+    esac
+  done < <(python3 - "$ENGINE_PLAN" "$ENGINE" <<'PY' || true
+import json, re, sys
+try:
+    plan = json.load(open(sys.argv[1]))
+except Exception:
+    raise SystemExit(92)
+if plan.get("schema_version") != 1 or plan.get("engine") != sys.argv[2]:
+    raise SystemExit(92)
+exe = plan.get("executable"); argv = plan.get("argv")
+if not isinstance(exe, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", exe):
+    raise SystemExit(92)
+if not isinstance(argv, list) or not argv or argv[0] != "{{EXE}}" or argv.count("{{PROMPT}}") != 1:
+    raise SystemExit(92)
+suffix = plan.get("model_argv_suffix") or []
+for element in list(argv) + list(suffix):
+    if not isinstance(element, str) or any(ord(ch) < 32 for ch in element):
+        raise SystemExit(92)
+print("EXE=" + exe)
+for element in argv:
+    print("ARG=" + element)
+for element in suffix:
+    print("MSFX=" + element)
+for name in plan.get("env_passthrough") or []:
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", name):
+        raise SystemExit(92)
+    print("ENVP=" + name)
+print("OK=1")
+PY
+)
+  [ "$PLAN_OK" = 1 ] || { echo "worker-sandbox: engine plan is invalid" >&2; exit 92; }
+fi
+build_plan_argv(){ # resolved-exe -> PLAN_RUN: exact-element placeholder substitution only
+  local exe="$1" element
+  PLAN_RUN=()
+  for element in "${PLAN_ARGV[@]}"; do
+    case "$element" in
+      '{{EXE}}')    PLAN_RUN+=("$exe") ;;
+      '{{PROMPT}}') PLAN_RUN+=("$PROMPT") ;;
+      '{{MODEL}}')  PLAN_RUN+=("$MODEL") ;;
+      *)            PLAN_RUN+=("$element") ;;
+    esac
+  done
+  if [ -n "$MODEL" ]; then
+    for element in "${PLAN_MODEL_SUFFIX[@]}"; do
+      case "$element" in
+        '{{MODEL}}') PLAN_RUN+=("$MODEL") ;;
+        *)           PLAN_RUN+=("$element") ;;
+      esac
+    done
+  fi
+}
 case "$ROLE" in implementer|verifier|gate) ;; *) echo "worker-sandbox: invalid worker role" >&2; exit 92;; esac
 case "$NETWORK_POLICY" in provider-only|none) ;; *) echo "worker-sandbox: invalid network policy" >&2; exit 92;; esac
 [ "$ENGINE:$ROLE" = gate:gate ] || { [ "$ENGINE" != gate ] && [ "$ROLE" != gate ]; } \
@@ -79,6 +150,11 @@ case "${RECURSION_TEST_WORKER:-}" in
         cd "$WT"; hermes -z "$PROMPT" -m "${MODEL:-gpt-5.6-sol}" -t file,terminal --yolo \
           ${USAGE_FILE:+--usage-file "$USAGE_FILE"}
         ;;
+      *)
+        command -v "$PLAN_EXE" >/dev/null 2>&1 || exit 90
+        build_plan_argv "$(command -v "$PLAN_EXE")"
+        cd "$WT"; "${PLAN_RUN[@]}"
+        ;;
     esac
     exit $?
     ;;
@@ -103,6 +179,12 @@ fi
 [ "$(id -u)" = 0 ] || { echo "worker-sandbox: controller must be root" >&2; exit 95; }
 command -v systemd-run >/dev/null 2>&1 \
   || { echo "worker-sandbox: systemd-run unavailable" >&2; exit 95; }
+if [ -n "$ENGINE_PLAN" ]; then
+  plan_owner="$(stat -c %u "$ENGINE_PLAN" 2>/dev/null || echo x)"
+  plan_mode="$(stat -c %a "$ENGINE_PLAN" 2>/dev/null || echo 777)"
+  [ "$plan_owner" = 0 ] && [ $((8#$plan_mode & 022)) -eq 0 ] \
+    || { echo "worker-sandbox: engine plan must be root-owned and not group/other-writable" >&2; exit 95; }
+fi
 if [ "$NETWORK_POLICY" = provider-only ]; then
   bash "$ROOT/scripts/provider-network.sh" check >/dev/null \
     || { echo "worker-sandbox: provider-only capability probe failed" >&2; exit 96; }
@@ -126,6 +208,7 @@ case "$ENGINE" in
   gate) EXE=""; EXE_REAL="" ;;
   claude) EXE="$(command -v claude 2>/dev/null || true)"; [ -n "$EXE" ] || exit 90 ;;
   hermes) EXE="$(command -v hermes 2>/dev/null || true)"; [ -n "$EXE" ] || exit 94 ;;
+  *) EXE="$(command -v "$PLAN_EXE" 2>/dev/null || true)"; [ -n "$EXE" ] || exit 90 ;;
 esac
 [ "$ENGINE" = gate ] || EXE_REAL="$(realpath -e "$EXE")"
 
@@ -262,6 +345,15 @@ case "$ENGINE" in
       RUN+=(--property "BindPaths=$USAGE_FILE:/run/recursion-worker-usage.json")
       RUN+=(--usage-file /run/recursion-worker-usage.json)
     fi
+    ;;
+  *)
+    # Plugin engines (D-015): exec exactly the admitted plan argv; no shell, no interpolation.
+    for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
+      plan_env_value="${!plan_env_name:-}"
+      [ -z "$plan_env_value" ] || RUN+=(--setenv "$plan_env_name=$plan_env_value")
+    done
+    build_plan_argv "$INNER_EXE"
+    RUN+=(/usr/bin/env "${PLAN_RUN[@]}")
     ;;
 esac
 
