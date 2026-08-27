@@ -149,3 +149,11 @@ because they touch production scripts or change Linux behavior.
    `set +e` blocks turns errexit ON for a file that never enabled it, truncating the suite
    on the first nonzero (why it reported rc=73/74 with ~25 checks unreported). Test-side
    but Linux-behavior-changing, so listed here rather than fixed.
+10. `scripts/project_authority.py:101` — the `file://` branch gates on
+    `Path(parsed.path).is_absolute()`; an RFC 8089 file-URL path is POSIX, so on Windows
+    (`WindowsPath`) `/var/tmp/x.git` reads as non-absolute and the transport is refused.
+    `PurePosixPath(parsed.path).is_absolute()` is identical on Linux.
+11. `scripts/validate-gate.py:152` — `shlex.split()` runs in POSIX mode, destroying
+    backslashes before the `.replace("\\", "/")` normalizations at lines 73/96 can act —
+    both Windows-tolerance guards are permanently unreachable. Dormant on the box; pairs
+    with 10 as latent portability defects.
