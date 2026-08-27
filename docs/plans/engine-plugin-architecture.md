@@ -246,15 +246,30 @@ Gemini). Semantics:
   present, and any pilot task with `network_policy: none` is now refused regardless
   of engine (every admissible engine is a networked worker).
 
-## Component 6 — connectors and further pluggability (design only, this session)
+## Component 6 — connectors and further pluggability (scaffolded 2026-08-26; inert)
 
-The same manifest pattern extends to notification transports (`notify.sh` currently
-hardcodes Telegram): a `scripts/connectors/<name>.json` declaring transport executable,
-destination-id shape, and delivery-receipt contract, consumed by the Phase 7 outbox.
-**Not implemented in this session** — the durable-outbox/PAUSE-interlock surface is
-promotion-critical and D-014 is still open; touching it now would invalidate evidence.
-Recorded here so the scope Lucas asked about ("connectors, and more") has a named,
-bounded follow-on.
+The manifest pattern now extends to notification transports:
+`schemas/control-plane/v1/connector-manifest.schema.json` documents the contract,
+`scripts/resolve-connector.py` is the fail-closed authority (0 valid / 2 invalid / 3
+disabled-or-absent, gated on `RECURSION_CONNECTORS=1` plus
+`RECURSION_CONNECTOR_<NAME>_ENABLED=1`), and `scripts/connector-transport.py` is an
+adapter a human may later point notify.sh's existing, currently-unset
+`RECURSION_NOTIFY_TRANSPORT` hook at. **`notify.sh`, `notification-outbox.py`, and
+`transition_receipt.py` were not modified**, so D-014's promotion evidence is intact;
+`scripts/connectors/` ships zero loadable manifests (a README plus one `.example` the
+resolver cannot load), and the adapter ships mode 644 so notify.sh cannot exec it until
+a human chmods it. The adapter substitutes `{{DESTINATION}}`/`{{MESSAGE}}` as exact argv
+elements, filters the child environment to `env_passthrough` plus PATH/HOME/LANG,
+enforces `timeout_seconds`, and passes the child's stdout through byte-exact — it never
+parses, edits, or fabricates an acknowledgement; notify.sh stays the sole ack validator.
+`env_passthrough` refuses any name containing TOKEN/SECRET/KEY/PASSWORD with no
+allowlist, so the Telegram token still never leaves notify.sh.
+
+Gated on D-014 closing, deliberately not done: widening notify.sh's ack validator past
+`transport=="telegram"` (until then `ack_contract` is a one-member enum — adding members
+first would make every delivery fail); mapping the adapter's retryable exit 10 through
+notify.sh's transport branch (it currently flattens nonzero to 12); non-Telegram
+destination kinds in the outbox; any enablement.
 
 Supervisor-plane routing (Hermes `config.yaml`, `loop/config/routing.yaml`) is already
 human-owned configuration and stays out of scope.
@@ -303,11 +318,40 @@ the implementing commit turns it green. Same discipline as every phase since Pha
    the pilots and soak exercise the engine roster that will actually run in September.
    Gate-1 GSC window work in flight is unaffected (all plugins inert until step 4).
 
+## Addendum 2026-08-26 (same session, later) — telemetry, governance, hygiene
+
+Rolled out on the same review branch after the cross-engine delta, on Lucas's instruction:
+
+- `scripts/usage-reconcile.py` — turns the usage evidence work.sh already writes into an
+  auditable cost ledger (`state/usage/ledger.jsonl`, idempotent by run_id) plus a one-page
+  weekly rollup. The load-bearing output is the split, not the total: receipt /
+  policy-record / unreconciled per run, with metered-but-receipt-less engines (Cursor)
+  printed as spend-UNKNOWN. Opt-in `openrouter-snapshot` adds account-level credit
+  snapshots as a coarse cross-check, never attributed per run.
+- `scripts/engine-scorecard.py` — per-(engine, alias) task statuses, run outcomes,
+  retries, wall-clock median/total, and attributable escalations from
+  `state/tasks` + `state/events.jsonl` + `state/runs`; absent sources report as absent,
+  malformed inputs are tallied, output is one page (`--json` for the full dump).
+- `scripts/verify-branch-protection.py` + the plan.sh automerge-seam closure — esc-0001
+  close-out tooling (exit 0 verified-clean / 1 violation / 3 unverifiable; the tokenless
+  truth today is 8/8 remote rows unverifiable).
+- worker-sandbox.sh fix: the hermes usage-file BindPaths property was appended after the
+  systemd-run command argv, so it landed in hermes's argv instead of mounting the file.
+- Component 6 connector scaffolding (see the amended section above).
+- `docs/audits/unlanded-branches-2026-08-26.md` — all 13 unlanded 2026-08-12/13 branches
+  are already on master; deletion hygiene only.
+
+Telemetry outputs land under `state/usage/` and `state/reports/` (both runtime-only,
+gitignored). Proposed cron lines and the remaining human steps are in
+`state/PROPOSALS.md` (2026-08-26 entry); the esc-0001 remainder is recorded inline in
+`state/INBOX.md`.
+
 ## Non-goals
 
 - No autonomy widening; no changes to PAUSE, publish, merge, or notification behavior.
 - No `.env` writes, no cron changes, no model-routing changes (rule 3).
 - No default-engine change: `engine: claude` tasks behave identically.
 - No provider-proxy/netns code changes this session (deployment step 3 is config).
-- No live enablement: every plugin engine ships disabled.
-- No notify-transport implementation (Component 6 is design only).
+- No live enablement: every plugin engine — and every connector — ships disabled.
+- No notify-transport execution-path change: Component 6 scaffolding is inert and
+  notify.sh/the outbox are untouched (D-014 evidence preserved).

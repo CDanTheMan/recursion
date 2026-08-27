@@ -81,3 +81,27 @@ Full plan: `docs/plans/engine-plugin-architecture.md`.
 byte-identical, plugins inert until `.env` flags a human sets, red controls before green.
 **Human steps after merge:** box CLI/flag verification, provider-allowlist entries, `.env`
 enable flags + alias values, Sentry server + tunnel (deployment section of the plan).
+
+## 2026-08-26 — [NEEDS-APPROVAL] Loop telemetry + governance rollout (same authoring session)
+status: IN AUTHORING — implementation on the same review branch as D-015
+
+**Shipped (all inert or read-only):** `scripts/usage-reconcile.py` (per-run cost ledger +
+weekly one-page rollup; every row split receipted / policy-record / unreconciled — Cursor's
+receipt-less metered spend prints as UNKNOWN, which is the September decision input);
+`scripts/engine-scorecard.py` (pass/retry/wall-clock/escalations per engine+alias from
+on-disk evidence); `scripts/verify-branch-protection.py` + the `plan.sh` automerge-seam
+closure (esc-0001); the worker-sandbox hermes usage-file BindPaths ordering fix; Component 6
+connector scaffolding (notify.sh / outbox untouched, zero loadable manifests, five unset
+human-owned links before anything can execute); `docs/audits/unlanded-branches-2026-08-26.md`
+(all 13 unlanded branches already on master — deletion hygiene only).
+
+**Human steps proposed:**
+1. Cron (a human edits cron — rule 3): weekly `usage-reconcile.py ingest` then `rollup`, and
+   `engine-scorecard.py --out state/reports/engine-scorecard.md`, after the Sunday brief;
+   `verify-branch-protection.py --json state/reports/branch-protection.json` weekly once a
+   token exists.
+2. `.env`: `RECURSION_ALLOW_AUTOMERGE=0` tombstone; `GITHUB_TOKEN` (repo-admin read) for the
+   verifier. Shapes documented in `.env.example`.
+3. Branch hygiene: approve the deletion list in `docs/audits/unlanded-branches-2026-08-26.md`.
+4. `DECISIONS.md`: record the 2026-08-12/13 review-branch-workflow bypass that audit found,
+   and confirm it is no longer happening.
