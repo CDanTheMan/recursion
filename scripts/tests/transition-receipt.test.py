@@ -3,14 +3,80 @@
 
 from __future__ import annotations
 
+import atexit
 import hashlib
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
+
+_NT_POSIX_SHIM = '''\
+"""Windows stand-ins for POSIX facilities the Linux controller assumes unconditionally."""
+import os
+import tempfile
+
+if os.name == "nt" and not getattr(os, "_recursion_nt_posix_shim", False):
+    os._recursion_nt_posix_shim = True
+    # The shared `mkstemp -> fchmod -> os.replace` writers raise AttributeError while their
+    # descriptor is still open, and the cleanup `unlink` of that open file then masks it as
+    # `[WinError 32] ... used by another process`, which callers report as a fabricated
+    # "taskctl lock contended". POSIX mode bits carry no meaning on NTFS, so a no-op is exact.
+    os.fchmod = lambda _descriptor, _mode: None
+    _real_open, _scratch = os.open, tempfile.TemporaryFile()
+
+    def _open(path, flags, mode=0o777, **kwargs):
+        # A directory has no openable handle on Windows, so notification-outbox.fsync_dir
+        # cannot take one. Return a syncable duplicate: the call sequence stays valid and the
+        # sync is inert, which is what runtime-state.py and jsonl_durable.py already do on nt
+        # behind their own `os.name` guards.
+        try:
+            inert = not flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT) and os.path.isdir(path)
+        except (TypeError, ValueError, OSError):
+            inert = False
+        return os.dup(_scratch.fileno()) if inert else _real_open(path, flags, mode, **kwargs)
+
+    os.open = _open
+'''
+
+
+def _install_nt_posix_shim() -> None:
+    """Neutralize POSIX-only facilities on the Windows authoring host; production is Linux.
+
+    `fcntl`, `os.fchmod`, and a read-only `os.open` of a directory are all absent here, and
+    each one fails as if an invariant broke rather than as a missing platform feature. These
+    controls are hermetic and single-process, so no-contention stand-ins let the real state
+    machines run instead of a platform artifact. The shim directory is exported on PYTHONPATH,
+    where `sitecustomize` re-applies it to the runtime-state.py helper that `_taskctl_guard`
+    spawns. On Linux this returns immediately and nothing below it is reachable.
+    """
+    if os.name != "nt":
+        return
+    directory = Path(tempfile.mkdtemp(prefix="nt-posix-shim-"))
+    atexit.register(shutil.rmtree, directory, True)
+    (directory / "fcntl.py").write_text(
+        "LOCK_SH = 1\nLOCK_EX = 2\nLOCK_NB = 4\nLOCK_UN = 8\n"
+        "def flock(_descriptor, _flags):\n    return None\n",
+        encoding="utf-8", newline="\n",
+    )
+    (directory / "_recursion_nt_posix.py").write_text(
+        _NT_POSIX_SHIM, encoding="utf-8", newline="\n",
+    )
+    (directory / "sitecustomize.py").write_text(
+        "import _recursion_nt_posix  # noqa: F401\n", encoding="utf-8", newline="\n",
+    )
+    sys.path.insert(0, str(directory))
+    __import__("_recursion_nt_posix")
+    inherited = os.environ.get("PYTHONPATH")
+    os.environ["PYTHONPATH"] = (
+        str(directory) + os.pathsep + inherited if inherited else str(directory)
+    )
+
+
+_install_nt_posix_shim()
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))

@@ -4,6 +4,19 @@
 from __future__ import annotations
 
 import os
+
+# systemd, `grp`, `pwd`, and /run/systemd/system are Linux-only, and this control proves
+# systemd's own planned-stop ordering against a live manager. Nothing about that invariant
+# exists on the Windows authoring host, so self-skip loudly before the Unix-only imports
+# instead of crashing at `import grp`. On Linux this branch is dead and the module is
+# byte-identical to before.
+if os.name == "nt":
+    print(
+        "hermes-gateway-shutdown-systemd: PLATFORM SKIP "
+        "(systemd, grp, and pwd are Linux-only; no part of this control is portable)"
+    )
+    raise SystemExit(0)
+
 from pathlib import Path
 import grp
 import pwd

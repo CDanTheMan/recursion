@@ -71,6 +71,31 @@ class Fixture:
             newline="\n",
         )
         host_trap.chmod(0o755)
+        if os.name == "nt":
+            # scripts/hermes-decide.sh serializes planner/sync work with util-linux flock(1),
+            # which Git Bash does not ship, so the turn died at "flock: command not found"
+            # before any selection logic ran. This fixture is hermetic and single-process, so
+            # there is no second holder to serialize against: a stand-in that satisfies the
+            # descriptor form lets the exact-instruction contract be exercised for real. The
+            # command form still execs its argument rather than silently skipping it. The
+            # production script is untouched; this lives only on the fixture's own PATH.
+            flock_stub = self.fixture_bin / "flock"
+            flock_stub.write_text(
+                "#!/bin/sh\n"
+                "# Windows authoring host stand-in for util-linux flock(1); production is Linux.\n"
+                "while [ \"$#\" -gt 0 ]; do\n"
+                "  case \"$1\" in\n"
+                "    -w|--wait|--timeout) shift 2 ;;\n"
+                "    -*) shift ;;\n"
+                "    *[!0-9]*) shift; [ \"$#\" -gt 0 ] && exec \"$@\"; exit 0 ;;\n"
+                "    *) shift ;;\n"
+                "  esac\n"
+                "done\n"
+                "exit 0\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            flock_stub.chmod(0o755)
         self.write_json("state/project-config/golden-stallion-client.json", {
             "schema_version": 1, "id": PROJECT, "repo": "/nonexistent/gsc",
             "remote": "origin", "default_branch": "main", "deploy_key_ref": "-",
