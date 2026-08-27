@@ -368,12 +368,12 @@ case "$ENGINE" in
     [ -n "$MODEL" ] && RUN+=(--model "$MODEL")
     ;;
   hermes)
-    RUN+=(/usr/bin/env "$INNER_EXE" -z "$PROMPT" -m "${MODEL:-gpt-5.6-sol}" -t file,terminal --yolo)
     if [ -n "$USAGE_FILE" ]; then
       : > "$USAGE_FILE"; chown "$RUNNER_UID:$RUNNER_GID" "$USAGE_FILE"
       RUN+=(--property "BindPaths=$USAGE_FILE:/run/recursion-worker-usage.json")
-      RUN+=(--usage-file /run/recursion-worker-usage.json)
     fi
+    RUN+=(/usr/bin/env "$INNER_EXE" -z "$PROMPT" -m "${MODEL:-gpt-5.6-sol}" -t file,terminal --yolo)
+    [ -n "$USAGE_FILE" ] && RUN+=(--usage-file /run/recursion-worker-usage.json)
     ;;
   *)
     # Plugin engines (D-015): exec exactly the admitted plan argv; no shell, no interpolation.
