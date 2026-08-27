@@ -1917,6 +1917,8 @@ def _phase8_expected_task_values(config: dict, pilot: dict, plan: dict, plan_id:
     }
     if task.get("source_task_id"):
         values["source_task_id"] = task["source_task_id"]
+    if task.get("verifier_engine"):
+        values["verifier_engine"] = task["verifier_engine"]
     if seed:
         values.update({
             "seed_manifest": seed["manifest_path"], "seed_manifest_sha256": seed["manifest_sha256"],

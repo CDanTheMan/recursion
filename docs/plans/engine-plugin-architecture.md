@@ -220,6 +220,32 @@ checks):
 - Logical test mode (`RECURSION_TEST_WORKER=logical`, /tmp-only) gets the same generic
   branch so hermetic controls can exercise a stub executable on PATH.
 
+## Component 7 — cross-engine verification (added 2026-08-26 at Lucas's request)
+
+A task may carry `verifier_engine:` naming a different engine for the independent
+verifier than `engine:` names for the implementer (implement on Cursor, verify on
+Gemini). Semantics:
+
+- Absent field → the implementer's engine; every existing task behaves identically,
+  and the contract digest of a task without the field is unchanged (the key joins the
+  digest set, but only present fields are hashed).
+- Each role's engine is validated independently: strict mode rejects
+  `hermes`/`gate`/`none`/`deepseek`/`openrouter` as a verifier engine; plugin engines
+  resolve their own role-specific plan at admission; billing, `model.required`,
+  probe, and capacity-slot checks run per engine (one slot when both roles share an
+  engine, one each when they differ).
+- An engine-qualified alias value must match the engine of **its role** —
+  `verifier_model_alias` resolving to `gemini:...` is valid only when
+  `verifier_engine: gemini`.
+- The shared rules live in `scripts/engine_contract.py`, consumed by
+  `project-pilot.py` (pilot plan admission now accepts claude or a well-formed plugin
+  engine — hermes stays refused for pilots — and registry aliases with role
+  enforcement) and `validate-control-state.py`. `resolve-model-alias.py` keeps its
+  self-contained copy by design: it is the execution-time authority.
+- Pilot plan tasks may name `verifier_engine`; the projection renders it only when
+  present, and any pilot task with `network_policy: none` is now refused regardless
+  of engine (every admissible engine is a networked worker).
+
 ## Component 6 — connectors and further pluggability (design only, this session)
 
 The same manifest pattern extends to notification transports (`notify.sh` currently

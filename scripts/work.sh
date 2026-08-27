@@ -86,6 +86,9 @@ CONTROLLER_GATE_FILES="${CONTROLLER_GATE_FILES//,/ }"
 APPROVED_GATE_CONTRACT="$(field gate_contract)"
 SOURCE_HEAD="$(field source_head)"; SOURCE_BRANCH="$(field source_branch)"
 WORKDIR="${WORKDIR:-.}"; AUTONOMY="${AUTONOMY:-auto}"; ENGINE="${ENGINE:-claude}"
+# Cross-engine verification (D-015): the verifier may run on a different engine than the
+# implementer. Absent field -> the implementer's engine, which is the historical behavior.
+VERIFIER_ENGINE="$(field verifier_engine)"; VERIFIER_ENGINE="${VERIFIER_ENGINE:-$ENGINE}"
 ALLOWED_PATHS="$(field allowed_paths)"; ALLOWED_PATHS="${ALLOWED_PATHS:-$WORKDIR}"
 STRICT_PHASE5=0
 [ "$EVIDENCE_CONTRACT" != worker-result-v1 ] || STRICT_PHASE5=1
@@ -128,7 +131,8 @@ CONTRACT_DIGEST="$(python3 - "$TASK" <<'PY'
 import hashlib,json,sys
 text=open(sys.argv[1],encoding='utf-8',errors='surrogateescape').read()
 header,sep,body=text.partition('\n\n')
-keys={'id','project_id','pilot_id','goal_id','goal','engine','repo','acceptance','workdir',
+keys={'id','project_id','pilot_id','goal_id','goal','engine','verifier_engine','repo',
+       'acceptance','workdir',
        'allowed_paths','non_goals','worker_class','model_alias','verifier_model_alias',
        'deadline_seconds','verifier_deadline_seconds','network_policy','evidence_contract',
        'verification','expected_change','gate_class','gate_files','controller_gate_files',
@@ -443,6 +447,10 @@ validate_worker_metadata(){
     || { reject_preworker_contract verification-policy-invalid 2; exit $?; }
   [ "$ENGINE" != hermes ] \
     || { reject_preworker_contract worker-engine-invalid 93; exit $?; }
+  case "$VERIFIER_ENGINE" in
+    hermes|gate|none|deepseek|openrouter)
+      reject_preworker_contract worker-engine-invalid 93; exit $? ;;
+  esac
   [ -n "$MODEL_ALIAS" ] || { reject_preworker_contract model-alias-invalid 2; exit $?; }
   [ -n "$VERIFIER_MODEL_ALIAS" ] || { reject_preworker_contract verifier-model-alias-invalid 2; exit $?; }
   [ -n "$MODEL_ALIAS" ] && [ -n "$VERIFIER_MODEL_ALIAS" ] && [ "$MODEL_ALIAS" != "$VERIFIER_MODEL_ALIAS" ] \
@@ -462,22 +470,23 @@ validate_worker_metadata(){
     case "$alias_rc" in 2|3) reject_preworker_contract verifier-model-alias-invalid 95; exit $? ;;
       *) log "verifier model resolver controller failure rc=$alias_rc"; exit 95 ;; esac
   fi
-  # An engine-qualified alias value ("engine:model", D-015) may never reroute a task away from
-  # its declared engine; the qualifier is stripped only after it proves equal to the contract.
-  strip_alias_engine(){ # value -> stdout model part; fails on an engine mismatch
-    local value="$1" engine_part model_part
+  # An engine-qualified alias value ("engine:model", D-015) may never reroute a role away from
+  # its declared engine; the qualifier is stripped only after it proves equal to the contract
+  # engine for that role (implementer -> engine:, verifier -> verifier_engine:).
+  strip_alias_engine(){ # value role-engine -> stdout model part; fails on an engine mismatch
+    local value="$1" role_engine="$2" engine_part model_part
     case "$value" in
       *:*)
         engine_part="${value%%:*}"; model_part="${value#*:}"
-        [ "$engine_part" = "$ENGINE" ] && [ -n "$model_part" ] || return 1
+        [ "$engine_part" = "$role_engine" ] && [ -n "$model_part" ] || return 1
         printf '%s\n' "$model_part" ;;
       *) printf '%s\n' "$value" ;;
     esac
   }
-  if ! RESOLVED_MODEL="$(strip_alias_engine "$RESOLVED_MODEL")"; then
+  if ! RESOLVED_MODEL="$(strip_alias_engine "$RESOLVED_MODEL" "$ENGINE")"; then
     reject_preworker_contract model-alias-engine-mismatch 2; exit $?
   fi
-  if ! RESOLVED_VERIFIER_MODEL="$(strip_alias_engine "$RESOLVED_VERIFIER_MODEL")"; then
+  if ! RESOLVED_VERIFIER_MODEL="$(strip_alias_engine "$RESOLVED_VERIFIER_MODEL" "$VERIFIER_ENGINE")"; then
     reject_preworker_contract model-alias-engine-mismatch 2; exit $?
   fi
 }
@@ -492,7 +501,8 @@ fi
 # written, and a deferral removes them. Note this also runs before gate validation, so a
 # NON-pilot task that has BOTH a dead engine and an invalid gate now escalates on the engine
 # first — a deliberate narrowing of the historical invalid-gate precedence below.
-ENGINE_PLAN_IMPLEMENTER=""; ENGINE_PLAN_VERIFIER=""; ENGINE_SLOT_LOCK=""
+ENGINE_PLAN_IMPLEMENTER=""; ENGINE_PLAN_VERIFIER=""; ENGINE_SLOT_LOCKS=()
+engine_is_builtin(){ case "$1" in none|claude|hermes|gate|deepseek|openrouter) return 0 ;; *) return 1 ;; esac; }
 plugin_probe_ok(){ # plan-file: absent probe passes; a declared probe needs a 2xx from its URL.
   # Probe from inside the provider-only namespace when it exists, so "reachable" is measured
   # where the worker will actually run, not on the controller's unrestricted network.
@@ -518,10 +528,12 @@ except Exception:
 PY
 }
 engine_slot_release(){
-  [ -n "$ENGINE_SLOT_LOCK" ] || return 0
-  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ENGINE_SLOT_LOCK" "$$" >>"$LOG" 2>&1 \
-    || log "engine slot release failed closed for $ENGINE_SLOT_LOCK"
-  ENGINE_SLOT_LOCK=""
+  local slot
+  for slot in ${ENGINE_SLOT_LOCKS[@]+"${ENGINE_SLOT_LOCKS[@]}"}; do
+    python3 "$ROOT/scripts/runtime-state.py" lock-release "$slot" "$$" >>"$LOG" 2>&1 \
+      || log "engine slot release failed closed for $slot"
+  done
+  ENGINE_SLOT_LOCKS=()
 }
 plugin_slot_acquire(){ # engine cap: a witnessed per-slot lock, held for the run, is the cap —
   local engine="$1" cap="$2" slot i   # a unit count is stale by launch time and races projects.
@@ -530,90 +542,103 @@ plugin_slot_acquire(){ # engine cap: a witnessed per-slot lock, held for the run
   for ((i = 0; i < cap; i++)); do
     slot="$ROOT/state/.locks/engine-$engine-slot-$i.lock"
     if python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$slot" "$$" >>"$LOG" 2>&1; then
-      ENGINE_SLOT_LOCK="$slot"
+      ENGINE_SLOT_LOCKS+=("$slot")
       return 0
     fi
   done
   return 1
 }
-plugin_engine_admission(){
-  local resolver="$ROOT/scripts/resolve-engine.py" rc plan_dir basis cap mreq
-  [ -f "$resolver" ] || { log "engine plugin resolver is missing"; return 95; }
-  plan_dir="$ROOT/state/runs"
-  mkdir -p "$plan_dir" 2>/dev/null || { log "engine plan directory could not be created"; return 95; }
-  mkdir -p "$ROOT/state/.locks" 2>/dev/null || { log "engine slot lock directory could not be created"; return 95; }
-  ENGINE_PLAN_IMPLEMENTER="$plan_dir/$ID-engine-plan-implementer-$STAMP.json"
-  if python3 "$resolver" "$ENGINE" --role implementer --emit-plan "$ENGINE_PLAN_IMPLEMENTER" 2>>"$LOG"; then
+plugin_resolve_plan(){ # role engine plan-path: emit the plan or log the refusal (rc 92)
+  local role="$1" engine="$2" plan_path="$3" rc
+  if python3 "$ROOT/scripts/resolve-engine.py" "$engine" --role "$role" \
+      --emit-plan "$plan_path" 2>>"$LOG"; then
     rc=0
   else rc=$?; fi
   if [ "$rc" -ne 0 ]; then
-    ENGINE_PLAN_IMPLEMENTER=""
-    log "engine=$ENGINE refused by the plugin resolver rc=$rc (2=invalid manifest/role, 3=disabled or absent)"
+    log "engine=$engine refused by the plugin resolver for the $role role rc=$rc (2=invalid manifest/role, 3=disabled or absent)"
     return 92
   fi
-  if [ "${VERIFICATION_POLICY:-}" = independent ]; then
-    ENGINE_PLAN_VERIFIER="$plan_dir/$ID-engine-plan-verifier-$STAMP.json"
-    if python3 "$resolver" "$ENGINE" --role verifier --emit-plan "$ENGINE_PLAN_VERIFIER" 2>>"$LOG"; then
-      rc=0
-    else rc=$?; fi
-    if [ "$rc" -ne 0 ]; then
-      ENGINE_PLAN_VERIFIER=""
-      log "engine=$ENGINE refused for the verifier role rc=$rc (2=invalid manifest/role, 3=disabled or absent)"
-      return 92
-    fi
-  fi
+}
+plugin_plan_checks(){ # plan resolved-model engine role: billing admission + model requirement
+  local plan="$1" resolved_model="$2" engine="$3" role="$4" basis mreq
   basis="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["billing"]["basis"])' \
-    "$ENGINE_PLAN_IMPLEMENTER" 2>>"$LOG")" || { log "engine plan billing could not be read"; return 95; }
+    "$plan" 2>>"$LOG")" || { log "engine plan billing could not be read"; return 95; }
   if [ "$basis" = metered ] && [ "${RECURSION_ALLOW_METERED:-0}" != 1 ]; then
+    log "engine=$engine ($role) bills as metered and RECURSION_ALLOW_METERED is unset"
     return 93
   fi
   mreq="$(python3 -c 'import json,sys; print(1 if json.load(open(sys.argv[1]))["model_required"] else 0)' \
-    "$ENGINE_PLAN_IMPLEMENTER" 2>>"$LOG")" || { log "engine plan model requirement could not be read"; return 95; }
-  if [ "$mreq" = 1 ]; then
-    [ -n "${RESOLVED_MODEL:-}" ] \
-      || { log "engine=$ENGINE requires a model and the implementer has none resolved"; return 92; }
-    if [ -n "$ENGINE_PLAN_VERIFIER" ]; then
-      [ -n "${RESOLVED_VERIFIER_MODEL:-}" ] \
-        || { log "engine=$ENGINE requires a model and the verifier has none resolved"; return 92; }
-    fi
+    "$plan" 2>>"$LOG")" || { log "engine plan model requirement could not be read"; return 95; }
+  if [ "$mreq" = 1 ] && [ -z "$resolved_model" ]; then
+    log "engine=$engine requires a model and the $role has none resolved"
+    return 92
   fi
+}
+plugin_engine_gate(){ # engine plan: availability probe + witnessed capacity slot
+  local engine="$1" plan="$2" cap rc
   cap="$(python3 -c 'import json,sys; v=json.load(open(sys.argv[1]))["concurrency_cap"]; print("" if v is None else v)' \
-    "$ENGINE_PLAN_IMPLEMENTER" 2>>"$LOG")" || { log "engine plan capacity could not be read"; return 95; }
-  plugin_probe_ok "$ENGINE_PLAN_IMPLEMENTER" || { log "engine=$ENGINE availability probe failed"; return 89; }
-  if plugin_slot_acquire "$ENGINE" "$cap"; then :; else
+    "$plan" 2>>"$LOG")" || { log "engine plan capacity could not be read"; return 95; }
+  plugin_probe_ok "$plan" || { log "engine=$engine availability probe failed"; return 89; }
+  if plugin_slot_acquire "$engine" "$cap"; then :; else
     rc=$?
     [ "$rc" -ne 95 ] || return 95
-    log "engine=$ENGINE at concurrency cap ($cap)"
+    log "engine=$engine at concurrency cap ($cap)"
     return 89
+  fi
+}
+plugin_engine_admission(){
+  local plan_dir rc
+  [ -f "$ROOT/scripts/resolve-engine.py" ] || { log "engine plugin resolver is missing"; return 95; }
+  plan_dir="$ROOT/state/runs"
+  mkdir -p "$plan_dir" 2>/dev/null || { log "engine plan directory could not be created"; return 95; }
+  mkdir -p "$ROOT/state/.locks" 2>/dev/null || { log "engine slot lock directory could not be created"; return 95; }
+  if ! engine_is_builtin "$ENGINE"; then
+    ENGINE_PLAN_IMPLEMENTER="$plan_dir/$ID-engine-plan-implementer-$STAMP.json"
+    plugin_resolve_plan implementer "$ENGINE" "$ENGINE_PLAN_IMPLEMENTER" \
+      || { rc=$?; ENGINE_PLAN_IMPLEMENTER=""; return "$rc"; }
+    plugin_plan_checks "$ENGINE_PLAN_IMPLEMENTER" "${RESOLVED_MODEL:-}" "$ENGINE" implementer || return $?
+  fi
+  if [ "${VERIFICATION_POLICY:-}" = independent ] && ! engine_is_builtin "$VERIFIER_ENGINE"; then
+    ENGINE_PLAN_VERIFIER="$plan_dir/$ID-engine-plan-verifier-$STAMP.json"
+    plugin_resolve_plan verifier "$VERIFIER_ENGINE" "$ENGINE_PLAN_VERIFIER" \
+      || { rc=$?; ENGINE_PLAN_VERIFIER=""; return "$rc"; }
+    plugin_plan_checks "$ENGINE_PLAN_VERIFIER" "${RESOLVED_VERIFIER_MODEL:-}" "$VERIFIER_ENGINE" verifier || return $?
+  fi
+  if [ -n "$ENGINE_PLAN_IMPLEMENTER" ]; then
+    plugin_engine_gate "$ENGINE" "$ENGINE_PLAN_IMPLEMENTER" || return $?
+  fi
+  if [ -n "$ENGINE_PLAN_VERIFIER" ]; then
+    if [ "$VERIFIER_ENGINE" != "$ENGINE" ] || [ -z "$ENGINE_PLAN_IMPLEMENTER" ]; then
+      plugin_engine_gate "$VERIFIER_ENGINE" "$ENGINE_PLAN_VERIFIER" || return $?
+    fi
   fi
   return 0
 }
-case "$ENGINE" in
-  none|claude|hermes|gate|deepseek|openrouter) ;;
-  *)
-    if plugin_engine_admission; then padm=0; else padm=$?; fi
-    if [ "$padm" -ne 0 ]; then
-      case "$padm" in
-        89)
-          rm -f -- ${ENGINE_PLAN_IMPLEMENTER:+"$ENGINE_PLAN_IMPLEMENTER"} \
-                   ${ENGINE_PLAN_VERIFIER:+"$ENGINE_PLAN_VERIFIER"} 2>/dev/null || true
-          log "engine=$ENGINE unavailable — deferring without lease or board mutation; task stays queued"
-          exit 75 ;;
-        93)
-          if [ -n "${PILOT_ID:-}" ]; then reject_preworker_contract worker-engine-invalid 93; exit $?; fi
-          board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "metered engine, flag unset"
-          complete_terminal_escalation escalated \
-            "engine=$ENGINE bills as metered — a human sets RECURSION_ALLOW_METERED=1 in .env to allow it" || exit $?
-          exit 0 ;;
-        *)
-          if [ -n "${PILOT_ID:-}" ]; then reject_preworker_contract worker-engine-invalid "$padm"; exit $?; fi
-          board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "engine not enabled"
-          complete_terminal_escalation escalated \
-            "engine=$ENGINE is not an enabled plugin (plugins disabled, manifest absent/invalid, or role refused)" || exit $?
-          exit 0 ;;
-      esac
-    fi ;;
-esac
+if ! engine_is_builtin "$ENGINE" \
+   || { [ "${VERIFICATION_POLICY:-}" = independent ] && ! engine_is_builtin "$VERIFIER_ENGINE"; }; then
+  if plugin_engine_admission; then padm=0; else padm=$?; fi
+  if [ "$padm" -ne 0 ]; then
+    case "$padm" in
+      89)
+        rm -f -- ${ENGINE_PLAN_IMPLEMENTER:+"$ENGINE_PLAN_IMPLEMENTER"} \
+                 ${ENGINE_PLAN_VERIFIER:+"$ENGINE_PLAN_VERIFIER"} 2>/dev/null || true
+        log "engine=$ENGINE/verifier=$VERIFIER_ENGINE unavailable — deferring without lease or board mutation; task stays queued"
+        exit 75 ;;
+      93)
+        if [ -n "${PILOT_ID:-}" ]; then reject_preworker_contract worker-engine-invalid 93; exit $?; fi
+        board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "metered engine, flag unset"
+        complete_terminal_escalation escalated \
+          "a required engine (engine=$ENGINE, verifier_engine=$VERIFIER_ENGINE) bills as metered — a human sets RECURSION_ALLOW_METERED=1 in .env to allow it" || exit $?
+        exit 0 ;;
+      *)
+        if [ -n "${PILOT_ID:-}" ]; then reject_preworker_contract worker-engine-invalid "$padm"; exit $?; fi
+        board add "$ID" "${WORKSTREAM:-?}" "$ENGINE" "${MODEL_ALIAS:-${MODEL:-$ENGINE}}" blocked "engine not enabled"
+        complete_terminal_escalation escalated \
+          "a required engine (engine=$ENGINE, verifier_engine=$VERIFIER_ENGINE) is not an enabled plugin (plugins disabled, manifest absent/invalid, or role refused) — see the arm log" || exit $?
+        exit 0 ;;
+    esac
+  fi
+fi
 
 # Validate the gate before leasing a worker. The validator rejects literal/no-op success and
 # records any declared gate files whose hashes become part of the exact-commit evidence.
@@ -883,7 +908,10 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
   local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
   local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
   local evidence_dir="${11:-}" readonly="${12:-0}" engine_plan=""
-  case "$ENGINE" in
+  # Cross-engine verification (D-015): each role runs on its own contract engine.
+  local active_engine="$ENGINE"
+  [ "$role" != verifier ] || active_engine="$VERIFIER_ENGINE"
+  case "$active_engine" in
     none) return 0 ;;   # verify-only: gate whatever is already in the worktree
     claude|hermes) ;;
     deepseek|openrouter)
@@ -894,10 +922,10 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
       [ -n "$engine_plan" ] && [ -f "$engine_plan" ] || return 92 ;;
   esac
 
-  [ "$ENGINE" != hermes ] || [ "${RECURSION_ALLOW_METERED:-0}" = "1" ] || return 93
+  [ "$active_engine" != hermes ] || [ "${RECURSION_ALLOW_METERED:-0}" = "1" ] || return 93
   [ -x "$ROOT/scripts/worker-sandbox.sh" ] || return 95
   LAST_USAGE_FILE="$usage"
-  if [ "$ENGINE" = claude ]; then
+  if [ "$active_engine" = claude ]; then
     # Claude Code flat-subscription arms have no metered usage receipt. Record that policy fact
     # explicitly outside the worker's mount namespace; an absent record remains a hard failure.
     mkdir -p "$(dirname "$usage")"
@@ -916,11 +944,11 @@ print(json.dumps({"schema_version": 1, "provider": plan["billing"]["provider"],
 PY
     ) || return 98
   fi
-  local -a cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine "$ENGINE" --worktree "$wt"
+  local -a cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine "$active_engine" --worktree "$wt"
     --prompt "$prompt" --role "$role" --network-policy "$NETWORK_POLICY")
   [ -n "$resolved_model" ] && cmd+=(--model "$resolved_model")
   [ -z "$engine_plan" ] || cmd+=(--engine-plan "$engine_plan")
-  [ "$ENGINE" != hermes ] || cmd+=(--usage-file "$usage")
+  [ "$active_engine" != hermes ] || cmd+=(--usage-file "$usage")
   [ "$readonly" != 1 ] || cmd+=(--read-only-worktree)
   [ -z "$evidence_dir" ] || cmd+=(--evidence-dir "$evidence_dir")
   local protected_path seen_paths=" "
@@ -938,7 +966,7 @@ PY
   worker_pgid=$!
   deadline_epoch="$(( $(date +%s) + deadline_s ))"; heartbeat_epoch=0
   LAST_RUN_ID="$run_id"; LAST_RUN_EVIDENCE="$ROOT/state/runs/$run_id.json"
-  log "$role process group=$worker_pgid engine=$ENGINE alias=${alias:-legacy} deadline=${deadline_s}s"
+  log "$role process group=$worker_pgid engine=$active_engine alias=${alias:-legacy} deadline=${deadline_s}s"
   if [ "$STRICT_PHASE5" = 1 ]; then
     mkdir -p "$ROOT/state/runs"
     python3 "$ROOT/scripts/worker-evidence.py" start --path "$LAST_RUN_EVIDENCE" --run-id "$run_id" \
