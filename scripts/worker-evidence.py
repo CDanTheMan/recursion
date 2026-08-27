@@ -32,11 +32,12 @@ def atomic(path: Path, value: dict) -> None:
             json.dump(value, out, indent=2, sort_keys=True)
             out.write("\n"); out.flush(); os.fsync(out.fileno())
         os.replace(name, path)
-        dfd = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(dfd)
-        finally:
-            os.close(dfd)
+        if os.name != "nt":  # directory fds cannot be opened on Windows (same guard as the sibling modules)
+            dfd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
     finally:
         if os.path.exists(name):
             os.unlink(name)

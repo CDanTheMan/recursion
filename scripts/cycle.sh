@@ -168,7 +168,13 @@ fi
 # it. Commit exactly those tracked cycle outputs so neither path leaves the checkout dirty.
 if [ "$PAUSED" = "0" ] && git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -q '^loop/auto$'; then
   git add -A state/BOARD.md state/.board.tsv state/events.jsonl 2>/dev/null || true
-  git diff --cached --quiet 2>/dev/null || git commit -q -m "loop: board $DATE $(date -u +%H:%MZ)" 2>/dev/null || true
+  # Identity supplied explicitly (as work.sh's commit_state does): without it, an account
+  # with no usable git ident fails the commit and `|| true` would leave state silently
+  # staged — dirty-tree drift with no signal. Log the failure instead of swallowing it.
+  git diff --cached --quiet 2>/dev/null \
+    || git -c user.name="recursion-loop" -c user.email="loop@recursion.local" \
+         commit -q -m "loop: board $DATE $(date -u +%H:%MZ)" 2>>"$LOG" \
+    || log "board commit FAILED — cycle state left staged (see $LOG)"
 fi
 
 # --- 3.5) Daily reflection (opt-in). --------------------------------------------------

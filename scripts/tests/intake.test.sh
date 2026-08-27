@@ -207,7 +207,8 @@ before="$(ingested)"
 add s-cockpit telegram "$LUCAS" -1003894008732 10 user "[Lucas Guerra] retain this after watermark recovery"
 set +e
 corrupt_rc="$(intake poll)"
-set -e
+# errexit stays OFF: it was never enabled at the top of this file, and turning it on here
+# truncated the suite on the first nonzero (the fails counter is the reporting path).
 if [ "$corrupt_rc" -ne 0 ] && [ "$(cat "$R/state/.intake-watermark")" = torn ] \
    && [ "$(ingested)" = "$before" ]; then
   ok "an existing corrupt watermark fails closed without skipping an authenticated instruction"
@@ -235,7 +236,7 @@ mkdir -p "$R/state/.locks/runtime-state.lock"
 runtime_mark="$(cat "$R/state/.intake-watermark")"; runtime_before="$(ingested)"
 set +e
 runtime_rc="$(RECURSION_LOCK_ATTEMPTS=1 RECURSION_LOCK_DELAY_S=0 intake poll)"
-set -e
+# errexit stays OFF (see the first set +e block).
 if [ "$runtime_rc" -ne 0 ] && [ "$(cat "$R/state/.intake-watermark")" = "$runtime_mark" ] \
    && [ "$(ingested)" = "$runtime_before" ] && [ ! -d "$R/state/.locks/taskctl.lock" ]; then
   ok "runtime-state maintenance excludes instruction creation and watermark advance"
@@ -247,7 +248,7 @@ rmdir "$R/state/.locks/runtime-state.lock"
 mv "$DB" "$DB.good"; printf 'not-sqlite\n' > "$DB"
 set +e
 reader_rc="$(intake poll)"
-set -e
+# errexit stays OFF (see the first set +e block).
 rm -f "$DB"; mv "$DB.good" "$DB"
 if [ "$reader_rc" -ne 0 ] && [ ! -d "$R/state/.locks/taskctl.lock" ]; then
   ok "reader failure releases the shared runtime-state boundary"
@@ -480,7 +481,7 @@ set +e
 ( cd "$R" && RECURSION_ROOT="$R" RECURSION_HERMES_DB="$WRONGDB" \
   RECURSION_INTAKE_ALLOW="$LUCAS" bash scripts/intake.sh poll --dry-run ) >"$TMP/wrong-store.out" 2>&1
 wrong_store_rc=$?
-set -e
+# errexit stays OFF (see the first set +e block).
 if [ -f "$anchor_file" ] && [ "$wrong_store_rc" -ne 0 ] \
    && [ "$(cat "$R/state/.intake-watermark")" = "$anchor_mark_before" ]; then
   ok "a skipped high-water row still leaves a durable store-identity witness"
@@ -509,7 +510,7 @@ set +e
 ( cd "$R_NO_PLATFORM" && RECURSION_ROOT="$R_NO_PLATFORM" RECURSION_HERMES_DB="$NO_PLATFORM_DB" \
   RECURSION_INTAKE_ALLOW="$LUCAS" bash scripts/intake.sh poll ) >"$TMP/no-platform.out" 2>&1
 no_platform_rc=$?
-set -e
+# errexit stays OFF (see the first set +e block).
 if [ "$no_platform_rc" = 0 ] \
    && [ -f "$R_NO_PLATFORM/state/instructions/$(printf '%08d' "$no_platform_id").md" ]; then
   ok "legacy gateway schema without platform_message_id remains supported"

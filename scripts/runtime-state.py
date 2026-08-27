@@ -122,7 +122,8 @@ def atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
     descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
     temporary = Path(name)
     try:
-        os.fchmod(descriptor, mode)
+        if hasattr(os, "fchmod"):  # absent on Windows; NTFS mode bits are meaningless
+            os.fchmod(descriptor, mode)
         with os.fdopen(descriptor, "wb") as output:
             output.write(value)
             output.flush()
@@ -130,7 +131,16 @@ def atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
         os.replace(temporary, path)
         fsync_dir(path.parent)
     except BaseException:
-        temporary.unlink(missing_ok=True)
+        # Cleanup must never replace the primary exception: close the descriptor first
+        # (Windows cannot unlink an open file) and swallow only the cleanup's own OSError.
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
         raise
 
 

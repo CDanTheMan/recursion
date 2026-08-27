@@ -108,7 +108,10 @@ human-owned links before anything can execute); `docs/audits/unlanded-branches-2
    and confirm it is no longer happening.
 
 ## 2026-08-27 — [NEEDS-APPROVAL] Production-side findings from the cross-platform test-suite pass
-status: PROPOSED — test-side fixes landed on the review branch; nothing below was applied
+status: PARTIALLY APPLIED — Lucas approved the low-risk set in-session (2026-08-27);
+items 1–7 and 9–10 are applied on this review branch. Still open: **8** (deploy-box gate —
+a design decision) and **11** (shlex escape handling — would change Linux parsing of
+backslash-carrying gate commands, so it stays a proposal).
 
 **Context:** post-#77 merge, the full suite was run on Windows and on clean Linux (WSL,
 non-root, named branch, no env pollution). Test-side fixes (fixture staging closures,

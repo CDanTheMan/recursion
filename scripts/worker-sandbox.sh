@@ -94,6 +94,12 @@ print("OK=1")
 PY
 )
   [ "$PLAN_OK" = 1 ] || { echo "worker-sandbox: engine plan is invalid" >&2; exit 92; }
+  # A group/other-writable plan can be rewritten between resolve and launch by any local
+  # process; refuse it in every mode, logical included. Root ownership is asserted only on
+  # the real-run path below — a /tmp logical controller cannot own files as uid 0.
+  plan_mode_any="$(stat -c %a "$ENGINE_PLAN" 2>/dev/null || echo 777)"
+  [ $((8#$plan_mode_any & 022)) -eq 0 ] \
+    || { echo "worker-sandbox: engine plan must not be group/other-writable" >&2; exit 95; }
   # model.required is a launch precondition, not advice: without a model the engine would run
   # on its own configured default, off-alias and off-evidence.
   [ "$PLAN_MREQ" != 1 ] || [ -n "$MODEL" ] \

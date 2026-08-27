@@ -12,7 +12,7 @@ import re
 import shlex
 import subprocess
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit
 
 
@@ -98,7 +98,8 @@ def _transport_shape(value: str, repo: Path) -> tuple[str, str]:
         return value, "file"
     if parsed.scheme == "file" and parsed.hostname in {None, "", "localhost"} \
             and parsed.username is None and parsed.password is None \
-            and not parsed.query and not parsed.fragment and Path(parsed.path).is_absolute():
+            and not parsed.query and not parsed.fragment \
+            and PurePosixPath(parsed.path).is_absolute():
         return value, "file"
     if scp_like:
         return value, "ssh"

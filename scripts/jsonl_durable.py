@@ -123,7 +123,8 @@ def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
     descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
     temporary = Path(name)
     try:
-        os.fchmod(descriptor, mode)
+        if hasattr(os, "fchmod"):  # absent on Windows; NTFS mode bits are meaningless
+            os.fchmod(descriptor, mode)
         with os.fdopen(descriptor, "wb") as output:
             _write_all(output.fileno(), value)
             output.flush()
@@ -131,7 +132,16 @@ def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
         os.replace(temporary, path)
         _fsync_dir(path.parent)
     except BaseException:
-        temporary.unlink(missing_ok=True)
+        # Cleanup must never replace the primary exception: close the descriptor first
+        # (Windows cannot unlink an open file) and swallow only the cleanup's own OSError.
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
         raise
 
 
@@ -214,7 +224,8 @@ def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int) -> dic
     payload_tmp = Path(payload_name)
     try:
         try:
-            os.fchmod(payload_fd, 0o600)
+            if hasattr(os, "fchmod"):  # absent on Windows; NTFS mode bits are meaningless
+                os.fchmod(payload_fd, 0o600)
             while cursor < size:
                 chunk = _read_at(descriptor, min(COPY_CHUNK_BYTES, size - cursor), cursor)
                 if not chunk:
