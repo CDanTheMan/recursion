@@ -275,12 +275,32 @@ def test_bad_root() -> None:
         check(result.returncode == 2, f"nonexistent --root exits 2 (got {result.returncode})")
 
 
+def test_hostile_header_values_sanitized() -> None:
+    # Task headers are worker-adjacent input; a raw ESC byte or '|' from one must not
+    # corrupt (or ANSI-style) the rendered table a human cats.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        tasks_dir = root / "state" / "tasks"
+        tasks_dir.mkdir(parents=True)
+        (tasks_dir / "task-evil.md").write_text(
+            "schema_version: 1\nid: task-evil\nengine: \x1b[31mansi\n"
+            "model_alias: a|b\nstatus: passed\n\nbody\n",
+            encoding="utf-8",
+        )
+        result = run_scorecard(root)
+        check(result.returncode == 0, f"hostile headers still render (got {result.returncode})")
+        check("\x1b" not in result.stdout, "raw ESC byte does not survive into the report")
+        check("?[31mansi" in result.stdout, "control characters are replaced, value still identifiable")
+        check("a\\|b" in result.stdout, "a '|' in an alias is escaped, not a cell break")
+
+
 def main() -> int:
     fixture_data = test_full_fixture()
     test_json_stable(fixture_data)
     test_missing_runs_dir()
     test_empty_events_file()
     test_bad_root()
+    test_hostile_header_values_sanitized()
 
     if failures:
         print(f"engine-scorecard.test: {len(failures)} FAILED")

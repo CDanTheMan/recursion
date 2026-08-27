@@ -90,7 +90,8 @@ weekly one-page rollup; every row split receipted / policy-record / unreconciled
 receipt-less metered spend prints as UNKNOWN, which is the September decision input);
 `scripts/engine-scorecard.py` (pass/retry/wall-clock/escalations per engine+alias from
 on-disk evidence); `scripts/verify-branch-protection.py` + the `plan.sh` automerge-seam
-closure (esc-0001); the worker-sandbox hermes usage-file BindPaths ordering fix; Component 6
+closure (esc-0001); the worker-sandbox hermes usage-file fix (property ordering + mount
+target moved out of the masked /run into PrivateTmp; confirm with one metered run); Component 6
 connector scaffolding (notify.sh / outbox untouched, zero loadable manifests, five unset
 human-owned links before anything can execute); `docs/audits/unlanded-branches-2026-08-26.md`
 (all 13 unlanded branches already on master — deletion hygiene only).

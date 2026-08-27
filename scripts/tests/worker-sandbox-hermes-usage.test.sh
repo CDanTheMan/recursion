@@ -155,16 +155,27 @@ if [ -f "$TMP/argv-1.out" ]; then
     no "★ a --property/--setenv element leaked into the command's own argv ($ASSERT_MSG)"
     cat -n "$TMP/argv-1.out" | sed 's/^/        /'
   fi
-  if grep -qF "BindPaths=$USAGE_FILE:/run/recursion-worker-usage.json" "$TMP/argv-1.out"; then
+  if grep -qF "BindPaths=$USAGE_FILE:/tmp/recursion-worker-usage.json" "$TMP/argv-1.out"; then
     ok "the usage-file BindPaths property is still present (not silently dropped)"
   else
     no "the usage-file BindPaths property is missing from the composed argv"
   fi
   if grep -qxF -- "--usage-file" "$TMP/argv-1.out" \
-     && grep -qxF "/run/recursion-worker-usage.json" "$TMP/argv-1.out"; then
+     && grep -qxF "/tmp/recursion-worker-usage.json" "$TMP/argv-1.out"; then
     ok "hermes's own --usage-file flag is still present"
   else
     no "hermes's own --usage-file flag is missing"
+  fi
+  # The hermes arm masks /run and /var/run as InaccessiblePaths, and systemd drops any mount
+  # entry shadowed by an inaccessible path — so a bind TARGET under /run is silently discarded.
+  # Bind sources under the host /run are equally suspect here. PrivateTmp=/tmp is the sanctioned
+  # target; this pins the retarget so nobody moves it back.
+  if grep -E '^(Bind(ReadOnly)?Paths=)?[^=]*:/(run|var/run)(/|$)' "$TMP/argv-1.out" \
+       | grep -q .; then
+    no "a bind mount targets the masked /run — systemd will drop it (shadowed by InaccessiblePaths)"
+    grep -E ':/(run|var/run)(/|$)' "$TMP/argv-1.out" | sed 's/^/        /'
+  else
+    ok "no bind mount targets the masked /run or /var/run"
   fi
 else
   no "hermes + --usage-file: systemd-run stub never captured argv (script exited before dispatch)"

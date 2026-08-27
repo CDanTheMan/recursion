@@ -335,6 +335,36 @@ def accumulate(bucket: dict, row: dict) -> None:
     bucket["by_basis"][basis]["cost_usd"] += cost
 
 
+def valid_amount(value: object, allow_float: bool) -> bool:
+    """True if *value* is absent (None), or a non-negative number of the allowed kind."""
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return False
+    if allow_float:
+        return isinstance(value, (int, float)) and value >= 0
+    return isinstance(value, int) and value >= 0
+
+
+def ledger_row_is_corrupt(row: dict) -> bool:
+    """A run row whose shape cannot be trusted for aggregation.
+
+    The ledger is append-only and never rewritten, so one bad row must never crash the
+    rollup or disable it permanently. tokens must be int>=0 (or absent); cost_usd must be
+    int/float>=0 (or absent). A row that claims cost_basis "receipt" but is missing either
+    number is not actually receipt-grade -- it must not be silently counted as $0.00 in the
+    column the report presents as measured money.
+    """
+    tokens, cost = row.get("tokens"), row.get("cost_usd")
+    if not valid_amount(tokens, allow_float=False):
+        return True
+    if not valid_amount(cost, allow_float=True):
+        return True
+    if row.get("cost_basis") == "receipt" and (tokens is None or cost is None):
+        return True
+    return False
+
+
 def group_key(row: dict) -> str:
     return row.get("model") or row.get("model_alias") or "(no alias)"
 
@@ -343,7 +373,8 @@ def build_rollup(rows: list, week: str) -> dict:
     groups: dict[tuple, dict] = {}
     totals = blank_totals()
     snapshots = []
-    outside = unbucketable = 0
+    outside = unbucketable = corrupt = 0
+    valid_runs: list[dict] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
@@ -353,6 +384,10 @@ def build_rollup(rows: list, week: str) -> dict:
             continue
         if row.get("record") != "run":
             continue
+        if ledger_row_is_corrupt(row):
+            corrupt += 1  # shape failed validation -- skipped, never crashes, never a $0 receipt
+            continue
+        valid_runs.append(row)
         bucket = iso_week_of(row.get("finished_at")) or iso_week_of(row.get("started_at"))
         if bucket is None:
             unbucketable += 1
@@ -368,9 +403,7 @@ def build_rollup(rows: list, week: str) -> dict:
     # policy statement, so their real spend is unknown. This is the gap the report exists
     # to surface.
     unreceipted: dict[str, int] = {}
-    for row in rows:
-        if not isinstance(row, dict) or row.get("record") != "run":
-            continue
+    for row in valid_runs:
         if (iso_week_of(row.get("finished_at")) or iso_week_of(row.get("started_at"))) != week:
             continue
         if row.get("billing_basis") == "metered" and row.get("cost_basis") != "receipt":
@@ -386,6 +419,7 @@ def build_rollup(rows: list, week: str) -> dict:
         "ledger_records": len(rows),
         "runs_outside_week": outside,
         "runs_unbucketable": unbucketable,
+        "corrupt_ledger_rows": corrupt,
         "totals": totals,
         "groups": [{"engine": engine, "alias": alias, **values} for (engine, alias), values in ordered],
         "metered_without_receipt": dict(sorted(unreceipted.items())),
@@ -468,6 +502,13 @@ def render_report(rollup: dict, ledger: Path) -> str:
                 "These bill real money and the ledger's 0 is a declaration, not a measurement.",
                 "Treat metered spend for these engines as UNKNOWN until a receipt source exists.",
             ]
+    if rollup["corrupt_ledger_rows"]:
+        lines += [
+            "",
+            f"{rollup['corrupt_ledger_rows']} corrupt ledger row(s) excluded: shape failed",
+            "validation (non-numeric/negative tokens or cost_usd, or a receipt claim missing",
+            "the numbers behind it). Not counted as zero, not counted as measured money.",
+        ]
     snapshots = rollup["openrouter_snapshots"]
     if snapshots:
         first = plain_number(snapshots[0].get("total_usage"))
@@ -507,6 +548,21 @@ def command_rollup(args: argparse.Namespace) -> int:
 
 # --- openrouter account snapshot --------------------------------------------------------
 
+class _RefuseRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Refuses every HTTP redirect outright, on any status code, scheme, or host.
+
+    Returning None (instead of a followed Request) makes urllib fall through to the 3xx's
+    own HTTPError, which the HTTP-failure branch below already reports tersely. Without
+    this, urlopen's default redirect handler copies the Authorization header onto whatever
+    Location a response names -- cross-origin, https->http, anywhere -- which would let a
+    single redirect exfiltrate the credential. Fail closed instead: no redirect is ever
+    followed, so the header can reach only the URL this call was configured with.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def command_snapshot(args: argparse.Namespace) -> int:
     if os.environ.get("RECURSION_USAGE_OPENROUTER", "") != "1":
         diag("openrouter snapshot disabled (RECURSION_USAGE_OPENROUTER is not 1)")
@@ -519,8 +575,9 @@ def command_snapshot(args: argparse.Namespace) -> int:
 
     request = urllib.request.Request(
         url, headers={"Authorization": f"Bearer {key}", "Accept": "application/json"})
+    opener = urllib.request.build_opener(_RefuseRedirectHandler)
     try:
-        with urllib.request.urlopen(request, timeout=SNAPSHOT_TIMEOUT_S) as response:
+        with opener.open(request, timeout=SNAPSHOT_TIMEOUT_S) as response:
             raw = response.read(SNAPSHOT_MAX_BYTES)
     except urllib.error.HTTPError as exc:
         # Terse by construction: neither the key, the URL, nor the body may reach a log.

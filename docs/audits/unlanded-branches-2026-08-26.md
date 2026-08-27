@@ -24,10 +24,11 @@ clones):
 - `recursion-gsc-conformance-node24` — `agent/gsc-conformance-node24-reporter` (already merged)
 - `recursion-gsc-v3-profile` — `agent/gsc-v3-profile-promotion` (already merged)
 
-Local refs total 36 branches. 22 are ancestors of `origin/master` (already merged, incl. the
-6 worktrees marked "already merged" above). 13 are unlanded, all dated 2026-08-12/13. The
-2026-08-12 audit apparently only counted the 6 that had dedicated worktrees; 7 more unlanded
-branches exist as refs only, checked out nowhere.
+Local refs total 37 branches. 23 are ancestors of `origin/master` (already merged, incl. the
+6 worktrees marked "already merged" above). 14 are not: this session's active branch plus the
+13 unlanded ones audited here, all dated 2026-08-12/13. The 2026-08-12 audit apparently only
+counted the 6 that had dedicated worktrees; 7 more unlanded branches exist as refs only,
+checked out nowhere.
 
 Method: for each unlanded branch, `git patch-id --stable` on every `origin/master..branch`
 commit, compared against patch-ids of all `origin/master` commits since 2026-08-01. Non-exact

@@ -368,12 +368,17 @@ case "$ENGINE" in
     [ -n "$MODEL" ] && RUN+=(--model "$MODEL")
     ;;
   hermes)
+    # The mount target must not live under /run: this arm masks /run and /var/run as
+    # InaccessiblePaths (twice, base set + non-gate set), and systemd drops any mount entry
+    # shadowed by an inaccessible path — the bind would be silently discarded and hermes
+    # could never write the file. PrivateTmp=yes gives the unit its own writable /tmp, so
+    # the usage file is bound there instead.
     if [ -n "$USAGE_FILE" ]; then
       : > "$USAGE_FILE"; chown "$RUNNER_UID:$RUNNER_GID" "$USAGE_FILE"
-      RUN+=(--property "BindPaths=$USAGE_FILE:/run/recursion-worker-usage.json")
+      RUN+=(--property "BindPaths=$USAGE_FILE:/tmp/recursion-worker-usage.json")
     fi
     RUN+=(/usr/bin/env "$INNER_EXE" -z "$PROMPT" -m "${MODEL:-gpt-5.6-sol}" -t file,terminal --yolo)
-    [ -n "$USAGE_FILE" ] && RUN+=(--usage-file /run/recursion-worker-usage.json)
+    [ -n "$USAGE_FILE" ] && RUN+=(--usage-file /tmp/recursion-worker-usage.json)
     ;;
   *)
     # Plugin engines (D-015): exec exactly the admitted plan argv; no shell, no interpolation.

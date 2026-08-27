@@ -19,14 +19,18 @@ answers "clean" when it learned nothing is worse than no verifier, because it re
 escalation with a fabricated fact.
 
 Exit codes:
-  0  every check verified clean
+  0  every check verified clean, and at least one ACTIVE portfolio row was actually checked
   1  at least one VIOLATION (including an UNPROTECTED default branch)
   2  usage or input error (bad argument, missing root, unreadable portfolio)
-  3  no VIOLATION, but at least one UNVERIFIABLE row — protection cannot be claimed
+  3  no VIOLATION, but at least one UNVERIFIABLE row — protection cannot be claimed. A
+     portfolio with nothing checkable in it (empty, all-comment, all-inactive, all-malformed)
+     lands here too: zero rows checked is something this run did not learn, not a clean bill.
 
 Auth: GITHUB_TOKEN or GH_TOKEN, sent as a Bearer header. With no token every remote row is
 UNVERIFIABLE (exit 3) — the tool never guesses from a public, unauthenticated read. The token
-value is scrubbed out of every line this program prints or writes.
+value is scrubbed out of every line this program prints or writes, no redirect is ever followed
+on an authenticated call (urllib would carry the Bearer header to the new location), and a
+credential embedded in a portfolio remote is redacted as the row is read.
 
 Reading classic branch protection requires admin rights on the repo; a read-only token gets
 403 and the row is reported UNVERIFIABLE, which is the honest answer.
@@ -70,12 +74,44 @@ HTTPS_REMOTE_RE = re.compile(r"^https://github\.com/([^/\s]+)/(.+?)(?:\.git)?/?$
 
 VIOLATION_STATUSES = {"VIOLATION", "UNPROTECTED"}
 
+# Everything that is not a checked-clean result. SKIPPED is in here on purpose: a row this run
+# could not parse is a row it did not check, and "I skipped it" must never be counted as "fine".
+UNVERIFIABLE_STATUSES = {"UNVERIFIABLE", "SKIPPED"}
+
+REDACTED = "<redacted>"
+
 
 def scrub(text: str, secrets: list[str]) -> str:
     """Never let a credential reach stdout, stderr, or the evidence file."""
     for secret in secrets:
         if secret:
             text = text.replace(secret, "***")
+    return text
+
+
+def safe_remote(remote: str) -> str:
+    """Redact the userinfo of a remote before the string can be printed or serialized.
+
+    `https://x-access-token:ghp_...@github.com/o/r.git` is how a credential ends up pasted into
+    a ticket, and scrub() cannot help: that token is not an env var this process knows. So the
+    userinfo is stripped here, at the one place a remote enters the program (read_portfolio),
+    and no downstream echo site can leak what it never received.
+    """
+    text = (remote or "").strip()
+    scheme, separator, rest = text.partition("://")
+    if separator:
+        # URL form: everything before the last "@" of the authority is credential material —
+        # including a bare `ghp_...@`, which is a valid token form. Redact all of it.
+        authority, _, path = rest.partition("/")
+        if "@" in authority:
+            host = authority.rpartition("@")[2]
+            return f"{scheme}://{REDACTED}@{host}" + (f"/{path}" if "/" in rest else "")
+        return text
+    # scp form (git@github.com:o/r.git): `git@` is a conventional username, not a secret, so it
+    # stays readable. Userinfo carrying a ":" is a user:password pair and does not.
+    userinfo, at_sign, tail = text.partition("@")
+    if at_sign and ":" in userinfo:
+        return f"{REDACTED}@{tail}"
     return text
 
 
@@ -192,6 +228,9 @@ def read_portfolio(path: Path):
     One deliberate divergence: a trailing CR is stripped. publish.sh does not, so a CRLF
     portfolio would make every row read as status "active\\r" and be skipped — which would
     make this verifier check nothing while reporting success. Stripping fails closed.
+
+    This is also the credential choke point: the remote is stored already redacted, so nothing
+    downstream — existing echo sites or ones added later — can print an embedded token.
     """
     rows, malformed = [], []
     for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -207,10 +246,27 @@ def read_portfolio(path: Path):
             continue
         rows.append({
             "project": project.strip(), "path": repo_path.strip(),
-            "remote": remote.strip(), "branch": branch.strip(),
+            "remote": safe_remote(remote), "branch": branch.strip(),
             "key": key.strip(), "line": number,
         })
     return rows, malformed
+
+
+class RefuseRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse every redirect on an authenticated call.
+
+    urllib's default handler copies the Authorization header onto the redirect target and will
+    happily cross origins (and downgrade https to http), so a single redirecting — or hijacked —
+    endpoint harvests the token. Returning None leaves the 3xx unhandled, so the opener raises
+    HTTPError and the row comes back UNVERIFIABLE. Not knowing is the safe answer here.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+# Module-level: every authenticated call goes through this opener, never the default one.
+OPENER = urllib.request.build_opener(RefuseRedirect())
 
 
 def github_get(base: str, path: str, token: str):
@@ -222,7 +278,7 @@ def github_get(base: str, path: str, token: str):
     request.add_header("User-Agent", PROG)
     request.add_header("Authorization", f"Bearer {token}")
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response:
+        with OPENER.open(request, timeout=TIMEOUT_S) as response:
             body = response.read()
             try:
                 payload = json.loads(body.decode("utf-8")) if body else None
@@ -234,6 +290,11 @@ def github_get(base: str, path: str, token: str):
             exc.read()
         except Exception:  # noqa: BLE001 - draining the body must never mask the status
             pass
+        if 300 <= exc.code < 400:
+            # A refused redirect is a dead end for this row, never a status to interpret.
+            return exc.code, None, (
+                f"refused an HTTP {exc.code} redirect — an authenticated request must not "
+                "carry its Authorization header to another location")
         return exc.code, None, None
     except urllib.error.URLError as exc:
         return None, None, f"request failed ({exc.reason})"
@@ -265,9 +326,10 @@ def check_remote(row: dict, base: str, token: str, stubbed: bool) -> dict:
                       "portfolio row has no registered default branch", **common)
     owned = parse_remote(row["remote"])
     if owned is None:
-        # The remote is echoed because the human has to go fix the row, and it is echoed
-        # through scrub() because a `https://user:token@host/...` remote is the classic way a
-        # credential ends up in a log.
+        # The remote is echoed because the human has to go fix the row. Echoing it is safe
+        # because read_portfolio already stripped any userinfo: a `https://user:token@host/...`
+        # remote is the classic way a credential ends up in a log, and scrub() cannot catch it
+        # (the token is not an env var this process knows).
         return result("remote", "UNVERIFIABLE", subject,
                       f"remote is not a recognized GitHub URL, so protection cannot be checked "
                       f"here: {row['remote']}", **common)
@@ -375,18 +437,31 @@ def main(argv=None) -> int:
         return 2
 
     if malformed:
+        # SKIPPED counts as unverifiable (see UNVERIFIABLE_STATUSES): portfolio.tsv is
+        # hand-edited, and one lost tab must not silently shrink what this run checked.
         results.append(result(
             "portfolio", "SKIPPED", "state/portfolio.tsv",
             f"{len(malformed)} malformed row(s) skipped at line(s) "
             f"{', '.join(str(number) for number in malformed)} — fewer than 8 tab-separated "
-            "fields, so publish.sh cannot resolve them either",
+            "fields, so publish.sh cannot resolve them either, and this run cannot claim "
+            "anything about them",
             malformed_lines=malformed,
+        ))
+    if not rows:
+        # Zero checked rows is not a clean result. An empty, all-comment, all-inactive or
+        # all-malformed portfolio teaches this run nothing about GitHub, and reporting CLEAN
+        # would retire esc-0001 on a fact nobody checked.
+        results.append(result(
+            "portfolio", "UNVERIFIABLE", "state/portfolio.tsv",
+            "no ACTIVE portfolio row could be checked, so nothing at all was verified about "
+            "branch protection on GitHub",
+            active_rows=0, malformed_lines=malformed,
         ))
     for row in rows:
         results.append(check_remote(row, base, token, bool(base_override)))
 
     violations = [item for item in results if item["status"] in VIOLATION_STATUSES]
-    unverifiable = [item for item in results if item["status"] == "UNVERIFIABLE"]
+    unverifiable = [item for item in results if item["status"] in UNVERIFIABLE_STATUSES]
     if violations:
         verdict, code = "violation", 1
     elif unverifiable:

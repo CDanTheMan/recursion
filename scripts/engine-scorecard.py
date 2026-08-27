@@ -331,10 +331,18 @@ def _fmt_duration(seconds: int) -> str:
     return f"{hours}h{minutes:02d}m"
 
 
+def _cell(value: object) -> str:
+    """Neutralize header-sourced text for the markdown table: task headers are worker-adjacent
+    input, and a raw ESC byte or '|' would corrupt (or ANSI-style) a report a human cats."""
+    text = str(value)
+    text = "".join("?" if (ord(ch) < 0x20 or ord(ch) == 0x7F) else ch for ch in text)
+    return text.replace("|", "\\|")
+
+
 def _fmt_counter(counter: Counter[str]) -> str:
     if not counter:
         return "-"
-    return " ".join(f"{k}:{v}" for k, v in sorted(counter.items()))
+    return " ".join(f"{_cell(k)}:{v}" for k, v in sorted(counter.items()))
 
 
 def _fmt_outcomes(counter: Counter[str]) -> str:
@@ -431,7 +439,7 @@ def render_markdown(data: dict) -> str:
             wc = row["wallclock_seconds"]
             wallclock = "n/a" if wc["n"] == 0 else f"{_fmt_duration(wc['median'])} / {_fmt_duration(wc['total'])}"
             lines.append(
-                f"| {row['engine']} | {row['alias']} | {_fmt_counter(task_status)} | "
+                f"| {_cell(row['engine'])} | {_cell(row['alias'])} | {_fmt_counter(task_status)} | "
                 f"{row['verifier_arms'] or '-'} | {_fmt_counter(runs_by_role)} | "
                 f"{_fmt_outcomes(outcomes)} | {row['retries'] or '-'} | {wallclock} | "
                 f"{_fmt_counter(escalations)} |"

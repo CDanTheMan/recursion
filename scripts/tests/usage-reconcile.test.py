@@ -129,6 +129,75 @@ def serve(payload: bytes, status: int):
     return server, f"http://127.0.0.1:{server.server_port}/credits"
 
 
+class RedirectHandler(http.server.BaseHTTPRequestHandler):
+    """Answers every GET with a 302 to another local server."""
+
+    target = ""
+
+    def do_GET(self) -> None:  # noqa: N802 - http.server API
+        self.send_response(302)
+        self.send_header("Location", type(self).target)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def log_message(self, *args) -> None:
+        pass
+
+
+class SinkHandler(http.server.BaseHTTPRequestHandler):
+    """Records every request it receives, including whether it carried Authorization."""
+
+    hits: list = []
+
+    def do_GET(self) -> None:  # noqa: N802 - http.server API
+        type(self).hits.append(self.headers.get("Authorization"))
+        body = b'{"data":{"total_credits":1.0,"total_usage":1.0}}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args) -> None:
+        pass
+
+
+def serve_redirect(target_url: str):
+    handler = type("Handler", (RedirectHandler,), {"target": target_url})
+    server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_port}/credits"
+
+
+def serve_sink():
+    hits: list = []
+    handler = type("Handler", (SinkHandler,), {"hits": hits})
+    server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_port}/sink", hits
+
+
+def ledger_row(run_id: str, *, engine: str, alias: str, tokens: object, cost_usd: object,
+              cost_basis: str, billing_basis: str = "metered",
+              finished: str = "2026-08-24T10:05:00Z") -> dict:
+    """A ledger row shaped like normalize()'s output -- written straight into the JSONL file
+    to simulate a hand-corrupted or legacy record, bypassing ingest's own construction."""
+    return {
+        "schema_version": 1, "record": "run", "run_id": run_id, "task_id": "T-100",
+        "role": "implementer", "engine": engine, "provider": "openrouter-via-opencode",
+        "model_alias": alias, "model": None, "billing_basis": billing_basis,
+        "evidence_source": "opencode-usage-v1", "tokens": tokens, "cost_usd": cost_usd,
+        "cost_basis": cost_basis, "started_at": "2026-08-24T10:00:00Z", "finished_at": finished,
+        "wall_seconds": 300, "status": "succeeded", "outcome": "done",
+    }
+
+
+def write_ledger_lines(path: Path, rows: list) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows),
+                    encoding="utf-8", newline="\n")
+
+
 def case_ingest(tmp: Path, engines: Path) -> None:
     runs, ledger = tmp / "runs", tmp / "usage" / "ledger.jsonl"
     write_json(runs / "r-claude.json", evidence("r-claude", "implementer", "opus-complex", CLAUDE_USAGE))
@@ -347,6 +416,96 @@ def case_snapshot_failure(tmp: Path) -> None:
     check(FAKE_KEY not in broken.stdout + broken.stderr, "parse-failure path never echoes the key")
 
 
+def case_snapshot_redirect_refused(tmp: Path) -> None:
+    """A redirecting endpoint must never receive the Authorization header via a hop."""
+    ledger = tmp / "usage11" / "ledger.jsonl"
+    sink_server, sink_url, hits = serve_sink()
+    redirector_server, redirector_url = serve_redirect(sink_url)
+    try:
+        result = run_tool(["openrouter-snapshot", "--ledger", str(ledger)], env_extra={
+            "RECURSION_USAGE_OPENROUTER": "1", "OPENROUTER_API_KEY": FAKE_KEY,
+            "RECURSION_USAGE_OPENROUTER_URL": redirector_url})
+    finally:
+        redirector_server.shutdown()
+        redirector_server.server_close()
+        sink_server.shutdown()
+        sink_server.server_close()
+    check(result.returncode != 0, f"a redirecting endpoint fails closed (got {result.returncode})")
+    combined = result.stdout + result.stderr
+    check(FAKE_KEY not in combined, "redirect-refusal path never echoes the key")
+    check(sink_url not in combined and redirector_url not in combined,
+          "redirect-refusal path never echoes either URL")
+    check(len(hits) == 0, "the redirect target receives no request at all")
+    check(all(header is None for header in hits),
+          "no request reaching the sink carried the Authorization header")
+    check(not ledger.exists(), "a refused redirect writes nothing to the ledger")
+
+
+def case_rollup_corrupt_rows(tmp: Path, engines: Path) -> None:
+    """A hand-corrupted ledger row must never crash rollup or count as measured money."""
+    ledger, out = tmp / "usage9" / "ledger.jsonl", tmp / "reports9"
+    week = "2026-W35"
+    rows = [
+        ledger_row("clean-1", engine="opencode", alias="opencode-flex", tokens=1200,
+                  cost_usd=0.42, cost_basis="receipt"),
+        ledger_row("clean-2", engine="claude", alias="opus-complex", tokens=0, cost_usd=0.0,
+                  cost_basis="policy-record", billing_basis="flat-subscription"),
+        # String tokens: one bad row must not crash the whole rollup (TypeError on +=).
+        ledger_row("bad-string-tokens", engine="opencode", alias="opencode-flex",
+                  tokens="500", cost_usd=0.10, cost_basis="receipt"),
+        # Claims a receipt but has no cost number behind it -- not receipt-grade.
+        ledger_row("bad-receipt-null-cost", engine="opencode", alias="opencode-flex",
+                  tokens=1000, cost_usd=None, cost_basis="receipt"),
+    ]
+    write_ledger_lines(ledger, rows)
+
+    result = run_tool(["rollup", "--ledger", str(ledger), "--out", str(out), "--week", week],
+                      engines)
+    check(result.returncode == 0,
+          f"rollup with corrupt rows still exits 0 (got {result.returncode}) {result.stderr.strip()}")
+
+    machine = json.loads((out / f"usage-{week}.json").read_text(encoding="utf-8"))
+    check(machine.get("corrupt_ledger_rows") == 2,
+          f"both corrupt rows are counted (got {machine.get('corrupt_ledger_rows')})")
+    totals, basis = machine["totals"], machine["totals"]["by_basis"]
+    check(totals["runs"] == 2, f"only the two clean rows are counted (got {totals['runs']})")
+    check(totals["tokens"] == 1200, f"corrupt rows contribute no tokens (got {totals['tokens']})")
+    check(abs(totals["cost_usd"] - 0.42) < 1e-9,
+          f"corrupt rows contribute no cost (got {totals['cost_usd']})")
+    check(basis["receipt"]["runs"] == 1 and abs(basis["receipt"]["cost_usd"] - 0.42) < 1e-9,
+          "the string-tokens and null-cost receipt rows never reach the receipted column")
+
+    report = (out / f"usage-{week}.md").read_text(encoding="utf-8")
+    check("2 corrupt ledger row(s) excluded" in report,
+          "report surfaces the excluded-row count in its honesty section")
+    check("bad-string-tokens" not in report and "bad-receipt-null-cost" not in report,
+          "corrupt run identifiers never leak into the report")
+
+
+def case_rollup_clean_ledger_stable(tmp: Path, engines: Path) -> None:
+    """A ledger with no corrupt rows produces identical totals to before the validation fix."""
+    ledger, out = tmp / "usage10" / "ledger.jsonl", tmp / "reports10"
+    week = "2026-W35"
+    rows = [
+        ledger_row("only-1", engine="opencode", alias="opencode-flex", tokens=1200,
+                  cost_usd=0.42, cost_basis="receipt"),
+        ledger_row("only-2", engine="claude", alias="opus-complex", tokens=0, cost_usd=0.0,
+                  cost_basis="policy-record", billing_basis="flat-subscription"),
+    ]
+    write_ledger_lines(ledger, rows)
+
+    result = run_tool(["rollup", "--ledger", str(ledger), "--out", str(out), "--week", week],
+                      engines)
+    check(result.returncode == 0, f"clean-ledger rollup exits 0 (got {result.returncode})")
+    machine = json.loads((out / f"usage-{week}.json").read_text(encoding="utf-8"))
+    check(machine.get("corrupt_ledger_rows") == 0, "a clean ledger has zero corrupt rows")
+    check(machine["totals"]["runs"] == 2 and machine["totals"]["tokens"] == 1200
+          and abs(machine["totals"]["cost_usd"] - 0.42) < 1e-9,
+          "clean-ledger totals are unchanged by the validation fix")
+    report = (out / f"usage-{week}.md").read_text(encoding="utf-8")
+    check("corrupt ledger row" not in report, "a clean ledger prints no corrupt-row line")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as raw:
         tmp = Path(raw)
@@ -364,6 +523,9 @@ def main() -> int:
         case_snapshot_disabled(tmp)
         case_snapshot_success(tmp)
         case_snapshot_failure(tmp)
+        case_snapshot_redirect_refused(tmp)
+        case_rollup_corrupt_rows(tmp, engines)
+        case_rollup_clean_ledger_stable(tmp, engines)
 
     if failures:
         print(f"usage-reconcile.test: {len(failures)} FAILED")

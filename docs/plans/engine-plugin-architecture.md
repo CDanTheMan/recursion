@@ -335,8 +335,13 @@ Rolled out on the same review branch after the cross-engine delta, on Lucas's in
 - `scripts/verify-branch-protection.py` + the plan.sh automerge-seam closure — esc-0001
   close-out tooling (exit 0 verified-clean / 1 violation / 3 unverifiable; the tokenless
   truth today is 8/8 remote rows unverifiable).
-- worker-sandbox.sh fix: the hermes usage-file BindPaths property was appended after the
-  systemd-run command argv, so it landed in hermes's argv instead of mounting the file.
+- worker-sandbox.sh fix, in two parts: the hermes usage-file BindPaths property was
+  appended after the systemd-run command argv (it landed in hermes's argv instead of
+  mounting), and the mount target itself sat under the arm's masked /run — systemd drops
+  binds shadowed by InaccessiblePaths — so the file is now bound into the unit's
+  PrivateTmp at /tmp/recursion-worker-usage.json. worker-evidence.py treats an empty
+  usage file as "no usage data" instead of crashing finish. One metered hermes run on
+  the box should confirm the file actually lands.
 - Component 6 connector scaffolding (see the amended section above).
 - `docs/audits/unlanded-branches-2026-08-26.md` — all 13 unlanded 2026-08-12/13 branches
   are already on master; deletion hygiene only.
