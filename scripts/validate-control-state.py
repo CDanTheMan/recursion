@@ -14,6 +14,12 @@ import re
 import sys
 from pathlib import Path
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+from engine_contract import alias_role_ok, default_registry_path, pilot_engine_ok
+
 
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 STATUSES = {
@@ -149,12 +155,17 @@ def validate(kind: str, value: object) -> dict:
         missing_phase5 = [field for field in phase5 if field not in value]
         if missing_phase5:
             fail("Phase 5 task is missing: " + ", ".join(missing_phase5))
-        if value["model_alias"] not in {"sonnet-routine", "opus-complex"}:
+        _registry = default_registry_path(_SCRIPT_DIR)
+        if not alias_role_ok(value["model_alias"], "implementer", _registry):
             fail("invalid implementer model alias")
-        if value["verifier_model_alias"] not in {"opus-review", "opus-complex"}:
+        if not alias_role_ok(value["verifier_model_alias"], "verifier", _registry):
             fail("invalid verifier model alias")
         if value["model_alias"] == value["verifier_model_alias"]:
             fail("implementer and verifier aliases must be independent")
+        if "engine" in value and not pilot_engine_ok(value["engine"]):
+            fail("invalid engine")
+        if "verifier_engine" in value and not pilot_engine_ok(value["verifier_engine"]):
+            fail("invalid verifier engine")
         if value["network_policy"] not in {"provider-only", "none"}:
             fail("invalid network policy")
         if value["verification"] != "independent":

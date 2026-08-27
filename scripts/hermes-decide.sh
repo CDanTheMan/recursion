@@ -327,9 +327,14 @@ reuse a historical goal merely because it already exists.
            \"non_goals\":[unique task-specific exclusions; include credentials, merge, deploy],
            \"acceptance\":\"<a real command>\",
            \"worker_class\":\"<string>\",
-           \"engine\":\"claude\",
-           \"model_alias\":\"sonnet-routine\" or \"opus-complex\",
-           \"verifier_model_alias\":\"opus-review\" or \"opus-complex\",
+           \"engine\":\"claude\" (or an ENABLED plugin engine the instruction names:
+                     \"cursor\", \"gemini\", \"opencode\", \"opencode-local\"),
+           \"model_alias\":\"sonnet-routine\" or \"opus-complex\"
+                     (plugin-engine tasks: \"cursor-primary\", \"opencode-flex\", or \"sentry-local\"),
+           \"verifier_model_alias\":\"opus-review\" or \"opus-complex\"
+                     (plugin verifiers: \"cursor-primary\", \"gemini-review\", or \"opencode-flex\"),
+           \"verifier_engine\":\"<OPTIONAL; OMIT unless the instruction asks for independent
+                     verification on a DIFFERENT engine than engine; same values as engine>\",
            \"deadline_seconds\":1+, \"verifier_deadline_seconds\":1+,
            \"network_policy\":\"provider-only\",
            \"evidence_contract\":\"worker-result-v1\",
@@ -352,8 +357,8 @@ reuse a historical goal merely because it already exists.
       gate_files, and controller_gate_files. gate_files are immutable grading code, never
       implementation targets. If acceptance invokes python, python3, node, bash, or sh under an
       allowed path, that grading program must be in gate_files. Use gate_class heavy for corpus,
-      renderer-diff, or full-suite compute; otherwise use light. Cloud engines claude and hermes
-      with network_policy none are refused because the worker cannot reach its provider. This
+      renderer-diff, or full-suite compute; otherwise use light. Every admissible engine is a
+      networked worker, so network_policy none is refused for every engine. This
       policy does not grant product network: acceptance gates always run controller-fixed none.
   pilot-plan-approve <project> <plan-id> <sha256>  materialize only when Lucas's correlated
     instruction itself names that exact plan id and digest.

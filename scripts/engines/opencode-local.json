@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "name": "opencode-local",
+  "description": "OpenCode CLI pointed at a Qwen 30B-class local OpenAI-compatible server on the Sentry PC, reached over the tunnel. Argv is provisional pending on-box flag verification (docs/plans/engine-plugin-architecture.md, deployment step 2) -- measure, don't assume.",
+  "executable": "opencode",
+  "argv": [
+    "{{EXE}}",
+    "run",
+    "--",
+    "{{PROMPT}}"
+  ],
+  "model": {
+    "required": true,
+    "argv_suffix": [
+      "--model",
+      "{{MODEL}}"
+    ]
+  },
+  "roles": [
+    "implementer"
+  ],
+  "billing": {
+    "basis": "local",
+    "provider": "sentry-local"
+  },
+  "network": {
+    "policy": "provider-only",
+    "endpoints": []
+  },
+  "availability_probe": {
+    "type": "http",
+    "url_env": "RECURSION_ENGINE_OPENCODE_LOCAL_HEALTH_URL",
+    "timeout_s": 5
+  },
+  "concurrency_cap": 1,
+  "env_passthrough": []
+}

@@ -6,10 +6,11 @@ set -euo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 ENGINE=""; WT=""; PROMPT=""; MODEL=""; USAGE_FILE=""; ROLE="implementer"
 NETWORK_POLICY="provider-only"; READ_ONLY_WORKTREE=0; EVIDENCE_DIR=""
-GATE_COMMAND=""; WORKDIR_PATH="."; READ_ONLY_PATHS=()
+GATE_COMMAND=""; WORKDIR_PATH="."; READ_ONLY_PATHS=(); ENGINE_PLAN=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --engine) ENGINE="${2:-}"; shift 2 ;;
+    --engine-plan) ENGINE_PLAN="${2:-}"; shift 2 ;;
     --worktree) WT="${2:-}"; shift 2 ;;
     --prompt) PROMPT="${2:-}"; shift 2 ;;
     --model) MODEL="${2:-}"; shift 2 ;;
@@ -24,7 +25,100 @@ while [ $# -gt 0 ]; do
     *) echo "worker-sandbox: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-case "$ENGINE" in claude|hermes|gate) ;; *) echo "worker-sandbox: invalid engine" >&2; exit 92;; esac
+case "$ENGINE" in
+  claude|hermes|gate)
+    [ -z "$ENGINE_PLAN" ] || { echo "worker-sandbox: builtin engines take no engine plan" >&2; exit 92; } ;;
+  none|deepseek|openrouter|"") echo "worker-sandbox: invalid engine" >&2; exit 92 ;;
+  *)
+    # Plugin engines (D-015) run only from a controller-admitted plan file, and the name is
+    # revalidated here because it is used as a root-written filename below.
+    [ -n "$ENGINE_PLAN" ] || { echo "worker-sandbox: invalid engine" >&2; exit 92; }
+    [[ "$ENGINE" =~ ^[a-z][a-z0-9-]{1,31}$ ]] \
+      || { echo "worker-sandbox: invalid engine" >&2; exit 92; } ;;
+esac
+PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ENV_PASS=(); PLAN_OK=0; PLAN_MREQ=0
+ENGINE_ENV_FILE=""
+if [ -n "$ENGINE_PLAN" ]; then
+  [ -f "$ENGINE_PLAN" ] || { echo "worker-sandbox: engine plan is missing" >&2; exit 92; }
+  while IFS= read -r plan_line; do
+    plan_line="${plan_line%$'\r'}"   # a Windows-native python3 emits CRLF; the box's does not
+    case "$plan_line" in
+      EXE=*)  PLAN_EXE="${plan_line#EXE=}" ;;
+      ARG=*)  PLAN_ARGV+=("${plan_line#ARG=}") ;;
+      MSFX=*) PLAN_MODEL_SUFFIX+=("${plan_line#MSFX=}") ;;
+      ENVP=*) PLAN_ENV_PASS+=("${plan_line#ENVP=}") ;;
+      MREQ=1) PLAN_MREQ=1 ;;
+      OK=1)   PLAN_OK=1 ;;
+    esac
+  done < <(python3 - "$ENGINE_PLAN" "$ENGINE" <<'PY' || true
+import json, re, sys
+try:
+    plan = json.load(open(sys.argv[1]))
+except Exception:
+    raise SystemExit(92)
+engine = plan.get("engine")
+if plan.get("schema_version") != 1 or engine != sys.argv[2] \
+        or not isinstance(engine, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", engine):
+    raise SystemExit(92)
+exe = plan.get("executable"); argv = plan.get("argv")
+if not isinstance(exe, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", exe):
+    raise SystemExit(92)
+if not isinstance(argv, list) or not argv or argv[0] != "{{EXE}}" \
+        or argv.count("{{EXE}}") != 1 or argv.count("{{PROMPT}}") != 1 \
+        or argv.count("{{MODEL}}") > 1:
+    raise SystemExit(92)
+suffix = plan.get("model_argv_suffix") or []
+if not isinstance(suffix, list) or suffix.count("{{MODEL}}") > 1:
+    raise SystemExit(92)
+for element in list(argv) + list(suffix):
+    if not isinstance(element, str) or any(ord(ch) < 32 for ch in element):
+        raise SystemExit(92)
+    if element.startswith("{{") and element.endswith("}}") \
+            and element not in ("{{EXE}}", "{{PROMPT}}", "{{MODEL}}"):
+        raise SystemExit(92)
+for element in suffix:
+    if element in ("{{EXE}}", "{{PROMPT}}"):
+        raise SystemExit(92)
+if plan.get("model_required"):
+    print("MREQ=1")
+print("EXE=" + exe)
+for element in argv:
+    print("ARG=" + element)
+for element in suffix:
+    print("MSFX=" + element)
+for name in plan.get("env_passthrough") or []:
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", name):
+        raise SystemExit(92)
+    print("ENVP=" + name)
+print("OK=1")
+PY
+)
+  [ "$PLAN_OK" = 1 ] || { echo "worker-sandbox: engine plan is invalid" >&2; exit 92; }
+  # model.required is a launch precondition, not advice: without a model the engine would run
+  # on its own configured default, off-alias and off-evidence.
+  [ "$PLAN_MREQ" != 1 ] || [ -n "$MODEL" ] \
+    || { echo "worker-sandbox: engine plan requires a model and none was given" >&2; exit 92; }
+fi
+build_plan_argv(){ # resolved-exe -> PLAN_RUN: exact-element placeholder substitution only
+  local exe="$1" element
+  PLAN_RUN=()
+  for element in "${PLAN_ARGV[@]}"; do
+    case "$element" in
+      '{{EXE}}')    PLAN_RUN+=("$exe") ;;
+      '{{PROMPT}}') PLAN_RUN+=("$PROMPT") ;;
+      '{{MODEL}}')  PLAN_RUN+=("$MODEL") ;;
+      *)            PLAN_RUN+=("$element") ;;
+    esac
+  done
+  if [ -n "$MODEL" ]; then
+    for element in "${PLAN_MODEL_SUFFIX[@]}"; do
+      case "$element" in
+        '{{MODEL}}') PLAN_RUN+=("$MODEL") ;;
+        *)           PLAN_RUN+=("$element") ;;
+      esac
+    done
+  fi
+}
 case "$ROLE" in implementer|verifier|gate) ;; *) echo "worker-sandbox: invalid worker role" >&2; exit 92;; esac
 case "$NETWORK_POLICY" in provider-only|none) ;; *) echo "worker-sandbox: invalid network policy" >&2; exit 92;; esac
 [ "$ENGINE:$ROLE" = gate:gate ] || { [ "$ENGINE" != gate ] && [ "$ROLE" != gate ]; } \
@@ -79,6 +173,16 @@ case "${RECURSION_TEST_WORKER:-}" in
         cd "$WT"; hermes -z "$PROMPT" -m "${MODEL:-gpt-5.6-sol}" -t file,terminal --yolo \
           ${USAGE_FILE:+--usage-file "$USAGE_FILE"}
         ;;
+      *)
+        command -v "$PLAN_EXE" >/dev/null 2>&1 || exit 90
+        # Declare the passthrough set so hermetic controls can verify the plan->env plumbing;
+        # the real --setenv/EnvironmentFile wiring is exercised only on the box.
+        for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
+          echo "worker-sandbox: env-passthrough $plan_env_name" >&2
+        done
+        build_plan_argv "$(command -v "$PLAN_EXE")"
+        cd "$WT"; "${PLAN_RUN[@]}"
+        ;;
     esac
     exit $?
     ;;
@@ -103,6 +207,12 @@ fi
 [ "$(id -u)" = 0 ] || { echo "worker-sandbox: controller must be root" >&2; exit 95; }
 command -v systemd-run >/dev/null 2>&1 \
   || { echo "worker-sandbox: systemd-run unavailable" >&2; exit 95; }
+if [ -n "$ENGINE_PLAN" ]; then
+  plan_owner="$(stat -c %u "$ENGINE_PLAN" 2>/dev/null || echo x)"
+  plan_mode="$(stat -c %a "$ENGINE_PLAN" 2>/dev/null || echo 777)"
+  [ "$plan_owner" = 0 ] && [ $((8#$plan_mode & 022)) -eq 0 ] \
+    || { echo "worker-sandbox: engine plan must be root-owned and not group/other-writable" >&2; exit 95; }
+fi
 if [ "$NETWORK_POLICY" = provider-only ]; then
   bash "$ROOT/scripts/provider-network.sh" check >/dev/null \
     || { echo "worker-sandbox: provider-only capability probe failed" >&2; exit 96; }
@@ -126,6 +236,7 @@ case "$ENGINE" in
   gate) EXE=""; EXE_REAL="" ;;
   claude) EXE="$(command -v claude 2>/dev/null || true)"; [ -n "$EXE" ] || exit 90 ;;
   hermes) EXE="$(command -v hermes 2>/dev/null || true)"; [ -n "$EXE" ] || exit 94 ;;
+  *) EXE="$(command -v "$PLAN_EXE" 2>/dev/null || true)"; [ -n "$EXE" ] || exit 90 ;;
 esac
 [ "$ENGINE" = gate ] || EXE_REAL="$(realpath -e "$EXE")"
 
@@ -167,6 +278,7 @@ stop_unit(){
 cleanup(){
   stop_unit || true
   rm -rf -- "$SANDBOX_BIN"
+  [ -z "$ENGINE_ENV_FILE" ] || rm -f -- "$ENGINE_ENV_FILE"
   chown -R 0:0 "$WT" 2>/dev/null || true
 }
 trap 'cleanup; exit 143' TERM INT
@@ -256,12 +368,37 @@ case "$ENGINE" in
     [ -n "$MODEL" ] && RUN+=(--model "$MODEL")
     ;;
   hermes)
-    RUN+=(/usr/bin/env "$INNER_EXE" -z "$PROMPT" -m "${MODEL:-gpt-5.6-sol}" -t file,terminal --yolo)
+    # The mount target must not live under /run: this arm masks /run and /var/run as
+    # InaccessiblePaths (twice, base set + non-gate set), and systemd drops any mount entry
+    # shadowed by an inaccessible path — the bind would be silently discarded and hermes
+    # could never write the file. PrivateTmp=yes gives the unit its own writable /tmp, so
+    # the usage file is bound there instead.
     if [ -n "$USAGE_FILE" ]; then
       : > "$USAGE_FILE"; chown "$RUNNER_UID:$RUNNER_GID" "$USAGE_FILE"
-      RUN+=(--property "BindPaths=$USAGE_FILE:/run/recursion-worker-usage.json")
-      RUN+=(--usage-file /run/recursion-worker-usage.json)
+      RUN+=(--property "BindPaths=$USAGE_FILE:/tmp/recursion-worker-usage.json")
     fi
+    RUN+=(/usr/bin/env "$INNER_EXE" -z "$PROMPT" -m "${MODEL:-gpt-5.6-sol}" -t file,terminal --yolo)
+    [ -n "$USAGE_FILE" ] && RUN+=(--usage-file /tmp/recursion-worker-usage.json)
+    ;;
+  *)
+    # Plugin engines (D-015): exec exactly the admitted plan argv; no shell, no interpolation.
+    # Passthrough values ride a root-owned 0600 EnvironmentFile, never the systemd-run command
+    # line, so credentials stay out of /proc/*/cmdline and `systemctl show`.
+    if [ "${#PLAN_ENV_PASS[@]}" -gt 0 ]; then
+      ENGINE_ENV_FILE="$(mktemp /tmp/recursion-engine-env.XXXXXX)" || exit 95
+      chmod 0600 "$ENGINE_ENV_FILE"
+      for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
+        plan_env_value="${!plan_env_name:-}"
+        [ -n "$plan_env_value" ] || continue
+        case "$plan_env_value" in
+          *$'\n'*|*$'\r'*) echo "worker-sandbox: engine env value contains a newline" >&2; exit 92 ;;
+        esac
+        printf '%s=%s\n' "$plan_env_name" "$plan_env_value" >> "$ENGINE_ENV_FILE"
+      done
+      RUN+=(--property "EnvironmentFile=$ENGINE_ENV_FILE")
+    fi
+    build_plan_argv "$INNER_EXE"
+    RUN+=(/usr/bin/env "${PLAN_RUN[@]}")
     ;;
 esac
 

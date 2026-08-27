@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+# plan-automerge.test.sh — the planner may not hand out automerge authority (esc-0001).
+#
+# WHY. `automerge:` on a task is the one field that can turn a review-branch loop into a
+# default-branch writer, and it never came from a human decision — plan.sh COPIED it out of a
+# roadmap header. That is how chiron-001 and chiron-003 ended up `status: passed` with
+# `automerge: yes`: somebody edited a roadmap, and the planner promoted a scope note into a
+# permission. Roadmaps say WHAT to build; they do not grant authority.
+#
+# So the field is dropped at the planner. Dropping it silently would be worse than copying it —
+# a header that looks honored but is ignored is the same failure wearing the opposite mask — so
+# the drop is announced on stderr, naming the roadmap the human has to edit.
+#
+# * Test 1 is the CONTROL: an ordinary roadmap must still plan, or every refusal below is
+#   satisfied by a plan.sh that emits nothing at all.
+# * Test 3 is the load-bearing one: the human must SEE that the field was dropped.
+#
+# Hermetic: a disposable fixture root. No network, no real state/, no spend.
+#
+#   run: bash scripts/tests/plan-automerge.test.sh
+set -uo pipefail
+export LC_ALL=C
+SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+fails=0
+ok(){ printf 'ok    %s\n' "$1"; }
+no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
+note(){ printf 'note  %s\n' "$1"; }
+
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+R="$TMP/root"
+mkdir -p "$R/scripts" "$R/state/roadmaps" "$R/state/tasks" "$R/state/goals" "$R/state/.locks"
+cp "$SRC/scripts/plan.sh" "$R/scripts/"
+cp "$SRC/scripts/runtime-state.py" "$R/scripts/"
+chmod +x "$R"/scripts/plan.sh "$R"/scripts/runtime-state.py 2>/dev/null
+
+# The planner lock witnesses the caller's process start time before it will hold a lock. Under
+# MSYS `$$` is a shell PID that a Windows-native python cannot open, so the real helper cannot
+# witness it and plan.sh refuses to allocate unlocked — correctly. Lock semantics have their own
+# control (hermes-pilot-phase2-red.test.sh, test 3); this file is about header translation, so on
+# such a host the fixture root gets a lock shim and the real helper is used everywhere else.
+if ( cd "$R" && python3 scripts/runtime-state.py lock-acquire state/.locks/probe.lock $$ ) >/dev/null 2>&1; then
+  ( cd "$R" && python3 scripts/runtime-state.py lock-release state/.locks/probe.lock $$ ) >/dev/null 2>&1 || true
+else
+  note "planner lock witness unavailable on this host — fixture lock shim in use"
+  cat > "$R/scripts/runtime-state.py" <<'SHIM'
+#!/usr/bin/env python3
+"""Fixture-only stand-in for the planner lock. See scripts/tests/plan-automerge.test.sh."""
+import os, shutil, sys
+command = sys.argv[1] if len(sys.argv) > 1 else ""
+path = sys.argv[2] if len(sys.argv) > 2 else ""
+if command == "lock-acquire":
+    try:
+        os.makedirs(path)
+    except FileExistsError:
+        raise SystemExit(1)
+elif command == "lock-release":
+    shutil.rmtree(path, ignore_errors=True)
+else:
+    raise SystemExit(2)
+SHIM
+  chmod +x "$R/scripts/runtime-state.py"
+fi
+
+# Same story for durability. plan.sh fsyncs each file it writes and the directory it lands in —
+# right on the Linux box, impossible here: Windows cannot _commit a read-only descriptor
+# (EBADF) and cannot open a directory at all (EACCES), so every plan.sh run dies at its first
+# fsync. Rather than edit the copy of plan.sh under test — which would stop it being plan.sh —
+# the fixture neutralizes the two syscalls for the fixture's python only, and only where they
+# are genuinely unavailable. Durability is covered on the host that can actually do it.
+PYSHIM=""
+if ! ( cd "$TMP" && : > probe.bin && python3 -c \
+     'import os,sys; f=open("probe.bin","rb"); os.fsync(f.fileno())' ) >/dev/null 2>&1; then
+  note "fsync unavailable on this host — fixture durability shim in use"
+  PYSHIM="$TMP/pyshim"; mkdir -p "$PYSHIM"
+  cat > "$PYSHIM/sitecustomize.py" <<'SHIM'
+"""Fixture-only. See scripts/tests/plan-automerge.test.sh: this host has no usable fsync."""
+import errno, os
+
+_open, _fsync = os.open, os.fsync
+
+
+def _fsync_optional(fd):
+    try:
+        return _fsync(fd)
+    except OSError as exc:
+        if exc.errno in (errno.EBADF, errno.EACCES, errno.EINVAL):
+            return None
+        raise
+
+
+def _open_optional(path, flags, *args, **kwargs):
+    try:
+        return _open(path, flags, *args, **kwargs)
+    except OSError:
+        if os.path.isdir(path):
+            return _open(os.devnull, os.O_RDONLY)
+        raise
+
+
+os.fsync = _fsync_optional
+os.open = _open_optional
+SHIM
+fi
+
+roadmap(){ # roadmap <workstream> <extra-header-lines...>
+  local ws="$1"; shift
+  printf 'status: active\n' > "$R/state/goals/goal-$ws.md"
+  {
+    echo "engine: claude"
+    echo "repo: /opt/demo"
+    echo "workdir: apps/demo"
+    echo "acceptance: npm run build"
+    for line in "$@"; do echo "$line"; done
+    echo
+    echo "- [ ] Add a landing page with a hero + CTA"
+  } > "$R/state/roadmaps/$ws.md"
+}
+plan(){ # plan <workstream> -> rc; stdout in $TMP/out, stderr in $TMP/err
+  ( cd "$R" && RECURSION_ROOT="$R" PYTHONPATH="${PYSHIM:-}${PYTHONPATH:+:$PYTHONPATH}" \
+      bash scripts/plan.sh "$1" ) >"$TMP/out" 2>"$TMP/err"
+  echo $?
+}
+header_of(){ awk 'NF==0{exit} {print}' "$R/state/tasks/$1.md" 2>/dev/null; }
+
+# --- 1. CONTROL: an ordinary roadmap still plans -------------------------------------------
+roadmap clean
+rc="$(plan clean)"
+if [ "$rc" = 0 ] && [ -f "$R/state/tasks/clean-001.md" ] \
+   && header_of clean-001 | grep -q '^acceptance: npm run build$'; then
+  ok "CONTROL: a roadmap without automerge still produces a task"
+else
+  no "CONTROL: plan.sh did not produce a usable task (rc=$rc): $(cat "$TMP/err")"
+fi
+if ! grep -qi automerge "$TMP/err"; then
+  ok "a clean roadmap draws no automerge warning (the refusal stays meaningful)"
+else
+  no "plan.sh warned about automerge on a roadmap that has none: $(cat "$TMP/err")"
+fi
+
+# --- 2. the field does not reach the task --------------------------------------------------
+roadmap grant "automerge: yes" "automerge_scope: apps/demo"
+rc="$(plan grant)"
+if [ "$rc" = 0 ] && [ -f "$R/state/tasks/grant-001.md" ]; then
+  ok "a roadmap carrying automerge still plans (the item is not lost)"
+else
+  no "plan.sh failed on an automerge-carrying roadmap (rc=$rc): $(cat "$TMP/err")"
+fi
+if [ -f "$R/state/tasks/grant-001.md" ] && ! header_of grant-001 | grep -qi '^automerge'; then
+  ok "* automerge:/automerge_scope: are NOT copied into the generated task"
+else
+  no "* automerge survived into the task: $(header_of grant-001 | grep -i '^automerge' | tr '\n' ' ')"
+fi
+
+# --- 3. the drop is announced, on stderr, naming the roadmap -------------------------------
+if grep -qi automerge "$TMP/err"; then
+  ok "* plan.sh prints a visible automerge refusal to stderr"
+else
+  no "* automerge was dropped SILENTLY — a human cannot tell the header was ignored"
+fi
+if grep -i automerge "$TMP/err" | grep -q 'state/roadmaps/grant.md'; then
+  ok "the refusal names the roadmap the human has to edit"
+else
+  no "the refusal does not name the offending roadmap: $(cat "$TMP/err")"
+fi
+if ! grep -qi automerge "$TMP/out"; then
+  ok "the refusal is not mixed into stdout (which the planner's callers parse)"
+else
+  no "an automerge line leaked onto stdout: $(cat "$TMP/out")"
+fi
+
+# --- 4. automerge_scope alone is the same grant, half-written ------------------------------
+roadmap scoped "automerge_scope: apps/demo"
+rc="$(plan scoped)"
+if [ "$rc" = 0 ] && ! header_of scoped-001 | grep -qi '^automerge' && grep -qi automerge "$TMP/err"; then
+  ok "a bare automerge_scope: is dropped and announced too"
+else
+  no "automerge_scope alone was copied through or passed unannounced (rc=$rc)"
+fi
+
+# --- 5. refusing the field does not break the reservation ----------------------------------
+if grep -q '^- \[~\] ' "$R/state/roadmaps/grant.md"; then
+  ok "the roadmap row is still reserved — dropping the field is not a planner failure"
+else
+  no "the roadmap row was not reserved after the automerge drop"
+fi
+
+echo
+[ "$fails" -eq 0 ] && { echo "plan-automerge: ALL PASS"; exit 0; }
+echo "plan-automerge: $fails FAILED"; exit 1

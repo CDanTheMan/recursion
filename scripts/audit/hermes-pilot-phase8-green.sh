@@ -259,6 +259,31 @@ for node in ast.walk(fn):
             required.add(left.args[0].value)
             for comparator in node.comparators:
                 required |= strings(comparator)
+        # "field" in task  (optional-key admission checks)
+        if (isinstance(left, ast.Constant) and isinstance(left.value, str)
+                and any(isinstance(op, ast.In) for op in node.ops)
+                and any(isinstance(c, ast.Name) and c.id == 'task' for c in node.comparators)):
+            required.add(left.value)
+    # engine_contract helper shapes: pilot_engine_ok(task.get("k")) / alias_role_ok(task.get("k"), ...)
+    if isinstance(node, ast.Call):
+        func = node.func
+        func_name = func.attr if isinstance(func, ast.Attribute) else getattr(func, 'id', '')
+        if func_name in ('pilot_engine_ok', 'alias_role_ok') and node.args:
+            first = node.args[0]
+            if (isinstance(first, ast.Call) and isinstance(first.func, ast.Attribute)
+                    and first.func.attr == 'get'
+                    and isinstance(first.func.value, ast.Name) and first.func.value.id == 'task'
+                    and first.args and isinstance(first.args[0], ast.Constant)):
+                required.add(first.args[0].value)
+
+# The enum values moved from validate_plan literals into engine_contract + the shipped alias
+# registry, so seed them from those sources; an unreadable registry fails this audit closed.
+import json
+sys.path.insert(0, 'scripts')
+from engine_contract import LEGACY_ALIASES, default_registry_path
+required |= set(LEGACY_ALIASES) | {'claude'}
+registry = json.load(open(default_registry_path('scripts'), encoding='utf-8'))
+required |= set(registry.get('aliases') or {})
 
 prompt = open('scripts/hermes-decide.sh', encoding='utf-8').read()
 missing = sorted(term for term in required if term not in prompt)

@@ -66,3 +66,43 @@ convenience of skipping this note.
 **Falsifier:** after both steps, a build message from a chiron task should appear in the `chiron`
 topic and not in General. If it lands in General, the registry has a topic id that `message_thread_id`
 is not receiving.
+
+## 2026-08-26 — [NEEDS-APPROVAL] Declarative engine plugins (Cursor / Gemini / OpenCode / Sentry-local)
+status: IN AUTHORING — Lucas approved the scope in-session (D-015 draft); implementation on a review branch
+
+**Evidence:** worker plane supports only `claude` and `hermes`; `deepseek|openrouter` exit 91
+("no file tools — needs a file-emission protocol"). Subscriptions are moving; Lucas wants
+Cursor + ChatGPT as the drive pair and a toggle-able local Qwen arm on the Sentry PC.
+**Change:** engine manifests under `scripts/engines/`, fail-closed `resolve-engine.py`,
+generalized model aliases, generic sandbox exec path, availability-probe requeue.
+Full plan: `docs/plans/engine-plugin-architecture.md`.
+**Fitness:** engines/models become human-owned configuration; September reshuffle needs no code.
+**Risk:** touches `work.sh`/`worker-sandbox.sh` (protected paths). Mitigated: builtin paths
+byte-identical, plugins inert until `.env` flags a human sets, red controls before green.
+**Human steps after merge:** box CLI/flag verification, provider-allowlist entries, `.env`
+enable flags + alias values, Sentry server + tunnel (deployment section of the plan).
+
+## 2026-08-26 — [NEEDS-APPROVAL] Loop telemetry + governance rollout (same authoring session)
+status: IN AUTHORING — implementation on the same review branch as D-015
+
+**Shipped (all inert or read-only):** `scripts/usage-reconcile.py` (per-run cost ledger +
+weekly one-page rollup; every row split receipted / policy-record / unreconciled — Cursor's
+receipt-less metered spend prints as UNKNOWN, which is the September decision input);
+`scripts/engine-scorecard.py` (pass/retry/wall-clock/escalations per engine+alias from
+on-disk evidence); `scripts/verify-branch-protection.py` + the `plan.sh` automerge-seam
+closure (esc-0001); the worker-sandbox hermes usage-file fix (property ordering + mount
+target moved out of the masked /run into PrivateTmp; confirm with one metered run); Component 6
+connector scaffolding (notify.sh / outbox untouched, zero loadable manifests, five unset
+human-owned links before anything can execute); `docs/audits/unlanded-branches-2026-08-26.md`
+(all 13 unlanded branches already on master — deletion hygiene only).
+
+**Human steps proposed:**
+1. Cron (a human edits cron — rule 3): weekly `usage-reconcile.py ingest` then `rollup`, and
+   `engine-scorecard.py --out state/reports/engine-scorecard.md`, after the Sunday brief;
+   `verify-branch-protection.py --json state/reports/branch-protection.json` weekly once a
+   token exists.
+2. `.env`: `RECURSION_ALLOW_AUTOMERGE=0` tombstone; `GITHUB_TOKEN` (repo-admin read) for the
+   verifier. Shapes documented in `.env.example`.
+3. Branch hygiene: approve the deletion list in `docs/audits/unlanded-branches-2026-08-26.md`.
+4. `DECISIONS.md`: record the 2026-08-12/13 review-branch-workflow bypass that audit found,
+   and confirm it is no longer happening.

@@ -25,6 +25,7 @@ from transition_receipt import (
     TransitionReceiptError, authenticated_transition, commit_event, commit_transition,
     json_mutation, resume_transition, raw_text_mutation, text_mutation,
 )
+from engine_contract import alias_role_ok, default_registry_path, pilot_engine_ok
 from pilot_instruction import require_affirmative_command
 from seed_contract import SeedContractError, inspect_repository, validate_contract
 from project_authority import (
@@ -1278,16 +1279,21 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
             "expected_change", "gate_class", "gate_files", "controller_gate_files",
         }
         if any(key not in task for key in required): fail(f"pilot plan task {task_id} is schema-incomplete")
-        if task.get("engine") != "claude" \
-                or task.get("model_alias") not in {"sonnet-routine", "opus-complex"} \
-                or task.get("verifier_model_alias") not in {"opus-review", "opus-complex"} \
+        registry = default_registry_path(_SCRIPT_DIR)
+        if not pilot_engine_ok(task.get("engine")) \
+                or not alias_role_ok(task.get("model_alias"), "implementer", registry) \
+                or not alias_role_ok(task.get("verifier_model_alias"), "verifier", registry) \
                 or task.get("network_policy") not in {"provider-only", "none"} \
                 or task.get("gate_class") not in {"light", "heavy"} \
                 or task.get("evidence_contract") != "worker-result-v1" \
                 or task.get("verification") != "independent" \
                 or task.get("expected_change") not in {"required", "optional"}:
             fail(f"pilot plan task {task_id} has an invalid Phase 5 policy")
-        if task.get("engine") in {"claude", "hermes"} and task.get("network_policy") == "none":
+        if "verifier_engine" in task and not pilot_engine_ok(task.get("verifier_engine")):
+            fail(f"pilot plan task {task_id} names an invalid verifier engine")
+        if task.get("network_policy") == "none":
+            # Every admissible engine is a networked worker (claude, or a provider-backed
+            # plugin — the Sentry-local arm still needs its tunnel route).
             fail(f"pilot plan task {task_id} gives a cloud worker no provider network")
         if any(isinstance(task.get(key), bool) or not isinstance(task.get(key), int) or task[key] < 1
                for key in ("deadline_seconds", "verifier_deadline_seconds")):
@@ -1447,6 +1453,8 @@ def task_values(cfg: dict, pilot: dict, plan_id: str, digest: str, goal_id: str,
     }
     if task.get("source_task_id"):
         values["source_task_id"] = task["source_task_id"]
+    if task.get("verifier_engine"):
+        values["verifier_engine"] = task["verifier_engine"]
     if seed_contract:
         values.update({
             "seed_manifest": seed_contract["manifest_path"],
@@ -1560,6 +1568,12 @@ def verify_approved_goal(base: Path, project: str, goal_id: str, *, terminal: bo
         actual = actual_tasks[str(task["id"])]
         if any(actual.get(key, "") != str(value) for key, value in expected.items()):
             fail(f"materialized task {task['id']} immutable contract differs from its approved plan")
+        # The subset comparison cannot see an injected optional key (verifier_engine would
+        # redirect which vendor verifies) — prove absence for the optional-key family too.
+        for optional_key in ("verifier_engine", "source_task_id", "gate_profile_selection",
+                             "seed_manifest", "seed_manifest_sha256", "seed", "seed_digest"):
+            if optional_key not in expected and actual.get(optional_key, ""):
+                fail(f"materialized task {task['id']} carries an unapproved {optional_key}")
     return {"project_id": project, "goal_id": goal_id, "plan_id": plan_id,
             "plan_digest": digest, "source_head": authority["source_head"],
             "authority_contract": authority,

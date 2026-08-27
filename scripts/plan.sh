@@ -12,8 +12,10 @@
 #     sshkey: ~/.ssh/id_deploy
 #     workdir: apps/chiron
 #     acceptance: cd apps/chiron && npm install && npm run build
-#     automerge: yes
-#     automerge_scope: apps/chiron
+#
+# `automerge:` / `automerge_scope:` are NOT roadmap-grantable (esc-0001). A roadmap says what to
+# build; it does not hand out default-branch write authority. Headers carrying them are dropped
+# with a warning — see below.
 #
 #     - [x] Scaffold a minimal Next.js shell
 #     - [ ] Add a landing page with a hero + CTA        <- plan.sh emits THIS, marks it [~]
@@ -107,6 +109,13 @@ AM="$(hget automerge)";    AMS="$(hget automerge_scope)"; MODEL="$(hget model)"
 GOAL_ID="$(hget goal_id)"; DEPS="$(hget dependencies)"; ALLOWED="$(hget allowed_paths)"
 NON_GOALS="$(hget non_goals)"; WORKER_CLASS="$(hget worker_class)"
 GOAL_ID="${GOAL_ID:-goal-$WS}"
+# The planner does not grant automerge (esc-0001). Copying the header through is how chiron-001
+# and chiron-003 acquired `automerge: yes` from a roadmap edit rather than a human decision. The
+# fields are read only so the drop can be announced: a header that is silently ignored looks
+# exactly like a header that was honored.
+if [ -n "$AM" ] || [ -n "$AMS" ]; then
+  echo "plan: REFUSED automerge from $RM (automerge='$AM' automerge_scope='$AMS') — not copied into $ID; publication stays review-branch-only. Remove it from the roadmap header." >&2
+fi
 printf '%s' "$GOAL_ID" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$' \
   || { echo "plan: roadmap has an invalid goal_id" >&2; exit 2; }
 if [ -f schemas/control-plane/v1/schema.json ] || [ -d state/goals ]; then
@@ -135,8 +144,6 @@ tmp_task="$(mktemp "$TASKDIR/.${ID}.tmp.XXXXXX")"
   echo "allowed_paths: ${ALLOWED:-${WORKDIR:-.}}"
   echo "non_goals: $NON_GOALS"
   echo "autonomy: auto"
-  [ -n "$AM" ]  && echo "automerge: $AM"
-  [ -n "$AMS" ] && echo "automerge_scope: $AMS"
   echo "status: queued"
   echo "planned_from: $RM:$LN"
   echo
