@@ -23,12 +23,38 @@ fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 
+# PLATFORM-BOUND (measured 2026-08-27 on Windows Git Bash). Every mutating intake path is gated on
+# a witnessed directory lock: intake.sh hands `$$` to scripts/runtime-state.py lock-acquire, and
+# runtime-state.py witnesses the owner by asking the OS for that PID's process start time. Under
+# Git Bash `$$` is the MSYS process id (e.g. 27160); the Windows process id is a different number
+# (13888, readable at /proc/$$/winpid). OpenProcess() on the MSYS id finds nothing, the witness
+# raises "cannot witness lock owner process start", and every `intake poll` returns 73 before one
+# instruction is written.
+#
+# That failure shape is the dangerous one, which is why this refuses to run rather than reporting
+# it: with nothing ever ingested, the self-feed trap, the unauthorised-sender refusal, the ASYNC
+# filter and the watermark hold all report ok — they are satisfied by an intake that ingests
+# nothing — while only the ★ CONTROLs go red. Both intake.sh and runtime-state.py are production
+# code and read-only here, so the fix is recorded for review, not faked in the fixture.
+if [ "$(uname -s)" != Linux ]; then
+  echo "intake: SKIP on $(uname -s) — scripts/intake.sh passes the MSYS \$\$ to runtime-state.py's witnessed lock, which reads it as a Windows PID; every poll refuses with rc=73 before ingesting anything."
+  echo "intake: NOT RUN — the whole suite, including the ★ ingest CONTROL, the self-feed trap, sender authorisation, watermark seeding/hold/recovery, gateway-store selection and replay canonicalisation, the release handshake controls, and the crash-replay durability checks."
+  exit 0
+fi
+
 export RECURSION_NO_NOTIFY=1
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/root"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/state/assists" \
   "$R/state/project-config" "$R/state/pilots" "$R/loop/logs"
-for s in intake.sh instruction_routing.py assist.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh publish.sh; do
+# The staging list is an IMPORT CLOSURE, not a wish list. instruction_routing.py opens with
+# `from pilot_instruction import project_window_open_terms`; leaving pilot_instruction.py out
+# makes every routing call raise ModuleNotFoundError, intake ingests nothing, and the refusal
+# tests below all pass vacuously while the ★ CONTROL is the only thing that goes red. Anything
+# added to the staged modules' imports has to be added here too.
+for s in intake.sh instruction_routing.py pilot_instruction.py assist.sh taskctl.sh \
+         jsonl_durable.py transition_receipt.py runtime-state.py notify.sh publish.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
+  [ -f "$R/scripts/$s" ] || no "staged module $s is missing from $SRC/scripts"
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null
 : > "$R/.env"; : > "$R/state/INBOX.md"

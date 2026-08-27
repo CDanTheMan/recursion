@@ -2,6 +2,14 @@
 # Hermetic controls for PAUSE-safe self-repo monitoring, cycle serialization, and date identity.
 set -uo pipefail
 export LC_ALL=C
+
+# This suite drives the live loop arms (flock, procfs, POSIX lock semantics) — off-box it can only
+# produce noise, so it reports an explicit SKIP. The box baseline runs it for real.
+if [ "$(uname -s)" != "Linux" ]; then
+  echo "cycle-control: SKIP (Linux loop runtime required — flock/procfs/POSIX lock semantics; certified in the box suite)"
+  exit 0
+fi
+
 SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0
 ok(){ printf 'ok    %s\n' "$1"; }

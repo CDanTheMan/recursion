@@ -17,6 +17,14 @@
 #   run: bash scripts/tests/worker-envelope.test.sh
 set -uo pipefail
 export LC_ALL=C
+
+# This suite drives the live loop arms (flock, procfs, POSIX lock semantics) — off-box it can only
+# produce noise, so it reports an explicit SKIP. The box baseline runs it for real.
+if [ "$(uname -s)" != "Linux" ]; then
+  echo "worker-envelope: SKIP (Linux loop runtime required — flock/procfs/POSIX lock semantics; certified in the box suite)"
+  exit 0
+fi
+
 SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
@@ -46,6 +54,15 @@ cp "$SRC/scripts/jsonl_durable.py" "$R/scripts/" 2>/dev/null || true
 cp "$SRC/scripts/transition_receipt.py" "$R/scripts/" 2>/dev/null || true
 cp "$SRC/scripts/runtime-state.py" "$R/scripts/" 2>/dev/null || true
 cp "$SRC/scripts/resync.sh" "$R/scripts/" 2>/dev/null || true
+# resync's freshness gate shells the typed source-pin controller; without it (and its full
+# import closure) every task blocks at CANNOT PROVE FRESH before the envelope is ever
+# exercised. Hard cp: a silent skip here would reproduce exactly the failure this stages
+# against.
+cp "$SRC/scripts/project-pilot.py" "$R/scripts/"
+cp "$SRC/scripts/engine_contract.py" "$R/scripts/"
+cp "$SRC/scripts/pilot_instruction.py" "$R/scripts/"
+cp "$SRC/scripts/seed_contract.py" "$R/scripts/"
+cp "$SRC/scripts/project_authority.py" "$R/scripts/"
 printf 'seed\n' > "$R/apps/chiron/seed.txt"
 printf 'protected fixture\n' > "$R/scripts/tests/existing.test.cjs"
 : > "$R/.env"

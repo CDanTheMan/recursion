@@ -14,6 +14,14 @@
 #
 #   run: bash scripts/tests/gate-collation.test.sh
 set -uo pipefail
+
+# This suite drives the live loop arms (flock, procfs, POSIX lock semantics) — off-box it can only
+# produce noise, so it reports an explicit SKIP. The box baseline runs it for real.
+if [ "$(uname -s)" != "Linux" ]; then
+  echo "gate-collation: SKIP (Linux loop runtime required — flock/procfs/POSIX lock semantics; certified in the box suite)"
+  exit 0
+fi
+
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 BASELINE="${GSC_BASELINE:-$ROOT/state/gsc/baseline-pass.txt}"
 GATE="${GSC_CONFORMANCE_GATE:-$ROOT/scripts/gsc-conformance-gate.sh}"
