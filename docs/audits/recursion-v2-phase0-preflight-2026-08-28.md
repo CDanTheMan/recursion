@@ -44,6 +44,17 @@ merge was mechanically conflict-free. Historical task and goal files deleted in 
 tree are restored byte-for-byte from the reviewed WIP parent because v2 requires historical state
 to remain truthful and readable.
 
+## Rollback boundary
+
+The exact pre-phase review head is `9c7a42c4b5098c443bc87ed4b6f7210ebdeff5fc`. The exact live
+committed head and dirty-diff digest are recorded above. Because this session made no live
+mutation, rollback before a future deployment is to abandon the WIP candidate; the controller is
+already at the recorded pre-phase baseline. No force push, reset, or live restore is required.
+
+Any later deployment is a separate human window. Its runbook must take a new snapshot and PAUSE
+witness, prove how newer runtime state is preserved, and define its own restore transaction before
+changing `/opt/recursion`. This artifact does not authorize that window.
+
 ## Dirty live state
 
 The live checkout had exactly two tracked dirty paths:
@@ -135,7 +146,7 @@ attempt requires a new task and immutable assignment.
 - convert authenticated remote-head drift into explicit source dispositions before any pilot;
 - confirm the transient PAUSE-time control locks are awareness-only in a Linux evidence run;
 - independently review the captured dirty-state disposition and later drift handling;
-- validate the merged candidate and an exact rollback procedure independently.
+- validate the merged candidate and this rollback procedure independently.
 
 Until those items pass, Phase 0 remains in progress and no live deployment or PAUSE transition is
 authorized.
