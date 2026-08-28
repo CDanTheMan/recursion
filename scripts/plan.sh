@@ -116,10 +116,10 @@ GOAL_ID="${GOAL_ID:-goal-$WS}"
 contains_legacy_chiron(){
   # Normalize separators, redundant ./ and trailing slashes before matching every command/path
   # field. This catches shell, Windows, and comma-separated roadmap spellings alike.
-  printf '%s\n' "$1" | tr '\\' '/' | sed -E 's#/{2,}#/#g; s#(^|[[:space:]])\./#\1#g; s#/$##' \
+  printf '%s\n' "$1" | tr '\\' '/' | sed -E 's#/{2,}#/#g; s#/\./#/#g; s#(^|[[:space:]])\./#\1#g; s#/$##' \
     | grep -qiE "(^|[^[:alnum:]_])apps/chiron([^[:alnum:]_]|$)"
 }
-for generated_field in "$WORKDIR" "$ALLOWED" "$ACC" "$GATE_COMMANDS" "$SEED" "$REPO" "$GOAL" "$NON_GOALS" "$ENGINE" "$MODEL" "$WORKER_CLASS" "$DEPS"; do
+for generated_field in "$WORKDIR" "$ALLOWED" "$ACC" "$GATE_COMMANDS" "$SEED" "$REPO" "$GOAL" "$NON_GOALS" "$ENGINE" "$MODEL" "$WORKER_CLASS" "$DEPS" "$SSHKEY" "$GOAL_ID"; do
   if contains_legacy_chiron "$generated_field"; then
     echo "plan: REFUSED new task targeting historical apps/chiron; use the canonical Chiron project repository" >&2
     exit 6
@@ -153,6 +153,9 @@ PY
       python3 "$ROOT/scripts/repository_contract.py" validate-project "$candidate_config" >/dev/null \
         || { echo "plan: active project descriptor failed v2 validation: $candidate_config" >&2; exit 6; }
       PROJECT_CONFIG="$candidate_config"; break;;
+    invalid)
+      echo "plan: registered project descriptor is malformed: $candidate_config" >&2
+      exit 6;;
   esac
 done
 if [ -n "$PROJECT_CONFIG" ]; then

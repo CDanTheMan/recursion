@@ -30,9 +30,15 @@ def git_raw(repo: Path, *args: str) -> str:
 
 class RepositoryContractTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.old_receipt_key = os.environ.get("RECURSION_VERIFIER_RECEIPT_KEY")
-        os.environ["RECURSION_VERIFIER_RECEIPT_KEY"] = "hermetic-controller-key"
         self.temp = tempfile.TemporaryDirectory(prefix="recursion-v2-contract-")
+        self.key_path = Path(self.temp.name) / "controller.key"
+        self.key_path.write_text("hermetic-controller-key\n", encoding="utf-8")
+        self.old_controller_key_path = rc.CONTROLLER_KEY_PATH
+        rc.CONTROLLER_KEY_PATH = self.key_path
+        self.old_receipt_key = os.environ.get("RECURSION_VERIFIER_RECEIPT_KEY")
+        self.old_receipt_key_file = os.environ.get("RECURSION_VERIFIER_RECEIPT_KEY_FILE")
+        os.environ["RECURSION_VERIFIER_RECEIPT_KEY"] = "hostile-caller-key"
+        os.environ["RECURSION_VERIFIER_RECEIPT_KEY_FILE"] = str(Path(self.temp.name) / "hostile.key")
         self.repo = Path(self.temp.name) / "repo"
         self.repo.mkdir()
         git(self.repo, "init", "-q", "-b", "main")
@@ -61,10 +67,15 @@ class RepositoryContractTests(unittest.TestCase):
         }
 
     def tearDown(self) -> None:
+        rc.CONTROLLER_KEY_PATH = self.old_controller_key_path
         if self.old_receipt_key is None:
             os.environ.pop("RECURSION_VERIFIER_RECEIPT_KEY", None)
         else:
             os.environ["RECURSION_VERIFIER_RECEIPT_KEY"] = self.old_receipt_key
+        if self.old_receipt_key_file is None:
+            os.environ.pop("RECURSION_VERIFIER_RECEIPT_KEY_FILE", None)
+        else:
+            os.environ["RECURSION_VERIFIER_RECEIPT_KEY_FILE"] = self.old_receipt_key_file
         self.temp.cleanup()
 
     def candidate(self) -> dict[str, object]:
@@ -123,7 +134,7 @@ class RepositoryContractTests(unittest.TestCase):
         duplicate_hosts = dict(self.contract, eligible_hosts=["gs-recursion", "gs-recursion"])
         with self.assertRaisesRegex(rc.ContractError, "eligible_hosts"):
             rc.validate_project_descriptor(duplicate_hosts)
-        with self.assertRaisesRegex(rc.ContractError, "unique normalized"):
+        with self.assertRaisesRegex(rc.ContractError, "canonical"):
             rc.validate_project_descriptor(dict(self.contract, allowed_paths=["src/", "src"]))
         overlap = dict(self.contract, external_branch_patterns=["recursion/*"])
         with self.assertRaisesRegex(rc.ContractError, "overlaps"):
@@ -142,12 +153,17 @@ class RepositoryContractTests(unittest.TestCase):
         for field in ("workdir", "acceptance", "gate_command", "gate_commands", "seed", "goal"):
             task = {"id": "task-one", "source_branch": "main", "source_sha": self.source,
                     "allowed_paths": ["src"], field: ".\\apps\\chiron/"}
+            if field == "gate_commands":
+                task[field] = [task[field]]
             with self.subTest(field=field), self.assertRaisesRegex(rc.ContractError, "apps/chiron"):
                 rc.admit_task(self.contract, task, self.repo)
         punctuation = {"id": "task-one", "source_branch": "main", "source_sha": self.source,
                        "allowed_paths": ["src"], "acceptance": "cd apps/chiron;)&|"}
         with self.assertRaisesRegex(rc.ContractError, "apps/chiron"):
             rc.admit_task(self.contract, punctuation, self.repo)
+        dotted = dict(punctuation, acceptance="cd apps/./chiron;", goal="safe")
+        with self.assertRaisesRegex(rc.ContractError, "apps/chiron"):
+            rc.admit_task(self.contract, dotted, self.repo)
 
     def test_verified_import_is_idempotent_and_cas(self) -> None:
         candidate = self.candidate()
@@ -171,6 +187,53 @@ class RepositoryContractTests(unittest.TestCase):
         widened = dict(candidate, allowed_paths=["."])
         with self.assertRaisesRegex(rc.ContractError, "widens"):
             rc.verify_candidate(self.contract, widened, self.repo, receipt=self.receipt(widened))
+
+    def test_allow_canonical_requires_exact_task_branch(self) -> None:
+        candidate = self.candidate()
+        canonical = dict(candidate, external_branch=rc.task_branch(self.contract, candidate["task_id"]))
+        git(self.repo, "branch", canonical["external_branch"], candidate["candidate_commit"])
+        with self.assertRaisesRegex(rc.ContractError, "exact task branch"):
+            rc.verify_candidate(self.contract, dict(canonical, external_branch="recursion/task/other"),
+                                self.repo, receipt=self.receipt(canonical), allow_canonical=True)
+        verified = rc.verify_candidate(self.contract, canonical, self.repo,
+                                       receipt=self.receipt(canonical), allow_canonical=True)
+        self.assertEqual(verified["external_branch"], "recursion/task/task-one")
+
+    def test_controller_key_cannot_be_selected_by_hostile_environment(self) -> None:
+        candidate = self.candidate()
+        receipt = self.receipt(candidate)
+        self.assertEqual(rc.verify_candidate(self.contract, candidate, self.repo, receipt=receipt)["task_id"], "task-one")
+
+    def test_symlink_and_submodule_tree_escapes_are_refused(self) -> None:
+        candidate = self.candidate()
+        git(self.repo, "checkout", "-qb", "cursor/symlink")
+        link = self.repo / "src" / "escape"
+        try:
+            link.symlink_to("../.git/control-plane", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("symlink creation is unavailable")
+        git(self.repo, "add", "src/escape")
+        git(self.repo, "commit", "-qm", "symlink escape")
+        bad = dict(candidate, external_branch="cursor/symlink", candidate_commit=git(self.repo, "rev-parse", "HEAD"))
+        with self.assertRaisesRegex(rc.ContractError, "symlink"):
+            rc.verify_candidate(self.contract, bad, self.repo, receipt=self.receipt(bad))
+
+    def test_malformed_task_fields_are_typed_before_legacy_guard(self) -> None:
+        for field in ("acceptance", "goal", "workdir", "gate_command", "seed"):
+            task = {"id": "task-one", "source_branch": "main", "source_sha": self.source,
+                    "allowed_paths": ["src"], field: {"apps/chiron": True}}
+            with self.subTest(field=field), self.assertRaisesRegex(rc.ContractError, "must be a string"):
+                rc.admit_task(self.contract, task, self.repo)
+
+    def test_invalid_refs_and_vacuous_gates_are_rejected(self) -> None:
+        for field in ("default_branch", "integration_branch"):
+            with self.subTest(field=field), self.assertRaises(rc.ContractError):
+                rc.validate_project_descriptor(dict(self.contract, **{field: "cursor/../main"}))
+        with self.assertRaises(rc.ContractError):
+            rc.validate_project_descriptor(dict(self.contract, external_branch_patterns=["cursor//x"]))
+        for command in ("", "   ", "true", "echo no-op", "printf nope", "pwd"):
+            with self.subTest(command=command), self.assertRaises(rc.ContractError):
+                rc.validate_project_descriptor(dict(self.contract, gate_commands=[command]))
 
     def test_import_race_reconciles_identical_winner_and_receipt_is_required(self) -> None:
         candidate = self.candidate()
