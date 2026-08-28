@@ -161,10 +161,11 @@ def load_events(root: Path) -> tuple[list[dict], int, int, str]:
 
 class RunRecord:
     __slots__ = ("id", "task_id", "role", "alias", "status", "outcome",
-                 "started_epoch", "finished_epoch")
+                 "started_epoch", "finished_epoch", "engine", "assignment_digest")
 
     def __init__(self, id_: str, task_id: str, role: str, alias: str, status: str,
-                 outcome: str, started_epoch: int | None, finished_epoch: int | None) -> None:
+                 outcome: str, started_epoch: int | None, finished_epoch: int | None,
+                 engine: str | None = None, assignment_digest: str | None = None) -> None:
         self.id = id_
         self.task_id = task_id
         self.role = role
@@ -172,6 +173,10 @@ class RunRecord:
         self.status = status
         self.outcome = outcome
         self.started_epoch = started_epoch
+        # Phase 3 (D-016): when the run's own assignment bound its engine at launch time, use
+        # it directly instead of joining the task header (which can change after the run).
+        self.engine = engine
+        self.assignment_digest = assignment_digest
         self.finished_epoch = finished_epoch
 
 
@@ -215,7 +220,11 @@ def load_runs(root: Path) -> tuple[list[RunRecord], int, int, bool]:
         outcome = record.get("outcome") if isinstance(record.get("outcome"), str) else ""
         started = _parse_ts(record.get("started_at"))
         finished = _parse_ts(record.get("finished_at"))
-        runs.append(RunRecord(run_id, task_id, role, alias, status, outcome, started, finished))
+        engine = record.get("engine") if isinstance(record.get("engine"), str) and record.get("engine") else None
+        assignment_digest = record.get("assignment_digest") \
+            if isinstance(record.get("assignment_digest"), str) and record.get("assignment_digest") else None
+        runs.append(RunRecord(run_id, task_id, role, alias, status, outcome, started, finished,
+                              engine, assignment_digest))
         parsed += 1
     return runs, parsed, skipped, False
 
@@ -276,17 +285,22 @@ def build_buckets(
         get(task.engine, task.model_alias).task_status[task.status] += 1
         get(task.verifier_engine, task.verifier_model_alias).verifier_arms += 1
 
-    # Run evidence: join engine via task_id + role. A run whose task_id is unknown still
-    # carries its own alias (that came straight from the run record) but not a real engine.
+    # Run evidence: an assignment-native run (Phase 3, D-016) carries its own resolved engine
+    # directly on the record -- use it. Only a run without one (pre-Phase-3 evidence) falls
+    # back to joining the task header via task_id + role, which can drift after the run
+    # finishes (docs/audits/recursion-v2-infrastructure-audit-2026-08-28.md).
     unknown_task_runs = 0
     by_bucket_task_role: dict[tuple[str, str], Counter[tuple[str, str]]] = {}
     for run in runs:
-        task = tasks.get(run.task_id)
-        if task is None:
-            engine = "(unknown-task)"
-            unknown_task_runs += 1
+        if run.engine is not None:
+            engine = run.engine
         else:
-            engine = task.verifier_engine if run.role == "verifier" else task.engine
+            task = tasks.get(run.task_id)
+            if task is None:
+                engine = "(unknown-task)"
+                unknown_task_runs += 1
+            else:
+                engine = task.verifier_engine if run.role == "verifier" else task.engine
         bucket = get(engine, run.alias)
         bucket.runs_by_role[run.role] += 1
         bucket.outcomes[_outcome_bucket(run.status, run.outcome)] += 1

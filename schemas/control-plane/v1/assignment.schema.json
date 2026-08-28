@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://recursion.local/schemas/control-plane/v1/assignment.schema.json",
+  "title": "Recursion immutable run assignment v1",
+  "description": "Documentation/box-tooling schema for a persisted assignment record under state/assignments/<task_id>/<assignment_digest>.json. The authoritative, self-contained validation lives in scripts/assignment.py (no jsonschema dependency at runtime); this schema exists to document the contract accurately and to support editor/CI tooling. See docs/plans/recursion-v2-execution-fabric.md, 'Immutable assignment', and state/DECISIONS.md D-016.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "task_id",
+    "project_id",
+    "role",
+    "source_repository",
+    "source_branch",
+    "source_sha",
+    "seed_manifest_digest",
+    "engine",
+    "provider",
+    "capacity_pool",
+    "model",
+    "model_parameters",
+    "host",
+    "sandbox_profile",
+    "network_profile",
+    "allowed_paths",
+    "gate_digest",
+    "publication_policy",
+    "created_at",
+    "assignment_digest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "task_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "role": { "enum": ["implementer", "verifier"] },
+    "source_repository": { "type": "string", "minLength": 1 },
+    "source_branch": { "type": "string", "minLength": 1 },
+    "source_sha": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+    "seed_manifest_digest": {
+      "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }]
+    },
+    "engine": { "type": "string", "minLength": 1 },
+    "provider": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
+    "capacity_pool": {
+      "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" }]
+    },
+    "model": { "anyOf": [{ "type": "null" }, { "type": "string", "minLength": 1 }] },
+    "model_parameters": { "type": "object", "additionalProperties": { "type": "string" } },
+    "host": { "type": "string", "minLength": 1 },
+    "sandbox_profile": {
+      "enum": [
+        "strict-linux", "workspace-linux", "vendor-cloud", "remote-linux",
+        "windows-interactive", "trusted-interactive", "account-shared-supervisor"
+      ]
+    },
+    "network_profile": { "enum": ["provider-only", "none"] },
+    "allowed_paths": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "gate_digest": {
+      "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }]
+    },
+    "publication_policy": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
+    "created_at": { "type": "string", "minLength": 1 },
+    "assignment_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 over the canonical (sorted-key, separator-compact) JSON encoding of every other field. Changes if any other field changes; retries of an unchanged resolution reuse the same digest and the same content-addressed file."
+    }
+  }
+}

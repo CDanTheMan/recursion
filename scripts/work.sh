@@ -128,6 +128,12 @@ BRANCH="loop/work/$ID"
 BASE_COMMIT=""; CANDIDATE_OID=""; LAST_SCOPE_FILE=""; LAST_RUN_ID=""; LAST_RUN_EVIDENCE=""
 IMPLEMENTER_RUN_ID=""; VERIFIER_RUN_ID=""; RESOLVED_MODEL="$MODEL"; RESOLVED_VERIFIER_MODEL=""
 LAST_USAGE_FILE=""; SEED_DIGEST_BEFORE=""
+# Phase 3 (D-016): the immutable assignment resolved for the arm most recently launched by
+# run_model_supervised. capacity_pool is an optional task-header field naming a
+# scripts/capacity-pools/<id>.json account/subscription identity; absent for every task that
+# predates it (legacy behavior: capacity_pool stays null on the assignment).
+ASSIGNMENT_DIGEST=""; ASSIGNMENT_FILE=""
+CAPACITY_POOL="$(field capacity_pool)"
 SEED_EVIDENCE_FILE="$ROOT/state/runs/$ID-seed-$STAMP-$$.json"
 
 CONTRACT_DIGEST="$(python3 - "$TASK" <<'PY'
@@ -914,6 +920,61 @@ invalidates the run even if committed before the controller inspects the worktre
 fi
 
 ARM_USAGE="${ARMLOG%.out}.usage.json"
+# --- Phase 3 (D-016): immutable run assignment, resolved and durably persisted BEFORE the
+# worker launches. Binds this exact arm to its exact engine/provider/pool/model/host/sandbox
+# and exact source commit; the digest becomes the identity every downstream evidence/usage/
+# scorecard record carries, instead of each consumer re-deriving those facts later from a
+# task header that can change after the run (docs/audits/
+# recursion-v2-infrastructure-audit-2026-08-28.md, "Missing execution-fabric contracts").
+# Fail-closed by construction: every input here is already known and non-empty by the time an
+# arm is about to launch, so a resolution failure indicates a controller defect, not a
+# legitimate legacy gap -- matching the existing return-95 ("controller failure") convention
+# used immediately above for worker-sandbox.sh itself.
+resolve_run_assignment(){ # role wt active-engine engine-plan resolved-model provider commit-oid
+  local role="$1" wt="$2" active_engine="$3" engine_plan="$4" resolved_model="$5"
+  local provider="$6" commit_oid="$7" seed_digest="" gate_digest="" src_branch="" out_file
+  ASSIGNMENT_DIGEST=""; ASSIGNMENT_FILE=""
+  if [ -s "$SEED_EVIDENCE_FILE" ]; then
+    seed_digest="$(python3 - "$SEED_EVIDENCE_FILE" <<'PY' 2>>"$LOG"
+import json, sys
+try:
+    value = json.load(open(sys.argv[1], encoding="utf-8"))
+except Exception:
+    raise SystemExit(0)
+digest = value.get("content_sha256")
+if isinstance(digest, str) and digest:
+    print(digest)
+PY
+    )" || true
+  fi
+  gate_digest="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())' \
+    "$ACCEPTANCE" 2>>"$LOG")" || return 95
+  src_branch="${SOURCE_BRANCH:-}"
+  [ -n "$src_branch" ] || src_branch="$(git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  [ -n "$src_branch" ] || src_branch="unknown"
+  mkdir -p "$ROOT/state/runs"
+  out_file="$ROOT/state/runs/$ID-$role-$STAMP-$$-assignment.json"
+  local -a acmd=(python3 "$ROOT/scripts/assignment.py" resolve
+    --task-id "$ID" --project-id "${PROJECT_ID:-$ID}" --role "$role"
+    --source-repository "$REPO_DIR" --source-branch "$src_branch"
+    --source-sha "${commit_oid:-$BASE_COMMIT}"
+    --engine "$active_engine" --provider "$provider" --host "$(hostname)"
+    --sandbox-profile "${RECURSION_SANDBOX_PROFILE:-strict-linux}" --network-profile "$NETWORK_POLICY"
+    --allowed-paths "$ALLOWED_PATHS" --publication-policy verified-integration-only
+    --out "$out_file")
+  [ -z "$seed_digest" ] || acmd+=(--seed-manifest-digest "$seed_digest")
+  [ -z "$CAPACITY_POOL" ] || acmd+=(--capacity-pool "$CAPACITY_POOL")
+  [ -z "$resolved_model" ] || acmd+=(--model "$resolved_model")
+  [ -z "$gate_digest" ] || acmd+=(--gate-digest "$gate_digest")
+  if ! "${acmd[@]}" >>"$LOG" 2>&1; then
+    log "assignment resolution refused for role=$role engine=$active_engine (see log above)"
+    return 95
+  fi
+  ASSIGNMENT_DIGEST="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["assignment_digest"])' \
+    "$out_file" 2>>"$LOG")" || return 95
+  ASSIGNMENT_FILE="$out_file"
+}
+
 run_model_supervised(){ # role worktree prompt resolved-model alias usage deadline run-id [commit] [implementer-run] [evidence-dir] [readonly]
   local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
   local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
@@ -954,6 +1015,27 @@ print(json.dumps({"schema_version": 1, "provider": plan["billing"]["provider"],
 PY
     ) || return 98
   fi
+
+  # Phase 3 (D-016): resolve+persist the immutable assignment for this exact arm before it
+  # launches. Only meaningful (and only attempted) under STRICT_PHASE5: that is the same gate
+  # worker-evidence.py start already runs behind below, so a legacy non-Phase-5 task neither
+  # gains a new failure mode here nor grows an assignment record nothing will ever read.
+  # arm_provider mirrors the usage-policy branching immediately above; hermes has no single
+  # provider known ahead of the call (it is dynamically metered per invocation), so it gets an
+  # explicit placeholder rather than a guess.
+  ASSIGNMENT_DIGEST=""; ASSIGNMENT_FILE=""
+  if [ "$STRICT_PHASE5" = 1 ]; then
+    local arm_provider=""
+    case "$active_engine" in
+      claude) arm_provider="anthropic-claude-code" ;;
+      hermes) arm_provider="hermes-tool-calls" ;;
+      *) arm_provider="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["billing"]["provider"])' \
+           "$engine_plan" 2>>"$LOG")" || return 95 ;;
+    esac
+    resolve_run_assignment "$role" "$wt" "$active_engine" "$engine_plan" "$resolved_model" \
+      "$arm_provider" "$commit_oid" || return 95
+  fi
+
   local -a cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine "$active_engine" --worktree "$wt"
     --prompt "$prompt" --role "$role" --network-policy "$NETWORK_POLICY")
   [ -n "$resolved_model" ] && cmd+=(--model "$resolved_model")
@@ -985,7 +1067,12 @@ PY
       --deadline-epoch "$deadline_epoch" --log "${log_path#$ROOT/}" --network-policy "$NETWORK_POLICY" \
       ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} \
       ${implementer_run:+--implementer-run-id "$implementer_run"} ${commit_oid:+--commit-oid "$commit_oid"} \
+      ${ASSIGNMENT_DIGEST:+--assignment-digest "$ASSIGNMENT_DIGEST" --assignment-file "$ASSIGNMENT_FILE"} \
       >>"$LOG" 2>&1 || { terminate_worker_group "$worker_pgid"; wait "$worker_pgid" 2>/dev/null || true; return 98; }
+    [ "$role" != implementer ] || [ -z "$ASSIGNMENT_DIGEST" ] || [ ! -x "$TASKCTL" ] \
+      || RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" \
+         bash "$TASKCTL" set-assignment "$ID" "$ASSIGNMENT_DIGEST" >>"$LOG" 2>&1 \
+      || log "lease assignment-digest stamp failed (non-fatal; the run evidence still carries it)"
   fi
   while kill -0 "$worker_pgid" 2>/dev/null; do
     if [ -f "$ROOT/state/PAUSE" ]; then

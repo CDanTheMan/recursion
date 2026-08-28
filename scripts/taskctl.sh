@@ -351,6 +351,21 @@ heartbeat)
     || { rc=$?; _unlock; exit "$rc"; }
   _unlock ;;
 
+# Phase 3 (D-016): stamp the live lease with the immutable assignment digest resolved for
+# the arm currently holding it, so a lease carries assignment identity, not just an owner
+# string. Additive frontmatter field -- legacy readers that never look for it are unaffected.
+set-assignment)
+  ID="${1:?usage: taskctl set-assignment <id> <assignment-digest>}"
+  DIGEST="${2:?usage: taskctl set-assignment <id> <assignment-digest>}"
+  printf '%s' "$DIGEST" | grep -qE '^[0-9a-f]{64}$' \
+    || { echo "taskctl: invalid assignment digest" >&2; exit 2; }
+  F="$(_taskfile "$ID")"; [ -f "$F" ] || exit 2
+  _lock || exit $?
+  transition_fields "$F" set-assignment "$ID" "assignment_digest=$DIGEST" \
+    lease_assignment_digest "$DIGEST" \
+    || { rc=$?; _unlock; exit "$rc"; }
+  _unlock ;;
+
 finish)
   ID="${1:?usage: taskctl finish <id> <status> [note]}"; ST="${2:?status}"; NOTE="${3:-}"
   F="$(_taskfile "$ID")"; [ -f "$F" ] || exit 2

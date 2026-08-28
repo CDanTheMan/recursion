@@ -32,6 +32,7 @@ import urllib.request
 from pathlib import Path
 
 from jsonl_durable import JsonlDurabilityError, append_jsonl, read_jsonl_objects
+import assignment as assignment_mod
 
 PROG = "usage-reconcile"
 LEDGER_SCHEMA_VERSION = 1
@@ -114,6 +115,28 @@ def iso_week(struct: time.struct_time) -> str:
 def iso_week_of(value: object) -> str | None:
     epoch = epoch_of(value)
     return None if epoch is None else iso_week(time.gmtime(epoch))
+
+
+# --- quota-period reconciliation (Phase 3, D-016) ---------------------------------------
+# A capacity pool's quota resets on its own declared cadence (daily/weekly/monthly), never
+# on the reporting ISO-week bucket above -- those are two independent concepts that happen
+# to share a "week" case.
+
+def period_key(period: str, struct: time.struct_time) -> str:
+    if period == "daily":
+        return time.strftime("%Y-%m-%d", struct)
+    if period == "monthly":
+        return time.strftime("%Y-%m", struct)
+    return iso_week(struct)
+
+
+def period_key_of(period: str, value: object) -> str | None:
+    epoch = epoch_of(value)
+    return None if epoch is None else period_key(period, time.gmtime(epoch))
+
+
+def current_period_key(period: str) -> str:
+    return period_key(period, time.gmtime())
 
 
 def current_iso_week() -> str:
@@ -210,7 +233,10 @@ def classify_cost(usage: dict) -> tuple[int | None, float | None, str]:
 
 def normalize(record: dict, mapping: dict) -> dict:
     usage = record.get("usage") if isinstance(record.get("usage"), dict) else {}
-    provider = nonempty_str(usage.get("provider"))
+    # Phase 3 (D-016): an assignment-native run carries its own resolved provider directly —
+    # more authoritative than usage.provider, which a worker's own sandboxed usage file
+    # declares. A legacy record without record["provider"] falls back exactly as before.
+    provider = nonempty_str(record.get("provider")) or nonempty_str(usage.get("provider"))
     basis = usage.get("billing_basis")
     tokens, cost, cost_basis = classify_cost(usage)
     role = record.get("role") if record.get("role") in ROLES else None
@@ -228,6 +254,9 @@ def normalize(record: dict, mapping: dict) -> dict:
         "role": role,
         "engine": derive_engine(record, usage, provider, mapping),
         "provider": provider,
+        "capacity_pool": nonempty_str(record.get("capacity_pool")),
+        "host": nonempty_str(record.get("host")),
+        "assignment_digest": nonempty_str(record.get("assignment_digest")),
         "model_alias": nonempty_str(record.get("model_alias")),
         "model": nonempty_str(record.get("model")) or nonempty_str(record.get("resolved_model")),
         "billing_basis": basis if basis in BILLING_BASES else None,
@@ -613,6 +642,62 @@ def command_snapshot(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_quota(args: argparse.Namespace) -> int:
+    pool_dir = Path(args.capacity_pool_dir) if args.capacity_pool_dir else assignment_mod.capacity_pool_dir()
+    try:
+        pool = assignment_mod.load_capacity_pool(pool_dir, args.pool_id)
+    except assignment_mod.AssignmentError as exc:
+        diag(str(exc))
+        return 2
+    try:
+        rows = read_jsonl_objects(Path(args.ledger))
+    except JsonlDurabilityError as exc:
+        diag(f"ledger is unusable: {exc}")
+        return 2
+
+    period = pool["quota"]["period"]
+    key = args.period or current_period_key(period)
+    unit = pool["quota"].get("unit")
+    limit = pool["quota"].get("limit")
+
+    runs = tokens = 0
+    cost = 0.0
+    for row in rows:
+        if not isinstance(row, dict) or row.get("record") != "run":
+            continue
+        if row.get("capacity_pool") != args.pool_id:
+            continue
+        bucket = period_key_of(period, row.get("finished_at")) or period_key_of(period, row.get("started_at"))
+        if bucket != key:
+            continue
+        runs += 1
+        tokens += row.get("tokens") or 0
+        cost += row.get("cost_usd") or 0.0
+
+    meters = {"usd": cost, "tokens": tokens, "requests": runs}
+    consumed = meters.get(unit) if unit else None
+    if limit is None:
+        status = "no-limit-declared"
+    elif unit is not None and unit not in meters:
+        status = "unmeasurable"  # a declared limit against a unit this tool cannot meter
+    elif consumed is not None and consumed >= limit:
+        status = "exceeded"
+    else:
+        status = "within-limit"
+    on_demand_required = status == "exceeded" and pool.get("on_demand") is False
+
+    report = {
+        "schema_version": LEDGER_SCHEMA_VERSION, "record": "quota-reconciliation",
+        "pool_id": args.pool_id, "period": period, "period_key": key,
+        "unit": unit, "limit": limit, "consumed": consumed,
+        "runs": runs, "tokens": tokens, "cost_usd": cost,
+        "status": status, "on_demand_required": on_demand_required,
+        "generated_at": now_iso(),
+    }
+    print(json.dumps(report, sort_keys=True))
+    return 0
+
+
 def parse_args(argv: list) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog=PROG, description="Engine usage/cost reconciliation.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -629,13 +714,20 @@ def parse_args(argv: list) -> argparse.Namespace:
     snapshot = sub.add_parser("openrouter-snapshot",
                               help="opt-in account-level OpenRouter reconciliation")
     snapshot.add_argument("--ledger", default=str(DEFAULT_LEDGER))
+
+    quota = sub.add_parser("quota", help="Phase 3: reconcile ledger usage against a capacity pool's quota period")
+    quota.add_argument("--pool-id", required=True)
+    quota.add_argument("--capacity-pool-dir", default=None)
+    quota.add_argument("--ledger", default=str(DEFAULT_LEDGER))
+    quota.add_argument("--period", default=None, metavar="PERIOD-KEY",
+                       help="override the computed current period key (for reproducible tests/reports)")
     return parser.parse_args(argv)
 
 
 def main() -> int:
     args = parse_args(sys.argv[1:])
     handlers = {"ingest": command_ingest, "rollup": command_rollup,
-                "openrouter-snapshot": command_snapshot}
+                "openrouter-snapshot": command_snapshot, "quota": command_quota}
     try:
         return handlers[args.command](args)
     except UsageError as exc:

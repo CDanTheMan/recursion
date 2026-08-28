@@ -68,6 +68,14 @@ def main() -> int:
     start.add_argument("--implementer-run-id", default="")
     start.add_argument("--commit-oid", default="")
     start.add_argument("--seed-evidence", default="")
+    # Phase 3 (D-016): bind this run to its immutable pre-launch assignment so engine/
+    # provider/pool/host/model attribution is read directly off the run record instead of
+    # being reconstructed later from a mutable task header (docs/audits/
+    # recursion-v2-infrastructure-audit-2026-08-28.md). Both flags are optional together —
+    # a caller that omits them gets exactly the pre-Phase-3 record (legacy behavior
+    # preserved); a caller that supplies only one is a controller bug, refused (exit 2).
+    start.add_argument("--assignment-digest", default="")
+    start.add_argument("--assignment-file", default="")
     heartbeat = sub.add_parser("heartbeat"); heartbeat.add_argument("path"); heartbeat.add_argument("lease_epoch", type=int)
     finish = sub.add_parser("finish"); finish.add_argument("path"); finish.add_argument("status")
     finish.add_argument("outcome"); finish.add_argument("exit_code", type=int)
@@ -81,11 +89,21 @@ def main() -> int:
     verify.add_argument("implementer_run_id"); verify.add_argument("verdict_file")
     link = sub.add_parser("link-verifier"); link.add_argument("path"); link.add_argument("verifier_run_id")
     link.add_argument("commit_oid"); link.add_argument("verdict_file")
+    remote = sub.add_parser("remote-evidence")  # Phase 3: remote session/branch/commit/artifact/cancellation
+    remote.add_argument("path")
+    remote.add_argument("--session-id", default="")
+    remote.add_argument("--branch", default="")
+    remote.add_argument("--commit", default="")
+    remote.add_argument("--artifact", action="append", default=[])
+    remote.add_argument("--cancelled-at", default="")
+    remote.add_argument("--cancellation-reason", default="")
     args = parser.parse_args(); path = Path(getattr(args, "path"))
 
     if args.command == "start":
         if args.pid < 1 or args.process_group < 1:
             raise SystemExit("worker-evidence: invalid process identity")
+        if bool(args.assignment_digest) != bool(args.assignment_file):
+            raise SystemExit(2)
         value = {"schema_version": 1, "id": args.run_id, "task_id": args.task_id,
                  "worker": f"{args.role}:{args.model_alias}", "role": args.role,
                  "model_alias": args.model_alias, "worktree": args.worktree,
@@ -101,6 +119,33 @@ def main() -> int:
         seed = maybe_json(args.seed_evidence)
         if isinstance(seed, dict) and seed:
             value["seed_evidence"] = seed
+        if args.assignment_digest:
+            assignment = maybe_json(args.assignment_file)
+            if not isinstance(assignment, dict) or assignment.get("assignment_digest") != args.assignment_digest \
+                    or assignment.get("task_id") != args.task_id:
+                raise SystemExit(2)
+            value["assignment_digest"] = args.assignment_digest
+            for key in ("engine", "provider", "capacity_pool", "host", "sandbox_profile", "model"):
+                value[key] = assignment.get(key)
+        atomic(path, value); return 0
+
+    if args.command == "remote-evidence":
+        value = load(path)
+        remote_value = dict(value.get("remote") or {})
+        if args.session_id:
+            remote_value["session_id"] = args.session_id
+        if args.branch:
+            remote_value["branch"] = args.branch
+        if args.commit:
+            remote_value["commit"] = args.commit
+        if args.artifact:
+            remote_value["artifacts"] = sorted(set(remote_value.get("artifacts", [])) | set(args.artifact))
+        if args.cancelled_at:
+            remote_value["cancelled_at"] = args.cancelled_at
+        if args.cancellation_reason:
+            remote_value["cancellation_reason"] = args.cancellation_reason
+        remote_value["recorded_at"] = now()
+        value["remote"] = remote_value
         atomic(path, value); return 0
 
     value = load(path)
