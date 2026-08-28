@@ -3,15 +3,83 @@
 
 from __future__ import annotations
 
+import atexit
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
 SOURCE = Path(__file__).resolve().parents[2]
+
+
+_NT_POSIX_SHIM = '''\
+"""Windows stand-ins for POSIX facilities the Linux controller assumes unconditionally."""
+import os
+import tempfile
+
+if os.name == "nt" and not getattr(os, "_recursion_nt_posix_shim", False):
+    os._recursion_nt_posix_shim = True
+    # The shared `mkstemp -> fchmod -> os.replace` writers raise AttributeError while their
+    # descriptor is still open, and the cleanup `unlink` of that open file then masks it as
+    # `[WinError 32] ... used by another process`, which callers report as a fabricated
+    # "taskctl lock contended". POSIX mode bits carry no meaning on NTFS, so a no-op is exact.
+    os.fchmod = lambda _descriptor, _mode: None
+    _real_open, _scratch = os.open, tempfile.TemporaryFile()
+
+    def _open(path, flags, mode=0o777, **kwargs):
+        # A directory has no openable handle on Windows, so notification-outbox.fsync_dir
+        # cannot take one. Return a syncable duplicate: the call sequence stays valid and the
+        # sync is inert, which is what runtime-state.py and jsonl_durable.py already do on nt
+        # behind their own `os.name` guards.
+        try:
+            inert = not flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT) and os.path.isdir(path)
+        except (TypeError, ValueError, OSError):
+            inert = False
+        return os.dup(_scratch.fileno()) if inert else _real_open(path, flags, mode, **kwargs)
+
+    os.open = _open
+'''
+
+
+def _install_nt_posix_shim() -> None:
+    """Neutralize POSIX-only facilities on the Windows authoring host; production is Linux.
+
+    `fcntl`, `os.fchmod`, and a read-only `os.open` of a directory are all absent here, and
+    each one fails as if an invariant broke rather than as a missing platform feature. This
+    fixture is hermetic and single-process, so no-contention stand-ins let the real state
+    machines run instead of a platform artifact. The shim directory is exported on PYTHONPATH,
+    where `sitecustomize` re-applies it to every child interpreter the fixture spawns. On
+    Linux this returns immediately and nothing below it is reachable.
+    """
+    if os.name != "nt":
+        return
+    directory = Path(tempfile.mkdtemp(prefix="nt-posix-shim-"))
+    atexit.register(shutil.rmtree, directory, True)
+    (directory / "fcntl.py").write_text(
+        "LOCK_SH = 1\nLOCK_EX = 2\nLOCK_NB = 4\nLOCK_UN = 8\n"
+        "def flock(_descriptor, _flags):\n    return None\n",
+        encoding="utf-8", newline="\n",
+    )
+    (directory / "_recursion_nt_posix.py").write_text(
+        _NT_POSIX_SHIM, encoding="utf-8", newline="\n",
+    )
+    (directory / "sitecustomize.py").write_text(
+        "import _recursion_nt_posix  # noqa: F401\n", encoding="utf-8", newline="\n",
+    )
+    sys.path.insert(0, str(directory))
+    __import__("_recursion_nt_posix")
+    inherited = os.environ.get("PYTHONPATH")
+    os.environ["PYTHONPATH"] = (
+        str(directory) + os.pathsep + inherited if inherited else str(directory)
+    )
+
+
+_install_nt_posix_shim()
 
 
 def load(path: Path, name: str):
@@ -154,14 +222,25 @@ def main() -> int:
         assert not forged_receipt.events() and not forged_receipt.deliveries()
         print("ok    tampered archived receipt cannot authenticate a rejection")
 
-        prepare_rejection(forged_action, authenticate_action=False)
-        forged_outbox = reconcile_source(forged_action)
-        forged_types = [row.get("event_type") for row in forged_action.events()]
-        assert forged_types.count("task-blocked") == forged_types.count("goal-stopped") == 1
-        assert not (forged_action.root / "state/reports/goal-alpha-pilot.json").exists()
-        assert not forged_outbox.build_chain(
-            forged_action.root, "alpha", "goal-alpha")["_controller_rejection_complete"]
-        print("ok    forged failed action without action receipt cannot authorize terminal report")
+        # Refusing the forged action drives notification-outbox.escalate(), which shells out to
+        # `bash scripts/taskctl.sh esc-record`; taskctl.sh then hands bash's `$$` to
+        # runtime-state.py lock-acquire. Under Git Bash `$$` is an MSYS pid, not a Win32 pid, so
+        # the native-Python owner witness (OpenProcess/GetProcessTimes) can never resolve it and
+        # the lock fails closed with "cannot witness lock owner process start". That needs one
+        # PID namespace shared by the shell and the interpreter, which only Linux provides here.
+        if os.name == "nt":
+            print("skip  forged failed action without action receipt cannot authorize terminal "
+                  "report: the escalation path locks through bash `$$`, which is an MSYS pid "
+                  "that Win32 OpenProcess cannot witness (Linux-only)")
+        else:
+            prepare_rejection(forged_action, authenticate_action=False)
+            forged_outbox = reconcile_source(forged_action)
+            forged_types = [row.get("event_type") for row in forged_action.events()]
+            assert forged_types.count("task-blocked") == forged_types.count("goal-stopped") == 1
+            assert not (forged_action.root / "state/reports/goal-alpha-pilot.json").exists()
+            assert not forged_outbox.build_chain(
+                forged_action.root, "alpha", "goal-alpha")["_controller_rejection_complete"]
+            print("ok    forged failed action without action receipt cannot authorize terminal report")
 
         compatibility.append_event("source-old-stop", "goal-transition",
                                    detail={"from": "active", "to": "blocked",

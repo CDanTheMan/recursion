@@ -21,6 +21,29 @@ fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 
+# PLATFORM-BOUND (measured 2026-08-27 on Windows Git Bash; this suite passes on Linux). This test
+# runs the REAL cycle.sh, and cycle.sh is gated on two Linux-only runtime facilities that no stub
+# can honestly stand in for:
+#
+#   1. `flock` (util-linux) — cycle.sh takes the whole-cycle lock on fd 9 before anything else.
+#      Git Bash ships no flock, so `flock -n 9` fails, every invocation logs "cycle overlap
+#      refused" and exits 73, and all twelve checks below judge a cycle that never started.
+#   2. the witnessed directory lock — taskctl.sh hands `$$` to scripts/runtime-state.py
+#      lock-acquire, which witnesses the owner by reading that PID's process start time. Under Git
+#      Bash `$$` is the MSYS process id, not the Windows process id (the latter is readable at
+#      /proc/$$/winpid), so the witness fails and durable escalation writes are refused with
+#      "cannot witness lock owner process start".
+#
+# Both were confirmed by experiment: stubbing flock alone turns the first six checks green and
+# then check 5 and all three RESUMED ★ CONTROLs still fail on (2) — i.e. exactly the controls that
+# keep the paused assertions from being vacuous. A suite that reports six passes and cannot run
+# its own controls is worse than one that says it did not run, so it says it did not run.
+if [ "$(uname -s)" != Linux ]; then
+  echo "pause-semantics: SKIP on $(uname -s) — cycle.sh needs flock (absent in Git Bash: every cycle exits 73 at the whole-cycle lock) and taskctl.sh's witnessed lock needs a Linux PID witness (Git Bash \$\$ is the MSYS pid, not the Windows pid)."
+  echo "pause-semantics: NOT RUN — awareness/heartbeat, portfolio fetch-without-maintenance, no-execution, PAUSED brief labelling, transport silence, self-repo Git preservation, durable escalation, and all three resumed ★ CONTROLs."
+  exit 0
+fi
+
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 BIN="$TMP/bin"; mkdir -p "$BIN"
 
@@ -97,7 +120,27 @@ PORT_REMOTE="$($GIT -C "$PORT_SEED" rev-parse main)"
   printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n'
   printf 'pause-probe\t%s\t%s\tmain\t-\t-\t-\tactive\n' "$PORT_REPO" "$PORT_ORIGIN"
 } > "$R/state/portfolio.tsv"
-( cd "$R" && git init -q . && git add -A >/dev/null 2>&1 \
+# The disposable clone is configured, not just initialised, because the REAL scripts commit inside
+# it and inherit whatever this machine happens to provide:
+#
+#   * user.name/user.email — cycle.sh (`git commit -q -m "loop: board ..." 2>/dev/null || true`)
+#     and work.sh both stage state and swallow a failed commit. This fixture supplied an identity
+#     to its OWN commit via `git -c`, but never wrote one into the clone, so those commits used
+#     the ambient identity. Under root git derives one from the passwd entry and they succeed;
+#     under an ordinary account with an empty gecos name git refuses with "empty ident name", the
+#     commit is silently dropped, and everything the cycle wrote stays STAGED — which the final
+#     ★ CONTROL then reports as "resumed forced cycle left tracked state dirty". That is the
+#     runner's account leaking into a PAUSE assertion, not a state leak. (Reproduced 2026-08-27:
+#     identical suite, same machine, passes as root and fails as a non-root user.)
+#   * core.autocrlf — a per-clone setting inherited from the developer's global config. If it is
+#     on, tracked text is checked out CRLF, every file the cycle rewrites comes back LF, and the
+#     same ★ CONTROL reports "M state/INBOX.md" for a line-ending artefact.
+#
+# Both are no-ops on the deploy box, which already has an identity and autocrlf off.
+( cd "$R" && git init -q . \
+  && git config user.name t && git config user.email t@t \
+  && git config core.autocrlf false && git config core.eol lf \
+  && git add -A >/dev/null 2>&1 \
   && git -c user.name=t -c user.email=t@t commit -qm init >/dev/null 2>&1 \
   && git checkout -qb loop/auto ) || true
 

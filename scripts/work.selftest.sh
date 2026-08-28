@@ -11,6 +11,14 @@
 #
 # Self-cleaning: snapshots INBOX, uses temp task files, removes the test branches/worktrees.
 set -uo pipefail
+
+# This is the CONTROL for the build-loop gate itself (flock, procfs, POSIX lock semantics) —
+# off-box it cannot certify anything, so it reports an explicit SKIP instead of a false signal.
+if [ "$(uname -s)" != "Linux" ]; then
+  echo "[selftest] SKIP (Linux loop runtime required — the gate can only be certified on the box)"
+  exit 0
+fi
+
 SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 # ★ RUN IN A CLONE, NOT IN THE LIVE REPO. work.sh exits the moment it sees state/PAUSE, so on a

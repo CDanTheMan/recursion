@@ -20,6 +20,14 @@
 #   run: bash scripts/tests/capacity.test.sh
 set -uo pipefail
 export LC_ALL=C
+
+# This suite drives the live loop arms (flock, procfs, POSIX lock semantics) — off-box it can only
+# produce noise, so it reports an explicit SKIP. The box baseline runs it for real.
+if [ "$(uname -s)" != "Linux" ]; then
+  echo "capacity: SKIP (Linux loop runtime required — flock/procfs/POSIX lock semantics; certified in the box suite)"
+  exit 0
+fi
+
 SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
@@ -33,7 +41,13 @@ done
 chmod +x "$R"/scripts/*.sh 2>/dev/null
 : > "$R/.env"
 HEAVY_TEST_OWNER_PID="$$"
-cap(){ ( cd "$R" && RECURSION_ROOT="$R" RECURSION_HEAVY_PID="$HEAVY_TEST_OWNER_PID" \
+# capacity.sh scales its load caps by the HOST's core count (nproc). The fixture metrics
+# below were chosen against the 2-core box; on a many-core machine a load of 9.00 would
+# legitimately ADMIT and the deferral assertions would go vacuous. Pin the fixture to 2.
+mkdir -p "$TMP/bin"
+printf '#!/usr/bin/env bash\necho 2\n' > "$TMP/bin/nproc"
+chmod +x "$TMP/bin/nproc"
+cap(){ ( cd "$R" && PATH="$TMP/bin:$PATH" RECURSION_ROOT="$R" RECURSION_HEAVY_PID="$HEAVY_TEST_OWNER_PID" \
   bash scripts/capacity.sh "$@" ) >"$TMP/out" 2>&1; echo $?; }
 
 # mem_mb load1 disk_mb swap_mb — a comfortable box and several kinds of full one.

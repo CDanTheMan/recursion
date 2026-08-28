@@ -26,7 +26,7 @@ copy_controller(){
     "$r/state/decision-queue/succeeded" "$r/state/decision-queue/failed" \
     "$r/state/.locks" "$r/state/evidence" "$r/loop/logs"
   for s in conduct-hermes.sh decision-queue.py validate-decision.py validate-control-state.py \
-           project-pilot.py project_authority.py pilot_instruction.py project-reconcile.py jsonl_durable.py transition_receipt.py runtime-state.py taskctl.sh worker-sandbox.sh validate-gate.py; do
+           project-pilot.py engine_contract.py project_authority.py pilot_instruction.py project-reconcile.py jsonl_durable.py transition_receipt.py runtime-state.py taskctl.sh worker-sandbox.sh validate-gate.py; do
     [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$r/scripts/"
   done
   [ ! -f "$SRC/scripts/seed_contract.py" ] || cp "$SRC/scripts/seed_contract.py" "$r/scripts/"
@@ -771,6 +771,8 @@ preworker_case verification verification-policy-invalid 'set_field "$r/state/tas
   && ok "invalid verifier policy uses the atomic pre-worker rejection" || no "invalid verifier policy stranded state"
 preworker_case engine worker-engine-invalid 'set_field "$r/state/tasks/$name-task.md" engine hermes' \
   && ok "invalid worker engine uses the atomic pre-worker rejection" || no "invalid worker engine stranded state"
+preworker_case verifier-engine worker-engine-invalid 'sed -i "1a verifier_engine: hermes" "$r/state/tasks/$name-task.md"' \
+  && ok "invalid verifier engine uses the atomic pre-worker rejection" || no "invalid verifier engine stranded state"
 preworker_case model model-alias-invalid 'set_field "$r/state/tasks/$name-task.md" model_alias unknown-model' \
   && ok "invalid implementer model uses the atomic pre-worker rejection" || no "invalid implementer model stranded state"
 preworker_case verifier-model verifier-model-alias-invalid 'set_field "$r/state/tasks/$name-task.md" verifier_model_alias unknown-model' \

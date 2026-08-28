@@ -64,7 +64,8 @@ LEGACY_SOURCE_KINDS = frozenset({"project-digest", "portfolio-brief"})
 CONTRACT_REJECTION_CATEGORIES = {
     "acceptance-missing", "acceptance-invalid", "deadline-invalid", "network-policy-invalid",
     "verification-policy-invalid", "worker-engine-invalid", "model-alias-invalid",
-    "verifier-model-alias-invalid", "model-separation-invalid", "contract-projection-invalid",
+    "verifier-model-alias-invalid", "model-separation-invalid", "model-alias-engine-mismatch",
+    "contract-projection-invalid",
     "gate-contract-drift", "source-head-drift", "seed-contract-invalid",
 }
 
@@ -86,6 +87,8 @@ def now_iso() -> str:
 
 
 def fsync_dir(path: Path) -> None:
+    if os.name == "nt":  # directory fds cannot be opened on Windows (same guard as the six sibling modules)
+        return
     descriptor = os.open(path, os.O_RDONLY)
     try:
         os.fsync(descriptor)
@@ -98,7 +101,8 @@ def atomic_json(path: Path, value: dict) -> None:
     descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
     temporary = Path(name)
     try:
-        os.fchmod(descriptor, 0o600)
+        if hasattr(os, "fchmod"):  # absent on Windows; NTFS mode bits are meaningless
+            os.fchmod(descriptor, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as output:
             json.dump(value, output, sort_keys=True, separators=(",", ":"))
             output.write("\n")
@@ -107,7 +111,16 @@ def atomic_json(path: Path, value: dict) -> None:
         os.replace(temporary, path)
         fsync_dir(path.parent)
     except BaseException:
-        temporary.unlink(missing_ok=True)
+        # Cleanup must never replace the primary exception: close the descriptor first
+        # (Windows cannot unlink an open file) and swallow only the cleanup's own OSError.
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
         raise
 
 

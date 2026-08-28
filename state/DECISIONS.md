@@ -399,3 +399,34 @@ tracked-state residue caused by a PAUSE-held forced cycle; or any resumed brief/
 a human without a Phase 7 delivery record and durable transport acknowledgement.
 
 **Review:** 2026-09-15
+
+## D-015 — Worker engines become declarative plugins (Cursor, Gemini, OpenCode, Sentry-local arm)
+Date: 2026-08-26 · Status: DRAFT — scope approved by Lucas in-session; ratified when the review branch merges
+
+**Context:** subscriptions are being cancelled and reshuffled after the August PoC. The
+worker plane supports exactly two engines (`claude`, `hermes`); `deepseek`/`openrouter`
+are stubs (exit 91). Lucas wants Recursion "as compatible as possible" — Cursor CLI,
+Gemini CLI, OpenCode CLI, and a toggle-able local Qwen arm on the Sentry PC — driving
+Cursor + ChatGPT as the primary pair.
+
+**Options considered:** (A) hardcode each new engine as another case branch /
+(B) declarative per-engine JSON manifests + a fail-closed resolver + one generic sandbox
+exec path, plugins inert until human-owned env flags enable them / (C) build the raw
+chat-completion file-emission protocol instead.
+
+**Chose:** B, per `docs/plans/engine-plugin-architecture.md`.
+
+**Because:** the gate/scope/verifier machinery never depended on the model, so engines
+are configuration, not code. Manifests keep the loop out of model policy (rule 3), keep
+every new engine fail-closed and disabled by default, make cross-engine verification
+possible, and subsume C entirely (OpenCode fronts OpenRouter/DeepSeek/local endpoints).
+A hardcoded case per engine (A) grows a protected file with every subscription change —
+the exact coupling this decision removes. Local-arm toggling is availability, not
+config: a failed health probe requeues the task instead of blocking it.
+
+**Falsifier:** any plugin engine that runs without both human-owned enable flags; a
+builtin engine whose behavior changes in any observable way; a metered plugin admitted
+without `RECURSION_ALLOW_METERED=1`; a probe failure that blocks or escalates instead of
+requeueing; a manifest carrying a credential value.
+
+**Review:** 2026-09-30

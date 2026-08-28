@@ -12,6 +12,14 @@
 #   run: bash scripts/tests/digest.test.sh
 set -uo pipefail
 export LC_ALL=C
+
+# This suite drives the live loop arms (flock, procfs, POSIX lock semantics) — off-box it can only
+# produce noise, so it reports an explicit SKIP. The box baseline runs it for real.
+if [ "$(uname -s)" != "Linux" ]; then
+  echo "digest: SKIP (Linux loop runtime required — flock/procfs/POSIX lock semantics; certified in the box suite)"
+  exit 0
+fi
+
 SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
@@ -20,7 +28,7 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 export RECURSION_NO_NOTIFY=1
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/root"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/state/roadmaps" "$R/state/assists" "$R/loop/logs"
-for s in digest.sh resync.sh assist.sh notify.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py; do
+for s in digest.sh resync.sh assist.sh notify.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py project-pilot.py engine_contract.py pilot_instruction.py seed_contract.py project_authority.py; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null

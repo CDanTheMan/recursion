@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "name": "telegram-alt",
+  "description": "Example only, not loadable. A second Telegram-shaped sender (separate bot or gateway) that prints the Telegram sendMessage JSON on stdout. Copy to ../telegram-alt.json and set the five .env links in ../README.md to make it real; argv is illustrative and must be verified against the actual binary before use.",
+  "executable": "/usr/local/bin/telegram-alt-send",
+  "transport_argv": ["{{EXE}}", "--destination", "{{DESTINATION}}", "--text", "{{MESSAGE}}", "--json"],
+  "ack_contract": "telegram",
+  "env_passthrough": ["TELEGRAM_ALT_ENDPOINT"],
+  "timeout_seconds": 20
+}

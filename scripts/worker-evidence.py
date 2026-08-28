@@ -32,11 +32,12 @@ def atomic(path: Path, value: dict) -> None:
             json.dump(value, out, indent=2, sort_keys=True)
             out.write("\n"); out.flush(); os.fsync(out.fileno())
         os.replace(name, path)
-        dfd = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(dfd)
-        finally:
-            os.close(dfd)
+        if os.name != "nt":  # directory fds cannot be opened on Windows (same guard as the sibling modules)
+            dfd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
     finally:
         if os.path.exists(name):
             os.unlink(name)
@@ -45,7 +46,13 @@ def atomic(path: Path, value: dict) -> None:
 def maybe_json(path: str | None) -> object:
     if not path or not Path(path).is_file():
         return {}
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    # The sandbox pre-truncates the hermes usage file before mounting it; a worker that exits
+    # without writing leaves it empty. An empty file means "no usage data", the same fact as
+    # an absent file — it must not crash `finish` and lose the whole run record.
+    raw = Path(path).read_text(encoding="utf-8")
+    if not raw.strip():
+        return {}
+    return json.loads(raw)
 
 
 def main() -> int:

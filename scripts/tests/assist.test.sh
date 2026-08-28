@@ -17,6 +17,14 @@
 #   run: bash scripts/tests/assist.test.sh
 set -uo pipefail
 export LC_ALL=C
+
+# This suite drives the live loop arms (flock, procfs, POSIX lock semantics) — off-box it can only
+# produce noise, so it reports an explicit SKIP. The box baseline runs it for real.
+if [ "$(uname -s)" != "Linux" ]; then
+  echo "assist: SKIP (Linux loop runtime required — flock/procfs/POSIX lock semantics; certified in the box suite)"
+  exit 0
+fi
+
 SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
@@ -25,7 +33,7 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 BIN="$TMP/bin"; mkdir -p "$BIN"
 R="$TMP/repo"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/assists" "$R/loop/logs" "$R/app"
-for s in work.sh worker-sandbox.sh assist.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh board.sh resync.sh publish.sh; do
+for s in work.sh worker-sandbox.sh assist.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh board.sh resync.sh project-pilot.py engine_contract.py pilot_instruction.py seed_contract.py project_authority.py publish.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null

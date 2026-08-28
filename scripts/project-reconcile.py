@@ -776,7 +776,8 @@ def check_work_authority(base: Path, task_id: str) -> dict:
 CONTRACT_REJECTION_CATEGORIES = {
     "acceptance-missing", "acceptance-invalid", "deadline-invalid", "network-policy-invalid",
     "verification-policy-invalid", "worker-engine-invalid", "model-alias-invalid",
-    "verifier-model-alias-invalid", "model-separation-invalid", "contract-projection-invalid",
+    "verifier-model-alias-invalid", "model-separation-invalid", "model-alias-engine-mismatch",
+    "contract-projection-invalid",
     "gate-contract-drift", "source-head-drift", "seed-contract-invalid",
 }
 
@@ -1916,6 +1917,8 @@ def _phase8_expected_task_values(config: dict, pilot: dict, plan: dict, plan_id:
     }
     if task.get("source_task_id"):
         values["source_task_id"] = task["source_task_id"]
+    if task.get("verifier_engine"):
+        values["verifier_engine"] = task["verifier_engine"]
     if seed:
         values.update({
             "seed_manifest": seed["manifest_path"], "seed_manifest_sha256": seed["manifest_sha256"],
@@ -2009,6 +2012,15 @@ def verify_phase8_goal_projection(base: Path, config: dict, pilot: dict,
             raise ReconcileError(
                 f"materialized task {task_id} immutable contract differs from its approved plan"
             )
+        # Optional keys are rendered only when the approved plan carries them, so the subset
+        # comparison above cannot see an injected one. verifier_engine redirects which vendor
+        # verifies, so absence must be proved too — for the whole optional-key family.
+        for optional_key in ("verifier_engine", "source_task_id", "gate_profile_selection",
+                             "seed_manifest", "seed_manifest_sha256", "seed", "seed_digest"):
+            if optional_key not in expected and actual.get(optional_key, ""):
+                raise ReconcileError(
+                    f"materialized task {task_id} carries an unapproved {optional_key}"
+                )
 
 
 def verify_goal(base: Path, project: str, goal_id: str,

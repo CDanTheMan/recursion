@@ -60,6 +60,7 @@ state/notification-audit-events.jsonl
 state/notification-recovery-events.jsonl
 state/transport-evidence/
 state/reports/
+state/usage/
 state/event-archive/
 state/jsonl-quarantine/
 state/jsonl-index/

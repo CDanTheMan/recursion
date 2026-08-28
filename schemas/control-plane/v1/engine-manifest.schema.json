@@ -1,0 +1,169 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://recursion.local/schemas/control-plane/v1/engine-manifest.schema.json",
+  "title": "Recursion engine plugin manifest v1",
+  "description": "Documentation/box-tooling schema for scripts/engines/<name>.json. The authoritative, self-contained validation lives in scripts/resolve-engine.py (no jsonschema dependency at runtime); this schema exists to document the contract accurately and to support editor/CI tooling. See docs/plans/engine-plugin-architecture.md Component 1.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "name",
+    "description",
+    "executable",
+    "argv",
+    "model",
+    "roles",
+    "billing",
+    "network",
+    "availability_probe",
+    "concurrency_cap",
+    "env_passthrough"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,31}$",
+      "description": "Must equal the manifest filename stem (e.g. gemini.json -> \"gemini\"), and must not collide with a builtin engine name (claude, hermes, gate, none, deepseek, openrouter)."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "executable": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,31}$",
+      "description": "Basename only (no path separators). Resolved via `command -v` inside the sandbox controller, then bind-mounted read-only exactly like the existing single-executable path. Need not equal `name`."
+    },
+    "argv": {
+      "type": "array",
+      "minItems": 2,
+      "items": [
+        {
+          "const": "{{EXE}}",
+          "description": "argv[0] must be the literal placeholder {{EXE}}."
+        }
+      ],
+      "additionalItems": {
+        "type": "string",
+        "minLength": 1
+      },
+      "contains": {
+        "const": "{{PROMPT}}"
+      },
+      "description": "Exactly one element must be the literal placeholder {{PROMPT}} (the count is enforced by the resolver; draft-07 `contains` only guarantees at least one). Any element that is wholly of the form {{...}} must be one of the three known placeholders ({{EXE}}, {{PROMPT}}, {{MODEL}}); {{EXE}} may appear only at index 0; {{MODEL}} may appear at most once anywhere in argv. No other templating is permitted."
+    },
+    "model": {
+      "type": "object",
+      "required": ["required", "argv_suffix"],
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "description": "If true, launch without a resolved model is refused."
+        },
+        "argv_suffix": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Appended to argv only when a model is present. Each element is either a plain literal string or the placeholder {{MODEL}}; {{MODEL}} may appear at most once."
+        }
+      }
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "enum": ["implementer", "verifier"]
+      },
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "description": "Nonempty subset of {implementer, verifier} without duplicates."
+    },
+    "billing": {
+      "type": "object",
+      "required": ["basis", "provider"],
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "enum": ["flat-subscription", "metered", "local"],
+          "description": "metered engines are admitted only under RECURSION_ALLOW_METERED=1 (same rule as engine=hermes today)."
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "network": {
+      "type": "object",
+      "required": ["policy", "endpoints"],
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "const": "provider-only"
+        },
+        "endpoints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+          },
+          "description": "Documentation and deployment input for the provider-only allowlist enforced by the root-owned provider netns/proxy on the box. Empty list allowed (e.g. tunnel-local engines)."
+        }
+      }
+    },
+    "availability_probe": {
+      "description": "null, or an HTTP probe spec. The URL itself lives in human-owned env, never in the manifest.",
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": ["type", "url_env", "timeout_s"],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "http"
+            },
+            "url_env": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+            },
+            "timeout_s": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60
+            }
+          }
+        }
+      ]
+    },
+    "concurrency_cap": {
+      "description": "null, or a positive integer maximum of simultaneous runs for this engine across the box.",
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "integer",
+          "minimum": 1
+        }
+      ]
+    },
+    "env_passthrough": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+      },
+      "uniqueItems": true,
+      "description": "Env var names (not values) copied from the controller environment into the unit when set. Possibly empty. No duplicates."
+    }
+  }
+}
