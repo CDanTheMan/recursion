@@ -207,7 +207,9 @@ class V2ContractsTest(unittest.TestCase):
         base = base_records()["engine"][0]
         values = (
             "Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9", "GHP_012345678901234567890123",
-            "SK-012345678901234567", "API_KEY=abc", "sk-short", "normal text",
+            "SK-012345678901234567", "API_KEY=abc", "secret:", "secret:x",
+            "secret:Bearer foo", "secret:API_KEY=abc", "secret:valid-ref",
+            "Bearer\ttoken", r"Bearer\ttoken", "BEARER\ttoken", "sk-short", "normal text",
         )
         for value in values:
             record = copy.deepcopy(base); record["description"] = value
@@ -217,6 +219,24 @@ class V2ContractsTest(unittest.TestCase):
             except ContractError:
                 runtime_rejects = True
             self.assertEqual(runtime_rejects, not validator.is_valid(record), value)
+        pool = base_records()["capacity_pool"][0]
+        for roles in (["implementer"], ["operator"], []):
+            record = copy.deepcopy(pool); record["roles"] = roles
+            runtime_rejects = False
+            try:
+                validate_record(record)
+            except ContractError:
+                runtime_rejects = True
+            self.assertEqual(runtime_rejects, not validator.is_valid(record), ("roles", roles))
+        provider = base_records()["provider"][0]
+        for errors in (["quota"], []):
+            record = copy.deepcopy(provider); record["error_classes"] = errors
+            runtime_rejects = False
+            try:
+                validate_record(record)
+            except ContractError:
+                runtime_rejects = True
+            self.assertEqual(runtime_rejects, not validator.is_valid(record), ("error_classes", errors))
 
     def test_weighted_rotation_survives_candidate_order(self):
         cfg = base_records()

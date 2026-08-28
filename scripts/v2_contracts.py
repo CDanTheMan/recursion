@@ -205,7 +205,9 @@ def _no_secrets(value: Any, where: str = "document") -> None:
 def _looks_secret(value: str) -> bool:
     if SECRET_REF.fullmatch(value):
         return False
-    return re.search(SECRET_PATTERN, value) is not None
+    # SECRET_PATTERN is stored in a raw Python literal; make its whitespace
+    # escapes equivalent to the JSON-Schema expression before matching.
+    return re.search(SECRET_PATTERN.replace(r"\\t", r"\t"), value) is not None
 
 
 def _common(record: Any, kind: str, fields: set[str], required: set[str]) -> dict[str, Any]:
@@ -265,7 +267,9 @@ def validate_record(record: Any) -> dict[str, Any]:
         if o["billing_basis"] not in BILLING_BASES: raise ContractError("capacity_pool.billing_basis is invalid")
         _str(o["credential_ref"], "capacity_pool.credential_ref");
         if not SECRET_REF.fullmatch(o["credential_ref"]): raise ContractError("capacity_pool.credential_ref must be a secret reference")
-        _strings(o["roles"], "capacity_pool.roles", nonempty=True); _refs(o.get("projects", []), "capacity_pool.projects"); _refs(o.get("models", []), "capacity_pool.models"); _refs(o.get("hosts", []), "capacity_pool.hosts")
+        _strings(o["roles"], "capacity_pool.roles", nonempty=True)
+        if not set(o["roles"]) <= ROLES: raise ContractError("capacity_pool.roles contains an unknown role")
+        _refs(o.get("projects", []), "capacity_pool.projects"); _refs(o.get("models", []), "capacity_pool.models"); _refs(o.get("hosts", []), "capacity_pool.hosts")
         q = _obj(o["quota"], "capacity_pool.quota", {"period", "source", "confidence", "remaining"}, {"period", "source", "confidence"}); _str(q["period"], "capacity_pool.quota.period"); _str(q["source"], "capacity_pool.quota.source"); _str(q["confidence"], "capacity_pool.quota.confidence")
         if "remaining" in q: _int(q["remaining"], "capacity_pool.quota.remaining")
         if "spend_ceiling_usd" in o: _int(o["spend_ceiling_usd"], "capacity_pool.spend_ceiling_usd")
