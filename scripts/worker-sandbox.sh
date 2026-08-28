@@ -37,7 +37,7 @@ case "$ENGINE" in
       || { echo "worker-sandbox: invalid engine" >&2; exit 92; } ;;
 esac
 PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ENV_PASS=(); PLAN_OK=0; PLAN_MREQ=0
-ENGINE_ENV_FILE=""
+PLAN_EGRESS=""; PLAN_ENDPOINTS=(); ENGINE_ENV_FILE=""
 if [ -n "$ENGINE_PLAN" ]; then
   [ -f "$ENGINE_PLAN" ] || { echo "worker-sandbox: engine plan is missing" >&2; exit 92; }
   while IFS= read -r plan_line; do
@@ -47,6 +47,8 @@ if [ -n "$ENGINE_PLAN" ]; then
       ARG=*)  PLAN_ARGV+=("${plan_line#ARG=}") ;;
       MSFX=*) PLAN_MODEL_SUFFIX+=("${plan_line#MSFX=}") ;;
       ENVP=*) PLAN_ENV_PASS+=("${plan_line#ENVP=}") ;;
+      EGRESS=*) PLAN_EGRESS="${plan_line#EGRESS=}" ;;
+      ENDPOINT=*) PLAN_ENDPOINTS+=("${plan_line#ENDPOINT=}") ;;
       MREQ=1) PLAN_MREQ=1 ;;
       OK=1)   PLAN_OK=1 ;;
     esac
@@ -90,6 +92,19 @@ for name in plan.get("env_passthrough") or []:
     if not isinstance(name, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", name):
         raise SystemExit(92)
     print("ENVP=" + name)
+egress = plan.get("egress_profile")
+endpoints = plan.get("network_endpoints")
+if egress is not None:
+    if not isinstance(egress, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", egress):
+        raise SystemExit(92)
+    if not isinstance(endpoints, list) or not endpoints or not all(
+        isinstance(item, str) and re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", item)
+        for item in endpoints
+    ):
+        raise SystemExit(92)
+    print("EGRESS=" + egress)
+    for endpoint in endpoints:
+        print("ENDPOINT=" + endpoint)
 print("OK=1")
 PY
 )
@@ -104,6 +119,10 @@ PY
   # on its own configured default, off-alias and off-evidence.
   [ "$PLAN_MREQ" != 1 ] || [ -n "$MODEL" ] \
     || { echo "worker-sandbox: engine plan requires a model and none was given" >&2; exit 92; }
+fi
+if [ -n "$PLAN_EGRESS" ] && [ "$NETWORK_POLICY" != provider-only ]; then
+  echo "worker-sandbox: provider egress profile requires provider-only network policy" >&2
+  exit 96
 fi
 build_plan_argv(){ # resolved-exe -> PLAN_RUN: exact-element placeholder substitution only
   local exe="$1" element
@@ -181,6 +200,20 @@ case "${RECURSION_TEST_WORKER:-}" in
         ;;
       *)
         command -v "$PLAN_EXE" >/dev/null 2>&1 || exit 90
+        if [ -n "$PLAN_EGRESS" ]; then
+          [ -x "$ROOT/scripts/provider-egress.py" ] || exit 96
+          egress_args=(inject "$PLAN_EGRESS")
+          for endpoint in "${PLAN_ENDPOINTS[@]}"; do egress_args+=(--endpoint "$endpoint"); done
+          egress_lines="$(RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
+            || { echo "worker-sandbox: provider egress profile was refused" >&2; exit 96; }
+          while IFS= read -r egress_line; do
+            [ -z "$egress_line" ] && continue
+            case "$egress_line" in
+              HTTP_PROXY=http://127.0.0.1:*|HTTPS_PROXY=http://127.0.0.1:*) export "$egress_line" ;;
+              *) echo "worker-sandbox: provider helper returned an unsafe environment value" >&2; exit 96 ;;
+            esac
+          done <<< "$egress_lines"
+        fi
         # Declare the passthrough set so hermetic controls can verify the plan->env plumbing;
         # the real --setenv/EnvironmentFile wiring is exercised only on the box.
         for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
@@ -390,6 +423,21 @@ case "$ENGINE" in
     # Plugin engines (D-015): exec exactly the admitted plan argv; no shell, no interpolation.
     # Passthrough values ride a root-owned 0600 EnvironmentFile, never the systemd-run command
     # line, so credentials stay out of /proc/*/cmdline and `systemctl show`.
+    if [ -n "$PLAN_EGRESS" ]; then
+      [ -x "$ROOT/scripts/provider-egress.py" ] \
+        || { echo "worker-sandbox: provider egress helper is absent" >&2; exit 96; }
+      egress_args=(inject "$PLAN_EGRESS")
+      for endpoint in "${PLAN_ENDPOINTS[@]}"; do egress_args+=(--endpoint "$endpoint"); done
+      egress_lines="$(RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
+        || { echo "worker-sandbox: provider egress profile was refused" >&2; exit 96; }
+      while IFS= read -r egress_line; do
+        [ -z "$egress_line" ] && continue
+        case "$egress_line" in
+          HTTP_PROXY=http://127.0.0.1:*|HTTPS_PROXY=http://127.0.0.1:*) RUN+=(--setenv "$egress_line") ;;
+          *) echo "worker-sandbox: provider helper returned an unsafe environment value" >&2; exit 96 ;;
+        esac
+      done <<< "$egress_lines"
+    fi
     if [ "${#PLAN_ENV_PASS[@]}" -gt 0 ]; then
       ENGINE_ENV_FILE="$(mktemp /tmp/recursion-engine-env.XXXXXX)" || exit 95
       chmod 0600 "$ENGINE_ENV_FILE"

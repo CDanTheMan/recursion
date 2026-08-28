@@ -24,6 +24,12 @@ import sys
 from collections.abc import Iterable
 
 try:
+    from provider_contract import enabled_allowlist, load_profile
+except ModuleNotFoundError:  # importlib-based hermetic tests load this file by path.
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    from provider_contract import enabled_allowlist, load_profile
+
+try:
     import pwd
 except ImportError:  # Allows parser/unit tests on the Windows review workstation.
     pwd = None  # type: ignore[assignment]
@@ -521,7 +527,9 @@ def make_parser() -> argparse.ArgumentParser:
     serve = commands.add_parser("serve")
     serve.add_argument("--namespace", type=pathlib.Path, required=True)
     serve.add_argument("--listen-port", type=int, default=18080)
-    serve.add_argument("--allow", action="append", required=True)
+    serve.add_argument("--allow", action="append", default=[])
+    serve.add_argument("--profile-dir", type=pathlib.Path)
+    serve.add_argument("--profile", action="append", default=[])
     serve.add_argument("--resolve", action="append", default=[])
     serve.add_argument("--drop-user", required=True)
     serve.add_argument("--concurrency", type=int, default=16)
@@ -539,7 +547,17 @@ def main() -> int:
         if args.command == "serve":
             if not 1 <= args.listen_port <= 65535 or not 1 <= args.concurrency <= 128:
                 raise ValueError("listener or concurrency is out of range")
-            allowed = parse_allowlist(args.allow)
+            if args.profile_dir is not None:
+                if args.allow:
+                    raise ValueError("--allow cannot be combined with --profile-dir")
+                if not args.profile:
+                    raise ValueError("at least one provider profile is required")
+                profiles = [load_profile(args.profile_dir / f"{name}.json", name) for name in args.profile]
+                if any(profile["namespace"] != args.namespace.name for profile in profiles):
+                    raise ValueError("provider profile namespace does not match --namespace")
+                allowed = enabled_allowlist(args.profile_dir, args.profile)
+            else:
+                allowed = parse_allowlist(args.allow)
             resolutions = parse_resolutions(args.resolve, args.namespace)
             listener = open_listener_in_namespace(args.namespace, args.listen_port)
             drop_privileges(args.drop_user)

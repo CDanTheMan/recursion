@@ -17,6 +17,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from provider_contract import ProviderProfileError, assert_endpoints_match, profile_directory, profile_for_provider
+
 PROG = "resolve-engine"
 
 NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
@@ -45,6 +47,7 @@ MODEL_KEYS = {"required", "argv_suffix"}
 BILLING_KEYS = {"basis", "provider"}
 BILLING_BASES = {"flat-subscription", "metered", "local"}
 NETWORK_KEYS = {"policy", "endpoints"}
+NETWORK_OPTIONAL_KEYS = {"profile"}
 PROBE_KEYS = {"type", "url_env", "timeout_s"}
 
 
@@ -126,7 +129,15 @@ def validate_billing(billing: object) -> None:
 
 
 def validate_network(network: object) -> None:
-    obj = require_object_keys(network, NETWORK_KEYS, "network")
+    if not isinstance(network, dict):
+        raise ManifestError("network must be a JSON object")
+    missing = NETWORK_KEYS - network.keys()
+    extra = network.keys() - NETWORK_KEYS - NETWORK_OPTIONAL_KEYS
+    if missing:
+        raise ManifestError(f"network missing required key(s): {', '.join(sorted(missing))}")
+    if extra:
+        raise ManifestError(f"network has unknown key(s): {', '.join(sorted(extra))}")
+    obj = network
     if obj["policy"] != "provider-only":
         raise ManifestError('network.policy must be "provider-only"')
     endpoints = obj["endpoints"]
@@ -135,6 +146,9 @@ def validate_network(network: object) -> None:
     for item in endpoints:
         if not isinstance(item, str) or not ENDPOINT_RE.fullmatch(item):
             raise ManifestError(f"network.endpoints contains an invalid hostname {item!r}")
+    profile = obj.get("profile")
+    if profile is not None and (not isinstance(profile, str) or not NAME_RE.fullmatch(profile)):
+        raise ManifestError("network.profile must be a valid provider profile name")
 
 
 def validate_probe(probe: object) -> None:
@@ -181,6 +195,15 @@ def validate_manifest(data: object, engine: str) -> dict:
     validate_roles(obj["roles"])
     validate_billing(obj["billing"])
     validate_network(obj["network"])
+    profile_name = obj["network"].get("profile")
+    if profile_name is not None:
+        try:
+            profile = profile_for_provider(profile_name, profile_directory(Path(__file__).resolve().parent))
+            if profile["provider"] != obj["billing"]["provider"]:
+                raise ProviderProfileError("profile provider does not match billing.provider")
+            assert_endpoints_match(profile, obj["network"]["endpoints"])
+        except ProviderProfileError as exc:
+            raise ManifestError(f"network.profile is invalid: {exc}") from exc
     validate_probe(obj["availability_probe"])
     cap = obj["concurrency_cap"]
     if cap is not None and not (is_plain_int(cap) and cap >= 1):
@@ -217,7 +240,7 @@ def enabled_env_name(engine: str) -> str:
 
 
 def build_plan(data: dict) -> dict:
-    return {
+    plan = {
         "schema_version": 1,
         "engine": data["name"],
         "executable": data["executable"],
@@ -232,6 +255,13 @@ def build_plan(data: dict) -> dict:
         "concurrency_cap": data["concurrency_cap"],
         "env_passthrough": list(data["env_passthrough"]),
     }
+    # Optional metadata keeps the v1 plan byte-for-byte compatible for manifests that do not
+    # declare a Phase 4 profile. New manifests carry the provider boundary explicitly.
+    profile = data["network"].get("profile")
+    if profile is not None:
+        plan["egress_profile"] = profile
+        plan["network_endpoints"] = list(data["network"]["endpoints"])
+    return plan
 
 
 def write_plan_atomically(plan: dict, out_path: Path) -> None:

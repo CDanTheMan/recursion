@@ -15,6 +15,8 @@
 #   conduct-hermes.sh                 drain every durable pending decision
 #   conduct-hermes.sh --file <path>   execute a specific decision file
 #   conduct-hermes.sh --dry-run       print what would run, execute nothing
+#   conduct-hermes.sh --non-work-only drain only state/approval decisions
+#   conduct-hermes.sh --work-only     drain only worker decisions
 set -uo pipefail
 export LC_ALL=C
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -25,16 +27,20 @@ cd "$ROOT"
 # into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
 RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 
-FILE=""; DRY=0; PAUSED_SAFE=0; RECOVER_ONLY=0
+FILE=""; DRY=0; PAUSED_SAFE=0; RECOVER_ONLY=0; NON_WORK_ONLY=0; WORK_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --file) FILE="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     --paused-safe) PAUSED_SAFE=1; shift ;;
     --recover-only) RECOVER_ONLY=1; shift ;;
+    --non-work-only) NON_WORK_ONLY=1; shift ;;
+    --work-only) WORK_ONLY=1; shift ;;
     *) shift ;;
   esac
 done
+[ "$NON_WORK_ONLY" = 0 ] || [ "$WORK_ONLY" = 0 ] \
+  || { echo "conduct-hermes: --non-work-only and --work-only are mutually exclusive" >&2; exit 2; }
 DATE="$(date +%F)"
 LOG="$ROOT/loop/logs/$DATE-conduct-hermes.log"; mkdir -p "$(dirname "$LOG")"
 log(){ echo "[$(date -Is)] conduct-hermes: $*" | tee -a "$LOG" >&2; }
@@ -145,7 +151,7 @@ drain_queue(){
 
   # Deterministic state transitions run serially. They may enqueue more transitions, which this
   # same loop drains before any worker dispatch, preserving the goal/task CAS order.
-  while :; do
+  while [ "$WORK_ONLY" = 0 ]; do
     if [ "$PAUSED_SAFE" = 1 ]; then
       queue_file="$(python3 "$ROOT/scripts/decision-queue.py" claim-pending --kind non-work \
         --verb noop --verb pilot-plan-propose --verb pilot-plan-approve --verb pilot-window-open \
@@ -163,6 +169,7 @@ drain_queue(){
   done
 
   [ "$PAUSED_SAFE" = 0 ] || return "$aggregate"
+  [ "$NON_WORK_ONLY" = 0 ] || return "$aggregate"
 
   # Work decisions remain ordinary actions through this same actuator. The only difference is
   # that independent projects may occupy separate bounded slots. One slot per project plus the

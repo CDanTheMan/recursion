@@ -5,6 +5,12 @@ export LC_ALL=C RECURSION_NO_NOTIFY=1
 SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
+# Phase 4 infrastructure controls are hermetic. The Linux proof test reports an explicit skip
+# off-box or without the required root/systemd capability; it never mutates a live host.
+python3 "$SRC/scripts/tests/provider-egress.test.py"
+python3 "$SRC/scripts/tests/backup-offsite.test.py"
+python3 "$SRC/scripts/tests/phase4-linux-proof.test.py"
+
 # Every tracked active project has one complete, unique topic pilot, and both record kinds remain
 # valid v1 control-state objects with additive Phase 4 metadata.
 RECURSION_ROOT="$SRC" python3 "$SRC/scripts/project-pilot.py" verify-registry >/dev/null

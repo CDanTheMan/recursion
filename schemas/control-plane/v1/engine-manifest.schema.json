@@ -107,6 +107,11 @@
         "policy": {
           "const": "provider-only"
         },
+        "profile": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,63}$",
+          "description": "Optional Phase 4 provider profile. When present, its authorities must exactly match endpoints and its proxy remains disabled until human deployment."
+        },
         "endpoints": {
           "type": "array",
           "items": {

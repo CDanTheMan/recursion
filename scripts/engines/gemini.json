@@ -7,7 +7,7 @@
   "model": { "required": false, "argv_suffix": ["--model", "{{MODEL}}"] },
   "roles": ["implementer", "verifier"],
   "billing": { "basis": "metered", "provider": "google-gemini" },
-  "network": { "policy": "provider-only", "endpoints": ["generativelanguage.googleapis.com"] },
+  "network": { "policy": "provider-only", "profile": "google-gemini", "endpoints": ["generativelanguage.googleapis.com"] },
   "availability_probe": null,
   "concurrency_cap": null,
   "env_passthrough": ["GEMINI_API_KEY"]

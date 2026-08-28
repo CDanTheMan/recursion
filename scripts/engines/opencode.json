@@ -26,6 +26,7 @@
   },
   "network": {
     "policy": "provider-only",
+    "profile": "openrouter-via-opencode",
     "endpoints": [
       "openrouter.ai",
       "api.deepseek.com"
