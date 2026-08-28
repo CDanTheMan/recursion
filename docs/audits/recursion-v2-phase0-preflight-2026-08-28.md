@@ -62,8 +62,20 @@ The live checkout had exactly two tracked dirty paths:
 - `state/briefs/2026-08-28.md`
 - `state/escalations.tsv`
 
-The exact binary diff stream SHA-256 was
-`42fa68b7d5d0f09be4d1824998dcd4e50984fea5acceca9f869d487bb7e361b9`.
+The original remote observer reported the binary diff stream SHA-256 as
+`42fa68b7d5d0f09be4d1824998dcd4e50984fea5acceca9f869d487bb7e361b9`. Its raw
+stream was not retained, and an independent review correctly found that this formatting-dependent
+digest could not be reproduced from the abbreviated `index` lines in the excerpt below. It remains
+an observation, not the canonical witness.
+
+The canonical reconstruction is
+`git diff --full-index --binary live/loop-auto 1514ab3 -- state/briefs/2026-08-28.md
+state/escalations.tsv`. Its byte-exact stream is stored as
+`docs/audits/recursion-v2-phase0-live-dirty-canonical.patch`, has SHA-256
+`3608a7e7e404b296968124df7e316e72b488c956a32c0f4b216c0b26f3fe072a`, and compares
+identically to a fresh invocation of that command. Commit `1514ab3` is the local preservation
+commit containing the captured live file bytes; `live/loop-auto` is the fetched committed live
+baseline. The following block is a human-readable excerpt only.
 
 ```diff
 diff --git a/state/briefs/2026-08-28.md b/state/briefs/2026-08-28.md
@@ -127,25 +139,54 @@ All observed active project working trees other than Recursion were clean. Obser
 
 `santa-clara-construction` remained pending and absent.
 
+Explicit dispositions for the observations above are:
+
+- `recursion`: preserve live `loop/auto` at `03c8fa4b...` and its two dirty paths; the committed
+  history was fetched and merged only into this disposable WIP branch. Do not fast-forward or
+  rewrite the live checkout. `928e221b...` is the authenticated default-branch observation, not
+  deployment authority; a future deployment window must fetch again and reconcile newer state.
+- `golden-stallion`, `golden-stallion-extension`, `ai-investment-cockpit`, and
+  `edgar-morning-brew`: preserve each observed local head without reset or deletion. Treat the
+  authenticated remote default head in the table as the only eligible basis for a *new* immutable
+  assignment after a fresh fetch. The observed local drift is not eligible for worker dispatch.
+- `golden-stallion-client`: preserve the observed local head. Treat authenticated `main`
+  `7a7462e9...` as the next-assignment basis after a fresh fetch; the old source-bound task was
+  closed rather than rebound.
+- `guerra-construction-group`: local and authenticated default heads were already identical;
+  preserve `977bd4e7...`, with no task or publication authorized by this audit.
+- `chiron`: preserve the observed local duplicate and its history untouched. The authenticated
+  default head `35c836b5...` is the source observation; cleanup remains forbidden until the Phase 9
+  parity, reference, migration, and independent-review gates pass.
+- `santa-clara-construction`: no checkout or commit existed to reconcile. Keep it pending; no task
+  may infer or manufacture a source ref.
+
 `state/leases` contained no entries. The eight paths under `state/.locks` were zero-byte regular
 files used as `flock(2)` lock targets, not lease records. Two short-lived, PID-owned control locks
 (`hermes-control.lock` and `decision-queue.lock`) were observed during an awareness cycle and
 released before their process details could be sampled. No worker process or unowned lease was
 observed. A later sample showed no matching control process and no held `state/.locks` flock. The
-transient sample aligned with the configured six-hour `hermes-decide.sh` cadence; confirming that
-its PAUSE path remained awareness-only is reserved for the Linux evidence run.
+transient sample aligned with the configured six-hour `hermes-decide.sh` cadence.
 
-The stale GSC source-bound goal/task was closed in the WIP review candidate: the pilot descriptor
-is `paused`, the v2 goal is `abandoned`, and its ready task is `stale`. The older unpinned goal/task
-was also closed as superseded. The authenticated current `main` head is
+A read-only Linux follow-up at `2026-08-28T21:39:47Z` re-witnessed the same PAUSE hash and live
+HEAD, found no lease entries, no worker/lease process, and no held `state/.locks` flock. Root's
+crontab schedules `hermes-decide.sh` every six hours. The four dated decision-log entries report
+only an exact authenticated Head-Hermes window decision without a model call; the dated cycle log
+repeatedly records `PAUSED`, fetch/status-only repository observation, and `skipping
+plan/drain/conduct (execution)`. The 21:15 cycle also preserved Git state and skipped execution.
+This closes the transient-lock question as awareness-only for the observed Linux interval; it is
+not a claim about a future deployment.
+
+The stale GSC source-bound goal/task was closed through the canonical crash-consistent transition
+path: the pilot descriptor and v2 goal share transition `transition-e5b33cc2...`; the v2 task is
+stale through `transition-04d2903b...`; and both goal transitions have separate durable
+`goal-terminal` events. The older unpinned goal/task was closed as superseded through
+`transition-9ce1f6b9...` and `transition-7ef28086...`. Projection versions and event sequences were
+advanced rather than edited in place. The authenticated current `main` head is
 `7a7462e97bc4efaa26faf2f9614f948145c9c8fb`; no state record was silently rebound to it. A future
 attempt requires a new task and immutable assignment.
 
 ## Remaining Phase 0 gate work
 
-- convert authenticated remote-head drift into explicit source dispositions before any pilot;
-- confirm the transient PAUSE-time control locks are awareness-only in a Linux evidence run;
-- independently review the captured dirty-state disposition and later drift handling;
 - validate the merged candidate and this rollback procedure independently.
 
 Until those items pass, Phase 0 remains in progress and no live deployment or PAUSE transition is

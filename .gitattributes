@@ -5,3 +5,5 @@ scripts/notify.sh text eol=lf
 scripts/install-cron.sh text eol=lf
 # Parser-read registry: the last column must not grow a CR on Windows checkouts.
 state/portfolio.tsv text eol=lf
+# This byte-exact Git patch intentionally contains the required single-space context markers.
+docs/audits/recursion-v2-phase0-live-dirty-canonical.patch text eol=lf -whitespace

@@ -1,5 +1,5 @@
 schema_version: 1
-version: 1
+version: 2
 id: task-gsc-0x6c-shadetops-underemission
 project_id: golden-stallion-client
 project: golden-stallion-client
@@ -28,8 +28,10 @@ repo: /opt/golden-stallion-client
 workdir: .
 autonomy: auto
 status: stale
-event_seq: 2
-last_transition_id: transition-d3ba1fb540570277f2462fe2f9fa639a
+event_seq: 3
+last_transition_id: transition-7ef2808676e3bdf2c1b242cdc9efe7f8
+transition_reason: phase0-superseded-unpinned-source
+transition_at: 2026-08-28T21:36:40Z
 resolution: Closed during Recursion v2 Phase 0 because the legacy task has no immutable source assignment and was superseded by a later source-bound attempt.
 
 Adjust renderer implementation to reduce verified 0x6c shade-tops overlay under-emission while preserving conformance behavior.

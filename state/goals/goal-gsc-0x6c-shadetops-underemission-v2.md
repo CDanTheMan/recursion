@@ -1,5 +1,5 @@
 schema_version: 1
-version: 1
+version: 2
 id: goal-gsc-0x6c-shadetops-underemission-v2
 project_id: golden-stallion-client
 pilot_id: pilot-golden-stallion-client
@@ -19,11 +19,15 @@ source_branch: main
 charter_sha256: 006bef38a57a453b25ec56fb7c76bb8e0f4782fe4f7a8655881c58cc3fc547ed
 budget: {"max_concurrency":1,"max_cost_usd":0,"max_failures":1,"max_publish_attempts":0,"max_review_queue":1,"max_task_attempts":1,"max_tokens":45000,"max_wall_clock_seconds":1800,"publication_required":false}
 started_at_epoch: 1786725203
-terminal_reported: 0
+terminal_reported: 1
 seed_manifest: .seedlist
 seed_manifest_sha256: 924ff916e705ba96689fe3ebc901c63c40d89c273ed10858e2109ab7c7630dc4
 seed: user-client/render/data/models
 seed_digest: fe5df2007ef8b345c7218a26c72e0f30510a05213c389b1465853643d3ee62dd
-event_seq: 2
-last_transition_id: transition-136910b065ea601ed6b96a1704148d01
+event_seq: 3
+last_transition_id: transition-e5b33cc2c55238e4cb584007428a112a
+last_transition_at: 2026-08-28T21:36:39Z
+last_transition_reason: phase0-source-head-stale
+last_transition_from: active
+finished_at: 2026-08-28T21:36:39Z
 resolution: Phase 0 closed this goal as stale; source_head ad4bb39a8cf3a9f3ad7e17b21dd89fcdf4252b39 is not the authenticated current main head 7a7462e97bc4efaa26faf2f9614f948145c9c8fb and may not be silently rebound.

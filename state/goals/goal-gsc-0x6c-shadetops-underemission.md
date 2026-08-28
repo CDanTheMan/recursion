@@ -1,5 +1,5 @@
 schema_version: 1
-version: 1
+version: 2
 id: goal-gsc-0x6c-shadetops-underemission
 project_id: golden-stallion-client
 pilot_id: pilot-golden-stallion-client
@@ -12,7 +12,11 @@ acceptance_suite: node user-client/render/tools/native-diff.cjs --metric
 falsifier: The native-diff metric does not show a reduced 0x6c under-emission or protected paths are modified.
 budget: {"max_concurrency":1,"max_cost_usd":0,"max_failures":1,"max_publish_attempts":0,"max_review_queue":1,"max_task_attempts":1,"max_tokens":45000,"max_wall_clock_seconds":1800,"publication_required":false}
 started_at_epoch: 1786583004
-terminal_reported: 0
-event_seq: 2
-last_transition_id: transition-d3ba1fb540570277f2462fe2f9fa639a
+terminal_reported: 1
+event_seq: 3
+last_transition_id: transition-9ce1f6b9f77f5764097d06ea09317158
+last_transition_at: 2026-08-28T21:36:40Z
+last_transition_reason: phase0-superseded-unpinned-source
+last_transition_from: active
+finished_at: 2026-08-28T21:36:40Z
 resolution: Superseded by the v2 source-bound attempt and closed during Recursion v2 Phase 0; this unpinned legacy goal must not resume.
