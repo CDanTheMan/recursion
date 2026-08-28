@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import sys
@@ -17,6 +19,11 @@ import repository_contract as rc
 def git(repo: Path, *args: str) -> str:
     result = subprocess.run(["git", "-C", str(repo), *args], text=True, capture_output=True, check=True)
     return result.stdout.strip()
+
+
+def git_raw(repo: Path, *args: str) -> str:
+    result = subprocess.run(["git", "-C", str(repo), *args], text=True, capture_output=True, check=True)
+    return result.stdout
 
 
 class RepositoryContractTests(unittest.TestCase):
@@ -58,11 +65,26 @@ class RepositoryContractTests(unittest.TestCase):
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-qm", "candidate")
         commit = git(self.repo, "rev-parse", "HEAD")
-        return {
+        candidate = {
             "project_id": "test-project", "task_id": "task-one", "source_branch": "main",
             "source_sha": self.source, "external_branch": "cursor/task-one",
-            "candidate_commit": commit, "verified": True, "idempotency_key": "dispatch-1",
+            "candidate_commit": commit, "idempotency_key": "dispatch-1",
         }
+        candidate["verification_receipt"] = self.receipt(candidate)
+        return candidate
+
+    def receipt(self, candidate: dict[str, object]) -> dict[str, object]:
+        diff = git_raw(self.repo, "diff", "--binary", str(candidate["source_sha"]), str(candidate["candidate_commit"]))
+        paths = [item for item in git(self.repo, "diff", "--name-only", str(candidate["source_sha"]), str(candidate["candidate_commit"])).splitlines() if item]
+        body = {
+            "schema": "recursion-controller-verifier-receipt/v1", "project_id": "test-project",
+            "task_id": candidate["task_id"], "source_sha": candidate["source_sha"],
+            "candidate_commit": candidate["candidate_commit"],
+            "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(),
+            "scope_digest": rc._json_digest(paths), "gate_digest": rc._json_digest(self.contract["gate_commands"]),
+            "verdict": "pass", "verifier": "controller-verifier", "provenance": "recursion-controller",
+        }
+        return {**body, "receipt_digest": rc._json_digest(body)}
 
     def test_descriptor_and_exact_source_admission(self) -> None:
         rc.validate_project_descriptor(self.contract)
@@ -78,6 +100,25 @@ class RepositoryContractTests(unittest.TestCase):
                 "id": "task-three", "source_branch": "main", "source_sha": self.source,
                 "allowed_paths": ["apps/chiron"],
             }, self.repo)
+        with self.assertRaisesRegex(rc.ContractError, "widens"):
+            rc.admit_task(self.contract, {
+                "id": "task-four", "source_branch": "main", "source_sha": self.source,
+                "allowed_paths": ["."],
+            }, self.repo)
+
+    def test_runtime_descriptor_uniqueness_and_namespace_overlap(self) -> None:
+        invalid_repo = dict(self.contract, repo=7)
+        with self.assertRaisesRegex(rc.ContractError, "repo"):
+            rc.validate_project_descriptor(invalid_repo)
+        duplicate_hosts = dict(self.contract, eligible_hosts=["gs-recursion", "gs-recursion"])
+        with self.assertRaisesRegex(rc.ContractError, "eligible_hosts"):
+            rc.validate_project_descriptor(duplicate_hosts)
+        with self.assertRaisesRegex(rc.ContractError, "unique normalized"):
+            rc.validate_project_descriptor(dict(self.contract, allowed_paths=["src/", "src"]))
+        overlap = dict(self.contract, external_branch_patterns=["recursion/*"])
+        with self.assertRaisesRegex(rc.ContractError, "overlaps"):
+            rc.validate_project_descriptor(overlap)
+        self.assertEqual(rc.branch_kind(self.contract, "recursion/task/task-one"), "task")
 
     def test_executor_branch_rules(self) -> None:
         with self.assertRaisesRegex(rc.ContractError, "default branch"):
@@ -86,6 +127,13 @@ class RepositoryContractTests(unittest.TestCase):
             rc.branch_kind(self.contract, "recursion/integration")
         self.assertEqual(rc.branch_kind(self.contract, "cursor/task-one"), "external")
         self.assertEqual(rc.task_branch(self.contract, "task-one"), "recursion/task/task-one")
+
+    def test_all_new_generation_fields_reject_legacy_chiron(self) -> None:
+        for field in ("workdir", "acceptance", "gate_command", "gate_commands", "seed", "goal"):
+            task = {"id": "task-one", "source_branch": "main", "source_sha": self.source,
+                    "allowed_paths": ["src"], field: ".\\apps\\chiron/"}
+            with self.subTest(field=field), self.assertRaisesRegex(rc.ContractError, "apps/chiron"):
+                rc.admit_task(self.contract, task, self.repo)
 
     def test_verified_import_is_idempotent_and_cas(self) -> None:
         candidate = self.candidate()
@@ -103,11 +151,36 @@ class RepositoryContractTests(unittest.TestCase):
         git(self.repo, "commit", "-qm", "other")
         changed["candidate_commit"] = git(self.repo, "rev-parse", "HEAD")
         changed["external_branch"] = "cursor/other"
+        changed["verification_receipt"] = self.receipt(changed)
         with self.assertRaisesRegex(rc.ContractError, "different candidate"):
             rc.import_candidate(self.contract, changed, self.repo)
 
+    def test_import_race_reconciles_identical_winner_and_receipt_is_required(self) -> None:
+        candidate = self.candidate()
+        missing_receipt = dict(candidate)
+        missing_receipt.pop("verification_receipt")
+        with self.assertRaisesRegex(rc.ContractError, "verification receipt"):
+            rc.verify_candidate(self.contract, missing_receipt, self.repo)
+        winner = candidate["candidate_commit"]
+        original = rc._git
+        raced = {"update": False}
+
+        def race(repo: Path, *args: str):
+            if args and args[0] == "update-ref" and not raced["update"]:
+                raced["update"] = True
+                original(repo, "update-ref", "refs/heads/recursion/task/task-one", winner, "0" * 40)
+                return subprocess.CompletedProcess(["git"], 1, "", "simulated CAS loss")
+            return original(repo, *args)
+
+        with mock.patch.object(rc, "_git", side_effect=race):
+            result = rc.import_candidate(self.contract, candidate, self.repo)
+        self.assertEqual(result["status"], "idempotent")
+
     def test_scope_and_stale_classification(self) -> None:
         candidate = self.candidate()
+        no_receipt = dict(candidate)
+        no_receipt.pop("verification_receipt")
+        self.assertEqual(rc.classify_stale_base(self.contract, no_receipt, self.repo), "unauthorized-result")
         bad = dict(candidate)
         git(self.repo, "checkout", "-qb", "cursor/bad")
         (self.repo / "outside.txt").write_text("no\n", encoding="utf-8")

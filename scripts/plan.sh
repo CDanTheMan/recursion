@@ -108,35 +108,58 @@ WORKDIR="$(hget workdir)"; ACC="$(hget acceptance)"; SEED="$(hget seed)"
 AM="$(hget automerge)";    AMS="$(hget automerge_scope)"; MODEL="$(hget model)"
 GOAL_ID="$(hget goal_id)"; DEPS="$(hget dependencies)"; ALLOWED="$(hget allowed_paths)"
 NON_GOALS="$(hget non_goals)"; WORKER_CLASS="$(hget worker_class)"
+GATE_COMMANDS="$(hget gate_commands)"
 GOAL_ID="${GOAL_ID:-goal-$WS}"
 # Phase 2 repository boundary. The frozen in-repository Chiron tree is historical residue, not a
 # destination for new work. A canonical Chiron project may still be planned from /opt/chiron;
 # only the legacy apps/chiron path is refused.
-case " ${WORKDIR:-} ${ALLOWED:-} " in
-  *" apps/chiron "*|*" apps/chiron/"*)
+contains_legacy_chiron(){
+  # Normalize separators, redundant ./ and trailing slashes before matching every command/path
+  # field. This catches shell, Windows, and comma-separated roadmap spellings alike.
+  printf '%s\n' "$1" | tr '\\' '/' | sed -E 's#/{2,}#/#g; s#(^|[[:space:]])\./#\1#g; s#/$##' \
+    | grep -qiE "(^|[[:space:]\"'=/:])apps/chiron([/[:space:]\"'=,:]|$)"
+}
+for generated_field in "$WORKDIR" "$ALLOWED" "$ACC" "$GATE_COMMANDS" "$SEED" "$REPO" "$GOAL" "$NON_GOALS" "$ENGINE" "$MODEL" "$WORKER_CLASS" "$DEPS"; do
+  if contains_legacy_chiron "$generated_field"; then
     echo "plan: REFUSED new task targeting historical apps/chiron; use the canonical Chiron project repository" >&2
     exit 6
-    ;;
-esac
+  fi
+done
 # Registered projects must bind the task to the exact current source tip. Disposable planner
 # fixtures intentionally have no descriptor/checkout and retain their v1 compatibility path.
-SOURCE_BRANCH=""; SOURCE_SHA=""; PROJECT_CONFIG=""
+SOURCE_BRANCH=""; SOURCE_SHA=""; PROJECT_CONFIG=""; REPO_CANONICAL="$REPO"
 for candidate_config in state/project-config/*.json; do
   [ -f "$candidate_config" ] || continue
-  if [ "$(python3 - "$candidate_config" "$REPO" <<'PY'
+  project_match="$(python3 - "$candidate_config" "$REPO" <<'PY'
 import json,sys
+from pathlib import Path
 try:
     value=json.load(open(sys.argv[1],encoding='utf-8'))
-    print('yes' if value.get('repo') == sys.argv[2] else 'no')
+    configured_raw=value.get('repo')
+    if not isinstance(configured_raw,str) or not configured_raw.strip():
+        print('invalid')
+    else:
+        configured=Path(configured_raw).expanduser().resolve(strict=False)
+        requested=Path(str(sys.argv[2] or '')).expanduser().resolve(strict=False)
+        print(value.get('status','invalid') if configured == requested else 'no')
 except (OSError,ValueError):
-    print('no')
+    print('invalid')
 PY
-)" = yes ]; then
-    PROJECT_CONFIG="$candidate_config"; break
-  fi
+)"
+  case "$project_match" in active) PROJECT_CONFIG="$candidate_config"; break;; esac
 done
 if [ -n "$PROJECT_CONFIG" ]; then
   [ -d "${REPO:-}/.git" ] || { echo "plan: registered project checkout is unavailable; exact source SHA cannot be admitted" >&2; exit 74; }
+  observed_root="$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null || true)"
+  canonical_root="$(python3 - "$REPO" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).expanduser().resolve(strict=False))
+PY
+)"
+  [ -n "$observed_root" ] && [ "$canonical_root" = "$observed_root" ] \
+    || { echo "plan: registered project path is not the exact Git worktree root" >&2; exit 74; }
+  REPO_CANONICAL="$canonical_root"
   SOURCE_BRANCH="$(python3 - "$PROJECT_CONFIG" <<'PY'
 import json,sys
 print(json.load(open(sys.argv[1],encoding='utf-8')).get('default_branch',''))
@@ -172,7 +195,7 @@ tmp_task="$(mktemp "$TASKDIR/.${ID}.tmp.XXXXXX")"
   echo "goal: $GOAL"
   echo "engine: ${ENGINE:-claude}"
   echo "worker_class: ${WORKER_CLASS:-${ENGINE:-claude}}"
-  [ -n "$REPO" ]    && echo "repo: $REPO"
+  [ -n "$REPO" ]    && echo "repo: ${REPO_CANONICAL:-$REPO}"
   [ -n "$SSHKEY" ]  && echo "sshkey: $SSHKEY"
   [ -n "$SEED" ]    && echo "seed: $SEED"
   [ -n "$SOURCE_BRANCH" ] && echo "source_branch: $SOURCE_BRANCH"

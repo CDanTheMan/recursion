@@ -48,6 +48,57 @@ def _json_digest(value: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _normalized_path(value: object, *, field: str = "path") -> str:
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise ContractError(f"{field} must be a non-empty path")
+    value = value.replace("\\", "/")
+    while value.startswith("./"):
+        value = value[2:]
+    value = re.sub(r"/{2,}", "/", value).rstrip("/") or "."
+    path = PurePosixPath(value)
+    if path.is_absolute() or ".." in path.parts:
+        raise ContractError(f"{field} is unsafe")
+    return "." if str(path) in {"", "."} else str(path)
+
+
+def _normalized_paths(values: object, *, field: str) -> list[str]:
+    if not isinstance(values, list) or not values:
+        raise ContractError(f"{field} must be a non-empty string array")
+    normalized = [_normalized_path(value, field=field) for value in values]
+    if len(set(normalized)) != len(normalized):
+        raise ContractError(f"{field} must contain unique normalized paths")
+    return normalized
+
+
+def _path_subset(child: str, parent: str) -> bool:
+    child_path = PurePosixPath(child)
+    parent_path = PurePosixPath(parent)
+    return parent == "." or child == parent or parent_path in child_path.parents
+
+
+def _gate_digest(contract: dict[str, Any]) -> str:
+    declared = contract.get("gate_digest")
+    if declared is not None:
+        if not isinstance(declared, str) or not re.fullmatch(r"[0-9a-f]{64}", declared):
+            raise ContractError("gate_digest must be a lowercase SHA-256 digest")
+        return declared
+    return _json_digest(contract["gate_commands"])
+
+
+def _require_path_subset(child: list[str], parent: list[str], *, field: str) -> list[str]:
+    if any(not any(_path_subset(path, root) for root in parent) for path in child):
+        raise ContractError(f"{field} widens the descriptor allowed_paths")
+    return child
+
+
+def _contains_legacy_chiron(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = re.sub(r"/{2,}", "/", value.replace("\\", "/")).lower()
+    normalized = re.sub(r"(^|[\s'\"=:])\./", r"\1", normalized)
+    return re.search(r"(^|[\s'\"=/:])apps/chiron([/\s'\"=,:]|$)", normalized) is not None
+
+
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env = {
         key: value for key, value in os.environ.items()
@@ -98,6 +149,8 @@ def _contract_fields(contract: dict[str, Any]) -> dict[str, Any]:
         raise ContractError(f"project contract is missing fields: {', '.join(missing)}")
     if not isinstance(contract["id"], str) or not IDENT.fullmatch(contract["id"]):
         raise ContractError("project id is invalid")
+    if not isinstance(contract["repo"], str) or not contract["repo"].strip():
+        raise ContractError("project repo must be a non-empty string")
     for key in ("default_branch", "integration_branch"):
         value = contract[key]
         if not isinstance(value, str) or not BRANCH.fullmatch(value) or value.startswith("/"):
@@ -113,16 +166,25 @@ def _contract_fields(contract: dict[str, Any]) -> dict[str, Any]:
     patterns = contract["external_branch_patterns"]
     if not isinstance(patterns, list) or not patterns or any(
         not isinstance(item, str) or not item or item in {"*", "**"} for item in patterns
-    ):
+    ) or len(set(patterns)) != len(patterns):
         raise ContractError("external_branch_patterns must be a non-empty restricted list")
+    task_probe = pattern.replace("{task_id}", "probe")
+    task_prefix, task_suffix = pattern.split("{task_id}")
+    if any(fnmatch.fnmatchcase(task_probe, item)
+           or item.startswith(task_prefix)
+           or task_prefix.startswith(item.rstrip("*")) for item in patterns):
+        raise ContractError("external branch namespace overlaps task branch namespace")
     if contract["publication_policy"] != "verified-integration-only":
         raise ContractError("unsupported publication policy")
     if contract["source_policy"] != "exact-sha":
         raise ContractError("unsupported source policy")
-    for key in ("allowed_paths", "gate_commands", "eligible_hosts", "eligible_pools"):
+    contract["allowed_paths"] = _normalized_paths(contract["allowed_paths"], field="allowed_paths")
+    for key in ("gate_commands", "eligible_hosts", "eligible_pools"):
         values = contract[key]
-        if not isinstance(values, list) or any(not isinstance(item, str) or not item for item in values):
+        if not isinstance(values, list) or any(not isinstance(item, str) or not item for item in values) \
+                or len(set(values)) != len(values):
             raise ContractError(f"{key} must be a string array")
+    _gate_digest(contract)
     return contract
 
 
@@ -154,10 +216,6 @@ def branch_kind(contract: dict[str, Any], branch: str) -> str:
         raise ContractError("executor may not target the default branch", "unauthorized-result")
     if branch == contract["integration_branch"]:
         raise ContractError("executor may not target the integration branch", "unauthorized-result")
-    if branch == task_branch(contract, "probe")[:-5] + "probe":
-        return "task"
-    if any(fnmatch.fnmatchcase(branch, pattern) for pattern in contract["external_branch_patterns"]):
-        return "external"
     # A resolved task branch is checked by constructing it from the task id.  This avoids
     # accepting arbitrary refs under a broad prefix when a project chose a custom pattern.
     prefix, suffix = contract["task_branch_pattern"].split("{task_id}")
@@ -165,6 +223,8 @@ def branch_kind(contract: dict[str, Any], branch: str) -> str:
         task_id = branch[len(prefix):len(branch) - len(suffix) if suffix else None]
         if task_id and IDENT.fullmatch(task_id):
             return "task"
+    if any(fnmatch.fnmatchcase(branch, pattern) for pattern in contract["external_branch_patterns"]):
+        return "external"
     raise ContractError("branch is outside the project execution namespaces", "unauthorized-result")
 
 
@@ -206,13 +266,23 @@ def admit_task(contract: dict[str, Any], task: dict[str, Any], repo: Path, *, ne
     if observed != source_sha:
         raise ContractError("source branch moved after exact SHA admission", "source-unavailable")
     declared_repo = task.get("source_repository", task.get("repo", contract["repo"]))
-    if declared_repo != contract["repo"]:
+    try:
+        same_repo = Path(str(declared_repo)).expanduser().resolve(strict=False) == \
+            Path(contract["repo"]).expanduser().resolve(strict=False)
+    except (OSError, ValueError):
+        same_repo = False
+    if not same_repo:
         raise ContractError("task source repository does not match project", "unauthorized-result")
-    allowed = task.get("allowed_paths", contract["allowed_paths"])
-    if not isinstance(allowed, list) or any(not isinstance(item, str) for item in allowed):
-        raise ContractError("task allowed_paths is invalid")
-    if new_generation and any(item == "apps/chiron" or item.startswith("apps/chiron/") for item in allowed):
+    allowed = _normalized_paths(task.get("allowed_paths", contract["allowed_paths"]), field="task allowed_paths")
+    if new_generation and any(_contains_legacy_chiron(task.get(key)) for key in (
+        "workdir", "acceptance", "gate_command", "gate_commands", "seed", "repo", "goal",
+    )):
         raise ContractError("new task generation may not target apps/chiron", "unauthorized-result")
+    if new_generation and any(_contains_legacy_chiron(item) for item in contract["gate_commands"]):
+        raise ContractError("new task generation may not target apps/chiron", "unauthorized-result")
+    if new_generation and any(_contains_legacy_chiron(item) for item in allowed):
+        raise ContractError("new task generation may not target apps/chiron", "unauthorized-result")
+    _require_path_subset(allowed, contract["allowed_paths"], field="task allowed_paths")
     target = task.get("target_branch")
     if target is not None:
         branch_kind(contract, target)
@@ -256,20 +326,49 @@ def verify_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: 
     if changed.returncode:
         raise ContractError("candidate diff could not be measured", "verification-unavailable")
     paths = [item for item in changed.stdout.splitlines() if item]
-    allowed = candidate.get("allowed_paths", contract["allowed_paths"])
-    if not isinstance(allowed, list) or any(not _path_allowed(path, allowed) for path in paths):
+    allowed = _normalized_paths(candidate.get("allowed_paths", contract["allowed_paths"]), field="candidate allowed_paths")
+    _require_path_subset(allowed, contract["allowed_paths"], field="candidate allowed_paths")
+    if any(not _path_allowed(path, allowed) for path in paths):
         raise ContractError("candidate changed a path outside allowed_paths", "unauthorized-result")
-    verified = candidate.get("verified") is True or (
-        isinstance(candidate.get("verification"), dict)
-        and candidate["verification"].get("status") == "pass"
-        and candidate["verification"].get("commit") in {None, commit}
-    )
-    if not verified:
-        raise ContractError("candidate lacks independent passing verification", "unauthorized-result")
+    receipt = candidate.get("verification_receipt")
+    if not isinstance(receipt, dict):
+        raise ContractError("candidate lacks a controller verification receipt", "unauthorized-result")
+    _verify_receipt(contract, candidate, receipt, source, commit, paths, repo)
     result = dict(candidate)
+    result["allowed_paths"] = allowed
     result["changed_paths"] = paths
     result["candidate_digest"] = _json_digest({key: result[key] for key in sorted(result) if key != "candidate_digest"})
     return result
+
+
+def _verify_receipt(contract: dict[str, Any], candidate: dict[str, Any], receipt: dict[str, Any],
+                    source: str, commit: str, paths: list[str], repo: Path) -> None:
+    """Validate the controller-verifier receipt, including its tamper-evident digest binding."""
+    required = {"schema", "project_id", "task_id", "source_sha", "candidate_commit", "diff_sha256",
+                "scope_digest", "gate_digest", "verdict", "verifier", "provenance", "receipt_digest"}
+    if not required.issubset(receipt):
+        raise ContractError("controller verification receipt is incomplete", "unauthorized-result")
+    if receipt.get("schema") != "recursion-controller-verifier-receipt/v1" \
+            or receipt.get("verdict") != "pass" \
+            or receipt.get("verifier") != "controller-verifier" \
+            or receipt.get("provenance") != "recursion-controller":
+        raise ContractError("controller verification receipt provenance is not trusted", "unauthorized-result")
+    diff = _git(repo, "diff", "--binary", source, commit)
+    if diff.returncode:
+        raise ContractError("candidate diff could not be hashed", "verification-unavailable")
+    expected = {
+        "schema": receipt["schema"], "project_id": contract["id"], "task_id": candidate["task_id"],
+        "source_sha": source, "candidate_commit": commit,
+        "diff_sha256": hashlib.sha256(diff.stdout.encode()).hexdigest(),
+        "scope_digest": _json_digest(sorted(paths)), "gate_digest": _gate_digest(contract),
+        "verdict": "pass", "verifier": "controller-verifier", "provenance": "recursion-controller",
+    }
+    for key, value in expected.items():
+        if receipt.get(key) != value:
+            raise ContractError(f"controller receipt binding mismatch: {key}", "unauthorized-result")
+    body = {key: receipt[key] for key in expected}
+    if receipt.get("receipt_digest") != _json_digest(body):
+        raise ContractError("controller verification receipt digest is invalid", "unauthorized-result")
 
 
 @contextlib.contextmanager
@@ -311,8 +410,16 @@ def import_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: 
     else:
         created = _git(repo, "update-ref", ref, verified["candidate_commit"], "0" * len(verified["candidate_commit"]))
         if created.returncode:
-            raise ContractError("canonical task ref changed during import", "idempotency-conflict")
-        status = "imported"
+            # Another coordinator may have won the same import race. Re-read the ref and
+            # reconcile an identical winner; only a different winner is a real conflict.
+            raced = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
+            raced_commit = raced.stdout.strip() if raced.returncode == 0 else ""
+            if raced_commit == verified["candidate_commit"]:
+                status = "idempotent"
+            else:
+                raise ContractError("canonical task ref changed during import", "idempotency-conflict")
+        else:
+            status = "imported"
     record = {"schema": SCHEMA, "idempotency_key": verified.get("idempotency_key", digest),
               "candidate_digest": digest, "task_id": verified["task_id"],
               "canonical_ref": ref.removeprefix("refs/heads/"),
@@ -331,6 +438,10 @@ def import_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: 
 
 def classify_stale_base(contract: dict[str, Any], candidate: dict[str, Any], repo: Path) -> str:
     """Classify a verified candidate against current default/integration ancestry."""
+    try:
+        candidate = verify_candidate(contract, candidate, repo, allow_canonical=True)
+    except ContractError as exc:
+        return exc.code if exc.code in OUTCOMES else "unauthorized-result"
     try:
         source = candidate["source_sha"]
         commit = candidate["candidate_commit"]
