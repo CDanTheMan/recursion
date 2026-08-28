@@ -214,9 +214,10 @@ checks):
   a model was passed). `env_passthrough` values ride a root-owned `0600`
   `EnvironmentFile` (removed on cleanup), never the systemd-run command line — argv is
   world-readable in `/proc` for the run's whole duration and these are API keys.
-- The claude-only CONNECT-proxy env stays claude-only. Plugin engines run inside the
-  same provider-only netns; their egress works only once the box's provider allowlist
-  includes their endpoints (deployment step below).
+- Provider egress is profile-bound and generic: the admitted plan supplies the provider,
+  endpoint set, namespace, and loopback proxy port. Every provider-only engine receives
+  only that profile's proxy environment; no Claude/Anthropic default or engine-specific
+  proxy injection is permitted.
 - Logical test mode (`RECURSION_TEST_WORKER=logical`, /tmp-only) gets the same generic
   branch so hermetic controls can exercise a stub executable on PATH.
 

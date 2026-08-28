@@ -25,6 +25,7 @@
   },
   "network": {
     "policy": "provider-only",
+    "profile": "sentry-local",
     "endpoints": []
   },
   "availability_probe": {

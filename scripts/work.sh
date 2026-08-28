@@ -40,9 +40,11 @@ pause_checkpoint(){
 }
 
 terminate_worker_group(){
-  local pgid="$1" i
-  kill -TERM -- "-$pgid" 2>/dev/null || true
-  for i in $(seq 1 50); do
+  local pgid="$1" signal="${2:-TERM}" grace="${3:-5}" i
+  case "$signal" in TERM|INT) ;; *) log "unsupported cancellation signal=$signal"; return 1 ;; esac
+  case "$grace" in ''|*[!0-9]*) return 1 ;; esac
+  kill -"$signal" -- "-$pgid" 2>/dev/null || true
+  for i in $(seq 1 $((grace * 10))); do
     kill -0 -- "-$pgid" 2>/dev/null || return 0
     sleep 0.1
   done
@@ -99,7 +101,7 @@ STRICT_PHASE5=0
 DEADLINE_SECONDS="${DEADLINE_SECONDS:-${RECURSION_WORKER_TIMEOUT_S:-3600}}"
 VERIFIER_DEADLINE_SECONDS="${VERIFIER_DEADLINE_SECONDS:-${RECURSION_VERIFIER_TIMEOUT_S:-1800}}"
 NETWORK_POLICY="${NETWORK_POLICY:-provider-only}"; EXPECTED_CHANGE="${EXPECTED_CHANGE:-optional}"
-CAPACITY_POOL="${CAPACITY_POOL:-unassigned}"
+CAPACITY_POOL="${CAPACITY_POOL:-}"
 # repo: which git repo the arm builds in. Default = this repo ($ROOT). An external repo
 # (e.g. /opt/golden-stallion-client) lets the loop build another codebase; its build output
 # and loop/work/<id> branch live in THAT repo, gated by whatever acceptance the task names.
@@ -128,6 +130,7 @@ gitr(){ if [ -n "$GSSH" ]; then GIT_SSH_COMMAND="$GSSH" git -C "$REPO_DIR" "$@";
 [ -n "$ID" ] || { log "task $TASK missing 'id:'"; exit 2; }
 BRANCH="loop/work/$ID"
 BASE_COMMIT=""; CANDIDATE_OID=""; LAST_SCOPE_FILE=""; LAST_RUN_ID=""; LAST_RUN_EVIDENCE=""
+ASSIGNMENT_FILE=""; ASSIGNMENT_DIGEST=""
 IMPLEMENTER_RUN_ID=""; VERIFIER_RUN_ID=""; RESOLVED_MODEL="$MODEL"; RESOLVED_VERIFIER_MODEL=""
 LAST_USAGE_FILE=""; SEED_DIGEST_BEFORE=""
 SEED_EVIDENCE_FILE="$ROOT/state/runs/$ID-seed-$STAMP-$$.json"
@@ -494,6 +497,8 @@ validate_worker_metadata(){
   if ! RESOLVED_VERIFIER_MODEL="$(strip_alias_engine "$RESOLVED_VERIFIER_MODEL" "$VERIFIER_ENGINE")"; then
     reject_preworker_contract model-alias-engine-mismatch 2; exit $?
   fi
+  [ -n "$CAPACITY_POOL" ] && [ "$CAPACITY_POOL" != unassigned ] \
+    || { reject_preworker_contract capacity-pool-invalid 2; exit $?; }
 }
 if [ "$STRICT_PHASE5" = 1 ] && [ -n "${PILOT_ID:-}" ]; then
   validate_worker_metadata
@@ -511,11 +516,15 @@ engine_is_builtin(){ case "$1" in none|claude|hermes|gate|deepseek|openrouter) r
 plugin_probe_ok(){ # plan-file: absent probe passes; a declared probe needs a 2xx from its URL.
   # Probe from inside the provider-only namespace when it exists, so "reachable" is measured
   # where the worker will actually run, not on the controller's unrestricted network.
-  local plan="$1"
-  local -a runner=(python3)
-  if [ -e /run/netns/recursion-provider-only ] && command -v ip >/dev/null 2>&1; then
-    runner=(ip netns exec recursion-provider-only python3)
-  fi
+  local plan="$1" profile provider endpoints namespace profile_json
+  profile="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["network"]["profile"])' "$plan" 2>/dev/null || true)"
+  provider="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["billing"]["provider"])' "$plan" 2>/dev/null || true)"
+  endpoints="$(python3 -c 'import json,sys; print(" ".join(json.load(open(sys.argv[1]))["network"]["endpoints"]))' "$plan" 2>/dev/null || true)"
+  [ -n "$profile" ] && [ -n "$provider" ] || return 1
+  profile_json="$(python3 "$ROOT/scripts/provider-egress.py" "$profile" --provider "$provider" $(printf -- '--endpoint %q ' $endpoints) 2>/dev/null)" || return 1
+  namespace="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["namespace"])' "$profile_json")"
+  [ -e "/run/netns/$namespace" ] && command -v ip >/dev/null 2>&1 || return 1
+  local -a runner=(ip netns exec "$namespace" python3)
   "${runner[@]}" - "$plan" <<'PY'
 import json, os, sys, urllib.request
 plan = json.load(open(sys.argv[1]))
@@ -722,8 +731,10 @@ mk_worktree(){
     log "worktree lock contended — refusing unlocked worktree mutation"
     return 73
   fi
-  git -C "$REPO_DIR" worktree remove --force "$wt" 2>/dev/null || true
-  rm -rf "$wt" 2>/dev/null || true
+  if [ -e "$wt" ]; then
+    log "existing worktree is retained as a quarantine; refusing to remove it before proving no worker is live: $wt"
+    return 96
+  fi
   git -C "$REPO_DIR" worktree prune 2>/dev/null || true
   # Fetch latest so the task builds on the FRESHEST merged base — this is what makes work
   # ACCUMULATE across tasks (once you merge task N, task N+1 builds on top).
@@ -819,6 +830,74 @@ verify_seed_integrity(){
   observed="$(seed_digest "$1")" || { SCOPE_FAIL="declared seed integrity could not be measured"; return 1; }
   [ "$observed" = "${SEED_DIGEST_EXPECTED:-$SEED_DIGEST_BEFORE}" ] \
     || { SCOPE_FAIL="worker/gate mutated a declared read-only seed or oracle"; return 1; }
+}
+
+make_phase5_assignment(){
+  [ "$STRICT_PHASE5" = 1 ] || return 0
+  [ -n "$CAPACITY_POOL" ] && [ "$CAPACITY_POOL" != unassigned ] || { log "strict Phase 5 requires a declared capacity pool"; return 1; }
+  local impl_provider verifier_provider impl_profile verifier_profile source_branch host gate_digest
+  impl_provider="$(python3 - "$ENGINE" "${ENGINE_PLAN_IMPLEMENTER:-}" <<'PY'
+import json,sys
+engine, path = sys.argv[1:]
+if engine == "claude": print("anthropic-claude-code")
+elif path: print(json.load(open(path, encoding="utf-8"))["billing"]["provider"])
+else: print("hermes")
+PY
+  )" || return 1
+  verifier_provider="$(python3 - "$VERIFIER_ENGINE" "${ENGINE_PLAN_VERIFIER:-}" <<'PY'
+import json,sys
+engine, path = sys.argv[1:]
+if engine == "claude": print("anthropic-claude-code")
+elif path: print(json.load(open(path, encoding="utf-8"))["billing"]["provider"])
+else: print("hermes")
+PY
+  )" || return 1
+  impl_profile="$(python3 - "$ENGINE" "${ENGINE_PLAN_IMPLEMENTER:-}" <<'PY'
+import json,sys
+engine, path = sys.argv[1:]
+if engine == "claude": print("anthropic")
+elif path: print(json.load(open(path, encoding="utf-8"))["network"]["profile"])
+else: print("none")
+PY
+  )" || return 1
+  verifier_profile="$(python3 - "$VERIFIER_ENGINE" "${ENGINE_PLAN_VERIFIER:-}" <<'PY'
+import json,sys
+engine, path = sys.argv[1:]
+if engine == "claude": print("anthropic")
+elif path: print(json.load(open(path, encoding="utf-8"))["network"]["profile"])
+else: print("none")
+PY
+  )" || return 1
+  source_branch="$SOURCE_BRANCH"
+  [ -n "$source_branch" ] || source_branch="$(git -C "$REPO_DIR" symbolic-ref --short HEAD 2>/dev/null || printf 'detached')"
+  host="${RECURSION_HOST_ID:-gs-recursion}"
+  gate_digest="$(printf '%s' "$CONTRACT_DIGEST" | sha256sum | cut -d' ' -f1)"
+  ASSIGNMENT_FILE="$ROOT/state/runs/$ID-assignment-$STAMP-$$.json"
+  mkdir -p "$ROOT/state/runs"
+  ASSIGNMENT_DIGEST="$(PYTHONPATH="$ROOT/scripts" python3 - "$ASSIGNMENT_FILE" "$ID" "$PROJECT_ID" "$REPO_DIR" "$source_branch" "$BASE_COMMIT" \
+    "$SEED_MANIFEST_SHA256" "$ENGINE" "$impl_provider" "$CAPACITY_POOL" "$host" "strict-linux" "$impl_profile" \
+    "$ALLOWED_PATHS" "$gate_digest" "$impl_provider" "$RESOLVED_MODEL" "$VERIFIER_ENGINE" "$verifier_provider" \
+    "$RESOLVED_VERIFIER_MODEL" <<'PY'
+import json, os, sys, tempfile
+from assignment import digest, validate_assignment
+(path, task, project, repo, branch, sha, seed, engine, provider, pool, host, sandbox, profile,
+ paths, gate, _, model, verifier_engine, verifier_provider, verifier_model) = sys.argv[1:]
+value = {"task_id":task, "project_id":project, "source_repository":repo, "source_branch":branch,
+         "source_sha":sha, "seed_manifest_digest":seed, "engine":engine, "provider":provider,
+         "capacity_pool":pool, "model":model, "host":host, "sandbox_profile":sandbox,
+         "network_profile":profile, "allowed_paths":paths.split(), "gate_digest":gate,
+         "publication_policy":"verified-integration-only",
+         "role_assignments":{"implementer":{"engine":engine,"provider":provider,"model":model},
+                             "verifier":{"engine":verifier_engine,"provider":verifier_provider,"model":verifier_model}}}
+value = validate_assignment(value); serialized=json.dumps(value, indent=2, sort_keys=True)+"\n"
+if os.path.lexists(path): raise SystemExit("assignment path already exists")
+fd=os.open(path, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o444)
+with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
+    out.write(serialized); out.flush(); os.fsync(out.fileno())
+print(digest(value))
+PY
+  )" || return 1
+  log "immutable Phase 5 assignment=$ASSIGNMENT_FILE digest=$ASSIGNMENT_DIGEST"
 }
 
 # --- the WORKER ENVELOPE (CONTROL_PLANE.md role 4) ---------------------------------------
@@ -920,6 +999,7 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
   local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
   local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
   local evidence_dir="${11:-}" readonly="${12:-0}" engine_plan="" provider=""
+  local cancel_signal=TERM cancel_grace=5
   # Cross-engine verification (D-015): each role runs on its own contract engine.
   local active_engine="$ENGINE"
   [ "$role" != verifier ] || active_engine="$VERIFIER_ENGINE"
@@ -933,6 +1013,14 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
       if [ "$role" = verifier ]; then engine_plan="$ENGINE_PLAN_VERIFIER"; else engine_plan="$ENGINE_PLAN_IMPLEMENTER"; fi
       [ -n "$engine_plan" ] && [ -f "$engine_plan" ] || return 92 ;;
   esac
+  if [ -n "$engine_plan" ]; then
+    read -r cancel_signal cancel_grace < <(python3 - "$engine_plan" <<'PY'
+import json,sys
+c=json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["cancellation"]
+print(c["signal"], c["grace_s"])
+PY
+    ) || return 95
+  fi
   case "$active_engine" in
     claude) provider="anthropic-claude-code" ;;
     hermes) provider="hermes" ;;
@@ -986,10 +1074,11 @@ PY
   pause_checkpoint "worker launch" || return 75
   local worker_pgid rc now_epoch deadline_epoch heartbeat_epoch log_path
   local -a evidence_meta=()
-  if [ -n "$engine_plan" ]; then
+  if [ "$STRICT_PHASE5" = 1 ]; then
     evidence_meta=(--engine "$active_engine" --provider "$provider" --capacity-pool "$CAPACITY_POOL"
       --model "$resolved_model" --host "${RECURSION_HOST_ID:-gs-recursion}"
-      --sandbox-profile strict-linux --assignment-digest "$CONTRACT_DIGEST")
+      --sandbox-profile strict-linux --assignment-digest "$ASSIGNMENT_DIGEST"
+      --assignment-file "$ASSIGNMENT_FILE")
   fi
   log_path="$ARMLOG"; [ "$role" != verifier ] || log_path="$ROOT/loop/logs/$DATE-verifier-$ID-$STAMP.out"
   RECURSION_VERIFICATION_COMMIT="$commit_oid" RECURSION_IMPLEMENTER_RUN_ID="$implementer_run" \
@@ -1007,12 +1096,12 @@ PY
       "${evidence_meta[@]}" \
       ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} \
       ${implementer_run:+--implementer-run-id "$implementer_run"} ${commit_oid:+--commit-oid "$commit_oid"} \
-      >>"$LOG" 2>&1 || { terminate_worker_group "$worker_pgid"; wait "$worker_pgid" 2>/dev/null || true; return 98; }
+      >>"$LOG" 2>&1 || { terminate_worker_group "$worker_pgid" "$cancel_signal" "$cancel_grace" || return 96; wait "$worker_pgid" 2>/dev/null || true; return 98; }
   fi
   while kill -0 "$worker_pgid" 2>/dev/null; do
     if [ -f "$ROOT/state/PAUSE" ]; then
       log "PAUSE observed with $role process group $worker_pgid in flight"
-      terminate_worker_group "$worker_pgid" || true
+      terminate_worker_group "$worker_pgid" "$cancel_signal" "$cancel_grace" || { wait "$worker_pgid" 2>/dev/null || true; return 96; }
       wait "$worker_pgid" 2>/dev/null || true
       kill -0 -- "-$worker_pgid" 2>/dev/null \
         && { log "worker group still alive after cancellation"; return 96; }
@@ -1024,7 +1113,7 @@ PY
     now_epoch="$(date +%s)"
     if [ "$STRICT_PHASE5" = 1 ] && [ "$now_epoch" -ge "$deadline_epoch" ]; then
       log "$role deadline expired; terminating process group $worker_pgid"
-      terminate_worker_group "$worker_pgid" || true
+      terminate_worker_group "$worker_pgid" "$cancel_signal" "$cancel_grace" || { wait "$worker_pgid" 2>/dev/null || true; return 96; }
       wait "$worker_pgid" 2>/dev/null || true
       kill -0 -- "-$worker_pgid" 2>/dev/null && return 96
       python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed timeout 124 \
@@ -1037,7 +1126,7 @@ PY
       window_checkpoint "$role execution" || window_rc=$?
       if [ "$window_rc" -ne 0 ]; then
         log "pilot-window checkpoint stopped $role process group $worker_pgid in flight reason=$WINDOW_AUTHORITY_FAILURE"
-        terminate_worker_group "$worker_pgid" || true
+        terminate_worker_group "$worker_pgid" "$cancel_signal" "$cancel_grace" || { wait "$worker_pgid" 2>/dev/null || true; return 96; }
         wait "$worker_pgid" 2>/dev/null || true
         [ "$STRICT_PHASE5" != 1 ] || python3 "$ROOT/scripts/worker-evidence.py" finish \
           "$LAST_RUN_EVIDENCE" cancelled "$WINDOW_AUTHORITY_FAILURE" 75 >>"$LOG" 2>&1 || true
@@ -1311,7 +1400,7 @@ run_independent_verifier(){
   rm -rf "$evidence_dir"; mkdir -p "$evidence_dir"
   git -C "$REPO_DIR" worktree add --detach "$verify_wt" "$CANDIDATE_OID" >>"$LOG" 2>&1 || return 99
   if ! copy_seed_into_worktree "$verify_wt" || ! verify_seed_integrity "$verify_wt"; then
-    git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
+    git -C "$REPO_DIR" worktree remove "$verify_wt" >/dev/null 2>&1 || true
     LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
     return 99
   fi
@@ -1329,7 +1418,7 @@ Explicit non-goals: ${NON_GOALS:-none}."
       "$verifier_id" "$CANDIDATE_OID" "$impl_run" "$evidence_dir" 1; then rc=0; else rc=$?; fi
   VERIFIER_RUN_ID="$LAST_RUN_ID"
   if [ "$rc" -ne 0 ]; then
-    git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
+    [ "$rc" = 96 ] || git -C "$REPO_DIR" worktree remove "$verify_wt" >/dev/null 2>&1 || true
     LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
     return "$rc"
   fi
@@ -1339,7 +1428,7 @@ Explicit non-goals: ${NON_GOALS:-none}."
     python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed verifier-mutated-source 99 \
       --commit-oid "$CANDIDATE_OID" \
       ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} >>"$LOG" 2>&1 || true
-    git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
+    git -C "$REPO_DIR" worktree remove "$verify_wt" >/dev/null 2>&1 || true
     LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
     return 99
   fi
@@ -1347,7 +1436,7 @@ Explicit non-goals: ${NON_GOALS:-none}."
       --implementer-run "$impl_run" >"$evidence_dir/validated-verdict.json" 2>>"$LOG"; then
     python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed invalid-verdict 99 \
       --commit-oid "$CANDIDATE_OID" >>"$LOG" 2>&1 || true
-    git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
+    git -C "$REPO_DIR" worktree remove "$verify_wt" >/dev/null 2>&1 || true
     LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
     return 99
   fi
@@ -1364,7 +1453,7 @@ Explicit non-goals: ${NON_GOALS:-none}."
   python3 "$ROOT/scripts/worker-evidence.py" link-verifier "$impl_evidence" "$VERIFIER_RUN_ID" \
     "$CANDIDATE_OID" "$verdict" >>"$LOG" 2>&1 || return 98
   local verdict_value; verdict_value="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["verdict"])' "$verdict")"
-  git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
+  git -C "$REPO_DIR" worktree remove "$verify_wt" >/dev/null 2>&1 || true
   LAST_RUN_EVIDENCE="$impl_evidence"; LAST_RUN_ID="$impl_run"; IMPLEMENTER_RUN_ID="$impl_run"
   [ "$verdict_value" = pass ]
 }
@@ -1458,6 +1547,9 @@ fi
 log "worktree: $WT (branch $BRANCH)"
 BASE_COMMIT="$(git -C "$WT" rev-parse HEAD)"
 [ -n "$BASE_COMMIT" ] || phase5_reject "base evidence missing" "exact worker base commit could not be recorded"
+if ! make_phase5_assignment; then
+  phase5_reject "assignment evidence missing" "strict Phase 5 assignment could not be validated or immutably recorded"
+fi
 if ! SEED_DIGEST_BEFORE="$(seed_digest "$WT")"; then
   phase5_reject "seed evidence missing" "declared seed/oracle could not be checksummed before worker launch"
 fi
@@ -1490,6 +1582,10 @@ if [ "$arc" -ne 0 ]; then
   esac
   board finish "$ID" blocked - "$msg"
   complete_terminal_escalation escalated "$msg" || exit $?
+  if [ "$arc" = 96 ]; then
+    log "quarantine: termination was not confirmed; retaining worktree, lease, and evidence at $WT"
+    exit 96
+  fi
   git -C "$REPO_DIR" worktree remove --force "$WT" 2>/dev/null || true
   exit 0
 fi

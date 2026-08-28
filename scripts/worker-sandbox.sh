@@ -4,6 +4,8 @@
 set -euo pipefail
 
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+export RECURSION_ROOT="$ROOT"
+PYTHON="${RECURSION_PYTHON:-python3}"
 ENGINE=""; WT=""; PROMPT=""; MODEL=""; USAGE_FILE=""; ROLE="implementer"
 NETWORK_POLICY="provider-only"; READ_ONLY_WORKTREE=0; EVIDENCE_DIR=""
 GATE_COMMAND=""; WORKDIR_PATH="."; READ_ONLY_PATHS=(); ENGINE_PLAN=""
@@ -42,7 +44,8 @@ PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ENV_PASS=(); PLAN_OK=0; PL
 PLAN_RUNTIME_MODE="executable-only"; PLAN_RUNTIME_SOURCE=""; PLAN_RUNTIME_TARGET=""; PLAN_RUNTIME_ENTRY=""
 PLAN_AUTH_REQUIRED=0; PLAN_AUTH_MODE="none"; PLAN_AUTH_MARKER=""
 PLAN_OUTPUT_FORMAT="text"; PLAN_STRUCTURED=0; PLAN_CANCEL_SIGNAL="TERM"; PLAN_CANCEL_GRACE=5
-PLAN_EXIT_CODES=""
+PLAN_EXIT_CODES='{"success":[0],"auth":[1,2],"runtime":[126,127],"egress":[60,65]}'
+PLAN_NETWORK_PROFILE=""; PLAN_NETWORK_PROVIDER=""; PLAN_NETWORK_ENDPOINTS=(); PLAN_PROXY_PORT=""
 ENGINE_ENV_FILE=""
 if [ -n "$ENGINE_PLAN" ]; then
   [ -f "$ENGINE_PLAN" ] || { echo "worker-sandbox: engine plan is missing" >&2; exit 92; }
@@ -57,6 +60,9 @@ if [ -n "$ENGINE_PLAN" ]; then
       RTSOURCE=*) PLAN_RUNTIME_SOURCE="${plan_line#RTSOURCE=}" ;;
       RTTARGET=*) PLAN_RUNTIME_TARGET="${plan_line#RTTARGET=}" ;;
       RTENTRY=*) PLAN_RUNTIME_ENTRY="${plan_line#RTENTRY=}" ;;
+      NETPROFILE=*) PLAN_NETWORK_PROFILE="${plan_line#NETPROFILE=}" ;;
+      NETPROVIDER=*) PLAN_NETWORK_PROVIDER="${plan_line#NETPROVIDER=}" ;;
+      NETEND=*) PLAN_NETWORK_ENDPOINTS+=("${plan_line#NETEND=}") ;;
       AUTHREQ=1) PLAN_AUTH_REQUIRED=1 ;;
       AUTHMODE=*) PLAN_AUTH_MODE="${plan_line#AUTHMODE=}" ;;
       AUTHMARKER=*) PLAN_AUTH_MARKER="${plan_line#AUTHMARKER=}" ;;
@@ -68,8 +74,8 @@ if [ -n "$ENGINE_PLAN" ]; then
       MREQ=1) PLAN_MREQ=1 ;;
       OK=1)   PLAN_OK=1 ;;
     esac
-  done < <(python3 - "$ENGINE_PLAN" "$ENGINE" <<'PY' || true
-import json, re, sys
+  done < <("$PYTHON" - "$ENGINE_PLAN" "$ENGINE" <<'PY' || true
+import json, os, re, sys
 try:
     plan = json.load(open(sys.argv[1]))
 except Exception:
@@ -89,7 +95,7 @@ suffix = plan.get("model_argv_suffix") or []
 if not isinstance(suffix, list) or suffix.count("{{MODEL}}") > 1:
     raise SystemExit(92)
 for element in list(argv) + list(suffix):
-    if not isinstance(element, str) or any(ord(ch) < 32 for ch in element):
+    if not isinstance(element, str) or any(ord(ch) < 32 or ord(ch) == 127 for ch in element):
         raise SystemExit(92)
     if element.startswith("{{") and element.endswith("}}") \
             and element not in ("{{EXE}}", "{{PROMPT}}", "{{MODEL}}"):
@@ -108,6 +114,23 @@ for name in plan.get("env_passthrough") or []:
     if not isinstance(name, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", name):
         raise SystemExit(92)
     print("ENVP=" + name)
+network = plan.get("network")
+if network is not None:
+    if not isinstance(network, dict) or network.get("policy") != "provider-only" \
+            or not isinstance(network.get("profile"), str) \
+            or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", network["profile"]) \
+            or not isinstance(network.get("endpoints"), list) \
+            or not all(isinstance(v, str) and re.fullmatch(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?", v) for v in network["endpoints"]):
+        raise SystemExit(92)
+    profile_config = json.load(open(os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts", "provider-egress-profiles.json")))
+    profile = profile_config.get("profiles", {}).get(network["profile"])
+    if not isinstance(profile, dict) or profile.get("provider") != plan.get("billing", {}).get("provider") \
+            or sorted(profile.get("endpoints", [])) != sorted(network["endpoints"]):
+        raise SystemExit(92)
+    print("NETPROFILE=" + network["profile"])
+    print("NETPROVIDER=" + str(plan.get("billing", {}).get("provider", "")))
+    for endpoint in network["endpoints"]:
+        print("NETEND=" + endpoint)
 layout = plan.get("runtime_layout")
 if layout is not None:
     if not isinstance(layout, dict) or layout.get("mode") not in ("executable-only", "sibling-tree"):
@@ -119,6 +142,8 @@ if layout is not None:
         if source != "executable-directory" or not isinstance(target, str) or not isinstance(entry, str):
             raise SystemExit(92)
         if target.startswith("/") or entry.startswith("/") or not target or not entry \
+                or any(ord(ch) < 32 or ord(ch) == 127 for ch in target + entry) \
+                or "\\" in target or "\\" in entry \
                 or any(part in ("", ".", "..") for part in target.split("/")) \
                 or any(part in ("", ".", "..") for part in entry.split("/")):
             raise SystemExit(92)
@@ -135,7 +160,8 @@ if auth is not None:
         raise SystemExit(92)
     if auth.get("mode") == "runner-home-marker":
         marker = auth.get("marker")
-        if not isinstance(marker, str) or not marker or marker.startswith("/") \
+        if not isinstance(marker, str) or not marker or any(ord(ch) < 32 or ord(ch) == 127 for ch in marker) \
+                or marker.startswith("/") or "\\" in marker \
                 or any(part in ("", ".", "..") for part in marker.split("/")):
             raise SystemExit(92)
         print("AUTHREQ=1" if auth.get("required") else "AUTHREQ=0")
@@ -152,13 +178,22 @@ if execution is not None:
     if execution.get("structured_output") is True:
         print("EXSTRUCT=1")
     cancellation = execution.get("cancellation") or {}
-    if cancellation.get("signal") not in ("TERM", "INT") or not isinstance(cancellation.get("grace_s"), int):
+    if set(cancellation) != {"signal", "grace_s"} \
+            or cancellation.get("signal") not in ("TERM", "INT") \
+            or not isinstance(cancellation.get("grace_s"), int) \
+            or not 1 <= cancellation["grace_s"] <= 60:
         raise SystemExit(92)
     print("CANCEL=" + cancellation["signal"])
     print("CGRACE=" + str(cancellation["grace_s"]))
-    codes = execution.get("exit_codes") or {}
-    if not isinstance(codes, dict):
+    codes = execution.get("exit_codes")
+    if not isinstance(codes, dict) or set(codes) != {"success", "auth", "runtime", "egress"}:
         raise SystemExit(92)
+    seen = set()
+    for values in codes.values():
+        if not isinstance(values, list) or not values or any(not isinstance(v, int) or not 0 <= v <= 255 for v in values) \
+                or len(set(values)) != len(values) or seen.intersection(values):
+            raise SystemExit(92)
+        seen.update(values)
     print("EXCODES=" + json.dumps(codes, sort_keys=True, separators=(",", ":")))
 print("OK=1")
 PY
@@ -174,7 +209,10 @@ PY
   # on its own configured default, off-alias and off-evidence.
   [ "$PLAN_MREQ" != 1 ] || [ -n "$MODEL" ] \
     || { echo "worker-sandbox: engine plan requires a model and none was given" >&2; exit 92; }
+  [ -z "$PLAN_NETWORK_PROFILE" ] || [ "$NETWORK_POLICY" = provider-only ] \
+    || { echo "worker-sandbox: provider network plan cannot be downgraded to a different policy" >&2; exit 92; }
 fi
+export RECURSION_AUTH_REQUIRED="$PLAN_AUTH_REQUIRED"
 build_plan_argv(){ # resolved-exe -> PLAN_RUN: exact-element placeholder substitution only
   local exe="$1" element
   PLAN_RUN=()
@@ -199,22 +237,29 @@ write_execution_evidence(){ # status rc classification; controller-owned, never 
   local status="$1" rc="$2" classification="$3"
   [ -z "$EXECUTION_EVIDENCE" ] || [ "$ENGINE" = gate ] || {
     mkdir -p "$(dirname "$EXECUTION_EVIDENCE")" || return 1
-    python3 - "$EXECUTION_EVIDENCE" "$ENGINE" "$MODEL" "$status" "$rc" "$classification" \
+    "$PYTHON" - "$EXECUTION_EVIDENCE" "$ENGINE" "$MODEL" "$status" "$rc" "$classification" \
       "$PLAN_RUNTIME_MODE" "$PLAN_RUNTIME_TARGET" "$PLAN_RUNTIME_ENTRY" "$PLAN_OUTPUT_FORMAT" \
       "$PLAN_STRUCTURED" "$PLAN_CANCEL_SIGNAL" "$PLAN_CANCEL_GRACE" "$PLAN_EXIT_CODES" \
+      "$PLAN_NETWORK_PROFILE" "$PLAN_NETWORK_PROVIDER" "${PLAN_NETWORK_ENDPOINTS[*]}" \
       "${PLAN_RUN[@]}" <<'PY'
 import json, os, sys, tempfile
 path, engine, model, status, rc, classification = sys.argv[1:7]
 runtime_mode, runtime_target, runtime_entry = sys.argv[7:10]
 output_format, structured, cancel_signal, cancel_grace, exit_codes = sys.argv[10:15]
-argv = sys.argv[15:]
+network_profile, network_provider, network_endpoints = sys.argv[15:18]
+argv = sys.argv[18:]
 value = {"schema_version": 1, "engine": engine, "status": status,
          "exit_code": int(rc), "exit_classification": classification,
          "model": model, "argv": argv,
+         "real_execution_capability": "unproven-without-auth",
+         "auth_required": os.environ.get("RECURSION_AUTH_REQUIRED", "0") == "1",
          "output_format": output_format, "structured_output": structured == "1",
          "cancellation": {"signal": cancel_signal, "grace_s": int(cancel_grace)},
          "exit_codes": json.loads(exit_codes) if exit_codes else {},
          "runtime_layout": {"mode": runtime_mode}}
+if network_profile:
+    value["network"] = {"policy": "provider-only", "profile": network_profile,
+                         "provider": network_provider, "endpoints": network_endpoints.split()}
 if runtime_mode == "sibling-tree":
     value["runtime_layout"].update(target=runtime_target, entrypoint=runtime_entry)
 fd, tmp = tempfile.mkstemp(prefix=".execution-evidence.", dir=os.path.dirname(path) or ".")
@@ -224,17 +269,35 @@ os.replace(tmp, path)
 PY
   }
 }
+classify_exit_code(){
+  "$PYTHON" - "$PLAN_EXIT_CODES" "$1" <<'PY'
+import json, sys
+codes = json.loads(sys.argv[1]); code = int(sys.argv[2])
+for name, values in codes.items():
+    if code in values:
+        print({"success":"success", "auth":"auth-failed", "runtime":"runtime-failed", "egress":"egress-failed"}[name])
+        break
+else:
+    print("process-exit")
+PY
+}
 check_plan_auth(){
   [ "$PLAN_AUTH_REQUIRED" = 1 ] || return 0
   [ "$PLAN_AUTH_MODE" = runner-home-marker ] && [ -n "$PLAN_AUTH_MARKER" ] || {
     echo "worker-sandbox: refusal=missing-auth invalid runner-home auth contract" >&2; return 90;
   }
-  local home="${RECURSION_TEST_RUNNER_HOME:-${RECURSION_RUNNER_HOME:-${HOME:-}}}" marker_path=""
-  marker_path="$(realpath -e "$home/$PLAN_AUTH_MARKER" 2>/dev/null || true)"
-  case "$marker_path" in
-    "$home"/*) ;;
-    *) echo "worker-sandbox: refusal=missing-auth runner auth marker is absent" >&2; return 90 ;;
-  esac
+  local home="${1:-${RECURSION_TEST_RUNNER_HOME:-${RECURSION_RUNNER_HOME:-${HOME:-}}}}" expected_uid="${2:-$(id -u)}" marker_path="" home_path="" marker_mode="" marker_owner="" marker_type=""
+  home_path="$(realpath -e -- "$home" 2>/dev/null || true)"
+  [ -n "$home_path" ] && [ -d "$home_path" ] || { echo "worker-sandbox: refusal=missing-auth runner home is absent" >&2; return 90; }
+  marker_path="$home_path/$PLAN_AUTH_MARKER"
+  [ -f "$marker_path" ] && [ ! -L "$marker_path" ] || { echo "worker-sandbox: refusal=missing-auth runner auth marker is absent or not regular" >&2; return 90; }
+  [ "$(realpath -e -- "$marker_path" 2>/dev/null || true)" = "$marker_path" ] || { echo "worker-sandbox: refusal=missing-auth auth marker escapes runner home" >&2; return 90; }
+  marker_type="$(stat -c %F -- "$marker_path" 2>/dev/null || true)"
+  [ "$marker_type" = "regular file" ] || { echo "worker-sandbox: refusal=missing-auth auth marker is not a regular file" >&2; return 90; }
+  marker_owner="$(stat -c %u -- "$marker_path" 2>/dev/null || true)"
+  marker_mode="$(stat -c %a -- "$marker_path" 2>/dev/null || true)"
+  [ "$marker_owner" = "$expected_uid" ] || { echo "worker-sandbox: refusal=missing-auth auth marker ownership is invalid" >&2; return 90; }
+  [ "$marker_mode" = 600 ] || { echo "worker-sandbox: refusal=missing-auth auth marker mode is invalid" >&2; return 90; }
 }
 case "$ROLE" in implementer|verifier|gate) ;; *) echo "worker-sandbox: invalid worker role" >&2; exit 92;; esac
 case "$NETWORK_POLICY" in provider-only|none) ;; *) echo "worker-sandbox: invalid network policy" >&2; exit 92;; esac
@@ -305,8 +368,9 @@ case "${RECURSION_TEST_WORKER:-}" in
         if [ "$PLAN_RUNTIME_MODE" = sibling-tree ]; then
           logical_runtime_host="$WT/$PLAN_RUNTIME_TARGET"
           mkdir -p "$(dirname "$logical_runtime_host")"
-          python3 "$(dirname "$0")/runtime-layout.py" stage \
+          "$PYTHON" "$(dirname "$0")/runtime-layout.py" stage \
             --source "$(dirname "$(realpath -e "$logical_exe")")" --destination "$logical_runtime_host" \
+            --entrypoint "$PLAN_RUNTIME_ENTRY" \
             || { echo "worker-sandbox: refusal=missing-runtime runtime tree could not be staged" >&2; exit 94; }
           logical_inner="$logical_runtime_host/$PLAN_RUNTIME_ENTRY"
         fi
@@ -314,13 +378,7 @@ case "${RECURSION_TEST_WORKER:-}" in
         write_execution_evidence started 0 prepared || exit 95
         cd "$WT"
         if "${PLAN_RUN[@]}"; then logical_rc=0; else logical_rc=$?; fi
-        case "$logical_rc" in
-          0) logical_class=success ;;
-          1|2) logical_class=auth-failed ;;
-          60|65) logical_class=egress-failed ;;
-          126|127) logical_class=runtime-failed ;;
-          *) logical_class=process-exit ;;
-        esac
+        logical_class="$(classify_exit_code "$logical_rc")"
         write_execution_evidence finished "$logical_rc" "$logical_class" || exit 95
         exit "$logical_rc"
         ;;
@@ -334,8 +392,27 @@ esac
 # provider-only is not a descriptive label. It requires a root-provisioned namespace whose
 # firewall/routing policy is owned outside worker authority. There is deliberately no host-network
 # fallback: absent capability means no worker.
-PROVIDER_NETNS=/run/netns/recursion-provider-only
+PROVIDER_PROFILE=""
+PROVIDER_PROXY_PORT=""
+PROVIDER_NETNS=""
 if [ "$NETWORK_POLICY" = provider-only ]; then
+  if [ -n "$ENGINE_PLAN" ]; then
+    PROVIDER_PROFILE="$PLAN_NETWORK_PROFILE"
+    [ -n "$PROVIDER_PROFILE" ] && [ "$PLAN_NETWORK_PROVIDER" = "$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["billing"]["provider"])' "$ENGINE_PLAN")" ] \
+      || { echo "worker-sandbox: refusal=missing-egress provider profile is not bound to the plan" >&2; exit 96; }
+  elif [ "$ENGINE" = claude ]; then
+    PROVIDER_PROFILE=anthropic
+    PLAN_NETWORK_PROVIDER=anthropic-claude-code
+    PLAN_NETWORK_ENDPOINTS=(api.anthropic.com)
+  else
+    echo "worker-sandbox: refusal=missing-egress provider profile is absent" >&2; exit 96
+  fi
+  PROVIDER_JSON="$("$PYTHON" "$ROOT/scripts/provider-egress.py" "$PROVIDER_PROFILE" --provider "$PLAN_NETWORK_PROVIDER" $(printf -- '--endpoint %q ' "${PLAN_NETWORK_ENDPOINTS[@]}"))" \
+    || { echo "worker-sandbox: refusal=missing-egress provider profile is invalid" >&2; exit 96; }
+  PROVIDER_NETNS="/run/netns/$("$PYTHON" -c 'import json,sys; print(json.loads(sys.argv[1])["namespace"])' "$PROVIDER_JSON")"
+  PROVIDER_PROXY_PORT="$("$PYTHON" -c 'import json,sys; print(json.loads(sys.argv[1])["proxy_port"])' "$PROVIDER_JSON")"
+  export RECURSION_PROVIDER_PROFILE="$PROVIDER_PROFILE" RECURSION_PROVIDER_ID="$PLAN_NETWORK_PROVIDER"
+  export RECURSION_PROVIDER_ENDPOINTS="${PLAN_NETWORK_ENDPOINTS[*]}"
   [ -e "$PROVIDER_NETNS" ] && mountpoint -q "$PROVIDER_NETNS" \
     || { echo "worker-sandbox: refusal=missing-egress provider-only network namespace capability is absent" >&2; exit 96; }
   netns_owner="$(stat -c %u "$PROVIDER_NETNS" 2>/dev/null || true)"
@@ -370,14 +447,13 @@ else
     *) echo "worker-sandbox: dedicated recursion-runner account is missing" >&2; exit 95 ;;
   esac
 fi
+[ -z "$RUNNER_HOME" ] || RUNNER_HOME="$(realpath -e -- "$RUNNER_HOME" 2>/dev/null || true)"
+[ -z "$RUNNER_HOME" ] || [ -d "$RUNNER_HOME" ] \
+  || { echo "worker-sandbox: runner home is not a canonical directory" >&2; exit 95; }
 [ "$RUNNER_UID" != 0 ] && [ "$RUNNER_GID" != 0 ] \
   || { echo "worker-sandbox: runner identity is privileged" >&2; exit 95; }
 if [ "$ENGINE" != gate ] && [ "$PLAN_AUTH_REQUIRED" = 1 ]; then
-  auth_marker_path="$(realpath -e "$RUNNER_HOME/$PLAN_AUTH_MARKER" 2>/dev/null || true)"
-  case "$auth_marker_path" in
-    "$RUNNER_HOME"/*) ;;
-    *) echo "worker-sandbox: refusal=missing-auth runner auth marker is absent" >&2; exit 90 ;;
-  esac
+  check_plan_auth "$RUNNER_HOME" "$RUNNER_UID" || exit $?
 fi
 
 case "$ENGINE" in
@@ -411,8 +487,9 @@ if [ "$ENGINE" != gate ] && [ "$PLAN_RUNTIME_MODE" = sibling-tree ]; then
   RUNTIME_DEST="/workspace/$PLAN_RUNTIME_TARGET"
   RUNTIME_ENTRY="$PLAN_RUNTIME_ENTRY"
   mkdir -p "$(dirname "$RUNTIME_HOST")"
-  python3 "$ROOT/scripts/runtime-layout.py" stage \
+  "$PYTHON" "$ROOT/scripts/runtime-layout.py" stage \
     --source "$(dirname "$EXE_REAL")" --destination "$RUNTIME_HOST" \
+    --entrypoint "$PLAN_RUNTIME_ENTRY" \
     || { echo "worker-sandbox: refusal=missing-runtime runtime tree could not be staged" >&2; exit 94; }
   chown -R 0:"$RUNNER_GID" "$RUNTIME_HOST"
   INNER_EXE="$RUNTIME_DEST/$RUNTIME_ENTRY"
@@ -421,10 +498,11 @@ fi
 safe_engine="${ENGINE//[^A-Za-z0-9_.-]/-}"
 UNIT="recursion-worker-${safe_engine}-$$-${RANDOM}.service"
 client_pid=""
+CLEANUP_DONE=0
 stop_unit(){
-  systemctl kill --kill-whom=all --signal=TERM "$UNIT" >/dev/null 2>&1 || true
-  local i
-  for i in $(seq 1 50); do
+  local signal="$PLAN_CANCEL_SIGNAL" grace="$PLAN_CANCEL_GRACE" i
+  systemctl kill --kill-whom=all --signal="$signal" "$UNIT" >/dev/null 2>&1 || true
+  for i in $(seq 1 $((grace * 10))); do
     systemctl is-active --quiet "$UNIT" 2>/dev/null || return 0
     sleep 0.1
   done
@@ -438,19 +516,24 @@ stop_unit(){
   return 1
 }
 cleanup(){
-  stop_unit || true
+  [ "$CLEANUP_DONE" = 1 ] && return 0
+  if ! stop_unit; then
+    echo "worker-sandbox: quarantine=termination-unconfirmed worktree and evidence retained" >&2
+    return 1
+  fi
   rm -rf -- "$SANDBOX_BIN"
   [ -z "$RUNTIME_HOST" ] || rm -rf -- "$RUNTIME_HOST"
   [ -z "$ENGINE_ENV_FILE" ] || rm -f -- "$ENGINE_ENV_FILE"
   chown -R 0:0 "$WT" 2>/dev/null || true
+  CLEANUP_DONE=1
 }
 cancel_worker(){
+  if ! cleanup; then exit 96; fi
   [ "$ENGINE" = gate ] || write_execution_evidence cancelled 143 cancelled || true
-  cleanup
   exit 143
 }
 trap cancel_worker TERM INT
-trap cleanup EXIT
+trap 'cleanup || true' EXIT
 
 RUN=(systemd-run --quiet --wait --collect --pipe --service-type=exec --unit "$UNIT"
   --uid "$RUNNER_USER" --gid "$RUNNER_GID" --working-directory "$SANDBOX_CWD"
@@ -472,7 +555,7 @@ RUN=(systemd-run --quiet --wait --collect --pipe --service-type=exec --unit "$UN
 # a read-only view of /opt while still running non-root under ProtectSystem=strict.
 # /run and /var/run carry host Unix sockets (systemd's private bus, Docker, journald) and other
 # confused deputies. Masking them per-arm here (and in the shared base above) keeps every arm from
-# reaching host sockets; Claude's provider egress is the TCP loopback CONNECT proxy, never a socket.
+# reaching host sockets; provider egress is always the profile-bound TCP loopback CONNECT proxy.
 if [ "$ENGINE" != gate ]; then
   RUN+=(--property "InaccessiblePaths=/opt /srv -/workspace/.git /run /var/run")
 else
@@ -505,12 +588,16 @@ if [ "$NETWORK_POLICY" = none ]; then
 else
   RUN+=(--property "NetworkNamespacePath=$PROVIDER_NETNS")
 fi
-if [ "$ENGINE" = claude ]; then
-  # Claude's provider request is the only intentional egress.  The namespace has no route or
-  # non-loopback interface, so clearing these variables cannot fall back to the host network.
-  RUN+=(--setenv HTTPS_PROXY=http://127.0.0.1:18080
-        --setenv HTTP_PROXY=http://127.0.0.1:18080
-        --setenv CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1)
+if [ "$NETWORK_POLICY" = provider-only ]; then
+  # Every provider uses the same profile-bound local proxy contract; no engine-specific
+  # proxy address or Claude-only routing assumption is permitted.
+  RUN+=(--setenv HTTPS_PROXY="http://127.0.0.1:$PROVIDER_PROXY_PORT"
+        --setenv HTTP_PROXY="http://127.0.0.1:$PROVIDER_PROXY_PORT"
+        --setenv RECURSION_PROVIDER_PROFILE="$PROVIDER_PROFILE"
+        --setenv RECURSION_PROVIDER_ID="$PLAN_NETWORK_PROVIDER"
+        --setenv RECURSION_PROVIDER_ENDPOINTS="${PLAN_NETWORK_ENDPOINTS[*]}"
+        --setenv CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+  )
 fi
 for name in RECURSION_VERIFICATION_COMMIT RECURSION_IMPLEMENTER_RUN_ID; do
   value="${!name:-}"; [ -z "$value" ] || RUN+=(--setenv "$name=$value")
@@ -580,14 +667,8 @@ esac
 if wait "$client_pid"; then rc=0; else rc=$?; fi
 client_pid=""
 if [ "$ENGINE" != gate ]; then
-  case "$rc" in
-    0) execution_class=success ;;
-    1|2) execution_class=auth-failed ;;
-    60|65) execution_class=egress-failed ;;
-    126|127) execution_class=runtime-failed ;;
-    143) execution_class=cancelled ;;
-    *) execution_class=process-exit ;;
-  esac
-  write_execution_evidence finished "$rc" "$execution_class" || exit 95
+  execution_class="$(classify_exit_code "$rc")"
+    execution_class="$(classify_exit_code "$rc")"
+    write_execution_evidence finished "$rc" "$execution_class" || exit 95
 fi
 exit "$rc"

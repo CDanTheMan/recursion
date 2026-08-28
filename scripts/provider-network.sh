@@ -1,18 +1,30 @@
 #!/usr/bin/env bash
-# Provision and prove the fixed, root-owned provider-only network capability.
+# Provision and prove a root-owned provider-only network capability selected by profile.
 set -euo pipefail
 
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-NS=recursion-provider-only
-NS_PATH="/run/netns/$NS"
-PROXY_PORT=18080
-PROVIDER_AUTHORITY=api.anthropic.com:443
+NS=""
+NS_PATH=""
+PROFILE="${RECURSION_PROVIDER_PROFILE:-}"
+PROFILE_JSON=""
+
+load_profile(){
+  [ -n "$PROFILE" ] || { echo "provider-network: provider profile is required (default deny)" >&2; return 96; }
+  local -a args=("$PROFILE" --provider "${RECURSION_PROVIDER_ID:-}") endpoint
+  for endpoint in ${RECURSION_PROVIDER_ENDPOINTS:-}; do args+=(--endpoint "$endpoint"); done
+  PROFILE_JSON="$(python3 "$ROOT/scripts/provider-egress.py" "${args[@]}" 2>/dev/null)" \
+    || { echo "provider-network: provider profile is invalid or not provisioned" >&2; return 96; }
+  NS="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["namespace"])' "$PROFILE_JSON")"
+  NS_PATH="/run/netns/$NS"
+  PROXY_PORT="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["proxy_port"])' "$PROFILE_JSON")"
+}
 
 [ "$(id -u)" = 0 ] || { echo "provider-network: root is required" >&2; exit 95; }
 command -v ip >/dev/null 2>&1 || { echo "provider-network: iproute2 is required" >&2; exit 95; }
 
 namespace_check(){
   local interfaces
+  [ -n "$NS_PATH" ] || { echo "provider-network: provider profile was not loaded" >&2; return 96; }
   command -v nsenter >/dev/null 2>&1 \
     || { echo "provider-network: util-linux nsenter is required" >&2; return 95; }
   command -v awk >/dev/null 2>&1 \
@@ -32,6 +44,7 @@ namespace_check(){
 
 case "${1:-}" in
   create)
+    load_profile
     created=0
     if [ ! -e "$NS_PATH" ]; then
       ip netns add "$NS"
@@ -45,26 +58,32 @@ case "${1:-}" in
     created=0
     ;;
   delete)
+    load_profile
     [ ! -e "$NS_PATH" ] || ip netns delete "$NS"
     ;;
   namespace-check)
+    load_profile
     namespace_check
     ;;
   check)
+    load_profile
     namespace_check
     systemctl is-active --quiet recursion-provider-network.service \
       && systemctl is-active --quiet recursion-provider-proxy.service \
       || { echo "provider-network: provider services are not active" >&2; exit 96; }
     python3 "$ROOT/scripts/provider-connect-proxy.py" probe \
-      --namespace "$NS_PATH" --listen-port "$PROXY_PORT" --allow "$PROVIDER_AUTHORITY"
+      --namespace "$NS_PATH" --listen-port "$PROXY_PORT" \
+      --allow "$(python3 -c 'import json,sys; e=json.loads(sys.argv[1])["endpoints"]; print(e[0]+":443" if e else "")' "$PROFILE_JSON")"
     ;;
   probe)
+    load_profile
     namespace_check
     systemctl is-active --quiet recursion-provider-network.service \
       && systemctl is-active --quiet recursion-provider-proxy.service \
       || { echo "provider-network: provider services are not active" >&2; exit 96; }
     python3 "$ROOT/scripts/provider-connect-proxy.py" probe --live \
-      --namespace "$NS_PATH" --listen-port "$PROXY_PORT" --allow "$PROVIDER_AUTHORITY"
+      --namespace "$NS_PATH" --listen-port "$PROXY_PORT" \
+      --allow "$(python3 -c 'import json,sys; e=json.loads(sys.argv[1])["endpoints"]; print(e[0]+":443" if e else "")' "$PROFILE_JSON")"
     ;;
   *)
     echo "usage: provider-network.sh {create|delete|namespace-check|check|probe}" >&2

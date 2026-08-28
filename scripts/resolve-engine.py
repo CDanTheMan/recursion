@@ -52,16 +52,22 @@ MODEL_KEYS = {"required", "argv_suffix"}
 BILLING_KEYS = {"basis", "provider"}
 BILLING_BASES = {"flat-subscription", "metered", "local"}
 NETWORK_KEYS = {"policy", "endpoints"}
+NETWORK_OPTIONAL_KEYS = {"profile"}
 PROBE_KEYS = {"type", "url_env", "timeout_s"}
 RUNTIME_LAYOUT_KEYS = {"mode", "source", "root", "target", "entrypoint"}
 EXECUTION_KEYS = {"structured_output", "output_format", "cancellation", "exit_codes"}
 CANCELLATION_KEYS = {"signal", "grace_s"}
 AUTH_KEYS = {"mode", "required", "marker"}
 EXIT_CODE_KEYS = {"success", "auth", "runtime", "egress"}
+PROVIDER_PROFILE_RE = re.compile(r"[a-z][a-z0-9-]{1,63}")
 
 
 class ManifestError(Exception):
     """A manifest file exists but violates the contract (exit code 2)."""
+
+
+def has_control(value: str) -> bool:
+    return any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value)
 
 
 def diag(message: str) -> None:
@@ -91,7 +97,7 @@ def require_object_keys(obj: object, keys: set, where: str) -> dict:
 def validate_argv(argv: object) -> None:
     if not isinstance(argv, list) or not argv:
         raise ManifestError("argv must be a nonempty list of strings")
-    if not all(isinstance(item, str) and item for item in argv):
+    if not all(isinstance(item, str) and item and not has_control(item) for item in argv):
         raise ManifestError("argv elements must be nonempty strings")
     if argv[0] != "{{EXE}}":
         raise ManifestError("argv[0] must be the literal placeholder {{EXE}}")
@@ -111,7 +117,7 @@ def validate_model(model: object) -> None:
     if not is_plain_bool(obj["required"]):
         raise ManifestError("model.required must be a boolean")
     suffix = obj["argv_suffix"]
-    if not isinstance(suffix, list) or not all(isinstance(item, str) and item for item in suffix):
+    if not isinstance(suffix, list) or not all(isinstance(item, str) and item and not has_control(item) for item in suffix):
         raise ManifestError("model.argv_suffix must be a list of nonempty strings")
     for item in suffix:
         if item.startswith("{{") and item.endswith("}}") and item != "{{MODEL}}":
@@ -133,20 +139,38 @@ def validate_billing(billing: object) -> None:
     obj = require_object_keys(billing, BILLING_KEYS, "billing")
     if obj["basis"] not in BILLING_BASES:
         raise ManifestError(f"billing.basis must be one of {sorted(BILLING_BASES)}")
-    if not isinstance(obj["provider"], str) or not obj["provider"]:
+    if not isinstance(obj["provider"], str) or not obj["provider"] or has_control(obj["provider"]):
         raise ManifestError("billing.provider must be a nonempty string")
 
 
 def validate_network(network: object) -> None:
-    obj = require_object_keys(network, NETWORK_KEYS, "network")
+    if not isinstance(network, dict):
+        raise ManifestError("network must be a JSON object")
+    missing = NETWORK_KEYS - network.keys()
+    extra = network.keys() - NETWORK_KEYS - NETWORK_OPTIONAL_KEYS
+    if missing or extra:
+        raise ManifestError("network has invalid fields")
+    obj = network
     if obj["policy"] != "provider-only":
         raise ManifestError('network.policy must be "provider-only"')
     endpoints = obj["endpoints"]
     if not isinstance(endpoints, list):
         raise ManifestError("network.endpoints must be a list of strings")
     for item in endpoints:
-        if not isinstance(item, str) or not ENDPOINT_RE.fullmatch(item):
+        if not isinstance(item, str) or not ENDPOINT_RE.fullmatch(item) or has_control(item):
             raise ManifestError(f"network.endpoints contains an invalid hostname {item!r}")
+    if "profile" in obj:
+        profile = obj["profile"]
+        if not isinstance(profile, str) or not PROVIDER_PROFILE_RE.fullmatch(profile):
+            raise ManifestError("network.profile is invalid")
+        profile_path = Path(__file__).resolve().parent / "provider-egress-profiles.json"
+        try:
+            profiles = json.loads(profile_path.read_text(encoding="utf-8"))["profiles"]
+            declared = profiles[profile]
+            if not isinstance(declared, dict) or not isinstance(declared.get("endpoints"), list):
+                raise KeyError(profile)
+        except (OSError, ValueError, KeyError, TypeError):
+            raise ManifestError("network.profile is not a declared provider profile")
 
 
 def validate_probe(probe: object) -> None:
@@ -175,6 +199,7 @@ def validate_env_passthrough(names: object) -> None:
 def validate_relative_path(value: object, where: str, *, allow_empty: bool = False) -> None:
     if not isinstance(value, str) or (not value and not allow_empty) \
             or value.startswith("/") or "\\" in value \
+            or has_control(value) \
             or any(part in {"", ".", ".."} for part in value.split("/")):
         raise ManifestError(f"{where} must be a relative path without . or .. components")
 
@@ -224,10 +249,14 @@ def validate_execution(execution: object) -> None:
     if not is_plain_int(cancel["grace_s"]) or not (1 <= cancel["grace_s"] <= 60):
         raise ManifestError("execution.cancellation.grace_s must be an integer in 1..60")
     codes = require_object_keys(obj["exit_codes"], EXIT_CODE_KEYS, "execution.exit_codes")
+    seen: set[int] = set()
     for name, values in codes.items():
         if not isinstance(values, list) or not values or \
                 not all(is_plain_int(value) and 0 <= value <= 255 for value in values):
             raise ManifestError(f"execution.exit_codes.{name} must be a nonempty list of 0..255 integers")
+        if len(set(values)) != len(values) or seen.intersection(values):
+            raise ManifestError("execution.exit_codes must be disjoint and contain no duplicates")
+        seen.update(values)
 
 
 def validate_auth(auth: object) -> None:
@@ -263,7 +292,7 @@ def validate_manifest(data: object, engine: str) -> dict:
         raise ManifestError(f"name {name!r} does not match manifest filename stem {engine!r}")
     if name in BUILTIN_ENGINES:
         raise ManifestError(f"name {name!r} collides with a builtin engine")
-    if not isinstance(obj["description"], str) or not obj["description"]:
+    if not isinstance(obj["description"], str) or not obj["description"] or has_control(obj["description"]):
         raise ManifestError("description must be a nonempty string")
     executable = obj["executable"]
     if not isinstance(executable, str) or not NAME_RE.fullmatch(executable):
@@ -272,6 +301,16 @@ def validate_manifest(data: object, engine: str) -> dict:
     validate_model(obj["model"])
     validate_roles(obj["roles"])
     validate_billing(obj["billing"])
+    if isinstance(obj["network"], dict) and "profile" in obj["network"]:
+        profile_path = Path(__file__).resolve().parent / "provider-egress-profiles.json"
+        try:
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))["profiles"][obj["network"]["profile"]]
+        except (OSError, ValueError, KeyError, TypeError):
+            raise ManifestError("network.profile is not a declared provider profile")
+        if profile.get("provider") != obj["billing"].get("provider"):
+            raise ManifestError("network.profile provider does not match billing.provider")
+        if sorted(profile.get("endpoints", [])) != sorted(obj["network"].get("endpoints", [])):
+            raise ManifestError("network.endpoints do not match the declared provider profile")
     validate_network(obj["network"])
     validate_probe(obj["availability_probe"])
     cap = obj["concurrency_cap"]
@@ -327,6 +366,12 @@ def build_plan(data: dict) -> dict:
         "concurrency_cap": data["concurrency_cap"],
         "env_passthrough": list(data["env_passthrough"]),
     }
+    if "profile" in data["network"]:
+        plan["network"] = {
+            "policy": data["network"]["policy"],
+            "profile": data["network"]["profile"],
+            "endpoints": list(data["network"]["endpoints"]),
+        }
     if "runtime_layout" in data:
         layout = data["runtime_layout"]
         if layout is None or layout["mode"] == "executable-only":

@@ -21,6 +21,8 @@ from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[2]
 SANDBOX_SCRIPT = SOURCE / "scripts" / "worker-sandbox.sh"
+BASH = shutil.which("bash") or (r"C:\Program Files\Git\bin\bash.exe" if os.name == "nt" else None)
+CYGPATH = shutil.which("cygpath") or (r"C:\Program Files\Git\usr\bin\cygpath.exe" if os.name == "nt" else None)
 
 failures: list[str] = []
 
@@ -34,8 +36,10 @@ def check(condition: bool, label: str) -> None:
 
 
 def _cygpath(flag: str, value: str) -> str | None:
+    if CYGPATH is None:
+        return None
     try:
-        result = subprocess.run(["cygpath", flag, value], capture_output=True, text=True)
+        result = subprocess.run([CYGPATH, flag, value], capture_output=True, text=True)
     except FileNotFoundError:
         return None
     if result.returncode == 0 and result.stdout.strip():
@@ -62,17 +66,18 @@ def to_local_path(posix_path: str) -> Path:
 
 
 def bash_run(sandbox_script_posix: str, argv_after_script: list[str], extra_path_dir_posix: str, env: dict):
-    wrapper = 'export PATH="$1:$PATH"; shift; exec bash "$@"'
-    argv = ["bash", "-c", wrapper, "bash_wrapper", extra_path_dir_posix, sandbox_script_posix] + argv_after_script
+    bash_dir = to_posix(Path(BASH).parent) if os.name == "nt" and BASH else ""
+    wrapper = 'export PATH="$1:$2:$PATH"; shift 2; exec "$1" "${@:2}"'
+    argv = [BASH, "-lc", wrapper, "bash_wrapper", extra_path_dir_posix, bash_dir, sandbox_script_posix] + argv_after_script
     return subprocess.run(argv, capture_output=True, text=True, env=env)
 
 
 def main() -> int:
-    if shutil.which("bash") is None:
+    if BASH is None:
         print("SKIP - bash not found on PATH")
         return 0
 
-    mktemp = subprocess.run(["bash", "-c", "mktemp -d"], capture_output=True, text=True)
+    mktemp = subprocess.run([BASH, "-lc", "mktemp -d"], capture_output=True, text=True)
     if mktemp.returncode != 0 or not mktemp.stdout.strip():
         print("SKIP - bash mktemp -d failed; cannot build a /tmp root")
         return 0
@@ -106,7 +111,7 @@ def main() -> int:
         stub_path.write_bytes(stub_body.encode("utf-8"))
         bin_dir_posix = to_posix(bin_dir)
         chmod_result = subprocess.run(
-            ["bash", "-c", f"chmod +x '{to_posix(stub_path)}'"], capture_output=True, text=True
+            [BASH, "-lc", f"chmod +x '{to_posix(stub_path)}'"], capture_output=True, text=True
         )
         check(chmod_result.returncode == 0, "stub executable is chmod +x")
 
@@ -132,6 +137,7 @@ def main() -> int:
                 "RECURSION_TEST_WORKER": "logical",
                 "RECURSION_TEST_PROVIDER_NETWORK": "logical",
                 "RECURSION_ROOT": root_posix,
+                "RECURSION_PYTHON": to_posix(Path(sys.executable)),
             }
         )
         common_tail = ["--worktree", wt_posix, "--role", "implementer", "--network-policy", "none"]
@@ -249,7 +255,7 @@ def main() -> int:
             result = invoke(["--engine", "stubeng", "--engine-plan", to_posix(bad_plan)], "hi", env_bad)
             check(result.returncode == 95, f"group/other-writable plan file is refused (got {result.returncode})")
     finally:
-        subprocess.run(["bash", "-c", f"rm -rf -- '{root_posix}'"], capture_output=True, text=True)
+            subprocess.run([BASH, "-lc", f"rm -rf -- '{root_posix}'"], capture_output=True, text=True)
 
     if failures:
         print(f"worker-sandbox-plugin.test: {len(failures)} FAILED")

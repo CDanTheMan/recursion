@@ -22,6 +22,18 @@ MACHINE_KEYS = {"schema_version", "id", "kind", "capabilities"}
 CAPABILITY_RE = re.compile(r"[a-z][a-z0-9-]{1,63}")
 
 
+def is_link_or_reparse(path: Path) -> bool:
+    info = os.lstat(path)
+    return os.path.islink(path) or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def safe_regular(path: Path) -> None:
+    if is_link_or_reparse(path) or not path.is_file():
+        raise ValueError("machine descriptor must be a regular non-symlink file")
+    if os.name != "nt" and (os.stat(path).st_mode & 0o022):
+        raise ValueError("machine descriptor is writable by group or other")
+
+
 def fail(message: str, code: int = 2) -> int:
     print(f"registered-machine-capabilities: {message}", file=sys.stderr)
     return code
@@ -29,12 +41,16 @@ def fail(message: str, code: int = 2) -> int:
 
 def descriptor_dir() -> Path:
     override = os.environ.get("RECURSION_MACHINE_DIR", "").strip()
-    return Path(override) if override else Path(__file__).resolve().parent / "machines"
+    value = Path(override) if override else Path(__file__).resolve().parent / "machines"
+    if is_link_or_reparse(value) or not value.is_dir():
+        raise ValueError("machine descriptor directory is not a confined directory")
+    return value.resolve()
 
 
 def read_descriptor(machine: str) -> dict:
     path = descriptor_dir() / f"{machine}.json"
     try:
+        safe_regular(path)
         raw = path.read_text(encoding="utf-8")
         value = json.loads(raw)
     except FileNotFoundError as exc:
@@ -54,6 +70,8 @@ def read_descriptor(machine: str) -> dict:
 
 
 def emit(path: Path, value: dict) -> None:
+    if path.exists() or path.is_symlink():
+        raise OSError("refusing to replace an existing or symlinked capability output")
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:

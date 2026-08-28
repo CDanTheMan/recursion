@@ -22,7 +22,17 @@ class LayoutError(Exception):
     pass
 
 
+def _is_link_or_reparse(path: Path) -> bool:
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return False
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+
+
 def _safe_source(path: Path) -> Path:
+    if _is_link_or_reparse(path):
+        raise LayoutError("runtime source must not be a symlink or reparse point")
     try:
         source = path.resolve(strict=True)
     except OSError as exc:
@@ -32,11 +42,11 @@ def _safe_source(path: Path) -> Path:
     return source
 
 
-def _copy_tree(source: Path, destination: Path) -> None:
+def _copy_tree(source: Path, destination: Path, entrypoint: str | None = None) -> None:
     for parent in destination.parents:
-        if parent.is_symlink():
+        if _is_link_or_reparse(parent):
             raise LayoutError(f"runtime destination has a symlinked parent: {parent}")
-    if destination.exists() or destination.is_symlink():
+    if _is_link_or_reparse(destination) or destination.exists():
         raise LayoutError(f"runtime destination already exists: {destination}")
     destination.mkdir(parents=True)
     try:
@@ -44,8 +54,9 @@ def _copy_tree(source: Path, destination: Path) -> None:
             current_path = Path(current)
             for name in list(directories) + list(files):
                 candidate = current_path / name
-                mode = candidate.stat(follow_symlinks=False).st_mode
-                if stat.S_ISLNK(mode):
+                info = os.lstat(candidate)
+                mode = info.st_mode
+                if _is_link_or_reparse(candidate):
                     raise LayoutError(f"runtime tree contains a symlink: {candidate}")
                 if not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
                     raise LayoutError(f"runtime tree contains a non-regular entry: {candidate}")
@@ -57,13 +68,21 @@ def _copy_tree(source: Path, destination: Path) -> None:
                 source_file = current_path / name
                 target_file = target_dir / name
                 shutil.copyfile(source_file, target_file, follow_symlinks=False)
-                source_mode = stat.S_IMODE(source_file.stat(follow_symlinks=False).st_mode)
+                source_mode = stat.S_IMODE(os.lstat(source_file).st_mode)
                 # Runtime files are always read-only to the runner; retain execute/read
                 # intent but strip every write bit.
                 os.chmod(target_file, (source_mode & 0o555) | (0o444 if source_mode & 0o444 else 0))
     except BaseException:
         shutil.rmtree(destination, ignore_errors=True)
         raise
+    if entrypoint:
+        candidate = destination / entrypoint
+        if _is_link_or_reparse(candidate) or not candidate.is_file():
+            shutil.rmtree(destination, ignore_errors=True)
+            raise LayoutError("runtime entrypoint is not a regular file")
+        if os.name != "nt" and not (stat.S_IMODE(os.lstat(candidate).st_mode) & 0o111):
+            shutil.rmtree(destination, ignore_errors=True)
+            raise LayoutError("runtime entrypoint is not executable")
 
 
 def main(argv: list[str]) -> int:
@@ -71,13 +90,16 @@ def main(argv: list[str]) -> int:
     parser.add_argument("stage", choices=("stage",))
     parser.add_argument("--source", required=True)
     parser.add_argument("--destination", required=True)
+    parser.add_argument("--entrypoint")
     args = parser.parse_args(argv)
     try:
         source = _safe_source(Path(args.source))
         destination = Path(args.destination)
         if not destination.is_absolute():
             raise LayoutError("runtime destination must be absolute")
-        _copy_tree(source, destination)
+        if args.entrypoint and (args.entrypoint.startswith("/") or any(part in ("", ".", "..") for part in args.entrypoint.split("/"))):
+            raise LayoutError("runtime entrypoint must be a confined relative path")
+        _copy_tree(source, destination, args.entrypoint)
     except (LayoutError, OSError) as exc:
         print(f"runtime-layout: {exc}", file=sys.stderr)
         return 2

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "anthropic": {
+      "provider": "anthropic-claude-code",
+      "namespace": "recursion-provider-anthropic",
+      "proxy_port": 18080,
+      "endpoints": ["api.anthropic.com"]
+    },
+    "cursor": {
+      "provider": "cursor",
+      "namespace": "recursion-provider-cursor",
+      "proxy_port": 18081,
+      "endpoints": ["api.cursor.com", "api2.cursor.sh"]
+    },
+    "gemini": {
+      "provider": "google-gemini",
+      "namespace": "recursion-provider-gemini",
+      "proxy_port": 18082,
+      "endpoints": ["generativelanguage.googleapis.com"]
+    },
+    "openrouter": {
+      "provider": "openrouter-via-opencode",
+      "namespace": "recursion-provider-openrouter",
+      "proxy_port": 18083,
+      "endpoints": ["openrouter.ai", "api.deepseek.com"]
+    },
+    "sentry-local": {
+      "provider": "sentry-local",
+      "namespace": "recursion-provider-sentry-local",
+      "proxy_port": 18084,
+      "endpoints": []
+    }
+  }
+}

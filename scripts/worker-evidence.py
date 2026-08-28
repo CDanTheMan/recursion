@@ -7,9 +7,15 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 import tempfile
 import time
 from pathlib import Path
+
+sys_path = Path(__file__).resolve().parent
+if str(sys_path) not in sys.path:
+    sys.path.insert(0, str(sys_path))
+from assignment import load_assignment
 
 
 def now() -> str:
@@ -75,6 +81,7 @@ def main() -> int:
     start.add_argument("--host", default="")
     start.add_argument("--sandbox-profile", default="")
     start.add_argument("--assignment-digest", default="")
+    start.add_argument("--assignment-file", default="")
     heartbeat = sub.add_parser("heartbeat"); heartbeat.add_argument("path"); heartbeat.add_argument("lease_epoch", type=int)
     finish = sub.add_parser("finish"); finish.add_argument("path"); finish.add_argument("status")
     finish.add_argument("outcome"); finish.add_argument("exit_code", type=int)
@@ -110,6 +117,21 @@ def main() -> int:
             supplied = getattr(args, field)
             if supplied:
                 value[field] = supplied
+        if args.assignment_file:
+            assignment_path = Path(args.assignment_file)
+            if not assignment_path.is_file() or assignment_path.is_symlink():
+                raise SystemExit("worker-evidence: assignment file must be a regular non-symlink file")
+            assignment, computed = load_assignment(assignment_path)
+            if args.assignment_digest and args.assignment_digest != computed:
+                raise SystemExit("worker-evidence: assignment digest mismatch")
+            role_spec = assignment.get("role_assignments", {}).get(args.role, assignment)
+            for field in ("engine", "provider", "capacity_pool", "model", "host", "sandbox_profile"):
+                supplied = getattr(args, field)
+                expected = role_spec.get(field, assignment.get(field, ""))
+                if supplied and expected and supplied != expected:
+                    raise SystemExit(f"worker-evidence: assignment {field} mismatch")
+            value["assignment"] = assignment
+            value["assignment_digest"] = computed
         seed = maybe_json(args.seed_evidence)
         if isinstance(seed, dict) and seed:
             value["seed_evidence"] = seed
