@@ -93,7 +93,7 @@ class RepositoryContractTests(unittest.TestCase):
         return candidate
 
     def plumbed_candidate(self, entry: str, name: str, base_candidate: dict[str, object] | None = None,
-                          root_entry: bool = False) -> dict[str, object]:
+                          root_entry: bool = False, branch_name: str | None = None) -> dict[str, object]:
         """Build a candidate tree with an arbitrary mode, independent of checkout symlink support."""
         candidate = base_candidate or self.candidate()
         source_tree = git(self.repo, "rev-parse", f"{candidate['candidate_commit']}:src")
@@ -115,7 +115,7 @@ class RepositoryContractTests(unittest.TestCase):
                                    capture_output=True, check=True).stdout.decode().strip()
         made_commit = subprocess.run(["git", "-C", str(self.repo), "commit-tree", made_root, "-p", self.source],
                                      input=f"{name}\n", text=True, capture_output=True, check=True).stdout.strip()
-        branch = f"cursor/{name}"
+        branch = f"cursor/{branch_name or name}"
         subprocess.run(["git", "-C", str(self.repo), "update-ref", f"refs/heads/{branch}", made_commit], check=True)
         return {**candidate, "external_branch": branch, "candidate_commit": made_commit}
 
@@ -265,6 +265,94 @@ class RepositoryContractTests(unittest.TestCase):
         outside = self.plumbed_candidate(f"120000 blob {target}", "escape-outside", base, root_entry=True)
         with self.assertRaisesRegex(rc.ContractError, "symlink"):
             rc._inspect_candidate_tree(self.repo, outside["candidate_commit"], ["src"])
+
+        # Case-distinct Git paths must not let an unsafe symlink be overwritten in the
+        # case-folded lookup used by Windows consumers.  Both tree insertion orders refuse.
+        for first_name, second_name in (("Escape", "escape"), ("escape", "Escape")):
+            first = self.plumbed_candidate(f"120000 blob {target}", first_name, base)
+            second = self.plumbed_candidate("120000 blob " +
+                                            subprocess.run(
+                                                ["git", "-C", str(self.repo), "hash-object", "-w", "--stdin"],
+                                                input=b"base.txt", capture_output=True, check=True,
+                                            ).stdout.decode().strip(), second_name, first)
+            with self.subTest(order=(first_name, second_name)), self.assertRaisesRegex(
+                    rc.ContractError, "case-folded path collision"):
+                rc._inspect_candidate_tree(self.repo, second["candidate_commit"], ["src"])
+
+        # Protected control-plane paths are forbidden even when the descriptor scope is "." and
+        # the entry is an ordinary tree/blob rather than a symlink target.
+        protected_blob = subprocess.run(
+            ["git", "-C", str(self.repo), "hash-object", "-w", "--stdin"],
+            input=b"protected\n", capture_output=True, check=True,
+        ).stdout.decode().strip()
+        protected_tree = subprocess.run(
+            ["git", "-C", str(self.repo), "mktree"],
+            input=f"100644 blob {protected_blob}\tsecret\n".encode(),
+            capture_output=True, check=True,
+        ).stdout.decode().strip()
+        for protected in (".git", "control-plane"):
+            protected_candidate = self.plumbed_candidate(
+                f"040000 tree {protected_tree}", protected, base, root_entry=True,
+                branch_name="protected-" + protected.removeprefix("."),
+            )
+            with self.subTest(protected=protected), self.assertRaisesRegex(
+                    rc.ContractError, "protected path"):
+                rc._inspect_candidate_tree(
+                    self.repo, protected_candidate["candidate_commit"], ["."])
+
+    def test_sha256_source_prefix_is_not_an_exact_source_sha(self) -> None:
+        sha_repo = Path(self.temp.name) / "sha256-repo"
+        sha_repo.mkdir()
+
+        def sha_git(*args: str) -> str:
+            return git(sha_repo, *args)
+
+        sha_git("init", "-q", "-b", "main", "--object-format=sha256")
+        sha_git("config", "user.name", "contract-test")
+        sha_git("config", "user.email", "contract-test@example.invalid")
+        (sha_repo / "src").mkdir()
+        (sha_repo / "src" / "base.txt").write_text("base\n", encoding="utf-8")
+        sha_git("add", ".")
+        sha_git("commit", "-qm", "base")
+        source = sha_git("rev-parse", "HEAD")
+        sha_git("branch", "recursion/integration", source)
+        sha_git("checkout", "-qb", "cursor/sha256")
+        (sha_repo / "src" / "feature.txt").write_text("candidate\n", encoding="utf-8")
+        sha_git("add", ".")
+        sha_git("commit", "-qm", "candidate")
+        commit = sha_git("rev-parse", "HEAD")
+        contract = dict(self.contract, repo=str(sha_repo))
+
+        def candidate(source_sha: str) -> dict[str, object]:
+            return {
+                "project_id": "test-project", "task_id": "task-one", "source_branch": "main",
+                "source_sha": source_sha, "external_branch": "cursor/sha256",
+                "candidate_commit": commit,
+            }
+
+        def receipt(item: dict[str, object]) -> dict[str, object]:
+            diff = git_raw(sha_repo, "diff", "--binary", str(item["source_sha"]), commit)
+            body = {
+                "schema": "recursion-controller-verifier-receipt/v1", "project_id": "test-project",
+                "task_id": "task-one", "source_sha": item["source_sha"],
+                "candidate_commit": commit, "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(),
+                "scope_digest": rc._json_digest(["src"]),
+                "gate_digest": rc._json_digest(contract["gate_commands"]), "verdict": "pass",
+                "verifier": "controller-verifier", "provenance": "recursion-controller",
+            }
+            receipt_digest = rc._json_digest(body)
+            return {
+                **body, "receipt_digest": receipt_digest,
+                "signature": hmac.new(b"hermetic-controller-key", receipt_digest.encode("ascii"),
+                                      hashlib.sha256).hexdigest(),
+            }
+
+        full = candidate(source)
+        self.assertEqual(
+            rc.verify_candidate(contract, full, sha_repo, receipt=receipt(full))["source_sha"], source)
+        prefix = candidate(source[:40])
+        with self.assertRaisesRegex(rc.ContractError, "full canonical"):
+            rc.verify_candidate(contract, prefix, sha_repo, receipt=receipt(prefix))
 
     def test_malformed_task_fields_are_typed_before_legacy_guard(self) -> None:
         for field in ("acceptance", "goal", "workdir", "gate_command", "seed"):

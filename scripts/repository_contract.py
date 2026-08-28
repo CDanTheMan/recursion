@@ -329,6 +329,7 @@ def _tree_entries(repo: Path, commit: str) -> dict[str, tuple[str, str, str]]:
     if result.returncode:
         raise ContractError("candidate tree could not be inspected", "verification-unavailable")
     entries: dict[str, tuple[str, str, str]] = {}
+    folded_paths: set[str] = set()
     for record in result.stdout.split("\x00"):
         if not record:
             continue
@@ -343,7 +344,14 @@ def _tree_entries(repo: Path, commit: str) -> dict[str, tuple[str, str, str]]:
             raise ContractError("candidate tree contains an unsafe path", "unauthorized-result") from exc
         if path in entries:
             raise ContractError("candidate tree contains duplicate paths", "unauthorized-result")
+        # Git permits case-distinct names, but Windows and other case-insensitive consumers do
+        # not.  Refuse an ambiguous tree before any symlink lookup can overwrite one entry with
+        # another (for example, `src/Escape` and `src/escape`).
+        folded_path = path.casefold()
+        if folded_path in folded_paths:
+            raise ContractError("candidate tree contains a case-folded path collision", "unauthorized-result")
         entries[path] = (mode, entry_type, oid)
+        folded_paths.add(folded_path)
     return entries
 
 
@@ -385,6 +393,10 @@ def _inspect_candidate_tree(repo: Path, commit: str, allowed: list[str]) -> None
     entries = _tree_entries(repo, commit)
     symlinks: dict[str, str] = {}
     for path, (mode, entry_type, oid) in entries.items():
+        components = PurePosixPath(path).parts
+        protected = {".git", "control-plane"}
+        if any(component.casefold() in protected for component in components):
+            raise ContractError("candidate tree contains a protected path", "unauthorized-result")
         if mode == "160000" or entry_type == "commit":
             raise ContractError("candidate tree contains an unsafe submodule entry", "unauthorized-result")
         if mode != "120000":
@@ -399,7 +411,6 @@ def _inspect_candidate_tree(repo: Path, commit: str, allowed: list[str]) -> None
     for path in symlinks:
         resolved = _resolve_tree_path(path, symlinks)
         components = PurePosixPath(resolved).parts
-        protected = {".git", "control-plane"}
         if any(component.casefold() in protected for component in components) \
                 or (_path_allowed(path, allowed) and not _path_allowed(resolved, allowed)):
             raise ContractError("candidate symlink escapes allowed_paths", "unauthorized-result")
@@ -615,7 +626,9 @@ def verify_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: 
     observed = _oid(repo, f"refs/heads/{candidate['external_branch']}", missing="unauthorized-result")
     if observed != commit:
         raise ContractError("external branch tip does not equal candidate commit", "unauthorized-result")
-    _oid(repo, source, missing="source-unavailable")
+    resolved_source = _oid(repo, source, missing="source-unavailable")
+    if resolved_source != source:
+        raise ContractError("candidate source_sha is not the full canonical commit SHA", "unauthorized-result")
     _oid(repo, commit, missing="unauthorized-result")
     if not _ancestor(repo, source, commit):
         raise ContractError("candidate is not descended from its exact source SHA", "unauthorized-result")
