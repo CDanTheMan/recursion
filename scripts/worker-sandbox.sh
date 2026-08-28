@@ -38,7 +38,7 @@ case "$ENGINE" in
       || { echo "worker-sandbox: invalid engine" >&2; exit 92; } ;;
 esac
 PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ENV_PASS=(); PLAN_OK=0; PLAN_MREQ=0
-PLAN_EGRESS=""; PLAN_ENDPOINTS=(); PLAN_TOKEN=""; ENGINE_ENV_FILE=""
+PLAN_EGRESS=""; PLAN_ENDPOINTS=(); PLAN_TOKEN="${RECURSION_ASSIGNMENT_PROXY_TOKEN:-}"; ENGINE_ENV_FILE=""
 if [ -n "$ENGINE_PLAN" ]; then
   [ -f "$ENGINE_PLAN" ] || { echo "worker-sandbox: engine plan is missing" >&2; exit 92; }
   while IFS= read -r plan_line; do
@@ -97,13 +97,10 @@ for name in plan.get("env_passthrough") or []:
 egress = plan.get("egress_profile")
 endpoints = plan.get("network_endpoints")
 token = plan.get("assignment_proxy_token")
+# Bearer capabilities must never be durable plan fields.  Reject old/forged plans that attempt
+# to smuggle one into state/runs; the controller injects the ephemeral token through the worker's
+# private environment instead.
 if token is not None:
-    if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}", token):
-        raise SystemExit(92)
-    print("TOKEN=" + token)
-if egress is not None and token is None:
-    raise SystemExit(92)
-if egress is None and token is not None:
     raise SystemExit(92)
 if egress is not None:
     if not isinstance(egress, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", egress):
@@ -120,6 +117,13 @@ print("OK=1")
 PY
 )
   [ "$PLAN_OK" = 1 ] || { echo "worker-sandbox: engine plan is invalid" >&2; exit 92; }
+  if [ -n "$PLAN_EGRESS" ]; then
+    [[ "$PLAN_TOKEN" =~ ^[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}$ ]] \
+      || { echo "worker-sandbox: assignment proxy capability is absent or malformed" >&2; exit 96; }
+  elif [ -n "$PLAN_TOKEN" ]; then
+    echo "worker-sandbox: assignment proxy capability supplied for a non-provider plan" >&2
+    exit 92
+  fi
   # A group/other-writable plan can be rewritten between resolve and launch by any local
   # process; refuse it in every mode, logical included. Root ownership is asserted only on
   # the real-run path below — a /tmp logical controller cannot own files as uid 0.
@@ -214,9 +218,9 @@ case "${RECURSION_TEST_WORKER:-}" in
         if [ -n "$PLAN_EGRESS" ]; then
           [ -x "$ROOT/scripts/provider-egress.py" ] || exit 96
           egress_args=(inject "$PLAN_EGRESS")
-          [ -z "$PLAN_TOKEN" ] || egress_args+=(--assignment-token "$PLAN_TOKEN")
           for endpoint in "${PLAN_ENDPOINTS[@]}"; do egress_args+=(--endpoint "$endpoint"); done
-          egress_lines="$(RECURSION_ROOT="$ROOT" "$PYTHON_BIN" "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
+          egress_lines="$(RECURSION_ROOT="$ROOT" RECURSION_ASSIGNMENT_PROXY_TOKEN="$PLAN_TOKEN" \
+            "$PYTHON_BIN" "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
             || { echo "worker-sandbox: provider egress profile was refused" >&2; exit 96; }
           while IFS= read -r egress_line; do
             [ -z "$egress_line" ] && continue
@@ -445,23 +449,27 @@ case "$ENGINE" in
     SECRET_RUNTIME_DIR="${RECURSION_SECRET_RUNTIME_DIR:-/run/recursion-runner}"
     "$PYTHON_BIN" "$ROOT/scripts/secret_runtime.py" scavenge --directory "$SECRET_RUNTIME_DIR" \
       || { echo "worker-sandbox: secret runtime cleanup refused" >&2; exit 95; }
+    ENV_CONTENT=""
     if [ -n "$PLAN_EGRESS" ]; then
       [ -x "$ROOT/scripts/provider-egress.py" ] \
         || { echo "worker-sandbox: provider egress helper is absent" >&2; exit 96; }
       egress_args=(inject "$PLAN_EGRESS")
       for endpoint in "${PLAN_ENDPOINTS[@]}"; do egress_args+=(--endpoint "$endpoint"); done
-      egress_lines="$(RECURSION_ROOT="$ROOT" "$PYTHON_BIN" "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
+      egress_lines="$(RECURSION_ROOT="$ROOT" RECURSION_ASSIGNMENT_PROXY_TOKEN="$PLAN_TOKEN" \
+        "$PYTHON_BIN" "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
         || { echo "worker-sandbox: provider egress profile was refused" >&2; exit 96; }
       while IFS= read -r egress_line; do
         [ -z "$egress_line" ] && continue
         case "$egress_line" in
-          HTTP_PROXY=http://127.0.0.1:*|HTTPS_PROXY=http://127.0.0.1:*) RUN+=(--setenv "$egress_line") ;;
+          HTTP_PROXY=http://127.0.0.1:*|HTTPS_PROXY=http://127.0.0.1:*) ENV_CONTENT+="$egress_line"$'\n' ;;
           *) echo "worker-sandbox: provider helper returned an unsafe environment value" >&2; exit 96 ;;
         esac
       done <<< "$egress_lines"
     fi
+    # The token is an ephemeral capability, never a plan field or systemd-run argument.  Carry it
+    # only through the root-owned 0600 runtime EnvironmentFile below, which is removed on exit.
+    [ -z "$PLAN_TOKEN" ] || ENV_CONTENT+="RECURSION_ASSIGNMENT_PROXY_TOKEN=$PLAN_TOKEN"$'\n'
     if [ "${#PLAN_ENV_PASS[@]}" -gt 0 ]; then
-      ENV_CONTENT=""
       for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
         plan_env_value="${!plan_env_name:-}"
         [ -n "$plan_env_value" ] || continue

@@ -286,6 +286,10 @@ def parse_args(argv: list) -> argparse.Namespace:
     parser.add_argument("--validate", action="store_true")
     parser.add_argument("--role", choices=ROLE_CHOICES)
     parser.add_argument("--emit-plan", metavar="PATH")
+    # Assignment authorization is deliberately not accepted here.  A resolved plan is a
+    # durable/public controller artifact; bearer capabilities are minted by work.sh at launch
+    # and carried out-of-band to the worker.  Keeping the resolver pure prevents a token from
+    # being written into state/runs or appearing in a plan digest.
     return parser.parse_args(argv)
 
 

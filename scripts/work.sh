@@ -505,6 +505,7 @@ fi
 # NON-pilot task that has BOTH a dead engine and an invalid gate now escalates on the engine
 # first — a deliberate narrowing of the historical invalid-gate precedence below.
 ENGINE_PLAN_IMPLEMENTER=""; ENGINE_PLAN_VERIFIER=""; ENGINE_SLOT_LOCKS=()
+ENGINE_TOKEN_IMPLEMENTER=""; ENGINE_TOKEN_VERIFIER=""
 engine_is_builtin(){ case "$1" in none|claude|hermes|gate|deepseek|openrouter) return 0 ;; *) return 1 ;; esac; }
 plugin_probe_ok(){ # plan-file: absent probe passes; a declared probe needs a 2xx from its URL.
   # Probe from inside the provider-only namespace when it exists, so "reachable" is measured
@@ -551,8 +552,8 @@ plugin_slot_acquire(){ # engine cap: a witnessed per-slot lock, held for the run
   done
   return 1
 }
-plugin_resolve_plan(){ # role engine plan-path: emit the plan or log the refusal (rc 92)
-  local role="$1" engine="$2" plan_path="$3" rc
+plugin_resolve_plan(){ # role engine plan-path: emit a token-free plan and mint ephemeral capability
+  local role="$1" engine="$2" plan_path="$3" rc profile assignment key_file token
   if python3 "$ROOT/scripts/resolve-engine.py" "$engine" --role "$role" \
       --emit-plan "$plan_path" 2>>"$LOG"; then
     rc=0
@@ -560,6 +561,28 @@ plugin_resolve_plan(){ # role engine plan-path: emit the plan or log the refusal
   if [ "$rc" -ne 0 ]; then
     log "engine=$engine refused by the plugin resolver for the $role role rc=$rc (2=invalid manifest/role, 3=disabled or absent)"
     return 92
+  fi
+  profile="$(python3 - "$plan_path" <<'PY'
+import json,sys
+try:
+    plan=json.load(open(sys.argv[1],encoding="utf-8"))
+except (OSError,ValueError):
+    raise SystemExit(1)
+value=plan.get("egress_profile")
+if value is not None: print(value)
+PY
+  )" || { log "engine=$engine provider profile could not be read"; return 95; }
+  if [ -n "$profile" ]; then
+    key_file="${RECURSION_PROVIDER_CAPABILITY_KEY_FILE:-/etc/recursion/provider-capability.key}"
+    assignment="$ID:$CONTRACT_DIGEST"
+    token="$(python3 "$ROOT/scripts/assignment-token.py" "$profile" "$assignment" \
+      --key-file "$key_file" 2>>"$LOG")" \
+      || { log "engine=$engine provider assignment capability could not be issued"; return 96; }
+    case "$role" in
+      implementer) ENGINE_TOKEN_IMPLEMENTER="$token" ;;
+      verifier) ENGINE_TOKEN_VERIFIER="$token" ;;
+      *) log "unknown plugin role '$role'"; return 92 ;;
+    esac
   fi
 }
 plugin_plan_checks(){ # plan resolved-model engine role: billing admission + model requirement
@@ -917,7 +940,7 @@ ARM_USAGE="${ARMLOG%.out}.usage.json"
 run_model_supervised(){ # role worktree prompt resolved-model alias usage deadline run-id [commit] [implementer-run] [evidence-dir] [readonly]
   local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
   local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
-  local evidence_dir="${11:-}" readonly="${12:-0}" engine_plan=""
+  local evidence_dir="${11:-}" readonly="${12:-0}" engine_plan="" assignment_token=""
   # Cross-engine verification (D-015): each role runs on its own contract engine.
   local active_engine="$ENGINE"
   [ "$role" != verifier ] || active_engine="$VERIFIER_ENGINE"
@@ -971,7 +994,9 @@ PY
   pause_checkpoint "worker launch" || return 75
   local worker_pgid rc now_epoch deadline_epoch heartbeat_epoch log_path
   log_path="$ARMLOG"; [ "$role" != verifier ] || log_path="$ROOT/loop/logs/$DATE-verifier-$ID-$STAMP.out"
+  if [ "$role" = verifier ]; then assignment_token="$ENGINE_TOKEN_VERIFIER"; else assignment_token="$ENGINE_TOKEN_IMPLEMENTER"; fi
   RECURSION_VERIFICATION_COMMIT="$commit_oid" RECURSION_IMPLEMENTER_RUN_ID="$implementer_run" \
+    RECURSION_ASSIGNMENT_PROXY_TOKEN="$assignment_token" \
     setsid --wait "${cmd[@]}" >"$log_path" 2>&1 &
   worker_pgid=$!
   deadline_epoch="$(( $(date +%s) + deadline_s ))"; heartbeat_epoch=0

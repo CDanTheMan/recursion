@@ -121,6 +121,19 @@ except Exception:
             check(True, "archive file-count bound refuses oversized manifests")
         else:
             check(False, "archive file-count bound refuses oversized manifests")
+        check(backup_module.artifact_time("backup-20261399T999999Z.tar.age") is None,
+              "impossible backup timestamp is rejected without raising")
+        original_sftp = backup_module.sftp
+        try:
+            backup_module.sftp = lambda *_args, **_kwargs: b"/remote/" + b"x" * (backup_module.MAX_SFTP_OUTPUT + 1)
+            try:
+                backup_module._remote_listing({"destination": {"path": "/remote"}})
+            except backup_module.BackupPolicyError:
+                check(True, "remote listing output is bounded before splitlines memory growth")
+            else:
+                check(False, "remote listing output is bounded before splitlines memory growth")
+        finally:
+            backup_module.sftp = original_sftp
 
         tools = base / "fake-tools.py"
         tools.write_text(FAKE_TOOLS, encoding="utf-8")

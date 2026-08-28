@@ -101,6 +101,40 @@ class ConnectContractTest(unittest.TestCase):
                 capability_key=key, profile_authorities={"anthropic": anthropic},
             )
 
+    def test_signed_capability_must_match_active_assignment(self):
+        key = b"k" * 32
+        token = self.proxy.issue_capability("anthropic", "assignment-a", key)
+        request = (
+            b"CONNECT api.anthropic.com:443 HTTP/1.1\r\n"
+            + f"Proxy-Authorization: Bearer {token}\r\n\r\n".encode("ascii")
+        )
+        with self.assertRaises(self.proxy.ConnectDenied):
+            self.proxy.parse_connect_request(
+                request, capability_key=key,
+                profile_authorities={"anthropic": self.allowed},
+                active_assignment="assignment-b",
+            )
+        self.assertEqual(self.proxy.parse_connect_request(
+            request, capability_key=key,
+            profile_authorities={"anthropic": self.allowed},
+            active_assignment="assignment-a",
+        ), ("api.anthropic.com", 443))
+
+    def test_basic_proxy_identity_cannot_be_swapped_between_assignments(self):
+        import base64
+        key = b"k" * 32
+        token = self.proxy.issue_capability("anthropic", "assignment-a", key)
+        basic = base64.b64encode(f"assignment-b:{token}".encode("ascii")).decode("ascii")
+        request = (
+            b"CONNECT api.anthropic.com:443 HTTP/1.1\r\n"
+            + f"Proxy-Authorization: Basic {basic}\r\n\r\n".encode("ascii")
+        )
+        with self.assertRaises(self.proxy.ConnectDenied):
+            self.proxy.parse_connect_request(
+                request, capability_key=key,
+                profile_authorities={"anthropic": self.allowed},
+            )
+
     def test_signed_capability_is_required_when_profile_authorization_is_enabled(self):
         with self.assertRaises(self.proxy.ConnectDenied):
             self.proxy.parse_connect_request(
@@ -288,6 +322,14 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn("/opt", inaccessible_lines[1])
         # The provider egress is the loopback CONNECT proxy over TCP, not a host socket.
         self.assertIn("HTTPS_PROXY=http://127.0.0.1:18080", worker)
+
+    def test_assignment_capability_stays_ephemeral_outside_durable_plans(self):
+        worker = (ROOT / "scripts/worker-sandbox.sh").read_text()
+        work = (ROOT / "scripts/work.sh").read_text()
+        self.assertIn("RECURSION_ASSIGNMENT_PROXY_TOKEN", worker)
+        self.assertIn("assignment-token.py", work)
+        self.assertIn("token-free plan", work)
+        self.assertNotIn('print("TOKEN=" + token)', worker)
 
 
 if __name__ == "__main__":

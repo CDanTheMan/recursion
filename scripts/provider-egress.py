@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -46,8 +47,11 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"id": profile["id"], "enabled": profile["enabled"]}, sort_keys=True))
         elif args.command == "inject":
             profile = profile_for_provider(args.provider, directory)
+            # The controller passes bearer capabilities through an ephemeral environment value;
+            # accepting it here keeps the token out of process argv and durable plan artifacts.
+            token = args.assignment_token or os.environ.get("RECURSION_ASSIGNMENT_PROXY_TOKEN")
             for key, value in sorted(proxy_environment(
-                    profile, args.endpoint, args.assignment_token).items()):
+                    profile, args.endpoint, token).items()):
                 print(f"{key}={value}")
         elif args.command == "allowlist":
             for host, port in sorted(enabled_allowlist(directory, args.providers)):

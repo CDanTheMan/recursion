@@ -67,6 +67,15 @@ def main() -> int:
         check(authorized.returncode == 0 and "assignment:" in authorized.stdout
               and token in authorized.stdout,
               "assignment token is bound into the proxy transport URL", failures)
+        issued = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/assignment-token.py"), "cursor", "assignment-a",
+             "--key-file", str(directory / "capability.key")],
+            capture_output=True, text=True, env=dict(env),
+        )
+        # The fixture key is deliberately absent: issuance must never silently fall back to a
+        # public/default key or mint an unbound token.
+        check(issued.returncode == 96 and "unavailable" in issued.stderr,
+              "assignment capability issuance fails closed without the human-owned key", failures)
         required_env = dict(env, RECURSION_PROVIDER_PROXY_REQUIRED="1")
         missing_token = subprocess.run(
             [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",

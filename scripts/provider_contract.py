@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import base64
+import binascii
 from urllib.parse import quote
 from pathlib import Path
 from typing import Iterable
@@ -137,7 +139,20 @@ def proxy_environment(profile: dict, endpoints: Iterable[str], token: str | None
     if token is not None:
         if not re.fullmatch(r"[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}", token):
             raise ProviderProfileError("assignment proxy token is malformed")
-        value = f"http://assignment:{quote(token, safe='._-')}@{profile['proxy']['host']}:{profile['proxy']['port']}"
+        # Encode the signed assignment identity in the HTTP Basic username as well as the bearer
+        # password.  The proxy compares both values, so a capability minted for A cannot be
+        # replayed with an active-assignment identity for B.  Malformed payloads still fail at the
+        # proxy; retaining the generic username preserves the legacy helper's shape for fixtures.
+        username = "assignment"
+        try:
+            encoded = token.split(".", 1)[0]
+            payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
+            candidate = payload.get("assignment") if isinstance(payload, dict) else None
+            if isinstance(candidate, str) and re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", candidate):
+                username = quote(candidate, safe="._-")
+        except (ValueError, TypeError, UnicodeError, json.JSONDecodeError, binascii.Error):
+            pass
+        value = f"http://{username}:{quote(token, safe='._-')}@{profile['proxy']['host']}:{profile['proxy']['port']}"
     elif os.environ.get("RECURSION_PROVIDER_PROXY_REQUIRED") == "1":
         raise ProviderProfileError("assignment proxy authorization is required")
     else:

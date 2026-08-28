@@ -28,6 +28,7 @@ cd "$ROOT"
 RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 
 FILE=""; DRY=0; PAUSED_SAFE=0; RECOVER_ONLY=0; NON_WORK_ONLY=0; WORK_ONLY=0
+DECISION_SNAPSHOT_B64=""; DECISION_FILE_DIGEST=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --file) FILE="$2"; shift 2 ;;
@@ -53,10 +54,15 @@ CHILD_SCOPE_ARGS=("${RECOVERY_SCOPE_ARGS[@]}")
 scope_allows_file(){
   local path="$1" verb
   if [ "$NON_WORK_ONLY" = 0 ] && [ "$WORK_ONLY" = 0 ]; then return 0; fi
-  verb="$(python3 - "$path" <<'PY' 2>/dev/null
+  verb="$(python3 - "$path" "${DECISION_SNAPSHOT_B64:-}" <<'PY' 2>/dev/null
 import json,sys
+import base64
 try:
-    print(json.load(open(sys.argv[1], encoding="utf-8")).get("verb", ""))
+    if sys.argv[2]:
+        value=base64.b64decode(sys.argv[2]).decode("utf-8")
+    else:
+        value=open(sys.argv[1], encoding="utf-8").read()
+    print(json.loads(value).get("verb", ""))
 except (OSError,ValueError,TypeError):
     raise SystemExit(2)
 PY
@@ -69,17 +75,25 @@ PY
 }
 scope_guard(){
   local scope_rc current_digest
-  current_digest="$(python3 - "$FILE" <<'PY' 2>/dev/null
+  [ -n "${DECISION_SNAPSHOT_B64:-}" ] || { log "REFUSED - immutable decision snapshot is absent"; return 74; }
+  current_digest="$(python3 - "${DECISION_SNAPSHOT_B64}" <<'PY' 2>/dev/null
+import base64,hashlib,sys
+print(hashlib.sha256(base64.b64decode(sys.argv[1])).hexdigest())
+PY
+)" || return 74
+  [ "$current_digest" = "$DECISION_FILE_DIGEST" ] || { log "REFUSED - immutable decision snapshot digest changed"; return 74; }
+  # The queue projection is checked against the snapshotted bytes before each action.  The action
+  # itself always consumes DECISION_JSON from that same immutable stream, so a swap after this
+  # observation cannot redirect the validated verb or arguments.
+  local source_digest
+  source_digest="$(python3 - "$FILE" <<'PY' 2>/dev/null
 import hashlib,sys
 try:
-    with open(sys.argv[1], "rb") as source:
-        print(hashlib.sha256(source.read()).hexdigest())
-except OSError:
-    raise SystemExit(2)
+    with open(sys.argv[1], "rb") as source: print(hashlib.sha256(source.read()).hexdigest())
+except OSError: raise SystemExit(2)
 PY
 )" || { log "REFUSED - decision disappeared before child action"; return 74; }
-  [ -n "${DECISION_FILE_DIGEST:-}" ] && [ "$current_digest" = "$DECISION_FILE_DIGEST" ] \
-    || { log "REFUSED - decision changed before child action"; return 74; }
+  [ "$source_digest" = "$DECISION_FILE_DIGEST" ] || { log "REFUSED - decision projection changed before child action"; return 74; }
   scope_allows_file "$FILE"; scope_rc=$?
   [ "$scope_rc" -eq 0 ] && return 0
   [ "$scope_rc" -eq 1 ] && log "REFUSED - decision scope changed before child action" \
@@ -126,7 +140,14 @@ drain_queue(){
   done
 
   finalize_claim(){
-    local claimed="$1" result_rc="$2" state reconcile_rc=0
+    local claimed="$1" result_rc="$2" state reconcile_rc=0 queue_sha=""
+    queue_sha="$(python3 - "$claimed" <<'PY' 2>/dev/null
+import hashlib,sys
+try:
+    print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())
+except OSError: raise SystemExit(2)
+PY
+)" || { log "cannot snapshot claimed decision before transition"; return 74; }
     state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed")" || return $?
     case "$state" in
       succeeded|failed|cancelled|pending)
@@ -143,12 +164,12 @@ drain_queue(){
         esac
         state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed")" || return $?
         case "$state" in
-          succeeded) python3 "$ROOT/scripts/decision-queue.py" succeed "$claimed" "action succeeded" >/dev/null ;;
+          succeeded) python3 "$ROOT/scripts/decision-queue.py" succeed "$claimed" "action succeeded" --expected-sha256 "$queue_sha" >/dev/null ;;
           failed|cancelled)
-        python3 "$ROOT/scripts/decision-queue.py" fail "$claimed" "action $state rc=$result_rc" >/dev/null
+        python3 "$ROOT/scripts/decision-queue.py" fail "$claimed" "action $state rc=$result_rc" --expected-sha256 "$queue_sha" >/dev/null
             aggregate=1 ;;
           pending)
-            python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "action deferred rc=$result_rc" >/dev/null
+            python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "action deferred rc=$result_rc" --expected-sha256 "$queue_sha" >/dev/null
             return 75 ;;
           *) log "action changed unexpectedly during recovery: $state"; return 74 ;;
         esac
@@ -156,7 +177,7 @@ drain_queue(){
       running) log "decision remains coupled to a running action"; return 75 ;;
       absent)
         if [ "$result_rc" -eq 75 ]; then
-          python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "execution deferred" >/dev/null
+          python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "execution deferred" --expected-sha256 "$queue_sha" >/dev/null
           return 75
         fi
         if [ -f "$ROOT/state/PAUSE" ]; then
@@ -166,10 +187,10 @@ drain_queue(){
           # deferrals is how an undrainable record spins forever while the actuator reports
           # healthy -- observed 2026-08-12. Disposition is unchanged; visibility is not.
           log "REFUSED under PAUSE - child rc=$result_rc for ${claimed#$ROOT/}; pending preserved, NOT a deferral"
-          python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "refused under pause rc=$result_rc" >/dev/null
+          python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "refused under pause rc=$result_rc" --expected-sha256 "$queue_sha" >/dev/null
           return 76
         fi
-        python3 "$ROOT/scripts/decision-queue.py" fail "$claimed" "no action record rc=$result_rc" >/dev/null
+        python3 "$ROOT/scripts/decision-queue.py" fail "$claimed" "no action record rc=$result_rc" --expected-sha256 "$queue_sha" >/dev/null
         aggregate=1 ;;
       *) log "corrupt action state '$state'; preserving $claimed"; return 74 ;;
     esac
@@ -283,6 +304,18 @@ if [ -z "$FILE" ]; then
 fi
 
 [ -f "$FILE" ] || { log "no decision file at $FILE"; exit 2; }
+SNAPSHOT_BUNDLE="$(python3 - "$FILE" <<'PY' 2>/dev/null
+import base64,hashlib,sys
+try:
+    with open(sys.argv[1], "rb") as source: raw=source.read()
+except OSError: raise SystemExit(2)
+print(hashlib.sha256(raw).hexdigest())
+print(base64.b64encode(raw).decode("ascii"))
+PY
+)" || { log "REFUSED - decision snapshot could not be captured"; exit 74; }
+DECISION_FILE_DIGEST="${SNAPSHOT_BUNDLE%%$'\n'*}"
+DECISION_SNAPSHOT_B64="${SNAPSHOT_BUNDLE#*$'\n'}"
+unset SNAPSHOT_BUNDLE
 # Do this before validation, action identity, consume, acknowledge, or release.  An out-of-scope
 # file remains untouched so its owning actuator can recover it.
 scope_allows_file "$FILE"; scope_rc=$?
@@ -292,13 +325,11 @@ scope_allows_file "$FILE"; scope_rc=$?
 }
 
 VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify reconcile-goal task-transition goal-transition verify-goal publish-task notification-reconcile notification-deliver notification-portfolio notification-audit notification-recover routing-refuse"
-RAW_DECISION="$(cat "$FILE" 2>/dev/null || true)"
-DECISION_FILE_DIGEST="$(python3 - "$FILE" <<'PY'
-import hashlib,sys
-with open(sys.argv[1], "rb") as source:
-    print(hashlib.sha256(source.read()).hexdigest())
+RAW_DECISION="$(python3 - "$DECISION_SNAPSHOT_B64" <<'PY'
+import base64,sys
+sys.stdout.write(base64.b64decode(sys.argv[1]).decode("utf-8"))
 PY
-)" || { log "REFUSED - decision digest could not be captured"; exit 74; }
+)" || { log "REFUSED - decision snapshot could not be decoded"; exit 74; }
 VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$RAW_DECISION" 2>&1)"
 case "$VALID" in
   OK\ *) DECISION_JSON="${VALID#OK }" ;;

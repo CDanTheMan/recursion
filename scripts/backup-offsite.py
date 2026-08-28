@@ -25,6 +25,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -45,6 +46,8 @@ STAMP_RE = re.compile(r"^backup-(\d{8}T\d{6}Z)\.tar\.age$")
 WORK_RE = re.compile(r"^\.backup\.(\d+)\.(\d+)\.[0-9a-f]{16}$")
 REMOTE_SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 MAX_REMOTE_LISTING = 1000
+MAX_SFTP_OUTPUT = MAX_REMOTE_LISTING * 256
+MAX_SFTP_ERROR = 64 * 1024
 
 
 def _object(value: object, keys: set[str], where: str) -> dict:
@@ -276,17 +279,71 @@ def pause_transfer(root: Path):
         raise BackupPolicyError(f"PAUSE transfer admission failed: {exc}") from exc
 
 
-def _run(argv: list[str], *, input_bytes: bytes | None = None) -> subprocess.CompletedProcess[bytes]:
+def _run(argv: list[str], *, input_bytes: bytes | None = None,
+         max_stdout: int = MAX_SFTP_OUTPUT, max_stderr: int = MAX_SFTP_ERROR,
+         file_size_limit: int | None = None) -> subprocess.CompletedProcess[bytes]:
     if not argv or any(not isinstance(item, str) or not item for item in argv):
         raise BackupPolicyError("external tool argv is invalid")
     try:
-        result = subprocess.run(argv, input=input_bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               check=False)
+        process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, preexec_fn=(
+                                       _limit_file_size(file_size_limit) if file_size_limit is not None
+                                       and os.name != "nt" else None))
     except OSError as exc:
         raise BackupPolicyError(f"required backup tool is unavailable: {argv[0]}") from exc
+    captured: dict[str, bytes] = {}
+    overflow = threading.Event()
+
+    def drain(name: str, stream, limit: int) -> None:
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = stream.read(65536)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > limit:
+                overflow.set()
+                try:
+                    process.kill()
+                except OSError:
+                    pass
+                return
+            chunks.append(chunk)
+        captured[name] = b"".join(chunks)
+
+    threads = [threading.Thread(target=drain, args=("stdout", process.stdout, max_stdout), daemon=True),
+               threading.Thread(target=drain, args=("stderr", process.stderr, max_stderr), daemon=True)]
+    for thread in threads:
+        thread.start()
+    if process.stdin is not None:
+        try:
+            if input_bytes:
+                process.stdin.write(input_bytes)
+            process.stdin.close()
+        except (BrokenPipeError, OSError):
+            pass
+    returncode = process.wait()
+    for thread in threads:
+        thread.join()
+    if overflow.is_set():
+        raise BackupPolicyError("backup tool output exceeds the bounded limit")
+    result = subprocess.CompletedProcess(argv, returncode, captured.get("stdout", b""),
+                                         captured.get("stderr", b""))
     if result.returncode:
         raise BackupPolicyError(f"backup tool failed: {Path(argv[0]).name}")
     return result
+
+
+def _limit_file_size(limit: int):
+    """Return a child pre-exec hook that caps files created by an untrusted SFTP client."""
+    def apply() -> None:
+        try:
+            import resource
+            resource.setrlimit(resource.RLIMIT_FSIZE, (limit, limit))
+        except (ImportError, OSError, ValueError):
+            pass
+    return apply
 
 
 def _tool(name: str, environment_name: str) -> list[str]:
@@ -321,14 +378,33 @@ def _remote_safe_path(policy: dict, name: str) -> str:
     return policy["destination"]["path"].rstrip("/") + "/" + name
 
 
-def sftp(policy: dict, batch: str) -> bytes:
+def sftp(policy: dict, batch: str, *, max_stdout: int = MAX_SFTP_OUTPUT) -> bytes:
     key = _credential_path(policy["destination"]["credential_ref"])
-    return _run(_sftp_base(policy, key), input_bytes=batch.encode("utf-8")).stdout
+    return _run(_sftp_base(policy, key), input_bytes=batch.encode("utf-8"),
+                max_stdout=max_stdout).stdout
+
+
+def sftp_download(policy: dict, remote: str, destination: Path, max_bytes: int) -> None:
+    """Download one ciphertext with a child file-size cap and a postcondition check."""
+    key = _credential_path(policy["destination"]["credential_ref"])
+    command = f"get {remote} {destination}\n"
+    _run(_sftp_base(policy, key), input_bytes=command.encode("utf-8"),
+         file_size_limit=max_bytes)
+    try:
+        observed = destination.stat().st_size
+    except OSError as exc:
+        raise BackupPolicyError("SFTP download did not produce a ciphertext") from exc
+    if observed > max_bytes:
+        destination.unlink(missing_ok=True)
+        raise BackupPolicyError("downloaded ciphertext exceeds configured byte-size bound")
 
 
 def _remote_listing(policy: dict) -> tuple[list[str], list[str]]:
     base = policy["destination"]["path"].rstrip("/")
-    output = sftp(policy, f"ls -1 {base}/*\n").decode("utf-8", "replace")
+    raw_output = sftp(policy, f"ls -1 {base}/*\n", max_stdout=MAX_SFTP_OUTPUT)
+    if len(raw_output) > MAX_SFTP_OUTPUT:
+        raise BackupPolicyError("remote artifact listing exceeds the bounded policy")
+    output = raw_output.decode("utf-8", "replace")
     names: set[str] = set()
     invalid: list[str] = []
     entries = 0
@@ -346,7 +422,7 @@ def _remote_listing(policy: dict) -> tuple[list[str], list[str]]:
                 raise BackupPolicyError("remote listing path is outside the configured destination")
         if not candidate or not REMOTE_SAFE_NAME_RE.fullmatch(candidate):
             raise BackupPolicyError("remote listing contains an unsafe artifact name")
-        if STAMP_RE.fullmatch(candidate):
+        if STAMP_RE.fullmatch(candidate) and artifact_time(candidate) is not None:
             names.add(candidate)
         else:
             invalid.append(candidate)
@@ -365,7 +441,10 @@ def artifact_time(name: str) -> datetime | None:
     match = STAMP_RE.fullmatch(name)
     if not match:
         return None
-    return datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+    try:
+        return datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
 
 
 def retention_keep(names: list[str], retention: dict, now: datetime | None = None) -> set[str]:
@@ -434,7 +513,8 @@ def reconcile_remote(policy: dict) -> dict:
                 ciphertext = work / name
                 archive = work / f"{name}.tar"
                 try:
-                    sftp(policy, f"get {_remote_path(policy, name)} {ciphertext}\n")
+                    sftp_download(policy, _remote_path(policy, name), ciphertext,
+                                  policy["archive_limits"]["max_bytes"])
                     decrypt(ciphertext, archive, policy)
                     validate_archive_bounds(archive, policy["archive_limits"])
                 except (BackupPolicyError, OSError, tarfile.TarError):
@@ -598,11 +678,12 @@ def execute_restore(config_path: Path, policy: dict, artifact: str | None) -> di
             name = artifact or (names[-1] if names else None)
             if name is None:
                 raise BackupPolicyError("no encrypted remote artifact is available")
-            if not STAMP_RE.fullmatch(name):
+            if not STAMP_RE.fullmatch(name) or artifact_time(name) is None:
                 raise BackupPolicyError("restore artifact name is nonconforming")
             ciphertext = work / name
             archive = work / "snapshot.tar"
-            sftp(policy, f"get {_remote_path(policy, name)} {ciphertext}\n")
+            sftp_download(policy, _remote_path(policy, name), ciphertext,
+                          policy["archive_limits"]["max_bytes"])
         decrypt(ciphertext, archive, policy)
         validate_archive_bounds(archive, policy["archive_limits"])
         snapshot = extract_snapshot(archive, work / "extract")

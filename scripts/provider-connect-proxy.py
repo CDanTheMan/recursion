@@ -132,6 +132,7 @@ def parse_connect_request(
     *,
     capability_key: bytes | None = None,
     profile_authorities: dict[str, set[tuple[str, int]]] | None = None,
+    active_assignment: str | None = None,
 ) -> tuple[str, int]:
     if len(request) > MAX_REQUEST or not request.endswith(b"\r\n\r\n"):
         raise MalformedConnect("request framing is invalid")
@@ -157,6 +158,7 @@ def parse_connect_request(
     except ValueError as exc:
         raise MalformedConnect("CONNECT authority is invalid") from exc
     proxy_authorization: str | None = None
+    active_identity: str | None = None
     for line in lines[1:]:
         if not line or line[:1] in " \t" or ":" not in line:
             raise MalformedConnect("header syntax is invalid")
@@ -177,12 +179,16 @@ def parse_connect_request(
         elif proxy_authorization.startswith("Basic "):
             try:
                 basic = base64.b64decode(proxy_authorization[6:], validate=True).decode("ascii")
-                _, token = basic.split(":", 1)
+                active_identity, token = basic.split(":", 1)
             except (ValueError, UnicodeError, binascii.Error):
                 raise ConnectDenied("transport authorization is invalid") from None
         else:
             raise ConnectDenied("transport authorization is invalid")
         capability = verify_capability(token, capability_key)
+        if active_identity not in (None, "assignment") and active_identity != capability["assignment"]:
+            raise ConnectDenied("transport capability identity does not match its assignment")
+        if active_assignment is not None and capability["assignment"] != active_assignment:
+            raise ConnectDenied("transport capability is not bound to the active assignment")
         allowed = profile_authorities.get(capability["profile"])
         if allowed is None:
             raise ConnectDenied("transport profile is not admitted")
@@ -494,12 +500,14 @@ class ConnectProxy:
         concurrency: int,
         capability_key: bytes | None = None,
         profile_authorities: dict[str, set[tuple[str, int]]] | None = None,
+        active_assignment: str | None = None,
     ) -> None:
         self.allowed = allowed
         self.resolutions = resolutions
         self.concurrency = concurrency
         self.capability_key = capability_key
         self.profile_authorities = profile_authorities
+        self.active_assignment = active_assignment
         self.active = 0
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -517,6 +525,7 @@ class ConnectProxy:
                 host, port = parse_connect_request(
                     request, self.allowed, capability_key=self.capability_key,
                     profile_authorities=self.profile_authorities,
+                    active_assignment=self.active_assignment,
                 )
             except ConnectDenied:
                 writer.write(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n")
@@ -676,6 +685,7 @@ def make_parser() -> argparse.ArgumentParser:
     serve.add_argument("--enabled-profiles", action="store_true",
                        help="select only profiles explicitly marked enabled")
     serve.add_argument("--capability-key-file", type=pathlib.Path)
+    serve.add_argument("--active-assignment")
     serve.add_argument("--resolve", action="append", default=[])
     serve.add_argument("--drop-user", required=True)
     serve.add_argument("--concurrency", type=int, default=16)
@@ -737,6 +747,7 @@ def main() -> int:
                 allowed if args.profile_dir is None else set(), resolutions, args.concurrency,
                 capability_key if args.profile_dir is not None else None,
                 profile_authorities if args.profile_dir is not None else None,
+                args.active_assignment,
             )))
             return 0
         authority = parse_authority(args.allow)

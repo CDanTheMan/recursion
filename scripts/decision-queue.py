@@ -662,13 +662,17 @@ def claim_pending(base: Path, kind: str, excluded_projects: set[str], allowed_ve
     return None
 
 
-def transition(base: Path, source: Path, outcome: str, evidence: str) -> Path:
+def transition(base: Path, source: Path, outcome: str, evidence: str,
+               expected_sha256: str | None = None) -> Path:
     resolved = source.resolve()
     running_root = (queue_root(base) / "running").resolve()
     if resolved.parent != running_root or outcome not in (*TERMINAL_DIRS, "pending"):
         raise ValueError("refusing an invalid decision queue transition")
     with queue_lock(base):
-        record = json.loads(resolved.read_text(encoding="utf-8"))
+        raw = resolved.read_bytes()
+        if expected_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_sha256:
+            raise ValueError("decision projection changed before queue transition")
+        record = json.loads(raw.decode("utf-8"))
         if outcome == "pending":
             record["status"] = "queued"
         else:
@@ -720,6 +724,7 @@ def main() -> int:
         cmd = sub.add_parser(name)
         cmd.add_argument("file")
         cmd.add_argument("evidence", nargs="?", default="")
+        cmd.add_argument("--expected-sha256")
     args = parser.parse_args()
     base = root()
     try:
@@ -754,7 +759,7 @@ def main() -> int:
             print(action_status(base, Path(args.file)))
         else:
             outcome = {"succeed": "succeeded", "fail": "failed", "defer": "pending"}[args.command]
-            print(transition(base, Path(args.file), outcome, args.evidence))
+            print(transition(base, Path(args.file), outcome, args.evidence, args.expected_sha256))
     except (OSError, ValueError, json.JSONDecodeError, RuntimeError) as exc:
         print(f"decision-queue: {exc}", file=sys.stderr)
         return 73
