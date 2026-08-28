@@ -389,8 +389,6 @@ def _inspect_candidate_tree(repo: Path, commit: str, allowed: list[str]) -> None
             raise ContractError("candidate tree contains an unsafe submodule entry", "unauthorized-result")
         if mode != "120000":
             continue
-        if not _path_allowed(path, allowed):
-            continue
         try:
             target_result = _git(repo, "cat-file", "blob", oid)
         except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
@@ -403,7 +401,7 @@ def _inspect_candidate_tree(repo: Path, commit: str, allowed: list[str]) -> None
         components = PurePosixPath(resolved).parts
         protected = {".git", "control-plane"}
         if any(component.casefold() in protected for component in components) \
-                or not _path_allowed(resolved, allowed):
+                or (_path_allowed(path, allowed) and not _path_allowed(resolved, allowed)):
             raise ContractError("candidate symlink escapes allowed_paths", "unauthorized-result")
 
 
@@ -723,6 +721,8 @@ def _canonical_ref(contract: dict[str, Any], task_id: str) -> str:
 def import_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: Path,
                      *, receipt: dict[str, Any] | None = None) -> dict[str, Any]:
     """Import one verified candidate exactly once; conflicting retries fail closed."""
+    validate_project_descriptor(contract)
+    repo = _require_descriptor_repository(contract, repo)
     with _serialization_lock(repo):
         verified = verify_candidate(contract, candidate, repo, receipt=receipt)
         digest = verified["candidate_digest"]
@@ -827,6 +827,8 @@ def classify_stale_base(contract: dict[str, Any], candidate: dict[str, Any], rep
 def plan_integration(contract: dict[str, Any], candidate: dict[str, Any], repo: Path,
                      *, receipt: dict[str, Any] | None = None) -> dict[str, Any]:
     """Return a serialized, read-only integration plan with an expected destination tip."""
+    validate_project_descriptor(contract)
+    repo = _require_descriptor_repository(contract, repo)
     with _serialization_lock(repo):
         canonical = isinstance(candidate, dict) and isinstance(candidate.get("task_id"), str) \
             and candidate.get("external_branch") == task_branch(contract, candidate["task_id"])

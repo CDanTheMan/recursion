@@ -92,19 +92,24 @@ class RepositoryContractTests(unittest.TestCase):
         }
         return candidate
 
-    def plumbed_candidate(self, entry: str, name: str, base_candidate: dict[str, object] | None = None) -> dict[str, object]:
+    def plumbed_candidate(self, entry: str, name: str, base_candidate: dict[str, object] | None = None,
+                          root_entry: bool = False) -> dict[str, object]:
         """Build a candidate tree with an arbitrary mode, independent of checkout symlink support."""
         candidate = base_candidate or self.candidate()
         source_tree = git(self.repo, "rev-parse", f"{candidate['candidate_commit']}:src")
         src_entries = [line.rstrip("\r") for line in git_raw(self.repo, "ls-tree", source_tree).splitlines()]
-        src_entries.append(f"{entry}\t{name}")
+        if not root_entry:
+            src_entries.append(f"{entry}\t{name}")
         made_src = subprocess.run(["git", "-C", str(self.repo), "mktree"],
                                   input=("\n".join(sorted(src_entries)) + "\n").encode(),
                                   capture_output=True, check=True).stdout.decode().strip()
         root_tree = git(self.repo, "rev-parse", f"{candidate['candidate_commit']}^{{tree}}")
         root_entries = [line.rstrip("\r") for line in git_raw(self.repo, "ls-tree", root_tree).splitlines()
                         if not line.rstrip("\r").endswith("\tsrc")]
-        root_entries.append(f"040000 tree {made_src}\tsrc")
+        if root_entry:
+            root_entries.append(f"{entry}\t{name}")
+        else:
+            root_entries.append(f"040000 tree {made_src}\tsrc")
         made_root = subprocess.run(["git", "-C", str(self.repo), "mktree"],
                                    input=("\n".join(sorted(root_entries)) + "\n").encode(),
                                    capture_output=True, check=True).stdout.decode().strip()
@@ -203,6 +208,9 @@ class RepositoryContractTests(unittest.TestCase):
         subprocess.run(["git", "clone", "-q", str(self.repo), str(wrong)], check=True)
         with self.assertRaisesRegex(rc.ContractError, "does not match"):
             rc.verify_candidate(self.contract, candidate, wrong, receipt=self.receipt(candidate))
+        with self.assertRaisesRegex(rc.ContractError, "does not match"):
+            rc.import_candidate(self.contract, candidate, wrong, receipt=self.receipt(candidate))
+        self.assertFalse((wrong / ".git" / "recursion-integration.lock").exists())
         first = rc.import_candidate(self.contract, candidate, self.repo, receipt=self.receipt(candidate))
         second = rc.import_candidate(self.contract, candidate, self.repo, receipt=self.receipt(candidate))
         self.assertEqual(first["status"], "imported")
@@ -254,6 +262,9 @@ class RepositoryContractTests(unittest.TestCase):
         submodule = self.plumbed_candidate(f"160000 commit {self.source}", "submodule", base)
         with self.assertRaisesRegex(rc.ContractError, "submodule"):
             rc.verify_candidate(self.contract, submodule, self.repo, receipt=self.receipt(submodule))
+        outside = self.plumbed_candidate(f"120000 blob {target}", "escape-outside", base, root_entry=True)
+        with self.assertRaisesRegex(rc.ContractError, "symlink"):
+            rc._inspect_candidate_tree(self.repo, outside["candidate_commit"], ["src"])
 
     def test_malformed_task_fields_are_typed_before_legacy_guard(self) -> None:
         for field in ("acceptance", "goal", "workdir", "gate_command", "seed"):
@@ -279,6 +290,14 @@ class RepositoryContractTests(unittest.TestCase):
             with self.subTest(command=command), self.assertRaises(rc.ContractError):
                 rc.validate_project_descriptor(dict(self.contract, gate_commands=[command]))
         rc.validate_project_descriptor(dict(self.contract, gate_commands=["git\tdiff --check"]))
+        for pattern in ("cursor/.x/{task_id}", "foo.lock/{task_id}"):
+            with self.assertRaises(rc.ContractError):
+                rc.validate_project_descriptor(dict(self.contract, task_branch_pattern=pattern))
+        with self.assertRaises(rc.ContractError):
+            rc.validate_project_descriptor(dict(self.contract, external_branch_patterns=["cursor/foo.lock/*"]))
+        for command in ("bash -c true", "python3 -c true", "command true", "exec true", "test -n foo"):
+            with self.assertRaises(rc.ContractError):
+                rc.validate_project_descriptor(dict(self.contract, gate_commands=[command]))
 
     def test_import_race_reconciles_identical_winner_and_receipt_is_required(self) -> None:
         candidate = self.candidate()
