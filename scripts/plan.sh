@@ -109,6 +109,43 @@ AM="$(hget automerge)";    AMS="$(hget automerge_scope)"; MODEL="$(hget model)"
 GOAL_ID="$(hget goal_id)"; DEPS="$(hget dependencies)"; ALLOWED="$(hget allowed_paths)"
 NON_GOALS="$(hget non_goals)"; WORKER_CLASS="$(hget worker_class)"
 GOAL_ID="${GOAL_ID:-goal-$WS}"
+# Phase 2 repository boundary. The frozen in-repository Chiron tree is historical residue, not a
+# destination for new work. A canonical Chiron project may still be planned from /opt/chiron;
+# only the legacy apps/chiron path is refused.
+case " ${WORKDIR:-} ${ALLOWED:-} " in
+  *" apps/chiron "*|*" apps/chiron/"*)
+    echo "plan: REFUSED new task targeting historical apps/chiron; use the canonical Chiron project repository" >&2
+    exit 6
+    ;;
+esac
+# Registered projects must bind the task to the exact current source tip. Disposable planner
+# fixtures intentionally have no descriptor/checkout and retain their v1 compatibility path.
+SOURCE_BRANCH=""; SOURCE_SHA=""; PROJECT_CONFIG=""
+for candidate_config in state/project-config/*.json; do
+  [ -f "$candidate_config" ] || continue
+  if [ "$(python3 - "$candidate_config" "$REPO" <<'PY'
+import json,sys
+try:
+    value=json.load(open(sys.argv[1],encoding='utf-8'))
+    print('yes' if value.get('repo') == sys.argv[2] else 'no')
+except (OSError,ValueError):
+    print('no')
+PY
+)" = yes ]; then
+    PROJECT_CONFIG="$candidate_config"; break
+  fi
+done
+if [ -n "$PROJECT_CONFIG" ]; then
+  [ -d "${REPO:-}/.git" ] || { echo "plan: registered project checkout is unavailable; exact source SHA cannot be admitted" >&2; exit 74; }
+  SOURCE_BRANCH="$(python3 - "$PROJECT_CONFIG" <<'PY'
+import json,sys
+print(json.load(open(sys.argv[1],encoding='utf-8')).get('default_branch',''))
+PY
+)"
+  SOURCE_SHA="$(git -C "$REPO" rev-parse --verify "refs/heads/$SOURCE_BRANCH^{commit}" 2>/dev/null || true)"
+  printf '%s' "$SOURCE_SHA" | grep -qE '^[0-9a-f]{40,64}$' \
+    || { echo "plan: registered project source branch is unavailable; exact source SHA cannot be admitted" >&2; exit 74; }
+fi
 # The planner does not grant automerge (esc-0001). Copying the header through is how chiron-001
 # and chiron-003 acquired `automerge: yes` from a roadmap edit rather than a human decision. The
 # fields are read only so the drop can be announced: a header that is silently ignored looks
@@ -138,6 +175,8 @@ tmp_task="$(mktemp "$TASKDIR/.${ID}.tmp.XXXXXX")"
   [ -n "$REPO" ]    && echo "repo: $REPO"
   [ -n "$SSHKEY" ]  && echo "sshkey: $SSHKEY"
   [ -n "$SEED" ]    && echo "seed: $SEED"
+  [ -n "$SOURCE_BRANCH" ] && echo "source_branch: $SOURCE_BRANCH"
+  [ -n "$SOURCE_SHA" ] && echo "source_sha: $SOURCE_SHA"
   [ -n "$MODEL" ]   && echo "model: $MODEL"
   echo "acceptance: ${ACC:?roadmap $WS is missing an 'acceptance:' default (no gate => no autonomy)}"
   echo "workdir: ${WORKDIR:-.}"

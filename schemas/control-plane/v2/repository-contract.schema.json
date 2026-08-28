@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recursion.local/schemas/control-plane/v2/repository-contract.schema.json",
+  "title": "Recursion v2 project repository contract",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "id", "repo", "default_branch", "integration_branch", "task_branch_pattern",
+    "external_branch_patterns", "publication_policy", "source_policy", "allowed_paths",
+    "gate_commands", "eligible_hosts", "eligible_pools"
+  ],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "repo": {"type": "string", "minLength": 1},
+    "default_branch": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$"},
+    "integration_branch": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$"},
+    "task_branch_pattern": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*\\{task_id\\}[A-Za-z0-9._/-]*$"},
+    "external_branch_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "publication_policy": {"const": "verified-integration-only"},
+    "source_policy": {"const": "exact-sha"},
+    "allowed_paths": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "gate_commands": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "eligible_hosts": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "eligible_pools": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  }
+}
