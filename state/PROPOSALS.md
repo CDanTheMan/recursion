@@ -167,3 +167,32 @@ because they touch production scripts or change Linux behavior.
     backslashes before the `.replace("\\", "/")` normalizations at lines 73/96 can act —
     both Windows-tolerance guards are permanently unreachable. Dormant on the box; pairs
     with 10 as latent portability defects.
+
+## 2026-08-28 — Fixture import chains, round three: the phase-gate audits
+
+status: ON REVIEW BRANCH `claude/phase4-red-intake-chain` — Lucas merges
+
+**Evidence:** the first certification run to include the `hermes-pilot-phase*-red` legs
+(box, post-PR77/78 merge `f4e81fa6`) failed phase4-red: its fixture stages `intake.sh`
+without `instruction_routing.py`, so poll dies before writing any instruction file.
+Verifying the fix exposed the same D-015 disease in `scripts/audit/`: phase2/3/4-green
+stage `validate-control-state.py` / `project-pilot.py` / `instruction_routing.py` without
+`engine_contract.py` (and, twice in phase3, `pilot_instruction.py`) and die with
+ModuleNotFoundError at reviewed master `d632c97` (proven in the WSL lane). Nothing runs
+these audits automatically, and phase 4 was the only phase whose green gate never ran its
+red leg — that is how both rotted unseen.
+**Change (on the branch):** complete the staged chains (tests: phase4-red, author.test.sh;
+audits: phase2/3/4-green), and run phase4-red from phase4-green as phases 5–8 already do.
+**Verification:** WSL lane red at master (phase4-red rc=1, phase2-green rc=73,
+phase3-green rc=1, phase4-green rc=73) → green at the branch tip (all four PASS;
+author/intake/phase3-red neighbors PASS). Box red legs 1/2/3/5/6/7/8 all green at
+`f4e81fa6`.
+**Open residue (not this branch's):** phase1-green, phase1-artifacts, and phase8-green
+refuse in the WSL lane for environment reasons (root sandbox, hermes venv, root systemd) —
+identically at master and tip, all box-covered. phase6-green fails only its red leg's
+check 22 (reversible gate-file tampering vs the OS read-only grading worktree) in the
+non-root lane, identically at master and tip, while the same red leg is green on the box
+as root — counterintuitive (root normally bypasses read-only) and worth a look; it also
+needs >300s there, so any future audit harness should budget 600s. phase6-red's failure
+summary hardcodes "(expected on the pre-Phase 6 base)", which misleads when the failure is
+current — cosmetic.
