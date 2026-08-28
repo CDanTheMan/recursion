@@ -1,140 +1,45 @@
-# Inbox
+# INBOX — questions and escalations requiring a human decision
 
-Where agents write instead of guessing. Clear this manually.
+(reset 2026-08-12 for first production launch on Lucas's instruction; pre-Hermes content archived at /var/backups/recursion/pre-launch-scrape-20260812T075324Z)
 
-Format:
-```
-## YYYY-MM-DD HH:MM — <one line>
-**Blocked on:** what decision or fact is missing
-**Context:** where this came up
-```
+## [esc-0004] 2026-08-12 12:15 — Supply the first Fall 2026 physics lecture block so the lead can be scheduled
+**Workstream:** physics-coursework
+**Pointer:** SYLLABUS LEAD ledger slice: Fall 2026 table contains only the `_fill from actual syllabus once posted_` placeholder; ANCHOR sets Berkeley start at 2026-08-26 and a three-week lead target
+**Blocked on:** the course/topic and first lecture date from the actual syllabus
+**Context:** lead, target dates, and the pause-new-blocks rule cannot be evaluated without a real lecture block
+**Options:** provide the official syllabus; provide only the first course/topic/date; explicitly defer physics scheduling until the syllabus is available
 
----
+## [esc-0005] 2026-08-12 15:15 — Supply the first Fall 2026 physics lecture block
+**Workstream:** physics-coursework
+**Pointer:** SYLLABUS LEAD ledger slice: the Fall 2026 table contains only `_fill from actual syllabus once posted_`; ANCHOR sets Berkeley start at 2026-08-26 and a three-week lead target.
+**Blocked on:** the course, topic, and first lecture date from the actual syllabus.
+**Context:** lead, target dates, and the pause-new-blocks rule cannot be evaluated without a real lecture block.
+**Options:** provide the official syllabus; provide only the first course/topic/date; explicitly defer physics scheduling until the syllabus is available.
 
-_(empty)_
+## [esc-0006] 2026-08-13 09:15 — Supply the first Fall 2026 physics lecture block or defer scheduling
+**Workstream:** physics-coursework
+**Pointer:** SYLLABUS LEAD ledger slice: the Fall 2026 table contains only `_fill from actual syllabus once posted_`; CURRENT INBOX `esc-0004` and `esc-0005` identify the same unresolved blocker.
+**Blocked on:** the course, first topic block, and first lecture date from the actual syllabus.
+**Context:** ANCHOR requires a three-week lecture lead; syllabus rules require pausing new blocks if lead falls below one week. Neither can be evaluated without the first block.
+**Options:** provide the official syllabus; provide the first course/topic/date only; explicitly defer physics scheduling until the syllabus is available.
 
-## build escalation — chiron-001  (2026-08-05T11:05:13Z)
-**Workstream:** chiron
-**Pointer:** state/tasks/chiron-001.md · branch loop/work/chiron-001 · arm log loop/logs/2026-08-05-arm-chiron-001-110508.out
-Blocked on: acceptance test failed after retry
-Acceptance: `npm install && npm run build` exited 254
-Options: inspect the worktree/branch, fix the task or its acceptance, then `recursion work chiron-001`.
+## [esc-0008] 2026-08-14 15:15 — Supply the first Fall 2026 physics lecture block or explicitly defer scheduling
+**Workstream:** physics-coursework
+**Pointer:** SYLLABUS LEAD ledger slice: the Fall 2026 table contains only `_fill from actual syllabus once posted_`; CURRENT INBOX esc-0004 through esc-0006 record the same unresolved blocker.
+**Blocked on:** the course, first topic block, and first lecture date from the actual syllabus.
+**Context:** ANCHOR requires a three-week lecture lead; syllabus rules require pausing new blocks below one week. Neither can be evaluated without the first block.
+**Options:** provide the official syllabus; provide the first course/topic/date only; explicitly defer physics scheduling until the syllabus is available.
 
-## resolved 2026-08-05T11:26:47Z — chiron-001 PASSED
-claude /login done on box; re-ran and acceptance (npm install && npm run build) went green.
-Auto-committed to loop/work/chiron-001 (ba02110) at $0.00 on flat Max. Nothing to action.
+## [esc-0009] 2026-08-15 18:15 — Provide the first Fall 2026 physics lecture block or explicitly defer scheduling
+**Workstream:** physics-coursework
+**Pointer:** SYLLABUS LEAD ledger slice: the Fall 2026 table contains only `_fill from actual syllabus once posted_`; CURRENT INBOX esc-0004, esc-0005, esc-0006, and esc-0008 are duplicate unresolved instances.
+**Blocked on:** the course, first topic block, and first lecture date from the actual syllabus.
+**Context:** ANCHOR requires a three-week lecture lead; the syllabus rule requires pausing new blocks below one week. Neither can be evaluated without the first block.
+**Options:** provide the official syllabus; provide only the first course/topic/date; explicitly defer physics scheduling until the syllabus is available.
 
-## build escalation — cubic-castles-001  (2026-08-05T12:53:40Z)
-**Workstream:** cubic-castles
-**Pointer:** state/tasks/cubic-castles-001.md · branch loop/work/cubic-castles-001 · arm log loop/logs/2026-08-05-arm-cubic-castles-001-121558.out
-Blocked on: acceptance test failed after retry
-Acceptance: `bash /opt/recursion/scripts/gsc-conformance-gate.sh` exited 2
-Options: inspect the worktree/branch, fix the task or its acceptance, then `recursion work cubic-castles-001`.
-
-## DECISION NEEDED — GSC overnight blocked on the model corpus  (2026-08-05T12:58Z)
-**Workstream:** cubic-castles (golden-stallion-client renderer)
-**What happened:** the build-loop drove cubic-castles-001 (water vertex-alpha). The arm did NOT
-fabricate a pass — it correctly diagnosed there is no code defect: the alpha lane is already
-implemented, and the two "failing" tests fail only on whole-mesh TOTALS that need the block
-model corpus. That corpus (`user-client/render/data/models/blocks`, 1,464 `.modl` ~12 MB) is
-**gitignored + Steam/PC-local**, so it is absent from the box clone (0 .modl on disk).
-**Scope:** ALL 48 of the 211 conformance tests that fail on the box trace to this one absence.
-The gate REQUIRES progress (>=1 failing test flips green), so no task targeting those tests can
-ever pass here. 001 failed (exit 2 = no-progress); 002/003 are now `blocked`; the driver stopped
-itself after 2 non-passes (no Max quota wasted).
-**Unblock (one-time, ~12 MB, NOT anti-cheat sensitive — static model files, no live game):**
-  scp the corpus from the PC checkout to the box, e.g. from the machine that has it:
-    scp -r golden-stallion-client/user-client/render/data/models  \
-        gs-recursion:/opt/golden-stallion-client/user-client/render/data/
-  (or regenerate from DynaContent/models/blocks per that repo's .gitignore note.)
-**After it is present:** re-queue with `sed -i "s/^status: blocked/status: queued/" state/tasks/cubic-castles-00{1,2,3}.md`
-then relaunch `nohup env RECURSION_ROOT=/opt/recursion GSC_DEADLINE_MIN=360 bash scripts/gsc-overnight.sh &`.
-Only then does the offline gate have tractable PROGRESS to measure.
-
-## 2026-08-05 12:58 — Provide the PC-local block-model corpus to unblock Cubic Castles conformance
-**Workstream:** cubic-castles
-**Pointer:** CURRENT INBOX: “DECISION NEEDED — GSC overnight blocked on the model corpus”; `golden-stallion-client/user-client/render/data/models/blocks`
-**Blocked on:** the 1,464 gitignored `.modl` files (~12 MB) are absent from the box; all relevant conformance tasks require them.
-**Context:** cubic-castles-001 correctly found the alpha lane already implemented, but the gate cannot measure whole-mesh totals without the corpus. Tasks 002–003 are blocked.
-**Options:** copy `user-client/render/data/models` from the PC checkout to `/opt/golden-stallion-client/user-client/render/data/`; or regenerate `models/blocks` from `DynaContent/models/blocks`.
-
-## 2026-08-05 15:15 — Choose how to provide the Cubic Castles block-model corpus
-**Workstream:** cubic-castles
-**Pointer:** CURRENT INBOX: “DECISION NEEDED — GSC overnight blocked on the model corpus”; `golden-stallion-client/user-client/render/data/models/blocks`
-**Blocked on:** the 1,464 gitignored `.modl` files (~12 MB) are absent from the box, so all relevant conformance tasks cannot measure whole-mesh totals.
-**Context:** `cubic-castles-001` found the water alpha lane already exists; the offline gate requires at least one failing test to turn green. Tasks 002–003 are blocked.
-**Options:** copy `user-client/render/data/models` from the PC checkout to `/opt/golden-stallion-client/user-client/render/data/`; or regenerate `models/blocks` from `DynaContent/models/blocks`.
-
-## RESOLVED 2026-08-05 — GSC corpus deployed; conformance is COMPLETE
-Corpus (1,399 .modl + 65 .ref, 12 MB) copied to the box GSC checkout; work.sh now SEEDS it into
-every worktree (git worktree does not inherit gitignored files — new `seed:` task field). Gate
-re-baselined 154 -> 205 genuine passes. Full corpus-present suite: 211 tests, 206 pass, 0 FAIL,
-5 skip. The 5 skips need a different absent dataset (gitignored raw cell dumps furys/world-*-cells
-.bin) and only VERIFY an already-implemented cull rule.
-=> There are NO failing conformance tests. cubic-castles-001/002/003 are MOOT — those features
-(water alpha, hsr, multipart) were already implemented; the corpus was the entire blocker.
-=> STRATEGIC: the conformance suite is now a REGRESSION gate (keep 205 green), not a source of
-open work. The real renderer frontier is NATIVE-DIFF QUALITY (reduce Sum|per-slot triangle error|
-vs the native mesh registry — joining gap, overlay pass, etc., per docs/spec/RENDERER-NORTH-STAR).
-That needs a NUMERIC acceptance gate (error must strictly decrease + a control reproducing the old
-golden), not the pass/fail gate. Building that gate + a task planner over the real frontier is the
-next design decision for productive overnight GSC work. Nothing is broken; the loop is idle by
-correct design (no tractable conformance tasks).
-
-## 2026-08-05 21:15 — Approve the next Cubic Castles renderer acceptance frontier
-**Workstream:** cubic-castles
-**Pointer:** OPEN SELF-IMPROVEMENT PROPOSALS: “Add a native-diff numeric acceptance gate for GSC frontier tasks”; `scripts/gsc-nativediff-gate.sh`; `state/gsc/nativediff-baseline.tsv`; `state/roadmaps/gsc-renderer.md`
-**Blocked on:** approval of the numeric native-mesh error metric/control and its integration into overnight task planning.
-**Context:** after the corpus deployment, conformance is complete (206 pass, 0 fail, 5 skip); it can only detect regressions and supplies no tractable new renderer tasks.
-**Options:** approve the proposed strict-decrease native-diff gate and planner integration; approve the gate but defer planner integration; reject/defer and keep GSC overnight work idle pending a different frontier definition.
-
-## build escalation — chiron-002  (2026-08-05T21:18:58Z)
-**Workstream:** chiron
-**Pointer:** state/tasks/chiron-002.md · branch loop/work/chiron-002 · arm log loop/logs/2026-08-05-arm-chiron-002-211542.out
-Blocked on: acceptance test failed after retry
-Acceptance: `cd apps/chiron && npm install && npm run build` exited 1
-Options: inspect the worktree/branch, fix the task or its acceptance, then `recursion work chiron-002` (or `recursion requeue chiron-002`).
-Close it with: `recursion resolve chiron-002 "<what you decided>"`.
-
-## RESOLVED 2026-08-05T21:22:51Z — chiron-002
-bootstrap flaw: no chiron scaffold on origin/master, so the arm branched from an empty base and reinvented the app as a static build instead of extending the Next.js scaffold. Chain paused (AUTO_PLAN=0) until the scaffold is on main.
-
-## build escalation — chiron-003  (2026-08-05T21:58:59Z)
-**Workstream:** chiron
-**Pointer:** state/tasks/chiron-003.md · branch loop/work/chiron-003 · arm log loop/logs/2026-08-05-arm-chiron-003-215545.out
-Blocked on: acceptance test failed after retry
-Acceptance: `cd apps/chiron && npm install && npm run build` exited 1
-Options: inspect the worktree/branch, fix the task or its acceptance, then `recursion work chiron-003` (or `recursion requeue chiron-003`).
-Close it with: `recursion resolve chiron-003 "<what you decided>"`.
-
-## 2026-08-06 00:15 — Approve the Cubic Castles native-diff acceptance frontier
-**Workstream:** cubic-castles
-**Pointer:** CURRENT INBOX: “2026-08-05 21:15 — Approve the next Cubic Castles renderer acceptance frontier”; `scripts/gsc-nativediff-gate.sh`; `state/gsc/nativediff-baseline.tsv`; `state/roadmaps/gsc-renderer.md`
-**Blocked on:** human approval of the numeric native-mesh error metric/control and whether to integrate it into overnight task planning.
-**Context:** corpus-present conformance is complete (206 pass, 0 fail, 5 skips), so it is now regression-only and provides no tractable renderer work; the next frontier is reducing native-diff error.
-**Options:** approve the strict-decrease gate plus planner integration; approve the gate but defer planner integration; defer/reject and leave GSC overnight work idle pending another frontier.
-
-## 2026-08-06 03:15 — Approve the Cubic Castles native-diff acceptance frontier
-**Workstream:** cubic-castles
-**Pointer:** CURRENT INBOX: “2026-08-06 00:15 — Approve the Cubic Castles native-diff acceptance frontier”; `scripts/gsc-nativediff-gate.sh`; `state/gsc/nativediff-baseline.tsv`; `state/roadmaps/gsc-renderer.md`
-**Blocked on:** Human approval of the numeric native-mesh error metric/control and whether it may drive overnight task planning.
-**Context:** Corpus-present conformance is complete (206 pass, 0 fail, 5 skip), so it is regression-only and yields no tractable renderer work. The native-diff frontier now needs a reviewed acceptance definition.
-**Options:** Approve strict-decrease gate plus planner integration; approve the gate but defer planner integration; defer/reject and leave GSC overnight work idle pending another frontier.
-
-## 2026-08-06 06:15 — Approve the Cubic Castles native-diff acceptance frontier
-**Workstream:** cubic-castles
-**Pointer:** OPEN SELF-IMPROVEMENT PROPOSALS: “Add a native-diff numeric acceptance gate for GSC frontier tasks”; `scripts/gsc-nativediff-gate.sh`; `state/gsc/nativediff-baseline.tsv`; `state/roadmaps/gsc-renderer.md`
-**Blocked on:** Human approval of the numeric native-mesh error metric/control and whether it may drive overnight task planning.
-**Context:** Corpus-present conformance is complete (206 pass, 0 fail, 5 skip), so it is regression-only and yields no tractable renderer work. The native-diff frontier needs a reviewed acceptance definition.
-**Options:** Approve strict-decrease gate plus planner integration; approve the gate but defer planner integration; defer/reject and leave GSC overnight work idle pending another frontier.
-
-## 2026-08-06 [RESOLVED] — native-diff acceptance frontier -> DECISIONS.md D-002
-Chosen: Option B — approve the strict-decrease native-diff gate as the metric; DEFER planner integration until the two-tier decomp-decision gate lands + register de-staled + a supervised shakedown. Stop re-raising this. See D-002.
-
-## [esc-0001] 2026-08-06 09:15 — Disable autonomous merging and verify branch protection
-**Workstream:** supervision
-**Pointer:** OPEN SELF-IMPROVEMENT PROPOSALS: “Turn OFF autonomous merge to the default branch”; `/opt/recursion/.env`; `state/tasks/chiron-001.md`; `state/tasks/chiron-003.md`
-**Blocked on:** human action to disable `RECURSION_ALLOW_AUTOMERGE=1`, remove task-level automerge fields, and confirm protected default branches on every repo with a write deploy key.
-**Context:** `chiron-001` and `chiron-003` are passed with automerge enabled; the next qualifying loop can fast-forward-push a default branch, contrary to the recorded review-branch-only policy.
-**Options:** disable automerge and enforce branch protection now; or explicitly authorize autonomous default-branch merging despite the control-plane invariant.
-**2026-08-26 progress (session, review branch):** the seam is closed and the check is machine-runnable. `plan.sh` no longer copies `automerge:`/`automerge_scope:` from roadmap headers (the drop is announced on stderr naming the roadmap); `scripts/verify-branch-protection.py` verifies all three facts and exits 0 only when verified clean (1 violation / 3 unverifiable). Tokenless run 2026-08-26: 0 violations, 8 of 8 remote rows UNVERIFIABLE. Still human-only: set `RECURSION_ALLOW_AUTOMERGE=0` in `/opt/recursion/.env`; strip the fields from `chiron-001`/`chiron-003` if they still exist on the box; actually enable protection on GitHub (classic protection is unavailable on free-plan private repos — if that applies, the verifier will truthfully report UNPROTECTED and gate 6 stays shut until the plan, visibility, or the invariant changes); then run the verifier with a repo-admin-read token and keep its `--json` record as gate-6 evidence.
+## [esc-0010] 2026-08-18 06:15 — Provide the first Fall 2026 physics lecture block or defer scheduling
+**Workstream:** physics-coursework
+**Pointer:** SYLLABUS LEAD ledger slice contains only `_fill from actual syllabus once posted_`; CURRENT INBOX esc-0004, esc-0005, esc-0006, esc-0008, and esc-0009 are duplicate unresolved instances.
+**Blocked on:** the course, first topic block, and first lecture date from the actual syllabus.
+**Context:** ANCHOR requires a three-week lecture lead, and the syllabus rules require pausing new blocks below one week. Neither can be evaluated from the current ledger.
+**Options:** provide the official syllabus; provide only the first course/topic/date; explicitly defer physics scheduling until the syllabus is available.
