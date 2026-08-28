@@ -62,10 +62,10 @@ def test_digest_stable_and_sensitive() -> None:
 
 def test_allowed_paths_normalized() -> None:
     value = amod.resolve_assignment(
-        **{**BASE_KWARGS, "allowed_paths": ["b/", "a", "a", "b"]},
+        **{**BASE_KWARGS, "allowed_paths": ["b", "a", "a", "b"]},
         created_at="2026-08-28T00:00:00Z",
     )
-    check(value["allowed_paths"] == ["a", "b"], "allowed_paths is sorted, deduped, trailing-slash-stripped")
+    check(value["allowed_paths"] == ["a", "b"], "allowed_paths is sorted and deduped")
 
 
 def test_allowed_paths_fail_closed() -> None:
@@ -79,12 +79,12 @@ def test_allowed_paths_fail_closed() -> None:
         except amod.AssignmentError:
             check(True, f"authority-bearing path {path!r} is refused")
 
-    value = amod.resolve_assignment(
-        **{**BASE_KWARGS, "allowed_paths": ["apps\\api\\", "apps/./api"]},
-        created_at="2026-08-28T00:00:00Z",
-    )
-    check(value["allowed_paths"] == ["apps/api"],
-          "platform aliases canonicalize before assignment digesting")
+    for path in (r"apps\api", "apps/./api", "apps//api", "./apps/api"):
+        try:
+            amod.resolve_assignment(**{**BASE_KWARGS, "allowed_paths": [path]}, created_at="2026-08-28T00:00:00Z")
+            check(False, f"noncanonical path alias {path!r} is refused")
+        except amod.AssignmentError:
+            check(True, f"noncanonical path alias {path!r} is refused")
 
 
 def test_fail_closed_invalid_inputs() -> None:
@@ -147,7 +147,7 @@ def test_capacity_pool_validation(tmp_path: Path) -> None:
     pool_dir.mkdir()
     good = {
         "schema_version": 1, "id": "cursor-ultra", "kind": "subscription",
-        "billing_basis": "flat-subscription", "provider": "cursor",
+        "billing_basis": "metered", "provider": "cursor",
         "quota": {"period": "weekly", "source": "declared", "limit": 500, "unit": "requests"},
         "on_demand": False,
     }
@@ -157,6 +157,10 @@ def test_capacity_pool_validation(tmp_path: Path) -> None:
 
     kwargs = dict(BASE_KWARGS)
     kwargs["capacity_pool"] = "cursor-ultra"
+    kwargs["engine"] = "cursor"
+    kwargs["provider"] = "cursor"
+    kwargs["billing_basis"] = "metered"
+    kwargs["metered_approved"] = True
     value = amod.resolve_assignment(**kwargs, capacity_pool_dir=pool_dir, created_at="2026-08-28T00:00:00Z")
     check(value["capacity_pool"] == "cursor-ultra", "assignment records a valid capacity_pool")
 

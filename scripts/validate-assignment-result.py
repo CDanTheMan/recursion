@@ -27,7 +27,7 @@ import calendar
 import json
 import sys
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import assignment as assignment_mod  # noqa: E402
@@ -35,7 +35,8 @@ from jsonl_durable import JsonlDurabilityError, append_jsonl, find_jsonl_objects
 
 PROG = "validate-assignment-result"
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-PROTECTED_BRANCHES = frozenset({"main", "master"})
+PROTECTED_BRANCHES = frozenset({"main", "master", "recursion/integration"})
+SHA_RE = assignment_mod.SHA_RE
 
 
 class RefusalError(Exception):
@@ -67,9 +68,19 @@ def results_ledger(root: Path) -> Path:
 
 
 def path_within_allowed(path: str, allowed_paths: list[str]) -> bool:
-    if "." in allowed_paths:
-        return True
-    normalized = path.strip("/")
+    try:
+        if not isinstance(path, str) or not path or path != path.strip() or "\\" in path:
+            return False
+        if path.startswith("/") or __import__("re").match(r"^[A-Za-z]:", path):
+            return False
+        parts = PurePosixPath(path).parts
+        if not parts or any(part in {".", ".."} for part in parts):
+            return False
+        normalized = PurePosixPath(*parts).as_posix()
+        if normalized != path:
+            return False
+    except (TypeError, ValueError):
+        return False
     for prefix in allowed_paths:
         prefix = prefix.rstrip("/")
         if normalized == prefix or normalized.startswith(prefix + "/"):
@@ -92,8 +103,11 @@ def check(args: argparse.Namespace) -> dict:
     value = assignment_mod.load_assignment(root, args.task_id, args.assignment_digest)
     if value is None:
         raise RefusalError(6, f"no assignment on record for task_id={args.task_id} digest={args.assignment_digest}")
-    if assignment_mod.canonical_digest(value) != value.get("assignment_digest") \
-            or value.get("assignment_digest") != args.assignment_digest:
+    try:
+        assignment_mod.validate_assignment(value, require_source_evidence=True)
+    except assignment_mod.AssignmentError as exc:
+        raise RefusalError(2, f"persisted assignment is invalid or tampered: {exc}") from exc
+    if value.get("assignment_digest") != args.assignment_digest:
         raise RefusalError(2, "persisted assignment failed its own digest check (tampered)")
 
     evidence = load_run_evidence(args.run_evidence)
@@ -101,6 +115,11 @@ def check(args: argparse.Namespace) -> dict:
         raise RefusalError(2, "run evidence is not bound to the given assignment digest")
     if evidence.get("task_id") != args.task_id:
         raise RefusalError(2, "run evidence names a different task_id than the assignment")
+    if evidence.get("base_commit") not in {None, value["source_sha"]}:
+        raise RefusalError(2, "run evidence base commit does not match assigned source SHA")
+    source_evidence = evidence.get("source_evidence")
+    if source_evidence != value["source_evidence"]:
+        raise RefusalError(2, "run evidence is missing or has mismatched source evidence")
 
     ledger = results_ledger(root)
     try:
@@ -121,16 +140,41 @@ def check(args: argparse.Namespace) -> dict:
     if args.result_repository and args.result_repository != value["source_repository"]:
         raise RefusalError(5, "returned repository does not match the assigned source_repository")
     if args.result_branch:
-        if args.result_branch in PROTECTED_BRANCHES:
+        try:
+            branch = assignment_mod.canonical_branch(args.result_branch, "result_branch")
+        except assignment_mod.AssignmentError as exc:
+            raise RefusalError(5, str(exc)) from exc
+        protected = set(PROTECTED_BRANCHES)
+        protected.update({value.get("default_branch"), value.get("integration_branch")})
+        if branch in protected:
             raise RefusalError(5, f"returned branch {args.result_branch!r} is a protected default branch")
+        if not (branch == f"loop/work/{args.task_id}" or branch.startswith("cursor/")
+                or branch.startswith("recursion/extern/")):
+            raise RefusalError(5, f"returned branch {args.result_branch!r} is not an authorized result ref")
     for changed in args.changed_path:
         if not path_within_allowed(changed, value["allowed_paths"]):
             raise RefusalError(5, f"returned path {changed!r} is outside the assigned allowed_paths")
+    if args.result_commit:
+        if not SHA_RE.fullmatch(args.result_commit):
+            raise RefusalError(2, "returned result commit is not a canonical object id")
+        for label, observed in (
+            ("run evidence commit", evidence.get("commit_oid")),
+            ("machine gate commit", (evidence.get("machine_gate") or {}).get("commit_oid")
+             if isinstance(evidence.get("machine_gate"), dict) else None),
+        ):
+            if observed and observed != args.result_commit:
+                raise RefusalError(2, f"{label} does not match returned result commit")
+    elif args.record:
+        raise RefusalError(2, "durable result validation requires an exact result commit")
 
     record = {
         "schema_version": 1, "assignment_digest": args.assignment_digest, "task_id": args.task_id,
         "run_id": args.run_id, "result_repository": args.result_repository,
         "result_branch": args.result_branch, "result_commit": args.result_commit,
+        "source_sha": value["source_sha"], "source_evidence": value["source_evidence"],
+        "provider": value["provider"], "capacity_pool": value.get("capacity_pool"),
+        "host": value["host"], "model": value.get("model"),
+        "sandbox_profile": value["sandbox_profile"],
         "verified_at": assignment_mod.now_iso(), "status": "accepted",
     }
     if args.record:

@@ -32,6 +32,7 @@ from project_authority import (
     AUTHORITY_V2_RELATIONSHIPS, AUTHORITY_V2_SCHEMA, OID, AuthorityError,
     authenticated_remote_head, observe_clean_source, prove_current_remote_lineage,
 )
+from remote_evidence import RemoteEvidenceError, read_events_for_run
 
 
 IDENT = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
@@ -256,7 +257,12 @@ def scoped_state(base: Path, project: str) -> dict:
     for path in status_files(base / "state/runs", ".json", 500):
         value = read_json(path, unavailable_code=74)
         if value.get("project_id") == project or value.get("task_id") in task_ids:
-            value = dict(value); value["file"] = str(path.relative_to(base)); runs.append(value)
+            value = dict(value)
+            try:
+                value["remote_events"] = read_events_for_run(path)
+            except RemoteEvidenceError as exc:
+                fail(f"remote evidence is unusable for {path.name}: {exc}", 74)
+            value["file"] = str(path.relative_to(base)); runs.append(value)
     evidence = []
     for path in status_files(base / "state/evidence", None, 100):
         value = (fields(path, unavailable_code=74) if path.suffix == ".md"

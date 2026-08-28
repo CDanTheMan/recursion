@@ -80,6 +80,14 @@ QUOTA_KEYS = {"period", "source", "limit", "unit"}
 QUOTA_PERIODS = frozenset({"daily", "weekly", "monthly"})
 QUOTA_SOURCES = frozenset({"observed", "declared"})
 FALLBACK_POLICIES = frozenset({"defer", "refuse"})
+BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,255}$")
+ASSIGNMENT_FIELDS = frozenset({
+    "schema_version", "task_id", "project_id", "role", "source_repository", "source_branch",
+    "source_sha", "source_evidence", "seed_manifest_digest", "engine", "provider",
+    "capacity_pool", "billing_basis", "metered_approved", "model", "model_parameters", "host",
+    "sandbox_profile", "network_profile", "allowed_paths", "gate_digest", "publication_policy",
+    "default_branch", "integration_branch", "created_at", "assignment_digest",
+})
 
 
 class AssignmentError(Exception):
@@ -116,14 +124,16 @@ def _normalize_allowed_paths(values: object) -> list[str]:
     for raw in values:
         if not _nonempty(raw) or "\x00" in raw:
             raise AssignmentError("allowed_paths entries must be nonempty canonical strings")
-        candidate = raw.replace("\\", "/")
+        if "\\" in raw:
+            raise AssignmentError(f"allowed_paths entry contains a backslash: {raw!r}")
+        candidate = raw
         if candidate.startswith("/") or re.match(r"^[A-Za-z]:", candidate):
             raise AssignmentError(f"allowed_paths entry must be repository-relative: {raw!r}")
         parts = PurePosixPath(candidate).parts
-        if not parts or any(part == ".." for part in parts):
+        if not parts or any(part in {".", ".."} for part in parts):
             raise AssignmentError(f"allowed_paths entry escapes repository scope: {raw!r}")
         canonical = PurePosixPath(*parts).as_posix()
-        if canonical == ".." or canonical.startswith("../"):
+        if canonical != raw or canonical == ".." or canonical.startswith("../"):
             raise AssignmentError(f"allowed_paths entry escapes repository scope: {raw!r}")
         normalized.add(canonical)
     return sorted(normalized)
@@ -205,6 +215,50 @@ def load_capacity_pool(pool_dir: Path, pool_id: str) -> dict:
     return validate_capacity_pool(data, pool_id)
 
 
+def engine_contract_attribution(engine: str) -> tuple[str | None, str | None]:
+    if engine == "claude":
+        return "anthropic-claude-code", "flat-subscription"
+    path = Path(os.environ.get("RECURSION_ENGINE_DIR") or Path(__file__).resolve().parent / "engines") / f"{engine}.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        billing = data.get("billing") if isinstance(data, dict) else None
+        if isinstance(billing, dict): return billing.get("provider"), billing.get("basis")
+    except (OSError, json.JSONDecodeError):
+        pass
+    return None, None
+
+
+def canonical_branch(value: object, field: str = "branch") -> str:
+    """Validate a git branch name without allowing platform/path aliases."""
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise AssignmentError(f"{field} must be a nonempty canonical branch")
+    if "\\" in value or "//" in value or "@{" in value or not BRANCH_RE.fullmatch(value):
+        raise AssignmentError(f"{field} is not a canonical git branch: {value!r}")
+    parts = value.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise AssignmentError(f"{field} contains a dot/path alias: {value!r}")
+    if value.startswith("/") or value.endswith("/") or value.endswith("."):
+        raise AssignmentError(f"{field} is not a canonical git branch: {value!r}")
+    return value
+
+
+def canonical_source_evidence(value: object, repository: str, branch: str, sha: str) -> dict:
+    if not isinstance(value, dict):
+        raise AssignmentError("source_evidence is required and must be an object")
+    required = {"repository", "branch", "sha", "verified"}
+    if set(value) not in (required, required | {"schema_version"}):
+        raise AssignmentError("source_evidence must contain exactly repository, branch, sha, verified")
+    if "schema_version" in value and value.get("schema_version") != 1:
+        raise AssignmentError("source_evidence schema_version must be 1")
+    if value.get("repository") != repository or value.get("branch") != branch or value.get("sha") != sha:
+        raise AssignmentError("source_evidence does not match the assigned source")
+    if value.get("verified") is not True:
+        raise AssignmentError("source_evidence is not verified")
+    result = {"repository": repository, "branch": branch, "sha": sha, "verified": True}
+    if "schema_version" in value: result = {"schema_version": 1, **result}
+    return result
+
+
 # --- assignment resolution ----------------------------------------------------------------
 
 def canonical_digest(value: dict) -> str:
@@ -220,6 +274,9 @@ def resolve_assignment(
     seed_manifest_digest: str | None = None, capacity_pool: str | None = None,
     model: str | None = None, model_parameters: dict | None = None,
     gate_digest: str | None = None, capacity_pool_dir: Path | None = None,
+    source_evidence: dict | None = None, billing_basis: str | None = None,
+    metered_approved: bool = False, default_branch: str = "main",
+    integration_branch: str = "recursion/integration",
     created_at: str | None = None,
 ) -> dict:
     if not IDENTIFIER_RE.fullmatch(task_id or ""):
@@ -230,8 +287,7 @@ def resolve_assignment(
         raise AssignmentError(f"role must be one of {sorted(ROLES)}")
     if not _nonempty(source_repository):
         raise AssignmentError("source_repository must be a nonempty string")
-    if not _nonempty(source_branch):
-        raise AssignmentError("source_branch must be a nonempty string")
+    source_branch = canonical_branch(source_branch, "source_branch")
     if not SHA_RE.fullmatch(source_sha or ""):
         raise AssignmentError(f"invalid source_sha {source_sha!r}")
     if seed_manifest_digest is not None and not DIGEST_RE.fullmatch(seed_manifest_digest):
@@ -240,11 +296,12 @@ def resolve_assignment(
         raise AssignmentError(f"invalid engine {engine!r}")
     if not _nonempty(provider) or not PROVIDER_RE.fullmatch(provider):
         raise AssignmentError(f"invalid provider {provider!r}")
+    pool = None
     if capacity_pool is not None:
         if not IDENTIFIER_RE.fullmatch(capacity_pool):
             raise AssignmentError(f"invalid capacity_pool {capacity_pool!r}")
         # Referencing a pool must resolve; a caller that names one is asserting it is real.
-        load_capacity_pool(capacity_pool_dir or capacity_pool_dir_default(), capacity_pool)
+        pool = load_capacity_pool(capacity_pool_dir or capacity_pool_dir_default(), capacity_pool)
     if model is not None and not _nonempty(model):
         raise AssignmentError("model must be null or a nonempty string")
     params = dict(model_parameters or {})
@@ -262,6 +319,36 @@ def resolve_assignment(
         raise AssignmentError(f"invalid gate_digest {gate_digest!r}")
     if not SLUG_RE.fullmatch(publication_policy or ""):
         raise AssignmentError(f"invalid publication_policy {publication_policy!r}")
+    default_branch = canonical_branch(default_branch, "default_branch")
+    integration_branch = canonical_branch(integration_branch, "integration_branch")
+    if default_branch == integration_branch:
+        raise AssignmentError("default_branch and integration_branch must differ")
+    source_evidence = canonical_source_evidence(
+        source_evidence or {"repository": source_repository, "branch": source_branch,
+                            "sha": source_sha, "verified": True},
+        source_repository, source_branch, source_sha)
+    if billing_basis is not None and billing_basis not in CAPACITY_POOL_BILLING_BASES:
+        raise AssignmentError(f"invalid billing_basis {billing_basis!r}")
+    engine_provider, engine_basis = engine_contract_attribution(engine)
+    if engine_provider is not None and engine_provider != provider:
+        raise AssignmentError("assignment provider does not match engine manifest")
+    if billing_basis is not None and engine_basis is not None and billing_basis != engine_basis:
+        raise AssignmentError("assignment billing_basis does not match engine manifest")
+    if not isinstance(metered_approved, bool):
+        raise AssignmentError("metered_approved must be boolean")
+    if pool is not None:
+        if pool["provider"] != provider:
+            raise AssignmentError("capacity pool provider does not match assignment provider")
+        if pool.get("roles") is not None and role not in pool["roles"]:
+            raise AssignmentError("assignment role is not allowed by capacity pool")
+        if pool.get("host_id") is not None and pool["host_id"] != host:
+            raise AssignmentError("assignment host does not match capacity pool host")
+        pool_basis = pool["billing_basis"]
+        if billing_basis is not None and billing_basis != pool_basis:
+            raise AssignmentError("assignment billing_basis does not match capacity pool")
+        billing_basis = pool_basis
+    if billing_basis == "metered" and not metered_approved:
+        raise AssignmentError("metered assignment requires explicit approval")
 
     value = {
         "schema_version": SCHEMA_VERSION,
@@ -271,10 +358,13 @@ def resolve_assignment(
         "source_repository": source_repository,
         "source_branch": source_branch,
         "source_sha": source_sha,
+        "source_evidence": source_evidence,
         "seed_manifest_digest": seed_manifest_digest,
         "engine": engine,
         "provider": provider,
         "capacity_pool": capacity_pool,
+        "billing_basis": billing_basis,
+        "metered_approved": metered_approved,
         "model": model,
         "model_parameters": params,
         "host": host,
@@ -283,6 +373,8 @@ def resolve_assignment(
         "allowed_paths": normalized_allowed_paths,
         "gate_digest": gate_digest,
         "publication_policy": publication_policy,
+        "default_branch": default_branch,
+        "integration_branch": integration_branch,
         "created_at": created_at or now_iso(),
     }
     value["assignment_digest"] = canonical_digest(value)
@@ -296,6 +388,8 @@ def capacity_pool_dir_default() -> Path:
 # --- persistence ----------------------------------------------------------------------
 
 def assignment_path(root: Path, task_id: str, digest: str) -> Path:
+    if not IDENTIFIER_RE.fullmatch(task_id or "") or not DIGEST_RE.fullmatch(digest or ""):
+        raise AssignmentError("assignment path identity is not canonical")
     return root / task_id / f"{digest}.json"
 
 
@@ -324,8 +418,21 @@ def _atomic_write(path: Path, text: str) -> None:
 
 
 def persist_assignment(root: Path, value: dict) -> Path:
+    validate_assignment(value, require_source_evidence=True)
+    root = Path(root)
+    if root.exists() and root.is_symlink():
+        raise AssignmentError("assignment root must not be a symlink")
+    if index_path(root).is_symlink():
+        raise AssignmentError("assignment index must not be a symlink")
+    root.mkdir(parents=True, exist_ok=True)
+    task_dir = root / value["task_id"]
+    if task_dir.exists() and task_dir.is_symlink():
+        raise AssignmentError("assignment task directory must not be a symlink")
+    task_dir.mkdir(exist_ok=True)
     path = assignment_path(root, value["task_id"], value["assignment_digest"])
     encoded = json.dumps(value, indent=2, sort_keys=True) + "\n"
+    if path.is_symlink():
+        raise AssignmentError("assignment record must not be a symlink")
     if path.exists():
         existing = path.read_text(encoding="utf-8")
         if existing != encoded:
@@ -333,8 +440,32 @@ def persist_assignment(root: Path, value: dict) -> Path:
                 f"assignment {path} already exists with different content "
                 "(content-address collision — refusing to overwrite an immutable record)"
             )
-        return path
-    _atomic_write(path, encoded)
+    else:
+        # A rename can replace a concurrent writer's immutable record. Install via a hard link
+    # from a fully fsynced temporary file: link(2) is create-if-absent, so the loser can only
+    # compare the winner's bytes and never overwrite them. Windows falls back to O_EXCL.
+        fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(task_dir))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(encoded); handle.flush(); os.fsync(handle.fileno())
+            try:
+                os.link(name, path)
+                installed = True
+            except FileExistsError:
+                installed = False
+            if not installed:
+                if path.is_symlink():
+                    raise AssignmentError("assignment record must not be a symlink")
+                existing = path.read_text(encoding="utf-8")
+                if existing != encoded:
+                    raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
+        finally:
+            if os.path.exists(name):
+                os.unlink(name)
+    if os.name != "nt":
+        dfd = os.open(task_dir, os.O_RDONLY)
+        try: os.fsync(dfd)
+        finally: os.close(dfd)
     try:
         from jsonl_durable import append_jsonl  # local import: only needed on the write path
         append_jsonl(
@@ -347,14 +478,19 @@ def persist_assignment(root: Path, value: dict) -> Path:
             },
             dedupe_field="assignment_digest", dedupe_value=value["assignment_digest"],
         )
-    except Exception as exc:  # index is best-effort; the content-addressed file is authoritative
-        diag(f"assignment index append failed (non-fatal): {exc}")
+    except Exception as exc:
+        raise AssignmentError(f"assignment index append failed: {exc}") from exc
     return path
 
 
 def load_assignment(root: Path, task_id: str, digest: str) -> dict | None:
-    path = assignment_path(root, task_id, digest)
-    if not path.is_file():
+    try:
+        path = assignment_path(root, task_id, digest)
+    except AssignmentError:
+        return None
+    if Path(root).is_symlink() or (Path(root) / task_id).is_symlink():
+        return None
+    if path.is_symlink() or not path.is_file():
         return None
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -362,6 +498,46 @@ def load_assignment(root: Path, task_id: str, digest: str) -> dict | None:
         return None
     if not isinstance(value, dict):
         return None
+    return value
+
+
+def validate_assignment(value: object, require_source_evidence: bool = False) -> dict:
+    if not isinstance(value, dict):
+        raise AssignmentError("assignment is not an object")
+    missing = {"schema_version", "task_id", "project_id", "role", "source_repository", "source_branch",
+               "source_sha", "seed_manifest_digest", "engine", "provider", "capacity_pool", "model",
+               "model_parameters", "host", "sandbox_profile", "network_profile", "allowed_paths",
+               "gate_digest", "publication_policy", "created_at", "assignment_digest"} - value.keys()
+    if missing:
+        raise AssignmentError("assignment missing required field(s): " + ", ".join(sorted(missing)))
+    if value.get("schema_version") != SCHEMA_VERSION or set(value) - ASSIGNMENT_FIELDS:
+        raise AssignmentError("assignment schema/runtime mismatch")
+    if require_source_evidence:
+        required_phase3 = {"source_evidence", "billing_basis", "metered_approved", "default_branch", "integration_branch"}
+        missing_phase3 = required_phase3 - value.keys()
+        if missing_phase3:
+            raise AssignmentError("Phase 3 assignment missing: " + ", ".join(sorted(missing_phase3)))
+    if not IDENTIFIER_RE.fullmatch(str(value.get("task_id") or "")) or not IDENTIFIER_RE.fullmatch(str(value.get("project_id") or "")):
+        raise AssignmentError("assignment identity is not canonical")
+    if value.get("role") not in ROLES or not _nonempty(value.get("source_repository")):
+        raise AssignmentError("assignment role or source repository is invalid")
+    source_sha = value.get("source_sha")
+    if not SHA_RE.fullmatch(source_sha or ""):
+        raise AssignmentError("assignment source_sha is invalid")
+    source_branch = canonical_branch(value.get("source_branch"), "source_branch")
+    if require_source_evidence or "source_evidence" in value:
+        canonical_source_evidence(value.get("source_evidence"), value["source_repository"], source_branch, source_sha)
+    _normalize_allowed_paths(value.get("allowed_paths"))
+    if value.get("billing_basis") not in (None, *CAPACITY_POOL_BILLING_BASES):
+        raise AssignmentError("assignment billing_basis is invalid")
+    if "metered_approved" in value and not isinstance(value.get("metered_approved"), bool):
+        raise AssignmentError("assignment metered_approved must be boolean")
+    if value.get("billing_basis") == "metered" and value.get("metered_approved") is not True:
+        raise AssignmentError("metered assignment is not approved")
+    canonical_branch(value.get("default_branch"), "default_branch")
+    canonical_branch(value.get("integration_branch"), "integration_branch")
+    if canonical_digest(value) != value.get("assignment_digest"):
+        raise AssignmentError("assignment digest does not match its content")
     return value
 
 
@@ -391,9 +567,14 @@ def command_resolve(args: argparse.Namespace) -> int:
             sandbox_profile=args.sandbox_profile, network_profile=args.network_profile,
             allowed_paths=_split_paths(args.allowed_paths), gate_digest=args.gate_digest,
             publication_policy=args.publication_policy, capacity_pool_dir=pool_dir,
+            source_evidence=(json.loads(Path(args.source_evidence_file).read_text(encoding="utf-8"))
+                             if args.source_evidence_file else None),
+            billing_basis=args.billing_basis, metered_approved=args.metered_approved,
+            default_branch=args.default_branch, integration_branch=args.integration_branch,
         )
-        persist_assignment(root, value)
-    except AssignmentError as exc:
+        if not args.no_persist:
+            persist_assignment(root, value)
+    except (AssignmentError, OSError, json.JSONDecodeError) as exc:
         diag(str(exc))
         return 2
     if args.out:
@@ -432,7 +613,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     resolve.add_argument("--gate-digest", default=None)
     resolve.add_argument("--root", default=None)
     resolve.add_argument("--capacity-pool-dir", default=None)
+    resolve.add_argument("--source-evidence-file", default=None)
+    resolve.add_argument("--billing-basis", default=None)
+    resolve.add_argument("--metered-approved", action="store_true")
+    resolve.add_argument("--default-branch", default="main")
+    resolve.add_argument("--integration-branch", default="recursion/integration")
     resolve.add_argument("--out", default=None)
+    resolve.add_argument("--no-persist", action="store_true",
+                         help="emit a validated candidate without writing durable state")
 
     show = sub.add_parser("show", help="print a previously persisted assignment")
     show.add_argument("--task-id", required=True)

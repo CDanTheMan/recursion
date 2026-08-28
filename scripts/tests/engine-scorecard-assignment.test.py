@@ -16,6 +16,8 @@ from pathlib import Path
 SOURCE = Path(__file__).resolve().parents[2]
 SCRIPTS = SOURCE / "scripts"
 SCORECARD = SCRIPTS / "engine-scorecard.py"
+sys.path.insert(0, str(SCRIPTS))
+import assignment as amod
 
 failures: list[str] = []
 
@@ -51,7 +53,24 @@ def main() -> int:
         root = Path(tmp)
         (root / "state" / "tasks").mkdir(parents=True)
         (root / "state" / "runs").mkdir(parents=True)
+        (root / "state" / "assignments").mkdir(parents=True)
         (root / "state" / "tasks" / "task-legacy.md").write_text(TASK_LEGACY, encoding="utf-8")
+
+        def persist(task_id: str) -> dict:
+            value = amod.resolve_assignment(
+                task_id=task_id, project_id="scorecard", role="implementer",
+                source_repository="scorecard-repo", source_branch="main", source_sha="a" * 40,
+                engine="hermes", provider="anthropic", host="scorecard-host",
+                sandbox_profile="strict-linux", network_profile="none", allowed_paths=["apps"],
+                publication_policy="append-only", billing_basis="flat-subscription",
+                default_branch="main", integration_branch="recursion/integration",
+                created_at="2026-08-28T00:00:00Z",
+            )
+            amod.persist_assignment(root / "state" / "assignments", value)
+            return value
+
+        assigned = persist("task-legacy")
+        orphan_assigned = persist("task-orphan-assigned")
 
         # Legacy run evidence: no top-level "engine" -> must fall back to the task-header join.
         (root / "state" / "runs" / "run-legacy.json").write_text(json.dumps({
@@ -60,19 +79,20 @@ def main() -> int:
         }), encoding="utf-8")
 
         # Assignment-native run evidence for the SAME task, but bound to a DIFFERENT engine than
-        # the (mutable) task header currently says -- proves the run's own value wins.
+        # the (mutable) task header currently says -- proves the persisted assignment wins.
         (root / "state" / "runs" / "run-assigned.json").write_text(json.dumps({
             "schema_version": 1, "id": "run-assigned", "task_id": "task-legacy", "role": "implementer",
             "model_alias": "sonnet-routine", "status": "succeeded", "outcome": "worker-complete",
-            "engine": "hermes", "assignment_digest": "e" * 64,
+            "engine": "claude", "assignment_digest": assigned["assignment_digest"],
         }), encoding="utf-8")
 
         # An assignment-native run whose task_id does not resolve at all: must NOT count toward
         # unknown_task_runs, because its engine is attributable directly off the record.
         (root / "state" / "runs" / "run-orphan-assigned.json").write_text(json.dumps({
-            "schema_version": 1, "id": "run-orphan-assigned", "task_id": "task-does-not-exist",
+            "schema_version": 1, "id": "run-orphan-assigned", "task_id": "task-orphan-assigned",
             "role": "implementer", "model_alias": "legacy", "status": "succeeded",
             "outcome": "worker-complete", "engine": "claude",
+            "assignment_digest": orphan_assigned["assignment_digest"],
         }), encoding="utf-8")
 
         # A legacy run whose task_id does not resolve: SHOULD still count toward unknown_task_runs.
@@ -98,14 +118,22 @@ def main() -> int:
 
         assigned_bucket = bucket(rows, "hermes", "sonnet-routine")
         check(assigned_bucket is not None,
-              "the assignment-native run (record.engine='hermes') lands in the (hermes, sonnet-routine) bucket, NOT (claude, ...)")
+              "the assignment-native run lands in the persisted-assignment (hermes, sonnet-routine) bucket, NOT (claude, ...)")
+        if assigned_bucket is not None:
+            attribution = assigned_bucket.get("attribution", [{}])[0]
+            check(attribution.get("provider") == "anthropic" and attribution.get("host") == "scorecard-host"
+                  and attribution.get("sandbox_profile") == "strict-linux"
+                  and attribution.get("source_branch") == "main",
+                  "scorecard JSON renders persisted provider/host/sandbox/source attribution")
+            check("Assignment attribution" in result.stdout and "provider=anthropic" in result.stdout,
+                  "scorecard markdown renders assignment attribution")
         claude_bucket_run_count = (legacy_bucket or {}).get("runs_by_role", {}).get("implementer", 0)
         check(claude_bucket_run_count == 1,
               "the (claude, sonnet-routine) bucket counts only the legacy run, not the hermes-assigned one")
 
-        orphan_assigned_bucket = bucket(rows, "claude", "legacy")
+        orphan_assigned_bucket = bucket(rows, "hermes", "legacy")
         check(orphan_assigned_bucket is not None,
-              "an assignment-native run with an unresolvable task_id still lands in its own (engine, alias) bucket")
+              "an assignment-native run with no task header still lands in its persisted-assignment bucket")
 
         check(data["unknown_task_runs"] == 1,
               f"only the LEGACY orphaned run (no record.engine) counts toward unknown_task_runs (got {data['unknown_task_runs']})")

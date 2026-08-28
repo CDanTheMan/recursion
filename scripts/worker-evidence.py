@@ -11,6 +11,8 @@ import tempfile
 import time
 from pathlib import Path
 
+import assignment as assignment_mod
+
 
 def now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -21,10 +23,28 @@ def iso(epoch: int) -> str:
 
 
 def load(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise SystemExit("worker-evidence: run evidence is not an object")
+    digest = value.get("assignment_digest")
+    if digest:
+        parent = path.parent
+        assignment_root = parent.parent / "assignments" if parent.name == "runs" else parent / "assignments"
+        persisted = assignment_mod.load_assignment(assignment_root, str(value.get("task_id") or ""), str(digest))
+        try:
+            assignment_mod.validate_assignment(persisted, require_source_evidence=True)
+        except assignment_mod.AssignmentError as exc:
+            raise SystemExit(f"worker-evidence: persisted assignment is unusable: {exc}") from exc
+        if value.get("assignment") != copy_assignment(persisted):
+            raise SystemExit("worker-evidence: run assignment projection disagrees with persisted assignment")
+        if any(value.get(key) != persisted.get(key) for key in copy_assignment(persisted)):
+            raise SystemExit("worker-evidence: run attribution disagrees with persisted assignment")
+    return value
 
 
 def atomic(path: Path, value: dict) -> None:
+    if path.is_symlink() or (path.parent.exists() and path.parent.is_symlink()):
+        raise OSError(f"refusing symlinked evidence path: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
@@ -55,6 +75,54 @@ def maybe_json(path: str | None) -> object:
     return json.loads(raw)
 
 
+def assignment_from(path: str, digest: str, task_id: str, role: str = "", run_path: Path | None = None) -> dict:
+    if run_path is not None:
+        parent = run_path.parent
+        assignment_root = parent.parent / "assignments" if parent.name == "runs" else parent / "assignments"
+        try:
+            expected = assignment_mod.assignment_path(assignment_root, task_id, digest)
+        except assignment_mod.AssignmentError as exc:
+            raise SystemExit(2) from exc
+        if os.path.realpath(path) != os.path.realpath(expected):
+            raise SystemExit(2)
+    try:
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+        assignment_mod.validate_assignment(value, require_source_evidence=True)
+    except (OSError, json.JSONDecodeError, assignment_mod.AssignmentError) as exc:
+        raise SystemExit(f"worker-evidence: invalid persisted assignment: {exc}") from exc
+    if value.get("assignment_digest") != digest or value.get("task_id") != task_id \
+            or (role and value.get("role") != role):
+        raise SystemExit(2)
+    return value
+
+
+def copy_assignment(value: dict) -> dict:
+    keys = ("schema_version", "assignment_digest", "task_id", "project_id", "role", "engine", "provider",
+            "capacity_pool", "billing_basis", "host", "model", "model_parameters",
+            "sandbox_profile", "network_profile", "allowed_paths", "publication_policy",
+            "source_repository", "source_branch", "source_sha", "source_evidence",
+            "default_branch", "integration_branch", "metered_approved", "seed_manifest_digest",
+            "gate_digest", "created_at")
+    return {key: value.get(key) for key in keys}
+
+
+def validate_usage(usage: object, assignment: dict | None) -> None:
+    if assignment is None or not isinstance(usage, dict) or not usage:
+        return
+    provider = usage.get("provider")
+    basis = usage.get("billing_basis")
+    if provider is not None and provider != assignment.get("provider"):
+        raise SystemExit("worker-evidence: usage provider disagrees with persisted assignment")
+    if basis is not None and basis != assignment.get("billing_basis"):
+        raise SystemExit("worker-evidence: usage billing basis disagrees with persisted assignment")
+    if assignment.get("billing_basis") == "metered" and not assignment.get("metered_approved"):
+        raise SystemExit("worker-evidence: unapproved metered usage is refused")
+    for key, minimum in (("tokens", 0), ("cost_usd", 0)):
+        item = usage.get(key)
+        if item is not None and (isinstance(item, bool) or not isinstance(item, (int, float)) or item < minimum):
+            raise SystemExit(f"worker-evidence: invalid usage {key}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
@@ -76,6 +144,18 @@ def main() -> int:
     # preserved); a caller that supplies only one is a controller bug, refused (exit 2).
     start.add_argument("--assignment-digest", default="")
     start.add_argument("--assignment-file", default="")
+    prepare = sub.add_parser("prepare")
+    for name in ("path", "run_id", "task_id", "role", "model_alias", "worktree", "base_commit",
+                 "log", "network_policy"):
+        prepare.add_argument(f"--{name.replace('_', '-')}", required=True)
+    prepare.add_argument("--deadline-epoch", required=True, type=int)
+    prepare.add_argument("--implementer-run-id", default="")
+    prepare.add_argument("--commit-oid", default="")
+    prepare.add_argument("--seed-evidence", default="")
+    prepare.add_argument("--assignment-digest", required=True)
+    prepare.add_argument("--assignment-file", required=True)
+    activate = sub.add_parser("activate")
+    activate.add_argument("path"); activate.add_argument("pid", type=int); activate.add_argument("process_group", type=int)
     heartbeat = sub.add_parser("heartbeat"); heartbeat.add_argument("path"); heartbeat.add_argument("lease_epoch", type=int)
     finish = sub.add_parser("finish"); finish.add_argument("path"); finish.add_argument("status")
     finish.add_argument("outcome"); finish.add_argument("exit_code", type=int)
@@ -89,12 +169,14 @@ def main() -> int:
     verify.add_argument("implementer_run_id"); verify.add_argument("verdict_file")
     link = sub.add_parser("link-verifier"); link.add_argument("path"); link.add_argument("verifier_run_id")
     link.add_argument("commit_oid"); link.add_argument("verdict_file")
-    remote = sub.add_parser("remote-evidence")  # Phase 3: remote session/branch/commit/artifact/cancellation
+    remote = sub.add_parser("remote-evidence")
     remote.add_argument("path")
     remote.add_argument("--session-id", default="")
     remote.add_argument("--branch", default="")
     remote.add_argument("--commit", default="")
-    remote.add_argument("--artifact", action="append", default=[])
+    remote.add_argument("--artifact", action="append", default=[], help="relative/path=sha256")
+    remote.add_argument("--event-type", choices=["session", "result", "artifact", "cancel", "terminal"], default="result")
+    remote.add_argument("--terminal-status", choices=["succeeded", "failed", "cancelled"], default="")
     remote.add_argument("--cancelled-at", default="")
     remote.add_argument("--cancellation-reason", default="")
     args = parser.parse_args(); path = Path(getattr(args, "path"))
@@ -120,33 +202,53 @@ def main() -> int:
         if isinstance(seed, dict) and seed:
             value["seed_evidence"] = seed
         if args.assignment_digest:
-            assignment = maybe_json(args.assignment_file)
-            if not isinstance(assignment, dict) or assignment.get("assignment_digest") != args.assignment_digest \
-                    or assignment.get("task_id") != args.task_id:
-                raise SystemExit(2)
-            value["assignment_digest"] = args.assignment_digest
-            for key in ("engine", "provider", "capacity_pool", "host", "sandbox_profile", "model"):
-                value[key] = assignment.get(key)
+            assignment = assignment_from(args.assignment_file, args.assignment_digest, args.task_id, args.role, path)
+            value["assignment"] = copy_assignment(assignment)
+            value.update(copy_assignment(assignment))
+        atomic(path, value); return 0
+
+    if args.command == "prepare":
+        assignment = assignment_from(args.assignment_file, args.assignment_digest, args.task_id, args.role, Path(args.path))
+        value = {"schema_version": 1, "id": args.run_id, "task_id": args.task_id,
+                 "worker": f"{args.role}:{args.model_alias}", "role": args.role,
+                 "model_alias": args.model_alias, "worktree": args.worktree,
+                 "base_commit": args.base_commit, "pid": 0, "process_group": 0,
+                 "lease_expires": iso(args.deadline_epoch), "deadline": iso(args.deadline_epoch),
+                 "deadline_epoch": args.deadline_epoch, "network_policy": args.network_policy,
+                 "heartbeat_at": now(), "log": args.log, "usage": {}, "result": {},
+                 "changed_files": [], "status": "prepared", "started_at": now(),
+                 "assignment": copy_assignment(assignment)}
+        value.update(copy_assignment(assignment))
+        if args.implementer_run_id: value["implementer_run_id"] = args.implementer_run_id
+        if args.commit_oid: value["verification_commit"] = args.commit_oid
+        seed = maybe_json(args.seed_evidence)
+        if isinstance(seed, dict) and seed: value["seed_evidence"] = seed
+        atomic(Path(args.path), value); return 0
+
+    if args.command == "activate":
+        if args.pid < 1 or args.process_group < 1: raise SystemExit(2)
+        value = load(path)
+        if value.get("status") != "prepared": raise SystemExit(2)
+        value.update(pid=args.pid, process_group=args.process_group, status="running", started_at=now())
         atomic(path, value); return 0
 
     if args.command == "remote-evidence":
+        from remote_evidence import RemoteEvidenceError, append_remote_event
         value = load(path)
-        remote_value = dict(value.get("remote") or {})
-        if args.session_id:
-            remote_value["session_id"] = args.session_id
-        if args.branch:
-            remote_value["branch"] = args.branch
-        if args.commit:
-            remote_value["commit"] = args.commit
-        if args.artifact:
-            remote_value["artifacts"] = sorted(set(remote_value.get("artifacts", [])) | set(args.artifact))
-        if args.cancelled_at:
-            remote_value["cancelled_at"] = args.cancelled_at
-        if args.cancellation_reason:
-            remote_value["cancellation_reason"] = args.cancellation_reason
-        remote_value["recorded_at"] = now()
-        value["remote"] = remote_value
-        atomic(path, value); return 0
+        digest = value.get("assignment_digest")
+        if digest:
+            try: assignment_mod.validate_assignment(value.get("assignment"), require_source_evidence=True)
+            except assignment_mod.AssignmentError as exc: raise SystemExit(str(exc)) from exc
+        try:
+            event = append_remote_event(
+                path=path, run=value, event_type=args.event_type, session_id=args.session_id,
+                branch=args.branch, commit=args.commit, artifacts=args.artifact,
+                cancelled_at=args.cancelled_at, cancellation_reason=args.cancellation_reason,
+                terminal_status=args.terminal_status,
+            )
+        except RemoteEvidenceError as exc:
+            raise SystemExit(str(exc)) from exc
+        print(json.dumps(event, sort_keys=True)); return 0
 
     value = load(path)
     if args.command == "heartbeat":
@@ -159,6 +261,7 @@ def main() -> int:
         if isinstance(scope, dict):
             value["changed_files"] = scope.get("entries", [])
         usage = maybe_json(args.usage_file)
+        validate_usage(usage, value.get("assignment") if value.get("assignment_digest") else None)
         if isinstance(usage, dict):
             value["usage"] = usage
         if args.commit_oid:

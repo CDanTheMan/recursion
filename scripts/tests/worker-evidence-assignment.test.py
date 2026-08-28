@@ -68,9 +68,8 @@ def make_assignment(tmp_path: Path, task_id: str = "task-1") -> tuple[Path, str]
         network_profile="provider-only", allowed_paths=["apps/api"],
         publication_policy="verified-integration-only", created_at="2026-08-28T00:00:00Z",
     )
-    out = tmp_path / "assignment.json"
-    out.write_text(json.dumps(value, indent=2, sort_keys=True), encoding="utf-8")
-    return out, value["assignment_digest"]
+    persisted = amod.persist_assignment(root, value)
+    return persisted, value["assignment_digest"]
 
 
 def test_start_binds_assignment(tmp_path: Path) -> None:
@@ -120,28 +119,37 @@ def test_start_refuses_task_id_mismatch(tmp_path: Path) -> None:
 
 def test_remote_evidence(tmp_path: Path) -> None:
     path = tmp_path / "run.json"
-    run(start_args(path, "run-remote", "task-1"))
+    assignment_file, digest = make_assignment(tmp_path)
+    persisted = tmp_path / "assignments" / "task-1" / f"{digest}.json"
+    bound_args = start_args(path, "run-remote", "task-1") + ["--assignment-digest", digest,
+        "--assignment-file", str(assignment_file)]
+    run(bound_args)
     first = run(["remote-evidence", str(path), "--session-id", "sess-1", "--branch", "cursor/task-1",
-                "--commit", "b" * 40, "--artifact", "artifact-a", "--artifact", "artifact-b"])
+                "--commit", "b" * 40, "--artifact", "apps/api/a.txt=" + "c" * 64,
+                "--artifact", "apps/api/b.txt=" + "d" * 64])
     check(first.returncode == 0, f"remote-evidence exits 0 (got {first.returncode}, stderr={first.stderr!r})")
-    value = json.loads(path.read_text(encoding="utf-8"))
-    remote = value.get("remote", {})
-    check(remote.get("session_id") == "sess-1", "remote-evidence records session_id")
-    check(remote.get("branch") == "cursor/task-1", "remote-evidence records branch")
-    check(remote.get("commit") == "b" * 40, "remote-evidence records commit")
-    check(remote.get("artifacts") == ["artifact-a", "artifact-b"], "remote-evidence records sorted, deduped artifacts")
-    check("cancelled_at" not in remote, "remote-evidence omits cancellation fields when not given")
+    events = [json.loads(line) for line in (tmp_path / "remote-events.jsonl").read_text().splitlines()]
+    remote = events[0]
+    check(remote.get("session_id") == "sess-1", "remote-evidence records immutable session_id")
+    check(remote.get("branch") == "cursor/task-1", "remote-evidence records authorized branch")
+    check(remote.get("commit") == "b" * 40, "remote-evidence records exact commit")
+    check([a["path"] for a in remote.get("artifacts", [])] == ["apps/api/a.txt", "apps/api/b.txt"],
+          "remote-evidence records typed artifact paths")
+    check(all(len(a["sha256"]) == 64 for a in remote.get("artifacts", [])),
+          "remote-evidence records artifact sha256 values")
 
-    second = run(["remote-evidence", str(path), "--artifact", "artifact-a", "--artifact", "artifact-c",
+    second = run(["remote-evidence", str(path), "--session-id", "sess-1", "--event-type", "cancel",
                  "--cancelled-at", "2026-08-28T01:00:00Z", "--cancellation-reason", "quota-exhausted"])
-    check(second.returncode == 0, "a second remote-evidence call also exits 0")
-    value2 = json.loads(path.read_text(encoding="utf-8"))
-    remote2 = value2.get("remote", {})
-    check(remote2.get("session_id") == "sess-1", "a later remote-evidence call preserves earlier fields it does not touch")
-    check(remote2.get("artifacts") == ["artifact-a", "artifact-b", "artifact-c"],
-          "artifacts accumulate across calls (union, deduped, sorted)")
-    check(remote2.get("cancelled_at") == "2026-08-28T01:00:00Z", "remote-evidence records cancellation timestamp")
-    check(remote2.get("cancellation_reason") == "quota-exhausted", "remote-evidence records cancellation reason")
+    check(second.returncode == 0, "a cancellation transition appends successfully")
+    check(len((tmp_path / "remote-events.jsonl").read_text().splitlines()) == 2,
+          "remote evidence is append-only")
+    duplicate = run(["remote-evidence", str(path), "--session-id", "sess-1", "--event-type", "terminal",
+                      "--terminal-status", "cancelled"])
+    check(duplicate.returncode == 0, "terminal cancellation transition appends successfully")
+    duplicate2 = run(["remote-evidence", str(path), "--session-id", "sess-1", "--event-type", "terminal",
+                       "--terminal-status", "cancelled"])
+    check(duplicate2.returncode == 0 and len((tmp_path / "remote-events.jsonl").read_text().splitlines()) == 3,
+          "identical terminal replay is idempotent without appending a duplicate")
 
 
 def main() -> int:

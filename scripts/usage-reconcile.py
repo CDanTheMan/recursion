@@ -231,13 +231,36 @@ def classify_cost(usage: dict) -> tuple[int | None, float | None, str]:
     return tokens, cost, "receipt"
 
 
-def normalize(record: dict, mapping: dict) -> dict:
+def normalize(record: dict, mapping: dict, assignment_root: Path | None = None) -> dict:
     usage = record.get("usage") if isinstance(record.get("usage"), dict) else {}
-    # Phase 3 (D-016): an assignment-native run carries its own resolved provider directly —
-    # more authoritative than usage.provider, which a worker's own sandboxed usage file
-    # declares. A legacy record without record["provider"] falls back exactly as before.
-    provider = nonempty_str(record.get("provider")) or nonempty_str(usage.get("provider"))
-    basis = usage.get("billing_basis")
+    assignment_record = None
+    assignment_digest = nonempty_str(record.get("assignment_digest"))
+    if assignment_digest:
+        if assignment_root is None:
+            raise UsageError("assignment-native run has no assignment root")
+        assignment_record = assignment_mod.load_assignment(
+            assignment_root, nonempty_str(record.get("task_id")) or "", assignment_digest)
+        if assignment_record is None:
+            raise UsageError(f"persisted assignment is absent for run {record.get('id')}")
+        try:
+            assignment_mod.validate_assignment(assignment_record, require_source_evidence=True)
+        except assignment_mod.AssignmentError as exc:
+            raise UsageError(f"persisted assignment is invalid for run {record.get('id')}: {exc}") from exc
+        provider = assignment_record["provider"]
+        basis = assignment_record.get("billing_basis")
+        if record.get("task_id") != assignment_record["task_id"]:
+            raise UsageError("run task_id does not match persisted assignment")
+        if record.get("role") != assignment_record["role"]:
+            raise UsageError("run role does not match persisted assignment")
+        if usage.get("provider") not in (None, provider) or usage.get("billing_basis") not in (None, basis):
+            raise UsageError("worker usage disagrees with persisted assignment")
+        if basis == "metered" and not assignment_record.get("metered_approved"):
+            raise UsageError("unapproved metered usage cannot be reconciled")
+    else:
+        # Versioned legacy compatibility: records written before Phase 3 retain their old
+        # provider/engine join and are explicitly distinguishable from assignment-native rows.
+        provider = nonempty_str(usage.get("provider"))
+        basis = usage.get("billing_basis")
     tokens, cost, cost_basis = classify_cost(usage)
     role = record.get("role") if record.get("role") in ROLES else None
     started_at = nonempty_str(record.get("started_at"))
@@ -252,13 +275,18 @@ def normalize(record: dict, mapping: dict) -> dict:
         "run_id": record["id"],
         "task_id": nonempty_str(record.get("task_id")),
         "role": role,
-        "engine": derive_engine(record, usage, provider, mapping),
+        "engine": assignment_record["engine"] if assignment_record else derive_engine(record, usage, provider, mapping),
         "provider": provider,
-        "capacity_pool": nonempty_str(record.get("capacity_pool")),
-        "host": nonempty_str(record.get("host")),
-        "assignment_digest": nonempty_str(record.get("assignment_digest")),
+        "capacity_pool": assignment_record.get("capacity_pool") if assignment_record else None,
+        "host": assignment_record.get("host") if assignment_record else None,
+        "assignment_digest": assignment_digest,
         "model_alias": nonempty_str(record.get("model_alias")),
-        "model": nonempty_str(record.get("model")) or nonempty_str(record.get("resolved_model")),
+        "model": assignment_record.get("model") if assignment_record else (nonempty_str(record.get("model")) or nonempty_str(record.get("resolved_model"))),
+        "sandbox_profile": assignment_record.get("sandbox_profile") if assignment_record else None,
+        "network_profile": assignment_record.get("network_profile") if assignment_record else None,
+        "source_repository": assignment_record.get("source_repository") if assignment_record else None,
+        "source_branch": assignment_record.get("source_branch") if assignment_record else None,
+        "source_sha": assignment_record.get("source_sha") if assignment_record else None,
         "billing_basis": basis if basis in BILLING_BASES else None,
         "evidence_source": nonempty_str(usage.get("evidence_source")),
         "tokens": tokens,
@@ -332,7 +360,8 @@ def command_ingest(args: argparse.Namespace) -> int:
             counts["duplicate"] += 1
             continue
         try:
-            outcome = append_jsonl(ledger, normalize(data, mapping),
+            assignment_root = runs_dir.parent / "assignments" if runs_dir.name != "runs" else runs_dir.parent / "assignments"
+            outcome = append_jsonl(ledger, normalize(data, mapping, assignment_root),
                                    dedupe_field="run_id", dedupe_value=run_id)
         except JsonlDurabilityError as exc:
             diag(f"ledger append failed: {exc}")
@@ -662,10 +691,28 @@ def command_quota(args: argparse.Namespace) -> int:
 
     runs = tokens = 0
     cost = 0.0
+    ledger_parent = Path(args.ledger).parent
+    assignment_root = ledger_parent.parent / "assignments" if ledger_parent.name == "usage" else ledger_parent / "assignments"
     for row in rows:
         if not isinstance(row, dict) or row.get("record") != "run":
             continue
-        if row.get("capacity_pool") != args.pool_id:
+        pool_id = row.get("capacity_pool")
+        if row.get("assignment_digest"):
+            persisted = assignment_mod.load_assignment(
+                assignment_root, str(row.get("task_id") or ""), row["assignment_digest"])
+            if persisted is None:
+                diag(f"assignment is absent for quota row {row.get('run_id')}")
+                return 2
+            try:
+                assignment_mod.validate_assignment(persisted, require_source_evidence=True)
+            except assignment_mod.AssignmentError as exc:
+                diag(f"assignment is invalid for quota row {row.get('run_id')}: {exc}")
+                return 2
+            if row.get("provider") != persisted["provider"] or row.get("capacity_pool") != persisted.get("capacity_pool"):
+                diag(f"quota row attribution disagrees with persisted assignment: {row.get('run_id')}")
+                return 2
+            pool_id = persisted.get("capacity_pool")
+        if pool_id != args.pool_id:
             continue
         bucket = period_key_of(period, row.get("finished_at")) or period_key_of(period, row.get("started_at"))
         if bucket != key:

@@ -23,6 +23,10 @@ cd "$ROOT"
 # caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
 # into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
 RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
+# Git Bash exposes an MSYS PID in $$ while the bundled Windows Python runtime validates
+# Win32 process identities.  Use the translated PID when available; on Linux this is the
+# ordinary shell PID and the fallback remains byte-for-byte compatible.
+OWNER_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"
 
 DATE="$(date +%F)"; STAMP="$(date +%H%M%S)"
 LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
@@ -102,6 +106,7 @@ NETWORK_POLICY="${NETWORK_POLICY:-provider-only}"; EXPECTED_CHANGE="${EXPECTED_C
 # (e.g. /opt/golden-stallion-client) lets the loop build another codebase; its build output
 # and loop/work/<id> branch live in THAT repo, gated by whatever acceptance the task names.
 REPO_DIR="$(field repo)"; REPO_DIR="${REPO_DIR:-$ROOT}"
+REPO_DIR="$(realpath -e "$REPO_DIR" 2>/dev/null || printf '%s' "$REPO_DIR")"
 # seed: gitignored paths (space/comma separated, relative to REPO_DIR) to COPY into each fresh
 # worktree. git worktree does NOT inherit gitignored files, so a required-but-untracked data
 # corpus (e.g. the GSC block-model corpus user-client/render/data/models) is absent in a new
@@ -134,7 +139,15 @@ LAST_USAGE_FILE=""; SEED_DIGEST_BEFORE=""
 # predates it (legacy behavior: capacity_pool stays null on the assignment).
 ASSIGNMENT_DIGEST=""; ASSIGNMENT_FILE=""
 CAPACITY_POOL="$(field capacity_pool)"
+LEASE_OWNER="work.sh:$$@$(hostname)"; LEASE_ATTEMPT=""
 SEED_EVIDENCE_FILE="$ROOT/state/runs/$ID-seed-$STAMP-$$.json"
+SOURCE_EVIDENCE_FILE="$ROOT/state/runs/$ID-source-$STAMP-$$.json"
+DEFAULT_BRANCH="main"; INTEGRATION_BRANCH="recursion/integration"
+PROJECT_CONFIG_FILE="$ROOT/state/project-config/${PROJECT_ID:-}.json"
+if [ -f "$PROJECT_CONFIG_FILE" ]; then
+  DEFAULT_BRANCH="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("default_branch") or "main")' "$PROJECT_CONFIG_FILE" 2>/dev/null || echo main)"
+  INTEGRATION_BRANCH="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("integration_branch") or "recursion/integration")' "$PROJECT_CONFIG_FILE" 2>/dev/null || echo recursion/integration)"
+fi
 
 CONTRACT_DIGEST="$(python3 - "$TASK" <<'PY'
 import hashlib,json,sys
@@ -223,11 +236,11 @@ WSLOCK="$ROOT/state/.locks/project-$LOCK_KEY.lock"
 WSLOCK_HELD=0
 project_lock_acquire(){
   [ -x "$ROOT/scripts/runtime-state.py" ] || { log "witnessed project lock helper is absent"; return 73; }
-  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$WSLOCK" "$$" >>"$LOG" 2>&1
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$WSLOCK" "$OWNER_PID" >>"$LOG" 2>&1
 }
 project_lock_release(){
   [ "$WSLOCK_HELD" = 1 ] || return 0
-  if python3 "$ROOT/scripts/runtime-state.py" lock-release "$WSLOCK" "$$" >>"$LOG" 2>&1; then
+  if python3 "$ROOT/scripts/runtime-state.py" lock-release "$WSLOCK" "$OWNER_PID" >>"$LOG" 2>&1; then
     WSLOCK_HELD=0
     return 0
   fi
@@ -331,11 +344,11 @@ claim_task(){
 # commit behind a short lock (spin <=30s, then proceed). Serial callers acquire it instantly.
 ledger_lock(){
   mkdir -p "$ROOT/state/.locks" 2>/dev/null || return 73
-  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ROOT/state/.locks/ledger.lock" "$$" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ROOT/state/.locks/ledger.lock" "$OWNER_PID" \
     >>"$LOG" 2>&1 || { log "ledger lock contended — refusing unlocked commit"; return 73; }
 }
 ledger_unlock(){
-  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ROOT/state/.locks/ledger.lock" "$$" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ROOT/state/.locks/ledger.lock" "$OWNER_PID" \
     >>"$LOG" 2>&1 || log "ledger lock release failed closed"
 }
 commit_state(){
@@ -539,7 +552,7 @@ PY
 engine_slot_release(){
   local slot
   for slot in ${ENGINE_SLOT_LOCKS[@]+"${ENGINE_SLOT_LOCKS[@]}"}; do
-    python3 "$ROOT/scripts/runtime-state.py" lock-release "$slot" "$$" >>"$LOG" 2>&1 \
+    python3 "$ROOT/scripts/runtime-state.py" lock-release "$slot" "$OWNER_PID" >>"$LOG" 2>&1 \
       || log "engine slot release failed closed for $slot"
   done
   ENGINE_SLOT_LOCKS=()
@@ -550,7 +563,7 @@ plugin_slot_acquire(){ # engine cap: a witnessed per-slot lock, held for the run
   [ -x "$ROOT/scripts/runtime-state.py" ] || { log "witnessed engine slot helper is absent"; return 95; }
   for ((i = 0; i < cap; i++)); do
     slot="$ROOT/state/.locks/engine-$engine-slot-$i.lock"
-    if python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$slot" "$$" >>"$LOG" 2>&1; then
+    if python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$slot" "$OWNER_PID" >>"$LOG" 2>&1; then
       ENGINE_SLOT_LOCKS+=("$slot")
       return 0
     fi
@@ -722,7 +735,7 @@ mk_worktree(){
   # sharing a repo do not race git ref/index locks. Cross-repo streams never contend.
   local rk wtlock; rk="$(printf '%s' "$REPO_DIR" | md5sum | cut -c1-12)"
   wtlock="$ROOT/state/.locks/wt-$rk.lock"; mkdir -p "$ROOT/state/.locks" 2>/dev/null || true
-  if ! python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$wtlock" "$$" >>"$LOG" 2>&1; then
+  if ! python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$wtlock" "$OWNER_PID" >>"$LOG" 2>&1; then
     log "worktree lock contended — refusing unlocked worktree mutation"
     return 73
   fi
@@ -750,7 +763,7 @@ mk_worktree(){
     else base="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"; fi
   fi
   git -C "$REPO_DIR" worktree add -B "$BRANCH" "$wt" "$base" >>"$LOG" 2>&1; local addrc=$?
-  python3 "$ROOT/scripts/runtime-state.py" lock-release "$wtlock" "$$" >>"$LOG" 2>&1 \
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$wtlock" "$OWNER_PID" >>"$LOG" 2>&1 \
     || { log "worktree lock release failed closed"; return 74; }
   [ "$addrc" -eq 0 ] || return 1
   copy_seed_into_worktree "$wt" || return 1
@@ -933,6 +946,7 @@ ARM_USAGE="${ARMLOG%.out}.usage.json"
 resolve_run_assignment(){ # role wt active-engine engine-plan resolved-model provider commit-oid
   local role="$1" wt="$2" active_engine="$3" engine_plan="$4" resolved_model="$5"
   local provider="$6" commit_oid="$7" seed_digest="" gate_digest="" src_branch="" out_file
+  local billing_basis="" metered_flag=()
   ASSIGNMENT_DIGEST=""; ASSIGNMENT_FILE=""
   if [ -s "$SEED_EVIDENCE_FILE" ]; then
     seed_digest="$(python3 - "$SEED_EVIDENCE_FILE" <<'PY' 2>>"$LOG"
@@ -952,16 +966,24 @@ PY
   src_branch="${SOURCE_BRANCH:-}"
   [ -n "$src_branch" ] || src_branch="$(git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
   [ -n "$src_branch" ] || src_branch="unknown"
+  case "$active_engine" in
+    claude) billing_basis="flat-subscription" ;;
+    hermes) billing_basis="metered" ;;
+    *) billing_basis="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["billing"]["basis"])' "$engine_plan" 2>>"$LOG")" || return 95 ;;
+  esac
+  [ "$billing_basis" != metered ] || metered_flag=(--metered-approved)
   mkdir -p "$ROOT/state/runs"
   out_file="$ROOT/state/runs/$ID-$role-$STAMP-$$-assignment.json"
   local -a acmd=(python3 "$ROOT/scripts/assignment.py" resolve
     --task-id "$ID" --project-id "${PROJECT_ID:-$ID}" --role "$role"
     --source-repository "$REPO_DIR" --source-branch "$src_branch"
-    --source-sha "${commit_oid:-$BASE_COMMIT}"
+    --source-sha "$BASE_COMMIT"
     --engine "$active_engine" --provider "$provider" --host "$(hostname)"
     --sandbox-profile "${RECURSION_SANDBOX_PROFILE:-strict-linux}" --network-profile "$NETWORK_POLICY"
     --allowed-paths "$ALLOWED_PATHS" --publication-policy verified-integration-only
-    --out "$out_file")
+    --out "$out_file" --root "$ROOT/state/assignments" --default-branch "$DEFAULT_BRANCH"
+    --integration-branch "$INTEGRATION_BRANCH" --source-evidence-file "$SOURCE_EVIDENCE_FILE" --no-persist
+    --billing-basis "$billing_basis" "${metered_flag[@]}")
   [ -z "$seed_digest" ] || acmd+=(--seed-manifest-digest "$seed_digest")
   [ -z "$CAPACITY_POOL" ] || acmd+=(--capacity-pool "$CAPACITY_POOL")
   [ -z "$resolved_model" ] || acmd+=(--model "$resolved_model")
@@ -973,6 +995,7 @@ PY
   ASSIGNMENT_DIGEST="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["assignment_digest"])' \
     "$out_file" 2>>"$LOG")" || return 95
   ASSIGNMENT_FILE="$out_file"
+  [ -f "$ASSIGNMENT_FILE" ] || { log "assignment candidate is absent after resolution"; return 95; }
 }
 
 run_model_supervised(){ # role worktree prompt resolved-model alias usage deadline run-id [commit] [implementer-run] [evidence-dir] [readonly]
@@ -1054,25 +1077,37 @@ PY
   local worker_pgid rc now_epoch deadline_epoch heartbeat_epoch log_path
   log_path="$ARMLOG"; [ "$role" != verifier ] || log_path="$ROOT/loop/logs/$DATE-verifier-$ID-$STAMP.out"
   RECURSION_VERIFICATION_COMMIT="$commit_oid" RECURSION_IMPLEMENTER_RUN_ID="$implementer_run" \
-    setsid --wait "${cmd[@]}" >"$log_path" 2>&1 &
-  worker_pgid=$!
   deadline_epoch="$(( $(date +%s) + deadline_s ))"; heartbeat_epoch=0
   LAST_RUN_ID="$run_id"; LAST_RUN_EVIDENCE="$ROOT/state/runs/$run_id.json"
-  log "$role process group=$worker_pgid engine=$active_engine alias=${alias:-legacy} deadline=${deadline_s}s"
   if [ "$STRICT_PHASE5" = 1 ]; then
     mkdir -p "$ROOT/state/runs"
-    python3 "$ROOT/scripts/worker-evidence.py" start --path "$LAST_RUN_EVIDENCE" --run-id "$run_id" \
+    if [ "$role" = implementer ]; then
+      LEASE_ATTEMPT="$(field attempts)"
+      [ -n "$LEASE_ATTEMPT" ] || return 98
+      RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" \
+        bash "$TASKCTL" set-assignment "$ID" "$ASSIGNMENT_DIGEST" "$ASSIGNMENT_FILE" \
+          "$LEASE_OWNER" "$LEASE_ATTEMPT" "$run_id" >>"$LOG" 2>&1 || return 98
+    else
+      RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" \
+        bash "$TASKCTL" persist-assignment "$ASSIGNMENT_FILE" >>"$LOG" 2>&1 || return 98
+    fi
+    ASSIGNMENT_FILE="$ROOT/state/assignments/$ID/$ASSIGNMENT_DIGEST.json"
+    [ -f "$ASSIGNMENT_FILE" ] || { log "persisted assignment file is absent before worker evidence"; return 98; }
+    python3 "$ROOT/scripts/worker-evidence.py" prepare --path "$LAST_RUN_EVIDENCE" --run-id "$run_id" \
       --task-id "$ID" --role "$role" --model-alias "$alias" --worktree "$wt" \
-      --base-commit "$BASE_COMMIT" --pid "$worker_pgid" --process-group "$worker_pgid" \
+      --base-commit "$BASE_COMMIT" \
       --deadline-epoch "$deadline_epoch" --log "${log_path#$ROOT/}" --network-policy "$NETWORK_POLICY" \
       ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} \
       ${implementer_run:+--implementer-run-id "$implementer_run"} ${commit_oid:+--commit-oid "$commit_oid"} \
       ${ASSIGNMENT_DIGEST:+--assignment-digest "$ASSIGNMENT_DIGEST" --assignment-file "$ASSIGNMENT_FILE"} \
+      >>"$LOG" 2>&1 || return 98
+  fi
+  setsid --wait "${cmd[@]}" >"$log_path" 2>&1 &
+  worker_pgid=$!
+  log "$role process group=$worker_pgid engine=$active_engine alias=${alias:-legacy} deadline=${deadline_s}s"
+  if [ "$STRICT_PHASE5" = 1 ]; then
+    python3 "$ROOT/scripts/worker-evidence.py" activate "$LAST_RUN_EVIDENCE" "$worker_pgid" "$worker_pgid" \
       >>"$LOG" 2>&1 || { terminate_worker_group "$worker_pgid"; wait "$worker_pgid" 2>/dev/null || true; return 98; }
-    [ "$role" != implementer ] || [ -z "$ASSIGNMENT_DIGEST" ] || [ ! -x "$TASKCTL" ] \
-      || RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" \
-         bash "$TASKCTL" set-assignment "$ID" "$ASSIGNMENT_DIGEST" >>"$LOG" 2>&1 \
-      || log "lease assignment-digest stamp failed (non-fatal; the run evidence still carries it)"
   fi
   while kill -0 "$worker_pgid" 2>/dev/null; do
     if [ -f "$ROOT/state/PAUSE" ]; then
@@ -1350,9 +1385,35 @@ phase5_assert_gate_commit(){
     && verify_seed_integrity "$1"
 }
 
+phase5_validate_assignment_result(){
+  [ "$STRICT_PHASE5" = 1 ] || return 0
+  [ -n "$ASSIGNMENT_DIGEST" ] && [ -f "$ASSIGNMENT_FILE" ] || { log "missing assignment before result validation"; return 98; }
+  [ -n "$CANDIDATE_OID" ] || { log "missing candidate commit before result validation"; return 98; }
+  local -a args=(--assignment-root "$ROOT/state/assignments" --task-id "$ID"
+    --assignment-digest "$ASSIGNMENT_DIGEST" --run-id "$IMPLEMENTER_RUN_ID"
+    --run-evidence "$ROOT/state/runs/$IMPLEMENTER_RUN_ID.json" --result-repository "$REPO_DIR"
+    --result-branch "$BRANCH" --result-commit "$CANDIDATE_OID" --record)
+  local changed
+  if [ -s "$LAST_SCOPE_FILE" ]; then
+    while IFS= read -r changed; do
+      [ -n "$changed" ] && args+=(--changed-path "$changed")
+    done < <(python3 - "$LAST_SCOPE_FILE" <<'PY'
+import json,sys
+try: value=json.load(open(sys.argv[1],encoding='utf-8'))
+except Exception: raise SystemExit(1)
+for entry in value.get('entries',[]):
+    if isinstance(entry,str): print(entry)
+    elif isinstance(entry,dict) and isinstance(entry.get('path'),str): print(entry['path'])
+PY
+    ) || return 98
+  fi
+  python3 "$ROOT/scripts/validate-assignment-result.py" "${args[@]}" >>"$LOG" 2>&1
+}
+
 run_independent_verifier(){
   [ "$STRICT_PHASE5" = 1 ] || return 0
   local impl_run="$IMPLEMENTER_RUN_ID" impl_evidence="$LAST_RUN_EVIDENCE"
+  local impl_assignment_digest="$ASSIGNMENT_DIGEST" impl_assignment_file="$ASSIGNMENT_FILE"
   local short verify_wt verifier_id evidence_dir verdict verifier_log
   short="${CANDIDATE_OID:0:12}"; verify_wt="$REPO_DIR/.worktrees/$ID-verifier-$short-$$"
   verifier_id="$ID-verify-$STAMP-$$"; evidence_dir="$ROOT/state/runs/$verifier_id-evidence"
@@ -1378,6 +1439,10 @@ Explicit non-goals: ${NON_GOALS:-none}."
       "$VERIFIER_MODEL_ALIAS" "${verifier_log%.out}.usage.json" "$VERIFIER_DEADLINE_SECONDS" \
       "$verifier_id" "$CANDIDATE_OID" "$impl_run" "$evidence_dir" 1; then rc=0; else rc=$?; fi
   VERIFIER_RUN_ID="$LAST_RUN_ID"
+  # run_model_supervised uses the same globals for each arm. Restore the implementer's binding
+  # before the caller validates the candidate result; the verifier's assignment must never be
+  # accidentally presented as the implementer's publication identity.
+  ASSIGNMENT_DIGEST="$impl_assignment_digest"; ASSIGNMENT_FILE="$impl_assignment_file"
   if [ "$rc" -ne 0 ]; then
     git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
     LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
@@ -1508,6 +1573,30 @@ fi
 log "worktree: $WT (branch $BRANCH)"
 BASE_COMMIT="$(git -C "$WT" rev-parse HEAD)"
 [ -n "$BASE_COMMIT" ] || phase5_reject "base evidence missing" "exact worker base commit could not be recorded"
+if [ -z "$SOURCE_BRANCH" ]; then
+  for candidate in "$DEFAULT_BRANCH" master main "$(git -C "$REPO_DIR" branch --show-current 2>/dev/null || true)"; do
+    [ -n "$candidate" ] || continue
+    if [ "$(git -C "$REPO_DIR" rev-parse "$candidate" 2>/dev/null || true)" = "$BASE_COMMIT" ]; then
+      SOURCE_BRANCH="$candidate"; break
+    fi
+  done
+fi
+[ -n "$SOURCE_BRANCH" ] || phase5_reject "source evidence missing" "source branch could not be resolved before worker launch"
+source_observed="$(git -C "$REPO_DIR" rev-parse "$SOURCE_BRANCH" 2>/dev/null || true)"
+[ "$source_observed" = "$BASE_COMMIT" ] || phase5_reject "source evidence mismatch" \
+  "source branch $SOURCE_BRANCH does not resolve to exact worker base $BASE_COMMIT"
+python3 - "$SOURCE_EVIDENCE_FILE" "$REPO_DIR" "$SOURCE_BRANCH" "$BASE_COMMIT" <<'PY'
+import json, os, sys, tempfile
+target, repository, branch, sha = sys.argv[1:]
+value = {"schema_version": 1, "repository": repository,
+         "branch": branch, "sha": sha, "verified": True}
+os.makedirs(os.path.dirname(target), exist_ok=True)
+fd, name = tempfile.mkstemp(prefix='.source.', dir=os.path.dirname(target))
+with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as out:
+    json.dump(value, out, sort_keys=True, separators=(',', ':'))
+    out.write('\n'); out.flush(); os.fsync(out.fileno())
+os.replace(name, target)
+PY
 if ! SEED_DIGEST_BEFORE="$(seed_digest "$WT")"; then
   phase5_reject "seed evidence missing" "declared seed/oracle could not be checksummed before worker launch"
 fi
@@ -1725,6 +1814,11 @@ engine: $ENGINE" 2>>"$LOG" || true
     fi
   fi
   pause_checkpoint "terminal completion admission" || exit 75
+  if ! phase5_validate_assignment_result; then
+    phase5_reject "assignment result validation failed" \
+      "DURABLE ASSIGNMENT RESULT REFUSED — candidate was not integrated or published"
+  fi
+  log "durable assignment result accepted for $IMPLEMENTER_RUN_ID at $CANDIDATE_OID"
   [ "$COMMITTED" != "1" ] || admit_remote_integration || exit $?
   if [ -f "$ARM_USAGE" ]; then board finish "$ID" done "$ARM_USAGE" "$NOTE"; else board finish "$ID" done - "$NOTE"; fi
   terminal_status passed "$NOTE" || exit $?

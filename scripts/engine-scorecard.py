@@ -47,6 +47,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+import assignment
+
 SCHEMA_VERSION = 1
 MAX_TABLE_ROWS = 25  # bounded-output rule: prioritize by activity, drop the rest, never append
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
@@ -161,11 +163,12 @@ def load_events(root: Path) -> tuple[list[dict], int, int, str]:
 
 class RunRecord:
     __slots__ = ("id", "task_id", "role", "alias", "status", "outcome",
-                 "started_epoch", "finished_epoch", "engine", "assignment_digest")
+                 "started_epoch", "finished_epoch", "engine", "assignment_digest", "attribution")
 
     def __init__(self, id_: str, task_id: str, role: str, alias: str, status: str,
                  outcome: str, started_epoch: int | None, finished_epoch: int | None,
-                 engine: str | None = None, assignment_digest: str | None = None) -> None:
+                 engine: str | None = None, assignment_digest: str | None = None,
+                 attribution: dict | None = None) -> None:
         self.id = id_
         self.task_id = task_id
         self.role = role
@@ -177,6 +180,7 @@ class RunRecord:
         # it directly instead of joining the task header (which can change after the run).
         self.engine = engine
         self.assignment_digest = assignment_digest
+        self.attribution = attribution or {}
         self.finished_epoch = finished_epoch
 
 
@@ -220,11 +224,29 @@ def load_runs(root: Path) -> tuple[list[RunRecord], int, int, bool]:
         outcome = record.get("outcome") if isinstance(record.get("outcome"), str) else ""
         started = _parse_ts(record.get("started_at"))
         finished = _parse_ts(record.get("finished_at"))
-        engine = record.get("engine") if isinstance(record.get("engine"), str) and record.get("engine") else None
         assignment_digest = record.get("assignment_digest") \
             if isinstance(record.get("assignment_digest"), str) and record.get("assignment_digest") else None
+        attribution = {}
+        if assignment_digest:
+            # Assignment-native records are deliberately joined to the immutable persisted
+            # assignment.  Run JSON is an evidence projection and is not an authority for
+            # engine/provider/pool/host/model/source attribution.
+            persisted = assignment.load_assignment(
+                root / "state" / "assignments", task_id, assignment_digest,
+            )
+            try:
+                assignment.validate_assignment(persisted, require_source_evidence=True)
+            except assignment.AssignmentError:
+                skipped += 1
+                continue
+            engine = persisted["engine"]
+            attribution = {key: persisted.get(key) for key in (
+                "assignment_digest", "capacity_pool", "provider", "host", "model",
+                "sandbox_profile", "source_repository", "source_branch", "source_sha")}
+        else:
+            engine = None
         runs.append(RunRecord(run_id, task_id, role, alias, status, outcome, started, finished,
-                              engine, assignment_digest))
+                              engine, assignment_digest, attribution))
         parsed += 1
     return runs, parsed, skipped, False
 
@@ -244,6 +266,7 @@ class Bucket:
         self.retries = 0
         self.durations: list[int] = []
         self.escalations: Counter[str] = Counter()
+        self.attributions: dict[str, dict] = {}
 
     def activity(self) -> int:
         return (sum(self.task_status.values()) + self.verifier_arms
@@ -309,6 +332,8 @@ def build_buckets(
             bucket.durations.append(run.finished_epoch - run.started_epoch)
         counter = by_bucket_task_role.setdefault(bucket.key(), Counter())
         counter[(run.task_id, run.role)] += 1
+        if run.attribution:
+            bucket.attributions[json.dumps(run.attribution, sort_keys=True, separators=(",", ":"))] = run.attribution
     for key, counter in by_bucket_task_role.items():
         buckets[key].retries += sum(max(0, n - 1) for n in counter.values())
 
@@ -359,6 +384,12 @@ def _fmt_counter(counter: Counter[str]) -> str:
     return " ".join(f"{_cell(k)}:{v}" for k, v in sorted(counter.items()))
 
 
+def _attribution_text(value: dict) -> str:
+    keys = ("assignment_digest", "capacity_pool", "provider", "host", "model",
+            "sandbox_profile", "source_repository", "source_branch", "source_sha")
+    return ", ".join(f"{key}={value.get(key) if value.get(key) is not None else '-'}" for key in keys)
+
+
 def _fmt_outcomes(counter: Counter[str]) -> str:
     order = ["pass", "fail", "timeout", "deferred", "running", "other"]
     parts = [f"{name}:{counter[name]}" for name in order if counter.get(name)]
@@ -398,6 +429,7 @@ def render_json(
                 "n": len(bucket.durations),
             },
             "escalations": dict(sorted(bucket.escalations.items())),
+            "attribution": [bucket.attributions[key] for key in sorted(bucket.attributions)],
         })
     return {
         "schema_version": SCHEMA_VERSION,
@@ -443,8 +475,8 @@ def render_markdown(data: dict) -> str:
     shown = rows[:MAX_TABLE_ROWS]
 
     if shown:
-        lines.append("| Engine | Alias | Tasks (status) | Verifier-arms | Runs (by role) | Outcomes | Retries | Wall-clock median/total | Escalations |")
-        lines.append("|---|---|---|---|---|---|---|---|---|")
+        lines.append("| Engine | Alias | Assignment attribution | Tasks (status) | Verifier-arms | Runs (by role) | Outcomes | Retries | Wall-clock median/total | Escalations |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|")
         for row in shown:
             task_status = Counter(row["task_status"])
             runs_by_role = Counter(row["runs_by_role"])
@@ -453,7 +485,7 @@ def render_markdown(data: dict) -> str:
             wc = row["wallclock_seconds"]
             wallclock = "n/a" if wc["n"] == 0 else f"{_fmt_duration(wc['median'])} / {_fmt_duration(wc['total'])}"
             lines.append(
-                f"| {_cell(row['engine'])} | {_cell(row['alias'])} | {_fmt_counter(task_status)} | "
+                f"| {_cell(row['engine'])} | {_cell(row['alias'])} | {_cell('; '.join(_attribution_text(item) for item in row.get('attribution', [])) or '-') } | {_fmt_counter(task_status)} | "
                 f"{row['verifier_arms'] or '-'} | {_fmt_counter(runs_by_role)} | "
                 f"{_fmt_outcomes(outcomes)} | {row['retries'] or '-'} | {wallclock} | "
                 f"{_fmt_counter(escalations)} |"

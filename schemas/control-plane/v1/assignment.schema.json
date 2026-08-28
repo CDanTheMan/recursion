@@ -12,10 +12,13 @@
     "source_repository",
     "source_branch",
     "source_sha",
+    "source_evidence",
     "seed_manifest_digest",
     "engine",
     "provider",
     "capacity_pool",
+    "billing_basis",
+    "metered_approved",
     "model",
     "model_parameters",
     "host",
@@ -24,6 +27,8 @@
     "allowed_paths",
     "gate_digest",
     "publication_policy",
+    "default_branch",
+    "integration_branch",
     "created_at",
     "assignment_digest"
   ],
@@ -36,6 +41,14 @@
     "source_repository": { "type": "string", "minLength": 1 },
     "source_branch": { "type": "string", "minLength": 1 },
     "source_sha": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+    "source_evidence": {
+      "type": "object", "required": ["repository", "branch", "sha", "verified"],
+      "properties": {
+        "schema_version": {"const": 1}, "repository": {"type": "string", "minLength": 1},
+        "branch": {"type": "string", "minLength": 1}, "sha": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "verified": {"const": true}
+      }, "additionalProperties": false
+    },
     "seed_manifest_digest": {
       "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }]
     },
@@ -44,6 +57,10 @@
     "capacity_pool": {
       "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" }]
     },
+    "billing_basis": {
+      "anyOf": [{ "type": "null" }, { "enum": ["flat-subscription", "metered", "local", "weekly-included", "human"] }]
+    },
+    "metered_approved": {"type": "boolean"},
     "model": { "anyOf": [{ "type": "null" }, { "type": "string", "minLength": 1 }] },
     "model_parameters": { "type": "object", "additionalProperties": { "type": "string" } },
     "host": { "type": "string", "minLength": 1 },
@@ -64,6 +81,8 @@
       "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }]
     },
     "publication_policy": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
+    "default_branch": { "type": "string", "minLength": 1 },
+    "integration_branch": { "type": "string", "minLength": 1 },
     "created_at": { "type": "string", "minLength": 1 },
     "assignment_digest": {
       "type": "string",

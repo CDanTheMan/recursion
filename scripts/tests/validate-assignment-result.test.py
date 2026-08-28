@@ -63,6 +63,7 @@ def make_fixture(tmp_path: Path):
     evidence = {
         "schema_version": 1, "id": "run-1", "task_id": "task-1", "role": "implementer",
         "assignment_digest": digest, "deadline_epoch": deadline_epoch,
+        "base_commit": "a" * 40, "source_evidence": value["source_evidence"],
     }
     evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
     return root, digest, evidence_path, deadline_epoch
@@ -75,7 +76,8 @@ def base_args(root: Path, digest: str, evidence_path: Path, run_id: str = "run-1
 
 def test_accepted_and_duplicate(tmp_path: Path) -> None:
     root, digest, evidence_path, _ = make_fixture(tmp_path)
-    args = base_args(root, digest, evidence_path) + ["--changed-path", "apps/api/main.py", "--record"]
+    args = base_args(root, digest, evidence_path) + ["--changed-path", "apps/api/main.py",
+        "--result-branch", "loop/work/task-1", "--result-commit", "b" * 40, "--record"]
     result = run(args)
     check(result.returncode == 0, f"a well-formed, in-scope, on-time result is accepted (got {result.returncode}, stderr={result.stderr!r})")
     check(json.loads(result.stdout).get("status") == "accepted", "accepted result reports status=accepted")

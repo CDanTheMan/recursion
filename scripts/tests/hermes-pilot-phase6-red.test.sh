@@ -26,7 +26,7 @@ copy_controller(){
     "$r/state/decision-queue/succeeded" "$r/state/decision-queue/failed" \
     "$r/state/.locks" "$r/state/evidence" "$r/loop/logs"
   for s in conduct-hermes.sh decision-queue.py validate-decision.py validate-control-state.py \
-           project-pilot.py engine_contract.py project_authority.py pilot_instruction.py project-reconcile.py jsonl_durable.py transition_receipt.py runtime-state.py taskctl.sh worker-sandbox.sh validate-gate.py; do
+           project-pilot.py remote_evidence.py engine_contract.py project_authority.py pilot_instruction.py project-reconcile.py jsonl_durable.py transition_receipt.py runtime-state.py taskctl.sh worker-sandbox.sh validate-gate.py; do
     [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$r/scripts/"
   done
   [ ! -f "$SRC/scripts/seed_contract.py" ] || cp "$SRC/scripts/seed_contract.py" "$r/scripts/"

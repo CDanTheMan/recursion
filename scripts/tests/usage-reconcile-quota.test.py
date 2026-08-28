@@ -27,6 +27,7 @@ USAGE_RECONCILE = SCRIPTS / "usage-reconcile.py"
 
 sys.path.insert(0, str(SCRIPTS))
 from jsonl_durable import read_jsonl_objects  # noqa: E402
+import assignment as amod  # noqa: E402
 
 failures: list[str] = []
 
@@ -70,15 +71,32 @@ def evidence(run_id: str, task_id: str, *, engine=None, provider=None, capacity_
     return value
 
 
+def persist_assignment(root: Path, task_id: str, *, provider: str, pool: str | None,
+                       billing: str = "metered", engine: str = "cursor") -> str:
+    value = amod.resolve_assignment(
+        task_id=task_id, project_id="project", role="implementer", source_repository="/repo",
+        source_branch="main", source_sha="a" * 40, engine=engine,
+        provider=provider, capacity_pool=pool, billing_basis=billing,
+        metered_approved=(billing == "metered"), host="gs-recursion",
+        sandbox_profile="strict-linux", network_profile="provider-only", allowed_paths=["app"],
+        publication_policy="verified-integration-only", created_at="2026-08-24T00:00:00Z",
+        capacity_pool_dir=root / "pools",
+    )
+    amod.persist_assignment(root / "assignments", value)
+    return value["assignment_digest"]
+
+
 def test_normalize_provider_preference(tmp_path: Path) -> None:
     runs_dir = tmp_path / "runs"
     runs_dir.mkdir()
     ledger = tmp_path / "ledger.jsonl"
+    write_pool(tmp_path / "pools", "pool-a", limit=100, unit="usd")
+    digest = persist_assignment(tmp_path, "task-a", provider="cursor", pool="pool-a", billing="metered")
 
     (runs_dir / "a.json").write_text(json.dumps(evidence(
-        "run-a", "task-a", engine="claude", provider="anthropic-claude-code",
-        capacity_pool="pool-a", host="gs-recursion", assignment_digest="d" * 64,
-        usage_provider="stale-worker-declared-value", cost_usd=1.0, tokens=100,
+        "run-a", "task-a", engine="hermes", provider="cursor",
+        capacity_pool="pool-a", host="gs-recursion", assignment_digest=digest,
+        usage_provider="cursor", cost_usd=1.0, tokens=100,
     )), encoding="utf-8")
     (runs_dir / "b.json").write_text(json.dumps(evidence(
         "run-b", "task-b", usage_provider="anthropic-claude-code", cost_usd=2.0, tokens=200,
@@ -89,12 +107,12 @@ def test_normalize_provider_preference(tmp_path: Path) -> None:
     rows = {row["run_id"]: row for row in read_jsonl_objects(ledger) if row.get("record") == "run"}
 
     row_a = rows.get("run-a", {})
-    check(row_a.get("provider") == "anthropic-claude-code",
-          "an assignment-native record's record-level provider wins over usage.provider")
+    check(row_a.get("provider") == "cursor",
+          "an assignment-native record's provider is loaded from the persisted assignment")
     check(row_a.get("capacity_pool") == "pool-a", "normalize() carries capacity_pool through")
     check(row_a.get("host") == "gs-recursion", "normalize() carries host through")
-    check(row_a.get("assignment_digest") == "d" * 64, "normalize() carries assignment_digest through")
-    check(row_a.get("engine") == "claude", "normalize() still derives engine from record.engine")
+    check(row_a.get("assignment_digest") == digest, "normalize() carries assignment_digest through")
+    check(row_a.get("engine") == "cursor", "normalize() derives engine from the persisted assignment")
 
     row_b = rows.get("run-b", {})
     check(row_b.get("provider") == "anthropic-claude-code",
@@ -117,9 +135,11 @@ def test_quota_within_and_exceeded(tmp_path: Path) -> None:
     runs_dir = tmp_path / "runs"; runs_dir.mkdir()
     ledger = tmp_path / "ledger.jsonl"
     pool_dir = tmp_path / "pools"
+    write_pool(pool_dir, "pool-b", limit=10.0, unit="usd")
+    digest = persist_assignment(tmp_path, "task-q", provider="cursor", pool="pool-b")
     (runs_dir / "a.json").write_text(json.dumps(evidence(
         "run-q1", "task-q", capacity_pool="pool-b", cost_usd=3.0, tokens=100,
-        usage_provider="cursor",
+        usage_provider="cursor", assignment_digest=digest,
     )), encoding="utf-8")
     run(["ingest", "--runs-dir", str(runs_dir), "--ledger", str(ledger)])
 
@@ -144,8 +164,11 @@ def test_quota_no_limit_and_unmeasurable(tmp_path: Path) -> None:
     runs_dir = tmp_path / "runs"; runs_dir.mkdir()
     ledger = tmp_path / "ledger.jsonl"
     pool_dir = tmp_path / "pools"
+    write_pool(pool_dir, "pool-c", limit=None, unit=None)
+    digest = persist_assignment(tmp_path, "task-q2", provider="cursor", pool="pool-c")
     (runs_dir / "a.json").write_text(json.dumps(evidence(
         "run-q2", "task-q2", capacity_pool="pool-c", cost_usd=1.0, tokens=10, usage_provider="cursor",
+        assignment_digest=digest,
     )), encoding="utf-8")
     run(["ingest", "--runs-dir", str(runs_dir), "--ledger", str(ledger)])
 
