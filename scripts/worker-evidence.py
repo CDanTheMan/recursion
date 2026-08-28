@@ -35,10 +35,10 @@ def load(path: Path) -> dict:
             assignment_mod.validate_assignment(persisted, require_source_evidence=True)
         except assignment_mod.AssignmentError as exc:
             raise SystemExit(f"worker-evidence: persisted assignment is unusable: {exc}") from exc
-        if value.get("assignment") != copy_assignment(persisted):
-            raise SystemExit("worker-evidence: run assignment projection disagrees with persisted assignment")
-        if any(value.get(key) != persisted.get(key) for key in copy_assignment(persisted)):
-            raise SystemExit("worker-evidence: run attribution disagrees with persisted assignment")
+        try:
+            assignment_mod.require_assignment_projection(value, persisted)
+        except assignment_mod.AssignmentError as exc:
+            raise SystemExit(f"worker-evidence: run attribution disagrees with persisted assignment: {exc}") from exc
     return value
 
 
@@ -97,13 +97,7 @@ def assignment_from(path: str, digest: str, task_id: str, role: str = "", run_pa
 
 
 def copy_assignment(value: dict) -> dict:
-    keys = ("schema_version", "assignment_digest", "task_id", "project_id", "role", "engine", "provider",
-            "capacity_pool", "billing_basis", "host", "model", "model_parameters",
-            "sandbox_profile", "network_profile", "allowed_paths", "publication_policy",
-            "source_repository", "source_branch", "source_sha", "source_evidence",
-            "default_branch", "integration_branch", "metered_approved", "seed_manifest_digest",
-            "gate_digest", "created_at")
-    return {key: value.get(key) for key in keys}
+    return assignment_mod.assignment_projection(value)
 
 
 def validate_usage(usage: object, assignment: dict | None) -> None:
@@ -144,6 +138,7 @@ def main() -> int:
     # preserved); a caller that supplies only one is a controller bug, refused (exit 2).
     start.add_argument("--assignment-digest", default="")
     start.add_argument("--assignment-file", default="")
+    start.add_argument("--attempt", type=int, default=None)
     prepare = sub.add_parser("prepare")
     for name in ("path", "run_id", "task_id", "role", "model_alias", "worktree", "base_commit",
                  "log", "network_policy"):
@@ -154,6 +149,7 @@ def main() -> int:
     prepare.add_argument("--seed-evidence", default="")
     prepare.add_argument("--assignment-digest", required=True)
     prepare.add_argument("--assignment-file", required=True)
+    prepare.add_argument("--attempt", type=int, default=None)
     activate = sub.add_parser("activate")
     activate.add_argument("path"); activate.add_argument("pid", type=int); activate.add_argument("process_group", type=int)
     heartbeat = sub.add_parser("heartbeat"); heartbeat.add_argument("path"); heartbeat.add_argument("lease_epoch", type=int)
@@ -205,6 +201,9 @@ def main() -> int:
             assignment = assignment_from(args.assignment_file, args.assignment_digest, args.task_id, args.role, path)
             value["assignment"] = copy_assignment(assignment)
             value.update(copy_assignment(assignment))
+        if args.attempt is not None:
+            if args.attempt < 1: raise SystemExit(2)
+            value["attempt"] = args.attempt
         atomic(path, value); return 0
 
     if args.command == "prepare":
@@ -219,6 +218,9 @@ def main() -> int:
                  "changed_files": [], "status": "prepared", "started_at": now(),
                  "assignment": copy_assignment(assignment)}
         value.update(copy_assignment(assignment))
+        if args.attempt is not None:
+            if args.attempt < 1: raise SystemExit(2)
+            value["attempt"] = args.attempt
         if args.implementer_run_id: value["implementer_run_id"] = args.implementer_run_id
         if args.commit_oid: value["verification_commit"] = args.commit_oid
         seed = maybe_json(args.seed_evidence)

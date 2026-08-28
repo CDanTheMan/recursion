@@ -998,10 +998,10 @@ PY
   [ -f "$ASSIGNMENT_FILE" ] || { log "assignment candidate is absent after resolution"; return 95; }
 }
 
-run_model_supervised(){ # role worktree prompt resolved-model alias usage deadline run-id [commit] [implementer-run] [evidence-dir] [readonly]
+run_model_supervised(){ # role worktree prompt resolved-model alias usage deadline run-id [commit] [implementer-run] [evidence-dir] [readonly] [attempt]
   local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
   local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
-  local evidence_dir="${11:-}" readonly="${12:-0}" engine_plan=""
+  local evidence_dir="${11:-}" readonly="${12:-0}" attempt="${13:-}" engine_plan=""
   # Cross-engine verification (D-015): each role runs on its own contract engine.
   local active_engine="$ENGINE"
   [ "$role" != verifier ] || active_engine="$VERIFIER_ENGINE"
@@ -1099,6 +1099,7 @@ PY
       --deadline-epoch "$deadline_epoch" --log "${log_path#$ROOT/}" --network-policy "$NETWORK_POLICY" \
       ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} \
       ${implementer_run:+--implementer-run-id "$implementer_run"} ${commit_oid:+--commit-oid "$commit_oid"} \
+      ${attempt:+--attempt "$attempt"} \
       ${ASSIGNMENT_DIGEST:+--assignment-digest "$ASSIGNMENT_DIGEST" --assignment-file "$ASSIGNMENT_FILE"} \
       >>"$LOG" 2>&1 || return 98
   fi
@@ -1161,7 +1162,7 @@ run_arm_supervised(){
   run_id="$ID-impl-$STAMP-$$-a$attempt"
   run_model_supervised implementer "$wt" "$BUILD_PROMPT
 EXACT BASE COMMIT: $BASE_COMMIT" "$RESOLVED_MODEL" "${MODEL_ALIAS:-legacy}" "$ARM_USAGE" \
-    "$DEADLINE_SECONDS" "$run_id"
+    "$DEADLINE_SECONDS" "$run_id" "" "" "" 0 "$attempt"
   local rc=$?; IMPLEMENTER_RUN_ID="$LAST_RUN_ID"; return "$rc"
 }
 
@@ -1392,7 +1393,7 @@ phase5_validate_assignment_result(){
   local -a args=(--assignment-root "$ROOT/state/assignments" --task-id "$ID"
     --assignment-digest "$ASSIGNMENT_DIGEST" --run-id "$IMPLEMENTER_RUN_ID"
     --run-evidence "$ROOT/state/runs/$IMPLEMENTER_RUN_ID.json" --result-repository "$REPO_DIR"
-    --result-branch "$BRANCH" --result-commit "$CANDIDATE_OID" --record)
+    --result-branch "$BRANCH" --result-commit "$CANDIDATE_OID" --attempt "$LEASE_ATTEMPT" --record)
   local changed
   if [ -s "$LAST_SCOPE_FILE" ]; then
     while IFS= read -r changed; do

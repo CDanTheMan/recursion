@@ -13,8 +13,10 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import tempfile
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
@@ -23,6 +25,10 @@ try:
     import fcntl
 except ImportError:  # pragma: no cover - production is Linux; Windows tests are sequential.
     fcntl = None  # type: ignore[assignment]
+try:
+    import msvcrt
+except ImportError:  # pragma: no cover - production is Linux.
+    msvcrt = None  # type: ignore[assignment]
 
 
 DEFAULT_MAX_RECORD_BYTES = 4 * 1024 * 1024
@@ -34,6 +40,108 @@ ZERO_CHAIN_SHA256 = "0" * 64
 
 class JsonlDurabilityError(RuntimeError):
     """The existing journal cannot safely accept or expose another record."""
+
+
+def _reject_symlink_components(path: Path) -> None:
+    """Reject symlinks in a path before any durable state operation follows them."""
+    absolute = Path(os.path.abspath(path))
+    current = Path(absolute.anchor) if absolute.anchor else Path()
+    parts = absolute.parts[1:] if absolute.anchor else absolute.parts
+    for part in parts:
+        current = current / part
+        try:
+            if stat.S_ISLNK(os.lstat(current).st_mode):
+                raise JsonlDurabilityError(f"JSONL path contains a symlink: {current}")
+        except FileNotFoundError:
+            continue
+
+
+def ensure_no_symlink(path: Path) -> None:
+    """Public path-confinement check used by higher-level append transactions."""
+    _reject_symlink_components(Path(path))
+
+
+def _lock_attempts() -> tuple[int, float]:
+    try:
+        attempts = max(1, int(os.environ.get("RECURSION_DURABLE_LOCK_ATTEMPTS", "100")))
+    except ValueError:
+        attempts = 100
+    try:
+        delay = max(0.0, float(os.environ.get("RECURSION_DURABLE_LOCK_DELAY_S", "0.01")))
+    except ValueError:
+        delay = 0.01
+    return attempts, delay
+
+
+def _lock_file_descriptor(descriptor: int) -> None:
+    attempts, delay = _lock_attempts()
+    if fcntl is not None:
+        for attempt in range(attempts):
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return
+            except BlockingIOError:
+                if attempt + 1 < attempts:
+                    time.sleep(delay)
+    elif msvcrt is not None:
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        for attempt in range(attempts):
+            try:
+                msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                return
+            except OSError:
+                if attempt + 1 < attempts:
+                    time.sleep(delay)
+    else:  # pragma: no cover - a supported platform always has one locking primitive.
+        raise JsonlDurabilityError("no cross-process lock primitive is available")
+    raise JsonlDurabilityError("durable JSONL transaction lock is contended")
+
+
+def _unlock_file_descriptor(descriptor: int) -> None:
+    if fcntl is not None:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+    elif msvcrt is not None:
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+
+
+@contextmanager
+def durable_lock(path: Path):
+    """Hold one durable, cross-process transaction lock for a journal operation.
+
+    The lock is a stable sibling of the journal, not the journal itself.  This lets callers
+    hold it across read/validate/append while ``append_jsonl`` retains its lower-level file
+    lock and crash/torn-tail/index checks.  The lock file is intentionally retained so a
+    missing journal has the same serialization identity as a later append.
+    """
+    path = Path(path)
+    ensure_no_symlink(path)
+    ensure_no_symlink(path.parent)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_no_symlink(path.parent)
+    ensure_no_symlink(path)
+    lock_path = path.parent / f".{path.name}.lock"
+    ensure_no_symlink(lock_path)
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(lock_path, flags, 0o600)
+    except OSError as exc:
+        raise JsonlDurabilityError(f"cannot open durable JSONL transaction lock: {lock_path}: {exc}") from exc
+    try:
+        # msvcrt.locking needs a byte to lock; this also makes creation durable.
+        if os.fstat(descriptor).st_size == 0:
+            os.write(descriptor, b"\0")
+            os.fsync(descriptor)
+            if os.name != "nt":
+                _fsync_dir(path.parent)
+        _lock_file_descriptor(descriptor)
+        yield
+    finally:
+        try:
+            _unlock_file_descriptor(descriptor)
+        finally:
+            os.close(descriptor)
 
 
 @dataclass(frozen=True)
@@ -760,10 +868,14 @@ def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RE
     encoded = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     if len(encoded) - 1 > max_record_bytes:
         raise JsonlDurabilityError(f"new JSONL record exceeds {max_record_bytes} bytes: {path}")
+    ensure_no_symlink(path.parent)
     path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_no_symlink(path.parent)
     existed = path.exists()
+    ensure_no_symlink(path)
     descriptor = os.open(
-        path, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0), 0o600
+        path, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0), 0o600
     )
     evidence: dict | None = None
     connection: sqlite3.Connection | None = None

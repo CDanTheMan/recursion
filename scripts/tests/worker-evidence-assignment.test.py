@@ -152,6 +152,38 @@ def test_remote_evidence(tmp_path: Path) -> None:
           "identical terminal replay is idempotent without appending a duplicate")
 
 
+def test_remote_state_and_concurrency(tmp_path: Path) -> None:
+    path = tmp_path / "run.json"
+    _assignment_file, digest = make_assignment(tmp_path)
+    run(start_args(path, "run-remote-race", "task-1") +
+        ["--assignment-digest", digest, "--assignment-file", str(tmp_path / "assignments" / "task-1" / f"{digest}.json")])
+    common = ["remote-evidence", str(path), "--session-id", "sess-race",
+              "--branch", "cursor/race", "--commit", "b" * 40]
+    first = subprocess.Popen([sys.executable, str(WORKER_EVIDENCE), *common],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    second = subprocess.Popen([sys.executable, str(WORKER_EVIDENCE), *common],
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    first.communicate(timeout=15); second.communicate(timeout=15)
+    check(sorted(item.returncode for item in (first, second)) == [0, 0],
+          "concurrent identical remote evidence is accepted or replayed idempotently")
+    events = (tmp_path / "remote-events.jsonl").read_text(encoding="utf-8").splitlines()
+    check(len(events) == 1, "concurrent identical remote evidence appends exactly one event")
+
+    conflict = ["remote-evidence", str(path), "--session-id", "sess-race",
+                "--branch", "cursor/other", "--commit", "b" * 40]
+    result = run(conflict)
+    check(result.returncode != 0, "a differing remote branch is a typed refusal")
+    check(len((tmp_path / "remote-events.jsonl").read_text(encoding="utf-8").splitlines()) == 1,
+          "a conflicting remote branch cannot append a second identity")
+
+    cancel = run(["remote-evidence", str(path), "--session-id", "sess-race", "--event-type", "cancel",
+                  "--cancelled-at", "2026-08-28T01:00:00Z", "--cancellation-reason", "test"])
+    check(cancel.returncode == 0, "remote cancellation transition remains appendable")
+    cancelled_result = run(["remote-evidence", str(path), "--session-id", "sess-race",
+                            "--event-type", "result", "--branch", "cursor/race", "--commit", "b" * 40])
+    check(cancelled_result.returncode != 0, "a result after cancellation terminal is refused")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         test_legacy_start_unchanged(Path(tmp))
@@ -165,6 +197,8 @@ def main() -> int:
         test_start_refuses_task_id_mismatch(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_remote_evidence(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_remote_state_and_concurrency(Path(tmp))
 
     if failures:
         print(f"worker-evidence-assignment.test: {len(failures)} FAILED")

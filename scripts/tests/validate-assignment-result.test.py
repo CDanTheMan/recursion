@@ -64,12 +64,19 @@ def make_fixture(tmp_path: Path):
         "schema_version": 1, "id": "run-1", "task_id": "task-1", "role": "implementer",
         "assignment_digest": digest, "deadline_epoch": deadline_epoch,
         "base_commit": "a" * 40, "source_evidence": value["source_evidence"],
+        "commit_oid": "b" * 40,
     }
+    evidence["assignment"] = amod.assignment_projection(value)
+    evidence.update(amod.assignment_projection(value))
     evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
     return root, digest, evidence_path, deadline_epoch
 
 
 def base_args(root: Path, digest: str, evidence_path: Path, run_id: str = "run-1") -> list[str]:
+    if run_id != "run-1":
+        value = json.loads(evidence_path.read_text(encoding="utf-8"))
+        value["id"] = run_id
+        evidence_path.write_text(json.dumps(value), encoding="utf-8")
     return ["--assignment-root", str(root), "--task-id", "task-1",
             "--assignment-digest", digest, "--run-id", run_id, "--run-evidence", str(evidence_path)]
 
@@ -104,6 +111,16 @@ def test_evidence_names_different_digest(tmp_path: Path) -> None:
     args = base_args(root, digest, other_evidence, run_id="run-2")
     result = run(args)
     check(result.returncode == 2, f"run evidence bound to a different digest is refused as mismatched (got {result.returncode})")
+
+
+def test_evidence_projection_cannot_forge_provider(tmp_path: Path) -> None:
+    root, digest, evidence_path, _ = make_fixture(tmp_path)
+    value = json.loads(evidence_path.read_text(encoding="utf-8"))
+    value["provider"] = "evil-provider"
+    value["assignment"]["provider"] = "evil-provider"
+    evidence_path.write_text(json.dumps(value), encoding="utf-8")
+    result = run(base_args(root, digest, evidence_path, run_id="run-evil-provider") + ["--record"])
+    check(result.returncode == 2, "correct digest/source cannot authorize a forged provider projection")
 
 
 def test_late(tmp_path: Path) -> None:
@@ -156,6 +173,38 @@ def test_not_recorded_without_flag(tmp_path: Path) -> None:
     check(second.returncode == 0, "without --record, a repeat is NOT durably remembered as a duplicate")
 
 
+def test_concurrent_record_has_one_winner(tmp_path: Path) -> None:
+    root, digest, evidence_path, _ = make_fixture(tmp_path)
+    args = base_args(root, digest, evidence_path, run_id="run-race") + [
+        "--result-branch", "cursor/task-1", "--result-commit", "b" * 40, "--record"]
+    first = subprocess.Popen([sys.executable, str(VALIDATOR), *args], stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True)
+    second = subprocess.Popen([sys.executable, str(VALIDATOR), *args], stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, text=True)
+    results = [first, second]
+    [item.communicate(timeout=15) for item in results]
+    codes = sorted(item.returncode for item in results)
+    check(codes == [0, 4], f"concurrent identical result has one winner and one duplicate refusal (got {codes})")
+    ledger = root / "results.jsonl"
+    check(ledger.exists() and len(ledger.read_text(encoding="utf-8").splitlines()) == 1,
+          "concurrent identical result creates exactly one durable ledger row")
+
+    conflict_winner_args = base_args(root, digest, evidence_path, run_id="run-conflict") + [
+        "--result-branch", "cursor/task-1", "--result-commit", "b" * 40, "--record"]
+    conflict_args = base_args(root, digest, evidence_path, run_id="run-conflict") + [
+        "--result-branch", "cursor/task-1", "--result-commit", "c" * 40, "--record"]
+    first = subprocess.Popen([sys.executable, str(VALIDATOR), *conflict_winner_args],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    second = subprocess.Popen([sys.executable, str(VALIDATOR), *conflict_args],
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    first.communicate(timeout=15); second.communicate(timeout=15)
+    codes = sorted(item.returncode for item in (first, second))
+    check(codes == [0, 4] or codes == [0, 2],
+          f"concurrent conflicting result has one winner and one typed refusal (got {codes})")
+    check(len(ledger.read_text(encoding="utf-8").splitlines()) == 2,
+          "concurrent conflicting result cannot lose or duplicate the winning row")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         test_accepted_and_duplicate(Path(tmp))
@@ -163,6 +212,8 @@ def main() -> int:
         test_unknown_digest_source_unavailable(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_evidence_names_different_digest(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_evidence_projection_cannot_forge_provider(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_late(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
@@ -175,6 +226,8 @@ def main() -> int:
         test_tampered_assignment_file(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_not_recorded_without_flag(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_concurrent_record_has_one_winner(Path(tmp))
 
     if failures:
         print(f"validate-assignment-result.test: {len(failures)} FAILED")

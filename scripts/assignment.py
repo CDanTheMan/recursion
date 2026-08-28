@@ -88,6 +88,10 @@ ASSIGNMENT_FIELDS = frozenset({
     "sandbox_profile", "network_profile", "allowed_paths", "gate_digest", "publication_policy",
     "default_branch", "integration_branch", "created_at", "assignment_digest",
 })
+# This is the exact projection embedded in run evidence.  Keep it derived from the
+# assignment schema so a newly authoritative attribution field cannot silently be omitted
+# by one consumer (Phase 3, D-016).
+ASSIGNMENT_PROJECTION_FIELDS = tuple(sorted(ASSIGNMENT_FIELDS))
 
 
 class AssignmentError(Exception):
@@ -539,6 +543,25 @@ def validate_assignment(value: object, require_source_evidence: bool = False) ->
     if canonical_digest(value) != value.get("assignment_digest"):
         raise AssignmentError("assignment digest does not match its content")
     return value
+
+
+def assignment_projection(value: dict) -> dict:
+    """Return the complete, exact run-evidence projection of an assignment."""
+    return {key: value[key] for key in ASSIGNMENT_PROJECTION_FIELDS}
+
+
+def require_assignment_projection(run: object, persisted: dict) -> dict:
+    """Require both nested and top-level run attribution to equal the persisted record."""
+    if not isinstance(run, dict):
+        raise AssignmentError("run evidence is not an object")
+    expected = assignment_projection(persisted)
+    nested = run.get("assignment")
+    if nested != expected:
+        raise AssignmentError("run assignment projection disagrees with persisted assignment")
+    for key, expected_value in expected.items():
+        if key not in run or run[key] != expected_value:
+            raise AssignmentError(f"run attribution field {key!r} disagrees with persisted assignment")
+    return expected
 
 
 # --- CLI --------------------------------------------------------------------------------

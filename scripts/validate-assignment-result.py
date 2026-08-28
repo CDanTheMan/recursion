@@ -31,7 +31,8 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import assignment as assignment_mod  # noqa: E402
-from jsonl_durable import JsonlDurabilityError, append_jsonl, find_jsonl_objects  # noqa: E402
+from jsonl_durable import (JsonlDurabilityError, append_jsonl, durable_lock,
+                           ensure_no_symlink, find_jsonl_objects)  # noqa: E402
 
 PROG = "validate-assignment-result"
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
@@ -90,6 +91,10 @@ def path_within_allowed(path: str, allowed_paths: list[str]) -> bool:
 
 def load_run_evidence(path: str) -> dict:
     try:
+        ensure_no_symlink(Path(path))
+    except JsonlDurabilityError as exc:
+        raise RefusalError(2, f"run evidence path is unsafe: {exc}") from exc
+    try:
         value = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise RefusalError(2, f"run evidence unreadable: {exc}") from exc
@@ -98,7 +103,7 @@ def load_run_evidence(path: str) -> dict:
     return value
 
 
-def check(args: argparse.Namespace) -> dict:
+def _check_locked(args: argparse.Namespace) -> dict:
     root = Path(args.assignment_root) if args.assignment_root else assignment_mod.DEFAULT_STATE_ROOT
     value = assignment_mod.load_assignment(root, args.task_id, args.assignment_digest)
     if value is None:
@@ -111,23 +116,53 @@ def check(args: argparse.Namespace) -> dict:
         raise RefusalError(2, "persisted assignment failed its own digest check (tampered)")
 
     evidence = load_run_evidence(args.run_evidence)
+    if evidence.get("id") != args.run_id:
+        raise RefusalError(2, "run evidence id does not match the requested run_id")
+    if "run_id" in evidence and evidence.get("run_id") != args.run_id:
+        raise RefusalError(2, "run evidence run_id does not match the requested run_id")
+    try:
+        assignment_mod.require_assignment_projection(evidence, value)
+    except assignment_mod.AssignmentError as exc:
+        raise RefusalError(2, f"run evidence attribution projection is invalid: {exc}") from exc
     if evidence.get("assignment_digest") != args.assignment_digest:
         raise RefusalError(2, "run evidence is not bound to the given assignment digest")
     if evidence.get("task_id") != args.task_id:
         raise RefusalError(2, "run evidence names a different task_id than the assignment")
-    if evidence.get("base_commit") not in {None, value["source_sha"]}:
+    if evidence.get("base_commit") != value["source_sha"]:
         raise RefusalError(2, "run evidence base commit does not match assigned source SHA")
     source_evidence = evidence.get("source_evidence")
     if source_evidence != value["source_evidence"]:
         raise RefusalError(2, "run evidence is missing or has mismatched source evidence")
 
-    ledger = results_ledger(root)
-    try:
-        prior = find_jsonl_objects(ledger, "run_id", args.run_id)
-    except JsonlDurabilityError as exc:
-        raise RefusalError(2, f"results ledger is unusable: {exc}") from exc
-    if prior:
-        raise RefusalError(4, f"run_id {args.run_id} was already accepted (duplicate result)")
+    # These fields are optional for legacy evidence, but once a producer emits one of the
+    # aliases it must be internally consistent.  This prevents a forged lease/attempt/run
+    # binding from being accepted merely because the assignment digest is correct.
+    attempt_values = []
+    for key in ("attempt", "assignment_attempt", "lease_attempt"):
+        if key in evidence:
+            item = evidence[key]
+            if isinstance(item, bool) or not isinstance(item, int) or item < 1:
+                raise RefusalError(2, f"run evidence {key} is not a positive integer")
+            attempt_values.append((key, item))
+    if attempt_values and len({item for _, item in attempt_values}) != 1:
+        raise RefusalError(2, "run evidence attempt/lease bindings disagree")
+    requested_attempt = getattr(args, "attempt", None)
+    if requested_attempt is not None and (not attempt_values or attempt_values[0][1] != requested_attempt):
+        raise RefusalError(2, "run evidence attempt does not match the requested lease attempt")
+    if "lease_assignment_digest" in evidence and evidence.get("lease_assignment_digest") != args.assignment_digest:
+        raise RefusalError(2, "run evidence lease assignment digest disagrees")
+    if "assignment_run_id" in evidence and evidence.get("assignment_run_id") != args.run_id:
+        raise RefusalError(2, "run evidence assignment run binding disagrees")
+    if "lease_expires" in evidence:
+        lease_expires = evidence.get("lease_expires")
+        if not isinstance(lease_expires, str) or (lease_expires != "0" and _epoch_of(lease_expires) is None):
+            raise RefusalError(2, "run evidence lease_expires is not canonical")
+    if "deadline_epoch" in evidence:
+        deadline_epoch = evidence.get("deadline_epoch")
+        if isinstance(deadline_epoch, bool) or not isinstance(deadline_epoch, int):
+            raise RefusalError(2, "run evidence deadline_epoch is not an integer")
+        if "deadline" in evidence and _epoch_of(evidence.get("deadline")) != deadline_epoch:
+            raise RefusalError(2, "run evidence deadline and deadline_epoch disagree")
 
     deadline_epoch = evidence.get("deadline_epoch")
     if isinstance(deadline_epoch, int) and not isinstance(deadline_epoch, bool):
@@ -157,6 +192,8 @@ def check(args: argparse.Namespace) -> dict:
     if args.result_commit:
         if not SHA_RE.fullmatch(args.result_commit):
             raise RefusalError(2, "returned result commit is not a canonical object id")
+        if args.record and evidence.get("commit_oid") != args.result_commit:
+            raise RefusalError(2, "run evidence commit_oid does not match returned result commit")
         for label, observed in (
             ("run evidence commit", evidence.get("commit_oid")),
             ("machine gate commit", (evidence.get("machine_gate") or {}).get("commit_oid")
@@ -177,12 +214,44 @@ def check(args: argparse.Namespace) -> dict:
         "sandbox_profile": value["sandbox_profile"],
         "verified_at": assignment_mod.now_iso(), "status": "accepted",
     }
+    ledger = results_ledger(root)
     if args.record:
         try:
-            append_jsonl(ledger, record, dedupe_field="run_id", dedupe_value=args.run_id)
+            prior = find_jsonl_objects(ledger, "run_id", args.run_id)
+        except JsonlDurabilityError as exc:
+            raise RefusalError(2, f"results ledger is unusable: {exc}") from exc
+        if prior:
+            stable = {key: item for key, item in record.items() if key != "verified_at"}
+            if any({key: item for key, item in row.items() if key != "verified_at"} == stable
+                   for row in prior):
+                raise RefusalError(4, f"run_id {args.run_id} was already accepted (duplicate result)")
+            raise RefusalError(2, f"run_id {args.run_id} has a conflicting accepted result")
+        try:
+            outcome = append_jsonl(ledger, record, dedupe_field="run_id", dedupe_value=args.run_id)
         except JsonlDurabilityError as exc:
             raise RefusalError(2, f"results ledger append failed: {exc}") from exc
+        if not outcome.appended:
+            try:
+                existing = find_jsonl_objects(ledger, "run_id", args.run_id)
+            except JsonlDurabilityError as exc:
+                raise RefusalError(2, f"results ledger changed during append: {exc}") from exc
+            if not existing:
+                raise RefusalError(2, "results ledger append lost its compare-and-swap result")
+            stable = {key: item for key, item in record.items() if key != "verified_at"}
+            if any({key: item for key, item in row.items() if key != "verified_at"} == stable
+                   for row in existing):
+                raise RefusalError(4, f"run_id {args.run_id} was already accepted (duplicate result)")
+            raise RefusalError(2, f"run_id {args.run_id} has a conflicting accepted result")
     return record
+
+
+def check(args: argparse.Namespace) -> dict:
+    ledger = results_ledger(Path(args.assignment_root) if args.assignment_root else assignment_mod.DEFAULT_STATE_ROOT)
+    try:
+        with durable_lock(ledger):
+            return _check_locked(args)
+    except JsonlDurabilityError as exc:
+        raise RefusalError(2, f"results ledger transaction lock failed: {exc}") from exc
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -197,6 +266,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--result-commit", default=None)
     parser.add_argument("--changed-path", action="append", default=[])
     parser.add_argument("--received-at", default=None)
+    parser.add_argument("--attempt", type=int, default=None)
     parser.add_argument("--record", action="store_true")
     return parser.parse_args(argv)
 
