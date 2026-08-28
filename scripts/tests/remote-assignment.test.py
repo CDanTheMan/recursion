@@ -152,6 +152,10 @@ check(raises("assignment-invalid", ra.validate_assignment,
       "a branch name with a space is refused")
 check(raises("assignment-invalid", ra.validate_assignment, variant(source_branch="a..b")),
       "a branch name with a '..' is refused")
+for invalid_ref in (".", "foo.", "foo@{bar}", "foo/.bar"):
+    check(raises("assignment-invalid", ra.validate_assignment,
+                 variant(source_branch=invalid_ref)),
+          f"git-invalid branch ref {invalid_ref!r} is refused")
 check(raises("assignment-invalid", ra.validate_assignment,
              variant(allowed_paths=["../etc/passwd"])),
       "an allowed_path escaping the worktree is refused")
@@ -228,11 +232,21 @@ check(raises("redaction-violation", ra.screen_for_secret_material,
              {"session_cookie": "x"}, "payload"),
       "a cookie-shaped key name is refused")
 try:
-    ra.screen_for_secret_material({"credential_ref": "secret:MY_BACKEND_KEY"}, "payload")
+    ra.screen_for_secret_material(
+        {"credential_ref": "secret:MY_BACKEND_KEY"}, "manifest",
+        allowed_reference_paths={("credential_ref",)})
     ref_exempt = True
 except ra.RemoteError:
     ref_exempt = False
-check(ref_exempt, "an explicitly permitted credential ref field holds a reference")
+check(ref_exempt, "only an explicitly authorized schema path may hold a validated reference")
+check(raises("redaction-violation", ra.screen_for_secret_material,
+             {"credential_ref": "secret:GITHUB_TOKEN"}, "session",
+             allowed_reference_paths={("credential_ref",)}),
+      "a controller secret is refused even at an otherwise authorized reference path")
+check(raises("redaction-violation", ra.screen_for_secret_material,
+             {"nested": {"credential_ref": "secret:MY_BACKEND_KEY"}}, "session",
+             allowed_reference_paths={("credential_ref",)}),
+      "a nested credential_ref cannot borrow a top-level schema exemption")
 check(raises("redaction-violation", ra.screen_for_secret_material,
              {"arbitrary_ref": "secret:SOME_BACKEND_KEY"}, "payload"),
       "an arbitrary *_ref field is not an exemption for a secret reference")

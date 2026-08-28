@@ -42,6 +42,7 @@ import importlib.util
 import json
 import os
 import re
+import socket
 import sys
 import tempfile
 import time
@@ -65,6 +66,7 @@ from remote_assignment import (  # noqa: F401  (re-exported for the adapters)
     resolve_secret,
     screen_for_secret_material,
     validate_branch_name,
+    validate_branch_pattern,
     validate_https_url,
     validate_secret_ref,
 )
@@ -258,6 +260,10 @@ def _validate_publication(value: object) -> dict:
         if item in ("*", "**", "/*"):
             raise _bad("publication.allowed_result_branch_patterns may not be an unrestricted "
                        "wildcard; an external worker must not be able to return any ref")
+        try:
+            validate_branch_pattern(item, "publication.allowed_result_branch_patterns entry")
+        except RemoteError as exc:
+            raise _bad(exc.message) from exc
         cleaned.append(item)
     if len(set(cleaned)) != len(cleaned):
         raise _bad("publication.allowed_result_branch_patterns contains a duplicate")
@@ -351,7 +357,11 @@ def validate_manifest(data: object, name: str) -> dict:
     # by failing validation, not by being noticed. The *_ref keys are exempt from the
     # key-NAME screen (validate_secret_ref already proved each holds a reference), but their
     # values still go through the value screen below.
-    screen_for_secret_material(normalised, "manifest", code="manifest-invalid")
+    screen_for_secret_material(
+        normalised, "manifest", code="manifest-invalid",
+        allowed_reference_paths={
+            ("endpoint_ref",), ("credential_ref",), ("signing_key_ref",),
+        })
     return normalised
 
 
@@ -502,27 +512,47 @@ class HttpsTransport(Transport):
             return urllib.request.urlopen(request, timeout=timeout)  # noqa: S310 (https enforced)
         except urllib.error.HTTPError as exc:
             return exc
-        except TimeoutError as exc:
-            raise RemoteError("transport-timeout", f"request timed out after {timeout}s") from exc
-        except urllib.error.URLError as exc:
-            raise RemoteError("transport-error", f"transport failure: {exc.reason}") from exc
-        except OSError as exc:
-            raise RemoteError("transport-error", f"transport failure: {exc}") from exc
+        except Exception as exc:  # noqa: BLE001 - normalize every urllib/socket failure
+            raise self._normalize_io_error(exc, timeout) from None
+
+    @staticmethod
+    def _normalize_io_error(exc: Exception, timeout: int) -> RemoteError:
+        """Convert network failures without copying exception text into a durable/log path."""
+        if isinstance(exc, (TimeoutError, socket.timeout)):
+            return RemoteError("transport-timeout", "transport timed out")
+        return RemoteError("transport-error", "transport failed while communicating with provider")
 
     def request(self, method: str, url: str, headers: dict, body: bytes | None,
                 timeout: int) -> TransportResponse:
         handle = self._open(method, url, headers, body, timeout)
-        with contextlib.closing(handle):
-            payload = handle.read()
-            status = getattr(handle, "status", None) or handle.getcode()
-            return TransportResponse(status, dict(handle.headers.items()), payload)
+        try:
+            with contextlib.closing(handle):
+                try:
+                    payload = handle.read()
+                    status = getattr(handle, "status", None) or handle.getcode()
+                    headers_out = dict(handle.headers.items())
+                except Exception as exc:  # noqa: BLE001 - normalize read/provider I/O failures
+                    raise self._normalize_io_error(exc, timeout) from None
+                return TransportResponse(status, headers_out, payload)
+        except RemoteError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - closing and response plumbing are I/O too
+            raise self._normalize_io_error(exc, timeout) from None
 
     def stream_lines(self, method: str, url: str, headers: dict, body: bytes | None,
                      timeout: int):
         handle = self._open(method, url, headers, body, timeout)
-        with contextlib.closing(handle):
-            for raw in handle:
-                yield raw.decode("utf-8", errors="replace").rstrip("\r\n")
+        try:
+            with contextlib.closing(handle):
+                try:
+                    for raw in handle:
+                        yield raw.decode("utf-8", errors="replace").rstrip("\r\n")
+                except Exception as exc:  # noqa: BLE001 - normalize iterator/read failures
+                    raise self._normalize_io_error(exc, timeout) from None
+        except RemoteError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - closing is part of stream I/O
+            raise self._normalize_io_error(exc, timeout) from None
 
 
 def classify_status(status: int, body: bytes) -> None:
@@ -1024,6 +1054,10 @@ def reconcile_attempt(base: Path, backend: str, attempt_id: str, *, observed: st
     if not ATTEMPT_ID_RE.fullmatch(attempt_id or ""):
         raise RemoteError("request-invalid",
                           "attempt_id must match ^[0-9a-f]{16}-[0-9]{1,3}$")
+    if detail is not None and not isinstance(detail, dict):
+        raise RemoteError("request-invalid", "reconciliation detail must be an object")
+    evidence = dict(detail or {})
+    screen_for_secret_material(evidence, "reconciliation evidence")
     with remote_state_lock(base, backend):
         rows = latest_states(_read_attempts_unlocked(base, backend))
         record = rows.get(attempt_id)
@@ -1032,6 +1066,43 @@ def reconcile_attempt(base: Path, backend: str, attempt_id: str, *, observed: st
         if record.get("state") != ATTEMPT_OPEN:
             raise RemoteError("request-invalid",
                               f"attempt {attempt_id} is {record.get('state')!r}, not open")
+
+        # A cancel is not a generic mutation.  "landed" only means success when the provider
+        # reported its terminal cancellation state for this exact session and attempt.  A
+        # missing, active, completed, or unknown observation must not turn a cancel request
+        # into a successful cancellation or authorize a second request.
+        if record.get("operation") == "cancel" and observed == "landed":
+            raw_status = evidence.get("provider_status", evidence.get("vendor_state"))
+            if (not isinstance(raw_status, str)
+                    or raw_status.strip().upper() not in {"CANCELLED", "CANCELED"}):
+                raise RemoteError(
+                    "unreconciled-attempt",
+                    "cancel reconciliation requires provider-terminal CANCELLED/CANCELED "
+                    "evidence bound to the attempt and session")
+            if evidence.get("attempt_id") != attempt_id:
+                raise RemoteError("unreconciled-attempt",
+                                  "cancel evidence is not bound to this attempt")
+            if evidence.get("dispatch_id") != record.get("dispatch_id"):
+                raise RemoteError("unreconciled-attempt",
+                                  "cancel evidence is not bound to this dispatch")
+            try:
+                session = _read_session_unlocked(base, backend, record["dispatch_id"])
+            except (KeyError, RemoteError) as exc:
+                raise RemoteError("unreconciled-attempt",
+                                  "cancel evidence has no readable bound session") from exc
+            session_status = session.get("vendor_state")
+            if (session.get("assignment_digest") != record.get("assignment_digest")
+                    or session.get("run_id") != evidence.get("run_id")
+                    or session.get("state") != "cancelled"
+                    or not isinstance(session_status, str)
+                    or session_status.strip().upper() != raw_status.strip().upper()):
+                raise RemoteError("unreconciled-attempt",
+                                  "cancel evidence does not match the admitted session")
+
+        if record.get("operation") == "cancel" and observed == "not-landed":
+            raise RemoteError("unreconciled-attempt",
+                              "a cancel is not failed merely because terminal cancellation "
+                              "has not been observed")
         state = {
             "landed": ATTEMPT_SUCCEEDED,
             "not-landed": ATTEMPT_FAILED,
@@ -1042,18 +1113,48 @@ def reconcile_attempt(base: Path, backend: str, attempt_id: str, *, observed: st
         body.update({
             "state": state,
             "outcome": f"reconciled:{observed}",
-            "detail": {"observer": observer, "observed": observed, **dict(detail or {})},
+            "detail": {"observer": observer, "observed": observed, **evidence},
             "closed_at": closed_at,
             "updated_at": closed_at,
         })
         return _commit_attempt(base, backend, body)
 
 
+def _read_session_unlocked(base: Path, backend: str, dispatch_id: str) -> dict:
+    """Read and screen one session while the caller holds ``remote_state_lock``."""
+    path = session_path(base, backend, dispatch_id)
+    if not path.is_file():
+        raise RemoteError("not-found", f"no session record for dispatch {dispatch_id}")
+    try:
+        _safe_file(path, create_parent=False)
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(str(path), flags)
+        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+            value = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RemoteError("malformed-response", "session record is unreadable") from exc
+    if not isinstance(value, dict):
+        raise RemoteError("malformed-response", "session record is not a JSON object")
+    allowed = _session_reference_paths(backend, value)
+    screen_for_secret_material(value, "session", allowed_reference_paths=allowed)
+    return value
+
+
+def _session_reference_paths(backend: str, record: dict) -> set[tuple[str, ...]]:
+    """Return reference paths for the one concrete session schema that defines them."""
+    if backend == "grok-bot" and record.get("kind") == "grok-routine-dispatch":
+        return {("endpoint_ref",), ("signing_key_ref",)}
+    return set()
+
+
 def write_session(base: Path, backend: str, dispatch_id: str, record: dict,
                   *, lock_held: bool = False) -> Path:
     if not DISPATCH_ID_RE.fullmatch(dispatch_id or ""):
         raise RemoteError("request-invalid", "dispatch_id must match ^[a-z0-9][a-z0-9-]{7,63}$")
-    screen_for_secret_material(record, "session")
+    allowed = _session_reference_paths(backend, record)
+    screen_for_secret_material(record, "session", allowed_reference_paths=allowed)
     lock = contextlib.nullcontext() if lock_held else remote_state_lock(base, backend)
     with lock:
         path = session_path(base, backend, dispatch_id)
@@ -1064,23 +1165,7 @@ def write_session(base: Path, backend: str, dispatch_id: str, record: dict,
 def read_session(base: Path, backend: str, dispatch_id: str, *, lock_held: bool = False) -> dict:
     lock = contextlib.nullcontext() if lock_held else remote_state_lock(base, backend)
     with lock:
-        path = session_path(base, backend, dispatch_id)
-        if not path.is_file():
-            raise RemoteError("not-found", f"no session record for dispatch {dispatch_id}")
-        try:
-            _safe_file(path, create_parent=False)
-            flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
-            if hasattr(os, "O_NOFOLLOW"):
-                flags |= os.O_NOFOLLOW
-            descriptor = os.open(str(path), flags)
-            with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
-                value = json.load(handle)
-        except (OSError, json.JSONDecodeError) as exc:
-            raise RemoteError("malformed-response", "session record is unreadable") from exc
-        if not isinstance(value, dict):
-            raise RemoteError("malformed-response", "session record is not a JSON object")
-        screen_for_secret_material(value, "session")
-        return value
+        return _read_session_unlocked(base, backend, dispatch_id)
 
 
 def list_sessions(base: Path, backend: str) -> list[dict]:
@@ -1097,7 +1182,9 @@ def list_sessions(base: Path, backend: str) -> list[dict]:
                 with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
                     value = json.load(handle)
                 if isinstance(value, dict):
-                    screen_for_secret_material(value, "session")
+                    allowed = _session_reference_paths(backend, value)
+                    screen_for_secret_material(value, "session",
+                                               allowed_reference_paths=allowed)
                     out.append(value)
             except OSError as exc:
                 raise RemoteError("malformed-response", "session record is unreadable") from exc

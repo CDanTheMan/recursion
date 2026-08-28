@@ -23,8 +23,11 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import socket
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[2]
@@ -247,6 +250,12 @@ check(raises("manifest-invalid", rb.validate_manifest,
              with_publication(CURSOR_MANIFEST, allowed_result_branch_patterns=["*"]),
              "cursor-cloud"),
       "an unrestricted result-branch wildcard is refused")
+for invalid_pattern in ("foo/.", "foo/.bar", "foo@{bar}"):
+    check(raises("manifest-invalid", rb.validate_manifest,
+                 with_publication(CURSOR_MANIFEST,
+                                  allowed_result_branch_patterns=[invalid_pattern]),
+                 "cursor-cloud"),
+          f"a git-invalid result pattern {invalid_pattern!r} is refused before fnmatch")
 check(raises("manifest-invalid", rb.validate_manifest,
              with_publication(CURSOR_MANIFEST, allowed_result_branch_patterns=[]),
              "cursor-cloud"),
@@ -343,6 +352,70 @@ os.environ["RECURSION_REMOTE_LIVE"] = "1"
 live = rb.HttpsTransport()
 check(isinstance(live, rb.Transport),
       "with the human-owned live flag set, the transport constructs (and only then)")
+
+class BrokenResponse:
+    status = 200
+    headers = {}
+
+    def __init__(self, failure):
+        self.failure = failure
+
+    def read(self):
+        raise self.failure
+
+    def close(self):
+        return None
+
+
+class BrokenStream:
+    headers = {}
+
+    def __iter__(self):
+        raise self.failure
+
+    def __init__(self, failure):
+        self.failure = failure
+
+    def close(self):
+        return None
+
+
+original_urlopen = urllib.request.urlopen
+try:
+    urllib.request.urlopen = lambda *args, **kwargs: BrokenResponse(
+        TimeoutError("Bearer ghp_" + "q" * 36))
+    try:
+        live.request("POST", "https://provider.example/run", {}, b"{}", 5)
+    except RemoteError as exc:
+        read_timeout = exc.code == "transport-timeout" and "ghp_" not in str(exc)
+    else:
+        read_timeout = False
+    check(read_timeout,
+          "a response read timeout is a typed timeout without response or credential text")
+
+    urllib.request.urlopen = lambda *args, **kwargs: BrokenResponse(
+        urllib.error.URLError("https://provider.example/?token=secret"))
+    try:
+        live.request("POST", "https://provider.example/run", {}, b"{}", 5)
+    except RemoteError as exc:
+        open_failure = exc.code == "transport-error" and "token=secret" not in str(exc)
+    else:
+        open_failure = False
+    check(open_failure,
+          "a urllib request failure is normalized without copying exception details")
+
+    urllib.request.urlopen = lambda *args, **kwargs: BrokenStream(socket.timeout(
+        "Bearer ghp_" + "r" * 36))
+    try:
+        list(live.stream_lines("GET", "https://provider.example/events", {}, None, 5))
+    except RemoteError as exc:
+        stream_timeout = exc.code == "transport-timeout" and "ghp_" not in str(exc)
+    else:
+        stream_timeout = False
+    check(stream_timeout,
+          "a stream iterator timeout is a typed timeout without response or credential text")
+finally:
+    urllib.request.urlopen = original_urlopen
 os.environ.pop("RECURSION_REMOTE_LIVE", None)
 
 refusing = rb.RefusingTransport()
@@ -491,6 +564,28 @@ check(raises("not-found", rb.reconcile_attempt, recon_base, "grok-bot", "0" * 16
              observed="landed", observer="lucas"),
       "reconciling an attempt that does not exist is not-found")
 
+cancel_digest = "c" * 64
+cancel = begin(recon_base, dispatch_id="dispatch-cancel", operation="cancel",
+               digest=cancel_digest, request="k" * 64)
+rb.write_session(recon_base, "grok-bot", "dispatch-cancel", {
+    "dispatch_id": "dispatch-cancel", "assignment_digest": cancel_digest,
+    "run_id": "provider-run-1", "state": "cancelled",
+    "vendor_state": "CANCELED",
+})
+check(raises("unreconciled-attempt", rb.reconcile_attempt, recon_base, "grok-bot",
+             cancel.attempt_id, observed="landed", observer="lucas",
+             detail={"provider_status": "RUNNING", "attempt_id": cancel.attempt_id,
+                     "dispatch_id": "dispatch-cancel", "run_id": "provider-run-1"}),
+      "generic landed evidence cannot mark a cancel successful from a running provider")
+check(rb.open_attempts(recon_base, "grok-bot")[0]["attempt_id"] == cancel.attempt_id,
+      "invalid cancel evidence leaves the cancellation attempt open")
+closed_cancel = rb.reconcile_attempt(
+    recon_base, "grok-bot", cancel.attempt_id, observed="landed", observer="lucas",
+    detail={"provider_status": "CANCELED", "attempt_id": cancel.attempt_id,
+            "dispatch_id": "dispatch-cancel", "run_id": "provider-run-1"})
+check(closed_cancel["state"] == "succeeded",
+      "only bound provider-terminal CANCELED evidence can close a cancel successfully")
+
 # --- sessions -------------------------------------------------------------------------------------------
 
 session_base = tempdir()
@@ -504,6 +599,13 @@ check(raises("not-found", rb.read_session, session_base, "grok-bot", "dispatch-a
 check(raises("redaction-violation", rb.write_session, session_base, "grok-bot",
              "dispatch-0002", {"note": "ghp_" + "a" * 36}),
       "a credential cannot be written into a durable session record")
+check(raises("redaction-violation", rb.write_session, session_base, "grok-bot",
+             "dispatch-0003", {"credential_ref": "secret:GITHUB_TOKEN"}),
+      "write_session cannot use credential_ref as a broad exemption for a controller secret")
+check(raises("redaction-violation", rb.write_session, session_base, "grok-bot",
+             "dispatch-0004", {"kind": "probe",
+                                "endpoint_ref": "secret:BACKEND_WEBHOOK_URL"}),
+      "an arbitrary session kind cannot borrow the Grok endpoint_ref exemption")
 check(raises("request-invalid", rb.write_session, session_base, "grok-bot", "bad id!",
              {"a": 1}),
       "a malformed dispatch id cannot name a session file")

@@ -320,6 +320,8 @@ class GrokBotDispatcher:
                 clock=self.clock, lock_held=True)
             if attempt.replayed or attempt.unreconciled:
                 raise RemoteError("unreconciled-attempt", "reservation changed unexpectedly")
+            admission_snapshot, admission_snapshot_digest = self._admission_snapshot(
+                normalised, digest)
 
             try:
                 with AccountLease(self.base, self.manifest["capacity_pool"],
@@ -379,6 +381,8 @@ class GrokBotDispatcher:
                 "billing_basis": self.manifest["billing_basis"],
                 "on_demand": self.manifest["on_demand"],
                 "provider": normalised["provider"],
+                "admission_snapshot": admission_snapshot,
+                "admission_snapshot_digest": admission_snapshot_digest,
             }
             write_session(self.base, self.name, dispatch_id, record, lock_held=True)
             attempt.succeed("dispatched", {"envelope_digest": env_digest},
@@ -392,6 +396,21 @@ class GrokBotDispatcher:
         if assignment["host"] != self.manifest["host_id"]:
             raise RemoteError("assignment-invalid",
                               "assignment host is not the authorized backend host")
+
+    def _admission_snapshot(self, assignment: dict, digest: str) -> tuple[dict, str]:
+        """Capture the admitted assignment/manifest attribution before dispatch."""
+        snapshot = {
+            "schema_version": SCHEMA_VERSION,
+            "backend": self.name,
+            "manifest_digest": canonical_digest(self.manifest),
+            "assignment_digest": digest,
+            "provider": assignment["provider"],
+            "capacity_pool": self.manifest["capacity_pool"],
+            "host_id": self.manifest["host_id"],
+            "billing_basis": self.manifest["billing_basis"],
+            "on_demand": self.manifest["on_demand"],
+        }
+        return snapshot, canonical_digest(snapshot)
 
     def read_dispatch(self, dispatch_id: str) -> dict:
         return read_session(self.base, self.name, dispatch_id)

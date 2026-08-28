@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[2]
@@ -427,6 +428,26 @@ check(usage["on_demand"] is False, "usage never reports on-demand spend")
 check(rb.read_usage(base, "cursor-cloud", DISPATCH)["spend_state"] == "included",
       "usage is durably persisted under the remote backend state")
 
+# Rotate the live manifest after admission. Historical usage must remain bound to the
+# authenticated snapshot captured with the session, not to the new pool/billing policy.
+adapter.manifest.update({"capacity_pool": "rotated-pool", "host_id": "rotated-host",
+                         "billing_basis": "metered", "on_demand": True})
+transport.route("GET", "/v0/agents/agent-1/usage",
+                payload={"usage": {"total_tokens": 31}, "billing": "metered"})
+rotated_usage = adapter.get_usage(DISPATCH)
+check(rotated_usage["capacity_pool"] == "cursor-cloud-pool"
+      and rotated_usage["host_id"] == "cursor-cloud"
+      and rotated_usage["billing_basis"] == "included"
+      and rotated_usage["on_demand"] is False,
+      "usage after manifest rotation retains the admitted pool/host/billing snapshot")
+
+tampered = rb.read_session(base, "cursor-cloud", DISPATCH)
+tampered["admission_snapshot"]["capacity_pool"] = "forged-pool"
+rb.write_session(base, "cursor-cloud", DISPATCH, tampered)
+transport.route("GET", "/v0/agents/agent-1/usage", payload={"usage": {"total_tokens": 32}})
+check(raises("malformed-response", adapter.get_usage, DISPATCH),
+      "usage rejects a missing or mismatched admission snapshot authentication")
+
 base, transport, adapter = fresh(billing_basis="metered")
 transport.route("POST", "/v0/agents", payload={"id": "agent-1", "status": "RUNNING"})
 adapter.create_run(assignment(), "x", DISPATCH)
@@ -562,6 +583,33 @@ check(raises("unauthorized-result", adapter.reconciliation_input, DISPATCH,
              authorized_repositories=["https://github.com/NotSkittlz/golden-stallion"]),
       "a caller cannot widen the immutable authorized repository scope")
 
+# Two concurrent, different reconciliation inputs have one durable winner. Repeating the
+# winning input is idempotent; the loser cannot overwrite it after the lock is released.
+base, transport, adapter = with_session()
+winner_inputs = [
+    {"status": "FINISHED", "target": {"branchName": "cursor/one", "commit": RESULT_COMMIT}},
+    {"status": "FINISHED", "target": {"branchName": "cursor/two", "commit": "a" * 40}},
+]
+results, errors = [], []
+
+def reconcile_probe(payload):
+    try:
+        results.append(adapter.reconciliation_input(DISPATCH, payload))
+    except RemoteError as exc:
+        errors.append(exc.code)
+
+threads = [threading.Thread(target=reconcile_probe, args=(payload,))
+           for payload in winner_inputs]
+for thread in threads:
+    thread.start()
+for thread in threads:
+    thread.join(10)
+check(len(results) == 1 and errors == ["request-invalid"],
+      "concurrent reconciliation inputs have one durable winner and one conflict")
+winning_record = results[0]
+check(adapter.reconciliation_input(DISPATCH, winner_inputs[0]) == winning_record,
+      "repeating the winning reconciliation input is idempotent")
+
 # --- restart recovery -----------------------------------------------------------------------------------------------------
 
 base, transport, adapter = fresh()
@@ -579,8 +627,9 @@ check(not transport.calls, "recovery under PAUSE makes no external call")
 base, transport, adapter = fresh()
 transport.route("POST", "/v0/agents", payload={"id": "agent-1", "status": "RUNNING"})
 adapter.create_run(assignment(), "x", DISPATCH)
+session_digest = rb.read_session(base, "cursor-cloud", DISPATCH)["assignment_digest"]
 crashed = rb.begin_attempt(base, "cursor-cloud", dispatch_id=DISPATCH, operation="cancel",
-                           assignment_digest="d" * 64, request_digest="r" * 64,
+                           assignment_digest=session_digest, request_digest="r" * 64,
                            max_attempts=3)
 transport.route("GET", "/v0/agents/agent-1", payload={"status": "CANCELLED"})
 report = adapter.recover()

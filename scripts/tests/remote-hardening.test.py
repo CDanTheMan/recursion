@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import json
 import subprocess
 import sys
 import tempfile
@@ -60,6 +61,35 @@ except Exception as exc:
     print(type(exc).__name__ + ":" + str(exc))
 '''
 
+RECONCILIATION_INPUT = r'''
+import importlib.util
+import json
+import sys
+sys.path.insert(0, sys.argv[2] + r"/scripts")
+import remote_backend as rb
+from pathlib import Path
+spec = importlib.util.spec_from_file_location(
+    "cursor_cloud_race", Path(sys.argv[2]) / "scripts" / "cursor-cloud-adapter.py")
+cc = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(cc)
+manifest = rb.validate_manifest({
+    "schema_version": 1, "name": "cursor-cloud", "kind": "cursor-cloud",
+    "description": "race fixture", "endpoint": "https://api.cursor.com",
+    "endpoint_ref": None, "credential_ref": "secret:CURSOR_CLOUD_API_KEY",
+    "signing_key_ref": None, "capacity_pool": "cursor-cloud-pool",
+    "host_id": "cursor-cloud", "billing_basis": "included", "on_demand": False,
+    "timeout_seconds": 60, "max_attempts": 3, "concurrency_lease": 1,
+    "publication": {"default_branch": "main", "integration_branch": "recursion/integration",
+                     "task_branch_pattern": "recursion/extern/<task-id>",
+                     "allowed_result_branch_patterns": ["cursor/*"]}}, "cursor-cloud")
+adapter = cc.CursorCloudAdapter(Path(sys.argv[1]), manifest, rb.RefusingTransport())
+try:
+    adapter.reconciliation_input("dispatch-input", json.loads(sys.argv[3]))
+    print("ok")
+except Exception as exc:
+    print(type(exc).__name__ + ":" + getattr(exc, "code", ""))
+'''
+
 with tempfile.TemporaryDirectory(prefix="recursion-remote-hardening-") as raw:
     base = Path(raw)
     (base / "state").mkdir()
@@ -102,6 +132,38 @@ with tempfile.TemporaryDirectory(prefix="recursion-remote-hardening-") as raw:
         "closed",
     ], "concurrent reconciliation has one transactional winner: " +
           repr((left_out, left_err, right_out, right_err)))
+
+    input_base = base / "reconciliation-input"
+    (input_base / "state").mkdir(parents=True)
+    rb.write_session(input_base, "cursor-cloud", "dispatch-input", {
+        "kind": "cursor-cloud-session", "dispatch_id": "dispatch-input",
+        "run_id": "provider-run", "assignment_digest": "a" * 64,
+        "source_repository": "https://github.com/NotSkittlz/chiron",
+        "authorized_repositories": [{
+            "repository": "https://github.com/NotSkittlz/chiron",
+            "source_branch": "main", "source_sha": "b" * 40,
+        }],
+    })
+    first_input = json.dumps({"status": "FINISHED", "target": {
+        "branchName": "cursor/one", "commit": "c" * 40}})
+    second_input = json.dumps({"status": "FINISHED", "target": {
+        "branchName": "cursor/two", "commit": "d" * 40}})
+    first = child(input_base, RECONCILIATION_INPUT, str(SOURCE), first_input)
+    second = child(input_base, RECONCILIATION_INPUT, str(SOURCE), second_input)
+    first_out, first_err = first.communicate(timeout=30)
+    second_out, second_err = second.communicate(timeout=30)
+    check(sorted((first_out.strip(), second_out.strip())) == [
+        "RemoteError:request-invalid", "ok",
+    ], "cross-process reconciliation input has one winner and one conflict: " +
+          repr((first_out, first_err, second_out, second_err)))
+    winner = rb.read_session(input_base, "cursor-cloud", "dispatch-input")["reconciliation"]
+    winner_payload = (first_input if winner["repositories"][0]["result_branch"] == "cursor/one"
+                      else second_input)
+    replay = child(input_base, RECONCILIATION_INPUT, str(SOURCE), winner_payload)
+    replay_out, replay_err = replay.communicate(timeout=30)
+    check(replay_out.strip() == "ok",
+          "cross-process replay of the winning reconciliation input is idempotent: " +
+          repr((replay_out, replay_err)))
 
     path_base = base / "path"
     (path_base / "state").mkdir(parents=True)

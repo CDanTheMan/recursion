@@ -225,40 +225,51 @@ def looks_like_secret_material(value: str) -> str:
 
 
 def screen_for_secret_material(value: object, where: str,
-                               code: str = "redaction-violation") -> None:
-    """Recursively refuse credential-shaped keys and values anywhere in a structure."""
-    if isinstance(value, dict):
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise RemoteError(code, f"{where} has a non-string key")
-            is_reference_field = key in EXPLICIT_SECRET_REFERENCE_FIELDS
-            if SECRET_KEY_SUBSTRING_RE.search(key) and not is_reference_field:
-                raise RemoteError(code,
-                                  f"{where}.{key} is a credential-shaped key name; remote "
-                                  "records and envelopes carry references, never secrets")
-            screen_for_secret_material(item, f"{where}.{key}", code)
-        return
-    if isinstance(value, list):
-        for index, item in enumerate(value):
-            screen_for_secret_material(item, f"{where}[{index}]", code)
-        return
-    if isinstance(value, str):
-        label = looks_like_secret_material(value)
-        if label:
-            raise RemoteError(code,
-                              f"{where} contains a value shaped like a {label}")
-        if SECRET_REF_RE.fullmatch(value):
-            # The parent key is deliberately not passed through this recursive helper.  A
-            # reference field is validated by the manifest validator; all other structures
-            # must not contain references at all.  This conservative rule means callers must
-            # screen a manifest only after validating its three explicit reference fields.
-            if not any(where.endswith("." + field)
-                       for field in EXPLICIT_SECRET_REFERENCE_FIELDS):
-                raise RemoteError(code,
-                                  f"{where} contains a secret reference outside an explicitly "
-                                  "permitted credential-reference field")
-        elif SECRET_REF_RE.search(value):
-            raise RemoteError(code, f"{where} embeds a secret reference inside free text")
+                               code: str = "redaction-violation",
+                               *, allowed_reference_paths=()) -> None:
+    """Refuse credential-shaped material, with only exact schema paths exempted.
+
+    ``credential_ref`` and friends are not globally safe field names.  The caller must pass
+    the exact root-relative paths authorized by the schema, for example
+    ``{("credential_ref",), ("endpoint_ref",)}`` for a validated manifest.  Nested records,
+    arbitrary session fields, and all other structures receive no exemption.
+    """
+    allowed = {tuple(path) for path in allowed_reference_paths}
+
+    def walk(item: object, display: str, path: tuple[str, ...]) -> None:
+        if isinstance(item, dict):
+            for key, child in item.items():
+                if not isinstance(key, str):
+                    raise RemoteError(code, f"{display} has a non-string key")
+                child_path = path + (key,)
+                if SECRET_KEY_SUBSTRING_RE.search(key) and child_path not in allowed:
+                    raise RemoteError(
+                        code,
+                        f"{display}.{key} is a credential-shaped key name; remote records "
+                        "and envelopes carry references, never secrets")
+                walk(child, f"{display}.{key}", child_path)
+            return
+        if isinstance(item, list):
+            for index, child in enumerate(item):
+                walk(child, f"{display}[{index}]", path)
+            return
+        if isinstance(item, str):
+            label = looks_like_secret_material(item)
+            if label:
+                raise RemoteError(code, f"{display} contains a value shaped like a {label}")
+            if SECRET_REF_RE.fullmatch(item):
+                if path not in allowed:
+                    raise RemoteError(
+                        code,
+                        f"{display} contains a secret reference outside an explicitly "
+                        "permitted schema field")
+                # Validate even an explicitly allowed path here.  This prevents a caller from
+                # treating the path exemption as proof that the reference itself is safe.
+                validate_secret_ref(item, display, code=code)
+            elif SECRET_REF_RE.search(item):
+                raise RemoteError(code, f"{display} embeds a secret reference inside free text")
+
+    walk(value, where, ())
 
 
 # --- the immutable assignment -----------------------------------------------------------
@@ -319,6 +330,28 @@ def validate_branch_name(value: object, field: str) -> str:
         raise _invalid(f"{field} has an empty path segment")
     if ".." in value or value.endswith(".lock") or value.startswith("-"):
         raise _invalid(f"{field} is not a well-formed branch name")
+    if "@{" in value or value == "@":
+        raise _invalid(f"{field} is not a well-formed branch name")
+    components = value.split("/")
+    if any(component in (".", "..") or component.startswith(".")
+           or component.endswith(".") or component.endswith(".lock")
+           for component in components):
+        raise _invalid(f"{field} is not a well-formed branch name")
+    return value
+
+
+def validate_branch_pattern(value: object, field: str) -> str:
+    """Validate a limited fnmatch pattern by probing its literal ref shape first.
+
+    Result patterns are policy inputs, not returned refs, so ``*`` and ``?`` are allowed.
+    Git-ref metacharacters and malformed path components are not.  Replacing the glob
+    operators with ordinary characters before ``validate_branch_name`` keeps fnmatch from
+    becoming the first parser of an attacker-controlled ref pattern.
+    """
+    if not isinstance(value, str) or not value:
+        raise _invalid(f"{field} must be a nonempty branch pattern")
+    probe = value.replace("*", "x").replace("?", "x")
+    validate_branch_name(probe, field)
     return value
 
 

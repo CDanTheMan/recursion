@@ -57,9 +57,11 @@ from remote_assignment import (
     assignment_digest,
     canonical_bytes,
     canonical_digest,
+    DIGEST_RE,
     screen_for_secret_material,
     validate_assignment,
     validate_branch_name,
+    validate_branch_pattern,
     validate_repository_url,
 )
 from remote_backend import (
@@ -79,6 +81,7 @@ from remote_backend import (
     outbound_admission,
     read_session,
     reconcile_attempt,
+    remote_state_lock,
     resolve_backend,
     resolve_secret,
     validate_directory,
@@ -144,8 +147,12 @@ def branch_is_allowed(branch: str, publication: dict) -> bool:
     validate_branch_name(branch, "returned branch")
     if branch in (publication["default_branch"], publication["integration_branch"]):
         return False
-    return any(fnmatch.fnmatchcase(branch, pattern)
-               for pattern in publication["allowed_result_branch_patterns"])
+    patterns = publication["allowed_result_branch_patterns"]
+    for pattern in patterns:
+        # Validate policy patterns before fnmatch interprets any metacharacters.  This also
+        # protects callers that construct a publication object without manifest validation.
+        validate_branch_pattern(pattern, "publication.allowed_result_branch_patterns entry")
+    return any(fnmatch.fnmatchcase(branch, pattern) for pattern in patterns)
 
 
 def task_branch_for(assignment: dict, publication: dict) -> str:
@@ -263,6 +270,21 @@ class CursorCloudAdapter:
             raise RemoteError("assignment-invalid",
                               "assignment host is not the authorized backend host")
 
+    def _admission_snapshot(self, assignment: dict, digest: str) -> tuple[dict, str]:
+        """Capture the admitted assignment/manifest attribution before dispatch."""
+        snapshot = {
+            "schema_version": SCHEMA_VERSION,
+            "backend": self.name,
+            "manifest_digest": canonical_digest(self.manifest),
+            "assignment_digest": digest,
+            "provider": assignment["provider"],
+            "capacity_pool": self.manifest["capacity_pool"],
+            "host_id": self.manifest["host_id"],
+            "billing_basis": self.manifest["billing_basis"],
+            "on_demand": self.manifest["on_demand"],
+        }
+        return snapshot, canonical_digest(snapshot)
+
     # -- models ---------------------------------------------------------------------------
 
     def list_models(self) -> list[str]:
@@ -343,6 +365,8 @@ class CursorCloudAdapter:
                                   lock_held=True)
             if attempt.replayed or attempt.unreconciled:
                 raise RemoteError("unreconciled-attempt", "reservation changed unexpectedly")
+            admission_snapshot, admission_snapshot_digest = self._admission_snapshot(
+                normalised, digest)
             try:
                 with AccountLease(self.base, self.manifest["capacity_pool"],
                                   self.manifest["concurrency_lease"]):
@@ -389,6 +413,8 @@ class CursorCloudAdapter:
                 "billing_basis": self.manifest["billing_basis"],
                 "on_demand": self.manifest["on_demand"],
                 "provider": normalised["provider"],
+                "admission_snapshot": admission_snapshot,
+                "admission_snapshot_digest": admission_snapshot_digest,
                 "authorized_repositories": ([{
                     "repository": normalised["source_repository"],
                     "source_branch": normalised["source_branch"],
@@ -546,6 +572,43 @@ class CursorCloudAdapter:
 
     # -- usage ----------------------------------------------------------------------------
 
+    def _usage_attribution(self, session: dict) -> tuple[dict, str, bool, str]:
+        """Authenticate the immutable attribution before making the usage read."""
+        snapshot = session.get("admission_snapshot")
+        snapshot_digest = session.get("admission_snapshot_digest")
+        if not isinstance(snapshot, dict) or not isinstance(snapshot_digest, str):
+            raise RemoteError("malformed-response",
+                              "session lacks its immutable admission snapshot")
+        if canonical_digest(snapshot) != snapshot_digest:
+            raise RemoteError("malformed-response",
+                              "session admission snapshot authentication failed")
+        expected_keys = {
+            "schema_version", "backend", "manifest_digest", "assignment_digest",
+            "provider", "capacity_pool", "host_id", "billing_basis", "on_demand",
+        }
+        if set(snapshot) != expected_keys or snapshot.get("schema_version") != SCHEMA_VERSION:
+            raise RemoteError("malformed-response", "session admission snapshot is malformed")
+        if snapshot["backend"] != self.name or snapshot["assignment_digest"] != \
+                session.get("assignment_digest"):
+            raise RemoteError("malformed-response",
+                              "session admission snapshot is bound to another dispatch")
+        if snapshot.get("billing_basis") not in ("included", "metered", "local") \
+                or not isinstance(snapshot.get("on_demand"), bool):
+            raise RemoteError("malformed-response", "session snapshot has invalid billing attribution")
+        if not isinstance(snapshot.get("provider"), str) or not snapshot["provider"]:
+            raise RemoteError("malformed-response", "session snapshot lacks authorized provider")
+        if (not isinstance(snapshot.get("manifest_digest"), str)
+                or not DIGEST_RE.fullmatch(snapshot["manifest_digest"])
+                or any(not isinstance(snapshot.get(field), str) or not snapshot[field]
+                       for field in ("capacity_pool", "host_id"))):
+            raise RemoteError("malformed-response", "session snapshot lacks authorized routing")
+        if any(session.get(field) != snapshot[field] for field in (
+                "provider", "capacity_pool", "host_id", "billing_basis", "on_demand")):
+            raise RemoteError("malformed-response",
+                              "session fields do not match the immutable admission snapshot")
+        return (snapshot, snapshot["billing_basis"], snapshot["on_demand"],
+                snapshot["provider"])
+
     def get_usage(self, dispatch_id: str) -> dict:
         """Token usage attributed to the capacity POOL that paid for it.
 
@@ -555,6 +618,7 @@ class CursorCloudAdapter:
         """
         with outbound_admission(self.base, self.name, "a Cursor Cloud usage query"):
             session = read_session(self.base, self.name, dispatch_id, lock_held=True)
+            snapshot, basis, on_demand, provider = self._usage_attribution(session)
             payload = self._call("GET", f"/v0/agents/{session['run_id']}/usage")
             tokens = payload.get("usage") if isinstance(payload.get("usage"), dict) else payload
             counts: dict[str, int] = {}
@@ -566,17 +630,7 @@ class CursorCloudAdapter:
                     raise RemoteError("malformed-response",
                                       f"usage.{field} is not a non-negative integer")
                 counts[field] = value
-            # These values were captured from the validated assignment and selected manifest at
-            # admission. Provider response fields such as ``billing`` and ``included`` are not
-            # authorization data and are intentionally ignored.
-            basis = session.get("billing_basis")
-            on_demand = session.get("on_demand")
-            provider = session.get("provider")
-            if basis not in ("included", "metered", "local") or not isinstance(on_demand, bool):
-                raise RemoteError("malformed-response",
-                                  "session lacks authorized billing attribution")
-            if not isinstance(provider, str) or not provider:
-                raise RemoteError("malformed-response", "session lacks authorized provider")
+
             spend_state = ("included" if basis == "included" and not on_demand
                            else "local" if basis == "local" and not on_demand
                            else "metered-unreconciled")
@@ -588,8 +642,8 @@ class CursorCloudAdapter:
                 "run_id": session["run_id"],
                 "assignment_digest": session["assignment_digest"],
                 "provider": provider,
-                "capacity_pool": self.manifest["capacity_pool"],
-                "host_id": self.manifest["host_id"],
+                "capacity_pool": snapshot["capacity_pool"],
+                "host_id": snapshot["host_id"],
                 "billing_basis": basis,
                 "on_demand": on_demand,
                 "spend_state": spend_state,
@@ -650,109 +704,122 @@ class CursorCloudAdapter:
         ``verification_state = requires-independent-verification`` and
         ``vendor_self_report_is_evidence = false``.
         """
-        session = read_session(self.base, self.name, dispatch_id)
-        publication = self.manifest["publication"]
-        if not isinstance(vendor_result, dict):
-            raise RemoteError("malformed-response", "vendor result must be a JSON object")
+        with remote_state_lock(self.base, self.name):
+            session = read_session(self.base, self.name, dispatch_id, lock_held=True)
+            publication = self.manifest["publication"]
+            if not isinstance(vendor_result, dict):
+                raise RemoteError("malformed-response", "vendor result must be a JSON object")
 
-        entries = vendor_result.get("repositories")
-        if entries is None:
-            target = vendor_result.get("target")
-            if not isinstance(target, dict):
+            entries = vendor_result.get("repositories")
+            if entries is None:
+                target = vendor_result.get("target")
+                if not isinstance(target, dict):
+                    raise RemoteError("malformed-response",
+                                      "vendor result carries neither a repositories list nor a "
+                                      "target block")
+                entries = [{
+                    "repository": target.get("repository", session["source_repository"]),
+                    "branch": target.get("branchName"),
+                    "commit": target.get("commit"),
+                }]
+            if not isinstance(entries, list) or not entries:
                 raise RemoteError("malformed-response",
-                                  "vendor result carries neither a repositories list nor a "
-                                  "target block")
-            entries = [{
-                "repository": target.get("repository", session["source_repository"]),
-                "branch": target.get("branchName"),
-                "commit": target.get("commit"),
-            }]
-        if not isinstance(entries, list) or not entries:
-            raise RemoteError("malformed-response",
-                              "vendor result repositories must be a nonempty list")
+                                  "vendor result repositories must be a nonempty list")
 
-        authorized = self._authorized_scope(session, authorized_repositories)
-        rows: list[dict] = []
-        seen_repositories: set[str] = set()
-        for entry in entries:
-            if not isinstance(entry, dict):
-                raise RemoteError("malformed-response", "repository result is not an object")
-            repository = entry.get("repository")
-            branch = entry.get("branch")
-            commit = entry.get("commit")
-            if not isinstance(repository, str):
-                raise RemoteError("malformed-response", "returned repository is not a string")
-            try:
-                validate_repository_url(repository, "returned repository")
-            except RemoteError as exc:
-                raise RemoteError("unauthorized-result",
-                                  "vendor returned a repository outside the URL contract") from exc
-            if repository not in authorized:
-                raise RemoteError("unauthorized-result",
-                                  f"vendor returned a result for repository {repository!r}, "
-                                  "which this assignment did not authorise")
-            if not isinstance(commit, str) or not SHA_RE.fullmatch(commit):
-                raise RemoteError("malformed-response",
-                                  f"returned commit for {repository} is not a 40-hex sha")
-            if not isinstance(branch, str):
-                raise RemoteError("malformed-response",
-                                  f"returned branch for {repository} is not a string")
-            try:
-                valid_branch = branch_is_allowed(branch, publication)
-            except RemoteError as exc:
-                raise RemoteError("unauthorized-result",
-                                  f"vendor returned an invalid branch for {repository}; "
-                                  "the result is outside the assignment confinement") from exc
-            if not valid_branch:
-                raise RemoteError("unauthorized-result",
-                                  f"vendor returned branch {branch!r} for {repository}: it is "
-                                  "the default or integration branch, or does not match "
-                                  "publication.allowed_result_branch_patterns")
-            if repository in seen_repositories:
-                raise RemoteError("unauthorized-result",
-                                  f"vendor returned duplicate results for {repository}")
-            seen_repositories.add(repository)
-            pinned = authorized[repository]
-            if commit == pinned["source_sha"]:
-                raise RemoteError("unauthorized-result",
-                                  f"returned commit for {repository} equals source_sha; the "
-                                  "run produced no candidate to verify")
-            rows.append({
-                "repository": repository,
-                "source_branch": pinned["source_branch"],
-                "source_sha": pinned["source_sha"],
-                "result_branch": branch,
-                "result_commit": commit,
-                "verification_state": VERIFICATION_STATE,
+            authorized = self._authorized_scope(session, authorized_repositories)
+            rows: list[dict] = []
+            seen_repositories: set[str] = set()
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    raise RemoteError("malformed-response", "repository result is not an object")
+                repository = entry.get("repository")
+                branch = entry.get("branch")
+                commit = entry.get("commit")
+                if not isinstance(repository, str):
+                    raise RemoteError("malformed-response", "returned repository is not a string")
+                try:
+                    validate_repository_url(repository, "returned repository")
+                except RemoteError as exc:
+                    raise RemoteError("unauthorized-result",
+                                      "vendor returned a repository outside the URL contract") from exc
+                if repository not in authorized:
+                    raise RemoteError("unauthorized-result",
+                                      f"vendor returned a result for repository {repository!r}, "
+                                      "which this assignment did not authorise")
+                if not isinstance(commit, str) or not SHA_RE.fullmatch(commit):
+                    raise RemoteError("malformed-response",
+                                      f"returned commit for {repository} is not a 40-hex sha")
+                if not isinstance(branch, str):
+                    raise RemoteError("malformed-response",
+                                      f"returned branch for {repository} is not a string")
+                try:
+                    valid_branch = branch_is_allowed(branch, publication)
+                except RemoteError as exc:
+                    raise RemoteError("unauthorized-result",
+                                      f"vendor returned an invalid branch for {repository}; "
+                                      "the result is outside the assignment confinement") from exc
+                if not valid_branch:
+                    raise RemoteError("unauthorized-result",
+                                      f"vendor returned branch {branch!r} for {repository}: it is "
+                                      "the default or integration branch, or does not match "
+                                      "publication.allowed_result_branch_patterns")
+                if repository in seen_repositories:
+                    raise RemoteError("unauthorized-result",
+                                      f"vendor returned duplicate results for {repository}")
+                seen_repositories.add(repository)
+                pinned = authorized[repository]
+                if commit == pinned["source_sha"]:
+                    raise RemoteError("unauthorized-result",
+                                      f"returned commit for {repository} equals source_sha; the "
+                                      "run produced no candidate to verify")
+                rows.append({
+                    "repository": repository,
+                    "source_branch": pinned["source_branch"],
+                    "source_sha": pinned["source_sha"],
+                    "result_branch": branch,
+                    "result_commit": commit,
+                    "verification_state": VERIFICATION_STATE,
+                })
+
+            vendor_status = vendor_result.get("status")
+            input_digest = canonical_digest({
+                "vendor_result": vendor_result,
+                "authorized_repositories": authorized_repositories,
             })
-
-        vendor_status = vendor_result.get("status")
-        record = {
-            "schema_version": SCHEMA_VERSION,
-            "kind": "cursor-cloud-reconciliation-input",
-            "backend": self.name,
-            "dispatch_id": dispatch_id,
-            "run_id": session["run_id"],
-            "assignment_digest": session["assignment_digest"],
-            "repositories": rows,
-            "verification_state": VERIFICATION_STATE,
-            "vendor_self_report_is_evidence": False,
-            "gate_evidence": None,
-            "required_independent_checks": list(REQUIRED_INDEPENDENT_CHECKS),
-            # The vendor's own claims are kept as a digest and a key inventory, not ingested.
-            # Recording them verbatim would put unvetted vendor text into canonical evidence;
-            # recording nothing would lose attributability when the two later disagree.
-            "advisory_only": {
-                "vendor_reported_state": str(vendor_status) if vendor_status is not None else "",
-                "vendor_report_digest": canonical_digest(vendor_result),
-                "vendor_claim_keys": sorted(str(key) for key in vendor_result),
-            },
-            "observed_at": self._now(),
-        }
-        session["reconciliation"] = record
-        session["updated_at"] = self._now()
-        write_session(self.base, self.name, dispatch_id, session)
-        return record
+            record = {
+                "schema_version": SCHEMA_VERSION,
+                "kind": "cursor-cloud-reconciliation-input",
+                "backend": self.name,
+                "dispatch_id": dispatch_id,
+                "run_id": session["run_id"],
+                "assignment_digest": session["assignment_digest"],
+                "repositories": rows,
+                "verification_state": VERIFICATION_STATE,
+                "vendor_self_report_is_evidence": False,
+                "gate_evidence": None,
+                "required_independent_checks": list(REQUIRED_INDEPENDENT_CHECKS),
+                # The vendor's own claims are kept as a digest and a key inventory, not ingested.
+                # Recording them verbatim would put unvetted vendor text into canonical evidence;
+                # recording nothing would lose attributability when the two later disagree.
+                "advisory_only": {
+                    "vendor_reported_state": str(vendor_status) if vendor_status is not None else "",
+                    "vendor_report_digest": canonical_digest(vendor_result),
+                    "vendor_claim_keys": sorted(str(key) for key in vendor_result),
+                },
+                "reconciliation_input_digest": input_digest,
+                "observed_at": self._now(),
+            }
+            existing = session.get("reconciliation")
+            if existing is not None:
+                if (isinstance(existing, dict)
+                        and existing.get("reconciliation_input_digest") == input_digest):
+                    return existing
+                raise RemoteError("request-invalid",
+                                  "a different reconciliation input already won for this dispatch")
+            session["reconciliation"] = record
+            session["updated_at"] = self._now()
+            write_session(self.base, self.name, dispatch_id, session, lock_held=True)
+            return record
 
     # -- restart recovery ------------------------------------------------------------------
 
@@ -806,15 +873,23 @@ class CursorCloudAdapter:
                 observed = "landed" if session.get("state") == "cancelled" else "unknown"
             else:
                 observed = "landed" if session.get("run_id") else "unknown"
+            evidence = {
+                "vendor_state": session.get("vendor_state", ""),
+                "ambiguity": "create-outcome-unknown"
+                if observed == "unknown" and row.get("operation") == "create"
+                else "provider-state-nonterminal"
+                if observed == "unknown" else "",
+            }
+            if row.get("operation") == "cancel" and observed == "landed":
+                evidence.update({
+                    "provider_status": session.get("vendor_state", ""),
+                    "attempt_id": row["attempt_id"],
+                    "dispatch_id": dispatch_id,
+                    "run_id": session.get("run_id", ""),
+                })
             reconcile_attempt(self.base, self.name, row["attempt_id"], observed=observed,
                               observer=f"{PROG}:recover",
-                              detail={
-                                  "vendor_state": session.get("vendor_state", ""),
-                                  "ambiguity": "create-outcome-unknown"
-                                  if observed == "unknown" and row.get("operation") == "create"
-                                  else "provider-state-nonterminal"
-                                  if observed == "unknown" else "",
-                              },
+                              detail=evidence,
                               clock=self.clock)
             if observed == "unknown":
                 report["unreconciled"].append(row["attempt_id"])
