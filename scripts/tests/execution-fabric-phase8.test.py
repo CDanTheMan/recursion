@@ -376,12 +376,20 @@ class DurableStateTests(unittest.TestCase):
             self.assertEqual(recovered[0]["status"], "recovery_required")
             self.assertEqual(restarted.reconcile_restart(now="2026-08-28T12:02:00Z"), ())
             # A terminal result can be accepted after restart, but never replayed as a second result.
+            with self.assertRaises(ReconciliationError) as error:
+                restarted.accept_result(attempt_id="attempt-one", lease_id="lease-one",
+                                        assignment_digest_value=assignment.assignment_digest,
+                                        result_digest=RESULT, status="succeeded", observed_at="9999-12-31T23:59:59Z",
+                                        controller_now=NOW)
+            self.assertEqual(error.exception.code, "INVALID_CONTROLLER_TIME")
             self.assertEqual(restarted.accept_result(attempt_id="attempt-one", lease_id="lease-one",
                                                      assignment_digest_value=assignment.assignment_digest,
-                                                     result_digest=RESULT, status="succeeded", observed_at=NOW, controller_now=NOW), "accepted")
+                                                     result_digest=RESULT, status="succeeded", observed_at=NOW,
+                                                     controller_now="2026-08-28T12:02:00Z"), "accepted")
             self.assertEqual(restarted.accept_result(attempt_id="attempt-one", lease_id="lease-one",
                                                      assignment_digest_value=assignment.assignment_digest,
-                                                     result_digest=RESULT, status="succeeded", observed_at=NOW, controller_now=NOW), "duplicate")
+                                                     result_digest=RESULT, status="succeeded", observed_at=NOW,
+                                                     controller_now="2026-08-28T12:02:00Z"), "duplicate")
             again = DurableFabricStore(journal)
             self.assertEqual(len(again.results), 1)
             with self.assertRaises(ReconciliationError) as error:
@@ -470,8 +478,21 @@ class DurableStateTests(unittest.TestCase):
             restarted = DurableFabricStore(path)
             self.assertEqual(restarted.active_reservations()[0]["host"], "host-one")
             restarted.reconcile_restart(now="2026-08-28T12:01:00Z")
-            self.assertEqual(restarted.record_recovery_query("lease-restart", state="unknown", observed_at="2026-08-28T12:02:00Z"), "recorded")
+            self.assertEqual(restarted.record_recovery_query("lease-restart", state="unknown", observed_at="2026-08-28T12:02:00Z", controller_now="2026-08-28T12:02:00Z"), "recorded")
+            with self.assertRaises(ReconciliationError) as error:
+                restarted.record_recovery_query("lease-restart", state="unknown", observed_at="9999-12-31T23:59:59Z", controller_now="2026-08-28T12:03:00Z")
+            self.assertEqual(error.exception.code, "OBSERVATION_FUTURE")
+            with self.assertRaises(ReconciliationError) as error:
+                restarted.record_recovery_query("lease-restart", state="terminal", terminal_status="succeeded",
+                                                result_digest=RESULT, observed_at="1900-01-01T00:00:00Z",
+                                                controller_now="2026-08-28T12:01:00Z")
+            self.assertEqual(error.exception.code, "INVALID_CONTROLLER_TIME")
+            self.assertEqual(restarted.leases["lease-restart"]["updated_at"], "2026-08-28T12:02:00Z")
             self.assertEqual(DurableFabricStore(path).leases["lease-restart"]["recovery_state"], "query_unknown")
+            import jsonschema
+            schema = json.loads((Path(__file__).resolve().parents[2] / "schemas" / "control-plane" / "v1" / "execution-fabric.schema.json").read_text(encoding="utf-8"))
+            for line in path.read_text(encoding="utf-8").splitlines():
+                jsonschema.validate(json.loads(line), schema)
 
     def test_recovery_terminal_requires_durable_result_evidence(self):
         registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
@@ -547,6 +568,27 @@ class DurableStateTests(unittest.TestCase):
                     DurableFabricStore(link / "fabric.jsonl", root=link)
                 self.assertEqual(error.exception.code, "UNSAFE_STORE_ROOT")
 
+    def test_receipt_assignment_binding_cannot_be_rewritten(self):
+        registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
+                                                               {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
+                                                               now_epoch=1787918400, created_at=NOW)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "receipts.jsonl"
+            store = VerificationReceiptStore(path, verification_keys={"controller/verifier-one": "test-key"})
+            receipt = receipt_for(assignment); store.issue(receipt)
+            forged = replace(receipt, assignment_digest="b" * 64)
+            with self.assertRaises(ReconciliationError) as error:
+                verify_candidate_result(assignment=assignment, receipt=forged, candidate_id="candidate-one",
+                                         result_commit=RESULT, diff_digest="c" * 64, scope_digest="d" * 64,
+                                         gate_digest="e" * 64, result_ref="cursor/candidate", receipt_store=store)
+            self.assertEqual(error.exception.code, "VERIFIER_RECEIPT_NOT_REGISTERED")
+            persisted = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
+            persisted["assignment_digest"] = "b" * 64
+            path.write_text(json.dumps(persisted) + "\n", encoding="utf-8")
+            with self.assertRaises(SchemaError) as error:
+                VerificationReceiptStore(path, verification_keys={"controller/verifier-one": "test-key"})
+            self.assertEqual(error.exception.code, "DIGEST_MISMATCH")
+
 
 class IntegrationTests(unittest.TestCase):
     def test_same_project_is_serialized_but_other_projects_can_overlap(self):
@@ -606,6 +648,12 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(error.exception.code, "PROTECTED_REF")
             self.assertEqual(restarted.complete("candidate-one"), "completed")
             self.assertEqual(IntegrationCoordinator(path, receipt_store=receipts).active, {})
+            # The durable journal's concrete policy/admit/complete events must
+            # validate against the public schema, not only the runtime parser.
+            import jsonschema
+            schema = json.loads((Path(__file__).resolve().parents[2] / "schemas" / "control-plane" / "v1" / "execution-fabric.schema.json").read_text(encoding="utf-8"))
+            for line in path.read_text(encoding="utf-8").splitlines():
+                jsonschema.validate(json.loads(line), schema)
 
     def test_verifier_hook_requires_assignment_source_and_pass(self):
         registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},

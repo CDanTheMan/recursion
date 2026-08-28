@@ -15,7 +15,10 @@
     { "$ref": "#/$defs/lease_status_event" },
     { "$ref": "#/$defs/result_event" },
     { "$ref": "#/$defs/verification_receipt" },
-    { "$ref": "#/$defs/routing_policy" }
+    { "$ref": "#/$defs/routing_policy" },
+    { "$ref": "#/$defs/integration_policy_event" },
+    { "$ref": "#/$defs/integration_admit_event" },
+    { "$ref": "#/$defs/integration_complete_event" }
   ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
@@ -109,7 +112,7 @@
         { "$ref": "#/$defs/event_common" },
         { "type": "object", "additionalProperties": false,
           "required": ["event", "schema_version", "event_digest", "prev_event_digest", "lease_id", "attempt_id", "remote_session_id", "assignment_digest", "assignment", "status", "created_at", "updated_at", "expires_at", "reservation", "recovery_state"],
-          "properties": { "event": { "const": "lease" }, "lease_id": { "$ref": "#/$defs/id" }, "attempt_id": { "$ref": "#/$defs/id" }, "remote_session_id": { "$ref": "#/$defs/id" }, "assignment_digest": { "$ref": "#/$defs/digest" }, "assignment": { "$ref": "#/$defs/assignment" }, "status": { "const": "active" }, "created_at": { "$ref": "#/$defs/timestamp" }, "updated_at": { "$ref": "#/$defs/timestamp" }, "expires_at": { "$ref": "#/$defs/timestamp" }, "reservation": { "type": "object" }, "recovery_state": { "const": "none" } }
+          "properties": { "event": { "const": "lease" }, "schema_version": { "const": 1 }, "event_digest": { "$ref": "#/$defs/digest" }, "prev_event_digest": { "$ref": "#/$defs/digest" }, "lease_id": { "$ref": "#/$defs/id" }, "attempt_id": { "$ref": "#/$defs/id" }, "remote_session_id": { "$ref": "#/$defs/id" }, "assignment_digest": { "$ref": "#/$defs/digest" }, "assignment": { "$ref": "#/$defs/assignment" }, "status": { "const": "active" }, "created_at": { "$ref": "#/$defs/timestamp" }, "updated_at": { "$ref": "#/$defs/timestamp" }, "expires_at": { "$ref": "#/$defs/timestamp" }, "reservation": { "type": "object", "additionalProperties": false, "required": ["host", "pool", "role"], "properties": { "host": { "$ref": "#/$defs/id" }, "pool": { "$ref": "#/$defs/id" }, "role": { "type": "string", "minLength": 1 } } }, "recovery_state": { "const": "none" } }
         }
       ]
     },
@@ -117,8 +120,8 @@
       "allOf": [
         { "$ref": "#/$defs/event_common" },
         { "type": "object", "additionalProperties": false,
-          "required": ["event", "schema_version", "event_digest", "prev_event_digest", "lease_id", "status", "updated_at", "recovery_state"],
-          "properties": { "event": { "const": "lease_status" }, "lease_id": { "$ref": "#/$defs/id" }, "status": { "type": "string" }, "updated_at": { "$ref": "#/$defs/timestamp" }, "recovery_state": { "type": "string" } }
+          "required": ["event", "schema_version", "event_digest", "prev_event_digest", "lease_id", "status", "updated_at", "observed_at", "recovery_state"],
+          "properties": { "event": { "const": "lease_status" }, "schema_version": { "const": 1 }, "event_digest": { "$ref": "#/$defs/digest" }, "prev_event_digest": { "$ref": "#/$defs/digest" }, "lease_id": { "$ref": "#/$defs/id" }, "status": { "enum": ["recovery_required", "expired", "succeeded", "failed", "cancelled"] }, "updated_at": { "$ref": "#/$defs/timestamp" }, "observed_at": { "$ref": "#/$defs/timestamp" }, "recovery_state": { "enum": ["query_pending", "query_running", "query_unknown", "query_terminal", "none"] } }
         }
       ]
     },
@@ -127,7 +130,7 @@
         { "$ref": "#/$defs/event_common" },
         { "type": "object", "additionalProperties": false,
           "required": ["event", "schema_version", "event_digest", "prev_event_digest", "attempt_id", "lease_id", "assignment_digest", "result_digest", "status", "observed_at"],
-          "properties": { "event": { "const": "result" }, "attempt_id": { "$ref": "#/$defs/id" }, "lease_id": { "$ref": "#/$defs/id" }, "assignment_digest": { "$ref": "#/$defs/digest" }, "result_digest": { "$ref": "#/$defs/digest" }, "status": { "type": "string" }, "observed_at": { "$ref": "#/$defs/timestamp" } }
+          "properties": { "event": { "const": "result" }, "schema_version": { "const": 1 }, "event_digest": { "$ref": "#/$defs/digest" }, "prev_event_digest": { "$ref": "#/$defs/digest" }, "attempt_id": { "$ref": "#/$defs/id" }, "lease_id": { "$ref": "#/$defs/id" }, "assignment_digest": { "$ref": "#/$defs/digest" }, "result_digest": { "$ref": "#/$defs/digest" }, "status": { "enum": ["succeeded", "failed", "cancelled"] }, "observed_at": { "$ref": "#/$defs/timestamp" } }
         }
       ]
     },
@@ -145,6 +148,27 @@
       "required": ["schema_version", "kind", "policy_id", "allowed_billing_basis", "allow_on_demand", "authority", "policy_digest"],
       "properties": {
         "schema_version": { "const": 1 }, "kind": { "const": "routing_policy" }, "policy_id": { "$ref": "#/$defs/id" }, "allowed_billing_basis": { "$ref": "#/$defs/strings" }, "allow_on_demand": { "type": "boolean" }, "authority": { "type": "string", "minLength": 1 }, "policy_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "integration_policy_event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event", "schema_version", "event_digest", "prev_event_digest", "project_id", "default_branch", "integration_branch"],
+      "properties": {
+        "event": { "const": "policy" }, "schema_version": { "const": 1 }, "event_digest": { "$ref": "#/$defs/digest" }, "prev_event_digest": { "$ref": "#/$defs/digest" }, "project_id": { "$ref": "#/$defs/id" }, "default_branch": { "type": "string", "minLength": 1 }, "integration_branch": { "type": "string", "minLength": 1 }
+      }
+    },
+    "integration_admit_event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event", "schema_version", "event_digest", "prev_event_digest", "candidate_id", "project_id", "assignment_digest", "source_sha", "result_commit", "source_ref", "result_ref", "default_branch", "integration_branch", "classification", "receipt_digest"],
+      "properties": {
+        "event": { "const": "admit" }, "schema_version": { "const": 1 }, "event_digest": { "$ref": "#/$defs/digest" }, "prev_event_digest": { "$ref": "#/$defs/digest" }, "candidate_id": { "$ref": "#/$defs/id" }, "project_id": { "$ref": "#/$defs/id" }, "assignment_digest": { "$ref": "#/$defs/digest" }, "source_sha": { "$ref": "#/$defs/sha" }, "result_commit": { "$ref": "#/$defs/sha" }, "source_ref": { "type": "string", "minLength": 1 }, "result_ref": { "type": "string", "minLength": 1 }, "default_branch": { "type": "string", "minLength": 1 }, "integration_branch": { "type": "string", "minLength": 1 }, "classification": { "enum": ["current-compatible", "stale-reviewable"] }, "receipt_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "integration_complete_event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event", "schema_version", "event_digest", "prev_event_digest", "candidate_id"],
+      "properties": {
+        "event": { "const": "complete" }, "schema_version": { "const": 1 }, "event_digest": { "$ref": "#/$defs/digest" }, "prev_event_digest": { "$ref": "#/$defs/digest" }, "candidate_id": { "$ref": "#/$defs/id" }
       }
     }
   }

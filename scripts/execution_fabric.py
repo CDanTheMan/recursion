@@ -164,8 +164,8 @@ def _append_bytes(path: Path, data: bytes) -> None:
 
 
 def digest_record(value: Mapping[str, Any]) -> str:
-    """Return the stable SHA-256 identity of a schema record, excluding its digest field."""
-    body = {key: item for key, item in value.items() if key not in {"digest", "assignment_digest"}}
+    """Return the stable SHA-256 identity excluding only the record digest field."""
+    body = {key: item for key, item in value.items() if key != "digest"}
     return hashlib.sha256(_canonical(body)).hexdigest()
 
 
@@ -1145,9 +1145,9 @@ class DurableFabricStore:
             if reservation["host"] != assignment.host or reservation["pool"] != assignment.capacity_pool or reservation["role"] != assignment.role:
                 raise ReconciliationError("ASSIGNMENT_MISMATCH", "lease reservation is not bound to the assignment")
         elif kind == "lease_status":
-            expected = common | {"lease_id", "status", "updated_at", "recovery_state"}
+            expected = common | {"lease_id", "status", "updated_at", "observed_at", "recovery_state"}
             _check_keys(event, expected, set(), "lease_status_event")
-            _id(event["lease_id"], "lease_id"); _timestamp(event["updated_at"], "updated_at")
+            _id(event["lease_id"], "lease_id"); _timestamp(event["updated_at"], "updated_at"); _timestamp(event["observed_at"], "observed_at")
             if event["status"] not in {"recovery_required", "expired", "succeeded", "failed", "cancelled"}:
                 raise ReconciliationError("INVALID_TRANSITION", "invalid lease status")
             if event["recovery_state"] not in {"query_pending", "query_running", "query_unknown", "query_terminal", "none"}:
@@ -1351,7 +1351,8 @@ class DurableFabricStore:
                 if lease["status"] != "active":
                     continue
                 event = {"event": "lease_status", "lease_id": lease_id,
-                         "status": "recovery_required", "updated_at": now, "recovery_state": "query_pending"}
+                         "status": "recovery_required", "updated_at": now, "observed_at": now,
+                         "recovery_state": "query_pending"}
                 self._record_locked(event)
                 recovered.append(dict(self.leases[lease_id]))
             return tuple(recovered)
@@ -1368,14 +1369,17 @@ class DurableFabricStore:
         for lease_id, lease in sorted(self.leases.items()):
             if lease["status"] in {"active", "recovery_required"} and current >= _epoch(lease["expires_at"]):
                 event = {"event": "lease_status", "lease_id": lease_id,
-                         "status": "expired", "updated_at": now, "recovery_state": "none"}
+                         "status": "expired", "updated_at": now, "observed_at": now, "recovery_state": "none"}
                 self._record_locked(event); expired.append(lease_id)
         return tuple(expired)
 
     def record_recovery_query(self, lease_id: str, *, state: str, observed_at: str,
                               terminal_status: str | None = None, result_digest: str | None = None,
-                              controller_now: str | None = None) -> str:
+                              controller_now: str) -> str:
         _id(lease_id, "lease_id"); _timestamp(observed_at, "observed_at")
+        _timestamp(controller_now, "controller_now")
+        if _epoch(observed_at) > _epoch(controller_now) + DEFAULT_HEARTBEAT_FUTURE_SKEW:
+            raise ReconciliationError("OBSERVATION_FUTURE", "remote recovery observation is too far in the future")
         if state not in {"running", "terminal", "unknown"}:
             raise ReconciliationError("INVALID_RECOVERY_STATE", "unsupported remote recovery state")
         if state == "terminal" and terminal_status not in {"succeeded", "failed", "cancelled"}:
@@ -1384,10 +1388,6 @@ class DurableFabricStore:
             raise ReconciliationError("EVIDENCE_REQUIRED", "terminal recovery requires a durable result digest")
         if result_digest is not None:
             _digest(result_digest, "result_digest")
-        if state == "terminal" and controller_now is None:
-            raise ReconciliationError("CONTROLLER_TIME_REQUIRED", "terminal recovery requires trusted controller time")
-        if controller_now is not None:
-            _timestamp(controller_now, "controller_now")
         with _journal_lock(self.lock_path):
             self._reload_locked()
             lease = self.leases.get(lease_id)
@@ -1400,6 +1400,8 @@ class DurableFabricStore:
                 current = _epoch(controller_now)
                 if current < _epoch(lease["created_at"]):
                     raise ReconciliationError("INVALID_CONTROLLER_TIME", "trusted controller time predates lease creation")
+                if current < _epoch(lease["updated_at"]):
+                    raise ReconciliationError("INVALID_CONTROLLER_TIME", "trusted controller time moves lease lifecycle backwards")
                 if current >= _epoch(lease["expires_at"]):
                     self._expire_due_locked(controller_now)
                     raise ReconciliationError("LATE_RESULT", "recovered result arrived at or after lease expiry")
@@ -1409,7 +1411,7 @@ class DurableFabricStore:
                 return "recorded"
             self._record_locked({"event": "lease_status", "lease_id": lease_id,
                                  "status": terminal_status if state == "terminal" else "recovery_required",
-                                 "updated_at": observed_at,
+                                 "updated_at": controller_now, "observed_at": observed_at,
                                  "recovery_state": recovery_state if state != "terminal" else "none"})
             return "recorded"
 
@@ -1438,6 +1440,8 @@ class DurableFabricStore:
                 raise ReconciliationError("LATE_RESULT", "result arrived after the lease was terminal")
             if _epoch(controller_now) < _epoch(lease["created_at"]):
                 raise ReconciliationError("INVALID_CONTROLLER_TIME", "trusted controller time predates lease creation")
+            if _epoch(controller_now) < _epoch(lease["updated_at"]):
+                raise ReconciliationError("INVALID_CONTROLLER_TIME", "trusted controller time moves lease lifecycle backwards")
             if _epoch(controller_now) >= _epoch(lease["expires_at"]):
                 self._expire_due_locked(controller_now)
                 raise ReconciliationError("LATE_RESULT", "result arrived at or after lease expiry")
