@@ -103,22 +103,29 @@ drift and reconcile rather than overwrite newer runtime state.
 
 All observed active project working trees other than Recursion were clean. Observed local heads:
 
-| Project | Local head |
-|---|---|
-| `golden-stallion` | `44ca42133e185be6954fde46063bea6f86310fab` |
-| `golden-stallion-extension` | `df30c746fae34bae8bbe3f2c0837d8593cece7a3` |
-| `golden-stallion-client` | `19998a79630b2d57c0ed1e99915470b1048ded10` |
-| `ai-investment-cockpit` | `095b88f75ed630b4a6e30358e2db9753c05f3a12` |
-| `edgar-morning-brew` | `bb90c53756b629f10e2b0112c56b5e6c62694285` |
-| `guerra-construction-group` | `977bd4e7634b6526e1fd91b716bd35646161cb9d` |
-| `chiron` | `5b7ae26129c13c33874ccd6d981ce29d9d122364` |
+| Project | Local head | Authenticated default-branch head |
+|---|---|---|
+| `recursion` | `03c8fa4b937f1ba1c1929ea0ca9161befcf0679b` | `928e221bbe90b9ad313be9e66a000643fe4d8f24` |
+| `golden-stallion` | `44ca42133e185be6954fde46063bea6f86310fab` | `bee0cf914d7398f951b626841664dbf50ad7c6d0` |
+| `golden-stallion-extension` | `df30c746fae34bae8bbe3f2c0837d8593cece7a3` | `0e9fe693c621f35aaa1cf49171943a1c5403f695` |
+| `golden-stallion-client` | `19998a79630b2d57c0ed1e99915470b1048ded10` | `7a7462e97bc4efaa26faf2f9614f948145c9c8fb` |
+| `ai-investment-cockpit` | `095b88f75ed630b4a6e30358e2db9753c05f3a12` | `1199a75497a281f2ba78d397d0d6600bce4f5f47` |
+| `edgar-morning-brew` | `bb90c53756b629f10e2b0112c56b5e6c62694285` | `fcf72a066ebda5e175b8e503069b16c30ad5b702` |
+| `guerra-construction-group` | `977bd4e7634b6526e1fd91b716bd35646161cb9d` | `977bd4e7634b6526e1fd91b716bd35646161cb9d` |
+| `chiron` | `5b7ae26129c13c33874ccd6d981ce29d9d122364` | `35c836b503db78468316fbd539ec1b521abf8b78` |
 
 `santa-clara-construction` remained pending and absent.
 
+`state/leases` contained no entries. The eight paths under `state/.locks` were zero-byte regular
+files used as `flock(2)` lock targets, not lease records. Two short-lived, PID-owned control locks
+(`hermes-control.lock` and `decision-queue.lock`) were observed during an awareness cycle and
+released before their process details could be sampled. No worker process or unowned lease was
+observed; the transient PAUSE-time control-lock activity remains part of the Phase 0 review.
+
 ## Remaining Phase 0 gate work
 
-- repeat authenticated remote-head observations and record drift from the dated audit;
-- classify every legacy empty lock and prove there is no live/unowned lease;
+- convert authenticated remote-head drift into explicit source dispositions before any pilot;
+- confirm the transient PAUSE-time control locks are awareness-only in a Linux evidence run;
 - independently review the captured dirty-state disposition and later drift handling;
 - supersede, rebind, or close the stale GSC pilot through the reviewed state path;
 - validate the merged candidate and an exact rollback procedure independently.
