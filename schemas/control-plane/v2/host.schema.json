@@ -1,1 +1,1 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://recursion.local/schemas/control-plane/v2/host.schema.json","allOf":[{"$ref":"schema.json#/$defs/host"},{"$ref":"schema.json#/$defs/secret_free"}]}
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://recursion.local/schemas/control-plane/v2/host.schema.json","allOf":[{"$ref":"schema.json#/$defs/host"},{"$ref":"schema.json#/$defs/secret_free"},{"$ref":"schema.json#/$defs/secret_reference_policy"}]}

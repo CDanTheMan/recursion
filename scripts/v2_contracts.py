@@ -35,6 +35,7 @@ POLICIES = {
     "fastest-eligible", "strongest-reviewer", "weighted-rotation", "no-metered-fallback",
 }
 BILLING_BASES = {"included", "weekly-included", "metered", "local", "human"}
+AVAILABLE_STATUSES = {"active", "ready", "online", "available"}
 APPROVED_CONTROLLER_VISIBILITY = "none"
 TRUST_COMPATIBILITY = {"coordinator": {"coordinator", "untrusted-worker"}, "untrusted-worker": {"untrusted-worker"}, "worker": {"worker", "untrusted-worker"}}
 ROUTING_ORDER_FIELDS = {
@@ -469,6 +470,11 @@ def validate_config(registries: Mapping[str, Any]) -> dict[str, list[dict[str, A
             names = [record["policy"] for record in checked]
             if len(set(names)) != len(names):
                 raise ContractError("routing policy names are ambiguous", "duplicate-policy")
+            # A selector may match either an id or a policy name.  Cross-record
+            # collisions would make resolution dependent on input ordering.
+            if any(record["id"] == other["policy"]
+                   for record in checked for other in checked if record is not other):
+                raise ContractError("routing policy id/name selectors are ambiguous", "ambiguous-policy")
         result[kind] = checked
     return result
 
@@ -484,6 +490,12 @@ def _find(items: Iterable[Mapping[str, Any]], item_id: str, kind: str) -> dict[s
     found = [dict(x) for x in items if x.get("id") == item_id]
     if len(found) != 1: raise ContractError(f"{kind} {item_id!r} is not uniquely registered", "unknown-reference")
     return found[0]
+
+
+def _available(record: Mapping[str, Any]) -> bool:
+    """Return whether a selectable component advertises an available status."""
+    status = record.get("status", "active")
+    return isinstance(status, str) and status in AVAILABLE_STATUSES
 
 
 def _paths_within(paths: Iterable[str], roots: Iterable[str]) -> bool:
@@ -572,11 +584,14 @@ def resolve_assignment(task: Mapping[str, Any], registries: Mapping[str, list[di
             if task["role"] not in profile.get("roles", []): reasons.append("profile-role-not-allowed")
             for field, value in (("engine_ids", e["id"]), ("provider_ids", p["id"]), ("capacity_pool_ids", pool["id"]), ("model_ids", m["id"]), ("host_ids", h["id"]), ("sandbox_profile_ids", s["id"])):
                 if value not in profile.get(field, []): reasons.append(f"profile-{field}-not-allowed")
-            if e.get("status", "active") not in {"active", "ready"} or e.get("enabled", True) is False: reasons.append("engine-unavailable")
+            if not _available(e) or e.get("enabled", True) is False: reasons.append("engine-unavailable")
+            if not _available(p): reasons.append("provider-unavailable")
+            if not _available(pool): reasons.append("pool-unavailable")
+            if not _available(m): reasons.append("model-unavailable")
+            if not _available(h): reasons.append("host-unavailable")
             if e["id"] not in h.get("engine_ids", []): reasons.append("host-missing-engine")
             if p["id"] not in m.get("provider_ids", []) or e["id"] not in m.get("engine_ids", []): reasons.append("model-incompatible")
             if task["role"] not in e.get("roles", []) or task["role"] not in m.get("roles", []) or task["role"] not in pool.get("roles", []): reasons.append("role-not-supported")
-            if pool.get("status", "active") not in {"active", "ready"}: reasons.append("pool-unavailable")
             if pool.get("quota", {}).get("remaining") == 0: reasons.append("quota-exhausted")
             if pool.get("projects") and task["project_id"] not in pool["projects"]: reasons.append("pool-project-not-allowed")
             if pool.get("models") and m["id"] not in pool["models"]: reasons.append("pool-model-not-allowed")

@@ -11,7 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, RefResolver
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -237,6 +237,58 @@ class V2ContractsTest(unittest.TestCase):
             except ContractError:
                 runtime_rejects = True
             self.assertEqual(runtime_rejects, not validator.is_valid(record), ("error_classes", errors))
+
+    def test_root_and_direct_schemas_match_runtime_mutation_matrix(self):
+        schema_dir = ROOT / "schemas" / "control-plane" / "v2"
+        root_schema = json.loads((schema_dir / "schema.json").read_text(encoding="utf-8"))
+        direct_names = ("engine", "provider", "capacity_pool", "model", "host", "sandbox_profile",
+                        "execution_profile", "routing_policy", "project")
+        direct = {kind: json.loads((schema_dir / f"{kind}.schema.json").read_text(encoding="utf-8"))
+                  for kind in direct_names}
+        store = {root_schema["$id"]: root_schema} | {doc["$id"]: doc for doc in direct.values()}
+
+        def valid(record):
+            root_ok = Draft202012Validator(root_schema).is_valid(record)
+            kind = record["kind"]
+            resolver = RefResolver(base_uri=root_schema["$id"], referrer=root_schema, store=store)
+            direct_ok = Draft202012Validator(direct[kind], resolver=resolver).is_valid(record)
+            runtime_ok = True
+            try:
+                validate_record(record)
+            except ContractError:
+                runtime_ok = False
+            self.assertEqual(root_ok, runtime_ok, ("root/runtime", kind, record))
+            self.assertEqual(direct_ok, runtime_ok, ("direct/runtime", kind, record))
+
+        cases = []
+        engine = copy.deepcopy(base_records()["engine"][0]); engine["argv_template"] = []; cases.append(engine)
+        engine = copy.deepcopy(base_records()["engine"][0]); engine["description"] = "secret:"; cases.append(engine)
+        profile = copy.deepcopy(base_records()["execution_profile"][0]); profile["network_profiles"] = []; cases.append(profile)
+        sandbox = copy.deepcopy(base_records()["sandbox_profile"][0]); sandbox["controller_visibility"] = "controller"; cases.append(sandbox)
+        sandbox = copy.deepcopy(base_records()["sandbox_profile"][0]); sandbox["controller_visibility"] = " \t"; cases.append(sandbox)
+        pool = copy.deepcopy(base_records()["capacity_pool"][0]); pool["fallback_policy"] = "bogus"; cases.append(pool)
+        policy = copy.deepcopy(base_records()["routing_policy"][0]); policy["allow_metered"] = True; policy["fallback_policy"] = "defer"; cases.append(policy)
+        policy = copy.deepcopy(base_records()["routing_policy"][0]); policy["policy"] = "weighted-rotation"; policy["weights"] = {"secret": 1}; cases.append(policy)
+        for record in cases:
+            valid(record)
+
+    def test_offline_selectable_components_defer_and_policy_selectors_are_unambiguous(self):
+        cfg = base_records()
+        task = {"task_id": "availability", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "execution_profile": "implementation", "requirements": {"capabilities": ["workspace-edit"]}}
+        for kind in ("model", "host", "capacity_pool"):
+            changed = copy.deepcopy(cfg)
+            changed[kind][0]["status"] = "offline"
+            result = resolve_assignment(task, changed)
+            self.assertEqual(result.status, "deferred", kind)
+            self.assertTrue(any(f"{('pool' if kind == 'capacity_pool' else kind)}-unavailable" in item["rejections"] for item in result.trace), kind)
+
+        collision = copy.deepcopy(cfg)
+        other = copy.deepcopy(collision["routing_policy"][0])
+        other["id"] = "cheapest-eligible"
+        other["policy"] = "local-first"
+        collision["routing_policy"].append(other)
+        with self.assertRaisesRegex(ContractError, "ambiguous"):
+            resolve_assignment(task, collision)
 
     def test_weighted_rotation_survives_candidate_order(self):
         cfg = base_records()
