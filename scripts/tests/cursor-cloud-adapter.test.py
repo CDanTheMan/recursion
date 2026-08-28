@@ -583,32 +583,122 @@ check(raises("unauthorized-result", adapter.reconciliation_input, DISPATCH,
              authorized_repositories=["https://github.com/NotSkittlz/golden-stallion"]),
       "a caller cannot widen the immutable authorized repository scope")
 
-# Two concurrent, different reconciliation inputs have one durable winner. Repeating the
-# winning input is idempotent; the loser cannot overwrite it after the lock is released.
+# Two concurrent, different reconciliation inputs have one durable winner. Identify the winner
+# from the record returned by the winning call rather than assuming thread/input order. Repeating
+# that input is idempotent, while replaying the loser remains a typed conflict.
+def reconciliation_race(adapter, dispatch_id, inputs):
+    barrier = threading.Barrier(len(inputs) + 1)
+    outcomes = [None] * len(inputs)
+
+    def reconcile_probe(index, payload):
+        try:
+            barrier.wait(timeout=10)
+            outcomes[index] = ("winner", adapter.reconciliation_input(dispatch_id, payload))
+        except RemoteError as exc:
+            outcomes[index] = ("error", exc.code)
+        except Exception as exc:  # noqa: BLE001
+            outcomes[index] = ("exception", type(exc).__name__)
+
+    threads = [threading.Thread(target=reconcile_probe, args=(index, payload))
+               for index, payload in enumerate(inputs)]
+    for thread in threads:
+        thread.start()
+    try:
+        barrier.wait(timeout=10)
+    except threading.BrokenBarrierError:
+        pass
+    for thread in threads:
+        thread.join(10)
+    return outcomes, all(not thread.is_alive() for thread in threads)
+
+
 base, transport, adapter = with_session()
 winner_inputs = [
     {"status": "FINISHED", "target": {"branchName": "cursor/one", "commit": RESULT_COMMIT}},
     {"status": "FINISHED", "target": {"branchName": "cursor/two", "commit": "a" * 40}},
 ]
-results, errors = [], []
+outcomes, joined = reconciliation_race(adapter, DISPATCH, winner_inputs)
+winners = [(index, outcome[1]) for index, outcome in enumerate(outcomes)
+           if outcome and outcome[0] == "winner"]
+conflicts = [outcome[1] for outcome in outcomes
+             if outcome and outcome[0] == "error"]
+check(joined and len(winners) == 1 and conflicts == ["request-invalid"]
+      and all(outcome and outcome[0] != "exception" for outcome in outcomes),
+      "concurrent reconciliation inputs have one durable winner and one typed conflict")
 
-def reconcile_probe(payload):
+if len(winners) == 1:
+    winning_index, winning_record = winners[0]
+    winning_branch = winning_record["repositories"][0]["result_branch"]
+    identified_winner = next((index for index, payload in enumerate(winner_inputs)
+                              if payload["target"]["branchName"] == winning_branch), None)
+else:
+    winning_index = identified_winner = None
+    winning_record = None
+check(identified_winner == winning_index,
+      "the durable reconciliation record identifies which concurrent payload won")
+if identified_winner is not None:
+    check(adapter.reconciliation_input(DISPATCH, winner_inputs[identified_winner])
+          == winning_record,
+          "repeating the actual winning reconciliation input is idempotent")
+    loser_index = 1 - identified_winner
+    check(raises("request-invalid", adapter.reconciliation_input, DISPATCH,
+                 winner_inputs[loser_index]),
+          "replaying the losing reconciliation input remains a typed conflict")
+else:
+    check(False, "repeating the actual winning reconciliation input is idempotent")
+    check(False, "replaying the losing reconciliation input remains a typed conflict")
+
+# Repeat the full race a bounded number of times to exercise lock acquisition order and ensure
+# every round preserves winner identity, idempotent winner replay, and loser refusal.
+stress_rounds = 8
+stress_ok = True
+for iteration in range(stress_rounds):
+    stress_base, _, stress_adapter = with_session()
+    stress_inputs = [
+        {"status": "FINISHED", "target": {
+            "branchName": f"cursor/stress-{iteration:02d}-one", "commit": RESULT_COMMIT}},
+        {"status": "FINISHED", "target": {
+            "branchName": f"cursor/stress-{iteration:02d}-two", "commit": "b" * 40}},
+    ]
+    stress_outcomes, stress_joined = reconciliation_race(
+        stress_adapter, DISPATCH, stress_inputs)
+    stress_winners = [(index, outcome[1])
+                      for index, outcome in enumerate(stress_outcomes)
+                      if outcome and outcome[0] == "winner"]
+    stress_conflicts = [outcome[1] for outcome in stress_outcomes
+                        if outcome and outcome[0] == "error"]
+    if not (stress_joined and len(stress_winners) == 1
+            and stress_conflicts == ["request-invalid"]):
+        stress_ok = False
+        continue
+    stress_winner_index, stress_record = stress_winners[0]
+    stress_branch = stress_record["repositories"][0]["result_branch"]
+    stress_identified = next(
+        (index for index, payload in enumerate(stress_inputs)
+         if payload["target"]["branchName"] == stress_branch), None)
+    if stress_identified != stress_winner_index:
+        stress_ok = False
+        continue
     try:
-        results.append(adapter.reconciliation_input(DISPATCH, payload))
+        if stress_adapter.reconciliation_input(
+                DISPATCH, stress_inputs[stress_identified]) != stress_record:
+            stress_ok = False
     except RemoteError as exc:
-        errors.append(exc.code)
-
-threads = [threading.Thread(target=reconcile_probe, args=(payload,))
-           for payload in winner_inputs]
-for thread in threads:
-    thread.start()
-for thread in threads:
-    thread.join(10)
-check(len(results) == 1 and errors == ["request-invalid"],
-      "concurrent reconciliation inputs have one durable winner and one conflict")
-winning_record = results[0]
-check(adapter.reconciliation_input(DISPATCH, winner_inputs[0]) == winning_record,
-      "repeating the winning reconciliation input is idempotent")
+        stress_ok = False
+    except Exception:  # noqa: BLE001
+        stress_ok = False
+    loser_refused = False
+    try:
+        stress_loser = 1 - stress_identified
+        stress_adapter.reconciliation_input(DISPATCH, stress_inputs[stress_loser])
+    except RemoteError as exc:
+        loser_refused = exc.code == "request-invalid"
+    except Exception:  # noqa: BLE001
+        pass
+    if not loser_refused:
+        stress_ok = False
+check(stress_ok, f"bounded {stress_rounds}-round reconciliation concurrency stress preserves "
+      "winner identity, idempotent replay, and loser refusal")
 
 # --- restart recovery -----------------------------------------------------------------------------------------------------
 

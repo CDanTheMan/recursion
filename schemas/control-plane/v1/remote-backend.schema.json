@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://recursion.local/schemas/control-plane/v1/remote-backend.schema.json",
   "title": "Recursion remote execution backend manifest v1",
-  "description": "Documentation/editor schema for scripts/remote/<name>.json. The authoritative, self-contained validation lives in scripts/remote_backend.py (no jsonschema dependency at runtime); this schema documents the contract and supports editor/CI tooling. A remote backend describes a service that executes work somewhere other than this box, pays from its own capacity pool, and returns a candidate that Recursion must independently verify. It is inert until a human sets RECURSION_REMOTE_ADAPTERS=1, RECURSION_REMOTE_<NAME>_ENABLED=1, the referenced env values, and RECURSION_REMOTE_LIVE=1. See docs/plans/remote-execution-adapters.md, docs/plans/recursion-v2-execution-fabric.md (Phase 6, Phase 7), and scripts/remote/README.md.",
+  "description": "Documentation/editor schema for scripts/remote/<name>.json. The authoritative, self-contained validation lives in scripts/remote_backend.py (no jsonschema dependency at runtime); this schema documents the contract and supports editor/CI tooling. A remote backend describes a service that executes work somewhere other than this box, pays from its own capacity pool, and returns a candidate that Recursion must independently verify. It is inert until a human sets RECURSION_REMOTE_ADAPTERS=1, RECURSION_REMOTE_<NAME>_ENABLED=1, the referenced env values, and RECURSION_REMOTE_LIVE=1. The schema validates the kind-specific public endpoint syntax and endpoint-reference shape. It cannot inspect an endpoint_ref's resolved environment value; scripts/remote_backend.py must still enforce that value's https, authority, userinfo, query, fragment, and path rules. Likewise, Draft7 cannot express the cross-field rule that publication.integration_branch differs from publication.default_branch; that semantic check remains mandatory in scripts/remote_backend.py. See docs/plans/remote-execution-adapters.md, docs/plans/recursion-v2-execution-fabric.md (Phase 6, Phase 7), and scripts/remote/README.md.",
   "type": "object",
   "required": [
     "schema_version",
@@ -35,6 +35,17 @@
       "minLength": 1,
       "pattern": "^(?!-)(?!.*\\.\\.)(?!.*@\\{)(?!.*[\\x00-\\x20\\x7f~^:\\[\\\\])(?!/)(?!.*//)(?!.*/$)(?!.*\\.$)(?!.*(?:^|/)\\.)(?!.*(?:^|/)[^/]*\\.lock(?:/|$))[^/]+(?:/[^/]+)*$",
       "description": "A safe fnmatch pattern whose * and ? wildcards are probed with literal x characters against the Git branch rules. All other characters retain their Git-ref meaning and restrictions."
+    },
+    "public_https_endpoint": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^https://(?:\\[[^\\]\\x00-\\x20/?#@]+\\]|[^\\x00-\\x20/@?#:][^\\x00-\\x20/@?#]*)(?::[^\\x00-\\x20/?#@]*)?(?:/[^\\x00-\\x20?#]*)?$",
+      "description": "A public https endpoint with a nonempty authority/host, no userinfo, query, or fragment. A path is allowed because the runtime validates this form with require_path=false. Port text is intentionally not constrained here beyond the runtime's host/authority parsing."
+    },
+    "endpoint_reference": {
+      "type": "string",
+      "pattern": "^(?!secret:(?:GITHUB_TOKEN|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID|OPENROUTER_API_KEY|ANTHROPIC_API_KEY|GH_TOKEN|RECURSION_|SSH_|GIT_SSH|AWS_|HERMES_))secret:[A-Z][A-Z0-9_]{2,63}$",
+      "description": "A reference to an environment value. The schema can validate only this reference form; runtime resolution must validate the referenced https URL, including its nonempty authority/host, userinfo, query, fragment, and path rules for the backend operation."
     }
   },
   "allOf": [
@@ -43,7 +54,7 @@
         {
           "properties": {
             "kind": {"const": "cursor-cloud"},
-            "endpoint": {"type": "string"},
+            "endpoint": {"$ref": "#/definitions/public_https_endpoint"},
             "endpoint_ref": {"type": "null"},
             "signing_key_ref": {"type": "null"}
           }
@@ -52,7 +63,7 @@
           "properties": {
             "kind": {"const": "grok-routine"},
             "endpoint": {"type": "null"},
-            "endpoint_ref": {"type": "string"},
+            "endpoint_ref": {"$ref": "#/definitions/endpoint_reference"},
             "signing_key_ref": {"type": "string"}
           }
         }
@@ -78,13 +89,11 @@
     },
     "endpoint": {
       "type": ["string", "null"],
-      "description": "Public https base URL, no userinfo, no query, no fragment. Exactly one of endpoint / endpoint_ref must be non-null. Use this form when the URL is not itself a secret (a vendor's public API base).",
-      "pattern": "^https://[^@?#]+$"
+      "description": "Kind-specific endpoint form: cursor-cloud uses a public_https_endpoint with a nonempty authority/host, no userinfo/query/fragment, and an optional path; grok-routine must set this to null. Exactly one of endpoint / endpoint_ref must be non-null."
     },
     "endpoint_ref": {
       "type": ["string", "null"],
-      "pattern": "^(?!secret:(?:GITHUB_TOKEN|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID|OPENROUTER_API_KEY|ANTHROPIC_API_KEY|GH_TOKEN|RECURSION_|SSH_|GIT_SSH|AWS_|HERMES_))secret:[A-Z][A-Z0-9_]{2,63}$",
-      "description": "Reference to an env var holding the URL. Use this form when the URL is itself bearer-grade -- a signed routine webhook URL grants anyone holding it the ability to post to the routine. Durable records store this reference; the resolved value is never written down."
+      "description": "Reference to an env var holding the URL. Use this form when the URL is itself bearer-grade -- a signed routine webhook URL grants anyone holding it the ability to post to the routine. Durable records store this reference; the resolved value is never written down. The schema validates the reference only; runtime backend_endpoint validation remains mandatory for the resolved URL."
     },
     "credential_ref": {
       "type": "string",
@@ -147,7 +156,7 @@
         },
         "integration_branch": {
           "$ref": "#/definitions/git_branch",
-          "description": "A disposable review artifact advanced only by the coordinator, after serialized ancestry, diff, scope and gate checks. Must differ from default_branch."
+          "description": "A disposable review artifact advanced only by the coordinator, after serialized ancestry, diff, scope and gate checks. Semantic rule (runtime-only): it must differ from default_branch; generic Draft7 schema validation intentionally does not enforce this cross-field relation."
         },
         "task_branch_pattern": {
           "allOf": [

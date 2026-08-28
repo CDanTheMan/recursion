@@ -31,6 +31,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from jsonschema import Draft7Validator
+
 SOURCE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SOURCE / "scripts"))
 
@@ -271,7 +273,21 @@ REMOTE_SCHEMA = json.loads(
     (SOURCE / "schemas" / "control-plane" / "v1" / "remote-backend.schema.json")
     .read_text(encoding="utf-8")
 )
+SCHEMA_VALIDATOR = Draft7Validator(REMOTE_SCHEMA)
+SCHEMA_VALIDATOR.check_schema(REMOTE_SCHEMA)
 PUBLICATION_SCHEMA = REMOTE_SCHEMA["properties"]["publication"]["properties"]
+
+
+def schema_accepts_manifest(value: object) -> bool:
+    return SCHEMA_VALIDATOR.is_valid(value)
+
+
+def runtime_accepts_manifest(value: dict, name: str) -> bool:
+    try:
+        rb.validate_manifest(value, name)
+        return True
+    except RemoteError:
+        return False
 
 
 def schema_accepts_definition(definition: dict, value: object) -> bool:
@@ -385,6 +401,69 @@ for candidate, expected in pattern_parity_cases:
     schema = schema_accepts_result_pattern(candidate)
     check(runtime == expected and schema == expected and runtime == schema,
           f"schema/runtime allowed_result_branch_patterns parity for {candidate!r}")
+
+# --- direct Draft7 endpoint/runtime differentials --------------------------------------------
+
+check(schema_accepts_manifest(CURSOR_MANIFEST)
+      and runtime_accepts_manifest(CURSOR_MANIFEST, "cursor-cloud"),
+      "the cursor-cloud manifest is accepted by both Draft7 and authoritative runtime validation")
+check(schema_accepts_manifest(GROK_MANIFEST)
+      and runtime_accepts_manifest(GROK_MANIFEST, "grok-bot"),
+      "the grok-routine endpoint_ref form is accepted by both Draft7 and runtime validation")
+
+public_endpoint_cases = [
+    ("https://api.cursor.com", True),
+    ("https://api.cursor.com/base/path", True),
+    ("https://api.cursor.com:443", True),
+    ("https:///x", False),
+    ("https://:443", False),
+    ("https://user:pass@api.cursor.com", False),
+    ("https://api.cursor.com?token=1", False),
+    ("https://api.cursor.com#fragment", False),
+    ("http://api.cursor.com", False),
+]
+for candidate, expected in public_endpoint_cases:
+    candidate_manifest = mutated(CURSOR_MANIFEST, endpoint=candidate)
+    schema = schema_accepts_manifest(candidate_manifest)
+    runtime = runtime_accepts_manifest(candidate_manifest, "cursor-cloud")
+    check(schema == expected and runtime == expected and schema == runtime,
+          f"direct schema/runtime public endpoint parity for {candidate!r}")
+
+# endpoint_ref is deliberately opaque to Draft7: it carries a secret reference, not the URL
+# value. The resolved value is tested through backend_endpoint, where the runtime applies the
+# same https/authority/userinfo/query/fragment/path policy with a webhook-appropriate query rule.
+check(schema_accepts_manifest(mutated(GROK_MANIFEST,
+                                      endpoint_ref="secret:GROK_ROUTINE_WEBHOOK_URL")),
+      "Draft7 accepts the grok endpoint_ref reference form without seeing its secret value")
+resolved_endpoint_cases = [
+    ("https://hooks.example.com/routines/abc", True),
+    ("https://hooks.example.com/routines/abc?v=1", True),
+    ("https://hooks.example.com?route=1", True),
+    ("https:///x", False),
+    ("https://:443", False),
+    ("https://user:pass@hooks.example.com/routines/abc", False),
+    ("https://hooks.example.com/routines/abc#fragment", False),
+    ("http://hooks.example.com/routines/abc", False),
+]
+for candidate, expected in resolved_endpoint_cases:
+    os.environ["GROK_ROUTINE_WEBHOOK_URL"] = candidate
+    try:
+        rb.backend_endpoint(GROK_MANIFEST)
+        runtime = True
+    except RemoteError:
+        runtime = False
+    check(schema_accepts_manifest(GROK_MANIFEST) and runtime == expected,
+          f"endpoint_ref schema/runtime differential for resolved value {candidate!r}")
+os.environ.pop("GROK_ROUTINE_WEBHOOK_URL", None)
+
+# Draft7 validates each branch independently but cannot generically compare two sibling values.
+# Keep the equality case accepted by the schema as an explicit semantic boundary, while the
+# authoritative runtime check remains mandatory and refuses it.
+equal_branches = with_publication(CURSOR_MANIFEST, integration_branch="main")
+check(schema_accepts_manifest(equal_branches)
+      and not runtime_accepts_manifest(equal_branches, "cursor-cloud"),
+      "Draft7 documents but does not pretend to enforce integration_branch != default_branch; "
+      "runtime validation remains mandatory")
 
 # --- resolution and the enablement chain -------------------------------------------------------
 
