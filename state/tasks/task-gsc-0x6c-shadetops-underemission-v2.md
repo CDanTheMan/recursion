@@ -8,7 +8,7 @@ pilot_id: pilot-golden-stallion-client
 goal_id: goal-gsc-0x6c-shadetops-underemission-v2
 plan_id: gsc-0x6c-shadetops-underemission-v2
 plan_digest: 7bc21268452add838f75e8ef40e466e074e6c9c977b6261bd5aaf9f7a6a22b3a
-dependencies: 
+dependencies:
 goal: Adjust only renderer implementation to reduce verified 0x6c shade-tops under-emission under the required forced-on native-diff gate.
 allowed_paths: user-client/render
 non_goals: tests,fixtures,oracles,baselines,corpus,live-game-access,portfolio-policy,credentials,merge,deploy

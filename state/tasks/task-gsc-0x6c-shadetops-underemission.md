@@ -8,7 +8,7 @@ pilot_id: pilot-golden-stallion-client
 goal_id: goal-gsc-0x6c-shadetops-underemission
 plan_id: gsc-0x6c-shadetops-underemission-v1
 plan_digest: 67fe16acff0c638df28ee86e5003fccd2e5905d7570d84ad638588a4e06bf8c3
-dependencies: 
+dependencies:
 goal: Adjust renderer implementation to reduce verified 0x6c shade-tops overlay under-emission while preserving conformance behavior.
 allowed_paths: user-client/render
 non_goals: credentials,merge,deploy
