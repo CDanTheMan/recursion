@@ -13,6 +13,8 @@ import types
 import unittest
 from pathlib import Path
 
+from windows_test_support import bash_command, prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SOURCE / "scripts"))
@@ -175,7 +177,7 @@ class HeadWindowAdmissionTest(unittest.TestCase):
             encoding="utf-8",
         )
         hermes.chmod(0o755)
-        env = os.environ.copy()
+        env = prepare_shell_env(os.environ.copy())
         env.update({
             "PATH": str(stub_dir) + os.pathsep + env.get("PATH", ""),
             "MODEL_MARKER": str(marker),
@@ -183,7 +185,7 @@ class HeadWindowAdmissionTest(unittest.TestCase):
             "RECURSION_INTAKE_ALLOW": "8913126684",
         })
         run = subprocess.run(
-            ["bash", "scripts/hermes-decide.sh", "--dry-run"],
+            bash_command("scripts/hermes-decide.sh", "--dry-run"),
             cwd=self.root,
             env=env,
             text=True,

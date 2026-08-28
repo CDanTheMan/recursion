@@ -24,6 +24,9 @@ cd "$ROOT"
 # caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
 # into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
 RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
+# Git Bash's $$ is an MSYS PID, while the Windows Python runtime witnesses native Win32
+# process identities. Linux has no /proc/<pid>/winpid, so the fallback is unchanged there.
+OWNER_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"
 
 FILE=""; DRY=0; PAUSED_SAFE=0; RECOVER_ONLY=0
 while [ $# -gt 0 ]; do
@@ -351,7 +354,7 @@ ACTION_LOCK=""; ACTION_LOCK_HELD=0; ACTION_FILE=""; ACTION_ID=""
 ACTION_CLAIMED=0; ACTION_TERMINAL=0; INSTRUCTION_CONSUMED=0
 action_unlock(){
   [ "$ACTION_LOCK_HELD" = 1 ] || return 0
-  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ACTION_LOCK" "$$" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ACTION_LOCK" "$OWNER_PID" \
     >/dev/null 2>&1 || return 74
   ACTION_LOCK_HELD=0
 }
@@ -360,7 +363,7 @@ action_lock(){
   ACTION_LOCK="$ROOT/state/.locks/action-$ACTION_ID.lock"
   [ -x "$ROOT/scripts/runtime-state.py" ] \
     || { log "witnessed action lock helper is absent"; return 73; }
-  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ACTION_LOCK" "$$" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ACTION_LOCK" "$OWNER_PID" \
     >/dev/null 2>&1 \
     || { log "action lock contended; refusing duplicate/unlocked dispatch"; return 73; }
   ACTION_LOCK_HELD=1

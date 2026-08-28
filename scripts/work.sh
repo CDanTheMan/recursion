@@ -23,6 +23,10 @@ cd "$ROOT"
 # caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
 # into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
 RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
+# Git Bash exposes an MSYS PID in $$ while the bundled Windows Python runtime validates
+# Win32 process identities. Use the translated PID when available; on Linux this is the
+# ordinary shell PID and the fallback remains byte-for-byte compatible.
+OWNER_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"
 
 DATE="$(date +%F)"; STAMP="$(date +%H%M%S)"
 LOG_DIR="$ROOT/loop/logs"; mkdir -p "$LOG_DIR"
@@ -217,11 +221,11 @@ WSLOCK="$ROOT/state/.locks/project-$LOCK_KEY.lock"
 WSLOCK_HELD=0
 project_lock_acquire(){
   [ -x "$ROOT/scripts/runtime-state.py" ] || { log "witnessed project lock helper is absent"; return 73; }
-  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$WSLOCK" "$$" >>"$LOG" 2>&1
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$WSLOCK" "$OWNER_PID" >>"$LOG" 2>&1
 }
 project_lock_release(){
   [ "$WSLOCK_HELD" = 1 ] || return 0
-  if python3 "$ROOT/scripts/runtime-state.py" lock-release "$WSLOCK" "$$" >>"$LOG" 2>&1; then
+  if python3 "$ROOT/scripts/runtime-state.py" lock-release "$WSLOCK" "$OWNER_PID" >>"$LOG" 2>&1; then
     WSLOCK_HELD=0
     return 0
   fi
@@ -325,11 +329,11 @@ claim_task(){
 # commit behind a short lock (spin <=30s, then proceed). Serial callers acquire it instantly.
 ledger_lock(){
   mkdir -p "$ROOT/state/.locks" 2>/dev/null || return 73
-  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ROOT/state/.locks/ledger.lock" "$$" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ROOT/state/.locks/ledger.lock" "$OWNER_PID" \
     >>"$LOG" 2>&1 || { log "ledger lock contended — refusing unlocked commit"; return 73; }
 }
 ledger_unlock(){
-  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ROOT/state/.locks/ledger.lock" "$$" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ROOT/state/.locks/ledger.lock" "$OWNER_PID" \
     >>"$LOG" 2>&1 || log "ledger lock release failed closed"
 }
 commit_state(){
@@ -533,7 +537,7 @@ PY
 engine_slot_release(){
   local slot
   for slot in ${ENGINE_SLOT_LOCKS[@]+"${ENGINE_SLOT_LOCKS[@]}"}; do
-    python3 "$ROOT/scripts/runtime-state.py" lock-release "$slot" "$$" >>"$LOG" 2>&1 \
+    python3 "$ROOT/scripts/runtime-state.py" lock-release "$slot" "$OWNER_PID" >>"$LOG" 2>&1 \
       || log "engine slot release failed closed for $slot"
   done
   ENGINE_SLOT_LOCKS=()
@@ -544,7 +548,7 @@ plugin_slot_acquire(){ # engine cap: a witnessed per-slot lock, held for the run
   [ -x "$ROOT/scripts/runtime-state.py" ] || { log "witnessed engine slot helper is absent"; return 95; }
   for ((i = 0; i < cap; i++)); do
     slot="$ROOT/state/.locks/engine-$engine-slot-$i.lock"
-    if python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$slot" "$$" >>"$LOG" 2>&1; then
+    if python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$slot" "$OWNER_PID" >>"$LOG" 2>&1; then
       ENGINE_SLOT_LOCKS+=("$slot")
       return 0
     fi
@@ -716,7 +720,7 @@ mk_worktree(){
   # sharing a repo do not race git ref/index locks. Cross-repo streams never contend.
   local rk wtlock; rk="$(printf '%s' "$REPO_DIR" | md5sum | cut -c1-12)"
   wtlock="$ROOT/state/.locks/wt-$rk.lock"; mkdir -p "$ROOT/state/.locks" 2>/dev/null || true
-  if ! python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$wtlock" "$$" >>"$LOG" 2>&1; then
+  if ! python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$wtlock" "$OWNER_PID" >>"$LOG" 2>&1; then
     log "worktree lock contended — refusing unlocked worktree mutation"
     return 73
   fi
@@ -744,7 +748,7 @@ mk_worktree(){
     else base="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"; fi
   fi
   git -C "$REPO_DIR" worktree add -B "$BRANCH" "$wt" "$base" >>"$LOG" 2>&1; local addrc=$?
-  python3 "$ROOT/scripts/runtime-state.py" lock-release "$wtlock" "$$" >>"$LOG" 2>&1 \
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$wtlock" "$OWNER_PID" >>"$LOG" 2>&1 \
     || { log "worktree lock release failed closed"; return 74; }
   [ "$addrc" -eq 0 ] || return 1
   copy_seed_into_worktree "$wt" || return 1
@@ -1190,7 +1194,7 @@ acquire_heavy(){
   local waited=0 out
   while :; do
     pause_checkpoint "heavy-gate wait" || return 75
-    out="$(RECURSION_ROOT="$ROOT" RECURSION_HEAVY_TAG="$ID" RECURSION_HEAVY_PID="$$" \
+    out="$(RECURSION_ROOT="$ROOT" RECURSION_HEAVY_TAG="$ID" RECURSION_HEAVY_PID="$OWNER_PID" \
       bash "$ROOT/scripts/capacity.sh" heavy acquire "$ID" 2>&1)"
     case "$out" in ACQUIRED*) HEAVY_HELD=1; log "heavy-gate lock acquired after ${waited}s"; return 0 ;; esac
     waited=$((waited+10))
@@ -1203,7 +1207,7 @@ acquire_heavy(){
 }
 release_heavy(){
   [ "$HEAVY_HELD" = "1" ] || return 0
-  if ! RECURSION_ROOT="$ROOT" RECURSION_HEAVY_PID="$$" \
+  if ! RECURSION_ROOT="$ROOT" RECURSION_HEAVY_PID="$OWNER_PID" \
       bash "$ROOT/scripts/capacity.sh" heavy release >/dev/null 2>&1; then
     log "heavy-gate lock release failed closed"
     return 76

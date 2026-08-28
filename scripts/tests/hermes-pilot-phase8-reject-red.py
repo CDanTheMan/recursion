@@ -16,6 +16,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from windows_test_support import bash_executable, prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 CONTROLS = [
@@ -83,6 +85,7 @@ class RejectFixture:
         self.write_goal()
         self.write_task()
         self.env = os.environ.copy()
+        prepare_shell_env(self.env)
         self.env.update({
             "RECURSION_ROOT": str(self.root), "RECURSION_INTAKE_ALLOW": "8913126684",
             "RECURSION_NO_NOTIFY": "1",
@@ -135,9 +138,7 @@ class RejectFixture:
                         "rjct-task", category, DIGEST, env_extra=env_extra)
 
     def bash(self) -> str:
-        if os.name == "nt":
-            return str(Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe")
-        return "bash"
+        return bash_executable()
 
     def task_status(self) -> str:
         return fields(self.root / "state/tasks/rjct-task.md").get("status", "")

@@ -10,6 +10,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from windows_test_support import bash_command, install_real_fcntl_shim, prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 
@@ -24,9 +26,7 @@ def fixture() -> tuple[Path, dict[str, str]]:
     shutil.copytree(SOURCE / "scripts", root / "scripts")
     shutil.copytree(SOURCE / "schemas", root / "schemas")
     if os.name == "nt":
-        (root / "scripts/fcntl.py").write_text(
-            "LOCK_EX=2\nLOCK_NB=4\ndef flock(_file, _flags):\n    return None\n", encoding="utf-8"
-        )
+        install_real_fcntl_shim(root / "scripts")
     for relative in (
         "state/actions", "state/tasks", "state/goals", "state/project-config", "state/pilots",
         "state/pilot-windows", "state/decision-queue/pending", "state/decision-queue/running",
@@ -89,6 +89,7 @@ def fixture() -> tuple[Path, dict[str, str]]:
         if enqueued.returncode:
             raise RuntimeError(f"decision enqueue failed: {enqueued.stderr.strip()}")
     env = os.environ.copy()
+    prepare_shell_env(env)
     env.update({"RECURSION_ROOT": str(root), "RECURSION_PILOT_GLOBAL_CONCURRENCY": "2",
                 "RECURSION_QUEUE_ACTUATION": "1", "RECURSION_NO_NOTIFY": "1"})
     return root, env
@@ -118,7 +119,7 @@ def linux_overlap(root: Path, env: dict[str, str]) -> bool:
         encoding="utf-8",
     )
     (root / "scripts/work.sh").chmod(0o755)
-    run = subprocess.run(["bash", str(root / "scripts/conduct-hermes.sh")], cwd=root, env=env,
+    run = subprocess.run(bash_command(str(root / "scripts/conduct-hermes.sh")), cwd=root, env=env,
                          text=True, capture_output=True, check=False, timeout=30)
     if run.returncode or not log.is_file():
         print(f"parallel fixture conductor rc={run.returncode}", file=__import__("sys").stderr)

@@ -17,6 +17,8 @@ import time
 import types
 from pathlib import Path
 
+from windows_test_support import bash_command
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 
@@ -158,7 +160,7 @@ def work_checkpoint_routing() -> bool:
             encoding="utf-8",
         )
         result = subprocess.run(
-            ["bash", str(runner)], env={
+            bash_command(str(runner)), env={
                 **os.environ, "CALLS": str(calls), "ADMIT_RC": "0", "CHECK_RC": "0",
             },
             text=True, capture_output=True, timeout=30, check=False,
@@ -176,22 +178,22 @@ def work_checkpoint_routing() -> bool:
             encoding="utf-8",
         )
         unavailable = subprocess.run(
-            ["bash", str(deferred)],
+            bash_command(str(deferred)),
             env={**os.environ, "CALLS": str(calls), "ADMIT_RC": "74"},
             text=True, capture_output=True, timeout=30, check=False,
         )
         revoked = subprocess.run(
-            ["bash", str(deferred)],
+            bash_command(str(deferred)),
             env={**os.environ, "CALLS": str(calls), "ADMIT_RC": "75"},
             text=True, capture_output=True, timeout=30, check=False,
         )
         invalid = subprocess.run(
-            ["bash", str(deferred)],
+            bash_command(str(deferred)),
             env={**os.environ, "CALLS": str(calls), "ADMIT_RC": "4"},
             text=True, capture_output=True, timeout=30, check=False,
         )
         crashed = subprocess.run(
-            ["bash", str(deferred)],
+            bash_command(str(deferred)),
             env={**os.environ, "CALLS": str(calls), "ADMIT_RC": "2"},
             text=True, capture_output=True, timeout=30, check=False,
         )
@@ -207,17 +209,17 @@ def work_checkpoint_routing() -> bool:
             encoding="utf-8",
         )
         local_unavailable = subprocess.run(
-            ["bash", str(local)],
+            bash_command(str(local)),
             env={**os.environ, "CALLS": str(calls), "CHECK_RC": "74"},
             text=True, capture_output=True, timeout=30, check=False,
         )
         local_invalid = subprocess.run(
-            ["bash", str(local)],
+            bash_command(str(local)),
             env={**os.environ, "CALLS": str(calls), "CHECK_RC": "4"},
             text=True, capture_output=True, timeout=30, check=False,
         )
         local_deferred = subprocess.run(
-            ["bash", str(local)],
+            bash_command(str(local)),
             env={**os.environ, "CALLS": str(calls), "CHECK_RC": "75"},
             text=True, capture_output=True, timeout=30, check=False,
         )
@@ -240,7 +242,7 @@ def work_checkpoint_routing() -> bool:
             encoding="utf-8",
         )
         role_unavailable = subprocess.run(
-            ["bash", str(role)], env={
+            bash_command(str(role)), env={
                 **os.environ, "CALLS": str(role_calls), "CHECK_RC": "74",
                 "CHECK_FAIL_AFTER": "2",
             },

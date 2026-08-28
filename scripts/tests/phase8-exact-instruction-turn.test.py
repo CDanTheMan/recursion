@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from windows_test_support import bash_command, prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 PROJECT = "golden-stallion-client"
@@ -113,6 +115,7 @@ class Fixture:
         self.write_instruction(930, "head-hermes", PROJECT, "old-head-marker")
         self.write_instruction(934, PILOT, PROJECT, "fresh-pilot-marker")
         self.env = os.environ.copy()
+        prepare_shell_env(self.env)
         self.env.update({
             "RECURSION_ROOT": str(self.root),
             "RECURSION_CONTROL_LOCK_WAIT_S": "2",
@@ -147,7 +150,7 @@ class Fixture:
 
     def run(self, *arguments: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["bash", "scripts/hermes-decide.sh", *arguments], cwd=self.root, env=self.env,
+            bash_command("scripts/hermes-decide.sh", *arguments), cwd=self.root, env=self.env,
             text=True, capture_output=True, check=False,
         )
 

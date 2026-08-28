@@ -13,6 +13,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from windows_test_support import bash_command, prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 PROJECT = "golden-stallion-client"
@@ -222,6 +224,7 @@ print(json.dumps({'ok':True,'accepted':True,'transport':'telegram',
         )
         transport.chmod(0o755)
         self.env = os.environ.copy()
+        prepare_shell_env(self.env)
         self.env.update({
             "RECURSION_ROOT": str(self.root), "RECURSION_INTAKE_ALLOW": "8913126684",
             "RECURSION_DECIDE_QUIET": "1", "RECURSION_NO_NOTIFY": "0",
@@ -255,11 +258,11 @@ print(json.dumps({'ok':True,'accepted':True,'transport':'telegram',
         return subprocess.run(command, cwd=self.root, env=env, text=True, capture_output=True, check=False)
 
     def decide(self) -> subprocess.CompletedProcess[str]:
-        return self.run(["bash", "scripts/hermes-decide.sh"])
+        return self.run(bash_command("scripts/hermes-decide.sh"))
 
     def drain(self, *, failpoint: str | None = None) -> subprocess.CompletedProcess[str]:
         extra = {"RECURSION_ROUTING_FAILPOINT": failpoint} if failpoint else None
-        return self.run(["bash", "scripts/conduct-hermes.sh", "--paused-safe"], extra=extra)
+        return self.run(bash_command("scripts/conduct-hermes.sh", "--paused-safe"), extra=extra)
 
     def queue(self, state: str, verb: str | None = None) -> list[tuple[Path, dict]]:
         result = []
@@ -450,7 +453,7 @@ def main() -> int:
         crash_env = fixture.env.copy()
         crash_env.update({"RECURSION_QUEUE_ACTUATION": "1", "RECURSION_ROUTING_FAILPOINT": "perform-hang"})
         process = subprocess.Popen(
-            ["bash", "scripts/conduct-hermes.sh", "--file", running_path], cwd=fixture.root,
+            bash_command("scripts/conduct-hermes.sh", "--file", running_path), cwd=fixture.root,
             env=crash_env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             start_new_session=True,
         )
@@ -485,7 +488,7 @@ def main() -> int:
                 "707 did not retain one replayed succeeded action")
         decision_707 = fixture.queue("succeeded", "routing-refuse")[0][0]
         action_replay = fixture.run(
-            ["bash", "scripts/conduct-hermes.sh", "--file", str(decision_707)],
+            bash_command("scripts/conduct-hermes.sh", "--file", str(decision_707)),
             extra={"RECURSION_QUEUE_ACTUATION": "1"},
         )
         require(action_replay.returncode == 0, f"succeeded action replay failed: {action_replay.stderr}")
@@ -547,7 +550,7 @@ def main() -> int:
         ])
         require(scheduled.returncode == 0 and scheduled.stdout.strip() == "2",
                 f"attention reconciliation was not scheduled exactly twice: {scheduled.stderr} {scheduled.stdout}")
-        notified = fixture.run(["bash", "scripts/conduct-hermes.sh"])
+        notified = fixture.run(bash_command("scripts/conduct-hermes.sh"))
         require(notified.returncode == 0, f"attention reconciliation failed: {notified.stderr}")
         attention = [json.loads(path.read_text(encoding="utf-8"))
                      for path in (fixture.root / "state/notification-events").glob("*.json")]
@@ -563,7 +566,7 @@ def main() -> int:
         ])
         require(delivery_schedule.returncode == 0 and delivery_schedule.stdout.strip() == "2",
                 "delivery actions were not scheduled exactly once")
-        delivered = fixture.run(["bash", "scripts/conduct-hermes.sh"])
+        delivered = fixture.run(bash_command("scripts/conduct-hermes.sh"))
         require(delivered.returncode == 0 and len(json_rows(fixture.visible)) == 2,
                 f"inert deliveries were not accepted exactly once: {delivered.stderr}")
         deliveries = [json.loads(path.read_text(encoding="utf-8"))
@@ -575,7 +578,7 @@ def main() -> int:
             + fixture.queue("succeeded", "notification-deliver")
         ):
             replay_notice = fixture.run(
-                ["bash", "scripts/conduct-hermes.sh", "--file", str(decision_path)],
+                bash_command("scripts/conduct-hermes.sh", "--file", str(decision_path)),
                 extra={"RECURSION_QUEUE_ACTUATION": "1"},
             )
             require(replay_notice.returncode == 0, "notification action replay failed")
