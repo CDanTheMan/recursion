@@ -95,8 +95,9 @@ index 2da829d1..3fe61a58 100644
 ```
 
 The brief edits are advisory/runtime content. The escalation edits are monotonic observation-count
-updates. Neither was silently applied to the WIP branch; their disposition remains an explicit
-Phase 0 reconciliation decision.
+updates. After preservation in this artifact, the exact captured delta was applied to the local
+WIP review candidate. The live checkout remained untouched; any later deployment must re-observe
+drift and reconcile rather than overwrite newer runtime state.
 
 ## Registered repository observations
 
@@ -118,7 +119,7 @@ All observed active project working trees other than Recursion were clean. Obser
 
 - repeat authenticated remote-head observations and record drift from the dated audit;
 - classify every legacy empty lock and prove there is no live/unowned lease;
-- choose and review the exact dirty-state disposition;
+- independently review the captured dirty-state disposition and later drift handling;
 - supersede, rebind, or close the stale GSC pilot through the reviewed state path;
 - validate the merged candidate and an exact rollback procedure independently.
 
