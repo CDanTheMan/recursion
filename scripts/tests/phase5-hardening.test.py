@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import importlib.util
 import os
 import stat
@@ -31,12 +32,21 @@ def check(ok: bool, label: str) -> None:
 
 
 def valid_assignment(repo: Path) -> dict:
+    source_sha = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+    gate_contract = {"acceptance_sha256": hashlib.sha256(b"test -s result").hexdigest(),
+                     "gate_files": {}, "controller_gate_files": {}}
+    gate_digest = hashlib.sha256(assignment.canonical_bytes(gate_contract)).hexdigest()
+    role = {"engine": "cursor", "provider": "cursor", "model": "cursor-primary",
+            "network_profile": "cursor",
+            "network_endpoints": ["api.cursor.com", "api2.cursor.sh"]}
     return {"task_id": "task-1", "project_id": "project-1", "source_repository": str(repo),
-            "source_branch": "codex/v2-cursor-runtime", "source_sha": "0" * 40,
+            "source_branch": "codex/v2-cursor-runtime", "source_sha": source_sha,
             "seed_manifest_digest": "", "engine": "cursor", "provider": "cursor",
             "capacity_pool": "cursor-ultra-grok-bot", "model": "cursor-primary",
             "host": "gs-recursion", "sandbox_profile": "strict-linux", "network_profile": "cursor",
-            "allowed_paths": ["scripts"], "gate_digest": "1" * 64,
+            "network_endpoints": ["api.cursor.com", "api2.cursor.sh"],
+            "allowed_paths": ["scripts"], "gate_digest": gate_digest, "gate_contract": gate_contract,
+            "role_assignments": {"implementer": role, "verifier": dict(role)},
             "publication_policy": "verified-integration-only"}
 
 
@@ -54,10 +64,22 @@ def main() -> int:
         try: assignment.validate_assignment(bad_pool)
         except assignment.AssignmentError: pass
         else: raise AssertionError("arbitrary pool accepted")
-        bad_role = dict(value); bad_role["role_assignments"] = {"verifier": {"engine":"gemini", "provider":"google-gemini", "model":"review"}}
+        bad_role = dict(value); bad_role["role_assignments"] = {"implementer": value["role_assignments"]["implementer"],
+            "verifier": {"engine":"gemini", "provider":"google-gemini", "model":"review",
+                         "network_profile":"gemini", "network_endpoints":["generativelanguage.googleapis.com"]}}
         try: assignment.validate_assignment(bad_role)
         except assignment.AssignmentError: pass
         else: raise AssertionError("role provider outside pool accepted")
+        for label, mutation in (
+            ("nonexistent source commit", {"source_sha": "f" * 40}),
+            ("wrong provider profile", {"network_profile": "gemini"}),
+            ("wrong profile endpoints", {"network_endpoints": ["example.test"]}),
+            ("wrong gate digest", {"gate_digest": "0" * 64}),
+        ):
+            bad = dict(value); bad.update(mutation)
+            try: assignment.validate_assignment(bad)
+            except assignment.AssignmentError: pass
+            else: raise AssertionError(f"{label} accepted")
 
         for field, bad in (("signal", "HUP"), ("overlap", [0])):
             execution = {"structured_output": False, "output_format":"text",
@@ -79,6 +101,13 @@ def main() -> int:
         work = (ROOT / "scripts/work.sh").read_text()
         check("quarantine: termination was not confirmed" in work and 'arc" = 96' in work,
               "controller retains worktree when process-group cancellation is unconfirmed")
+        arc96 = work.split('if [ "$arc" = "96" ]; then', 1)[1].split('case "$arc" in', 1)[0]
+        check("complete_terminal_escalation" not in arc96 and "quarantine_unconfirmed" in arc96,
+              "arc=96 records escalation without terminalizing or clearing the lease")
+        taskctl = (ROOT / "scripts/taskctl.sh").read_text()
+        check("termination-unconfirmed.json" in taskctl and "quarantine-release" in taskctl
+              and 'kill -0 -- "-$PGID"' in taskctl,
+              "quarantine reuse is blocked until explicit dead-process recovery")
 
         destination = tmp / "dest"
         runtime_layout._copy_tree(source, destination, "cursor-agent")
@@ -99,6 +128,32 @@ def main() -> int:
                 except runtime_layout.LayoutError: pass
                 else: raise AssertionError("symlinked runtime source accepted")
 
+        # Git on Windows may materialize a mode-120000 blob as a regular file when
+        # core.symlinks=false.  The staging decision must follow the index, not lstat().
+        git_source = tmp / "git-runtime"; git_source.mkdir()
+        subprocess.run(["git", "init", "-q", str(git_source)], check=True)
+        materialized = git_source / "cursor-agent"
+        materialized.write_text("outside-target\n", encoding="utf-8")
+        blob = subprocess.check_output(
+            ["git", "-C", str(git_source), "hash-object", "-w", "--stdin"],
+            input=b"outside-target\n",
+        ).decode().strip()
+        subprocess.run(["git", "-C", str(git_source), "update-index", "--add",
+                        f"--cacheinfo", f"120000,{blob},cursor-agent"], check=True)
+        try:
+            runtime_layout._copy_tree(git_source, tmp / "git-dest", "cursor-agent")
+        except runtime_layout.LayoutError:
+            pass
+        else:
+            raise AssertionError("Git mode-120000 materialized file accepted")
+        for entrypoint in (r"..\outside", "foo/../outside", "./cursor-agent"):
+            try:
+                runtime_layout._copy_tree(source, tmp / ("bad-" + str(len(entrypoint))), entrypoint)
+            except runtime_layout.LayoutError:
+                pass
+            else:
+                raise AssertionError(f"unsafe entrypoint accepted: {entrypoint!r}")
+
         assignment_path = tmp / "assignment.json"
         assignment_path.write_text(json.dumps(value), encoding="utf-8")
         evidence = tmp / "evidence.json"
@@ -117,6 +172,15 @@ def main() -> int:
         mismatch = cmd.copy(); mismatch[mismatch.index("--assignment-digest") + 1] = "f" * 64
         check(subprocess.run(mismatch, capture_output=True).returncode != 0,
               "evidence rejects caller-supplied digest mismatch")
+        wrong_gate = [sys.executable, str(ROOT / "scripts/worker-evidence.py"), "gate",
+                      str(evidence), "0" * 40, "test -s different-result", "0", "gate.log"]
+        check(subprocess.run(wrong_gate, capture_output=True).returncode != 0,
+              "evidence recomputes and rejects a wrong gate contract")
+        assignment_path.write_text(json.dumps({**value, "network_profile": "gemini"}), encoding="utf-8")
+        tampered_finish = [sys.executable, str(ROOT / "scripts/worker-evidence.py"), "finish",
+                           str(evidence), "failed", "tampered", "1"]
+        check(subprocess.run(tampered_finish, capture_output=True).returncode != 0,
+              "evidence consumption rejects assignment tampering")
 
     print("phase5-hardening.test: ALL PASS")
     return 0

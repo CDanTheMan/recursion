@@ -134,6 +134,13 @@ ASSIGNMENT_FILE=""; ASSIGNMENT_DIGEST=""
 IMPLEMENTER_RUN_ID=""; VERIFIER_RUN_ID=""; RESOLVED_MODEL="$MODEL"; RESOLVED_VERIFIER_MODEL=""
 LAST_USAGE_FILE=""; SEED_DIGEST_BEFORE=""
 SEED_EVIDENCE_FILE="$ROOT/state/runs/$ID-seed-$STAMP-$$.json"
+QUARANTINE_FILE="$ROOT/state/runs/$ID-termination-unconfirmed.json"
+UNCONFIRMED_PROCESS_GROUP=0
+
+if [ -e "$QUARANTINE_FILE" ]; then
+  log "task $ID is quarantined after unconfirmed worker termination; explicit observed recovery is required"
+  exit 75
+fi
 
 CONTRACT_DIGEST="$(python3 - "$TASK" <<'PY'
 import hashlib,json,sys
@@ -426,6 +433,36 @@ complete_terminal_escalation(){ # status reason [key] [acceptance-rc]
   terminal_ledger
   deliver_prepared_escalation
   return 0
+}
+
+# An unconfirmed process-group cancellation is not a terminal task outcome. The worker may
+# still be alive and may still hold files or credentials, so preserve the lease, worktree, and
+# evidence behind a durable marker. Only taskctl quarantine-release, after an observed dead
+# process group, may turn this into a recoverable stale task.
+quarantine_unconfirmed(){
+  local reason="$1" key="termination-unconfirmed:$ID:${LAST_RUN_ID:-none}" tmp
+  mkdir -p "$ROOT/state/runs" || return 74
+  tmp="${QUARANTINE_FILE}.tmp.$$"
+  python3 - "$tmp" "$QUARANTINE_FILE" "$ID" "$LAST_RUN_ID" "$UNCONFIRMED_PROCESS_GROUP" "$WT" "$LAST_RUN_EVIDENCE" "$reason" <<'PY' || return 74
+import json, os, sys, time
+tmp, target, task, run_id, pgid, worktree, evidence, reason = sys.argv[1:]
+value = {"schema_version": 1, "task_id": task, "run_id": run_id,
+         "process_group": int(pgid), "worktree": worktree, "evidence": evidence,
+         "reason": reason, "observed_terminal": False,
+         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
+    json.dump(value, out, sort_keys=True); out.write("\n"); out.flush(); os.fsync(out.fileno())
+os.replace(tmp, target)
+PY
+  # A restart/retry cannot steal this task even after its original TTL. Refresh the lease while
+  # the marker is installed; failure to refresh is itself fail-closed and leaves the marker.
+  if [ -x "$TASKCTL" ]; then
+    RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" bash "$TASKCTL" heartbeat "$ID" >>"$LOG" 2>&1 \
+      || { log "termination quarantine could not refresh the task lease"; return 74; }
+  fi
+  prepare_escalation_once "$key" "$reason" 96 || return $?
+  log "termination quarantine installed for $ID; lease/worktree/evidence retained"
 }
 
 # --- acceptance is the contract: no test -> no autonomy (delegation-design.md) ----------
@@ -835,7 +872,7 @@ verify_seed_integrity(){
 make_phase5_assignment(){
   [ "$STRICT_PHASE5" = 1 ] || return 0
   [ -n "$CAPACITY_POOL" ] && [ "$CAPACITY_POOL" != unassigned ] || { log "strict Phase 5 requires a declared capacity pool"; return 1; }
-  local impl_provider verifier_provider impl_profile verifier_profile source_branch host gate_digest
+  local impl_provider verifier_provider impl_profile verifier_profile impl_endpoints verifier_endpoints source_branch host
   impl_provider="$(python3 - "$ENGINE" "${ENGINE_PLAN_IMPLEMENTER:-}" <<'PY'
 import json,sys
 engine, path = sys.argv[1:]
@@ -868,27 +905,48 @@ elif path: print(json.load(open(path, encoding="utf-8"))["network"]["profile"])
 else: print("none")
 PY
   )" || return 1
+  impl_endpoints="$(python3 - "$ENGINE" "${ENGINE_PLAN_IMPLEMENTER:-}" "$impl_profile" "$ROOT/scripts/provider-egress-profiles.json" <<'PY'
+import json,sys
+engine, path, profile, profiles_path = sys.argv[1:]
+if engine == "none": print("[]")
+elif path: print(json.dumps(json.load(open(path, encoding="utf-8"))["network"]["endpoints"], separators=(",", ":")))
+else: print(json.dumps(json.load(open(profiles_path, encoding="utf-8"))["profiles"][profile]["endpoints"], separators=(",", ":")))
+PY
+  )" || return 1
+  verifier_endpoints="$(python3 - "$VERIFIER_ENGINE" "${ENGINE_PLAN_VERIFIER:-}" "$verifier_profile" "$ROOT/scripts/provider-egress-profiles.json" <<'PY'
+import json,sys
+engine, path, profile, profiles_path = sys.argv[1:]
+if engine == "none": print("[]")
+elif path: print(json.dumps(json.load(open(path, encoding="utf-8"))["network"]["endpoints"], separators=(",", ":")))
+else: print(json.dumps(json.load(open(profiles_path, encoding="utf-8"))["profiles"][profile]["endpoints"], separators=(",", ":")))
+PY
+  )" || return 1
   source_branch="$SOURCE_BRANCH"
   [ -n "$source_branch" ] || source_branch="$(git -C "$REPO_DIR" symbolic-ref --short HEAD 2>/dev/null || printf 'detached')"
   host="${RECURSION_HOST_ID:-gs-recursion}"
-  gate_digest="$(printf '%s' "$CONTRACT_DIGEST" | sha256sum | cut -d' ' -f1)"
+  [ -n "$GATE_CONTRACT" ] || { log "strict Phase 5 requires the validated gate contract"; return 1; }
   ASSIGNMENT_FILE="$ROOT/state/runs/$ID-assignment-$STAMP-$$.json"
   mkdir -p "$ROOT/state/runs"
   ASSIGNMENT_DIGEST="$(PYTHONPATH="$ROOT/scripts" python3 - "$ASSIGNMENT_FILE" "$ID" "$PROJECT_ID" "$REPO_DIR" "$source_branch" "$BASE_COMMIT" \
     "$SEED_MANIFEST_SHA256" "$ENGINE" "$impl_provider" "$CAPACITY_POOL" "$host" "strict-linux" "$impl_profile" \
-    "$ALLOWED_PATHS" "$gate_digest" "$impl_provider" "$RESOLVED_MODEL" "$VERIFIER_ENGINE" "$verifier_provider" \
-    "$RESOLVED_VERIFIER_MODEL" <<'PY'
-import json, os, sys, tempfile
+    "$impl_endpoints" "$GATE_CONTRACT" "$impl_provider" "$RESOLVED_MODEL" "$VERIFIER_ENGINE" "$verifier_provider" \
+    "$verifier_profile" "$verifier_endpoints" "$RESOLVED_VERIFIER_MODEL" <<'PY'
+import hashlib, json, os, sys, tempfile
 from assignment import digest, validate_assignment
 (path, task, project, repo, branch, sha, seed, engine, provider, pool, host, sandbox, profile,
- paths, gate, _, model, verifier_engine, verifier_provider, verifier_model) = sys.argv[1:]
+ paths, endpoints, gate_contract, _, model, verifier_engine, verifier_provider, verifier_profile,
+ verifier_endpoints, verifier_model) = sys.argv[1:]
+gate = hashlib.sha256(json.dumps(json.loads(gate_contract), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 value = {"task_id":task, "project_id":project, "source_repository":repo, "source_branch":branch,
          "source_sha":sha, "seed_manifest_digest":seed, "engine":engine, "provider":provider,
          "capacity_pool":pool, "model":model, "host":host, "sandbox_profile":sandbox,
-         "network_profile":profile, "allowed_paths":paths.split(), "gate_digest":gate,
+         "network_profile":profile, "network_endpoints":json.loads(endpoints),
+         "allowed_paths":paths.split(), "gate_digest":gate, "gate_contract":json.loads(gate_contract),
          "publication_policy":"verified-integration-only",
          "role_assignments":{"implementer":{"engine":engine,"provider":provider,"model":model},
                              "verifier":{"engine":verifier_engine,"provider":verifier_provider,"model":verifier_model}}}
+value["role_assignments"]["implementer"].update(network_profile=profile, network_endpoints=json.loads(endpoints))
+value["role_assignments"]["verifier"].update(network_profile=verifier_profile, network_endpoints=json.loads(verifier_endpoints))
 value = validate_assignment(value); serialized=json.dumps(value, indent=2, sort_keys=True)+"\n"
 if os.path.lexists(path): raise SystemExit("assignment path already exists")
 fd=os.open(path, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o444)
@@ -1084,6 +1142,7 @@ PY
   RECURSION_VERIFICATION_COMMIT="$commit_oid" RECURSION_IMPLEMENTER_RUN_ID="$implementer_run" \
     setsid --wait "${cmd[@]}" >"$log_path" 2>&1 &
   worker_pgid=$!
+  UNCONFIRMED_PROCESS_GROUP="$worker_pgid"
   deadline_epoch="$(( $(date +%s) + deadline_s ))"; heartbeat_epoch=0
   LAST_RUN_ID="$run_id"; LAST_RUN_EVIDENCE="$ROOT/state/runs/$run_id.json"
   log "$role process group=$worker_pgid engine=$active_engine alias=${alias:-legacy} deadline=${deadline_s}s"
@@ -1569,6 +1628,13 @@ if [ "$arc" -ne 0 ]; then
     log "worker timeout retained worktree for inspection: $WT"
     exit 0
   fi
+  if [ "$arc" = "96" ]; then
+    msg="engine=$ENGINE missing-egress or worker process group could not be confirmed terminated"
+    board finish "$ID" blocked - "$msg" || true
+    quarantine_unconfirmed "$msg" || true
+    log "quarantine: termination was not confirmed; retaining worktree, lease, and evidence at $WT"
+    exit 96
+  fi
   case "$arc" in
     90) msg="engine=$ENGINE missing-auth (for claude: run claude /login)" ;;
     91) msg="engine=$ENGINE has no file-writing tool (use an opencode engine manifest instead, D-015)" ;;
@@ -1582,10 +1648,6 @@ if [ "$arc" -ne 0 ]; then
   esac
   board finish "$ID" blocked - "$msg"
   complete_terminal_escalation escalated "$msg" || exit $?
-  if [ "$arc" = 96 ]; then
-    log "quarantine: termination was not confirmed; retaining worktree, lease, and evidence at $WT"
-    exit 96
-  fi
   git -C "$REPO_DIR" worktree remove --force "$WT" 2>/dev/null || true
   exit 0
 fi
@@ -1680,6 +1742,11 @@ else
         "WORKER TIMEOUT — $ID retry exceeded ${DEADLINE_SECONDS}s; process group terminated, lease cleared, inspect $LAST_RUN_EVIDENCE" \
         "worker-timeout:$ID:$IMPLEMENTER_RUN_ID" || exit $?
       exit 0
+    fi
+    if [ "$retry_arc" = 96 ]; then
+      quarantine_unconfirmed "engine=$ENGINE retry worker process group could not be confirmed terminated" || true
+      log "quarantine: retry termination was not confirmed; retaining worktree, lease, and evidence at $WT"
+      exit 96
     fi
     if [ "$retry_arc" = 0 ]; then
       if [ "$STRICT_PHASE5" = 1 ]; then

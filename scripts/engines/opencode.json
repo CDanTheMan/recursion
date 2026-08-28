@@ -36,5 +36,13 @@
   "concurrency_cap": null,
   "env_passthrough": [
     "OPENROUTER_API_KEY"
-  ]
+  ],
+  "runtime_layout": { "mode": "executable-only" },
+  "execution": {
+    "structured_output": false,
+    "output_format": "text",
+    "cancellation": { "signal": "TERM", "grace_s": 5 },
+    "exit_codes": { "success": [0], "auth": [1, 2], "runtime": [126, 127], "egress": [60, 65] }
+  },
+  "auth": { "mode": "none", "required": false, "marker": null }
 }

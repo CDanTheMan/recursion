@@ -28,6 +28,7 @@
 #   taskctl.sh cas <id> <from> <to> <reason>  Phase 6 compare-and-swap transition
 #   taskctl.sh get <id> [field]        canonical status, or one field
 #   taskctl.sh reap                    expire dead leases -> stale + event (safe, idempotent)
+#   taskctl.sh quarantine-release <id> observe an unconfirmed worker is terminal, then release
 #   taskctl.sh event <kind> <task> <detail...>
 #   taskctl.sh notify-event <portfolio-brief|project-digest> <project> <message>
 #   taskctl.sh esc-record <key> <title> [workstream] [pointer]
@@ -324,6 +325,10 @@ case "$cmd" in
 start)
   ID="${1:?usage: taskctl start <id> [owner]}"; OWNER="${2:-$$@$(hostname)}"
   F="$(_taskfile "$ID")"; [ -f "$F" ] || { echo "taskctl: no such task: $ID" >&2; exit 2; }
+  if [ -e "$ROOT/state/runs/$ID-termination-unconfirmed.json" ]; then
+    echo "taskctl: $ID is quarantined after unconfirmed worker termination; observe/recover it explicitly" >&2
+    exit 4
+  fi
   _validate_task_start "$F" || exit $?
   _lock || exit $?
   cur="$(_field "$F" status)"
@@ -398,6 +403,38 @@ get)
   ID="${1:?usage: taskctl get <id> [field]}"; FLD="${2:-status}"
   F="$(_taskfile "$ID")"; [ -f "$F" ] || exit 2
   _field "$F" "$FLD" ;;
+
+quarantine-release)
+  ID="${1:?usage: taskctl quarantine-release <id>}"
+  F="$(_taskfile "$ID")"; MARKER="$ROOT/state/runs/$ID-termination-unconfirmed.json"
+  [ -f "$F" ] || { echo "taskctl: no such task: $ID" >&2; exit 2; }
+  [ -f "$MARKER" ] || { echo "taskctl: no termination quarantine for $ID" >&2; exit 2; }
+  PGID="$(python3 - "$MARKER" "$ID" <<'PY'
+import json,sys
+try:
+    value=json.load(open(sys.argv[1], encoding="utf-8"))
+    if value.get("task_id") != sys.argv[2]: raise ValueError
+    pgid=value["process_group"]
+    if not isinstance(pgid, int) or pgid < 1: raise ValueError
+    print(pgid)
+except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+    raise SystemExit(2)
+PY
+  )" || { echo "taskctl: quarantine witness is malformed" >&2; exit 2; }
+  if kill -0 -- "-$PGID" 2>/dev/null; then
+    echo "taskctl: process group $PGID is still live; quarantine remains" >&2
+    exit 4
+  fi
+  _lock || exit $?
+  case "$(_field "$F" status)" in
+    running|stale) : ;;
+    *) _unlock; echo "taskctl: $ID is not a quarantined task" >&2; exit 4 ;;
+  esac
+  transition_fields "$F" quarantine-recovered "$ID" "observed terminal process group $PGID" \
+    status stale lease_expires 0 transition_reason "termination-quarantine-recovered" \
+    transition_at "$(_now)" || { rc=$?; _unlock; exit "$rc"; }
+  rm -f -- "$MARKER" || { _unlock; echo "taskctl: quarantine witness could not be removed" >&2; exit 71; }
+  _unlock; echo "recovered $ID from termination quarantine" ;;
 
 reap)
   # A task is STALE when it claims to be running, its lease has expired, and nothing is

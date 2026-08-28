@@ -107,12 +107,17 @@
         "policy": {
           "const": "provider-only"
         },
+        "profile": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,63}$"
+        },
         "endpoints": {
           "type": "array",
           "items": {
             "type": "string",
             "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
           },
+          "uniqueItems": true,
           "description": "Documentation and deployment input for the provider-only allowlist enforced by the root-owned provider netns/proxy on the box. Empty list allowed (e.g. tunnel-local engines)."
         }
       }
@@ -177,9 +182,22 @@
             "mode": { "enum": ["executable-only", "sibling-tree"] },
             "source": { "const": "executable-directory" },
             "root": { "const": "executable-directory" },
-            "target": { "type": "string", "pattern": "^[^/\\\\.][^/\\\\]*(/[^/\\\\.][^/\\\\]*)*$" },
-            "entrypoint": { "type": "string", "pattern": "^[^/\\\\.][^/\\\\]*(/[^/\\\\.][^/\\\\]*)*$" }
-          }
+            "target": { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/]+(?:/[^/]+)*$" },
+            "entrypoint": { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/]+(?:/[^/]+)*$" }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "mode": { "const": "sibling-tree" } } },
+              "then": { "required": ["source", "target", "entrypoint"] }
+            },
+            {
+              "if": { "properties": { "mode": { "const": "executable-only" } } },
+              "then": { "not": { "anyOf": [
+                { "required": ["source"] }, { "required": ["root"] },
+                { "required": ["target"] }, { "required": ["entrypoint"] }
+              ] } }
+            }
+          ]
         }
       ]
     },

@@ -174,7 +174,7 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn('HTTPS_PROXY="http://127.0.0.1:$PROVIDER_PROXY_PORT"', worker)
         self.assertIn('HTTP_PROXY="http://127.0.0.1:$PROVIDER_PROXY_PORT"', worker)
         self.assertIn('RECURSION_PROVIDER_PROFILE="$PROVIDER_PROFILE"', worker)
-        self.assertIn("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", worker)
+        self.assertNotIn("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", worker)
 
     def test_worker_sandbox_masks_host_run_sockets_for_gate_and_model_arms(self):
         worker = (ROOT / "scripts/worker-sandbox.sh").read_text()

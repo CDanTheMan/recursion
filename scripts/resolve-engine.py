@@ -159,6 +159,8 @@ def validate_network(network: object) -> None:
     for item in endpoints:
         if not isinstance(item, str) or not ENDPOINT_RE.fullmatch(item) or has_control(item):
             raise ManifestError(f"network.endpoints contains an invalid hostname {item!r}")
+    if len(set(endpoints)) != len(endpoints):
+        raise ManifestError("network.endpoints must not contain duplicates")
     if "profile" in obj:
         profile = obj["profile"]
         if not isinstance(profile, str) or not PROVIDER_PROFILE_RE.fullmatch(profile):

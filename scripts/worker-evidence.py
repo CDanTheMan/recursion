@@ -15,7 +15,7 @@ from pathlib import Path
 sys_path = Path(__file__).resolve().parent
 if str(sys_path) not in sys.path:
     sys.path.insert(0, str(sys_path))
-from assignment import load_assignment
+from assignment import canonical_bytes, load_assignment
 
 
 def now() -> str:
@@ -59,6 +59,26 @@ def maybe_json(path: str | None) -> object:
     if not raw.strip():
         return {}
     return json.loads(raw)
+
+
+def refresh_assignment(value: dict) -> dict | None:
+    """Re-read the immutable assignment whenever evidence is consumed.
+
+    A valid assignment at process start is not enough: the file, embedded copy, or
+    gate input may be replaced before finish/gate/verification evidence is recorded.
+    Recomputing here makes every evidence transition bind to the same source commit,
+    engine/provider profile, and validated gate contract.
+    """
+    assignment_file = value.get("assignment_file")
+    if not assignment_file:
+        return None
+    assignment, computed = load_assignment(assignment_file)
+    if computed != value.get("assignment_digest"):
+        raise SystemExit("worker-evidence: assignment changed after run start")
+    embedded = value.get("assignment")
+    if not isinstance(embedded, dict) or canonical_bytes(embedded) != canonical_bytes(assignment):
+        raise SystemExit("worker-evidence: embedded assignment does not match its source file")
+    return assignment
 
 
 def main() -> int:
@@ -132,12 +152,14 @@ def main() -> int:
                     raise SystemExit(f"worker-evidence: assignment {field} mismatch")
             value["assignment"] = assignment
             value["assignment_digest"] = computed
+            value["assignment_file"] = str(assignment_path.resolve())
         seed = maybe_json(args.seed_evidence)
         if isinstance(seed, dict) and seed:
             value["seed_evidence"] = seed
         atomic(path, value); return 0
 
     value = load(path)
+    assignment = refresh_assignment(value)
     if args.command == "heartbeat":
         value["heartbeat_at"] = now(); value["lease_expires"] = iso(args.lease_epoch)
     elif args.command == "finish":
@@ -162,6 +184,12 @@ def main() -> int:
                 seed["verified_after"] = True
             value["seed_evidence"] = seed
     elif args.command == "gate":
+        if assignment is not None:
+            contract = assignment["gate_contract"]
+            expected_acceptance = contract["acceptance_sha256"]
+            observed_acceptance = hashlib.sha256(args.acceptance.encode()).hexdigest()
+            if observed_acceptance != expected_acceptance:
+                raise SystemExit("worker-evidence: gate command does not match the assigned gate contract")
         value["machine_gate"] = {"commit_oid": args.commit_oid,
                                   "acceptance_sha256": hashlib.sha256(args.acceptance.encode()).hexdigest(),
                                   "exit_code": args.exit_code, "passed": args.exit_code == 0,
