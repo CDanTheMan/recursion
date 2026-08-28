@@ -61,21 +61,21 @@ index 7e51edf1..390a0d47 100644
 +++ b/state/briefs/2026-08-28.md
 @@ -2,15 +2,13 @@
  > No arms, planning, drain, or reflection ran. Lift with `scripts/resume.sh`.
- 
- ## Needs a decision today
+
+## Needs a decision today
 -- Physics scheduling is blocked: provide the first Fall 2026 course/topic/lecture date, or explicitly defer scheduling. This remains unresolved since 2026-08-12.
 +- **Physics scheduling remains blocked:** provide the first Fall 2026 course/topic/lecture date, or explicitly defer scheduling. This is already recorded in `esc-0004` through `esc-0010`; do not create another duplicate.
- 
- ## Stale
+
+## Stale
 -- Physics gap map was last assessed 2026-08-04; its only recorded gap is still unassessed.
 -- The Fall 2026 syllabus map still contains no actual lecture block.
 +- **Physics gap map** was last updated 2026-08-04. Its only tracked concept, Lagrangian mechanics, remains not started with no assessment evidence.
- 
- ## Syllabus lead
+
+## Syllabus lead
 -- Unmeasurable: no course, topic, or lecture date is recorded. Pause new scheduled blocks until the first block is supplied or scheduling is explicitly deferred.
 +- **Unassessable:** the syllabus table still has no actual lecture block, so weeks ahead/behind and the pause-new-blocks decision cannot be calculated.
- 
- ## Today’s physics
+
+## Today’s physics
 -- Lagrangian mechanics — first verify the Newtonian-mechanics and calculus-of-variations prerequisites before treating it as ready.
 -
 +- **Lagrangian mechanics** — begin with the Euler–Lagrange formulation, after confirming the relevant Newtonian-mechanics and calculus-of-variations prerequisites.
