@@ -271,7 +271,7 @@ headers = transport.calls[0]["headers"]
 check(set(headers) == {"Content-Type", "X-Recursion-Dispatch-Id",
                        "X-Recursion-Assignment-Digest", "X-Recursion-Envelope-Digest",
                        "X-Recursion-Timestamp", "X-Recursion-Signature",
-                       "X-Recursion-Sender"},
+                       "X-Recursion-Sender", "Idempotency-Key"},
       "the request carries exactly the declared headers -- no environment passthrough, no "
       "controller token rides along")
 check(headers["X-Recursion-Signature"].startswith("v1="),
@@ -380,6 +380,9 @@ for status, code in ((402, "quota-exhausted"), (429, "rate-limited"), (401, "aut
     check(raises(code, dispatcher.dispatch, assignment(), role="reviewer",
                  instructions=INSTRUCTIONS, non_goals=NON_GOALS, dispatch_id=DISPATCH),
           f"HTTP {status} from the routine is a typed {code}")
+    if status in (429, 503, 500):
+        check(rb.read_attempts(base, "grok-bot")[-1]["state"] == "open",
+              f"HTTP {status} leaves the mutation open for reconciliation")
 
 base, transport, dispatcher = fresh()
 transport.route(payload={"accepted": False, "reason": "routine rejected duplicate"})
@@ -394,6 +397,8 @@ transport.route(error=RemoteError("transport-timeout", "timed out"))
 check(raises("transport-timeout", dispatcher.dispatch, assignment(), role="reviewer",
              instructions=INSTRUCTIONS, non_goals=NON_GOALS, dispatch_id=DISPATCH),
       "a timeout is typed and retryable")
+check(rb.open_attempts(base, "grok-bot"),
+      "an ambiguous fire-and-forget timeout remains open for external reconciliation")
 
 base, transport, dispatcher = fresh()
 os.environ.pop("GROK_ROUTINE_SIGNING_SECRET", None)

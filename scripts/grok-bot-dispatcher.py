@@ -54,6 +54,7 @@ from remote_assignment import (
 )
 from remote_backend import (
     AccountLease,
+    AMBIGUOUS_MUTATION_ERRORS,
     RefusingTransport,
     Transport,
     atomic_json,
@@ -62,7 +63,9 @@ from remote_backend import (
     begin_attempt,
     classify_status,
     is_paused,
+    lookup_attempt,
     now_iso,
+    outbound_admission,
     open_attempts,
     read_session,
     reconcile_attempt,
@@ -262,6 +265,7 @@ class GrokBotDispatcher:
         """
         assert_not_paused(self.base, "a Grok Bot routine dispatch")
         normalised = validate_assignment(assignment)
+        self._assert_assignment_binding(normalised)
         digest = assignment_digest(normalised)
         issued_at = self._now()
         envelope = build_envelope(normalised, role=role, instructions=instructions,
@@ -272,96 +276,122 @@ class GrokBotDispatcher:
         env_digest = envelope_digest(envelope)
         identity_digest = envelope_identity_digest(envelope)
 
-        # Resolved before the attempt is committed so a missing credential is a clean refusal
-        # rather than a consumed attempt. Neither the URL nor either key is recorded anywhere.
-        url = backend_endpoint(self.manifest)
-        headers = {
-            "Content-Type": "application/json",
-            "X-Recursion-Dispatch-Id": dispatch_id,
-            "X-Recursion-Assignment-Digest": digest,
-            "X-Recursion-Envelope-Digest": env_digest,
-            "X-Recursion-Timestamp": issued_at,
-            "X-Recursion-Signature": sign_envelope(body, issued_at, self._signing_key()),
-            "X-Recursion-Sender": self._sender_credential(),
-        }
-
-        attempt = begin_attempt(
-            self.base, self.name, dispatch_id=dispatch_id,
-            operation=DISPATCH_ATTEMPT_OPERATION, assignment_digest=digest,
-            request_digest=identity_digest, max_attempts=self.manifest["max_attempts"],
-            clock=self.clock)
-        if attempt.replayed:
-            # Idempotency, the whole point: the identical envelope for this dispatch_id and
-            # assignment already landed. Re-sending would create a second routine run and, if
-            # the routine writes code, a second branch.
-            try:
-                return self.read_dispatch(dispatch_id)
-            except RemoteError as exc:
-                if exc.code != "not-found":
-                    raise
-                # Landed per reconciliation, but no durable envelope record exists -- the
-                # process died between the POST and the projection. Importing the result is a
-                # human step; re-dispatching would duplicate a routine run that already ran.
+        # The admission lock orders the PAUSE decision, reservation, POST and close.  The
+        # idempotency key is also sent to providers that support it, so a crash after the
+        # provider accepts the request can be reconciled without blind duplicate creation.
+        with outbound_admission(self.base, self.name, "a Grok Bot routine dispatch"):
+            prior = lookup_attempt(
+                self.base, self.name, dispatch_id=dispatch_id,
+                operation=DISPATCH_ATTEMPT_OPERATION, assignment_digest=digest,
+                request_digest=identity_digest, lock_held=True)
+            if prior is not None:
+                if prior.replayed:
+                    try:
+                        return read_session(self.base, self.name, dispatch_id, lock_held=True)
+                    except RemoteError as exc:
+                        if exc.code != "not-found":
+                            raise
+                        raise RemoteError("unreconciled-attempt",
+                                          f"dispatch {dispatch_id} is recorded as landed but has no "
+                                          "local dispatch record; import the result rather than "
+                                          "re-dispatching") from exc
                 raise RemoteError("unreconciled-attempt",
-                                  f"dispatch {dispatch_id} is recorded as landed but has no "
-                                  "local dispatch record; import the result rather than "
-                                  "re-dispatching") from exc
-        if attempt.unreconciled:
-            raise RemoteError("unreconciled-attempt",
-                              f"dispatch attempt {attempt.attempt_id} was left open by an "
-                              "earlier process. The routine may already be running. Reconcile "
-                              "it with observed evidence before dispatching again.")
+                                  f"dispatch attempt {prior.attempt_id} was left open by an "
+                                  "earlier process. The routine may already be running. Reconcile "
+                                  "it with observed evidence before dispatching again.")
 
-        try:
-            with AccountLease(self.base, self.manifest["capacity_pool"],
-                              self.manifest["concurrency_lease"]):
-                response = self.transport.request(
-                    "POST", url, headers, body, self.manifest["timeout_seconds"])
-                classify_status(response.status, response.body)
-                payload = response.json()
-        except RemoteError as exc:
-            (attempt.defer if exc.exit_code == 75 else attempt.fail)(exc, clock=self.clock)
-            raise
+            # Resolve credentials only for new work. A completed idempotent replay must remain
+            # readable even after a human rotates/removes the old credential.
+            url = backend_endpoint(self.manifest)
+            headers = {
+                "Content-Type": "application/json",
+                "X-Recursion-Dispatch-Id": dispatch_id,
+                "X-Recursion-Assignment-Digest": digest,
+                "X-Recursion-Envelope-Digest": env_digest,
+                "X-Recursion-Timestamp": issued_at,
+                "X-Recursion-Signature": sign_envelope(body, issued_at, self._signing_key()),
+                "X-Recursion-Sender": self._sender_credential(),
+                "Idempotency-Key": identity_digest,
+            }
+            attempt = begin_attempt(
+                self.base, self.name, dispatch_id=dispatch_id,
+                operation=DISPATCH_ATTEMPT_OPERATION, assignment_digest=digest,
+                request_digest=identity_digest, max_attempts=self.manifest["max_attempts"],
+                clock=self.clock, lock_held=True)
+            if attempt.replayed or attempt.unreconciled:
+                raise RemoteError("unreconciled-attempt", "reservation changed unexpectedly")
 
-        accepted = payload.get("accepted")
-        if accepted is not True:
-            error = RemoteError("malformed-response",
-                                "routine did not acknowledge the envelope with accepted=true")
-            attempt.fail(error, clock=self.clock)
-            raise error
-        routine_run_id = payload.get("routine_run_id")
-        if routine_run_id is not None and not isinstance(routine_run_id, str):
-            error = RemoteError("malformed-response", "routine_run_id is not a string")
-            attempt.fail(error, clock=self.clock)
-            raise error
+            try:
+                with AccountLease(self.base, self.manifest["capacity_pool"],
+                                  self.manifest["concurrency_lease"]):
+                    assert_not_paused(self.base, "a Grok Bot routine dispatch")
+                    response = self.transport.request(
+                        "POST", url, headers, body, self.manifest["timeout_seconds"])
+                    classify_status(response.status, response.body)
+                    payload = response.json()
+            except RemoteError as exc:
+                if exc.code in AMBIGUOUS_MUTATION_ERRORS:
+                    # A retryable-looking provider failure can still follow an accepted
+                    # mutation.  Reconcile before allowing another dispatch.
+                    pass
+                elif exc.exit_code == 75:
+                    attempt.defer(exc, clock=self.clock, lock_held=True)
+                else:
+                    attempt.fail(exc, clock=self.clock, lock_held=True)
+                # A transport/ambiguous response leaves the fire-and-forget dispatch OPEN.
+                # The caller must observe the Bot externally before retrying.
+                raise
 
-        record = {
-            "schema_version": SCHEMA_VERSION,
-            "kind": "grok-routine-dispatch",
-            "backend": self.name,
-            "dispatch_id": dispatch_id,
-            "assignment_digest": digest,
-            "envelope_digest": env_digest,
-            "envelope_identity_digest": identity_digest,
-            "body_sha256": body_digest,
-            "role": role,
-            "task_id": normalised["task_id"],
-            "project_id": normalised["project_id"],
-            "capacity_pool": self.manifest["capacity_pool"],
-            "host_id": self.manifest["host_id"],
-            # The URL is bearer-grade; the REFERENCE is what is durable, never the value.
-            "endpoint_ref": self.manifest["endpoint_ref"],
-            "signing_key_ref": self.manifest["signing_key_ref"],
-            "result_channel": RESULT_CHANNEL,
-            "routine_run_id": routine_run_id or "",
-            "state": "dispatched",
-            "envelope": envelope,
-            "issued_at": issued_at,
-            "updated_at": self._now(),
-        }
-        write_session(self.base, self.name, dispatch_id, record)
-        attempt.succeed("dispatched", {"envelope_digest": env_digest}, clock=self.clock)
-        return record
+            accepted = payload.get("accepted")
+            if accepted is not True:
+                error = RemoteError("malformed-response",
+                                    "routine did not acknowledge the envelope with accepted=true")
+                attempt.fail(error, clock=self.clock, lock_held=True)
+                raise error
+            routine_run_id = payload.get("routine_run_id")
+            if routine_run_id is not None and not isinstance(routine_run_id, str):
+                error = RemoteError("malformed-response", "routine_run_id is not a string")
+                raise error
+
+            record = {
+                "schema_version": SCHEMA_VERSION,
+                "kind": "grok-routine-dispatch",
+                "backend": self.name,
+                "dispatch_id": dispatch_id,
+                "assignment_digest": digest,
+                "envelope_digest": env_digest,
+                "envelope_identity_digest": identity_digest,
+                "body_sha256": body_digest,
+                "role": role,
+                "task_id": normalised["task_id"],
+                "project_id": normalised["project_id"],
+                "capacity_pool": self.manifest["capacity_pool"],
+                "host_id": self.manifest["host_id"],
+                # The URL is bearer-grade; the REFERENCE is what is durable, never the value.
+                "endpoint_ref": self.manifest["endpoint_ref"],
+                "signing_key_ref": self.manifest["signing_key_ref"],
+                "result_channel": RESULT_CHANNEL,
+                "routine_run_id": routine_run_id or "",
+                "state": "dispatched",
+                "envelope": envelope,
+                "issued_at": issued_at,
+                "updated_at": self._now(),
+                "billing_basis": self.manifest["billing_basis"],
+                "on_demand": self.manifest["on_demand"],
+                "provider": normalised["provider"],
+            }
+            write_session(self.base, self.name, dispatch_id, record, lock_held=True)
+            attempt.succeed("dispatched", {"envelope_digest": env_digest},
+                            clock=self.clock, lock_held=True)
+            return record
+
+    def _assert_assignment_binding(self, assignment: dict) -> None:
+        if assignment["capacity_pool"] != self.manifest["capacity_pool"]:
+            raise RemoteError("assignment-invalid",
+                              "assignment capacity_pool is not the authorized backend pool")
+        if assignment["host"] != self.manifest["host_id"]:
+            raise RemoteError("assignment-invalid",
+                              "assignment host is not the authorized backend host")
 
     def read_dispatch(self, dispatch_id: str) -> dict:
         return read_session(self.base, self.name, dispatch_id)

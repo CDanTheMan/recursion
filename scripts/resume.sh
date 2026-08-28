@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 if [ -f "$ROOT/state/PAUSE" ]; then
-  rm -f "$ROOT/state/PAUSE"
+  python3 "$ROOT/scripts/remote-pause.py" clear --base "$ROOT"
   echo "resumed (state/PAUSE removed)"
   bash "$ROOT/scripts/notify.sh" "▶ Recursion RESUMED. Scheduled jobs active." || true
 else

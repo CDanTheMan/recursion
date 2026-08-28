@@ -149,15 +149,20 @@ CONTROLLER_CREDENTIAL_PREFIX = ("RECURSION_", "SSH_", "GIT_SSH", "AWS_", "HERMES
 
 # Key NAMES that announce a credential value. Broad, in the spirit of resolve-connector.py's
 # env_passthrough screen, but not so broad that ordinary structural names collide: a bare
-# "KEY" would reject `idempotency_key`, which carries no secret and must be recorded. Any name
-# ending in `_ref` is exempt -- that is the reference form, and validate_secret_ref has already
-# proved it is a reference rather than a value.
+# "KEY" would reject `idempotency_key`, which carries no secret and must be recorded. Only the
+# explicitly permitted manifest reference fields are exempt, and validate_secret_ref proves
+# those values are references rather than credentials.
 SECRET_KEY_SUBSTRING_RE = re.compile(
-    r"TOKEN|SECRET|PASSWORD|CREDENTIAL|COOKIE|BEARER|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY"
-    r"|SIGNING_?KEY|AUTH_?KEY",
+    r"(?:^|_)(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|COOKIE|BEARER|API_?KEY|ACCESS_?KEY|"
+    r"PRIVATE_?KEY|SIGNING_?KEY|AUTH_?KEY)(?:$|_)",
     re.IGNORECASE,
 )
-SECRET_KEY_EXEMPT_SUFFIX = "_ref"
+# A reference is data with authority.  It is valid only in these manifest fields; a
+# generic ``*_ref`` field must not become a covert way to smuggle a credential reference
+# through an envelope, assignment, response, or durable record.
+EXPLICIT_SECRET_REFERENCE_FIELDS = frozenset({
+    "endpoint_ref", "credential_ref", "signing_key_ref",
+})
 
 # Shapes of real credentials, anchored so an ordinary word cannot trip them ("risk-register"
 # contains "sk-"). The label, never the matched text, is what appears in an error message:
@@ -226,8 +231,8 @@ def screen_for_secret_material(value: object, where: str,
         for key, item in value.items():
             if not isinstance(key, str):
                 raise RemoteError(code, f"{where} has a non-string key")
-            if SECRET_KEY_SUBSTRING_RE.search(key) \
-                    and not key.endswith(SECRET_KEY_EXEMPT_SUFFIX):
+            is_reference_field = key in EXPLICIT_SECRET_REFERENCE_FIELDS
+            if SECRET_KEY_SUBSTRING_RE.search(key) and not is_reference_field:
                 raise RemoteError(code,
                                   f"{where}.{key} is a credential-shaped key name; remote "
                                   "records and envelopes carry references, never secrets")
@@ -242,7 +247,17 @@ def screen_for_secret_material(value: object, where: str,
         if label:
             raise RemoteError(code,
                               f"{where} contains a value shaped like a {label}")
-        if SECRET_REF_RE.search(value) and not SECRET_REF_RE.fullmatch(value):
+        if SECRET_REF_RE.fullmatch(value):
+            # The parent key is deliberately not passed through this recursive helper.  A
+            # reference field is validated by the manifest validator; all other structures
+            # must not contain references at all.  This conservative rule means callers must
+            # screen a manifest only after validating its three explicit reference fields.
+            if not any(where.endswith("." + field)
+                       for field in EXPLICIT_SECRET_REFERENCE_FIELDS):
+                raise RemoteError(code,
+                                  f"{where} contains a secret reference outside an explicitly "
+                                  "permitted credential-reference field")
+        elif SECRET_REF_RE.search(value):
             raise RemoteError(code, f"{where} embeds a secret reference inside free text")
 
 
@@ -283,6 +298,10 @@ ASSIGNMENT_OPTIONAL: dict[str, object] = {
     "model_parameters": {},
     "network_profile": "",
     "allowed_paths": [],
+    # Additional repositories are explicit, pinned inputs to a multi-repository task.  A
+    # caller cannot widen this list at reconciliation time because it is part of the
+    # immutable assignment digest.
+    "authorized_repositories": [],
 }
 ASSIGNMENT_KEYS = frozenset(ASSIGNMENT_REQUIRED) | frozenset(ASSIGNMENT_OPTIONAL)
 
@@ -431,8 +450,34 @@ def validate_assignment(value: object) -> dict:
             if not isinstance(raw, str) or (raw and not SLUG_RE.fullmatch(raw)):
                 raise _invalid("network_profile must be empty or ^[a-z][a-z0-9-]{1,63}$")
             normalised[field] = raw
-        else:  # allowed_paths
+        elif field == "allowed_paths":
             normalised[field] = validate_allowed_paths(raw)
+        else:  # authorized_repositories
+            if not isinstance(raw, list):
+                raise _invalid("authorized_repositories must be a list")
+            repos: list[dict[str, str]] = []
+            seen: set[str] = set()
+            for item in raw:
+                if not isinstance(item, dict) or set(item) != {
+                        "repository", "source_branch", "source_sha"}:
+                    raise _invalid("authorized_repositories entries must contain exactly "
+                                   "repository, source_branch and source_sha")
+                repository = validate_repository_url(
+                    item["repository"], "authorized_repositories.repository")
+                source_branch = validate_branch_name(
+                    item["source_branch"], "authorized_repositories.source_branch")
+                source_sha = item["source_sha"]
+                if not isinstance(source_sha, str) or not SHA_RE.fullmatch(source_sha):
+                    raise _invalid("authorized_repositories.source_sha must be exactly 40 "
+                                   "lowercase hex characters")
+                if repository in seen:
+                    raise _invalid("authorized_repositories contains a duplicate repository")
+                seen.add(repository)
+                repos.append({"repository": repository, "source_branch": source_branch,
+                              "source_sha": source_sha})
+            if any(item["repository"] == normalised["source_repository"] for item in repos):
+                raise _invalid("authorized_repositories must not duplicate source_repository")
+            normalised[field] = sorted(repos, key=lambda item: item["repository"])
 
     # An assignment is a tracked, transmitted, durably-recorded object. Nothing in it may be
     # a credential, in any field, under any name.
@@ -465,5 +510,6 @@ def assignment_reference(assignment: dict) -> dict:
         "source_branch": normalised["source_branch"],
         "source_sha": normalised["source_sha"],
         "publication_policy": normalised["publication_policy"],
+        "authorized_repositories": normalised["authorized_repositories"],
         "assignment_digest": canonical_digest(normalised),
     }

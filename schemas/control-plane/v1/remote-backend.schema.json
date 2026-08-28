@@ -23,6 +23,28 @@
     "publication"
   ],
   "additionalProperties": false,
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {"const": "cursor-cloud"},
+            "endpoint": {"type": "string"},
+            "endpoint_ref": {"type": "null"},
+            "signing_key_ref": {"type": "null"}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"const": "grok-routine"},
+            "endpoint": {"type": "null"},
+            "endpoint_ref": {"type": "string"},
+            "signing_key_ref": {"type": "string"}
+          }
+        }
+      ]
+    }
+  ],
   "properties": {
     "schema_version": {
       "const": 1
@@ -47,17 +69,17 @@
     },
     "endpoint_ref": {
       "type": ["string", "null"],
-      "pattern": "^secret:[A-Z][A-Z0-9_]{2,63}$",
+      "pattern": "^(?!secret:(?:GITHUB_TOKEN|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID|OPENROUTER_API_KEY|ANTHROPIC_API_KEY|GH_TOKEN|RECURSION_|SSH_|GIT_SSH|AWS_|HERMES_))secret:[A-Z][A-Z0-9_]{2,63}$",
       "description": "Reference to an env var holding the URL. Use this form when the URL is itself bearer-grade -- a signed routine webhook URL grants anyone holding it the ability to post to the routine. Durable records store this reference; the resolved value is never written down."
     },
     "credential_ref": {
       "type": "string",
-      "pattern": "^secret:[A-Z][A-Z0-9_]{2,63}$",
+      "pattern": "^(?!secret:(?:GITHUB_TOKEN|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID|OPENROUTER_API_KEY|ANTHROPIC_API_KEY|GH_TOKEN|RECURSION_|SSH_|GIT_SSH|AWS_|HERMES_))secret:[A-Z][A-Z0-9_]{2,63}$",
       "description": "Reference to the env var holding this backend's own credential. Never a value. A reference naming a controller or deploy credential (GITHUB_TOKEN, TELEGRAM_BOT_TOKEN, OPENROUTER_API_KEY, or any name starting RECURSION_, SSH_, GIT_SSH, AWS_, HERMES_) is refused: a remote backend may hold exactly one credential, its own."
     },
     "signing_key_ref": {
       "type": ["string", "null"],
-      "pattern": "^secret:[A-Z][A-Z0-9_]{2,63}$",
+      "pattern": "^(?!secret:(?:GITHUB_TOKEN|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID|OPENROUTER_API_KEY|ANTHROPIC_API_KEY|GH_TOKEN|RECURSION_|SSH_|GIT_SSH|AWS_|HERMES_))secret:[A-Z][A-Z0-9_]{2,63}$",
       "description": "Required and non-null for kind grok-routine (an unsigned outbound routine call is not authenticated), and must be null for every other kind. Must differ from credential_ref."
     },
     "capacity_pool": {
@@ -123,7 +145,8 @@
           "minItems": 1,
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "not": {"enum": ["*", "**", "/*"]}
           },
           "description": "fnmatch patterns a returned branch must match. An unrestricted wildcard is refused: an external worker must not be able to return any ref. The default and integration branches are rejected before patterns are consulted, so a permissive pattern cannot readmit them."
         }

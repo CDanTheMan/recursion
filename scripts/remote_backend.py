@@ -112,6 +112,79 @@ ATTEMPT_UNRECONCILED = "unreconciled"
 ATTEMPT_STATES = frozenset({
     ATTEMPT_OPEN, ATTEMPT_SUCCEEDED, ATTEMPT_FAILED, ATTEMPT_DEFERRED, ATTEMPT_UNRECONCILED,
 })
+# A response or exception in this set does not prove that the provider did not accept a
+# mutating request.  The attempt therefore remains OPEN for reconciliation; closing it as a
+# retryable failure would authorize a duplicate create.
+AMBIGUOUS_MUTATION_ERRORS = frozenset({
+    "transport-error", "transport-timeout", "provider-error", "provider-unavailable",
+    "rate-limited", "malformed-response",
+})
+
+
+def _lstat(path: Path):
+    try:
+        return path.lstat()
+    except FileNotFoundError:
+        return None
+
+
+def _is_link_or_reparse(path: Path, stat_result) -> bool:
+    if path.is_symlink():
+        return True
+    # Windows junctions are reparse points but pathlib does not report them as symlinks.
+    return bool(getattr(stat_result, "st_file_attributes", 0) & 0x400)
+
+
+def _safe_directory(path: Path) -> Path:
+    """Create/check a directory one component at a time without following symlinks."""
+    path = Path(path)
+    # Work with an absolute lexical path, but do not call resolve(): resolving would follow
+    # an attacker-controlled link before the component checks below get a chance to refuse it.
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        stat = _lstat(current)
+        if stat is None:
+            try:
+                current.mkdir()
+                _fsync_directory(current.parent)
+            except FileExistsError:
+                # Another process may publish this directory between lstat and mkdir.  It
+                # is safe only after the winning object is checked without following it.
+                stat = _lstat(current)
+                if stat is None:
+                    raise
+        if stat is not None and (_is_link_or_reparse(current, stat) or not current.is_dir()):
+            raise RemoteError("request-invalid", f"unsafe runtime storage path: {current}")
+    return path
+
+
+def _safe_file(path: Path, *, create_parent: bool = True) -> Path:
+    path = Path(path)
+    if create_parent:
+        _safe_directory(path.parent)
+    stat = _lstat(path)
+    if stat is not None and (_is_link_or_reparse(path, stat) or not path.is_file()):
+        raise RemoteError("request-invalid", f"unsafe runtime storage file: {path}")
+    return path
+
+
+def _safe_existing_lock(path: Path) -> None:
+    stat = _lstat(path)
+    if stat is not None and (_is_link_or_reparse(path, stat) or not path.is_dir()):
+        raise RemoteError("request-invalid", f"unsafe runtime lock path: {path}")
+
+
+def _fsync_directory(path: Path) -> None:
+    if os.name == "nt":
+        return
+    descriptor = os.open(str(path), os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def diag(message: str) -> None:
@@ -215,6 +288,10 @@ def validate_manifest(data: object, name: str) -> dict:
 
     endpoint = data["endpoint"]
     endpoint_ref = data["endpoint_ref"]
+    if data["kind"] == "cursor-cloud" and (endpoint is None or endpoint_ref is not None):
+        raise _bad("cursor-cloud requires endpoint and endpoint_ref must be null")
+    if data["kind"] == "grok-routine" and (endpoint is not None or endpoint_ref is None):
+        raise _bad("grok-routine requires endpoint_ref and endpoint must be null")
     if (endpoint is None) == (endpoint_ref is None):
         raise _bad("exactly one of endpoint / endpoint_ref must be set; the other must be null")
     if endpoint is not None:
@@ -458,34 +535,33 @@ def classify_status(status: int, body: bytes) -> None:
     """
     if 200 <= status < 300:
         return
-    snippet = body[:200].decode("utf-8", errors="replace")
     if status in (401, 403):
         raise RemoteError("auth-failed",
                           f"provider rejected the credential (HTTP {status}); a human "
                           "re-authorises through the credential window")
     if status == 404:
-        raise RemoteError("not-found", f"provider returned HTTP 404: {snippet}")
+        raise RemoteError("not-found", "provider returned HTTP 404")
     if status == 402:
-        raise RemoteError("quota-exhausted",
-                          f"provider reports the pool is exhausted (HTTP 402): {snippet}")
+        raise RemoteError("quota-exhausted", "provider reports the pool is exhausted (HTTP 402)")
     if status == 429:
-        raise RemoteError("rate-limited", f"provider rate limited the request: {snippet}")
+        raise RemoteError("rate-limited", "provider rate limited the request")
     if status == 503:
-        raise RemoteError("provider-unavailable",
-                          f"provider is unavailable (HTTP 503): {snippet}")
+        raise RemoteError("provider-unavailable", "provider is unavailable (HTTP 503)")
     if 500 <= status < 600:
-        raise RemoteError("provider-error", f"provider error HTTP {status}: {snippet}")
-    raise RemoteError("request-invalid", f"provider rejected the request HTTP {status}: {snippet}")
+        raise RemoteError("provider-error", f"provider error HTTP {status}")
+    raise RemoteError("request-invalid", f"provider rejected the request HTTP {status}")
 
 
 # --- PAUSE -------------------------------------------------------------------------------
 
 def pause_path(base: Path) -> Path:
-    return Path(base) / "state" / "PAUSE"
+    state = _safe_directory(Path(base) / "state")
+    return _safe_file(state / "PAUSE")
 
 
 def is_paused(base: Path) -> bool:
-    return pause_path(base).is_file()
+    path = pause_path(base)
+    return path.is_file() and not path.is_symlink()
 
 
 def assert_not_paused(base: Path, operation: str) -> None:
@@ -545,11 +621,11 @@ class AccountLease:
         self.slot: int | None = None
 
     def _lock_dir(self) -> Path:
-        return self.base / "state" / ".locks"
+        return _safe_directory(self.base / "state" / ".locks")
 
     def __enter__(self) -> "AccountLease":
         runtime = _runtime_state()
-        self._lock_dir().mkdir(parents=True, exist_ok=True)
+        self._lock_dir()
         # The shared acquire retries for ~10s by default, which is right for a maintenance
         # mutex and wrong for probing N slots. One attempt per slot, then defer.
         previous = {name: os.environ.get(name)
@@ -560,9 +636,10 @@ class AccountLease:
             for slot in range(self.slots):
                 candidate = self._lock_dir() / f"remote-{self.pool_id}-slot-{slot}.lock"
                 try:
+                    _safe_existing_lock(candidate)
                     runtime.acquire_witnessed_directory_lock(
                         candidate, f"remote-{self.pool_id}-slot-{slot}", os.getpid())
-                except (RuntimeError, OSError):
+                except (RemoteError, RuntimeError, OSError):
                     # A contended slot and an unusable one both mean "not this slot". The loop
                     # ends in a DEFER, so failing to take a lease is never a crash.
                     continue
@@ -593,19 +670,84 @@ class AccountLease:
 # --- durable attempts ---------------------------------------------------------------------
 
 def remote_root(base: Path, backend: str) -> Path:
-    return Path(base) / "state" / "remote" / backend
+    if not isinstance(backend, str) or not NAME_RE.fullmatch(backend):
+        raise RemoteError("request-invalid", "backend name cannot name runtime storage")
+    return _safe_directory(Path(base) / "state" / "remote" / backend)
 
 
 def attempts_journal(base: Path, backend: str) -> Path:
-    return remote_root(base, backend) / "attempts.jsonl"
+    return _safe_file(remote_root(base, backend) / "attempts.jsonl")
 
 
 def attempt_projection(base: Path, backend: str, attempt_id: str) -> Path:
-    return remote_root(base, backend) / "attempts" / f"{attempt_id}.json"
+    if not isinstance(attempt_id, str) or not ATTEMPT_ID_RE.fullmatch(attempt_id):
+        raise RemoteError("request-invalid", "attempt_id cannot name runtime storage")
+    return _safe_file(remote_root(base, backend) / "attempts" / f"{attempt_id}.json")
 
 
 def session_path(base: Path, backend: str, dispatch_id: str) -> Path:
-    return remote_root(base, backend) / "sessions" / f"{dispatch_id}.json"
+    if not isinstance(dispatch_id, str) or not DISPATCH_ID_RE.fullmatch(dispatch_id):
+        raise RemoteError("request-invalid", "dispatch_id cannot name runtime storage")
+    return _safe_file(remote_root(base, backend) / "sessions" / f"{dispatch_id}.json")
+
+
+def usage_path(base: Path, backend: str, dispatch_id: str) -> Path:
+    if not isinstance(dispatch_id, str) or not DISPATCH_ID_RE.fullmatch(dispatch_id):
+        raise RemoteError("request-invalid", "dispatch_id cannot name runtime storage")
+    return _safe_file(remote_root(base, backend) / "usage" / f"{dispatch_id}.json")
+
+
+class RemoteStateLock:
+    """Cross-process serialization for the remote journal and projections.
+
+    The lock covers the read/check/reserve/project transition, not merely the append.  The
+    same lock is held across an outbound mutation by ``outbound_admission``; PAUSE writers
+    use it too, giving PAUSE and send one linearization point.
+    """
+
+    def __init__(self, base: Path, backend: str) -> None:
+        if not isinstance(backend, str) or not NAME_RE.fullmatch(backend):
+            raise RemoteError("request-invalid", "backend name cannot name a lock")
+        self.base = Path(base)
+        self.backend = backend
+        self.path: Path | None = None
+
+    def __enter__(self) -> "RemoteStateLock":
+        runtime = _runtime_state()
+        lock_root = _safe_directory(self.base / "state" / ".locks")
+        # One admission/state lock covers every remote backend and PAUSE writer.  A
+        # backend-specific lock would leave the PAUSE transition racing a sender from the
+        # other adapter.
+        candidate = lock_root / "remote-state.lock"
+        _safe_existing_lock(candidate)
+        runtime.acquire_witnessed_directory_lock(candidate, "remote-state", os.getpid())
+        self.path = candidate
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        if self.path is None:
+            return
+        runtime = _runtime_state()
+        try:
+            runtime.release_witnessed_directory_lock(
+                self.path, "remote-state", os.getpid())
+        finally:
+            self.path = None
+
+
+def remote_state_lock(base: Path, backend: str) -> RemoteStateLock:
+    return RemoteStateLock(base, backend)
+
+
+@contextlib.contextmanager
+def outbound_admission(base: Path, backend: str, operation: str):
+    """Atomically admit a mutation with PAUSE and hold the admission through send."""
+    with remote_state_lock(base, backend):
+        # This is intentionally the first operation under the shared lock.  pause.sh and
+        # resume.sh acquire the same lock before changing state/PAUSE, so a PAUSE request is
+        # ordered either before admission (send is refused) or after the send completes.
+        assert_not_paused(base, operation)
+        yield
 
 
 def idempotency_key(backend: str, operation: str, assignment_digest: str,
@@ -627,15 +769,41 @@ def idempotency_key(backend: str, operation: str, assignment_digest: str,
 
 
 def atomic_json(path: Path, value: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if not isinstance(value, dict):
+        raise RemoteError("request-invalid", "durable JSON records must be objects")
+    _safe_file(path)
     fd, tmp_name = tempfile.mkstemp(prefix=".remote-", suffix=".tmp", dir=str(path.parent))
     try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             json.dump(value, handle, indent=2, sort_keys=True)
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp_name, str(path))
+        _fsync_directory(path.parent)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.remove(tmp_name)
+        raise
+
+
+def atomic_bytes(path: Path, value: bytes) -> None:
+    """Atomically replace a runtime file, refusing symlink targets and syncing its parent."""
+    if not isinstance(value, bytes):
+        raise RemoteError("request-invalid", "atomic runtime content must be bytes")
+    _safe_file(path)
+    fd, tmp_name = tempfile.mkstemp(prefix=".remote-", suffix=".tmp", dir=str(path.parent))
+    try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(value)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, str(path))
+        _fsync_directory(path.parent)
     except BaseException:
         with contextlib.suppress(OSError):
             os.remove(tmp_name)
@@ -643,6 +811,11 @@ def atomic_json(path: Path, value: dict) -> None:
 
 
 def read_attempts(base: Path, backend: str) -> list[dict]:
+    with remote_state_lock(base, backend):
+        return _read_attempts_unlocked(base, backend)
+
+
+def _read_attempts_unlocked(base: Path, backend: str) -> list[dict]:
     path = attempts_journal(base, backend)
     if not path.is_file():
         return []
@@ -656,6 +829,9 @@ def _commit_attempt(base: Path, backend: str, body: dict) -> dict:
     and the projection is repaired by simply repeating the call: the second append
     deduplicates against the first instead of doubling the row.
     """
+    attempt_id = body.get("attempt_id")
+    if not isinstance(attempt_id, str) or not ATTEMPT_ID_RE.fullmatch(attempt_id):
+        raise RemoteError("request-invalid", "attempt_id cannot name runtime storage")
     record = {key: value for key, value in body.items() if key != "record_id"}
     screen_for_secret_material(record, "attempt")
     record["record_id"] = canonical_digest(record)
@@ -700,7 +876,8 @@ class AttemptHandle:
     def attempt_id(self) -> str:
         return self.record["attempt_id"]
 
-    def _close(self, state: str, outcome: str, detail: dict | None, clock=None) -> dict:
+    def _close(self, state: str, outcome: str, detail: dict | None, clock=None,
+               *, lock_held: bool = False) -> dict:
         if state not in ATTEMPT_STATES:
             raise RemoteError("request-invalid", f"unknown attempt state {state!r}")
         if self.closed:
@@ -715,46 +892,87 @@ class AttemptHandle:
             "closed_at": closed_at,
             "updated_at": closed_at,
         })
-        self.record = _commit_attempt(self.base, self.backend, body)
+        if lock_held:
+            self.record = _commit_attempt(self.base, self.backend, body)
+        else:
+            with remote_state_lock(self.base, self.backend):
+                current = latest_states(_read_attempts_unlocked(self.base, self.backend)).get(
+                    self.attempt_id)
+                if current is None or current.get("state") != ATTEMPT_OPEN:
+                    raise RemoteError("request-invalid",
+                                      f"attempt {self.attempt_id} is no longer open")
+                self.record = _commit_attempt(self.base, self.backend, body)
         self.closed = True
         return self.record
 
-    def succeed(self, outcome: str = "ok", detail: dict | None = None, clock=None) -> dict:
-        return self._close(ATTEMPT_SUCCEEDED, outcome, detail, clock)
+    def succeed(self, outcome: str = "ok", detail: dict | None = None, clock=None,
+                *, lock_held: bool = False) -> dict:
+        return self._close(ATTEMPT_SUCCEEDED, outcome, detail, clock, lock_held=lock_held)
 
-    def fail(self, error: RemoteError, clock=None) -> dict:
-        return self._close(ATTEMPT_FAILED, error.code, error.as_record(), clock)
+    def fail(self, error: RemoteError, clock=None, *, lock_held: bool = False) -> dict:
+        return self._close(ATTEMPT_FAILED, error.code, error.as_record(), clock,
+                           lock_held=lock_held)
 
-    def defer(self, error: RemoteError, clock=None) -> dict:
-        return self._close(ATTEMPT_DEFERRED, error.code, error.as_record(), clock)
+    def defer(self, error: RemoteError, clock=None, *, lock_held: bool = False) -> dict:
+        return self._close(ATTEMPT_DEFERRED, error.code, error.as_record(), clock,
+                           lock_held=lock_held)
+
+
+def lookup_attempt(base: Path, backend: str, *, dispatch_id: str, operation: str,
+                   assignment_digest: str, request_digest: str,
+                   lock_held: bool = False) -> AttemptHandle | None:
+    """Look up an existing reservation without creating one.
+
+    Adapters use this while holding outbound admission so a replay can be returned even if a
+    credential has since been rotated or removed. New work still resolves credentials before
+    calling ``begin_attempt`` and therefore consumes no attempt on configuration failure.
+    """
+    if not DISPATCH_ID_RE.fullmatch(dispatch_id or ""):
+        raise RemoteError("request-invalid",
+                          "dispatch_id must match ^[a-z0-9][a-z0-9-]{7,63}$")
+    key = idempotency_key(backend, operation, assignment_digest, dispatch_id, request_digest)
+    lock = contextlib.nullcontext() if lock_held else remote_state_lock(base, backend)
+    with lock:
+        mine = [row for row in latest_states(_read_attempts_unlocked(base, backend)).values()
+                if row.get("idempotency_key") == key]
+        for row in mine:
+            if row.get("state") == ATTEMPT_SUCCEEDED:
+                return AttemptHandle(base, backend, row, replayed=True)
+        for row in mine:
+            if row.get("state") == ATTEMPT_OPEN:
+                return AttemptHandle(base, backend, row, unreconciled=True)
+    return None
 
 
 def begin_attempt(base: Path, backend: str, *, dispatch_id: str, operation: str,
                   assignment_digest: str, request_digest: str, max_attempts: int,
-                  clock=None) -> AttemptHandle:
+                  clock=None, lock_held: bool = False) -> AttemptHandle:
     """Commit the intent BEFORE any I/O, and refuse to re-send what may already have landed."""
     if not DISPATCH_ID_RE.fullmatch(dispatch_id or ""):
         raise RemoteError("request-invalid",
                           "dispatch_id must match ^[a-z0-9][a-z0-9-]{7,63}$")
     key = idempotency_key(backend, operation, assignment_digest, dispatch_id, request_digest)
-    rows = read_attempts(base, backend)
-    mine = [row for row in latest_states(rows).values() if row.get("idempotency_key") == key]
+    lock = contextlib.nullcontext() if lock_held else remote_state_lock(base, backend)
+    with lock:
+        rows = _read_attempts_unlocked(base, backend)
+        mine = [row for row in latest_states(rows).values()
+                if row.get("idempotency_key") == key]
 
-    for row in mine:
-        if row.get("state") == ATTEMPT_SUCCEEDED:
-            return AttemptHandle(base, backend, row, replayed=True)
-    for row in mine:
-        if row.get("state") == ATTEMPT_OPEN:
-            return AttemptHandle(base, backend, row, unreconciled=True)
+        for row in mine:
+            if row.get("state") == ATTEMPT_SUCCEEDED:
+                return AttemptHandle(base, backend, row, replayed=True)
+        for row in mine:
+            if row.get("state") == ATTEMPT_OPEN:
+                return AttemptHandle(base, backend, row, unreconciled=True)
 
-    attempt_number = len(mine) + 1
-    if attempt_number > max_attempts:
-        raise RemoteError("attempts-exhausted",
-                          f"{operation} for dispatch {dispatch_id} has used its "
-                          f"{max_attempts} permitted attempt(s)")
-    opened_at = now_iso(clock)
-    attempt_id = f"{key[:16]}-{attempt_number}"
-    body = {
+        attempt_number = len(mine) + 1
+        if attempt_number > max_attempts:
+            raise RemoteError("attempts-exhausted",
+                              f"{operation} for dispatch {dispatch_id} has used its "
+                              f"{max_attempts} permitted attempt(s)")
+        opened_at = now_iso(clock)
+        attempt_id = f"{key[:16]}-{attempt_number}"
+        body = {
         "schema_version": SCHEMA_VERSION,
         "attempt_id": attempt_id,
         "idempotency_key": key,
@@ -765,14 +983,19 @@ def begin_attempt(base: Path, backend: str, *, dispatch_id: str, operation: str,
         "request_digest": request_digest,
         "attempt_number": attempt_number,
         "max_attempts": max_attempts,
+        "pre_send_intent": {
+            "operation": operation,
+            "idempotency_key": key,
+            "request_digest": request_digest,
+        },
         "state": ATTEMPT_OPEN,
         "outcome": "",
         "detail": {},
         "opened_at": opened_at,
         "closed_at": "",
         "updated_at": opened_at,
-    }
-    return AttemptHandle(base, backend, _commit_attempt(base, backend, body))
+        }
+        return AttemptHandle(base, backend, _commit_attempt(base, backend, body))
 
 
 def open_attempts(base: Path, backend: str) -> list[dict]:
@@ -801,63 +1024,119 @@ def reconcile_attempt(base: Path, backend: str, attempt_id: str, *, observed: st
     if not ATTEMPT_ID_RE.fullmatch(attempt_id or ""):
         raise RemoteError("request-invalid",
                           "attempt_id must match ^[0-9a-f]{16}-[0-9]{1,3}$")
-    rows = latest_states(read_attempts(base, backend))
-    record = rows.get(attempt_id)
-    if record is None:
-        raise RemoteError("not-found", f"no attempt {attempt_id} for backend {backend}")
-    if record.get("state") != ATTEMPT_OPEN:
-        raise RemoteError("request-invalid",
-                          f"attempt {attempt_id} is {record.get('state')!r}, not open")
-    state = {
-        "landed": ATTEMPT_SUCCEEDED,
-        "not-landed": ATTEMPT_FAILED,
-        "unknown": ATTEMPT_UNRECONCILED,
-    }[observed]
-    closed_at = now_iso(clock)
-    body = dict(record)
-    body.update({
-        "state": state,
-        "outcome": f"reconciled:{observed}",
-        "detail": {"observer": observer, "observed": observed, **dict(detail or {})},
-        "closed_at": closed_at,
-        "updated_at": closed_at,
-    })
-    return _commit_attempt(base, backend, body)
+    with remote_state_lock(base, backend):
+        rows = latest_states(_read_attempts_unlocked(base, backend))
+        record = rows.get(attempt_id)
+        if record is None:
+            raise RemoteError("not-found", f"no attempt {attempt_id} for backend {backend}")
+        if record.get("state") != ATTEMPT_OPEN:
+            raise RemoteError("request-invalid",
+                              f"attempt {attempt_id} is {record.get('state')!r}, not open")
+        state = {
+            "landed": ATTEMPT_SUCCEEDED,
+            "not-landed": ATTEMPT_FAILED,
+            "unknown": ATTEMPT_UNRECONCILED,
+        }[observed]
+        closed_at = now_iso(clock)
+        body = dict(record)
+        body.update({
+            "state": state,
+            "outcome": f"reconciled:{observed}",
+            "detail": {"observer": observer, "observed": observed, **dict(detail or {})},
+            "closed_at": closed_at,
+            "updated_at": closed_at,
+        })
+        return _commit_attempt(base, backend, body)
 
 
-def write_session(base: Path, backend: str, dispatch_id: str, record: dict) -> Path:
+def write_session(base: Path, backend: str, dispatch_id: str, record: dict,
+                  *, lock_held: bool = False) -> Path:
     if not DISPATCH_ID_RE.fullmatch(dispatch_id or ""):
         raise RemoteError("request-invalid", "dispatch_id must match ^[a-z0-9][a-z0-9-]{7,63}$")
     screen_for_secret_material(record, "session")
-    path = session_path(base, backend, dispatch_id)
-    atomic_json(path, record)
+    lock = contextlib.nullcontext() if lock_held else remote_state_lock(base, backend)
+    with lock:
+        path = session_path(base, backend, dispatch_id)
+        atomic_json(path, record)
     return path
 
 
-def read_session(base: Path, backend: str, dispatch_id: str) -> dict:
-    path = session_path(base, backend, dispatch_id)
-    if not path.is_file():
-        raise RemoteError("not-found", f"no session record for dispatch {dispatch_id}")
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise RemoteError("malformed-response", f"session record is unreadable: {exc}") from exc
-    if not isinstance(value, dict):
-        raise RemoteError("malformed-response", "session record is not a JSON object")
-    return value
+def read_session(base: Path, backend: str, dispatch_id: str, *, lock_held: bool = False) -> dict:
+    lock = contextlib.nullcontext() if lock_held else remote_state_lock(base, backend)
+    with lock:
+        path = session_path(base, backend, dispatch_id)
+        if not path.is_file():
+            raise RemoteError("not-found", f"no session record for dispatch {dispatch_id}")
+        try:
+            _safe_file(path, create_parent=False)
+            flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            descriptor = os.open(str(path), flags)
+            with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+                value = json.load(handle)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RemoteError("malformed-response", "session record is unreadable") from exc
+        if not isinstance(value, dict):
+            raise RemoteError("malformed-response", "session record is not a JSON object")
+        screen_for_secret_material(value, "session")
+        return value
 
 
 def list_sessions(base: Path, backend: str) -> list[dict]:
-    directory = remote_root(base, backend) / "sessions"
-    if not directory.is_dir():
-        return []
-    out: list[dict] = []
-    for path in sorted(directory.glob("*.json")):
-        with contextlib.suppress(OSError, json.JSONDecodeError):
-            value = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(value, dict):
-                out.append(value)
-    return out
+    with remote_state_lock(base, backend):
+        directory = _safe_directory(remote_root(base, backend) / "sessions")
+        out: list[dict] = []
+        for path in sorted(directory.glob("*.json")):
+            try:
+                _safe_file(path, create_parent=False)
+                flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+                if hasattr(os, "O_NOFOLLOW"):
+                    flags |= os.O_NOFOLLOW
+                descriptor = os.open(str(path), flags)
+                with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+                    value = json.load(handle)
+                if isinstance(value, dict):
+                    screen_for_secret_material(value, "session")
+                    out.append(value)
+            except OSError as exc:
+                raise RemoteError("malformed-response", "session record is unreadable") from exc
+            except json.JSONDecodeError as exc:
+                raise RemoteError("malformed-response", "session record is not valid JSON") from exc
+        return out
+
+
+def write_usage(base: Path, backend: str, dispatch_id: str, record: dict,
+                *, lock_held: bool = False) -> Path:
+    if not DISPATCH_ID_RE.fullmatch(dispatch_id or ""):
+        raise RemoteError("request-invalid", "dispatch_id must match ^[a-z0-9][a-z0-9-]{7,63}$")
+    screen_for_secret_material(record, "usage")
+    lock = contextlib.nullcontext() if lock_held else remote_state_lock(base, backend)
+    with lock:
+        path = usage_path(base, backend, dispatch_id)
+        atomic_json(path, record)
+    return path
+
+
+def read_usage(base: Path, backend: str, dispatch_id: str) -> dict:
+    with remote_state_lock(base, backend):
+        path = usage_path(base, backend, dispatch_id)
+        if not path.is_file():
+            raise RemoteError("not-found", f"no usage record for dispatch {dispatch_id}")
+        try:
+            _safe_file(path, create_parent=False)
+            flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            descriptor = os.open(str(path), flags)
+            with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+                value = json.load(handle)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RemoteError("malformed-response", "usage record is unreadable") from exc
+        if not isinstance(value, dict):
+            raise RemoteError("malformed-response", "usage record is not a JSON object")
+        screen_for_secret_material(value, "usage")
+        return value
 
 
 # --- CLI: validation only ------------------------------------------------------------------

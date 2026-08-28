@@ -135,15 +135,28 @@ captured envelope cannot be replayed with a fresh header, but if it were inside 
 key then the same logical dispatch retried one second later would be a different key and would
 be sent twice.
 
-Reads (status, artifacts, usage) do not consume attempts. A durable row per status poll would
-drown the journal that exists to answer one question — "did a request that may have changed
-remote state actually land?" — and a poll cannot change remote state. Reads update the session
-projection instead.
+Reservation is serialized by one witnessed `state/.locks/remote-state.lock` across processes;
+the check, reservation, journal append and projection are one critical section. The same lock
+is held from the final PAUSE admission check through outbound I/O and attempt close, and the
+PAUSE/resume scripts acquire it before changing `state/PAUSE`. The provider receives the same
+identity as `Idempotency-Key`. A completed replay is looked up before credential resolution,
+so credential rotation cannot turn a safe replay into a second send. A pre-send intent records
+the operation, request digest and identity; an ambiguous create crash is reported as an
+unreconciled create ambiguity and is never blindly recreated.
+
+Reads (status, artifacts, usage) do not consume attempts. They still pass through the shared
+PAUSE admission/send section. Usage is persisted under `state/remote/<backend>/usage/`, and its
+pool, host, provider, billing basis and on-demand state come from the validated assignment and
+manifest, never from provider response fields.
+
+Cancellation is successful only when the provider returns terminal `CANCELLED`/`CANCELED`.
+Missing, active, completed, or unrecognised status leaves the cancel attempt open for
+reconciliation; it is never relabelled as success.
 
 ### PAUSE
 
-Every outbound path calls `assert_not_paused` **first**, before building anything, before
-committing an attempt, before resolving a credential. Local awareness stays available: `recover`
+Every outbound path enters the shared admission lock and calls `assert_not_paused` immediately
+under it, before transport I/O. Local awareness stays available: `recover`
 enumerates open attempts and non-terminal sessions under PAUSE and reports
 `provider_queried: false` rather than pretending the remote state is known. A paused box that
 cannot tell you what it was doing is a failure, not a safety feature (D-012).

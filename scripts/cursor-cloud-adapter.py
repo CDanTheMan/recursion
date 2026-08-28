@@ -60,9 +60,11 @@ from remote_assignment import (
     screen_for_secret_material,
     validate_assignment,
     validate_branch_name,
+    validate_repository_url,
 )
 from remote_backend import (
     AccountLease,
+    AMBIGUOUS_MUTATION_ERRORS,
     RefusingTransport,
     Transport,
     assert_not_paused,
@@ -70,14 +72,17 @@ from remote_backend import (
     begin_attempt,
     classify_status,
     is_paused,
+    lookup_attempt,
     list_sessions,
     now_iso,
     open_attempts,
+    outbound_admission,
     read_session,
     reconcile_attempt,
     resolve_backend,
     resolve_secret,
     validate_directory,
+    write_usage,
     validate_secret_ref,
     write_session,
 )
@@ -136,6 +141,7 @@ def map_vendor_state(raw: object) -> str:
 
 
 def branch_is_allowed(branch: str, publication: dict) -> bool:
+    validate_branch_name(branch, "returned branch")
     if branch in (publication["default_branch"], publication["integration_branch"]):
         return False
     return any(fnmatch.fnmatchcase(branch, pattern)
@@ -224,9 +230,13 @@ class CursorCloudAdapter:
             raise RemoteError("request-invalid", "adapter paths are absolute within the API")
         return self.endpoint + path
 
-    def _call(self, method: str, path: str, body: dict | None = None) -> dict:
+    def _call(self, method: str, path: str, body: dict | None = None,
+              extra_headers: dict | None = None) -> dict:
         payload = canonical_bytes(body) if body is not None else None
-        response = self.transport.request(method, self._url(path), self._headers(), payload,
+        headers = self._headers()
+        headers.update(extra_headers or {})
+        assert_not_paused(self.base, f"{method} {path}")
+        response = self.transport.request(method, self._url(path), headers, payload,
                                           self.manifest["timeout_seconds"])
         classify_status(response.status, response.body)
         return response.json()
@@ -234,7 +244,8 @@ class CursorCloudAdapter:
     def _now(self) -> str:
         return now_iso(self.clock)
 
-    def _begin(self, dispatch_id: str, operation: str, digest: str, request_digest: str):
+    def _begin(self, dispatch_id: str, operation: str, digest: str, request_digest: str,
+               *, lock_held: bool = False):
         if operation not in MUTATING_OPERATIONS:
             raise RemoteError("request-invalid",
                               f"{operation!r} is a read; reads update the session projection "
@@ -242,17 +253,25 @@ class CursorCloudAdapter:
         return begin_attempt(
             self.base, self.name, dispatch_id=dispatch_id, operation=operation,
             assignment_digest=digest, request_digest=request_digest,
-            max_attempts=self.manifest["max_attempts"], clock=self.clock)
+            max_attempts=self.manifest["max_attempts"], clock=self.clock, lock_held=lock_held)
+
+    def _assert_assignment_binding(self, assignment: dict) -> None:
+        if assignment["capacity_pool"] != self.manifest["capacity_pool"]:
+            raise RemoteError("assignment-invalid",
+                              "assignment capacity_pool is not the authorized backend pool")
+        if assignment["host"] != self.manifest["host_id"]:
+            raise RemoteError("assignment-invalid",
+                              "assignment host is not the authorized backend host")
 
     # -- models ---------------------------------------------------------------------------
 
     def list_models(self) -> list[str]:
-        assert_not_paused(self.base, "a Cursor Cloud model listing")
-        payload = self._call("GET", "/v0/models")
-        models = payload.get("models")
-        if not isinstance(models, list) or not all(isinstance(item, str) for item in models):
-            raise RemoteError("malformed-response", "models response is not a list of strings")
-        return models
+        with outbound_admission(self.base, self.name, "a Cursor Cloud model listing"):
+            payload = self._call("GET", "/v0/models")
+            models = payload.get("models")
+            if not isinstance(models, list) or not all(isinstance(item, str) for item in models):
+                raise RemoteError("malformed-response", "models response is not a list of strings")
+            return models
 
     def validate_model(self, model_id: str) -> str:
         """Configured model IDs are validated against the provider, not assumed."""
@@ -295,78 +314,103 @@ class CursorCloudAdapter:
 
     def create_run(self, assignment: dict, prompt: str, dispatch_id: str) -> dict:
         assert_not_paused(self.base, "a Cursor Cloud run creation")
-        self._assert_credential()
         normalised = validate_assignment(assignment)
+        self._assert_assignment_binding(normalised)
         digest = assignment_digest(normalised)
         body = self.build_create_request(normalised, prompt)
-        attempt = self._begin(dispatch_id, "create", digest, canonical_digest(body))
-        if attempt.replayed:
-            # The identical create already succeeded. Returning the stored session is the
-            # whole point of the idempotency key: a second POST here is a second vendor run.
-            try:
-                return read_session(self.base, self.name, dispatch_id)
-            except RemoteError as exc:
-                if exc.code != "not-found":
-                    raise
+        with outbound_admission(self.base, self.name, "a Cursor Cloud run creation"):
+            request_digest = canonical_digest(body)
+            prior = lookup_attempt(
+                self.base, self.name, dispatch_id=dispatch_id, operation="create",
+                assignment_digest=digest, request_digest=request_digest, lock_held=True)
+            if prior is not None:
+                if prior.replayed:
+                    try:
+                        return read_session(self.base, self.name, dispatch_id, lock_held=True)
+                    except RemoteError as exc:
+                        if exc.code != "not-found":
+                            raise
+                        raise RemoteError("unreconciled-attempt",
+                                          f"dispatch {dispatch_id} is recorded as landed but has no "
+                                          "local session record; recover the vendor run rather than "
+                                          "creating a second one") from exc
                 raise RemoteError("unreconciled-attempt",
-                                  f"dispatch {dispatch_id} is recorded as landed but has no "
-                                  "local session record; recover the vendor run rather than "
-                                  "creating a second one") from exc
-        if attempt.unreconciled:
-            raise RemoteError("unreconciled-attempt",
-                              f"attempt {attempt.attempt_id} was left open by an earlier "
-                              "process; reconcile it against observed provider state before "
-                              "dispatching again")
-        try:
-            with AccountLease(self.base, self.manifest["capacity_pool"],
-                              self.manifest["concurrency_lease"]):
-                payload = self._call("POST", "/v0/agents", body)
-        except RemoteError as exc:
-            (attempt.defer if exc.exit_code == 75 else attempt.fail)(exc, clock=self.clock)
-            raise
-        run_id = payload.get("id")
-        if not isinstance(run_id, str) or not run_id.strip():
-            error = RemoteError("malformed-response", "create response carries no run id")
-            attempt.fail(error, clock=self.clock)
-            raise error
-        record = {
-            "schema_version": SCHEMA_VERSION,
-            "kind": "cursor-cloud-session",
-            "backend": self.name,
-            "dispatch_id": dispatch_id,
-            "run_id": run_id,
-            "assignment_digest": digest,
-            "task_id": normalised["task_id"],
-            "project_id": normalised["project_id"],
-            "source_repository": normalised["source_repository"],
-            "source_branch": normalised["source_branch"],
-            "source_sha": normalised["source_sha"],
-            "target_branch": body["target"]["branchName"],
-            "capacity_pool": self.manifest["capacity_pool"],
-            "host_id": self.manifest["host_id"],
-            "state": "created",
-            "vendor_state": str(payload.get("status") or "CREATING"),
-            "artifacts": [],
-            "reconciliation": None,
-            "created_at": self._now(),
-            "updated_at": self._now(),
-        }
-        write_session(self.base, self.name, dispatch_id, record)
-        attempt.succeed("created", {"run_id": run_id}, clock=self.clock)
-        return record
+                                  f"attempt {prior.attempt_id} was left open by an earlier "
+                                  "process; reconcile it against observed provider state before "
+                                  "dispatching again")
+            self._assert_credential()
+            attempt = self._begin(dispatch_id, "create", digest, canonical_digest(body),
+                                  lock_held=True)
+            if attempt.replayed or attempt.unreconciled:
+                raise RemoteError("unreconciled-attempt", "reservation changed unexpectedly")
+            try:
+                with AccountLease(self.base, self.manifest["capacity_pool"],
+                                  self.manifest["concurrency_lease"]):
+                    payload = self._call(
+                        "POST", "/v0/agents", body,
+                        {"Idempotency-Key": attempt.record["idempotency_key"]})
+            except RemoteError as exc:
+                if exc.code in AMBIGUOUS_MUTATION_ERRORS:
+                    # Even a retryable-looking 503 is ambiguous after a mutation was sent.
+                    # Keep the reservation OPEN until reconciliation proves the outcome.
+                    pass
+                elif exc.exit_code == 75:
+                    attempt.defer(exc, clock=self.clock, lock_held=True)
+                else:
+                    attempt.fail(exc, clock=self.clock, lock_held=True)
+                # An ambiguous create intentionally remains OPEN.  Recovery/reconciliation
+                # must establish whether the provider accepted it before any retry.
+                raise
+            run_id = payload.get("id")
+            if not isinstance(run_id, str) or not run_id.strip():
+                error = RemoteError("malformed-response", "create response carries no run id")
+                raise error
+            record = {
+                "schema_version": SCHEMA_VERSION,
+                "kind": "cursor-cloud-session",
+                "backend": self.name,
+                "dispatch_id": dispatch_id,
+                "run_id": run_id,
+                "assignment_digest": digest,
+                "task_id": normalised["task_id"],
+                "project_id": normalised["project_id"],
+                "source_repository": normalised["source_repository"],
+                "source_branch": normalised["source_branch"],
+                "source_sha": normalised["source_sha"],
+                "target_branch": body["target"]["branchName"],
+                "capacity_pool": self.manifest["capacity_pool"],
+                "host_id": self.manifest["host_id"],
+                "state": "created",
+                "vendor_state": str(payload.get("status") or "CREATING"),
+                "artifacts": [],
+                "reconciliation": None,
+                "created_at": self._now(),
+                "updated_at": self._now(),
+                "billing_basis": self.manifest["billing_basis"],
+                "on_demand": self.manifest["on_demand"],
+                "provider": normalised["provider"],
+                "authorized_repositories": ([{
+                    "repository": normalised["source_repository"],
+                    "source_branch": normalised["source_branch"],
+                    "source_sha": normalised["source_sha"],
+                }] + normalised["authorized_repositories"]),
+            }
+            write_session(self.base, self.name, dispatch_id, record, lock_held=True)
+            attempt.succeed("created", {"run_id": run_id}, clock=self.clock, lock_held=True)
+            return record
 
     # -- status / stream ------------------------------------------------------------------
 
     def get_status(self, dispatch_id: str) -> dict:
-        assert_not_paused(self.base, "a Cursor Cloud status query")
-        session = read_session(self.base, self.name, dispatch_id)
-        payload = self._call("GET", f"/v0/agents/{session['run_id']}")
-        state = map_vendor_state(payload.get("status"))
-        session["state"] = state
-        session["vendor_state"] = str(payload.get("status"))
-        session["updated_at"] = self._now()
-        write_session(self.base, self.name, dispatch_id, session)
-        return session
+        with outbound_admission(self.base, self.name, "a Cursor Cloud status query"):
+            session = read_session(self.base, self.name, dispatch_id, lock_held=True)
+            payload = self._call("GET", f"/v0/agents/{session['run_id']}")
+            state = map_vendor_state(payload.get("status"))
+            session["state"] = state
+            session["vendor_state"] = str(payload.get("status"))
+            session["updated_at"] = self._now()
+            write_session(self.base, self.name, dispatch_id, session, lock_held=True)
+            return session
 
     def poll_status(self, dispatch_id: str, *, max_polls: int = 5, base_delay: int = 2,
                     max_delay: int = 60, sleeper=None) -> dict:
@@ -387,95 +431,118 @@ class CursorCloudAdapter:
     def stream_events(self, dispatch_id: str):
         """Yield decoded run events. Server-sent-event framing is tolerated; a malformed
         payload is a typed error, never a skipped line."""
-        assert_not_paused(self.base, "a Cursor Cloud status stream")
-        session = read_session(self.base, self.name, dispatch_id)
-        url = self._url(f"/v0/agents/{session['run_id']}/events")
-        for line in self.transport.stream_lines("GET", url, self._headers(), None,
-                                                self.manifest["timeout_seconds"]):
-            text = line.strip()
-            if not text or text.startswith(":"):
-                continue
-            if text.startswith("data:"):
-                text = text[len("data:"):].strip()
-            if text == "[DONE]":
-                return
-            try:
-                event = json.loads(text)
-            except json.JSONDecodeError as exc:
-                raise RemoteError("malformed-response",
-                                  f"stream carried a line that is not JSON: {exc}") from exc
-            if not isinstance(event, dict):
-                raise RemoteError("malformed-response", "stream event is not a JSON object")
-            yield event
+        with outbound_admission(self.base, self.name, "a Cursor Cloud status stream"):
+            session = read_session(self.base, self.name, dispatch_id, lock_held=True)
+            url = self._url(f"/v0/agents/{session['run_id']}/events")
+            assert_not_paused(self.base, "a Cursor Cloud status stream")
+            for line in self.transport.stream_lines("GET", url, self._headers(), None,
+                                                    self.manifest["timeout_seconds"]):
+                text = line.strip()
+                if not text or text.startswith(":"):
+                    continue
+                if text.startswith("data:"):
+                    text = text[len("data:"):].strip()
+                if text == "[DONE]":
+                    return
+                try:
+                    event = json.loads(text)
+                except json.JSONDecodeError as exc:
+                    raise RemoteError("malformed-response",
+                                      f"stream carried a line that is not JSON: {exc}") from exc
+                if not isinstance(event, dict):
+                    raise RemoteError("malformed-response", "stream event is not a JSON object")
+                yield event
 
     # -- cancel ---------------------------------------------------------------------------
 
     def cancel(self, dispatch_id: str) -> dict:
         assert_not_paused(self.base, "a Cursor Cloud cancellation")
-        self._assert_credential()
-        session = read_session(self.base, self.name, dispatch_id)
-        attempt = self._begin(dispatch_id, "cancel", session["assignment_digest"],
-                              canonical_digest({"run_id": session["run_id"]}))
-        if attempt.replayed:
-            return read_session(self.base, self.name, dispatch_id)
-        if attempt.unreconciled:
-            raise RemoteError("unreconciled-attempt",
-                              f"cancel attempt {attempt.attempt_id} was left open; reconcile "
-                              "the run's observed state before cancelling again")
-        try:
-            payload = self._call("POST", f"/v0/agents/{session['run_id']}/cancel")
-        except RemoteError as exc:
-            (attempt.defer if exc.exit_code == 75 else attempt.fail)(exc, clock=self.clock)
-            raise
-        # A cancel that does not leave the run terminal is not a cancel; reconcile what the
-        # provider actually reports rather than what we asked for.
-        session["state"] = map_vendor_state(payload.get("status") or "CANCELLED")
-        session["vendor_state"] = str(payload.get("status") or "CANCELLED")
-        session["updated_at"] = self._now()
-        write_session(self.base, self.name, dispatch_id, session)
-        attempt.succeed("cancelled", {"run_id": session["run_id"]}, clock=self.clock)
-        return session
+        with outbound_admission(self.base, self.name, "a Cursor Cloud cancellation"):
+            self._assert_credential()
+            session = read_session(self.base, self.name, dispatch_id, lock_held=True)
+            attempt = self._begin(dispatch_id, "cancel", session["assignment_digest"],
+                                  canonical_digest({"run_id": session["run_id"]}),
+                                  lock_held=True)
+            if attempt.replayed:
+                return read_session(self.base, self.name, dispatch_id, lock_held=True)
+            if attempt.unreconciled:
+                raise RemoteError("unreconciled-attempt",
+                                  f"cancel attempt {attempt.attempt_id} was left open; reconcile "
+                                  "the run's observed state before cancelling again")
+            try:
+                payload = self._call("POST", f"/v0/agents/{session['run_id']}/cancel")
+            except RemoteError as exc:
+                if exc.code in AMBIGUOUS_MUTATION_ERRORS:
+                    # A cancel transport failure is also ambiguous: the provider may have
+                    # accepted the request even when the client did not receive a response.
+                    pass
+                elif exc.exit_code == 75:
+                    attempt.defer(exc, clock=self.clock, lock_held=True)
+                else:
+                    attempt.fail(exc, clock=self.clock, lock_held=True)
+                raise
+            # Only the provider's terminal CANCELLED state is cancellation success.  Missing,
+            # active, completed, and unknown states leave the attempt OPEN for reconciliation;
+            # callers must never infer success from the fact that a cancel was requested.
+            raw_status = payload.get("status")
+            if raw_status is None:
+                raise RemoteError("malformed-response",
+                                  "cancel response has no provider status; cancellation is "
+                                  "unknown and remains reconcilable")
+            state = map_vendor_state(raw_status)
+            session["state"] = state
+            session["vendor_state"] = str(raw_status)
+            session["updated_at"] = self._now()
+            write_session(self.base, self.name, dispatch_id, session, lock_held=True)
+            if state != "cancelled":
+                raise RemoteError("unreconciled-attempt",
+                                  f"provider reported {raw_status!r}, not terminal CANCELLED; "
+                                  "cancellation remains reconcilable")
+            attempt.succeed("cancelled", {"run_id": session["run_id"]},
+                            clock=self.clock, lock_held=True)
+            return session
 
     # -- artifacts ------------------------------------------------------------------------
 
     def list_artifacts(self, dispatch_id: str) -> list[dict]:
-        assert_not_paused(self.base, "a Cursor Cloud artifact listing")
-        session = read_session(self.base, self.name, dispatch_id)
-        payload = self._call("GET", f"/v0/agents/{session['run_id']}/artifacts")
-        artifacts = payload.get("artifacts")
-        if not isinstance(artifacts, list):
-            raise RemoteError("malformed-response", "artifacts response is not a list")
-        out: list[dict] = []
-        for item in artifacts:
-            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
-                raise RemoteError("malformed-response", "artifact entry has no string id")
-            out.append({"id": item["id"], "name": str(item.get("name") or ""),
-                        "bytes": int(item.get("bytes") or 0)})
-        return out
+        with outbound_admission(self.base, self.name, "a Cursor Cloud artifact listing"):
+            session = read_session(self.base, self.name, dispatch_id, lock_held=True)
+            payload = self._call("GET", f"/v0/agents/{session['run_id']}/artifacts")
+            artifacts = payload.get("artifacts")
+            if not isinstance(artifacts, list):
+                raise RemoteError("malformed-response", "artifacts response is not a list")
+            out: list[dict] = []
+            for item in artifacts:
+                if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                    raise RemoteError("malformed-response", "artifact entry has no string id")
+                out.append({"id": item["id"], "name": str(item.get("name") or ""),
+                            "bytes": int(item.get("bytes") or 0)})
+            return out
 
     def download_artifact(self, dispatch_id: str, artifact_id: str) -> tuple[bytes, dict]:
         """Return the bytes and an evidence row. Artifacts are ADVISORY: a vendor-produced
         file is an input to verification, never the verification."""
-        assert_not_paused(self.base, "a Cursor Cloud artifact download")
         if not isinstance(artifact_id, str) or not artifact_id.strip():
             raise RemoteError("request-invalid", "artifact id must be a nonempty string")
-        session = read_session(self.base, self.name, dispatch_id)
-        response = self.transport.request(
-            "GET", self._url(f"/v0/agents/{session['run_id']}/artifacts/{artifact_id}"),
-            self._headers(), None, self.manifest["timeout_seconds"])
-        classify_status(response.status, response.body)
-        row = {
-            "id": artifact_id,
-            "sha256": hashlib.sha256(response.body).hexdigest(),
-            "bytes": len(response.body),
-            "evidence_class": "advisory",
-            "observed_at": self._now(),
-        }
-        session["artifacts"] = [entry for entry in session.get("artifacts", [])
-                                if entry.get("id") != artifact_id] + [row]
-        session["updated_at"] = self._now()
-        write_session(self.base, self.name, dispatch_id, session)
-        return response.body, row
+        with outbound_admission(self.base, self.name, "a Cursor Cloud artifact download"):
+            session = read_session(self.base, self.name, dispatch_id, lock_held=True)
+            assert_not_paused(self.base, "a Cursor Cloud artifact download")
+            response = self.transport.request(
+                "GET", self._url(f"/v0/agents/{session['run_id']}/artifacts/{artifact_id}"),
+                self._headers(), None, self.manifest["timeout_seconds"])
+            classify_status(response.status, response.body)
+            row = {
+                "id": artifact_id,
+                "sha256": hashlib.sha256(response.body).hexdigest(),
+                "bytes": len(response.body),
+                "evidence_class": "advisory",
+                "observed_at": self._now(),
+            }
+            session["artifacts"] = [entry for entry in session.get("artifacts", [])
+                                    if entry.get("id") != artifact_id] + [row]
+            session["updated_at"] = self._now()
+            write_session(self.base, self.name, dispatch_id, session, lock_held=True)
+            return response.body, row
 
     # -- usage ----------------------------------------------------------------------------
 
@@ -486,44 +553,93 @@ class CursorCloudAdapter:
         vendor payload: an unreconciled metered run must not be able to report itself as
         included usage (plan Phase 3 gate).
         """
-        assert_not_paused(self.base, "a Cursor Cloud usage query")
-        session = read_session(self.base, self.name, dispatch_id)
-        payload = self._call("GET", f"/v0/agents/{session['run_id']}/usage")
-        tokens = payload.get("usage") if isinstance(payload.get("usage"), dict) else payload
-        counts: dict[str, int] = {}
-        for field in ("input_tokens", "output_tokens", "cache_read_tokens", "total_tokens"):
-            value = tokens.get(field)
-            if value is None:
-                continue
-            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        with outbound_admission(self.base, self.name, "a Cursor Cloud usage query"):
+            session = read_session(self.base, self.name, dispatch_id, lock_held=True)
+            payload = self._call("GET", f"/v0/agents/{session['run_id']}/usage")
+            tokens = payload.get("usage") if isinstance(payload.get("usage"), dict) else payload
+            counts: dict[str, int] = {}
+            for field in ("input_tokens", "output_tokens", "cache_read_tokens", "total_tokens"):
+                value = tokens.get(field)
+                if value is None:
+                    continue
+                if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                    raise RemoteError("malformed-response",
+                                      f"usage.{field} is not a non-negative integer")
+                counts[field] = value
+            # These values were captured from the validated assignment and selected manifest at
+            # admission. Provider response fields such as ``billing`` and ``included`` are not
+            # authorization data and are intentionally ignored.
+            basis = session.get("billing_basis")
+            on_demand = session.get("on_demand")
+            provider = session.get("provider")
+            if basis not in ("included", "metered", "local") or not isinstance(on_demand, bool):
                 raise RemoteError("malformed-response",
-                                  f"usage.{field} is not a non-negative integer")
-            counts[field] = value
-        basis = self.manifest["billing_basis"]
-        spend_state = {"included": "included", "local": "local"}.get(
-            basis, "metered-unreconciled")
-        return {
-            "schema_version": SCHEMA_VERSION,
-            "kind": "cursor-cloud-usage",
-            "backend": self.name,
-            "dispatch_id": dispatch_id,
-            "run_id": session["run_id"],
-            "assignment_digest": session["assignment_digest"],
-            "provider": "cursor",
-            "capacity_pool": self.manifest["capacity_pool"],
-            "host_id": self.manifest["host_id"],
-            "billing_basis": basis,
-            "on_demand": False,
-            "spend_state": spend_state,
-            "tokens": counts,
-            "evidence_source": EVIDENCE_SOURCE,
-            "observed_at": self._now(),
-        }
+                                  "session lacks authorized billing attribution")
+            if not isinstance(provider, str) or not provider:
+                raise RemoteError("malformed-response", "session lacks authorized provider")
+            spend_state = ("included" if basis == "included" and not on_demand
+                           else "local" if basis == "local" and not on_demand
+                           else "metered-unreconciled")
+            record = {
+                "schema_version": SCHEMA_VERSION,
+                "kind": "cursor-cloud-usage",
+                "backend": self.name,
+                "dispatch_id": dispatch_id,
+                "run_id": session["run_id"],
+                "assignment_digest": session["assignment_digest"],
+                "provider": provider,
+                "capacity_pool": self.manifest["capacity_pool"],
+                "host_id": self.manifest["host_id"],
+                "billing_basis": basis,
+                "on_demand": on_demand,
+                "spend_state": spend_state,
+                "tokens": counts,
+                "observed_at": self._now(),
+            }
+            write_usage(self.base, self.name, dispatch_id, record, lock_held=True)
+            return record
 
     # -- returned ref / commit reconciliation ----------------------------------------------
 
+    @staticmethod
+    def _authorized_scope(session: dict,
+                          requested: list[str] | list[dict] | None) -> dict[str, dict]:
+        authoritative = session.get("authorized_repositories")
+        if not isinstance(authoritative, list) or not authoritative:
+            raise RemoteError("malformed-response",
+                              "session lacks the immutable authorized repository scope")
+        by_repo = {}
+        for item in authoritative:
+            if not isinstance(item, dict) or set(item) != {
+                    "repository", "source_branch", "source_sha"}:
+                raise RemoteError("malformed-response", "session repository scope is malformed")
+            by_repo[item["repository"]] = item
+        if requested is None:
+            return by_repo
+        selected: dict[str, dict] = {}
+        for item in requested:
+            if isinstance(item, str):
+                repository = item
+                expected = by_repo.get(repository)
+            elif isinstance(item, dict):
+                repository = item.get("repository")
+                expected = by_repo.get(repository)
+                if expected is None or item != expected:
+                    expected = None
+            else:
+                expected = None
+                repository = item
+            if expected is None:
+                raise RemoteError("unauthorized-result",
+                                  f"requested repository {repository!r} is outside the "
+                                  "immutable assignment scope or lacks its pinned source")
+            selected[repository] = expected
+        if not selected:
+            raise RemoteError("unauthorized-result", "authorized repository selection is empty")
+        return selected
+
     def reconciliation_input(self, dispatch_id: str, vendor_result: dict,
-                             authorized_repositories: list[str] | None = None) -> dict:
+                             authorized_repositories: list[str] | list[dict] | None = None) -> dict:
         """Turn a vendor result into the INPUT to independent verification.
 
         Every returned branch and commit is recorded per repository, because a run that
@@ -536,7 +652,6 @@ class CursorCloudAdapter:
         """
         session = read_session(self.base, self.name, dispatch_id)
         publication = self.manifest["publication"]
-        authorized = set(authorized_repositories or [session["source_repository"]])
         if not isinstance(vendor_result, dict):
             raise RemoteError("malformed-response", "vendor result must be a JSON object")
 
@@ -556,32 +671,56 @@ class CursorCloudAdapter:
             raise RemoteError("malformed-response",
                               "vendor result repositories must be a nonempty list")
 
+        authorized = self._authorized_scope(session, authorized_repositories)
         rows: list[dict] = []
+        seen_repositories: set[str] = set()
         for entry in entries:
             if not isinstance(entry, dict):
                 raise RemoteError("malformed-response", "repository result is not an object")
             repository = entry.get("repository")
             branch = entry.get("branch")
             commit = entry.get("commit")
-            if not isinstance(repository, str) or repository not in authorized:
+            if not isinstance(repository, str):
+                raise RemoteError("malformed-response", "returned repository is not a string")
+            try:
+                validate_repository_url(repository, "returned repository")
+            except RemoteError as exc:
+                raise RemoteError("unauthorized-result",
+                                  "vendor returned a repository outside the URL contract") from exc
+            if repository not in authorized:
                 raise RemoteError("unauthorized-result",
                                   f"vendor returned a result for repository {repository!r}, "
                                   "which this assignment did not authorise")
             if not isinstance(commit, str) or not SHA_RE.fullmatch(commit):
                 raise RemoteError("malformed-response",
                                   f"returned commit for {repository} is not a 40-hex sha")
-            if not isinstance(branch, str) or not branch_is_allowed(branch, publication):
+            if not isinstance(branch, str):
+                raise RemoteError("malformed-response",
+                                  f"returned branch for {repository} is not a string")
+            try:
+                valid_branch = branch_is_allowed(branch, publication)
+            except RemoteError as exc:
+                raise RemoteError("unauthorized-result",
+                                  f"vendor returned an invalid branch for {repository}; "
+                                  "the result is outside the assignment confinement") from exc
+            if not valid_branch:
                 raise RemoteError("unauthorized-result",
                                   f"vendor returned branch {branch!r} for {repository}: it is "
                                   "the default or integration branch, or does not match "
                                   "publication.allowed_result_branch_patterns")
-            if commit == session["source_sha"]:
+            if repository in seen_repositories:
+                raise RemoteError("unauthorized-result",
+                                  f"vendor returned duplicate results for {repository}")
+            seen_repositories.add(repository)
+            pinned = authorized[repository]
+            if commit == pinned["source_sha"]:
                 raise RemoteError("unauthorized-result",
                                   f"returned commit for {repository} equals source_sha; the "
                                   "run produced no candidate to verify")
             rows.append({
                 "repository": repository,
-                "source_sha": session["source_sha"],
+                "source_branch": pinned["source_branch"],
+                "source_sha": pinned["source_sha"],
                 "result_branch": branch,
                 "result_commit": commit,
                 "verification_state": VERIFICATION_STATE,
@@ -639,6 +778,7 @@ class CursorCloudAdapter:
             "active_sessions": [row["dispatch_id"] for row in active],
             "reconciled": [],
             "unreconciled": [],
+            "ambiguous_create_attempts": [],
             "observed_at": self._now(),
         }
         if paused or not query_provider:
@@ -652,16 +792,36 @@ class CursorCloudAdapter:
                 # An attempt whose outcome cannot be established stays a question. It is never
                 # reopened for re-sending; a human closes it.
                 reconcile_attempt(self.base, self.name, row["attempt_id"], observed="unknown",
-                                  observer=f"{PROG}:recover", detail={"error": exc.code},
+                                  observer=f"{PROG}:recover", detail={
+                                      "error": exc.code,
+                                      "ambiguity": "create-outcome-unknown"
+                                      if row.get("operation") == "create" else "provider-state-unknown",
+                                  },
                                   clock=self.clock)
                 report["unreconciled"].append(row["attempt_id"])
+                if row.get("operation") == "create":
+                    report["ambiguous_create_attempts"].append(row["attempt_id"])
                 continue
-            observed = "landed" if session.get("run_id") else "not-landed"
+            if row.get("operation") == "cancel":
+                observed = "landed" if session.get("state") == "cancelled" else "unknown"
+            else:
+                observed = "landed" if session.get("run_id") else "unknown"
             reconcile_attempt(self.base, self.name, row["attempt_id"], observed=observed,
                               observer=f"{PROG}:recover",
-                              detail={"vendor_state": session.get("vendor_state", "")},
+                              detail={
+                                  "vendor_state": session.get("vendor_state", ""),
+                                  "ambiguity": "create-outcome-unknown"
+                                  if observed == "unknown" and row.get("operation") == "create"
+                                  else "provider-state-nonterminal"
+                                  if observed == "unknown" else "",
+                              },
                               clock=self.clock)
-            report["reconciled"].append(row["attempt_id"])
+            if observed == "unknown":
+                report["unreconciled"].append(row["attempt_id"])
+                if row.get("operation") == "create":
+                    report["ambiguous_create_attempts"].append(row["attempt_id"])
+            else:
+                report["reconciled"].append(row["attempt_id"])
         return report
 
 

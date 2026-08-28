@@ -195,6 +195,13 @@ check(raises("manifest-invalid", rb.validate_manifest,
              mutated(CURSOR_MANIFEST, endpoint="http://api.cursor.com"), "cursor-cloud"),
       "a plain http endpoint is refused")
 check(raises("manifest-invalid", rb.validate_manifest,
+             mutated(CURSOR_MANIFEST, endpoint=None, endpoint_ref="secret:CURSOR_ENDPOINT"),
+                    "cursor-cloud"),
+      "cursor-cloud requires its public endpoint form")
+check(raises("manifest-invalid", rb.validate_manifest,
+             mutated(GROK_MANIFEST, endpoint="https://api.cursor.com", endpoint_ref=None), "grok-bot"),
+      "grok-routine requires its bearer-grade endpoint reference form")
+check(raises("manifest-invalid", rb.validate_manifest,
              mutated(CURSOR_MANIFEST, endpoint="https://u:p@api.cursor.com"), "cursor-cloud"),
       "an endpoint carrying userinfo is refused")
 
@@ -362,6 +369,13 @@ for status, code in ((401, "auth-failed"), (403, "auth-failed"), (404, "not-foun
                      (502, "provider-error"), (400, "request-invalid")):
     check(raises(code, rb.classify_status, status, b"body"),
           f"HTTP {status} classifies as {code}")
+try:
+    rb.classify_status(500, b"ghp_" + b"a" * 36)
+    status_message = ""
+except RemoteError as exc:
+    status_message = str(exc)
+check("ghp_" not in status_message and "body" not in status_message,
+      "HTTP response bodies never enter durable error text")
 check(RemoteError("quota-exhausted", "x").exit_code == 75,
       "quota exhaustion DEFERS (75); it is never an argument for spending")
 check(RemoteError("rate-limited", "x").exit_code == 10,
@@ -493,6 +507,9 @@ check(raises("redaction-violation", rb.write_session, session_base, "grok-bot",
 check(raises("request-invalid", rb.write_session, session_base, "grok-bot", "bad id!",
              {"a": 1}),
       "a malformed dispatch id cannot name a session file")
+check(raises("request-invalid", rb.write_session, session_base, "../escape", "dispatch-0002",
+             {"a": 1}),
+      "a backend traversal cannot escape runtime storage")
 
 # --- the account-shared lease ------------------------------------------------------------------------------
 

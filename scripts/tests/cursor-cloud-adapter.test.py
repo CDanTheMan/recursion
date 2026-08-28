@@ -291,14 +291,23 @@ base, transport, adapter = fresh()
 transport.route("POST", "/v0/agents", status=429, payload={"error": "slow down"})
 check(raises("rate-limited", adapter.create_run, assignment(), "x", DISPATCH),
       "an API rate limit is typed and retryable")
+check(rb.read_attempts(base, "cursor-cloud")[-1]["state"] == "open",
+      "a rate-limited create remains open because the provider may have accepted it")
+
+base, transport, adapter = fresh()
+transport.route("POST", "/v0/agents", status=503, payload={"error": "temporarily unavailable"})
+check(raises("provider-unavailable", adapter.create_run, assignment(), "x", DISPATCH),
+      "an unavailable provider is typed")
+check(rb.read_attempts(base, "cursor-cloud")[-1]["state"] == "open",
+      "an HTTP 503 after create remains open despite retryable exit code 75")
 
 base, transport, adapter = fresh()
 transport.route("POST", "/v0/agents",
                 error=RemoteError("transport-error", "connection reset"))
 check(raises("transport-error", adapter.create_run, assignment(), "x", DISPATCH),
       "host loss is a typed retryable transport error")
-check(rb.read_attempts(base, "cursor-cloud")[-1]["state"] == "failed",
-      "a transport failure closes the attempt rather than leaving it open")
+check(rb.read_attempts(base, "cursor-cloud")[-1]["state"] == "open",
+      "an ambiguous transport failure leaves the create open for reconciliation")
 
 base, transport, adapter = fresh()
 transport.route("POST", "/v0/agents", error=RemoteError("transport-timeout", "timed out"))
@@ -371,6 +380,16 @@ adapter.cancel(DISPATCH)
 check(transport.posts("/v0/agents/agent-1/cancel") == 1,
       "a repeated cancel replays rather than issuing a second request")
 
+for label, response in (("missing status", {}), ("RUNNING status", {"status": "RUNNING"}),
+                        ("CREATED status", {"status": "CREATING"})):
+    base, transport, adapter = with_session()
+    transport.route("POST", "/v0/agents/agent-1/cancel", payload=response)
+    expected = "malformed-response" if not response else "unreconciled-attempt"
+    check(raises(expected, adapter.cancel, DISPATCH),
+          f"a cancel with {label} does not report success")
+    check(bool(rb.open_attempts(base, "cursor-cloud")),
+          f"a cancel with {label} leaves its attempt open for reconciliation")
+
 # --- artifacts -----------------------------------------------------------------------------------------------
 
 base, transport, adapter = fresh()
@@ -405,6 +424,8 @@ check(usage["capacity_pool"] == "cursor-cloud-pool" and usage["host_id"] == "cur
 check(usage["tokens"]["total_tokens"] == 30 and usage["spend_state"] == "included",
       "an included pool reports included spend")
 check(usage["on_demand"] is False, "usage never reports on-demand spend")
+check(rb.read_usage(base, "cursor-cloud", DISPATCH)["spend_state"] == "included",
+      "usage is durably persisted under the remote backend state")
 
 base, transport, adapter = fresh(billing_basis="metered")
 transport.route("POST", "/v0/agents", payload={"id": "agent-1", "status": "RUNNING"})
@@ -415,6 +436,16 @@ transport.route("GET", "/v0/agents/agent-1/usage",
 metered_usage = adapter.get_usage(DISPATCH)
 check(metered_usage["spend_state"] == "metered-unreconciled",
       "a METERED run cannot report itself as included usage, whatever the vendor payload says")
+
+base, transport, adapter = fresh(on_demand=True)
+transport.route("POST", "/v0/agents", payload={"id": "agent-1", "status": "RUNNING"})
+adapter.create_run(assignment(), "x", DISPATCH)
+transport.route("GET", "/v0/agents/agent-1/usage",
+                payload={"usage": {"total_tokens": 2}, "billing": "included"})
+on_demand_usage = adapter.get_usage(DISPATCH)
+check(on_demand_usage["on_demand"] is True
+      and on_demand_usage["spend_state"] == "metered-unreconciled",
+      "on-demand attribution comes from the authorized manifest, not provider billing claims")
 
 base, transport, adapter = fresh()
 transport.route("POST", "/v0/agents", payload={"id": "agent-1", "status": "RUNNING"})
@@ -483,14 +514,20 @@ check(raises("unauthorized-result", adapter.reconciliation_input, DISPATCH,
                   "branch": "cursor/x", "commit": RESULT_COMMIT}]}),
       "a result for a repository the assignment did not authorise is unauthorized")
 
-base, transport, adapter = with_session()
+multi_assignment = assignment(authorized_repositories=[
+    {"repository": "https://github.com/NotSkittlz/golden-stallion",
+     "source_branch": "main", "source_sha": "1" * 40},
+])
+base, transport, adapter = fresh()
+transport.route("POST", "/v0/agents", payload={"id": "agent-1", "status": "RUNNING"})
+adapter.create_run(multi_assignment, "x", DISPATCH)
 multi = adapter.reconciliation_input(
     DISPATCH,
     {"status": "FINISHED", "repositories": [
         {"repository": "https://github.com/NotSkittlz/chiron",
          "branch": "cursor/one", "commit": RESULT_COMMIT},
         {"repository": "https://github.com/NotSkittlz/golden-stallion",
-         "branch": "cursor/two", "commit": "1" * 40}]},
+         "branch": "cursor/two", "commit": "2" * 40}]},
     authorized_repositories=["https://github.com/NotSkittlz/chiron",
                              "https://github.com/NotSkittlz/golden-stallion"])
 check(len(multi["repositories"]) == 2
@@ -508,6 +545,22 @@ base, transport, adapter = with_session()
 check(raises("malformed-response", adapter.reconciliation_input, DISPATCH,
              {"status": "FINISHED"}),
       "a vendor result with neither a repositories list nor a target block is malformed")
+
+base, transport, adapter = with_session()
+check(raises("unauthorized-result", adapter.reconciliation_input, DISPATCH,
+             {"status": "FINISHED", "repositories": [
+                 {"repository": "https://github.com/NotSkittlz/chiron",
+                  "branch": "../cursor/x", "commit": RESULT_COMMIT}]},
+             authorized_repositories=["https://github.com/NotSkittlz/chiron"]),
+      "a returned branch is validated before fnmatch and traversal-shaped refs are refused")
+
+base, transport, adapter = with_session()
+check(raises("unauthorized-result", adapter.reconciliation_input, DISPATCH,
+             {"status": "FINISHED", "repositories": [
+                 {"repository": "https://github.com/NotSkittlz/golden-stallion",
+                  "branch": "cursor/x", "commit": RESULT_COMMIT}]},
+             authorized_repositories=["https://github.com/NotSkittlz/golden-stallion"]),
+      "a caller cannot widen the immutable authorized repository scope")
 
 # --- restart recovery -----------------------------------------------------------------------------------------------------
 
@@ -529,7 +582,7 @@ adapter.create_run(assignment(), "x", DISPATCH)
 crashed = rb.begin_attempt(base, "cursor-cloud", dispatch_id=DISPATCH, operation="cancel",
                            assignment_digest="d" * 64, request_digest="r" * 64,
                            max_attempts=3)
-transport.route("GET", "/v0/agents/agent-1", payload={"status": "FINISHED"})
+transport.route("GET", "/v0/agents/agent-1", payload={"status": "CANCELLED"})
 report = adapter.recover()
 check(report["reconciled"] == [crashed.attempt_id],
       "with the provider reachable, an open attempt is reconciled against observed state")
@@ -543,6 +596,8 @@ orphan = rb.begin_attempt(base, "cursor-cloud", dispatch_id="dispatch-orph",
 report = adapter.recover()
 check(report["unreconciled"] == [orphan.attempt_id],
       "an attempt whose outcome cannot be established stays a question for a human")
+check(report["ambiguous_create_attempts"] == [orphan.attempt_id],
+      "an ambiguous create crash is explicitly classified and never blindly recreated")
 check(not transport.calls,
       "recovering an attempt with no local session queries nothing and invents nothing")
 

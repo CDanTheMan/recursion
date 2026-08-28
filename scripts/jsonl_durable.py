@@ -546,7 +546,10 @@ def _rows_to_lines(rows: Iterator[tuple]) -> tuple[VerifiedLine, ...]:
 
 def _verified_descriptor(path: Path, max_record_bytes: int) \
         -> tuple[int, sqlite3.Connection, bool]:
-    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags)
     try:
         _lock_descriptor(descriptor)
         size = os.fstat(descriptor).st_size
@@ -762,9 +765,10 @@ def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RE
         raise JsonlDurabilityError(f"new JSONL record exceeds {max_record_bytes} bytes: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
     existed = path.exists()
-    descriptor = os.open(
-        path, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0), 0o600
-    )
+    flags = os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags, 0o600)
     evidence: dict | None = None
     connection: sqlite3.Connection | None = None
     try:

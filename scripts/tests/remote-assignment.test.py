@@ -232,7 +232,10 @@ try:
     ref_exempt = True
 except ra.RemoteError:
     ref_exempt = False
-check(ref_exempt, "a *_ref field is exempt from the key-name screen -- it holds a reference")
+check(ref_exempt, "an explicitly permitted credential ref field holds a reference")
+check(raises("redaction-violation", ra.screen_for_secret_material,
+             {"arbitrary_ref": "secret:SOME_BACKEND_KEY"}, "payload"),
+      "an arbitrary *_ref field is not an exemption for a secret reference")
 check(raises("redaction-violation", ra.screen_for_secret_material,
              {"note": "use secret:MY_KEY here"}, "payload"),
       "a secret reference embedded in free text is refused")
