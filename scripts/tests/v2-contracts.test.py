@@ -290,6 +290,45 @@ class V2ContractsTest(unittest.TestCase):
         with self.assertRaisesRegex(ContractError, "ambiguous"):
             resolve_assignment(task, collision)
 
+    def test_malformed_containers_are_typed_contract_errors(self):
+        engine = copy.deepcopy(base_records()["engine"][0])
+        for value in (None, False, 0, [], {}):
+            bad = copy.deepcopy(engine); bad["runtime_layout"]["kind"] = value
+            with self.assertRaises(ContractError):
+                validate_record(bad)
+        routing = copy.deepcopy(base_records()["routing_policy"][0])
+        for value in (None, False, 0, [], {}):
+            bad = copy.deepcopy(routing); bad["policy"] = value
+            with self.assertRaises(ContractError):
+                validate_record(bad)
+
+        # Every top-level field and JSON container shape must fail closed with
+        # the typed contract exception, never leaking TypeError/KeyError/etc.
+        malformed = (None, False, 0, [], {})
+        for kind, records in base_records().items():
+            for record in records:
+                for field in record:
+                    for value in malformed:
+                        bad = copy.deepcopy(record); bad[field] = value
+                        try:
+                            validate_record(bad)
+                        except ContractError:
+                            pass
+                        except Exception as exc:  # pragma: no cover - diagnostic guard
+                            self.fail(f"{kind}.{field}={value!r} leaked {type(exc).__name__}: {exc}")
+
+    def test_engine_and_provider_disabled_are_valid_but_unavailable(self):
+        cfg = base_records()
+        engine = copy.deepcopy(cfg["engine"][0]); engine["enabled"] = False
+        provider = copy.deepcopy(cfg["provider"][0]); provider["enabled"] = False
+        validate_record(engine); validate_record(provider)
+        task = {"task_id": "disabled", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "execution_profile": "implementation", "requirements": {"capabilities": ["workspace-edit"]}}
+        for kind, replacement in (("engine", engine), ("provider", provider)):
+            changed = copy.deepcopy(cfg); changed[kind] = [replacement]
+            result = resolve_assignment(task, changed)
+            self.assertEqual(result.status, "deferred", kind)
+            self.assertTrue(any(f"{kind}-unavailable" in item["rejections"] for item in result.trace), kind)
+
     def test_weighted_rotation_survives_candidate_order(self):
         cfg = base_records()
         extra = copy.deepcopy(cfg["capacity_pool"][0]); extra["id"] = "pool-b"; cfg["capacity_pool"].append(extra)

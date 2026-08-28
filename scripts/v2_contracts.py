@@ -238,6 +238,7 @@ def validate_record(record: Any) -> dict[str, Any]:
         o = _common(record, kind, {"description", "runtime_layout", "argv_template", "structured_output", "roles", "capabilities", "health_probe", "cancellation", "resume", "usage_receipt", "network_capabilities", "compatible_sandbox_profiles", "compatible_host_capabilities", "enabled"}, {"description", "runtime_layout", "argv_template", "structured_output", "roles", "capabilities", "cancellation", "resume", "usage_receipt", "network_capabilities", "compatible_sandbox_profiles", "compatible_host_capabilities"})
         _str(o["description"], "engine.description")
         r = _obj(o["runtime_layout"], "engine.runtime_layout", {"kind", "executable", "runtime_paths", "read_only_mounts"}, {"kind", "executable", "runtime_paths", "read_only_mounts"})
+        _str(r["kind"], "engine.runtime_layout.kind")
         if r["kind"] not in {"bare", "runtime-tree"}: raise ContractError("engine.runtime_layout.kind is invalid")
         _safe_relative_path(r["executable"], "engine.runtime_layout.executable")
         _workspace_paths(r["runtime_paths"], "engine.runtime_layout.runtime_paths")
@@ -254,14 +255,16 @@ def validate_record(record: Any) -> dict[str, Any]:
             _bool(o[name]["supported"], f"engine.{name}.supported"); _str(o[name]["protocol"], f"engine.{name}.protocol")
         if "health_probe" in o and o["health_probe"] is not None:
             p = _obj(o["health_probe"], "engine.health_probe", {"type", "endpoint", "timeout_s"}, {"type", "endpoint", "timeout_s"})
+            _str(p["type"], "engine.health_probe.type")
             if p["type"] not in {"none", "http", "command"}: raise ContractError("engine.health_probe.type is invalid")
             _str(p["endpoint"], "engine.health_probe.endpoint"); _int(p["timeout_s"], "engine.health_probe.timeout_s", 1)
         if "enabled" in o: _bool(o["enabled"], "engine.enabled")
     elif kind == "provider":
-        o = _common(record, kind, {"endpoints", "egress_profile", "receipt_semantics", "error_classes", "data_classification"}, {"endpoints", "egress_profile", "receipt_semantics", "error_classes", "data_classification"})
+        o = _common(record, kind, {"endpoints", "egress_profile", "receipt_semantics", "error_classes", "data_classification", "enabled"}, {"endpoints", "egress_profile", "receipt_semantics", "error_classes", "data_classification"})
         _strings(o["endpoints"], "provider.endpoints", nonempty=True)
         for endpoint in o["endpoints"]: _str(endpoint, "provider.endpoint", ENDPOINT)
         _str(o["egress_profile"], "provider.egress_profile"); _str(o["receipt_semantics"], "provider.receipt_semantics"); _strings(o["error_classes"], "provider.error_classes", nonempty=True); _str(o["data_classification"], "provider.data_classification")
+        if "enabled" in o: _bool(o["enabled"], "provider.enabled")
     elif kind == "capacity_pool":
         o = _common(record, kind, {"account_id", "billing_basis", "credential_ref", "roles", "projects", "models", "hosts", "quota", "spend_ceiling_usd", "on_demand", "initial_concurrency", "cooldown_s", "fallback_policy", "status"}, {"account_id", "billing_basis", "credential_ref", "roles", "quota", "on_demand", "initial_concurrency", "fallback_policy", "status"})
         _str(o["account_id"], "capacity_pool.account_id"); _str(o["billing_basis"], "capacity_pool.billing_basis")
@@ -311,6 +314,7 @@ def validate_record(record: Any) -> dict[str, Any]:
         _strings(o["network_profiles"], "execution_profile.network_profiles", nonempty=True)
     elif kind == "routing_policy":
         o = _common(record, kind, {"policy", "role", "candidate_order", "allow_metered", "fallback_policy", "weights"}, {"policy", "role", "candidate_order", "allow_metered", "fallback_policy"})
+        _str(o["policy"], "routing_policy.policy")
         if o["policy"] not in POLICIES: raise ContractError("routing_policy.policy is unknown")
         _str(o["role"], "routing_policy.role")
         if o["role"] not in ROLES: raise ContractError("routing_policy.role is unknown role")
@@ -382,6 +386,7 @@ def validate_registry(records: Any, expected_kind: str | None = None) -> list[di
         _obj(records, "registry", {"schema_version", "registry", "entries"}, {"schema_version", "registry", "entries"})
         if records["schema_version"] != V2_VERSION:
             raise ContractError("registry schema_version is unsupported", "unsupported-version")
+        _str(records["registry"], "registry.registry")
         if records["registry"] not in REGISTRY_KINDS:
             raise ContractError("registry kind is unknown", "unknown-kind")
         wrapper_kind = records["registry"]
@@ -585,7 +590,7 @@ def resolve_assignment(task: Mapping[str, Any], registries: Mapping[str, list[di
             for field, value in (("engine_ids", e["id"]), ("provider_ids", p["id"]), ("capacity_pool_ids", pool["id"]), ("model_ids", m["id"]), ("host_ids", h["id"]), ("sandbox_profile_ids", s["id"])):
                 if value not in profile.get(field, []): reasons.append(f"profile-{field}-not-allowed")
             if not _available(e) or e.get("enabled", True) is False: reasons.append("engine-unavailable")
-            if not _available(p): reasons.append("provider-unavailable")
+            if not _available(p) or p.get("enabled", True) is False: reasons.append("provider-unavailable")
             if not _available(pool): reasons.append("pool-unavailable")
             if not _available(m): reasons.append("model-unavailable")
             if not _available(h): reasons.append("host-unavailable")
