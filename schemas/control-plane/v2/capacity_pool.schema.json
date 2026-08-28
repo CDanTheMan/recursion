@@ -1,1 +1,1 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://recursion.local/schemas/control-plane/v2/capacity_pool.schema.json","$ref":"schema.json#/$defs/capacity_pool"}
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://recursion.local/schemas/control-plane/v2/capacity_pool.schema.json","allOf":[{"$ref":"schema.json#/$defs/capacity_pool"},{"$ref":"schema.json#/$defs/secret_free"}]}

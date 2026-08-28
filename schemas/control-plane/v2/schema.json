@@ -6,7 +6,7 @@
   "oneOf": [
     { "$ref": "#/$defs/engine" }, { "$ref": "#/$defs/provider" },
     { "$ref": "#/$defs/capacity_pool" }, { "$ref": "#/$defs/model" },
-    { "$ref": "#/$defs/host" }, { "$ref": "#/$defs/sandbox_profile" },
+    { "$ref": "#/$defs/host" }, { "$ref": "#/$defs/sandbox_profile" }, { "$ref": "#/$defs/execution_profile" },
     { "$ref": "#/$defs/routing_policy" }, { "$ref": "#/$defs/project" },
     { "$ref": "#/$defs/assignment" }, { "$ref": "#/$defs/registry" }
   ],
@@ -22,18 +22,22 @@
     ,{ "if": { "required": ["registry"], "properties": { "registry": { "const": "model" } } }, "then": { "properties": { "entries": { "items": { "$ref": "#/$defs/model" } } } } }
     ,{ "if": { "required": ["registry"], "properties": { "registry": { "const": "host" } } }, "then": { "properties": { "entries": { "items": { "$ref": "#/$defs/host" } } } } }
     ,{ "if": { "required": ["registry"], "properties": { "registry": { "const": "sandbox_profile" } } }, "then": { "properties": { "entries": { "items": { "$ref": "#/$defs/sandbox_profile" } } } } }
+    ,{ "if": { "required": ["registry"], "properties": { "registry": { "const": "execution_profile" } } }, "then": { "properties": { "entries": { "items": { "$ref": "#/$defs/execution_profile" } } } } }
     ,{ "if": { "required": ["registry"], "properties": { "registry": { "const": "routing_policy" } } }, "then": { "properties": { "entries": { "items": { "$ref": "#/$defs/routing_policy" } } } } }
     ,{ "if": { "required": ["registry"], "properties": { "registry": { "const": "project" } } }, "then": { "properties": { "entries": { "items": { "$ref": "#/$defs/project" } } } } }
     ,{ "if": { "required": ["registry"], "properties": { "registry": { "const": "assignment" } } }, "then": { "properties": { "entries": { "items": { "$ref": "#/$defs/assignment" } } } } }
+    ,{ "$ref": "#/$defs/secret_free" }
   ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "strings": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
     "role": { "enum": ["implementer", "verifier", "planner", "project-lead", "reviewer", "browser-qa"] },
+    "execution_profile": { "type": "object", "required": ["schema_version", "kind", "id", "roles", "engine_ids", "provider_ids", "capacity_pool_ids", "model_ids", "host_ids", "sandbox_profile_ids", "network_profiles"], "properties": { "schema_version": { "const": 2 }, "kind": { "const": "execution_profile" }, "id": { "$ref": "#/$defs/id" }, "roles": { "$ref": "#/$defs/roles" }, "engine_ids": { "$ref": "#/$defs/refs" }, "provider_ids": { "$ref": "#/$defs/refs" }, "capacity_pool_ids": { "$ref": "#/$defs/refs" }, "model_ids": { "$ref": "#/$defs/refs" }, "host_ids": { "$ref": "#/$defs/refs" }, "sandbox_profile_ids": { "$ref": "#/$defs/refs" }, "network_profiles": { "$ref": "#/$defs/strings" } }, "additionalProperties": false },
     "roles": { "type": "array", "items": { "$ref": "#/$defs/role" }, "minItems": 1, "uniqueItems": true },
     "refs": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
     "routing_order": { "enum": ["billing_basis", "cost_class", "pool_id", "provider_id", "capacity_pool_id", "model_id", "engine_id", "host_id", "sandbox_profile_id", "speed_class", "reasoning_class", "manual_pin"] },
+    "secret_free": { "anyOf": [ { "type": "string", "anyOf": [ { "pattern": "^secret:" }, { "not": { "pattern": "(?:sk-[A-Za-z0-9_-]{12,}|ghp_[A-Za-z0-9]{12,}|github_pat_[A-Za-z0-9_]{12,}|xox[baprs]-[A-Za-z0-9-]{12,}|AKIA[0-9A-Z]{16}|npm_[A-Za-z0-9]{12,}|AIza[0-9A-Za-z_-]{20,}|Bearer\\s+\\S+|(?:api[_-]?key|password|secret)\\s*[:=]|-----BEGIN [A-Z ]+ KEY-----)" } } ] }, { "type": "array", "items": { "$ref": "#/$defs/secret_free" } }, { "type": "object", "additionalProperties": { "$ref": "#/$defs/secret_free" } }, { "type": ["number", "boolean", "null"] } ] },
     "base": {
       "type": "object", "required": ["schema_version", "kind", "id"],
       "properties": { "schema_version": { "const": 2 }, "kind": { "type": "string" }, "id": { "$ref": "#/$defs/id" } },
@@ -43,8 +47,8 @@
       "type": "object", "required": ["schema_version", "registry", "entries"],
       "properties": {
         "schema_version": { "const": 2 },
-        "registry": { "enum": ["engine", "provider", "capacity_pool", "model", "host", "sandbox_profile", "routing_policy", "project", "assignment"] },
-        "entries": { "type": "array", "minItems": 1, "items": { "oneOf": [{ "$ref": "#/$defs/engine" }, { "$ref": "#/$defs/provider" }, { "$ref": "#/$defs/capacity_pool" }, { "$ref": "#/$defs/model" }, { "$ref": "#/$defs/host" }, { "$ref": "#/$defs/sandbox_profile" }, { "$ref": "#/$defs/routing_policy" }, { "$ref": "#/$defs/project" }, { "$ref": "#/$defs/assignment" }] } }
+        "registry": { "enum": ["engine", "provider", "capacity_pool", "model", "host", "sandbox_profile", "execution_profile", "routing_policy", "project", "assignment"] },
+        "entries": { "type": "array", "minItems": 1, "items": { "oneOf": [{ "$ref": "#/$defs/engine" }, { "$ref": "#/$defs/provider" }, { "$ref": "#/$defs/capacity_pool" }, { "$ref": "#/$defs/model" }, { "$ref": "#/$defs/host" }, { "$ref": "#/$defs/sandbox_profile" }, { "$ref": "#/$defs/execution_profile" }, { "$ref": "#/$defs/routing_policy" }, { "$ref": "#/$defs/project" }, { "$ref": "#/$defs/assignment" }] } }
       }, "additionalProperties": false
     },
     "protocol": {
@@ -70,7 +74,7 @@
     "model_parameters": {
       "type": "object", "properties": { "effort": { "type": "string", "minLength": 1 }, "context_tokens": { "type": "integer", "minimum": 1 }, "temperature": { "type": "number", "minimum": 0, "maximum": 2 }, "structured_output": { "type": "boolean" } }, "additionalProperties": false
     },
-    "relative_path": { "type": "string", "pattern": "^(?!\\s)(?!.*\\s$)(?![/\\\\]|[A-Za-z]:)(?!.*(?:^|[/\\\\])\\.{1,2}(?:[/\\\\]|$))[^/\\\\]+(?:[/\\\\][^/\\\\]+)*$" },
+    "relative_path": { "type": "string", "pattern": "^(?!.*\\u0000)(?!\\s)(?!.*\\s$)(?![/\\\\]|[A-Za-z]:)(?!.*(?:^|[/\\\\])\\.{1,2}(?:[/\\\\]|$))[^/\\\\]+(?:[/\\\\][^/\\\\]+)*$" },
     "endpoint": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
     "engine": {
       "type": "object", "required": ["schema_version", "kind", "id", "description", "runtime_layout", "argv_template", "structured_output", "roles", "capabilities", "cancellation", "resume", "usage_receipt", "network_capabilities", "compatible_sandbox_profiles", "compatible_host_capabilities"],

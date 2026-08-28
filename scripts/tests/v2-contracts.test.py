@@ -49,7 +49,7 @@ class V2ContractsTest(unittest.TestCase):
         task = {
             "task_id": "task-phase1", "project_id": "recursion", "source_repository": "/opt/recursion",
             "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64,
-            "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer",
+            "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "execution_profile": "implementation",
             "requirements": {"capabilities": ["workspace-edit"], "operating_system": "linux"},
             "created_at": "2026-08-28T00:00:00Z",
         }
@@ -66,7 +66,7 @@ class V2ContractsTest(unittest.TestCase):
 
     def test_manual_pin_is_strict_and_no_metered_fallback(self):
         cfg = base_records()
-        task = {"task_id": "pin", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "requirements": {"capabilities": ["workspace-edit"]}, "manual_pin": {"engine": "missing", "provider": "anthropic", "capacity_pool": "claude-subscription", "model": "claude-sonnet", "host": "gs-recursion", "sandbox_profile": "strict-linux"}}
+        task = {"task_id": "pin", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "execution_profile": "implementation", "requirements": {"capabilities": ["workspace-edit"]}, "manual_pin": {"engine": "missing", "provider": "anthropic", "capacity_pool": "claude-subscription", "model": "claude-sonnet", "host": "gs-recursion", "sandbox_profile": "strict-linux"}}
         result = resolve_assignment(task, cfg, policy="manual-pin")
         self.assertEqual(result.status, "deferred")
         self.assertTrue(any("manual-pin-mismatch" in x["rejections"] for x in result.trace))
@@ -78,6 +78,7 @@ class V2ContractsTest(unittest.TestCase):
             resolve_assignment(task, base_records())
         cfg = base_records()
         metered = copy.deepcopy(cfg["capacity_pool"][0]); metered["id"] = "metered-pool"; metered["billing_basis"] = "metered"; metered["on_demand"] = True; metered["fallback_policy"] = "approved"; cfg["capacity_pool"] = [metered]
+        cfg["execution_profile"][0]["capacity_pool_ids"] = ["metered-pool"]
         cfg["project"][0]["eligible_pools"] = []
         cfg["routing_policy"].append({"schema_version": 2, "kind": "routing_policy", "id": "approved-metered", "policy": "subscription-first", "role": "implementer", "candidate_order": ["billing_basis"], "allow_metered": True, "fallback_policy": "approved"})
         approved_task = dict(task); approved_task.pop("allow_metered")
@@ -87,7 +88,7 @@ class V2ContractsTest(unittest.TestCase):
     def test_component_capabilities_and_provider_egress_are_not_unionable(self):
         cfg = base_records()
         cfg["engine"][0]["capabilities"] = ["terminal"]
-        task = {"task_id": "caps", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "requirements": {"capabilities": ["workspace-edit"]}}
+        task = {"task_id": "caps", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "execution_profile": "implementation", "requirements": {"capabilities": ["workspace-edit"]}}
         result = resolve_assignment(task, cfg)
         self.assertEqual(result.status, "deferred")
         self.assertTrue(any("missing-engine-capabilities:workspace-edit" in x["rejections"] for x in result.trace))
@@ -128,7 +129,7 @@ class V2ContractsTest(unittest.TestCase):
         self.assertEqual(header["task_id"], "demo-task"); self.assertEqual(header["allowed_paths"], ["docs", "src"])
 
     def test_cli_is_dry_and_emits_trace(self):
-        task = {"task_id": "cli", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "requirements": {"capabilities": ["workspace-edit"]}}
+        task = {"task_id": "cli", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "execution_profile": "implementation", "requirements": {"capabilities": ["workspace-edit"]}}
         with tempfile.TemporaryDirectory() as tmp:
             task_file = Path(tmp) / "task.json"; task_file.write_text(json.dumps(task), encoding="utf-8")
             proc = subprocess.run([sys.executable, str(ROOT / "scripts" / "resolve-assignment.py"), "--task", str(task_file), "--config-dir", str(ROOT / "config" / "v2")], capture_output=True, text=True)
@@ -151,13 +152,13 @@ class V2ContractsTest(unittest.TestCase):
         with self.assertRaises(ContractError):
             bad = copy.deepcopy(cfg["model"][0]); bad["provider_ids"] = ["../provider"]; validate_record(bad)
         with self.assertRaisesRegex(ContractError, "unknown fields"):
-            task = {"task_id": "strict", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "requirements": {"capabilities": []}, "future": True}
+            task = {"task_id": "strict", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "execution_profile": "implementation", "requirements": {"capabilities": []}, "future": True}
             resolve_assignment(task, cfg)
         with self.assertRaisesRegex(ContractError, "unknown fields"):
-            task = {"task_id": "strict", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "requirements": {"future": True}}
+            task = {"task_id": "strict", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "execution_profile": "implementation", "requirements": {"future": True}}
             resolve_assignment(task, cfg)
         bad = copy.deepcopy(cfg["host"][0]); bad["operating_system"] = "windows"; cfg["host"] = [bad]
-        task = {"task_id": "os-check", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "requirements": {"capabilities": ["workspace-edit"]}}
+        task = {"task_id": "os-check", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "execution_profile": "implementation", "requirements": {"capabilities": ["workspace-edit"]}}
         self.assertEqual(resolve_assignment(task, cfg).status, "deferred")
         cfg = base_records(); task["requirements"]["network_profile"] = "other-egress"
         result = resolve_assignment(task, cfg); self.assertEqual(result.status, "deferred")
@@ -171,6 +172,49 @@ class V2ContractsTest(unittest.TestCase):
         duplicate = copy.deepcopy(cfg["routing_policy"][0]); duplicate["id"] = "another-cheapest"; cfg["routing_policy"].append(duplicate)
         with self.assertRaisesRegex(ContractError, "ambiguous"):
             resolve_assignment(task, cfg)
+
+    def test_third_review_scope_profile_and_parity_controls(self):
+        cfg = base_records()
+        task = {"task_id": "scope", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs/sub"], "role": "implementer", "execution_profile": "implementation", "requirements": {"capabilities": ["workspace-edit"]}}
+        with self.assertRaisesRegex(ContractError, "allowed_paths"):
+            resolve_assignment(dict(task, allowed_paths=["src"]), cfg)
+        with self.assertRaisesRegex(ContractError, "source_repository"):
+            resolve_assignment(dict(task, source_repository="/other"), cfg)
+        with self.assertRaisesRegex(ContractError, "execution_profile"):
+            resolve_assignment(dict(task, execution_profile="unknown-profile"), cfg)
+        cfg["provider"][0]["data_classification"] = "restricted"
+        data_task = copy.deepcopy(task); data_task["requirements"] = {"data_class": "approved-project-data"}
+        self.assertEqual(resolve_assignment(data_task, cfg).status, "deferred")
+        sandbox = copy.deepcopy(cfg["sandbox_profile"][0]); sandbox["controller_visibility"] = "controller"
+        with self.assertRaises(ContractError): validate_record(sandbox)
+        cfg = base_records(); cfg["sandbox_profile"][0]["trust_class"] = "isolated"
+        self.assertEqual(resolve_assignment(task, cfg).status, "deferred")
+        with self.assertRaises(ContractError):
+            bad_pool = copy.deepcopy(base_records()["capacity_pool"][0]); bad_pool["cooldown_s"] = -1; validate_record(bad_pool)
+        first = resolve_assignment(task, base_records()).assignment
+        changed = dict(task, source_sha="d" * 40)
+        second = resolve_assignment(changed, base_records()).assignment
+        self.assertNotEqual(first["id"], second["id"])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); (root / "unexpected.txt").write_text("x", encoding="utf-8")
+            with self.assertRaisesRegex(ContractError, "root file"):
+                load_config(root)
+
+    def test_weighted_rotation_survives_candidate_order(self):
+        cfg = base_records()
+        extra = copy.deepcopy(cfg["capacity_pool"][0]); extra["id"] = "pool-b"; cfg["capacity_pool"].append(extra)
+        cfg["project"][0]["eligible_pools"] = []
+        cfg["execution_profile"][0]["capacity_pool_ids"] = ["claude-subscription", "pool-b"]
+        cfg["routing_policy"].append({"schema_version": 2, "kind": "routing_policy", "id": "weighted", "policy": "weighted-rotation", "role": "implementer", "candidate_order": ["pool_id"], "allow_metered": False, "fallback_policy": "defer", "weights": {"claude-subscription": 1, "pool-b": 100}})
+        template = {"task_id": "weighted-0", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "execution_profile": "implementation", "requirements": {"capabilities": ["workspace-edit"]}}
+        chosen = []
+        for index in range(40):
+            task = dict(template, task_id=f"weighted-{index}")
+            result = resolve_assignment(task, cfg, policy="weighted")
+            self.assertEqual(result.status, "assigned")
+            chosen.append(result.assignment["capacity_pool_id"])
+            self.assertEqual(result.assignment, resolve_assignment(task, cfg, policy="weighted").assignment)
+        self.assertGreater(chosen.count("pool-b"), chosen.count("claude-subscription"))
 
 
 if __name__ == "__main__":
