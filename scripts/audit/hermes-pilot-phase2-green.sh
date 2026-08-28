@@ -40,6 +40,7 @@ R="$TMP/control"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/state/goals" \
 cp "$SRC/scripts/conduct-hermes.sh" "$SRC/scripts/taskctl.sh" "$SRC/scripts/intake.sh" \
   "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
   "$SRC/scripts/decision-queue.py" "$SRC/scripts/validate-control-state.py" \
+  "$SRC/scripts/engine_contract.py" \
   "$SRC/scripts/validate-decision.py" "$SRC/scripts/runtime-state.py" "$R/scripts/"
 normalize_head_decision(){
   local file="$1" temporary="$1.normalized"
