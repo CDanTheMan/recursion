@@ -68,7 +68,7 @@ P="$TMP/pilot"; mkdir -p "$P/scripts" "$P/state/project-config" "$P/state/pilots
   "$P/state/goals" "$P/state/tasks" "$P/state/runs" "$P/state/instructions" "$P/state/actions" \
   "$P/state/.locks" "$P/loop/logs"
 for script in project-pilot.py project_authority.py conduct-hermes.sh validate-decision.py validate-control-state.py \
-              decision-queue.py taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
+              engine_contract.py decision-queue.py taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
               instruction_routing.py pilot_instruction.py seed_contract.py runtime-state.py; do
   cp "$SRC/scripts/$script" "$P/scripts/"
 done
@@ -150,7 +150,7 @@ echo "ok    pilot task verb is charter-, goal-, dependency-, gate-, and action-c
 # key, clean clone, and exact remote OID becomes active and records the proof.
 A="$TMP/activation"; mkdir -p "$A/scripts" "$A/state/project-config" "$A/state/pilots" "$A/state/.locks"
 cp "$SRC/scripts/project-pilot.py" "$SRC/scripts/project_authority.py" "$SRC/scripts/pilot_instruction.py" \
-   "$SRC/scripts/seed_contract.py" "$SRC/scripts/jsonl_durable.py" \
+   "$SRC/scripts/engine_contract.py" "$SRC/scripts/seed_contract.py" "$SRC/scripts/jsonl_durable.py" \
    "$SRC/scripts/transition_receipt.py" "$SRC/scripts/runtime-state.py" "$A/scripts/"
 KEY="$TMP/activation-key"; : > "$KEY"; chmod 600 "$KEY"
 ORIGIN="$TMP/activation.git"; SEED="$TMP/activation-seed"; CLONE="$TMP/activation-clone"
@@ -184,5 +184,8 @@ head="$(git -C "$CLONE" rev-parse HEAD)"; grep -q "$head" "$TMP/proof.json"
 RECURSION_ROOT="$A" python3 "$A/scripts/project-pilot.py" repo new-project src/f > "$TMP/repo-read.json"
 grep -q '"path":"src/f"' "$TMP/repo-read.json"; grep -q '"content":"x"' "$TMP/repo-read.json"
 echo "ok    two-step registration activates only after clone/auth/freshness proof"
+
+# The phase gate includes its negative controls, as in phases 5-8.
+bash "$SRC/scripts/tests/hermes-pilot-phase4-red.test.sh"
 
 echo "hermes-pilot-phase4-green: ALL PASS"
