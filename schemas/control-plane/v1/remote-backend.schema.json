@@ -23,6 +23,20 @@
     "publication"
   ],
   "additionalProperties": false,
+  "definitions": {
+    "git_branch": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!-)(?!.*\\.\\.)(?!.*@\\{)(?!.*[\\x00-\\x20\\x7f~^:?*\\[\\\\])(?!/)(?!.*//)(?!.*/$)(?!.*\\.$)(?!.*(?:^|/)\\.)(?!.*(?:^|/)[^/]*\\.lock(?:/|$))[^/]+(?:/[^/]+)*$",
+      "description": "A branch name accepted by Git 2.46 `git check-ref-format --branch`: one or more nonempty slash-separated components, with Git's forbidden characters, dot components, @{ sequence, .lock suffix, and leading-dash rules applied. Git imposes no 255-character limit here."
+    },
+    "git_branch_pattern": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!-)(?!.*\\.\\.)(?!.*@\\{)(?!.*[\\x00-\\x20\\x7f~^:\\[\\\\])(?!/)(?!.*//)(?!.*/$)(?!.*\\.$)(?!.*(?:^|/)\\.)(?!.*(?:^|/)[^/]*\\.lock(?:/|$))[^/]+(?:/[^/]+)*$",
+      "description": "A safe fnmatch pattern whose * and ? wildcards are probed with literal x characters against the Git branch rules. All other characters retain their Git-ref meaning and restrictions."
+    }
+  },
   "allOf": [
     {
       "oneOf": [
@@ -128,25 +142,28 @@
       "additionalProperties": false,
       "properties": {
         "default_branch": {
-          "type": "string",
+          "$ref": "#/definitions/git_branch",
           "description": "Never a write target. Lucas merges here."
         },
         "integration_branch": {
-          "type": "string",
+          "$ref": "#/definitions/git_branch",
           "description": "A disposable review artifact advanced only by the coordinator, after serialized ancestry, diff, scope and gate checks. Must differ from default_branch."
         },
         "task_branch_pattern": {
-          "type": "string",
-          "pattern": "<task-id>",
+          "allOf": [
+            {"$ref": "#/definitions/git_branch"},
+            {"type": "string", "pattern": "<task-id>"}
+          ],
           "description": "Must contain the literal <task-id>. Substituted with the assignment's task_id to derive the isolated target branch."
         },
         "allowed_result_branch_patterns": {
           "type": "array",
           "minItems": 1,
           "items": {
-            "type": "string",
-            "minLength": 1,
-            "not": {"enum": ["*", "**", "/*"]}
+            "allOf": [
+              {"$ref": "#/definitions/git_branch_pattern"},
+              {"not": {"enum": ["*", "**", "/*"]}}
+            ]
           },
           "description": "fnmatch patterns a returned branch must match. An unrestricted wildcard is refused: an external worker must not be able to return any ref. The default and integration branches are rejected before patterns are consulted, so a permissive pattern cannot readmit them."
         }

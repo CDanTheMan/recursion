@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import socket
 import sys
@@ -263,6 +264,127 @@ check(raises("manifest-invalid", rb.validate_manifest,
 check(raises("manifest-invalid", rb.validate_manifest,
              mutated(CURSOR_MANIFEST, description="token is sk-" + "a" * 32), "cursor-cloud"),
       "a credential pasted into a manifest field is refused by the secret screen")
+
+# --- schema/runtime branch parity -----------------------------------------------------------
+
+REMOTE_SCHEMA = json.loads(
+    (SOURCE / "schemas" / "control-plane" / "v1" / "remote-backend.schema.json")
+    .read_text(encoding="utf-8")
+)
+PUBLICATION_SCHEMA = REMOTE_SCHEMA["properties"]["publication"]["properties"]
+
+
+def schema_accepts_definition(definition: dict, value: object) -> bool:
+    return (isinstance(value, str)
+            and len(value) >= definition.get("minLength", 0)
+            and re.search(definition["pattern"], value) is not None)
+
+
+def schema_accepts_property(field: str, value: object) -> bool:
+    definition = PUBLICATION_SCHEMA[field]
+    if "allOf" in definition:
+        return all(
+            schema_accepts_definition(
+                REMOTE_SCHEMA["definitions"][clause["$ref"].split("/")[-1]]
+                if "$ref" in clause else clause,
+                value,
+            )
+            for clause in definition["allOf"]
+        )
+    if "$ref" in definition:
+        definition = REMOTE_SCHEMA["definitions"][definition["$ref"].split("/")[-1]]
+    return schema_accepts_definition(definition, value)
+
+
+def schema_accepts_result_pattern(value: object) -> bool:
+    item = PUBLICATION_SCHEMA["allowed_result_branch_patterns"]["items"]
+    definition = REMOTE_SCHEMA["definitions"][item["allOf"][0]["$ref"].split("/")[-1]]
+    return (schema_accepts_definition(definition, value)
+            and value not in item["allOf"][1]["not"]["enum"])
+
+
+def runtime_accepts_branch(value: str) -> bool:
+    try:
+        rb.validate_branch_name(value, "branch")
+        return True
+    except RemoteError:
+        return False
+
+
+branch_parity_cases = [
+    ("@", True),
+    ("x" * 256, True),
+    (".", False),
+    ("foo.", False),
+    ("foo@{bar}", False),
+    ("foo/.bar", False),
+    ("foo/bar.lock", False),
+    ("foo/.lock", False),
+    ("foo\x00bar", False),
+    ("foo\x1fbar", False),
+    ("foo\x7fbar", False),
+    ("foo./bar", True),
+    ("foo/@", True),
+]
+for candidate, expected in branch_parity_cases:
+    runtime = runtime_accepts_branch(candidate)
+    schema = schema_accepts_property("default_branch", candidate)
+    check(runtime == expected and schema == expected and runtime == schema,
+          f"schema/runtime default_branch parity for {candidate!r}")
+
+task_pattern_parity_cases = [
+    ("recursion/extern/<task-id>", True),
+    ("@/<task-id>", True),
+    (".", False),
+    ("foo/.bar/<task-id>", False),
+    ("foo@{bar}/<task-id>", False),
+    ("foo/<task-id>?", False),
+]
+for candidate, expected in task_pattern_parity_cases:
+    try:
+        rb.validate_manifest(
+            with_publication(CURSOR_MANIFEST, task_branch_pattern=candidate),
+            "cursor-cloud",
+        )
+        runtime = True
+    except RemoteError:
+        runtime = False
+    schema = schema_accepts_property("task_branch_pattern", candidate)
+    check(runtime == expected and schema == expected and runtime == schema,
+          f"schema/runtime task_branch_pattern parity for {candidate!r}")
+
+pattern_parity_cases = [
+    ("@", True),
+    ("x" * 256, True),
+    ("foo/*", True),
+    ("foo/?bar", True),
+    ("foo./*", True),
+    ("?", True),
+    ("*", False),
+    ("**", False),
+    ("/*", False),
+    (".", False),
+    ("foo.", False),
+    ("foo/.bar", False),
+    ("foo/bar.lock", False),
+    ("foo@{bar}", False),
+    ("foo\x00*", False),
+    ("foo\x1f*", False),
+    ("foo[ab]", False),
+]
+for candidate, expected in pattern_parity_cases:
+    try:
+        rb.validate_manifest(
+            with_publication(CURSOR_MANIFEST,
+                             allowed_result_branch_patterns=[candidate]),
+            "cursor-cloud",
+        )
+        runtime = True
+    except RemoteError:
+        runtime = False
+    schema = schema_accepts_result_pattern(candidate)
+    check(runtime == expected and schema == expected and runtime == schema,
+          f"schema/runtime allowed_result_branch_patterns parity for {candidate!r}")
 
 # --- resolution and the enablement chain -------------------------------------------------------
 

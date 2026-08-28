@@ -16,6 +16,7 @@ Hermetic: no filesystem outside tempdirs, no network, no environment on the box.
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -156,6 +157,51 @@ for invalid_ref in (".", "foo.", "foo@{bar}", "foo/.bar"):
     check(raises("assignment-invalid", ra.validate_assignment,
                  variant(source_branch=invalid_ref)),
           f"git-invalid branch ref {invalid_ref!r} is refused")
+
+
+def git_branch_valid(value: str) -> bool:
+    try:
+        return subprocess.run(
+            ["git", "check-ref-format", "--branch", value],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        ).returncode == 0
+    except (OSError, ValueError):
+        return False
+
+
+# This corpus deliberately mixes boundaries, every ASCII byte class, component rules, and
+# ordinary punctuation.  The runtime validator must not grow a second approximation of Git's
+# ref parser: its answer is compared directly with the Git 2.46 executable available to CI.
+branch_corpus = [
+    "", "@", ".", "..", "foo", "foo.", "foo..bar", "foo@{bar", "foo@{bar}",
+    "foo/.bar", "foo/.", "foo.lock", "foo/bar.lock", "foo/.lock", "-foo", "foo/-bar",
+    "foo//bar", "/foo", "foo/", "foo bar", "foo~bar", "foo^bar", "foo:bar",
+    "foo?bar", "foo*bar", "foo[bar", "foo\\bar", "foo./bar", "foo@bar", "@/x",
+    "x/@", "x/a.lock-y", "x/a.locked", "refs/heads/main", "é/ß",
+    "x" * 255, "x" * 256, "x" * 1024,
+]
+branch_corpus.extend(chr(code) for code in range(0x00, 0x20))
+branch_corpus.extend(f"a{chr(code)}b" for code in range(0x20, 0x80))
+branch_corpus.extend(f"a/{chr(code)}b" for code in range(0x80, 0x100))
+branch_mismatches = []
+for candidate in branch_corpus:
+    expected = git_branch_valid(candidate)
+    try:
+        ra.validate_branch_name(candidate, "corpus")
+        actual = True
+    except ra.RemoteError:
+        actual = False
+    if actual != expected:
+        branch_mismatches.append((repr(candidate), expected, actual))
+check(not branch_mismatches,
+      "validate_branch_name matches Git 2.46 check-ref-format --branch across the broad corpus"
+      + (f": {branch_mismatches[:3]}" if branch_mismatches else ""))
+check(ra.validate_branch_name("@", "branch") == "@",
+      "Git-valid single-character @ is accepted")
+check(ra.validate_branch_name("x" * 256, "branch") == "x" * 256,
+      "Git-valid 256-character branch is accepted without an arbitrary cap")
 check(raises("assignment-invalid", ra.validate_assignment,
              variant(allowed_paths=["../etc/passwd"])),
       "an allowed_path escaping the worktree is refused")

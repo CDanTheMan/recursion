@@ -31,6 +31,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 from urllib.parse import urlsplit
 
 SCHEMA_VERSION = 1
@@ -280,8 +281,6 @@ SHA_RE = re.compile(r"[0-9a-f]{40}")
 DIGEST_RE = re.compile(r"[0-9a-f]{64}")
 ISO_UTC_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 MODEL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}")
-# git check-ref-format, reduced to what a branch name may be here.
-BRANCH_FORBIDDEN_RE = re.compile(r"[\x00-\x20\x7f~^:?*\[\\]")
 
 PUBLICATION_POLICIES = frozenset({"verified-integration-only", "review-branch-only"})
 
@@ -322,21 +321,22 @@ def _invalid(message: str) -> RemoteError:
 
 
 def validate_branch_name(value: object, field: str) -> str:
-    if not isinstance(value, str) or not (1 <= len(value) <= 255):
-        raise _invalid(f"{field} must be a branch name of 1..255 characters")
-    if BRANCH_FORBIDDEN_RE.search(value):
-        raise _invalid(f"{field} contains a character git forbids in a ref name")
-    if value.startswith("/") or value.endswith("/") or "//" in value:
-        raise _invalid(f"{field} has an empty path segment")
-    if ".." in value or value.endswith(".lock") or value.startswith("-"):
-        raise _invalid(f"{field} is not a well-formed branch name")
-    if "@{" in value or value == "@":
-        raise _invalid(f"{field} is not a well-formed branch name")
-    components = value.split("/")
-    if any(component in (".", "..") or component.startswith(".")
-           or component.endswith(".") or component.endswith(".lock")
-           for component in components):
-        raise _invalid(f"{field} is not a well-formed branch name")
+    if not isinstance(value, str) or not value:
+        raise _invalid(f"{field} must be a nonempty Git branch name")
+    try:
+        result = subprocess.run(
+            ["git", "check-ref-format", "--branch", value],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except (OSError, ValueError):
+        # ValueError covers strings Git cannot receive (notably an embedded NUL).  OSError
+        # keeps a missing/unlaunchable Git binary fail closed instead of accepting a ref by
+        # falling back to a subtly different local implementation.
+        result = None
+    if result is None or result.returncode != 0:
+        raise _invalid(f"{field} is not a Git-valid branch name")
     return value
 
 
