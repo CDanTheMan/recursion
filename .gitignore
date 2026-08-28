@@ -68,6 +68,11 @@ state/event-archive/
 state/jsonl-quarantine/
 state/jsonl-index/
 state/instructions/
+# Remote adapter runtime state (v2 Phase 6/7): durable attempt journals, vendor session
+# projections, and Grok Bot proposals. Same class as state/runs/ -- state ON the box, not in
+# its history. state/remote/<backend>/attempts.jsonl is the record of truth; the JSON files
+# beside it are projections of it.
+state/remote/
 
 # Escalation index (taskctl). Same class as state/events.jsonl above: appended by every cycle
 # AND by every test run that exercises work.sh, read live by the board and the digest. The

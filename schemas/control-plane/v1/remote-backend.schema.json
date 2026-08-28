@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://recursion.local/schemas/control-plane/v1/remote-backend.schema.json",
+  "title": "Recursion remote execution backend manifest v1",
+  "description": "Documentation/editor schema for scripts/remote/<name>.json. The authoritative, self-contained validation lives in scripts/remote_backend.py (no jsonschema dependency at runtime); this schema documents the contract and supports editor/CI tooling. A remote backend describes a service that executes work somewhere other than this box, pays from its own capacity pool, and returns a candidate that Recursion must independently verify. It is inert until a human sets RECURSION_REMOTE_ADAPTERS=1, RECURSION_REMOTE_<NAME>_ENABLED=1, the referenced env values, and RECURSION_REMOTE_LIVE=1. See docs/plans/remote-execution-adapters.md, docs/plans/recursion-v2-execution-fabric.md (Phase 6, Phase 7), and scripts/remote/README.md.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "name",
+    "kind",
+    "description",
+    "endpoint",
+    "endpoint_ref",
+    "credential_ref",
+    "signing_key_ref",
+    "capacity_pool",
+    "host_id",
+    "billing_basis",
+    "on_demand",
+    "timeout_seconds",
+    "max_attempts",
+    "concurrency_lease",
+    "publication"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,31}$",
+      "description": "Must equal the manifest filename stem. Uppercased with dashes replaced by underscores, it forms the per-backend enablement flag RECURSION_REMOTE_<NAME>_ENABLED."
+    },
+    "kind": {
+      "enum": ["cursor-cloud", "grok-routine"],
+      "description": "cursor-cloud = an isolated vendor VM (scripts/cursor-cloud-adapter.py). grok-routine = a supervisory arm on an account-shared cloud computer, reached by an outbound signed routine webhook (scripts/grok-bot-dispatcher.py)."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "endpoint": {
+      "type": ["string", "null"],
+      "description": "Public https base URL, no userinfo, no query, no fragment. Exactly one of endpoint / endpoint_ref must be non-null. Use this form when the URL is not itself a secret (a vendor's public API base).",
+      "pattern": "^https://[^@?#]+$"
+    },
+    "endpoint_ref": {
+      "type": ["string", "null"],
+      "pattern": "^secret:[A-Z][A-Z0-9_]{2,63}$",
+      "description": "Reference to an env var holding the URL. Use this form when the URL is itself bearer-grade -- a signed routine webhook URL grants anyone holding it the ability to post to the routine. Durable records store this reference; the resolved value is never written down."
+    },
+    "credential_ref": {
+      "type": "string",
+      "pattern": "^secret:[A-Z][A-Z0-9_]{2,63}$",
+      "description": "Reference to the env var holding this backend's own credential. Never a value. A reference naming a controller or deploy credential (GITHUB_TOKEN, TELEGRAM_BOT_TOKEN, OPENROUTER_API_KEY, or any name starting RECURSION_, SSH_, GIT_SSH, AWS_, HERMES_) is refused: a remote backend may hold exactly one credential, its own."
+    },
+    "signing_key_ref": {
+      "type": ["string", "null"],
+      "pattern": "^secret:[A-Z][A-Z0-9_]{2,63}$",
+      "description": "Required and non-null for kind grok-routine (an unsigned outbound routine call is not authenticated), and must be null for every other kind. Must differ from credential_ref."
+    },
+    "capacity_pool": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,63}$",
+      "description": "The account/subscription/quota that pays for work on this backend. Also the key of the concurrency lease: slots are held per pool, not per task."
+    },
+    "host_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,63}$",
+      "description": "The host class the work runs on, e.g. cursor-cloud (vendor isolated VM) or grok-bot-account-cloud (account-shared -- separate Bots are not separate security boundaries)."
+    },
+    "billing_basis": {
+      "enum": ["included", "metered", "local"],
+      "description": "metered additionally requires RECURSION_ALLOW_METERED=1, the same rule the hermes engine follows. Usage records derive spend_state from this field and never from a vendor payload, so an unreconciled metered run cannot report itself as included."
+    },
+    "on_demand": {
+      "type": "boolean",
+      "description": "Permission to exceed the included quota. Setting it true also requires RECURSION_ALLOW_METERED=1. No error handler can set this: quota exhaustion is a defer (exit 75), never an argument for spending."
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 600
+    },
+    "max_attempts": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Attempts permitted per idempotency key (backend + operation + assignment_digest + dispatch_id + request_digest)."
+    },
+    "concurrency_lease": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8,
+      "description": "Simultaneous runs permitted against this capacity pool. Grok Bot ships with 1: every Bot on the account shares one computer, so two Bots editing code are one writer with two screens."
+    },
+    "publication": {
+      "type": "object",
+      "required": [
+        "default_branch",
+        "integration_branch",
+        "task_branch_pattern",
+        "allowed_result_branch_patterns"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "default_branch": {
+          "type": "string",
+          "description": "Never a write target. Lucas merges here."
+        },
+        "integration_branch": {
+          "type": "string",
+          "description": "A disposable review artifact advanced only by the coordinator, after serialized ancestry, diff, scope and gate checks. Must differ from default_branch."
+        },
+        "task_branch_pattern": {
+          "type": "string",
+          "pattern": "<task-id>",
+          "description": "Must contain the literal <task-id>. Substituted with the assignment's task_id to derive the isolated target branch."
+        },
+        "allowed_result_branch_patterns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "fnmatch patterns a returned branch must match. An unrestricted wildcard is refused: an external worker must not be able to return any ref. The default and integration branches are rejected before patterns are consulted, so a permissive pattern cannot readmit them."
+        }
+      }
+    }
+  }
+}
