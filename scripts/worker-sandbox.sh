@@ -668,7 +668,6 @@ if wait "$client_pid"; then rc=0; else rc=$?; fi
 client_pid=""
 if [ "$ENGINE" != gate ]; then
   execution_class="$(classify_exit_code "$rc")"
-    execution_class="$(classify_exit_code "$rc")"
-    write_execution_evidence finished "$rc" "$execution_class" || exit 95
+  write_execution_evidence finished "$rc" "$execution_class" || exit 95
 fi
 exit "$rc"
