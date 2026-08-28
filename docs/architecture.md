@@ -15,6 +15,16 @@ WHO decides; this is HOW.
 > Everything else here — the tiering, the escalation scoring, the cost model, the where-it-runs
 > map, the context-management rules — is current and load-bearing.
 
+> **V2 EXECUTION-FABRIC WORK IN PROGRESS — 2026-08-28 (D-016 draft).** The provider and
+> subscription-specific engine roster below describes the deployed v1 lineage, not the intended
+> permanent binding. Lucas has approved a provider-neutral extension that separates engine,
+> provider, capacity pool, model, host, sandbox, routing, project, publication, and immutable run
+> assignment. Hetzner remains the authoritative coordinator; Cursor Cloud becomes an isolated
+> burst-worker pool; Grok Bot becomes a separate weekly-quota supervisory pool. See
+> `docs/plans/recursion-v2-execution-fabric.md` and the dated audit at
+> `docs/audits/recursion-v2-infrastructure-audit-2026-08-28.md`. Nothing in that WIP changes the
+> authority hierarchy, PAUSE, review-only publication, or human deployment boundary.
+
 ## Purpose
 
 One control plane over several workstreams that each move at a different tempo and need a different

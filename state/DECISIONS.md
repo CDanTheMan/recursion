@@ -430,3 +430,51 @@ without `RECURSION_ALLOW_METERED=1`; a probe failure that blocks or escalates in
 requeueing; a manifest carrying a credential value.
 
 **Review:** 2026-09-30
+
+---
+
+## D-016 — Extend engine plugins into a provider-neutral execution fabric
+Date: 2026-08-28 · Status: DRAFT — architecture approved by Lucas in-session; ratified when the review branch merges
+
+**Extends:** D-015. Its declarative worker-engine choice remains correct and becomes the engine
+layer of this design rather than being replaced.
+
+**Context:** Lucas is cancelling Claude, pivoting execution capacity toward Cursor Ultra, and wants
+Recursion to supervise every product repository without embedding product trees in the control
+repository. The new Grok Bot product also supplies a separate weekly quota and persistent cloud
+computer suitable for supervisory arms. The audit found that Recursion has the engine, sandbox,
+lease, evidence, lock, and review-publication foundation, but lacks account/subscription pools,
+host placement, immutable assignments, integration branches, and remote execution contracts.
+
+**Options considered:** (A) make Cursor the new hardcoded executor / (B) keep adding provider cases
+to the existing single-host loop / (C) preserve the current safety machinery and add versioned
+declarative contracts for engine, provider, capacity pool, model, host, sandbox, routing, project,
+publication, and immutable assignment.
+
+**Chose:** C, per `docs/plans/recursion-v2-execution-fabric.md`.
+
+Hetzner remains the authoritative coordinator and a light Linux worker. Cursor CLI, Cursor Cloud,
+registered machines, local models, and future subscriptions are selectable execution pools behind
+one assignment/evidence contract. Grok Bot is a separate account-shared supervisory host and
+weekly capacity pool, not a model alias or isolated-worker fleet. External workers publish only
+candidate refs; Recursion independently verifies and serializes integration; Lucas retains the
+default-branch merge and production seams.
+
+**Because:** subscriptions, model availability, quotas, and machines change faster than the safety
+contract. Binding a task to one vendor or one box makes every capacity change an architecture
+change. Capability-oriented tasks and immutable resolved assignments preserve customizability
+without weakening attribution, sandboxing, stale-base handling, or review-only publication. The
+existing v2 engine-plugin work already proves the low-level approach; the missing control-plane
+layer should be additive.
+
+**Falsifier:** a task must be edited merely to change an eligible subscription; a run cannot name
+the exact engine/provider/pool/model/host/sandbox/source that executed it; a remote worker can write
+default or integration directly; Grok Bots are treated as isolated despite sharing one computer;
+quota exhaustion silently enables metered spend; or Hetzner must become a heavyweight universal
+worker for the system to function.
+
+**Execution boundary:** this decision and its plan do not authorize credentials, spending,
+firewall exposure, production deployment, PAUSE removal, destructive Chiron cleanup, or default-
+branch merge. Each remains a reviewed human seam under `CONTROL_PLANE.md`.
+
+**Review:** after the Phase 9 soak or 2026-10-31, whichever comes first.
