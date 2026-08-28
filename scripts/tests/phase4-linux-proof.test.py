@@ -3,7 +3,7 @@
 
 This test never starts a service or changes a host namespace. The actual transient-systemd
 proof remains an explicitly human-run Linux gate; off Linux and without root it is a real,
-visible skip rather than a counted production pass.
+visible not-proven result (exit 77), never a counted production pass.
 """
 
 from __future__ import annotations
@@ -21,13 +21,13 @@ ROOT = Path(__file__).resolve().parents[2]
 def main() -> int:
     if sys.platform != "linux":
         print("SKIP - phase4-linux-proof: Linux-only sandbox/ownership proof")
-        return 0
+        return 77
     if os.geteuid() != 0:
         print("SKIP - phase4-linux-proof: root is required for ownership proof")
-        return 0
+        return 77
     if shutil.which("systemd-run") is None:
         print("SKIP - phase4-linux-proof: systemd-run is absent; no host mutation attempted")
-        return 0
+        return 77
     with tempfile.TemporaryDirectory(prefix="recursion-phase4-proof-") as tmp:
         plan = Path(tmp) / "plan.json"
         plan.write_text("{}\n", encoding="utf-8")
@@ -42,8 +42,9 @@ def main() -> int:
         print("FAIL - worker sandbox lacks provider namespace and ownership checks")
         return 1
     print("ok - Linux ownership fixture and worker sandbox checks are present")
-    print("SKIP - phase4-linux-proof: transient systemd sandbox proof is human-run only")
-    return 0
+    print("PREPARED - phase4-linux-proof: transient systemd sandbox proof is human-run only")
+    print("NOT PRODUCTION-PROVEN - no live Linux/systemd evidence was collected")
+    return 77
 
 
 if __name__ == "__main__":

@@ -12,7 +12,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from provider_contract import ProviderProfileError, assert_endpoints_match, load_profile, proxy_environment  # noqa: E402
+from provider_contract import (DEPLOYED_PROFILE_DIR, ProviderProfileError, assert_endpoints_match,
+                               engine_profile, load_profile, profile_directory,
+                               proxy_environment)  # noqa: E402
 
 
 def check(condition: bool, label: str, failures: list[str]) -> None:
@@ -25,6 +27,8 @@ def main() -> int:
     failures: list[str] = []
     profiles = sorted((ROOT / "scripts/providers").glob("*.json"))
     check(len(profiles) == 4, "all shipped provider profiles are present", failures)
+    check(profile_directory(ROOT / "scripts") == DEPLOYED_PROFILE_DIR,
+          "default provider directory is the deployed /etc directory", failures)
     for path in profiles:
         profile = load_profile(path, path.stem)
         check(profile["enabled"] is False, f"shipped profile is disabled: {path.stem}", failures)
@@ -39,9 +43,10 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory() as tmp:
         directory = Path(tmp)
-        enabled = dict(cursor)
-        enabled["enabled"] = True
-        (directory / "cursor.json").write_text(json.dumps(enabled) + "\n", encoding="utf-8")
+        for source in profiles:
+            enabled = json.loads(source.read_text(encoding="utf-8"))
+            enabled["enabled"] = True
+            (directory / source.name).write_text(json.dumps(enabled) + "\n", encoding="utf-8")
         env = dict(os.environ, RECURSION_PROVIDER_DIR=str(directory))
         result = subprocess.run(
             [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
@@ -58,6 +63,46 @@ def main() -> int:
             capture_output=True, text=True, env=env,
         )
         check(mismatch.returncode == 96, "endpoint outside the profile is typed refusal", failures)
+
+        engine_endpoints = {
+            "cursor": ["api.cursor.com", "api2.cursor.sh"],
+            "gemini": ["generativelanguage.googleapis.com"],
+            "opencode": ["openrouter.ai", "api.deepseek.com"],
+            "claude": ["api.anthropic.com"],
+        }
+        for engine, endpoints in engine_endpoints.items():
+            try:
+                admitted = engine_profile(engine, directory, endpoints)
+            except ProviderProfileError as exc:
+                check(False, f"enabled {engine} is admitted to its exact provider ({exc})", failures)
+            else:
+                check(admitted["enabled"] is True, f"enabled {engine} is admitted to its exact provider", failures)
+        admission = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/provider-egress.py"), "admit-engine", "gemini"],
+            capture_output=True, text=True, env=env,
+        )
+        check(admission.returncode == 0 and '"profile": "google-gemini"' in admission.stdout,
+              "CLI admission is bound to the Gemini assignment", failures)
+        disabled = json.loads((directory / "cursor.json").read_text(encoding="utf-8"))
+        disabled["enabled"] = False
+        (directory / "cursor.json").write_text(json.dumps(disabled) + "\n", encoding="utf-8")
+        refusal = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/provider-egress.py"), "admit-engine", "cursor"],
+            capture_output=True, text=True, env=env,
+        )
+        check(refusal.returncode == 96 and "disabled" in refusal.stderr,
+              "assignment refuses when its provider profile is disabled", failures)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        directory = Path(tmp)
+        for source in profiles:
+            directory.joinpath(source.name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        try:
+            __import__("provider_contract").enabled_profile_names(directory)
+        except ProviderProfileError as exc:
+            check("all provider profiles are disabled" in str(exc), "all-disabled profile set refuses", failures)
+        else:
+            check(False, "all-disabled profile set refuses", failures)
 
     bad = json.loads((ROOT / "scripts/providers/cursor.json").read_text(encoding="utf-8"))
     bad["proxy"]["credential"] = "must-not-validate"

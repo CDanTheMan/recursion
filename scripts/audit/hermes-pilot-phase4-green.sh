@@ -7,9 +7,21 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 # Phase 4 infrastructure controls are hermetic. The Linux proof test reports an explicit skip
 # off-box or without the required root/systemd capability; it never mutates a live host.
-python3 "$SRC/scripts/tests/provider-egress.test.py"
-python3 "$SRC/scripts/tests/backup-offsite.test.py"
-python3 "$SRC/scripts/tests/phase4-linux-proof.test.py"
+run_control(){
+  local output="$TMP/control-$RANDOM.out"
+  if [ "${RECURSION_PHASE4_VERBOSE:-0}" = 1 ]; then
+    "$@"
+    return $?
+  fi
+  if "$@" >"$output" 2>&1; then
+    rm -f "$output"; return 0
+  fi
+  cat "$output" >&2; rm -f "$output"; return 1
+}
+run_control python3 "$SRC/scripts/tests/provider-egress.test.py"
+run_control python3 "$SRC/scripts/tests/backup-offsite.test.py"
+run_control python3 "$SRC/scripts/tests/secret-runtime.test.py"
+run_control bash "$SRC/scripts/tests/phase4-scope-recovery.test.sh"
 
 # Every tracked active project has one complete, unique topic pilot, and both record kinds remain
 # valid v1 control-state objects with additive Phase 4 metadata.
@@ -192,6 +204,16 @@ grep -q '"path":"src/f"' "$TMP/repo-read.json"; grep -q '"content":"x"' "$TMP/re
 echo "ok    two-step registration activates only after clone/auth/freshness proof"
 
 # The phase gate includes its negative controls, as in phases 5-8.
-bash "$SRC/scripts/tests/hermes-pilot-phase4-red.test.sh"
+run_control bash "$SRC/scripts/tests/hermes-pilot-phase4-red.test.sh"
 
+set +e
+python3 "$SRC/scripts/tests/phase4-linux-proof.test.py"
+PROOF_RC=$?
+set -e
+if [ "$PROOF_RC" = 77 ]; then
+  echo "PREPARED - Phase 4 local controls passed; production Linux proof is not proven"
+  echo "NOT PRODUCTION-PROVEN - refusing a green aggregate audit without live evidence"
+  exit 77
+fi
+[ "$PROOF_RC" = 0 ] || exit "$PROOF_RC"
 echo "hermes-pilot-phase4-green: ALL PASS"

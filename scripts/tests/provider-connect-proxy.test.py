@@ -150,7 +150,7 @@ class ClientHelloContractTest(unittest.TestCase):
 
 
 class DeploymentContractTest(unittest.TestCase):
-    def test_production_unit_has_one_anthropic_authority_and_no_test_override(self):
+    def test_v1_production_unit_retains_legacy_capability_boundary(self):
         unit = (ROOT / "deploy/systemd/recursion-provider-proxy.service").read_text()
         self.assertIn("--allow api.anthropic.com:443", unit)
         self.assertNotIn("--resolve", unit)
@@ -158,6 +158,36 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn("CapabilityBoundingSet=CAP_SYS_ADMIN", unit)
         self.assertIn("LimitNOFILE=256", unit)
         self.assertIn("MemoryMax=256M", unit)
+
+    def test_phase4_unit_uses_the_deployed_explicit_profile_directory(self):
+        unit = (ROOT / "deploy/systemd/recursion-provider-proxy-phase4.service.example").read_text()
+        self.assertIn("--profile-dir /etc/recursion/providers", unit)
+        self.assertIn("--enabled-profiles", unit)
+
+    def test_profile_selection_refuses_all_disabled_and_selects_only_enabled(self):
+        import tempfile
+        import json
+        from provider_contract import enabled_allowlist, enabled_profile_names, ProviderProfileError
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            for name, authorities in {
+                "anthropic": ["api.anthropic.com:443"],
+                "cursor": ["api.cursor.com:443"],
+                "google-gemini": ["generativelanguage.googleapis.com:443"],
+                "openrouter-via-opencode": ["openrouter.ai:443"],
+            }.items():
+                value = {"schema_version": 1, "id": name, "provider": name, "enabled": name == "cursor",
+                         "namespace": "recursion-provider-only",
+                         "proxy": {"type": "connect-proxy", "host": "127.0.0.1", "port": 18080,
+                                   "env": ["HTTP_PROXY", "HTTPS_PROXY"]}, "authorities": authorities}
+                (directory / f"{name}.json").write_text(json.dumps(value), encoding="utf-8")
+            self.assertEqual(enabled_profile_names(directory), ["cursor"])
+            self.assertEqual(enabled_allowlist(directory), {("api.cursor.com", 443)})
+            (directory / "cursor.json").write_text(
+                (directory / "cursor.json").read_text().replace('"enabled": true', '"enabled": false'),
+                encoding="utf-8")
+            with self.assertRaises(ProviderProfileError):
+                enabled_profile_names(directory)
 
     def test_namespace_unit_and_worker_share_the_fixed_capability(self):
         network = (ROOT / "deploy/systemd/recursion-provider-network.service").read_text()

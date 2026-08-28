@@ -9,8 +9,8 @@ if [ "$(id -u)" != 0 ] || ! command -v ip >/dev/null 2>&1 \
     || ! command -v awk >/dev/null 2>&1 \
     || ! command -v systemd-run >/dev/null 2>&1 \
     || ! systemctl show-environment >/dev/null 2>&1; then
-  echo "provider-network-root: SKIP (root, iproute2, util-linux, and live systemd required)"
-  exit 0
+  echo "provider-network-root: SKIP / NOT PROVEN (root, iproute2, util-linux, and live systemd required)"
+  exit 77
 fi
 
 NS="recursion-provider-test-$$"

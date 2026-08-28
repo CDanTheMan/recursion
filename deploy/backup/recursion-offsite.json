@@ -4,10 +4,12 @@
   "enabled": false,
   "source": {
     "runtime_root": "/opt/recursion",
-    "snapshot_directory": "/var/lib/recursion-backup/snapshots"
+    "snapshot_directory": "/var/lib/recursion-backup/snapshots",
+    "runtime_directory": "/run/recursion-backup"
   },
   "destination": {
     "type": "sftp",
+    "user": "recursion-backup",
     "host": "backup.example.invalid",
     "port": 22,
     "path": "/recursion/runtime",
@@ -17,6 +19,11 @@
     "tool": "age",
     "recipient_file": "/etc/recursion/backup-recipient.age",
     "identity_ref": "secret:recursion-backup-age-identity"
+  },
+  "authentication": {
+    "type": "hmac-sha256",
+    "key_ref": "secret:recursion-backup-config-key",
+    "signature_file": "/etc/recursion/backup-policy.sig"
   },
   "retention": { "daily": 14, "weekly": 8, "monthly": 12 },
   "log_rotation": {

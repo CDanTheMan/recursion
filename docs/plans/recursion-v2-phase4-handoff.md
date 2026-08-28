@@ -21,9 +21,10 @@ off-host destination.
   mismatched profiles return a typed refusal. Existing plans without `egress_profile` retain
   their v1 shape and behavior.
 - `deploy/backup/recursion-offsite.json` is a disabled age/SFTP contract with explicit
-  retention, log-rotation, and restore-drill requirements. `backup-offsite.py` validates and
-  renders a plan without network or snapshot side effects; its restore drill uses a temporary
-  copied root only.
+  retention, log-rotation, and restore-drill requirements. `backup-offsite.py` has explicit
+  `--execute` backup/restore/reconcile commands, HMAC-authenticated configuration, argv-only age
+  and SFTP calls, atomic evidence, and tmpfs/runtime-dir plaintext cleanup. The local restore
+  drill is labeled prepared; off-host restore remains pending live evidence.
 - `.example` systemd and logrotate artifacts are review templates, not units installed by this
   checkout. No artifact has a `WantedBy` target that could enable it implicitly.
 - `phase4-linux-proof.test.py` is an explicit Linux/root/systemd-aware proof boundary. It never
@@ -42,11 +43,12 @@ off-host destination.
    profile disabled until endpoint ownership, proxy namespace, credentials, and provider billing
    approval are separately recorded. Enable only the reviewed profile and run the Linux proxy
    gate; do not broaden the allowlist to make a probe pass.
-5. Provision an encrypted age recipient/identity through the secret store, create the off-host
-   destination, and set the policy `enabled` flag in the human-owned copy. Use `backup-offsite.py
-   plan` as the review record, then perform one PAUSE-held backup and a restore drill into a
-   disposable root. Verify the manifest, PAUSE hash, retention result, and recovery point before
-   scheduling anything.
+5. Provision an encrypted age recipient/identity and HMAC policy key through the secret store,
+   create the off-host destination, authenticate the human-owned policy, and set its `enabled`
+   flag. Use `backup-offsite.py plan` as the review record, then explicitly execute one PAUSE-held
+   backup and a restore drill into a disposable root. Verify the manifest, PAUSE hash, retention
+   result, atomic evidence, and recovery point before scheduling anything. Do not call local
+   evidence an off-host restore; that remains pending live evidence.
 6. Install logrotate and, only after the preceding receipts are reviewed, install and enable a
    separately reviewed backup schedule. The checked-in `.example` files are never sufficient
    authorization for those operations.

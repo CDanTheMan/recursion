@@ -85,6 +85,9 @@ def main() -> int:
     try:
         scripts_dir = root_local / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
+        (scripts_dir / "secret_runtime.py").write_bytes(
+            (SOURCE / "scripts" / "secret_runtime.py").read_bytes()
+        )
         sandbox_copy = scripts_dir / "worker-sandbox.sh"
         sandbox_copy.write_bytes(SANDBOX_SCRIPT.read_bytes())
         sandbox_copy_posix = to_posix(sandbox_copy)
@@ -132,6 +135,8 @@ def main() -> int:
                 "RECURSION_TEST_WORKER": "logical",
                 "RECURSION_TEST_PROVIDER_NETWORK": "logical",
                 "RECURSION_ROOT": root_posix,
+                "RECURSION_SECRET_RUNTIME_DIR": root_posix + "/secret-runtime",
+                "RECURSION_PYTHON": to_posix(Path(sys.executable)),
             }
         )
         common_tail = ["--worktree", wt_posix, "--role", "implementer", "--network-policy", "none"]

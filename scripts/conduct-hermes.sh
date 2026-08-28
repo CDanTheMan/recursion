@@ -41,6 +41,31 @@ while [ $# -gt 0 ]; do
 done
 [ "$NON_WORK_ONLY" = 0 ] || [ "$WORK_ONLY" = 0 ] \
   || { echo "conduct-hermes: --non-work-only and --work-only are mutually exclusive" >&2; exit 2; }
+RECOVERY_SCOPE_ARGS=()
+[ "$NON_WORK_ONLY" = 1 ] && RECOVERY_SCOPE_ARGS+=(--non-work-only)
+[ "$WORK_ONLY" = 1 ] && RECOVERY_SCOPE_ARGS+=(--work-only)
+
+# Scope is an admission boundary, not merely a queue preference.  It must run before action
+# recovery because recovery can acknowledge or release the instruction coupled to an action.
+# A state-only actuator may therefore never touch a work decision (and vice versa), including a
+# directly supplied --file or a claim left in running/ after a crash.
+scope_allows_file(){
+  local path="$1" verb
+  if [ "$NON_WORK_ONLY" = 0 ] && [ "$WORK_ONLY" = 0 ]; then return 0; fi
+  verb="$(python3 - "$path" <<'PY' 2>/dev/null
+import json,sys
+try:
+    print(json.load(open(sys.argv[1], encoding="utf-8")).get("verb", ""))
+except (OSError,ValueError,TypeError):
+    raise SystemExit(2)
+PY
+)" || return 2
+  if [ "$WORK_ONLY" = 1 ]; then
+    [ "$verb" = work ]
+  else
+    [ "$verb" != work ]
+  fi
+}
 DATE="$(date +%F)"
 LOG="$ROOT/loop/logs/$DATE-conduct-hermes.log"; mkdir -p "$(dirname "$LOG")"
 log(){ echo "[$(date -Is)] conduct-hermes: $*" | tee -a "$LOG" >&2; }
@@ -89,7 +114,8 @@ drain_queue(){
         # coupled instruction. Reconcile that handshake idempotently before moving the decision;
         # otherwise the parent would hide the only projection capable of recovery.
         RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-          bash "$ROOT/scripts/conduct-hermes.sh" --recover-only --file "$claimed" 8>&- \
+          bash "$ROOT/scripts/conduct-hermes.sh" --recover-only "${RECOVERY_SCOPE_ARGS[@]}" \
+            --file "$claimed" 8>&- \
           >/dev/null 2>&1 || reconcile_rc=$?
         case "$state:$reconcile_rc" in
           succeeded:0|failed:1|cancelled:1|pending:75) : ;;
@@ -134,6 +160,11 @@ drain_queue(){
   # its own durable action reaches terminal state.
   for queue_file in "$ROOT/state/decision-queue/running"/*.json; do
     [ -f "$queue_file" ] || continue
+    scope_allows_file "$queue_file"; scope_rc=$?
+    if [ "$scope_rc" -ne 0 ]; then
+      [ "$scope_rc" -eq 1 ] || { log "recovery scope could not inspect $queue_file; preserving it"; return 74; }
+      continue
+    fi
     action_state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$queue_file")" || return $?
     case "$action_state" in
       absent) python3 "$ROOT/scripts/decision-queue.py" defer "$queue_file" "recovered claim had no action" >/dev/null || return $? ;;
@@ -231,6 +262,13 @@ if [ -z "$FILE" ]; then
 fi
 
 [ -f "$FILE" ] || { log "no decision file at $FILE"; exit 2; }
+# Do this before validation, action identity, consume, acknowledge, or release.  An out-of-scope
+# file remains untouched so its owning actuator can recover it.
+scope_allows_file "$FILE"; scope_rc=$?
+[ "$scope_rc" -eq 0 ] || {
+  [ "$scope_rc" -eq 1 ] && { log "REFUSED - decision is outside actuator scope"; exit 74; }
+  log "REFUSED - decision scope could not be authenticated"; exit 74
+}
 
 VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify reconcile-goal task-transition goal-transition verify-goal publish-task notification-reconcile notification-deliver notification-portfolio notification-audit notification-recover routing-refuse"
 RAW_DECISION="$(cat "$FILE" 2>/dev/null || true)"

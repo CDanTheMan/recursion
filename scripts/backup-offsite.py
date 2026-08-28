@@ -1,23 +1,33 @@
 #!/usr/bin/env python3
-"""Offline contract, plan, and disposable restore-drill tooling for Phase 4 backups.
+"""Fail-closed encrypted backup/restore controller.
 
-The default policy is disabled. ``validate`` and ``plan`` do not touch the network or
-create a snapshot. ``restore-drill`` restores only into a temporary copy of the supplied
-fixture root, making it suitable for hermetic CI and review. Production transfer remains
-a human deployment seam.
+The default policy is disabled and all mutating commands require ``--execute``.  Execution uses
+only explicit argv vectors: age encrypts/decrypts a runtime snapshot and OpenSSH sftp transfers
+the ciphertext.  Plaintext snapshots and decrypted archives live only in the configured
+runtime-dir (intended to be tmpfs-backed) and are scavenged on every startup.  Evidence contains
+hashes, counts, and dispositions, never credentials or decrypted content.
 """
 
 from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
+import hmac
 import importlib.util
 import io
 import json
+import os
+import re
 import shutil
+import stat
+import subprocess
 import sys
+import tarfile
 import tempfile
-from pathlib import Path
+import time
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
 
 
 class BackupPolicyError(ValueError):
@@ -26,8 +36,13 @@ class BackupPolicyError(ValueError):
 
 POLICY_KEYS = {
     "schema_version", "id", "enabled", "source", "destination", "encryption",
-    "retention", "log_rotation", "restore_drill",
+    "authentication", "retention", "log_rotation", "restore_drill",
 }
+SOURCE_KEYS = {"runtime_root", "snapshot_directory", "runtime_directory"}
+DESTINATION_KEYS = {"type", "user", "host", "port", "path", "credential_ref"}
+AUTH_KEYS = {"type", "key_ref", "signature_file"}
+STAMP_RE = re.compile(r"^backup-(\d{8}T\d{6}Z)\.tar\.age$")
+WORK_RE = re.compile(r"^\.backup\.(\d+)\.(\d+)\.[0-9a-f]{16}$")
 
 
 def _object(value: object, keys: set[str], where: str) -> dict:
@@ -48,6 +63,17 @@ def _positive(value: object, where: str, maximum: int = 3650) -> int:
     return value
 
 
+def _absolute(value: object, where: str) -> None:
+    if not isinstance(value, str) or (not Path(value).is_absolute() and not value.startswith("/")) \
+            or "\x00" in value:
+        raise BackupPolicyError(f"{where} must be an absolute path")
+
+
+def _secret_ref(value: object, where: str) -> None:
+    if not isinstance(value, str) or not re.fullmatch(r"secret:[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value):
+        raise BackupPolicyError(f"{where} must reference a secret, not contain one")
+
+
 def load_policy(path: Path) -> dict:
     try:
         policy = json.loads(path.read_text(encoding="utf-8"))
@@ -56,37 +82,40 @@ def load_policy(path: Path) -> dict:
     policy = _object(policy, POLICY_KEYS, "policy")
     if policy["schema_version"] != 1 or not isinstance(policy["enabled"], bool):
         raise BackupPolicyError("schema_version must be 1 and enabled must be boolean")
-    if not isinstance(policy["id"], str) or not policy["id"]:
-        raise BackupPolicyError("policy.id must be nonempty")
-    source = _object(policy["source"], {"runtime_root", "snapshot_directory"}, "source")
-    for key in ("runtime_root", "snapshot_directory"):
-        if not isinstance(source[key], str) or not source[key].startswith("/"):
-            raise BackupPolicyError(f"source.{key} must be an absolute path")
-    destination = _object(
-        policy["destination"], {"type", "host", "port", "path", "credential_ref"}, "destination"
-    )
-    if destination["type"] != "sftp" or not isinstance(destination["host"], str) \
-            or not destination["host"] or not isinstance(destination["path"], str) \
-            or not destination["path"].startswith("/"):
-        raise BackupPolicyError("destination must be an sftp host and absolute path")
+    if not isinstance(policy["id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", policy["id"]):
+        raise BackupPolicyError("policy.id must be a safe nonempty identifier")
+    source = _object(policy["source"], SOURCE_KEYS, "source")
+    for key in SOURCE_KEYS:
+        _absolute(source[key], f"source.{key}")
+    destination = _object(policy["destination"], DESTINATION_KEYS, "destination")
+    if destination["type"] != "sftp":
+        raise BackupPolicyError("destination.type must be sftp")
+    for key in ("user", "host"):
+        if not isinstance(destination[key], str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", destination[key]):
+            raise BackupPolicyError(f"destination.{key} is invalid")
+    _absolute(destination["path"], "destination.path")
+    remote_path = PurePosixPath(destination["path"])
+    if not destination["path"].startswith("/") or any(
+            part in {"", ".", ".."} for part in remote_path.parts) \
+            or any(ord(char) < 32 or char.isspace() for char in destination["path"]):
+        raise BackupPolicyError("destination.path must be a canonical absolute SFTP path")
     _positive(destination["port"], "destination.port", 65535)
-    if not isinstance(destination["credential_ref"], str) \
-            or not destination["credential_ref"].startswith("secret:"):
-        raise BackupPolicyError("destination.credential_ref must reference a secret, not contain one")
-    encryption = _object(
-        policy["encryption"], {"tool", "recipient_file", "identity_ref"}, "encryption"
-    )
-    if encryption["tool"] != "age" or not isinstance(encryption["recipient_file"], str) \
-            or not encryption["recipient_file"].startswith("/") \
-            or not isinstance(encryption["identity_ref"], str) \
-            or not encryption["identity_ref"].startswith("secret:"):
-        raise BackupPolicyError("encryption must use age and secret/file references")
+    _secret_ref(destination["credential_ref"], "destination.credential_ref")
+    encryption = _object(policy["encryption"], {"tool", "recipient_file", "identity_ref"}, "encryption")
+    if encryption["tool"] != "age":
+        raise BackupPolicyError("encryption.tool must be age")
+    _absolute(encryption["recipient_file"], "encryption.recipient_file")
+    _secret_ref(encryption["identity_ref"], "encryption.identity_ref")
+    authentication = _object(policy["authentication"], AUTH_KEYS, "authentication")
+    if authentication["type"] != "hmac-sha256":
+        raise BackupPolicyError("authentication.type must be hmac-sha256")
+    _secret_ref(authentication["key_ref"], "authentication.key_ref")
+    _absolute(authentication["signature_file"], "authentication.signature_file")
     retention = _object(policy["retention"], {"daily", "weekly", "monthly"}, "retention")
     for key, maximum in (("daily", 3650), ("weekly", 520), ("monthly", 240)):
         _positive(retention[key], f"retention.{key}", maximum)
     rotation = _object(policy["log_rotation"], {"directory", "max_size_mb", "keep"}, "log_rotation")
-    if not isinstance(rotation["directory"], str) or not rotation["directory"].startswith("/"):
-        raise BackupPolicyError("log_rotation.directory must be absolute")
+    _absolute(rotation["directory"], "log_rotation.directory")
     _positive(rotation["max_size_mb"], "log_rotation.max_size_mb", 10240)
     _positive(rotation["keep"], "log_rotation.keep", 3650)
     drill = _object(policy["restore_drill"], {"cadence_days", "required"}, "restore_drill")
@@ -106,6 +135,310 @@ def runtime_module():
     return module
 
 
+def secret_runtime_module():
+    source = Path(__file__).resolve().with_name("secret_runtime.py")
+    spec = importlib.util.spec_from_file_location("recursion_secret_runtime", source)
+    if spec is None or spec.loader is None:
+        raise BackupPolicyError("secret runtime helper is absent")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _credential_path(ref: str) -> Path:
+    _secret_ref(ref, "credential reference")
+    name = ref.split(":", 1)[1]
+    directory = os.environ.get("CREDENTIALS_DIRECTORY") or os.environ.get("RECURSION_CREDENTIALS_DIRECTORY")
+    if not directory:
+        raise BackupPolicyError("systemd credentials directory is unavailable")
+    path = Path(directory) / name
+    if path.is_symlink() or not path.is_file():
+        raise BackupPolicyError("referenced credential is unavailable")
+    mode = stat.S_IMODE(path.stat().st_mode)
+    if os.name != "nt" and mode & 0o077:
+        raise BackupPolicyError("referenced credential is group/other accessible")
+    if os.name != "nt" and hasattr(os, "geteuid") and os.geteuid() == 0 \
+            and path.stat().st_uid != 0:
+        raise BackupPolicyError("referenced credential is not root-owned")
+    return path
+
+
+def authenticate_policy(path: Path, policy: dict) -> None:
+    key_path = _credential_path(policy["authentication"]["key_ref"])
+    signature = Path(policy["authentication"]["signature_file"])
+    if signature.is_symlink() or not signature.is_file():
+        raise BackupPolicyError("authenticated policy signature is unavailable")
+    try:
+        expected = signature.read_text(encoding="ascii").strip()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise BackupPolicyError("authenticated policy signature is unreadable") from exc
+    if not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise BackupPolicyError("authenticated policy signature has invalid shape")
+    observed = hmac.new(key_path.read_bytes(), path.read_bytes(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, observed):
+        raise BackupPolicyError("authenticated policy signature does not match")
+
+
+def require_execution(path: Path, policy: dict, execute: bool) -> None:
+    if not execute:
+        raise BackupPolicyError("mutating backup commands require explicit --execute")
+    if not policy["enabled"]:
+        raise BackupPolicyError("backup policy is disabled")
+    authenticate_policy(path, policy)
+
+
+def _safe_runtime_dir(path: Path) -> None:
+    if not path.is_absolute() or path.is_symlink() or (path.exists() and not path.is_dir()):
+        raise BackupPolicyError("backup runtime directory has an unsafe type")
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.chmod(0o700)
+    if hasattr(os, "geteuid") and os.geteuid() == 0 and path.stat().st_uid != 0:
+        raise BackupPolicyError("backup runtime directory is not root-owned")
+
+
+@contextlib.contextmanager
+def private_workspace(path: Path):
+    _safe_runtime_dir(path)
+    secret_runtime = secret_runtime_module()
+    secret_runtime.scavenge(path)
+    for stale in path.iterdir():
+        match = WORK_RE.fullmatch(stale.name)
+        if match:
+            observed = secret_runtime.process_start(int(match.group(1)))
+            if observed is None or observed != match.group(2):
+                if stale.is_symlink() or not stale.is_dir():
+                    stale.unlink(missing_ok=True)
+                else:
+                    shutil.rmtree(stale)
+    start = secret_runtime.process_start(os.getpid())
+    if start is None:
+        raise BackupPolicyError("cannot witness backup process identity")
+    work = Path(tempfile.mkdtemp(prefix=f".backup.{os.getpid()}.{start}.", dir=path))
+    try:
+        work.chmod(0o700)
+        yield work
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def _run(argv: list[str], *, input_bytes: bytes | None = None) -> subprocess.CompletedProcess[bytes]:
+    if not argv or any(not isinstance(item, str) or not item for item in argv):
+        raise BackupPolicyError("external tool argv is invalid")
+    try:
+        result = subprocess.run(argv, input=input_bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               check=False)
+    except OSError as exc:
+        raise BackupPolicyError(f"required backup tool is unavailable: {argv[0]}") from exc
+    if result.returncode:
+        raise BackupPolicyError(f"backup tool failed: {Path(argv[0]).name}")
+    return result
+
+
+def _tool(name: str, environment_name: str) -> list[str]:
+    value = os.environ.get(environment_name, "").strip() or shutil.which(name)
+    if not value:
+        raise BackupPolicyError(f"required backup tool is unavailable: {name}")
+    raw_extra = os.environ.get(environment_name + "_ARGS_JSON", "[]")
+    try:
+        extra = json.loads(raw_extra)
+    except json.JSONDecodeError as exc:
+        raise BackupPolicyError(f"backup tool arguments are invalid: {name}") from exc
+    if not isinstance(extra, list) or not all(isinstance(item, str) and item for item in extra):
+        raise BackupPolicyError(f"backup tool arguments are invalid: {name}")
+    return [value, *extra]
+
+
+def _sftp_base(policy: dict, key: Path) -> list[str]:
+    destination = policy["destination"]
+    return [*_tool("sftp", "RECURSION_SFTP_TOOL"), "-q", "-i", str(key), "-P",
+            str(destination["port"]), "-b", "-", f"{destination['user']}@{destination['host']}"]
+
+
+def _remote_path(policy: dict, name: str) -> str:
+    if "/" in name or name in {"", ".", ".."} or not STAMP_RE.fullmatch(name):
+        raise BackupPolicyError("remote artifact name is unsafe")
+    return policy["destination"]["path"].rstrip("/") + "/" + name
+
+
+def sftp(policy: dict, batch: str) -> bytes:
+    key = _credential_path(policy["destination"]["credential_ref"])
+    return _run(_sftp_base(policy, key), input_bytes=batch.encode("utf-8")).stdout
+
+
+def remote_artifacts(policy: dict) -> list[str]:
+    base = policy["destination"]["path"].rstrip("/")
+    output = sftp(policy, f"ls -1 {base}/*.tar.age\n").decode("utf-8", "replace")
+    names: set[str] = set()
+    for line in output.splitlines():
+        candidate = line.strip().rsplit("/", 1)[-1]
+        if STAMP_RE.fullmatch(candidate):
+            names.add(candidate)
+    return sorted(names)
+
+
+def artifact_time(name: str) -> datetime | None:
+    match = STAMP_RE.fullmatch(name)
+    if not match:
+        return None
+    return datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+
+
+def retention_keep(names: list[str], retention: dict, now: datetime | None = None) -> set[str]:
+    dated = [(name, artifact_time(name)) for name in names]
+    dated = [(name, stamp) for name, stamp in dated if stamp is not None]
+    dated.sort(key=lambda item: item[1], reverse=True)
+    days = []
+    weeks = []
+    months = []
+    for name, stamp in dated:
+        day = stamp.date()
+        week = stamp.isocalendar()[:2]
+        month = (stamp.year, stamp.month)
+        if day not in days and len(days) < retention["daily"]:
+            days.append(day)
+        if week not in weeks and len(weeks) < retention["weekly"]:
+            weeks.append(week)
+        if month not in months and len(months) < retention["monthly"]:
+            months.append(month)
+    keep = {name for name, stamp in dated
+            if stamp.date() in days or stamp.isocalendar()[:2] in weeks
+            or (stamp.year, stamp.month) in months}
+    # Nonconforming remote names are never deleted by reconciliation.
+    keep.update(name for name in names if artifact_time(name) is None)
+    return keep
+
+
+def reconcile_remote(policy: dict) -> dict:
+    names = remote_artifacts(policy)
+    keep = retention_keep(names, policy["retention"])
+    deleted: list[str] = []
+    for name in names:
+        if name in keep:
+            continue
+        sftp(policy, f"rm {_remote_path(policy, name)}\n")
+        deleted.append(name)
+    return {"remote_seen": len(names), "retained": len(keep), "deleted": len(deleted),
+            "deleted_artifacts": deleted}
+
+
+def write_evidence(directory: Path, evidence: dict) -> Path:
+    if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+        raise BackupPolicyError("evidence directory has an unsafe type")
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    directory.chmod(0o700)
+    raw = (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    target = directory / f"backup-evidence-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{time.time_ns()}-{hashlib.sha256(raw).hexdigest()[:12]}.json"
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{target.name}.tmp.", dir=directory)
+    temporary = Path(temporary_name)
+    try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as output:
+            output.write(raw)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, target)
+        if os.name != "nt":
+            descriptor = os.open(directory, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        return target
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def archive_snapshot(snapshot: Path, target: Path) -> None:
+    with tarfile.open(target, "w") as archive:
+        archive.add(snapshot, arcname="snapshot", recursive=True)
+
+
+def encrypt(archive: Path, ciphertext: Path, policy: dict) -> None:
+    recipient = Path(policy["encryption"]["recipient_file"])
+    if recipient.is_symlink() or not recipient.is_file():
+        raise BackupPolicyError("age recipient file is unavailable")
+    _run([*_tool("age", "RECURSION_AGE_TOOL"), "--encrypt", "--recipient-file",
+          str(recipient), "--output", str(ciphertext), str(archive)])
+
+
+def decrypt(ciphertext: Path, archive: Path, policy: dict) -> None:
+    identity = _credential_path(policy["encryption"]["identity_ref"])
+    _run([*_tool("age", "RECURSION_AGE_TOOL"), "--decrypt", "--identity", str(identity),
+          "--output", str(archive), str(ciphertext)])
+
+
+def extract_snapshot(archive: Path, target: Path) -> Path:
+    target.mkdir(mode=0o700)
+    with tarfile.open(archive, "r:") as source:
+        for member in source.getmembers():
+            name = PurePosixPath(member.name)
+            if name.is_absolute() or ".." in name.parts or not name.parts or name.parts[0] != "snapshot":
+                raise BackupPolicyError("encrypted backup contains an unsafe archive path")
+            if member.isdir():
+                continue
+            if member.issym() or member.islnk():
+                raise BackupPolicyError("encrypted backup contains a link entry")
+            if not member.isfile():
+                raise BackupPolicyError("encrypted backup contains an unsupported archive entry")
+            destination = target.joinpath(*name.parts)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with source.extractfile(member) as input_stream, destination.open("wb") as output:
+                assert input_stream is not None
+                shutil.copyfileobj(input_stream, output)
+            os.chmod(destination, stat.S_IMODE(member.mode) or 0o600)
+    snapshot = target / "snapshot"
+    runtime_module().load_manifest(snapshot)
+    return snapshot
+
+
+def execute_backup(config_path: Path, policy: dict) -> dict:
+    root = Path(policy["source"]["runtime_root"])
+    runtime = runtime_module()
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    name = f"backup-{stamp}.tar.age"
+    with private_workspace(Path(policy["source"]["runtime_directory"])) as work:
+        snapshot = work / "snapshot"
+        with contextlib.redirect_stdout(io.StringIO()):
+            runtime.backup(root, snapshot)
+        archive = work / "snapshot.tar"
+        ciphertext = work / name
+        archive_snapshot(snapshot, archive)
+        encrypt(archive, ciphertext, policy)
+        sftp(policy, f"put {ciphertext} {_remote_path(policy, name)}\n")
+    retention = reconcile_remote(policy)
+    evidence = {"schema_version": 1, "operation": "backup", "status": "succeeded",
+                "artifact": name, "encrypted": True, "remote_uploaded": True,
+                "retention": retention, "restore_evidence": "pending live evidence",
+                "policy_id": policy["id"], "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    evidence["evidence_path"] = str(write_evidence(Path(policy["log_rotation"]["directory"]), evidence))
+    return evidence
+
+
+def execute_restore(config_path: Path, policy: dict, artifact: str | None) -> dict:
+    root = Path(policy["source"]["runtime_root"])
+    names = remote_artifacts(policy)
+    name = artifact or (names[-1] if names else None)
+    if name is None:
+        raise BackupPolicyError("no encrypted remote artifact is available")
+    remote = _remote_path(policy, name)
+    with private_workspace(Path(policy["source"]["runtime_directory"])) as work:
+        ciphertext = work / name
+        archive = work / "snapshot.tar"
+        sftp(policy, f"get {remote} {ciphertext}\n")
+        decrypt(ciphertext, archive, policy)
+        snapshot = extract_snapshot(archive, work / "extract")
+        with contextlib.redirect_stdout(io.StringIO()):
+            runtime_module().restore(root, snapshot)
+    evidence = {"schema_version": 1, "operation": "restore", "status": "succeeded",
+                "artifact": name, "encrypted": True, "remote_downloaded": True,
+                "local_restore": True, "off_host_restore": "pending live evidence",
+                "policy_id": policy["id"], "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    evidence["evidence_path"] = str(write_evidence(Path(policy["log_rotation"]["directory"]), evidence))
+    return evidence
+
+
 def restore_drill(root: Path, snapshot: Path) -> None:
     runtime = runtime_module()
     if not root.is_dir() or root.is_symlink() or not snapshot.is_dir() or snapshot.is_symlink():
@@ -113,8 +446,6 @@ def restore_drill(root: Path, snapshot: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="recursion-restore-drill-") as temporary:
         target = Path(temporary) / "root"
         shutil.copytree(root, target, symlinks=False)
-        # runtime-state's operator output is useful interactively, but the drill's JSON result
-        # is the machine-readable receipt and must not be mixed with that progress line.
         with contextlib.redirect_stdout(io.StringIO()):
             runtime.restore(target, snapshot)
         manifest = runtime.load_manifest(snapshot)
@@ -123,39 +454,59 @@ def restore_drill(root: Path, snapshot: Path) -> None:
         expected = {item["path"]: item["sha256"] for item in manifest["files"]}
         if observed != expected:
             raise BackupPolicyError("restore drill did not reconstruct the manifest inventory")
-    print(json.dumps({"status": "passed", "files": len(expected), "temporary_target": "discarded"}, sort_keys=True))
+    print(json.dumps({"status": "prepared", "files": len(expected), "temporary_target": "discarded",
+                      "production_proven": False}, sort_keys=True))
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="backup-offsite")
-    parser.add_argument("--config", type=Path, default=Path(__file__).resolve().parents[1] / "deploy/backup/recursion-offsite.json")
+    parser.add_argument("--config", type=Path,
+                        default=Path(__file__).resolve().parents[1] / "deploy/backup/recursion-offsite.json")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("validate")
     sub.add_parser("plan")
     drill = sub.add_parser("restore-drill")
     drill.add_argument("--root", type=Path, required=True)
     drill.add_argument("--snapshot", type=Path, required=True)
+    backup = sub.add_parser("backup")
+    backup.add_argument("--execute", action="store_true")
+    restore = sub.add_parser("restore")
+    restore.add_argument("--execute", action="store_true")
+    restore.add_argument("--artifact")
+    reconcile = sub.add_parser("reconcile")
+    reconcile.add_argument("--execute", action="store_true")
     args = parser.parse_args(argv)
     try:
         policy = load_policy(args.config)
         if args.command == "validate":
             print(json.dumps({"id": policy["id"], "enabled": policy["enabled"]}, sort_keys=True))
         elif args.command == "plan":
-            print(json.dumps({
-                "enabled": policy["enabled"],
-                "steps": [
-                    ["runtime-state.py", "backup", policy["source"]["snapshot_directory"] + "/<timestamp>"],
-                    ["age", "--encrypt", "--recipients-file", policy["encryption"]["recipient_file"]],
-                    ["sftp", "put", "<encrypted-snapshot>", policy["destination"]["path"]],
-                    ["retention", "daily=%d" % policy["retention"]["daily"],
-                     "weekly=%d" % policy["retention"]["weekly"], "monthly=%d" % policy["retention"]["monthly"]],
-                ],
-                "execution": "human-deployment-only",
-            }, sort_keys=True))
-        else:
+            print(json.dumps({"enabled": policy["enabled"], "explicit_execute_required": True,
+                              "steps": [["runtime-state.py", "backup", "tmpfs-runtime-snapshot"],
+                                         ["age", "--encrypt", "--recipient-file", "<recipient-file>"],
+                                         ["sftp", "put", "<encrypted-snapshot>", policy["destination"]["path"]],
+                                         ["retention", "daily=%d" % policy["retention"]["daily"],
+                                          "weekly=%d" % policy["retention"]["weekly"],
+                                          "monthly=%d" % policy["retention"]["monthly"]]],
+                              "execution": "disabled-until-explicit-enable-and-execute",
+                              "off_host_restore": "pending live evidence"}, sort_keys=True))
+        elif args.command == "restore-drill":
             restore_drill(args.root.resolve(), args.snapshot.resolve())
+        else:
+            require_execution(args.config, policy, args.execute)
+            if args.command == "backup":
+                print(json.dumps(execute_backup(args.config, policy), sort_keys=True))
+            elif args.command == "restore":
+                print(json.dumps(execute_restore(args.config, policy, args.artifact), sort_keys=True))
+            else:
+                retention = reconcile_remote(policy)
+                evidence = {"schema_version": 1, "operation": "reconcile", "status": "succeeded",
+                            "retention": retention, "policy_id": policy["id"],
+                            "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+                evidence["evidence_path"] = str(write_evidence(Path(policy["log_rotation"]["directory"]), evidence))
+                print(json.dumps(evidence, sort_keys=True))
         return 0
-    except (OSError, ValueError, BackupPolicyError) as exc:
+    except (OSError, ValueError, BackupPolicyError, tarfile.TarError) as exc:
         print(f"backup-offsite: {exc}", file=sys.stderr)
         return 2
 

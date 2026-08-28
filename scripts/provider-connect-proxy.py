@@ -24,10 +24,10 @@ import sys
 from collections.abc import Iterable
 
 try:
-    from provider_contract import enabled_allowlist, load_profile
+    from provider_contract import enabled_allowlist, enabled_profile_names, load_profile
 except ModuleNotFoundError:  # importlib-based hermetic tests load this file by path.
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-    from provider_contract import enabled_allowlist, load_profile
+    from provider_contract import enabled_allowlist, enabled_profile_names, load_profile
 
 try:
     import pwd
@@ -530,6 +530,8 @@ def make_parser() -> argparse.ArgumentParser:
     serve.add_argument("--allow", action="append", default=[])
     serve.add_argument("--profile-dir", type=pathlib.Path)
     serve.add_argument("--profile", action="append", default=[])
+    serve.add_argument("--enabled-profiles", action="store_true",
+                       help="select only profiles explicitly marked enabled")
     serve.add_argument("--resolve", action="append", default=[])
     serve.add_argument("--drop-user", required=True)
     serve.add_argument("--concurrency", type=int, default=16)
@@ -550,12 +552,18 @@ def main() -> int:
             if args.profile_dir is not None:
                 if args.allow:
                     raise ValueError("--allow cannot be combined with --profile-dir")
-                if not args.profile:
+                if args.profile and args.enabled_profiles:
+                    raise ValueError("--profile and --enabled-profiles are mutually exclusive")
+                if args.enabled_profiles:
+                    selected = enabled_profile_names(args.profile_dir)
+                else:
+                    selected = args.profile
+                if not selected:
                     raise ValueError("at least one provider profile is required")
-                profiles = [load_profile(args.profile_dir / f"{name}.json", name) for name in args.profile]
+                profiles = [load_profile(args.profile_dir / f"{name}.json", name) for name in selected]
                 if any(profile["namespace"] != args.namespace.name for profile in profiles):
                     raise ValueError("provider profile namespace does not match --namespace")
-                allowed = enabled_allowlist(args.profile_dir, args.profile)
+                allowed = enabled_allowlist(args.profile_dir, selected)
             else:
                 allowed = parse_allowlist(args.allow)
             resolutions = parse_resolutions(args.resolve, args.namespace)

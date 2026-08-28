@@ -51,6 +51,9 @@ def check(condition: bool, label: str) -> None:
 
 def run_validate(engine: str, engine_dir: Path | None) -> subprocess.CompletedProcess:
     env = dict(os.environ)
+    # Production resolution reads the human-owned /etc profile directory. The local contract
+    # suite explicitly points at the checked-in disabled fixtures so it remains hermetic.
+    env["RECURSION_PROVIDER_DIR"] = str(SOURCE / "scripts" / "providers")
     if engine_dir is None:
         env.pop("RECURSION_ENGINE_DIR", None)
     else:

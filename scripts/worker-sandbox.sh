@@ -4,6 +4,7 @@
 set -euo pipefail
 
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+PYTHON_BIN="${RECURSION_PYTHON:-python3}"
 ENGINE=""; WT=""; PROMPT=""; MODEL=""; USAGE_FILE=""; ROLE="implementer"
 NETWORK_POLICY="provider-only"; READ_ONLY_WORKTREE=0; EVIDENCE_DIR=""
 GATE_COMMAND=""; WORKDIR_PATH="."; READ_ONLY_PATHS=(); ENGINE_PLAN=""
@@ -52,7 +53,7 @@ if [ -n "$ENGINE_PLAN" ]; then
       MREQ=1) PLAN_MREQ=1 ;;
       OK=1)   PLAN_OK=1 ;;
     esac
-  done < <(python3 - "$ENGINE_PLAN" "$ENGINE" <<'PY' || true
+  done < <("$PYTHON_BIN" - "$ENGINE_PLAN" "$ENGINE" <<'PY' || true
 import json, re, sys
 try:
     plan = json.load(open(sys.argv[1]))
@@ -204,7 +205,7 @@ case "${RECURSION_TEST_WORKER:-}" in
           [ -x "$ROOT/scripts/provider-egress.py" ] || exit 96
           egress_args=(inject "$PLAN_EGRESS")
           for endpoint in "${PLAN_ENDPOINTS[@]}"; do egress_args+=(--endpoint "$endpoint"); done
-          egress_lines="$(RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
+          egress_lines="$(RECURSION_ROOT="$ROOT" "$PYTHON_BIN" "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
             || { echo "worker-sandbox: provider egress profile was refused" >&2; exit 96; }
           while IFS= read -r egress_line; do
             [ -z "$egress_line" ] && continue
@@ -253,8 +254,15 @@ if [ -n "$ENGINE_PLAN" ]; then
     || { echo "worker-sandbox: engine plan must be root-owned and not group/other-writable" >&2; exit 95; }
 fi
 if [ "$NETWORK_POLICY" = provider-only ]; then
-  bash "$ROOT/scripts/provider-network.sh" check >/dev/null \
-    || { echo "worker-sandbox: provider-only capability probe failed" >&2; exit 96; }
+  if [ -n "$PLAN_EGRESS" ]; then
+    bash "$ROOT/scripts/provider-network.sh" check --engine "$ENGINE" >/dev/null \
+      || { echo "worker-sandbox: provider-only capability probe failed" >&2; exit 96; }
+  else
+    # v1 engines have no Phase 4 assignment/profile. Preserve their existing Anthropic proxy
+    # boundary until a Phase 4 engine plan explicitly opts into provider-specific admission.
+    bash "$ROOT/scripts/provider-network.sh" check >/dev/null \
+      || { echo "worker-sandbox: provider-only capability probe failed" >&2; exit 96; }
+  fi
 fi
 
 RUNNER_USER="${RECURSION_RUNNER_USER:-recursion-runner}"
@@ -423,12 +431,15 @@ case "$ENGINE" in
     # Plugin engines (D-015): exec exactly the admitted plan argv; no shell, no interpolation.
     # Passthrough values ride a root-owned 0600 EnvironmentFile, never the systemd-run command
     # line, so credentials stay out of /proc/*/cmdline and `systemctl show`.
+    SECRET_RUNTIME_DIR="${RECURSION_SECRET_RUNTIME_DIR:-/run/recursion-runner}"
+    "$PYTHON_BIN" "$ROOT/scripts/secret_runtime.py" scavenge --directory "$SECRET_RUNTIME_DIR" \
+      || { echo "worker-sandbox: secret runtime cleanup refused" >&2; exit 95; }
     if [ -n "$PLAN_EGRESS" ]; then
       [ -x "$ROOT/scripts/provider-egress.py" ] \
         || { echo "worker-sandbox: provider egress helper is absent" >&2; exit 96; }
       egress_args=(inject "$PLAN_EGRESS")
       for endpoint in "${PLAN_ENDPOINTS[@]}"; do egress_args+=(--endpoint "$endpoint"); done
-      egress_lines="$(RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
+      egress_lines="$(RECURSION_ROOT="$ROOT" "$PYTHON_BIN" "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
         || { echo "worker-sandbox: provider egress profile was refused" >&2; exit 96; }
       while IFS= read -r egress_line; do
         [ -z "$egress_line" ] && continue
@@ -439,17 +450,20 @@ case "$ENGINE" in
       done <<< "$egress_lines"
     fi
     if [ "${#PLAN_ENV_PASS[@]}" -gt 0 ]; then
-      ENGINE_ENV_FILE="$(mktemp /tmp/recursion-engine-env.XXXXXX)" || exit 95
-      chmod 0600 "$ENGINE_ENV_FILE"
+      ENV_CONTENT=""
       for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
         plan_env_value="${!plan_env_name:-}"
         [ -n "$plan_env_value" ] || continue
         case "$plan_env_value" in
           *$'\n'*|*$'\r'*) echo "worker-sandbox: engine env value contains a newline" >&2; exit 92 ;;
         esac
-        printf '%s=%s\n' "$plan_env_name" "$plan_env_value" >> "$ENGINE_ENV_FILE"
+        ENV_CONTENT+="$plan_env_name=$plan_env_value"$'\n'
       done
-      RUN+=(--property "EnvironmentFile=$ENGINE_ENV_FILE")
+      if [ -n "$ENV_CONTENT" ]; then
+        ENGINE_ENV_FILE="$(printf '%s' "$ENV_CONTENT" | "$PYTHON_BIN" "$ROOT/scripts/secret_runtime.py" \
+          write-env --directory "$SECRET_RUNTIME_DIR")" || exit 95
+        RUN+=(--property "EnvironmentFile=$ENGINE_ENV_FILE")
+      fi
     fi
     build_plan_argv "$INNER_EXE"
     RUN+=(/usr/bin/env "${PLAN_RUN[@]}")

@@ -22,6 +22,14 @@ NAMESPACE_RE = re.compile(r"recursion-provider-[a-z0-9-]{1,40}\Z")
 PROXY_ENV = frozenset({"HTTP_PROXY", "HTTPS_PROXY"})
 PROFILE_KEYS = {"schema_version", "id", "provider", "enabled", "namespace", "proxy", "authorities"}
 PROXY_KEYS = {"type", "host", "port", "env"}
+DEPLOYED_PROFILE_DIR = Path("/etc/recursion/providers")
+ENGINE_PROFILE_MAP = {
+    "claude": "anthropic",
+    "hermes": "anthropic",
+    "cursor": "cursor",
+    "gemini": "google-gemini",
+    "opencode": "openrouter-via-opencode",
+}
 
 
 class ProviderProfileError(ValueError):
@@ -102,7 +110,9 @@ def load_profile(path: Path, expected_id: str | None = None) -> dict:
 
 def profile_directory(script_dir: Path | str) -> Path:
     override = os.environ.get("RECURSION_PROVIDER_DIR", "").strip()
-    return Path(override) if override else Path(script_dir) / "providers"
+    # The checked-in profiles are review fixtures, not an implicit production source.  The
+    # deployed proxy and every resolver must read the same human-owned /etc directory.
+    return Path(override) if override else DEPLOYED_PROFILE_DIR
 
 
 def profile_for_provider(provider: str, directory: Path) -> dict:
@@ -128,7 +138,7 @@ def proxy_environment(profile: dict, endpoints: Iterable[str]) -> dict[str, str]
 
 
 def enabled_allowlist(directory: Path, profiles: Iterable[str] | None = None) -> set[tuple[str, int]]:
-    names = list(profiles) if profiles is not None else sorted(path.stem for path in directory.glob("*.json"))
+    names = list(profiles) if profiles is not None else enabled_profile_names(directory)
     if not names:
         raise ProviderProfileError("no provider profiles were selected")
     allowed: set[tuple[str, int]] = set()
@@ -138,3 +148,30 @@ def enabled_allowlist(directory: Path, profiles: Iterable[str] | None = None) ->
             raise ProviderProfileError(f"provider egress profile is disabled: {name}")
         allowed.update(parse_authority(item) for item in profile["authorities"])
     return allowed
+
+
+def enabled_profile_names(directory: Path) -> list[str]:
+    """Return only profiles whose human-owned record explicitly says enabled=true."""
+    names: list[str] = []
+    for path in sorted(directory.glob("*.json")):
+        profile = load_profile(path, path.stem)
+        if profile["enabled"]:
+            names.append(profile["id"])
+    if not names:
+        raise ProviderProfileError("all provider profiles are disabled; refusing provider egress")
+    return names
+
+
+def engine_profile(engine: str, directory: Path, endpoints: Iterable[str] | None = None) -> dict:
+    """Authenticate one engine assignment to exactly one enabled provider profile."""
+    if not isinstance(engine, str) or not NAME_RE.fullmatch(engine):
+        raise ProviderProfileError("engine name is invalid")
+    profile_name = ENGINE_PROFILE_MAP.get(engine)
+    if profile_name is None:
+        raise ProviderProfileError(f"no provider profile is bound to engine: {engine}")
+    profile = profile_for_provider(profile_name, directory)
+    if endpoints is not None:
+        assert_endpoints_match(profile, endpoints)
+    if not profile["enabled"]:
+        raise ProviderProfileError(f"provider egress profile is disabled: {profile_name}")
+    return profile
