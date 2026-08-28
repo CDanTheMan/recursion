@@ -135,10 +135,9 @@ def atomic_text(path: Path, text: str) -> None:
 
 
 # --- engine derivation ------------------------------------------------------------------
-# The run-evidence schema (worker-evidence.py) records role and model_alias but NOT the
-# engine, so the engine name is reconstructed from the usage record's provider via the
-# shipped manifests. A provider claimed by two manifests is ambiguous and resolves to
-# "unknown" rather than to a guess.
+# New Phase 5 records carry engine/provider/capacity-pool facts directly.  The provider
+# join below remains as a compatibility reader for v1 records; it must never be used to
+# infer a pool because one provider may expose multiple account/subscription pools.
 
 def manifest_dir() -> Path:
     override = os.environ.get("RECURSION_ENGINE_DIR", "").strip()
@@ -228,6 +227,8 @@ def normalize(record: dict, mapping: dict) -> dict:
         "role": role,
         "engine": derive_engine(record, usage, provider, mapping),
         "provider": provider,
+        "capacity_pool": nonempty_str(usage.get("capacity_pool"))
+                          or nonempty_str(record.get("capacity_pool")),
         "model_alias": nonempty_str(record.get("model_alias")),
         "model": nonempty_str(record.get("model")) or nonempty_str(record.get("resolved_model")),
         "billing_basis": basis if basis in BILLING_BASES else None,

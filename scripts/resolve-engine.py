@@ -40,12 +40,24 @@ TOP_LEVEL_KEYS = {
     "availability_probe",
     "concurrency_cap",
     "env_passthrough",
+    # Phase 5 contracts are optional for the original v1 manifests.  A missing
+    # value means the v1 executable-only behavior, which keeps old fixtures and
+    # builtin execution compatible while allowing wrapper engines to opt in.
+    "runtime_layout",
+    "execution",
+    "auth",
 }
+REQUIRED_TOP_LEVEL_KEYS = TOP_LEVEL_KEYS - {"runtime_layout", "execution", "auth"}
 MODEL_KEYS = {"required", "argv_suffix"}
 BILLING_KEYS = {"basis", "provider"}
 BILLING_BASES = {"flat-subscription", "metered", "local"}
 NETWORK_KEYS = {"policy", "endpoints"}
 PROBE_KEYS = {"type", "url_env", "timeout_s"}
+RUNTIME_LAYOUT_KEYS = {"mode", "source", "root", "target", "entrypoint"}
+EXECUTION_KEYS = {"structured_output", "output_format", "cancellation", "exit_codes"}
+CANCELLATION_KEYS = {"signal", "grace_s"}
+AUTH_KEYS = {"mode", "required", "marker"}
+EXIT_CODE_KEYS = {"success", "auth", "runtime", "egress"}
 
 
 class ManifestError(Exception):
@@ -160,8 +172,88 @@ def validate_env_passthrough(names: object) -> None:
             raise ManifestError(f"env_passthrough contains an invalid env var name {item!r}")
 
 
+def validate_relative_path(value: object, where: str, *, allow_empty: bool = False) -> None:
+    if not isinstance(value, str) or (not value and not allow_empty) \
+            or value.startswith("/") or "\\" in value \
+            or any(part in {"", ".", ".."} for part in value.split("/")):
+        raise ManifestError(f"{where} must be a relative path without . or .. components")
+
+
+def validate_runtime_layout(layout: object) -> None:
+    if layout is None:
+        return
+    if not isinstance(layout, dict):
+        raise ManifestError("runtime_layout must be a JSON object or null")
+    extra = layout.keys() - RUNTIME_LAYOUT_KEYS
+    if extra:
+        raise ManifestError(f"runtime_layout has unknown key(s): {', '.join(sorted(extra))}")
+    if "mode" not in layout:
+        raise ManifestError("runtime_layout missing required key(s): mode")
+    obj = layout
+    mode = obj["mode"]
+    if mode not in {"executable-only", "sibling-tree"}:
+        raise ManifestError('runtime_layout.mode must be "executable-only" or "sibling-tree"')
+    if mode == "executable-only":
+        if any(obj.get(key) is not None for key in ("source", "root", "target", "entrypoint")):
+            raise ManifestError("executable-only runtime_layout may not declare tree paths")
+        return
+    source = obj.get("source", obj.get("root"))
+    if source is None:
+        raise ManifestError("sibling-tree runtime_layout requires source")
+    if source != "executable-directory":
+        raise ManifestError('runtime_layout.source must be "executable-directory"')
+    if obj.get("source") is not None and obj.get("root") is not None and obj["source"] != obj["root"]:
+        raise ManifestError("runtime_layout.source and root disagree")
+    validate_relative_path(obj.get("target", ".recursion-runtime"), "runtime_layout.target")
+    validate_relative_path(obj.get("entrypoint"), "runtime_layout.entrypoint")
+
+
+def validate_execution(execution: object) -> None:
+    if execution is None:
+        return
+    obj = require_object_keys(execution, EXECUTION_KEYS, "execution")
+    structured = obj["structured_output"]
+    if not isinstance(structured, bool):
+        raise ManifestError("execution.structured_output must be a boolean")
+    output_format = obj["output_format"]
+    if output_format not in {"text", "json"}:
+        raise ManifestError('execution.output_format must be "text" or "json"')
+    cancel = require_object_keys(obj["cancellation"], CANCELLATION_KEYS, "execution.cancellation")
+    if cancel["signal"] not in {"TERM", "INT"}:
+        raise ManifestError("execution.cancellation.signal must be TERM or INT")
+    if not is_plain_int(cancel["grace_s"]) or not (1 <= cancel["grace_s"] <= 60):
+        raise ManifestError("execution.cancellation.grace_s must be an integer in 1..60")
+    codes = require_object_keys(obj["exit_codes"], EXIT_CODE_KEYS, "execution.exit_codes")
+    for name, values in codes.items():
+        if not isinstance(values, list) or not values or \
+                not all(is_plain_int(value) and 0 <= value <= 255 for value in values):
+            raise ManifestError(f"execution.exit_codes.{name} must be a nonempty list of 0..255 integers")
+
+
+def validate_auth(auth: object) -> None:
+    if auth is None:
+        return
+    obj = require_object_keys(auth, AUTH_KEYS, "auth")
+    if obj["mode"] not in {"none", "runner-home-marker"}:
+        raise ManifestError('auth.mode must be "none" or "runner-home-marker"')
+    if not is_plain_bool(obj["required"]):
+        raise ManifestError("auth.required must be a boolean")
+    if obj["mode"] == "runner-home-marker":
+        validate_relative_path(obj["marker"], "auth.marker")
+    elif obj["marker"] is not None:
+        raise ManifestError("auth.marker is only valid for runner-home-marker auth")
+
+
 def validate_manifest(data: object, engine: str) -> dict:
-    obj = require_object_keys(data, TOP_LEVEL_KEYS, "manifest")
+    if not isinstance(data, dict):
+        raise ManifestError("manifest must be a JSON object")
+    missing = REQUIRED_TOP_LEVEL_KEYS - data.keys()
+    if missing:
+        raise ManifestError(f"manifest missing required key(s): {', '.join(sorted(missing))}")
+    extra = data.keys() - TOP_LEVEL_KEYS
+    if extra:
+        raise ManifestError(f"manifest has unknown key(s): {', '.join(sorted(extra))}")
+    obj = data
     if not is_plain_int(obj["schema_version"]) or obj["schema_version"] != 1:
         raise ManifestError("schema_version must be 1")
     name = obj["name"]
@@ -186,6 +278,9 @@ def validate_manifest(data: object, engine: str) -> dict:
     if cap is not None and not (is_plain_int(cap) and cap >= 1):
         raise ManifestError("concurrency_cap must be null or an integer >= 1")
     validate_env_passthrough(obj["env_passthrough"])
+    validate_runtime_layout(obj.get("runtime_layout"))
+    validate_execution(obj.get("execution"))
+    validate_auth(obj.get("auth"))
     return obj
 
 
@@ -217,7 +312,7 @@ def enabled_env_name(engine: str) -> str:
 
 
 def build_plan(data: dict) -> dict:
-    return {
+    plan = {
         "schema_version": 1,
         "engine": data["name"],
         "executable": data["executable"],
@@ -232,6 +327,21 @@ def build_plan(data: dict) -> dict:
         "concurrency_cap": data["concurrency_cap"],
         "env_passthrough": list(data["env_passthrough"]),
     }
+    if "runtime_layout" in data:
+        layout = data["runtime_layout"]
+        if layout is None or layout["mode"] == "executable-only":
+            plan["runtime_layout"] = {"mode": "executable-only"}
+        else:
+            plan["runtime_layout"] = {
+                "mode": "sibling-tree",
+                "source": layout.get("source", layout.get("root")),
+                "target": layout.get("target", ".recursion-runtime"),
+                "entrypoint": layout["entrypoint"],
+            }
+    for key in ("execution", "auth"):
+        if key in data:
+            plan[key] = data[key]
+    return plan
 
 
 def write_plan_atomically(plan: dict, out_path: Path) -> None:

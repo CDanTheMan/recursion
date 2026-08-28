@@ -7,6 +7,7 @@ ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 ENGINE=""; WT=""; PROMPT=""; MODEL=""; USAGE_FILE=""; ROLE="implementer"
 NETWORK_POLICY="provider-only"; READ_ONLY_WORKTREE=0; EVIDENCE_DIR=""
 GATE_COMMAND=""; WORKDIR_PATH="."; READ_ONLY_PATHS=(); ENGINE_PLAN=""
+EXECUTION_EVIDENCE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --engine) ENGINE="${2:-}"; shift 2 ;;
@@ -20,6 +21,7 @@ while [ $# -gt 0 ]; do
     --read-only-worktree) READ_ONLY_WORKTREE=1; shift ;;
     --read-only-path) READ_ONLY_PATHS+=("${2:-}"); shift 2 ;;
     --evidence-dir) EVIDENCE_DIR="${2:-}"; shift 2 ;;
+    --execution-evidence) EXECUTION_EVIDENCE="${2:-}"; shift 2 ;;
     --gate-command) GATE_COMMAND="${2:-}"; shift 2 ;;
     --workdir) WORKDIR_PATH="${2:-}"; shift 2 ;;
     *) echo "worker-sandbox: unknown argument: $1" >&2; exit 2 ;;
@@ -37,6 +39,10 @@ case "$ENGINE" in
       || { echo "worker-sandbox: invalid engine" >&2; exit 92; } ;;
 esac
 PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ENV_PASS=(); PLAN_OK=0; PLAN_MREQ=0
+PLAN_RUNTIME_MODE="executable-only"; PLAN_RUNTIME_SOURCE=""; PLAN_RUNTIME_TARGET=""; PLAN_RUNTIME_ENTRY=""
+PLAN_AUTH_REQUIRED=0; PLAN_AUTH_MODE="none"; PLAN_AUTH_MARKER=""
+PLAN_OUTPUT_FORMAT="text"; PLAN_STRUCTURED=0; PLAN_CANCEL_SIGNAL="TERM"; PLAN_CANCEL_GRACE=5
+PLAN_EXIT_CODES=""
 ENGINE_ENV_FILE=""
 if [ -n "$ENGINE_PLAN" ]; then
   [ -f "$ENGINE_PLAN" ] || { echo "worker-sandbox: engine plan is missing" >&2; exit 92; }
@@ -47,6 +53,18 @@ if [ -n "$ENGINE_PLAN" ]; then
       ARG=*)  PLAN_ARGV+=("${plan_line#ARG=}") ;;
       MSFX=*) PLAN_MODEL_SUFFIX+=("${plan_line#MSFX=}") ;;
       ENVP=*) PLAN_ENV_PASS+=("${plan_line#ENVP=}") ;;
+      RTMODE=*) PLAN_RUNTIME_MODE="${plan_line#RTMODE=}" ;;
+      RTSOURCE=*) PLAN_RUNTIME_SOURCE="${plan_line#RTSOURCE=}" ;;
+      RTTARGET=*) PLAN_RUNTIME_TARGET="${plan_line#RTTARGET=}" ;;
+      RTENTRY=*) PLAN_RUNTIME_ENTRY="${plan_line#RTENTRY=}" ;;
+      AUTHREQ=1) PLAN_AUTH_REQUIRED=1 ;;
+      AUTHMODE=*) PLAN_AUTH_MODE="${plan_line#AUTHMODE=}" ;;
+      AUTHMARKER=*) PLAN_AUTH_MARKER="${plan_line#AUTHMARKER=}" ;;
+      EXOUT=*) PLAN_OUTPUT_FORMAT="${plan_line#EXOUT=}" ;;
+      EXSTRUCT=1) PLAN_STRUCTURED=1 ;;
+      CANCEL=*) PLAN_CANCEL_SIGNAL="${plan_line#CANCEL=}" ;;
+      CGRACE=*) PLAN_CANCEL_GRACE="${plan_line#CGRACE=}" ;;
+      EXCODES=*) PLAN_EXIT_CODES="${plan_line#EXCODES=}" ;;
       MREQ=1) PLAN_MREQ=1 ;;
       OK=1)   PLAN_OK=1 ;;
     esac
@@ -90,6 +108,58 @@ for name in plan.get("env_passthrough") or []:
     if not isinstance(name, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", name):
         raise SystemExit(92)
     print("ENVP=" + name)
+layout = plan.get("runtime_layout")
+if layout is not None:
+    if not isinstance(layout, dict) or layout.get("mode") not in ("executable-only", "sibling-tree"):
+        raise SystemExit(92)
+    if layout.get("mode") == "sibling-tree":
+        source = layout.get("source", layout.get("root"))
+        target = layout.get("target", ".recursion-runtime")
+        entry = layout.get("entrypoint")
+        if source != "executable-directory" or not isinstance(target, str) or not isinstance(entry, str):
+            raise SystemExit(92)
+        if target.startswith("/") or entry.startswith("/") or not target or not entry \
+                or any(part in ("", ".", "..") for part in target.split("/")) \
+                or any(part in ("", ".", "..") for part in entry.split("/")):
+            raise SystemExit(92)
+        print("RTMODE=sibling-tree")
+        print("RTSOURCE=" + source)
+        print("RTTARGET=" + target)
+        print("RTENTRY=" + entry)
+    else:
+        print("RTMODE=executable-only")
+auth = plan.get("auth")
+if auth is not None:
+    if not isinstance(auth, dict) or auth.get("mode") not in ("none", "runner-home-marker") \
+            or not isinstance(auth.get("required"), bool):
+        raise SystemExit(92)
+    if auth.get("mode") == "runner-home-marker":
+        marker = auth.get("marker")
+        if not isinstance(marker, str) or not marker or marker.startswith("/") \
+                or any(part in ("", ".", "..") for part in marker.split("/")):
+            raise SystemExit(92)
+        print("AUTHREQ=1" if auth.get("required") else "AUTHREQ=0")
+        print("AUTHMODE=runner-home-marker")
+        print("AUTHMARKER=" + marker)
+execution = plan.get("execution")
+if execution is not None:
+    if not isinstance(execution, dict):
+        raise SystemExit(92)
+    output = execution.get("output_format", "text")
+    if output not in ("text", "json"):
+        raise SystemExit(92)
+    print("EXOUT=" + output)
+    if execution.get("structured_output") is True:
+        print("EXSTRUCT=1")
+    cancellation = execution.get("cancellation") or {}
+    if cancellation.get("signal") not in ("TERM", "INT") or not isinstance(cancellation.get("grace_s"), int):
+        raise SystemExit(92)
+    print("CANCEL=" + cancellation["signal"])
+    print("CGRACE=" + str(cancellation["grace_s"]))
+    codes = execution.get("exit_codes") or {}
+    if not isinstance(codes, dict):
+        raise SystemExit(92)
+    print("EXCODES=" + json.dumps(codes, sort_keys=True, separators=(",", ":")))
 print("OK=1")
 PY
 )
@@ -125,6 +195,47 @@ build_plan_argv(){ # resolved-exe -> PLAN_RUN: exact-element placeholder substit
     done
   fi
 }
+write_execution_evidence(){ # status rc classification; controller-owned, never worker-written
+  local status="$1" rc="$2" classification="$3"
+  [ -z "$EXECUTION_EVIDENCE" ] || [ "$ENGINE" = gate ] || {
+    mkdir -p "$(dirname "$EXECUTION_EVIDENCE")" || return 1
+    python3 - "$EXECUTION_EVIDENCE" "$ENGINE" "$MODEL" "$status" "$rc" "$classification" \
+      "$PLAN_RUNTIME_MODE" "$PLAN_RUNTIME_TARGET" "$PLAN_RUNTIME_ENTRY" "$PLAN_OUTPUT_FORMAT" \
+      "$PLAN_STRUCTURED" "$PLAN_CANCEL_SIGNAL" "$PLAN_CANCEL_GRACE" "$PLAN_EXIT_CODES" \
+      "${PLAN_RUN[@]}" <<'PY'
+import json, os, sys, tempfile
+path, engine, model, status, rc, classification = sys.argv[1:7]
+runtime_mode, runtime_target, runtime_entry = sys.argv[7:10]
+output_format, structured, cancel_signal, cancel_grace, exit_codes = sys.argv[10:15]
+argv = sys.argv[15:]
+value = {"schema_version": 1, "engine": engine, "status": status,
+         "exit_code": int(rc), "exit_classification": classification,
+         "model": model, "argv": argv,
+         "output_format": output_format, "structured_output": structured == "1",
+         "cancellation": {"signal": cancel_signal, "grace_s": int(cancel_grace)},
+         "exit_codes": json.loads(exit_codes) if exit_codes else {},
+         "runtime_layout": {"mode": runtime_mode}}
+if runtime_mode == "sibling-tree":
+    value["runtime_layout"].update(target=runtime_target, entrypoint=runtime_entry)
+fd, tmp = tempfile.mkstemp(prefix=".execution-evidence.", dir=os.path.dirname(path) or ".")
+with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
+    json.dump(value, out, indent=2, sort_keys=True); out.write("\n"); out.flush(); os.fsync(out.fileno())
+os.replace(tmp, path)
+PY
+  }
+}
+check_plan_auth(){
+  [ "$PLAN_AUTH_REQUIRED" = 1 ] || return 0
+  [ "$PLAN_AUTH_MODE" = runner-home-marker ] && [ -n "$PLAN_AUTH_MARKER" ] || {
+    echo "worker-sandbox: refusal=missing-auth invalid runner-home auth contract" >&2; return 90;
+  }
+  local home="${RECURSION_TEST_RUNNER_HOME:-${RECURSION_RUNNER_HOME:-${HOME:-}}}" marker_path=""
+  marker_path="$(realpath -e "$home/$PLAN_AUTH_MARKER" 2>/dev/null || true)"
+  case "$marker_path" in
+    "$home"/*) ;;
+    *) echo "worker-sandbox: refusal=missing-auth runner auth marker is absent" >&2; return 90 ;;
+  esac
+}
 case "$ROLE" in implementer|verifier|gate) ;; *) echo "worker-sandbox: invalid worker role" >&2; exit 92;; esac
 case "$NETWORK_POLICY" in provider-only|none) ;; *) echo "worker-sandbox: invalid network policy" >&2; exit 92;; esac
 [ "$ENGINE:$ROLE" = gate:gate ] || { [ "$ENGINE" != gate ] && [ "$ROLE" != gate ]; } \
@@ -159,6 +270,9 @@ case "${RECURSION_TEST_WORKER:-}" in
     # Existing hermetic envelope tests exercise the logical scope gate, not the OS boundary.
     # This bypass is accepted only for disposable /tmp controllers and is never valid on /opt.
     case "$(realpath -m "$ROOT")" in /tmp/*) ;; *) echo "worker-sandbox: test bypass refused" >&2; exit 95;; esac
+    if [ "$ENGINE" != gate ]; then
+      check_plan_auth || exit $?
+    fi
     if [ "$NETWORK_POLICY" = provider-only ] \
        && [ "${RECURSION_TEST_PROVIDER_NETWORK:-}" != logical ]; then
       echo "worker-sandbox: provider-only test capability is absent" >&2; exit 96
@@ -180,14 +294,35 @@ case "${RECURSION_TEST_WORKER:-}" in
           ${USAGE_FILE:+--usage-file "$USAGE_FILE"}
         ;;
       *)
-        command -v "$PLAN_EXE" >/dev/null 2>&1 || exit 90
+        logical_exe="$(command -v "$PLAN_EXE" 2>/dev/null || true)"
+        [ -n "$logical_exe" ] || { echo "worker-sandbox: refusal=missing-runtime executable is unavailable" >&2; exit 94; }
         # Declare the passthrough set so hermetic controls can verify the plan->env plumbing;
         # the real --setenv/EnvironmentFile wiring is exercised only on the box.
         for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
           echo "worker-sandbox: env-passthrough $plan_env_name" >&2
         done
-        build_plan_argv "$(command -v "$PLAN_EXE")"
-        cd "$WT"; "${PLAN_RUN[@]}"
+        logical_inner="$logical_exe"
+        if [ "$PLAN_RUNTIME_MODE" = sibling-tree ]; then
+          logical_runtime_host="$WT/$PLAN_RUNTIME_TARGET"
+          mkdir -p "$(dirname "$logical_runtime_host")"
+          python3 "$(dirname "$0")/runtime-layout.py" stage \
+            --source "$(dirname "$(realpath -e "$logical_exe")")" --destination "$logical_runtime_host" \
+            || { echo "worker-sandbox: refusal=missing-runtime runtime tree could not be staged" >&2; exit 94; }
+          logical_inner="$logical_runtime_host/$PLAN_RUNTIME_ENTRY"
+        fi
+        build_plan_argv "$logical_inner"
+        write_execution_evidence started 0 prepared || exit 95
+        cd "$WT"
+        if "${PLAN_RUN[@]}"; then logical_rc=0; else logical_rc=$?; fi
+        case "$logical_rc" in
+          0) logical_class=success ;;
+          1|2) logical_class=auth-failed ;;
+          60|65) logical_class=egress-failed ;;
+          126|127) logical_class=runtime-failed ;;
+          *) logical_class=process-exit ;;
+        esac
+        write_execution_evidence finished "$logical_rc" "$logical_class" || exit 95
+        exit "$logical_rc"
         ;;
     esac
     exit $?
@@ -202,12 +337,12 @@ esac
 PROVIDER_NETNS=/run/netns/recursion-provider-only
 if [ "$NETWORK_POLICY" = provider-only ]; then
   [ -e "$PROVIDER_NETNS" ] && mountpoint -q "$PROVIDER_NETNS" \
-    || { echo "worker-sandbox: provider-only network namespace capability is absent" >&2; exit 96; }
+    || { echo "worker-sandbox: refusal=missing-egress provider-only network namespace capability is absent" >&2; exit 96; }
   netns_owner="$(stat -c %u "$PROVIDER_NETNS" 2>/dev/null || true)"
   netns_mode="$(stat -c %a "$PROVIDER_NETNS" 2>/dev/null || true)"
   [ "$netns_owner" = 0 ] && [ -n "$netns_mode" ] \
     && [ $((8#$netns_mode & 022)) -eq 0 ] \
-    || { echo "worker-sandbox: provider network capability is not root-owned/read-only" >&2; exit 96; }
+    || { echo "worker-sandbox: refusal=missing-egress provider network capability is not root-owned/read-only" >&2; exit 96; }
 fi
 
 [ "$(id -u)" = 0 ] || { echo "worker-sandbox: controller must be root" >&2; exit 95; }
@@ -221,7 +356,7 @@ if [ -n "$ENGINE_PLAN" ]; then
 fi
 if [ "$NETWORK_POLICY" = provider-only ]; then
   bash "$ROOT/scripts/provider-network.sh" check >/dev/null \
-    || { echo "worker-sandbox: provider-only capability probe failed" >&2; exit 96; }
+    || { echo "worker-sandbox: refusal=missing-egress provider-only capability probe failed" >&2; exit 96; }
 fi
 
 RUNNER_USER="${RECURSION_RUNNER_USER:-recursion-runner}"
@@ -237,20 +372,30 @@ else
 fi
 [ "$RUNNER_UID" != 0 ] && [ "$RUNNER_GID" != 0 ] \
   || { echo "worker-sandbox: runner identity is privileged" >&2; exit 95; }
+if [ "$ENGINE" != gate ] && [ "$PLAN_AUTH_REQUIRED" = 1 ]; then
+  auth_marker_path="$(realpath -e "$RUNNER_HOME/$PLAN_AUTH_MARKER" 2>/dev/null || true)"
+  case "$auth_marker_path" in
+    "$RUNNER_HOME"/*) ;;
+    *) echo "worker-sandbox: refusal=missing-auth runner auth marker is absent" >&2; exit 90 ;;
+  esac
+fi
 
 case "$ENGINE" in
   gate) EXE=""; EXE_REAL="" ;;
   claude) EXE="$(command -v claude 2>/dev/null || true)"; [ -n "$EXE" ] || exit 90 ;;
   hermes) EXE="$(command -v hermes 2>/dev/null || true)"; [ -n "$EXE" ] || exit 94 ;;
-  *) EXE="$(command -v "$PLAN_EXE" 2>/dev/null || true)"; [ -n "$EXE" ] || exit 90 ;;
+  *) EXE="$(command -v "$PLAN_EXE" 2>/dev/null || true)"; [ -n "$EXE" ] \
+       || { echo "worker-sandbox: refusal=missing-runtime executable is unavailable" >&2; exit 94; } ;;
 esac
-[ "$ENGINE" = gate ] || EXE_REAL="$(realpath -e "$EXE")"
+[ "$ENGINE" = gate ] || EXE_REAL="$(realpath -e "$EXE")" \
+  || { echo "worker-sandbox: refusal=missing-runtime executable cannot be resolved" >&2; exit 94; }
 
 # The disposable worktree is the only writable project mount. A test stub outside /usr is copied
 # in as one read-only executable and removed before the controller evaluates the diff.
 chown -R "$RUNNER_UID:$RUNNER_GID" "$WT"
 INNER_EXE="$EXE"
 SANDBOX_BIN="$WT/.recursion-sandbox"
+RUNTIME_HOST=""; RUNTIME_DEST=""; RUNTIME_ENTRY=""
 case "$ENGINE:$EXE_REAL" in
   gate:) ;;
   *:/usr/*) ;;
@@ -261,6 +406,17 @@ case "$ENGINE:$EXE_REAL" in
     INNER_EXE="/workspace/.recursion-sandbox/$ENGINE"
     ;;
 esac
+if [ "$ENGINE" != gate ] && [ "$PLAN_RUNTIME_MODE" = sibling-tree ]; then
+  RUNTIME_HOST="$WT/$PLAN_RUNTIME_TARGET"
+  RUNTIME_DEST="/workspace/$PLAN_RUNTIME_TARGET"
+  RUNTIME_ENTRY="$PLAN_RUNTIME_ENTRY"
+  mkdir -p "$(dirname "$RUNTIME_HOST")"
+  python3 "$ROOT/scripts/runtime-layout.py" stage \
+    --source "$(dirname "$EXE_REAL")" --destination "$RUNTIME_HOST" \
+    || { echo "worker-sandbox: refusal=missing-runtime runtime tree could not be staged" >&2; exit 94; }
+  chown -R 0:"$RUNNER_GID" "$RUNTIME_HOST"
+  INNER_EXE="$RUNTIME_DEST/$RUNTIME_ENTRY"
+fi
 
 safe_engine="${ENGINE//[^A-Za-z0-9_.-]/-}"
 UNIT="recursion-worker-${safe_engine}-$$-${RANDOM}.service"
@@ -284,10 +440,16 @@ stop_unit(){
 cleanup(){
   stop_unit || true
   rm -rf -- "$SANDBOX_BIN"
+  [ -z "$RUNTIME_HOST" ] || rm -rf -- "$RUNTIME_HOST"
   [ -z "$ENGINE_ENV_FILE" ] || rm -f -- "$ENGINE_ENV_FILE"
   chown -R 0:0 "$WT" 2>/dev/null || true
 }
-trap 'cleanup; exit 143' TERM INT
+cancel_worker(){
+  [ "$ENGINE" = gate ] || write_execution_evidence cancelled 143 cancelled || true
+  cleanup
+  exit 143
+}
+trap cancel_worker TERM INT
 trap cleanup EXIT
 
 RUN=(systemd-run --quiet --wait --collect --pipe --service-type=exec --unit "$UNIT"
@@ -328,6 +490,11 @@ fi
 for ((i=0; i<${#READ_ONLY_HOSTS[@]}; i++)); do
   RUN+=(--property "BindReadOnlyPaths=${READ_ONLY_HOSTS[$i]}:${READ_ONLY_DESTS[$i]}")
 done
+if [ -n "$RUNTIME_DEST" ]; then
+  # The runtime tree is staged below the disposable checkout, then made
+  # read-only in the worker mount namespace as one complete unit.
+  RUN+=(--property "ReadOnlyPaths=$RUNTIME_DEST")
+fi
 if [ -n "$EVIDENCE_DIR" ]; then
   chown -R "$RUNNER_UID:$RUNNER_GID" "$EVIDENCE_DIR"
   RUN+=(--property "BindPaths=$EVIDENCE_DIR:/evidence" --property ReadWritePaths=/evidence
@@ -404,6 +571,7 @@ case "$ENGINE" in
       RUN+=(--property "EnvironmentFile=$ENGINE_ENV_FILE")
     fi
     build_plan_argv "$INNER_EXE"
+    write_execution_evidence started 0 prepared || exit 95
     RUN+=(/usr/bin/env "${PLAN_RUN[@]}")
     ;;
 esac
@@ -411,4 +579,15 @@ esac
 "${RUN[@]}" & client_pid=$!
 if wait "$client_pid"; then rc=0; else rc=$?; fi
 client_pid=""
+if [ "$ENGINE" != gate ]; then
+  case "$rc" in
+    0) execution_class=success ;;
+    1|2) execution_class=auth-failed ;;
+    60|65) execution_class=egress-failed ;;
+    126|127) execution_class=runtime-failed ;;
+    143) execution_class=cancelled ;;
+    *) execution_class=process-exit ;;
+  esac
+  write_execution_evidence finished "$rc" "$execution_class" || exit 95
+fi
 exit "$rc"

@@ -16,9 +16,9 @@ Grounding notes (read the source before changing the joins below):
     "${MODEL_ALIAS:-legacy}" into worker-evidence.py --model-alias, which is the exact
     string this script reads back out of a run record — "legacy" is not invented here,
     it is the literal sentinel the executor already writes).
-  - A run-evidence record (worker-evidence.py) carries task_id/role/model_alias/status/
-    outcome/exit_code/started_at/finished_at but NOT engine — engine is joined from the
-    task header via task_id, using the run's role to pick implementer vs verifier engine.
+  - Phase 5 run evidence carries its resolved engine directly. Older records without it are
+     read through the task-header compatibility join; current assignment facts are not rebuilt
+     from mutable headers when direct evidence exists.
   - Canonical escalation identity events (taskctl.sh esc-record -> emit_event
     escalation-open/escalation-resolve) are written with an EMPTY task field today, so a
     join on events.jsonl's task field will legitimately find zero attributable
@@ -161,10 +161,11 @@ def load_events(root: Path) -> tuple[list[dict], int, int, str]:
 
 class RunRecord:
     __slots__ = ("id", "task_id", "role", "alias", "status", "outcome",
-                 "started_epoch", "finished_epoch")
+                 "started_epoch", "finished_epoch", "engine")
 
     def __init__(self, id_: str, task_id: str, role: str, alias: str, status: str,
-                 outcome: str, started_epoch: int | None, finished_epoch: int | None) -> None:
+                 outcome: str, started_epoch: int | None, finished_epoch: int | None,
+                 engine: str = "") -> None:
         self.id = id_
         self.task_id = task_id
         self.role = role
@@ -173,6 +174,7 @@ class RunRecord:
         self.outcome = outcome
         self.started_epoch = started_epoch
         self.finished_epoch = finished_epoch
+        self.engine = engine
 
 
 def _parse_ts(value: Any) -> int | None:
@@ -215,7 +217,8 @@ def load_runs(root: Path) -> tuple[list[RunRecord], int, int, bool]:
         outcome = record.get("outcome") if isinstance(record.get("outcome"), str) else ""
         started = _parse_ts(record.get("started_at"))
         finished = _parse_ts(record.get("finished_at"))
-        runs.append(RunRecord(run_id, task_id, role, alias, status, outcome, started, finished))
+        engine = record.get("engine") if isinstance(record.get("engine"), str) else ""
+        runs.append(RunRecord(run_id, task_id, role, alias, status, outcome, started, finished, engine))
         parsed += 1
     return runs, parsed, skipped, False
 
@@ -276,17 +279,17 @@ def build_buckets(
         get(task.engine, task.model_alias).task_status[task.status] += 1
         get(task.verifier_engine, task.verifier_model_alias).verifier_arms += 1
 
-    # Run evidence: join engine via task_id + role. A run whose task_id is unknown still
-    # carries its own alias (that came straight from the run record) but not a real engine.
+    # Run evidence is authoritative when it carries the resolved engine. A run whose task
+    # predates Phase 5 falls back to the task-id compatibility join.
     unknown_task_runs = 0
     by_bucket_task_role: dict[tuple[str, str], Counter[tuple[str, str]]] = {}
     for run in runs:
         task = tasks.get(run.task_id)
         if task is None:
-            engine = "(unknown-task)"
-            unknown_task_runs += 1
+            engine = run.engine or "(unknown-task)"
+            unknown_task_runs += int(not run.engine)
         else:
-            engine = task.verifier_engine if run.role == "verifier" else task.engine
+            engine = run.engine or (task.verifier_engine if run.role == "verifier" else task.engine)
         bucket = get(engine, run.alias)
         bucket.runs_by_role[run.role] += 1
         bucket.outcomes[_outcome_bucket(run.status, run.outcome)] += 1

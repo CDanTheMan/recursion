@@ -10,5 +10,23 @@
   "network": { "policy": "provider-only", "endpoints": ["api.cursor.com", "api2.cursor.sh"] },
   "availability_probe": null,
   "concurrency_cap": null,
-  "env_passthrough": []
+  "env_passthrough": [],
+  "runtime_layout": {
+    "mode": "sibling-tree",
+    "source": "executable-directory",
+    "target": ".recursion-runtime",
+    "entrypoint": "cursor-agent"
+  },
+  "execution": {
+    "structured_output": false,
+    "output_format": "text",
+    "cancellation": { "signal": "TERM", "grace_s": 5 },
+    "exit_codes": {
+      "success": [0],
+      "auth": [1, 2],
+      "runtime": [126, 127],
+      "egress": [60, 65]
+    }
+  },
+  "auth": { "mode": "runner-home-marker", "required": true, "marker": ".cursor" }
 }

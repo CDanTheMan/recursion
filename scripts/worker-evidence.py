@@ -68,10 +68,18 @@ def main() -> int:
     start.add_argument("--implementer-run-id", default="")
     start.add_argument("--commit-oid", default="")
     start.add_argument("--seed-evidence", default="")
+    start.add_argument("--engine", default="")
+    start.add_argument("--provider", default="")
+    start.add_argument("--capacity-pool", default="")
+    start.add_argument("--model", default="")
+    start.add_argument("--host", default="")
+    start.add_argument("--sandbox-profile", default="")
+    start.add_argument("--assignment-digest", default="")
     heartbeat = sub.add_parser("heartbeat"); heartbeat.add_argument("path"); heartbeat.add_argument("lease_epoch", type=int)
     finish = sub.add_parser("finish"); finish.add_argument("path"); finish.add_argument("status")
     finish.add_argument("outcome"); finish.add_argument("exit_code", type=int)
     finish.add_argument("--result-file"); finish.add_argument("--scope-file"); finish.add_argument("--usage-file")
+    finish.add_argument("--execution-evidence")
     finish.add_argument("--seed-evidence")
     finish.add_argument("--seed-verified-after", action="store_true")
     finish.add_argument("--commit-oid", default="")
@@ -98,6 +106,10 @@ def main() -> int:
             value["implementer_run_id"] = args.implementer_run_id
         if args.commit_oid:
             value["verification_commit"] = args.commit_oid
+        for field in ("engine", "provider", "capacity_pool", "model", "host", "sandbox_profile", "assignment_digest"):
+            supplied = getattr(args, field)
+            if supplied:
+                value[field] = supplied
         seed = maybe_json(args.seed_evidence)
         if isinstance(seed, dict) and seed:
             value["seed_evidence"] = seed
@@ -116,6 +128,9 @@ def main() -> int:
         usage = maybe_json(args.usage_file)
         if isinstance(usage, dict):
             value["usage"] = usage
+        execution = maybe_json(args.execution_evidence)
+        if isinstance(execution, dict):
+            value["execution"] = execution
         if args.commit_oid:
             value["commit_oid"] = args.commit_oid
         seed = maybe_json(args.seed_evidence)

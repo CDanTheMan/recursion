@@ -164,6 +164,56 @@
       },
       "uniqueItems": true,
       "description": "Env var names (not values) copied from the controller environment into the unit when set. Possibly empty. No duplicates."
+    },
+    "runtime_layout": {
+      "description": "Optional v1-compatible runtime layout. sibling-tree stages the executable's complete parent directory read-only; executable-only preserves the original single-file behavior.",
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["mode"],
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "enum": ["executable-only", "sibling-tree"] },
+            "source": { "const": "executable-directory" },
+            "root": { "const": "executable-directory" },
+            "target": { "type": "string", "pattern": "^[^/\\\\.][^/\\\\]*(/[^/\\\\.][^/\\\\]*)*$" },
+            "entrypoint": { "type": "string", "pattern": "^[^/\\\\.][^/\\\\]*(/[^/\\\\.][^/\\\\]*)*$" }
+          }
+        }
+      ]
+    },
+    "execution": {
+      "type": "object",
+      "required": ["structured_output", "output_format", "cancellation", "exit_codes"],
+      "additionalProperties": false,
+      "properties": {
+        "structured_output": { "type": "boolean" },
+        "output_format": { "enum": ["text", "json"] },
+        "cancellation": {
+          "type": "object", "required": ["signal", "grace_s"], "additionalProperties": false,
+          "properties": { "signal": { "enum": ["TERM", "INT"] }, "grace_s": { "type": "integer", "minimum": 1, "maximum": 60 } }
+        },
+        "exit_codes": {
+          "type": "object", "required": ["success", "auth", "runtime", "egress"], "additionalProperties": false,
+          "properties": {
+            "success": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 }, "minItems": 1 },
+            "auth": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 }, "minItems": 1 },
+            "runtime": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 }, "minItems": 1 },
+            "egress": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 }, "minItems": 1 }
+          }
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "required": ["mode", "required", "marker"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["none", "runner-home-marker"] },
+        "required": { "type": "boolean" },
+        "marker": { "type": ["string", "null"] }
+      }
     }
   }
 }

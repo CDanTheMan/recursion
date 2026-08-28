@@ -76,6 +76,7 @@ PILOT_ID="$(field pilot_id)"
 ENGINE="$(field engine)"; ACCEPTANCE="$(field acceptance)"; WORKDIR="$(field workdir)"
 AUTONOMY="$(field autonomy)"; MODEL="$(field model)"
 MODEL_ALIAS="$(field model_alias)"; VERIFIER_MODEL_ALIAS="$(field verifier_model_alias)"
+CAPACITY_POOL="$(field capacity_pool)"; [ -n "$CAPACITY_POOL" ] || CAPACITY_POOL="$(field pool_id)"
 DEADLINE_SECONDS="$(field deadline_seconds)"; VERIFIER_DEADLINE_SECONDS="$(field verifier_deadline_seconds)"
 NETWORK_POLICY="$(field network_policy)"; EVIDENCE_CONTRACT="$(field evidence_contract)"
 VERIFICATION_POLICY="$(field verification)"; EXPECTED_CHANGE="$(field expected_change)"
@@ -98,6 +99,7 @@ STRICT_PHASE5=0
 DEADLINE_SECONDS="${DEADLINE_SECONDS:-${RECURSION_WORKER_TIMEOUT_S:-3600}}"
 VERIFIER_DEADLINE_SECONDS="${VERIFIER_DEADLINE_SECONDS:-${RECURSION_VERIFIER_TIMEOUT_S:-1800}}"
 NETWORK_POLICY="${NETWORK_POLICY:-provider-only}"; EXPECTED_CHANGE="${EXPECTED_CHANGE:-optional}"
+CAPACITY_POOL="${CAPACITY_POOL:-unassigned}"
 # repo: which git repo the arm builds in. Default = this repo ($ROOT). An external repo
 # (e.g. /opt/golden-stallion-client) lets the loop build another codebase; its build output
 # and loop/work/<id> branch live in THAT repo, gated by whatever acceptance the task names.
@@ -136,7 +138,7 @@ text=open(sys.argv[1],encoding='utf-8',errors='surrogateescape').read()
 header,sep,body=text.partition('\n\n')
 keys={'id','project_id','pilot_id','goal_id','goal','engine','verifier_engine','repo',
        'acceptance','workdir',
-       'allowed_paths','non_goals','worker_class','model_alias','verifier_model_alias',
+       'allowed_paths','non_goals','worker_class','model_alias','verifier_model_alias','capacity_pool','pool_id',
        'deadline_seconds','verifier_deadline_seconds','network_policy','evidence_contract',
        'verification','expected_change','gate_class','gate_files','controller_gate_files',
        'gate_contract','source_head','source_branch','charter_sha256','plan_id','plan_digest',
@@ -917,7 +919,7 @@ ARM_USAGE="${ARMLOG%.out}.usage.json"
 run_model_supervised(){ # role worktree prompt resolved-model alias usage deadline run-id [commit] [implementer-run] [evidence-dir] [readonly]
   local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
   local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
-  local evidence_dir="${11:-}" readonly="${12:-0}" engine_plan=""
+  local evidence_dir="${11:-}" readonly="${12:-0}" engine_plan="" provider=""
   # Cross-engine verification (D-015): each role runs on its own contract engine.
   local active_engine="$ENGINE"
   [ "$role" != verifier ] || active_engine="$VERIFIER_ENGINE"
@@ -930,6 +932,18 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
       # Plugin engines run only from the plan admitted before lease/board mutation.
       if [ "$role" = verifier ]; then engine_plan="$ENGINE_PLAN_VERIFIER"; else engine_plan="$ENGINE_PLAN_IMPLEMENTER"; fi
       [ -n "$engine_plan" ] && [ -f "$engine_plan" ] || return 92 ;;
+  esac
+  case "$active_engine" in
+    claude) provider="anthropic-claude-code" ;;
+    hermes) provider="hermes" ;;
+    *) provider="$(python3 - "$engine_plan" <<'PY'
+import json,sys
+try:
+    print(json.load(open(sys.argv[1], encoding="utf-8"))["billing"]["provider"])
+except Exception:
+    raise SystemExit(1)
+PY
+  )" || return 95 ;;
   esac
 
   [ "$active_engine" != hermes ] || [ "${RECURSION_ALLOW_METERED:-0}" = "1" ] || return 93
@@ -945,10 +959,11 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
   elif [ -n "$engine_plan" ]; then
     # Plugin engines record the manifest's billing declaration; an absent record stays fatal.
     mkdir -p "$(dirname "$usage")"
-    ( umask 077; python3 - "$engine_plan" > "$usage" <<'PY'
+    ( umask 077; python3 - "$engine_plan" "$CAPACITY_POOL" > "$usage" <<'PY'
 import json, sys
 plan = json.load(open(sys.argv[1]))
 print(json.dumps({"schema_version": 1, "provider": plan["billing"]["provider"],
+                  "capacity_pool": sys.argv[2],
                   "billing_basis": plan["billing"]["basis"], "tokens": 0, "cost_usd": 0,
                   "evidence_source": "engine-manifest-v1"}))
 PY
@@ -957,7 +972,7 @@ PY
   local -a cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine "$active_engine" --worktree "$wt"
     --prompt "$prompt" --role "$role" --network-policy "$NETWORK_POLICY")
   [ -n "$resolved_model" ] && cmd+=(--model "$resolved_model")
-  [ -z "$engine_plan" ] || cmd+=(--engine-plan "$engine_plan")
+  [ -z "$engine_plan" ] || cmd+=(--engine-plan "$engine_plan" --execution-evidence "$ROOT/state/runs/$run_id-execution.json")
   [ "$active_engine" != hermes ] || cmd+=(--usage-file "$usage")
   [ "$readonly" != 1 ] || cmd+=(--read-only-worktree)
   [ -z "$evidence_dir" ] || cmd+=(--evidence-dir "$evidence_dir")
@@ -970,6 +985,12 @@ PY
 
   pause_checkpoint "worker launch" || return 75
   local worker_pgid rc now_epoch deadline_epoch heartbeat_epoch log_path
+  local -a evidence_meta=()
+  if [ -n "$engine_plan" ]; then
+    evidence_meta=(--engine "$active_engine" --provider "$provider" --capacity-pool "$CAPACITY_POOL"
+      --model "$resolved_model" --host "${RECURSION_HOST_ID:-gs-recursion}"
+      --sandbox-profile strict-linux --assignment-digest "$CONTRACT_DIGEST")
+  fi
   log_path="$ARMLOG"; [ "$role" != verifier ] || log_path="$ROOT/loop/logs/$DATE-verifier-$ID-$STAMP.out"
   RECURSION_VERIFICATION_COMMIT="$commit_oid" RECURSION_IMPLEMENTER_RUN_ID="$implementer_run" \
     setsid --wait "${cmd[@]}" >"$log_path" 2>&1 &
@@ -983,6 +1004,7 @@ PY
       --task-id "$ID" --role "$role" --model-alias "$alias" --worktree "$wt" \
       --base-commit "$BASE_COMMIT" --pid "$worker_pgid" --process-group "$worker_pgid" \
       --deadline-epoch "$deadline_epoch" --log "${log_path#$ROOT/}" --network-policy "$NETWORK_POLICY" \
+      "${evidence_meta[@]}" \
       ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} \
       ${implementer_run:+--implementer-run-id "$implementer_run"} ${commit_oid:+--commit-oid "$commit_oid"} \
       >>"$LOG" 2>&1 || { terminate_worker_group "$worker_pgid"; wait "$worker_pgid" 2>/dev/null || true; return 98; }
@@ -1031,6 +1053,19 @@ PY
     sleep 0.1
   done
   if wait "$worker_pgid"; then rc=0; else rc=$?; fi
+  if [ "$rc" -ne 0 ] && [ "$rc" -ne 75 ] && [ "$rc" -ne 97 ] \
+       && [ "$STRICT_PHASE5" = 1 ] && [ -f "$LAST_RUN_EVIDENCE" ]; then
+    case "$rc" in
+      90) execution_outcome=missing-auth ;;
+      94) execution_outcome=missing-runtime ;;
+      96) execution_outcome=missing-egress ;;
+      *) execution_outcome=engine-exit ;;
+    esac
+    local -a refusal_finish=(finish "$LAST_RUN_EVIDENCE" failed "$execution_outcome" "$rc")
+    execution_evidence="$ROOT/state/runs/$run_id-execution.json"
+    [ ! -f "$execution_evidence" ] || refusal_finish+=(--execution-evidence "$execution_evidence")
+    python3 "$ROOT/scripts/worker-evidence.py" "${refusal_finish[@]}" >>"$LOG" 2>&1 || true
+  fi
   return "$rc"
 }
 
@@ -1128,6 +1163,8 @@ phase5_record_run(){ # status outcome rc [commit]
   [ -z "$result_file" ] || args+=(--result-file "$result_file")
   [ -z "$LAST_SCOPE_FILE" ] || args+=(--scope-file "$LAST_SCOPE_FILE")
   [ -z "$LAST_USAGE_FILE" ] || [ ! -f "$LAST_USAGE_FILE" ] || args+=(--usage-file "$LAST_USAGE_FILE")
+  execution_evidence="$ROOT/state/runs/$LAST_RUN_ID-execution.json"
+  [ ! -f "$execution_evidence" ] || args+=(--execution-evidence "$execution_evidence")
   [ -z "$commit_oid" ] || args+=(--commit-oid "$commit_oid")
   [ ! -f "$SEED_EVIDENCE_FILE" ] || args+=(--seed-evidence "$SEED_EVIDENCE_FILE" --seed-verified-after)
   python3 "$ROOT/scripts/worker-evidence.py" "${args[@]}" >>"$LOG" 2>&1
@@ -1441,13 +1478,13 @@ if [ "$arc" -ne 0 ]; then
     exit 0
   fi
   case "$arc" in
-    90) msg="engine=$ENGINE CLI not logged in / unavailable on the box (for claude: run claude /login)" ;;
+    90) msg="engine=$ENGINE missing-auth (for claude: run claude /login)" ;;
     91) msg="engine=$ENGINE has no file-writing tool (use an opencode engine manifest instead, D-015)" ;;
     92) msg="engine=$ENGINE is not runnable (unknown engine, or its admitted plugin plan is missing)" ;;
     93) msg="engine=$ENGINE is metered — a human sets RECURSION_ALLOW_METERED=1 in .env to allow it" ;;
-    94) msg="hermes CLI unavailable" ;;
+    94) msg="engine=$ENGINE missing-runtime (CLI or declared runtime tree unavailable)" ;;
     95) msg="worker sandbox unavailable or dedicated runner not provisioned" ;;
-    96) msg="worker process group could not be confirmed terminated" ;;
+    96) msg="engine=$ENGINE missing-egress or worker process group could not be confirmed terminated" ;;
     98) msg="worker run evidence could not be recorded atomically" ;;
     *)  msg="arm dispatch error (code $arc)" ;;
   esac
