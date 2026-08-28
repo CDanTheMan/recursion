@@ -106,9 +106,9 @@ log(){ echo "[$(date -Is)] conduct-hermes: $*" | tee -a "$LOG" >&2; }
 ev(){ bash scripts/taskctl.sh event "$1" "" "$2" >/dev/null 2>&1 || true; }
 
 drain_queue(){
-  local queue_file claim_rc child_rc action_state aggregate=0 project global first i
+  local queue_file claim_rc child_rc action_state aggregate=0 project global first i claimed_digest
   local import_error import_rc
-  local -a pids=() files=() projects=() claim_args=()
+  local -a pids=() files=() projects=() digests=() claim_args=()
   [ "$DRY" = 0 ] || { log "--dry-run requires an explicit --file"; return 2; }
   [ -x "$ROOT/scripts/decision-queue.py" ] \
     || { log "durable decision queue helper is absent"; return 74; }
@@ -140,14 +140,11 @@ drain_queue(){
   done
 
   finalize_claim(){
-    local claimed="$1" result_rc="$2" state reconcile_rc=0 queue_sha=""
-    queue_sha="$(python3 - "$claimed" <<'PY' 2>/dev/null
-import hashlib,sys
-try:
-    print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())
-except OSError: raise SystemExit(2)
-PY
-)" || { log "cannot snapshot claimed decision before transition"; return 74; }
+    local claimed="$1" result_rc="$2" queue_sha="$3" state reconcile_rc=0
+    # queue_sha is captured immediately after claim and retained across child execution.  Never
+    # hash the post-action path here: that would let a swapped projection become the authority
+    # used by terminalization after the immutable child snapshot has completed.
+    [[ "$queue_sha" =~ ^[0-9a-f]{64}$ ]] || { log "original claimed decision digest is absent"; return 74; }
     state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed")" || return $?
     case "$state" in
       succeeded|failed|cancelled|pending)
@@ -212,11 +209,12 @@ PY
       succeeded|failed|cancelled|running|pending)
         # Re-enter only the recovery path so the coupled instruction is acknowledged/released
         # before the decision projection becomes terminal. No verb is dispatched here.
+        claimed_digest="$(sha256sum "$queue_file" | awk '{print $1}')" || return 74
         RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
           bash "$ROOT/scripts/conduct-hermes.sh" --recover-only "${CHILD_SCOPE_ARGS[@]}" \
             --file "$queue_file" 8>&-
         child_rc=$?
-        finalize_claim "$queue_file" "$child_rc" || return $?
+        finalize_claim "$queue_file" "$child_rc" "$claimed_digest" || return $?
         ;;
       *) log "corrupt recovered action state '$action_state'"; return 74 ;;
     esac
@@ -235,10 +233,11 @@ PY
     claim_rc=$?
     [ "$claim_rc" -ne 4 ] || break
     [ "$claim_rc" -eq 0 ] || return "$claim_rc"
+    claimed_digest="$(sha256sum "$queue_file" | awk '{print $1}')" || return 74
     RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
       bash "$ROOT/scripts/conduct-hermes.sh" "${CHILD_SCOPE_ARGS[@]}" --file "$queue_file" 8>&-
     child_rc=$?
-    finalize_claim "$queue_file" "$child_rc" || return $?
+    finalize_claim "$queue_file" "$child_rc" "$claimed_digest" || return $?
   done
 
   [ "$PAUSED_SAFE" = 0 ] || return "$aggregate"
@@ -280,17 +279,18 @@ PY
       [ -n "$project" ] || project="unknown-$(basename "$queue_file")"
       RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
         bash "$ROOT/scripts/conduct-hermes.sh" "${CHILD_SCOPE_ARGS[@]}" --file "$queue_file" 8>&- &
-      pids+=("$!"); files+=("$queue_file"); projects+=("$project")
+      claimed_digest="$(sha256sum "$queue_file" | awk '{print $1}')" || return 74
+      pids+=("$!"); files+=("$queue_file"); projects+=("$project"); digests+=("$claimed_digest")
     done
     [ "${#pids[@]}" -gt 0 ] || break
     first="${pids[0]}"; queue_file="${files[0]}"
     wait "$first"; child_rc=$?
-    finalize_claim "$queue_file" "$child_rc" || return $?
-    pids=("${pids[@]:1}"); files=("${files[@]:1}"); projects=("${projects[@]:1}")
+    finalize_claim "$queue_file" "$child_rc" "${digests[0]}" || return $?
+    pids=("${pids[@]:1}"); files=("${files[@]:1}"); projects=("${projects[@]:1}"); digests=("${digests[@]:1}")
     if [ -f "$ROOT/state/PAUSE" ]; then
       for ((i=0; i<${#pids[@]}; i++)); do
         wait "${pids[$i]}"; child_rc=$?
-        finalize_claim "${files[$i]}" "$child_rc" || true
+        finalize_claim "${files[$i]}" "$child_rc" "${digests[$i]}" || true
       done
       return 75
     fi

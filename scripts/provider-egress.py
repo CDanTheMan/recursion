@@ -34,6 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     inject.add_argument("provider")
     inject.add_argument("--endpoint", action="append", required=True)
     inject.add_argument("--assignment-token")
+    inject.add_argument("--assignment-identity")
     allowlist = sub.add_parser("allowlist")
     allowlist.add_argument("--provider", action="append", dest="providers")
     admission = sub.add_parser("admit-engine")
@@ -51,7 +52,8 @@ def main(argv: list[str] | None = None) -> int:
             # accepting it here keeps the token out of process argv and durable plan artifacts.
             token = args.assignment_token or os.environ.get("RECURSION_ASSIGNMENT_PROXY_TOKEN")
             for key, value in sorted(proxy_environment(
-                    profile, args.endpoint, token).items()):
+                profile, args.endpoint, token, args.assignment_identity or
+                os.environ.get("RECURSION_ASSIGNMENT_IDENTITY")).items()):
                 print(f"{key}={value}")
         elif args.command == "allowlist":
             for host, port in sorted(enabled_allowlist(directory, args.providers)):

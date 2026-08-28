@@ -34,6 +34,15 @@ def main() -> int:
         check(profile["enabled"] is False, f"shipped profile is disabled: {path.stem}", failures)
     cursor = load_profile(ROOT / "scripts/providers/cursor.json", "cursor")
     assert_endpoints_match(cursor, ["api.cursor.com", "api2.cursor.sh"])
+    check(all(part.endswith(":443") for part in cursor["authorities"]),
+          "shipped provider authorities are explicit TLS port 443", failures)
+    try:
+        assert_endpoints_match({"authorities": ["api.cursor.com:443", "api.cursor.com:80"]},
+                               ["api.cursor.com"])
+    except ProviderProfileError:
+        check(True, "non-TLS provider port cannot hide behind a host-only engine endpoint", failures)
+    else:
+        check(False, "non-TLS provider port cannot hide behind a host-only engine endpoint", failures)
     try:
         proxy_environment(cursor, ["api.cursor.com", "api2.cursor.sh"])
     except ProviderProfileError as exc:
@@ -61,10 +70,10 @@ def main() -> int:
         authorized = subprocess.run(
             [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
              "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh",
-             "--assignment-token", token],
+             "--assignment-token", token, "--assignment-identity", "assignment-a"],
             capture_output=True, text=True, env=env,
         )
-        check(authorized.returncode == 0 and "assignment:" in authorized.stdout
+        check(authorized.returncode == 0 and "assignment-a:" in authorized.stdout
               and token in authorized.stdout,
               "assignment token is bound into the proxy transport URL", failures)
         issued = subprocess.run(

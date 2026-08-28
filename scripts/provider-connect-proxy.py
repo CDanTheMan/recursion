@@ -21,10 +21,12 @@ import json
 import os
 import pathlib
 import re
+import secrets
 import socket
 import ssl
 import stat
 import sys
+import time
 from collections.abc import Iterable
 
 try:
@@ -46,6 +48,8 @@ HEADER_TIMEOUT = 5.0
 CONNECT_TIMEOUT = 15.0
 CLIENT_HELLO_TIMEOUT = 15.0
 IDLE_TIMEOUT = 300.0
+CAPABILITY_TTL_SECONDS = 900
+CAPABILITY_CLOCK_SKEW_SECONDS = 30
 MAX_CLIENT_HELLO = 65536
 TLS_HANDSHAKE = 0x16
 TLS_CLIENT_HELLO = 0x01
@@ -70,21 +74,32 @@ class ClientHelloMismatch(ValueError):
     """The ClientHello SNI does not match the CONNECT authority."""
 
 
-def issue_capability(profile: str, assignment: str, secret: bytes) -> str:
+def issue_capability(profile: str, assignment: str, secret: bytes, *,
+                     now: int | None = None, ttl: int = CAPABILITY_TTL_SECONDS,
+                     jti: str | None = None) -> str:
     """Create an opaque, signed transport capability for exactly one assignment/profile."""
     if len(secret) < 32:
         raise ValueError("capability key is too short")
     if not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", profile) \
             or not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", assignment):
         raise ValueError("capability identity is invalid")
-    payload = json.dumps({"assignment": assignment, "profile": profile},
+    issued = int(time.time()) if now is None else int(now)
+    if not 1 <= ttl <= 86400:
+        raise ValueError("capability lifetime is invalid")
+    nonce = jti or secrets.token_urlsafe(24)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{22,128}", nonce):
+        raise ValueError("capability nonce is invalid")
+    payload = json.dumps({"assignment": assignment, "profile": profile,
+                          "iat": issued, "nbf": issued,
+                          "exp": issued + ttl, "jti": nonce},
                          sort_keys=True, separators=(",", ":")).encode("ascii")
     encoded = base64.urlsafe_b64encode(payload).rstrip(b"=")
     signature = hmac.new(secret, encoded, hashlib.sha256).digest()
     return encoded.decode("ascii") + "." + base64.urlsafe_b64encode(signature).rstrip(b"=").decode("ascii")
 
 
-def verify_capability(token: str, secret: bytes) -> dict[str, str]:
+def verify_capability(token: str, secret: bytes, *, now: int | None = None,
+                      revoked_jtis: set[str] | None = None) -> dict[str, str]:
     try:
         encoded, signed = token.split(".", 1)
         expected = hmac.new(secret, encoded.encode("ascii"), hashlib.sha256).digest()
@@ -95,9 +110,43 @@ def verify_capability(token: str, secret: bytes) -> dict[str, str]:
     except (ValueError, UnicodeError, json.JSONDecodeError, TypeError, binascii.Error):
         raise ConnectDenied("transport capability is invalid") from None
     if not isinstance(payload, dict) or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", str(payload.get("profile", ""))) \
-            or not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", str(payload.get("assignment", ""))):
+            or not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", str(payload.get("assignment", ""))) \
+            or not re.fullmatch(r"[A-Za-z0-9_-]{22,128}", str(payload.get("jti", ""))):
         raise ConnectDenied("transport capability is invalid")
-    return {"profile": str(payload["profile"]), "assignment": str(payload["assignment"])}
+    try:
+        issued = int(payload["iat"]); not_before = int(payload["nbf"]); expires = int(payload["exp"])
+    except (KeyError, TypeError, ValueError):
+        raise ConnectDenied("transport capability is invalid") from None
+    current = int(time.time()) if now is None else int(now)
+    if issued != not_before or expires <= issued or expires - issued > 86400 \
+            or not_before > current + CAPABILITY_CLOCK_SKEW_SECONDS \
+            or expires < current - CAPABILITY_CLOCK_SKEW_SECONDS:
+        raise ConnectDenied("transport capability is expired or not yet valid")
+    jti = str(payload["jti"])
+    if revoked_jtis is not None and jti in revoked_jtis:
+        raise ConnectDenied("transport capability has been revoked")
+    return {"profile": str(payload["profile"]), "assignment": str(payload["assignment"]), "jti": jti}
+
+
+def load_revoked_jtis(path: pathlib.Path | None) -> set[str]:
+    """Load only a root-owned, mode-0600 revocation set from ephemeral runtime state."""
+    if path is None:
+        return set()
+    if path.is_symlink() or not path.is_file():
+        raise ConnectDenied("capability revocation state is unavailable")
+    info = path.stat()
+    if stat.S_IMODE(info.st_mode) != 0o600 or (hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0):
+        raise ConnectDenied("capability revocation state ownership/mode is unsafe")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise ConnectDenied("capability revocation state is invalid") from None
+    revoked = value.get("revoked_jtis", []) if isinstance(value, dict) else None
+    if not isinstance(revoked, list) or any(not isinstance(item, str) or
+                                             not re.fullmatch(r"[A-Za-z0-9_-]{22,128}", item)
+                                             for item in revoked):
+        raise ConnectDenied("capability revocation state is invalid")
+    return set(revoked)
 
 
 def parse_authority(value: str) -> tuple[str, int]:
@@ -114,6 +163,8 @@ def parse_authority(value: str) -> tuple[str, int]:
     else:
         raise ValueError("IP-literal authorities are forbidden")
     port = int(port_text, 10)
+    if port_text != str(port):
+        raise ValueError("authority port is not canonical")
     if not 1 <= port <= 65535:
         raise ValueError("authority port is out of range")
     return host, port
@@ -133,6 +184,7 @@ def parse_connect_request(
     capability_key: bytes | None = None,
     profile_authorities: dict[str, set[tuple[str, int]]] | None = None,
     active_assignment: str | None = None,
+    revoked_jtis: set[str] | None = None,
 ) -> tuple[str, int]:
     if len(request) > MAX_REQUEST or not request.endswith(b"\r\n\r\n"):
         raise MalformedConnect("request framing is invalid")
@@ -174,18 +226,18 @@ def parse_connect_request(
     if capability_key is not None:
         if profile_authorities is None or not proxy_authorization:
             raise ConnectDenied("transport authorization is required")
-        if proxy_authorization.startswith("Bearer "):
-            token = proxy_authorization[7:]
-        elif proxy_authorization.startswith("Basic "):
+        if proxy_authorization.startswith("Basic "):
             try:
                 basic = base64.b64decode(proxy_authorization[6:], validate=True).decode("ascii")
                 active_identity, token = basic.split(":", 1)
             except (ValueError, UnicodeError, binascii.Error):
                 raise ConnectDenied("transport authorization is invalid") from None
         else:
-            raise ConnectDenied("transport authorization is invalid")
-        capability = verify_capability(token, capability_key)
-        if active_identity not in (None, "assignment") and active_identity != capability["assignment"]:
+            raise ConnectDenied("Basic assignment identity is required")
+        if not active_identity or active_identity == "assignment":
+            raise ConnectDenied("active assignment identity is required")
+        capability = verify_capability(token, capability_key, revoked_jtis=revoked_jtis)
+        if active_identity != capability["assignment"]:
             raise ConnectDenied("transport capability identity does not match its assignment")
         if active_assignment is not None and capability["assignment"] != active_assignment:
             raise ConnectDenied("transport capability is not bound to the active assignment")
@@ -501,6 +553,7 @@ class ConnectProxy:
         capability_key: bytes | None = None,
         profile_authorities: dict[str, set[tuple[str, int]]] | None = None,
         active_assignment: str | None = None,
+        revoked_jtis: set[str] | None = None,
     ) -> None:
         self.allowed = allowed
         self.resolutions = resolutions
@@ -508,6 +561,7 @@ class ConnectProxy:
         self.capability_key = capability_key
         self.profile_authorities = profile_authorities
         self.active_assignment = active_assignment
+        self.revoked_jtis = revoked_jtis or set()
         self.active = 0
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -526,6 +580,7 @@ class ConnectProxy:
                     request, self.allowed, capability_key=self.capability_key,
                     profile_authorities=self.profile_authorities,
                     active_assignment=self.active_assignment,
+                    revoked_jtis=self.revoked_jtis,
                 )
             except ConnectDenied:
                 writer.write(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n")
@@ -686,6 +741,7 @@ def make_parser() -> argparse.ArgumentParser:
                        help="select only profiles explicitly marked enabled")
     serve.add_argument("--capability-key-file", type=pathlib.Path)
     serve.add_argument("--active-assignment")
+    serve.add_argument("--capability-revocation-file", type=pathlib.Path)
     serve.add_argument("--resolve", action="append", default=[])
     serve.add_argument("--drop-user", required=True)
     serve.add_argument("--concurrency", type=int, default=16)
@@ -748,6 +804,7 @@ def main() -> int:
                 capability_key if args.profile_dir is not None else None,
                 profile_authorities if args.profile_dir is not None else None,
                 args.active_assignment,
+                load_revoked_jtis(args.capability_revocation_file),
             )))
             return 0
         authority = parse_authority(args.allow)

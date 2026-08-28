@@ -70,7 +70,7 @@ class ConnectContractTest(unittest.TestCase):
             self.proxy.parse_allowlist(["api.anthropic.com:443"]),
             {("api.anthropic.com", 443)},
         )
-        for value in ("https://api.anthropic.com:443", "*.anthropic.com:443", "1.2.3.4:443", "api.anthropic.com"):
+        for value in ("https://api.anthropic.com:443", "*.anthropic.com:443", "1.2.3.4:443", "api.anthropic.com", "api.anthropic.com:0443", "bücher.example:443"):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     self.proxy.parse_allowlist([value])
@@ -80,9 +80,11 @@ class ConnectContractTest(unittest.TestCase):
         anthropic = {("api.anthropic.com", 443)}
         cursor = {("api.cursor.com", 443)}
         token = self.proxy.issue_capability("anthropic", "assignment-a", key)
+        import base64
+        basic = base64.b64encode(f"assignment-a:{token}".encode("ascii")).decode("ascii")
         request = (
             b"CONNECT api.anthropic.com:443 HTTP/1.1\r\n"
-            + f"Proxy-Authorization: Bearer {token}\r\n\r\n".encode("ascii")
+            + f"Proxy-Authorization: Basic {basic}\r\n\r\n".encode("ascii")
         )
         self.assertEqual(self.proxy.parse_connect_request(
             request, capability_key=key,
@@ -95,18 +97,21 @@ class ConnectContractTest(unittest.TestCase):
                 profile_authorities={"anthropic": anthropic, "cursor": cursor},
             )
         forged = token[:-1] + ("A" if token[-1] != "A" else "B")
+        forged_basic = base64.b64encode(f"assignment-a:{forged}".encode("ascii")).decode("ascii")
         with self.assertRaises(self.proxy.ConnectDenied):
             self.proxy.parse_connect_request(
-                request.replace(token.encode("ascii"), forged.encode("ascii")),
+                request.replace(basic.encode("ascii"), forged_basic.encode("ascii")),
                 capability_key=key, profile_authorities={"anthropic": anthropic},
             )
 
     def test_signed_capability_must_match_active_assignment(self):
         key = b"k" * 32
         token = self.proxy.issue_capability("anthropic", "assignment-a", key)
+        import base64
+        basic = base64.b64encode(f"assignment-a:{token}".encode("ascii")).decode("ascii")
         request = (
             b"CONNECT api.anthropic.com:443 HTTP/1.1\r\n"
-            + f"Proxy-Authorization: Bearer {token}\r\n\r\n".encode("ascii")
+            + f"Proxy-Authorization: Basic {basic}\r\n\r\n".encode("ascii")
         )
         with self.assertRaises(self.proxy.ConnectDenied):
             self.proxy.parse_connect_request(
@@ -134,6 +139,33 @@ class ConnectContractTest(unittest.TestCase):
                 request, capability_key=key,
                 profile_authorities={"anthropic": self.allowed},
             )
+
+    def test_bearer_or_omitted_basic_identity_is_rejected(self):
+        import base64
+        key = b"k" * 32
+        token = self.proxy.issue_capability("anthropic", "assignment-a", key)
+        bearer = (b"CONNECT api.anthropic.com:443 HTTP/1.1\r\n"
+                  + f"Proxy-Authorization: Bearer {token}\r\n\r\n".encode("ascii"))
+        generic = base64.b64encode(f"assignment:{token}".encode("ascii")).decode("ascii")
+        basic = (b"CONNECT api.anthropic.com:443 HTTP/1.1\r\n"
+                 + f"Proxy-Authorization: Basic {generic}\r\n\r\n".encode("ascii"))
+        for request in (bearer, basic):
+            with self.subTest(request=request[:30]):
+                with self.assertRaises(self.proxy.ConnectDenied):
+                    self.proxy.parse_connect_request(
+                        request, capability_key=key,
+                        profile_authorities={"anthropic": self.allowed},
+                    )
+
+    def test_capability_expiry_nonce_and_revocation(self):
+        key = b"k" * 32
+        token = self.proxy.issue_capability("anthropic", "assignment-a", key, now=100, ttl=60,
+                                            jti="J" * 22)
+        self.proxy.verify_capability(token, key, now=130)
+        with self.assertRaises(self.proxy.ConnectDenied):
+            self.proxy.verify_capability(token, key, now=200)
+        with self.assertRaises(self.proxy.ConnectDenied):
+            self.proxy.verify_capability(token, key, now=130, revoked_jtis={"J" * 22})
 
     def test_signed_capability_is_required_when_profile_authorization_is_enabled(self):
         with self.assertRaises(self.proxy.ConnectDenied):
@@ -327,7 +359,9 @@ class DeploymentContractTest(unittest.TestCase):
         worker = (ROOT / "scripts/worker-sandbox.sh").read_text()
         work = (ROOT / "scripts/work.sh").read_text()
         self.assertIn("RECURSION_ASSIGNMENT_PROXY_TOKEN", worker)
+        self.assertIn("RECURSION_ASSIGNMENT_IDENTITY", worker)
         self.assertIn("assignment-token.py", work)
+        self.assertIn("ENGINE_ASSIGNMENT_IMPLEMENTER", work)
         self.assertIn("token-free plan", work)
         self.assertNotIn('print("TOKEN=" + token)', worker)
 

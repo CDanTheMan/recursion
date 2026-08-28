@@ -20,6 +20,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -48,6 +49,8 @@ REMOTE_SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 MAX_REMOTE_LISTING = 1000
 MAX_SFTP_OUTPUT = MAX_REMOTE_LISTING * 256
 MAX_SFTP_ERROR = 64 * 1024
+PIPE_JOIN_TIMEOUT = 5.0
+PROCESS_TIMEOUT = 300.0
 
 
 def _object(value: object, keys: set[str], where: str) -> dict:
@@ -285,10 +288,14 @@ def _run(argv: list[str], *, input_bytes: bytes | None = None,
     if not argv or any(not isinstance(item, str) or not item for item in argv):
         raise BackupPolicyError("external tool argv is invalid")
     try:
-        process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, preexec_fn=(
+        popen_kwargs = dict(stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if os.name == "nt":
+            popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        else:
+            popen_kwargs["start_new_session"] = True
+        process = subprocess.Popen(argv, preexec_fn=(
                                        _limit_file_size(file_size_limit) if file_size_limit is not None
-                                       and os.name != "nt" else None))
+                                       and os.name != "nt" else None), **popen_kwargs)
     except OSError as exc:
         raise BackupPolicyError(f"required backup tool is unavailable: {argv[0]}") from exc
     captured: dict[str, bytes] = {}
@@ -323,9 +330,24 @@ def _run(argv: list[str], *, input_bytes: bytes | None = None,
             process.stdin.close()
         except (BrokenPipeError, OSError):
             pass
-    returncode = process.wait()
+    try:
+        returncode = process.wait(timeout=PROCESS_TIMEOUT)
+    except subprocess.TimeoutExpired as exc:
+        _terminate_process_tree(process)
+        process.wait(timeout=PIPE_JOIN_TIMEOUT)
+        raise BackupPolicyError("backup tool exceeded its bounded runtime") from exc
     for thread in threads:
-        thread.join()
+        thread.join(PIPE_JOIN_TIMEOUT)
+    if any(thread.is_alive() for thread in threads):
+        _terminate_process_tree(process)
+        for stream in (process.stdout, process.stderr):
+            try:
+                stream.close()
+            except OSError:
+                pass
+        for thread in threads:
+            thread.join(PIPE_JOIN_TIMEOUT)
+        raise BackupPolicyError("backup tool retained an inherited output pipe")
     if overflow.is_set():
         raise BackupPolicyError("backup tool output exceeds the bounded limit")
     result = subprocess.CompletedProcess(argv, returncode, captured.get("stdout", b""),
@@ -333,6 +355,22 @@ def _run(argv: list[str], *, input_bytes: bytes | None = None,
     if result.returncode:
         raise BackupPolicyError(f"backup tool failed: {Path(argv[0]).name}")
     return result
+
+
+def _terminate_process_tree(process: subprocess.Popen) -> None:
+    """Terminate the external transfer and descendants that could retain its pipes."""
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=PIPE_JOIN_TIMEOUT, check=False)
+        else:
+            os.killpg(process.pid, signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError):
+        try:
+            process.kill()
+        except OSError:
+            pass
 
 
 def _limit_file_size(limit: int):

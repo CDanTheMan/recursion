@@ -45,6 +45,8 @@ def parse_authority(value: object) -> tuple[str, int]:
     host, port_text = value.rsplit(":", 1)
     if not HOST_RE.fullmatch(host.lower()) or not port_text.isascii() or not port_text.isdecimal():
         raise ProviderProfileError("authority must be a canonical DNS name and explicit port")
+    if port_text != str(int(port_text, 10)):
+        raise ProviderProfileError("authority port is not canonical")
     port = int(port_text, 10)
     if not 1 <= port <= 65535:
         raise ProviderProfileError("authority port is out of range")
@@ -125,13 +127,16 @@ def profile_for_provider(provider: str, directory: Path) -> dict:
 
 
 def assert_endpoints_match(profile: dict, endpoints: Iterable[str]) -> None:
-    expected = {str(item).lower() for item in endpoints}
-    actual = {host for host, _ in (parse_authority(item) for item in profile["authorities"])}
+    # Engine manifests intentionally declare provider hosts, not arbitrary ports.  Provider
+    # authority ports are therefore exact and must be the reviewed TLS port (443).
+    expected = {(str(item).lower(), 443) for item in endpoints}
+    actual = {parse_authority(item) for item in profile["authorities"]}
     if expected != actual:
         raise ProviderProfileError("profile authorities do not exactly match engine endpoints")
 
 
-def proxy_environment(profile: dict, endpoints: Iterable[str], token: str | None = None) -> dict[str, str]:
+def proxy_environment(profile: dict, endpoints: Iterable[str], token: str | None = None,
+                      assignment_identity: str | None = None) -> dict[str, str]:
     validate_profile(profile)
     assert_endpoints_match(profile, endpoints)
     if not profile["enabled"]:
@@ -143,16 +148,10 @@ def proxy_environment(profile: dict, endpoints: Iterable[str], token: str | None
         # password.  The proxy compares both values, so a capability minted for A cannot be
         # replayed with an active-assignment identity for B.  Malformed payloads still fail at the
         # proxy; retaining the generic username preserves the legacy helper's shape for fixtures.
-        username = "assignment"
-        try:
-            encoded = token.split(".", 1)[0]
-            payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-            candidate = payload.get("assignment") if isinstance(payload, dict) else None
-            if isinstance(candidate, str) and re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", candidate):
-                username = quote(candidate, safe="._-")
-        except (ValueError, TypeError, UnicodeError, json.JSONDecodeError, binascii.Error):
-            pass
-        value = f"http://{username}:{quote(token, safe='._-')}@{profile['proxy']['host']}:{profile['proxy']['port']}"
+        if not isinstance(assignment_identity, str) or not re.fullmatch(
+                r"[A-Za-z0-9._:-]{1,128}", assignment_identity):
+            raise ProviderProfileError("active assignment identity is required")
+        value = f"http://{quote(assignment_identity, safe='._-')}:{quote(token, safe='._-')}@{profile['proxy']['host']}:{profile['proxy']['port']}"
     elif os.environ.get("RECURSION_PROVIDER_PROXY_REQUIRED") == "1":
         raise ProviderProfileError("assignment proxy authorization is required")
     else:

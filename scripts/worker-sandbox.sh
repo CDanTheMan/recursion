@@ -38,7 +38,7 @@ case "$ENGINE" in
       || { echo "worker-sandbox: invalid engine" >&2; exit 92; } ;;
 esac
 PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ENV_PASS=(); PLAN_OK=0; PLAN_MREQ=0
-PLAN_EGRESS=""; PLAN_ENDPOINTS=(); PLAN_TOKEN="${RECURSION_ASSIGNMENT_PROXY_TOKEN:-}"; ENGINE_ENV_FILE=""
+PLAN_EGRESS=""; PLAN_ENDPOINTS=(); PLAN_TOKEN="${RECURSION_ASSIGNMENT_PROXY_TOKEN:-}"; PLAN_ASSIGNMENT="${RECURSION_ASSIGNMENT_IDENTITY:-}"; ENGINE_ENV_FILE=""
 if [ -n "$ENGINE_PLAN" ]; then
   [ -f "$ENGINE_PLAN" ] || { echo "worker-sandbox: engine plan is missing" >&2; exit 92; }
   while IFS= read -r plan_line; do
@@ -120,8 +120,13 @@ PY
   if [ -n "$PLAN_EGRESS" ]; then
     [[ "$PLAN_TOKEN" =~ ^[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}$ ]] \
       || { echo "worker-sandbox: assignment proxy capability is absent or malformed" >&2; exit 96; }
+    [[ "$PLAN_ASSIGNMENT" =~ ^[A-Za-z0-9._:-]{1,128}$ ]] \
+      || { echo "worker-sandbox: active assignment identity is absent or malformed" >&2; exit 96; }
   elif [ -n "$PLAN_TOKEN" ]; then
     echo "worker-sandbox: assignment proxy capability supplied for a non-provider plan" >&2
+    exit 92
+  elif [ -n "$PLAN_ASSIGNMENT" ]; then
+    echo "worker-sandbox: assignment identity supplied for a non-provider plan" >&2
     exit 92
   fi
   # A group/other-writable plan can be rewritten between resolve and launch by any local
@@ -219,7 +224,7 @@ case "${RECURSION_TEST_WORKER:-}" in
           [ -x "$ROOT/scripts/provider-egress.py" ] || exit 96
           egress_args=(inject "$PLAN_EGRESS")
           for endpoint in "${PLAN_ENDPOINTS[@]}"; do egress_args+=(--endpoint "$endpoint"); done
-          egress_lines="$(RECURSION_ROOT="$ROOT" RECURSION_ASSIGNMENT_PROXY_TOKEN="$PLAN_TOKEN" \
+          egress_lines="$(RECURSION_ROOT="$ROOT" RECURSION_ASSIGNMENT_PROXY_TOKEN="$PLAN_TOKEN" RECURSION_ASSIGNMENT_IDENTITY="$PLAN_ASSIGNMENT" \
             "$PYTHON_BIN" "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
             || { echo "worker-sandbox: provider egress profile was refused" >&2; exit 96; }
           while IFS= read -r egress_line; do
@@ -455,7 +460,7 @@ case "$ENGINE" in
         || { echo "worker-sandbox: provider egress helper is absent" >&2; exit 96; }
       egress_args=(inject "$PLAN_EGRESS")
       for endpoint in "${PLAN_ENDPOINTS[@]}"; do egress_args+=(--endpoint "$endpoint"); done
-      egress_lines="$(RECURSION_ROOT="$ROOT" RECURSION_ASSIGNMENT_PROXY_TOKEN="$PLAN_TOKEN" \
+      egress_lines="$(RECURSION_ROOT="$ROOT" RECURSION_ASSIGNMENT_PROXY_TOKEN="$PLAN_TOKEN" RECURSION_ASSIGNMENT_IDENTITY="$PLAN_ASSIGNMENT" \
         "$PYTHON_BIN" "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
         || { echo "worker-sandbox: provider egress profile was refused" >&2; exit 96; }
       while IFS= read -r egress_line; do
@@ -469,6 +474,7 @@ case "$ENGINE" in
     # The token is an ephemeral capability, never a plan field or systemd-run argument.  Carry it
     # only through the root-owned 0600 runtime EnvironmentFile below, which is removed on exit.
     [ -z "$PLAN_TOKEN" ] || ENV_CONTENT+="RECURSION_ASSIGNMENT_PROXY_TOKEN=$PLAN_TOKEN"$'\n'
+    [ -z "$PLAN_ASSIGNMENT" ] || ENV_CONTENT+="RECURSION_ASSIGNMENT_IDENTITY=$PLAN_ASSIGNMENT"$'\n'
     if [ "${#PLAN_ENV_PASS[@]}" -gt 0 ]; then
       for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
         plan_env_value="${!plan_env_name:-}"

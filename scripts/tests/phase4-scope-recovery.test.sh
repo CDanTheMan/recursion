@@ -36,5 +36,23 @@ grep -q 'CHILD_SCOPE_ARGS' "$TMP/conduct-hermes.sh"
 grep -q 'DECISION_FILE_DIGEST' "$TMP/conduct-hermes.sh"
 grep -q 'DECISION_SNAPSHOT_B64' "$TMP/conduct-hermes.sh"
 grep -q 'decision projection changed before child action' "$TMP/conduct-hermes.sh"
+grep -q 'original claimed decision digest is absent' "$TMP/conduct-hermes.sh"
+grep -q 'finalize_claim "$queue_file" "$child_rc" "$claimed_digest"' "$TMP/conduct-hermes.sh"
+! grep -q 'queue_sha="$(python3 - "$claimed"' "$TMP/conduct-hermes.sh"
 grep -q 'scope_guard' "$TMP/conduct-hermes.sh"
+mkdir -p "$TMP/state/decision-queue/running" "$TMP/state/decision-queue/failed"
+if python3 -c 'import fcntl' 2>/dev/null; then
+printf '{"id":"swap","status":"running","verb":"noop"}\n' > "$TMP/state/decision-queue/running/swap.json"
+post_action_digest="$(sha256sum "$TMP/state/decision-queue/running/swap.json" | awk '{print $1}')"
+printf '{"id":"swap","status":"running","verb":"work"}\n' > "$TMP/state/decision-queue/running/swap.json"
+set +e
+RECURSION_ROOT="$TMP" python3 "$ROOT/scripts/decision-queue.py" fail "$TMP/state/decision-queue/running/swap.json" swapped --expected-sha256 "$post_action_digest" >/dev/null 2>&1
+swap_rc=$?
+set -e
+test "$swap_rc" = 73
+test -f "$TMP/state/decision-queue/running/swap.json"
+echo "ok    post-action queue projection swap fails the retained original digest CAS"
+else
+ echo "skip  post-action queue projection swap CAS (fcntl unavailable on this host)"
+fi
 echo "phase4-scope-recovery: ALL PASS"

@@ -506,6 +506,7 @@ fi
 # first — a deliberate narrowing of the historical invalid-gate precedence below.
 ENGINE_PLAN_IMPLEMENTER=""; ENGINE_PLAN_VERIFIER=""; ENGINE_SLOT_LOCKS=()
 ENGINE_TOKEN_IMPLEMENTER=""; ENGINE_TOKEN_VERIFIER=""
+ENGINE_ASSIGNMENT_IMPLEMENTER=""; ENGINE_ASSIGNMENT_VERIFIER=""
 engine_is_builtin(){ case "$1" in none|claude|hermes|gate|deepseek|openrouter) return 0 ;; *) return 1 ;; esac; }
 plugin_probe_ok(){ # plan-file: absent probe passes; a declared probe needs a 2xx from its URL.
   # Probe from inside the provider-only namespace when it exists, so "reachable" is measured
@@ -579,8 +580,8 @@ PY
       --key-file "$key_file" 2>>"$LOG")" \
       || { log "engine=$engine provider assignment capability could not be issued"; return 96; }
     case "$role" in
-      implementer) ENGINE_TOKEN_IMPLEMENTER="$token" ;;
-      verifier) ENGINE_TOKEN_VERIFIER="$token" ;;
+      implementer) ENGINE_TOKEN_IMPLEMENTER="$token"; ENGINE_ASSIGNMENT_IMPLEMENTER="$assignment" ;;
+      verifier) ENGINE_TOKEN_VERIFIER="$token"; ENGINE_ASSIGNMENT_VERIFIER="$assignment" ;;
       *) log "unknown plugin role '$role'"; return 92 ;;
     esac
   fi
@@ -994,9 +995,10 @@ PY
   pause_checkpoint "worker launch" || return 75
   local worker_pgid rc now_epoch deadline_epoch heartbeat_epoch log_path
   log_path="$ARMLOG"; [ "$role" != verifier ] || log_path="$ROOT/loop/logs/$DATE-verifier-$ID-$STAMP.out"
-  if [ "$role" = verifier ]; then assignment_token="$ENGINE_TOKEN_VERIFIER"; else assignment_token="$ENGINE_TOKEN_IMPLEMENTER"; fi
+  if [ "$role" = verifier ]; then assignment_token="$ENGINE_TOKEN_VERIFIER"; assignment_identity="$ENGINE_ASSIGNMENT_VERIFIER";
+  else assignment_token="$ENGINE_TOKEN_IMPLEMENTER"; assignment_identity="$ENGINE_ASSIGNMENT_IMPLEMENTER"; fi
   RECURSION_VERIFICATION_COMMIT="$commit_oid" RECURSION_IMPLEMENTER_RUN_ID="$implementer_run" \
-    RECURSION_ASSIGNMENT_PROXY_TOKEN="$assignment_token" \
+    RECURSION_ASSIGNMENT_PROXY_TOKEN="$assignment_token" RECURSION_ASSIGNMENT_IDENTITY="$assignment_identity" \
     setsid --wait "${cmd[@]}" >"$log_path" 2>&1 &
   worker_pgid=$!
   deadline_epoch="$(( $(date +%s) + deadline_s ))"; heartbeat_epoch=0
