@@ -18,7 +18,9 @@
     { "$ref": "#/$defs/routing_policy" },
     { "$ref": "#/$defs/integration_policy_event" },
     { "$ref": "#/$defs/integration_admit_event" },
-    { "$ref": "#/$defs/integration_complete_event" }
+    { "$ref": "#/$defs/integration_complete_event" },
+    { "$ref": "#/$defs/host_registry" },
+    { "$ref": "#/$defs/verification_key_registry" }
   ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
@@ -47,6 +49,28 @@
         "schema_version": { "const": 1 }, "kind": { "const": "host_heartbeat" }, "host_id": { "$ref": "#/$defs/id" },
         "registration_digest": { "$ref": "#/$defs/digest" }, "sequence": { "type": "integer", "minimum": 0 },
         "observed_at": { "$ref": "#/$defs/timestamp" }, "lease_epoch": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "host_registry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "kind", "hosts", "heartbeats", "state_digest"],
+      "properties": {
+        "schema_version": { "const": 1 }, "kind": { "const": "host_registry" },
+        "hosts": { "type": "array", "items": { "$ref": "#/$defs/host_registration" } },
+        "heartbeats": { "type": "array", "items": { "$ref": "#/$defs/host_heartbeat" } },
+        "state_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "verification_key_registry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "kind", "registry_epoch", "keys", "registry_digest", "authentication_tag"],
+      "properties": {
+        "schema_version": { "const": 1 }, "kind": { "const": "verification_key_registry" },
+        "registry_epoch": { "type": "integer", "minimum": 1 },
+        "keys": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false,
+          "required": ["verifier_identity", "key_hex"],
+          "properties": { "verifier_identity": { "type": "string", "pattern": "^controller/.+" }, "key_hex": { "type": "string", "pattern": "^[0-9a-f]+$" } } } },
+        "registry_digest": { "$ref": "#/$defs/digest" }, "authentication_tag": { "$ref": "#/$defs/digest" }
       }
     },
     "pool_status": {

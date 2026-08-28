@@ -460,6 +460,11 @@ class RoutingPolicy:
         return cls(_id(raw["policy_id"], "policy_id"), _string_list(raw["allowed_billing_basis"], "allowed_billing_basis"),
                    raw["allow_on_demand"], _string(raw["authority"], "authority"), digest)
 
+    def to_dict(self) -> dict[str, Any]:
+        return {"schema_version": SCHEMA_VERSION, "kind": "routing_policy", "policy_id": self.policy_id,
+                "allowed_billing_basis": list(self.allowed_billing_basis), "allow_on_demand": self.allow_on_demand,
+                "authority": self.authority, "policy_digest": self.policy_digest}
+
 
 @dataclass(frozen=True)
 class PlacementRequirements:
@@ -738,6 +743,7 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
                       reserved_workload: Mapping[tuple[str, str], int] | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
     """Resolve one immutable assignment and a complete, deterministic rejection trace."""
     req = requirements if isinstance(requirements, PlacementRequirements) else PlacementRequirements.from_dict(requirements)
+    req = PlacementRequirements.from_dict(req.to_dict())
     if pause_guard is not None:
         pause_guard.assert_open()
     policies = {"manual-pin", "subscription-first", "local-first", "cheapest-eligible", "fastest-eligible",
@@ -746,7 +752,8 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
         raise SchemaError("UNKNOWN_POLICY", f"unsupported placement policy: {req.policy}")
     if req.policy == "manual-pin" and req.manual_candidate_id is None:
         raise SchemaError("MISSING_FIELD", "manual-pin requires manual_candidate_id")
-    policy = None if routing_policy is None else (routing_policy if isinstance(routing_policy, RoutingPolicy) else RoutingPolicy.from_dict(routing_policy))
+    policy = None if routing_policy is None else RoutingPolicy.from_dict(
+        routing_policy.to_dict() if isinstance(routing_policy, RoutingPolicy) else routing_policy)
     if policy is not None and policy.authority != "human-owned":
         raise AdmissionError("ROUTING_POLICY_UNTRUSTED", "routing policy is not human-owned")
     try:
@@ -756,12 +763,13 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
     if not math.isfinite(ttl) or ttl < 0:
         raise SchemaError("INVALID_FIELD", "heartbeat_ttl_s must be finite and non-negative")
     parsed_candidates = [item if isinstance(item, PlacementCandidate) else PlacementCandidate.from_dict(item) for item in candidates]
+    parsed_candidates = [PlacementCandidate.from_dict(item.to_dict()) for item in parsed_candidates]
     candidate_ids = [item.candidate_id for item in parsed_candidates]
     if len(candidate_ids) != len(set(candidate_ids)):
         raise SchemaError("DUPLICATE_CANDIDATE", "placement candidates must have unique candidate_id values")
-    parsed_hosts = {key: item if isinstance(item, HostRegistration) else HostRegistration.from_dict(item) for key, item in hosts.items()}
-    parsed_heartbeats = {key: item if isinstance(item, HostHeartbeat) else HostHeartbeat.from_dict(item) for key, item in heartbeats.items()}
-    parsed_pools = {key: item if isinstance(item, PoolStatus) else PoolStatus.from_dict(item) for key, item in pools.items()}
+    parsed_hosts = {key: HostRegistration.from_dict(item.to_dict() if isinstance(item, HostRegistration) else item) for key, item in hosts.items()}
+    parsed_heartbeats = {key: HostHeartbeat.from_dict(item.to_dict() if isinstance(item, HostHeartbeat) else item) for key, item in heartbeats.items()}
+    parsed_pools = {key: PoolStatus.from_dict(item.to_dict() if isinstance(item, PoolStatus) else item) for key, item in pools.items()}
     now = time.time() if now_epoch is None else now_epoch
     if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(float(now)):
         raise SchemaError("INVALID_FIELD", "now_epoch must be finite")
@@ -912,6 +920,7 @@ class HostRegistry:
         with self._lock:
             if not isinstance(registration, HostRegistration):
                 raise SchemaError("INVALID_RECORD", "registration must be a HostRegistration")
+            registration = HostRegistration.from_dict(registration.to_dict())
             current = self.hosts.get(registration.host_id)
             if current is not None and current.registration_digest == registration.registration_digest:
                 return "duplicate"
@@ -924,6 +933,7 @@ class HostRegistry:
         with self._lock:
             if not isinstance(value, HostHeartbeat):
                 raise SchemaError("INVALID_RECORD", "heartbeat must be a HostHeartbeat")
+            value = HostHeartbeat.from_dict(value.to_dict())
             registration = self.hosts.get(value.host_id)
             if registration is None or registration.registration_digest != value.registration_digest:
                 raise AdmissionError("HEARTBEAT_UNBOUND", "heartbeat does not match a registered host")
@@ -1346,6 +1356,9 @@ class DurableFabricStore:
         _timestamp(now, "now")
         with _journal_lock(self.lock_path):
             self._reload_locked()
+            # Expiration wins over restart recovery.  Never turn an already
+            # expired lease back into a capacity reservation.
+            self._expire_due_locked(now)
             recovered: list[dict[str, Any]] = []
             for lease_id, lease in sorted(self.leases.items()):
                 if lease["status"] != "active":
@@ -1393,6 +1406,12 @@ class DurableFabricStore:
             lease = self.leases.get(lease_id)
             if lease is None:
                 raise ReconciliationError("UNKNOWN_LEASE", "recovery query references no lease")
+            # A remote observation cannot revive an expired lease or keep its
+            # reservation active.  Use trusted controller time for this check
+            # on every recovery state, including running and unknown.
+            if _epoch(controller_now) >= _epoch(lease["expires_at"]):
+                self._expire_due_locked(controller_now)
+                raise ReconciliationError("LATE_RESULT", "recovery observation arrived at or after lease expiry")
             recovery_state = {"running": "query_running", "terminal": "query_terminal", "unknown": "query_unknown"}[state]
             if lease["status"] != "recovery_required":
                 return "duplicate" if lease["recovery_state"] == recovery_state else "ignored"
@@ -1519,28 +1538,206 @@ class VerificationReceipt:
         return result
 
 
+class VerificationKeyRegistry:
+    """Authenticated controller-owned verifier key registry.
+
+    Receipt stores deliberately cannot bootstrap trust from a caller-supplied
+    mapping.  A controller provisions this registry once with a protected
+    authority key, and subsequent rotation rewrites the authenticated state.
+    """
+
+    def __init__(self, path: Path | str, *, authority_key_path: Path | str | None = None,
+                 root: Path | str | None = None):
+        self.path, self.root = _safe_store_path(path, root)
+        authority = Path(authority_key_path) if authority_key_path is not None else self.path.with_suffix(".authority")
+        self.authority_key_path, _ = _safe_store_path(authority, self.root)
+        self.lock_path, _ = _safe_store_path(self.path.with_name(self.path.name + ".lock"), self.root)
+        self._keys: Mapping[str, bytes] = MappingProxyType({})
+        self._epoch = 0
+        with _journal_lock(self.lock_path):
+            self._reload_locked()
+
+    @staticmethod
+    def _private_file(path: Path, field: str) -> None:
+        if _file_is_reparse_or_symlink(path):
+            raise SchemaError("UNSAFE_REGISTRY_PATH", f"{field} is a symlink or reparse point")
+        try:
+            info = path.stat()
+        except OSError as exc:
+            raise SchemaError("CONTROLLER_AUTH_REQUIRED", f"{field} is not available") from exc
+        if not path.is_file():
+            raise SchemaError("INVALID_FIELD", f"{field} must be a regular file")
+        # POSIX deployments must keep controller material owner-only.  Windows
+        # ACL inspection is platform-specific; reparse checks remain enforced,
+        # and Linux CI is the production proof for this boundary.
+        if os.name != "nt":
+            if info.st_uid != os.getuid() or info.st_mode & 0o077:
+                raise SchemaError("UNSAFE_REGISTRY_PERMISSIONS", f"{field} is not owner-only")
+
+    @staticmethod
+    def _secret(path: Path) -> bytes:
+        VerificationKeyRegistry._private_file(path, "controller authority key")
+        try:
+            secret = path.read_bytes()
+        except OSError as exc:
+            raise SchemaError("CONTROLLER_AUTH_REQUIRED", "controller authority key cannot be read") from exc
+        if not secret:
+            raise SchemaError("CONTROLLER_AUTH_REQUIRED", "controller authority key is empty")
+        return secret
+
+    @staticmethod
+    def _normalize_keys(keys: Mapping[str, str | bytes]) -> dict[str, bytes]:
+        if not isinstance(keys, Mapping) or not keys:
+            raise SchemaError("VERIFICATION_KEY_REQUIRED", "controller registry requires verifier keys")
+        normalized: dict[str, bytes] = {}
+        for identity, key in keys.items():
+            identity = _string(identity, "verifier_identity")
+            if not identity.startswith("controller/"):
+                raise SchemaError("VERIFIER_UNTRUSTED", "registry identities must be controller-owned")
+            if not isinstance(key, (str, bytes)):
+                raise SchemaError("INVALID_FIELD", "verifier keys must be strings or bytes")
+            value = key.encode() if isinstance(key, str) else key
+            if not value:
+                raise SchemaError("INVALID_FIELD", "verifier keys must be non-empty")
+            normalized[identity] = bytes(value)
+        return normalized
+
+    @classmethod
+    def provision(cls, path: Path | str, *, authority_key_path: Path | str,
+                  verification_keys: Mapping[str, str | bytes],
+                  root: Path | str | None = None) -> "VerificationKeyRegistry":
+        """Provision deployment-owned state from an existing protected authority key.
+
+        The authority file is intentionally an input, never generated here: a
+        receipt caller cannot bootstrap trust by choosing both a key registry
+        and its signing key.
+        """
+        registry_path, root_path = _safe_store_path(path, root)
+        authority = Path(authority_key_path)
+        authority_path, _ = _safe_store_path(authority, root_path)
+        secret = cls._secret(authority_path)
+        if registry_path.exists():
+            raise SchemaError("REGISTRY_EXISTS", "controller verifier registry is already provisioned")
+        registry_path.parent.mkdir(parents=True, exist_ok=True)
+        instance = cls.__new__(cls)
+        instance.path, instance.root = registry_path, root_path
+        instance.authority_key_path = authority_path
+        instance.lock_path, _ = _safe_store_path(registry_path.with_name(registry_path.name + ".lock"), root_path)
+        instance._keys = MappingProxyType({}); instance._epoch = 0
+        with _journal_lock(instance.lock_path):
+            instance._write_locked(cls._normalize_keys(verification_keys), 1, secret)
+            instance._reload_locked()
+        return instance
+
+    def _write_locked(self, keys: Mapping[str, bytes], epoch: int, secret: bytes | None = None) -> None:
+        secret = self._secret(self.authority_key_path) if secret is None else secret
+        entries = [{"verifier_identity": identity, "key_hex": value.hex()} for identity, value in sorted(keys.items())]
+        body = {"schema_version": SCHEMA_VERSION, "kind": "verification_key_registry", "registry_epoch": epoch, "keys": entries}
+        body["registry_digest"] = digest_record(body)
+        body["authentication_tag"] = hmac.new(secret, body["registry_digest"].encode(), hashlib.sha256).hexdigest()
+        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{self.path.name}.tmp.", dir=self.path.parent)
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                json.dump(body, output, sort_keys=True, separators=(",", ":")); output.flush(); os.fsync(output.fileno())
+            os.replace(temporary, self.path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def _reload_locked(self) -> None:
+        if not self.path.exists():
+            raise SchemaError("VERIFICATION_REGISTRY_REQUIRED", "controller verifier registry is not provisioned")
+        secret = self._secret(self.authority_key_path)
+        self._private_file(self.path, "controller verifier registry")
+        try:
+            state = _json_load(self.path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError) as exc:
+            raise SchemaError("CORRUPT_REGISTRY", "controller verifier registry cannot be read") from exc
+        required = {"schema_version", "kind", "registry_epoch", "keys", "registry_digest", "authentication_tag"}
+        _check_keys(state, required, set(), "verification_key_registry")
+        if state["schema_version"] != SCHEMA_VERSION or state["kind"] != "verification_key_registry":
+            raise SchemaError("SCHEMA_VERSION", "unsupported controller verifier registry schema")
+        epoch = _nonnegative_int(state["registry_epoch"], "registry_epoch")
+        if epoch < 1:
+            raise SchemaError("INVALID_FIELD", "registry_epoch must be positive")
+        digest = _digest(state["registry_digest"], "registry_digest")
+        body = {key: state[key] for key in required if key not in {"registry_digest", "authentication_tag"}}
+        if digest != digest_record(body):
+            raise SchemaError("DIGEST_MISMATCH", "controller verifier registry digest is invalid")
+        tag = _digest(state["authentication_tag"], "authentication_tag")
+        if not hmac.compare_digest(tag, hmac.new(secret, digest.encode(), hashlib.sha256).hexdigest()):
+            raise SchemaError("CONTROLLER_AUTH_FAILED", "controller verifier registry authentication failed")
+        if not isinstance(state["keys"], list) or not state["keys"]:
+            raise SchemaError("VERIFICATION_KEY_REQUIRED", "controller verifier registry has no keys")
+        normalized: dict[str, bytes] = {}
+        for entry in state["keys"]:
+            _check_keys(entry, {"verifier_identity", "key_hex"}, set(), "verification_key")
+            identity = _string(entry["verifier_identity"], "verifier_identity")
+            if not identity.startswith("controller/") or identity in normalized:
+                raise SchemaError("VERIFIER_UNTRUSTED", "controller verifier registry identity is invalid")
+            key_hex = _string(entry["key_hex"], "key_hex")
+            if not re.fullmatch(r"[0-9a-f]+", key_hex):
+                raise SchemaError("INVALID_FIELD", "registry key encoding is invalid")
+            try:
+                value = bytes.fromhex(key_hex)
+            except ValueError as exc:
+                raise SchemaError("INVALID_FIELD", "registry key encoding is invalid") from exc
+            if not value:
+                raise SchemaError("INVALID_FIELD", "registry key is empty")
+            normalized[identity] = value
+        self._keys = MappingProxyType(normalized); self._epoch = epoch
+
+    def reload(self) -> None:
+        with _journal_lock(self.lock_path):
+            self._reload_locked()
+
+    @property
+    def keys(self) -> Mapping[str, bytes]:
+        return self._keys
+
+    @property
+    def epoch(self) -> int:
+        return self._epoch
+
+    def rotate(self, verifier_identity: str, key: str | bytes) -> int:
+        identity = _string(verifier_identity, "verifier_identity")
+        if not identity.startswith("controller/"):
+            raise SchemaError("VERIFIER_UNTRUSTED", "registry identities must be controller-owned")
+        value = key.encode() if isinstance(key, str) else key
+        if not isinstance(value, bytes) or not value:
+            raise SchemaError("INVALID_FIELD", "verifier key must be non-empty")
+        with _journal_lock(self.lock_path):
+            self._reload_locked(); updated = dict(self._keys); updated[identity] = bytes(value)
+            self._write_locked(updated, self._epoch + 1); self._reload_locked(); return self._epoch
+
+
 class VerificationReceiptStore:
     """Durable controller-owned receipt index used by candidate integration admission."""
 
     def __init__(self, path: Path | str, *, root: Path | str | None = None,
+                 verification_registry: VerificationKeyRegistry | Path | str | None = None,
+                 verification_authority_key_path: Path | str | None = None,
                  verification_keys: Mapping[str, str | bytes] | None = None):
         self.path, self.root = _safe_store_path(path, root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.lock_path = _safe_store_path(self.path.with_name(self.path.name + ".lock"), self.root)[0]
-        if not verification_keys:
-            raise SchemaError("VERIFICATION_KEY_REQUIRED", "receipt store requires registered verifier keys")
-        self.verification_keys = MappingProxyType({
-            _string(identity, "verifier_identity"): (key.encode() if isinstance(key, str) else key)
-            for identity, key in verification_keys.items()
-            if isinstance(key, (str, bytes)) and len(key) > 0
-        })
-        if len(self.verification_keys) != len(verification_keys):
-            raise SchemaError("INVALID_FIELD", "verification keys must be non-empty strings or bytes")
+        if verification_keys is not None:
+            raise SchemaError("VERIFICATION_REGISTRY_REQUIRED", "caller-supplied verifier keys cannot bootstrap trust")
+        if verification_registry is None:
+            raise SchemaError("VERIFICATION_REGISTRY_REQUIRED", "receipt store requires a controller verifier registry")
+        if isinstance(verification_registry, VerificationKeyRegistry):
+            self.verification_registry = verification_registry
+        else:
+            self.verification_registry = VerificationKeyRegistry(
+                verification_registry, authority_key_path=verification_authority_key_path, root=self.root)
+        self.verification_keys: Mapping[str, bytes] = MappingProxyType({})
         self.receipts: dict[str, VerificationReceipt] = {}
         with _journal_lock(self.lock_path):
             self._reload_locked()
 
     def _reload_locked(self) -> None:
+        self.verification_registry.reload()
+        self.verification_keys = MappingProxyType(dict(self.verification_registry.keys))
         self.receipts.clear()
         if not self.path.exists():
             return
