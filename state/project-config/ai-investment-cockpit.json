@@ -14,7 +14,7 @@
   "allowed_paths": [
     "."
   ],
-  "gate_commands": [],
+  "gate_commands": ["git diff --check"],
   "eligible_hosts": ["gs-recursion", "gs-worker", "cursor-cloud", "cursor-my-machines"],
   "eligible_pools": ["local", "cursor-ultra"],
   "topic": 7,

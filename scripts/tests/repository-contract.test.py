@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import hashlib
+import hmac
+import os
 import subprocess
 import tempfile
 import unittest
@@ -28,6 +30,8 @@ def git_raw(repo: Path, *args: str) -> str:
 
 class RepositoryContractTests(unittest.TestCase):
     def setUp(self) -> None:
+        self.old_receipt_key = os.environ.get("RECURSION_VERIFIER_RECEIPT_KEY")
+        os.environ["RECURSION_VERIFIER_RECEIPT_KEY"] = "hermetic-controller-key"
         self.temp = tempfile.TemporaryDirectory(prefix="recursion-v2-contract-")
         self.repo = Path(self.temp.name) / "repo"
         self.repo.mkdir()
@@ -51,12 +55,16 @@ class RepositoryContractTests(unittest.TestCase):
             "publication_policy": "verified-integration-only",
             "source_policy": "exact-sha",
             "allowed_paths": ["src"],
-            "gate_commands": ["python -m unittest"],
+            "gate_commands": ["git diff --check"],
             "eligible_hosts": ["gs-recursion"],
             "eligible_pools": ["local"],
         }
 
     def tearDown(self) -> None:
+        if self.old_receipt_key is None:
+            os.environ.pop("RECURSION_VERIFIER_RECEIPT_KEY", None)
+        else:
+            os.environ["RECURSION_VERIFIER_RECEIPT_KEY"] = self.old_receipt_key
         self.temp.cleanup()
 
     def candidate(self) -> dict[str, object]:
@@ -70,7 +78,6 @@ class RepositoryContractTests(unittest.TestCase):
             "source_sha": self.source, "external_branch": "cursor/task-one",
             "candidate_commit": commit, "idempotency_key": "dispatch-1",
         }
-        candidate["verification_receipt"] = self.receipt(candidate)
         return candidate
 
     def receipt(self, candidate: dict[str, object]) -> dict[str, object]:
@@ -81,10 +88,13 @@ class RepositoryContractTests(unittest.TestCase):
             "task_id": candidate["task_id"], "source_sha": candidate["source_sha"],
             "candidate_commit": candidate["candidate_commit"],
             "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(),
-            "scope_digest": rc._json_digest(paths), "gate_digest": rc._json_digest(self.contract["gate_commands"]),
+            "scope_digest": rc._json_digest(candidate.get("allowed_paths", self.contract["allowed_paths"])),
+            "gate_digest": rc._json_digest(self.contract["gate_commands"]),
             "verdict": "pass", "verifier": "controller-verifier", "provenance": "recursion-controller",
         }
-        return {**body, "receipt_digest": rc._json_digest(body)}
+        receipt_digest = rc._json_digest(body)
+        signature = hmac.new(b"hermetic-controller-key", receipt_digest.encode("ascii"), hashlib.sha256).hexdigest()
+        return {**body, "receipt_digest": receipt_digest, "signature": signature}
 
     def test_descriptor_and_exact_source_admission(self) -> None:
         rc.validate_project_descriptor(self.contract)
@@ -134,13 +144,17 @@ class RepositoryContractTests(unittest.TestCase):
                     "allowed_paths": ["src"], field: ".\\apps\\chiron/"}
             with self.subTest(field=field), self.assertRaisesRegex(rc.ContractError, "apps/chiron"):
                 rc.admit_task(self.contract, task, self.repo)
+        punctuation = {"id": "task-one", "source_branch": "main", "source_sha": self.source,
+                       "allowed_paths": ["src"], "acceptance": "cd apps/chiron;)&|"}
+        with self.assertRaisesRegex(rc.ContractError, "apps/chiron"):
+            rc.admit_task(self.contract, punctuation, self.repo)
 
     def test_verified_import_is_idempotent_and_cas(self) -> None:
         candidate = self.candidate()
-        verified = rc.verify_candidate(self.contract, candidate, self.repo)
+        verified = rc.verify_candidate(self.contract, candidate, self.repo, receipt=self.receipt(candidate))
         self.assertEqual(verified["changed_paths"], ["src/feature.txt"])
-        first = rc.import_candidate(self.contract, candidate, self.repo)
-        second = rc.import_candidate(self.contract, candidate, self.repo)
+        first = rc.import_candidate(self.contract, candidate, self.repo, receipt=self.receipt(candidate))
+        second = rc.import_candidate(self.contract, candidate, self.repo, receipt=self.receipt(candidate))
         self.assertEqual(first["status"], "imported")
         self.assertEqual(second["status"], "idempotent")
         self.assertEqual(git(self.repo, "rev-parse", "refs/heads/recursion/task/task-one"), candidate["candidate_commit"])
@@ -151,16 +165,17 @@ class RepositoryContractTests(unittest.TestCase):
         git(self.repo, "commit", "-qm", "other")
         changed["candidate_commit"] = git(self.repo, "rev-parse", "HEAD")
         changed["external_branch"] = "cursor/other"
-        changed["verification_receipt"] = self.receipt(changed)
         with self.assertRaisesRegex(rc.ContractError, "different candidate"):
-            rc.import_candidate(self.contract, changed, self.repo)
+            rc.import_candidate(self.contract, changed, self.repo, receipt=self.receipt(changed))
+
+        widened = dict(candidate, allowed_paths=["."])
+        with self.assertRaisesRegex(rc.ContractError, "widens"):
+            rc.verify_candidate(self.contract, widened, self.repo, receipt=self.receipt(widened))
 
     def test_import_race_reconciles_identical_winner_and_receipt_is_required(self) -> None:
         candidate = self.candidate()
-        missing_receipt = dict(candidate)
-        missing_receipt.pop("verification_receipt")
         with self.assertRaisesRegex(rc.ContractError, "verification receipt"):
-            rc.verify_candidate(self.contract, missing_receipt, self.repo)
+            rc.verify_candidate(self.contract, candidate, self.repo)
         winner = candidate["candidate_commit"]
         original = rc._git
         raced = {"update": False}
@@ -173,14 +188,27 @@ class RepositoryContractTests(unittest.TestCase):
             return original(repo, *args)
 
         with mock.patch.object(rc, "_git", side_effect=race):
-            result = rc.import_candidate(self.contract, candidate, self.repo)
+            result = rc.import_candidate(self.contract, candidate, self.repo, receipt=self.receipt(candidate))
         self.assertEqual(result["status"], "idempotent")
+
+    def test_forged_receipt_and_malformed_candidates_are_typed_refusals(self) -> None:
+        candidate = self.candidate()
+        receipt = self.receipt(candidate)
+        forged = dict(receipt, signature="0" * 64)
+        with self.assertRaisesRegex(rc.ContractError, "authentication"):
+            rc.verify_candidate(self.contract, candidate, self.repo, receipt=forged)
+        for malformed in (None, [], {"project_id": []}, {"project_id": "test-project", "task_id": []}):
+            with self.subTest(malformed=malformed):
+                try:
+                    rc.verify_candidate(self.contract, malformed, self.repo, receipt=receipt)
+                except rc.ContractError:
+                    pass
+                else:
+                    self.fail("malformed candidate was not refused")
 
     def test_scope_and_stale_classification(self) -> None:
         candidate = self.candidate()
-        no_receipt = dict(candidate)
-        no_receipt.pop("verification_receipt")
-        self.assertEqual(rc.classify_stale_base(self.contract, no_receipt, self.repo), "unauthorized-result")
+        self.assertEqual(rc.classify_stale_base(self.contract, candidate, self.repo), "unauthorized-result")
         bad = dict(candidate)
         git(self.repo, "checkout", "-qb", "cursor/bad")
         (self.repo / "outside.txt").write_text("no\n", encoding="utf-8")
@@ -191,20 +219,20 @@ class RepositoryContractTests(unittest.TestCase):
         with self.assertRaisesRegex(rc.ContractError, "outside allowed_paths"):
             rc.verify_candidate(self.contract, bad, self.repo)
         # Return to the valid external ref and prove a current source is compatible.
-        valid = rc.verify_candidate(self.contract, candidate, self.repo)
-        self.assertEqual(rc.classify_stale_base(self.contract, valid, self.repo), "current-compatible")
+        valid = rc.verify_candidate(self.contract, candidate, self.repo, receipt=self.receipt(candidate))
+        self.assertEqual(rc.classify_stale_base(self.contract, valid, self.repo, receipt=self.receipt(candidate)), "current-compatible")
         # Advance default independently; the exact candidate remains reviewable but cannot be
         # silently rebased into the integration ref.
         git(self.repo, "checkout", "main")
         (self.repo / "src" / "main.txt").write_text("main\n", encoding="utf-8")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-qm", "main advances")
-        self.assertEqual(rc.classify_stale_base(self.contract, valid, self.repo), "stale-rebase-required")
+        self.assertEqual(rc.classify_stale_base(self.contract, valid, self.repo, receipt=self.receipt(candidate)), "stale-rebase-required")
 
     def test_plan_is_read_only_and_serialized(self) -> None:
         candidate = self.candidate()
         before = git(self.repo, "rev-parse", "refs/heads/recursion/integration")
-        plan = rc.plan_integration(self.contract, candidate, self.repo)
+        plan = rc.plan_integration(self.contract, candidate, self.repo, receipt=self.receipt(candidate))
         self.assertTrue(plan["serialized"])
         self.assertEqual(plan["expected_destination_tip"], before)
         self.assertTrue(plan["can_integrate"])

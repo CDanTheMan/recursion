@@ -14,7 +14,7 @@
   "allowed_paths": [
     "docs"
   ],
-  "gate_commands": [],
+  "gate_commands": ["git diff --check"],
   "eligible_hosts": ["gs-recursion"],
   "eligible_pools": ["local"],
   "topic": 3,

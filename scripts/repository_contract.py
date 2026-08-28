@@ -15,12 +15,15 @@ import argparse
 import contextlib
 import fnmatch
 import hashlib
+import hmac
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
+import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterator
 
@@ -96,7 +99,24 @@ def _contains_legacy_chiron(value: object) -> bool:
         return False
     normalized = re.sub(r"/{2,}", "/", value.replace("\\", "/")).lower()
     normalized = re.sub(r"(^|[\s'\"=:])\./", r"\1", normalized)
-    return re.search(r"(^|[\s'\"=/:])apps/chiron([/\s'\"=,:]|$)", normalized) is not None
+    return re.search(r"(?<![a-z0-9_])apps/chiron(?![a-z0-9_])", normalized) is not None
+
+
+def _valid_git_ref(value: object) -> bool:
+    if not isinstance(value, str) or not value or "*" in value:
+        return False
+    result = subprocess.run(
+        ["git", "check-ref-format", "--branch", value], stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    return result.returncode == 0
+
+
+def _valid_git_pattern(value: object) -> bool:
+    if not isinstance(value, str) or not value or any(char in value for char in "?["):
+        return False
+    probe = value.replace("*", "probe")
+    return _valid_git_ref(probe)
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -153,7 +173,8 @@ def _contract_fields(contract: dict[str, Any]) -> dict[str, Any]:
         raise ContractError("project repo must be a non-empty string")
     for key in ("default_branch", "integration_branch"):
         value = contract[key]
-        if not isinstance(value, str) or not BRANCH.fullmatch(value) or value.startswith("/"):
+        if not isinstance(value, str) or not BRANCH.fullmatch(value) or value.startswith("/") \
+                or not _valid_git_ref(value):
             raise ContractError(f"{key} is invalid")
     if contract["default_branch"] == contract["integration_branch"]:
         raise ContractError("default and integration branches must differ")
@@ -161,11 +182,13 @@ def _contract_fields(contract: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(pattern, str) or pattern.count("{task_id}") != 1:
         raise ContractError("task_branch_pattern must contain exactly one {task_id}")
     probe = pattern.replace("{task_id}", "probe")
-    if not BRANCH.fullmatch(probe) or probe in {contract["default_branch"], contract["integration_branch"]}:
+    if not BRANCH.fullmatch(probe) or not _valid_git_ref(probe) \
+            or probe in {contract["default_branch"], contract["integration_branch"]}:
         raise ContractError("task_branch_pattern is unsafe")
     patterns = contract["external_branch_patterns"]
     if not isinstance(patterns, list) or not patterns or any(
-        not isinstance(item, str) or not item or item in {"*", "**"} for item in patterns
+        not isinstance(item, str) or not item or item in {"*", "**"} or not _valid_git_pattern(item)
+        for item in patterns
     ) or len(set(patterns)) != len(patterns):
         raise ContractError("external_branch_patterns must be a non-empty restricted list")
     task_probe = pattern.replace("{task_id}", "probe")
@@ -181,7 +204,8 @@ def _contract_fields(contract: dict[str, Any]) -> dict[str, Any]:
     contract["allowed_paths"] = _normalized_paths(contract["allowed_paths"], field="allowed_paths")
     for key in ("gate_commands", "eligible_hosts", "eligible_pools"):
         values = contract[key]
-        if not isinstance(values, list) or any(not isinstance(item, str) or not item for item in values) \
+        if not isinstance(values, list) or not values \
+                or any(not isinstance(item, str) or not item for item in values) \
                 or len(set(values)) != len(values):
             raise ContractError(f"{key} must be a string array")
     _gate_digest(contract)
@@ -291,6 +315,12 @@ def admit_task(contract: dict[str, Any], task: dict[str, Any], repo: Path, *, ne
 
 
 def _candidate_payload(candidate: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(candidate, dict):
+        raise ContractError("candidate must be an object", "unauthorized-result")
+    try:
+        json.dumps(candidate, sort_keys=True)
+    except (TypeError, ValueError) as exc:
+        raise ContractError("candidate contains non-serializable input", "unauthorized-result") from exc
     required = {"project_id", "task_id", "source_branch", "source_sha", "external_branch", "candidate_commit"}
     missing = sorted(key for key in required if key not in candidate)
     if missing:
@@ -298,11 +328,54 @@ def _candidate_payload(candidate: dict[str, Any]) -> dict[str, Any]:
     return candidate
 
 
+def _controller_key() -> bytes:
+    raw = os.environ.get("RECURSION_VERIFIER_RECEIPT_KEY", "")
+    key_file = os.environ.get("RECURSION_VERIFIER_RECEIPT_KEY_FILE", "")
+    if key_file:
+        try:
+            raw = Path(key_file).read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ContractError("controller verifier key is unavailable", "verification-unavailable") from exc
+    if not raw:
+        raise ContractError("controller verifier authentication is unavailable", "verification-unavailable")
+    return raw.encode("utf-8")
+
+
+def _run_independent_gates(contract: dict[str, Any], repo: Path, commit: str) -> None:
+    """Run the descriptor's gates on an isolated detached worktree under controller control."""
+    with tempfile.TemporaryDirectory(prefix="recursion-gate-") as raw:
+        worktree = Path(raw) / "candidate"
+        created = _git(repo, "worktree", "add", "--detach", "--quiet", str(worktree), commit)
+        if created.returncode:
+            raise ContractError("controller gate worktree could not be created", "verification-unavailable")
+        try:
+            env = {key: value for key, value in os.environ.items()
+                   if key in {"PATH", "HOME", "USERPROFILE", "SystemRoot", "WINDIR"}}
+            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+                        "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"})
+            for command in contract["gate_commands"]:
+                try:
+                    result = subprocess.run(command, shell=True, cwd=worktree, env=env,
+                                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE, text=True, timeout=120, check=False)
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    raise ContractError("controller gate execution was unavailable", "verification-unavailable") from exc
+                if result.returncode:
+                    raise ContractError("independent controller gate failed", "unauthorized-result")
+        finally:
+            removed = _git(repo, "worktree", "remove", "--force", str(worktree))
+            if removed.returncode:
+                raise ContractError("controller gate worktree cleanup failed", "verification-unavailable")
+
+
 def verify_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: Path,
-                     *, allow_canonical: bool = False) -> dict[str, Any]:
+                     *, receipt: dict[str, Any] | None = None,
+                     allow_canonical: bool = False) -> dict[str, Any]:
     """Independently verify branch identity, source ancestry, scope, and verifier evidence."""
     validate_project_descriptor(contract)
     _candidate_payload(candidate)
+    if "verification_receipt" in candidate or "verified" in candidate:
+        raise ContractError("candidate may not supply verification authority", "unauthorized-result")
     if candidate["project_id"] != contract["id"]:
         raise ContractError("candidate project identity does not match", "unauthorized-result")
     task_branch(contract, candidate["task_id"])
@@ -330,10 +403,10 @@ def verify_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: 
     _require_path_subset(allowed, contract["allowed_paths"], field="candidate allowed_paths")
     if any(not _path_allowed(path, allowed) for path in paths):
         raise ContractError("candidate changed a path outside allowed_paths", "unauthorized-result")
-    receipt = candidate.get("verification_receipt")
     if not isinstance(receipt, dict):
-        raise ContractError("candidate lacks a controller verification receipt", "unauthorized-result")
-    _verify_receipt(contract, candidate, receipt, source, commit, paths, repo)
+        raise ContractError("controller verification receipt is required separately", "unauthorized-result")
+    _run_independent_gates(contract, repo, commit)
+    _verify_receipt(contract, candidate, receipt, source, commit, paths, allowed, repo)
     result = dict(candidate)
     result["allowed_paths"] = allowed
     result["changed_paths"] = paths
@@ -342,10 +415,10 @@ def verify_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: 
 
 
 def _verify_receipt(contract: dict[str, Any], candidate: dict[str, Any], receipt: dict[str, Any],
-                    source: str, commit: str, paths: list[str], repo: Path) -> None:
+                    source: str, commit: str, paths: list[str], allowed: list[str], repo: Path) -> None:
     """Validate the controller-verifier receipt, including its tamper-evident digest binding."""
     required = {"schema", "project_id", "task_id", "source_sha", "candidate_commit", "diff_sha256",
-                "scope_digest", "gate_digest", "verdict", "verifier", "provenance", "receipt_digest"}
+                "scope_digest", "gate_digest", "verdict", "verifier", "provenance", "receipt_digest", "signature"}
     if not required.issubset(receipt):
         raise ContractError("controller verification receipt is incomplete", "unauthorized-result")
     if receipt.get("schema") != "recursion-controller-verifier-receipt/v1" \
@@ -360,7 +433,7 @@ def _verify_receipt(contract: dict[str, Any], candidate: dict[str, Any], receipt
         "schema": receipt["schema"], "project_id": contract["id"], "task_id": candidate["task_id"],
         "source_sha": source, "candidate_commit": commit,
         "diff_sha256": hashlib.sha256(diff.stdout.encode()).hexdigest(),
-        "scope_digest": _json_digest(sorted(paths)), "gate_digest": _gate_digest(contract),
+        "scope_digest": _json_digest(allowed), "gate_digest": _gate_digest(contract),
         "verdict": "pass", "verifier": "controller-verifier", "provenance": "recursion-controller",
     }
     for key, value in expected.items():
@@ -369,6 +442,9 @@ def _verify_receipt(contract: dict[str, Any], candidate: dict[str, Any], receipt
     body = {key: receipt[key] for key in expected}
     if receipt.get("receipt_digest") != _json_digest(body):
         raise ContractError("controller verification receipt digest is invalid", "unauthorized-result")
+    expected_signature = hmac.new(_controller_key(), receipt["receipt_digest"].encode("ascii"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(str(receipt.get("signature", "")), expected_signature):
+        raise ContractError("controller verification receipt authentication is invalid", "unauthorized-result")
 
 
 @contextlib.contextmanager
@@ -378,12 +454,36 @@ def _serialization_lock(repo: Path, timeout: float = 10.0) -> Iterator[None]:
     while True:
         try:
             lock.mkdir(mode=0o700)
+            (lock / "owner").write_text(str(os.getpid()), encoding="ascii")
             try:
                 yield
             finally:
-                lock.rmdir()
+                try:
+                    (lock / "owner").unlink()
+                finally:
+                    lock.rmdir()
             return
         except FileExistsError:
+            # A coordinator crash can leave mkdir-based locks behind. Reclaim only when the
+            # recorded owner is definitely gone; an unknown owner remains fail-closed.
+            owner = lock / "owner"
+            try:
+                owner_pid = int(owner.read_text(encoding="ascii").strip())
+            except (OSError, ValueError):
+                owner_pid = 0
+            if owner_pid and owner_pid != os.getpid():
+                try:
+                    os.kill(owner_pid, 0)
+                except (OSError, ProcessLookupError):
+                    shutil.rmtree(lock, ignore_errors=True)
+                    continue
+            elif not owner_pid:
+                try:
+                    if time.time() - lock.stat().st_mtime > timeout:
+                        shutil.rmtree(lock, ignore_errors=True)
+                        continue
+                except OSError:
+                    pass
             if time.monotonic() >= deadline:
                 raise ContractError("integration planning lock is busy", "integration-busy")
             time.sleep(0.02)
@@ -393,53 +493,79 @@ def _canonical_ref(contract: dict[str, Any], task_id: str) -> str:
     return f"refs/heads/{task_branch(contract, task_id)}"
 
 
-def import_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: Path) -> dict[str, Any]:
+def import_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: Path,
+                     *, receipt: dict[str, Any] | None = None) -> dict[str, Any]:
     """Import one verified candidate exactly once; conflicting retries fail closed."""
-    verified = verify_candidate(contract, candidate, repo)
-    digest = verified["candidate_digest"]
-    ledger = _git_dir(repo) / "recursion-candidates"
-    ledger.mkdir(mode=0o700, exist_ok=True)
-    record_path = ledger / f"{digest}.json"
-    ref = _canonical_ref(contract, verified["task_id"])
-    current_result = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
-    current = current_result.stdout.strip() if current_result.returncode == 0 else ""
-    if current and current != verified["candidate_commit"]:
-        raise ContractError("canonical task ref already names a different candidate", "idempotency-conflict")
-    if current == verified["candidate_commit"]:
-        status = "idempotent"
-    else:
-        created = _git(repo, "update-ref", ref, verified["candidate_commit"], "0" * len(verified["candidate_commit"]))
-        if created.returncode:
-            # Another coordinator may have won the same import race. Re-read the ref and
-            # reconcile an identical winner; only a different winner is a real conflict.
-            raced = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
-            raced_commit = raced.stdout.strip() if raced.returncode == 0 else ""
-            if raced_commit == verified["candidate_commit"]:
-                status = "idempotent"
-            else:
-                raise ContractError("canonical task ref changed during import", "idempotency-conflict")
+    with _serialization_lock(repo):
+        verified = verify_candidate(contract, candidate, repo, receipt=receipt)
+        digest = verified["candidate_digest"]
+        git_dir = _git_dir(repo)
+        ledger = git_dir / "recursion-candidates"
+        ledger.mkdir(mode=0o700, exist_ok=True)
+        idempotency_key = str(verified.get("idempotency_key") or digest)
+        operation_key = _json_digest(["candidate-import", contract["id"], idempotency_key])
+        record_path = ledger / f"{operation_key}.json"
+        ref = _canonical_ref(contract, verified["task_id"])
+        current_result = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
+        current = current_result.stdout.strip() if current_result.returncode == 0 else ""
+        if current and current != verified["candidate_commit"]:
+            raise ContractError("canonical task ref already names a different candidate", "idempotency-conflict")
+        if current == verified["candidate_commit"]:
+            status = "idempotent"
         else:
-            status = "imported"
-    record = {"schema": SCHEMA, "idempotency_key": verified.get("idempotency_key", digest),
-              "candidate_digest": digest, "task_id": verified["task_id"],
-              "canonical_ref": ref.removeprefix("refs/heads/"),
-              "candidate_commit": verified["candidate_commit"], "status": status}
-    if record_path.exists():
-        try:
-            existing = json.loads(record_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise ContractError("candidate idempotency record is unreadable", "idempotency-conflict") from exc
-        if existing.get("candidate_digest") != digest:
-            raise ContractError("candidate idempotency record conflicts", "idempotency-conflict")
-    else:
-        record_path.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n", encoding="utf-8")
-    return record
+            created = _git(repo, "update-ref", ref, verified["candidate_commit"], "0" * len(verified["candidate_commit"]))
+            if created.returncode:
+                # Another coordinator may have won the same import race. Re-read the ref and
+                # reconcile an identical winner; only a different winner is a real conflict.
+                raced = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
+                raced_commit = raced.stdout.strip() if raced.returncode == 0 else ""
+                if raced_commit == verified["candidate_commit"]:
+                    status = "idempotent"
+                else:
+                    raise ContractError("canonical task ref changed during import", "idempotency-conflict")
+            else:
+                status = "imported"
+        record = {"schema": SCHEMA, "idempotency_key": verified.get("idempotency_key", digest),
+                  "candidate_digest": digest, "task_id": verified["task_id"],
+                  "canonical_ref": ref.removeprefix("refs/heads/"),
+                  "candidate_commit": verified["candidate_commit"], "status": status}
+        if record_path.exists():
+            try:
+                existing = json.loads(record_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ContractError("candidate idempotency record is unreadable", "idempotency-conflict") from exc
+            if existing.get("candidate_digest") != digest:
+                raise ContractError("candidate idempotency key names a different candidate", "idempotency-conflict")
+        else:
+            tmp = record_path.with_name(f".{record_path.name}.tmp")
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+                with tmp.open("w", encoding="utf-8", newline="\n") as stream:
+                    stream.write(json.dumps(record, sort_keys=True, indent=2) + "\n")
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(tmp, record_path)
+                if os.name != "nt":
+                    fd = os.open(str(ledger), os.O_RDONLY)
+                    try:
+                        os.fsync(fd)
+                    finally:
+                        os.close(fd)
+            except OSError as exc:
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+                raise ContractError("candidate idempotency record could not be durably written", "verification-unavailable") from exc
+        return record
 
 
-def classify_stale_base(contract: dict[str, Any], candidate: dict[str, Any], repo: Path) -> str:
+def classify_stale_base(contract: dict[str, Any], candidate: dict[str, Any], repo: Path,
+                        *, receipt: dict[str, Any] | None = None) -> str:
     """Classify a verified candidate against current default/integration ancestry."""
     try:
-        candidate = verify_candidate(contract, candidate, repo, allow_canonical=True)
+        candidate = verify_candidate(contract, candidate, repo, receipt=receipt, allow_canonical=True)
     except ContractError as exc:
         return exc.code if exc.code in OUTCOMES else "unauthorized-result"
     try:
@@ -469,11 +595,12 @@ def classify_stale_base(contract: dict[str, Any], candidate: dict[str, Any], rep
     return "stale-rebase-required"
 
 
-def plan_integration(contract: dict[str, Any], candidate: dict[str, Any], repo: Path) -> dict[str, Any]:
+def plan_integration(contract: dict[str, Any], candidate: dict[str, Any], repo: Path,
+                     *, receipt: dict[str, Any] | None = None) -> dict[str, Any]:
     """Return a serialized, read-only integration plan with an expected destination tip."""
     with _serialization_lock(repo):
-        verified = verify_candidate(contract, candidate, repo, allow_canonical=True)
-        outcome = classify_stale_base(contract, verified, repo)
+        verified = verify_candidate(contract, candidate, repo, receipt=receipt, allow_canonical=True)
+        outcome = classify_stale_base(contract, verified, repo, receipt=receipt)
         integration = _oid(repo, f"refs/heads/{contract['integration_branch']}", missing="source-unavailable")
         return {"schema": SCHEMA, "task_id": verified["task_id"], "candidate_commit": verified["candidate_commit"],
                 "source_sha": verified["source_sha"], "destination_branch": contract["integration_branch"],
@@ -499,6 +626,7 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("project")
         command.add_argument("payload", nargs="?")
         command.add_argument("--repo")
+        command.add_argument("--receipt")
     args = parser.parse_args(argv)
     try:
         contract = validate_project_descriptor(_load(args.project))
@@ -509,16 +637,19 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error(f"{args.command} requires payload and --repo")
             payload = _load(args.payload)
             repo = Path(args.repo).resolve()
+            if args.command != "admit-task" and not args.receipt:
+                parser.error(f"{args.command} requires a controller receipt via --receipt")
+            receipt = _load(args.receipt) if args.receipt else None
             if args.command == "admit-task":
                 result = admit_task(contract, payload, repo)
             elif args.command == "verify-candidate":
-                result = verify_candidate(contract, payload, repo)
+                result = verify_candidate(contract, payload, repo, receipt=receipt)
             elif args.command == "import-candidate":
-                result = import_candidate(contract, payload, repo)
+                result = import_candidate(contract, payload, repo, receipt=receipt)
             elif args.command == "classify":
-                result = {"outcome": classify_stale_base(contract, payload, repo)}
+                result = {"outcome": classify_stale_base(contract, payload, repo, receipt=receipt)}
             else:
-                result = plan_integration(contract, payload, repo)
+                result = plan_integration(contract, payload, repo, receipt=receipt)
         print(json.dumps(result, sort_keys=True))
         return 0
     except ContractError as exc:

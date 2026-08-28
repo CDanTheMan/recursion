@@ -117,7 +117,7 @@ contains_legacy_chiron(){
   # Normalize separators, redundant ./ and trailing slashes before matching every command/path
   # field. This catches shell, Windows, and comma-separated roadmap spellings alike.
   printf '%s\n' "$1" | tr '\\' '/' | sed -E 's#/{2,}#/#g; s#(^|[[:space:]])\./#\1#g; s#/$##' \
-    | grep -qiE "(^|[[:space:]\"'=/:])apps/chiron([/[:space:]\"'=,:]|$)"
+    | grep -qiE "(^|[^[:alnum:]_])apps/chiron([^[:alnum:]_]|$)"
 }
 for generated_field in "$WORKDIR" "$ALLOWED" "$ACC" "$GATE_COMMANDS" "$SEED" "$REPO" "$GOAL" "$NON_GOALS" "$ENGINE" "$MODEL" "$WORKER_CLASS" "$DEPS"; do
   if contains_legacy_chiron "$generated_field"; then
@@ -146,7 +146,14 @@ except (OSError,ValueError):
     print('invalid')
 PY
 )"
-  case "$project_match" in active) PROJECT_CONFIG="$candidate_config"; break;; esac
+  case "$project_match" in
+    active)
+      [ -f "$ROOT/scripts/repository_contract.py" ] \
+        || { echo "plan: active project validator is unavailable; refusing descriptor use" >&2; exit 74; }
+      python3 "$ROOT/scripts/repository_contract.py" validate-project "$candidate_config" >/dev/null \
+        || { echo "plan: active project descriptor failed v2 validation: $candidate_config" >&2; exit 6; }
+      PROJECT_CONFIG="$candidate_config"; break;;
+  esac
 done
 if [ -n "$PROJECT_CONFIG" ]; then
   [ -d "${REPO:-}/.git" ] || { echo "plan: registered project checkout is unavailable; exact source SHA cannot be admitted" >&2; exit 74; }
