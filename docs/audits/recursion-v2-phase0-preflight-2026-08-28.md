@@ -185,6 +185,14 @@ advanced rather than edited in place. The authenticated current `main` head is
 `7a7462e97bc4efaa26faf2f9614f948145c9c8fb`; no state record was silently rebound to it. A future
 attempt requires a new task and immutable assignment.
 
+The runtime transition archive is intentionally ignored and owner-only. For independent review,
+the four mutation receipts and two terminal-event receipts were copied byte-for-byte into
+`docs/audits/recursion-v2-phase0-transition-receipts/`. Its manifest pins both files for every
+receipt by SHA-256. `scripts/tests/phase0-transition-receipts.test.py` recomputes each transition
+identity, requires the frozen event to equal the tracked journal event, and verifies every current
+canonical mutation witness. The tracked snapshot is audit evidence only; it is not a second
+runtime receipt store and cannot authorize a future transition.
+
 ## Remaining Phase 0 gate work
 
 - validate the merged candidate and this rollback procedure independently.

@@ -7,3 +7,5 @@ scripts/install-cron.sh text eol=lf
 state/portfolio.tsv text eol=lf
 # This byte-exact Git patch intentionally contains the required single-space context markers.
 docs/audits/recursion-v2-phase0-live-dirty-canonical.patch text eol=lf -whitespace
+# Sealed receipt hashes are byte-level evidence and must survive cross-platform checkouts.
+docs/audits/recursion-v2-phase0-transition-receipts/*.json text eol=lf
