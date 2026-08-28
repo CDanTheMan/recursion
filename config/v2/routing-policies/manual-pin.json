@@ -1,0 +1,1 @@
+{"schema_version":2,"kind":"routing_policy","id":"manual-pin","policy":"manual-pin","role":"implementer","candidate_order":["manual_pin","engine_id","provider_id","capacity_pool_id","model_id","host_id","sandbox_profile_id"],"allow_metered":false,"fallback_policy":"defer"}

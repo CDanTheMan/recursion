@@ -13,7 +13,7 @@ import json
 import sys
 from pathlib import Path
 
-from v2_contracts import ContractError, load_config, resolve_assignment
+from v2_contracts import ContractError, load_config, resolve_assignment, secure_file
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -23,7 +23,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--policy")
     args = parser.parse_args(argv)
     try:
-        task = json.loads(args.task.read_text(encoding="utf-8"))
+        task = json.loads(secure_file(args.task).read_text(encoding="utf-8"))
         result = resolve_assignment(task, load_config(args.config_dir), policy=args.policy)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ContractError) as exc:
         print(json.dumps({"status": "refused", "error": str(exc), "error_code": getattr(exc, "code", "invalid-input")}, sort_keys=True))
