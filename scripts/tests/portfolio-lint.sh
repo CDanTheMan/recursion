@@ -19,11 +19,22 @@ ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 sk(){ printf 'SKIP  %s\n' "$1"; }
 
-# Off the Linux deploy box two things about the REAL registry are environmental rather than wrong:
+# Off the deploy box two things about the REAL registry are environmental rather than wrong:
 # the rows point at box-local clone paths (/opt/..., /root/projects/...) and at deploy keys that
 # only exist in the box's ~/.ssh. Neither says anything about the registry from anywhere else.
-# Guarded on `uname -s` so the Linux box runs exactly the rules it ran before.
-OFFBOX=0; [ "$(uname -s)" = Linux ] || OFFBOX=1
+# RECURSION_DEPLOY_BOX declares the machine class explicitly: 1 = the deploy box, 0 = not the
+# box (a Linux verification lane exports this). Unset falls back to the `uname -s` heuristic,
+# so the box runs exactly the rules it ran before with NO .env or cron change — weakening the
+# box's real-registry checks would take a human writing 0 into its environment, an act rather
+# than an accident, while a non-box Linux lane can finally say so instead of failing here.
+case "${RECURSION_DEPLOY_BOX:-}" in
+  1) OFFBOX=0 ;;
+  0) OFFBOX=1 ;;
+  *) OFFBOX=0; [ "$(uname -s)" = Linux ] || OFFBOX=1 ;;
+esac
+# Test hook: `__classify` prints the machine-class verdict and exits, so the CONTROLs below can
+# prove the flag steers classification — in-process the verdict is fixed by the time they run.
+if [ "${1:-}" = __classify ]; then echo "OFFBOX=$OFFBOX"; exit 0; fi
 
 # A linked worktree's `.git` is a FILE containing "gitdir: ...", not a directory, so the original
 # `[ -d "$path/.git" ]` calls a perfectly good checkout "not a git repo" — which is how the ★
@@ -99,7 +110,7 @@ if [ "$OFFBOX" = 1 ]; then
   # which exercises GHOST/STALE/NOKEY against fixture paths and a fixture key.
   boxlocal="$(printf '%s\n' "$out" | grep -cE '^(GHOST|STALE|NOKEY) ')"
   out="$(printf '%s\n' "$out" | grep -vE '^(GHOST|STALE|NOKEY) ')"
-  sk "GHOST/STALE/NOKEY withdrawn from the real-registry check on $(uname -s): clone paths and ~/.ssh deploy keys exist only on the Linux deploy box ($boxlocal line(s) withheld). The ★ CONTROLs below still prove all three codes fire."
+  sk "GHOST/STALE/NOKEY withdrawn from the real-registry check here (RECURSION_DEPLOY_BOX=${RECURSION_DEPLOY_BOX:-unset}, uname $(uname -s)): clone paths and ~/.ssh deploy keys exist only on the deploy box ($boxlocal line(s) withheld). The ★ CONTROLs below still prove all three codes fire."
 fi
 if [ -z "$out" ]; then
   ok "state/portfolio.tsv is internally consistent (paths, keys, roadmaps, statuses, uniqueness)"
@@ -148,6 +159,20 @@ check_control "a row missing columns"                    SHORTROW   "p	/tmp	x	ma
 o="$(lint "$TMP/reg.tsv" 2>&1)"
 [ -z "$o" ] && ok "★ CONTROL — a well-formed registry passes (the lint is not rejecting everything)" \
              || no "★ CONTROL FAILED — a valid registry was rejected: $o"
+
+# ★ CONTROL — the machine-class flag steers classification in both directions, and unset
+# reproduces the uname heuristic (sub-invocations: OFFBOX is computed at file top).
+me="${BASH_SOURCE[0]}"
+[ "$(RECURSION_DEPLOY_BOX=1 bash "$me" __classify)" = "OFFBOX=0" ] \
+  && ok "CONTROL — RECURSION_DEPLOY_BOX=1 selects deploy-box rules" \
+  || no "CONTROL FAILED — RECURSION_DEPLOY_BOX=1 did not select deploy-box rules"
+[ "$(RECURSION_DEPLOY_BOX=0 bash "$me" __classify)" = "OFFBOX=1" ] \
+  && ok "CONTROL — RECURSION_DEPLOY_BOX=0 selects off-box rules even on Linux" \
+  || no "CONTROL FAILED — RECURSION_DEPLOY_BOX=0 did not select off-box rules"
+expect="OFFBOX=1"; [ "$(uname -s)" = Linux ] && expect="OFFBOX=0"
+[ "$(env -u RECURSION_DEPLOY_BOX bash "$me" __classify)" = "$expect" ] \
+  && ok "CONTROL — unset flag falls back to the uname heuristic ($expect here)" \
+  || no "CONTROL FAILED — unset flag did not reproduce the uname heuristic (expected $expect)"
 
 echo
 [ "$fails" -eq 0 ] && { echo "portfolio-lint: ALL PASS"; exit 0; }

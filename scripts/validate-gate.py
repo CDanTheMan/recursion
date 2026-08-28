@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -148,6 +149,13 @@ def main() -> int:
         operators = re.findall(r"&&|\|\||;", gate)
         parsed_segments: list[list[str]] = []
         for segment in raw_segments:
+            # POSIX-mode shlex consumes unquoted backslashes, so a Windows-style path reaches
+            # entrypoint() pre-mangled ("app\check.py" -> "appcheck.py") and slips outside the
+            # allowed roots — evading the gate_files declaration check. Normalize before the
+            # split on Windows hosts only: on the box parsing stays byte-for-byte identical
+            # (making it identical there too is PROPOSALS 2026-08-27 item 11's open remainder).
+            if os.name == "nt":
+                segment = segment.replace("\\", "/")
             try:
                 parsed_segments.append(shlex.split(segment))
             except ValueError as exc:

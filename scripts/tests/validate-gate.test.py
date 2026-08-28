@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import unittest
@@ -101,6 +102,29 @@ class DirectGateAdmissionTest(unittest.TestCase):
         ):
             with self.subTest(gate=gate):
                 self.assertNotEqual(run_gate(gate), 0)
+
+
+class WindowsPathToleranceTest(unittest.TestCase):
+    """Backslash-carrying gate programs. Quoted backslashes survive POSIX shlex, so the
+    per-word normalization admits them identically on every host. UNQUOTED backslashes are
+    consumed by the split itself; on Windows the segment is normalized before splitting, while
+    on the box the mangled word ("appcheck.py") falls outside the allowed roots and today's
+    verdicts are preserved byte-for-byte — these tests pin that difference so a change to
+    Linux parsing cannot land silently (PROPOSALS 2026-08-27 item 11 holds that remainder)."""
+
+    def test_quoted_backslash_program_is_normalized_and_checked_everywhere(self):
+        self.assertEqual(run_gate('python3 "app\\check.py"', gate_files="app/check.py"), 0)
+        self.assertNotEqual(run_gate('python3 "app\\check.py"'), 0)
+
+    def test_unquoted_backslash_program(self):
+        undeclared = run_gate("python3 app\\check.py")
+        declared = run_gate("python3 app\\check.py", gate_files="app/check.py")
+        if os.name == "nt":
+            self.assertNotEqual(undeclared, 0)
+            self.assertEqual(declared, 0)
+        else:
+            self.assertEqual(undeclared, 0)
+            self.assertEqual(declared, 0)
 
 
 if __name__ == "__main__":
