@@ -34,6 +34,21 @@ POLICIES = {
     "manual-pin", "subscription-first", "local-first", "cheapest-eligible",
     "fastest-eligible", "strongest-reviewer", "weighted-rotation", "no-metered-fallback",
 }
+BILLING_BASES = {"included", "weekly-included", "metered", "local", "human"}
+ROUTING_ORDER_FIELDS = {
+    "billing_basis", "cost_class", "pool_id", "provider_id", "capacity_pool_id", "model_id", "engine_id", "host_id",
+    "sandbox_profile_id", "speed_class", "reasoning_class", "manual_pin",
+}
+TASK_FIELDS = {
+    "task_id", "project_id", "source_repository", "source_branch", "source_sha",
+    "seed_manifest_digest", "gate_digest", "allowed_paths", "role", "requirements",
+    "model_parameters", "created_at", "manual_pin", "execution_profile", "preferences",
+}
+REQUIREMENT_FIELDS = {
+    "capabilities", "engine_capabilities", "model_capabilities", "host_capabilities",
+    "sandbox_capabilities", "operating_system", "isolation", "data_class", "billing",
+    "network_profile", "max_cost_usd",
+}
 
 
 class ContractError(ValueError):
@@ -235,8 +250,9 @@ def validate_record(record: Any) -> dict[str, Any]:
         _bool(o["structured_output"], "engine.structured_output")
         _strings(o["roles"], "engine.roles", nonempty=True)
         if not set(o["roles"]) <= ROLES: raise ContractError("engine.roles contains an unknown role")
-        for name in ("capabilities", "network_capabilities", "compatible_sandbox_profiles", "compatible_host_capabilities"):
+        for name in ("capabilities", "network_capabilities", "compatible_host_capabilities"):
             _strings(o[name], f"engine.{name}")
+        _refs(o["compatible_sandbox_profiles"], "engine.compatible_sandbox_profiles")
         for name in ("cancellation", "resume", "usage_receipt"):
             _obj(o[name], f"engine.{name}", {"supported", "protocol"}, {"supported", "protocol"})
             _bool(o[name]["supported"], f"engine.{name}.supported"); _str(o[name]["protocol"], f"engine.{name}.protocol")
@@ -253,6 +269,7 @@ def validate_record(record: Any) -> dict[str, Any]:
     elif kind == "capacity_pool":
         o = _common(record, kind, {"account_id", "billing_basis", "credential_ref", "roles", "projects", "models", "hosts", "quota", "spend_ceiling_usd", "on_demand", "initial_concurrency", "cooldown_s", "fallback_policy", "status"}, {"account_id", "billing_basis", "credential_ref", "roles", "quota", "on_demand", "initial_concurrency", "fallback_policy", "status"})
         _str(o["account_id"], "capacity_pool.account_id"); _str(o["billing_basis"], "capacity_pool.billing_basis")
+        if o["billing_basis"] not in BILLING_BASES: raise ContractError("capacity_pool.billing_basis is invalid")
         _str(o["credential_ref"], "capacity_pool.credential_ref");
         if not SECRET_REF.fullmatch(o["credential_ref"]): raise ContractError("capacity_pool.credential_ref must be a secret reference")
         _strings(o["roles"], "capacity_pool.roles", nonempty=True); _refs(o.get("projects", []), "capacity_pool.projects"); _refs(o.get("models", []), "capacity_pool.models"); _refs(o.get("hosts", []), "capacity_pool.hosts")
@@ -264,7 +281,9 @@ def validate_record(record: Any) -> dict[str, Any]:
         _str(o["status"], "capacity_pool.status")
     elif kind == "model":
         o = _common(record, kind, {"provider_ids", "engine_ids", "roles", "data_classes", "capabilities", "reasoning_class", "speed_class", "cost_class", "efforts", "context_tokens", "status"}, {"provider_ids", "engine_ids", "roles", "data_classes", "capabilities", "reasoning_class", "speed_class", "cost_class", "efforts", "context_tokens", "status"})
-        for name in ("provider_ids", "engine_ids", "roles", "data_classes", "capabilities", "efforts"): _strings(o[name], f"model.{name}")
+        _refs(o["provider_ids"], "model.provider_ids"); _refs(o["engine_ids"], "model.engine_ids")
+        _strings(o["roles"], "model.roles", nonempty=True)
+        for name in ("data_classes", "capabilities", "efforts"): _strings(o[name], f"model.{name}")
         if not set(o["roles"]) <= ROLES: raise ContractError("model.roles contains an unknown role")
         for name in ("reasoning_class", "speed_class", "cost_class", "status"): _str(o[name], f"model.{name}")
         _int(o["context_tokens"], "model.context_tokens", 1)
@@ -273,7 +292,8 @@ def validate_record(record: Any) -> dict[str, Any]:
         for name in ("class", "operating_system", "architecture", "cpu", "gpu", "trust_class", "status"): _str(o[name], f"host.{name}")
         for name in ("ram_mb", "disk_mb"): _int(o[name], f"host.{name}", 1)
         _bool(o["gui"], "host.gui");
-        for name in ("engine_ids", "sandbox_profile_ids", "capabilities", "network_profiles", "network_endpoints"): _strings(o[name], f"host.{name}")
+        _refs(o["engine_ids"], "host.engine_ids"); _refs(o["sandbox_profile_ids"], "host.sandbox_profile_ids")
+        for name in ("capabilities", "network_profiles", "network_endpoints"): _strings(o[name], f"host.{name}")
         for endpoint in o["network_endpoints"]: _str(endpoint, "host.network_endpoint", ENDPOINT)
         _int(o["concurrency"], "host.concurrency", 1)
         for name in ("heartbeat", "recovery"):
@@ -286,11 +306,17 @@ def validate_record(record: Any) -> dict[str, Any]:
     elif kind == "routing_policy":
         o = _common(record, kind, {"policy", "role", "candidate_order", "allow_metered", "fallback_policy", "weights"}, {"policy", "role", "candidate_order", "allow_metered", "fallback_policy"})
         if o["policy"] not in POLICIES: raise ContractError("routing_policy.policy is unknown")
-        _str(o["role"], "routing_policy.role"); _strings(o["candidate_order"], "routing_policy.candidate_order"); _bool(o["allow_metered"], "routing_policy.allow_metered"); _str(o["fallback_policy"], "routing_policy.fallback_policy")
+        _str(o["role"], "routing_policy.role")
+        if o["role"] not in ROLES: raise ContractError("routing_policy.role is unknown role")
+        _strings(o["candidate_order"], "routing_policy.candidate_order", nonempty=True)
+        if not set(o["candidate_order"]) <= ROUTING_ORDER_FIELDS: raise ContractError("routing_policy.candidate_order contains an unknown field")
+        if len(o["candidate_order"]) != len(set(o["candidate_order"])): raise ContractError("routing_policy.candidate_order is ambiguous", "duplicate-field")
+        _bool(o["allow_metered"], "routing_policy.allow_metered"); _str(o["fallback_policy"], "routing_policy.fallback_policy")
         if o["fallback_policy"] not in {"defer", "approved", "allow-approved"}: raise ContractError("routing_policy.fallback_policy is invalid")
         if o["allow_metered"] and o["fallback_policy"] not in {"approved", "allow-approved"}: raise ContractError("metered routing requires an approved fallback")
         if "weights" in o:
             if not isinstance(o["weights"], dict): raise ContractError("routing_policy.weights must be an object")
+            if o["policy"] != "weighted-rotation": raise ContractError("weights are only valid for weighted-rotation")
             for key, value in o["weights"].items(): _str(key, "routing_policy.weights key", IDENTIFIER); _int(value, "routing_policy.weights value", 1)
     elif kind == "project":
         o = _common(record, kind, {"repository", "default_branch", "integration_branch", "task_branch_pattern", "external_branch_patterns", "publication_policy", "source_policy", "allowed_paths", "gate_commands", "eligible_hosts", "eligible_pools", "status"}, {"repository", "default_branch", "integration_branch", "task_branch_pattern", "external_branch_patterns", "publication_policy", "source_policy", "allowed_paths", "gate_commands", "eligible_hosts", "eligible_pools", "status"})
@@ -299,7 +325,7 @@ def validate_record(record: Any) -> dict[str, Any]:
         if o["publication_policy"] != "verified-integration-only" or o["source_policy"] != "exact-sha": raise ContractError("project publication/source policy is not fail-closed")
     else:  # assignment
         o = _common(record, kind, {"task_id", "project_id", "source_repository", "source_branch", "source_sha", "seed_manifest_digest", "engine_id", "provider_id", "capacity_pool_id", "model_id", "model_parameters", "host_id", "sandbox_profile_id", "network_profile", "allowed_paths", "gate_digest", "publication_policy", "created_at", "assignment_digest"}, {"task_id", "project_id", "source_repository", "source_branch", "source_sha", "seed_manifest_digest", "engine_id", "provider_id", "capacity_pool_id", "model_id", "model_parameters", "host_id", "sandbox_profile_id", "network_profile", "allowed_paths", "gate_digest", "publication_policy", "created_at", "assignment_digest"})
-        for name in ("task_id", "project_id", "engine_id", "provider_id", "capacity_pool_id", "model_id", "host_id", "sandbox_profile_id"): _str(o[name], f"assignment.{name}")
+        for name in ("task_id", "project_id", "engine_id", "provider_id", "capacity_pool_id", "model_id", "host_id", "sandbox_profile_id"): _str(o[name], f"assignment.{name}", IDENTIFIER)
         _str(o["source_sha"], "assignment.source_sha");
         if not COMMIT.fullmatch(o["source_sha"]): raise ContractError("assignment.source_sha is not a commit SHA")
         for name in ("seed_manifest_digest", "gate_digest", "assignment_digest"): _str(o[name], f"assignment.{name}", SHA256)
@@ -322,16 +348,21 @@ def load_registry(path: Path | str, expected_kind: str | None = None, *, root: P
         raw = json.loads(text)
     except json.JSONDecodeError as exc:
         raise ContractError(f"registry {path} is not valid JSON: {exc}", "malformed-registry") from exc
+    wrapper_kind: str | None = None
     if isinstance(raw, dict) and "entries" in raw:
         allowed = {"schema_version", "registry", "entries"}
         _obj(raw, "registry", allowed, allowed)
         if raw["schema_version"] != V2_VERSION: raise ContractError("registry schema_version is unsupported", "unsupported-version")
-        if expected_kind and raw["registry"] != expected_kind: raise ContractError("registry kind mismatch")
+        wrapper_kind = raw["registry"]
+        if expected_kind and wrapper_kind != expected_kind: raise ContractError("registry kind mismatch")
         entries = raw["entries"]
     else: entries = [raw]
     if not isinstance(entries, list): raise ContractError("registry.entries must be a list")
     if not entries: raise ContractError("registry is empty", "empty-registry")
     result = [validate_record(x) for x in entries]
+    required_kind = expected_kind or wrapper_kind
+    if required_kind and any(item["kind"] != required_kind for item in result):
+        raise ContractError("record kind does not match registry")
     ids = [x["id"] for x in result]
     if len(set(ids)) != len(ids): raise ContractError("registry has duplicate ids", "duplicate-id")
     return result
@@ -339,17 +370,27 @@ def load_registry(path: Path | str, expected_kind: str | None = None, *, root: P
 
 def validate_registry(records: Any, expected_kind: str | None = None) -> list[dict[str, Any]]:
     """Validate an already decoded collection without touching the filesystem."""
+    wrapper_kind: str | None = None
     if isinstance(records, Mapping) and "entries" in records:
-        if records.get("schema_version") != V2_VERSION:
+        _obj(records, "registry", {"schema_version", "registry", "entries"}, {"schema_version", "registry", "entries"})
+        if records["schema_version"] != V2_VERSION:
             raise ContractError("registry schema_version is unsupported", "unsupported-version")
-        if expected_kind and records.get("registry") != expected_kind:
+        if records["registry"] not in REGISTRY_KINDS:
+            raise ContractError("registry kind is unknown", "unknown-kind")
+        wrapper_kind = records["registry"]
+        if expected_kind and wrapper_kind != expected_kind:
             raise ContractError("registry kind mismatch")
         records = records.get("entries")
     if not isinstance(records, list):
         raise ContractError("registry entries must be a list")
+    if not records:
+        raise ContractError("registry is empty", "empty-registry")
     result = [validate_record(item) for item in records]
+    required_kind = expected_kind or wrapper_kind
+    if required_kind and any(item["kind"] != required_kind for item in result):
+        raise ContractError("record kind does not match registry")
     if len({item["id"] for item in result}) != len(result):
-        raise ContractError("registry has duplicate ids")
+        raise ContractError("registry has duplicate ids", "duplicate-id")
     return result
 
 
@@ -414,6 +455,10 @@ def validate_config(registries: Mapping[str, Any]) -> dict[str, list[dict[str, A
             checked.append(record)
         if len({record["id"] for record in checked}) != len(checked):
             raise ContractError(f"registry {kind} has duplicate ids", "duplicate-id")
+        if kind == "routing_policy":
+            names = [record["policy"] for record in checked]
+            if len(set(names)) != len(names):
+                raise ContractError("routing policy names are ambiguous", "duplicate-policy")
         result[kind] = checked
     return result
 
@@ -443,16 +488,39 @@ def resolve_assignment(task: Mapping[str, Any], registries: Mapping[str, list[di
     if not isinstance(task, Mapping): raise ContractError("task must be an object")
     _no_secrets(task, "task")
     registries = validate_config(registries)
-    for name in ("task_id", "project_id", "source_repository", "source_branch", "source_sha", "seed_manifest_digest", "gate_digest", "allowed_paths", "role", "requirements"): 
-        if name not in task: raise ContractError(f"task missing required field {name}")
     if "allow_metered" in task or "on_demand" in task:
         raise ContractError("task cannot authorize metered or on-demand execution", "policy-unauthorized")
-    _str(task["task_id"], "task.task_id"); _str(task["project_id"], "task.project_id"); _str(task["source_repository"], "task.source_repository"); _str(task["source_branch"], "task.source_branch"); _str(task["source_sha"], "task.source_sha"); _str(task["seed_manifest_digest"], "task.seed_manifest_digest", SHA256); _str(task["gate_digest"], "task.gate_digest", SHA256); _workspace_paths(task["allowed_paths"], "task.allowed_paths", nonempty=True); _str(task["role"], "task.role")
+    unknown_task_fields = set(task) - TASK_FIELDS
+    if unknown_task_fields:
+        raise ContractError(f"task has unknown fields: {', '.join(sorted(unknown_task_fields))}", "unknown-field")
+    for name in ("task_id", "project_id", "source_repository", "source_branch", "source_sha", "seed_manifest_digest", "gate_digest", "allowed_paths", "role", "requirements"):
+        if name not in task: raise ContractError(f"task missing required field {name}")
+    _str(task["task_id"], "task.task_id", IDENTIFIER); _str(task["project_id"], "task.project_id", IDENTIFIER); _str(task["source_repository"], "task.source_repository"); _str(task["source_branch"], "task.source_branch"); _str(task["source_sha"], "task.source_sha"); _str(task["seed_manifest_digest"], "task.seed_manifest_digest", SHA256); _str(task["gate_digest"], "task.gate_digest", SHA256); _workspace_paths(task["allowed_paths"], "task.allowed_paths", nonempty=True); _str(task["role"], "task.role")
+    if task["role"] not in ROLES: raise ContractError("task.role is unknown role")
     requirements = task["requirements"]
     if not isinstance(requirements, Mapping): raise ContractError("task.requirements must be an object")
+    unknown_requirement_fields = set(requirements) - REQUIREMENT_FIELDS
+    if unknown_requirement_fields:
+        raise ContractError(f"task.requirements has unknown fields: {', '.join(sorted(unknown_requirement_fields))}", "unknown-field")
     _model_parameters(task.get("model_parameters", {}), "task.model_parameters")
     for field in ("capabilities", "engine_capabilities", "model_capabilities", "host_capabilities", "sandbox_capabilities", "billing"):
         if field in requirements: _strings(requirements[field], f"task.requirements.{field}")
+    if "billing" in requirements and not set(requirements["billing"]) <= BILLING_BASES:
+        raise ContractError("task.requirements.billing contains an unknown billing basis")
+    for field in ("operating_system", "isolation", "data_class", "network_profile"):
+        if field in requirements: _str(requirements[field], f"task.requirements.{field}")
+    if "max_cost_usd" in requirements:
+        value = requirements["max_cost_usd"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0 or not math.isfinite(value):
+            raise ContractError("task.requirements.max_cost_usd must be a finite number >= 0")
+    if "execution_profile" in task: _str(task["execution_profile"], "task.execution_profile")
+    if "preferences" in task:
+        preferences = _obj(task["preferences"], "task.preferences", {"implementer_family", "verifier_family"}, set())
+        for field, value in preferences.items(): _str(value, f"task.preferences.{field}")
+    if "manual_pin" in task:
+        pin = task["manual_pin"]
+        _obj(pin, "task.manual_pin", {"engine", "provider", "capacity_pool", "model", "host", "sandbox_profile"}, {"engine", "provider", "capacity_pool", "model", "host", "sandbox_profile"})
+        for field, value in pin.items(): _str(value, f"task.manual_pin.{field}", IDENTIFIER)
     if "routing_policy" in task:
         raise ContractError("task cannot select routing policy", "policy-unauthorized")
     policy_records = registries.get("routing_policy", [])
@@ -489,12 +557,13 @@ def resolve_assignment(task: Mapping[str, Any], registries: Mapping[str, list[di
             if project.get("eligible_hosts") and h["id"] not in project["eligible_hosts"]: reasons.append("project-host-not-allowed")
             if project.get("eligible_pools") and pool["id"] not in project["eligible_pools"]: reasons.append("project-pool-not-allowed")
             if s["id"] not in e.get("compatible_sandbox_profiles", []) or s["id"] not in h.get("sandbox_profile_ids", []): reasons.append("sandbox-incompatible")
+            if h.get("operating_system") != s.get("operating_system"): reasons.append("host-sandbox-os-mismatch")
             if set(e.get("compatible_host_capabilities", [])) - set(h.get("capabilities", [])): reasons.append("host-capability-incompatible")
             if p.get("egress_profile") not in h.get("network_profiles", []) or p.get("egress_profile") not in s.get("network_profiles", []): reasons.append("provider-egress-profile-unavailable")
             endpoints = set(p.get("endpoints", []))
             if endpoints - set(h.get("network_endpoints", [])): reasons.append("provider-endpoint-unavailable-on-host")
             if endpoints - set(s.get("network_endpoints", [])): reasons.append("provider-endpoint-unavailable-in-sandbox")
-            if requirements.get("operating_system") and h.get("operating_system") != requirements["operating_system"]: reasons.append("operating-system-mismatch")
+            if requirements.get("operating_system") and (h.get("operating_system") != requirements["operating_system"] or s.get("operating_system") != requirements["operating_system"]): reasons.append("operating-system-mismatch")
             required_capabilities = requirements.get("capabilities", [])
             for component, record in (("engine", e), ("model", m), ("host", h), ("sandbox", s)):
                 missing = sorted(set(required_capabilities) - set(record.get("capabilities", [])))
@@ -505,7 +574,10 @@ def resolve_assignment(task: Mapping[str, Any], registries: Mapping[str, list[di
             if requirements.get("isolation") and s.get("isolation") != requirements["isolation"]: reasons.append("isolation-mismatch")
             if requirements.get("data_class") and requirements["data_class"] not in m.get("data_classes", []): reasons.append("data-class-not-allowed")
             if requirements.get("billing") and pool.get("billing_basis") not in requirements["billing"]: reasons.append("billing-not-allowed")
-            if requirements.get("network_profile") and requirements["network_profile"] not in h.get("network_profiles", []): reasons.append("network-profile-mismatch")
+            requested_network = requirements.get("network_profile")
+            provider_network = p.get("egress_profile")
+            if requested_network and (requested_network != provider_network or requested_network not in h.get("network_profiles", []) or requested_network not in s.get("network_profiles", [])): reasons.append("network-profile-mismatch")
+            if not requested_network and (provider_network not in h.get("network_profiles", []) or provider_network not in s.get("network_profiles", [])): reasons.append("network-profile-mismatch")
             if policy == "manual-pin":
                 pin = task.get("manual_pin")
                 if not isinstance(pin, Mapping): reasons.append("manual-pin-missing")
@@ -521,22 +593,32 @@ def resolve_assignment(task: Mapping[str, Any], registries: Mapping[str, list[di
     if not candidates: return Resolution(None, tuple(trace), "deferred")
     def score(c: dict[str, Any]) -> tuple[Any, ...]:
         e, p, pool, m, h, s = c["engine"], c["provider"], c["pool"], c["model"], c["host"], c["sandbox"]
-        billing = {"local": 0, "included": 1, "weekly-included": 1, "flat-subscription": 1, "human": 2, "metered": 3}.get(pool.get("billing_basis"), 9)
-        speed = {"fast": 0, "medium": 1, "slow": 2}.get(m.get("speed_class"), 9); reasoning = {"frontier": 0, "strong": 1, "standard": 2}.get(m.get("reasoning_class"), 9)
-        if policy == "local-first": return (billing, h["id"], e["id"], m["id"], pool["id"], s["id"])
-        if policy == "fastest-eligible": return (speed, billing, h["id"], e["id"], m["id"], pool["id"], s["id"])
-        if policy == "strongest-reviewer": return (reasoning, speed, billing, m["id"], e["id"], pool["id"], h["id"], s["id"])
-        if policy == "subscription-first": return (billing, pool["id"], m["id"], e["id"], h["id"], s["id"])
-        if policy == "manual-pin":
-            pin = task.get("manual_pin", {})
-            return (0 if all(pin.get(k) == c[k]["id"] for k in ("engine", "provider", "capacity_pool", "model", "host", "sandbox_profile")) else 1,)
+        billing = {"local": 0, "included": 1, "weekly-included": 1, "human": 2, "metered": 3}.get(pool.get("billing_basis"), 9)
+        cost = {"local": 0, "included": 1, "low": 2, "medium": 3, "high": 4, "metered": 5}.get(m.get("cost_class"), 9)
+        speed = {"fast": 0, "medium": 1, "slow": 2}.get(m.get("speed_class"), 9)
+        reasoning = {"frontier": 0, "strong": 1, "standard": 2}.get(m.get("reasoning_class"), 9)
+        pin = task.get("manual_pin", {})
+        features: dict[str, Any] = {
+            "billing_basis": billing, "cost_class": cost, "pool_id": pool["id"], "provider_id": p["id"], "capacity_pool_id": pool["id"],
+            "model_id": m["id"], "engine_id": e["id"], "host_id": h["id"],
+            "sandbox_profile_id": s["id"], "speed_class": speed, "reasoning_class": reasoning,
+            "manual_pin": 0 if isinstance(pin, Mapping) and all(pin.get(k) == c[k]["id"] for k in ("engine", "provider", "capacity_pool", "model", "host", "sandbox_profile")) else 1,
+        }
+        ordered = tuple(features[field] for field in policy_record["candidate_order"])
+        # Weighted rotation uses a stable task/capacity hash; the declared
+        # candidate_order remains the primary ordering contract.
         if policy == "weighted-rotation":
-            return (int(digest(task["task_id"] + ":" + pool["id"])[0:8], 16),)
-        return (billing, speed, m.get("cost_class", "zz"), pool["id"], m["id"], e["id"], h["id"], s["id"])
+            weights = policy_record.get("weights", {})
+            weight = next((weights[item_id] for item_id in (pool["id"], m["id"], e["id"], p["id"], h["id"], s["id"]) if item_id in weights), 1)
+            rotation = (int(digest(task["task_id"] + ":" + pool["id"])[0:8], 16) / weight,)
+        else:
+            rotation = ()
+        return ordered + rotation + (e["id"], p["id"], pool["id"], m["id"], h["id"], s["id"])
     chosen = sorted(candidates, key=score)[0]
     network_profiles = sorted(set(chosen["sandbox"]["network_profiles"]) & set(chosen["host"].get("network_profiles", [])))
-    safe_task_id = re.sub(r"[^a-z0-9-]", "-", str(task["task_id"]).lower()).strip("-") or digest(task["task_id"])[:16]
-    assignment = {"schema_version": 2, "kind": "assignment", "id": f"assignment-{safe_task_id}", "task_id": task["task_id"], "project_id": task["project_id"], "source_repository": task["source_repository"], "source_branch": task["source_branch"], "source_sha": task["source_sha"], "seed_manifest_digest": task["seed_manifest_digest"], "engine_id": chosen["engine"]["id"], "provider_id": chosen["provider"]["id"], "capacity_pool_id": chosen["pool"]["id"], "model_id": chosen["model"]["id"], "model_parameters": dict(task.get("model_parameters", {})), "host_id": chosen["host"]["id"], "sandbox_profile_id": chosen["sandbox"]["id"], "network_profile": network_profiles[0], "allowed_paths": list(task["allowed_paths"]), "gate_digest": task["gate_digest"], "publication_policy": project["publication_policy"], "created_at": str(task.get("created_at", "dry-run"))}
+    selected_network = requirements.get("network_profile") or chosen["provider"]["egress_profile"]
+    assignment_id = "assignment-" + digest(task["task_id"])[:52]
+    assignment = {"schema_version": 2, "kind": "assignment", "id": assignment_id, "task_id": task["task_id"], "project_id": task["project_id"], "source_repository": task["source_repository"], "source_branch": task["source_branch"], "source_sha": task["source_sha"], "seed_manifest_digest": task["seed_manifest_digest"], "engine_id": chosen["engine"]["id"], "provider_id": chosen["provider"]["id"], "capacity_pool_id": chosen["pool"]["id"], "model_id": chosen["model"]["id"], "model_parameters": dict(task.get("model_parameters", {})), "host_id": chosen["host"]["id"], "sandbox_profile_id": chosen["sandbox"]["id"], "network_profile": selected_network, "allowed_paths": list(task["allowed_paths"]), "gate_digest": task["gate_digest"], "publication_policy": project["publication_policy"], "created_at": str(task.get("created_at", "dry-run"))}
     assignment["assignment_digest"] = digest({k: v for k, v in assignment.items() if k != "assignment_digest"})
     validate_record(assignment)
     return Resolution(assignment, tuple(trace), "assigned")

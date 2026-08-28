@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from v2_contracts import ContractError, digest, load_config, load_registry, read_v1_manifest, read_v1_portfolio_row, read_v1_task_header, resolve_assignment, validate_record  # noqa: E402
+from v2_contracts import ContractError, digest, load_config, load_registry, read_v1_manifest, read_v1_portfolio_row, read_v1_task_header, resolve_assignment, validate_record, validate_registry  # noqa: E402
 
 
 def base_records() -> dict[str, list[dict]]:
@@ -135,6 +135,42 @@ class V2ContractsTest(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             output = json.loads(proc.stdout)
             self.assertEqual(output["status"], "assigned"); self.assertIn("trace", output); self.assertFalse((Path(tmp) / "assignment.json").exists())
+
+    def test_second_review_adversarial_contracts_fail_closed(self):
+        cfg = base_records()
+        with self.assertRaisesRegex(ContractError, "unknown fields"):
+            validate_registry({"schema_version": 2, "registry": "engine", "entries": [cfg["engine"][0]], "poison": True}, "engine")
+        with self.assertRaisesRegex(ContractError, "kind"):
+            validate_registry({"schema_version": 2, "registry": "engine", "entries": [cfg["provider"][0]]})
+        with self.assertRaisesRegex(ContractError, "billing_basis"):
+            bad = copy.deepcopy(cfg["capacity_pool"][0]); bad["billing_basis"] = "free-unlimited"; validate_record(bad)
+        with self.assertRaisesRegex(ContractError, "unknown role"):
+            bad = copy.deepcopy(cfg["routing_policy"][0]); bad["role"] = "operator"; validate_record(bad)
+        with self.assertRaises(ContractError):
+            bad = copy.deepcopy(cfg["routing_policy"][0]); bad["candidate_order"] = ["pool_id", "pool_id"]; validate_record(bad)
+        with self.assertRaises(ContractError):
+            bad = copy.deepcopy(cfg["model"][0]); bad["provider_ids"] = ["../provider"]; validate_record(bad)
+        with self.assertRaisesRegex(ContractError, "unknown fields"):
+            task = {"task_id": "strict", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "requirements": {"capabilities": []}, "future": True}
+            resolve_assignment(task, cfg)
+        with self.assertRaisesRegex(ContractError, "unknown fields"):
+            task = {"task_id": "strict", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "requirements": {"future": True}}
+            resolve_assignment(task, cfg)
+        bad = copy.deepcopy(cfg["host"][0]); bad["operating_system"] = "windows"; cfg["host"] = [bad]
+        task = {"task_id": "os-check", "project_id": "recursion", "source_repository": "/opt/recursion", "source_branch": "master", "source_sha": "a" * 40, "seed_manifest_digest": "b" * 64, "gate_digest": "c" * 64, "allowed_paths": ["docs"], "role": "implementer", "requirements": {"capabilities": ["workspace-edit"]}}
+        self.assertEqual(resolve_assignment(task, cfg).status, "deferred")
+        cfg = base_records(); task["requirements"]["network_profile"] = "other-egress"
+        result = resolve_assignment(task, cfg); self.assertEqual(result.status, "deferred")
+        self.assertTrue(any("network-profile-mismatch" in x["rejections"] for x in result.trace))
+        task["requirements"]["network_profile"] = "anthropic-provider-only"
+        result = resolve_assignment(task, cfg); self.assertEqual(result.status, "assigned")
+        self.assertEqual(result.assignment["network_profile"], "anthropic-provider-only")
+        task["task_id"] = "not_allowed"
+        with self.assertRaisesRegex(ContractError, "invalid format"):
+            resolve_assignment(task, cfg)
+        duplicate = copy.deepcopy(cfg["routing_policy"][0]); duplicate["id"] = "another-cheapest"; cfg["routing_policy"].append(duplicate)
+        with self.assertRaisesRegex(ContractError, "ambiguous"):
+            resolve_assignment(task, cfg)
 
 
 if __name__ == "__main__":
