@@ -122,12 +122,17 @@ files used as `flock(2)` lock targets, not lease records. Two short-lived, PID-o
 released before their process details could be sampled. No worker process or unowned lease was
 observed; the transient PAUSE-time control-lock activity remains part of the Phase 0 review.
 
+The stale GSC source-bound goal/task was closed in the WIP review candidate: the pilot descriptor
+is `paused`, the v2 goal is `abandoned`, and its ready task is `stale`. The older unpinned goal/task
+was also closed as superseded. The authenticated current `main` head is
+`7a7462e97bc4efaa26faf2f9614f948145c9c8fb`; no state record was silently rebound to it. A future
+attempt requires a new task and immutable assignment.
+
 ## Remaining Phase 0 gate work
 
 - convert authenticated remote-head drift into explicit source dispositions before any pilot;
 - confirm the transient PAUSE-time control locks are awareness-only in a Linux evidence run;
 - independently review the captured dirty-state disposition and later drift handling;
-- supersede, rebind, or close the stale GSC pilot through the reviewed state path;
 - validate the merged candidate and an exact rollback procedure independently.
 
 Until those items pass, Phase 0 remains in progress and no live deployment or PAUSE transition is

@@ -33,7 +33,7 @@ charter_sha256: 006bef38a57a453b25ec56fb7c76bb8e0f4782fe4f7a8655881c58cc3fc547ed
 repo: /opt/golden-stallion-client
 workdir: .
 autonomy: auto
-status: ready
+status: stale
 seed_manifest: .seedlist
 seed_manifest_sha256: 924ff916e705ba96689fe3ebc901c63c40d89c273ed10858e2109ab7c7630dc4
 seed: user-client/render/data/models
@@ -43,5 +43,6 @@ last_transition_id: transition-3512f1ad25e433fe63edce9e20487d4a
 lease_expires: 0
 transition_reason: dependencies-passed
 transition_at: 2026-08-17T13:49:58Z
+resolution: Phase 0 invalidated this ready task because its exact source_head is stale. A future retry requires a new task and immutable assignment.
 
 Adjust only renderer implementation to reduce verified 0x6c shade-tops under-emission under the required forced-on native-diff gate.

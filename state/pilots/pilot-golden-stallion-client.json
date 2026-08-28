@@ -43,5 +43,6 @@
   "memory_key": "telegram-topic:6",
   "worktree_root": ".worktrees/golden-stallion-client",
   "window_required": true,
-  "status": "active"
+  "status": "paused",
+  "pause_reason": "Phase 0: the source-bound GSC pilot is stale and must be explicitly rebound through a new immutable assignment before any resume."
 }

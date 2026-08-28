@@ -6,7 +6,7 @@ pilot_id: pilot-golden-stallion-client
 plan_id: gsc-0x6c-shadetops-underemission-v2
 plan_digest: 7bc21268452add838f75e8ef40e466e074e6c9c977b6261bd5aaf9f7a6a22b3a
 instruction_id: 747
-status: active
+status: abandoned
 outcome: Reduce verified 0x6c shade-tops under-emission through renderer-only changes while preserving the forced-on native-diff gate.
 acceptance_suite: /opt/recursion/scripts/gsc-shade-tops-gate.py --repo . --profile /opt/recursion/scripts/gates/gsc-shade-tops-v1.json
 falsifier: The required forced-on native-diff gate does not show reduced 0x6c under-emission or any protected path is modified.
@@ -26,3 +26,4 @@ seed: user-client/render/data/models
 seed_digest: fe5df2007ef8b345c7218a26c72e0f30510a05213c389b1465853643d3ee62dd
 event_seq: 2
 last_transition_id: transition-136910b065ea601ed6b96a1704148d01
+resolution: Phase 0 closed this goal as stale; source_head ad4bb39a8cf3a9f3ad7e17b21dd89fcdf4252b39 is not the authenticated current main head 7a7462e97bc4efaa26faf2f9614f948145c9c8fb and may not be silently rebound.

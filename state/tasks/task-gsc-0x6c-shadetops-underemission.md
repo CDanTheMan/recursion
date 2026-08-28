@@ -27,8 +27,9 @@ acceptance: node user-client/render/tools/native-diff.cjs --metric
 repo: /opt/golden-stallion-client
 workdir: .
 autonomy: auto
-status: proposed
+status: stale
 event_seq: 2
 last_transition_id: transition-d3ba1fb540570277f2462fe2f9fa639a
+resolution: Closed during Recursion v2 Phase 0 because the legacy task has no immutable source assignment and was superseded by a later source-bound attempt.
 
 Adjust renderer implementation to reduce verified 0x6c shade-tops overlay under-emission while preserving conformance behavior.
