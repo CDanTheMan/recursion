@@ -108,10 +108,17 @@ human-owned links before anything can execute); `docs/audits/unlanded-branches-2
    and confirm it is no longer happening.
 
 ## 2026-08-27 — [NEEDS-APPROVAL] Production-side findings from the cross-platform test-suite pass
-status: PARTIALLY APPLIED — Lucas approved the low-risk set in-session (2026-08-27);
-items 1–7 and 9–10 are applied on this review branch. Still open: **8** (deploy-box gate —
-a design decision) and **11** (shlex escape handling — would change Linux parsing of
-backslash-carrying gate commands, so it stays a proposal).
+status: APPLIED — Lucas approved the low-risk set in-session (2026-08-27); items 1–7 and
+9–10 landed with PR #78. Items 8 and 11 followed the same day on a second review branch at
+Lucas's direction: **8** as a tri-state `RECURSION_DEPLOY_BOX` flag (1 = box, 0 = declared
+non-box for Linux verification lanes, UNSET falls back to the old uname heuristic — so the
+box runs identical rules with no .env or cron change, and weakening its real-registry
+checks would take an explicit human act); **11** as a Windows-host-only pre-split backslash
+normalization in validate-gate.py — POSIX parsing stays byte-identical, and the sharper
+finding is recorded in the tests: on POSIX an unquoted `app\check.py` gate mangles to
+`appcheck.py`, which falls OUTSIDE the allowed roots and thereby evades the gate_files
+declaration check. Making POSIX normalize too would change Linux parsing, so that
+remainder stays open below.
 
 **Context:** post-#77 merge, the full suite was run on Windows and on clean Linux (WSL,
 non-root, named branch, no env pollution). Test-side fixes (fixture staging closures,
