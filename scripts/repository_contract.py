@@ -136,18 +136,26 @@ def _valid_git_pattern(value: object) -> bool:
     return _valid_git_ref(probe)
 
 
-def _valid_gate_command(value: object) -> bool:
+def _valid_gate_command(value: object, *, allowed_paths: list[str] | None = None,
+                        controller_gate_files: list[str] | None = None) -> bool:
     if not isinstance(value, str) or not value.strip() or len(value) > 4096 \
             or "\x00" in value or any(ord(char) < 32 and char != "\t" for char in value):
         return False
     validator = Path(__file__).with_name("validate-gate.py")
     try:
+        validator_args = [
+            sys.executable, str(validator), "--acceptance", value, "--allowed-paths",
+            ",".join(allowed_paths or []), "--controller-gate-files",
+            ",".join(controller_gate_files or []), "--strict-direct",
+        ]
+        if controller_gate_files:
+            # Controller gate paths are rooted at this controller checkout. Bind their bytes to
+            # tracked HEAD content while admitting their declared relative paths.
+            validator_args += ["--controller-root", str(Path(__file__).resolve().parents[1])]
         result = subprocess.run(
-            # Repository descriptors bind their gate command digest; gate-file ownership is a
-            # separate contract.  Use an empty worker scope here so validator parsing does not
-            # require a task-level gate_files declaration.
-            [sys.executable, str(validator), "--acceptance", value, "--allowed-paths", "",
-             "--strict-direct"],
+            # Repository descriptors bind their gate command and declared gate-file ownership;
+            # controller-owned gate files are rooted and hashed by the validator below.
+            validator_args,
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             timeout=10, check=False,
         )
@@ -261,7 +269,15 @@ def _contract_fields(contract: dict[str, Any]) -> dict[str, Any]:
                 ) for item in values) \
                 or len(set(values)) != len(values):
             raise ContractError(f"{key} must be a string array")
-    if any(not _valid_gate_command(item) for item in contract["gate_commands"]):
+    required_gate_profile = contract.get("required_gate_profile")
+    controller_gate_files = (required_gate_profile.get("controller_gate_files", [])
+                             if isinstance(required_gate_profile, dict) else [])
+    if not isinstance(controller_gate_files, list) or any(not isinstance(item, str)
+                                                          for item in controller_gate_files):
+        raise ContractError("required_gate_profile controller_gate_files must be a string array")
+    if any(not _valid_gate_command(item, allowed_paths=contract["allowed_paths"],
+                                  controller_gate_files=controller_gate_files)
+           for item in contract["gate_commands"]):
         raise ContractError("gate_commands must contain non-vacuous commands")
     _gate_digest(contract)
     return contract

@@ -103,14 +103,38 @@ class DirectGateAdmissionTest(unittest.TestCase):
             with self.subTest(gate=gate):
                 self.assertNotEqual(run_gate(gate), 0)
 
+    def test_path_traversal_and_git_repository_redirection_are_refused(self):
+        refused = (
+            "python3 ../check.py",
+            "python3 app/../check.py",
+            "python3 app/check.py --profile ../profile.json",
+            "python3 app\\..\\check.py",
+            "git -C ../other diff --check",
+            "git -C../other diff --check",
+            "git --git-dir ../other/.git diff",
+            "git --git-dir=../other/.git diff",
+            "git --work-tree /tmp diff",
+            "git --work-tree=/tmp diff",
+            "git -c core.worktree=../other diff",
+            "git --config-env=GIT_DIR=../other diff",
+            "git -Ctmp diff --check",
+            "git --git-dir/tmp diff",
+            "git --work-tree/tmp diff",
+            "git -cfoo diff --check",
+            "git -o /tmp diff",
+            "git --output /tmp diff",
+            "git --output=/tmp diff",
+        )
+        for gate in refused:
+            with self.subTest(gate=gate):
+                self.assertNotEqual(run_gate(gate, gate_files="app/check.py"), 0)
+
 
 class WindowsPathToleranceTest(unittest.TestCase):
     """Backslash-carrying gate programs. Quoted backslashes survive POSIX shlex, so the
-    per-word normalization admits them identically on every host. UNQUOTED backslashes are
-    consumed by the split itself; on Windows the segment is normalized before splitting, while
-    on the box the mangled word ("appcheck.py") falls outside the allowed roots and today's
-    verdicts are preserved byte-for-byte — these tests pin that difference so a change to
-    Linux parsing cannot land silently (PROPOSALS 2026-08-27 item 11 holds that remainder)."""
+    per-word normalization admits them identically on every host. Unquoted and quoted forms are
+    normalized before POSIX shlex splitting, so the declaration and confinement checks see one
+    canonical path representation."""
 
     def test_quoted_backslash_program_is_normalized_and_checked_everywhere(self):
         self.assertEqual(run_gate('python3 "app\\check.py"', gate_files="app/check.py"), 0)
@@ -119,12 +143,8 @@ class WindowsPathToleranceTest(unittest.TestCase):
     def test_unquoted_backslash_program(self):
         undeclared = run_gate("python3 app\\check.py")
         declared = run_gate("python3 app\\check.py", gate_files="app/check.py")
-        if os.name == "nt":
-            self.assertNotEqual(undeclared, 0)
-            self.assertEqual(declared, 0)
-        else:
-            self.assertEqual(undeclared, 0)
-            self.assertEqual(declared, 0)
+        self.assertNotEqual(undeclared, 0)
+        self.assertEqual(declared, 0)
 
 
 if __name__ == "__main__":

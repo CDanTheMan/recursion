@@ -102,6 +102,85 @@ def entrypoint(words: list[str], strict: bool) -> str | None:
     fail(f"{name} acceptance has no explicit grading program")
 
 
+def _path_is_absolute(value: str) -> bool:
+    normalized = value.replace("\\", "/")
+    return normalized.startswith("/") or bool(re.match(r"^[A-Za-z]:/", normalized))
+
+
+def _path_has_traversal(value: str) -> bool:
+    normalized = value.replace("\\", "/")
+    return any(part == ".." for part in normalized.split("/"))
+
+
+def _controller_declared(value: str, controller_root: str | None,
+                         controller_gate_files: list[str]) -> bool:
+    if not controller_root or not _path_is_absolute(value):
+        return False
+    try:
+        relative = Path(value).resolve().relative_to(Path(controller_root).resolve()).as_posix()
+    except ValueError:
+        return False
+    return relative in controller_gate_files
+
+
+def _reject_git_cwd_options(words: list[str]) -> None:
+    """Reject Git options that can redirect a gate outside its detached worktree."""
+    if not words or PurePosixPath(words[0].replace("\\", "/")).name != "git":
+        return
+    blocked_exact = {"-C", "--git-dir", "--work-tree", "--super-prefix", "--exec-path",
+                     "--namespace", "-c", "--config", "--config-env", "-o", "--output"}
+    blocked_prefixes = ("-C", "--git-dir", "--work-tree", "--super-prefix",
+                       "--exec-path", "--namespace", "-c", "--config", "--config-env",
+                       "-o", "--output")
+    for word in words[1:]:
+        if word in blocked_exact or any(word.startswith(prefix) and word != prefix
+                                        for prefix in blocked_prefixes):
+            fail(f"Git gate may not redirect its repository or configuration: {word}")
+
+
+def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: list[str],
+                         controller_root: str | None, controller_gate_files: list[str]) -> str | None:
+    """Apply the strict direct-command policy to parsed argv, including every path operand."""
+    if not words:
+        return None
+    _reject_git_cwd_options(words)
+    command = words[0].replace("\\", "/")
+    command_absolute = _path_is_absolute(command)
+    if command_absolute:
+        if not _controller_declared(command, controller_root, controller_gate_files):
+            fail(f"absolute acceptance program is not controller-declared: {command}")
+    elif _path_has_traversal(command):
+        fail(f"acceptance executable path is unsafe: {command}")
+
+    candidate = entrypoint(words, True)
+    candidate_index = None
+    if candidate is not None:
+        # Locate the script operand in parsed argv rather than searching the raw command string.
+        for index, word in enumerate(words[1:], 1):
+            if not word.startswith("-"):
+                candidate_index = index
+                break
+        normalized_candidate = candidate.replace("\\", "/")
+        if _path_is_absolute(normalized_candidate):
+            if not _controller_declared(normalized_candidate, controller_root, controller_gate_files):
+                fail(f"absolute acceptance program is not controller-declared: {candidate}")
+        elif _path_has_traversal(normalized_candidate):
+            fail(f"acceptance program path is unsafe: {candidate}")
+        elif under(normalized_candidate, allowed):
+            if normalized_candidate not in gate_files:
+                fail(f"worker-modifiable gate program must be declared in gate_files: {normalized_candidate}")
+        elif normalized_candidate not in controller_gate_files:
+            fail(f"gate program is outside allowed/controller-declared paths: {normalized_candidate}")
+
+    for index, word in enumerate(words[1:], 1):
+        normalized = word.replace("\\", "/")
+        if index == candidate_index:
+            continue
+        if _path_is_absolute(normalized) or _path_has_traversal(normalized):
+            fail(f"acceptance path operand is unsafe: {word}")
+    return candidate
+
+
 def vacuous_success(words: list[str]) -> bool:
     """Recognize commands whose success is independent of the code under review."""
     if not words:
@@ -160,13 +239,9 @@ def main() -> int:
         operators = re.findall(r"&&|\|\||;", gate)
         parsed_segments: list[list[str]] = []
         for segment in raw_segments:
-            # POSIX-mode shlex consumes unquoted backslashes, so a Windows-style path reaches
-            # entrypoint() pre-mangled ("app\check.py" -> "appcheck.py") and slips outside the
-            # allowed roots — evading the gate_files declaration check. Normalize before the
-            # split on Windows hosts only: on the box parsing stays byte-for-byte identical
-            # (making it identical there too is PROPOSALS 2026-08-27 item 11's open remainder).
-            if os.name == "nt":
-                segment = segment.replace("\\", "/")
+            # Normalize Windows separators before POSIX-mode shlex can consume them. This keeps
+            # quoted and unquoted argv forms on one path-policy implementation on every host.
+            segment = segment.replace("\\", "/")
             try:
                 parsed_segments.append(shlex.split(segment))
             except ValueError as exc:
@@ -186,18 +261,23 @@ def main() -> int:
         gate_files = paths(args.gate_files)
         controller_gate_files = paths(args.controller_gate_files)
         for words in parsed_segments:
-            candidate = entrypoint(words, args.strict_direct)
-            if candidate and PurePosixPath(candidate).is_absolute():
-                if not args.controller_root:
-                    fail("absolute acceptance program lacks a controller root")
-                try:
-                    relative = Path(candidate).resolve().relative_to(Path(args.controller_root).resolve()).as_posix()
-                except ValueError:
-                    fail(f"acceptance program is outside the controller root: {candidate}")
-                if relative not in controller_gate_files:
-                    fail(f"controller acceptance program must be declared: {relative}")
-            elif candidate and under(candidate, allowed) and candidate not in gate_files:
-                fail(f"worker-modifiable gate program must be declared in gate_files: {candidate}")
+            if args.strict_direct:
+                validate_direct_argv(words, allowed=allowed, gate_files=gate_files,
+                                     controller_root=args.controller_root,
+                                     controller_gate_files=controller_gate_files)
+            else:
+                candidate = entrypoint(words, args.strict_direct)
+                if candidate and PurePosixPath(candidate).is_absolute():
+                    if not args.controller_root:
+                        fail("absolute acceptance program lacks a controller root")
+                    try:
+                        relative = Path(candidate).resolve().relative_to(Path(args.controller_root).resolve()).as_posix()
+                    except ValueError:
+                        fail(f"acceptance program is outside the controller root: {candidate}")
+                    if relative not in controller_gate_files:
+                        fail(f"controller acceptance program must be declared: {relative}")
+                elif candidate and under(candidate, allowed) and candidate not in gate_files:
+                    fail(f"worker-modifiable gate program must be declared in gate_files: {candidate}")
         hashes: dict[str, str] = {}
         if args.repo:
             repo = Path(args.repo)

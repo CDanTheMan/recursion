@@ -12,6 +12,7 @@ import tempfile
 import unittest
 from unittest import mock
 from pathlib import Path
+import jsonschema
 
 import sys
 sys.path.insert(0, str(Path(__file__).parents[1]))
@@ -386,6 +387,34 @@ class RepositoryContractTests(unittest.TestCase):
         for command in ("bash -c true", "python3 -c true", "command true", "exec true", "test -n foo"):
             with self.assertRaises(rc.ContractError):
                 rc.validate_project_descriptor(dict(self.contract, gate_commands=[command]))
+
+    def test_schema_and_runtime_gate_grammar_differential_corpus(self) -> None:
+        schema = json.loads((Path(__file__).parents[2] /
+                             "schemas/control-plane/v2/repository-contract.schema.json").read_text())
+        validator = jsonschema.Draft202012Validator(schema)
+        valid = (
+            "git diff --check",
+            "test -s src/result.txt",
+        )
+        refused = (
+            "foo /bar",
+            "/bin/foo",
+            "python3 --version",
+            "python3 ../check.py",
+            "python3 src/../check.py",
+            "git -C ../other diff --check",
+            "git --git-dir=../other/.git diff",
+            "git --work-tree /tmp diff",
+        )
+        for command in valid:
+            with self.subTest(command=command):
+                jsonschema.Draft202012Validator(schema).validate(dict(self.contract, gate_commands=[command]))
+                rc.validate_project_descriptor(dict(self.contract, gate_commands=[command]))
+        for command in refused:
+            with self.subTest(command=command):
+                self.assertTrue(list(validator.iter_errors(dict(self.contract, gate_commands=[command]))))
+                with self.assertRaises(rc.ContractError):
+                    rc.validate_project_descriptor(dict(self.contract, gate_commands=[command]))
 
     def test_import_race_reconciles_identical_winner_and_receipt_is_required(self) -> None:
         candidate = self.candidate()

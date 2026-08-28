@@ -192,6 +192,27 @@ else
   no "the roadmap row was not reserved after the automerge drop"
 fi
 
+# --- 6. a matching registered project may not fall through to the fixture path -------------
+mkdir -p "$R/state/project-config" "$R/registered"
+REG="$(cd "$R/registered" && pwd -P)"
+cat > "$R/state/project-config/registered.json" <<JSON
+{"id":"registered","repo":"$REG","status":"pending"}
+JSON
+{
+  echo "repo: $REG"
+  echo "workdir: ."
+  echo "acceptance: git diff --check"
+  echo
+  echo "- [ ] This must not be planned while the project is pending"
+} > "$R/state/roadmaps/registered.md"
+rc="$(plan registered)"
+if [ "$rc" = 6 ] && [ ! -f "$R/state/tasks/registered-001.md" ] \
+   && [ ! -d "$R/state/.locks/planner-registered.lock" ]; then
+  ok "a matching pending descriptor is refused without fixture task or lock residue"
+else
+  no "pending registered project fell through or left side effects (rc=$rc): $(cat "$TMP/err")"
+fi
+
 echo
 [ "$fails" -eq 0 ] && { echo "plan-automerge: ALL PASS"; exit 0; }
 echo "plan-automerge: $fails FAILED"; exit 1

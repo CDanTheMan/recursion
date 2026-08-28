@@ -156,6 +156,10 @@ PY
     invalid)
       echo "plan: registered project descriptor is malformed: $candidate_config" >&2
       exit 6;;
+    no) :;;
+    *)
+      echo "plan: registered project is not active (status=$project_match): $candidate_config" >&2
+      exit 6;;
   esac
 done
 if [ -n "$PROJECT_CONFIG" ]; then
