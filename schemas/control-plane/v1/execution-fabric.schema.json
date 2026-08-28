@@ -25,7 +25,7 @@
     "strings": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
     "host_registration": {
       "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "kind", "host_id", "capabilities", "operating_system", "architectures", "sandbox_profiles", "network_profiles", "trust_class", "max_concurrency", "workload_concurrency", "registration_digest", "registered_at"],
+      "required": ["schema_version", "kind", "host_id", "capabilities", "operating_system", "architectures", "sandbox_profiles", "network_profiles", "trust_class", "max_concurrency", "workload_concurrency", "registration_digest", "registered_at", "network_endpoints"],
       "properties": {
         "schema_version": { "const": 1 }, "kind": { "const": "host_registration" }, "host_id": { "$ref": "#/$defs/id" },
         "capabilities": { "$ref": "#/$defs/strings" }, "operating_system": { "type": "string", "minLength": 1 },
@@ -50,7 +50,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["schema_version", "kind", "pool_id", "billing_basis", "allowed_roles", "allowed_projects", "allowed_models", "max_concurrency", "in_flight", "quota_remaining", "quota_period", "on_demand", "cost_per_run"],
       "properties": {
-        "schema_version": { "const": 1 }, "kind": { "const": "pool_status" }, "pool_id": { "$ref": "#/$defs/id" }, "account_id": { "type": ["string", "null"] },
+        "schema_version": { "const": 1 }, "kind": { "const": "pool_status" }, "pool_id": { "$ref": "#/$defs/id" }, "account_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
         "billing_basis": { "type": "string", "minLength": 1 }, "allowed_roles": { "$ref": "#/$defs/strings" },
         "allowed_projects": { "$ref": "#/$defs/strings" }, "allowed_models": { "$ref": "#/$defs/strings" },
         "max_concurrency": { "type": "integer", "minimum": 0 }, "in_flight": { "type": "integer", "minimum": 0 },
@@ -89,7 +89,7 @@
       "required": ["schema_version", "kind", "task_id", "project_id", "source_sha", "engine", "provider", "capacity_pool", "model", "host", "sandbox_profile", "network_profile", "assignment_digest", "created_at", "account_id", "role", "source_repository", "source_branch", "seed_manifest_digest", "model_parameters", "allowed_paths", "gate_digest", "publication_policy", "candidate_id"],
       "properties": {
         "schema_version": { "const": 1 }, "kind": { "const": "assignment" }, "task_id": { "$ref": "#/$defs/id" }, "project_id": { "$ref": "#/$defs/id" },
-        "source_sha": { "$ref": "#/$defs/sha" }, "engine": { "$ref": "#/$defs/id" }, "provider": { "$ref": "#/$defs/id" }, "capacity_pool": { "$ref": "#/$defs/id" }, "account_id": { "type": ["string", "null"] }, "role": { "type": "string", "minLength": 1 },
+        "source_sha": { "$ref": "#/$defs/sha" }, "engine": { "$ref": "#/$defs/id" }, "provider": { "$ref": "#/$defs/id" }, "capacity_pool": { "$ref": "#/$defs/id" }, "account_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }, "role": { "type": "string", "minLength": 1 },
         "model": { "type": "string", "minLength": 1 }, "host": { "$ref": "#/$defs/id" }, "sandbox_profile": { "type": "string", "minLength": 1 }, "network_profile": { "type": "string", "minLength": 1 },
         "assignment_digest": { "$ref": "#/$defs/digest" }, "created_at": { "$ref": "#/$defs/timestamp" },
         "source_repository": { "type": "string", "minLength": 1 }, "source_branch": { "type": "string", "minLength": 1 }, "seed_manifest_digest": { "$ref": "#/$defs/digest" }, "model_parameters": { "type": "object" }, "allowed_paths": { "$ref": "#/$defs/strings" }, "gate_digest": { "$ref": "#/$defs/digest" }, "publication_policy": { "type": "string", "minLength": 1 }, "candidate_id": { "$ref": "#/$defs/id" }
@@ -137,7 +137,7 @@
       "properties": {
         "schema_version": { "const": 1 }, "kind": { "const": "verification_receipt" }, "receipt_id": { "$ref": "#/$defs/id" },
         "assignment_digest": { "$ref": "#/$defs/digest" }, "source_sha": { "$ref": "#/$defs/sha" }, "candidate_id": { "$ref": "#/$defs/id" }, "result_commit": { "$ref": "#/$defs/sha" },
-        "diff_digest": { "$ref": "#/$defs/digest" }, "scope_digest": { "$ref": "#/$defs/digest" }, "gate_digest": { "$ref": "#/$defs/digest" }, "verifier_identity": { "type": "string", "pattern": "^controller/.+" }, "verified_at": { "$ref": "#/$defs/timestamp" }, "verification_status": { "const": "pass" }, "receipt_digest": { "$ref": "#/$defs/digest" }
+        "diff_digest": { "$ref": "#/$defs/digest" }, "scope_digest": { "$ref": "#/$defs/digest" }, "gate_digest": { "$ref": "#/$defs/digest" }, "verifier_identity": { "type": "string", "pattern": "^controller/.+" }, "verified_at": { "$ref": "#/$defs/timestamp" }, "verification_status": { "const": "pass" }, "receipt_digest": { "$ref": "#/$defs/digest" }, "authentication_tag": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
       }
     },
     "routing_policy": {

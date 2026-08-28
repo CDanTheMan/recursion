@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from execution_fabric import (  # noqa: E402
     AdmissionError,
+    Assignment,
     DurableFabricStore,
     DurableHostRegistry,
     HostHeartbeat,
@@ -31,6 +32,7 @@ from execution_fabric import (  # noqa: E402
     PoolStatus,
     RoutingPolicy,
     PlacementGovernor,
+    PauseGuard,
     ReconciliationError,
     SchemaError,
     resolve_placement,
@@ -111,9 +113,16 @@ def receipt_for(assignment, candidate_id="candidate-one", result_commit=RESULT):
                                       verifier_identity="controller/verifier-one", verified_at=NOW)
 
 
-def integration_receipt(candidate_id, source_sha=SHA, result_commit=RESULT):
-    return VerificationReceipt.build(receipt_id=f"receipt-{candidate_id}", assignment_digest="f" * 64,
-                                      source_sha=source_sha, candidate_id=candidate_id, result_commit=result_commit,
+def integration_assignment(candidate_id, project_id):
+    registered = host()
+    return resolve_placement(requirements(task_id=f"task-{candidate_id}", project_id=project_id), [candidate(candidate_id)],
+                             {registered.host_id: registered}, {registered.host_id: heartbeat(registered)},
+                             {"pool-one": pool()}, now_epoch=1787918400, created_at=NOW)[0]
+
+
+def integration_receipt(assignment, result_commit=RESULT):
+    return VerificationReceipt.build(receipt_id=f"receipt-{assignment.project_id}-{assignment.candidate_id}", assignment_digest=assignment.assignment_digest,
+                                      source_sha=assignment.source_sha, candidate_id=assignment.candidate_id, result_commit=result_commit,
                                       diff_digest="c" * 64, scope_digest="d" * 64, gate_digest="e" * 64,
                                       verifier_identity="controller/verifier-one", verified_at=NOW)
 
@@ -269,6 +278,16 @@ class FabricPlacementTests(unittest.TestCase):
         self.assertEqual(classify_stale_base(assigned_source_sha=SHA, current_source_sha="c" * 64), "stale-reviewable")
         self.assertEqual(classify_stale_base(assigned_source_sha=SHA, current_source_sha=SHA, integration_advanced=True), "stale-rebase-required")
 
+    def test_cheapest_is_cost_first_even_against_preferences(self):
+        registered = host()
+        expensive = replace(candidate("preferred"), cost_per_run=10)
+        cheap = replace(candidate("cheap"), cost_per_run=1)
+        selected, _ = resolve_placement(requirements(policy="cheapest-eligible", max_cost=20,
+                                                      preferred_hosts=("host-one",)), [expensive, cheap],
+                                        {registered.host_id: registered}, {registered.host_id: heartbeat(registered)},
+                                        {"pool-one": pool()}, now_epoch=1787918400, created_at=NOW)
+        self.assertEqual(selected.candidate_id, "cheap")
+
     def test_endpoints_refs_weighted_and_routing_authority_fail_closed(self):
         registered = host(network_endpoints={"provider-only": ("registry-endpoint",)})
         selected, _ = resolve_placement(requirements(), [candidate(required_endpoints=("registry-endpoint",))],
@@ -409,6 +428,21 @@ class DurableStateTests(unittest.TestCase):
                                     result_digest=RESULT, status="failed", observed_at=NOW, controller_now=NOW)
             self.assertEqual(error.exception.code, "CONFLICTING_RESULT")
 
+            # Worker-reported observation time is advisory: an extreme but valid
+            # timestamp cannot bypass or invalidate trusted controller admission.
+            store2 = DurableFabricStore(Path(temp) / "fabric-advisory.jsonl")
+            store2.create_lease(assignment, lease_id="lease-advisory", attempt_id="attempt-advisory", remote_session_id="session-advisory",
+                                now=NOW, expires_at="2026-08-28T12:05:00Z")
+            self.assertEqual(store2.accept_result(attempt_id="attempt-advisory", lease_id="lease-advisory",
+                                                  assignment_digest_value=assignment.assignment_digest, result_digest=RESULT,
+                                                  status="succeeded", observed_at="1900-01-01T00:00:00Z", controller_now=NOW), "accepted")
+            store3 = DurableFabricStore(Path(temp) / "fabric-advisory-future.jsonl")
+            store3.create_lease(assignment, lease_id="lease-advisory-future", attempt_id="attempt-advisory-future", remote_session_id="session-advisory-future",
+                                now=NOW, expires_at="2026-08-28T12:05:00Z")
+            self.assertEqual(store3.accept_result(attempt_id="attempt-advisory-future", lease_id="lease-advisory-future",
+                                                  assignment_digest_value=assignment.assignment_digest, result_digest=RESULT,
+                                                  status="succeeded", observed_at="9999-12-31T23:59:59Z", controller_now=NOW), "accepted")
+
     def test_durable_admission_is_atomic_across_threads_and_processes(self):
         registered = host(max_concurrency=3, workload={"implementer": 3})
         with tempfile.TemporaryDirectory() as temp:
@@ -439,15 +473,53 @@ class DurableStateTests(unittest.TestCase):
             self.assertEqual(restarted.record_recovery_query("lease-restart", state="unknown", observed_at="2026-08-28T12:02:00Z"), "recorded")
             self.assertEqual(DurableFabricStore(path).leases["lease-restart"]["recovery_state"], "query_unknown")
 
+    def test_recovery_terminal_requires_durable_result_evidence(self):
+        registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
+                                                               {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
+                                                               now_epoch=1787918400, created_at=NOW)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "fabric.jsonl"; store = DurableFabricStore(path)
+            store.create_lease(assignment, lease_id="lease-recover", attempt_id="attempt-recover", remote_session_id="session-recover",
+                               now=NOW, expires_at="2026-08-28T12:05:00Z")
+            store.reconcile_restart(now="2026-08-28T12:01:00Z")
+            with self.assertRaises(ReconciliationError) as error:
+                store.record_recovery_query("lease-recover", state="terminal", terminal_status="succeeded", observed_at="2026-08-28T12:02:00Z", controller_now="2026-08-28T12:02:00Z")
+            self.assertEqual(error.exception.code, "EVIDENCE_REQUIRED")
+            self.assertEqual(store.leases["lease-recover"]["status"], "recovery_required")
+            self.assertEqual(store.record_recovery_query("lease-recover", state="terminal", terminal_status="succeeded",
+                                                         result_digest=RESULT, observed_at="2026-08-28T12:02:00Z",
+                                                         controller_now="2026-08-28T12:02:00Z"), "recorded")
+            self.assertEqual(DurableFabricStore(path).leases["lease-recover"]["status"], "succeeded")
+
+    def test_pause_blocks_durable_retries_before_existing_assignment_return(self):
+        registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
+                                                               {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
+                                                               now_epoch=1787918400, created_at=NOW)
+        with tempfile.TemporaryDirectory() as temp:
+            store = DurableFabricStore(Path(temp) / "fabric.jsonl")
+            store.create_lease(assignment, lease_id="lease-pause", attempt_id="attempt-pause", remote_session_id="session-pause",
+                               now=NOW, expires_at="2026-08-28T12:05:00Z")
+            with self.assertRaises(AdmissionError) as error:
+                store.create_lease(assignment, lease_id="lease-pause", attempt_id="attempt-pause", remote_session_id="session-pause",
+                                   now=NOW, expires_at="2026-08-28T12:05:00Z", pause_guard=PauseGuard(True))
+            self.assertEqual(error.exception.code, "PAUSED")
+            with self.assertRaises(AdmissionError) as error:
+                store.admit_placement(requirements(), [candidate()], {registered.host_id: registered},
+                                      {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
+                                      lease_id="lease-pause", attempt_id="attempt-pause", remote_session_id="session-pause",
+                                      now=NOW, expires_at="2026-08-28T12:05:00Z", pause_guard=PauseGuard(True))
+            self.assertEqual(error.exception.code, "PAUSED")
+
     def test_paused_durable_admission_creates_no_lease(self):
         registered = host()
         with tempfile.TemporaryDirectory() as temp:
             store = DurableFabricStore(Path(temp) / "fabric.jsonl")
-            assignment, trace = store.admit_placement(requirements(), [candidate()], {registered.host_id: registered},
-                                                      {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
-                                                      lease_id="lease-paused", attempt_id="attempt-paused", remote_session_id="session-paused",
-                                                      now=NOW, expires_at="2026-08-28T12:05:00Z", paused=True)
-            self.assertIsNone(assignment); self.assertEqual(trace[0].code, "PAUSED"); self.assertFalse(store.leases)
+            with self.assertRaises(AdmissionError) as error:
+                store.admit_placement(requirements(), [candidate()], {registered.host_id: registered},
+                                      {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
+                                      lease_id="lease-paused", attempt_id="attempt-paused", remote_session_id="session-paused",
+                                      now=NOW, expires_at="2026-08-28T12:05:00Z", paused=True)
+            self.assertEqual(error.exception.code, "PAUSED"); self.assertFalse(store.leases)
 
     def test_journal_tamper_and_store_boundary_fail_closed(self):
         registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
@@ -478,62 +550,94 @@ class DurableStateTests(unittest.TestCase):
 
 class IntegrationTests(unittest.TestCase):
     def test_same_project_is_serialized_but_other_projects_can_overlap(self):
-        coordinator = IntegrationCoordinator()
-        self.assertEqual(coordinator.admit(candidate_id="candidate-one", project_id="project-one",
-                                            source_sha=SHA, result_commit=RESULT, classification="current-compatible",
-                                            verification_receipt=integration_receipt("candidate-one")), "admitted")
-        with self.assertRaises(AdmissionError) as error:
-            coordinator.admit(candidate_id="candidate-two", project_id="project-one",
-                              source_sha=SHA, result_commit=RESULT, classification="current-compatible",
-                              verification_receipt=integration_receipt("candidate-two"))
-        self.assertEqual(error.exception.code, "INTEGRATION_SERIALIZED")
-        self.assertEqual(coordinator.admit(candidate_id="candidate-two", project_id="project-two",
-                                           source_sha=SHA, result_commit=RESULT, classification="stale-reviewable",
-                                           verification_receipt=integration_receipt("candidate-two")), "admitted")
-        self.assertEqual(coordinator.admit(candidate_id="candidate-two", project_id="project-two",
-                                           source_sha=SHA, result_commit=RESULT, classification="stale-reviewable",
-                                           verification_receipt=integration_receipt("candidate-two")), "duplicate")
-        self.assertEqual(coordinator.complete("candidate-one"), "completed")
-        self.assertEqual(coordinator.admit(candidate_id="candidate-three", project_id="project-one",
-                                           source_sha=SHA, result_commit=RESULT, classification="current-compatible",
-                                           verification_receipt=integration_receipt("candidate-three")), "admitted")
+        with tempfile.TemporaryDirectory() as temp:
+            receipts = VerificationReceiptStore(Path(temp) / "receipts.jsonl", verification_keys={"controller/verifier-one": "test-key"})
+            a1 = integration_assignment("candidate-one", "project-one"); r1 = integration_receipt(a1); receipts.issue(r1); r1 = receipts.get(r1.receipt_id)
+            coordinator = IntegrationCoordinator(receipt_store=receipts)
+            self.assertEqual(coordinator.admit(candidate_id="candidate-one", project_id="project-one", assignment=a1,
+                                                source_sha=SHA, result_commit=RESULT, classification="current-compatible",
+                                                verification_receipt=r1), "admitted")
+            a2 = integration_assignment("candidate-two", "project-one"); r2 = integration_receipt(a2); receipts.issue(r2); r2 = receipts.get(r2.receipt_id)
+            with self.assertRaises(AdmissionError) as error:
+                coordinator.admit(candidate_id="candidate-two", project_id="project-one", assignment=a2,
+                                  source_sha=SHA, result_commit=RESULT, classification="current-compatible",
+                                  verification_receipt=r2)
+            self.assertEqual(error.exception.code, "INTEGRATION_SERIALIZED")
+            a2p = integration_assignment("candidate-two", "project-two"); r2p = integration_receipt(a2p); receipts.issue(r2p); r2p = receipts.get(r2p.receipt_id)
+            self.assertEqual(coordinator.admit(candidate_id="candidate-two", project_id="project-two", assignment=a2p,
+                                               source_sha=SHA, result_commit=RESULT, classification="stale-reviewable",
+                                               verification_receipt=r2p), "admitted")
+            self.assertEqual(coordinator.admit(candidate_id="candidate-two", project_id="project-two", assignment=a2p,
+                                               source_sha=SHA, result_commit=RESULT, classification="stale-reviewable",
+                                               verification_receipt=r2p), "duplicate")
+            self.assertEqual(coordinator.complete("candidate-two"), "completed")
+            self.assertEqual(coordinator.admit(candidate_id="candidate-two", project_id="project-two", assignment=a2p,
+                                               source_sha=SHA, result_commit=RESULT, classification="stale-reviewable",
+                                               verification_receipt=r2p), "completed")
+            self.assertEqual(coordinator.complete("candidate-one"), "completed")
+            a3 = integration_assignment("candidate-three", "project-one"); r3 = integration_receipt(a3); receipts.issue(r3); r3 = receipts.get(r3.receipt_id)
+            self.assertEqual(coordinator.admit(candidate_id="candidate-three", project_id="project-one", assignment=a3,
+                                               source_sha=SHA, result_commit=RESULT, classification="current-compatible",
+                                               verification_receipt=r3), "admitted")
 
     def test_durable_integration_restarts_and_protects_refs(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "nested" / "integration.jsonl"
-            coordinator = IntegrationCoordinator(path)
+            receipts = VerificationReceiptStore(Path(temp) / "receipts.jsonl", verification_keys={"controller/verifier-one": "test-key"})
+            a1 = integration_assignment("candidate-one", "project-one"); r1 = integration_receipt(a1); receipts.issue(r1); r1 = receipts.get(r1.receipt_id)
+            coordinator = IntegrationCoordinator(path, receipt_store=receipts)
             coordinator.set_project_policy(project_id="project-one", default_branch="main", integration_branch="integration")
             coordinator.admit(candidate_id="candidate-one", project_id="project-one", source_sha=SHA,
-                              result_commit=RESULT, result_ref="cursor/candidate-one", classification="current-compatible",
-                              verification_receipt=integration_receipt("candidate-one"))
-            restarted = IntegrationCoordinator(path)
+                              result_commit=RESULT, assignment=a1, result_ref="cursor/candidate-one", classification="current-compatible",
+                              verification_receipt=r1)
+            restarted = IntegrationCoordinator(path, receipt_store=receipts)
             self.assertEqual(restarted.active["project-one"], "candidate-one")
             with self.assertRaises(AdmissionError) as error:
-                restarted.admit(candidate_id="candidate-two", project_id="project-one", source_sha=SHA,
+                a2 = integration_assignment("candidate-two", "project-one"); r2 = integration_receipt(a2); receipts.issue(r2); r2 = receipts.get(r2.receipt_id)
+                restarted.admit(candidate_id="candidate-two", project_id="project-one", assignment=a2, source_sha=SHA,
                                 result_commit=RESULT, result_ref="cursor/candidate-two", classification="current-compatible",
-                                verification_receipt=integration_receipt("candidate-two"))
+                                verification_receipt=r2)
             self.assertEqual(error.exception.code, "INTEGRATION_SERIALIZED")
             with self.assertRaises(AdmissionError) as error:
-                restarted.admit(candidate_id="candidate-main", project_id="project-two", source_sha=SHA,
+                am = integration_assignment("candidate-main", "project-two"); rm = integration_receipt(am); receipts.issue(rm); rm = receipts.get(rm.receipt_id)
+                restarted.admit(candidate_id="candidate-main", project_id="project-two", assignment=am, source_sha=SHA,
                                 result_commit=RESULT, result_ref="main", classification="current-compatible",
-                                verification_receipt=integration_receipt("candidate-main"))
+                                verification_receipt=rm)
             self.assertEqual(error.exception.code, "PROTECTED_REF")
             self.assertEqual(restarted.complete("candidate-one"), "completed")
-            self.assertEqual(IntegrationCoordinator(path).active, {})
+            self.assertEqual(IntegrationCoordinator(path, receipt_store=receipts).active, {})
 
     def test_verifier_hook_requires_assignment_source_and_pass(self):
         registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
                                                                {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
                                                                now_epoch=1787918400, created_at=NOW)
         receipt = receipt_for(assignment)
-        self.assertEqual(verify_candidate_result(assignment=assignment, receipt=receipt, candidate_id="candidate-one",
-                                                 result_commit=RESULT, diff_digest="c" * 64, scope_digest="d" * 64,
-                                                 gate_digest="e" * 64, result_ref="cursor/candidate"), "verified")
-        with self.assertRaises(ReconciliationError) as error:
-            verify_candidate_result(assignment=assignment, receipt=receipt, candidate_id="candidate-other",
+        with tempfile.TemporaryDirectory() as temp:
+            receipts = VerificationReceiptStore(Path(temp) / "receipts.jsonl", verification_keys={"controller/verifier-one": "test-key"})
+            with self.assertRaises(ReconciliationError) as error:
+                verify_candidate_result(assignment=assignment, receipt=receipt, candidate_id="candidate-one",
+                                        result_commit=RESULT, diff_digest="c" * 64, scope_digest="d" * 64,
+                                        gate_digest="e" * 64, result_ref="cursor/candidate", receipt_store=receipts)
+            self.assertEqual(error.exception.code, "VERIFIER_RECEIPT_NOT_REGISTERED")
+            receipts.issue(receipt); receipt = receipts.get(receipt.receipt_id)
+            self.assertEqual(verify_candidate_result(assignment=assignment, receipt=receipt, candidate_id="candidate-one",
+                                                     result_commit=RESULT, diff_digest="c" * 64, scope_digest="d" * 64,
+                                                     gate_digest="e" * 64, result_ref="cursor/candidate", receipt_store=receipts), "verified")
+            with self.assertRaises(ReconciliationError) as error:
+                verify_candidate_result(assignment=assignment, receipt=receipt, candidate_id="candidate-other",
                                     result_commit=RESULT, diff_digest="c" * 64, scope_digest="d" * 64,
-                                    gate_digest="e" * 64, result_ref="cursor/candidate")
-        self.assertEqual(error.exception.code, "CANDIDATE_MISMATCH")
+                                    gate_digest="e" * 64, result_ref="cursor/candidate", receipt_store=receipts)
+            self.assertEqual(error.exception.code, "CANDIDATE_MISMATCH")
+            with self.assertRaises(SchemaError) as error:
+                Assignment.from_dict({key: value for key, value in assignment.to_dict().items() if key != "candidate_id"})
+            self.assertEqual(error.exception.code, "MISSING_FIELD")
+            unknown = VerificationReceipt.build(receipt_id="receipt-unknown", assignment_digest=assignment.assignment_digest,
+                                                 source_sha=assignment.source_sha, candidate_id="candidate-one", result_commit=RESULT,
+                                                 diff_digest="c" * 64, scope_digest="d" * 64, gate_digest="e" * 64,
+                                                 verifier_identity="controller/not-registered", verified_at=NOW)
+            with self.assertRaises(ReconciliationError) as error:
+                receipts.issue(unknown)
+            self.assertEqual(error.exception.code, "VERIFIER_UNREGISTERED")
 
 
 if __name__ == "__main__":

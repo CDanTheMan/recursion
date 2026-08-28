@@ -14,6 +14,7 @@ for a later adapter which explicitly opts into the control-plane seams.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import math
 import os
@@ -22,7 +23,7 @@ import tempfile
 import threading
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -286,8 +287,8 @@ class HostRegistration:
     def from_dict(cls, raw: Mapping[str, Any]) -> "HostRegistration":
         required = {"schema_version", "kind", "host_id", "capabilities", "operating_system",
                     "architectures", "sandbox_profiles", "network_profiles", "trust_class",
-                    "max_concurrency", "workload_concurrency", "registration_digest", "registered_at"}
-        _check_keys(raw, required, {"network_endpoints"}, "host_registration")
+                    "max_concurrency", "workload_concurrency", "registration_digest", "registered_at", "network_endpoints"}
+        _check_keys(raw, required, set(), "host_registration")
         if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "host_registration":
             raise SchemaError("SCHEMA_VERSION", "unsupported host registration schema")
         host_id = _id(raw["host_id"], "host_id")
@@ -304,7 +305,7 @@ class HostRegistration:
         normalized: dict[str, int] = {}
         for key, count in sorted(workloads.items()):
             normalized[_string(key, "workload_concurrency key")] = _nonnegative_int(count, f"workload_concurrency.{key}")
-        endpoints_raw = raw.get("network_endpoints", {})
+        endpoints_raw = raw["network_endpoints"]
         if not isinstance(endpoints_raw, Mapping):
             raise SchemaError("INVALID_FIELD", "network_endpoints must be an object")
         endpoints: dict[str, tuple[str, ...]] = {}
@@ -652,26 +653,26 @@ class Assignment:
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "Assignment":
         required = {"schema_version", "kind", "task_id", "project_id", "source_sha", "engine", "provider",
-                    "capacity_pool", "model", "host", "sandbox_profile", "network_profile", "assignment_digest", "created_at"}
-        _check_keys(raw, required, {"account_id", "role", "source_repository", "source_branch", "seed_manifest_digest", "model_parameters", "allowed_paths", "gate_digest", "publication_policy", "candidate_id"}, "assignment")
+                    "capacity_pool", "model", "host", "sandbox_profile", "network_profile", "assignment_digest", "created_at",
+                    "account_id", "role", "source_repository", "source_branch", "seed_manifest_digest", "model_parameters",
+                    "allowed_paths", "gate_digest", "publication_policy", "candidate_id"}
+        _check_keys(raw, required, set(), "assignment")
         if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "assignment":
             raise SchemaError("SCHEMA_VERSION", "unsupported assignment schema")
-        account_id = raw.get("account_id")
+        account_id = raw["account_id"]
         if account_id is not None:
             account_id = _id(account_id, "account_id")
-        role = _string(raw.get("role", "unknown"), "role")
-        source_repository = _string(raw.get("source_repository", "unknown-repository"), "source_repository")
-        source_branch = _string(raw.get("source_branch", "unknown-source"), "source_branch")
-        seed_manifest_digest = _digest(raw.get("seed_manifest_digest", ZERO_DIGEST), "seed_manifest_digest")
-        model_parameters = raw.get("model_parameters", {})
+        role = _string(raw["role"], "role")
+        source_repository = _string(raw["source_repository"], "source_repository")
+        source_branch = _string(raw["source_branch"], "source_branch")
+        seed_manifest_digest = _digest(raw["seed_manifest_digest"], "seed_manifest_digest")
+        model_parameters = raw["model_parameters"]
         if not isinstance(model_parameters, Mapping):
             raise SchemaError("INVALID_FIELD", "model_parameters must be an object")
-        allowed_paths = _string_list(raw.get("allowed_paths", []), "allowed_paths")
-        gate_digest = _digest(raw.get("gate_digest", ZERO_DIGEST), "gate_digest")
-        publication_policy = _string(raw.get("publication_policy", "verified-integration-only"), "publication_policy")
-        candidate_id = raw.get("candidate_id")
-        if candidate_id is not None:
-            candidate_id = _id(candidate_id, "candidate_id")
+        allowed_paths = _string_list(raw["allowed_paths"], "allowed_paths")
+        gate_digest = _digest(raw["gate_digest"], "gate_digest")
+        publication_policy = _string(raw["publication_policy"], "publication_policy")
+        candidate_id = _id(raw["candidate_id"], "candidate_id")
         assignment = cls(_id(raw["task_id"], "task_id"), _id(raw["project_id"], "project_id"), _commit(raw["source_sha"], "source_sha"),
                          _id(raw["engine"], "engine"), _id(raw["provider"], "provider"), _id(raw["capacity_pool"], "capacity_pool"),
                          _string(raw["model"], "model"), _id(raw["host"], "host"), _string(raw["sandbox_profile"], "sandbox_profile"),
@@ -706,11 +707,11 @@ def _candidate_sort_key(candidate: PlacementCandidate, requirements: PlacementRe
         return (0 if candidate.host_id in requirements.preferred_hosts else 1, -candidate.reviewer_score, candidate.candidate_id)
     if policy == "weighted-rotation":
         return (candidate.candidate_id,)
-    # cheapest-eligible and the safe unknown-policy fallback are cost ordered. Unknown policies
-    # are rejected before this key is used; the fallback keeps the key total for callers.
-    return (0 if candidate.host_id in requirements.preferred_hosts else 1,
+    # Cheapest is cost-first; host/pool preferences only break equal-cost ties.
+    return (candidate.cost_per_run,
+            0 if candidate.host_id in requirements.preferred_hosts else 1,
             0 if candidate.pool_id in requirements.preferred_pools else 1,
-            candidate.cost_per_run, candidate.candidate_id)
+            candidate.candidate_id)
 
 
 @dataclass(frozen=True)
@@ -734,8 +735,7 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
                       routing_policy: RoutingPolicy | Mapping[str, Any] | None = None,
                       reserved_host: Mapping[str, int] | None = None,
                       reserved_pool: Mapping[str, int] | None = None,
-                      reserved_workload: Mapping[tuple[str, str], int] | None = None,
-                      network_endpoints: Mapping[str, Iterable[str]] | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
+                      reserved_workload: Mapping[tuple[str, str], int] | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
     """Resolve one immutable assignment and a complete, deterministic rejection trace."""
     req = requirements if isinstance(requirements, PlacementRequirements) else PlacementRequirements.from_dict(requirements)
     if pause_guard is not None:
@@ -803,7 +803,7 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
             reason = ("SANDBOX_INCOMPATIBLE", "host or task does not permit the sandbox profile")
         elif candidate.network_profile not in host.network_profiles or (req.network_profile and candidate.network_profile != req.network_profile):
             reason = ("NETWORK_INCOMPATIBLE", "host or task does not permit the network profile")
-        elif candidate.required_endpoints and not set(candidate.required_endpoints) <= set(host.network_endpoints.get(candidate.network_profile, tuple((network_endpoints or {}).get(candidate.network_profile, ())))):
+        elif candidate.required_endpoints and not set(candidate.required_endpoints) <= set(host.network_endpoints.get(candidate.network_profile, ())):
             reason = ("NETWORK_ENDPOINT_MISSING", "selected network profile lacks a required endpoint")
         elif candidate.billing_basis not in req.billing_basis:
             reason = ("BILLING_NOT_ALLOWED", "candidate billing basis is outside task policy")
@@ -1223,6 +1223,11 @@ class DurableFabricStore:
                        "expired": set(), "succeeded": set(), "failed": set(), "cancelled": set()}
             if event["status"] not in allowed[current]:
                 raise ReconciliationError("INVALID_TRANSITION", f"cannot move lease {current} to {event['status']}")
+            if event["status"] in {"succeeded", "failed", "cancelled"}:
+                attempt_id = lease["attempt_id"]
+                result = self.results.get(attempt_id)
+                if result is None or result.get("lease_id") != event["lease_id"] or result.get("status") != event["status"]:
+                    raise ReconciliationError("EVIDENCE_REQUIRED", "terminal recovery requires a durable result event")
             if _epoch(event["updated_at"]) < _epoch(lease["updated_at"]):
                 raise ReconciliationError("INVALID_TRANSITION", "lease status timestamp moved backwards")
             if current == "recovery_required" and event["status"] == "recovery_required":
@@ -1268,8 +1273,17 @@ class DurableFabricStore:
         return self._record_locked(event)
 
     def create_lease(self, assignment: Assignment, *, lease_id: str, attempt_id: str, remote_session_id: str,
-                     now: str, expires_at: str, role: str = "unknown") -> dict[str, Any]:
+                     now: str, expires_at: str, role: str = "unknown", paused: bool = False,
+                     pause_guard: PauseGuard | None = None) -> dict[str, Any]:
+        if paused:
+            raise AdmissionError("PAUSED", "PAUSE is asserted; lease admission is halted")
+        if pause_guard is not None:
+            pause_guard.assert_open()
         with _journal_lock(self.lock_path):
+            if paused:
+                raise AdmissionError("PAUSED", "PAUSE is asserted; lease admission is halted")
+            if pause_guard is not None:
+                pause_guard.assert_open()
             self._reload_locked()
             return self._create_lease_locked(assignment, lease_id=lease_id, attempt_id=attempt_id,
                                              remote_session_id=remote_session_id, now=now, expires_at=expires_at, role=role)
@@ -1282,10 +1296,17 @@ class DurableFabricStore:
                         attempt_id: str, remote_session_id: str, now: str, expires_at: str,
                         heartbeat_ttl_s: float = 120.0, paused: bool = False,
                         pause_guard: PauseGuard | None = None,
-                        routing_policy: RoutingPolicy | Mapping[str, Any] | None = None,
-                        network_endpoints: Mapping[str, Iterable[str]] | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
+                        routing_policy: RoutingPolicy | Mapping[str, Any] | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
         """Atomically resolve placement, reserve capacity, and create its durable lease."""
+        if paused:
+            raise AdmissionError("PAUSED", "PAUSE is asserted; lease admission is halted")
+        if pause_guard is not None:
+            pause_guard.assert_open()
         with _journal_lock(self.lock_path):
+            if paused:
+                raise AdmissionError("PAUSED", "PAUSE is asserted; lease admission is halted")
+            if pause_guard is not None:
+                pause_guard.assert_open()
             self._reload_locked()
             req = requirements if isinstance(requirements, PlacementRequirements) else PlacementRequirements.from_dict(requirements)
             for existing in self.leases.values():
@@ -1307,8 +1328,7 @@ class DurableFabricStore:
                                                   paused=paused,
                                                   reserved_host=host_reserved, reserved_pool=pool_reserved,
                                                   reserved_workload=workload_reserved,
-                                                  routing_policy=routing_policy, pause_guard=pause_guard,
-                                                  network_endpoints=network_endpoints)
+                                                  routing_policy=routing_policy, pause_guard=pause_guard)
             if assignment is None:
                 return None, trace
             self._create_lease_locked(assignment, lease_id=lease_id, attempt_id=attempt_id,
@@ -1353,12 +1373,21 @@ class DurableFabricStore:
         return tuple(expired)
 
     def record_recovery_query(self, lease_id: str, *, state: str, observed_at: str,
-                              terminal_status: str | None = None) -> str:
+                              terminal_status: str | None = None, result_digest: str | None = None,
+                              controller_now: str | None = None) -> str:
         _id(lease_id, "lease_id"); _timestamp(observed_at, "observed_at")
         if state not in {"running", "terminal", "unknown"}:
             raise ReconciliationError("INVALID_RECOVERY_STATE", "unsupported remote recovery state")
         if state == "terminal" and terminal_status not in {"succeeded", "failed", "cancelled"}:
             raise ReconciliationError("INVALID_RECOVERY_STATE", "terminal recovery requires a terminal result status")
+        if state == "terminal" and result_digest is None:
+            raise ReconciliationError("EVIDENCE_REQUIRED", "terminal recovery requires a durable result digest")
+        if result_digest is not None:
+            _digest(result_digest, "result_digest")
+        if state == "terminal" and controller_now is None:
+            raise ReconciliationError("CONTROLLER_TIME_REQUIRED", "terminal recovery requires trusted controller time")
+        if controller_now is not None:
+            _timestamp(controller_now, "controller_now")
         with _journal_lock(self.lock_path):
             self._reload_locked()
             lease = self.leases.get(lease_id)
@@ -1367,6 +1396,17 @@ class DurableFabricStore:
             recovery_state = {"running": "query_running", "terminal": "query_terminal", "unknown": "query_unknown"}[state]
             if lease["status"] != "recovery_required":
                 return "duplicate" if lease["recovery_state"] == recovery_state else "ignored"
+            if state == "terminal":
+                current = _epoch(controller_now)
+                if current < _epoch(lease["created_at"]):
+                    raise ReconciliationError("INVALID_CONTROLLER_TIME", "trusted controller time predates lease creation")
+                if current >= _epoch(lease["expires_at"]):
+                    self._expire_due_locked(controller_now)
+                    raise ReconciliationError("LATE_RESULT", "recovered result arrived at or after lease expiry")
+                self._record_locked({"event": "result", "attempt_id": lease["attempt_id"], "lease_id": lease_id,
+                                     "assignment_digest": lease["assignment_digest"], "result_digest": result_digest,
+                                     "status": terminal_status, "observed_at": observed_at})
+                return "recorded"
             self._record_locked({"event": "lease_status", "lease_id": lease_id,
                                  "status": terminal_status if state == "terminal" else "recovery_required",
                                  "updated_at": observed_at,
@@ -1424,6 +1464,7 @@ class VerificationReceipt:
     verified_at: str
     verification_status: str
     receipt_digest: str
+    authentication_tag: str = ""
 
     @classmethod
     def build(cls, *, receipt_id: str, assignment_digest: str, source_sha: str, candidate_id: str,
@@ -1440,7 +1481,7 @@ class VerificationReceipt:
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "VerificationReceipt":
         required = {"schema_version", "kind", "receipt_id", "assignment_digest", "source_sha", "candidate_id", "result_commit", "diff_digest", "scope_digest", "gate_digest", "verifier_identity", "verified_at", "verification_status", "receipt_digest"}
-        _check_keys(raw, required, set(), "verification_receipt")
+        _check_keys(raw, required, {"authentication_tag"}, "verification_receipt")
         if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "verification_receipt":
             raise SchemaError("SCHEMA_VERSION", "unsupported verification receipt schema")
         digest = _digest(raw["receipt_digest"], "receipt_digest")
@@ -1448,28 +1489,49 @@ class VerificationReceipt:
             raise SchemaError("DIGEST_MISMATCH", "verification receipt digest is invalid")
         if raw["verification_status"] != "pass":
             raise ReconciliationError("VERIFIER_REQUIRED", "verification receipt is not a passing receipt")
+        authentication_tag = raw.get("authentication_tag", "")
+        if "authentication_tag" in raw and not authentication_tag:
+            raise SchemaError("INVALID_FIELD", "authentication_tag cannot be empty when present")
+        if authentication_tag and not _SHA256.fullmatch(authentication_tag):
+            raise SchemaError("INVALID_FIELD", "authentication_tag must be a SHA-256 digest")
+        verifier_identity = _string(raw["verifier_identity"], "verifier_identity")
+        if not verifier_identity.startswith("controller/"):
+            raise ReconciliationError("VERIFIER_UNTRUSTED", "verification identity is not controller-owned")
         return cls(_id(raw["receipt_id"], "receipt_id"), _digest(raw["assignment_digest"], "assignment_digest"),
                    _commit(raw["source_sha"], "source_sha"), _id(raw["candidate_id"], "candidate_id"),
                    _commit(raw["result_commit"], "result_commit"), _digest(raw["diff_digest"], "diff_digest"),
                    _digest(raw["scope_digest"], "scope_digest"), _digest(raw["gate_digest"], "gate_digest"),
-                   _string(raw["verifier_identity"], "verifier_identity"), _timestamp(raw["verified_at"], "verified_at"),
-                   "pass", digest)
+                   verifier_identity, _timestamp(raw["verified_at"], "verified_at"),
+                   "pass", digest, authentication_tag)
 
     def to_dict(self) -> dict[str, Any]:
-        return {"schema_version": SCHEMA_VERSION, "kind": "verification_receipt", "receipt_id": self.receipt_id,
+        result = {"schema_version": SCHEMA_VERSION, "kind": "verification_receipt", "receipt_id": self.receipt_id,
                 "assignment_digest": self.assignment_digest, "source_sha": self.source_sha, "candidate_id": self.candidate_id,
                 "result_commit": self.result_commit, "diff_digest": self.diff_digest, "scope_digest": self.scope_digest,
                 "gate_digest": self.gate_digest, "verifier_identity": self.verifier_identity, "verified_at": self.verified_at,
                 "verification_status": self.verification_status, "receipt_digest": self.receipt_digest}
+        if self.authentication_tag:
+            result["authentication_tag"] = self.authentication_tag
+        return result
 
 
 class VerificationReceiptStore:
     """Durable controller-owned receipt index used by candidate integration admission."""
 
-    def __init__(self, path: Path | str, *, root: Path | str | None = None):
+    def __init__(self, path: Path | str, *, root: Path | str | None = None,
+                 verification_keys: Mapping[str, str | bytes] | None = None):
         self.path, self.root = _safe_store_path(path, root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.lock_path = _safe_store_path(self.path.with_name(self.path.name + ".lock"), self.root)[0]
+        if not verification_keys:
+            raise SchemaError("VERIFICATION_KEY_REQUIRED", "receipt store requires registered verifier keys")
+        self.verification_keys = MappingProxyType({
+            _string(identity, "verifier_identity"): (key.encode() if isinstance(key, str) else key)
+            for identity, key in verification_keys.items()
+            if isinstance(key, (str, bytes)) and len(key) > 0
+        })
+        if len(self.verification_keys) != len(verification_keys):
+            raise SchemaError("INVALID_FIELD", "verification keys must be non-empty strings or bytes")
         self.receipts: dict[str, VerificationReceipt] = {}
         with _journal_lock(self.lock_path):
             self._reload_locked()
@@ -1484,10 +1546,50 @@ class VerificationReceiptStore:
                 old = self.receipts.get(receipt.receipt_id)
                 if old is not None and old != receipt:
                     raise ReconciliationError("CONFLICTING_REPLAY", "receipt identity has conflicting data")
+                self._authenticate(receipt)
                 self.receipts[receipt.receipt_id] = receipt
+
+    def _key(self, verifier_identity: str) -> bytes:
+        key = self.verification_keys.get(verifier_identity)
+        if key is None:
+            raise ReconciliationError("VERIFIER_UNREGISTERED", "receipt verifier is not registered")
+        return key
+
+    def _authenticate(self, receipt: VerificationReceipt) -> None:
+        expected = hmac.new(self._key(receipt.verifier_identity), receipt.receipt_digest.encode(), hashlib.sha256).hexdigest()
+        if not receipt.authentication_tag or not hmac.compare_digest(expected, receipt.authentication_tag):
+            raise ReconciliationError("VERIFIER_AUTH_FAILED", "verification receipt authentication failed")
+
+    def get(self, receipt_id: str) -> VerificationReceipt | None:
+        _id(receipt_id, "receipt_id")
+        with _journal_lock(self.lock_path):
+            self._reload_locked()
+            return self.receipts.get(receipt_id)
+
+    def require(self, receipt: VerificationReceipt) -> VerificationReceipt:
+        stored = self.get(receipt.receipt_id)
+        if stored is None or stored != receipt:
+            raise ReconciliationError("VERIFIER_RECEIPT_NOT_REGISTERED", "receipt is not the exact registered controller receipt")
+        self._authenticate(stored)
+        return stored
+
+    def require_digest(self, receipt_digest: str) -> VerificationReceipt:
+        _digest(receipt_digest, "receipt_digest")
+        with _journal_lock(self.lock_path):
+            self._reload_locked()
+            for receipt in self.receipts.values():
+                if receipt.receipt_digest == receipt_digest:
+                    self._authenticate(receipt)
+                    return receipt
+        raise ReconciliationError("VERIFIER_RECEIPT_NOT_REGISTERED", "receipt digest is not registered")
 
     def issue(self, receipt: VerificationReceipt) -> str:
         receipt = VerificationReceipt.from_dict(receipt.to_dict())
+        if receipt.authentication_tag:
+            self._authenticate(receipt)
+        else:
+            tag = hmac.new(self._key(receipt.verifier_identity), receipt.receipt_digest.encode(), hashlib.sha256).hexdigest()
+            receipt = replace(receipt, authentication_tag=tag)
         with _journal_lock(self.lock_path):
             self._reload_locked()
             old = self.receipts.get(receipt.receipt_id)
@@ -1543,9 +1645,13 @@ def classify_stale_base(*, assigned_source_sha: str, current_source_sha: str,
 def verify_candidate_result(*, assignment: Assignment, receipt: VerificationReceipt | Mapping[str, Any],
                             candidate_id: str, result_commit: str, diff_digest: str, scope_digest: str, gate_digest: str,
                             result_ref: str, default_branch: str = "main",
-                            integration_branch: str = "recursion/integration") -> str:
+                            integration_branch: str = "recursion/integration",
+                            receipt_store: VerificationReceiptStore | None = None) -> str:
     """Validate a durable independent-verifier receipt for candidate import admission."""
     receipt = receipt if isinstance(receipt, VerificationReceipt) else VerificationReceipt.from_dict(receipt)
+    if receipt_store is None:
+        raise ReconciliationError("VERIFIER_AUTH_REQUIRED", "candidate verification requires a controller receipt store")
+    receipt_store.require(receipt)
     if assignment.assignment_digest != receipt.assignment_digest:
         raise ReconciliationError("ASSIGNMENT_MISMATCH", "candidate result assignment digest differs")
     if assignment.source_sha != receipt.source_sha:
@@ -1569,8 +1675,12 @@ class IntegrationCoordinator:
     """Durable, serialized same-project integration admission; never performs git operations."""
 
     def __init__(self, path: Path | str | None = None, *, root: Path | str | None = None,
-                 pause_guard: PauseGuard | None = None):
+                 pause_guard: PauseGuard | None = None,
+                 receipt_store: VerificationReceiptStore | None = None):
         self.pause_guard = pause_guard
+        if receipt_store is None:
+            raise ReconciliationError("VERIFIER_AUTH_REQUIRED", "integration coordinator requires a controller receipt store")
+        self.receipt_store = receipt_store
         self.path = None if path is None else _safe_store_path(path, root)[0]
         self.root = None if path is None else _safe_store_path(path, root)[1]
         if self.path is not None:
@@ -1597,6 +1707,8 @@ class IntegrationCoordinator:
                 try:
                     event = _json_load(line)
                     self._validate_event(event)
+                    if event.get("event") == "admit" and self.receipt_store is not None:
+                        self.receipt_store.require_digest(event["receipt_digest"])
                     self._apply_event(event)
                     self._tail_digest = event["event_digest"]
                 except FabricError:
@@ -1618,8 +1730,9 @@ class IntegrationCoordinator:
             _check_keys(event, {"event", "schema_version", "event_digest", "prev_event_digest", "project_id", "default_branch", "integration_branch"}, set(), "integration_policy")
             _id(event["project_id"], "project_id"); _string(event["default_branch"], "default_branch"); _string(event["integration_branch"], "integration_branch")
         elif kind == "admit":
-            _check_keys(event, {"event", "schema_version", "event_digest", "prev_event_digest", "candidate_id", "project_id", "source_sha", "result_commit", "source_ref", "result_ref", "default_branch", "integration_branch", "classification", "receipt_digest"}, set(), "integration_admit")
+            _check_keys(event, {"event", "schema_version", "event_digest", "prev_event_digest", "candidate_id", "project_id", "assignment_digest", "source_sha", "result_commit", "source_ref", "result_ref", "default_branch", "integration_branch", "classification", "receipt_digest"}, set(), "integration_admit")
             _id(event["candidate_id"], "candidate_id"); _id(event["project_id"], "project_id"); _commit(event["source_sha"], "source_sha"); _commit(event["result_commit"], "result_commit")
+            _digest(event["assignment_digest"], "assignment_digest")
             if event["classification"] not in {"current-compatible", "stale-reviewable"}:
                 raise ReconciliationError("STALE_CLASSIFICATION_REQUIRED", "integration journal classification is invalid")
             _digest(event["receipt_digest"], "receipt_digest")
@@ -1644,10 +1757,14 @@ class IntegrationCoordinator:
             self._policies[event["project_id"]] = {"default_branch": event["default_branch"], "integration_branch": event["integration_branch"]}
         elif kind == "admit":
             existing = self._candidates.get(event["candidate_id"])
-            value = {key: event[key] for key in ("project_id", "source_sha", "result_commit", "source_ref", "result_ref", "classification", "receipt_digest")}
+            value = {key: event[key] for key in ("project_id", "assignment_digest", "source_sha", "result_commit", "source_ref", "result_ref", "classification", "receipt_digest")}
             value["status"] = "active"
-            if existing is not None and existing != value:
-                raise ReconciliationError("CONFLICTING_REPLAY", "candidate identity has conflicting replay data")
+            if existing is not None:
+                same_identity = all(existing.get(key) == value[key] for key in value if key != "status")
+                if not same_identity:
+                    raise ReconciliationError("CONFLICTING_REPLAY", "candidate identity has conflicting replay data")
+                if existing.get("status") == "complete":
+                    return
             current = self._active.get(event["project_id"])
             if current is not None and current != event["candidate_id"]:
                 raise ReconciliationError("INTEGRATION_SERIALIZED", "journal replays two active candidates for one project")
@@ -1669,6 +1786,7 @@ class IntegrationCoordinator:
             self._reload_locked(); self._record_locked({"event": "policy", "project_id": project_id, "default_branch": default_branch, "integration_branch": integration_branch}); return "set"
 
     def admit(self, *, candidate_id: str, project_id: str, source_sha: str, result_commit: str,
+              assignment: Assignment | Mapping[str, Any] | None = None,
               source_ref: str = "source", result_ref: str | None = None,
               default_branch: str | None = None, integration_branch: str | None = None,
               classification: str | None = None,
@@ -1676,42 +1794,54 @@ class IntegrationCoordinator:
         if self.pause_guard is not None:
             self.pause_guard.assert_open()
         _id(candidate_id, "candidate_id"); _id(project_id, "project_id"); _commit(source_sha, "source_sha"); _commit(result_commit, "result_commit")
+        if assignment is None:
+            raise ReconciliationError("ASSIGNMENT_REQUIRED", "integration requires the immutable assignment record")
+        assignment = assignment if isinstance(assignment, Assignment) else Assignment.from_dict(assignment)
+        if assignment.project_id != project_id or assignment.source_sha != source_sha:
+            raise ReconciliationError("ASSIGNMENT_MISMATCH", "assignment does not match integration source")
+        if assignment.candidate_id != candidate_id:
+            raise ReconciliationError("CANDIDATE_MISMATCH", "candidate does not match immutable assignment")
         if classification not in {"current-compatible", "stale-reviewable"}:
             raise ReconciliationError("STALE_CLASSIFICATION_REQUIRED", "integration requires current or stale-reviewable classification")
         if verification_receipt is None:
             raise ReconciliationError("VERIFIER_REQUIRED", "integration requires an independent verification receipt")
+        if self.receipt_store is None:
+            raise ReconciliationError("VERIFIER_AUTH_REQUIRED", "integration requires a controller receipt store")
         receipt = verification_receipt if isinstance(verification_receipt, VerificationReceipt) else VerificationReceipt.from_dict(verification_receipt)
-        if receipt.candidate_id != candidate_id or receipt.source_sha != source_sha or receipt.result_commit != result_commit or not receipt.verifier_identity.startswith("controller/"):
+        self.receipt_store.require(receipt)
+        if receipt.assignment_digest != assignment.assignment_digest or receipt.candidate_id != candidate_id or receipt.source_sha != source_sha or receipt.result_commit != result_commit:
             raise ReconciliationError("VERIFICATION_BINDING_MISMATCH", "verification receipt is not bound to this candidate")
         policy = self._policies.get(project_id, {"default_branch": "main", "integration_branch": "recursion/integration"})
         default = default_branch or policy["default_branch"]; integration = integration_branch or policy["integration_branch"]
         result_ref = result_ref or f"recursion/candidate/{candidate_id}"
         _string(source_ref, "source_ref"); validate_candidate_refs(result_ref=result_ref, default_branch=default, integration_branch=integration)
         if self.path is None:
-            return self._admit_memory(candidate_id, project_id, source_sha, result_commit, source_ref, result_ref, default, integration, classification, receipt.receipt_digest)
+            return self._admit_memory(candidate_id, project_id, assignment.assignment_digest, source_sha, result_commit, source_ref, result_ref, default, integration, classification, receipt.receipt_digest)
         with _journal_lock(self.lock_path):
             self._reload_locked()
-            return self._admit_locked(candidate_id, project_id, source_sha, result_commit, source_ref, result_ref, default, integration, classification, receipt.receipt_digest)
+            return self._admit_locked(candidate_id, project_id, assignment.assignment_digest, source_sha, result_commit, source_ref, result_ref, default, integration, classification, receipt.receipt_digest)
 
-    def _admit_memory(self, candidate_id: str, project_id: str, source_sha: str, result_commit: str, source_ref: str, result_ref: str, default: str, integration: str, classification: str, receipt_digest: str) -> str:
+    def _admit_memory(self, candidate_id: str, project_id: str, assignment_digest: str, source_sha: str, result_commit: str, source_ref: str, result_ref: str, default: str, integration: str, classification: str, receipt_digest: str) -> str:
         existing = self._candidates.get(candidate_id)
-        proposed = {"project_id": project_id, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "classification": classification, "receipt_digest": receipt_digest, "status": "active"}
+        proposed = {"project_id": project_id, "assignment_digest": assignment_digest, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "classification": classification, "receipt_digest": receipt_digest, "status": "active"}
         if existing is not None:
-            if existing == proposed: return "duplicate"
+            same_identity = all(existing.get(key) == proposed[key] for key in proposed if key != "status")
+            if same_identity: return "completed" if existing.get("status") == "complete" else "duplicate"
             raise AdmissionError("CONFLICTING_CANDIDATE", "candidate identity is already bound to another result")
         current = self._active.get(project_id)
         if current is not None: raise AdmissionError("INTEGRATION_SERIALIZED", f"project already has active integration candidate {current}")
         self._candidates[candidate_id] = proposed; self._active[project_id] = candidate_id; return "admitted"
 
-    def _admit_locked(self, candidate_id: str, project_id: str, source_sha: str, result_commit: str, source_ref: str, result_ref: str, default: str, integration: str, classification: str, receipt_digest: str) -> str:
+    def _admit_locked(self, candidate_id: str, project_id: str, assignment_digest: str, source_sha: str, result_commit: str, source_ref: str, result_ref: str, default: str, integration: str, classification: str, receipt_digest: str) -> str:
         existing = self._candidates.get(candidate_id)
-        proposed = {"project_id": project_id, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "classification": classification, "receipt_digest": receipt_digest, "status": "active"}
+        proposed = {"project_id": project_id, "assignment_digest": assignment_digest, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "classification": classification, "receipt_digest": receipt_digest, "status": "active"}
         if existing is not None:
-            if existing == proposed: return "duplicate"
+            same_identity = all(existing.get(key) == proposed[key] for key in proposed if key != "status")
+            if same_identity: return "completed" if existing.get("status") == "complete" else "duplicate"
             raise AdmissionError("CONFLICTING_CANDIDATE", "candidate identity is already bound to another result")
         current = self._active.get(project_id)
         if current is not None: raise AdmissionError("INTEGRATION_SERIALIZED", f"project already has active integration candidate {current}")
-        self._record_locked({"event": "admit", "candidate_id": candidate_id, "project_id": project_id, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "default_branch": default, "integration_branch": integration, "classification": classification, "receipt_digest": receipt_digest})
+        self._record_locked({"event": "admit", "candidate_id": candidate_id, "project_id": project_id, "assignment_digest": assignment_digest, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "default_branch": default, "integration_branch": integration, "classification": classification, "receipt_digest": receipt_digest})
         return "admitted"
 
     def complete(self, candidate_id: str) -> str:
