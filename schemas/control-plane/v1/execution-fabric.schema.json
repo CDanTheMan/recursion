@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recursion.invalid/schemas/control-plane/v1/execution-fabric.schema.json",
+  "title": "Recursion v2 execution fabric records",
+  "description": "Strict, inert control-plane records for host placement and remote reconciliation.",
+  "oneOf": [
+    { "$ref": "#/$defs/host_registration" },
+    { "$ref": "#/$defs/host_heartbeat" },
+    { "$ref": "#/$defs/pool_status" },
+    { "$ref": "#/$defs/placement_requirements" },
+    { "$ref": "#/$defs/placement_candidate" },
+    { "$ref": "#/$defs/assignment" },
+    { "$ref": "#/$defs/placement_rejection" }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$" },
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "timestamp": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$" },
+    "strings": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "host_registration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "kind", "host_id", "capabilities", "operating_system", "architectures", "sandbox_profiles", "network_profiles", "trust_class", "max_concurrency", "workload_concurrency", "registration_digest", "registered_at"],
+      "properties": {
+        "schema_version": { "const": 1 }, "kind": { "const": "host_registration" }, "host_id": { "$ref": "#/$defs/id" },
+        "capabilities": { "$ref": "#/$defs/strings" }, "operating_system": { "type": "string", "minLength": 1 },
+        "architectures": { "$ref": "#/$defs/strings" }, "sandbox_profiles": { "$ref": "#/$defs/strings" },
+        "network_profiles": { "$ref": "#/$defs/strings" }, "trust_class": { "type": "string", "minLength": 1 },
+        "max_concurrency": { "type": "integer", "minimum": 0 },
+        "workload_concurrency": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "registration_digest": { "$ref": "#/$defs/digest" }, "registered_at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "host_heartbeat": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "kind", "host_id", "registration_digest", "sequence", "observed_at", "lease_epoch"],
+      "properties": {
+        "schema_version": { "const": 1 }, "kind": { "const": "host_heartbeat" }, "host_id": { "$ref": "#/$defs/id" },
+        "registration_digest": { "$ref": "#/$defs/digest" }, "sequence": { "type": "integer", "minimum": 0 },
+        "observed_at": { "$ref": "#/$defs/timestamp" }, "lease_epoch": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "pool_status": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "kind", "pool_id", "billing_basis", "allowed_roles", "allowed_projects", "allowed_models", "max_concurrency", "in_flight", "quota_remaining", "quota_period", "on_demand", "cost_per_run"],
+      "properties": {
+        "schema_version": { "const": 1 }, "kind": { "const": "pool_status" }, "pool_id": { "$ref": "#/$defs/id" },
+        "billing_basis": { "type": "string", "minLength": 1 }, "allowed_roles": { "$ref": "#/$defs/strings" },
+        "allowed_projects": { "$ref": "#/$defs/strings" }, "allowed_models": { "$ref": "#/$defs/strings" },
+        "max_concurrency": { "type": "integer", "minimum": 0 }, "in_flight": { "type": "integer", "minimum": 0 },
+        "quota_remaining": { "type": ["integer", "null"], "minimum": 0 }, "quota_period": { "type": ["string", "null"] },
+        "on_demand": { "type": "boolean" }, "cost_per_run": { "type": "number", "minimum": 0 }
+      }
+    },
+    "placement_requirements": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "kind", "task_id", "project_id", "role", "capabilities", "operating_system", "sandbox_profile", "network_profile", "billing_basis", "max_cost_usd", "model", "preferred_hosts", "preferred_pools", "source_sha"],
+      "properties": {
+        "schema_version": { "const": 1 }, "kind": { "const": "placement_requirements" }, "task_id": { "$ref": "#/$defs/id" },
+        "project_id": { "$ref": "#/$defs/id" }, "role": { "type": "string", "minLength": 1 }, "capabilities": { "$ref": "#/$defs/strings" },
+        "operating_system": { "type": ["string", "null"] }, "sandbox_profile": { "type": ["string", "null"] },
+        "network_profile": { "type": ["string", "null"] }, "billing_basis": { "$ref": "#/$defs/strings" },
+        "max_cost_usd": { "type": "number", "minimum": 0 }, "model": { "type": ["string", "null"] },
+        "preferred_hosts": { "$ref": "#/$defs/strings" }, "preferred_pools": { "$ref": "#/$defs/strings" }, "source_sha": { "$ref": "#/$defs/sha" }
+      }
+    },
+    "placement_candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "kind", "candidate_id", "engine", "provider", "pool_id", "model", "host_id", "sandbox_profile", "network_profile", "capabilities", "operating_system", "billing_basis", "cost_per_run", "roles", "enabled"],
+      "properties": {
+        "schema_version": { "const": 1 }, "kind": { "const": "placement_candidate" }, "candidate_id": { "$ref": "#/$defs/id" },
+        "engine": { "$ref": "#/$defs/id" }, "provider": { "$ref": "#/$defs/id" }, "pool_id": { "$ref": "#/$defs/id" },
+        "model": { "type": "string", "minLength": 1 }, "host_id": { "$ref": "#/$defs/id" }, "sandbox_profile": { "type": "string", "minLength": 1 },
+        "network_profile": { "type": "string", "minLength": 1 }, "capabilities": { "$ref": "#/$defs/strings" },
+        "operating_system": { "type": "string", "minLength": 1 }, "billing_basis": { "type": "string", "minLength": 1 },
+        "cost_per_run": { "type": "number", "minimum": 0 }, "roles": { "$ref": "#/$defs/strings" }, "enabled": { "type": "boolean" }
+      }
+    },
+    "assignment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "kind", "task_id", "project_id", "source_sha", "engine", "provider", "capacity_pool", "model", "host", "sandbox_profile", "network_profile", "assignment_digest", "created_at"],
+      "properties": {
+        "schema_version": { "const": 1 }, "kind": { "const": "assignment" }, "task_id": { "$ref": "#/$defs/id" }, "project_id": { "$ref": "#/$defs/id" },
+        "source_sha": { "$ref": "#/$defs/sha" }, "engine": { "$ref": "#/$defs/id" }, "provider": { "$ref": "#/$defs/id" }, "capacity_pool": { "$ref": "#/$defs/id" },
+        "model": { "type": "string", "minLength": 1 }, "host": { "$ref": "#/$defs/id" }, "sandbox_profile": { "type": "string", "minLength": 1 }, "network_profile": { "type": "string", "minLength": 1 },
+        "assignment_digest": { "$ref": "#/$defs/digest" }, "created_at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "placement_rejection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "kind", "candidate_id", "code", "reason"],
+      "properties": { "schema_version": { "const": 1 }, "kind": { "const": "placement_rejection" }, "candidate_id": { "$ref": "#/$defs/id" }, "code": { "type": "string", "minLength": 1 }, "reason": { "type": "string", "minLength": 1 } }
+    }
+  }
+}
