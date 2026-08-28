@@ -19,6 +19,7 @@ echo "ok    Telegram gateway is an authenticated intake/status surface, not an a
 # One authenticated Telegram row becomes one inert instruction with the complete Phase 3 identity.
 I="$TMP/intake"; mkdir -p "$I/scripts" "$I/state"
 cp "$SRC/scripts/intake.sh" "$SRC/scripts/instruction_routing.py" \
+   "$SRC/scripts/pilot_instruction.py" \
    "$SRC/scripts/transition_receipt.py" "$SRC/scripts/jsonl_durable.py" \
    "$SRC/scripts/runtime-state.py" "$I/scripts/"
 printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n' > "$I/state/portfolio.tsv"
@@ -48,7 +49,7 @@ echo "ok    one authenticated message became one inert, fully correlated durable
 P="$TMP/planner"; BIN="$TMP/bin"
 mkdir -p "$P/scripts" "$P/state/tasks" "$P/state/roadmaps" "$P/state/.locks" "$P/loop/logs" "$BIN"
 for s in hermes-decide.sh validate-decision.py validate-control-state.py decision-queue.py \
-         jsonl_durable.py; do
+         engine_contract.py jsonl_durable.py; do
   cp "$SRC/scripts/$s" "$P/scripts/"
 done
 for s in intake taskctl assist branch-review resync capacity notify; do
@@ -107,8 +108,8 @@ echo "ok    planner projection preserved complete authority, scope, and decision
 A="$TMP/actuator"
 mkdir -p "$A/scripts" "$A/state/tasks" "$A/state/instructions" "$A/loop/logs"
 for s in conduct-hermes.sh decision-queue.py validate-control-state.py validate-decision.py \
-         hermes-actuator.sh taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
-         instruction_routing.py runtime-state.py; do
+         engine_contract.py hermes-actuator.sh taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
+         instruction_routing.py pilot_instruction.py runtime-state.py; do
   cp "$SRC/scripts/$s" "$A/scripts/"
 done
 cat > "$A/scripts/work.sh" <<'STUB'
