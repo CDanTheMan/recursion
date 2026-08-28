@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from execution_fabric import (  # noqa: E402
     AdmissionError,
     DurableFabricStore,
+    DurableHostRegistry,
     HostHeartbeat,
     HostRegistry,
     HostRegistration,
@@ -28,6 +29,7 @@ from execution_fabric import (  # noqa: E402
     PlacementCandidate,
     PlacementRequirements,
     PoolStatus,
+    RoutingPolicy,
     PlacementGovernor,
     ReconciliationError,
     SchemaError,
@@ -35,6 +37,8 @@ from execution_fabric import (  # noqa: E402
     classify_stale_base,
     validate_candidate_refs,
     verify_candidate_result,
+    VerificationReceipt,
+    VerificationReceiptStore,
 )
 
 
@@ -46,13 +50,13 @@ RESULT = "b" * 64
 
 def host(host_id: str = "host-one", *, caps=("terminal", "workspace-edit", "structured-result"),
          sandbox=("workspace",), network=("provider-only",), max_concurrency=2,
-         workload=None, registered_at=NOW):
+         workload=None, registered_at=NOW, network_endpoints=None):
     return HostRegistration.build(host_id=host_id, capabilities=caps, operating_system="linux",
                                  architectures=("x86_64",), sandbox_profiles=sandbox,
                                  network_profiles=network, trust_class="registered",
                                  max_concurrency=max_concurrency,
                                  workload_concurrency=workload or {"implementer": 2},
-                                 registered_at=registered_at)
+                                 registered_at=registered_at, network_endpoints=network_endpoints)
 
 
 def heartbeat(registration, *, observed_at=NOW, sequence=1):
@@ -68,10 +72,10 @@ def pool(pool_id="pool-one", *, max_concurrency=2, in_flight=0, quota_remaining=
 
 def candidate(candidate_id="candidate-one", *, host_id="host-one", pool_id="pool-one",
               caps=("terminal", "workspace-edit", "structured-result"), sandbox="workspace",
-              network="provider-only", model="model-one", enabled=True):
+              network="provider-only", model="model-one", enabled=True, required_endpoints=()):
     return PlacementCandidate(candidate_id, "engine-one", "provider-one", pool_id, model, host_id,
                               sandbox, network, caps, "linux", "included", 0.0,
-                              ("implementer",), enabled)
+                              ("implementer",), enabled, required_endpoints=required_endpoints)
 
 
 def requirements(*, task_id="task-one", project_id="project-one", caps=("terminal", "workspace-edit", "structured-result"),
@@ -98,6 +102,20 @@ def process_admit(args):
         return assignment is not None, trace[0].code if trace else None
     except Exception as error:  # child result is asserted by the parent test
         return False, type(error).__name__ + ":" + getattr(error, "code", "")
+
+
+def receipt_for(assignment, candidate_id="candidate-one", result_commit=RESULT):
+    return VerificationReceipt.build(receipt_id=f"receipt-{candidate_id}", assignment_digest=assignment.assignment_digest,
+                                      source_sha=assignment.source_sha, candidate_id=candidate_id, result_commit=result_commit,
+                                      diff_digest="c" * 64, scope_digest="d" * 64, gate_digest="e" * 64,
+                                      verifier_identity="controller/verifier-one", verified_at=NOW)
+
+
+def integration_receipt(candidate_id, source_sha=SHA, result_commit=RESULT):
+    return VerificationReceipt.build(receipt_id=f"receipt-{candidate_id}", assignment_digest="f" * 64,
+                                      source_sha=source_sha, candidate_id=candidate_id, result_commit=result_commit,
+                                      diff_digest="c" * 64, scope_digest="d" * 64, gate_digest="e" * 64,
+                                      verifier_identity="controller/verifier-one", verified_at=NOW)
 
 
 class FabricPlacementTests(unittest.TestCase):
@@ -251,8 +269,78 @@ class FabricPlacementTests(unittest.TestCase):
         self.assertEqual(classify_stale_base(assigned_source_sha=SHA, current_source_sha="c" * 64), "stale-reviewable")
         self.assertEqual(classify_stale_base(assigned_source_sha=SHA, current_source_sha=SHA, integration_advanced=True), "stale-rebase-required")
 
+    def test_endpoints_refs_weighted_and_routing_authority_fail_closed(self):
+        registered = host(network_endpoints={"provider-only": ("registry-endpoint",)})
+        selected, _ = resolve_placement(requirements(), [candidate(required_endpoints=("registry-endpoint",))],
+                                        {registered.host_id: registered}, {registered.host_id: heartbeat(registered)},
+                                        {"pool-one": pool()}, now_epoch=1787918400, created_at=NOW)
+        self.assertIsNotNone(selected)
+        selected, trace = resolve_placement(requirements(), [candidate(required_endpoints=("missing-endpoint",))],
+                                            {registered.host_id: registered}, {registered.host_id: heartbeat(registered)},
+                                            {"pool-one": pool()}, now_epoch=1787918400, created_at=NOW)
+        self.assertIsNone(selected); self.assertEqual(trace[0].code, "NETWORK_ENDPOINT_MISSING")
+        for bad_ref in ("../escape", "feature..name", "feature^{}", "feature@{bad}", "feature~1", "feature.lock/x"):
+            with self.assertRaises(AdmissionError) as error:
+                validate_candidate_refs(result_ref=bad_ref)
+            self.assertEqual(error.exception.code, "INVALID_RESULT_REF")
+        weighted = [replace(candidate("low"), weight=1), replace(candidate("high"), weight=3)]
+        choices = [resolve_placement(requirements(task_id=f"weighted-{i}", policy="weighted-rotation"), weighted,
+                                     {registered.host_id: registered}, {registered.host_id: heartbeat(registered)},
+                                     {"pool-one": pool()}, now_epoch=1787918400, created_at=NOW)[0].candidate_id
+                   for i in range(80)]
+        self.assertGreater(choices.count("high"), choices.count("low"))
+        metered = replace(candidate(), billing_basis="metered")
+        metered_pool = pool(billing_basis="metered")
+        selected, trace = resolve_placement(requirements(billing_basis=("metered",)), [metered],
+                                            {registered.host_id: registered}, {registered.host_id: heartbeat(registered)},
+                                            {"pool-one": metered_pool}, now_epoch=1787918400, created_at=NOW)
+        self.assertIsNone(selected); self.assertEqual(trace[0].code, "METERED_NOT_AUTHORIZED")
+        policy = RoutingPolicy.build(policy_id="human-policy", allowed_billing_basis=("metered",), allow_on_demand=False)
+        selected, _ = resolve_placement(requirements(billing_basis=("metered",)), [metered],
+                                        {registered.host_id: registered}, {registered.host_id: heartbeat(registered)},
+                                        {"pool-one": metered_pool}, now_epoch=1787918400, created_at=NOW,
+                                        routing_policy=policy)
+        self.assertIsNotNone(selected)
+
 
 class DurableStateTests(unittest.TestCase):
+    def test_durable_host_registry_restarts_and_rejects_tampered_digest(self):
+        registered = host()
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "registry.json"
+            registry = DurableHostRegistry(path, now=NOW)
+            self.assertEqual(registry.register(registered), "registered")
+            self.assertEqual(registry.heartbeat(heartbeat(registered), now=NOW), "accepted")
+            restarted = DurableHostRegistry(path, now=NOW)
+            hosts, beats = restarted.snapshot()
+            self.assertEqual(hosts[registered.host_id], registered)
+            self.assertEqual(beats[registered.host_id], heartbeat(registered))
+            state = json.loads(path.read_text(encoding="utf-8")); state["state_digest"] = "0" * 64
+            path.write_text(json.dumps(state), encoding="utf-8")
+            with self.assertRaises(ReconciliationError) as error:
+                DurableHostRegistry(path, now=NOW)
+            self.assertEqual(error.exception.code, "DIGEST_MISMATCH")
+
+    def test_lease_identity_role_expiry_and_nonfinite_time_fail_closed(self):
+        registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
+                                                               {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
+                                                               now_epoch=1787918400, created_at=NOW)
+        with tempfile.TemporaryDirectory() as temp:
+            store = DurableFabricStore(Path(temp) / "fabric.jsonl")
+            with self.assertRaises(AdmissionError) as error:
+                store.create_lease(assignment, lease_id="lease-bad", attempt_id="attempt-bad", remote_session_id="session-bad",
+                                   now=NOW, expires_at=NOW)
+            self.assertEqual(error.exception.code, "INVALID_LEASE")
+            store.create_lease(assignment, lease_id="lease-one", attempt_id="attempt-one", remote_session_id="session-one",
+                               now=NOW, expires_at="2026-08-28T12:05:00Z")
+            self.assertEqual(store.leases["lease-one"]["reservation"]["role"], "implementer")
+            with self.assertRaises(AdmissionError) as error:
+                store.create_lease(assignment, lease_id="lease-two", attempt_id="attempt-two", remote_session_id="session-one",
+                                   now=NOW, expires_at="2026-08-28T12:05:00Z")
+            self.assertEqual(error.exception.code, "DUPLICATE_REMOTE_SESSION")
+        with self.assertRaises(SchemaError):
+            resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
+                              {registered.host_id: heartbeat(registered)}, {"pool-one": pool()}, now_epoch=math.inf)
     def test_restart_reconciles_without_relaunch_and_is_idempotent(self):
         registered = host()
         assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
@@ -271,16 +359,16 @@ class DurableStateTests(unittest.TestCase):
             # A terminal result can be accepted after restart, but never replayed as a second result.
             self.assertEqual(restarted.accept_result(attempt_id="attempt-one", lease_id="lease-one",
                                                      assignment_digest_value=assignment.assignment_digest,
-                                                     result_digest=RESULT, status="succeeded", observed_at=NOW), "accepted")
+                                                     result_digest=RESULT, status="succeeded", observed_at=NOW, controller_now=NOW), "accepted")
             self.assertEqual(restarted.accept_result(attempt_id="attempt-one", lease_id="lease-one",
                                                      assignment_digest_value=assignment.assignment_digest,
-                                                     result_digest=RESULT, status="succeeded", observed_at=NOW), "duplicate")
+                                                     result_digest=RESULT, status="succeeded", observed_at=NOW, controller_now=NOW), "duplicate")
             again = DurableFabricStore(journal)
             self.assertEqual(len(again.results), 1)
             with self.assertRaises(ReconciliationError) as error:
                 again.accept_result(attempt_id="attempt-one", lease_id="lease-one",
                                     assignment_digest_value=assignment.assignment_digest, result_digest="c" * 64,
-                                    status="succeeded", observed_at=NOW)
+                                    status="succeeded", observed_at=NOW, controller_now=NOW)
             self.assertEqual(error.exception.code, "CONFLICTING_RESULT")
 
     def test_late_and_mismatched_results_fail_closed(self):
@@ -296,7 +384,7 @@ class DurableStateTests(unittest.TestCase):
             with self.assertRaises(ReconciliationError) as error:
                 store.accept_result(attempt_id="attempt-one", lease_id="lease-one",
                                     assignment_digest_value=assignment.assignment_digest, result_digest=RESULT,
-                                    status="succeeded", observed_at=NOW)
+                                    status="succeeded", observed_at=NOW, controller_now=NOW)
             self.assertEqual(error.exception.code, "LATE_RESULT")
 
     def test_result_at_expiry_is_rejected_without_expire_and_duplicate_identity_is_strict(self):
@@ -309,16 +397,16 @@ class DurableStateTests(unittest.TestCase):
                                now=NOW, expires_at="2026-08-28T12:01:00Z")
             with self.assertRaises(ReconciliationError) as error:
                 store.accept_result(attempt_id="attempt-exp", lease_id="lease-exp", assignment_digest_value=assignment.assignment_digest,
-                                    result_digest=RESULT, status="succeeded", observed_at="2026-08-28T12:01:00Z")
+                                    result_digest=RESULT, status="succeeded", observed_at="2026-08-28T12:01:00Z", controller_now="2026-08-28T12:01:00Z")
             self.assertEqual(error.exception.code, "LATE_RESULT")
             # A conflicting status/lease/result identity is not an idempotent retry.
             store.create_lease(assignment, lease_id="lease-ok", attempt_id="attempt-ok", remote_session_id="session-ok",
                                now=NOW, expires_at="2026-08-28T12:05:00Z")
             store.accept_result(attempt_id="attempt-ok", lease_id="lease-ok", assignment_digest_value=assignment.assignment_digest,
-                                result_digest=RESULT, status="succeeded", observed_at=NOW)
+                                result_digest=RESULT, status="succeeded", observed_at=NOW, controller_now=NOW)
             with self.assertRaises(ReconciliationError) as error:
                 store.accept_result(attempt_id="attempt-ok", lease_id="lease-ok", assignment_digest_value=assignment.assignment_digest,
-                                    result_digest=RESULT, status="failed", observed_at=NOW)
+                                    result_digest=RESULT, status="failed", observed_at=NOW, controller_now=NOW)
             self.assertEqual(error.exception.code, "CONFLICTING_RESULT")
 
     def test_durable_admission_is_atomic_across_threads_and_processes(self):
@@ -392,18 +480,23 @@ class IntegrationTests(unittest.TestCase):
     def test_same_project_is_serialized_but_other_projects_can_overlap(self):
         coordinator = IntegrationCoordinator()
         self.assertEqual(coordinator.admit(candidate_id="candidate-one", project_id="project-one",
-                                            source_sha=SHA, result_commit=RESULT), "admitted")
+                                            source_sha=SHA, result_commit=RESULT, classification="current-compatible",
+                                            verification_receipt=integration_receipt("candidate-one")), "admitted")
         with self.assertRaises(AdmissionError) as error:
             coordinator.admit(candidate_id="candidate-two", project_id="project-one",
-                              source_sha=SHA, result_commit=RESULT)
+                              source_sha=SHA, result_commit=RESULT, classification="current-compatible",
+                              verification_receipt=integration_receipt("candidate-two"))
         self.assertEqual(error.exception.code, "INTEGRATION_SERIALIZED")
         self.assertEqual(coordinator.admit(candidate_id="candidate-two", project_id="project-two",
-                                           source_sha=SHA, result_commit=RESULT), "admitted")
+                                           source_sha=SHA, result_commit=RESULT, classification="stale-reviewable",
+                                           verification_receipt=integration_receipt("candidate-two")), "admitted")
         self.assertEqual(coordinator.admit(candidate_id="candidate-two", project_id="project-two",
-                                           source_sha=SHA, result_commit=RESULT), "duplicate")
+                                           source_sha=SHA, result_commit=RESULT, classification="stale-reviewable",
+                                           verification_receipt=integration_receipt("candidate-two")), "duplicate")
         self.assertEqual(coordinator.complete("candidate-one"), "completed")
         self.assertEqual(coordinator.admit(candidate_id="candidate-three", project_id="project-one",
-                                           source_sha=SHA, result_commit=RESULT), "admitted")
+                                           source_sha=SHA, result_commit=RESULT, classification="current-compatible",
+                                           verification_receipt=integration_receipt("candidate-three")), "admitted")
 
     def test_durable_integration_restarts_and_protects_refs(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -411,16 +504,19 @@ class IntegrationTests(unittest.TestCase):
             coordinator = IntegrationCoordinator(path)
             coordinator.set_project_policy(project_id="project-one", default_branch="main", integration_branch="integration")
             coordinator.admit(candidate_id="candidate-one", project_id="project-one", source_sha=SHA,
-                              result_commit=RESULT, result_ref="cursor/candidate-one")
+                              result_commit=RESULT, result_ref="cursor/candidate-one", classification="current-compatible",
+                              verification_receipt=integration_receipt("candidate-one"))
             restarted = IntegrationCoordinator(path)
             self.assertEqual(restarted.active["project-one"], "candidate-one")
             with self.assertRaises(AdmissionError) as error:
                 restarted.admit(candidate_id="candidate-two", project_id="project-one", source_sha=SHA,
-                                result_commit=RESULT, result_ref="cursor/candidate-two")
+                                result_commit=RESULT, result_ref="cursor/candidate-two", classification="current-compatible",
+                                verification_receipt=integration_receipt("candidate-two"))
             self.assertEqual(error.exception.code, "INTEGRATION_SERIALIZED")
             with self.assertRaises(AdmissionError) as error:
                 restarted.admit(candidate_id="candidate-main", project_id="project-two", source_sha=SHA,
-                                result_commit=RESULT, result_ref="main")
+                                result_commit=RESULT, result_ref="main", classification="current-compatible",
+                                verification_receipt=integration_receipt("candidate-main"))
             self.assertEqual(error.exception.code, "PROTECTED_REF")
             self.assertEqual(restarted.complete("candidate-one"), "completed")
             self.assertEqual(IntegrationCoordinator(path).active, {})
@@ -429,12 +525,15 @@ class IntegrationTests(unittest.TestCase):
         registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
                                                                {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
                                                                now_epoch=1787918400, created_at=NOW)
-        self.assertEqual(verify_candidate_result(assignment=assignment, assignment_digest_value=assignment.assignment_digest,
-                                                 source_sha=SHA, result_ref="cursor/candidate", verifier_passed=True), "verified")
+        receipt = receipt_for(assignment)
+        self.assertEqual(verify_candidate_result(assignment=assignment, receipt=receipt, candidate_id="candidate-one",
+                                                 result_commit=RESULT, diff_digest="c" * 64, scope_digest="d" * 64,
+                                                 gate_digest="e" * 64, result_ref="cursor/candidate"), "verified")
         with self.assertRaises(ReconciliationError) as error:
-            verify_candidate_result(assignment=assignment, assignment_digest_value=assignment.assignment_digest,
-                                    source_sha=SHA, result_ref="cursor/candidate", verifier_passed=False)
-        self.assertEqual(error.exception.code, "VERIFIER_REQUIRED")
+            verify_candidate_result(assignment=assignment, receipt=receipt, candidate_id="candidate-other",
+                                    result_commit=RESULT, diff_digest="c" * 64, scope_digest="d" * 64,
+                                    gate_digest="e" * 64, result_ref="cursor/candidate")
+        self.assertEqual(error.exception.code, "CANDIDATE_MISMATCH")
 
 
 if __name__ == "__main__":

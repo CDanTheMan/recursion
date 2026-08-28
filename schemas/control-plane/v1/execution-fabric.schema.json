@@ -13,7 +13,9 @@
     { "$ref": "#/$defs/placement_rejection" },
     { "$ref": "#/$defs/lease_event" },
     { "$ref": "#/$defs/lease_status_event" },
-    { "$ref": "#/$defs/result_event" }
+    { "$ref": "#/$defs/result_event" },
+    { "$ref": "#/$defs/verification_receipt" },
+    { "$ref": "#/$defs/routing_policy" }
   ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
@@ -31,7 +33,8 @@
         "network_profiles": { "$ref": "#/$defs/strings" }, "trust_class": { "type": "string", "minLength": 1 },
         "max_concurrency": { "type": "integer", "minimum": 0 },
         "workload_concurrency": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
-        "registration_digest": { "$ref": "#/$defs/digest" }, "registered_at": { "$ref": "#/$defs/timestamp" }
+        "registration_digest": { "$ref": "#/$defs/digest" }, "registered_at": { "$ref": "#/$defs/timestamp" },
+        "network_endpoints": { "type": "object", "additionalProperties": { "$ref": "#/$defs/strings" } }
       }
     },
     "host_heartbeat": {
@@ -52,7 +55,8 @@
         "allowed_projects": { "$ref": "#/$defs/strings" }, "allowed_models": { "$ref": "#/$defs/strings" },
         "max_concurrency": { "type": "integer", "minimum": 0 }, "in_flight": { "type": "integer", "minimum": 0 },
         "quota_remaining": { "type": ["integer", "null"], "minimum": 0 }, "quota_period": { "type": ["string", "null"] },
-        "on_demand": { "type": "boolean" }, "cost_per_run": { "type": "number", "minimum": 0 }
+        "on_demand": { "type": "boolean" }, "cost_per_run": { "type": "number", "minimum": 0 },
+        "account_quota_remaining": { "type": ["integer", "null"], "minimum": 0 }
       }
     },
     "placement_requirements": {
@@ -64,7 +68,8 @@
         "operating_system": { "type": ["string", "null"] }, "sandbox_profile": { "type": ["string", "null"] },
         "network_profile": { "type": ["string", "null"] }, "billing_basis": { "$ref": "#/$defs/strings" },
         "max_cost_usd": { "type": "number", "minimum": 0 }, "model": { "type": ["string", "null"] },
-        "preferred_hosts": { "$ref": "#/$defs/strings" }, "preferred_pools": { "$ref": "#/$defs/strings" }, "source_sha": { "$ref": "#/$defs/sha" }, "policy": { "type": "string", "enum": ["manual-pin", "subscription-first", "local-first", "cheapest-eligible", "fastest-eligible", "strongest-reviewer", "weighted-rotation"] }, "manual_candidate_id": { "$ref": "#/$defs/id" }
+        "preferred_hosts": { "$ref": "#/$defs/strings" }, "preferred_pools": { "$ref": "#/$defs/strings" }, "source_sha": { "$ref": "#/$defs/sha" }, "policy": { "type": "string", "enum": ["manual-pin", "subscription-first", "local-first", "cheapest-eligible", "fastest-eligible", "strongest-reviewer", "weighted-rotation"] }, "manual_candidate_id": { "type": ["string", "null"], "pattern": "^[a-z][a-z0-9-]{1,63}$" },
+        "source_repository": { "type": "string", "minLength": 1 }, "source_branch": { "type": "string", "minLength": 1 }, "seed_manifest_digest": { "$ref": "#/$defs/digest" }, "model_parameters": { "type": "object" }, "allowed_paths": { "$ref": "#/$defs/strings" }, "gate_digest": { "$ref": "#/$defs/digest" }, "publication_policy": { "type": "string", "minLength": 1 }
       }
     },
     "placement_candidate": {
@@ -76,17 +81,18 @@
         "model": { "type": "string", "minLength": 1 }, "host_id": { "$ref": "#/$defs/id" }, "sandbox_profile": { "type": "string", "minLength": 1 },
         "network_profile": { "type": "string", "minLength": 1 }, "capabilities": { "$ref": "#/$defs/strings" },
         "operating_system": { "type": "string", "minLength": 1 }, "billing_basis": { "type": "string", "minLength": 1 },
-        "cost_per_run": { "type": "number", "minimum": 0 }, "roles": { "$ref": "#/$defs/strings" }, "enabled": { "type": "boolean" }, "speed_score": { "type": "number", "minimum": 0 }, "reviewer_score": { "type": "number", "minimum": 0 }, "weight": { "type": "integer", "minimum": 1 }
+        "cost_per_run": { "type": "number", "minimum": 0 }, "roles": { "$ref": "#/$defs/strings" }, "enabled": { "type": "boolean" }, "speed_score": { "type": "number", "minimum": 0 }, "reviewer_score": { "type": "number", "minimum": 0 }, "weight": { "type": "integer", "minimum": 1 }, "required_endpoints": { "$ref": "#/$defs/strings" }
       }
     },
     "assignment": {
       "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "kind", "task_id", "project_id", "source_sha", "engine", "provider", "capacity_pool", "model", "host", "sandbox_profile", "network_profile", "assignment_digest", "created_at"],
+      "required": ["schema_version", "kind", "task_id", "project_id", "source_sha", "engine", "provider", "capacity_pool", "model", "host", "sandbox_profile", "network_profile", "assignment_digest", "created_at", "account_id", "role", "source_repository", "source_branch", "seed_manifest_digest", "model_parameters", "allowed_paths", "gate_digest", "publication_policy", "candidate_id"],
       "properties": {
         "schema_version": { "const": 1 }, "kind": { "const": "assignment" }, "task_id": { "$ref": "#/$defs/id" }, "project_id": { "$ref": "#/$defs/id" },
         "source_sha": { "$ref": "#/$defs/sha" }, "engine": { "$ref": "#/$defs/id" }, "provider": { "$ref": "#/$defs/id" }, "capacity_pool": { "$ref": "#/$defs/id" }, "account_id": { "type": ["string", "null"] }, "role": { "type": "string", "minLength": 1 },
         "model": { "type": "string", "minLength": 1 }, "host": { "$ref": "#/$defs/id" }, "sandbox_profile": { "type": "string", "minLength": 1 }, "network_profile": { "type": "string", "minLength": 1 },
-        "assignment_digest": { "$ref": "#/$defs/digest" }, "created_at": { "$ref": "#/$defs/timestamp" }
+        "assignment_digest": { "$ref": "#/$defs/digest" }, "created_at": { "$ref": "#/$defs/timestamp" },
+        "source_repository": { "type": "string", "minLength": 1 }, "source_branch": { "type": "string", "minLength": 1 }, "seed_manifest_digest": { "$ref": "#/$defs/digest" }, "model_parameters": { "type": "object" }, "allowed_paths": { "$ref": "#/$defs/strings" }, "gate_digest": { "$ref": "#/$defs/digest" }, "publication_policy": { "type": "string", "minLength": 1 }, "candidate_id": { "$ref": "#/$defs/id" }
       }
     },
     "placement_rejection": {
@@ -124,6 +130,22 @@
           "properties": { "event": { "const": "result" }, "attempt_id": { "$ref": "#/$defs/id" }, "lease_id": { "$ref": "#/$defs/id" }, "assignment_digest": { "$ref": "#/$defs/digest" }, "result_digest": { "$ref": "#/$defs/digest" }, "status": { "type": "string" }, "observed_at": { "$ref": "#/$defs/timestamp" } }
         }
       ]
+    },
+    "verification_receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "kind", "receipt_id", "assignment_digest", "source_sha", "candidate_id", "result_commit", "diff_digest", "scope_digest", "gate_digest", "verifier_identity", "verified_at", "verification_status", "receipt_digest"],
+      "properties": {
+        "schema_version": { "const": 1 }, "kind": { "const": "verification_receipt" }, "receipt_id": { "$ref": "#/$defs/id" },
+        "assignment_digest": { "$ref": "#/$defs/digest" }, "source_sha": { "$ref": "#/$defs/sha" }, "candidate_id": { "$ref": "#/$defs/id" }, "result_commit": { "$ref": "#/$defs/sha" },
+        "diff_digest": { "$ref": "#/$defs/digest" }, "scope_digest": { "$ref": "#/$defs/digest" }, "gate_digest": { "$ref": "#/$defs/digest" }, "verifier_identity": { "type": "string", "pattern": "^controller/.+" }, "verified_at": { "$ref": "#/$defs/timestamp" }, "verification_status": { "const": "pass" }, "receipt_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "routing_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "kind", "policy_id", "allowed_billing_basis", "allow_on_demand", "authority", "policy_digest"],
+      "properties": {
+        "schema_version": { "const": 1 }, "kind": { "const": "routing_policy" }, "policy_id": { "$ref": "#/$defs/id" }, "allowed_billing_basis": { "$ref": "#/$defs/strings" }, "allow_on_demand": { "type": "boolean" }, "authority": { "type": "string", "minLength": 1 }, "policy_digest": { "$ref": "#/$defs/digest" }
+      }
     }
   }
 }

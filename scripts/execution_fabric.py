@@ -126,7 +126,19 @@ def _nonnegative_number(value: Any, field: str) -> float:
     return float(value)
 
 
+def _ensure_finite(item: Any) -> None:
+    if isinstance(item, float) and not math.isfinite(item):
+        raise SchemaError("NONFINITE_NUMBER", "records cannot contain NaN or infinity")
+    if isinstance(item, Mapping):
+        for nested in item.values():
+            _ensure_finite(nested)
+    elif isinstance(item, (list, tuple)):
+        for nested in item:
+            _ensure_finite(nested)
+
+
 def _canonical(value: Mapping[str, Any]) -> bytes:
+    _ensure_finite(value)
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
 
@@ -184,7 +196,7 @@ def _safe_store_path(path: Path | str, root: Path | str | None) -> tuple[Path, P
     # including a symlinked root or journal, instead of trusting resolve() to hide the boundary.
     current = root_abs
     while True:
-        if current.exists() and _file_is_reparse_or_symlink(current):
+        if _file_is_reparse_or_symlink(current):
             raise ReconciliationError("UNSAFE_STORE_ROOT", "store root path contains a symlink or reparse point")
         if current.parent == current:
             break
@@ -195,9 +207,19 @@ def _safe_store_path(path: Path | str, root: Path | str | None) -> tuple[Path, P
         raise ReconciliationError("STORE_OUTSIDE_ROOT", "journal path is outside the configured store root") from exc
     for part in relative.parts:
         current = current / part
-        if current.exists() and _file_is_reparse_or_symlink(current):
+        if _file_is_reparse_or_symlink(current):
             raise ReconciliationError("UNSAFE_STORE_PATH", "journal path contains a symlink or reparse point")
-    return target_abs, root_abs
+    # Canonicalize only after the lexical component audit above.  This both
+    # prevents ``root/../outside`` and gives callers stable paths for atomic
+    # replacement, while the pre-resolve audit prevents a symlink from being
+    # silently followed into an otherwise-contained location.
+    root_canonical = root_abs.resolve(strict=False)
+    target_canonical = target_abs.resolve(strict=False)
+    try:
+        target_canonical.relative_to(root_canonical)
+    except ValueError as exc:
+        raise ReconciliationError("STORE_OUTSIDE_ROOT", "journal path resolves outside the configured store root") from exc
+    return target_canonical, root_canonical
 
 
 _THREAD_LOCKS: dict[str, threading.RLock] = {}
@@ -253,16 +275,19 @@ class HostRegistration:
     workload_concurrency: Mapping[str, int]
     registration_digest: str
     registered_at: str
+    network_endpoints: Mapping[str, tuple[str, ...]] = MappingProxyType({})
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "workload_concurrency", _frozen_mapping(self.workload_concurrency, "workload_concurrency"))
+        endpoints = {str(key): tuple(sorted(set(value))) for key, value in self.network_endpoints.items()}
+        object.__setattr__(self, "network_endpoints", MappingProxyType(endpoints))
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "HostRegistration":
         required = {"schema_version", "kind", "host_id", "capabilities", "operating_system",
                     "architectures", "sandbox_profiles", "network_profiles", "trust_class",
                     "max_concurrency", "workload_concurrency", "registration_digest", "registered_at"}
-        _check_keys(raw, required, set(), "host_registration")
+        _check_keys(raw, required, {"network_endpoints"}, "host_registration")
         if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "host_registration":
             raise SchemaError("SCHEMA_VERSION", "unsupported host registration schema")
         host_id = _id(raw["host_id"], "host_id")
@@ -279,12 +304,18 @@ class HostRegistration:
         normalized: dict[str, int] = {}
         for key, count in sorted(workloads.items()):
             normalized[_string(key, "workload_concurrency key")] = _nonnegative_int(count, f"workload_concurrency.{key}")
+        endpoints_raw = raw.get("network_endpoints", {})
+        if not isinstance(endpoints_raw, Mapping):
+            raise SchemaError("INVALID_FIELD", "network_endpoints must be an object")
+        endpoints: dict[str, tuple[str, ...]] = {}
+        for profile, values in endpoints_raw.items():
+            endpoints[_string(profile, "network_endpoints profile")] = _string_list(values, f"network_endpoints.{profile}")
         registration_digest = _digest(raw["registration_digest"], "registration_digest")
-        expected = digest_record({key: raw[key] for key in required if key != "registration_digest"})
+        expected = digest_record({key: value for key, value in raw.items() if key != "registration_digest"})
         if registration_digest != expected:
             raise SchemaError("DIGEST_MISMATCH", "host registration digest does not match immutable fields")
         return cls(host_id, caps, os_name, architectures, sandbox, network, trust, max_concurrency,
-                   normalized, registration_digest, _timestamp(raw["registered_at"], "registered_at"))
+                   normalized, registration_digest, _timestamp(raw["registered_at"], "registered_at"), endpoints)
 
     def to_dict(self) -> dict[str, Any]:
         return {"schema_version": SCHEMA_VERSION, "kind": "host_registration", "host_id": self.host_id,
@@ -292,19 +323,21 @@ class HostRegistration:
                 "architectures": list(self.architectures), "sandbox_profiles": list(self.sandbox_profiles),
                 "network_profiles": list(self.network_profiles), "trust_class": self.trust_class,
                 "max_concurrency": self.max_concurrency, "workload_concurrency": dict(self.workload_concurrency),
-                "registration_digest": self.registration_digest, "registered_at": self.registered_at}
+                "registration_digest": self.registration_digest, "registered_at": self.registered_at,
+                "network_endpoints": {key: list(value) for key, value in self.network_endpoints.items()}}
 
     @classmethod
     def build(cls, *, host_id: str, capabilities: Iterable[str], operating_system: str,
               architectures: Iterable[str], sandbox_profiles: Iterable[str],
               network_profiles: Iterable[str], trust_class: str, max_concurrency: int,
-              workload_concurrency: Mapping[str, int], registered_at: str) -> "HostRegistration":
+              workload_concurrency: Mapping[str, int], registered_at: str,
+              network_endpoints: Mapping[str, Iterable[str]] | None = None) -> "HostRegistration":
         body = {"schema_version": SCHEMA_VERSION, "kind": "host_registration", "host_id": host_id,
                 "capabilities": sorted(set(capabilities)), "operating_system": operating_system,
                 "architectures": sorted(set(architectures)), "sandbox_profiles": sorted(set(sandbox_profiles)),
                 "network_profiles": sorted(set(network_profiles)), "trust_class": trust_class,
                 "max_concurrency": max_concurrency, "workload_concurrency": dict(sorted(workload_concurrency.items())),
-                "registered_at": registered_at}
+                "registered_at": registered_at, "network_endpoints": {key: sorted(set(value)) for key, value in (network_endpoints or {}).items()}}
         body["registration_digest"] = digest_record(body)
         return cls.from_dict(body)
 
@@ -347,10 +380,13 @@ class PoolStatus:
     on_demand: bool
     cost_per_run: float
     account_id: str | None = None
+    account_quota_remaining: int | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.cost_per_run, bool) or not isinstance(self.cost_per_run, (int, float)) or not math.isfinite(float(self.cost_per_run)) or self.cost_per_run < 0:
             raise SchemaError("INVALID_FIELD", "cost_per_run must be finite and non-negative")
+        if self.account_quota_remaining is not None and (isinstance(self.account_quota_remaining, bool) or not isinstance(self.account_quota_remaining, int) or self.account_quota_remaining < 0):
+            raise SchemaError("INVALID_FIELD", "account_quota_remaining must be a non-negative integer")
 
     def to_dict(self) -> dict[str, Any]:
         return {"schema_version": SCHEMA_VERSION, "kind": "pool_status", "pool_id": self.pool_id,
@@ -358,14 +394,15 @@ class PoolStatus:
                 "allowed_roles": list(self.allowed_roles), "allowed_projects": list(self.allowed_projects),
                 "allowed_models": list(self.allowed_models), "max_concurrency": self.max_concurrency,
                 "in_flight": self.in_flight, "quota_remaining": self.quota_remaining,
-                "quota_period": self.quota_period, "on_demand": self.on_demand, "cost_per_run": self.cost_per_run}
+                "quota_period": self.quota_period, "on_demand": self.on_demand, "cost_per_run": self.cost_per_run,
+                "account_quota_remaining": self.account_quota_remaining}
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "PoolStatus":
         required = {"schema_version", "kind", "pool_id", "billing_basis", "allowed_roles", "allowed_projects",
                     "allowed_models", "max_concurrency", "in_flight", "quota_remaining", "quota_period",
                     "on_demand", "cost_per_run"}
-        _check_keys(raw, required, {"account_id"}, "pool_status")
+        _check_keys(raw, required, {"account_id", "account_quota_remaining"}, "pool_status")
         if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "pool_status":
             raise SchemaError("SCHEMA_VERSION", "unsupported pool status schema")
         quota = raw["quota_remaining"]
@@ -379,11 +416,48 @@ class PoolStatus:
         account_id = raw.get("account_id")
         if account_id is not None:
             account_id = _id(account_id, "account_id")
+        account_quota = raw.get("account_quota_remaining")
+        if account_quota is not None:
+            account_quota = _nonnegative_int(account_quota, "account_quota_remaining")
         return cls(_id(raw["pool_id"], "pool_id"), _string(raw["billing_basis"], "billing_basis"),
                    _string_list(raw["allowed_roles"], "allowed_roles"), _string_list(raw["allowed_projects"], "allowed_projects"),
                    _string_list(raw["allowed_models"], "allowed_models"), _nonnegative_int(raw["max_concurrency"], "max_concurrency"),
                    _nonnegative_int(raw["in_flight"], "in_flight"), quota, period, raw["on_demand"],
-                   _nonnegative_number(raw["cost_per_run"], "cost_per_run"), account_id)
+                   _nonnegative_number(raw["cost_per_run"], "cost_per_run"), account_id, account_quota)
+
+
+@dataclass(frozen=True)
+class RoutingPolicy:
+    """Human-owned, versioned routing authority; absent policy fails closed for metered work."""
+
+    policy_id: str
+    allowed_billing_basis: tuple[str, ...]
+    allow_on_demand: bool
+    authority: str
+    policy_digest: str
+
+    @classmethod
+    def build(cls, *, policy_id: str, allowed_billing_basis: Iterable[str], allow_on_demand: bool,
+              authority: str = "human-owned") -> "RoutingPolicy":
+        body = {"schema_version": SCHEMA_VERSION, "kind": "routing_policy", "policy_id": policy_id,
+                "allowed_billing_basis": sorted(set(allowed_billing_basis)), "allow_on_demand": allow_on_demand,
+                "authority": authority}
+        body["policy_digest"] = digest_record(body)
+        return cls.from_dict(body)
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> "RoutingPolicy":
+        required = {"schema_version", "kind", "policy_id", "allowed_billing_basis", "allow_on_demand", "authority", "policy_digest"}
+        _check_keys(raw, required, set(), "routing_policy")
+        if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "routing_policy":
+            raise SchemaError("SCHEMA_VERSION", "unsupported routing policy schema")
+        if not isinstance(raw["allow_on_demand"], bool):
+            raise SchemaError("INVALID_FIELD", "allow_on_demand must be boolean")
+        digest = _digest(raw["policy_digest"], "policy_digest")
+        if digest != digest_record({key: raw[key] for key in required if key != "policy_digest"}):
+            raise SchemaError("DIGEST_MISMATCH", "routing policy digest does not match immutable fields")
+        return cls(_id(raw["policy_id"], "policy_id"), _string_list(raw["allowed_billing_basis"], "allowed_billing_basis"),
+                   raw["allow_on_demand"], _string(raw["authority"], "authority"), digest)
 
 
 @dataclass(frozen=True)
@@ -403,10 +477,19 @@ class PlacementRequirements:
     source_sha: str
     policy: str = "subscription-first"
     manual_candidate_id: str | None = None
+    source_repository: str = "unknown-repository"
+    source_branch: str = "unknown-source"
+    seed_manifest_digest: str = ZERO_DIGEST
+    model_parameters: Mapping[str, Any] = MappingProxyType({})
+    allowed_paths: tuple[str, ...] = ()
+    gate_digest: str = ZERO_DIGEST
+    publication_policy: str = "verified-integration-only"
 
     def __post_init__(self) -> None:
         if isinstance(self.max_cost_usd, bool) or not isinstance(self.max_cost_usd, (int, float)) or not math.isfinite(float(self.max_cost_usd)) or self.max_cost_usd < 0:
             raise SchemaError("INVALID_FIELD", "max_cost_usd must be finite and non-negative")
+        object.__setattr__(self, "model_parameters", MappingProxyType(dict(self.model_parameters)))
+        _ensure_finite(self.model_parameters)
 
     def to_dict(self) -> dict[str, Any]:
         return {"schema_version": SCHEMA_VERSION, "kind": "placement_requirements", "task_id": self.task_id,
@@ -415,14 +498,18 @@ class PlacementRequirements:
                 "network_profile": self.network_profile, "billing_basis": list(self.billing_basis),
                 "max_cost_usd": self.max_cost_usd, "model": self.model, "preferred_hosts": list(self.preferred_hosts),
                 "preferred_pools": list(self.preferred_pools), "source_sha": self.source_sha,
-                "policy": self.policy, "manual_candidate_id": self.manual_candidate_id}
+                "policy": self.policy, "manual_candidate_id": self.manual_candidate_id,
+                "source_repository": self.source_repository, "source_branch": self.source_branch,
+                "seed_manifest_digest": self.seed_manifest_digest, "model_parameters": dict(self.model_parameters),
+                "allowed_paths": list(self.allowed_paths), "gate_digest": self.gate_digest,
+                "publication_policy": self.publication_policy}
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "PlacementRequirements":
         required = {"schema_version", "kind", "task_id", "project_id", "role", "capabilities",
                     "operating_system", "sandbox_profile", "network_profile", "billing_basis", "max_cost_usd",
                     "model", "preferred_hosts", "preferred_pools", "source_sha"}
-        _check_keys(raw, required, {"policy", "manual_candidate_id"}, "placement_requirements")
+        _check_keys(raw, required, {"policy", "manual_candidate_id", "source_repository", "source_branch", "seed_manifest_digest", "model_parameters", "allowed_paths", "gate_digest", "publication_policy"}, "placement_requirements")
         if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "placement_requirements":
             raise SchemaError("SCHEMA_VERSION", "unsupported placement requirements schema")
         optional_text = {key: (None if raw[key] is None else _string(raw[key], key))
@@ -431,12 +518,22 @@ class PlacementRequirements:
         manual = raw.get("manual_candidate_id")
         if manual is not None:
             manual = _id(manual, "manual_candidate_id")
+        source_repository = _string(raw.get("source_repository", "unknown-repository"), "source_repository")
+        source_branch = _string(raw.get("source_branch", "unknown-source"), "source_branch")
+        seed_manifest_digest = _digest(raw.get("seed_manifest_digest", ZERO_DIGEST), "seed_manifest_digest")
+        params = raw.get("model_parameters", {})
+        if not isinstance(params, Mapping):
+            raise SchemaError("INVALID_FIELD", "model_parameters must be an object")
+        allowed_paths = _string_list(raw.get("allowed_paths", []), "allowed_paths")
+        gate_digest = _digest(raw.get("gate_digest", ZERO_DIGEST), "gate_digest")
+        publication_policy = _string(raw.get("publication_policy", "verified-integration-only"), "publication_policy")
         return cls(_id(raw["task_id"], "task_id"), _id(raw["project_id"], "project_id"),
                    _string(raw["role"], "role"), _string_list(raw["capabilities"], "capabilities"),
                    optional_text["operating_system"], optional_text["sandbox_profile"], optional_text["network_profile"],
                    _string_list(raw["billing_basis"], "billing_basis"), _nonnegative_number(raw["max_cost_usd"], "max_cost_usd"),
                    optional_text["model"], _string_list(raw["preferred_hosts"], "preferred_hosts"),
-                   _string_list(raw["preferred_pools"], "preferred_pools"), _commit(raw["source_sha"], "source_sha"), policy, manual)
+                   _string_list(raw["preferred_pools"], "preferred_pools"), _commit(raw["source_sha"], "source_sha"), policy, manual,
+                   source_repository, source_branch, seed_manifest_digest, params, allowed_paths, gate_digest, publication_policy)
 
 
 @dataclass(frozen=True)
@@ -458,13 +555,14 @@ class PlacementCandidate:
     speed_score: float = 0.0
     reviewer_score: float = 0.0
     weight: int = 1
+    required_endpoints: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for field in ("cost_per_run", "speed_score", "reviewer_score"):
             value = getattr(self, field)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)) or value < 0:
                 raise SchemaError("INVALID_FIELD", f"{field} must be finite and non-negative")
-        if self.weight <= 0:
+        if isinstance(self.weight, bool) or not isinstance(self.weight, int) or self.weight <= 0:
             raise SchemaError("INVALID_FIELD", "weight must be positive")
 
     def to_dict(self) -> dict[str, Any]:
@@ -474,14 +572,14 @@ class PlacementCandidate:
                 "capabilities": list(self.capabilities), "operating_system": self.operating_system,
                 "billing_basis": self.billing_basis, "cost_per_run": self.cost_per_run, "roles": list(self.roles),
                 "enabled": self.enabled, "speed_score": self.speed_score, "reviewer_score": self.reviewer_score,
-                "weight": self.weight}
+                "weight": self.weight, "required_endpoints": list(self.required_endpoints)}
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "PlacementCandidate":
         required = {"schema_version", "kind", "candidate_id", "engine", "provider", "pool_id", "model", "host_id",
                     "sandbox_profile", "network_profile", "capabilities", "operating_system", "billing_basis",
                     "cost_per_run", "roles", "enabled"}
-        _check_keys(raw, required, {"speed_score", "reviewer_score", "weight"}, "placement_candidate")
+        _check_keys(raw, required, {"speed_score", "reviewer_score", "weight", "required_endpoints"}, "placement_candidate")
         if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "placement_candidate":
             raise SchemaError("SCHEMA_VERSION", "unsupported placement candidate schema")
         if not isinstance(raw["enabled"], bool):
@@ -491,12 +589,13 @@ class PlacementCandidate:
         weight = _nonnegative_int(raw.get("weight", 1), "weight")
         if weight == 0:
             raise SchemaError("INVALID_FIELD", "weight must be positive")
+        endpoints = _string_list(raw.get("required_endpoints", []), "required_endpoints")
         return cls(_id(raw["candidate_id"], "candidate_id"), _id(raw["engine"], "engine"), _id(raw["provider"], "provider"),
                    _id(raw["pool_id"], "pool_id"), _string(raw["model"], "model"), _id(raw["host_id"], "host_id"),
                    _string(raw["sandbox_profile"], "sandbox_profile"), _string(raw["network_profile"], "network_profile"),
                    _string_list(raw["capabilities"], "capabilities"), _string(raw["operating_system"], "operating_system"),
                    _string(raw["billing_basis"], "billing_basis"), _nonnegative_number(raw["cost_per_run"], "cost_per_run"),
-                   _string_list(raw["roles"], "roles"), raw["enabled"], speed, reviewer, weight)
+                   _string_list(raw["roles"], "roles"), raw["enabled"], speed, reviewer, weight, endpoints)
 
 
 @dataclass(frozen=True)
@@ -526,6 +625,18 @@ class Assignment:
     created_at: str
     account_id: str | None = None
     role: str = "unknown"
+    source_repository: str = "unknown-repository"
+    source_branch: str = "unknown-source"
+    seed_manifest_digest: str = ZERO_DIGEST
+    model_parameters: Mapping[str, Any] = MappingProxyType({})
+    allowed_paths: tuple[str, ...] = ()
+    gate_digest: str = ZERO_DIGEST
+    publication_policy: str = "verified-integration-only"
+    candidate_id: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "model_parameters", MappingProxyType(dict(self.model_parameters)))
+        _ensure_finite(self.model_parameters)
 
     def to_dict(self) -> dict[str, Any]:
         return {"schema_version": SCHEMA_VERSION, "kind": "assignment", "task_id": self.task_id,
@@ -533,24 +644,40 @@ class Assignment:
                 "provider": self.provider, "capacity_pool": self.capacity_pool, "model": self.model,
                 "host": self.host, "sandbox_profile": self.sandbox_profile, "network_profile": self.network_profile,
                 "assignment_digest": self.assignment_digest, "created_at": self.created_at, "account_id": self.account_id,
-                "role": self.role}
+                "role": self.role, "source_repository": self.source_repository, "source_branch": self.source_branch,
+                "seed_manifest_digest": self.seed_manifest_digest, "model_parameters": dict(self.model_parameters),
+                "allowed_paths": list(self.allowed_paths), "gate_digest": self.gate_digest,
+                "publication_policy": self.publication_policy, "candidate_id": self.candidate_id}
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "Assignment":
         required = {"schema_version", "kind", "task_id", "project_id", "source_sha", "engine", "provider",
                     "capacity_pool", "model", "host", "sandbox_profile", "network_profile", "assignment_digest", "created_at"}
-        _check_keys(raw, required, {"account_id", "role"}, "assignment")
+        _check_keys(raw, required, {"account_id", "role", "source_repository", "source_branch", "seed_manifest_digest", "model_parameters", "allowed_paths", "gate_digest", "publication_policy", "candidate_id"}, "assignment")
         if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "assignment":
             raise SchemaError("SCHEMA_VERSION", "unsupported assignment schema")
         account_id = raw.get("account_id")
         if account_id is not None:
             account_id = _id(account_id, "account_id")
         role = _string(raw.get("role", "unknown"), "role")
+        source_repository = _string(raw.get("source_repository", "unknown-repository"), "source_repository")
+        source_branch = _string(raw.get("source_branch", "unknown-source"), "source_branch")
+        seed_manifest_digest = _digest(raw.get("seed_manifest_digest", ZERO_DIGEST), "seed_manifest_digest")
+        model_parameters = raw.get("model_parameters", {})
+        if not isinstance(model_parameters, Mapping):
+            raise SchemaError("INVALID_FIELD", "model_parameters must be an object")
+        allowed_paths = _string_list(raw.get("allowed_paths", []), "allowed_paths")
+        gate_digest = _digest(raw.get("gate_digest", ZERO_DIGEST), "gate_digest")
+        publication_policy = _string(raw.get("publication_policy", "verified-integration-only"), "publication_policy")
+        candidate_id = raw.get("candidate_id")
+        if candidate_id is not None:
+            candidate_id = _id(candidate_id, "candidate_id")
         assignment = cls(_id(raw["task_id"], "task_id"), _id(raw["project_id"], "project_id"), _commit(raw["source_sha"], "source_sha"),
                          _id(raw["engine"], "engine"), _id(raw["provider"], "provider"), _id(raw["capacity_pool"], "capacity_pool"),
                          _string(raw["model"], "model"), _id(raw["host"], "host"), _string(raw["sandbox_profile"], "sandbox_profile"),
                          _string(raw["network_profile"], "network_profile"), _digest(raw["assignment_digest"], "assignment_digest"),
-                         _timestamp(raw["created_at"], "created_at"), account_id, role)
+                         _timestamp(raw["created_at"], "created_at"), account_id, role, source_repository, source_branch,
+                         seed_manifest_digest, model_parameters, allowed_paths, gate_digest, publication_policy, candidate_id)
         if assignment_digest(assignment) != assignment.assignment_digest:
             raise SchemaError("DIGEST_MISMATCH", "assignment digest does not match immutable fields")
         return assignment
@@ -578,13 +705,21 @@ def _candidate_sort_key(candidate: PlacementCandidate, requirements: PlacementRe
     if policy == "strongest-reviewer":
         return (0 if candidate.host_id in requirements.preferred_hosts else 1, -candidate.reviewer_score, candidate.candidate_id)
     if policy == "weighted-rotation":
-        digest = hashlib.sha256(f"{requirements.task_id}:{candidate.candidate_id}".encode()).hexdigest()
-        return (int(digest[:16], 16) % candidate.weight, int(digest[16:32], 16), candidate.candidate_id)
+        return (candidate.candidate_id,)
     # cheapest-eligible and the safe unknown-policy fallback are cost ordered. Unknown policies
     # are rejected before this key is used; the fallback keeps the key total for callers.
     return (0 if candidate.host_id in requirements.preferred_hosts else 1,
             0 if candidate.pool_id in requirements.preferred_pools else 1,
             candidate.cost_per_run, candidate.candidate_id)
+
+
+@dataclass(frozen=True)
+class PauseGuard:
+    paused: bool = False
+
+    def assert_open(self) -> None:
+        if self.paused:
+            raise AdmissionError("PAUSED", "PAUSE is asserted; execution fabric mutations are halted")
 
 
 def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
@@ -595,17 +730,31 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
                       *, now_epoch: float | None = None, heartbeat_ttl_s: float = 120.0,
                       created_at: str | None = None,
                       paused: bool = False,
+                      pause_guard: PauseGuard | None = None,
+                      routing_policy: RoutingPolicy | Mapping[str, Any] | None = None,
                       reserved_host: Mapping[str, int] | None = None,
                       reserved_pool: Mapping[str, int] | None = None,
-                      reserved_workload: Mapping[tuple[str, str], int] | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
+                      reserved_workload: Mapping[tuple[str, str], int] | None = None,
+                      network_endpoints: Mapping[str, Iterable[str]] | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
     """Resolve one immutable assignment and a complete, deterministic rejection trace."""
     req = requirements if isinstance(requirements, PlacementRequirements) else PlacementRequirements.from_dict(requirements)
+    if pause_guard is not None:
+        pause_guard.assert_open()
     policies = {"manual-pin", "subscription-first", "local-first", "cheapest-eligible", "fastest-eligible",
                 "strongest-reviewer", "weighted-rotation"}
     if req.policy not in policies:
         raise SchemaError("UNKNOWN_POLICY", f"unsupported placement policy: {req.policy}")
     if req.policy == "manual-pin" and req.manual_candidate_id is None:
         raise SchemaError("MISSING_FIELD", "manual-pin requires manual_candidate_id")
+    policy = None if routing_policy is None else (routing_policy if isinstance(routing_policy, RoutingPolicy) else RoutingPolicy.from_dict(routing_policy))
+    if policy is not None and policy.authority != "human-owned":
+        raise AdmissionError("ROUTING_POLICY_UNTRUSTED", "routing policy is not human-owned")
+    try:
+        ttl = float(heartbeat_ttl_s)
+    except (TypeError, ValueError) as exc:
+        raise SchemaError("INVALID_FIELD", "heartbeat_ttl_s must be finite and non-negative") from exc
+    if not math.isfinite(ttl) or ttl < 0:
+        raise SchemaError("INVALID_FIELD", "heartbeat_ttl_s must be finite and non-negative")
     parsed_candidates = [item if isinstance(item, PlacementCandidate) else PlacementCandidate.from_dict(item) for item in candidates]
     candidate_ids = [item.candidate_id for item in parsed_candidates]
     if len(candidate_ids) != len(set(candidate_ids)):
@@ -614,6 +763,8 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
     parsed_heartbeats = {key: item if isinstance(item, HostHeartbeat) else HostHeartbeat.from_dict(item) for key, item in heartbeats.items()}
     parsed_pools = {key: item if isinstance(item, PoolStatus) else PoolStatus.from_dict(item) for key, item in pools.items()}
     now = time.time() if now_epoch is None else now_epoch
+    if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(float(now)):
+        raise SchemaError("INVALID_FIELD", "now_epoch must be finite")
     if created_at is None:
         created_at = _now_iso() if now_epoch is None else time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now_epoch))
     _timestamp(created_at, "created_at")
@@ -624,8 +775,9 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
     if paused:
         return None, tuple(Rejection(item.candidate_id, "PAUSED", "PAUSE is asserted; placement is halted")
                            for item in sorted(parsed_candidates, key=lambda item: _candidate_sort_key(item, req)))
-    selected: PlacementCandidate | None = None
-    for candidate in sorted(parsed_candidates, key=lambda item: _candidate_sort_key(item, req)):
+    ordered = sorted(parsed_candidates, key=lambda item: _candidate_sort_key(item, req))
+    eligible: list[PlacementCandidate] = []
+    for candidate in ordered:
         host = parsed_hosts.get(candidate.host_id)
         pool = parsed_pools.get(candidate.pool_id)
         heartbeat = parsed_heartbeats.get(candidate.host_id)
@@ -651,8 +803,14 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
             reason = ("SANDBOX_INCOMPATIBLE", "host or task does not permit the sandbox profile")
         elif candidate.network_profile not in host.network_profiles or (req.network_profile and candidate.network_profile != req.network_profile):
             reason = ("NETWORK_INCOMPATIBLE", "host or task does not permit the network profile")
+        elif candidate.required_endpoints and not set(candidate.required_endpoints) <= set(host.network_endpoints.get(candidate.network_profile, tuple((network_endpoints or {}).get(candidate.network_profile, ())))):
+            reason = ("NETWORK_ENDPOINT_MISSING", "selected network profile lacks a required endpoint")
         elif candidate.billing_basis not in req.billing_basis:
             reason = ("BILLING_NOT_ALLOWED", "candidate billing basis is outside task policy")
+        elif candidate.billing_basis == "metered" and (policy is None or candidate.billing_basis not in policy.allowed_billing_basis):
+            reason = ("METERED_NOT_AUTHORIZED", "metered execution requires an explicit human-owned routing policy")
+        elif pool.on_demand and (policy is None or not policy.allow_on_demand):
+            reason = ("ON_DEMAND_NOT_AUTHORIZED", "on-demand capacity requires explicit human-owned policy")
         elif candidate.billing_basis != pool.billing_basis:
             reason = ("POOL_BILLING_MISMATCH", "candidate billing basis does not match capacity pool")
         elif candidate.cost_per_run > req.max_cost_usd:
@@ -671,6 +829,13 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
             reason = ("POOL_CONCURRENCY_EXHAUSTED", "capacity pool concurrency is exhausted")
         elif pool.quota_remaining is not None and pool.quota_remaining <= int(pool_used.get(pool.pool_id, 0)):
             reason = ("POOL_QUOTA_EXHAUSTED", "capacity pool quota is exhausted")
+        elif pool.account_id is not None and any(item.account_id == pool.account_id and item.account_quota_remaining is not None for item in parsed_pools.values()):
+            account_used = sum(int(pool_used.get(item.pool_id, 0)) + item.in_flight
+                               for item in parsed_pools.values() if item.account_id == pool.account_id)
+            account_limits = [item.account_quota_remaining for item in parsed_pools.values()
+                              if item.account_id == pool.account_id and item.account_quota_remaining is not None]
+            if account_used >= min(account_limits):
+                reason = ("ACCOUNT_QUOTA_EXHAUSTED", "shared account quota is exhausted")
         elif host_used.get(host.host_id, 0) >= host.max_concurrency:
             reason = ("HOST_CONCURRENCY_EXHAUSTED", "host concurrency is exhausted")
         elif req.role in host.workload_concurrency and workload_used.get((host.host_id, req.role), 0) + 1 > host.workload_concurrency[req.role]:
@@ -678,23 +843,43 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
         if reason is not None:
             trace.append(Rejection(candidate.candidate_id, reason[0], reason[1]))
             continue
-        if selected is not None:
-            # Continue evaluating later candidates so callers get a complete trace. Selection
-            # remains the first eligible candidate under the deterministic ordering above.
-            continue
-        selected = candidate
+        eligible.append(candidate)
+    selected: PlacementCandidate | None = None
+    if eligible:
+        if req.policy == "weighted-rotation":
+            # Weight only candidates that actually passed admission.  Including a
+            # disabled/stale candidate in the ticket space would skew the advertised
+            # distribution toward whichever eligible candidate followed it.
+            eligible = sorted(eligible, key=lambda item: item.candidate_id)
+            total_weight = sum(item.weight for item in eligible)
+            ticket = int(hashlib.sha256(f"{req.task_id}:weighted-rotation".encode()).hexdigest(), 16) % total_weight
+            cursor = 0
+            for candidate in eligible:
+                cursor += candidate.weight
+                if ticket < cursor:
+                    selected = candidate
+                    break
+        else:
+            selected = eligible[0]
     if selected is not None:
         candidate = selected
+        selected_pool = parsed_pools[selected.pool_id]
         body = {"schema_version": SCHEMA_VERSION, "kind": "assignment", "task_id": req.task_id,
                 "project_id": req.project_id, "source_sha": req.source_sha, "engine": candidate.engine,
                 "provider": candidate.provider, "capacity_pool": candidate.pool_id, "model": candidate.model,
                 "host": candidate.host_id, "sandbox_profile": candidate.sandbox_profile,
                 "network_profile": candidate.network_profile, "created_at": created_at,
-                "account_id": pool.account_id, "role": req.role}
+                "account_id": selected_pool.account_id, "role": req.role, "source_repository": req.source_repository,
+                "source_branch": req.source_branch, "seed_manifest_digest": req.seed_manifest_digest,
+                "model_parameters": dict(req.model_parameters), "allowed_paths": list(req.allowed_paths),
+                "gate_digest": req.gate_digest, "publication_policy": req.publication_policy,
+                "candidate_id": selected.candidate_id}
         digest = hashlib.sha256(_canonical(body)).hexdigest()
         assignment = Assignment(req.task_id, req.project_id, req.source_sha, candidate.engine, candidate.provider,
                                 candidate.pool_id, candidate.model, candidate.host_id, candidate.sandbox_profile,
-                                candidate.network_profile, digest, body["created_at"], pool.account_id, req.role)
+                                candidate.network_profile, digest, body["created_at"], selected_pool.account_id, req.role,
+                                req.source_repository, req.source_branch, req.seed_manifest_digest, req.model_parameters,
+                                req.allowed_paths, req.gate_digest, req.publication_policy, selected.candidate_id)
         return assignment, tuple(trace)
     return None, tuple(trace)
 
@@ -763,6 +948,73 @@ class HostRegistry:
             return dict(self.hosts), dict(self.heartbeats)
 
 
+class DurableHostRegistry(HostRegistry):
+    """Restart-safe host registration/heartbeat records with digest-checked snapshots."""
+
+    def __init__(self, path: Path | str, *, root: Path | str | None = None,
+                 now: str | None = None, future_skew_s: float = DEFAULT_HEARTBEAT_FUTURE_SKEW):
+        super().__init__(now=now, future_skew_s=future_skew_s)
+        self.path, self.root = _safe_store_path(path, root)
+        self.root.mkdir(parents=True, exist_ok=True)
+        if self.path.parent != self.root:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.lock_path = _safe_store_path(self.path.with_name(self.path.name + ".lock"), self.root)[0]
+        with _journal_lock(self.lock_path):
+            self._reload_durable_locked()
+
+    def _reload_durable_locked(self) -> None:
+        self.hosts.clear(); self.heartbeats.clear()
+        if not self.path.exists():
+            return
+        if _file_is_reparse_or_symlink(self.path):
+            raise ReconciliationError("UNSAFE_STORE_PATH", "host registry is a symlink or reparse point")
+        state = _json_load(self.path.read_text(encoding="utf-8"))
+        if not isinstance(state, Mapping):
+            raise ReconciliationError("CORRUPT_REGISTRY", "host registry snapshot is not an object")
+        required = {"schema_version", "kind", "hosts", "heartbeats", "state_digest"}
+        _check_keys(state, required, set(), "host_registry")
+        if state["schema_version"] != SCHEMA_VERSION or state["kind"] != "host_registry":
+            raise ReconciliationError("SCHEMA_VERSION", "unsupported host registry snapshot")
+        if state["state_digest"] != digest_record({key: state[key] for key in required if key != "state_digest"}):
+            raise ReconciliationError("DIGEST_MISMATCH", "host registry snapshot digest is invalid")
+        if not isinstance(state["hosts"], list) or not isinstance(state["heartbeats"], list):
+            raise ReconciliationError("CORRUPT_REGISTRY", "host registry collections are malformed")
+        for raw in state["hosts"]:
+            item = HostRegistration.from_dict(raw)
+            if item.host_id in self.hosts:
+                raise ReconciliationError("CONFLICTING_REPLAY", "duplicate host registration")
+            self.hosts[item.host_id] = item
+        for raw in state["heartbeats"]:
+            item = HostHeartbeat.from_dict(raw)
+            if item.host_id not in self.hosts or self.hosts[item.host_id].registration_digest != item.registration_digest:
+                raise ReconciliationError("HEARTBEAT_UNBOUND", "persisted heartbeat is not registration-bound")
+            if item.host_id in self.heartbeats:
+                raise ReconciliationError("CONFLICTING_REPLAY", "duplicate host heartbeat")
+            self.heartbeats[item.host_id] = item
+
+    def _persist_locked(self) -> None:
+        body = {"schema_version": SCHEMA_VERSION, "kind": "host_registry",
+                "hosts": [item.to_dict() for _, item in sorted(self.hosts.items())],
+                "heartbeats": [item.to_dict() for _, item in sorted(self.heartbeats.items())]}
+        body["state_digest"] = digest_record(body)
+        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{self.path.name}.tmp.", dir=self.path.parent)
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                json.dump(body, output, sort_keys=True, separators=(",", ":")); output.flush(); os.fsync(output.fileno())
+            os.replace(temporary, self.path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def register(self, registration: HostRegistration) -> str:
+        with _journal_lock(self.lock_path):
+            self._reload_durable_locked(); result = super().register(registration); self._persist_locked(); return result
+
+    def heartbeat(self, value: HostHeartbeat, *, now: str | None = None) -> str:
+        with _journal_lock(self.lock_path):
+            self._reload_durable_locked(); result = super().heartbeat(value, now=now); self._persist_locked(); return result
+
+
 class PlacementGovernor:
     """Atomic in-process host/pool admission around the pure resolver.
 
@@ -770,14 +1022,17 @@ class PlacementGovernor:
     reservation and release it only after terminal reconciliation; this class never dispatches work.
     """
 
-    def __init__(self, registry: HostRegistry, pools: Mapping[str, PoolStatus]):
+    def __init__(self, registry: HostRegistry, pools: Mapping[str, PoolStatus], *, pause_guard: PauseGuard | None = None):
         self.registry = registry
         self.pools = dict(pools)
+        self.pause_guard = pause_guard
         self._active: dict[str, Assignment] = {}
         self._lock = threading.RLock()
 
     def place(self, requirements: PlacementRequirements, candidates: Sequence[PlacementCandidate],
               *, now_epoch: float | None = None, created_at: str | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
+        if self.pause_guard is not None:
+            self.pause_guard.assert_open()
         with self._lock:
             host_reserved: dict[str, int] = {}
             pool_reserved: dict[str, int] = {}
@@ -877,7 +1132,9 @@ class DurableFabricStore:
                 raise ReconciliationError("ASSIGNMENT_MISMATCH", "lease assignment digest does not match assignment")
             _digest(event["assignment_digest"], "assignment_digest")
             _timestamp(event["created_at"], "created_at"); _timestamp(event["updated_at"], "updated_at"); _timestamp(event["expires_at"], "expires_at")
-            if _epoch(event["updated_at"]) < _epoch(event["created_at"]) or _epoch(event["expires_at"]) <= _epoch(event["created_at"]):
+            if (_epoch(event["updated_at"]) < _epoch(event["created_at"]) or
+                    _epoch(event["expires_at"]) <= _epoch(event["created_at"]) or
+                    _epoch(event["updated_at"]) >= _epoch(event["expires_at"] )):
                 raise ReconciliationError("INVALID_TRANSITION", "lease expiry must follow creation")
             if event["status"] != "active" or event["recovery_state"] != "none":
                 raise ReconciliationError("INVALID_TRANSITION", "new leases must be active with no recovery state")
@@ -885,6 +1142,8 @@ class DurableFabricStore:
             if not isinstance(reservation, Mapping) or set(reservation) != {"host", "pool", "role"}:
                 raise ReconciliationError("INVALID_EVENT", "lease reservation is malformed")
             _id(reservation["host"], "reservation.host"); _id(reservation["pool"], "reservation.pool"); _string(reservation["role"], "reservation.role")
+            if reservation["host"] != assignment.host or reservation["pool"] != assignment.capacity_pool or reservation["role"] != assignment.role:
+                raise ReconciliationError("ASSIGNMENT_MISMATCH", "lease reservation is not bound to the assignment")
         elif kind == "lease_status":
             expected = common | {"lease_id", "status", "updated_at", "recovery_state"}
             _check_keys(event, expected, set(), "lease_status_event")
@@ -949,10 +1208,6 @@ class DurableFabricStore:
                 raise ReconciliationError("UNKNOWN_ATTEMPT", "result references no durable attempt")
             if attempt.get("assignment_digest") != event["assignment_digest"] or lease.get("assignment_digest") != event["assignment_digest"]:
                 raise ReconciliationError("ASSIGNMENT_MISMATCH", "result assignment differs from the lease")
-            if _epoch(event["observed_at"]) >= _epoch(lease["expires_at"]):
-                raise ReconciliationError("LATE_RESULT", "result arrived at or after lease expiry")
-            if _epoch(event["observed_at"]) < _epoch(lease["created_at"]):
-                raise ReconciliationError("INVALID_TRANSITION", "result predates lease creation")
             if lease["status"] not in {"active", "recovery_required"} and previous is None:
                 raise ReconciliationError("INVALID_TRANSITION", "result cannot transition a terminal lease")
             self.results[event["attempt_id"]] = dict(event)
@@ -964,7 +1219,7 @@ class DurableFabricStore:
             if lease is None:
                 raise ReconciliationError("UNKNOWN_LEASE", "lease status references no lease")
             current = lease["status"]
-            allowed = {"active": {"recovery_required", "expired"}, "recovery_required": {"recovery_required", "expired"},
+            allowed = {"active": {"recovery_required", "expired"}, "recovery_required": {"recovery_required", "expired", "succeeded", "failed", "cancelled"},
                        "expired": set(), "succeeded": set(), "failed": set(), "cancelled": set()}
             if event["status"] not in allowed[current]:
                 raise ReconciliationError("INVALID_TRANSITION", f"cannot move lease {current} to {event['status']}")
@@ -988,8 +1243,22 @@ class DurableFabricStore:
         assignment = Assignment.from_dict(assignment.to_dict())
         _id(lease_id, "lease_id"); _id(attempt_id, "attempt_id"); _id(remote_session_id, "remote_session_id")
         _timestamp(now, "now"); _timestamp(expires_at, "expires_at")
-        if lease_id in self.leases or attempt_id in self.attempts:
-            raise AdmissionError("DUPLICATE_LEASE", "lease or attempt identity already exists")
+        if _epoch(expires_at) <= _epoch(now):
+            raise AdmissionError("INVALID_LEASE", "lease expiry must be after lease creation")
+        if role == "unknown":
+            role = assignment.role
+        if lease_id in self.leases:
+            existing = self.leases[lease_id]
+            if existing["attempt_id"] == attempt_id and existing["remote_session_id"] == remote_session_id and existing["assignment_digest"] == assignment.assignment_digest:
+                return dict(existing)
+            raise AdmissionError("DUPLICATE_LEASE", "lease identity has conflicting fields")
+        if attempt_id in self.attempts:
+            raise AdmissionError("DUPLICATE_ATTEMPT", "attempt identity already exists")
+        if any(item.get("remote_session_id") == remote_session_id for item in self.leases.values()):
+            raise AdmissionError("DUPLICATE_REMOTE_SESSION", "remote session identity already exists")
+        for item in self.leases.values():
+            if item["status"] in {"active", "recovery_required"} and item["assignment"].get("task_id") == assignment.task_id:
+                raise AdmissionError("DUPLICATE_TASK_LEASE", "task already has an active lease")
         event = {"event": "lease", "lease_id": lease_id, "attempt_id": attempt_id,
                  "remote_session_id": remote_session_id, "assignment_digest": assignment.assignment_digest,
                  "assignment": assignment.to_dict(), "status": "active", "created_at": now,
@@ -1011,10 +1280,19 @@ class DurableFabricStore:
                         heartbeats: Mapping[str, HostHeartbeat | Mapping[str, Any]],
                         pools: Mapping[str, PoolStatus | Mapping[str, Any]], *, lease_id: str,
                         attempt_id: str, remote_session_id: str, now: str, expires_at: str,
-                        heartbeat_ttl_s: float = 120.0, paused: bool = False) -> tuple[Assignment | None, tuple[Rejection, ...]]:
+                        heartbeat_ttl_s: float = 120.0, paused: bool = False,
+                        pause_guard: PauseGuard | None = None,
+                        routing_policy: RoutingPolicy | Mapping[str, Any] | None = None,
+                        network_endpoints: Mapping[str, Iterable[str]] | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
         """Atomically resolve placement, reserve capacity, and create its durable lease."""
         with _journal_lock(self.lock_path):
             self._reload_locked()
+            req = requirements if isinstance(requirements, PlacementRequirements) else PlacementRequirements.from_dict(requirements)
+            for existing in self.leases.values():
+                if existing["status"] in {"active", "recovery_required"} and existing["assignment"].get("task_id") == req.task_id:
+                    if existing["assignment"].get("source_sha") == req.source_sha:
+                        return Assignment.from_dict(existing["assignment"]), ()
+                    raise AdmissionError("DUPLICATE_TASK_LEASE", "task already has an active lease")
             host_reserved: dict[str, int] = {}; pool_reserved: dict[str, int] = {}
             workload_reserved: dict[tuple[str, str], int] = {}
             for lease in self.leases.values():
@@ -1023,17 +1301,19 @@ class DurableFabricStore:
                     pool_reserved[lease["reservation"]["pool"]] = pool_reserved.get(lease["reservation"]["pool"], 0) + 1
                     key = (lease["reservation"]["host"], lease["reservation"]["role"])
                     workload_reserved[key] = workload_reserved.get(key, 0) + 1
-            assignment, trace = resolve_placement(requirements, candidates, hosts, heartbeats, pools,
+            assignment, trace = resolve_placement(req, candidates, hosts, heartbeats, pools,
                                                   now_epoch=_epoch(now), created_at=now,
                                                   heartbeat_ttl_s=heartbeat_ttl_s,
                                                   paused=paused,
                                                   reserved_host=host_reserved, reserved_pool=pool_reserved,
-                                                  reserved_workload=workload_reserved)
+                                                  reserved_workload=workload_reserved,
+                                                  routing_policy=routing_policy, pause_guard=pause_guard,
+                                                  network_endpoints=network_endpoints)
             if assignment is None:
                 return None, trace
             self._create_lease_locked(assignment, lease_id=lease_id, attempt_id=attempt_id,
                                       remote_session_id=remote_session_id, now=now, expires_at=expires_at,
-                                      role=(requirements.role if isinstance(requirements, PlacementRequirements) else PlacementRequirements.from_dict(requirements).role))
+                                      role=req.role)
             return assignment, trace
 
     def active_reservations(self) -> tuple[dict[str, Any], ...]:
@@ -1072,10 +1352,13 @@ class DurableFabricStore:
                 self._record_locked(event); expired.append(lease_id)
         return tuple(expired)
 
-    def record_recovery_query(self, lease_id: str, *, state: str, observed_at: str) -> str:
+    def record_recovery_query(self, lease_id: str, *, state: str, observed_at: str,
+                              terminal_status: str | None = None) -> str:
         _id(lease_id, "lease_id"); _timestamp(observed_at, "observed_at")
         if state not in {"running", "terminal", "unknown"}:
             raise ReconciliationError("INVALID_RECOVERY_STATE", "unsupported remote recovery state")
+        if state == "terminal" and terminal_status not in {"succeeded", "failed", "cancelled"}:
+            raise ReconciliationError("INVALID_RECOVERY_STATE", "terminal recovery requires a terminal result status")
         with _journal_lock(self.lock_path):
             self._reload_locked()
             lease = self.leases.get(lease_id)
@@ -1085,18 +1368,18 @@ class DurableFabricStore:
             if lease["status"] != "recovery_required":
                 return "duplicate" if lease["recovery_state"] == recovery_state else "ignored"
             self._record_locked({"event": "lease_status", "lease_id": lease_id,
-                                 "status": "recovery_required", "updated_at": observed_at,
-                                 "recovery_state": recovery_state})
+                                 "status": terminal_status if state == "terminal" else "recovery_required",
+                                 "updated_at": observed_at,
+                                 "recovery_state": recovery_state if state != "terminal" else "none"})
             return "recorded"
 
     def accept_result(self, *, attempt_id: str, lease_id: str, assignment_digest_value: str,
-                      result_digest: str, status: str, observed_at: str, now: str | None = None) -> str:
+                      result_digest: str, status: str, observed_at: str, controller_now: str) -> str:
         _id(attempt_id, "attempt_id"); _id(lease_id, "lease_id"); _digest(assignment_digest_value, "assignment_digest")
         _digest(result_digest, "result_digest"); _timestamp(observed_at, "observed_at")
         if status not in {"succeeded", "failed", "cancelled"}:
             raise ReconciliationError("INVALID_RESULT_STATUS", "result status is not terminal")
-        if now is not None:
-            _timestamp(now, "now")
+        _timestamp(controller_now, "controller_now")
         with _journal_lock(self.lock_path):
             self._reload_locked()
             existing = self.results.get(attempt_id)
@@ -1113,8 +1396,10 @@ class DurableFabricStore:
                 raise ReconciliationError("ASSIGNMENT_MISMATCH", "result assignment does not match the attempt")
             if lease["status"] not in {"active", "recovery_required"}:
                 raise ReconciliationError("LATE_RESULT", "result arrived after the lease was terminal")
-            if _epoch(observed_at) >= _epoch(lease["expires_at"]) or (now is not None and _epoch(now) >= _epoch(lease["expires_at"])):
-                self._expire_due_locked(now or observed_at)
+            if _epoch(controller_now) < _epoch(lease["created_at"]):
+                raise ReconciliationError("INVALID_CONTROLLER_TIME", "trusted controller time predates lease creation")
+            if _epoch(controller_now) >= _epoch(lease["expires_at"]):
+                self._expire_due_locked(controller_now)
                 raise ReconciliationError("LATE_RESULT", "result arrived at or after lease expiry")
             event = {"event": "result", "attempt_id": attempt_id, "lease_id": lease_id,
                      "assignment_digest": assignment_digest_value, "result_digest": result_digest,
@@ -1123,12 +1408,116 @@ class DurableFabricStore:
             return "accepted"
 
 
+@dataclass(frozen=True)
+class VerificationReceipt:
+    """Controller-owned independent verification evidence; workers cannot self-assert this."""
+
+    receipt_id: str
+    assignment_digest: str
+    source_sha: str
+    candidate_id: str
+    result_commit: str
+    diff_digest: str
+    scope_digest: str
+    gate_digest: str
+    verifier_identity: str
+    verified_at: str
+    verification_status: str
+    receipt_digest: str
+
+    @classmethod
+    def build(cls, *, receipt_id: str, assignment_digest: str, source_sha: str, candidate_id: str,
+              result_commit: str, diff_digest: str, scope_digest: str, gate_digest: str,
+              verifier_identity: str, verified_at: str, verification_status: str = "pass") -> "VerificationReceipt":
+        body = {"schema_version": SCHEMA_VERSION, "kind": "verification_receipt", "receipt_id": receipt_id,
+                "assignment_digest": assignment_digest, "source_sha": source_sha, "candidate_id": candidate_id,
+                "result_commit": result_commit, "diff_digest": diff_digest, "scope_digest": scope_digest,
+                "gate_digest": gate_digest, "verifier_identity": verifier_identity, "verified_at": verified_at,
+                "verification_status": verification_status}
+        body["receipt_digest"] = digest_record(body)
+        return cls.from_dict(body)
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> "VerificationReceipt":
+        required = {"schema_version", "kind", "receipt_id", "assignment_digest", "source_sha", "candidate_id", "result_commit", "diff_digest", "scope_digest", "gate_digest", "verifier_identity", "verified_at", "verification_status", "receipt_digest"}
+        _check_keys(raw, required, set(), "verification_receipt")
+        if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "verification_receipt":
+            raise SchemaError("SCHEMA_VERSION", "unsupported verification receipt schema")
+        digest = _digest(raw["receipt_digest"], "receipt_digest")
+        if digest != digest_record({key: raw[key] for key in required if key != "receipt_digest"}):
+            raise SchemaError("DIGEST_MISMATCH", "verification receipt digest is invalid")
+        if raw["verification_status"] != "pass":
+            raise ReconciliationError("VERIFIER_REQUIRED", "verification receipt is not a passing receipt")
+        return cls(_id(raw["receipt_id"], "receipt_id"), _digest(raw["assignment_digest"], "assignment_digest"),
+                   _commit(raw["source_sha"], "source_sha"), _id(raw["candidate_id"], "candidate_id"),
+                   _commit(raw["result_commit"], "result_commit"), _digest(raw["diff_digest"], "diff_digest"),
+                   _digest(raw["scope_digest"], "scope_digest"), _digest(raw["gate_digest"], "gate_digest"),
+                   _string(raw["verifier_identity"], "verifier_identity"), _timestamp(raw["verified_at"], "verified_at"),
+                   "pass", digest)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"schema_version": SCHEMA_VERSION, "kind": "verification_receipt", "receipt_id": self.receipt_id,
+                "assignment_digest": self.assignment_digest, "source_sha": self.source_sha, "candidate_id": self.candidate_id,
+                "result_commit": self.result_commit, "diff_digest": self.diff_digest, "scope_digest": self.scope_digest,
+                "gate_digest": self.gate_digest, "verifier_identity": self.verifier_identity, "verified_at": self.verified_at,
+                "verification_status": self.verification_status, "receipt_digest": self.receipt_digest}
+
+
+class VerificationReceiptStore:
+    """Durable controller-owned receipt index used by candidate integration admission."""
+
+    def __init__(self, path: Path | str, *, root: Path | str | None = None):
+        self.path, self.root = _safe_store_path(path, root)
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.lock_path = _safe_store_path(self.path.with_name(self.path.name + ".lock"), self.root)[0]
+        self.receipts: dict[str, VerificationReceipt] = {}
+        with _journal_lock(self.lock_path):
+            self._reload_locked()
+
+    def _reload_locked(self) -> None:
+        self.receipts.clear()
+        if not self.path.exists():
+            return
+        with self.path.open("r", encoding="utf-8") as stream:
+            for line in stream:
+                receipt = VerificationReceipt.from_dict(_json_load(line))
+                old = self.receipts.get(receipt.receipt_id)
+                if old is not None and old != receipt:
+                    raise ReconciliationError("CONFLICTING_REPLAY", "receipt identity has conflicting data")
+                self.receipts[receipt.receipt_id] = receipt
+
+    def issue(self, receipt: VerificationReceipt) -> str:
+        receipt = VerificationReceipt.from_dict(receipt.to_dict())
+        with _journal_lock(self.lock_path):
+            self._reload_locked()
+            old = self.receipts.get(receipt.receipt_id)
+            if old is not None:
+                if old == receipt:
+                    return "duplicate"
+                raise ReconciliationError("CONFLICTING_RECEIPT", "receipt identity already exists")
+            _append_bytes(self.path, (json.dumps(receipt.to_dict(), sort_keys=True, separators=(",", ":")) + "\n").encode())
+            self.receipts[receipt.receipt_id] = receipt
+            return "issued"
 def validate_candidate_refs(*, result_ref: str, default_branch: str = "main",
                             integration_branch: str = "recursion/integration") -> None:
-    """Reject external results that target protected branches."""
-    result = _string(result_ref, "result_ref").removeprefix("refs/heads/")
-    default = _string(default_branch, "default_branch").removeprefix("refs/heads/")
-    integration = _string(integration_branch, "integration_branch").removeprefix("refs/heads/")
+    """Reject protected or malformed refs using git-check-ref-format rules."""
+    def normalize(value: str, field: str) -> str:
+        value = _string(value, field).removeprefix("refs/heads/")
+        invalid = (
+            not value or value == "@" or value.startswith("/") or value.endswith("/") or
+            "//" in value or ".." in value or "@{" in value or value.endswith(".") or
+            any(part.endswith(".lock") for part in value.split("/")) or
+            any(ord(char) < 32 or ord(char) == 127 for char in value) or
+            any(char in value for char in (" ", "~", "^", ":", "?", "*", "[", "\\")) or
+            any(part in {".", ".."} or part.startswith(".") for part in value.split("/"))
+        )
+        if invalid:
+            raise AdmissionError("INVALID_RESULT_REF", f"{field} is not a valid git ref")
+        return value
+
+    result = normalize(result_ref, "result_ref")
+    default = normalize(default_branch, "default_branch")
+    integration = normalize(integration_branch, "integration_branch")
     if result in {default, integration}:
         raise AdmissionError("PROTECTED_REF", "candidate result ref targets a default or integration branch")
     if result.startswith("refs/") or result.startswith("HEAD"):
@@ -1151,24 +1540,37 @@ def classify_stale_base(*, assigned_source_sha: str, current_source_sha: str,
     return "current-compatible"
 
 
-def verify_candidate_result(*, assignment: Assignment, assignment_digest_value: str,
-                            source_sha: str, result_ref: str, verifier_passed: bool,
-                            default_branch: str = "main", integration_branch: str = "recursion/integration") -> str:
-    """Inert independent-verifier hook for candidate import admission."""
-    if assignment.assignment_digest != assignment_digest_value:
+def verify_candidate_result(*, assignment: Assignment, receipt: VerificationReceipt | Mapping[str, Any],
+                            candidate_id: str, result_commit: str, diff_digest: str, scope_digest: str, gate_digest: str,
+                            result_ref: str, default_branch: str = "main",
+                            integration_branch: str = "recursion/integration") -> str:
+    """Validate a durable independent-verifier receipt for candidate import admission."""
+    receipt = receipt if isinstance(receipt, VerificationReceipt) else VerificationReceipt.from_dict(receipt)
+    if assignment.assignment_digest != receipt.assignment_digest:
         raise ReconciliationError("ASSIGNMENT_MISMATCH", "candidate result assignment digest differs")
-    if assignment.source_sha != _commit(source_sha, "source_sha"):
+    if assignment.source_sha != receipt.source_sha:
         raise ReconciliationError("SOURCE_MISMATCH", "candidate result source differs from assignment")
+    if receipt.candidate_id != _id(candidate_id, "candidate_id"):
+        raise ReconciliationError("CANDIDATE_MISMATCH", "candidate identity differs from receipt")
+    if assignment.candidate_id is not None and assignment.candidate_id != receipt.candidate_id:
+        raise ReconciliationError("CANDIDATE_MISMATCH", "candidate identity differs from assignment")
+    if receipt.result_commit != _commit(result_commit, "result_commit"):
+        raise ReconciliationError("RESULT_MISMATCH", "result commit differs from receipt")
+    for field, value in (("diff_digest", diff_digest), ("scope_digest", scope_digest), ("gate_digest", gate_digest)):
+        if getattr(receipt, field) != _digest(value, field):
+            raise ReconciliationError("VERIFICATION_BINDING_MISMATCH", f"{field} differs from receipt")
     validate_candidate_refs(result_ref=result_ref, default_branch=default_branch, integration_branch=integration_branch)
-    if not isinstance(verifier_passed, bool) or not verifier_passed:
-        raise ReconciliationError("VERIFIER_REQUIRED", "independent verifier has not passed")
+    if not receipt.verifier_identity.startswith("controller/"):
+        raise ReconciliationError("VERIFIER_UNTRUSTED", "verification identity is not controller-owned")
     return "verified"
 
 
 class IntegrationCoordinator:
     """Durable, serialized same-project integration admission; never performs git operations."""
 
-    def __init__(self, path: Path | str | None = None, *, root: Path | str | None = None):
+    def __init__(self, path: Path | str | None = None, *, root: Path | str | None = None,
+                 pause_guard: PauseGuard | None = None):
+        self.pause_guard = pause_guard
         self.path = None if path is None else _safe_store_path(path, root)[0]
         self.root = None if path is None else _safe_store_path(path, root)[1]
         if self.path is not None:
@@ -1216,8 +1618,11 @@ class IntegrationCoordinator:
             _check_keys(event, {"event", "schema_version", "event_digest", "prev_event_digest", "project_id", "default_branch", "integration_branch"}, set(), "integration_policy")
             _id(event["project_id"], "project_id"); _string(event["default_branch"], "default_branch"); _string(event["integration_branch"], "integration_branch")
         elif kind == "admit":
-            _check_keys(event, {"event", "schema_version", "event_digest", "prev_event_digest", "candidate_id", "project_id", "source_sha", "result_commit", "source_ref", "result_ref", "default_branch", "integration_branch"}, set(), "integration_admit")
+            _check_keys(event, {"event", "schema_version", "event_digest", "prev_event_digest", "candidate_id", "project_id", "source_sha", "result_commit", "source_ref", "result_ref", "default_branch", "integration_branch", "classification", "receipt_digest"}, set(), "integration_admit")
             _id(event["candidate_id"], "candidate_id"); _id(event["project_id"], "project_id"); _commit(event["source_sha"], "source_sha"); _commit(event["result_commit"], "result_commit")
+            if event["classification"] not in {"current-compatible", "stale-reviewable"}:
+                raise ReconciliationError("STALE_CLASSIFICATION_REQUIRED", "integration journal classification is invalid")
+            _digest(event["receipt_digest"], "receipt_digest")
             validate_candidate_refs(result_ref=event["result_ref"], default_branch=event["default_branch"], integration_branch=event["integration_branch"])
         elif kind == "complete":
             _check_keys(event, {"event", "schema_version", "event_digest", "prev_event_digest", "candidate_id"}, set(), "integration_complete")
@@ -1239,7 +1644,7 @@ class IntegrationCoordinator:
             self._policies[event["project_id"]] = {"default_branch": event["default_branch"], "integration_branch": event["integration_branch"]}
         elif kind == "admit":
             existing = self._candidates.get(event["candidate_id"])
-            value = {key: event[key] for key in ("project_id", "source_sha", "result_commit", "source_ref", "result_ref")}
+            value = {key: event[key] for key in ("project_id", "source_sha", "result_commit", "source_ref", "result_ref", "classification", "receipt_digest")}
             value["status"] = "active"
             if existing is not None and existing != value:
                 raise ReconciliationError("CONFLICTING_REPLAY", "candidate identity has conflicting replay data")
@@ -1254,7 +1659,10 @@ class IntegrationCoordinator:
             candidate["status"] = "complete"; self._active.pop(candidate["project_id"], None)
 
     def set_project_policy(self, *, project_id: str, default_branch: str, integration_branch: str) -> str:
+        if self.pause_guard is not None:
+            self.pause_guard.assert_open()
         _id(project_id, "project_id"); _string(default_branch, "default_branch"); _string(integration_branch, "integration_branch")
+        validate_candidate_refs(result_ref="candidate-policy-check", default_branch=default_branch, integration_branch=integration_branch)
         if self.path is None:
             self._policies[project_id] = {"default_branch": default_branch, "integration_branch": integration_branch}; return "set"
         with _journal_lock(self.lock_path):
@@ -1262,21 +1670,32 @@ class IntegrationCoordinator:
 
     def admit(self, *, candidate_id: str, project_id: str, source_sha: str, result_commit: str,
               source_ref: str = "source", result_ref: str | None = None,
-              default_branch: str | None = None, integration_branch: str | None = None) -> str:
+              default_branch: str | None = None, integration_branch: str | None = None,
+              classification: str | None = None,
+              verification_receipt: VerificationReceipt | Mapping[str, Any] | None = None) -> str:
+        if self.pause_guard is not None:
+            self.pause_guard.assert_open()
         _id(candidate_id, "candidate_id"); _id(project_id, "project_id"); _commit(source_sha, "source_sha"); _commit(result_commit, "result_commit")
+        if classification not in {"current-compatible", "stale-reviewable"}:
+            raise ReconciliationError("STALE_CLASSIFICATION_REQUIRED", "integration requires current or stale-reviewable classification")
+        if verification_receipt is None:
+            raise ReconciliationError("VERIFIER_REQUIRED", "integration requires an independent verification receipt")
+        receipt = verification_receipt if isinstance(verification_receipt, VerificationReceipt) else VerificationReceipt.from_dict(verification_receipt)
+        if receipt.candidate_id != candidate_id or receipt.source_sha != source_sha or receipt.result_commit != result_commit or not receipt.verifier_identity.startswith("controller/"):
+            raise ReconciliationError("VERIFICATION_BINDING_MISMATCH", "verification receipt is not bound to this candidate")
         policy = self._policies.get(project_id, {"default_branch": "main", "integration_branch": "recursion/integration"})
         default = default_branch or policy["default_branch"]; integration = integration_branch or policy["integration_branch"]
         result_ref = result_ref or f"recursion/candidate/{candidate_id}"
         _string(source_ref, "source_ref"); validate_candidate_refs(result_ref=result_ref, default_branch=default, integration_branch=integration)
         if self.path is None:
-            return self._admit_memory(candidate_id, project_id, source_sha, result_commit, source_ref, result_ref, default, integration)
+            return self._admit_memory(candidate_id, project_id, source_sha, result_commit, source_ref, result_ref, default, integration, classification, receipt.receipt_digest)
         with _journal_lock(self.lock_path):
             self._reload_locked()
-            return self._admit_locked(candidate_id, project_id, source_sha, result_commit, source_ref, result_ref, default, integration)
+            return self._admit_locked(candidate_id, project_id, source_sha, result_commit, source_ref, result_ref, default, integration, classification, receipt.receipt_digest)
 
-    def _admit_memory(self, candidate_id: str, project_id: str, source_sha: str, result_commit: str, source_ref: str, result_ref: str, default: str, integration: str) -> str:
+    def _admit_memory(self, candidate_id: str, project_id: str, source_sha: str, result_commit: str, source_ref: str, result_ref: str, default: str, integration: str, classification: str, receipt_digest: str) -> str:
         existing = self._candidates.get(candidate_id)
-        proposed = {"project_id": project_id, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "status": "active"}
+        proposed = {"project_id": project_id, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "classification": classification, "receipt_digest": receipt_digest, "status": "active"}
         if existing is not None:
             if existing == proposed: return "duplicate"
             raise AdmissionError("CONFLICTING_CANDIDATE", "candidate identity is already bound to another result")
@@ -1284,18 +1703,20 @@ class IntegrationCoordinator:
         if current is not None: raise AdmissionError("INTEGRATION_SERIALIZED", f"project already has active integration candidate {current}")
         self._candidates[candidate_id] = proposed; self._active[project_id] = candidate_id; return "admitted"
 
-    def _admit_locked(self, candidate_id: str, project_id: str, source_sha: str, result_commit: str, source_ref: str, result_ref: str, default: str, integration: str) -> str:
+    def _admit_locked(self, candidate_id: str, project_id: str, source_sha: str, result_commit: str, source_ref: str, result_ref: str, default: str, integration: str, classification: str, receipt_digest: str) -> str:
         existing = self._candidates.get(candidate_id)
-        proposed = {"project_id": project_id, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "status": "active"}
+        proposed = {"project_id": project_id, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "classification": classification, "receipt_digest": receipt_digest, "status": "active"}
         if existing is not None:
             if existing == proposed: return "duplicate"
             raise AdmissionError("CONFLICTING_CANDIDATE", "candidate identity is already bound to another result")
         current = self._active.get(project_id)
         if current is not None: raise AdmissionError("INTEGRATION_SERIALIZED", f"project already has active integration candidate {current}")
-        self._record_locked({"event": "admit", "candidate_id": candidate_id, "project_id": project_id, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "default_branch": default, "integration_branch": integration})
+        self._record_locked({"event": "admit", "candidate_id": candidate_id, "project_id": project_id, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "default_branch": default, "integration_branch": integration, "classification": classification, "receipt_digest": receipt_digest})
         return "admitted"
 
     def complete(self, candidate_id: str) -> str:
+        if self.pause_guard is not None:
+            self.pause_guard.assert_open()
         _id(candidate_id, "candidate_id")
         if self.path is None:
             candidate = self._candidates.get(candidate_id)
