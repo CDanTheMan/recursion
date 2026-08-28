@@ -102,11 +102,18 @@ def vacuous_success(words: list[str]) -> bool:
     """Recognize commands whose success is independent of the code under review."""
     if not words:
         return True
+    # Shell grouping must not hide a literal success command.  shlex keeps `(true)` as
+    # one token, so recognize balanced outer parentheses before the token checks below.
+    grouped = " ".join(words).strip()
+    while grouped.startswith("(") and grouped.endswith(")"):
+        grouped = grouped[1:-1].strip()
+    if grouped in {"true", ":", "/bin/true", "exit 0"}:
+        return True
     if words[0] in {"true", ":", "/bin/true"}:
         return True
     if words[:2] == ["exit", "0"]:
         return True
-    if words[0] in {"echo", "printf"}:
+    if words[0] in {"echo", "printf", "pwd"}:
         return True
     test = words
     if words[0] == "[" and words[-1:] == ["]"]:

@@ -194,6 +194,30 @@ if [ -f schemas/control-plane/v1/schema.json ] || [ -d state/goals ]; then
   [ "$(sed -n 's/^status: *//p' "state/goals/$GOAL_ID.md" | head -1)" = active ] \
     || { echo "plan: parent goal is not active: $GOAL_ID" >&2; exit 6; }
 fi
+# Bind the generated task's scope and exact source admission to the active descriptor before
+# writing anything.  In particular, a permissive roadmap default (such as `allowed_paths: .`)
+# must not widen a descriptor restricted to a subtree.
+if [ -n "$PROJECT_CONFIG" ]; then
+  python3 - "$PROJECT_CONFIG" "$REPO_CANONICAL" "$ID" "$SOURCE_BRANCH" "$SOURCE_SHA" \
+    "${ALLOWED:-${WORKDIR:-.}}" "$WORKDIR" "$ACC" "$GOAL" <<'PY'
+import json, re, sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+import repository_contract as rc
+
+descriptor_path, repo, task_id, source_branch, source_sha, allowed_raw, workdir, acceptance, goal = sys.argv[1:]
+allowed = [item for item in re.split(r"[\\s,]+", allowed_raw) if item]
+task = {"id": task_id, "source_branch": source_branch, "source_sha": source_sha,
+        "source_repository": repo, "allowed_paths": allowed, "workdir": workdir,
+        "acceptance": acceptance, "goal": goal}
+try:
+    rc.admit_task(rc.validate_project_descriptor(json.loads(Path(descriptor_path).read_text(encoding="utf-8"))),
+                  task, Path(repo), new_generation=True)
+except rc.ContractError as exc:
+    print(f"plan: generated task violates active repository contract: {exc}", file=sys.stderr)
+    raise SystemExit(6)
+PY
+fi
 
 tmp_task="$(mktemp "$TASKDIR/.${ID}.tmp.XXXXXX")"
 {

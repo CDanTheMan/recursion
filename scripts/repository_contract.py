@@ -32,7 +32,8 @@ OID = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 BRANCH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
 SCHEMA = "recursion-project-repository-contract/v2"
-CONTROLLER_KEY_PATH = Path(__file__).resolve().parents[1] / "state" / "secrets" / "verifier-receipt.key"
+_DEFAULT_CONTROLLER_KEY_PATH = Path(__file__).resolve().parents[1] / "state" / "secrets" / "verifier-receipt.key"
+CONTROLLER_KEY_PATH = _DEFAULT_CONTROLLER_KEY_PATH
 OUTCOMES = {
     "current-compatible", "stale-reviewable", "stale-rebase-required", "invalidated",
     "source-unavailable", "unauthorized-result",
@@ -53,7 +54,7 @@ def _json_digest(value: Any) -> str:
 
 
 def _normalized_path(value: object, *, field: str = "path") -> str:
-    if not isinstance(value, str) or not value or "\x00" in value:
+    if not isinstance(value, str) or not value or any(ord(char) < 32 for char in value):
         raise ContractError(f"{field} must be a non-empty path")
     if "\\" in value or value != value.strip() or value != "." and (
         value.startswith("./") or value.endswith("/") or "//" in value
@@ -62,7 +63,8 @@ def _normalized_path(value: object, *, field: str = "path") -> str:
     if re.match(r"^[A-Za-z]:", value):
         raise ContractError(f"{field} must be repository-relative")
     path = PurePosixPath(value)
-    if path.is_absolute() or value != "." and any(part in {".", ".."} for part in path.parts):
+    raw_parts = value.split("/")
+    if path.is_absolute() or value != "." and any(part in {".", ".."} for part in raw_parts):
         raise ContractError(f"{field} is unsafe")
     return "." if str(path) in {"", "."} else str(path)
 
@@ -114,7 +116,8 @@ def _contains_legacy_chiron(value: object) -> bool:
 
 
 def _valid_git_ref(value: object) -> bool:
-    if not isinstance(value, str) or not value or "*" in value:
+    if not isinstance(value, str) or not value or "*" in value \
+            or any(ord(char) < 32 for char in value):
         return False
     try:
         result = subprocess.run(
@@ -134,9 +137,22 @@ def _valid_git_pattern(value: object) -> bool:
 
 
 def _valid_gate_command(value: object) -> bool:
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or not value.strip() or len(value) > 4096 \
+            or "\x00" in value or any(ord(char) < 32 and char != "\t" for char in value):
         return False
-    return re.fullmatch(r"\s*(?:true|:|echo(?:\s+.*)?|printf(?:\s+.*)?|pwd)\s*", value) is None
+    validator = Path(__file__).with_name("validate-gate.py")
+    try:
+        result = subprocess.run(
+            # Repository descriptors bind their gate command digest; gate-file ownership is a
+            # separate contract.  Use an empty worker scope here so validator parsing does not
+            # require a task-level gate_files declaration.
+            [sys.executable, str(validator), "--acceptance", value, "--allowed-paths", ""],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=10, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -177,6 +193,18 @@ def _git_dir(repo: Path) -> Path:
     return path
 
 
+def _require_descriptor_repository(contract: dict[str, Any], repo: Path) -> Path:
+    """Bind every operation to the descriptor's canonical checkout, not a caller-selected clone."""
+    try:
+        supplied = Path(repo).expanduser().resolve(strict=True)
+        declared = Path(contract["repo"]).expanduser().resolve(strict=True)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ContractError("project repository is unavailable", "repository-unavailable") from exc
+    if supplied != declared or not supplied.is_dir():
+        raise ContractError("supplied repository does not match project descriptor", "unauthorized-result")
+    return supplied
+
+
 def _contract_fields(contract: dict[str, Any]) -> dict[str, Any]:
     """Validate and return the additive v2 fields from a v1-compatible descriptor."""
     required = {
@@ -190,6 +218,7 @@ def _contract_fields(contract: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(contract["id"], str) or not IDENT.fullmatch(contract["id"]):
         raise ContractError("project id is invalid")
     if not isinstance(contract["repo"], str) or not contract["repo"].strip() \
+            or any(ord(char) < 32 for char in contract["repo"]) \
             or contract["repo"] != contract["repo"].strip():
         raise ContractError("project repo must be a non-empty string")
     for key in ("default_branch", "integration_branch"):
@@ -226,7 +255,8 @@ def _contract_fields(contract: dict[str, Any]) -> dict[str, Any]:
     for key in ("gate_commands", "eligible_hosts", "eligible_pools"):
         values = contract[key]
         if not isinstance(values, list) or not values \
-                or any(not isinstance(item, str) or not item for item in values) \
+                or any(not isinstance(item, str) or not item or any(ord(char) < 32 for char in item)
+                       for item in values) \
                 or len(set(values)) != len(values):
             raise ContractError(f"{key} must be a string array")
     if any(not _valid_gate_command(item) for item in contract["gate_commands"]):
@@ -375,11 +405,13 @@ def _inspect_candidate_tree(repo: Path, commit: str, allowed: list[str]) -> None
 def admit_task(contract: dict[str, Any], task: dict[str, Any], repo: Path, *, new_generation: bool = True) -> dict[str, Any]:
     """Admit a task only when its source branch currently names its exact source SHA."""
     validate_project_descriptor(contract)
+    repo = _require_descriptor_repository(contract, repo)
     if not isinstance(task, dict):
         raise ContractError("task must be an object")
     for key in ("workdir", "acceptance", "goal", "gate_command", "seed", "repo",
                 "source_repository", "source_branch", "source_sha", "target_branch"):
-        if key in task and not isinstance(task[key], str):
+        if key in task and (not isinstance(task[key], str)
+                            or any(ord(char) < 32 and char != "\t" for char in task[key])):
             raise ContractError(f"task field {key} must be a string")
     if "gate_commands" in task and (
         not isinstance(task["gate_commands"], list)
@@ -452,13 +484,44 @@ def _controller_key() -> bytes:
     # file would turn the receipt into self-attestation.
     try:
         key_path = Path(CONTROLLER_KEY_PATH)
-        if key_path.is_symlink() or not key_path.is_file():
+        def is_link(path: Path) -> bool:
+            if path.is_symlink():
+                return True
+            # Windows junctions/reparse points are not always reported by is_symlink().
+            return bool(getattr(path.stat(), "st_file_attributes", 0) & 0x400)
+
+        if is_link(key_path) or not key_path.is_file():
             raise OSError("controller key is not a regular file")
         stat = key_path.stat()
         if hasattr(os, "getuid") and stat.st_uid != os.getuid():
             raise OSError("controller key owner is not the current controller")
         if os.name != "nt" and stat.st_mode & 0o077:
             raise OSError("controller key permissions are too broad")
+        for parent in (key_path.parent, *key_path.parent.parents):
+            if parent == parent.parent:
+                break
+            if is_link(parent) or not parent.is_dir():
+                raise OSError("controller key parent is not a safe directory")
+            if os.name != "nt":
+                parent_mode = parent.stat().st_mode
+                # A sticky temporary root (for hermetic controller tests) may be world-writable;
+                # every non-sticky ancestor must remain private to its owner.
+                if parent_mode & 0o022 and not (parent_mode & 0o1000 and parent_mode & 0o002):
+                    raise OSError("controller key parent is writable by group or world")
+        if os.name == "nt" and key_path == _DEFAULT_CONTROLLER_KEY_PATH:
+            # The fixed production path is additionally checked against the Windows ACL.  Do
+            # not accept inherited Everyone/Users write access or a missing current-user ACE.
+            acl = subprocess.run(["icacls", str(key_path)], capture_output=True, text=True,
+                                  stdin=subprocess.DEVNULL, timeout=10, check=False)
+            if acl.returncode or not acl.stdout:
+                raise OSError("controller key ACL could not be inspected")
+            acl_text = acl.stdout.lower()
+            if any(principal in acl_text for principal in
+                   ("everyone", "authenticated users", "\\users:", "codexsandboxusers")):
+                raise OSError("controller key ACL grants broad access")
+            username = os.environ.get("USERNAME", "").lower()
+            if not username or username not in acl_text:
+                raise OSError("controller key ACL is not owned by the controller")
         raw = key_path.read_text(encoding="utf-8").strip()
     except OSError as exc:
         raise ContractError("controller verifier key is unavailable", "verification-unavailable") from exc
@@ -499,6 +562,7 @@ def verify_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: 
                      allow_canonical: bool = False) -> dict[str, Any]:
     """Independently verify branch identity, source ancestry, scope, and verifier evidence."""
     validate_project_descriptor(contract)
+    repo = _require_descriptor_repository(contract, repo)
     _candidate_payload(candidate)
     if "verification_receipt" in candidate or "verified" in candidate:
         raise ContractError("candidate may not supply verification authority", "unauthorized-result")

@@ -33,6 +33,7 @@ class RepositoryContractTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="recursion-v2-contract-")
         self.key_path = Path(self.temp.name) / "controller.key"
         self.key_path.write_text("hermetic-controller-key\n", encoding="utf-8")
+        os.chmod(self.key_path, 0o600)
         self.old_controller_key_path = rc.CONTROLLER_KEY_PATH
         rc.CONTROLLER_KEY_PATH = self.key_path
         self.old_receipt_key = os.environ.get("RECURSION_VERIFIER_RECEIPT_KEY")
@@ -126,6 +127,13 @@ class RepositoryContractTests(unittest.TestCase):
                 "id": "task-four", "source_branch": "main", "source_sha": self.source,
                 "allowed_paths": ["."],
             }, self.repo)
+        wrong = Path(self.temp.name) / "wrong-clone"
+        subprocess.run(["git", "clone", "-q", str(self.repo), str(wrong)], check=True)
+        with self.assertRaisesRegex(rc.ContractError, "does not match"):
+            rc.admit_task(self.contract, {
+                "id": "task-five", "source_branch": "main", "source_sha": self.source,
+                "allowed_paths": ["src"],
+            }, wrong)
 
     def test_runtime_descriptor_uniqueness_and_namespace_overlap(self) -> None:
         invalid_repo = dict(self.contract, repo=7)
@@ -169,6 +177,10 @@ class RepositoryContractTests(unittest.TestCase):
         candidate = self.candidate()
         verified = rc.verify_candidate(self.contract, candidate, self.repo, receipt=self.receipt(candidate))
         self.assertEqual(verified["changed_paths"], ["src/feature.txt"])
+        wrong = Path(self.temp.name) / "verify-wrong-clone"
+        subprocess.run(["git", "clone", "-q", str(self.repo), str(wrong)], check=True)
+        with self.assertRaisesRegex(rc.ContractError, "does not match"):
+            rc.verify_candidate(self.contract, candidate, wrong, receipt=self.receipt(candidate))
         first = rc.import_candidate(self.contract, candidate, self.repo, receipt=self.receipt(candidate))
         second = rc.import_candidate(self.contract, candidate, self.repo, receipt=self.receipt(candidate))
         self.assertEqual(first["status"], "imported")
@@ -203,6 +215,10 @@ class RepositoryContractTests(unittest.TestCase):
         candidate = self.candidate()
         receipt = self.receipt(candidate)
         self.assertEqual(rc.verify_candidate(self.contract, candidate, self.repo, receipt=receipt)["task_id"], "task-one")
+        if os.name != "nt":
+            os.chmod(self.key_path, 0o666)
+            with self.assertRaisesRegex(rc.ContractError, "key"):
+                rc.verify_candidate(self.contract, candidate, self.repo, receipt=receipt)
 
     def test_symlink_and_submodule_tree_escapes_are_refused(self) -> None:
         candidate = self.candidate()
@@ -227,11 +243,17 @@ class RepositoryContractTests(unittest.TestCase):
 
     def test_invalid_refs_and_vacuous_gates_are_rejected(self) -> None:
         for field in ("default_branch", "integration_branch"):
-            with self.subTest(field=field), self.assertRaises(rc.ContractError):
-                rc.validate_project_descriptor(dict(self.contract, **{field: "cursor/../main"}))
-        with self.assertRaises(rc.ContractError):
-            rc.validate_project_descriptor(dict(self.contract, external_branch_patterns=["cursor//x"]))
-        for command in ("", "   ", "true", "echo no-op", "printf nope", "pwd"):
+            for branch in ("cursor/../main", "cursor//x", "foo.lock"):
+                with self.subTest(field=field, branch=branch), self.assertRaises(rc.ContractError):
+                    rc.validate_project_descriptor(dict(self.contract, **{field: branch}))
+        for pattern in ("cursor//x", "cursor/../*", "cursor/\x00*"):
+            with self.assertRaises(rc.ContractError):
+                rc.validate_project_descriptor(dict(self.contract, external_branch_patterns=[pattern]))
+        for path in ("src\\x", "src/./x", "src\x00x", " src"):
+            with self.assertRaises(rc.ContractError):
+                rc.validate_project_descriptor(dict(self.contract, allowed_paths=[path]))
+        for command in ("", "   ", "true", "echo no-op", "printf nope", "pwd", "false||true",
+                        "git diff --check||true", "(true)", "exit 0", "git diff --check\ntrue", "x\x00y"):
             with self.subTest(command=command), self.assertRaises(rc.ContractError):
                 rc.validate_project_descriptor(dict(self.contract, gate_commands=[command]))
 
