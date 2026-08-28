@@ -43,15 +43,20 @@ class JsonlDurabilityError(RuntimeError):
 
 
 def _reject_symlink_components(path: Path) -> None:
-    """Reject symlinks in a path before any durable state operation follows them."""
+    """Reject links/reparse points before any durable state operation follows them."""
     absolute = Path(os.path.abspath(path))
     current = Path(absolute.anchor) if absolute.anchor else Path()
     parts = absolute.parts[1:] if absolute.anchor else absolute.parts
     for part in parts:
         current = current / part
         try:
-            if stat.S_ISLNK(os.lstat(current).st_mode):
-                raise JsonlDurabilityError(f"JSONL path contains a symlink: {current}")
+            metadata = os.lstat(current)
+            reparse_attribute = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x0400)
+            if stat.S_ISLNK(metadata.st_mode) or (
+                os.name == "nt"
+                and bool(getattr(metadata, "st_file_attributes", 0) & reparse_attribute)
+            ):
+                raise JsonlDurabilityError(f"JSONL path contains a link or reparse point: {current}")
         except FileNotFoundError:
             continue
 

@@ -2,9 +2,9 @@
 
 This is the shared Phase 6/7 remote evidence API.  Adapters submit typed events; they never
 rewrite a run projection or choose a different session/branch/commit after the first event.
-The append-only state machine permits an initial session/result/artifact stream, one cancel
-transition (after which only terminal=cancelled is allowed), or one terminal transition; after
-terminal, only the identical terminal replay is idempotent.
+The append-only state machine permits an initial session/artifact stream, one immutable terminal
+result, one cancel transition (after which only terminal=cancelled is allowed), or one terminal
+transition; after a terminal result, only its identical replay is idempotent.
 """
 
 from __future__ import annotations
@@ -120,9 +120,12 @@ def _append_remote_event_locked(*, path: Path, run: dict, event_type: str, sessi
     if prior_session and prior_session != session_id:
         raise RemoteEvidenceError("remote session_id is immutable")
     terminal = next((row for row in prior if row.get("terminal_status")), None)
+    result_event = next((row for row in prior if row.get("event_type") == "result"), None)
     cancellation = next((row for row in prior if row.get("event_type") == "cancel"), None)
     if terminal and event_type != "terminal":
         raise RemoteEvidenceError("remote run is terminal; no further transitions are allowed")
+    if result_event and event_type != "result":
+        raise RemoteEvidenceError("remote run already has a terminal result")
     if cancellation and event_type in {"session", "result", "artifact"}:
         raise RemoteEvidenceError("remote run is cancellation-terminal; no further result transitions are allowed")
     if event_type == "session" and prior and not any(row.get("event_type") == "session" for row in prior):
@@ -144,7 +147,7 @@ def _append_remote_event_locked(*, path: Path, run: dict, event_type: str, sessi
         if artifact_path in seen_artifacts and seen_artifacts[artifact_path] != sha:
             raise RemoteEvidenceError("one remote artifact path has conflicting hashes")
         seen_artifacts[artifact_path] = sha
-        parsed_artifacts.append({"path": artifact_path, "sha256": sha})
+    parsed_artifacts = [{"path": name, "sha256": sha} for name, sha in seen_artifacts.items()]
     frozen_branch = next((row.get("branch") for row in prior if row.get("branch")), None)
     frozen_commit = next((row.get("commit") for row in prior if row.get("commit")), None)
     frozen_artifacts: dict[str, str] = {}
@@ -191,6 +194,8 @@ def _append_remote_event_locked(*, path: Path, run: dict, event_type: str, sessi
         return {"status": "duplicate", **identical}
     if event_type == "session" and any(row.get("event_type") == "session" for row in prior):
         raise RemoteEvidenceError("conflicting duplicate session event")
+    if event_type == "result" and result_event:
+        raise RemoteEvidenceError("conflicting terminal result")
     if event_type == "cancel" and cancellation:
         raise RemoteEvidenceError("conflicting duplicate cancellation transition")
     if event_type == "terminal" and terminal:

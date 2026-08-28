@@ -37,6 +37,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import sys
 import tempfile
 import time
@@ -401,8 +402,31 @@ def index_path(root: Path) -> Path:
     return root / "index.jsonl"
 
 
+def _ensure_assignment_path_safe(path: Path) -> None:
+    """Reject links and Windows reparse points in every component of a write path."""
+    absolute = Path(os.path.abspath(path))
+    current = Path(absolute.anchor) if absolute.anchor else Path()
+    parts = absolute.parts[1:] if absolute.anchor else absolute.parts
+    for part in parts:
+        current = current / part
+        try:
+            metadata = os.lstat(current)
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise AssignmentError(f"cannot inspect assignment path component {current}: {exc}") from exc
+        reparse_attribute = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x0400)
+        if stat.S_ISLNK(metadata.st_mode) or (
+            os.name == "nt"
+            and bool(getattr(metadata, "st_file_attributes", 0) & reparse_attribute)
+        ):
+            raise AssignmentError(f"assignment path contains a link or reparse point: {current}")
+
+
 def _atomic_write(path: Path, text: str) -> None:
+    _ensure_assignment_path_safe(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_assignment_path_safe(path)
     fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
@@ -424,19 +448,20 @@ def _atomic_write(path: Path, text: str) -> None:
 def persist_assignment(root: Path, value: dict) -> Path:
     validate_assignment(value, require_source_evidence=True)
     root = Path(root)
-    if root.exists() and root.is_symlink():
-        raise AssignmentError("assignment root must not be a symlink")
-    if index_path(root).is_symlink():
-        raise AssignmentError("assignment index must not be a symlink")
+    index = index_path(root)
+    _ensure_assignment_path_safe(root)
+    _ensure_assignment_path_safe(index)
     root.mkdir(parents=True, exist_ok=True)
+    _ensure_assignment_path_safe(root)
+    _ensure_assignment_path_safe(index)
     task_dir = root / value["task_id"]
-    if task_dir.exists() and task_dir.is_symlink():
-        raise AssignmentError("assignment task directory must not be a symlink")
+    _ensure_assignment_path_safe(task_dir)
     task_dir.mkdir(exist_ok=True)
+    _ensure_assignment_path_safe(task_dir)
     path = assignment_path(root, value["task_id"], value["assignment_digest"])
+    _ensure_assignment_path_safe(path)
+    _ensure_assignment_path_safe(index)
     encoded = json.dumps(value, indent=2, sort_keys=True) + "\n"
-    if path.is_symlink():
-        raise AssignmentError("assignment record must not be a symlink")
     if path.exists():
         existing = path.read_text(encoding="utf-8")
         if existing != encoded:
@@ -448,6 +473,8 @@ def persist_assignment(root: Path, value: dict) -> Path:
         # A rename can replace a concurrent writer's immutable record. Install via a hard link
     # from a fully fsynced temporary file: link(2) is create-if-absent, so the loser can only
     # compare the winner's bytes and never overwrite them. Windows falls back to O_EXCL.
+        _ensure_assignment_path_safe(path)
+        _ensure_assignment_path_safe(task_dir)
         fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(task_dir))
         try:
             with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
@@ -458,8 +485,7 @@ def persist_assignment(root: Path, value: dict) -> Path:
             except FileExistsError:
                 installed = False
             if not installed:
-                if path.is_symlink():
-                    raise AssignmentError("assignment record must not be a symlink")
+                _ensure_assignment_path_safe(path)
                 existing = path.read_text(encoding="utf-8")
                 if existing != encoded:
                     raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
@@ -472,6 +498,7 @@ def persist_assignment(root: Path, value: dict) -> Path:
         finally: os.close(dfd)
     try:
         from jsonl_durable import append_jsonl  # local import: only needed on the write path
+        _ensure_assignment_path_safe(index)
         append_jsonl(
             index_path(root),
             {

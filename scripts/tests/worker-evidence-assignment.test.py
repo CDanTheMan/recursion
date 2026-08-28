@@ -124,7 +124,8 @@ def test_remote_evidence(tmp_path: Path) -> None:
     bound_args = start_args(path, "run-remote", "task-1") + ["--assignment-digest", digest,
         "--assignment-file", str(assignment_file)]
     run(bound_args)
-    first = run(["remote-evidence", str(path), "--session-id", "sess-1", "--branch", "cursor/task-1",
+    first = run(["remote-evidence", str(path), "--session-id", "sess-1", "--event-type", "session",
+                "--branch", "cursor/task-1",
                 "--commit", "b" * 40, "--artifact", "apps/api/a.txt=" + "c" * 64,
                 "--artifact", "apps/api/b.txt=" + "d" * 64])
     check(first.returncode == 0, f"remote-evidence exits 0 (got {first.returncode}, stderr={first.stderr!r})")
@@ -157,7 +158,7 @@ def test_remote_state_and_concurrency(tmp_path: Path) -> None:
     _assignment_file, digest = make_assignment(tmp_path)
     run(start_args(path, "run-remote-race", "task-1") +
         ["--assignment-digest", digest, "--assignment-file", str(tmp_path / "assignments" / "task-1" / f"{digest}.json")])
-    common = ["remote-evidence", str(path), "--session-id", "sess-race",
+    common = ["remote-evidence", str(path), "--session-id", "sess-race", "--event-type", "session",
               "--branch", "cursor/race", "--commit", "b" * 40]
     first = subprocess.Popen([sys.executable, str(WORKER_EVIDENCE), *common],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -184,6 +185,50 @@ def test_remote_state_and_concurrency(tmp_path: Path) -> None:
     check(cancelled_result.returncode != 0, "a result after cancellation terminal is refused")
 
 
+def test_terminal_result_is_immutable_and_concurrent(tmp_path: Path) -> None:
+    path = tmp_path / "run.json"
+    _assignment_file, digest = make_assignment(tmp_path)
+    run(start_args(path, "run-result-terminal", "task-1") +
+        ["--assignment-digest", digest, "--assignment-file",
+         str(tmp_path / "assignments" / "task-1" / f"{digest}.json")])
+    first = ["remote-evidence", str(path), "--session-id", "sess-result",
+             "--branch", "cursor/result", "--commit", "b" * 40,
+             "--artifact", "apps/api/a.txt=" + "c" * 64,
+             "--artifact", "apps/api/c.txt=" + "e" * 64]
+    replay = run(first)
+    check(replay.returncode == 0, "the first terminal result is accepted")
+    same = run(first[:-4] + ["--artifact", first[-1], "--artifact", first[-3]])
+    check(same.returncode == 0 and json.loads(same.stdout).get("status") == "duplicate",
+          "a byte/semantic-identical (including reordered artifacts) terminal result replay is harmless")
+    conflict = run([*first[:-1], "--artifact", "apps/api/b.txt=" + "d" * 64])
+    check(conflict.returncode != 0, "a conflicting sequential terminal result is refused")
+    check(len((tmp_path / "remote-events.jsonl").read_text(encoding="utf-8").splitlines()) == 1,
+          "a conflicting terminal result cannot append a second event")
+
+    path2 = tmp_path / "run-concurrent.json"
+    run(start_args(path2, "run-result-concurrent", "task-1") +
+        ["--assignment-digest", digest, "--assignment-file",
+         str(tmp_path / "assignments" / "task-1" / f"{digest}.json")])
+    left = ["remote-evidence", str(path2), "--session-id", "sess-concurrent",
+            "--branch", "cursor/result", "--commit", "b" * 40,
+            "--artifact", "apps/api/a.txt=" + "c" * 64]
+    right = ["remote-evidence", str(path2), "--session-id", "sess-concurrent",
+             "--branch", "cursor/result", "--commit", "b" * 40,
+             "--artifact", "apps/api/b.txt=" + "d" * 64]
+    first_process = subprocess.Popen([sys.executable, str(WORKER_EVIDENCE), *left],
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    second_process = subprocess.Popen([sys.executable, str(WORKER_EVIDENCE), *right],
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    first_process.communicate(timeout=15); second_process.communicate(timeout=15)
+    check(sorted(item.returncode for item in (first_process, second_process)) == [0, 1],
+          "concurrent conflicting terminal results have one winner and one refusal")
+    concurrent_events = [json.loads(line) for line in
+                         (tmp_path / "remote-events.jsonl").read_text(encoding="utf-8").splitlines()
+                         if json.loads(line).get("run_id") == "run-result-concurrent"]
+    check(len(concurrent_events) == 1,
+          "concurrent conflicting terminal results append exactly one event")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         test_legacy_start_unchanged(Path(tmp))
@@ -199,6 +244,8 @@ def main() -> int:
         test_remote_evidence(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_remote_state_and_concurrency(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_terminal_result_is_immutable_and_concurrent(Path(tmp))
 
     if failures:
         print(f"worker-evidence-assignment.test: {len(failures)} FAILED")

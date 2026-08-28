@@ -9,6 +9,7 @@ a disposable tempdir; nothing touches the live repo's state/.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -142,6 +143,97 @@ def test_persist_idempotent_and_collision_safe(tmp_path: Path) -> None:
         collide_path.write_text(original, encoding="utf-8")
 
 
+def _make_directory_link(link: Path, target: Path) -> None:
+    """Create a directory link on both supported test platforms; never silently skip it."""
+    if os.name == "nt":
+        result = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(target)],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise AssertionError(f"could not create Windows junction: {result.stderr or result.stdout}")
+    else:
+        link.symlink_to(target, target_is_directory=True)
+
+
+def _make_leaf_link(link: Path, target: Path) -> None:
+    """Create a file symlink on POSIX or a directory junction at the leaf on Windows."""
+    if os.name == "nt":
+        result = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(target)],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise AssertionError(f"could not create Windows leaf junction: {result.stderr or result.stdout}")
+        return
+    try:
+        link.symlink_to(target)
+    except OSError as exc:
+        raise AssertionError(f"could not create file symlink for confinement test: {exc}") from exc
+
+
+def test_persist_rejects_linked_paths_before_writes(tmp_path: Path) -> None:
+    value = amod.resolve_assignment(**BASE_KWARGS, created_at="2026-08-28T00:00:00Z")
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    linked_parent = tmp_path / "linked-parent"
+    _make_directory_link(linked_parent, outside)
+    try:
+        amod.persist_assignment(linked_parent / "assignments", value)
+        check(False, "an assignment root below a linked ancestor is refused")
+    except amod.AssignmentError:
+        check(True, "an assignment root below a linked ancestor is refused")
+    check(not (outside / "assignments").exists(),
+          "a linked ancestor cannot redirect assignment writes outside the intended root")
+
+    task_root = tmp_path / "task-link-root"
+    task_root.mkdir()
+    outside_task = outside / "task-link-target"
+    outside_task.mkdir()
+    _make_directory_link(task_root / value["task_id"], outside_task)
+    try:
+        amod.persist_assignment(task_root, value)
+        check(False, "a linked assignment task directory is refused")
+    except amod.AssignmentError:
+        check(True, "a linked assignment task directory is refused")
+    check(not (outside_task / f"{value['assignment_digest']}.json").exists(),
+          "a linked task directory receives no assignment bytes")
+
+    record_root = tmp_path / "record-link-root"
+    record_task = record_root / value["task_id"]
+    record_task.mkdir(parents=True)
+    outside_record = outside / "record-target"
+    outside_record.mkdir()
+    record_sentinel = outside_record / "sentinel"
+    record_sentinel.write_text("sentinel\n", encoding="utf-8")
+    _make_leaf_link(record_task / f"{value['assignment_digest']}.json", outside_record)
+    try:
+        amod.persist_assignment(record_root, value)
+        check(False, "a linked assignment record leaf is refused")
+    except amod.AssignmentError:
+        check(True, "a linked assignment record leaf is refused")
+    check(record_sentinel.read_text(encoding="utf-8") == "sentinel\n",
+          "a linked assignment record cannot overwrite its target")
+
+    index_root = tmp_path / "index-link-root"
+    (index_root / value["task_id"]).mkdir(parents=True)
+    outside_index = outside / "index-target"
+    outside_index.mkdir()
+    index_sentinel = outside_index / "sentinel"
+    index_sentinel.write_text("sentinel\n", encoding="utf-8")
+    _make_leaf_link(index_root / "index.jsonl", outside_index)
+    try:
+        amod.persist_assignment(index_root, value)
+        check(False, "a linked assignment index leaf is refused")
+    except amod.AssignmentError:
+        check(True, "a linked assignment index leaf is refused")
+    check(not (index_root / value["task_id"] / f"{value['assignment_digest']}.json").exists(),
+          "an unsafe linked index is rejected before the assignment file is written")
+    check(index_sentinel.read_text(encoding="utf-8") == "sentinel\n",
+          "a linked assignment index cannot be overwritten")
+
+
 def test_capacity_pool_validation(tmp_path: Path) -> None:
     pool_dir = tmp_path / "pools"
     pool_dir.mkdir()
@@ -258,6 +350,8 @@ def main() -> int:
     test_empty_allowed_paths_refused()
     with tempfile.TemporaryDirectory() as tmp:
         test_persist_idempotent_and_collision_safe(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_persist_rejects_linked_paths_before_writes(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_capacity_pool_validation(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
