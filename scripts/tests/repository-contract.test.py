@@ -80,7 +80,7 @@ class RepositoryContractTests(unittest.TestCase):
         self.temp.cleanup()
 
     def candidate(self) -> dict[str, object]:
-        git(self.repo, "checkout", "-qb", "cursor/task-one")
+        git(self.repo, "checkout", "-qB", "cursor/task-one")
         (self.repo / "src" / "feature.txt").write_text("candidate\n", encoding="utf-8")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-qm", "candidate")
@@ -91,6 +91,28 @@ class RepositoryContractTests(unittest.TestCase):
             "candidate_commit": commit, "idempotency_key": "dispatch-1",
         }
         return candidate
+
+    def plumbed_candidate(self, entry: str, name: str, base_candidate: dict[str, object] | None = None) -> dict[str, object]:
+        """Build a candidate tree with an arbitrary mode, independent of checkout symlink support."""
+        candidate = base_candidate or self.candidate()
+        source_tree = git(self.repo, "rev-parse", f"{candidate['candidate_commit']}:src")
+        src_entries = [line.rstrip("\r") for line in git_raw(self.repo, "ls-tree", source_tree).splitlines()]
+        src_entries.append(f"{entry}\t{name}")
+        made_src = subprocess.run(["git", "-C", str(self.repo), "mktree"],
+                                  input=("\n".join(sorted(src_entries)) + "\n").encode(),
+                                  capture_output=True, check=True).stdout.decode().strip()
+        root_tree = git(self.repo, "rev-parse", f"{candidate['candidate_commit']}^{{tree}}")
+        root_entries = [line.rstrip("\r") for line in git_raw(self.repo, "ls-tree", root_tree).splitlines()
+                        if not line.rstrip("\r").endswith("\tsrc")]
+        root_entries.append(f"040000 tree {made_src}\tsrc")
+        made_root = subprocess.run(["git", "-C", str(self.repo), "mktree"],
+                                   input=("\n".join(sorted(root_entries)) + "\n").encode(),
+                                   capture_output=True, check=True).stdout.decode().strip()
+        made_commit = subprocess.run(["git", "-C", str(self.repo), "commit-tree", made_root, "-p", self.source],
+                                     input=f"{name}\n", text=True, capture_output=True, check=True).stdout.strip()
+        branch = f"cursor/{name}"
+        subprocess.run(["git", "-C", str(self.repo), "update-ref", f"refs/heads/{branch}", made_commit], check=True)
+        return {**candidate, "external_branch": branch, "candidate_commit": made_commit}
 
     def receipt(self, candidate: dict[str, object]) -> dict[str, object]:
         diff = git_raw(self.repo, "diff", "--binary", str(candidate["source_sha"]), str(candidate["candidate_commit"]))
@@ -220,19 +242,18 @@ class RepositoryContractTests(unittest.TestCase):
             with self.assertRaisesRegex(rc.ContractError, "key"):
                 rc.verify_candidate(self.contract, candidate, self.repo, receipt=receipt)
 
-    def test_symlink_and_submodule_tree_escapes_are_refused(self) -> None:
-        candidate = self.candidate()
-        git(self.repo, "checkout", "-qb", "cursor/symlink")
-        link = self.repo / "src" / "escape"
-        try:
-            link.symlink_to("../.git/control-plane", target_is_directory=True)
-        except (OSError, NotImplementedError):
-            self.skipTest("symlink creation is unavailable")
-        git(self.repo, "add", "src/escape")
-        git(self.repo, "commit", "-qm", "symlink escape")
-        bad = dict(candidate, external_branch="cursor/symlink", candidate_commit=git(self.repo, "rev-parse", "HEAD"))
+    def test_git_plumbed_symlink_and_submodule_tree_escapes_are_refused(self) -> None:
+        # Create the exact unsafe target blob without requiring an OS-level symlink or elevated
+        # Windows privilege.
+        target = subprocess.run(["git", "-C", str(self.repo), "hash-object", "-w", "--stdin"],
+                                input=b"../.GIT/Control-Plane\n", capture_output=True, check=True).stdout.decode().strip()
+        base = self.candidate()
+        symlink = self.plumbed_candidate(f"120000 blob {target}", "escape", base)
         with self.assertRaisesRegex(rc.ContractError, "symlink"):
-            rc.verify_candidate(self.contract, bad, self.repo, receipt=self.receipt(bad))
+            rc.verify_candidate(self.contract, symlink, self.repo, receipt=self.receipt(symlink))
+        submodule = self.plumbed_candidate(f"160000 commit {self.source}", "submodule", base)
+        with self.assertRaisesRegex(rc.ContractError, "submodule"):
+            rc.verify_candidate(self.contract, submodule, self.repo, receipt=self.receipt(submodule))
 
     def test_malformed_task_fields_are_typed_before_legacy_guard(self) -> None:
         for field in ("acceptance", "goal", "workdir", "gate_command", "seed"):
@@ -253,9 +274,11 @@ class RepositoryContractTests(unittest.TestCase):
             with self.assertRaises(rc.ContractError):
                 rc.validate_project_descriptor(dict(self.contract, allowed_paths=[path]))
         for command in ("", "   ", "true", "echo no-op", "printf nope", "pwd", "false||true",
-                        "git diff --check||true", "(true)", "exit 0", "git diff --check\ntrue", "x\x00y"):
+                        "git diff --check||true", "(true)", "(false)", "{ true; }", "exit 0",
+                        "git diff --check\ntrue", "x\x00y"):
             with self.subTest(command=command), self.assertRaises(rc.ContractError):
                 rc.validate_project_descriptor(dict(self.contract, gate_commands=[command]))
+        rc.validate_project_descriptor(dict(self.contract, gate_commands=["git\tdiff --check"]))
 
     def test_import_race_reconciles_identical_winner_and_receipt_is_required(self) -> None:
         candidate = self.candidate()

@@ -146,7 +146,8 @@ def _valid_gate_command(value: object) -> bool:
             # Repository descriptors bind their gate command digest; gate-file ownership is a
             # separate contract.  Use an empty worker scope here so validator parsing does not
             # require a task-level gate_files declaration.
-            [sys.executable, str(validator), "--acceptance", value, "--allowed-paths", ""],
+            [sys.executable, str(validator), "--acceptance", value, "--allowed-paths", "",
+             "--strict-direct"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             timeout=10, check=False,
         )
@@ -255,8 +256,9 @@ def _contract_fields(contract: dict[str, Any]) -> dict[str, Any]:
     for key in ("gate_commands", "eligible_hosts", "eligible_pools"):
         values = contract[key]
         if not isinstance(values, list) or not values \
-                or any(not isinstance(item, str) or not item or any(ord(char) < 32 for char in item)
-                       for item in values) \
+                or any(not isinstance(item, str) or not item or any(
+                    ord(char) < 32 and (key != "gate_commands" or char != "\t") for char in item
+                ) for item in values) \
                 or len(set(values)) != len(values):
             raise ContractError(f"{key} must be a string array")
     if any(not _valid_gate_command(item) for item in contract["gate_commands"]):
@@ -349,15 +351,17 @@ def _resolve_tree_path(path: str, symlinks: dict[str, str]) -> str:
     """Resolve a Git-tree path lexically through symlinks, refusing escapes and cycles."""
     pending = list(PurePosixPath(path).parts)
     seen: set[str] = set()
+    symlink_lookup = {name.casefold(): (name, target) for name, target in symlinks.items()}
     for _ in range(64):
         current = "/".join(pending) or "."
-        link = next((candidate for candidate in symlinks if candidate == current), None)
-        if link is None:
+        link_record = symlink_lookup.get(current.casefold())
+        if link_record is None:
             return current
-        if link in seen:
+        link, target = link_record
+        folded_link = link.casefold()
+        if folded_link in seen:
             raise ContractError("candidate tree contains a symlink cycle", "unauthorized-result")
-        seen.add(link)
-        target = symlinks[link]
+        seen.add(folded_link)
         if not target or any(char in target for char in ("\x00", "\n", "\r", "\\")) \
                 or target.startswith("/") \
                 or re.match(r"^[A-Za-z]:", target):
@@ -397,7 +401,8 @@ def _inspect_candidate_tree(repo: Path, commit: str, allowed: list[str]) -> None
     for path in symlinks:
         resolved = _resolve_tree_path(path, symlinks)
         components = PurePosixPath(resolved).parts
-        if ".git" in components or "control-plane" in components \
+        protected = {".git", "control-plane"}
+        if any(component.casefold() in protected for component in components) \
                 or not _path_allowed(resolved, allowed):
             raise ContractError("candidate symlink escapes allowed_paths", "unauthorized-result")
 
@@ -488,7 +493,7 @@ def _controller_key() -> bytes:
             if path.is_symlink():
                 return True
             # Windows junctions/reparse points are not always reported by is_symlink().
-            return bool(getattr(path.stat(), "st_file_attributes", 0) & 0x400)
+            return bool(getattr(path.stat(follow_symlinks=False), "st_file_attributes", 0) & 0x400)
 
         if is_link(key_path) or not key_path.is_file():
             raise OSError("controller key is not a regular file")
@@ -509,19 +514,45 @@ def _controller_key() -> bytes:
                 if parent_mode & 0o022 and not (parent_mode & 0o1000 and parent_mode & 0o002):
                     raise OSError("controller key parent is writable by group or world")
         if os.name == "nt" and key_path == _DEFAULT_CONTROLLER_KEY_PATH:
-            # The fixed production path is additionally checked against the Windows ACL.  Do
-            # not accept inherited Everyone/Users write access or a missing current-user ACE.
-            acl = subprocess.run(["icacls", str(key_path)], capture_output=True, text=True,
-                                  stdin=subprocess.DEVNULL, timeout=10, check=False)
-            if acl.returncode or not acl.stdout:
-                raise OSError("controller key ACL could not be inspected")
-            acl_text = acl.stdout.lower()
-            if any(principal in acl_text for principal in
-                   ("everyone", "authenticated users", "\\users:", "codexsandboxusers")):
-                raise OSError("controller key ACL grants broad access")
-            username = os.environ.get("USERNAME", "").lower()
-            if not username or username not in acl_text:
-                raise OSError("controller key ACL is not owned by the controller")
+            # The fixed production path is additionally checked against the Windows ACL.  Parse
+            # ACE lines (never the path header: a username in C:\Users\name\... is not an ACE),
+            # deny broad principals and inherited write access, and require an exact current-user
+            # full-control ACE on both the key and its parent directories.
+            username = os.environ.get("USERNAME", "").casefold()
+
+            def check_acl(path: Path, require_owner: bool) -> None:
+                acl = subprocess.run(["icacls", str(path)], capture_output=True, text=True,
+                                      stdin=subprocess.DEVNULL, timeout=10, check=False)
+                if acl.returncode or not acl.stdout:
+                    raise OSError("controller key ACL could not be inspected")
+                entries: list[tuple[str, str]] = []
+                for line in acl.stdout.splitlines():
+                    match = re.match(r"^\s*([^:]+):((?:\([^)]+\))+.*)$", line)
+                    if match:
+                        entries.append((match.group(1).strip(), match.group(2).strip()))
+                if not entries:
+                    raise OSError("controller key ACL has no parseable ACEs")
+                broad = {"everyone", "authenticated users", "users", "codexsandboxusers",
+                         "builtin\\users", "nt authority\\authenticated users"}
+                owner = False
+                for principal, permissions in entries:
+                    folded = principal.casefold()
+                    if folded in broad or folded.endswith("\\users"):
+                        raise OSError("controller key ACL grants broad access")
+                    if "(i)" in permissions.casefold() and re.search(r"\((?:f|m|w|wd|ad)\)",
+                                                                        permissions, re.I):
+                        raise OSError("controller key ACL grants inherited write access")
+                    if require_owner and username and folded.rsplit("\\", 1)[-1] == username \
+                            and re.search(r"\((?:f|m)\)", permissions, re.I):
+                        owner = True
+                if require_owner and not owner:
+                    raise OSError("controller key ACL is not owned by the controller")
+
+            check_acl(key_path, True)
+            for parent in (key_path.parent, *key_path.parent.parents):
+                if parent == parent.parent:
+                    break
+                check_acl(parent, False)
         raw = key_path.read_text(encoding="utf-8").strip()
     except OSError as exc:
         raise ContractError("controller verifier key is unavailable", "verification-unavailable") from exc

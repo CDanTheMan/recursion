@@ -206,7 +206,7 @@ sys.path.insert(0, str(Path.cwd() / "scripts"))
 import repository_contract as rc
 
 descriptor_path, repo, task_id, source_branch, source_sha, allowed_raw, workdir, acceptance, goal = sys.argv[1:]
-allowed = [item for item in re.split(r"[\\s,]+", allowed_raw) if item]
+allowed = [item for item in re.split(r"[\s,]+", allowed_raw) if item]
 task = {"id": task_id, "source_branch": source_branch, "source_sha": source_sha,
         "source_repository": repo, "allowed_paths": allowed, "workdir": workdir,
         "acceptance": acceptance, "goal": goal}

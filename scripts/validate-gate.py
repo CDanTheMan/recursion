@@ -81,6 +81,10 @@ def entrypoint(words: list[str], strict: bool) -> str | None:
         return None
     if name in {"test", "["}:
         return None
+    # Repository descriptors may use read-only Git checks such as `git diff --check`; Git itself
+    # is a controller-provided executable, not an admitted worker-modifiable grading file.
+    if name == "git":
+        return None
     if name not in {"bash", "sh", "python", "python3", "node"}:
         if strict and "/" not in command:
             fail(f"bare acceptance launcher is not admitted: {name}")
@@ -146,7 +150,7 @@ def main() -> int:
             fail("acceptance gate must be bounded, single-line, and non-empty")
         compact = re.sub(r"\s+", " ", gate)
         if args.strict_direct and (
-            any(token in gate for token in ("`", "$", "<(", ">(", "||", ";"))
+            any(token in gate for token in ("`", "$", "<(", ">(", "||", ";", "(", ")", "{", "}"))
             or re.search(r"(?<!\|)\|(?!\|)", gate)
             or re.search(r"(?<![&])&(?![&])", gate)
             or "<" in gate or ">" in gate
