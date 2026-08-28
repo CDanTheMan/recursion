@@ -41,6 +41,7 @@ ROUTING_ORDER_FIELDS = {
     "billing_basis", "cost_class", "pool_id", "provider_id", "capacity_pool_id", "model_id", "engine_id", "host_id",
     "sandbox_profile_id", "speed_class", "reasoning_class", "manual_pin",
 }
+SECRET_PATTERN = r"(?:[sS][kK]-[A-Za-z0-9_-]{12,}|[gG][hH][pP]_[A-Za-z0-9]{12,}|[gG][iI][tT][hH][uU][bB]_[pP][aA][tT]_[A-Za-z0-9_]{12,}|[xX][oO][xX][bBaApPrRsS]-[A-Za-z0-9-]{12,}|[aA][kK][iI][aA][0-9A-Za-z]{16}|[nN][pP][mM]_[A-Za-z0-9]{12,}|[aA][iI][zZ][aA][0-9A-Za-z_-]{20,}|[bB][eE][aA][rR][eE][rR][ \\t]+[^ \\t]+|(?:[aA][pP][iI][-_]?[kK][eE][yY]|[pP][aA][sS][sS][wW][oO][rR][dD]|[sS][eE][cC][rR][eE][tT])[ \\t]*[:=]|-----BEGIN [A-Z ]+ KEY-----)"
 TASK_FIELDS = {
     "task_id", "project_id", "source_repository", "source_branch", "source_sha",
     "seed_manifest_digest", "gate_digest", "allowed_paths", "role", "requirements",
@@ -204,17 +205,7 @@ def _no_secrets(value: Any, where: str = "document") -> None:
 def _looks_secret(value: str) -> bool:
     if SECRET_REF.fullmatch(value):
         return False
-    if re.search(r"(?:sk-[A-Za-z0-9_-]{12,}|ghp_[A-Za-z0-9]{12,}|github_pat_[A-Za-z0-9_]{12,}|xox[baprs]-[A-Za-z0-9-]{12,}|AKIA[0-9A-Z]{16}|npm_[A-Za-z0-9]{12,}|AIza[0-9A-Za-z_-]{20,}|Bearer\s+\S+|(?:api[_-]?key|password|secret)\s*[:=]|-----BEGIN [A-Z ]+ KEY-----)", value, re.I):
-        return True
-    compact = re.sub(r"\s+", "", value)
-    if len(compact) < 24 or " " in value or "\t" in value:
-        return False
-    alphabet = set(compact)
-    if not (any(c.islower() for c in compact) and any(c.isupper() for c in compact) and any(c.isdigit() for c in compact)):
-        return False
-    counts = {c: compact.count(c) for c in alphabet}
-    entropy = -sum((n / len(compact)) * math.log2(n / len(compact)) for n in counts.values())
-    return entropy >= 4.2
+    return re.search(SECRET_PATTERN, value) is not None
 
 
 def _common(record: Any, kind: str, fields: set[str], required: set[str]) -> dict[str, Any]:

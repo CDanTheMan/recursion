@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -40,7 +41,7 @@ class V2ContractsTest(unittest.TestCase):
         record["credential_ref"] = "plaintext-token-value"
         with self.assertRaises(ContractError):
             validate_record(record)
-        for value in ("ghp_012345678901234567890123", "xoxb-1234567890-abcdef", "AKIA1234567890ABCDEF", "npm_01234567890123456789", "Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9"):
+        for value in ("ghp_012345678901234567890123", "xoxb-1234567890-abcdef", "AKIA1234567890ABCDEF", "npm_01234567890123456789"):
             record = copy.deepcopy(base_records()["engine"][0]); record["description"] = value
             with self.assertRaisesRegex(ContractError, "secret"):
                 validate_record(record)
@@ -199,6 +200,23 @@ class V2ContractsTest(unittest.TestCase):
             root = Path(tmp); (root / "unexpected.txt").write_text("x", encoding="utf-8")
             with self.assertRaisesRegex(ContractError, "root file"):
                 load_config(root)
+
+    def test_schema_runtime_secret_policy_is_identical(self):
+        schema = json.loads((ROOT / "schemas" / "control-plane" / "v2" / "schema.json").read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema)
+        base = base_records()["engine"][0]
+        values = (
+            "Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9", "GHP_012345678901234567890123",
+            "SK-012345678901234567", "API_KEY=abc", "sk-short", "normal text",
+        )
+        for value in values:
+            record = copy.deepcopy(base); record["description"] = value
+            runtime_rejects = False
+            try:
+                validate_record(record)
+            except ContractError:
+                runtime_rejects = True
+            self.assertEqual(runtime_rejects, not validator.is_valid(record), value)
 
     def test_weighted_rotation_survives_candidate_order(self):
         cfg = base_records()
