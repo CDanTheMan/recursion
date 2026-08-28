@@ -11,7 +11,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
+import binascii
 import ctypes
+import hashlib
+import hmac
 import ipaddress
 import json
 import os
@@ -66,6 +70,36 @@ class ClientHelloMismatch(ValueError):
     """The ClientHello SNI does not match the CONNECT authority."""
 
 
+def issue_capability(profile: str, assignment: str, secret: bytes) -> str:
+    """Create an opaque, signed transport capability for exactly one assignment/profile."""
+    if len(secret) < 32:
+        raise ValueError("capability key is too short")
+    if not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", profile) \
+            or not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", assignment):
+        raise ValueError("capability identity is invalid")
+    payload = json.dumps({"assignment": assignment, "profile": profile},
+                         sort_keys=True, separators=(",", ":")).encode("ascii")
+    encoded = base64.urlsafe_b64encode(payload).rstrip(b"=")
+    signature = hmac.new(secret, encoded, hashlib.sha256).digest()
+    return encoded.decode("ascii") + "." + base64.urlsafe_b64encode(signature).rstrip(b"=").decode("ascii")
+
+
+def verify_capability(token: str, secret: bytes) -> dict[str, str]:
+    try:
+        encoded, signed = token.split(".", 1)
+        expected = hmac.new(secret, encoded.encode("ascii"), hashlib.sha256).digest()
+        observed = base64.urlsafe_b64decode(signed + "=" * (-len(signed) % 4))
+        if not hmac.compare_digest(observed, expected):
+            raise ValueError
+        payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
+    except (ValueError, UnicodeError, json.JSONDecodeError, TypeError, binascii.Error):
+        raise ConnectDenied("transport capability is invalid") from None
+    if not isinstance(payload, dict) or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", str(payload.get("profile", ""))) \
+            or not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", str(payload.get("assignment", ""))):
+        raise ConnectDenied("transport capability is invalid")
+    return {"profile": str(payload["profile"]), "assignment": str(payload["assignment"])}
+
+
 def parse_authority(value: str) -> tuple[str, int]:
     if value.count(":") != 1 or any(ch.isspace() for ch in value):
         raise ValueError("authority must be a DNS name and explicit port")
@@ -92,7 +126,13 @@ def parse_allowlist(values: Iterable[str]) -> set[tuple[str, int]]:
     return allowed
 
 
-def parse_connect_request(request: bytes, allowed: set[tuple[str, int]]) -> tuple[str, int]:
+def parse_connect_request(
+    request: bytes,
+    allowed: set[tuple[str, int]] | None = None,
+    *,
+    capability_key: bytes | None = None,
+    profile_authorities: dict[str, set[tuple[str, int]]] | None = None,
+) -> tuple[str, int]:
     if len(request) > MAX_REQUEST or not request.endswith(b"\r\n\r\n"):
         raise MalformedConnect("request framing is invalid")
     if request[:-4].find(b"\r\n\r\n") >= 0 or b"\x00" in request:
@@ -116,6 +156,7 @@ def parse_connect_request(request: bytes, allowed: set[tuple[str, int]]) -> tupl
         authority = parse_authority(authority_text)
     except ValueError as exc:
         raise MalformedConnect("CONNECT authority is invalid") from exc
+    proxy_authorization: str | None = None
     for line in lines[1:]:
         if not line or line[:1] in " \t" or ":" not in line:
             raise MalformedConnect("header syntax is invalid")
@@ -124,7 +165,28 @@ def parse_connect_request(request: bytes, allowed: set[tuple[str, int]]) -> tupl
             raise MalformedConnect("header name is invalid")
         if name.lower() in {"content-length", "transfer-encoding"}:
             raise MalformedConnect("CONNECT bodies are forbidden")
-    if authority not in allowed:
+        if name.lower() == "proxy-authorization":
+            if proxy_authorization is not None:
+                raise MalformedConnect("duplicate proxy authorization")
+            proxy_authorization = line.split(":", 1)[1].strip()
+    if capability_key is not None:
+        if profile_authorities is None or not proxy_authorization:
+            raise ConnectDenied("transport authorization is required")
+        if proxy_authorization.startswith("Bearer "):
+            token = proxy_authorization[7:]
+        elif proxy_authorization.startswith("Basic "):
+            try:
+                basic = base64.b64decode(proxy_authorization[6:], validate=True).decode("ascii")
+                _, token = basic.split(":", 1)
+            except (ValueError, UnicodeError, binascii.Error):
+                raise ConnectDenied("transport authorization is invalid") from None
+        else:
+            raise ConnectDenied("transport authorization is invalid")
+        capability = verify_capability(token, capability_key)
+        allowed = profile_authorities.get(capability["profile"])
+        if allowed is None:
+            raise ConnectDenied("transport profile is not admitted")
+    if allowed is None or authority not in allowed:
         raise ConnectDenied("authority is not allowed")
     return authority
 
@@ -360,16 +422,84 @@ async def _pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> N
             pass
 
 
+def forbidden_destination(address: str) -> bool:
+    """Reject every non-public destination class before a socket is created."""
+    try:
+        value = ipaddress.ip_address(address)
+    except ValueError:
+        return True
+    return not value.is_global or value.is_private or value.is_loopback or value.is_link_local \
+        or value.is_reserved or value.is_multicast or value.is_unspecified
+
+
+def resolve_approved_addresses(
+    host: str, port: int, overrides: dict[str, str] | None = None,
+) -> list[tuple[int, int, int, tuple[object, ...], str]]:
+    """Resolve once, reject unsafe answers, and return the exact peer set for dialing."""
+    override = (overrides or {}).get(host)
+    allow_test_private = bool(override) and os.environ.get("RECURSION_PROVIDER_PROXY_TEST") == "1"
+    if override:
+        infos = [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (override, port))]
+    else:
+        try:
+            infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        except OSError as exc:
+            raise ConnectDenied("destination resolution failed") from exc
+    approved: list[tuple[int, int, int, tuple[object, ...], str]] = []
+    seen: set[tuple[int, str]] = set()
+    for family, socktype, proto, _, sockaddr in infos:
+        address = str(sockaddr[0])
+        if (family, address) in seen:
+            continue
+        if forbidden_destination(address) and not allow_test_private:
+            raise ConnectDenied("destination resolves to a forbidden address")
+        seen.add((family, address))
+        approved.append((family, socktype, proto, tuple(sockaddr), address))
+    if not approved:
+        raise ConnectDenied("destination has no approved addresses")
+    return approved
+
+
+async def open_approved_connection(
+    destinations: list[tuple[int, int, int, tuple[object, ...], str]], port: int,
+) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    del port  # The port is already part of each approved sockaddr.
+    loop = asyncio.get_running_loop()
+    last_error: OSError | None = None
+    for family, socktype, proto, sockaddr, approved_ip in destinations:
+        sock = socket.socket(family, socktype, proto)
+        sock.setblocking(False)
+        try:
+            await asyncio.wait_for(loop.sock_connect(sock, sockaddr), CONNECT_TIMEOUT)
+            peer = sock.getpeername()
+            connected_ip = str(peer[0])
+            if connected_ip != approved_ip or forbidden_destination(connected_ip) and \
+                    os.environ.get("RECURSION_PROVIDER_PROXY_TEST") != "1":
+                raise ConnectDenied("connected peer is outside the approved DNS answer")
+            return await asyncio.open_connection(sock=sock)
+        except ConnectDenied:
+            sock.close()
+            raise
+        except (asyncio.TimeoutError, OSError) as exc:
+            last_error = exc
+            sock.close()
+    raise OSError("all approved upstream addresses refused the connection") from last_error
+
+
 class ConnectProxy:
     def __init__(
         self,
         allowed: set[tuple[str, int]],
         resolutions: dict[str, str],
         concurrency: int,
+        capability_key: bytes | None = None,
+        profile_authorities: dict[str, set[tuple[str, int]]] | None = None,
     ) -> None:
         self.allowed = allowed
         self.resolutions = resolutions
         self.concurrency = concurrency
+        self.capability_key = capability_key
+        self.profile_authorities = profile_authorities
         self.active = 0
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -384,7 +514,10 @@ class ConnectProxy:
         try:
             try:
                 request = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), HEADER_TIMEOUT)
-                host, port = parse_connect_request(request, self.allowed)
+                host, port = parse_connect_request(
+                    request, self.allowed, capability_key=self.capability_key,
+                    profile_authorities=self.profile_authorities,
+                )
             except ConnectDenied:
                 writer.write(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n")
                 await writer.drain()
@@ -393,10 +526,10 @@ class ConnectProxy:
                 writer.write(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n")
                 await writer.drain()
                 return
-            destination = self.resolutions.get(host, host)
+            destinations = resolve_approved_addresses(host, port, self.resolutions)
             try:
-                upstream_reader, upstream_writer = await asyncio.wait_for(
-                    asyncio.open_connection(destination, port), CONNECT_TIMEOUT
+                upstream_reader, upstream_writer = await open_approved_connection(
+                    destinations, port
                 )
             except (asyncio.TimeoutError, OSError):
                 writer.write(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n")
@@ -452,6 +585,8 @@ def parse_resolutions(values: Iterable[str], namespace: pathlib.Path) -> dict[st
         host, address = value.split("=", 1)
         canonical, _ = parse_authority(f"{host}:1")
         socket.inet_pton(socket.AF_INET, address)
+        if forbidden_destination(address) and os.environ.get("RECURSION_PROVIDER_PROXY_TEST") != "1":
+            raise ValueError("resolver override is a forbidden destination")
         result[canonical] = address
     return result
 
@@ -465,9 +600,13 @@ def namespace_inventory() -> dict[str, object]:
     return {"interfaces": interfaces, "ipv4_routes": len(routes)}
 
 
-def proxy_response(port: int, authority: str) -> bytes:
+def proxy_response(port: int, authority: str, capability_token: str | None = None) -> bytes:
     with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
-        client.sendall(f"CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n\r\n".encode("ascii"))
+        authorization = f"Proxy-Authorization: Bearer {capability_token}\r\n" \
+            if capability_token else ""
+        client.sendall(
+            f"CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n{authorization}\r\n".encode("ascii")
+        )
         response = b""
         while b"\r\n\r\n" not in response and len(response) <= 4096:
             block = client.recv(4096)
@@ -477,7 +616,8 @@ def proxy_response(port: int, authority: str) -> bytes:
         return response
 
 
-def probe_namespace(namespace: pathlib.Path, port: int, authority: tuple[str, int], live: bool) -> dict[str, object]:
+def probe_namespace(namespace: pathlib.Path, port: int, authority: tuple[str, int], live: bool,
+                    capability_token: str | None = None) -> dict[str, object]:
     validate_namespace_file(namespace)
     host_fd = os.open("/proc/self/ns/net", os.O_RDONLY | os.O_CLOEXEC)
     provider_fd = os.open(namespace, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
@@ -487,7 +627,7 @@ def probe_namespace(namespace: pathlib.Path, port: int, authority: tuple[str, in
         inventory = namespace_inventory()
         if inventory != {"interfaces": ["lo"], "ipv4_routes": 0}:
             raise RuntimeError("provider namespace is not loopback-only")
-        denied = proxy_response(port, "example.com:443")
+        denied = proxy_response(port, "example.com:443", capability_token)
         if not denied.startswith(b"HTTP/1.1 403"):
             raise RuntimeError("provider proxy did not deny an unlisted authority")
         try:
@@ -502,8 +642,11 @@ def probe_namespace(namespace: pathlib.Path, port: int, authority: tuple[str, in
         if live:
             authority_text = f"{authority[0]}:{authority[1]}"
             with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
+                authorization = f"Proxy-Authorization: Bearer {capability_token}\r\n" \
+                    if capability_token else ""
                 client.sendall(
-                    f"CONNECT {authority_text} HTTP/1.1\r\nHost: {authority_text}\r\n\r\n".encode("ascii")
+                    f"CONNECT {authority_text} HTTP/1.1\r\nHost: {authority_text}\r\n"
+                    f"{authorization}\r\n".encode("ascii")
                 )
                 response = b""
                 while b"\r\n\r\n" not in response and len(response) <= 4096:
@@ -532,6 +675,7 @@ def make_parser() -> argparse.ArgumentParser:
     serve.add_argument("--profile", action="append", default=[])
     serve.add_argument("--enabled-profiles", action="store_true",
                        help="select only profiles explicitly marked enabled")
+    serve.add_argument("--capability-key-file", type=pathlib.Path)
     serve.add_argument("--resolve", action="append", default=[])
     serve.add_argument("--drop-user", required=True)
     serve.add_argument("--concurrency", type=int, default=16)
@@ -540,6 +684,7 @@ def make_parser() -> argparse.ArgumentParser:
     probe.add_argument("--listen-port", type=int, default=18080)
     probe.add_argument("--allow", required=True)
     probe.add_argument("--live", action="store_true")
+    probe.add_argument("--capability-token")
     return parser
 
 
@@ -563,16 +708,40 @@ def main() -> int:
                 profiles = [load_profile(args.profile_dir / f"{name}.json", name) for name in selected]
                 if any(profile["namespace"] != args.namespace.name for profile in profiles):
                     raise ValueError("provider profile namespace does not match --namespace")
-                allowed = enabled_allowlist(args.profile_dir, selected)
+                if any(not profile["enabled"] for profile in profiles):
+                    raise ValueError("provider egress profile is disabled")
+                if args.capability_key_file is None:
+                    raise ValueError("shared provider proxy requires an assignment capability key")
+                key_path = args.capability_key_file
+                if key_path.is_symlink() or not key_path.is_file():
+                    raise ValueError("provider capability key is unavailable")
+                key_info = key_path.stat()
+                if key_info.st_mode & 0o077 or (
+                        hasattr(os, "geteuid") and os.geteuid() == 0 and key_info.st_uid != 0):
+                    raise ValueError("provider capability key ownership/mode is unsafe")
+                capability_key = key_path.read_bytes()
+                if len(capability_key) < 32:
+                    raise ValueError("provider capability key is too short")
+                profile_authorities = {
+                    profile["id"]: {parse_authority(item) for item in profile["authorities"]}
+                    for profile in profiles
+                }
             else:
+                if args.capability_key_file is not None:
+                    raise ValueError("capability keys require --profile-dir")
                 allowed = parse_allowlist(args.allow)
             resolutions = parse_resolutions(args.resolve, args.namespace)
             listener = open_listener_in_namespace(args.namespace, args.listen_port)
             drop_privileges(args.drop_user)
-            asyncio.run(run_server(listener, ConnectProxy(allowed, resolutions, args.concurrency)))
+            asyncio.run(run_server(listener, ConnectProxy(
+                allowed if args.profile_dir is None else set(), resolutions, args.concurrency,
+                capability_key if args.profile_dir is not None else None,
+                profile_authorities if args.profile_dir is not None else None,
+            )))
             return 0
         authority = parse_authority(args.allow)
-        result = probe_namespace(args.namespace, args.listen_port, authority, args.live)
+        result = probe_namespace(args.namespace, args.listen_port, authority, args.live,
+                                 args.capability_token)
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
     except (OSError, RuntimeError, ValueError, KeyError) as exc:

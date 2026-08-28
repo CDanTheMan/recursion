@@ -31,5 +31,6 @@
     "max_size_mb": 50,
     "keep": 14
   },
-  "restore_drill": { "cadence_days": 30, "required": true }
+  "restore_drill": { "cadence_days": 30, "required": true },
+  "archive_limits": { "max_files": 10000, "max_bytes": 104857600 }
 }

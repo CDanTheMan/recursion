@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import importlib.util
 import json
 import os
 import stat
 import subprocess
 import sys
 import tempfile
+import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -46,7 +48,7 @@ elif mode == "sftp":
         elif words[0] == "get": shutil.copyfile(state / Path(words[1]).name, words[2])
         elif words[0] == "rm": (state / Path(words[1]).name).unlink()
         elif words[0] == "ls":
-            for path in sorted(state.glob("backup-*.tar.age")): print("/remote/" + path.name)
+            for path in sorted(state.iterdir()): print("/remote/" + path.name)
         else: raise SystemExit("unsupported fake sftp command")
 else: raise SystemExit("unsupported fake tool")
 '''
@@ -89,6 +91,36 @@ def main() -> int:
         drill = run("restore-drill", "--root", str(fixture), "--snapshot", str(snapshot))
         check(drill.returncode == 0 and '"status": "prepared"' in drill.stdout,
               "local restore drill is labeled prepared, not production-proven")
+        spec = importlib.util.spec_from_file_location("backup_offsite_test_module", TOOL)
+        assert spec and spec.loader
+        backup_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(backup_module)
+        with backup_module.pause_transfer(fixture):
+            contender = subprocess.run(
+                [sys.executable, "-c", """
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('backup_offsite', sys.argv[1])
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+try:
+    with module.pause_transfer(__import__('pathlib').Path(sys.argv[2])):
+        raise SystemExit(0)
+except Exception:
+    raise SystemExit(73)
+""", str(TOOL), str(fixture)], capture_output=True, text=True)
+            check(contender.returncode != 0,
+                  "PAUSE transfer admission lock rejects a concurrent transfer")
+        bounded = base / "bounded.tar"
+        with tarfile.open(bounded, "w") as archive:
+            for index in range(2):
+                item = base / f"bounded-{index}"
+                item.write_bytes(b"x")
+                archive.add(item, arcname=f"snapshot/{item.name}")
+        try:
+            backup_module.validate_archive_bounds(bounded, {"max_files": 1, "max_bytes": 100})
+        except backup_module.BackupPolicyError:
+            check(True, "archive file-count bound refuses oversized manifests")
+        else:
+            check(False, "archive file-count bound refuses oversized manifests")
 
         tools = base / "fake-tools.py"
         tools.write_text(FAKE_TOOLS, encoding="utf-8")
@@ -115,11 +147,13 @@ def main() -> int:
             "retention": {"daily": 2, "weekly": 2, "monthly": 2},
             "log_rotation": {"directory": str(base / "evidence"), "max_size_mb": 50, "keep": 14},
             "restore_drill": {"cadence_days": 30, "required": True},
+            "archive_limits": {"max_files": 10000, "max_bytes": 104857600},
         }
         config.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
         signature.write_text(hmac.new(b"config-secret", config.read_bytes(), hashlib.sha256).hexdigest(),
                              encoding="ascii")
         exec_env = dict(os.environ, CREDENTIALS_DIRECTORY=str(credentials),
+                        RECURSION_SECRET_RUNTIME_ROOT=str(base / "runtime"),
                         FAKE_SFTP_STATE=str(base / "sftp-state"),
                         RECURSION_AGE_TOOL=sys.executable, RECURSION_SFTP_TOOL=sys.executable,
                         RECURSION_AGE_TOOL_ARGS_JSON=json.dumps([str(tools), "age"]),
@@ -136,11 +170,14 @@ def main() -> int:
                   "backup evidence is encrypted and transfer-acknowledged")
             check(evidence["restore_evidence"] == "pending live evidence",
                   "backup evidence does not claim an off-host restore")
-            check(evidence["retention"]["deleted"] == 2,
-                  "retention reconciliation removes an expired remote artifact")
+            check(evidence["retention"]["deleted"] == 0
+                  and len(evidence["retention"]["invalid_deleted"]) == 3,
+                  "reconciliation deletes bounded nonconforming encrypted artifacts")
             remote = max((base / "sftp-state").glob("backup-*.tar.age"), default=None)
             check(remote is not None and remote.read_bytes().startswith(b"FAKE-AGE\n"),
                   "SFTP fixture receives ciphertext rather than plaintext")
+            check((base / "snapshots" / remote.name).is_file() if remote else False,
+                  "canonical snapshot directory durably retains the encrypted artifact")
             evidence_path = Path(evidence["evidence_path"])
             check(evidence_path.is_file() and b"config-secret" not in evidence_path.read_bytes(),
                   "evidence is atomically written without secret values")
@@ -153,6 +190,12 @@ def main() -> int:
                   "restore reconstructs the encrypted snapshot")
             check('"off_host_restore": "pending live evidence"' in restore.stdout,
                   "restore output records pending live evidence")
+            pause = fixture / "state/PAUSE"
+            pause.unlink()
+            blocked = run("--config", str(config), "reconcile", "--execute", env=exec_env)
+            check(blocked.returncode == 2 and "PAUSE admission" in blocked.stderr,
+                  "reconcile refuses before any remote contact without PAUSE")
+            pause.write_text("paused for test\n", encoding="utf-8")
         tampered = json.loads(config.read_text(encoding="utf-8")); tampered["destination"]["host"] = "evil.test"
         config.write_text(json.dumps(tampered, indent=2) + "\n", encoding="utf-8")
         refused = run("--config", str(config), "reconcile", "--execute", env=exec_env)

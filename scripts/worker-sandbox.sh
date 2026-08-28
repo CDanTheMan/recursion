@@ -38,7 +38,7 @@ case "$ENGINE" in
       || { echo "worker-sandbox: invalid engine" >&2; exit 92; } ;;
 esac
 PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ENV_PASS=(); PLAN_OK=0; PLAN_MREQ=0
-PLAN_EGRESS=""; PLAN_ENDPOINTS=(); ENGINE_ENV_FILE=""
+PLAN_EGRESS=""; PLAN_ENDPOINTS=(); PLAN_TOKEN=""; ENGINE_ENV_FILE=""
 if [ -n "$ENGINE_PLAN" ]; then
   [ -f "$ENGINE_PLAN" ] || { echo "worker-sandbox: engine plan is missing" >&2; exit 92; }
   while IFS= read -r plan_line; do
@@ -50,6 +50,7 @@ if [ -n "$ENGINE_PLAN" ]; then
       ENVP=*) PLAN_ENV_PASS+=("${plan_line#ENVP=}") ;;
       EGRESS=*) PLAN_EGRESS="${plan_line#EGRESS=}" ;;
       ENDPOINT=*) PLAN_ENDPOINTS+=("${plan_line#ENDPOINT=}") ;;
+      TOKEN=*) PLAN_TOKEN="${plan_line#TOKEN=}" ;;
       MREQ=1) PLAN_MREQ=1 ;;
       OK=1)   PLAN_OK=1 ;;
     esac
@@ -95,6 +96,15 @@ for name in plan.get("env_passthrough") or []:
     print("ENVP=" + name)
 egress = plan.get("egress_profile")
 endpoints = plan.get("network_endpoints")
+token = plan.get("assignment_proxy_token")
+if token is not None:
+    if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}", token):
+        raise SystemExit(92)
+    print("TOKEN=" + token)
+if egress is not None and token is None:
+    raise SystemExit(92)
+if egress is None and token is not None:
+    raise SystemExit(92)
 if egress is not None:
     if not isinstance(egress, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", egress):
         raise SystemExit(92)
@@ -204,6 +214,7 @@ case "${RECURSION_TEST_WORKER:-}" in
         if [ -n "$PLAN_EGRESS" ]; then
           [ -x "$ROOT/scripts/provider-egress.py" ] || exit 96
           egress_args=(inject "$PLAN_EGRESS")
+          [ -z "$PLAN_TOKEN" ] || egress_args+=(--assignment-token "$PLAN_TOKEN")
           for endpoint in "${PLAN_ENDPOINTS[@]}"; do egress_args+=(--endpoint "$endpoint"); done
           egress_lines="$(RECURSION_ROOT="$ROOT" "$PYTHON_BIN" "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
             || { echo "worker-sandbox: provider egress profile was refused" >&2; exit 96; }

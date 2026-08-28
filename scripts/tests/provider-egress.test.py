@@ -57,6 +57,24 @@ def main() -> int:
         check(result.stdout.splitlines() == sorted([
             "HTTP_PROXY=http://127.0.0.1:18080", "HTTPS_PROXY=http://127.0.0.1:18080"
         ]), "injection emits only the fixed loopback proxy", failures)
+        token = "A" * 64 + "." + "B" * 64
+        authorized = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
+             "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh",
+             "--assignment-token", token],
+            capture_output=True, text=True, env=env,
+        )
+        check(authorized.returncode == 0 and "assignment:" in authorized.stdout
+              and token in authorized.stdout,
+              "assignment token is bound into the proxy transport URL", failures)
+        required_env = dict(env, RECURSION_PROVIDER_PROXY_REQUIRED="1")
+        missing_token = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
+             "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh"],
+            capture_output=True, text=True, env=required_env,
+        )
+        check(missing_token.returncode == 96 and "authorization is required" in missing_token.stderr,
+              "required proxy authorization fails closed when assignment is absent", failures)
         mismatch = subprocess.run(
             [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
              "--endpoint", "evil.example.com"],

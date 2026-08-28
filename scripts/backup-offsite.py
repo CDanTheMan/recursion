@@ -36,13 +36,15 @@ class BackupPolicyError(ValueError):
 
 POLICY_KEYS = {
     "schema_version", "id", "enabled", "source", "destination", "encryption",
-    "authentication", "retention", "log_rotation", "restore_drill",
+    "authentication", "retention", "log_rotation", "restore_drill", "archive_limits",
 }
 SOURCE_KEYS = {"runtime_root", "snapshot_directory", "runtime_directory"}
 DESTINATION_KEYS = {"type", "user", "host", "port", "path", "credential_ref"}
 AUTH_KEYS = {"type", "key_ref", "signature_file"}
 STAMP_RE = re.compile(r"^backup-(\d{8}T\d{6}Z)\.tar\.age$")
 WORK_RE = re.compile(r"^\.backup\.(\d+)\.(\d+)\.[0-9a-f]{16}$")
+REMOTE_SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+MAX_REMOTE_LISTING = 1000
 
 
 def _object(value: object, keys: set[str], where: str) -> dict:
@@ -97,7 +99,9 @@ def load_policy(path: Path) -> dict:
     remote_path = PurePosixPath(destination["path"])
     if not destination["path"].startswith("/") or any(
             part in {"", ".", ".."} for part in remote_path.parts) \
-            or any(ord(char) < 32 or char.isspace() for char in destination["path"]):
+            or any(ord(char) < 32 or char.isspace() for char in destination["path"]) \
+            or any(not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", part)
+                   for part in remote_path.parts if part != "/"):
         raise BackupPolicyError("destination.path must be a canonical absolute SFTP path")
     _positive(destination["port"], "destination.port", 65535)
     _secret_ref(destination["credential_ref"], "destination.credential_ref")
@@ -122,6 +126,9 @@ def load_policy(path: Path) -> dict:
     _positive(drill["cadence_days"], "restore_drill.cadence_days", 3650)
     if drill["required"] is not True:
         raise BackupPolicyError("restore_drill.required must remain true")
+    limits = _object(policy["archive_limits"], {"max_files", "max_bytes"}, "archive_limits")
+    _positive(limits["max_files"], "archive_limits.max_files", 1000000)
+    _positive(limits["max_bytes"], "archive_limits.max_bytes", 1073741824)
     return policy
 
 
@@ -191,7 +198,8 @@ def _safe_runtime_dir(path: Path) -> None:
     if not path.is_absolute() or path.is_symlink() or (path.exists() and not path.is_dir()):
         raise BackupPolicyError("backup runtime directory has an unsafe type")
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    path.chmod(0o700)
+    if os.name != "nt" and stat.S_IMODE(path.stat().st_mode) & 0o077:
+        raise BackupPolicyError("backup runtime directory is group/other accessible")
     if hasattr(os, "geteuid") and os.geteuid() == 0 and path.stat().st_uid != 0:
         raise BackupPolicyError("backup runtime directory is not root-owned")
 
@@ -218,7 +226,54 @@ def private_workspace(path: Path):
         work.chmod(0o700)
         yield work
     finally:
-        shutil.rmtree(work, ignore_errors=True)
+        try:
+            shutil.rmtree(work)
+        except OSError as exc:
+            raise BackupPolicyError("backup plaintext workspace cleanup failed") from exc
+
+
+def _validate_canonical_directory(path: Path, label: str) -> Path:
+    if not path.is_absolute() or path != path.resolve(strict=False):
+        raise BackupPolicyError(f"{label} must be a canonical absolute directory")
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        if current.exists() or current.is_symlink():
+            info = current.lstat()
+            if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0):
+                raise BackupPolicyError(f"{label} has a symlink/reparse parent")
+            if not stat.S_ISDIR(info.st_mode) or (os.name != "nt" and (
+                    stat.S_IMODE(info.st_mode) & 0o022 and
+                    not (stat.S_IMODE(info.st_mode) & stat.S_ISVTX))):
+                raise BackupPolicyError(f"{label} parent ownership/mode is unsafe")
+            if hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0:
+                raise BackupPolicyError(f"{label} parent is not root-owned")
+        else:
+            current.mkdir(mode=0o700)
+    if not path.exists():
+        path.mkdir(mode=0o700)
+    info = path.lstat()
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode) \
+            or (os.name != "nt" and stat.S_IMODE(info.st_mode) & 0o077):
+        raise BackupPolicyError(f"{label} ownership/mode is unsafe")
+    if hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0:
+        raise BackupPolicyError(f"{label} is not root-owned")
+    return path
+
+
+@contextlib.contextmanager
+def pause_transfer(root: Path):
+    """Atomically admit one external transfer while pause.sh is unable to race it."""
+    runtime = runtime_module()
+    lock = runtime.DirectoryLock(root / "state/.locks/pause-transfer.lock", "pause-transfer")
+    try:
+        with lock:
+            pause = root / "state/PAUSE"
+            if not pause.is_file():
+                raise BackupPolicyError("PAUSE admission is absent; refusing external transfer")
+            yield
+    except RuntimeError as exc:
+        raise BackupPolicyError(f"PAUSE transfer admission failed: {exc}") from exc
 
 
 def _run(argv: list[str], *, input_bytes: bytes | None = None) -> subprocess.CompletedProcess[bytes]:
@@ -260,20 +315,50 @@ def _remote_path(policy: dict, name: str) -> str:
     return policy["destination"]["path"].rstrip("/") + "/" + name
 
 
+def _remote_safe_path(policy: dict, name: str) -> str:
+    if not REMOTE_SAFE_NAME_RE.fullmatch(name):
+        raise BackupPolicyError("remote artifact name is unsafe")
+    return policy["destination"]["path"].rstrip("/") + "/" + name
+
+
 def sftp(policy: dict, batch: str) -> bytes:
     key = _credential_path(policy["destination"]["credential_ref"])
     return _run(_sftp_base(policy, key), input_bytes=batch.encode("utf-8")).stdout
 
 
-def remote_artifacts(policy: dict) -> list[str]:
+def _remote_listing(policy: dict) -> tuple[list[str], list[str]]:
     base = policy["destination"]["path"].rstrip("/")
-    output = sftp(policy, f"ls -1 {base}/*.tar.age\n").decode("utf-8", "replace")
+    output = sftp(policy, f"ls -1 {base}/*\n").decode("utf-8", "replace")
     names: set[str] = set()
+    invalid: list[str] = []
+    entries = 0
     for line in output.splitlines():
-        candidate = line.strip().rsplit("/", 1)[-1]
+        raw = line.strip()
+        if not raw:
+            continue
+        entries += 1
+        if entries > MAX_REMOTE_LISTING:
+            raise BackupPolicyError("remote artifact listing exceeds the bounded policy")
+        candidate = raw.rsplit("/", 1)[-1]
+        if "/" in raw:
+            remote = PurePosixPath(raw)
+            if not remote.is_absolute() or remote.parent != PurePosixPath(base):
+                raise BackupPolicyError("remote listing path is outside the configured destination")
+        if not candidate or not REMOTE_SAFE_NAME_RE.fullmatch(candidate):
+            raise BackupPolicyError("remote listing contains an unsafe artifact name")
         if STAMP_RE.fullmatch(candidate):
             names.add(candidate)
-    return sorted(names)
+        else:
+            invalid.append(candidate)
+    return sorted(names), sorted(set(invalid))
+
+
+def remote_artifacts(policy: dict, root: Path | None = None) -> list[str]:
+    if root is None:
+        root = Path(policy["source"]["runtime_root"])
+    with pause_transfer(root):
+        names, _ = _remote_listing(policy)
+    return names
 
 
 def artifact_time(name: str) -> datetime | None:
@@ -303,22 +388,75 @@ def retention_keep(names: list[str], retention: dict, now: datetime | None = Non
     keep = {name for name, stamp in dated
             if stamp.date() in days or stamp.isocalendar()[:2] in weeks
             or (stamp.year, stamp.month) in months}
-    # Nonconforming remote names are never deleted by reconciliation.
-    keep.update(name for name in names if artifact_time(name) is None)
     return keep
 
 
+def validate_archive_bounds(archive: Path, limits: dict) -> dict[str, int]:
+    max_files, max_bytes = limits["max_files"], limits["max_bytes"]
+    physical = archive.stat().st_size
+    if physical > max_bytes:
+        raise BackupPolicyError("archive exceeds configured byte-size bound")
+    files = 0
+    content_bytes = 0
+    with tarfile.open(archive, "r:") as source:
+        for member in source.getmembers():
+            if member.isdir():
+                continue
+            if not member.isfile() or member.issym() or member.islnk():
+                raise BackupPolicyError("archive contains an unsupported or linked entry")
+            files += 1
+            content_bytes += member.size
+            if files > max_files or content_bytes > max_bytes:
+                raise BackupPolicyError("archive exceeds configured file-count/byte-size bounds")
+    return {"files": files, "bytes": content_bytes, "archive_bytes": physical}
+
+
+def _remote_delete(policy: dict, name: str) -> None:
+    if not REMOTE_SAFE_NAME_RE.fullmatch(name):
+        raise BackupPolicyError("refusing to delete an unsafe remote artifact name")
+    sftp(policy, f"rm {_remote_safe_path(policy, name)}\n")
+
+
 def reconcile_remote(policy: dict) -> dict:
-    names = remote_artifacts(policy)
+    root = Path(policy["source"]["runtime_root"])
+    with pause_transfer(root):
+        names, invalid_names = _remote_listing(policy)
+        # A bounded, malformed-name policy: safely named unknown objects are deleted and recorded;
+        # ambiguous names fail closed because no remote command can address them safely.
+        invalid_deleted: list[str] = []
+        for name in invalid_names:
+            _remote_delete(policy, name)
+            invalid_deleted.append(name)
+        valid: list[str] = []
+        invalid_archives: list[str] = []
+        with private_workspace(Path(policy["source"]["runtime_directory"])) as work:
+            for name in names:
+                ciphertext = work / name
+                archive = work / f"{name}.tar"
+                try:
+                    sftp(policy, f"get {_remote_path(policy, name)} {ciphertext}\n")
+                    decrypt(ciphertext, archive, policy)
+                    validate_archive_bounds(archive, policy["archive_limits"])
+                except (BackupPolicyError, OSError, tarfile.TarError):
+                    invalid_archives.append(name)
+                else:
+                    valid.append(name)
+                finally:
+                    ciphertext.unlink(missing_ok=True)
+                    archive.unlink(missing_ok=True)
+        for name in invalid_archives:
+            _remote_delete(policy, name)
+        names = valid
     keep = retention_keep(names, policy["retention"])
     deleted: list[str] = []
     for name in names:
         if name in keep:
             continue
-        sftp(policy, f"rm {_remote_path(policy, name)}\n")
+        with pause_transfer(root):
+            _remote_delete(policy, name)
         deleted.append(name)
     return {"remote_seen": len(names), "retained": len(keep), "deleted": len(deleted),
-            "deleted_artifacts": deleted}
+            "deleted_artifacts": deleted, "invalid_deleted": invalid_deleted + invalid_archives}
 
 
 def write_evidence(directory: Path, evidence: dict) -> Path:
@@ -395,6 +533,11 @@ def extract_snapshot(archive: Path, target: Path) -> Path:
 
 def execute_backup(config_path: Path, policy: dict) -> dict:
     root = Path(policy["source"]["runtime_root"])
+    if not (root / "state/PAUSE").is_file():
+        raise BackupPolicyError("PAUSE is required for backup admission")
+    snapshot_directory = _validate_canonical_directory(
+        Path(policy["source"]["snapshot_directory"]), "snapshot directory"
+    )
     runtime = runtime_module()
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     name = f"backup-{stamp}.tar.age"
@@ -405,8 +548,39 @@ def execute_backup(config_path: Path, policy: dict) -> dict:
         archive = work / "snapshot.tar"
         ciphertext = work / name
         archive_snapshot(snapshot, archive)
+        validate_archive_bounds(archive, policy["archive_limits"])
         encrypt(archive, ciphertext, policy)
-        sftp(policy, f"put {ciphertext} {_remote_path(policy, name)}\n")
+        durable = snapshot_directory / name
+        if durable.exists() or durable.is_symlink():
+            raise BackupPolicyError(f"snapshot artifact already exists: {durable}")
+        temporary = snapshot_directory / f".{name}.tmp.{os.getpid()}.{time.time_ns()}"
+        try:
+            with temporary.open("xb") as output, ciphertext.open("rb") as source:
+                shutil.copyfileobj(source, output)
+                output.flush()
+                os.fsync(output.fileno())
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, durable)
+            if os.name != "nt":
+                descriptor = os.open(snapshot_directory, os.O_RDONLY)
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+        except BaseException:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                raise BackupPolicyError("durable snapshot temporary cleanup failed") from exc
+            raise
+        try:
+            with pause_transfer(root):
+                sftp(policy, f"put {durable} {_remote_path(policy, name)}\n")
+        except BaseException:
+            # The durable canonical snapshot remains for an operator-authorized retry.
+            raise
     retention = reconcile_remote(policy)
     evidence = {"schema_version": 1, "operation": "backup", "status": "succeeded",
                 "artifact": name, "encrypted": True, "remote_uploaded": True,
@@ -418,16 +592,19 @@ def execute_backup(config_path: Path, policy: dict) -> dict:
 
 def execute_restore(config_path: Path, policy: dict, artifact: str | None) -> dict:
     root = Path(policy["source"]["runtime_root"])
-    names = remote_artifacts(policy)
-    name = artifact or (names[-1] if names else None)
-    if name is None:
-        raise BackupPolicyError("no encrypted remote artifact is available")
-    remote = _remote_path(policy, name)
     with private_workspace(Path(policy["source"]["runtime_directory"])) as work:
-        ciphertext = work / name
-        archive = work / "snapshot.tar"
-        sftp(policy, f"get {remote} {ciphertext}\n")
+        with pause_transfer(root):
+            names, _ = _remote_listing(policy)
+            name = artifact or (names[-1] if names else None)
+            if name is None:
+                raise BackupPolicyError("no encrypted remote artifact is available")
+            if not STAMP_RE.fullmatch(name):
+                raise BackupPolicyError("restore artifact name is nonconforming")
+            ciphertext = work / name
+            archive = work / "snapshot.tar"
+            sftp(policy, f"get {_remote_path(policy, name)} {ciphertext}\n")
         decrypt(ciphertext, archive, policy)
+        validate_archive_bounds(archive, policy["archive_limits"])
         snapshot = extract_snapshot(archive, work / "extract")
         with contextlib.redirect_stdout(io.StringIO()):
             runtime_module().restore(root, snapshot)
@@ -488,6 +665,8 @@ def main(argv: list[str] | None = None) -> int:
                                          ["retention", "daily=%d" % policy["retention"]["daily"],
                                           "weekly=%d" % policy["retention"]["weekly"],
                                           "monthly=%d" % policy["retention"]["monthly"]]],
+                              "archive_limits": policy["archive_limits"],
+                              "nonconforming_remote_policy": "delete only bounded safe names; refuse ambiguous names",
                               "execution": "disabled-until-explicit-enable-and-execute",
                               "off_host_restore": "pending live evidence"}, sort_keys=True))
         elif args.command == "restore-drill":

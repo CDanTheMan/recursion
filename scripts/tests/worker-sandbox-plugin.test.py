@@ -2,11 +2,8 @@
 """Red control: worker-sandbox.sh --engine-plan generic plugin dispatch, logical mode.
 
 Frozen contract: docs/plans/engine-plugin-architecture.md, "Controls" #4, and the
-worked spec handed down with this control set. Requires bash (Git Bash on Windows,
-plain bash elsewhere); SKIPs (exit 0) if bash is unavailable. --engine-plan does not
-exist in scripts/worker-sandbox.sh today, so cases (3)-(5) below are expected to fail;
-(1)-(2) exercise validation paths whose current-day result is observed and reported
-below, not assumed (see inline notes).
+worked spec handed down with this control set. Requires Bash, Linux, root, systemd,
+and an explicit environment proof marker; absent prerequisites are non-green (77).
 """
 
 from __future__ import annotations
@@ -69,13 +66,25 @@ def bash_run(sandbox_script_posix: str, argv_after_script: list[str], extra_path
 
 def main() -> int:
     if shutil.which("bash") is None:
-        print("SKIP - bash not found on PATH")
-        return 0
+        print("NOT PROVEN - bash not found on PATH")
+        return 77
+    if sys.platform != "linux":
+        print("NOT PROVEN - Linux is required for the worker sandbox proof")
+        return 77
+    if getattr(os, "geteuid", lambda: -1)() != 0:
+        print("NOT PROVEN - root is required for the worker sandbox proof")
+        return 77
+    if shutil.which("systemd-run") is None:
+        print("NOT PROVEN - systemd-run is absent")
+        return 77
+    if os.environ.get("RECURSION_PHASE4_LINUX_PROOF") != "1":
+        print("NOT PROVEN - explicit Linux/systemd environment proof is absent")
+        return 77
 
     mktemp = subprocess.run(["bash", "-c", "mktemp -d"], capture_output=True, text=True)
     if mktemp.returncode != 0 or not mktemp.stdout.strip():
-        print("SKIP - bash mktemp -d failed; cannot build a /tmp root")
-        return 0
+        print("NOT PROVEN - bash mktemp -d failed; cannot build a /tmp root")
+        return 77
     root_posix = mktemp.stdout.strip()
     root_local = to_local_path(root_posix)
 
@@ -148,8 +157,7 @@ def main() -> int:
             return bash_run(sandbox_copy_posix, args, bin_dir_posix, env)
 
         # --- (1) builtin engine + --engine-plan must be refused (contract: exit 92) ---
-        # NOTE: today's argument parser has no --engine-plan case at all, so this currently
-        # exits 2 ("unknown argument") rather than 92 -- observed below, not assumed.
+        # The builtin/plugin split is an execution-time authority boundary.
         result = invoke(["--engine", "claude", "--engine-plan", plan_posix], "hi", dict(base_env))
         check(
             result.returncode == 92,
@@ -242,8 +250,9 @@ def main() -> int:
         )
 
         # --- permission control: plan file ownership/writability (Linux root only) ---
-        if os.name == "nt" or not is_linux_root:
-            print("SKIP - plan file ownership/permission control (requires Linux + root)")
+        if not is_linux_root:
+            print("NOT PROVEN - plan file ownership/permission control requires Linux + root")
+            return 77
         else:
             bad_plan = root_local / "plan-bad-perms.json"
             bad_plan.write_bytes((json.dumps(plan, indent=2) + "\n").encode("utf-8"))

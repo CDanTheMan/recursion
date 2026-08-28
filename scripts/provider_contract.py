@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from urllib.parse import quote
 from pathlib import Path
 from typing import Iterable
 
@@ -128,12 +129,19 @@ def assert_endpoints_match(profile: dict, endpoints: Iterable[str]) -> None:
         raise ProviderProfileError("profile authorities do not exactly match engine endpoints")
 
 
-def proxy_environment(profile: dict, endpoints: Iterable[str]) -> dict[str, str]:
+def proxy_environment(profile: dict, endpoints: Iterable[str], token: str | None = None) -> dict[str, str]:
     validate_profile(profile)
     assert_endpoints_match(profile, endpoints)
     if not profile["enabled"]:
         raise ProviderProfileError("provider egress profile is disabled")
-    value = f"http://{profile['proxy']['host']}:{profile['proxy']['port']}"
+    if token is not None:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}", token):
+            raise ProviderProfileError("assignment proxy token is malformed")
+        value = f"http://assignment:{quote(token, safe='._-')}@{profile['proxy']['host']}:{profile['proxy']['port']}"
+    elif os.environ.get("RECURSION_PROVIDER_PROXY_REQUIRED") == "1":
+        raise ProviderProfileError("assignment proxy authorization is required")
+    else:
+        value = f"http://{profile['proxy']['host']}:{profile['proxy']['port']}"
     return {name: value for name in profile["proxy"]["env"]}
 
 

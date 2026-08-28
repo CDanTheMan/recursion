@@ -17,14 +17,19 @@ off-host destination.
 - `hermes-actuator.sh` retains its v1 `all` mode. Optional `state` and `work` scopes let a
   human deploy a non-root state actuator alongside a narrowly scoped root worker dispatcher.
 - Provider profiles are strict, provider-specific, endpoint-exact, and disabled in the tree.
-  A sandbox plan can request proxy injection only through `provider-egress.py`; disabled or
-  mismatched profiles return a typed refusal. Existing plans without `egress_profile` retain
-  their v1 shape and behavior.
+  The shared Phase 4 proxy admits only signed per-assignment capabilities, maps each capability
+  to exactly one provider profile, and rejects missing, forged, or cross-provider transport
+  authorization. A sandbox plan can request proxy injection only through `provider-egress.py`;
+  disabled or mismatched profiles return a typed refusal. Existing plans without `egress_profile`
+  retain their v1 shape and behavior.
 - `deploy/backup/recursion-offsite.json` is a disabled age/SFTP contract with explicit
   retention, log-rotation, and restore-drill requirements. `backup-offsite.py` has explicit
   `--execute` backup/restore/reconcile commands, HMAC-authenticated configuration, argv-only age
-  and SFTP calls, atomic evidence, and tmpfs/runtime-dir plaintext cleanup. The local restore
-  drill is labeled prepared; off-host restore remains pending live evidence.
+  and SFTP calls, PAUSE admission held across every remote transfer, strict archive file/byte
+  limits, bounded deletion of safely named nonconforming remote artifacts, durable encrypted
+  snapshots in the configured canonical snapshot directory, atomic evidence, and tmpfs/runtime-
+  dir plaintext cleanup. The local restore drill is labeled prepared; off-host restore remains
+  pending live evidence.
 - `.example` systemd and logrotate artifacts are review templates, not units installed by this
   checkout. No artifact has a `WantedBy` target that could enable it implicitly.
 - `phase4-linux-proof.test.py` is an explicit Linux/root/systemd-aware proof boundary. It never

@@ -32,4 +32,7 @@ test "$(sha256sum "$TMP/state-action.json" | awk '{print $1}')" = "$before_state
 test ! -e "$TMP/state/instructions/00000001.md"
 grep -q 'REFUSED' "$TMP/non-work.out"
 grep -q 'REFUSED' "$TMP/work.out"
+grep -q 'CHILD_SCOPE_ARGS' "$TMP/conduct-hermes.sh"
+grep -q 'DECISION_FILE_DIGEST' "$TMP/conduct-hermes.sh"
+grep -q 'scope_guard' "$TMP/conduct-hermes.sh"
 echo "phase4-scope-recovery: ALL PASS"

@@ -32,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     inject = sub.add_parser("inject")
     inject.add_argument("provider")
     inject.add_argument("--endpoint", action="append", required=True)
+    inject.add_argument("--assignment-token")
     allowlist = sub.add_parser("allowlist")
     allowlist.add_argument("--provider", action="append", dest="providers")
     admission = sub.add_parser("admit-engine")
@@ -45,7 +46,8 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"id": profile["id"], "enabled": profile["enabled"]}, sort_keys=True))
         elif args.command == "inject":
             profile = profile_for_provider(args.provider, directory)
-            for key, value in sorted(proxy_environment(profile, args.endpoint).items()):
+            for key, value in sorted(proxy_environment(
+                    profile, args.endpoint, args.assignment_token).items()):
                 print(f"{key}={value}")
         elif args.command == "allowlist":
             for host, port in sorted(enabled_allowlist(directory, args.providers)):

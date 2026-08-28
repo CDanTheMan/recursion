@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import asyncio
 import pathlib
 import sys
 import unittest
@@ -73,6 +74,78 @@ class ConnectContractTest(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     self.proxy.parse_allowlist([value])
+
+    def test_signed_capability_binds_transport_to_one_profile(self):
+        key = b"k" * 32
+        anthropic = {("api.anthropic.com", 443)}
+        cursor = {("api.cursor.com", 443)}
+        token = self.proxy.issue_capability("anthropic", "assignment-a", key)
+        request = (
+            b"CONNECT api.anthropic.com:443 HTTP/1.1\r\n"
+            + f"Proxy-Authorization: Bearer {token}\r\n\r\n".encode("ascii")
+        )
+        self.assertEqual(self.proxy.parse_connect_request(
+            request, capability_key=key,
+            profile_authorities={"anthropic": anthropic, "cursor": cursor},
+        ), ("api.anthropic.com", 443))
+        cross_provider = request.replace(b"api.anthropic.com", b"api.cursor.com")
+        with self.assertRaises(self.proxy.ConnectDenied):
+            self.proxy.parse_connect_request(
+                cross_provider, capability_key=key,
+                profile_authorities={"anthropic": anthropic, "cursor": cursor},
+            )
+        forged = token[:-1] + ("A" if token[-1] != "A" else "B")
+        with self.assertRaises(self.proxy.ConnectDenied):
+            self.proxy.parse_connect_request(
+                request.replace(token.encode("ascii"), forged.encode("ascii")),
+                capability_key=key, profile_authorities={"anthropic": anthropic},
+            )
+
+    def test_signed_capability_is_required_when_profile_authorization_is_enabled(self):
+        with self.assertRaises(self.proxy.ConnectDenied):
+            self.proxy.parse_connect_request(
+                b"CONNECT api.anthropic.com:443 HTTP/1.1\r\n\r\n",
+                capability_key=b"k" * 32,
+                profile_authorities={"anthropic": {("api.anthropic.com", 443)}},
+            )
+
+    def test_dns_rejects_private_and_rebinding_answers_before_connect(self):
+        for address in ("127.0.0.1", "10.0.0.1", "169.254.1.1", "224.0.0.1", "::1"):
+            with self.subTest(address=address):
+                self.assertTrue(self.proxy.forbidden_destination(address))
+        original = self.proxy.socket.getaddrinfo
+        try:
+            self.proxy.socket.getaddrinfo = lambda *args, **kwargs: [
+                (self.proxy.socket.AF_INET, self.proxy.socket.SOCK_STREAM,
+                 self.proxy.socket.IPPROTO_TCP, "", ("203.0.113.10", 443)),
+                (self.proxy.socket.AF_INET, self.proxy.socket.SOCK_STREAM,
+                 self.proxy.socket.IPPROTO_TCP, "", ("127.0.0.1", 443)),
+            ]
+            with self.assertRaises(self.proxy.ConnectDenied):
+                self.proxy.resolve_approved_addresses("provider.example", 443)
+        finally:
+            self.proxy.socket.getaddrinfo = original
+
+    def test_connected_peer_must_match_the_approved_dns_answer(self):
+        async def exercise():
+            async def sink(reader, writer):
+                writer.close()
+                await writer.wait_closed()
+
+            server = await asyncio.start_server(sink, "127.0.0.1", 0)
+            try:
+                port = server.sockets[0].getsockname()[1]
+                destinations = [(
+                    self.proxy.socket.AF_INET, self.proxy.socket.SOCK_STREAM,
+                    self.proxy.socket.IPPROTO_TCP, ("127.0.0.1", port), "203.0.113.10",
+                )]
+                with self.assertRaises(self.proxy.ConnectDenied):
+                    await self.proxy.open_approved_connection(destinations, port)
+            finally:
+                server.close()
+                await server.wait_closed()
+
+        asyncio.run(exercise())
 
 
 def build_client_hello(sni: str) -> bytes:

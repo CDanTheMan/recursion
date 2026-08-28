@@ -19,6 +19,15 @@ from pathlib import Path
 
 
 NAME_RE = re.compile(r"^\.secret\.(\d+)\.(\d+)\.[0-9a-f]{16}$")
+DEFAULT_RUNTIME_ROOTS = (Path("/run/recursion-runner"), Path("/run/recursion-backup"))
+
+
+class SecretRuntimeError(ValueError):
+    """A secret runtime path or lifecycle operation is unsafe."""
+
+
+class SecretRuntimeCleanupError(SecretRuntimeError):
+    """A secret could not be removed durably; the caller must remain non-green."""
 
 
 def process_start(pid: int) -> str | None:
@@ -34,15 +43,46 @@ def process_start(pid: int) -> str | None:
     return tail[19] if len(tail) > 19 else None
 
 
+def _approved_root(directory: Path) -> Path:
+    configured = os.environ.get("RECURSION_SECRET_RUNTIME_ROOT", "").strip()
+    roots = (Path(configured),) if configured else DEFAULT_RUNTIME_ROOTS
+    for root in roots:
+        if not root.is_absolute() or root != root.resolve(strict=False):
+            continue
+        if directory == root:
+            return root
+    raise SecretRuntimeError("secret runtime directory is not an approved canonical runtime root")
+
+
+def _validate_component(path: Path, label: str, *, final: bool = False) -> None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0):
+        raise SecretRuntimeError(f"{label} contains a symlink/reparse component")
+    if not stat.S_ISDIR(info.st_mode):
+        raise SecretRuntimeError(f"{label} contains a non-directory component")
+    mode = stat.S_IMODE(info.st_mode)
+    if os.name != "nt" and ((final and mode & 0o077) or (not final and mode & 0o022)):
+        raise SecretRuntimeError(f"{label} is group/other accessible")
+    if os.name != "nt" and not final and mode & 0o002 and not (mode & stat.S_ISVTX):
+        raise SecretRuntimeError(f"{label} is world-writable without sticky confinement")
+    if hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0:
+        raise SecretRuntimeError(f"{label} is not root-owned")
+
+
 def ensure_directory(directory: Path) -> None:
-    if not directory.is_absolute():
-        raise ValueError("secret runtime directory must be absolute")
-    if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
-        raise ValueError("secret runtime directory has an unsafe type")
-    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-    directory.chmod(0o700)
-    if hasattr(os, "geteuid") and os.geteuid() == 0 and directory.stat().st_uid != 0:
-        raise ValueError("secret runtime directory is not root-owned")
+    if not directory.is_absolute() or directory != directory.resolve(strict=False):
+        raise SecretRuntimeError("secret runtime directory must be canonical and absolute")
+    root = _approved_root(directory)
+    current = Path(root.anchor)
+    for component in root.parts[1:]:
+        current /= component
+        if not current.exists():
+            current.mkdir(mode=0o700)
+        _validate_component(current, "secret runtime parent", final=current == root)
+    _validate_component(root, "secret runtime directory", final=True)
 
 
 def scavenge(directory: Path, current_pid: int | None = None) -> int:
@@ -54,20 +94,58 @@ def scavenge(directory: Path, current_pid: int | None = None) -> int:
         match = NAME_RE.fullmatch(path.name)
         if not match:
             if path.name.startswith(".secret."):
-                path.unlink(missing_ok=True)
+                _validate_secret_file(path)
+                _remove_secret(path)
                 removed += 1
             continue
+        _validate_secret_file(path)
         pid, start = int(match.group(1)), match.group(2)
         if pid == current_pid and current_start == start:
             continue
         observed = process_start(pid)
         if observed is None or observed != start:
-            if path.is_symlink() or not path.is_file():
-                path.unlink(missing_ok=True)
-            else:
-                path.unlink()
+            _remove_secret(path)
             removed += 1
     return removed
+
+
+def _validate_secret_file(path: Path) -> None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0):
+        raise SecretRuntimeError("secret runtime contains a symlink/reparse file")
+    if not stat.S_ISREG(info.st_mode):
+        raise SecretRuntimeError("secret runtime contains a non-regular secret file")
+    if os.name != "nt" and (stat.S_IMODE(info.st_mode) & 0o077 or stat.S_IMODE(info.st_mode) != 0o600):
+        raise SecretRuntimeError("secret runtime file permissions are unsafe")
+    if hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0:
+        raise SecretRuntimeError("secret runtime file is not root-owned")
+
+
+def _remove_secret(path: Path) -> None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0):
+        raise SecretRuntimeCleanupError("refusing to remove a symlink/reparse secret path")
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise SecretRuntimeCleanupError(f"secret cleanup failed for {path.name}") from exc
+    if os.name != "nt":
+        try:
+            descriptor = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        except OSError as exc:
+            raise SecretRuntimeCleanupError(f"secret cleanup durability failed for {path.name}") from exc
 
 
 def write_env(directory: Path, content: bytes) -> Path:
@@ -82,6 +160,8 @@ def write_env(directory: Path, content: bytes) -> Path:
     name = f".secret.{os.getpid()}.{start}.{secrets.token_hex(8)}"
     path = directory / name
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
     descriptor = os.open(path, flags, 0o600)
     try:
         if hasattr(os, "fchmod"):
@@ -95,11 +175,15 @@ def write_env(directory: Path, content: bytes) -> Path:
             info = path.stat()
             if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600:
                 raise ValueError("secret environment ownership is unsafe")
+        _validate_secret_file(path)
         return path
     except BaseException:
         if descriptor >= 0:
             os.close(descriptor)
-        path.unlink(missing_ok=True)
+        try:
+            _remove_secret(path)
+        except SecretRuntimeCleanupError:
+            raise
         raise
 
 
@@ -116,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(write_env(args.directory, sys.stdin.buffer.read()))
         return 0
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, SecretRuntimeError) as exc:
         print(f"secret-runtime: {exc}", file=sys.stderr)
         return 2
 

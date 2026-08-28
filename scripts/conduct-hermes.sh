@@ -44,6 +44,7 @@ done
 RECOVERY_SCOPE_ARGS=()
 [ "$NON_WORK_ONLY" = 1 ] && RECOVERY_SCOPE_ARGS+=(--non-work-only)
 [ "$WORK_ONLY" = 1 ] && RECOVERY_SCOPE_ARGS+=(--work-only)
+CHILD_SCOPE_ARGS=("${RECOVERY_SCOPE_ARGS[@]}")
 
 # Scope is an admission boundary, not merely a queue preference.  It must run before action
 # recovery because recovery can acknowledge or release the instruction coupled to an action.
@@ -65,6 +66,25 @@ PY
   else
     [ "$verb" != work ]
   fi
+}
+scope_guard(){
+  local scope_rc current_digest
+  current_digest="$(python3 - "$FILE" <<'PY' 2>/dev/null
+import hashlib,sys
+try:
+    with open(sys.argv[1], "rb") as source:
+        print(hashlib.sha256(source.read()).hexdigest())
+except OSError:
+    raise SystemExit(2)
+PY
+)" || { log "REFUSED - decision disappeared before child action"; return 74; }
+  [ -n "${DECISION_FILE_DIGEST:-}" ] && [ "$current_digest" = "$DECISION_FILE_DIGEST" ] \
+    || { log "REFUSED - decision changed before child action"; return 74; }
+  scope_allows_file "$FILE"; scope_rc=$?
+  [ "$scope_rc" -eq 0 ] && return 0
+  [ "$scope_rc" -eq 1 ] && log "REFUSED - decision scope changed before child action" \
+    || log "REFUSED - decision scope could not be authenticated before child action"
+  return 74
 }
 DATE="$(date +%F)"
 LOG="$ROOT/loop/logs/$DATE-conduct-hermes.log"; mkdir -p "$(dirname "$LOG")"
@@ -114,7 +134,7 @@ drain_queue(){
         # coupled instruction. Reconcile that handshake idempotently before moving the decision;
         # otherwise the parent would hide the only projection capable of recovery.
         RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-          bash "$ROOT/scripts/conduct-hermes.sh" --recover-only "${RECOVERY_SCOPE_ARGS[@]}" \
+          bash "$ROOT/scripts/conduct-hermes.sh" --recover-only "${CHILD_SCOPE_ARGS[@]}" \
             --file "$claimed" 8>&- \
           >/dev/null 2>&1 || reconcile_rc=$?
         case "$state:$reconcile_rc" in
@@ -172,7 +192,8 @@ drain_queue(){
         # Re-enter only the recovery path so the coupled instruction is acknowledged/released
         # before the decision projection becomes terminal. No verb is dispatched here.
         RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-          bash "$ROOT/scripts/conduct-hermes.sh" --recover-only --file "$queue_file" 8>&-
+          bash "$ROOT/scripts/conduct-hermes.sh" --recover-only "${CHILD_SCOPE_ARGS[@]}" \
+            --file "$queue_file" 8>&-
         child_rc=$?
         finalize_claim "$queue_file" "$child_rc" || return $?
         ;;
@@ -194,7 +215,7 @@ drain_queue(){
     [ "$claim_rc" -ne 4 ] || break
     [ "$claim_rc" -eq 0 ] || return "$claim_rc"
     RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-      bash "$ROOT/scripts/conduct-hermes.sh" --file "$queue_file" 8>&-
+      bash "$ROOT/scripts/conduct-hermes.sh" "${CHILD_SCOPE_ARGS[@]}" --file "$queue_file" 8>&-
     child_rc=$?
     finalize_claim "$queue_file" "$child_rc" || return $?
   done
@@ -237,7 +258,7 @@ PY
 )"
       [ -n "$project" ] || project="unknown-$(basename "$queue_file")"
       RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-        bash "$ROOT/scripts/conduct-hermes.sh" --file "$queue_file" 8>&- &
+        bash "$ROOT/scripts/conduct-hermes.sh" "${CHILD_SCOPE_ARGS[@]}" --file "$queue_file" 8>&- &
       pids+=("$!"); files+=("$queue_file"); projects+=("$project")
     done
     [ "${#pids[@]}" -gt 0 ] || break
@@ -272,6 +293,12 @@ scope_allows_file "$FILE"; scope_rc=$?
 
 VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify reconcile-goal task-transition goal-transition verify-goal publish-task notification-reconcile notification-deliver notification-portfolio notification-audit notification-recover routing-refuse"
 RAW_DECISION="$(cat "$FILE" 2>/dev/null || true)"
+DECISION_FILE_DIGEST="$(python3 - "$FILE" <<'PY'
+import hashlib,sys
+with open(sys.argv[1], "rb") as source:
+    print(hashlib.sha256(source.read()).hexdigest())
+PY
+)" || { log "REFUSED - decision digest could not be captured"; exit 74; }
 VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$RAW_DECISION" 2>&1)"
 case "$VALID" in
   OK\ *) DECISION_JSON="${VALID#OK }" ;;
@@ -401,6 +428,7 @@ action_unlock(){
   ACTION_LOCK_HELD=0
 }
 action_lock(){
+  scope_guard || return 74
   mkdir -p "$ROOT/state/actions" "$ROOT/state/.locks" || return 70
   ACTION_LOCK="$ROOT/state/.locks/action-$ACTION_ID.lock"
   [ -x "$ROOT/scripts/runtime-state.py" ] \
@@ -409,6 +437,7 @@ action_lock(){
     >/dev/null 2>&1 \
     || { log "action lock contended; refusing duplicate/unlocked dispatch"; return 73; }
   ACTION_LOCK_HELD=1
+  scope_guard || { action_unlock || true; return 74; }
   if ! RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/transition_receipt.py" \
        --root "$ROOT" recover >/dev/null; then
     action_unlock || true
@@ -458,6 +487,7 @@ PY
 }
 action_transition(){ # status evidence
   local status="$1" evidence="${2:-}" rc
+  scope_guard || return 74
   ACTION_STATUS="$status" ACTION_EVIDENCE="$evidence" ACTION_ID="$ACTION_ID" \
   ACTION_KEY="$IDEMPOTENCY_KEY" ACTION_DECISION="$DECISION_ID" \
   ACTION_INSTRUCTION="$INSTRUCTION_ID" ACTION_VERB="$VERB" ACTION_GOAL="$GOAL" \
@@ -512,6 +542,7 @@ PY
 }
 release_consumed_instruction(){
   [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ] || return 0
+  scope_guard || return 74
   if ! RECURSION_ROOT="$ROOT" bash scripts/intake.sh release "$INSTRUCTION_ID" "$ACTION_ID"; then
     log "action $ACTION_ID could not reopen instruction $INSTRUCTION_ID"
     return 74
@@ -520,6 +551,7 @@ release_consumed_instruction(){
 reconcile_terminal_instruction(){ # succeeded|failed
   local disposition="$1"
   [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ] || return 0
+  scope_guard || return 74
   case "$disposition" in
     succeeded)
       if [ "$VERB" = routing-refuse ]; then
@@ -664,6 +696,8 @@ if [ "$DRY" = 0 ]; then
   trap 'exit 143' TERM
   trap 'exit 129' HUP
   if [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ]; then
+    scope_guard || { action_transition failed "decision scope changed before instruction consume" || true
+      action_unlock; trap - EXIT; exit 74; }
     if ! RECURSION_ROOT="$ROOT" bash scripts/intake.sh consume "$INSTRUCTION_ID" "$ACTION_ID"; then
       action_transition failed "instruction coupling failed before dispatch" || true
       action_unlock; trap - EXIT
