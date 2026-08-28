@@ -120,7 +120,9 @@ All observed active project working trees other than Recursion were clean. Obser
 files used as `flock(2)` lock targets, not lease records. Two short-lived, PID-owned control locks
 (`hermes-control.lock` and `decision-queue.lock`) were observed during an awareness cycle and
 released before their process details could be sampled. No worker process or unowned lease was
-observed; the transient PAUSE-time control-lock activity remains part of the Phase 0 review.
+observed. A later sample showed no matching control process and no held `state/.locks` flock. The
+transient sample aligned with the configured six-hour `hermes-decide.sh` cadence; confirming that
+its PAUSE path remained awareness-only is reserved for the Linux evidence run.
 
 The stale GSC source-bound goal/task was closed in the WIP review candidate: the pilot descriptor
 is `paused`, the v2 goal is `abandoned`, and its ready task is `stale`. The older unpinned goal/task
