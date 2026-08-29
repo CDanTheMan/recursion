@@ -29,9 +29,17 @@ def test_shell_selection() -> None:
 
 def test_native_pid_translation_contract() -> None:
     work = (SOURCE / "scripts/work.sh").read_text(encoding="utf-8")
+    conduct = (SOURCE / "scripts/conduct-hermes.sh").read_text(encoding="utf-8")
     assert 'OWNER_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"' in work
     assert 'lock-acquire "$WSLOCK" "$OWNER_PID"' in work
     assert 'lock-release "$WSLOCK" "$OWNER_PID"' in work
+    assert 'OWNER_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"' in conduct
+    for script in (work, conduct):
+        lock_lines = [
+            line for line in script.splitlines()
+            if 'runtime-state.py" lock-' in line
+        ]
+        assert lock_lines and all('"$OWNER_PID"' in line for line in lock_lines)
     if os.name == "nt":
         result = subprocess.run(
             [bash_executable(), "-lc", "test -r /proc/$$/winpid && cat /proc/$$/winpid"],

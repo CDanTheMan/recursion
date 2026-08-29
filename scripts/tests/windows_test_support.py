@@ -84,6 +84,40 @@ def install_real_fcntl_shim(scripts_root: Path) -> None:
     )
 
 
+def install_nt_posix_shim(scripts_root: Path) -> None:
+    """Stage only the POSIX filesystem no-ops needed by Windows fixture children.
+
+    The deployed controller remains Linux-shaped.  Windows cannot fsync a directory or
+    chmod an open temporary file, so this fixture-local sitecustomize preserves the tested
+    state-machine paths without changing production imports or lock ownership semantics.
+    """
+    if os.name != "nt":
+        return
+    scripts_root.mkdir(parents=True, exist_ok=True)
+    (scripts_root / "_recursion_nt_posix.py").write_text(
+        "import os\n"
+        "import tempfile\n\n"
+        "if not getattr(os, '_recursion_nt_posix_shim', False):\n"
+        "    os._recursion_nt_posix_shim = True\n"
+        "    os.fchmod = lambda _descriptor, _mode: None\n"
+        "    _real_open, _scratch = os.open, tempfile.TemporaryFile()\n\n"
+        "    def _open(path, flags, mode=0o777, **kwargs):\n"
+        "        try:\n"
+        "            inert = not flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT) and os.path.isdir(path)\n"
+        "        except (TypeError, ValueError, OSError):\n"
+        "            inert = False\n"
+        "        return os.dup(_scratch.fileno()) if inert else _real_open(path, flags, mode, **kwargs)\n\n"
+        "    os.open = _open\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    (scripts_root / "sitecustomize.py").write_text(
+        "import _recursion_nt_posix  # noqa: F401\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
 def install_single_process_flock_stub(bin_root: Path) -> None:
     """Provide util-linux ``flock(1)`` syntax for single-process Windows fixtures.
 
@@ -107,6 +141,23 @@ def install_single_process_flock_stub(bin_root: Path) -> None:
         "  esac\n"
         "done\n"
         "exit 0\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def install_python_lf_wrapper(bin_root: Path) -> None:
+    """Normalize Python text streams at the fixture boundary for Git Bash ``read``."""
+    if os.name != "nt":
+        return
+    bin_root.mkdir(parents=True, exist_ok=True)
+    import sys
+    executable = sys.executable.replace("\\", "/")
+    (bin_root / "python3").write_text(
+        "#!/usr/bin/env bash\n"
+        "set -o pipefail\n"
+        f'"{executable}" "$@" | tr -d \'\\r\'\n'
+        "exit ${PIPESTATUS[0]}\n",
         encoding="utf-8",
         newline="\n",
     )
