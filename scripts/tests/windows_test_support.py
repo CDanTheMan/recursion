@@ -9,6 +9,8 @@ Keep this selection test-only; production scripts continue to invoke the platfor
 from __future__ import annotations
 
 import os
+import shutil
+import unittest
 from pathlib import Path
 
 
@@ -16,10 +18,19 @@ def bash_executable() -> str:
     """Return Git Bash on Windows, and the normal shell name on POSIX."""
     if os.name != "nt":
         return "bash"
+    for command in ("bash.exe", "bash"):
+        discovered = shutil.which(command)
+        if discovered:
+            candidate = Path(discovered)
+            # Windows' WSL app-execution alias is not Git Bash and cannot provide the
+            # POSIX utilities required by these fixtures.
+            if candidate.is_file() and not any(
+                part.casefold() == "windowsapps" for part in candidate.parts
+            ):
+                return str(candidate)
     roots = [
         os.environ.get("ProgramFiles"),
         os.environ.get("ProgramW6432"),
-        r"C:\Program Files",
     ]
     for root in roots:
         if root:
@@ -30,8 +41,10 @@ def bash_executable() -> str:
                 candidate = Path(root) / relative
                 if candidate.is_file():
                     return str(candidate)
-    # Preserve a useful OS-level error if Git is not installed; do not silently use WSL.
-    return str(Path(roots[0] or r"C:\Program Files") / "Git/usr/bin/bash.exe")
+    raise unittest.SkipTest(
+        "Git Bash unavailable: no usable bash.exe was found on PATH or under the Windows "
+        "Program Files locations"
+    )
 
 
 def prepare_shell_env(env: dict[str, str]) -> dict[str, str]:
