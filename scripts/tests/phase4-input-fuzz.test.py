@@ -669,6 +669,15 @@ def main() -> int:
     deep_value: Any = "leaf"
     for _ in range(65):
         deep_value = {"nested": deep_value}
+    in_bounds_value: Any = "leaf"
+    for _ in range(63):
+        in_bounds_value = {"nested": in_bounds_value}
+    in_bounds_decision = conduct_root / "in-bounds-depth.json"
+    write_raw(in_bounds_decision, conduct_variant("in-bounds-depth", unknown=in_bounds_value))
+    result = run_conduct(conduct_root, in_bounds_decision)
+    conduct_check(result.returncode == 0 and "done (verb=noop rc=0)" in conduct_text(result)
+                  and not result_has_raw_error_or_path(result, conduct_root),
+                  "conduct-hermes in-bounds JSON depth is accepted")
     utf8_probe = "replacement \ufffd"
     utf8_raw = conduct_variant("utf8", unknown=utf8_probe)
     # The replacement character is valid JSON after strict decoding, so replacing only its

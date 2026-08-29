@@ -133,14 +133,42 @@ def main() -> int:
             else:
                 raise AssertionError("unsafe secret file permissions were repaired/accepted")
             created.chmod(0o600)
+            cleanup_candidate = directory / ".secret.999999.1.0123456789abcdef"
+            create_secret(cleanup_candidate, "STALE=cleanup-test\n")
             with mock.patch.object(Path, "unlink", side_effect=OSError("synthetic cleanup failure")):
                 try:
-                    runtime.scavenge(directory, current_pid=os.getpid() + 1)
-                except runtime.SecretRuntimeCleanupError:
-                    pass
+                    runtime.scavenge(directory)
+                except runtime.SecretRuntimeCleanupError as exc:
+                    assert str(exc) == "secret cleanup failed"
+                    assert "synthetic cleanup failure" not in str(exc)
+                    assert str(temporary) not in str(exc)
                 else:
                     raise AssertionError("cleanup failure was hidden")
-        created.unlink()
+            cleanup_candidate.unlink()
+
+            with mock.patch.object(
+                runtime, "_validate_secret_file",
+                side_effect=runtime.SecretRuntimeError("synthetic body failure"),
+            ), mock.patch.object(Path, "unlink", side_effect=OSError("synthetic cleanup failure")):
+                try:
+                    runtime.write_env(directory, b"TOKEN=body-failure\n")
+                except runtime.SecretRuntimeError as exc:
+                    assert not isinstance(exc, runtime.SecretRuntimeCleanupError)
+                    assert str(exc) == "synthetic body failure"
+                    notes = getattr(exc, "__notes__", [])
+                    assert "secret runtime cleanup failed after the primary operation error" in notes
+                    assert "synthetic cleanup failure" not in " ".join(notes)
+                    assert str(temporary) not in " ".join(notes)
+                else:
+                    raise AssertionError("body exception was not preserved")
+            for leftover in directory.iterdir():
+                if leftover != created:
+                    leftover.unlink()
+
+            runtime._remove_secret(created)
+            assert not created.exists()
+        else:
+            created.unlink()
         os.environ.pop("RECURSION_SECRET_RUNTIME_ROOT", None)
     finally:
         shutil.rmtree(temporary, ignore_errors=True)

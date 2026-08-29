@@ -208,8 +208,8 @@ def _remove_secret(path: Path) -> None:
         info = path.lstat()
     except FileNotFoundError:
         return
-    except OSError as exc:
-        raise SecretRuntimeCleanupError("secret cleanup could not inspect the file") from exc
+    except OSError:
+        raise SecretRuntimeCleanupError("secret cleanup could not inspect the file") from None
     if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
             or (getattr(info, "st_file_attributes", 0) & 0x400):
         raise SecretRuntimeCleanupError("refusing to remove a symlink/reparse secret path")
@@ -217,8 +217,8 @@ def _remove_secret(path: Path) -> None:
         path.unlink()
     except FileNotFoundError:
         return
-    except OSError as exc:
-        raise SecretRuntimeCleanupError(f"secret cleanup failed for {path.name}") from exc
+    except OSError:
+        raise SecretRuntimeCleanupError("secret cleanup failed") from None
     if os.name != "nt":
         try:
             descriptor = os.open(path.parent, os.O_RDONLY)
@@ -226,8 +226,31 @@ def _remove_secret(path: Path) -> None:
                 os.fsync(descriptor)
             finally:
                 os.close(descriptor)
-        except OSError as exc:
-            raise SecretRuntimeCleanupError(f"secret cleanup durability failed for {path.name}") from exc
+        except OSError:
+            raise SecretRuntimeCleanupError("secret cleanup durability failed") from None
+
+
+def _cleanup_written_secret(descriptor: int, path: Path) -> SecretRuntimeCleanupError | None:
+    failure: SecretRuntimeCleanupError | None = None
+    if descriptor >= 0:
+        try:
+            os.close(descriptor)
+        except OSError:
+            failure = SecretRuntimeCleanupError("secret cleanup could not close the file")
+    try:
+        _remove_secret(path)
+    except SecretRuntimeCleanupError as exc:
+        failure = failure or exc
+    return failure
+
+
+def _attach_cleanup_failure(primary: BaseException, cleanup: SecretRuntimeCleanupError) -> None:
+    # Preserve the body exception as the raised diagnostic.  The note is deliberately generic:
+    # cleanup errors must be observable without exposing an OS message or an absolute path.
+    try:
+        primary.add_note("secret runtime cleanup failed after the primary operation error")
+    except AttributeError:  # pragma: no cover - Python versions before BaseException.add_note
+        primary.__context__ = cleanup
 
 
 def write_env(directory: Path, content: bytes) -> Path:
@@ -280,13 +303,10 @@ def write_env(directory: Path, content: bytes) -> Path:
             return path
         except OSError as exc:
             raise SecretRuntimeError("secret runtime file operation failed") from exc
-    except BaseException:
-        if descriptor >= 0:
-            os.close(descriptor)
-        try:
-            _remove_secret(path)
-        except SecretRuntimeCleanupError:
-            raise
+    except BaseException as primary:
+        cleanup_failure = _cleanup_written_secret(descriptor, path)
+        if cleanup_failure is not None:
+            _attach_cleanup_failure(primary, cleanup_failure)
         raise
 
 

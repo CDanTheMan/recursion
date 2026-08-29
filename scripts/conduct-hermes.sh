@@ -481,9 +481,38 @@ def check_path(value):
             or "//" in normalized[1:]):
         raise ValueError("decision path is unsafe")
 
-def check_value(value, depth=0, key=None):
+def check_depth_limit(depth):
     if depth > MAX_DEPTH:
         raise ValueError("decision nesting is too deep")
+
+def check_json_depth(text):
+    # json.loads descends through nested arrays/objects in the platform parser.  Count structure
+    # iteratively first so a hostile document reaches the typed depth boundary before that
+    # parser can exhaust its platform-dependent recursion/stack budget.
+    nesting=0
+    in_string=False
+    escaped=False
+    for char in text:
+        if in_string:
+            if escaped:
+                escaped=False
+            elif char == "\\":
+                escaped=True
+            elif char == '"':
+                in_string=False
+            continue
+        if char == '"':
+            in_string=True
+        elif char in "[{":
+            nesting += 1
+            # The recursive validator checks the scalar immediately below the deepest
+            # container too, so the structural count is the conservative equivalent depth.
+            check_depth_limit(nesting)
+        elif char in "]}" and nesting:
+            nesting -= 1
+
+def check_value(value, depth=0, key=None):
+    check_depth_limit(depth)
     if key in INTEGER_FIELDS and type(value) is not int:
         raise TypeError("decision integer field has the wrong type")
     if key in REAL_FIELDS and value is not None \
@@ -531,6 +560,7 @@ try:
     if len(raw) > MAX_BYTES:
         raise ValueError("decision exceeds the bounded input size")
     text=raw.decode("utf-8", "strict")
+    check_json_depth(text)
     value=json.loads(text, parse_int=bounded_int, parse_float=bounded_float,
                      parse_constant=lambda name: (_ for _ in ()).throw(ValueError(
                          "decision JSON constant is forbidden")))
