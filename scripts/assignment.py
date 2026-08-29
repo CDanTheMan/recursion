@@ -34,8 +34,10 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import datetime
 import hashlib
 import json
+import math
 import os
 import re
 import stat
@@ -188,8 +190,16 @@ def validate_capacity_pool(data: object, pool_id: str) -> dict:
     if quota.get("source") not in QUOTA_SOURCES:
         raise AssignmentError(f"capacity-pool quota.source must be one of {sorted(QUOTA_SOURCES)}")
     limit = quota.get("limit")
-    if limit is not None and not (isinstance(limit, (int, float)) and not isinstance(limit, bool) and limit >= 0):
-        raise AssignmentError("capacity-pool quota.limit must be null or a non-negative number")
+    if limit is not None:
+        try:
+            valid_limit = (
+                isinstance(limit, (int, float)) and not isinstance(limit, bool)
+                and math.isfinite(float(limit)) and limit >= 0
+            )
+        except (OverflowError, ValueError):
+            valid_limit = False
+        if not valid_limit:
+            raise AssignmentError("capacity-pool quota.limit must be null or a non-negative number")
     unit = quota.get("unit")
     if unit is not None and not _nonempty(unit):
         raise AssignmentError("capacity-pool quota.unit must be null or a nonempty string")
@@ -255,8 +265,22 @@ def canonical_source_evidence(value: object, repository: str, branch: str, sha: 
     required = {"repository", "branch", "sha", "verified"}
     if set(value) not in (required, required | {"schema_version"}):
         raise AssignmentError("source_evidence must contain exactly repository, branch, sha, verified")
-    if "schema_version" in value and value.get("schema_version") != 1:
+    if "schema_version" in value and (
+            not isinstance(value.get("schema_version"), int)
+            or isinstance(value.get("schema_version"), bool)
+            or value.get("schema_version") != 1):
         raise AssignmentError("source_evidence schema_version must be 1")
+    if not _nonempty(value.get("repository")):
+        raise AssignmentError("source_evidence repository must be a nonempty string")
+    evidence_branch = value.get("branch")
+    if not isinstance(evidence_branch, str):
+        raise AssignmentError("source_evidence branch must be a string")
+    canonical_branch(evidence_branch, "source_evidence.branch")
+    evidence_sha = value.get("sha")
+    if not isinstance(evidence_sha, str) or not SHA_RE.fullmatch(evidence_sha):
+        raise AssignmentError("source_evidence sha is invalid")
+    if not isinstance(value.get("verified"), bool):
+        raise AssignmentError("source_evidence verified must be boolean")
     if value.get("repository") != repository or value.get("branch") != branch or value.get("sha") != sha:
         raise AssignmentError("source_evidence does not match the assigned source")
     if value.get("verified") is not True:
@@ -395,7 +419,8 @@ def capacity_pool_dir_default() -> Path:
 # --- persistence ----------------------------------------------------------------------
 
 def assignment_path(root: Path, task_id: str, digest: str) -> Path:
-    if not IDENTIFIER_RE.fullmatch(task_id or "") or not DIGEST_RE.fullmatch(digest or ""):
+    if not isinstance(task_id, str) or not isinstance(digest, str) \
+            or not IDENTIFIER_RE.fullmatch(task_id) or not DIGEST_RE.fullmatch(digest):
         raise AssignmentError("assignment path identity is not canonical")
     return root / task_id / f"{digest}.json"
 
@@ -856,14 +881,55 @@ def persist_assignment(root: Path, value: dict) -> Path:
     return _persist_assignment_posix(root, value, encoded)
 
 
+def _is_reparse_point(path: Path) -> bool:
+    """Detect POSIX links and every Windows reparse representation without following it."""
+    try:
+        junction = getattr(path, "is_junction", None)
+        if callable(junction) and junction():
+            return True
+        metadata = os.lstat(path)
+    except (OSError, ValueError):
+        return False
+    return stat.S_ISLNK(metadata.st_mode) or (
+        os.name == "nt"
+        and bool(getattr(metadata, "st_file_attributes", 0)
+                 & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x0400))
+    )
+
+
+def _path_contains_reparse_point(path: Path) -> bool:
+    """Inspect each existing component with lstat, including junctions on Windows."""
+    absolute = Path(os.path.abspath(path))
+    current = Path(absolute.anchor) if absolute.anchor else Path()
+    parts = absolute.parts[1:] if absolute.anchor else absolute.parts
+    for part in parts:
+        current /= part
+        if _is_reparse_point(current):
+            return True
+    return False
+
+
 def load_assignment(root: Path, task_id: str, digest: str) -> dict | None:
     try:
+        root = Path(root)
         path = assignment_path(root, task_id, digest)
-    except AssignmentError:
+    except (AssignmentError, TypeError, ValueError):
         return None
-    if Path(root).is_symlink() or (Path(root) / task_id).is_symlink():
+    task_path = root / task_id
+    if _path_contains_reparse_point(root) or _path_contains_reparse_point(task_path) \
+            or _path_contains_reparse_point(path):
         return None
-    if path.is_symlink() or not path.is_file():
+    try:
+        root_resolved = root.resolve(strict=True)
+        path_resolved = path.resolve(strict=True)
+        path_resolved.relative_to(root_resolved)
+        root_metadata = os.lstat(root)
+        task_metadata = os.lstat(task_path)
+        leaf_metadata = os.lstat(path)
+    except (OSError, RuntimeError, ValueError):
+        return None
+    if not stat.S_ISDIR(root_metadata.st_mode) or not stat.S_ISDIR(task_metadata.st_mode) \
+            or not stat.S_ISREG(leaf_metadata.st_mode) or _is_reparse_point(path):
         return None
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -877,38 +943,100 @@ def load_assignment(root: Path, task_id: str, digest: str) -> dict | None:
 def validate_assignment(value: object, require_source_evidence: bool = False) -> dict:
     if not isinstance(value, dict):
         raise AssignmentError("assignment is not an object")
-    missing = {"schema_version", "task_id", "project_id", "role", "source_repository", "source_branch",
-               "source_sha", "seed_manifest_digest", "engine", "provider", "capacity_pool", "model",
-               "model_parameters", "host", "sandbox_profile", "network_profile", "allowed_paths",
-               "gate_digest", "publication_policy", "created_at", "assignment_digest"} - value.keys()
+    required = {"schema_version", "task_id", "project_id", "role", "source_repository", "source_branch",
+                "source_sha", "seed_manifest_digest", "engine", "provider", "capacity_pool", "model",
+                "model_parameters", "host", "sandbox_profile", "network_profile", "allowed_paths",
+                "gate_digest", "publication_policy", "created_at", "assignment_digest"}
+    if require_source_evidence:
+        required |= {"source_evidence", "billing_basis", "metered_approved",
+                     "default_branch", "integration_branch"}
+    missing = required - value.keys()
     if missing:
         raise AssignmentError("assignment missing required field(s): " + ", ".join(sorted(missing)))
     if value.get("schema_version") != SCHEMA_VERSION or set(value) - ASSIGNMENT_FIELDS:
         raise AssignmentError("assignment schema/runtime mismatch")
-    if require_source_evidence:
-        required_phase3 = {"source_evidence", "billing_basis", "metered_approved", "default_branch", "integration_branch"}
-        missing_phase3 = required_phase3 - value.keys()
-        if missing_phase3:
-            raise AssignmentError("Phase 3 assignment missing: " + ", ".join(sorted(missing_phase3)))
-    if not IDENTIFIER_RE.fullmatch(str(value.get("task_id") or "")) or not IDENTIFIER_RE.fullmatch(str(value.get("project_id") or "")):
+    if not isinstance(value.get("schema_version"), int) or isinstance(value.get("schema_version"), bool):
+        raise AssignmentError("assignment schema_version must be an integer")
+    task_id, project_id = value.get("task_id"), value.get("project_id")
+    if not isinstance(task_id, str) or not IDENTIFIER_RE.fullmatch(task_id) \
+            or not isinstance(project_id, str) or not IDENTIFIER_RE.fullmatch(project_id):
         raise AssignmentError("assignment identity is not canonical")
-    if value.get("role") not in ROLES or not _nonempty(value.get("source_repository")):
+    role, source_repository = value.get("role"), value.get("source_repository")
+    if not isinstance(role, str) or role not in ROLES or not _nonempty(source_repository):
         raise AssignmentError("assignment role or source repository is invalid")
     source_sha = value.get("source_sha")
-    if not SHA_RE.fullmatch(source_sha or ""):
+    if not isinstance(source_sha, str) or not SHA_RE.fullmatch(source_sha):
         raise AssignmentError("assignment source_sha is invalid")
     source_branch = canonical_branch(value.get("source_branch"), "source_branch")
     if require_source_evidence or "source_evidence" in value:
-        canonical_source_evidence(value.get("source_evidence"), value["source_repository"], source_branch, source_sha)
-    _normalize_allowed_paths(value.get("allowed_paths"))
-    if value.get("billing_basis") not in (None, *CAPACITY_POOL_BILLING_BASES):
+        canonical_source_evidence(value.get("source_evidence"), source_repository, source_branch, source_sha)
+    seed_manifest_digest = value.get("seed_manifest_digest")
+    if seed_manifest_digest is not None and (
+            not isinstance(seed_manifest_digest, str) or not DIGEST_RE.fullmatch(seed_manifest_digest)):
+        raise AssignmentError("assignment seed_manifest_digest is invalid")
+    engine = value.get("engine")
+    if not isinstance(engine, str) \
+            or not (engine in engine_contract.BUILTIN_ENGINES
+                    or engine_contract.plugin_engine_name_ok(engine)):
+        raise AssignmentError("assignment engine is invalid")
+    provider = value.get("provider")
+    if not isinstance(provider, str) or not PROVIDER_RE.fullmatch(provider):
+        raise AssignmentError("assignment provider is invalid")
+    capacity_pool = value.get("capacity_pool")
+    if capacity_pool is not None and (
+            not isinstance(capacity_pool, str) or not IDENTIFIER_RE.fullmatch(capacity_pool)):
+        raise AssignmentError("assignment capacity_pool is invalid")
+    billing_basis = value.get("billing_basis")
+    if billing_basis not in (None, *CAPACITY_POOL_BILLING_BASES):
         raise AssignmentError("assignment billing_basis is invalid")
-    if "metered_approved" in value and not isinstance(value.get("metered_approved"), bool):
+    metered_approved = value.get("metered_approved")
+    if "metered_approved" in value and not isinstance(metered_approved, bool):
         raise AssignmentError("assignment metered_approved must be boolean")
-    if value.get("billing_basis") == "metered" and value.get("metered_approved") is not True:
+    if billing_basis == "metered" and metered_approved is not True:
         raise AssignmentError("metered assignment is not approved")
-    canonical_branch(value.get("default_branch"), "default_branch")
-    canonical_branch(value.get("integration_branch"), "integration_branch")
+    model = value.get("model")
+    if model is not None and not _nonempty(model):
+        raise AssignmentError("assignment model must be null or a nonempty string")
+    parameters = value.get("model_parameters")
+    if not isinstance(parameters, dict):
+        raise AssignmentError("assignment model_parameters must be an object")
+    for key, item in parameters.items():
+        if not isinstance(key, str) or not MODEL_PARAM_KEY_RE.fullmatch(key) \
+                or not isinstance(item, str):
+            raise AssignmentError(f"assignment model parameter {key!r} is invalid")
+    if not _nonempty(value.get("host")):
+        raise AssignmentError("assignment host must be a nonempty string")
+    if not isinstance(value.get("sandbox_profile"), str) or value.get("sandbox_profile") not in SANDBOX_PROFILES:
+        raise AssignmentError("assignment sandbox_profile is invalid")
+    if not isinstance(value.get("network_profile"), str) or value.get("network_profile") not in NETWORK_PROFILES:
+        raise AssignmentError("assignment network_profile is invalid")
+    _normalize_allowed_paths(value.get("allowed_paths"))
+    gate_digest = value.get("gate_digest")
+    if gate_digest is not None and (
+            not isinstance(gate_digest, str) or not DIGEST_RE.fullmatch(gate_digest)):
+        raise AssignmentError("assignment gate_digest is invalid")
+    publication_policy = value.get("publication_policy")
+    if not isinstance(publication_policy, str) or not SLUG_RE.fullmatch(publication_policy):
+        raise AssignmentError("assignment publication_policy is invalid")
+    default_branch = value.get("default_branch")
+    integration_branch = value.get("integration_branch")
+    if "default_branch" in value:
+        default_branch = canonical_branch(default_branch, "default_branch")
+    if "integration_branch" in value:
+        integration_branch = canonical_branch(integration_branch, "integration_branch")
+    if default_branch is not None and integration_branch is not None \
+            and default_branch == integration_branch:
+        raise AssignmentError("default_branch and integration_branch must differ")
+    created_at = value.get("created_at")
+    if not isinstance(created_at, str) or not created_at or created_at != created_at.strip():
+        raise AssignmentError("assignment created_at must be a nonempty timestamp string")
+    try:
+        datetime.datetime.strptime(created_at, TS_FORMAT)
+    except ValueError as exc:
+        raise AssignmentError("assignment created_at is not a canonical UTC timestamp") from exc
+    assignment_digest = value.get("assignment_digest")
+    if not isinstance(assignment_digest, str) or not DIGEST_RE.fullmatch(assignment_digest):
+        raise AssignmentError("assignment_digest is invalid")
     if canonical_digest(value) != value.get("assignment_digest"):
         raise AssignmentError("assignment digest does not match its content")
     return value

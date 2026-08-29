@@ -22,6 +22,7 @@ import argparse
 import calendar
 import datetime
 import json
+import math
 import os
 import re
 import sys
@@ -95,7 +96,10 @@ def plain_number(value: object) -> float | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value)
+        try:
+            return float(value)
+        except (OverflowError, ValueError):
+            return None
     return None
 
 
@@ -225,11 +229,11 @@ def looks_like_evidence(data: object) -> bool:
 def classify_cost(usage: dict) -> tuple[int | None, float | None, str]:
     evidence_source = nonempty_str(usage.get("evidence_source"))
     basis = usage.get("billing_basis")
-    if evidence_source is None or basis not in BILLING_BASES:
+    if evidence_source is None or not isinstance(basis, str) or basis not in BILLING_BASES:
         return None, None, "unreconciled"
     tokens = plain_int(usage.get("tokens"))
     cost = plain_number(usage.get("cost_usd"))
-    if tokens is None or cost is None:
+    if tokens is None or tokens < 0 or cost is None or not math.isfinite(cost) or cost < 0:
         return None, None, "unreconciled"
     if evidence_source in POLICY_RECORD_SOURCES:
         return tokens, cost, "policy-record"
@@ -414,7 +418,12 @@ def valid_amount(value: object, allow_float: bool) -> bool:
     if isinstance(value, bool):
         return False
     if allow_float:
-        return isinstance(value, (int, float)) and value >= 0
+        if not isinstance(value, (int, float)):
+            return False
+        try:
+            return math.isfinite(float(value)) and value >= 0
+        except (OverflowError, ValueError):
+            return False
     return isinstance(value, int) and value >= 0
 
 
@@ -710,6 +719,9 @@ def command_quota(args: argparse.Namespace) -> int:
     for row in rows:
         if not isinstance(row, dict) or row.get("record") != "run":
             continue
+        if ledger_row_is_corrupt(row):
+            diag(f"corrupt ledger row refused for quota: {row.get('run_id')!r}")
+            return 2
         pool_id = row.get("capacity_pool")
         if row.get("assignment_digest"):
             persisted = assignment_mod.load_assignment(
@@ -731,6 +743,9 @@ def command_quota(args: argparse.Namespace) -> int:
         bucket = period_key_of(period, row.get("finished_at")) or period_key_of(period, row.get("started_at"))
         if bucket != key:
             continue
+        if pool.get("billing_basis") == "metered" and row.get("cost_basis") != "receipt":
+            diag(f"metered quota row has no valid provider receipt: {row.get('run_id')!r}")
+            return 2
         runs += 1
         tokens += row.get("tokens") or 0
         cost += row.get("cost_usd") or 0.0

@@ -123,6 +123,44 @@ def test_empty_allowed_paths_refused() -> None:
         check(True, "empty allowed_paths is refused")
 
 
+def test_validate_rejects_malformed_field_types() -> None:
+    value = amod.resolve_assignment(**BASE_KWARGS, created_at="2026-08-28T00:00:00Z")
+    malformed = (
+        ("schema_version", True), ("task_id", 123), ("project_id", []),
+        ("role", {}), ("source_repository", []), ("source_branch", []),
+        ("source_sha", 123), ("source_evidence", []), ("seed_manifest_digest", []),
+        ("engine", []), ("provider", []), ("capacity_pool", []),
+        ("billing_basis", []), ("metered_approved", []), ("model", 123),
+        ("model_parameters", []), ("host", []), ("sandbox_profile", []),
+        ("network_profile", []), ("allowed_paths", {}), ("gate_digest", []),
+        ("publication_policy", []), ("default_branch", []),
+        ("integration_branch", []), ("created_at", []),
+    )
+    for field, bad in malformed:
+        candidate = dict(value)
+        candidate[field] = bad
+        candidate["assignment_digest"] = amod.canonical_digest(candidate)
+        try:
+            amod.validate_assignment(candidate, require_source_evidence=True)
+        except amod.AssignmentError:
+            check(True, f"malformed assignment field type {field} is a typed refusal")
+        except Exception as exc:  # noqa: BLE001 - raw exceptions are the regression target.
+            check(False, f"malformed assignment field type {field} raised raw {type(exc).__name__}")
+        else:
+            check(False, f"malformed assignment field type {field} was accepted")
+
+    candidate = dict(value)
+    candidate["assignment_digest"] = 123
+    try:
+        amod.validate_assignment(candidate, require_source_evidence=True)
+    except amod.AssignmentError:
+        check(True, "non-string assignment_digest is a typed refusal")
+    except Exception as exc:  # noqa: BLE001
+        check(False, f"non-string assignment_digest raised raw {type(exc).__name__}")
+    else:
+        check(False, "non-string assignment_digest was accepted")
+
+
 def test_persist_idempotent_and_collision_safe(tmp_path: Path) -> None:
     root = tmp_path / "assignments"
     value = amod.resolve_assignment(**BASE_KWARGS, created_at="2026-08-28T00:00:00Z")
@@ -606,6 +644,23 @@ def test_capacity_pool_validation(tmp_path: Path) -> None:
         check(True, "capacity-pool manifest id/filename mismatch is refused")
 
 
+def test_load_rejects_reparse_task_directory(tmp_path: Path) -> None:
+    root = tmp_path / "assignments"
+    outside = tmp_path / "outside-task"
+    root.mkdir()
+    outside.mkdir()
+    value = amod.resolve_assignment(**BASE_KWARGS, created_at="2026-08-28T00:00:00Z")
+    (outside / f"{value['assignment_digest']}.json").write_text(
+        json.dumps(value, sort_keys=True), encoding="utf-8",
+    )
+    _make_directory_link(root / value["task_id"], outside)
+    loaded = amod.load_assignment(root, value["task_id"], value["assignment_digest"])
+    check(loaded is None,
+          "load_assignment refuses an assignments/<task> junction/reparse point")
+    check((outside / f"{value['assignment_digest']}.json").is_file(),
+          "a refused junction load does not mutate the outside target")
+
+
 def run_cli(args: list[str], env: dict) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(ASSIGNMENT), *args],
                           capture_output=True, text=True, env=env)
@@ -673,6 +728,7 @@ def main() -> int:
     test_allowed_paths_fail_closed()
     test_fail_closed_invalid_inputs()
     test_empty_allowed_paths_refused()
+    test_validate_rejects_malformed_field_types()
     with tempfile.TemporaryDirectory() as tmp:
         test_persist_idempotent_and_collision_safe(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
@@ -691,6 +747,8 @@ def main() -> int:
         test_persist_40_process_idempotency(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_capacity_pool_validation(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_load_rejects_reparse_task_directory(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_cli_resolve_and_persist(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:

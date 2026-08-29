@@ -193,6 +193,58 @@ def test_quota_unknown_pool_fails_closed(tmp_path: Path) -> None:
     check(result.returncode == 2, f"an unknown capacity pool fails closed with exit 2 (got {result.returncode})")
 
 
+def test_quota_corrupt_token_row_is_typed_refusal(tmp_path: Path) -> None:
+    ledger = tmp_path / "ledger.jsonl"
+    pool_dir = tmp_path / "pools"
+    write_pool(pool_dir, "pool-corrupt", limit=100, unit="tokens")
+    ledger.write_text(json.dumps({
+        "schema_version": 1, "record": "run", "run_id": "corrupt-token",
+        "task_id": "task-corrupt", "capacity_pool": "pool-corrupt",
+        "billing_basis": "metered", "cost_basis": "receipt",
+        "tokens": "not-an-integer", "cost_usd": 0.0,
+        "started_at": FIXED_TS, "finished_at": FIXED_TS,
+    }) + "\n", encoding="utf-8")
+    result = run(["quota", "--pool-id", "pool-corrupt", "--capacity-pool-dir", str(pool_dir),
+                  "--ledger", str(ledger), "--period", FIXED_WEEK])
+    check(result.returncode == 2,
+          f"a corrupt-token quota row is refused with typed exit 2 (got {result.returncode})")
+    check("corrupt ledger row" in result.stderr and "TypeError" not in result.stderr,
+          "corrupt-token quota refusal is deterministic and never a raw TypeError")
+
+
+def test_invalid_receipts_cannot_evade_quota(tmp_path: Path) -> None:
+    """Invalid receipt numbers are unreconciled and therefore block metered quota."""
+    for number, (field, bad) in enumerate((
+        ("cost_usd", -1.0), ("cost_usd", float("nan")), ("cost_usd", float("inf")),
+        ("tokens", -1), ("tokens", float("nan")), ("tokens", float("inf")),
+    )):
+        case = tmp_path / f"receipt-{number}"
+        runs_dir = case / "runs"
+        runs_dir.mkdir(parents=True)
+        ledger = case / "ledger.jsonl"
+        pool_dir = case / "pools"
+        write_pool(pool_dir, "pool-receipt", limit=100, unit="usd")
+        digest = persist_assignment(case, f"task-receipt-{number}", provider="cursor",
+                                    pool="pool-receipt")
+        usage_values = {"cost_usd": 1.0, "tokens": 10}
+        usage_values[field] = bad
+        (runs_dir / "run.json").write_text(json.dumps(evidence(
+            f"run-receipt-{number}", f"task-receipt-{number}", capacity_pool="pool-receipt",
+            assignment_digest=digest, usage_provider="cursor", **usage_values,
+        )), encoding="utf-8")
+        ingested = run(["ingest", "--runs-dir", str(runs_dir), "--ledger", str(ledger)])
+        check(ingested.returncode == 0,
+              f"invalid {field}={bad!r} ingests without a raw exception")
+        rows = read_jsonl_objects(ledger)
+        check(rows and rows[0].get("cost_basis") == "unreconciled"
+              and rows[0].get("tokens") is None and rows[0].get("cost_usd") is None,
+              f"invalid {field}={bad!r} is excluded from receipt measurement")
+        quota = run(["quota", "--pool-id", "pool-receipt", "--capacity-pool-dir", str(pool_dir),
+                     "--ledger", str(ledger), "--period", FIXED_WEEK])
+        check(quota.returncode == 2 and "TypeError" not in quota.stderr,
+              f"invalid {field}={bad!r} cannot evade metered quota")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         test_normalize_provider_preference(Path(tmp))
@@ -202,6 +254,10 @@ def main() -> int:
         test_quota_no_limit_and_unmeasurable(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_quota_unknown_pool_fails_closed(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_quota_corrupt_token_row_is_typed_refusal(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_invalid_receipts_cannot_evade_quota(Path(tmp))
 
     if failures:
         print(f"usage-reconcile-quota.test: {len(failures)} FAILED")

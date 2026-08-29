@@ -227,6 +227,39 @@ def control_hardlinked_leaves_are_rejected() -> tuple[bool, str]:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def control_hardlink_created_after_open_is_rejected() -> tuple[bool, str]:
+    """A hardlink added after the open-time check must not receive the new record."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-hardlink-race-"))
+    try:
+        path = root / "inside" / "events.jsonl"
+        outside = root / "outside-alias.jsonl"
+        path.parent.mkdir(parents=True)
+        original = b'{"id":"prior"}\n'
+        path.write_bytes(original)
+        armed = True
+
+        def hook(stage: str) -> None:
+            nonlocal armed
+            if armed and stage == "pre-journal-write":
+                armed = False
+                outside.hardlink_to(path)
+
+        try:
+            append_jsonl(path, {"id": "must-not-escape"}, hook=hook)
+        except JsonlDurabilityError as exc:
+            return (
+                not armed and path.read_bytes() == original and outside.read_bytes() == original
+                and b"must-not-escape" not in outside.read_bytes()
+            ), str(exc)
+        finally:
+            outside.unlink(missing_ok=True)
+        return False, "a hardlink created after validation was accepted"
+    except OSError as exc:
+        return False, f"hardlink race fixture could not be created: {exc}"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def control_hardlinked_index_is_rejected() -> tuple[bool, str]:
     root = Path(tempfile.mkdtemp(prefix="jsonl-index-hardlink-"))
     try:
@@ -629,6 +662,8 @@ def main() -> int:
         ("short writes are retried until the complete record is durable", control_complete_write_loop),
         ("idempotent appends still repair and preserve a torn tail", control_dedupe_still_repairs_tail),
         ("hardlinked journal leaves are rejected without an outside-root write", control_hardlinked_leaves_are_rejected),
+        ("a post-validation hardlink race is refused before journal bytes escape",
+         control_hardlink_created_after_open_is_rejected),
         ("hardlinked verification-index leaves are rejected", control_hardlinked_index_is_rejected),
         ("an exact verification index makes steady-state append and reads tail-only",
          control_verified_index_avoids_prefix_rescan),
