@@ -138,9 +138,16 @@ header_of(){ awk 'NF==0{exit} {print}' "$R/state/tasks/$1.md" 2>/dev/null; }
 
 # --- 0. a missing first-party module is diagnosed without a traceback -----------------------
 mv -- "$R/scripts/repository_contract.py" "$TMP/repository_contract.py"
+expected_code_root="$R/scripts"
+if command -v cygpath >/dev/null 2>&1; then
+  converted_code_root="$(cygpath -w "$expected_code_root" 2>/dev/null || true)"
+  if [ -n "$converted_code_root" ]; then
+    expected_code_root="$converted_code_root"
+  fi
+fi
 rc="$(plan missing-module)"
 if [ "$rc" != 0 ] && grep -q "required module 'repository_contract'" "$TMP/err" \
-   && grep -q "searched code root: $R/scripts" "$TMP/err" \
+   && grep -Fq "searched code root: $expected_code_root" "$TMP/err" \
    && ! grep -q 'Traceback' "$TMP/err"; then
   ok "a missing planner module fails closed with its module and searched code root"
 else
