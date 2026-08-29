@@ -1510,7 +1510,7 @@ def backup(root: Path, destination: Path) -> None:
             if staging is not None:
                 _safe_remove_tree(staging)
     assert manifest is not None
-    print(f"backup {destination} files={len(manifest['files'])} "
+    print(f"backup destination={destination.name} files={len(manifest['files'])} "
           f"pause_sha256={manifest['pause_sha256']}")
 
 
@@ -1526,7 +1526,7 @@ def restore(root: Path, snapshot: Path) -> None:
         _create_restore_transaction(root, snapshot, manifest)
         resolve_open_restore(root)
         require_pause(root)
-    print(f"restore {snapshot} files={len(manifest['files'])} "
+    print(f"restore snapshot={snapshot.name} files={len(manifest['files'])} "
           f"pause_sha256={manifest['pause_sha256']}")
 
 

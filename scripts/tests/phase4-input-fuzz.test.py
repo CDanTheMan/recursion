@@ -135,6 +135,9 @@ def main() -> int:
         print("phase4-input-fuzz: SKIP (no usable bash interpreter found)")
         return 77
     failures: list[str] = []
+    cases_run = 0
+    cases_passed = 0
+    cases_skipped = 0
     scratch = Path(tempfile.gettempdir()) / f"phase4-input-fuzz-{os.getpid()}-{time.time_ns()}"
     try:
         # On this Windows host mode=0700 creates a directory ACL that the sandboxed test
@@ -147,9 +150,18 @@ def main() -> int:
     atexit.register(shutil.rmtree, scratch, ignore_errors=True)
 
     def check(condition: bool, label: str) -> None:
+        nonlocal cases_run, cases_passed
+        cases_run += 1
+        if condition:
+            cases_passed += 1
         print(("ok - " if condition else "FAIL - ") + label)
         if not condition:
             failures.append(label)
+
+    def skip_case(label: str, reason: str) -> None:
+        nonlocal cases_skipped
+        cases_skipped += 1
+        print(f"SKIP - {label}: {reason}")
 
     def typed(label: str, call: Callable[[], Any], expected: tuple[type, ...]) -> None:
         try:
@@ -340,24 +352,39 @@ def main() -> int:
     (valid_root / "state/events.jsonl").write_text("{}\n", encoding="utf-8")
     snapshot = scratch / "snapshot"
     env = dict(os.environ, RECURSION_ROOT=str(valid_root))
+    backup_result: subprocess.CompletedProcess[str] | None = None
+    snapshot_available = False
     if os.name == "nt":
         # The Windows host denies re-opening the 0700 lock-candidate ACL used by the Linux
-        # witnessed-lock implementation.  Build the same bounded snapshot shape directly so
-        # this loader fuzz remains executable without depending on that host artifact.
-        files_root = snapshot / "files" / "state"
-        files_root.mkdir(parents=True, exist_ok=True)
-        pause_bytes = b"pause\n"
-        (files_root / "PAUSE").write_bytes(pause_bytes)
-        manifest = {"schema_version": 1, "pause_sha256": hashlib.sha256(pause_bytes).hexdigest(),
-                    "files": [{"path": "state/PAUSE", "sha256": hashlib.sha256(pause_bytes).hexdigest(),
-                               "size": len(pause_bytes), "mode": "0o600", "uid": 0, "gid": 0}]}
-        (snapshot / "manifest.json").write_text(json.dumps(manifest) + "\n", encoding="utf-8")
-        backup_result = subprocess.CompletedProcess([], 0, "", "")
+        # witnessed-lock implementation.  Do not replace that unavailable production proof
+        # with a fabricated subprocess result or hand-built snapshot.
+        skip_case(
+            "legitimate runtime snapshot is accepted",
+            "Windows cannot reopen the 0700 lock-candidate ACL used by the Linux witnessed-lock "
+            "implementation; runtime snapshot acceptance is not proven",
+        )
+        # Keep the independent manifest-loader fuzz executable with a snapshot produced by the
+        # real writer.  This does not substitute for the skipped backup acceptance proof.  The
+        # adapter changes only the temporary fixture ACL; the writer still creates and validates
+        # the complete snapshot tree and manifest.
+        class WritableSnapshotPath(type(snapshot)):
+            def mkdir(self, mode: int = 0o777, parents: bool = False,
+                      exist_ok: bool = False) -> None:
+                super().mkdir(mode=0o777, parents=parents, exist_ok=exist_ok)
+
+        runtime._write_snapshot_tree(valid_root, WritableSnapshotPath(snapshot))
+        snapshot_available = True
     else:
-        backup_result = subprocess.run([PYTHON, str(ROOT / "scripts/runtime-state.py"), "backup", str(snapshot)],
-                                       env=env, capture_output=True, text=True)
-    check(backup_result.returncode == 0 and not result_has_raw_error_or_path(backup_result, snapshot),
-          "legitimate runtime snapshot is accepted")
+        backup_result = subprocess.run(
+            [PYTHON, str(ROOT / "scripts/runtime-state.py"), "backup", str(snapshot)],
+            env=env, capture_output=True, text=True,
+        )
+        backup_output = backup_result.stdout or ""
+        check(backup_result.returncode == 0 and not result_has_raw_error_or_path(backup_result, snapshot)
+              and f"backup destination={snapshot.name} files=" in backup_output
+              and "pause_sha256=" in backup_output,
+              "legitimate runtime snapshot is accepted")
+        snapshot_available = backup_result.returncode == 0
     digest_victim = scratch / "digest-victim"
     digest_replacement = scratch / "digest-replacement"
     digest_victim.write_bytes(b"original digest input\n")
@@ -378,7 +405,7 @@ def main() -> int:
     finally:
         runtime.os.open = real_open
     check(digest_swap_refused, "runtime digest refuses a deterministic open-path replacement")
-    if backup_result.returncode == 0:
+    if snapshot_available:
         manifest = json.loads((snapshot / "manifest.json").read_text(encoding="utf-8"))
         check(runtime.load_manifest(snapshot)["schema_version"] == 1, "legitimate runtime manifest loads")
         for index, (label, raw) in enumerate(json_matrix):
@@ -1036,8 +1063,15 @@ def main() -> int:
 
     try:
         if failures:
-            print(f"phase4-input-fuzz.test: {len(failures)} FAILED")
+            print(
+                f"phase4-input-fuzz.test: SUMMARY ran={cases_run} passed={cases_passed} "
+                f"failed={len(failures)} skipped={cases_skipped}"
+            )
             return 1
+        print(
+            f"phase4-input-fuzz.test: SUMMARY ran={cases_run} passed={cases_passed} "
+            f"failed=0 skipped={cases_skipped}"
+        )
         print(f"phase4-input-fuzz.test: ALL PASS hostile_cases={len(hostile)} json_cases={len(json_matrix)}")
         return 0
     finally:
