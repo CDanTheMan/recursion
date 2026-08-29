@@ -1099,9 +1099,9 @@ def load_manifest(snapshot: Path) -> dict:
     try:
         snapshot_info = snapshot.lstat()
     except OSError as exc:
-        raise RuntimeError(f"snapshot is absent, not a directory: {snapshot}") from exc
+        raise RuntimeError("snapshot is absent, not a directory [snapshot]") from exc
     if _is_reparse(snapshot_info) or not stat.S_ISDIR(snapshot_info.st_mode):
-        raise RuntimeError(f"snapshot is absent, not a directory, or a symlink: {snapshot}")
+        raise RuntimeError("snapshot is absent, not a directory, or a symlink [snapshot]")
     manifest_path = snapshot / "manifest.json"
     raw_manifest = _read_verified_file(manifest_path, "backup manifest", max_bytes=MAX_MANIFEST_BYTES)
     try:

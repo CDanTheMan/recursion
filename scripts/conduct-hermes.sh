@@ -482,16 +482,19 @@ def check_path(value):
         raise ValueError("decision path is unsafe")
 
 def check_depth_limit(depth):
-    if depth > MAX_DEPTH:
-        raise ValueError("decision nesting is too deep")
+    if depth <= MAX_DEPTH:
+        return
+    raise ValueError("decision nesting is too deep")
 
 def check_json_depth(text):
     # json.loads descends through nested arrays/objects in the platform parser.  Count value depth
     # iteratively first so a hostile document reaches the typed depth boundary before that parser
     # can exhaust its platform-dependent recursion/stack budget.  An opening container is itself
-    # at the current value depth (the root is 0); values inside it are one level deeper.  Checking
-    # after incrementing would reject a valid empty container one level before check_value does.
-    nesting=0
+    # at the current value depth; the decision root is structural depth -1 so its fields begin at
+    # depth 0.  This keeps the inclusive MAX_DEPTH comparison aligned with check_value for a
+    # maximum-depth value beneath the root.  Checking after incrementing would reject a valid
+    # empty container one level before check_value does.
+    nesting=-1
     in_string=False
     escaped=False
     for char in text:
@@ -516,7 +519,7 @@ def check_json_depth(text):
             # grammar/parser remains authoritative for whether the token sequence is valid.
             check_depth_limit(nesting)
 
-def check_value(value, depth=0, key=None):
+def check_value(value, depth=-1, key=None):
     check_depth_limit(depth)
     if key in INTEGER_FIELDS and type(value) is not int:
         raise TypeError("decision integer field has the wrong type")

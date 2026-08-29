@@ -82,11 +82,21 @@ def _existing_regular(path: Path, label: str) -> os.stat_result | None:
         raise JsonlDurabilityError(f"cannot inspect {label}: {path}") from exc
     if _is_reparse(info) or not stat.S_ISREG(info.st_mode):
         raise JsonlDurabilityError(f"{label} is not a regular non-reparse file: {path}")
+    if int(getattr(info, "st_nlink", 0)) != 1:
+        raise JsonlDurabilityError(f"{label} has {info.st_nlink} hard links: {path}")
     return info
 
 
 def _same_identity(left: os.stat_result, right: os.stat_result) -> bool:
     return (left.st_dev, left.st_ino, left.st_size) == (right.st_dev, right.st_ino, right.st_size)
+
+
+def _validate_opened_leaf(path: Path, info: os.stat_result) -> None:
+    """Require a regular, non-reparse, single-link journal leaf."""
+    if _is_reparse(info) or not stat.S_ISREG(info.st_mode):
+        raise JsonlDurabilityError(f"JSONL leaf is not a regular non-reparse file: {path}")
+    if int(getattr(info, "st_nlink", 0)) != 1:
+        raise JsonlDurabilityError(f"JSONL leaf has {info.st_nlink} hard links: {path}")
 
 
 def _open_verified_file(path: Path, flags: int, mode: int = 0o600,
@@ -99,8 +109,7 @@ def _open_verified_file(path: Path, flags: int, mode: int = 0o600,
         raise JsonlDurabilityError(f"cannot open JSONL file: {path}") from exc
     try:
         observed = os.fstat(descriptor)
-        if _is_reparse(observed) or not stat.S_ISREG(observed.st_mode):
-            raise JsonlDurabilityError(f"opened JSONL path is not a regular file: {path}")
+        _validate_opened_leaf(path, observed)
         if expected is not None and not _same_identity(expected, observed):
             raise JsonlDurabilityError(f"JSONL file changed while opening: {path}")
         return descriptor, observed
@@ -688,6 +697,7 @@ def _verified_descriptor(path: Path, max_record_bytes: int) \
     try:
         _lock_descriptor(descriptor)
         current = os.fstat(descriptor)
+        _validate_opened_leaf(path, current)
         if not _same_identity(expected, current) or not _same_identity(opened, current):
             raise JsonlDurabilityError(f"JSONL journal changed before verification: {path}")
         size = current.st_size
@@ -934,6 +944,7 @@ def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RE
     try:
         _lock_descriptor(descriptor)
         current = os.fstat(descriptor)
+        _validate_opened_leaf(path, current)
         if not _same_identity(opened, current):
             raise JsonlDurabilityError(f"JSONL journal changed before append: {path}")
         size = current.st_size
@@ -941,6 +952,8 @@ def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RE
         if size and _read_at(descriptor, 1, size - 1) != b"\n":
             committed = _last_newline(descriptor, size)
             evidence = _quarantine_tail(path, descriptor, committed, size)
+            current = os.fstat(descriptor)
+            _validate_opened_leaf(path, current)
             os.ftruncate(descriptor, committed)
             os.fsync(descriptor)
         connection, _rebuilt = _open_verified_index(
@@ -948,6 +961,8 @@ def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RE
         )
         if _duplicate_in_index(connection, dedupe_field, dedupe_value):
             return AppendOutcome(appended=False, quarantine=evidence)
+        current = os.fstat(descriptor)
+        _validate_opened_leaf(path, current)
         _write_all(descriptor, encoded)
         os.fsync(descriptor)
         if not existed:

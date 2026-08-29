@@ -86,28 +86,25 @@ def has_controlled_refusal(result: subprocess.CompletedProcess[str], markers: tu
         and not result_has_raw_error_or_path(result, *paths)
 
 
-def strict_schema_validator(schema: dict):
+def stock_schema_validator(schema: dict):
     import jsonschema
 
     validator_class = jsonschema.validators.validator_for(schema)
     validator_class.check_schema(schema)
     if validator_class is not jsonschema.Draft7Validator:
         raise AssertionError("engine manifest must declare Draft-7")
-    checker = validator_class.TYPE_CHECKER.redefine(
-        "integer", lambda _checker, instance: type(instance) is int
-    )
-    return jsonschema.validators.extend(validator_class, type_checker=checker)(schema)
+    return validator_class(schema)
 
 
 def differential_mismatches(resolver: Any, validator: Any,
                             cases: list[tuple[str, dict]],
                             runtime_validate: Callable[[dict], Any] | None = None
-                            ) -> tuple[list[str], int, int]:
-    """Compare the real declared-draft validator with the product validator without masking errors."""
+                            ) -> tuple[list[str], list[str], list[str]]:
+    """Compare stock declared-draft validation with the product validator."""
     validate = runtime_validate or resolver.validate_manifest
     mismatches: list[str] = []
-    forward = 0
-    reverse = 0
+    schema_only: list[str] = []
+    runtime_only: list[str] = []
     for label, candidate in cases:
         schema_valid = not list(validator.iter_errors(candidate))
         runtime_valid = True
@@ -118,10 +115,10 @@ def differential_mismatches(resolver: Any, validator: Any,
         if schema_valid != runtime_valid:
             mismatches.append(f"{label}: schema={schema_valid} runtime={runtime_valid}")
             if schema_valid:
-                forward += 1
+                schema_only.append(label)
             else:
-                reverse += 1
-    return mismatches, forward, reverse
+                runtime_only.append(label)
+    return mismatches, schema_only, runtime_only
 
 
 def signed_token(proxy: Any, payload: bytes, key: bytes) -> str:
@@ -194,6 +191,7 @@ def main() -> int:
     resolver = load_module("phase4_resolver", ROOT / "scripts/resolve-engine.py")
     backup = load_module("phase4_backup", ROOT / "scripts/backup-offsite.py")
     runtime = load_module("phase4_runtime", ROOT / "scripts/runtime-state.py")
+    jsonl = load_module("phase4_jsonl", ROOT / "scripts/jsonl_durable.py")
     secrets_runtime = load_module("phase4_secret_runtime", ROOT / "scripts/secret_runtime.py")
     queue = load_module("phase4_queue", ROOT / "scripts/decision-queue.py")
 
@@ -408,12 +406,40 @@ def main() -> int:
     if snapshot_available:
         manifest = json.loads((snapshot / "manifest.json").read_text(encoding="utf-8"))
         check(runtime.load_manifest(snapshot)["schema_version"] == 1, "legitimate runtime manifest loads")
+        missing_snapshot = scratch / "missing-snapshot"
+        missing_result = subprocess.run(
+            [PYTHON, str(ROOT / "scripts/runtime-state.py"), "restore", str(missing_snapshot)],
+            env=env, capture_output=True, text=True,
+        )
+        missing_output = missing_result.stdout + missing_result.stderr
+        check(missing_result.returncode != 0 and "[snapshot]" in missing_output
+              and str(missing_snapshot) not in missing_output
+              and not result_has_raw_error_or_path(missing_result, missing_snapshot),
+              "runtime-state missing snapshot refusal uses a symbolic identifier")
         for index, (label, raw) in enumerate(json_matrix):
             bad_snapshot = scratch / f"raw-snapshot-{index}"
             shutil.copytree(snapshot, bad_snapshot)
             (bad_snapshot / "manifest.json").write_text(raw, encoding="utf-8")
             typed(f"runtime manifest raw {label}", lambda bad_snapshot=bad_snapshot: runtime.load_manifest(bad_snapshot),
                   (RuntimeError,))
+
+    hardlink_root = scratch / "jsonl-hardlink"
+    hardlink_root.mkdir()
+    hardlink_target = hardlink_root / "outside.jsonl"
+    hardlink_journal = hardlink_root / "state/events.jsonl"
+    hardlink_journal.parent.mkdir()
+    hardlink_bytes = b'{"id":"outside"}\n'
+    hardlink_target.write_bytes(hardlink_bytes)
+    os.link(hardlink_target, hardlink_journal)
+    try:
+        jsonl.append_jsonl(hardlink_journal, {"id": "must-not-escape"})
+    except jsonl.JsonlDurabilityError as exc:
+        hardlink_refused = "hard link" in str(exc)
+    else:
+        hardlink_refused = False
+    check(hardlink_refused and hardlink_target.read_bytes() == hardlink_bytes
+          and hardlink_journal.read_bytes() == hardlink_bytes,
+          "JSONL hardlinked leaf is refused without escaping its state path")
 
     queue_base = scratch / "queue-root"
     for directory in (queue_base / "state/.locks", queue_base / "state/decision-queue/pending",
@@ -483,8 +509,14 @@ def main() -> int:
         )
         host_acl = (os.name == "nt" and result.returncode == 256
                     and "CreateFileMapping" in result.stderr and "Win32 error 5" in result.stderr)
-        check((result.returncode == 92 and not result_has_raw_error_or_path(result, worker_root)) or host_acl,
-              f"worker-sandbox hostile plan {index} is controlled (rc={result.returncode}, host_acl={host_acl})")
+        if host_acl:
+            skip_case(
+                f"worker-sandbox hostile plan {index} is a truthful host-ACL skip",
+                "truthful Git Bash host-ACL skip",
+            )
+        else:
+            check(result.returncode == 92 and not result_has_raw_error_or_path(result, worker_root),
+                  f"worker-sandbox hostile plan {index} is controlled")
 
     # Exercise every command boundary with traversal, UNC, drive-relative, tilde, and env-style
     # paths.  These are intentionally refusal cases; no command is allowed to print a traceback.
@@ -633,7 +665,7 @@ def main() -> int:
 
     def conduct_check(condition: bool, label: str) -> None:
         if conduct_host_acl:
-            check(True, label + " (truthful Git Bash host-ACL skip)")
+            skip_case(label, "truthful Git Bash host-ACL skip")
         else:
             check(condition, label)
 
@@ -693,18 +725,30 @@ def main() -> int:
         return json.dumps(row, ensure_ascii=False, allow_nan=True,
                           separators=(",", ":")).encode("utf-8") + b"\n"
 
-    deep_value: Any = "leaf"
-    for _ in range(65):
-        deep_value = {"nested": deep_value}
-    in_bounds_value: Any = "leaf"
-    for _ in range(63):
-        in_bounds_value = {"nested": in_bounds_value}
-    in_bounds_decision = conduct_root / "in-bounds-depth.json"
-    write_raw(in_bounds_decision, conduct_variant("in-bounds-depth", unknown=in_bounds_value))
-    result = run_conduct(conduct_root, in_bounds_decision)
-    conduct_check(result.returncode == 0 and "done (verb=noop rc=0)" in conduct_text(result)
-                  and not result_has_raw_error_or_path(result, conduct_root),
-                  "conduct-hermes in-bounds JSON depth is accepted")
+    def nested_value(depth: int) -> Any:
+        value: Any = "leaf"
+        for _ in range(depth):
+            value = {"nested": value}
+        return value
+
+    deep_value = nested_value(65)
+    depth_results: dict[int, str] = {}
+    for depth, expected in ((63, "accepted"), (64, "accepted"), (65, "refused")):
+        depth_decision = conduct_root / f"depth-{depth}.json"
+        write_raw(depth_decision, conduct_variant(f"depth-{depth}", unknown=nested_value(depth)))
+        result = run_conduct(conduct_root, depth_decision)
+        if conduct_host_acl:
+            condition = True
+            depth_results[depth] = "HOST-ACL SKIP"
+        elif expected == "accepted":
+            condition = result.returncode == 0 and "done (verb=noop rc=0)" in conduct_text(result) \
+                and not result_has_raw_error_or_path(result, conduct_root)
+            depth_results[depth] = expected if condition else f"unexpected rc={result.returncode}"
+        else:
+            condition = conduct_refusal(result, "boundary=depth", conduct_root)
+            depth_results[depth] = expected if condition else f"unexpected rc={result.returncode}"
+        conduct_check(condition, f"conduct-hermes JSON depth {depth} is {expected}")
+        print(f"CONDUCT_DEPTH_COVERAGE depth={depth} -> {depth_results[depth]}")
     empty_in_bounds_value: Any = []
     for _ in range(63):
         empty_in_bounds_value = [empty_in_bounds_value]
@@ -821,7 +865,8 @@ def main() -> int:
          "if False:", conduct_variant("path-type", path=1), "boundary=path-type", "accepted"),
         ("check-path", "PATH_FIELDS check_path guard", "            check_path(value)", "            pass",
          conduct_variant("path-unsafe", path="../outside"), "boundary=path-unsafe", "accepted"),
-        ("depth", "MAX_DEPTH guard", "if depth > MAX_DEPTH:", "if False:",
+        ("depth", "MAX_DEPTH guard", "if depth <= MAX_DEPTH:\n        return",
+         "if True:\n        return",
          conduct_variant("depth", unknown=deep_value), "boundary=depth", "accepted"),
         ("object-root", "non-object root guard", "if not isinstance(value, dict):", "if False:",
          b"[]", "boundary=non-object-root", "boundary=semantic-validation"),
@@ -860,9 +905,13 @@ def main() -> int:
             write_raw(decision, raw)
         result = run_conduct(mutant_root, decision)
         if is_git_bash_acl_artifact(result):
-            check(True, f"conduct-hermes mutation {label} is a truthful host-ACL skip")
+            skip_case(
+                f"conduct-hermes mutation {label} is a truthful host-ACL skip",
+                "truthful Git Bash host-ACL skip",
+            )
             mutation_rows.append(
-                f"{label} -> {guard_description} disabled; expected {expected_marker} -> HOST-ACL SKIP"
+                f"{label} -> case={label}; guard={guard_description} disabled; "
+                f"assertion='original {expected_marker} refusal must fail'; observed=HOST-ACL SKIP"
             )
             continue
         text_output = conduct_text(result)
@@ -889,8 +938,8 @@ def main() -> int:
                 ) if marker in text_output
             })) or f"controlled rc={result.returncode}"
         mutation_rows.append(
-            f"{label} -> {guard_description} disabled; expected {expected_marker} -> "
-            f"assertion observed ({observed})"
+            f"{label} -> case={label}; guard={guard_description} disabled; "
+            f"assertion='original {expected_marker} refusal must fail'; observed={observed}"
         )
 
     print("CONDUCT_MUTATION_TABLE")
@@ -941,11 +990,12 @@ def main() -> int:
         check(has_controlled_refusal(result, ("model-alias:",), alias_registry),
               f"resolve-model-alias hostile JSON {label} is controlled")
 
-    # Differential corpus for every constrained engine-manifest field.  The declared Draft-7
-    # validator is real jsonschema; only its integer checker is tightened to the product's
-    # explicit JSON-integer contract because Draft-7 otherwise treats 1.0 as an integer.
+    # Differential corpus for every constrained engine-manifest field.  Stock Draft-7 is
+    # authoritative: its integer type intentionally accepts integral floats such as 1.0, while
+    # the product's explicit JSON-integer contract rejects them.  These are expected schema-only
+    # differences, not a reason to customize or weaken the standard validator.
     schema = json.loads((ROOT / "schemas/control-plane/v1/engine-manifest.schema.json").read_text(encoding="utf-8"))
-    validator = strict_schema_validator(schema)
+    validator = stock_schema_validator(schema)
     profile_for_differential = {
         "schema_version": 1, "id": "profile", "provider": "sample-provider", "enabled": False,
         "namespace": "recursion-provider-fuzz", "proxy": {
@@ -1042,19 +1092,34 @@ def main() -> int:
             # Test-only fault injection used by the review proof below. It is never enabled by
             # normal runs and deliberately makes the differential report a mismatch.
             def runtime_validate(candidate: dict) -> Any:
-                if candidate.get("schema_version") in {True, 1.0} \
-                        or candidate.get("concurrency_cap") in {True, 1.0}:
+                schema_version = candidate.get("schema_version")
+                concurrency_cap = candidate.get("concurrency_cap")
+                if schema_version is True or (type(schema_version) is float and schema_version == 1.0) \
+                        or concurrency_cap is True \
+                        or (type(concurrency_cap) is float and concurrency_cap == 1.0):
                     return candidate
                 return resolver.validate_manifest(candidate, "sampleeng")
 
-        mismatches, forward_mismatches, reverse_mismatches = differential_mismatches(
+        mismatches, schema_only, runtime_only = differential_mismatches(
             resolver, validator, cases, runtime_validate
         )
-        check(not mismatches, "engine schema/runtime differential has zero mismatches")
+        justified_schema_only = {
+            "schema_version=1.0": "schema_version=1.0",
+            # The generated corpus label contains the complete object, but the justified
+            # difference is specifically the timeout_s leaf.
+            "availability_probe={'type': 'http', 'url_env': 'FUZZ_URL', 'timeout_s': 1.0}":
+                "availability_probe.timeout_s=1.0",
+            "concurrency_cap=1.0": "concurrency_cap=1.0",
+        }
+        check(not runtime_only, "engine schema/runtime differential has zero runtime-only cases")
+        check(set(schema_only) == set(justified_schema_only),
+              "engine schema/runtime differential has only the enumerated schema-only cases")
         print(f"SCHEMA_DIFFERENTIAL cases={len(cases)} mismatches={len(mismatches)}")
-        print(f"SCHEMA_DIFFERENTIAL_DIRECTIONS forward={forward_mismatches} reverse={reverse_mismatches}")
-        for mismatch in mismatches:
-            print(f"  {mismatch}")
+        print(f"SCHEMA_DIFFERENTIAL_DIRECTIONS schema_only={len(schema_only)} runtime_only={len(runtime_only)}")
+        for label in sorted(schema_only):
+            print(f"  schema_only: {justified_schema_only.get(label, label)}")
+        for label in sorted(runtime_only):
+            print(f"  runtime_only: {label}")
     finally:
         if old_provider_dir is None:
             os.environ.pop("RECURSION_PROVIDER_DIR", None)

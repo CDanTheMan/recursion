@@ -25,7 +25,7 @@
       "const": 1,
       "multipleOf": 1,
       "not": {"type": "boolean"},
-      "$comment": "Recursion validators use the declared Draft-7 validator with its integer type checker restricted to JSON integers (not booleans or integral floats)."
+      "$comment": "Stock Draft-7 integer validation permits integral floats such as 1.0; the runtime validator intentionally applies a stricter JSON-integer contract."
     },
     "name": {
       "type": "string",
