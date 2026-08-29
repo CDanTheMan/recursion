@@ -33,6 +33,7 @@ this must never happen and is refused rather than overwritten).
 from __future__ import annotations
 
 import argparse
+import ctypes
 import hashlib
 import json
 import os
@@ -45,6 +46,7 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import engine_contract  # noqa: E402  (shared engine/alias contract helpers, D-015)
+import jsonl_durable  # noqa: E402  (pinned assignment index transaction)
 
 PROG = "assignment"
 SCHEMA_VERSION = 1
@@ -402,31 +404,32 @@ def index_path(root: Path) -> Path:
     return root / "index.jsonl"
 
 
-def _ensure_assignment_path_safe(path: Path) -> None:
-    """Reject links and Windows reparse points in every component of a write path."""
+def _assignment_persistence_hook(stage: str) -> None:
+    """Test seam for deterministic swaps while all trusted directories are pinned."""
+    del stage
+
+
+def _ensure_output_path_safe(path: Path) -> None:
+    """Keep the optional human-readable --out copy's historical link refusal."""
     absolute = Path(os.path.abspath(path))
     current = Path(absolute.anchor) if absolute.anchor else Path()
-    parts = absolute.parts[1:] if absolute.anchor else absolute.parts
-    for part in parts:
-        current = current / part
+    for part in absolute.parts[1:] if absolute.anchor else absolute.parts:
+        current /= part
         try:
             metadata = os.lstat(current)
         except FileNotFoundError:
             continue
-        except OSError as exc:
-            raise AssignmentError(f"cannot inspect assignment path component {current}: {exc}") from exc
-        reparse_attribute = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x0400)
         if stat.S_ISLNK(metadata.st_mode) or (
-            os.name == "nt"
-            and bool(getattr(metadata, "st_file_attributes", 0) & reparse_attribute)
-        ):
-            raise AssignmentError(f"assignment path contains a link or reparse point: {current}")
+                os.name == "nt" and bool(getattr(
+                    metadata, "st_file_attributes", 0
+                ) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x0400))):
+            raise AssignmentError(f"assignment output path contains a link or reparse point: {current}")
 
 
 def _atomic_write(path: Path, text: str) -> None:
-    _ensure_assignment_path_safe(path)
+    _ensure_output_path_safe(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    _ensure_assignment_path_safe(path)
+    _ensure_output_path_safe(path)
     fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
@@ -445,73 +448,382 @@ def _atomic_write(path: Path, text: str) -> None:
             os.unlink(name)
 
 
+def _posix_open_directory(path: Path) -> int:
+    """Create/open *path* one component at a time, retaining the final directory fd."""
+    if os.name == "nt" or not hasattr(os, "supports_dir_fd") or not os.supports_dir_fd:
+        raise AssignmentError("POSIX pinned-directory persistence is unavailable")
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    if not nofollow:
+        raise AssignmentError("O_NOFOLLOW is required for assignment persistence")
+    absolute = Path(os.path.abspath(path))
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | nofollow | getattr(os, "O_CLOEXEC", 0)
+    try:
+        current_fd = os.open(absolute.anchor, flags)
+    except OSError as exc:
+        raise AssignmentError(f"cannot pin assignment path anchor {absolute.anchor}: {exc}") from exc
+    try:
+        for component in absolute.parts[1:]:
+            try:
+                os.mkdir(component, mode=0o700, dir_fd=current_fd)
+            except FileExistsError:
+                pass
+            next_fd = os.open(component, flags, dir_fd=current_fd)
+            os.close(current_fd)
+            current_fd = next_fd
+        return current_fd
+    except BaseException:
+        os.close(current_fd)
+        raise
+
+
+def _read_at_directory(directory: int, name: str) -> bytes | None:
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(name, flags, dir_fd=directory)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise AssignmentError(f"cannot open assignment record {name!r}: {exc}") from exc
+    try:
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                return b"".join(chunks)
+            chunks.append(chunk)
+    finally:
+        os.close(descriptor)
+
+
+def _open_private_at(directory: int, prefix: str) -> tuple[int, str]:
+    for _ in range(128):
+        name = f"{prefix}{os.getpid()}-{time.time_ns():x}-{os.urandom(8).hex()}"
+        try:
+            return os.open(
+                name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+                dir_fd=directory,
+            ), name
+        except FileExistsError:
+            continue
+    raise AssignmentError("could not allocate an assignment temporary")
+
+
+def _persist_record_posix(task_directory: int, digest: str, encoded: bytes) -> None:
+    final_name = f"{digest}.json"
+    existing = _read_at_directory(task_directory, final_name)
+    if existing is not None:
+        if existing != encoded:
+            raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
+        return
+    _assignment_persistence_hook("pre-mkstemp")
+    descriptor, temporary_name = _open_private_at(task_directory, f".{final_name}.")
+    try:
+        written = memoryview(encoded)
+        while written:
+            count = os.write(descriptor, written)
+            if count <= 0:
+                raise OSError("assignment write made no progress")
+            written = written[count:]
+        os.fsync(descriptor)
+        try:
+            os.link(
+                temporary_name, final_name,
+                src_dir_fd=task_directory, dst_dir_fd=task_directory,
+                follow_symlinks=False,
+            )
+        except FileExistsError:
+            existing = _read_at_directory(task_directory, final_name)
+            if existing != encoded:
+                raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
+    finally:
+        try:
+            os.unlink(temporary_name, dir_fd=task_directory)
+        except FileNotFoundError:
+            pass
+        finally:
+            os.close(descriptor)
+    os.fsync(task_directory)
+
+
+def _assert_posix_pin(path: Path, descriptor: int, label: str) -> None:
+    """Reject a changed pathname after the fd-only commit, without using it for writes."""
+    try:
+        current = os.stat(path, follow_symlinks=False)
+    except OSError as exc:
+        raise AssignmentError(f"pinned {label} pathname changed during persistence") from exc
+    pinned = os.fstat(descriptor)
+    if not stat.S_ISDIR(current.st_mode) or (current.st_dev, current.st_ino) != (
+            pinned.st_dev, pinned.st_ino):
+        raise AssignmentError(f"pinned {label} pathname changed during persistence")
+
+
+if os.name == "nt":
+    _KERNEL32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+    _FILE_SHARE_READ = 0x00000001
+    _FILE_SHARE_WRITE = 0x00000002
+    _GENERIC_READ = 0x80000000
+    _GENERIC_WRITE = 0x40000000
+    _OPEN_EXISTING = 3
+    _OPEN_ALWAYS = 4
+    _CREATE_NEW = 1
+    _FILE_ATTRIBUTE_NORMAL = 0x80
+    _FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+    _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+    _FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+    _FileAttributeTagInfo = 9
+
+    class _FILE_ATTRIBUTE_TAG_INFO_STRUCT(ctypes.Structure):
+        _fields_ = [("FileAttributes", ctypes.c_uint32), ("ReparseTag", ctypes.c_uint32),
+                    ("Reserved", ctypes.c_uint32)]
+
+    _KERNEL32.CreateFileW.restype = ctypes.c_void_p
+    _KERNEL32.GetFileInformationByHandleEx.argtypes = [ctypes.c_void_p, ctypes.c_int,
+                                                        ctypes.c_void_p, ctypes.c_uint32]
+    _KERNEL32.GetFileInformationByHandleEx.restype = ctypes.c_int
+    _KERNEL32.CloseHandle.argtypes = [ctypes.c_void_p]
+    _KERNEL32.CloseHandle.restype = ctypes.c_int
+
+    def _win_handle_attributes(handle: int) -> int:
+        info = _FILE_ATTRIBUTE_TAG_INFO_STRUCT()
+        if not _KERNEL32.GetFileInformationByHandleEx(
+                ctypes.c_void_p(handle), _FileAttributeTagInfo, ctypes.byref(info), ctypes.sizeof(info)):
+            raise OSError(ctypes.get_last_error(), "GetFileInformationByHandleEx failed")
+        return int(info.FileAttributes)
+
+    def _win_open_directory(path: Path, disposition: int = _OPEN_EXISTING) -> int:
+        handle = _KERNEL32.CreateFileW(
+            str(path), _GENERIC_READ,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE, None, disposition,
+            _FILE_FLAG_BACKUP_SEMANTICS | _FILE_FLAG_OPEN_REPARSE_POINT, None,
+        )
+        if handle in (None, _INVALID_HANDLE_VALUE):
+            raise OSError(ctypes.get_last_error(), f"cannot pin Windows directory {path}")
+        try:
+            if _win_handle_attributes(handle) & _FILE_ATTRIBUTE_REPARSE_POINT:
+                raise AssignmentError(f"Windows directory is a reparse point: {path}")
+            return int(handle)
+        except BaseException:
+            _KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+            raise
+
+    def _win_pin_directory(path: Path) -> list[tuple[Path, int]]:
+        absolute = Path(os.path.abspath(path))
+        parts = absolute.parts
+        if not parts:
+            raise AssignmentError("cannot pin an empty Windows path")
+        handles: list[tuple[Path, int]] = []
+        current = Path(parts[0])
+        try:
+            handles.append((current, _win_open_directory(current)))
+            for component in parts[1:]:
+                current = current / component
+                try:
+                    current.mkdir(mode=0o700)
+                except FileExistsError:
+                    pass
+                handles.append((current, _win_open_directory(current)))
+            if len(parts) == 1:
+                handles.append((current, _win_open_directory(current)))
+            return handles
+        except BaseException:
+            for _, handle in reversed(handles):
+                _KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+            raise
+
+    def _win_open_file(path: Path, disposition: int) -> int:
+        handle = _KERNEL32.CreateFileW(
+            str(path), _GENERIC_READ | _GENERIC_WRITE,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE, None, disposition,
+            _FILE_ATTRIBUTE_NORMAL | _FILE_FLAG_OPEN_REPARSE_POINT, None,
+        )
+        if handle in (None, _INVALID_HANDLE_VALUE):
+            raise OSError(ctypes.get_last_error(), f"cannot open pinned Windows file {path}")
+        try:
+            if _win_handle_attributes(handle) & _FILE_ATTRIBUTE_REPARSE_POINT:
+                raise AssignmentError(f"Windows file is a reparse point: {path}")
+            return int(handle)
+        except BaseException:
+            _KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+            raise
+
+    def _win_fd(handle: int, flags: int) -> int:
+        import msvcrt
+        return msvcrt.open_osfhandle(handle, flags)
+
+    def _win_read_file(path: Path) -> bytes | None:
+        try:
+            handle = _win_open_file(path, _OPEN_EXISTING)
+        except OSError as exc:
+            if isinstance(exc, FileNotFoundError) or exc.errno in (2, 3) \
+                    or getattr(exc, "winerror", None) in (2, 3):
+                return None
+            raise
+        descriptor = _win_fd(handle, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+        try:
+            return os.read(descriptor, 64 * 1024 * 1024)
+        finally:
+            os.close(descriptor)
+
+    def _persist_record_windows(task_path: Path, digest: str, encoded: bytes) -> None:
+        final = task_path / f"{digest}.json"
+        existing = _win_read_file(final)
+        if existing is not None:
+            if existing != encoded:
+                raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
+            return
+        _assignment_persistence_hook("pre-mkstemp")
+        temporary = task_path / f".{digest}.json.{os.getpid()}.{time.time_ns():x}.tmp"
+        handle = _win_open_file(temporary, _CREATE_NEW)
+        descriptor = _win_fd(handle, os.O_WRONLY | getattr(os, "O_BINARY", 0))
+        try:
+            with os.fdopen(descriptor, "wb", closefd=True) as output:
+                output.write(encoded)
+                output.flush()
+                os.fsync(output.fileno())
+        except BaseException:
+            try:
+                _KERNEL32.DeleteFileW(str(temporary))
+            finally:
+                raise
+        if not _KERNEL32.CreateHardLinkW(str(final), str(temporary), None):
+            error = ctypes.get_last_error()
+            if error not in (80, 183):  # ERROR_FILE_EXISTS / ERROR_ALREADY_EXISTS
+                raise OSError(error, "CreateHardLinkW failed")
+            existing = _win_read_file(final)
+            if existing != encoded:
+                raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
+        _KERNEL32.DeleteFileW(str(temporary))
+
+
+def _assignment_index_record(value: dict) -> dict:
+    return {
+        "schema_version": SCHEMA_VERSION, "assignment_digest": value["assignment_digest"],
+        "task_id": value["task_id"], "role": value["role"], "engine": value["engine"],
+        "provider": value["provider"], "capacity_pool": value["capacity_pool"],
+        "host": value["host"], "created_at": value["created_at"],
+    }
+
+
+def _persist_assignment_posix(root: Path, value: dict, encoded: bytes) -> Path:
+    root_fd = _posix_open_directory(root)
+    task_fd: int | None = None
+    cache_fd: int | None = None
+    try:
+        task_id = value["task_id"]
+        try:
+            os.mkdir(task_id, mode=0o700, dir_fd=root_fd)
+        except FileExistsError:
+            pass
+        task_fd = os.open(
+            task_id,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=root_fd,
+        )
+
+        try:
+            descriptor = os.open(
+                "index.jsonl", os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=root_fd
+            )
+        except FileNotFoundError:
+            pass
+        else:
+            os.close(descriptor)
+
+        cache_name = ".jsonl-index"
+        try:
+            os.mkdir(cache_name, mode=0o700, dir_fd=root_fd)
+        except FileExistsError:
+            pass
+        cache_fd = os.open(
+            cache_name,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=root_fd,
+        )
+        identity = f"assignment-root/{value['task_id']}/index.jsonl"
+        try:
+            descriptor = os.open(
+                jsonl_durable.index_cache_name(identity),
+                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=cache_fd
+            )
+        except FileNotFoundError:
+            pass
+        else:
+            os.close(descriptor)
+
+        _persist_record_posix(task_fd, value["assignment_digest"], encoded)
+        _assignment_persistence_hook("pre-index-open")
+        jsonl_durable.append_jsonl_at(
+            root_fd, "index.jsonl", _assignment_index_record(value), cache_fd, identity,
+            dedupe_field="assignment_digest", dedupe_value=value["assignment_digest"],
+            hook=_assignment_persistence_hook,
+        )
+        os.fsync(root_fd)
+        _assert_posix_pin(root, root_fd, "root")
+        _assert_posix_pin(root / task_id, task_fd, "task directory")
+        return assignment_path(root, value["task_id"], value["assignment_digest"])
+    except (OSError, jsonl_durable.JsonlDurabilityError) as exc:
+        raise AssignmentError(f"pinned assignment persistence failed: {exc}") from exc
+    finally:
+        if cache_fd is not None:
+            os.close(cache_fd)
+        if task_fd is not None:
+            os.close(task_fd)
+        os.close(root_fd)
+
+
+def _persist_assignment_windows(root: Path, value: dict, encoded: bytes) -> Path:
+    root = Path(os.path.abspath(root))
+    root_pins = _win_pin_directory(root)
+    task = root / value["task_id"]
+    task_pins: list[tuple[Path, int]] = []
+    cache_pins: list[tuple[Path, int]] = []
+    index_handle: int | None = None
+    cache_handle: int | None = None
+    try:
+        task_pins = _win_pin_directory(task)
+        cache = root / ".jsonl-index"
+        cache_pins = _win_pin_directory(cache)
+        index = root / "index.jsonl"
+        index_handle = _win_open_file(index, _OPEN_ALWAYS)
+        identity = f"assignment-root/{value['task_id']}/index.jsonl"
+        cache_file = cache / jsonl_durable.index_cache_name(identity)
+        # Pin the cache leaf for the whole SQLite transaction.  The durability layer's
+        # Windows in-place rebuild never replaces this handle-protected leaf.
+        cache_handle = _win_open_file(cache_file, _OPEN_ALWAYS)
+        _persist_record_windows(task, value["assignment_digest"], encoded)
+        _assignment_persistence_hook("pre-index-open")
+        with jsonl_durable.durable_lock(index):
+            jsonl_durable.append_jsonl(
+                index, _assignment_index_record(value),
+                dedupe_field="assignment_digest", dedupe_value=value["assignment_digest"],
+                index_root=cache, index_identity=identity, rebuild_in_place=True,
+                hook=_assignment_persistence_hook,
+            )
+        return assignment_path(root, value["task_id"], value["assignment_digest"])
+    except (OSError, jsonl_durable.JsonlDurabilityError) as exc:
+        raise AssignmentError(f"pinned Windows assignment persistence failed: {exc}") from exc
+    finally:
+        for handle in (index_handle, cache_handle):
+            if handle is not None:
+                _KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+        for pins in (cache_pins, task_pins, root_pins):
+            for _, handle in reversed(pins):
+                _KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+
+
 def persist_assignment(root: Path, value: dict) -> Path:
     validate_assignment(value, require_source_evidence=True)
     root = Path(root)
-    index = index_path(root)
-    _ensure_assignment_path_safe(root)
-    _ensure_assignment_path_safe(index)
-    root.mkdir(parents=True, exist_ok=True)
-    _ensure_assignment_path_safe(root)
-    _ensure_assignment_path_safe(index)
-    task_dir = root / value["task_id"]
-    _ensure_assignment_path_safe(task_dir)
-    task_dir.mkdir(exist_ok=True)
-    _ensure_assignment_path_safe(task_dir)
-    path = assignment_path(root, value["task_id"], value["assignment_digest"])
-    _ensure_assignment_path_safe(path)
-    _ensure_assignment_path_safe(index)
-    encoded = json.dumps(value, indent=2, sort_keys=True) + "\n"
-    if path.exists():
-        existing = path.read_text(encoding="utf-8")
-        if existing != encoded:
-            raise AssignmentError(
-                f"assignment {path} already exists with different content "
-                "(content-address collision — refusing to overwrite an immutable record)"
-            )
-    else:
-        # A rename can replace a concurrent writer's immutable record. Install via a hard link
-    # from a fully fsynced temporary file: link(2) is create-if-absent, so the loser can only
-    # compare the winner's bytes and never overwrite them. Windows falls back to O_EXCL.
-        _ensure_assignment_path_safe(path)
-        _ensure_assignment_path_safe(task_dir)
-        fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(task_dir))
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-                handle.write(encoded); handle.flush(); os.fsync(handle.fileno())
-            try:
-                os.link(name, path)
-                installed = True
-            except FileExistsError:
-                installed = False
-            if not installed:
-                _ensure_assignment_path_safe(path)
-                existing = path.read_text(encoding="utf-8")
-                if existing != encoded:
-                    raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
-        finally:
-            if os.path.exists(name):
-                os.unlink(name)
-    if os.name != "nt":
-        dfd = os.open(task_dir, os.O_RDONLY)
-        try: os.fsync(dfd)
-        finally: os.close(dfd)
-    try:
-        from jsonl_durable import append_jsonl  # local import: only needed on the write path
-        _ensure_assignment_path_safe(index)
-        append_jsonl(
-            index_path(root),
-            {
-                "schema_version": SCHEMA_VERSION, "assignment_digest": value["assignment_digest"],
-                "task_id": value["task_id"], "role": value["role"], "engine": value["engine"],
-                "provider": value["provider"], "capacity_pool": value["capacity_pool"],
-                "host": value["host"], "created_at": value["created_at"],
-            },
-            dedupe_field="assignment_digest", dedupe_value=value["assignment_digest"],
-        )
-    except Exception as exc:
-        raise AssignmentError(f"assignment index append failed: {exc}") from exc
-    return path
+    encoded = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    if os.name == "nt":
+        return _persist_assignment_windows(root, value, encoded)
+    return _persist_assignment_posix(root, value, encoded)
 
 
 def load_assignment(root: Path, task_id: str, digest: str) -> dict | None:

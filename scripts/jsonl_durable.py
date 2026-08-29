@@ -19,7 +19,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 try:
     import fcntl
@@ -283,8 +283,13 @@ def _index_identity(path: Path) -> tuple[Path, str]:
     return resolved.parent / "jsonl-index", resolved.name
 
 
-def _ensure_index_root(path: Path) -> tuple[Path, str]:
-    root, identity = _index_identity(path)
+def _ensure_index_root(path: Path, index_root: Path | None = None,
+                       index_identity: str | None = None) -> tuple[Path, str]:
+    if index_root is None:
+        root, identity = _index_identity(path)
+    else:
+        root = Path(index_root)
+        identity = index_identity if index_identity is not None else path.name
     if root.exists():
         if root.is_symlink() or not root.is_dir():
             raise JsonlDurabilityError(f"JSONL index root has unsafe type: {root}")
@@ -298,13 +303,19 @@ def _ensure_index_root(path: Path) -> tuple[Path, str]:
     return root, identity
 
 
-def _index_path(path: Path) -> tuple[Path, str]:
-    root, identity = _ensure_index_root(path)
-    name = hashlib.sha256(identity.encode("utf-8")).hexdigest() + ".sqlite3"
+def _index_path(path: Path, index_root: Path | None = None,
+                index_identity: str | None = None) -> tuple[Path, str]:
+    root, identity = _ensure_index_root(path, index_root, index_identity)
+    name = index_cache_name(identity)
     candidate = root / name
     if candidate.exists() and (candidate.is_symlink() or not candidate.is_file()):
         raise JsonlDurabilityError(f"JSONL index has unsafe type: {candidate}")
     return candidate, identity
+
+
+def index_cache_name(identity: str) -> str:
+    """Return the stable SQLite filename for a journal identity."""
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest() + ".sqlite3"
 
 
 def _last_newline(descriptor: int, size: int) -> int:
@@ -578,7 +589,8 @@ def _write_metadata(connection: sqlite3.Connection, identity: str, stat: os.stat
 
 
 def _rebuild_index(index_path: Path, identity: str, descriptor: int, stat: os.stat_result,
-                   journal: Path, max_record_bytes: int) -> None:
+                   journal: Path, max_record_bytes: int,
+                   hook: Callable[[str], None] | None = None) -> None:
     temporary_fd, temporary_name = tempfile.mkstemp(
         prefix=f".{index_path.name}.tmp.", dir=index_path.parent
     )
@@ -606,6 +618,8 @@ def _rebuild_index(index_path: Path, identity: str, descriptor: int, stat: os.st
             os.fsync(cache_fd)
         finally:
             os.close(cache_fd)
+        if hook is not None:
+            hook("pre-replace")
         os.replace(temporary, index_path)
         _fsync_dir(index_path.parent)
     except BaseException:
@@ -616,14 +630,52 @@ def _rebuild_index(index_path: Path, identity: str, descriptor: int, stat: os.st
 
 
 def _open_verified_index(path: Path, descriptor: int, size: int,
-                         max_record_bytes: int) -> tuple[sqlite3.Connection, bool]:
+                         max_record_bytes: int, *,
+                         index_root: Path | None = None,
+                         index_identity: str | None = None,
+                         rebuild_in_place: bool = False,
+                         hook: Callable[[str], None] | None = None) -> tuple[sqlite3.Connection, bool]:
     stat = os.fstat(descriptor)
     if stat.st_size != size:
         raise JsonlDurabilityError(f"JSONL size changed while opening verification index: {path}")
-    index_path, identity = _index_path(path)
+    index_path, identity = _index_path(path, index_root, index_identity)
+    if rebuild_in_place:
+        # The caller pins the cache directory and (on Windows) the cache leaf before
+        # entering this function.  A missing leaf is created by that caller, so this
+        # branch never has to make a pathname-based create decision on its own.
+        if not index_path.exists():
+            raise JsonlDurabilityError(f"pinned JSONL verification cache is absent: {index_path}")
+        connection: sqlite3.Connection | None = None
+        try:
+            if hook is not None:
+                hook("pre-sqlite-open")
+            connection = sqlite3.connect(index_path)
+            connection.execute("PRAGMA query_only=ON")
+            if _index_matches(connection, identity, stat, max_record_bytes):
+                connection.execute("PRAGMA query_only=OFF")
+                return connection, False
+        except sqlite3.DatabaseError:
+            if connection is not None:
+                connection.close()
+            connection = None
+        else:
+            connection.close()
+            connection = None
+        _rebuild_index_in_place(
+            index_path, identity, descriptor, stat, path, max_record_bytes, hook
+        )
+        if hook is not None:
+            hook("pre-sqlite-open")
+        connection = sqlite3.connect(index_path)
+        if not _index_matches(connection, identity, stat, max_record_bytes):
+            connection.close()
+            raise JsonlDurabilityError(f"rebuilt JSONL verification index is inconsistent: {path}")
+        return connection, True
     if index_path.exists():
         connection: sqlite3.Connection | None = None
         try:
+            if hook is not None:
+                hook("pre-sqlite-open")
             connection = sqlite3.connect(index_path)
             connection.execute("PRAGMA query_only=ON")
             if _index_matches(connection, identity, stat, max_record_bytes):
@@ -636,7 +688,9 @@ def _open_verified_index(path: Path, descriptor: int, size: int,
         finally:
             if connection is not None:
                 connection.close()
-    _rebuild_index(index_path, identity, descriptor, stat, path, max_record_bytes)
+    _rebuild_index(index_path, identity, descriptor, stat, path, max_record_bytes, hook)
+    if hook is not None:
+        hook("pre-sqlite-open")
     connection = sqlite3.connect(index_path)
     if not _index_matches(connection, identity, stat, max_record_bytes):
         connection.close()
@@ -860,8 +914,54 @@ def _update_index_after_append(connection: sqlite3.Connection, descriptor: int, 
         raise JsonlDurabilityError(f"cannot advance JSONL verification index: {path}: {exc}") from exc
 
 
+def _rebuild_index_in_place(index_path: Path, identity: str, descriptor: int,
+                            stat: os.stat_result, journal: Path, max_record_bytes: int,
+                            hook: Callable[[str], None] | None = None) -> None:
+    """Rebuild a cache without replacing its leaf name.
+
+    Windows directory handles opened without delete sharing pin the cache leaf.  Replacing
+    that leaf would therefore fail with a sharing violation; rebuilding the already-pinned
+    file in place keeps the same race-free name and remains crash-safe through SQLite's
+    rollback journal and FULL synchronous mode.
+    """
+    if hook is not None:
+        hook("pre-replace")
+    connection: sqlite3.Connection | None = None
+    try:
+        connection = sqlite3.connect(index_path)
+        connection.execute("PRAGMA journal_mode=DELETE")
+        connection.execute("PRAGMA synchronous=FULL")
+        tables = [row[0] for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )]
+        for table in tables:
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table):
+                raise JsonlDurabilityError(f"unsafe SQLite cache table name: {table!r}")
+            connection.execute(f'DROP TABLE "{table}"')
+        _create_index_schema(connection)
+        connection.execute("BEGIN IMMEDIATE")
+        line_count = 0
+        chain = ZERO_CHAIN_SHA256
+        for line_count, line in enumerate(
+                _iter_complete_lines(descriptor, stat.st_size, journal, max_record_bytes), 1):
+            _insert_line(connection, line_count, line)
+            chain = line.chain_sha256
+        _write_metadata(connection, identity, stat, max_record_bytes, line_count, chain)
+        connection.commit()
+    except BaseException:
+        if connection is not None:
+            connection.rollback()
+        raise
+    finally:
+        if connection is not None:
+            connection.close()
+
+
 def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES,
-                 dedupe_field: str | None = None, dedupe_value: object = None) -> AppendOutcome:
+                 dedupe_field: str | None = None, dedupe_value: object = None, *,
+                 index_root: Path | None = None, index_identity: str | None = None,
+                 rebuild_in_place: bool = False,
+                 hook: Callable[[str], None] | None = None) -> AppendOutcome:
     """Repair a torn tail, validate committed rows, and durably append one object.
 
     The exact torn bytes and fail-closed escalation metadata are stored in the canonical
@@ -894,7 +994,9 @@ def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RE
             os.ftruncate(descriptor, committed)
             os.fsync(descriptor)
         connection, _rebuilt = _open_verified_index(
-            path, descriptor, committed, max_record_bytes
+            path, descriptor, committed, max_record_bytes,
+            index_root=index_root, index_identity=index_identity,
+            rebuild_in_place=rebuild_in_place, hook=hook,
         )
         if _duplicate_in_index(connection, dedupe_field, dedupe_value):
             return AppendOutcome(appended=False, quarantine=evidence)
@@ -908,3 +1010,130 @@ def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RE
             connection.close()
         os.close(descriptor)
     return AppendOutcome(appended=True, quarantine=evidence)
+
+
+def _pinned_fd_path(descriptor: int, name: str) -> Path:
+    """Address a child through an already-open directory on POSIX."""
+    if os.name == "nt" or not Path("/proc/self/fd").is_dir():
+        raise JsonlDurabilityError("pinned JSONL persistence requires /proc/self/fd on POSIX")
+    if not name or Path(name).name != name or name in {".", ".."}:
+        raise JsonlDurabilityError("pinned JSONL child name is not a single path component")
+    return Path("/proc/self/fd") / str(descriptor) / name
+
+
+def _open_unique_at(directory: int, prefix: str, mode: int = 0o600) -> tuple[int, str]:
+    """Create a private file with openat semantics and return its fd/name."""
+    for _ in range(128):
+        name = f"{prefix}{os.getpid()}-{time.time_ns():x}-{os.urandom(8).hex()}"
+        try:
+            descriptor = os.open(
+                name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+                mode,
+                dir_fd=directory,
+            )
+            return descriptor, name
+        except FileExistsError:
+            continue
+    raise JsonlDurabilityError("could not allocate a private pinned JSONL temporary")
+
+
+def _install_serialized_cache(cache_directory: int, cache_name: str, cache_bytes: bytes,
+                              hook: Callable[[str], None] | None = None) -> None:
+    temporary_fd, temporary_name = _open_unique_at(cache_directory, ".jsonl-cache.tmp.")
+    try:
+        _write_all(temporary_fd, cache_bytes)
+        os.fsync(temporary_fd)
+        if hook is not None:
+            hook("pre-replace")
+        os.replace(temporary_name, cache_name,
+                   src_dir_fd=cache_directory, dst_dir_fd=cache_directory)
+        os.fsync(cache_directory)
+    except BaseException:
+        try:
+            os.unlink(temporary_name, dir_fd=cache_directory)
+        except OSError:
+            pass
+        raise
+    finally:
+        os.close(temporary_fd)
+
+
+def append_jsonl_at(root_descriptor: int, journal_name: str, value: dict,
+                    cache_directory: int, identity: str,
+                    max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES,
+                    dedupe_field: str | None = None,
+                    dedupe_value: object = None,
+                    hook: Callable[[str], None] | None = None) -> AppendOutcome:
+    """Append a JSONL object using pinned POSIX directory descriptors.
+
+    This is intentionally a separate primitive from :func:`append_jsonl`: the latter's
+    pathname API is retained for existing journals, while this API never resolves the root,
+    journal, cache, temporary, or replacement names through an attacker-switchable parent.
+    """
+    if os.name == "nt" or not hasattr(os, "supports_dir_fd") or not os.supports_dir_fd:
+        raise JsonlDurabilityError("pinned JSONL persistence is unavailable on this platform")
+    if not isinstance(value, dict):
+        raise JsonlDurabilityError("JSONL append requires an object")
+    encoded = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    if len(encoded) - 1 > max_record_bytes:
+        raise JsonlDurabilityError(f"new JSONL record exceeds {max_record_bytes} bytes")
+    cache_name = index_cache_name(identity)
+    journal = _pinned_fd_path(root_descriptor, journal_name)
+    journal_descriptor = os.open(
+        journal_name,
+        os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0),
+        0o600, dir_fd=root_descriptor,
+    )
+    connection: sqlite3.Connection | None = None
+    try:
+        _lock_descriptor(journal_descriptor)
+        size = os.fstat(journal_descriptor).st_size
+        if size and _read_at(journal_descriptor, 1, size - 1) != b"\n":
+            raise JsonlDurabilityError(f"unterminated pinned JSONL tail: {journal_name}")
+        journal_stat = os.fstat(journal_descriptor)
+        try:
+            metadata = os.stat(cache_name, dir_fd=cache_directory, follow_symlinks=False)
+            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+                raise JsonlDurabilityError("pinned JSONL verification cache has unsafe type")
+        except FileNotFoundError:
+            pass
+        if hook is not None:
+            hook("pre-sqlite-open")
+        # Keep SQLite entirely in memory for this descriptor-based path.  sqlite3's filename
+        # API cannot consume an open directory fd without reopening a switchable leaf, and
+        # its rollback journal would introduce more pathnames.  The authoritative journal is
+        # already fsynced; the serialized verification cache is only a rebuildable derivative.
+        connection = sqlite3.connect(":memory:")
+        _create_index_schema(connection)
+        connection.execute("BEGIN IMMEDIATE")
+        line_count = 0
+        chain = ZERO_CHAIN_SHA256
+        for line_count, line in enumerate(
+                _iter_complete_lines(journal_descriptor, journal_stat.st_size, journal, max_record_bytes), 1):
+            _insert_line(connection, line_count, line)
+            chain = line.chain_sha256
+        _write_metadata(connection, identity, journal_stat, max_record_bytes, line_count, chain)
+        connection.commit()
+        if _duplicate_in_index(connection, dedupe_field, dedupe_value):
+            if not hasattr(connection, "serialize"):
+                raise JsonlDurabilityError("SQLite serialization is unavailable for pinned persistence")
+            _install_serialized_cache(cache_directory, cache_name, connection.serialize(), hook)
+            return AppendOutcome(appended=False, quarantine=None)
+        _write_all(journal_descriptor, encoded)
+        os.fsync(journal_descriptor)
+        _update_index_after_append(
+            connection, journal_descriptor, journal, encoded, max_record_bytes
+        )
+        if not hasattr(connection, "serialize"):
+            raise JsonlDurabilityError("SQLite serialization is unavailable for pinned persistence")
+        _install_serialized_cache(cache_directory, cache_name, connection.serialize(), hook)
+        os.fsync(root_descriptor)
+        return AppendOutcome(appended=True, quarantine=None)
+    finally:
+        if connection is not None:
+            connection.close()
+        _unlock_descriptor(journal_descriptor)
+        os.close(journal_descriptor)

@@ -9,7 +9,10 @@ a disposable tempdir; nothing touches the live repo's state/.
 from __future__ import annotations
 
 import json
+import hashlib
+import multiprocessing
 import os
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -233,6 +236,144 @@ def test_persist_rejects_linked_paths_before_writes(tmp_path: Path) -> None:
     check(index_sentinel.read_text(encoding="utf-8") == "sentinel\n",
           "a linked assignment index cannot be overwritten")
 
+    cache_root = tmp_path / "cache-link-root"
+    (cache_root / value["task_id"]).mkdir(parents=True)
+    cache_dir = cache_root / ".jsonl-index"
+    cache_dir.mkdir()
+    outside_cache = outside / "cache-target"
+    outside_cache.mkdir()
+    cache_leaf = hashlib.sha256(
+        f"assignment-root/{value['task_id']}/index.jsonl".encode("utf-8")
+    ).hexdigest() + ".sqlite3"
+    _make_leaf_link(cache_dir / cache_leaf, outside_cache)
+    try:
+        amod.persist_assignment(cache_root, value)
+        check(False, "a linked verification-cache leaf is refused")
+    except amod.AssignmentError:
+        check(True, "a linked verification-cache leaf is refused")
+    check(not (cache_root / value["task_id"] / f"{value['assignment_digest']}.json").exists(),
+          "an unsafe linked cache is rejected before the assignment file is written")
+
+
+def _swap_root_to_outside(root: Path, outside: Path) -> None:
+    saved = root.with_name(root.name + ".pinned")
+    root.rename(saved)
+    root.symlink_to(outside, target_is_directory=True)
+
+
+def test_persist_rejects_deterministic_swaps(tmp_path: Path) -> None:
+    """Arm each decisive TOCTOU point and prove no byte reaches the outside tree."""
+    if os.name == "nt":
+        # Windows directory handles are opened without delete sharing, so the attempted
+        # rename is rejected by the kernel; the static junction suite and stress suite cover
+        # the native path on this platform.
+        check(True, "Windows directory handles deny deterministic root/task swaps")
+        return
+
+    stages = (
+        ("pre-mkstemp", "task", "task-directory swap before assignment temp create"),
+        ("pre-index-open", "root", "root swap before index open"),
+        ("pre-sqlite-open", "root", "root swap before SQLite open"),
+        ("pre-replace", "root", "root swap before verification-cache replace"),
+    )
+    for stage, target, label in stages:
+        root = tmp_path / f"root-{stage}"
+        outside = tmp_path / f"outside-{stage}"
+        outside.mkdir()
+        value = amod.resolve_assignment(
+            **{**BASE_KWARGS, "task_id": f"task-{stage}"},
+            created_at="2026-08-28T00:00:00Z",
+        )
+        task = root / value["task_id"]
+        outside_task = outside / "task-target"
+        outside_task.mkdir()
+        outside_before = {item.relative_to(outside) for item in outside.rglob("*")}
+        armed = True
+
+        def hook(current: str, *, root=root, outside=outside, task=task,
+                 outside_task=outside_task, target=target) -> None:
+            nonlocal armed
+            if not armed or current != stage:
+                return
+            armed = False
+            if target == "root":
+                _swap_root_to_outside(root, outside)
+            else:
+                task.rename(task.with_name(task.name + ".pinned"))
+                task.symlink_to(outside_task, target_is_directory=True)
+
+        previous = amod._assignment_persistence_hook
+        amod._assignment_persistence_hook = hook
+        try:
+            try:
+                amod.persist_assignment(root, value)
+                check(False, f"{label} is refused rather than accepted")
+            except amod.AssignmentError:
+                check(True, f"{label} is refused rather than accepted")
+        finally:
+            amod._assignment_persistence_hook = previous
+            if target == "root":
+                if root.is_symlink():
+                    root.unlink()
+                saved = root.with_name(root.name + ".pinned")
+                if saved.exists():
+                    saved.rename(root)
+            else:
+                if task.is_symlink():
+                    task.unlink()
+                saved = task.with_name(task.name + ".pinned")
+                if saved.exists():
+                    saved.rename(task)
+        outside_after = {item.relative_to(outside) for item in outside.rglob("*")}
+        check(outside_after == outside_before, f"{label} creates no outside file")
+
+
+def _persist_worker(args: tuple[str, dict]) -> str:
+    root_name, value = args
+    sys.path.insert(0, str(SCRIPTS))
+    import assignment as worker_assignment
+    try:
+        worker_assignment.persist_assignment(Path(root_name), value)
+        return "ok"
+    except Exception as exc:  # the parent reports any unexpected worker refusal
+        return f"error:{type(exc).__name__}:{exc}"
+
+
+def test_persist_32_process_idempotency(tmp_path: Path) -> None:
+    root = tmp_path / "stress-root"
+    value = amod.resolve_assignment(**BASE_KWARGS, created_at="2026-08-28T00:00:00Z")
+    context = multiprocessing.get_context("spawn")
+    old_attempts = os.environ.get("RECURSION_DURABLE_LOCK_ATTEMPTS")
+    os.environ["RECURSION_DURABLE_LOCK_ATTEMPTS"] = "1000"
+    pool = context.Pool(32)
+    try:
+        results = pool.map(_persist_worker, [(str(root), value)] * 32)
+    finally:
+        pool.close()
+        pool.join()
+        if old_attempts is None:
+            os.environ.pop("RECURSION_DURABLE_LOCK_ATTEMPTS", None)
+        else:
+            os.environ["RECURSION_DURABLE_LOCK_ATTEMPTS"] = old_attempts
+    check(all(result == "ok" for result in results), "32 concurrent persistence workers succeed idempotently")
+    record = root / value["task_id"] / f"{value['assignment_digest']}.json"
+    check(record.is_file(), "32-process persistence leaves one immutable assignment record")
+    index = root / "index.jsonl"
+    rows = [json.loads(line) for line in index.read_text(encoding="utf-8").splitlines() if line]
+    check(len(rows) == 1 and rows[0]["assignment_digest"] == value["assignment_digest"],
+          "32-process persistence appends exactly one index row")
+    cache_files = list((root / ".jsonl-index").glob("*.sqlite3"))
+    cache_ok = False
+    if len(cache_files) == 1:
+        connection = sqlite3.connect(cache_files[0])
+        try:
+            cache_ok = connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        finally:
+            connection.close()
+    check(cache_ok, "32-process persistence leaves one intact verification SQLite cache inside the root")
+    check(not list(root.parent.glob("jsonl-index")),
+          "32-process persistence creates no verification cache outside the pinned root")
+
 
 def test_capacity_pool_validation(tmp_path: Path) -> None:
     pool_dir = tmp_path / "pools"
@@ -352,6 +493,10 @@ def main() -> int:
         test_persist_idempotent_and_collision_safe(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_persist_rejects_linked_paths_before_writes(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_persist_rejects_deterministic_swaps(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_persist_32_process_idempotency(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_capacity_pool_validation(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
