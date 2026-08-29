@@ -310,8 +310,8 @@ def main() -> int:
             print(json.dumps(value, sort_keys=True, separators=(",", ":")))
     except (OSError, ValueError, TypeError, OverflowError, RecursionError,
             UnicodeError, json.JSONDecodeError, subprocess.TimeoutExpired,
-            subprocess.SubprocessError, SeedContractError) as exc:
-        print(f"seed-contract: {exc}", file=sys.stderr)
+            subprocess.SubprocessError, SeedContractError):
+        print("seed-contract: operation refused", file=sys.stderr)
         return 4
     return 0
 

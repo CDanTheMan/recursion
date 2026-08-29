@@ -44,34 +44,36 @@ def load_registry() -> dict[str, tuple[str, set[str]]]:
     try:
         raw = path.read_bytes()
         if len(raw) > MAX_REGISTRY_BYTES:
-            raise RegistryError(f"alias registry {path} exceeds the 1 MiB bound")
+            raise RegistryError("alias registry exceeds the 1 MiB bound")
         text = raw.decode("utf-8")
-    except (OSError, UnicodeDecodeError, RegistryError) as exc:
-        raise RegistryError(f"alias registry {path} is missing or unreadable ({exc})") from exc
+    except RegistryError:
+        raise
+    except (OSError, UnicodeDecodeError) as exc:
+        raise RegistryError("alias registry is missing or unreadable") from exc
     try:
         doc = json.loads(text, parse_constant=_reject_json_constant)
     except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError) as exc:
-        raise RegistryError(f"alias registry {path} is not valid JSON ({exc})") from exc
+        raise RegistryError("alias registry is not valid JSON") from exc
     if not isinstance(doc, dict) or type(doc.get("schema_version")) is not int \
             or doc["schema_version"] != 1:
-        raise RegistryError(f"alias registry {path} has an invalid schema")
+        raise RegistryError("alias registry has an invalid schema")
     aliases = doc.get("aliases")
     if not isinstance(aliases, dict):
-        raise RegistryError(f"alias registry {path} has an invalid schema")
+        raise RegistryError("alias registry has an invalid schema")
     resolved: dict[str, tuple[str, set[str]]] = {}
     for name, entry in aliases.items():
         if not isinstance(name, str) or not ALIAS_NAME_RE.fullmatch(name):
-            raise RegistryError(f"alias registry {path} has an invalid alias name {name!r}")
+            raise RegistryError("alias registry has an invalid alias name")
         if name in ALIASES:
-            raise RegistryError(f"alias registry {path} redefines reserved alias {name!r}")
+            raise RegistryError("alias registry redefines a reserved alias")
         if not isinstance(entry, dict):
-            raise RegistryError(f"alias registry {path} has an invalid entry for {name!r}")
+            raise RegistryError("alias registry has an invalid alias entry")
         env_name = entry.get("env")
         roles = entry.get("roles")
         if not isinstance(env_name, str) or not ENV_NAME_RE.fullmatch(env_name):
-            raise RegistryError(f"alias registry {path} has an invalid env name for {name!r}")
+            raise RegistryError("alias registry has an invalid environment name")
         if not isinstance(roles, list) or not roles or not set(roles) <= VALID_ROLES:
-            raise RegistryError(f"alias registry {path} has invalid roles for {name!r}")
+            raise RegistryError("alias registry has invalid roles")
         resolved[name] = (env_name, set(roles))
     return resolved
 
@@ -86,17 +88,17 @@ def _run_main() -> int:
     if spec is None:
         try:
             registry = load_registry()
-        except RegistryError as exc:
-            print(f"model-alias: {exc}", file=sys.stderr)
+        except RegistryError:
+            print("model-alias: alias registry is unavailable", file=sys.stderr)
             return 2
         spec = registry.get(args.alias)
         if spec is None:
-            print(f"model-alias: unknown alias {args.alias!r}", file=sys.stderr)
+            print("model-alias: unknown alias", file=sys.stderr)
             return 2
 
     env_name, roles = spec
     if args.role not in roles:
-        print(f"model-alias: {args.alias} is not approved for {args.role}", file=sys.stderr)
+        print("model-alias: alias is not approved for this role", file=sys.stderr)
         return 2
     value = os.environ.get(env_name, "").strip()
     if not value:
@@ -108,7 +110,7 @@ def _run_main() -> int:
     if ":" in value:
         engine, _, model = value.partition(":")
         if not ENGINE_RE.fullmatch(engine) or not model:
-            print(f"model-alias: invalid engine-qualified model {value!r}", file=sys.stderr)
+            print("model-alias: invalid engine-qualified model", file=sys.stderr)
             return 2
     print(value)
     return 0
@@ -118,8 +120,8 @@ def main() -> int:
     try:
         return _run_main()
     except (OSError, ValueError, TypeError, OverflowError, RecursionError,
-            UnicodeError, json.JSONDecodeError) as exc:
-        print(f"model-alias: {exc}", file=sys.stderr)
+            UnicodeError, json.JSONDecodeError):
+        print("model-alias: operation refused", file=sys.stderr)
         return 4
 
 

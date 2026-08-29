@@ -1537,8 +1537,8 @@ def main() -> int:
             release_witnessed_directory_lock(path, path.name, args.owner_pid)
     except (OSError, ValueError, TypeError, UnicodeError, OverflowError, RecursionError,
             RuntimeError, json.JSONDecodeError, subprocess.TimeoutExpired,
-            subprocess.SubprocessError) as exc:
-        print(f"runtime-state: {exc}", file=sys.stderr)
+            subprocess.SubprocessError):
+        print("runtime-state: operation refused", file=sys.stderr)
         return 2
     return 0
 

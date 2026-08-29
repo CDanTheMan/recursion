@@ -62,7 +62,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except (OSError, ValueError, TypeError, UnicodeError, OverflowError,
             RecursionError, json.JSONDecodeError, ProviderProfileError) as exc:
-        print(f"provider-egress: {exc}", file=sys.stderr)
+        # Do not expose path-bearing loader details or platform OS text at a caller boundary.
+        detail = str(exc)
+        if "authorization is required" in detail:
+            message = "assignment proxy authorization is required"
+        elif "disabled" in detail:
+            message = "provider egress profile is disabled"
+        elif "unavailable" in detail:
+            message = "provider egress is unavailable"
+        else:
+            message = "provider egress request is invalid"
+        print(f"provider-egress: {message}", file=sys.stderr)
         return 96 if args.command in {"inject", "admit-engine"} else 2
 
 

@@ -31,6 +31,23 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
+if os.name == "nt":
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+    _KERNEL32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _CREATE_FILE_W = _KERNEL32.CreateFileW
+    _CREATE_FILE_W.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+                               wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    _CREATE_FILE_W.restype = wintypes.HANDLE
+    _CLOSE_HANDLE = _KERNEL32.CloseHandle
+    _CLOSE_HANDLE.argtypes = [wintypes.HANDLE]
+    _CLOSE_HANDLE.restype = wintypes.BOOL
+    _SET_FILE_INFORMATION_BY_HANDLE = _KERNEL32.SetFileInformationByHandle
+    _SET_FILE_INFORMATION_BY_HANDLE.argtypes = [wintypes.HANDLE, wintypes.INT,
+                                                wintypes.LPVOID, wintypes.DWORD]
+    _SET_FILE_INFORMATION_BY_HANDLE.restype = wintypes.BOOL
+
 
 class BackupPolicyError(ValueError):
     pass
@@ -56,6 +73,77 @@ MAX_POLICY_BYTES = 2 * 1024 * 1024
 MAX_CREDENTIAL_BYTES = 1024 * 1024
 PIPE_JOIN_TIMEOUT = 5.0
 PROCESS_TIMEOUT = 300.0
+
+
+def _open_pinned(path: Path, *, directory: bool = False, delete_access: bool = False) -> int:
+    """Open without following reparse points and deny other processes delete-sharing."""
+    if os.name != "nt":
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        if directory:
+            flags |= getattr(os, "O_DIRECTORY", 0)
+        return os.open(path, flags)
+    access = 0x80000000 | (0x00010000 if delete_access else 0)  # GENERIC_READ | DELETE
+    share = 0x00000001 | 0x00000002  # FILE_SHARE_READ | FILE_SHARE_WRITE
+    flags = 0x00200000 | (0x02000000 if directory else 0)  # OPEN_REPARSE_POINT/BACKUP_SEMANTICS
+    handle = _CREATE_FILE_W(
+        str(path), access, share, None, 3, flags, None,  # OPEN_EXISTING
+    )
+    invalid = ctypes.c_void_p(-1).value
+    if handle == invalid:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        descriptor = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+    except OSError:
+        _CLOSE_HANDLE(handle)
+        raise
+    return descriptor
+
+
+def _delete_pinned(descriptor: int, path: Path) -> None:
+    """Delete the already-open file identity, avoiding a pathname unlink race on Windows."""
+    if os.name != "nt":
+        path.unlink()
+        return
+    class _FileDispositionInfo(ctypes.Structure):
+        _fields_ = [("DeleteFile", wintypes.BOOLEAN)]
+    disposition = _FileDispositionInfo(True)
+    handle = msvcrt.get_osfhandle(descriptor)
+    if not _SET_FILE_INFORMATION_BY_HANDLE(
+            handle, 4, ctypes.byref(disposition), ctypes.sizeof(disposition)):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
+@contextlib.contextmanager
+def _pin_directory_chain(path: Path, label: str):
+    """Keep every existing directory ancestor pinned until the path operation completes."""
+    handles: list[int] = []
+    current = Path(path.anchor)
+    try:
+        for component in path.parts[1:]:
+            current /= component
+            try:
+                info = current.lstat()
+            except OSError as exc:
+                raise BackupPolicyError(f"{label} parent is unavailable") from exc
+            if _is_reparse(info) or not stat.S_ISDIR(info.st_mode):
+                raise BackupPolicyError(f"{label} parent is unsafe")
+            descriptor = _open_pinned(current, directory=True)
+            try:
+                opened = os.fstat(descriptor)
+                if _is_reparse(opened) or not stat.S_ISDIR(opened.st_mode) \
+                        or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                    raise BackupPolicyError(f"{label} parent changed while opening")
+            except BaseException:
+                os.close(descriptor)
+                raise
+            handles.append(descriptor)
+        yield
+    finally:
+        for descriptor in reversed(handles):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
 
 
 def _is_reparse(info: os.stat_result) -> bool:
@@ -99,6 +187,25 @@ def _directory_identity(path: Path, label: str) -> tuple[int, int, int, int]:
     except OSError as exc:
         raise BackupPolicyError(f"{label} is unavailable") from exc
     return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
+def _file_identity(info: os.stat_result) -> tuple[int, int, int, int]:
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
+def _unlink_if_identity(path: Path, expected: tuple[int, int, int, int]) -> None:
+    """Best-effort cleanup that never removes a replacement at the old pathname."""
+    try:
+        with _pin_directory_chain(path.parent, "temporary cleanup"):
+            descriptor = _open_pinned(path, delete_access=True)
+            try:
+                observed = os.fstat(descriptor)
+                if _file_identity(observed) == expected:
+                    _delete_pinned(descriptor, path)
+            finally:
+                os.close(descriptor)
+    except (FileNotFoundError, OSError, ValueError, TypeError):
+        return
 
 
 def _read_real_file(path: Path, label: str, maximum: int) -> bytes:
@@ -183,7 +290,7 @@ def load_policy(path: Path) -> dict:
                             parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
     except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
             json.JSONDecodeError, RecursionError, BackupPolicyError) as exc:
-        raise BackupPolicyError(f"backup policy is unreadable: {path}") from exc
+        raise BackupPolicyError("backup policy is unreadable") from exc
     policy = _object(policy, POLICY_KEYS, "policy")
     if not isinstance(policy["schema_version"], int) or isinstance(policy["schema_version"], bool) \
             or policy["schema_version"] != 1 or not isinstance(policy["enabled"], bool):
@@ -422,7 +529,7 @@ def pause_transfer(root: Path):
                 raise BackupPolicyError("PAUSE admission is absent; refusing external transfer")
             yield
     except RuntimeError as exc:
-        raise BackupPolicyError(f"PAUSE transfer admission failed: {exc}") from exc
+        raise BackupPolicyError("PAUSE transfer admission failed") from exc
 
 
 def _run(argv: list[str], *, input_bytes: bytes | None = None,
@@ -747,6 +854,7 @@ def write_evidence(directory: Path, evidence: dict) -> Path:
     target = directory / f"backup-evidence-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{time.time_ns()}-{hashlib.sha256(raw).hexdigest()[:12]}.json"
     fd, temporary_name = tempfile.mkstemp(prefix=f".{target.name}.tmp.", dir=directory)
     temporary = Path(temporary_name)
+    temporary_identity = _file_identity(os.fstat(fd))
     try:
         if hasattr(os, "fchmod"):
             os.fchmod(fd, 0o600)
@@ -764,7 +872,7 @@ def write_evidence(directory: Path, evidence: dict) -> Path:
                 os.close(descriptor)
         return target
     except BaseException:
-        temporary.unlink(missing_ok=True)
+        _unlink_if_identity(temporary, temporary_identity)
         raise
 
 
@@ -784,16 +892,45 @@ def _publish_file_noreplace(source: Path, target: Path, label: str) -> None:
         raise BackupPolicyError(f"{label} source is unavailable") from exc
     if _is_reparse(source_info) or not stat.S_ISREG(source_info.st_mode):
         raise BackupPolicyError(f"{label} source is unsafe")
-    try:
-        os.link(source, target, follow_symlinks=False)
-    except FileExistsError as exc:
-        raise BackupPolicyError(f"{label} already exists") from exc
-    except (OSError, ValueError, TypeError) as exc:
-        raise BackupPolicyError(f"{label} could not be published") from exc
-    try:
-        source.unlink()
-    except (OSError, ValueError, TypeError) as exc:
-        raise BackupPolicyError(f"{label} temporary cleanup failed") from exc
+    source_identity = _file_identity(source_info)
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(_pin_directory_chain(source.parent, f"{label} source"))
+        if target.parent != source.parent:
+            stack.enter_context(_pin_directory_chain(target.parent, f"{label} target"))
+        try:
+            source_descriptor = _open_pinned(source, delete_access=True)
+        except (OSError, ValueError, TypeError) as exc:
+            raise BackupPolicyError(f"{label} source is unavailable") from exc
+        try:
+            opened = os.fstat(source_descriptor)
+            if _is_reparse(opened) or not stat.S_ISREG(opened.st_mode) \
+                    or _file_identity(opened) != source_identity:
+                raise BackupPolicyError(f"{label} source changed while opening")
+            try:
+                os.link(source, target, follow_symlinks=False)
+            except FileExistsError as exc:
+                raise BackupPolicyError(f"{label} already exists") from exc
+            except (OSError, ValueError, TypeError) as exc:
+                raise BackupPolicyError(f"{label} could not be published") from exc
+            # Recheck the pathname and the same pinned descriptor immediately before cleanup.
+            # On Windows _open_pinned denies delete-sharing and _delete_pinned removes this
+            # exact handle identity, so a replacement cannot be unlinked through the name.
+            try:
+                current = source.lstat()
+            except OSError as exc:
+                raise BackupPolicyError(f"{label} source changed before cleanup") from exc
+            if _file_identity(current) != source_identity \
+                    or _file_identity(os.fstat(source_descriptor)) != source_identity:
+                raise BackupPolicyError(f"{label} source changed before cleanup")
+            try:
+                _delete_pinned(source_descriptor, source)
+            except (OSError, ValueError, TypeError) as exc:
+                raise BackupPolicyError(f"{label} temporary cleanup failed") from exc
+        finally:
+            try:
+                os.close(source_descriptor)
+            except OSError:
+                pass
     if os.name != "nt":
         try:
             descriptor = os.open(target.parent, os.O_RDONLY)
@@ -876,7 +1013,7 @@ def execute_backup(config_path: Path, policy: dict) -> dict:
         except OSError as exc:
             raise BackupPolicyError("durable snapshot path is unreadable") from exc
         if durable_info is not None:
-            raise BackupPolicyError(f"snapshot artifact already exists: {durable}")
+            raise BackupPolicyError("snapshot artifact already exists")
         temporary = snapshot_directory / f".{name}.tmp.{os.getpid()}.{time.time_ns()}"
         try:
             with temporary.open("xb") as output, ciphertext.open("rb") as source:
@@ -884,16 +1021,13 @@ def execute_backup(config_path: Path, policy: dict) -> dict:
                 output.flush()
                 os.fsync(output.fileno())
             os.chmod(temporary, 0o600)
+            temporary_identity = _file_identity(temporary.lstat())
             _validate_real_directory(snapshot_directory, "snapshot directory")
             _reject_reparse_components(durable, "durable snapshot path")
             _publish_file_noreplace(temporary, durable, "durable snapshot")
         except BaseException:
-            try:
-                temporary.unlink()
-            except FileNotFoundError:
-                pass
-            except OSError as exc:
-                raise BackupPolicyError("durable snapshot temporary cleanup failed") from exc
+            if "temporary_identity" in locals():
+                _unlink_if_identity(temporary, temporary_identity)
             raise
         try:
             with pause_transfer(root):
@@ -1014,7 +1148,9 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError, TypeError, UnicodeError, OverflowError, BackupPolicyError,
             tarfile.TarError, RecursionError, subprocess.TimeoutExpired,
             subprocess.SubprocessError) as exc:
-        print(f"backup-offsite: {exc}", file=sys.stderr)
+        message = "backup policy is disabled" if isinstance(exc, BackupPolicyError) \
+            and "disabled" in str(exc) else "operation refused"
+        print(f"backup-offsite: {message}", file=sys.stderr)
         return 2
 
 

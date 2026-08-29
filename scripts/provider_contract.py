@@ -120,18 +120,18 @@ def _read_profile(path: Path) -> bytes:
     try:
         expected = path.lstat()
     except OSError as exc:
-        raise ProviderProfileError(f"provider profile is unavailable: {path}") from exc
+        raise ProviderProfileError("provider profile is unavailable") from exc
     if stat.S_ISLNK(expected.st_mode) or bool(getattr(expected, "st_reparse_tag", 0)) \
             or bool(getattr(expected, "st_file_attributes", 0) & 0x400) \
             or not stat.S_ISREG(expected.st_mode):
-        raise ProviderProfileError(f"provider profile is unavailable: {path}")
+        raise ProviderProfileError("provider profile is unavailable")
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     try:
         descriptor = os.open(path, flags)
     except (OSError, ValueError, TypeError) as exc:
-        raise ProviderProfileError(f"provider profile is unreadable: {path}") from exc
+        raise ProviderProfileError("provider profile is unreadable") from exc
     try:
         info = os.fstat(descriptor)
         if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
@@ -139,15 +139,15 @@ def _read_profile(path: Path) -> bytes:
                 or not stat.S_ISREG(info.st_mode) \
                 or (info.st_dev, info.st_ino) != (expected.st_dev, expected.st_ino) \
                 or info.st_size != expected.st_size or info.st_size > MAX_PROFILE_BYTES:
-            raise ProviderProfileError(f"provider profile is unavailable: {path}")
+            raise ProviderProfileError("provider profile is unavailable")
         with os.fdopen(descriptor, "rb") as source:
             descriptor = -1
             raw = source.read(MAX_PROFILE_BYTES + 1)
         if len(raw) > MAX_PROFILE_BYTES:
-            raise ProviderProfileError(f"provider profile is too large: {path}")
+            raise ProviderProfileError("provider profile is too large")
         return raw
     except (OSError, ValueError, TypeError, OverflowError) as exc:
-        raise ProviderProfileError(f"provider profile is unreadable: {path}") from exc
+        raise ProviderProfileError("provider profile is unreadable") from exc
     finally:
         if descriptor != -1:
             try:
@@ -207,7 +207,7 @@ def load_profile(path: Path, expected_id: str | None = None) -> dict:
                          parse_constant=_reject_json_constant)
     except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
             RecursionError, json.JSONDecodeError, ProviderProfileError) as exc:
-        raise ProviderProfileError(f"provider profile is unreadable: {path}") from exc
+        raise ProviderProfileError("provider profile is unreadable") from exc
     return validate_profile(raw, expected_id)
 
 

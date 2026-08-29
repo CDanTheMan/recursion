@@ -640,8 +640,8 @@ def main() -> int:
         print(evidence, file=stream)
         return rc
     except (RoutingError, OSError, ValueError, TypeError, OverflowError, RecursionError,
-            UnicodeError, json.JSONDecodeError, subprocess.TimeoutExpired) as exc:
-        print(f"instruction-routing: {exc}", file=sys.stderr)
+            UnicodeError, json.JSONDecodeError, subprocess.TimeoutExpired):
+        print("instruction-routing: operation refused", file=sys.stderr)
         return 4
 
 

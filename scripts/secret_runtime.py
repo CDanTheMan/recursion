@@ -239,8 +239,8 @@ def main(argv: list[str] | None = None) -> int:
             print(write_env(args.directory, sys.stdin.buffer.read()))
         return 0
     except (OSError, ValueError, TypeError, UnicodeError, OverflowError, RecursionError,
-            SecretRuntimeError) as exc:
-        print(f"secret-runtime: {exc}", file=sys.stderr)
+            SecretRuntimeError):
+        print("secret-runtime: operation refused", file=sys.stderr)
         return 2
 
 

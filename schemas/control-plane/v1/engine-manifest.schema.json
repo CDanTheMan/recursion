@@ -22,11 +22,14 @@
   "properties": {
     "schema_version": {
       "type": "integer",
-      "const": 1
+      "const": 1,
+      "multipleOf": 1,
+      "not": {"type": "boolean"},
+      "$comment": "Recursion validators use the declared Draft-7 validator with its integer type checker restricted to JSON integers (not booleans or integral floats)."
     },
     "name": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]{1,31}$",
+      "pattern": "^[a-z][a-z0-9-]{1,31}$(?![\\s\\S])",
       "not": {
         "enum": ["claude", "hermes", "gate", "none", "deepseek", "openrouter"]
       },
@@ -38,7 +41,7 @@
     },
     "executable": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]{1,31}$",
+      "pattern": "^[a-z][a-z0-9-]{1,31}$(?![\\s\\S])",
       "description": "Basename only (no path separators). Resolved via `command -v` inside the sandbox controller, then bind-mounted read-only exactly like the existing single-executable path. Need not equal `name`."
     },
     "argv": {
@@ -60,7 +63,7 @@
             "anyOf": [
               {
                 "not": {
-                  "pattern": "^\\{\\{.*\\}\\}$"
+                  "pattern": "^\\{\\{.*\\}\\}$(?![\\s\\S])"
                 }
               },
               {
@@ -73,6 +76,7 @@
       "contains": {
         "const": "{{PROMPT}}"
       },
+      "uniqueItems": true,
       "description": "Exactly one element must be the literal placeholder {{PROMPT}} (the count is enforced by the resolver; draft-07 `contains` only guarantees at least one). Any element that is wholly of the form {{...}} must be one of the three known placeholders ({{EXE}}, {{PROMPT}}, {{MODEL}}); {{EXE}} may appear only at index 0; {{MODEL}} may appear at most once anywhere in argv. No other templating is permitted."
     },
     "model": {
@@ -86,6 +90,7 @@
         },
         "argv_suffix": {
           "type": "array",
+          "uniqueItems": true,
           "items": {
             "allOf": [
               {
@@ -96,7 +101,7 @@
                 "anyOf": [
                   {
                     "not": {
-                      "pattern": "^\\{\\{.*\\}\\}$"
+                      "pattern": "^\\{\\{.*\\}\\}$(?![\\s\\S])"
                     }
                   },
                   {
@@ -145,14 +150,14 @@
         },
         "profile": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{1,63}$",
+          "pattern": "^[a-z][a-z0-9-]{1,63}$(?![\\s\\S])",
           "description": "Optional Phase 4 provider profile. When present, its authorities must exactly match endpoints and its proxy remains disabled until human deployment."
         },
         "endpoints": {
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+            "pattern": "^(?=.{1,253}$(?![\\s\\S]))(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$(?![\\s\\S])"
           },
           "description": "Documentation and deployment input for the provider-only allowlist enforced by the root-owned provider netns/proxy on the box. Empty list allowed (e.g. tunnel-local engines)."
         }
@@ -174,12 +179,14 @@
             },
             "url_env": {
               "type": "string",
-              "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+              "pattern": "^[A-Z][A-Z0-9_]{2,63}$(?![\\s\\S])"
             },
             "timeout_s": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 60
+              "maximum": 60,
+              "multipleOf": 1,
+              "not": {"type": "boolean"}
             }
           }
         }
@@ -193,7 +200,9 @@
         },
         {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "multipleOf": 1,
+          "not": {"type": "boolean"}
         }
       ]
     },
@@ -201,7 +210,7 @@
       "type": "array",
       "items": {
         "type": "string",
-        "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        "pattern": "^[A-Z][A-Z0-9_]{2,63}$(?![\\s\\S])"
       },
       "uniqueItems": true,
       "description": "Env var names (not values) copied from the controller environment into the unit when set. Possibly empty. No duplicates."

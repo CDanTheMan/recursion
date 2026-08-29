@@ -73,8 +73,8 @@ def _json_copy(value: object) -> object:
     try:
         return json.loads(json.dumps(value, allow_nan=False),
                           parse_constant=_reject_json_constant)
-    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
-        fail(f"input is not canonical JSON: {exc}")
+    except (TypeError, ValueError, OverflowError, RecursionError):
+        fail("input is not canonical JSON")
 
 
 def root() -> Path:
@@ -82,7 +82,10 @@ def root() -> Path:
 
 
 def fail(message: str, code: int = 4) -> None:
-    print(f"project-pilot: {message}", file=sys.stderr)
+    # Caller-facing diagnostics are deliberately path-free.  State paths are controller details,
+    # and raw OS exceptions can disclose both those paths and host-specific ACL information.
+    safe = re.sub(r"(?:[A-Za-z]:[\\/]|\\\\|(?<![A-Za-z0-9_])/)[^\s,;)]*", "<path>", str(message))
+    print(f"project-pilot: {safe}", file=sys.stderr)
     raise SystemExit(code)
 
 
@@ -90,7 +93,7 @@ def compact(value: object) -> None:
     try:
         print(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False))
     except (TypeError, ValueError, OverflowError, RecursionError) as exc:
-        fail(f"output is not canonical JSON: {exc}")
+        fail("output is not canonical JSON")
 
 
 def read_json(path: Path, unavailable_code: int = 4,
@@ -100,16 +103,16 @@ def read_json(path: Path, unavailable_code: int = 4,
         with path.open("rb") as source:
             raw_bytes = source.read(MAX_PILOT_JSON_BYTES + 1)
         if len(raw_bytes) > MAX_PILOT_JSON_BYTES:
-            fail(f"state record exceeds the 256 KiB read bound: {path}", invalid_code)
+            fail("state record exceeds the 256 KiB read bound", invalid_code)
         raw = raw_bytes.decode("utf-8")
     except (OSError, UnicodeDecodeError) as exc:
-        fail(f"cannot read validated state {path}: {exc}", unavailable_code)
+        fail("cannot read validated state", unavailable_code)
     try:
         value = json.loads(raw, parse_constant=_reject_json_constant)
     except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError) as exc:
-        fail(f"cannot read validated state {path}: {exc}", invalid_code)
+        fail("cannot read validated state", invalid_code)
     if not isinstance(value, dict):
-        fail(f"state record is not an object: {path}", invalid_code)
+        fail("state record is not an object", invalid_code)
     return value
 
 
@@ -120,54 +123,85 @@ def read_required_json(path: Path, absent: str, *, unavailable_code: int = 4) ->
     except FileNotFoundError:
         fail(absent)
     except OSError as exc:
-        fail(f"cannot inspect validated state {path}: {exc}", unavailable_code)
+        fail("cannot inspect validated state", unavailable_code)
     return read_json(path, unavailable_code=unavailable_code, malformed_code=4)
+
+
+def _is_reparse_info(info: os.stat_result) -> bool:
+    """Detect POSIX links and Windows reparse points, including junctions."""
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+        or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def _reject_status_reparse_ancestors(directory: Path) -> None:
+    """Reject links/reparse points in the whole status path before any directory walk."""
+    current = Path(directory.anchor) if directory.anchor else Path()
+    components = directory.parts[1:] if directory.anchor else directory.parts
+    for index, component in enumerate(components):
+        current /= component
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            fail("cannot inspect status state", 74)
+        if _is_reparse_info(info):
+            fail("status state contains a symlink/reparse ancestor", 74)
+        if index < len(components) - 1 and not stat.S_ISDIR(info.st_mode):
+            fail("status state is not a directory", 74)
 
 
 def fields(path: Path, unavailable_code: int | None = None) -> dict[str, str]:
     result: dict[str, str] = {}
     try:
         if path.stat().st_size > 131072:
-            fail(f"state record exceeds the 128 KiB read bound: {path}", unavailable_code or 4)
+            fail("state record exceeds the 128 KiB read bound", unavailable_code or 4)
         for line in path.read_text(encoding="utf-8", errors="surrogateescape").splitlines():
             if ":" in line and not line.startswith((" ", "\t")):
                 key, value = line.split(":", 1)
                 result.setdefault(key.strip(), value.strip())
-    except OSError as exc:
+    except OSError:
         if unavailable_code is not None:
-            fail(f"cannot read status state {path}: {exc}", unavailable_code)
+            fail("cannot read status state", unavailable_code)
     return result
 
 
 def status_files(directory: Path, suffix: str | None, limit: int | None,
                  newest: bool = False) -> list[Path]:
     """List one status source, distinguishing a lazy empty directory from unreadable state."""
+    _reject_status_reparse_ancestors(directory)
     try:
-        mode = os.lstat(directory).st_mode
+        directory_info = os.lstat(directory)
     except FileNotFoundError:
         return []
-    except OSError as exc:
-        fail(f"cannot inspect status state {directory}: {exc}", 74)
-    if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
-        fail(f"status state is not a real directory: {directory}", 74)
+    except OSError:
+        fail("cannot inspect status state", 74)
+    if _is_reparse_info(directory_info) or not stat.S_ISDIR(directory_info.st_mode):
+        fail("status state is not a real directory", 74)
     try:
         with os.scandir(directory) as entries:
             paths = []
             for entry in entries:
                 if suffix is not None and not entry.name.endswith(suffix):
                     continue
-                if entry.is_symlink():
-                    fail(f"status state record is a symlink: {directory / entry.name}", 74)
+                try:
+                    entry_info = entry.stat(follow_symlinks=False)
+                except AttributeError:
+                    entry_info = None
+                except OSError:
+                    fail("cannot inspect status state record", 74)
+                if entry.is_symlink() or (entry_info is not None and _is_reparse_info(entry_info)):
+                    fail("status state record is a symlink/reparse point", 74)
                 if entry.is_file(follow_symlinks=False):
                     paths.append(directory / entry.name)
                 elif not entry.is_dir(follow_symlinks=False):
-                    fail(f"status state record has an unsupported type: {directory / entry.name}", 74)
+                    fail("status state record has an unsupported type", 74)
     except FileNotFoundError:
         # Runtime directories are created lazily; disappearance before the scan proves no records
         # were readable at this instant and must not be conflated with a permission failure.
         return []
-    except OSError as exc:
-        fail(f"cannot enumerate status state {directory}: {exc}", 74)
+    except OSError:
+        fail("cannot enumerate status state", 74)
     ordered = sorted(paths)
     if limit is None:
         return ordered
@@ -180,8 +214,8 @@ def rows(base: Path, unavailable_code: int = 4) -> list[dict[str, str]]:
     registry = base / "state/portfolio.tsv"
     try:
         lines = registry.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
-        fail(f"portfolio unavailable: {exc}", unavailable_code)
+    except OSError:
+        fail("portfolio unavailable", unavailable_code)
     for line in lines:
         if not line or line.startswith("#"):
             continue
@@ -411,7 +445,7 @@ def validate_control_state(base: Path, kind: str, value: dict) -> None:
     proc = subprocess.run([sys.executable, str(base / "scripts/validate-control-state.py"), kind],
                           input=json.dumps(value), text=True, capture_output=True, check=False)
     if proc.returncode:
-        fail((proc.stderr or proc.stdout or f"{kind} schema validation failed").strip())
+        fail("control-state validation failed")
 
 
 def append_event(base: Path, event: str, project: str, goal: str = "", task: str = "",
@@ -422,8 +456,8 @@ def append_event(base: Path, event: str, project: str, goal: str = "", task: str
         value["id"] = event_id
     try:
         commit_event(base, value)
-    except (OSError, TransitionReceiptError) as exc:
-        fail(f"event journal append failed: {exc}", 74)
+    except (OSError, TransitionReceiptError):
+        fail("event journal append failed", 74)
 
 
 def transition_event(event: str, project: str, goal: str = "", task: str = "",
@@ -440,8 +474,8 @@ def commit_pilot_transition(base: Path, mutations: list, event: dict,
     try:
         commit_transition(base, mutations, event, authoritative_index=authoritative_index,
                           precondition=precondition)
-    except (OSError, TransitionReceiptError) as exc:
-        fail(f"crash-consistent pilot transition failed: {exc}", 74)
+    except (OSError, TransitionReceiptError):
+        fail("crash-consistent pilot transition failed", 74)
 
 
 @contextmanager
@@ -550,8 +584,8 @@ def prepare(base: Path, project: str, remote: str, charter: str) -> None:
         try:
             if resume_transition(base, event):
                 return
-        except (OSError, TransitionReceiptError) as exc:
-            fail(f"pending registration recovery failed: {exc}", 74)
+        except (OSError, TransitionReceiptError):
+            fail("pending registration recovery failed", 74)
         if any(row["id"] == project for row in rows(base)): fail(f"project {project} already exists", 2)
         repo = f"/opt/{project}"; key = f"~/.ssh/{project}_deploy"; pilot_id = f"pilot-{project}"
         line = f"{project}\t{repo}\t{remote}\tmain\t{key}\t-\t-\tpending\n"
@@ -593,8 +627,8 @@ def bind_topic(base: Path, project: str, topic: str) -> None:
         try:
             if resume_transition(base, event):
                 return
-        except (OSError, TransitionReceiptError) as exc:
-            fail(f"project topic recovery failed: {exc}", 74)
+        except (OSError, TransitionReceiptError):
+            fail("project topic recovery failed", 74)
         cfg, pilot, row = records(base, project)
         if row["status"] != "pending": fail("topic binding is allowed only while pending", 2)
         if any(other["topic"] == topic and other["id"] != project for other in rows(base)):
@@ -634,8 +668,8 @@ def activate(base: Path, project: str) -> dict:
                 if not isinstance(proof, dict):
                     fail("recovered activation lacks its exact proof", 74)
                 return proof
-        except (OSError, TransitionReceiptError) as exc:
-            fail(f"project activation recovery failed: {exc}", 74)
+        except (OSError, TransitionReceiptError):
+            fail("project activation recovery failed", 74)
         cfg, pilot, row = records(base, project)
         if row["status"] != "pending": fail(f"project {project} is not pending", 2)
         if not str(cfg.get("charter", "")).strip(): fail("project charter is absent")
@@ -792,8 +826,8 @@ def controller_tracked_bytes(base: Path, relative: str, label: str) -> bytes:
     path = base.joinpath(*pure.parts)
     try:
         mode = os.lstat(path).st_mode
-    except OSError as exc:
-        fail(f"{label} is unavailable: {exc}")
+    except OSError:
+        fail(f"{label} is unavailable")
     if not stat.S_ISREG(mode) or stat.S_ISLNK(mode):
         fail(f"{label} is not a regular controller file")
     tracked = subprocess.run(
@@ -824,8 +858,8 @@ def load_gate_profile_promotion(base: Path, cfg: dict, promotion_id: str) -> dic
     try:
         binding = json.loads(raw.decode("utf-8"), parse_constant=_reject_json_constant)
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError, OverflowError,
-            RecursionError) as exc:
-        fail(f"gate-profile promotion binding is malformed: {exc}")
+            RecursionError):
+        fail("gate-profile promotion binding is malformed")
     expected_keys = {
         "schema", "promotion_id", "project_id", "source_head", "profile",
         "required_gate_profile",
@@ -855,8 +889,8 @@ def load_gate_profile_promotion(base: Path, cfg: dict, promotion_id: str) -> dic
     try:
         profile = json.loads(profile_raw.decode("utf-8"), parse_constant=_reject_json_constant)
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError, OverflowError,
-            RecursionError) as exc:
-        fail(f"promoted measured profile is malformed: {exc}")
+            RecursionError):
+        fail("promoted measured profile is malformed")
     worlds = profile.get("worlds") if isinstance(profile, dict) else None
     roles = [world.get("role") for world in worlds if isinstance(world, dict)] \
         if isinstance(worlds, list) else []
@@ -1195,8 +1229,8 @@ def bind_seed_contract(cfg: dict, value: object) -> dict:
     plan = _json_copy(value)
     try:
         observed = inspect_repository(Path(str(cfg["repo"])))
-    except (OSError, SeedContractError) as exc:
-        fail(f"project seed contract is invalid: {exc}")
+    except (OSError, SeedContractError):
+        fail("project seed contract is invalid")
     claimed = plan.get("seed_contract")
     if observed is None:
         if claimed not in (None, {}):
@@ -1214,8 +1248,8 @@ def validate_seed_binding(cfg: dict, value: dict) -> dict | None:
     if claimed is None:
         try:
             observed = inspect_repository(Path(str(cfg["repo"])))
-        except (OSError, SeedContractError) as exc:
-            fail(f"project seed contract is invalid: {exc}")
+        except (OSError, SeedContractError):
+            fail("project seed contract is invalid")
         if observed is not None:
             fail("pilot plan does not bind the tracked project seed manifest")
         return None
@@ -1223,8 +1257,8 @@ def validate_seed_binding(cfg: dict, value: dict) -> dict | None:
         fail("pilot plan seed contract is not an object")
     try:
         return validate_contract(Path(str(cfg["repo"])), claimed)
-    except (OSError, SeedContractError) as exc:
-        fail(f"pilot plan seed contract is stale or invalid: {exc}")
+    except (OSError, SeedContractError):
+        fail("pilot plan seed contract is stale or invalid")
 
 
 def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: object,
@@ -1424,8 +1458,8 @@ def require_lucas_instruction(path: Path, instruction: dict[str, str], verb: str
     # requires the affirmative verb and every authority-bound value contiguously and in order.
     try:
         require_affirmative_command(body, verb, [str(term) for term in terms])
-    except ValueError as exc:
-        fail(f"Lucas {exc}")
+    except ValueError:
+        fail("Lucas instruction is invalid")
 
 
 def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction_id: str) -> dict:
@@ -1455,8 +1489,8 @@ def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
                 fail("pilot plan id collides with different content or instruction")
             try:
                 resumed = resume_transition(base, event)
-            except (OSError, TransitionReceiptError) as exc:
-                fail(f"pilot plan proposal recovery failed: {exc}", 74)
+            except (OSError, TransitionReceiptError):
+                fail("pilot plan proposal recovery failed", 74)
             if not resumed:
                 append_event(base, event["event"], event["project"], event["goal"],
                              detail=event["detail"], event_id=event["id"])
@@ -1693,10 +1727,10 @@ def active_source_pin(base: Path, project: str) -> dict | None:
             expected_event = "goal-transition"
         try:
             receipt = authenticated_transition(base, event_id)
-        except OSError as exc:
-            fail(f"terminal source-pin transition is unavailable: {exc}", 74)
-        except TransitionReceiptError as exc:
-            fail(f"terminal source-pin transition is not authenticated: {exc}")
+        except OSError:
+            fail("terminal source-pin transition is unavailable", 74)
+        except TransitionReceiptError:
+            fail("terminal source-pin transition is not authenticated")
         event = receipt.get("event") if isinstance(receipt, dict) else None
         if not isinstance(event, dict) or event.get("event") != expected_event \
                 or event.get("project") != project or event.get("goal") != goal_id:
@@ -1753,8 +1787,8 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
         )
         try:
             resumed = resume_transition(base, event)
-        except (OSError, TransitionReceiptError) as exc:
-            fail(f"pilot plan approval recovery failed: {exc}", 74)
+        except (OSError, TransitionReceiptError):
+            fail("pilot plan approval recovery failed", 74)
         if resumed:
             proposal = read_json(path)
             if proposal.get("status") != "approved":
@@ -1911,8 +1945,8 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
                 if prior.get("instruction_id") == instruction_id and prior.get("goal_id") == goal_id \
                         and prior.get("duration_seconds") == int(raw_seconds):
                     try: resumed = resume_transition(base, event)
-                    except (OSError, TransitionReceiptError) as exc:
-                        fail(f"pilot window recovery failed: {exc}", 74)
+                    except (OSError, TransitionReceiptError):
+                        fail("pilot window recovery failed", 74)
                     if not resumed:
                         append_event(base, event["event"], event["project"], event["goal"],
                                      detail=event["detail"], event_id=event["id"])
@@ -1972,8 +2006,8 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
         )
         try:
             resumed = resume_transition(base, event)
-        except (OSError, TransitionReceiptError) as exc:
-            fail(f"pilot window close recovery failed: {exc}", 74)
+        except (OSError, TransitionReceiptError):
+            fail("pilot window close recovery failed", 74)
         if resumed:
             return read_json(path)
         if record.get("status") == "closed":
@@ -2154,8 +2188,8 @@ def _run_main() -> int:
     else:
         try:
             decision = _parse_json_arg(args.decision)
-        except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError) as exc:
-            fail(f"frozen decision JSON is invalid: {exc}")
+        except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError):
+            fail("frozen decision JSON is invalid")
         compact(execute_value(base, decision))
     return 0
 
@@ -2165,8 +2199,8 @@ def main() -> int:
         return _run_main()
     except (OSError, ValueError, TypeError, OverflowError, RecursionError,
             UnicodeError, json.JSONDecodeError, subprocess.TimeoutExpired,
-            subprocess.SubprocessError) as exc:
-        print(f"project-pilot: {exc}", file=sys.stderr)
+            subprocess.SubprocessError):
+        print("project-pilot: operation refused", file=sys.stderr)
         return 4
 
 

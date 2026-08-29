@@ -44,6 +44,11 @@ ROUTING_RECONCILER_VERBS = {"routing-refuse"}
 MAX_DECISION_BYTES = 2 * 1024 * 1024
 
 
+def safe_diagnostic(message):
+    """Keep validator diagnostics useful without reflecting an absolute caller path."""
+    return re.sub(r"(?:[A-Za-z]:[\\/]|\\\\|(?<![A-Za-z0-9_])/)[^\s,;)]*", "<path>", str(message))
+
+
 def parse_finite(value):
     parsed = float(value)
     if not math.isfinite(parsed):
@@ -218,11 +223,11 @@ def main():
         verbs = set(sys.argv[1].split())
         expected_actor = sys.argv[3] if len(sys.argv) > 3 else None
         ok, msg = validate(verbs, sys.argv[2], expected_actor)
-        print(("OK " if ok else "ERR ") + msg)
+        print(("OK " if ok else "ERR ") + (msg if ok else safe_diagnostic(msg)))
         return 0 if ok else 1
     except (OSError, ValueError, TypeError, OverflowError, RecursionError,
-            UnicodeError, json.JSONDecodeError) as exc:
-        print("ERR controlled validator failure: %s" % exc)
+            UnicodeError, json.JSONDecodeError):
+        print("ERR controlled validator failure")
         return 2
 
 

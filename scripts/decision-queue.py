@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
+import ctypes
 import hashlib
 import json
 import os
@@ -21,6 +23,22 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+
+if os.name == "nt":
+    import msvcrt
+    from ctypes import wintypes
+    _KERNEL32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _CREATE_FILE_W = _KERNEL32.CreateFileW
+    _CREATE_FILE_W.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+                               wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    _CREATE_FILE_W.restype = wintypes.HANDLE
+    _CLOSE_HANDLE = _KERNEL32.CloseHandle
+    _CLOSE_HANDLE.argtypes = [wintypes.HANDLE]
+    _CLOSE_HANDLE.restype = wintypes.BOOL
+    _SET_FILE_INFORMATION_BY_HANDLE = _KERNEL32.SetFileInformationByHandle
+    _SET_FILE_INFORMATION_BY_HANDLE.argtypes = [wintypes.HANDLE, wintypes.INT,
+                                                wintypes.LPVOID, wintypes.DWORD]
+    _SET_FILE_INFORMATION_BY_HANDLE.restype = wintypes.BOOL
 
 try:
     import fcntl
@@ -107,6 +125,10 @@ def _is_reparse(path: Path) -> bool:
         return False
     except OSError as exc:
         raise RuntimeError(f"queue path is unreadable: {path}") from exc
+    return _is_reparse_info(info)
+
+
+def _is_reparse_info(info: os.stat_result) -> bool:
     return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
         or bool(getattr(info, "st_file_attributes", 0) & 0x400)
 
@@ -142,6 +164,106 @@ def _path_identity(path: Path, label: str) -> tuple[int, int, int, int]:
     return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
 
 
+def _open_pinned(path: Path, *, directory: bool = False, delete_access: bool = False) -> int:
+    """Open without following reparse points and deny other processes delete-sharing."""
+    if os.name != "nt":
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        if directory:
+            flags |= getattr(os, "O_DIRECTORY", 0)
+        return os.open(path, flags)
+    access = 0x80000000 | (0x00010000 if delete_access else 0)  # GENERIC_READ | DELETE
+    share = 0x00000001 | 0x00000002  # FILE_SHARE_READ | FILE_SHARE_WRITE
+    flags = 0x00200000 | (0x02000000 if directory else 0)  # OPEN_REPARSE_POINT/BACKUP_SEMANTICS
+    handle = _CREATE_FILE_W(str(path), access, share, None, 3, flags, None)
+    if handle == ctypes.c_void_p(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        return msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+    except OSError:
+        _CLOSE_HANDLE(handle)
+        raise
+
+
+@contextlib.contextmanager
+def _pin_directory_chain(path: Path, label: str):
+    handles: list[int] = []
+    current = Path(path.anchor)
+    try:
+        for component in path.parts[1:]:
+            current /= component
+            info = current.lstat()
+            if _is_reparse_info(info) or not stat.S_ISDIR(info.st_mode):
+                raise ValueError(f"{label} is unsafe")
+            descriptor = _open_pinned(current, directory=True)
+            try:
+                opened = os.fstat(descriptor)
+                if _is_reparse_info(opened) or not stat.S_ISDIR(opened.st_mode) \
+                        or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                    raise ValueError(f"{label} changed while opening")
+            except BaseException:
+                os.close(descriptor)
+                raise
+            handles.append(descriptor)
+        yield
+    except (FileNotFoundError, OSError) as exc:
+        raise ValueError(f"{label} is unavailable") from exc
+    finally:
+        for descriptor in reversed(handles):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
+@contextlib.contextmanager
+def _pinned_file(path: Path, label: str, *, delete_access: bool = False):
+    _reject_reparse_components(path, label)
+    with _pin_directory_chain(path.parent, f"{label} parent"):
+        try:
+            expected = path.lstat()
+        except OSError as exc:
+            raise ValueError(f"{label} is unavailable") from exc
+        if _is_reparse_info(expected) or not stat.S_ISREG(expected.st_mode):
+            raise ValueError(f"{label} is not a regular file")
+        descriptor = _open_pinned(path, delete_access=delete_access)
+        try:
+            opened = os.fstat(descriptor)
+            if _is_reparse_info(opened) or not stat.S_ISREG(opened.st_mode) \
+                    or (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino) \
+                    or opened.st_size != expected.st_size:
+                raise ValueError(f"{label} changed while opening")
+            yield descriptor, opened
+        finally:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
+def _read_pinned(descriptor: int, maximum: int, label: str) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    while total <= maximum:
+        chunk = os.read(descriptor, min(1024 * 1024, maximum + 1 - total))
+        if not chunk:
+            return b"".join(chunks)
+        chunks.append(chunk)
+        total += len(chunk)
+    raise ValueError(f"{label} exceeds the bounded JSON input size")
+
+
+def _delete_pinned(descriptor: int, path: Path) -> None:
+    if os.name != "nt":
+        path.unlink()
+        return
+    class _FileDispositionInfo(ctypes.Structure):
+        _fields_ = [("DeleteFile", wintypes.BOOLEAN)]
+    disposition = _FileDispositionInfo(True)
+    if not _SET_FILE_INFORMATION_BY_HANDLE(
+            msvcrt.get_osfhandle(descriptor), 4, ctypes.byref(disposition), ctypes.sizeof(disposition)):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
 def _load_json_bytes(raw: bytes, label: str) -> object:
     if len(raw) > MAX_QUEUE_JSON_BYTES:
         raise ValueError(f"{label} exceeds the bounded JSON input size")
@@ -154,38 +276,18 @@ def _load_json_bytes(raw: bytes, label: str) -> object:
 
 
 def _read_json_path_bytes(path: Path, label: str) -> bytes:
-    _reject_reparse_components(path, label)
     try:
-        expected = path.lstat()
-    except OSError as exc:
+        with _pinned_file(path, label) as (descriptor, info):
+            if info.st_size > MAX_QUEUE_JSON_BYTES:
+                raise ValueError(f"{label} exceeds the bounded JSON input size")
+            raw = _read_pinned(descriptor, MAX_QUEUE_JSON_BYTES, label)
+            if len(raw) > MAX_QUEUE_JSON_BYTES:
+                raise ValueError(f"{label} exceeds the bounded JSON input size")
+            return raw
+    except (OSError, ValueError, TypeError) as exc:
+        if isinstance(exc, ValueError):
+            raise
         raise ValueError(f"{label} is unreadable") from exc
-    if _is_reparse(path) or not stat.S_ISREG(expected.st_mode):
-        raise ValueError(f"{label} is not a regular file")
-    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
-    try:
-        descriptor = os.open(path, flags)
-    except OSError as exc:
-        raise ValueError(f"{label} is unreadable") from exc
-    try:
-        info = os.fstat(descriptor)
-        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
-                or (getattr(info, "st_file_attributes", 0) & 0x400) \
-                or not stat.S_ISREG(info.st_mode) \
-                or (info.st_dev, info.st_ino) != (expected.st_dev, expected.st_ino) \
-                or info.st_size != expected.st_size:
-            raise ValueError(f"{label} is not a regular file")
-        if info.st_size > MAX_QUEUE_JSON_BYTES:
-            raise ValueError(f"{label} exceeds the bounded JSON input size")
-        with os.fdopen(descriptor, "rb") as source:
-            descriptor = -1
-            raw = source.read(MAX_QUEUE_JSON_BYTES + 1)
-        if len(raw) > MAX_QUEUE_JSON_BYTES:
-            raise ValueError(f"{label} exceeds the bounded JSON input size")
-        return raw
-    except BaseException:
-        if descriptor >= 0:
-            os.close(descriptor)
-        raise
 
 
 def _load_json_path(path: Path, label: str) -> object:
@@ -435,7 +537,7 @@ def validate_record(base: Path, record: dict) -> None:
     except (OSError, subprocess.TimeoutExpired, subprocess.SubprocessError) as exc:
         raise ValueError("decision schema validation was unavailable") from exc
     if proc.returncode:
-        raise ValueError((proc.stderr or proc.stdout or "decision schema validation failed").strip())
+        raise ValueError("decision schema validation failed")
 
 
 def existing_path(base: Path, decision_id: str) -> Path | None:
@@ -954,30 +1056,50 @@ def transition(base: Path, source: Path, outcome: str, evidence: str,
     if expected_sha256 is not None and not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
         raise ValueError("decision projection digest is invalid")
     with queue_lock(base):
-        raw = _read_json_path_bytes(source, f"decision projection {source}")
-        source_identity = _path_identity(source, f"decision projection {source}")
-        observed_sha256 = hashlib.sha256(raw).hexdigest()
-        if expected_sha256 is not None and observed_sha256 != expected_sha256:
-            raise ValueError("decision projection changed before queue transition")
-        record = _load_json_bytes(raw, f"decision projection {source}")
-        if not isinstance(record, dict):
-            raise ValueError("decision projection is not an object")
-        if outcome == "pending":
-            record["status"] = "queued"
-        else:
-            record["status"] = "executed" if outcome == "succeeded" else "refused"
-            record["result_evidence"] = evidence
-        target = queue_root(base) / outcome / source.name
-        atomic_json(target, record)
-        try:
-            if _path_identity(source, f"decision projection {source}") != source_identity \
-                    or hashlib.sha256(_read_json_path_bytes(source, f"decision projection {source}")).hexdigest() != observed_sha256:
+        with _pinned_file(source, "decision projection", delete_access=True) as (descriptor, info):
+            if info.st_size > MAX_QUEUE_JSON_BYTES:
+                raise ValueError("decision projection exceeds the bounded JSON input size")
+            raw = _read_pinned(descriptor, MAX_QUEUE_JSON_BYTES, "decision projection")
+            source_identity = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+            observed_sha256 = hashlib.sha256(raw).hexdigest()
+            if expected_sha256 is not None and observed_sha256 != expected_sha256:
                 raise ValueError("decision projection changed before queue transition")
-            source.unlink()
-        except OSError as exc:
-            raise ValueError("decision projection could not be removed after transition") from exc
-        fsync_dir(source.parent)
-        return target
+            record = _load_json_bytes(raw, "decision projection")
+            if not isinstance(record, dict):
+                raise ValueError("decision projection is not an object")
+            if outcome == "pending":
+                record["status"] = "queued"
+            else:
+                record["status"] = "executed" if outcome == "succeeded" else "refused"
+                record["result_evidence"] = evidence
+            target = queue_root(base) / outcome / source.name
+            # Revalidate the source immediately before publishing the successor.  The earlier
+            # read establishes the candidate record; it is not authority for a later publish.
+            try:
+                current = source.lstat()
+            except OSError as exc:
+                raise ValueError("decision projection changed before queue transition") from exc
+            if (os.fstat(descriptor).st_dev, os.fstat(descriptor).st_ino,
+                    os.fstat(descriptor).st_size, os.fstat(descriptor).st_mtime_ns) != source_identity \
+                    or (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns) != source_identity:
+                raise ValueError("decision projection changed before queue transition")
+            with _pin_directory_chain(target.parent, "transition target"):
+                atomic_json(target, record)
+                try:
+                    try:
+                        current = source.lstat()
+                    except OSError as exc:
+                        raise ValueError("decision projection changed before queue transition") from exc
+                    opened = os.fstat(descriptor)
+                    opened_identity = (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns)
+                    current_identity = (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns)
+                    if opened_identity != source_identity or current_identity != source_identity:
+                        raise ValueError("decision projection changed before queue transition")
+                    _delete_pinned(descriptor, source)
+                except OSError as exc:
+                    raise ValueError("decision projection could not be removed after transition") from exc
+            fsync_dir(source.parent)
+            return target
 
 
 def action_status(base: Path, decision_file: Path, expected_sha256: str | None = None) -> str:
@@ -1099,8 +1221,8 @@ def main() -> int:
             print(transition(base, Path(args.file), outcome, args.evidence, args.expected_sha256))
     except (OSError, ValueError, TypeError, UnicodeError, OverflowError, RecursionError,
             json.JSONDecodeError, RuntimeError, subprocess.TimeoutExpired,
-            subprocess.SubprocessError) as exc:
-        print(f"decision-queue: {exc}", file=sys.stderr)
+            subprocess.SubprocessError):
+        print("decision-queue: operation refused", file=sys.stderr)
         return 73
     return 0
 

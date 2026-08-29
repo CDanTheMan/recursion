@@ -946,12 +946,12 @@ def main() -> int:
         )
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
-    except ConnectDenied as exc:
-        print(f"provider-connect-proxy: {exc}", file=sys.stderr)
+    except ConnectDenied:
+        print("provider-connect-proxy: connection refused", file=sys.stderr)
         return 96
     except (OSError, RuntimeError, ValueError, TypeError, UnicodeError, OverflowError,
-            KeyError, RecursionError) as exc:
-        print(f"provider-connect-proxy: {exc}", file=sys.stderr)
+            KeyError, RecursionError):
+        print("provider-connect-proxy: operation refused", file=sys.stderr)
         return 96
 
 

@@ -15,6 +15,7 @@ import hmac
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,9 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = sys.executable
 BASH = Path(r"C:\Program Files\Git\bin\bash.exe")
+ABSOLUTE_PATH_RE = re.compile(
+    r"(?:[A-Za-z]:[\\/]|\\\\[^\\s/\\]+[\\/]|(?<![A-Za-z0-9_])/(?:[^\\s/]+/)+[^\\s/]+)"
+)
 
 
 def load_module(name: str, path: Path):
@@ -38,17 +42,47 @@ def load_module(name: str, path: Path):
     return module
 
 
-def result_has_traceback(result: subprocess.CompletedProcess[str]) -> bool:
-    return "Traceback" in (result.stdout or "") + (result.stderr or "")
+def result_has_raw_error_or_path(result: subprocess.CompletedProcess[str], *paths: Path) -> bool:
+    text = (result.stdout or "") + (result.stderr or "")
+    raw_markers = ("Traceback", "WinError", "PermissionError", "FileNotFoundError", "OSError", "[Errno")
+    normalized = text.replace("\\", "/")
+    # Git Bash can fail before executing a script on this host with the documented ACL-only
+    # CreateFileMapping error.  It is not product output; the scope test records it separately.
+    host_acl = result.returncode == 256 and "CreateFileMapping" in text and "Win32 error 5" in text
+    return any(marker in text for marker in raw_markers) \
+        or (not host_acl and bool(ABSOLUTE_PATH_RE.search(normalized))) \
+        or any(str(path).replace("\\", "/") in normalized for path in paths)
 
 
 def strict_schema_validator(schema: dict):
     import jsonschema
 
-    checker = jsonschema.Draft7Validator.TYPE_CHECKER.redefine(
+    validator_class = jsonschema.validators.validator_for(schema)
+    validator_class.check_schema(schema)
+    if validator_class is not jsonschema.Draft7Validator:
+        raise AssertionError("engine manifest must declare Draft-7")
+    checker = validator_class.TYPE_CHECKER.redefine(
         "integer", lambda _checker, instance: type(instance) is int
     )
-    return jsonschema.validators.extend(jsonschema.Draft7Validator, type_checker=checker)(schema)
+    return jsonschema.validators.extend(validator_class, type_checker=checker)(schema)
+
+
+def differential_mismatches(resolver: Any, validator: Any,
+                            cases: list[tuple[str, dict]],
+                            runtime_validate: Callable[[dict], Any] | None = None) -> list[str]:
+    """Compare the real declared-draft validator with the product validator without masking errors."""
+    validate = runtime_validate or resolver.validate_manifest
+    mismatches: list[str] = []
+    for label, candidate in cases:
+        schema_valid = not list(validator.iter_errors(candidate))
+        runtime_valid = True
+        try:
+            validate(candidate)
+        except resolver.ManifestError:
+            runtime_valid = False
+        if schema_valid != runtime_valid:
+            mismatches.append(f"{label}: schema={schema_valid} runtime={runtime_valid}")
+    return mismatches
 
 
 def signed_token(proxy: Any, payload: bytes, key: bytes) -> str:
@@ -65,8 +99,8 @@ def main() -> int:
         # process cannot reopen.  The fixture contains no durable credential and is removed at
         # the end, so use a writable temporary ACL on Windows and 0700 on production Linux.
         scratch.mkdir(mode=0o777 if os.name == "nt" else 0o700)
-    except OSError as exc:
-        print(f"phase4-input-fuzz: SKIP (system-temp fixture could not be created: {exc})")
+    except OSError:
+        print("phase4-input-fuzz: SKIP (system-temp fixture could not be created)")
         return 77
     atexit.register(shutil.rmtree, scratch, ignore_errors=True)
 
@@ -80,8 +114,6 @@ def main() -> int:
             call()
         except expected:
             check(True, f"{label} has a typed refusal")
-        except Exception as exc:  # pragma: no cover - diagnostic guard
-            check(False, f"{label} has a typed refusal (raw {type(exc).__name__})")
         else:
             check(False, f"{label} has a typed refusal")
 
@@ -173,7 +205,7 @@ def main() -> int:
                          ("env_passthrough", [[]])):
         bad = copy.deepcopy(base_manifest)
         bad[field] = value
-        typed(f"engine manifest {field}={value!r}", lambda bad=bad: resolver.validate_manifest(bad, "sampleeng"),
+        typed(f"engine manifest {field} hostile value", lambda bad=bad: resolver.validate_manifest(bad, "sampleeng"),
               (resolver.ManifestError,))
 
     policy = {
@@ -203,14 +235,14 @@ def main() -> int:
         bad[field] = value
         path = scratch / f"bad-policy-{len(failures)}.json"
         path.write_text(json.dumps(bad, allow_nan=True) + "\n", encoding="utf-8")
-        typed(f"backup policy {field}={value!r}", lambda path=path: backup.load_policy(path),
+        typed(f"backup policy {field} hostile value", lambda path=path: backup.load_policy(path),
               (backup.BackupPolicyError,))
     for index, (label, raw) in enumerate(json_matrix):
         path = scratch / f"raw-policy-{index}.json"
         path.write_text(raw, encoding="utf-8")
         result = subprocess.run([PYTHON, str(ROOT / "scripts/backup-offsite.py"), "--config", str(path), "validate"],
                                 capture_output=True, text=True)
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result, path),
               "backup CLI hostile JSON is controlled")
 
     secret_root = scratch / "secret-runtime"
@@ -233,7 +265,7 @@ def main() -> int:
                                  "--directory", str(secret_root)],
                                 input="x" * (secrets_runtime.MAX_SECRET_ENV_BYTES + 1), text=True,
                                 capture_output=True)
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result, secret_root),
               "secret runtime CLI deep input is controlled")
     finally:
         if old_secret_root is None:
@@ -263,7 +295,7 @@ def main() -> int:
     else:
         backup_result = subprocess.run([PYTHON, str(ROOT / "scripts/runtime-state.py"), "backup", str(snapshot)],
                                        env=env, capture_output=True, text=True)
-    check(backup_result.returncode == 0 and not result_has_traceback(backup_result),
+    check(backup_result.returncode == 0 and not result_has_raw_error_or_path(backup_result, snapshot),
           "legitimate runtime snapshot is accepted")
     if backup_result.returncode == 0:
         manifest = json.loads((snapshot / "manifest.json").read_text(encoding="utf-8"))
@@ -286,7 +318,7 @@ def main() -> int:
         result = subprocess.run([PYTHON, str(ROOT / "scripts/decision-queue.py"), "normalize"],
                                 input=raw, text=True, capture_output=True,
                                 env=dict(os.environ, RECURSION_ROOT=str(queue_base)))
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result, queue_base),
               "decision queue hostile input is controlled")
 
     provider_dir = scratch / "providers"
@@ -297,7 +329,7 @@ def main() -> int:
         result = subprocess.run([PYTHON, str(ROOT / "scripts/provider-egress.py"), "validate", "fixture"],
                                 capture_output=True, text=True,
                                 env=dict(os.environ, RECURSION_PROVIDER_DIR=str(provider_dir)))
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result, provider_dir),
               "provider egress hostile profile JSON is controlled")
         (provider_dir / "fixture.json").write_text(json.dumps(profile) + "\n", encoding="utf-8")
     check(subprocess.run([PYTHON, str(ROOT / "scripts/provider-egress.py"), "validate", "fixture"],
@@ -313,12 +345,12 @@ def main() -> int:
                                 capture_output=True, text=True,
                                 env=dict(os.environ, RECURSION_ENGINE_DIR=str(resolver_dir),
                                          RECURSION_PROVIDER_DIR=str(provider_dir)))
-        check(result.returncode == 2 and not result_has_traceback(result),
+        check(result.returncode == 2 and not result_has_raw_error_or_path(result, resolver_dir),
               f"resolve-engine hostile manifest {index} is controlled")
     valid_resolver = subprocess.run([PYTHON, str(ROOT / "scripts/resolve-engine.py"), "gemini", "--validate"],
                                     capture_output=True, text=True,
                                     env=dict(os.environ, RECURSION_PROVIDER_DIR=str(ROOT / "scripts/providers")))
-    check(valid_resolver.returncode == 0 and not result_has_traceback(valid_resolver),
+    check(valid_resolver.returncode == 0 and not result_has_raw_error_or_path(valid_resolver, resolver_dir),
           "legitimate resolve-engine CLI input is accepted")
 
     worker_root = scratch / "worker-root"
@@ -343,7 +375,7 @@ def main() -> int:
         )
         host_acl = (os.name == "nt" and result.returncode == 256
                     and "CreateFileMapping" in result.stderr and "Win32 error 5" in result.stderr)
-        check((result.returncode == 92 and not result_has_traceback(result)) or host_acl,
+        check((result.returncode == 92 and not result_has_raw_error_or_path(result, worker_root)) or host_acl,
               f"worker-sandbox hostile plan {index} is controlled (rc={result.returncode}, host_acl={host_acl})")
 
     # Exercise every command boundary with traversal, UNC, drive-relative, tilde, and env-style
@@ -352,17 +384,17 @@ def main() -> int:
         result = subprocess.run([PYTHON, str(ROOT / "scripts/backup-offsite.py"), "restore-drill",
                                  "--root", path_value, "--snapshot", path_value],
                                 capture_output=True, text=True)
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result),
               f"backup restore-drill path {path_value!r} is controlled")
         result = subprocess.run([PYTHON, str(ROOT / "scripts/assignment-token.py"), "fixture", "assignment-a",
                                  "--key-file", path_value], capture_output=True, text=True)
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result),
               f"assignment-token path {path_value!r} is controlled")
 
     result = subprocess.run([PYTHON, str(ROOT / "scripts/provider-connect-proxy.py"), "probe",
                              "--namespace", "/bad", "--allow", "api.fixture.example:443"],
                             capture_output=True, text=True)
-    check(result.returncode != 0 and not result_has_traceback(result), "provider proxy CLI boundary is controlled")
+    check(result.returncode != 0 and not result_has_raw_error_or_path(result), "provider proxy CLI boundary is controlled")
     conduct_root = scratch / "conduct-root"
     (conduct_root / "scripts").mkdir(parents=True)
     (conduct_root / "loop/logs").mkdir(parents=True)
@@ -370,7 +402,7 @@ def main() -> int:
     missing_decision = conduct_root / "missing.json"
     result = subprocess.run([str(BASH), str(conduct_root / "scripts/conduct-hermes.sh"), "--file", str(missing_decision)],
                             capture_output=True, text=True, env=dict(os.environ, RECURSION_ROOT=str(conduct_root)))
-    check(result.returncode != 0 and not result_has_traceback(result), "conduct-hermes CLI boundary is controlled")
+    check(result.returncode != 0 and not result_has_raw_error_or_path(result, conduct_root), "conduct-hermes CLI boundary is controlled")
     for index, (label, raw) in enumerate(json_matrix):
         hostile_decision = conduct_root / f"hostile-{index}.json"
         hostile_decision.write_text(raw, encoding="utf-8")
@@ -378,7 +410,7 @@ def main() -> int:
                                  "--file", str(hostile_decision)],
                                 capture_output=True, text=True,
                                 env=dict(os.environ, RECURSION_ROOT=str(conduct_root)))
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result, conduct_root),
               f"conduct-hermes hostile JSON {label} is controlled")
 
     # Exercise the remaining Phase 4 validator/loader/CLI boundaries with the same raw matrix.
@@ -387,33 +419,33 @@ def main() -> int:
     for label, raw in json_matrix:
         result = subprocess.run([PYTHON, str(ROOT / "scripts/validate-control-state.py"), "decision"],
                                 input=raw, text=True, capture_output=True)
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result),
               f"validate-control-state hostile JSON {label} is controlled")
         result = subprocess.run([PYTHON, str(ROOT / "scripts/validate-decision.py"), "noop", raw],
                                 capture_output=True, text=True)
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result),
               f"validate-decision hostile JSON {label} is controlled")
         result = subprocess.run(
             [PYTHON, str(ROOT / "scripts/transition_receipt.py"), "--root", str(scratch),
              "apply-fields", "state/missing.json", raw, raw], capture_output=True, text=True,
         )
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result, scratch),
               f"transition-receipt hostile JSON {label} is controlled")
         result = subprocess.run(
             [PYTHON, str(ROOT / "scripts/instruction_routing.py"), "--root", str(scratch),
              "route", "hostile", raw, raw], capture_output=True, text=True,
         )
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result, scratch),
               f"instruction-routing hostile JSON {label} is controlled")
         result = subprocess.run([PYTHON, str(ROOT / "scripts/project-pilot.py"), "execute-json", raw],
                                 capture_output=True, text=True,
                                 env=dict(os.environ, RECURSION_ROOT=str(scratch)))
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result, scratch),
               f"project-pilot hostile JSON {label} is controlled")
         result = subprocess.run([PYTHON, str(ROOT / "scripts/seed_contract.py"), "digest",
                                  "--root", str(scratch), "--path", raw],
                                 capture_output=True, text=True)
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result, scratch),
               f"seed-contract hostile path {label} is controlled")
 
     alias_registry = scratch / "hostile-alias-registry.json"
@@ -422,45 +454,125 @@ def main() -> int:
         result = subprocess.run([PYTHON, str(ROOT / "scripts/resolve-model-alias.py"), "custom", "implementer"],
                                 capture_output=True, text=True,
                                 env=dict(os.environ, RECURSION_ALIAS_REGISTRY=str(alias_registry)))
-        check(result.returncode != 0 and not result_has_traceback(result),
+        check(result.returncode != 0 and not result_has_raw_error_or_path(result, alias_registry),
               f"resolve-model-alias hostile JSON {label} is controlled")
 
-    # Differential corpus for the engine schema.  Draft-7's stock Python type checker treats
-    # 1.0 as an integer; the strict checker models the runtime's deliberate plain-int contract.
+    # Differential corpus for every constrained engine-manifest field.  The declared Draft-7
+    # validator is real jsonschema; only its integer checker is tightened to the product's
+    # explicit JSON-integer contract because Draft-7 otherwise treats 1.0 as an integer.
     schema = json.loads((ROOT / "schemas/control-plane/v1/engine-manifest.schema.json").read_text(encoding="utf-8"))
     validator = strict_schema_validator(schema)
-    cases: list[tuple[str, dict]] = [("baseline", copy.deepcopy(base_manifest))]
-    for field, value in (("schema_version", True), ("schema_version", False), ("schema_version", 1.0),
-                         ("schema_version", 1), ("concurrency_cap", True), ("concurrency_cap", 1.0),
-                         ("concurrency_cap", 0), ("concurrency_cap", 1), ("availability_probe", {
-                             "type": "http", "url_env": "FUZZ_URL", "timeout_s": 1.0}),
-                         ("availability_probe", {"type": "http", "url_env": "FUZZ_URL", "timeout_s": 1}),
-                         ("argv", ["{{EXE}}", "{{OTHER}}", "{{PROMPT}}"]),
-                         ("model", {"required": False, "argv_suffix": ["{{OTHER}}"]}),
-                         ("roles", ["implementer", "implementer"]),
-                         ("network", {"policy": "provider-only", "endpoints": ["bad"]}),
-                         ("env_passthrough", [[]])):
-        mutated = copy.deepcopy(base_manifest)
-        mutated[field] = value
-        cases.append((f"{field}={value!r}", mutated))
-    mismatches: list[str] = []
-    for label, candidate in cases:
-        schema_valid = not list(validator.iter_errors(candidate))
-        try:
-            resolver.validate_manifest(candidate, "sampleeng")
-            runtime_valid = True
-        except resolver.ManifestError:
-            runtime_valid = False
-        except Exception as exc:  # pragma: no cover - differential must expose raw leaks
-            mismatches.append(f"{label}: raw runtime {type(exc).__name__}")
-            runtime_valid = False
-        if schema_valid != runtime_valid:
-            mismatches.append(f"{label}: schema={schema_valid} runtime={runtime_valid}")
-    check(not mismatches, "engine schema/runtime differential has zero mismatches")
-    print(f"SCHEMA_DIFFERENTIAL cases={len(cases)} mismatches={len(mismatches)}")
-    if mismatches:
+    profile_for_differential = {
+        "schema_version": 1, "id": "profile", "provider": "sample-provider", "enabled": False,
+        "namespace": "recursion-provider-fuzz", "proxy": {
+            "type": "connect-proxy", "host": "127.0.0.1", "port": 18080,
+            "env": ["HTTP_PROXY", "HTTPS_PROXY"],
+        }, "authorities": ["sample.example.com:443"],
+    }
+    (provider_dir / "profile.json").write_text(
+        json.dumps(profile_for_differential) + "\n", encoding="utf-8"
+    )
+    old_provider_dir = os.environ.get("RECURSION_PROVIDER_DIR")
+    os.environ["RECURSION_PROVIDER_DIR"] = str(provider_dir)
+    try:
+        def corpus_case(path: tuple[str, ...], value: Any) -> tuple[str, dict]:
+            candidate = copy.deepcopy(base_manifest)
+            target = candidate
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = value
+            return (".".join(path) + "=" + repr(value), candidate)
+
+        cases: list[tuple[str, dict]] = [("baseline", copy.deepcopy(base_manifest))]
+        field_values: dict[tuple[str, ...], tuple[Any, ...]] = {
+            ("schema_version",): (True, 1.0, 0, 1),
+            ("name",): (None, 1, "", "Sampleeng", "sampleeng\n", "claude", "sampleeng"),
+            ("description",): (None, 1, "", "valid description"),
+            ("executable",): (None, 1, "", "Sampleeng", "sampleeng\n", "sampleeng"),
+            ("argv",): (
+                [],
+                ["{{EXE}}", 1, "{{PROMPT}}"],
+                ["{{EXE}}", "{{PROMPT}}"],
+                ["{{EXE}}", "{{PROMPT}}", "{{PROMPT}}"],
+                ["{{EXE}}", "{{OTHER}}", "{{PROMPT}}"],
+                ["{{EXE}}", "{{OTHER}}\n", "{{PROMPT}}"],
+                ["{{EXE}}", "-p", "-p", "{{PROMPT}}"],
+                ["{{EXE}}", "-p", "{{PROMPT}}"],
+            ),
+            ("model",): (
+                [],
+                {"required": False},
+                {"required": False, "argv_suffix": [], "unexpected": True},
+                {"required": 1, "argv_suffix": []},
+                {"required": False, "argv_suffix": [1]},
+                {"required": False, "argv_suffix": ["{{OTHER}}"]},
+                {"required": False, "argv_suffix": ["{{MODEL}}", "{{MODEL}}"]},
+                {"required": False, "argv_suffix": ["--model", "--model"]},
+                {"required": False, "argv_suffix": ["{{OTHER}}\n"]},
+                {"required": False, "argv_suffix": []},
+            ),
+            ("roles",): ([], ["implementer", "implementer"], ["implementer", "verifier", "implementer"],
+                           ["other"], ["implementer", "verifier"]),
+            ("billing",): ([], {"basis": "flat-subscription"},
+                             {"basis": "flat-subscription", "provider": "sample-provider", "unexpected": True}),
+            ("billing", "basis"): (1, "prepaid", "flat-subscription"),
+            ("billing", "provider"): (None, 1, "", "sample-provider"),
+            ("network",): ([], {"policy": "provider-only", "endpoints": [], "unexpected": True}),
+            ("network", "policy"): (1, "none", "provider-only"),
+            ("network", "profile"): (1, "P", "profile\n", "profile"),
+            ("network", "endpoints"): (
+                "not-a-list", [1], [[]], ["bad"], ["sample.example.com\n"], [], ["sample.example.com"],
+            ),
+            ("availability_probe",): (
+                [],
+                {"type": "http", "url_env": "FUZZ_URL", "timeout_s": 1, "unexpected": True},
+                {"type": "http", "url_env": "FUZZ_URL"},
+                {"type": 1, "url_env": "FUZZ_URL", "timeout_s": 1},
+                {"type": "http", "url_env": 1, "timeout_s": 1},
+                {"type": "tcp", "url_env": "FUZZ_URL", "timeout_s": 1},
+                {"type": "http", "url_env": "bad", "timeout_s": 1},
+                {"type": "http", "url_env": "FUZZ_URL\n", "timeout_s": 1},
+                {"type": "http", "url_env": "FUZZ_URL", "timeout_s": True},
+                {"type": "http", "url_env": "FUZZ_URL", "timeout_s": 1.0},
+                {"type": "http", "url_env": "FUZZ_URL", "timeout_s": 0},
+                {"type": "http", "url_env": "FUZZ_URL", "timeout_s": 1},
+                None,
+            ),
+            ("concurrency_cap",): (True, 1.0, 0, -1, 1, None),
+            ("env_passthrough",): (1, [1], [[]], ["bad"], ["FUZZ_ENV\n"],
+                                     ["FUZZ_ENV", "FUZZ_ENV"], [], ["FUZZ_ENV"]),
+        }
+        for path, values in field_values.items():
+            for value in values:
+                cases.append(corpus_case(path, value))
+        for required in sorted(base_manifest):
+            candidate = copy.deepcopy(base_manifest)
+            del candidate[required]
+            cases.append((f"missing {required}", candidate))
+        unknown = copy.deepcopy(base_manifest)
+        unknown["unexpected"] = True
+        cases.append(("unknown top-level key", unknown))
+
+        runtime_validate = lambda candidate: resolver.validate_manifest(candidate, "sampleeng")
+        if os.environ.get("PHASE4_FUZZ_DISABLE_MANIFEST_GUARD") == "1":
+            # Test-only fault injection used by the review proof below. It is never enabled by
+            # normal runs and deliberately makes the differential report a mismatch.
+            def runtime_validate(candidate: dict) -> Any:
+                if candidate.get("schema_version") in {True, 1.0} \
+                        or candidate.get("concurrency_cap") in {True, 1.0}:
+                    return candidate
+                return resolver.validate_manifest(candidate, "sampleeng")
+
+        mismatches = differential_mismatches(resolver, validator, cases, runtime_validate)
+        check(not mismatches, "engine schema/runtime differential has zero mismatches")
+        print(f"SCHEMA_DIFFERENTIAL cases={len(cases)} mismatches={len(mismatches)}")
         for mismatch in mismatches:
             print(f"  {mismatch}")
+    finally:
+        if old_provider_dir is None:
+            os.environ.pop("RECURSION_PROVIDER_DIR", None)
+        else:
+            os.environ["RECURSION_PROVIDER_DIR"] = old_provider_dir
 
     try:
         if failures:

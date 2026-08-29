@@ -268,8 +268,8 @@ def main() -> int:
         record = _load_json_bytes(raw)
         validate(args.kind, record)
     except (OSError, json.JSONDecodeError, ValueError, TypeError, OverflowError,
-            RecursionError, UnicodeError) as exc:
-        print(f"ERR {exc}", file=sys.stderr)
+            RecursionError, UnicodeError):
+        print("ERR controlled validator failure", file=sys.stderr)
         return 2
     print("OK")
     return 0

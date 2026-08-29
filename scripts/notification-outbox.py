@@ -2042,8 +2042,8 @@ def main() -> int:
             recover(base, args.project, args.goal)
     except (OSError, ValueError, TypeError, OverflowError, RecursionError, UnicodeError,
             json.JSONDecodeError, subprocess.TimeoutExpired, OutboxError) as exc:
-        print(f"notification-outbox: {exc}", file=sys.stderr)
-        return 75 if "PAUSE" in str(exc) else 4
+        print("notification-outbox: operation refused", file=sys.stderr)
+        return 75 if isinstance(exc, OutboxError) and "PAUSE" in str(exc) else 4
     return 0
 
 

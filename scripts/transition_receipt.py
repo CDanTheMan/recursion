@@ -1207,8 +1207,8 @@ def main() -> int:
             print(commit_transition(base, [fields_mutation(path, changes)], event,
                                     taskctl_locked=held))
     except (OSError, ValueError, TypeError, OverflowError, RecursionError, UnicodeError,
-            json.JSONDecodeError, subprocess.TimeoutExpired, TransitionReceiptError) as exc:
-        print(f"transition-receipt: {exc}", file=os.sys.stderr)
+            json.JSONDecodeError, subprocess.TimeoutExpired, TransitionReceiptError):
+        print("transition-receipt: operation refused", file=os.sys.stderr)
         return 74
     return 0
 
