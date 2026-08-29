@@ -62,6 +62,10 @@ def make_fixture(tmp_path: Path):
     deadline_epoch = epoch_now() + 3600
     evidence = {
         "schema_version": 1, "id": "run-1", "task_id": "task-1", "role": "implementer",
+        "worker": "implementer:sonnet-routine", "worktree": "/tmp/wt",
+        "pid": 100, "process_group": 100,
+        "lease_expires": iso(deadline_epoch), "deadline": iso(deadline_epoch),
+        "usage": {}, "result": {}, "status": "running",
         "assignment_digest": digest, "deadline_epoch": deadline_epoch,
         "base_commit": "a" * 40, "source_evidence": value["source_evidence"],
         "commit_oid": "b" * 40,
@@ -121,6 +125,17 @@ def test_evidence_projection_cannot_forge_provider(tmp_path: Path) -> None:
     evidence_path.write_text(json.dumps(value), encoding="utf-8")
     result = run(base_args(root, digest, evidence_path, run_id="run-evil-provider") + ["--record"])
     check(result.returncode == 2, "correct digest/source cannot authorize a forged provider projection")
+
+
+def test_projection_does_not_launder_numeric_types(tmp_path: Path) -> None:
+    root, digest, evidence_path, _ = make_fixture(tmp_path)
+    value = json.loads(evidence_path.read_text(encoding="utf-8"))
+    value["source_evidence"]["verified"] = 1
+    value["assignment"]["source_evidence"]["verified"] = 1
+    evidence_path.write_text(json.dumps(value), encoding="utf-8")
+    result = run(base_args(root, digest, evidence_path, run_id="run-type-launder"))
+    check(result.returncode == 2,
+          "projection comparison distinguishes an integer from the persisted boolean")
 
 
 def test_late(tmp_path: Path) -> None:
@@ -214,6 +229,8 @@ def main() -> int:
         test_evidence_names_different_digest(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_evidence_projection_cannot_forge_provider(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_projection_does_not_launder_numeric_types(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_late(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:

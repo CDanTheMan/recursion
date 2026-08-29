@@ -89,19 +89,21 @@ def outside_sentinel(path: Path) -> bytes:
     return value
 
 
-def make_link(link: Path, target: Path, *, directory: bool) -> None:
+def make_link(link: Path, target: Path, *, directory: bool, reparse: bool = False) -> None:
     link.parent.mkdir(parents=True, exist_ok=True)
     if os.name == "nt":
-        kind = "/J" if directory else "/H"
-        result = subprocess.run(
-            ["cmd.exe", "/d", "/c", "mklink", kind, str(link), str(target)],
-            capture_output=True, text=True,
-        )
+        command = ["cmd.exe", "/d", "/c", "mklink"]
+        if directory:
+            command.append("/J")
+        elif not reparse:
+            command.append("/H")
+        command.extend([str(link), str(target)])
+        result = subprocess.run(command, capture_output=True, text=True)
         if result.returncode != 0:
             raise AssertionError(f"could not create Windows link: {result.stderr or result.stdout}")
     else:
-        if directory:
-            link.symlink_to(target, target_is_directory=True)
+        if directory or reparse:
+            link.symlink_to(target, target_is_directory=directory)
         else:
             link.hardlink_to(target)
 
@@ -174,12 +176,13 @@ def test_jsonl_battery(root: Path) -> None:
 
     junction_leaf = root / "jsonl-junction-leaf"
     jpath = junction_leaf / "events.jsonl"
-    jtarget = junction_leaf / "outside-target"
-    jtarget.mkdir(parents=True)
-    make_link(jpath, jtarget, directory=True)
+    jtarget = junction_leaf / "outside-target.jsonl"
+    jtarget.parent.mkdir(parents=True)
+    joriginal = outside_sentinel(jtarget)
+    make_link(jpath, jtarget, directory=False, reparse=True)
     expect_refusal(lambda: jd.append_jsonl(jpath, {"id": "junction-leaf"}),
                    "JSONL junction/reparse leaf", error_types)
-    check(not (jtarget / "events.jsonl").exists(), "JSONL junction leaf receives no bytes")
+    check(jtarget.read_bytes() == joriginal, "JSONL junction leaf receives no bytes")
 
     ancestor = root / "jsonl-junction-ancestor"
     atarget = ancestor / "outside-target"
@@ -225,12 +228,14 @@ def test_jsonl_battery(root: Path) -> None:
     check(not armed and not race_target.exists(), "JSONL atomic post-validation race leaves no target")
 
     atomic_junction_leaf = root / "jsonl-atomic-junction-leaf"
-    atomic_junction_target = atomic_junction_leaf / "outside-target"
-    atomic_junction_target.mkdir(parents=True)
-    make_link(atomic_junction_leaf / "record.json", atomic_junction_target, directory=True)
+    atomic_junction_target = atomic_junction_leaf / "outside-target.json"
+    atomic_junction_target.parent.mkdir(parents=True)
+    atomic_junction_original = outside_sentinel(atomic_junction_target)
+    make_link(atomic_junction_leaf / "record.json", atomic_junction_target,
+              directory=False, reparse=True)
     expect_refusal(lambda: jd.atomic_bytes(atomic_junction_leaf / "record.json", b"junction\n"),
                    "JSONL atomic replacement junction leaf", error_types)
-    check(not (atomic_junction_target / "record.json").exists(),
+    check(atomic_junction_target.read_bytes() == atomic_junction_original,
           "JSONL atomic junction leaf receives no bytes")
 
     atomic_ancestor = root / "jsonl-atomic-junction-ancestor"
@@ -301,21 +306,45 @@ def test_jsonl_battery(root: Path) -> None:
     check(jd.read_jsonl_objects(rebuild_positive_path) == [{"id": "one"}],
           "JSONL normal SQLite index rebuild succeeds")
 
+    rebuild_in_place_root = root / "jsonl-rebuild-in-place"
+    rebuild_in_place_path = rebuild_in_place_root / "events.jsonl"
+    in_place_calls = 0
+    original_rebuild_in_place = jd._rebuild_index_in_place
+
+    def tracked_rebuild_in_place(*args, **kwargs):
+        nonlocal in_place_calls
+        in_place_calls += 1
+        return original_rebuild_in_place(*args, **kwargs)
+
+    jd._rebuild_index_in_place = tracked_rebuild_in_place
+    try:
+        jd.append_jsonl(rebuild_in_place_path, {"id": "one"}, rebuild_in_place=True)
+        jd.append_jsonl(rebuild_in_place_path, {"id": "two"}, rebuild_in_place=True)
+        in_place_index = next((rebuild_in_place_root / "jsonl-index").glob("*.sqlite3"))
+        in_place_index.write_bytes(b"not-a-sqlite-cache")
+        jd.append_jsonl(rebuild_in_place_path, {"id": "three"}, rebuild_in_place=True)
+    finally:
+        jd._rebuild_index_in_place = original_rebuild_in_place
+    check(in_place_calls == 2 and jd.read_jsonl_objects(rebuild_in_place_path) == [
+        {"id": "one"}, {"id": "two"}, {"id": "three"}
+    ], "JSONL retained rebuild_in_place=True branch rebuilds missing/corrupt caches")
+
     index_junction_leaf = root / "jsonl-index-junction-leaf"
     index_journal = index_junction_leaf / "events.jsonl"
     index_identity = "phase3/junction-leaf"
     jd.append_jsonl(index_journal, {"id": "one"},
                     index_root=index_junction_leaf / "cache", index_identity=index_identity)
     index_leaf = index_junction_leaf / "cache" / jd.index_cache_name(index_identity)
-    index_target = index_junction_leaf / "outside-index-target"
-    index_target.mkdir()
+    index_target = index_junction_leaf / "outside-index-target.sqlite3"
+    index_original = index_leaf.read_bytes()
+    index_target.write_bytes(index_original)
     index_leaf.unlink()
-    make_link(index_leaf, index_target, directory=True)
+    make_link(index_leaf, index_target, directory=False, reparse=True)
     expect_refusal(lambda: jd.append_jsonl(index_journal, {"id": "two"},
                                             index_root=index_junction_leaf / "cache",
                                             index_identity=index_identity),
                    "JSONL SQLite index junction leaf", error_types)
-    check(not (index_target / index_leaf.name).exists(),
+    check(index_target.read_bytes() == index_original,
           "JSONL SQLite index junction leaf receives no bytes")
 
     index_junction_ancestor = root / "jsonl-index-junction-ancestor"
@@ -391,12 +420,16 @@ def test_assignment_battery(root: Path) -> None:
     load_leaf_root = root / "assignment-load-junction-leaf"
     load_leaf_task = load_leaf_root / value["task_id"]
     load_leaf_task.mkdir(parents=True)
-    load_leaf_target = load_leaf_root / "outside-target"
-    load_leaf_target.mkdir()
-    make_link(load_leaf_task / f"{value['assignment_digest']}.json", load_leaf_target, directory=True)
+    load_leaf_target = load_leaf_root / "outside-target.json"
+    load_leaf_original = json.dumps(value, sort_keys=True).encode("utf-8")
+    load_leaf_target.write_bytes(load_leaf_original)
+    make_link(load_leaf_task / f"{value['assignment_digest']}.json", load_leaf_target,
+              directory=False, reparse=True)
     check(amod.load_assignment(
         load_leaf_root, value["task_id"], value["assignment_digest"]
     ) is None, "load_assignment refuses a junction/reparse leaf")
+    check(load_leaf_target.read_bytes() == load_leaf_original,
+          "load_assignment reparse leaf leaves the target untouched")
 
     load_ancestor_root = root / "assignment-load-junction-ancestor"
     load_ancestor_target = load_ancestor_root / "outside-target"
@@ -572,12 +605,14 @@ def test_assignment_battery(root: Path) -> None:
     check(not armed and not race_output.exists(), "assignment atomic output race leaves no target")
 
     output_junction_leaf = root / "assignment-output-junction-leaf"
-    output_junction_target = output_junction_leaf / "outside-target"
-    output_junction_target.mkdir(parents=True)
-    make_link(output_junction_leaf / "copy.json", output_junction_target, directory=True)
+    output_junction_target = output_junction_leaf / "outside-target.json"
+    output_junction_target.parent.mkdir(parents=True)
+    output_junction_original = outside_sentinel(output_junction_target)
+    make_link(output_junction_leaf / "copy.json", output_junction_target,
+              directory=False, reparse=True)
     expect_refusal(lambda: amod._atomic_write(output_junction_leaf / "copy.json", "junction\n"),
                    "assignment atomic output junction leaf", error_types)
-    check(not (output_junction_target / "copy.json").exists(),
+    check(output_junction_target.read_bytes() == output_junction_original,
           "assignment atomic output junction leaf receives no bytes")
 
     output_ancestor = root / "assignment-output-junction-ancestor"
@@ -675,6 +710,38 @@ def test_worker_battery(root: Path) -> None:
     check(json.loads(valid.read_text(encoding="utf-8"))["id"] == "normal",
           "worker evidence normal publish succeeds")
 
+    load_root = root / "worker-load"
+    load_assignment = base_assignment("task-worker-load")
+    amod.persist_assignment(load_root / "assignments", load_assignment)
+    load_run = load_root / "runs" / "run.json"
+    load_projection = amod.assignment_projection(load_assignment)
+    load_value = {
+        "schema_version": 1, "id": "run-worker-load", "task_id": load_assignment["task_id"],
+        "worker": "implementer:sonnet-routine", "worktree": "/tmp/wt",
+        "base_commit": load_assignment["source_sha"], "pid": 1, "process_group": 1,
+        "lease_expires": "2026-08-28T00:10:00Z", "deadline": "2026-08-28T00:10:00Z",
+        "usage": {}, "result": {}, "status": "running",
+        "assignment_digest": load_assignment["assignment_digest"],
+        "assignment": copy.deepcopy(load_projection),
+    }
+    load_value.update(copy.deepcopy(load_projection))
+    worker.atomic(load_run, load_value)
+    check(worker.load(load_run) == load_value,
+          "worker.load validates and returns a valid assignment-bound run")
+    for label, bad in (("verified-int", 1), ("schema-version-float", 1.0)):
+        forged = copy.deepcopy(load_value)
+        if label == "schema-version-float":
+            # Keep the top-level run field valid so this case reaches the nested
+            # projection comparator instead of being rejected by run_contract.
+            forged["assignment"]["schema_version"] = bad
+        else:
+            forged["assignment"]["source_evidence"]["verified"] = bad
+            forged["source_evidence"]["verified"] = bad
+        worker.atomic(load_run, forged)
+        expect_refusal(lambda: worker.load(load_run),
+                       f"worker.load rejects projection type laundering ({label})", error_types)
+    worker.atomic(load_run, load_value)
+
     hardlink_root = root / "worker-hardlink"
     hardlink_root.mkdir(parents=True)
     path = hardlink_root / "run.json"
@@ -708,12 +775,14 @@ def test_worker_battery(root: Path) -> None:
     check(not armed and not race_path.exists(), "worker evidence race leaves no target")
 
     worker_junction_leaf = root / "worker-atomic-junction-leaf"
-    worker_junction_target = worker_junction_leaf / "outside-target"
-    worker_junction_target.mkdir(parents=True)
-    make_link(worker_junction_leaf / "run.json", worker_junction_target, directory=True)
+    worker_junction_target = worker_junction_leaf / "outside-target.json"
+    worker_junction_target.parent.mkdir(parents=True)
+    worker_junction_original = outside_sentinel(worker_junction_target)
+    make_link(worker_junction_leaf / "run.json", worker_junction_target,
+              directory=False, reparse=True)
     expect_refusal(lambda: worker.atomic(worker_junction_leaf / "run.json", {"id": "junction"}),
                    "worker evidence junction leaf", error_types)
-    check(not (worker_junction_target / "run.json").exists(),
+    check(worker_junction_target.read_bytes() == worker_junction_original,
           "worker evidence junction leaf receives no bytes")
 
     worker_ancestor = root / "worker-atomic-junction-ancestor"
@@ -736,12 +805,13 @@ def test_worker_battery(root: Path) -> None:
 
     junction_leaf = root / "worker-junction-leaf"
     jpath = junction_leaf / "run.json"
-    jtarget = junction_leaf / "outside-target"
-    jtarget.mkdir(parents=True)
-    make_link(jpath, jtarget, directory=True)
+    jtarget = junction_leaf / "outside-target.json"
+    jtarget.parent.mkdir(parents=True)
+    joriginal = outside_sentinel(jtarget)
+    make_link(jpath, jtarget, directory=False, reparse=True)
     expect_refusal(lambda: worker.atomic(jpath, {"id": "junction"}),
                    "worker evidence junction/reparse leaf", error_types)
-    check(not (jtarget / "run.json").exists(), "worker junction leaf receives no bytes")
+    check(jtarget.read_bytes() == joriginal, "worker junction leaf receives no bytes")
 
     ancestor = root / "worker-junction-ancestor"
     atarget = ancestor / "outside-target"
@@ -775,10 +845,10 @@ def test_capacity_pool_differential() -> None:
         # JSON Schema's numeric model cannot distinguish lexical 1.0 from integer 1;
         # the runtime deliberately rejects the Python float as an input-boundary type.
         "schema_version": [True, "1", 2],
-        "id": ["bad id", 7, "pool/child"],
-        "kind": ["unknown", 7, []],
-        "billing_basis": ["unknown", 7, []],
-        "provider": ["Cursor", "c", 7, []],
+        "id": ["", "bad id", 7, "pool/child", "pool\n"],
+        "kind": ["", "unknown", 7, []],
+        "billing_basis": ["", "unknown", 7, []],
+        "provider": ["", "Cursor", "c", 7, [], "cursor\n"],
         "on_demand": [1, "false", None],
     }.items():
         for bad in bad_values:
@@ -796,8 +866,8 @@ def test_capacity_pool_differential() -> None:
     candidate["quota"]["unexpected"] = True
     corpus.append(candidate)
     for key, bad_values in {
-        "period": ["yearly", 7, []],
-        "source": ["unknown", 7, []],
+        "period": ["", "yearly", 7, []],
+        "source": ["", "unknown", 7, []],
         "limit": [-1, "10", True, float("inf"), 10 ** 400],
         "unit": ["", 7, None, " "],
     }.items():
@@ -828,7 +898,8 @@ def test_capacity_pool_differential() -> None:
             candidate.update(optional)
         corpus.append(candidate)
 
-    mismatches = 0
+    schema_only = 0
+    runtime_only = 0
     for candidate in corpus:
         schema_valid = not list(validator.iter_errors(candidate))
         pool_id = candidate.get("id") if isinstance(candidate.get("id"), str) else "pool"
@@ -842,10 +913,15 @@ def test_capacity_pool_differential() -> None:
             check(False, f"capacity-pool differential leaked {type(exc).__name__}: {exc}")
         else:
             runtime_valid = True
-        if schema_valid != runtime_valid:
-            mismatches += 1
+        if schema_valid and not runtime_valid:
+            schema_only += 1
+            print(f"mismatch: capacity-pool schema=true runtime=false candidate={candidate!r}")
+        elif runtime_valid and not schema_valid:
+            runtime_only += 1
             print(f"mismatch: schema={schema_valid} runtime={runtime_valid} candidate={candidate!r}")
-    check(mismatches == 0, f"capacity-pool schema/runtime generated differential has zero mismatches ({len(corpus)} cases)")
+    check(schema_only == 0 and runtime_only == 0,
+          f"capacity-pool schema/runtime differential has zero mismatches in both directions "
+          f"({len(corpus)} cases; schema-only={schema_only}, runtime-only={runtime_only})")
     float_version = copy.deepcopy(base)
     float_version["schema_version"] = 1.0
     expect_refusal(lambda: amod.validate_capacity_pool(float_version, "pool"),
@@ -871,15 +947,24 @@ def test_run_schema_differential() -> None:
         corpus.append(candidate)
     for key, bad_values in {
         "schema_version": [True, 1.0, 2],
-        "id": ["bad id", 7], "task_id": ["bad/task", None], "worker": ["", 7],
-        "worktree": ["", None], "base_commit": ["not-a-sha", 7],
+        "id": ["", "run\n", "bad id", 7],
+        "task_id": ["", "task\n", "bad/task", None],
+        "worker": ["", 7],
+        "worktree": ["", None], "base_commit": ["", "a" * 40 + "\n", "not-a-sha", 7],
         "pid": [True, 1.0, -1, "1"], "process_group": [True, 0.0, -1, "0"],
         "lease_expires": ["", 7], "deadline": ["", None], "usage": [[], None],
         "result": [None, 7, True], "status": ["unknown", 7],
-        "role": ["worker", 7], "model_alias": ["A", 7],
-        "network_policy": ["internet", 7], "assignment_digest": ["x", 7],
-        "assignment": [[], None], "project_id": ["bad/id", 7], "capacity_pool": [7, []],
+        "role": ["", "worker", 7], "model_alias": ["", "model\n", "A", 7],
+        "network_policy": ["internet", 7],
+        "assignment_digest": ["", "b" * 64 + "\n", "x", 7],
+        "assignment": [[], None], "project_id": ["", "project\n", "bad/id", 7],
+        "capacity_pool": ["", 7, []], "billing_basis": ["", 7], "model": ["", 7],
         "metered_approved": [1, "true"], "allowed_paths": [[], [7]],
+        "engine": ["", 7], "provider": ["", 7], "host": ["", 7],
+        "sandbox_profile": ["", 7], "source_repository": ["", 7],
+        "source_branch": ["", 7], "source_sha": ["a" * 40 + "\n", "", 7],
+        "publication_policy": ["", 7], "default_branch": ["", 7],
+        "integration_branch": ["", 7],
     }.items():
         for bad in bad_values:
             candidate = copy.deepcopy(base)
@@ -901,7 +986,8 @@ def test_run_schema_differential() -> None:
     missing_projection.pop("provider")
     corpus.append(missing_projection)
 
-    mismatches = 0
+    schema_only = 0
+    runtime_only = 0
     for candidate in corpus:
         schema_valid = not list(validator.iter_errors(candidate))
         try:
@@ -913,10 +999,15 @@ def test_run_schema_differential() -> None:
             check(False, f"run differential leaked {type(exc).__name__}: {exc}")
         else:
             runtime_valid = True
-        if schema_valid != runtime_valid:
-            mismatches += 1
-            print(f"mismatch: run schema={schema_valid} runtime={runtime_valid} candidate={candidate!r}")
-    check(mismatches == 0, f"run schema/runtime generated differential has zero mismatches ({len(corpus)} cases)")
+        if schema_valid and not runtime_valid:
+            schema_only += 1
+            print(f"mismatch: run schema=true runtime=false candidate={candidate!r}")
+        elif runtime_valid and not schema_valid:
+            runtime_only += 1
+            print(f"mismatch: run schema=false runtime=true candidate={candidate!r}")
+    check(schema_only == 0 and runtime_only == 0,
+          f"run schema/runtime differential has zero mismatches in both directions "
+          f"({len(corpus)} cases; schema-only={schema_only}, runtime-only={runtime_only})")
     nonfinite = copy.deepcopy(base)
     nonfinite["extra"] = float("nan")
     expect_refusal(lambda: run_contract.validate_run(nonfinite),

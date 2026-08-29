@@ -1149,6 +1149,28 @@ def assignment_projection(value: dict) -> dict:
     return {key: value[key] for key in ASSIGNMENT_PROJECTION_FIELDS}
 
 
+def type_aware_equal(left: object, right: object) -> bool:
+    """Compare JSON values without Python's bool/int/float equality coercions."""
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        if len(left) != len(right):
+            return False
+        unmatched = list(right.items())
+        for left_key, left_value in left.items():
+            for index, (right_key, right_value) in enumerate(unmatched):
+                if type_aware_equal(left_key, right_key) and type_aware_equal(left_value, right_value):
+                    del unmatched[index]
+                    break
+            else:
+                return False
+        return not unmatched
+    if isinstance(left, list):
+        return len(left) == len(right) and all(type_aware_equal(left_item, right_item)
+                   for left_item, right_item in zip(left, right))
+    return left == right
+
+
 def require_assignment_projection(run: object, persisted: dict) -> dict:
     """Require both nested and top-level run attribution to equal the persisted record."""
     if not isinstance(run, dict):
@@ -1156,10 +1178,10 @@ def require_assignment_projection(run: object, persisted: dict) -> dict:
     validate_assignment(persisted, require_source_evidence=True)
     expected = assignment_projection(persisted)
     nested = run.get("assignment")
-    if nested != expected:
+    if not type_aware_equal(nested, expected):
         raise AssignmentError("run assignment projection disagrees with persisted assignment")
     for key, expected_value in expected.items():
-        if key not in run or run[key] != expected_value:
+        if key not in run or not type_aware_equal(run[key], expected_value):
             raise AssignmentError(f"run attribution field {key!r} disagrees with persisted assignment")
     return expected
 

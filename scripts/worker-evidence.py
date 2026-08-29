@@ -157,22 +157,23 @@ def copy_assignment(value: dict) -> dict:
 
 
 def validate_usage(usage: object, assignment: dict | None) -> None:
-    if assignment is None or usage is None or usage == {}:
-        return
     if not isinstance(usage, dict):
         raise WorkerEvidenceError("usage evidence must be an object")
+    if usage == {}:
+        return
     provider = usage.get("provider")
     basis = usage.get("billing_basis")
     if provider is not None and not isinstance(provider, str):
         raise WorkerEvidenceError("usage provider must be a string")
     if basis is not None and not isinstance(basis, str):
         raise WorkerEvidenceError("usage billing basis must be a string")
-    if provider is not None and provider != assignment.get("provider"):
-        raise SystemExit("worker-evidence: usage provider disagrees with persisted assignment")
-    if basis is not None and basis != assignment.get("billing_basis"):
-        raise SystemExit("worker-evidence: usage billing basis disagrees with persisted assignment")
-    if assignment.get("billing_basis") == "metered" and not assignment.get("metered_approved"):
-        raise SystemExit("worker-evidence: unapproved metered usage is refused")
+    if assignment is not None:
+        if provider is not None and provider != assignment.get("provider"):
+            raise SystemExit("worker-evidence: usage provider disagrees with persisted assignment")
+        if basis is not None and basis != assignment.get("billing_basis"):
+            raise SystemExit("worker-evidence: usage billing basis disagrees with persisted assignment")
+        if assignment.get("billing_basis") == "metered" and not assignment.get("metered_approved"):
+            raise SystemExit("worker-evidence: unapproved metered usage is refused")
     for key, minimum in (("tokens", 0), ("cost_usd", 0)):
         item = usage.get(key)
         if item is not None:

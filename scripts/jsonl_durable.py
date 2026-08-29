@@ -1839,27 +1839,11 @@ def _rebuild_index_in_place_unpinned(
     try:
         if hook is not None:
             hook("pre-replace")
-        validate_durable_leaf(index_path)
-        raw = read_durable_bytes(index_path)
-        if raw is None:
-            raise FileNotFoundError(index_path)
+        validate_durable_leaf(index_path, allow_missing=True)
         connection = sqlite3.connect(":memory:", factory=_PinnedIndexConnection)
         connection._durable_index_path = index_path
-        connection.deserialize(raw)
         if hook is not None:
             hook("pre-sqlite-write")
-        _revalidate_index_connection(connection)
-        connection.execute("PRAGMA journal_mode=DELETE")
-        _revalidate_index_connection(connection)
-        connection.execute("PRAGMA synchronous=FULL")
-        tables = [row[0] for row in connection.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-        )]
-        for table in tables:
-            if not isinstance(table, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table):
-                raise JsonlDurabilityError(f"unsafe SQLite cache table name: {table!r}")
-            _revalidate_index_connection(connection)
-            connection.execute(f'DROP TABLE "{table}"')
         _revalidate_index_connection(connection)
         _create_index_schema(connection)
         _revalidate_index_connection(connection)
@@ -1889,7 +1873,9 @@ def _rebuild_index_in_place(index_path: Path, identity: str, descriptor: int,
                             stat: os.stat_result, journal: Path, max_record_bytes: int,
                             hook: Callable[[str], None] | None = None) -> None:
     with pinned_durable_parent(index_path.parent) as pins:
-        validate_durable_leaf(index_path)
+        # The retained-name branch also serves the first cache build, where no leaf
+        # exists yet; the serialized replacement writer performs the safe create.
+        validate_durable_leaf(index_path, allow_missing=True)
         _rebuild_index_in_place_unpinned(
             index_path, identity, descriptor, stat, journal, max_record_bytes, hook
         )

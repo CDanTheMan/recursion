@@ -10,14 +10,14 @@
     "schema_version": { "type": "integer", "const": 1 },
     "id": {
       "type": "string",
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$(?![\\s\\S])",
       "description": "Must equal the manifest filename stem (e.g. cursor-ultra.json -> \"cursor-ultra\")."
     },
     "kind": { "enum": ["subscription", "supervisory", "local", "human"] },
     "billing_basis": {
       "enum": ["flat-subscription", "metered", "local", "weekly-included", "human"]
     },
-    "provider": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
+    "provider": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$(?![\\s\\S])" },
     "quota": {
       "type": "object",
       "required": ["period", "source"],

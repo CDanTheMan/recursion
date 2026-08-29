@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import assignment as assignment_mod  # noqa: E402
 from jsonl_durable import (JsonlDurabilityError, append_jsonl, durable_lock,
                            find_jsonl_objects, read_durable_bytes)  # noqa: E402
+from run_contract import RunContractError, validate_run  # noqa: E402
 
 PROG = "validate-assignment-result"
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
@@ -122,6 +123,10 @@ def _check_locked(args: argparse.Namespace) -> dict:
         raise RefusalError(2, "persisted assignment failed its own digest check (tampered)")
 
     evidence = load_run_evidence(args.run_evidence)
+    try:
+        validate_run(evidence)
+    except RunContractError as exc:
+        raise RefusalError(2, f"run evidence violates the runtime contract: {exc}") from exc
     if evidence.get("id") != args.run_id:
         raise RefusalError(2, "run evidence id does not match the requested run_id")
     if "run_id" in evidence and evidence.get("run_id") != args.run_id:
@@ -137,7 +142,7 @@ def _check_locked(args: argparse.Namespace) -> dict:
     if evidence.get("base_commit") != value["source_sha"]:
         raise RefusalError(2, "run evidence base commit does not match assigned source SHA")
     source_evidence = evidence.get("source_evidence")
-    if source_evidence != value["source_evidence"]:
+    if not assignment_mod.type_aware_equal(source_evidence, value["source_evidence"]):
         raise RefusalError(2, "run evidence is missing or has mismatched source evidence")
 
     # These fields are optional for legacy evidence, but once a producer emits one of the

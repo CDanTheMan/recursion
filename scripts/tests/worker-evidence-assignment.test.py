@@ -163,6 +163,41 @@ def test_finish_rejects_malformed_and_off_schema_inputs(tmp_path: Path) -> None:
     check(path.read_bytes() == original, "array result leaves the run unchanged")
 
 
+def test_usage_validation_applies_to_legacy_and_bound_runs(tmp_path: Path) -> None:
+    bad_payloads = {
+        "array": "[[]]",
+        "negative": json.dumps({"tokens": -1}),
+        "boolean-number": json.dumps({"cost_usd": True}),
+        "non-finite": "{\"cost_usd\": NaN}",
+    }
+    for label, payload in bad_payloads.items():
+        path = tmp_path / f"legacy-{label}.json"
+        started = run(start_args(path, f"run-legacy-{label}", "task-1"))
+        check(started.returncode == 0, f"legacy usage fixture {label} starts")
+        original = path.read_bytes()
+        usage = tmp_path / f"usage-{label}.json"
+        usage.write_text(payload, encoding="utf-8")
+        result = run(["finish", str(path), "succeeded", "done", "0", "--usage-file", str(usage)])
+        check(result.returncode != 0 and "Traceback" not in result.stderr,
+              f"legacy {label} usage is a typed refusal")
+        check(path.read_bytes() == original, f"legacy {label} usage leaves the run unchanged")
+
+    assignment_file, digest = make_assignment(tmp_path)
+    for label, payload in bad_payloads.items():
+        path = tmp_path / "runs" / f"bound-{label}.json"
+        started = run(start_args(path, f"run-bound-{label}", "task-1") +
+                      ["--assignment-digest", digest, "--assignment-file", str(assignment_file)])
+        check(started.returncode == 0, f"assignment-bound usage fixture {label} starts")
+        original = path.read_bytes()
+        usage = tmp_path / f"usage-bound-{label}.json"
+        usage.write_text(payload, encoding="utf-8")
+        result = run(["finish", str(path), "succeeded", "done", "0", "--usage-file", str(usage)])
+        check(result.returncode != 0 and "Traceback" not in result.stderr,
+              f"assignment-bound {label} usage is a typed refusal")
+        check(path.read_bytes() == original,
+              f"assignment-bound {label} usage leaves the run unchanged")
+
+
 def _make_directory_link(link: Path, target: Path) -> None:
     if os.name == "nt":
         result = subprocess.run(
@@ -350,6 +385,8 @@ def main() -> int:
         test_start_refuses_task_id_mismatch(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_finish_rejects_malformed_and_off_schema_inputs(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_usage_validation_applies_to_legacy_and_bound_runs(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_windows_atomic_publish_rejects_parent_swap(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
