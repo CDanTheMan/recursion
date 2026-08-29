@@ -1001,10 +1001,10 @@ PY
   [ -f "$ASSIGNMENT_FILE" ] || { log "assignment candidate is absent after resolution"; return 95; }
 }
 
-run_model_supervised(){ # role worktree prompt resolved-model alias usage deadline run-id [commit] [implementer-run] [evidence-dir] [readonly] [attempt]
+run_model_supervised(){ # role worktree prompt resolved-model alias usage deadline run-id [commit] [implementer-run] [evidence-dir] [readonly] [arm-attempt]
   local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
   local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
-  local evidence_dir="${11:-}" readonly="${12:-0}" attempt="${13:-}" engine_plan="" candidate_assignment=""
+  local evidence_dir="${11:-}" readonly="${12:-0}" arm_attempt="${13:-}" engine_plan="" candidate_assignment=""
   # Cross-engine verification (D-015): each role runs on its own contract engine.
   local active_engine="$ENGINE"
   [ "$role" != verifier ] || active_engine="$VERIFIER_ENGINE"
@@ -1056,7 +1056,7 @@ PY
     # must reuse the exact digest that was bound before attempt one; re-resolving here would
     # include a new created_at and then taskctl would correctly reject the new digest as a
     # lease mutation before the retry worker could launch.
-    if [ "$role" = implementer ] && [ "${attempt:-1}" != 1 ]; then
+    if [ "$role" = implementer ] && [ "${arm_attempt:-1}" != 1 ]; then
       ASSIGNMENT_DIGEST="$(field assignment_digest)"
       ASSIGNMENT_FILE="$ROOT/state/assignments/$ID/$ASSIGNMENT_DIGEST.json"
       [ -n "$ASSIGNMENT_DIGEST" ] && [ -f "$ASSIGNMENT_FILE" ] || return 98
@@ -1098,10 +1098,13 @@ PY
   LAST_RUN_ID="$run_id"; LAST_RUN_EVIDENCE="$ROOT/state/runs/$run_id.json"
   if [ "$STRICT_PHASE5" = 1 ]; then
     mkdir -p "$ROOT/state/runs"
+    # Evidence binds to the task lease attempt, not the bounded worker retry ordinal.  A retry
+    # is run id a2 but reuses the same lease and immutable assignment; recording 2 here would
+    # make the validator reject the result that was actually verified against lease attempt 1.
+    LEASE_ATTEMPT="$(field attempts)"
+    [ -n "$LEASE_ATTEMPT" ] || return 98
     if [ "$role" = implementer ]; then
-      LEASE_ATTEMPT="$(field attempts)"
-      [ -n "$LEASE_ATTEMPT" ] || return 98
-      if [ "${attempt:-1}" = 1 ]; then
+      if [ "${arm_attempt:-1}" = 1 ]; then
         RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" \
           bash "$TASKCTL" set-assignment "$ID" "$ASSIGNMENT_DIGEST" "$ASSIGNMENT_FILE" \
             "$LEASE_OWNER" "$LEASE_ATTEMPT" "$run_id" >>"$LOG" 2>&1 || return 98
@@ -1139,7 +1142,7 @@ PY
       --deadline-epoch "$deadline_epoch" --log "${log_path#$ROOT/}" --network-policy "$NETWORK_POLICY" \
       ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} \
       ${implementer_run:+--implementer-run-id "$implementer_run"} ${commit_oid:+--commit-oid "$commit_oid"} \
-      ${attempt:+--attempt "$attempt"} \
+      --attempt "$LEASE_ATTEMPT" \
       ${ASSIGNMENT_DIGEST:+--assignment-digest "$ASSIGNMENT_DIGEST" --assignment-file "$ASSIGNMENT_FILE"} \
       >>"$LOG" 2>&1 || return 98
   fi
@@ -1484,7 +1487,7 @@ Allowed implementation paths: $ALLOWED_PATHS
 Explicit non-goals: ${NON_GOALS:-none}."
   if run_model_supervised verifier "$verify_wt" "$prompt" "$RESOLVED_VERIFIER_MODEL" \
       "$VERIFIER_MODEL_ALIAS" "${verifier_log%.out}.usage.json" "$VERIFIER_DEADLINE_SECONDS" \
-      "$verifier_id" "$CANDIDATE_OID" "$impl_run" "$evidence_dir" 1; then rc=0; else rc=$?; fi
+      "$verifier_id" "$CANDIDATE_OID" "$impl_run" "$evidence_dir" 1 "$LEASE_ATTEMPT"; then rc=0; else rc=$?; fi
   VERIFIER_RUN_ID="$LAST_RUN_ID"
   # run_model_supervised uses the same globals for each arm. Restore the implementer's binding
   # before the caller validates the candidate result; the verifier's assignment must never be
