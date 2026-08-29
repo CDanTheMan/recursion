@@ -60,7 +60,7 @@ _PLACEMENT_POLICIES = frozenset({"manual-pin", "subscription-first", "local-firs
                                 "fastest-eligible", "strongest-reviewer", "weighted-rotation"})
 
 _INPUT_ERRORS = (json.JSONDecodeError, ValueError, TypeError, OverflowError,
-                 RecursionError, UnicodeDecodeError, UnicodeError, OSError, AttributeError)
+                 RecursionError, UnicodeDecodeError, UnicodeError, OSError)
 
 
 class FabricError(ValueError):
@@ -1541,6 +1541,11 @@ class PauseGuard:
             raise AdmissionError("PAUSED", "PAUSE is asserted; execution fabric mutations are halted")
 
 
+def _validate_pause_guard(value: Any, kind: str) -> None:
+    if value is not None and not isinstance(value, PauseGuard):
+        raise SchemaError("INVALID_INPUT", f"invalid {kind}")
+
+
 @_typed_boundary("placement input")
 def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
                       candidates: Sequence[PlacementCandidate | Mapping[str, Any]],
@@ -1556,6 +1561,7 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
                       reserved_pool: Mapping[str, int] | None = None,
                       reserved_workload: Mapping[tuple[str, str], int] | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
     """Resolve one immutable assignment and a complete, deterministic rejection trace."""
+    _validate_pause_guard(pause_guard, "placement input")
     req = requirements if isinstance(requirements, PlacementRequirements) else PlacementRequirements.from_dict(requirements)
     req = PlacementRequirements.from_dict(req.to_dict())
     if pause_guard is not None:
@@ -1863,6 +1869,7 @@ class PlacementGovernor:
     """
 
     def __init__(self, registry: HostRegistry, pools: Mapping[str, PoolStatus], *, pause_guard: PauseGuard | None = None):
+        _validate_pause_guard(pause_guard, "governed placement input")
         self.registry = registry
         self.pools = dict(pools)
         self.pause_guard = pause_guard
@@ -2125,6 +2132,7 @@ class DurableFabricStore:
     def create_lease(self, assignment: Assignment | Mapping[str, Any], *, lease_id: str, attempt_id: str, remote_session_id: str,
                      now: str, expires_at: str, role: str = "unknown", paused: bool = False,
                      pause_guard: PauseGuard | None = None) -> dict[str, Any]:
+        _validate_pause_guard(pause_guard, "lease input")
         if paused:
             raise AdmissionError("PAUSED", "PAUSE is asserted; lease admission is halted")
         if pause_guard is not None:
@@ -2150,6 +2158,7 @@ class DurableFabricStore:
                         pause_guard: PauseGuard | None = None,
                         routing_policy: RoutingPolicy | Mapping[str, Any] | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
         """Atomically resolve placement, reserve capacity, and create its durable lease."""
+        _validate_pause_guard(pause_guard, "placement admission")
         if paused:
             raise AdmissionError("PAUSED", "PAUSE is asserted; lease admission is halted")
         if pause_guard is not None:
@@ -2833,6 +2842,7 @@ class IntegrationCoordinator:
     def __init__(self, path: Path | str | None = None, *, root: Path | str | None = None,
                  pause_guard: PauseGuard | None = None,
                  receipt_store: VerificationReceiptStore | None = None):
+        _validate_pause_guard(pause_guard, "integration admission")
         self.pause_guard = pause_guard
         if receipt_store is None:
             raise ReconciliationError("VERIFIER_AUTH_REQUIRED", "integration coordinator requires a controller receipt store")

@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import uuid
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -425,8 +426,11 @@ def _run_case(case: Path, mode: str, hostile: str | None) -> None:
         with patch.object(fabric, "_revalidate_destination", side_effect=inject):
             try:
                 _writer(mode, path, root)
-            except fabric.FabricError:
-                pass
+            except fabric.ReconciliationError as exc:
+                if (getattr(exc, "code", None) != "UNSAFE_STORE_PATH" or
+                        str(exc) != "durable store destination appeared before commit"):
+                    raise AssertionError(
+                        f"{mode} absent-destination race was not rejected by the atomic no-clobber guard: {exc}") from exc
             else:
                 raise AssertionError(f"{mode} accepted an absent-destination race")
         if not injected:
@@ -493,54 +497,105 @@ def run_shared_battery(root: Path) -> int:
 
 def run_isolated_windows_reparse_guard(root: Path) -> int:
     """Prove the initial Windows handle reparse bit is independently enforced."""
-    guard_source = Path(fabric.__file__).read_text(encoding="utf-8")
-    expected_guard = "if not is_directory or is_reparse:"
-    if expected_guard not in guard_source:
-        raise AssertionError("Windows handle reparse guard is missing or weakened")
     if os.name != "nt":
-        print("ok    Windows handle-only reparse guard: structural parity checked (POSIX execution skipped)")
-        return 1
+        print("skip  Windows handle-only reparse guard: native Windows handle reparse metadata is unavailable on POSIX (77)")
+        return 77
 
     root.mkdir(parents=True, exist_ok=True)
     target = root / "real-directory"
     target.mkdir()
-    original_open = fabric._windows_open
+
+    opened: list[object] = []
 
     def report_handle_reparse(path, **kwargs):
-        result = original_open(path, **kwargs)
-        if Path(path) == target:
-            handle, identity, is_directory, links, _ = result
-            return handle, identity, is_directory, links, True
-        return result
+        handle = object()
+        opened.append(handle)
+        return (handle, ("synthetic", os.fspath(path)), True, 1,
+                os.fspath(path) == os.fspath(target))
 
-    # Make this case depend only on the initial handle tuple.  The independent
-    # path-level check and the later pinned validation are deliberately quiet;
-    # deleting `or is_reparse` must therefore make this case pass.
+    # The independent path-level check and later pinned validation are
+    # deliberately quiet; weakening only the handle tuple's reparse sub-guard
+    # must therefore make this behavior case accept the synthetic reparse object.
     with patch.object(fabric, "_windows_path_is_reparse", return_value=False), \
             patch.object(fabric, "_windows_open", side_effect=report_handle_reparse), \
+            patch.object(fabric, "_close_windows", return_value=None), \
             patch.object(fabric._WindowsPinnedDirectory, "validate", return_value=None):
         try:
             with fabric._pin_store_directory(target):
                 pass
         except fabric.ReconciliationError as exc:
-            if str(exc) != "store parent is not a real directory":
+            if (getattr(exc, "code", None) != "UNSAFE_STORE_PATH" or
+                    str(exc) != "store parent is not a real directory"):
                 raise AssertionError(f"isolated handle reparse guard produced unexpected refusal: {exc}") from exc
         else:
             raise AssertionError("isolated handle reparse guard accepted a reparse-marked directory")
-    print("ok    Windows handle-only reparse guard: isolated line-539 sub-guard refused")
+    print("ok    Windows handle-only reparse guard: behavioral line-539 sub-guard refused (native tuple seam)")
     return 1
 
 
 def run_posix_source_race(root: Path) -> int:
     """Exercise the POSIX source-handle guard and its pre-commit ordering."""
     if os.name == "nt":
-        lines = Path(fabric.__file__).read_text(encoding="utf-8").splitlines()
-        replace_line = next((index for index, line in enumerate(lines) if "os.replace(" in line), None)
-        if (replace_line is None or
-                "_validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)" not in lines[replace_line - 1] or
-                lines[replace_line - 2].strip() == "if False:"):
-            raise AssertionError("POSIX source guard missing immediately before os.replace")
-        print("ok    POSIX replace source revalidation: structural parity checked (Windows execution skipped)")
+        # Windows cannot provide POSIX dir_fd semantics, so exercise the
+        # production branch with mocked descriptors.  The synthetic source
+        # identity changes only before the pre-commit validation; a fake
+        # os.replace restores it so the post-commit validations cannot mask a
+        # missing line-834 guard.
+        source_changed = False
+        replace_called = False
+        revalidation_calls = 0
+        directory = object()
+        current_descriptor = object()
+        temporary_descriptor = object()
+        current_identity = ("current",)
+        temporary_identity = ("temporary",)
+
+        def fake_leaf_info(descriptor):
+            return "temporary" if descriptor is temporary_descriptor else "current"
+
+        def validate_leaf_info(info, *, identity=None):
+            actual = temporary_identity if info == "temporary" and not source_changed else (
+                ("changed",) if info == "temporary" else current_identity)
+            if actual != identity:
+                raise fabric.ReconciliationError("UNSAFE_STORE_PATH", "synthetic source identity changed")
+            return actual
+
+        def revalidate_destination(*args, **kwargs):
+            nonlocal revalidation_calls, source_changed
+            revalidation_calls += 1
+            if revalidation_calls == 2:
+                source_changed = True
+
+        def observe_replace(*args, **kwargs):
+            nonlocal replace_called, source_changed
+            replace_called = True
+            source_changed = False
+
+        path = root / "store" / "store.jsonl"
+        with patch.object(fabric.os, "name", "posix"), \
+                patch.object(fabric, "_pin_store_directory", return_value=nullcontext(directory)), \
+                patch.object(fabric, "_open_leaf_in_directory",
+                             return_value=(current_descriptor, current_identity)), \
+                patch.object(fabric, "_write_new_leaf",
+                             return_value=(temporary_descriptor, temporary_identity)), \
+                patch.object(fabric, "_validate_pinned_directory", return_value=None), \
+                patch.object(fabric, "_leaf_info_for_descriptor", side_effect=fake_leaf_info), \
+                patch.object(fabric, "_validate_leaf_info", side_effect=validate_leaf_info), \
+                patch.object(fabric, "_revalidate_destination", side_effect=revalidate_destination), \
+                patch.object(fabric.os, "replace", side_effect=observe_replace), \
+                patch.object(fabric.os, "close", return_value=None), \
+                patch.object(fabric.os, "unlink", return_value=None):
+            try:
+                fabric._replace_store_bytes(path, b"writer-payload\n")
+            except fabric.ReconciliationError as exc:
+                if (getattr(exc, "code", None) != "UNSAFE_STORE_PATH" or
+                        str(exc) != "synthetic source identity changed"):
+                    raise AssertionError(f"POSIX source guard produced unexpected refusal: {exc}") from exc
+            else:
+                raise AssertionError("POSIX source identity change was accepted")
+        if replace_called:
+            raise AssertionError("POSIX source guard allowed os.replace after source identity changed")
+        print("ok    POSIX replace source revalidation: behavioral line-834 guard refused (descriptor seam)")
         return 1
     root.mkdir(parents=True, exist_ok=True)
     store_root = root / "store"
@@ -588,6 +643,28 @@ def run_posix_source_race(root: Path) -> int:
     return 1
 
 
+def run_absent_destination_guard(root: Path) -> int:
+    """Exercise the line-730 FileExistsError guard without its outer fallback."""
+    root.mkdir(parents=True, exist_ok=True)
+    temporary = root / "temporary.jsonl"
+    destination = root / "destination.jsonl"
+    temporary.write_bytes(b"temporary\n")
+    with fabric._pin_store_directory(root) as directory:
+        with patch.object(fabric.os, "link", side_effect=FileExistsError("synthetic competing create")):
+            try:
+                fabric._commit_absent_leaf(directory, temporary, destination, object(), object())
+            except fabric.ReconciliationError as exc:
+                if (getattr(exc, "code", None) != "UNSAFE_STORE_PATH" or
+                        str(exc) != "durable store destination appeared before commit"):
+                    raise AssertionError(f"absent-destination guard produced unexpected refusal: {exc}") from exc
+            except FileExistsError as exc:
+                raise AssertionError("absent-destination guard leaked the competing-create error") from exc
+            else:
+                raise AssertionError("absent-destination guard accepted a competing create")
+    print("ok    absent destination guard: line-730 competing-create marker was produced directly")
+    return 1
+
+
 def run_absent_destination_race(root: Path) -> int:
     """Prove an absent destination cannot be replaced after a competing create."""
     root.mkdir(parents=True, exist_ok=True)
@@ -632,6 +709,36 @@ def run_registry_boundaries(root: Path) -> int:
             raise AssertionError(f"{label} runtime accepted invalid registry state")
         checked += 1
         print(f"ok    registry {label}: schema and runtime rejected {value!r}")
+
+    retired_case = root / "retired-key-hex"
+    retired_case.mkdir()
+    authority = retired_case / "authority.key"
+    authority.write_bytes(b"authority")
+    if os.name != "nt":
+        authority.chmod(0o600)
+    retired_registry = fabric.VerificationKeyRegistry.provision(
+        retired_case / "verifiers.json", authority_key_path=authority,
+        verification_keys={"controller/verifier-one": "test-key"}, root=retired_case)
+    retired_registry.rotate("controller/verifier-one", "rotated-key")
+    state = json.loads(retired_registry.path.read_text(encoding="utf-8"))
+    state["retired_keys"][0]["key_hex"] = "AA"
+    state["registry_digest"] = fabric.digest_record({key: state[key] for key in
+                                                       state if key not in {"registry_digest", "authentication_tag"}})
+    state["authentication_tag"] = hmac.new(
+        b"authority", state["registry_digest"].encode(), hashlib.sha256).hexdigest()
+    retired_registry.path.write_text(json.dumps(state), encoding="utf-8")
+    if validator.is_valid(state):
+        raise AssertionError("retired-key-hex schema accepted invalid registry state")
+    try:
+        retired_registry.reload()
+    except fabric.FabricError as exc:
+        if getattr(exc, "code", None) != "INVALID_FIELD":
+            raise AssertionError(
+                f"retired-key-hex runtime produced {exc.code}, not INVALID_FIELD")
+    else:
+        raise AssertionError("retired-key-hex runtime accepted invalid registry state")
+    checked += 1
+    print("ok    registry retired-key-hex: schema and runtime rejected 'AA'")
     return checked
 
 
@@ -685,19 +792,36 @@ def run_placement_boundaries() -> int:
                                  {host.host_id: heartbeat}, {pool.pool_id: pool},
                                  now_epoch=1787918400, created_at=NOW, pause_guard=True)
     except fabric.FabricError as exc:
-        if getattr(exc, "code", None) != "INVALID_INPUT":
+        if (getattr(exc, "code", None) != "INVALID_INPUT" or
+                str(exc) != "invalid placement input" or os.path.isabs(str(exc)) or exc.__cause__ is not None):
             raise AssertionError(f"pause_guard wrong type produced {exc.code}, not INVALID_INPUT")
     except (ValueError, TypeError, OverflowError, RecursionError, UnicodeError, OSError, AttributeError) as exc:
         raise AssertionError(f"pause_guard wrong type leaked {type(exc).__name__}") from exc
     else:
         raise AssertionError("pause_guard wrong type was accepted")
+    checked += 1
+    internal_typo = "synthetic internal typo"
+    with patch.object(fabric, "_candidate_sort_key", side_effect=AttributeError(internal_typo)):
+        try:
+            fabric.resolve_placement(requirements, [candidate], {host.host_id: host},
+                                     {host.host_id: heartbeat}, {pool.pool_id: pool},
+                                     now_epoch=1787918400, created_at=NOW)
+        except AttributeError as exc:
+            if str(exc) != internal_typo:
+                raise AssertionError(f"internal AttributeError was changed: {exc}") from exc
+        except fabric.FabricError as exc:
+            raise AssertionError(
+                f"internal AttributeError was masked as a typed refusal ({exc.code})") from exc
+        else:
+            raise AssertionError("synthetic internal AttributeError was swallowed")
+    checked += 1
     assignment, _ = fabric.resolve_placement(
         requirements, [candidate], {host.host_id: host}, {host.host_id: heartbeat}, {pool.pool_id: pool},
         now_epoch=1787918400, created_at=NOW, pause_guard=fabric.PauseGuard(False))
     if assignment is None:
         raise AssertionError("legitimate open pause_guard blocked placement")
     checked += 1
-    print(f"ok    placement boundary matrix: {checked} malformed/mismatched containers rejected")
+    print(f"ok    placement boundary matrix: {checked} malformed/mismatched containers rejected; internal AttributeError propagated")
     return checked
 
 
@@ -768,10 +892,11 @@ def main() -> int:
         registry = run_registry_boundaries(run_root / "registry")
         shared = run_shared_battery(run_root / "shared")
         isolated_reparse = run_isolated_windows_reparse_guard(run_root / "isolated-reparse")
+        absent_guard = run_absent_destination_guard(run_root / "absent-guard")
         absent_race = run_absent_destination_race(run_root / "absent-race")
         posix = run_posix_source_race(run_root / "posix")
         positive = run_positive_controls(run_root / "positive")
-        print(f"phase8-durable-writer-sweep: PASS differential={differential} hostile={hostile} placement={placement} registry={registry} shared={shared} isolated_reparse={isolated_reparse} absent_race={absent_race} posix={posix} positive={positive}")
+        print(f"phase8-durable-writer-sweep: PASS differential={differential} hostile={hostile} placement={placement} registry={registry} shared={shared} isolated_reparse={isolated_reparse} absent_guard={absent_guard} absent_race={absent_race} posix={posix} positive={positive}")
         return 0
     finally:
         # Only this harness-owned child is cleaned.  The caller-owned scratch
