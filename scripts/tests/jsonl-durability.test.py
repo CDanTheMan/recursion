@@ -166,6 +166,82 @@ def control_hardlinked_journal_is_refused_without_escape() -> tuple[bool, str]:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def _link_directory(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError:
+        if os.name != "nt":
+            raise
+        junction = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            capture_output=True, text=True, check=False,
+        )
+        if junction.returncode != 0:
+            raise AssertionError(f"directory link fixture could not be created: {junction.stderr}")
+
+
+def control_linked_ancestor_is_refused_without_escape() -> tuple[bool, str]:
+    """The journal leaf check must not be the only protection against a linked ancestor."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-ancestor-link-"))
+    try:
+        state = root / "state"
+        state.mkdir()
+        outside = root / "outside"
+        outside.mkdir()
+        linked = state / "linked"
+        _link_directory(linked, outside)
+        try:
+            append_jsonl(linked / "events.jsonl", {"id": "must-not-escape"})
+        except JsonlDurabilityError as exc:
+            detail = str(exc)
+            refused = True
+        except BaseException as exc:  # noqa: BLE001 - raw refusal is a control failure
+            detail = f"raw {type(exc).__name__}: {exc}"
+            refused = False
+        else:
+            detail = "linked ancestor append was accepted"
+            refused = False
+        return refused and not list(outside.iterdir()), detail
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_ancestor_swap_is_refused_at_leaf_window() -> tuple[bool, str]:
+    """A deterministic ancestor swap in the check/open window must be refused."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-ancestor-swap-"))
+    try:
+        state = root / "state"
+        state.mkdir()
+        linked = state / "linked"
+        linked.mkdir()
+        outside = root / "outside"
+        outside.mkdir()
+        old_linked = state / "linked-old"
+        swapped = False
+
+        def swap_ancestor(_path: Path) -> None:
+            nonlocal swapped
+            linked.rename(old_linked)
+            _link_directory(linked, outside)
+            swapped = True
+
+        try:
+            with mock.patch("jsonl_durable._before_journal_leaf_open", side_effect=swap_ancestor):
+                append_jsonl(linked / "events.jsonl", {"id": "must-not-write"})
+        except JsonlDurabilityError as exc:
+            detail = str(exc)
+            refused = True
+        except BaseException as exc:  # noqa: BLE001 - raw refusal is a control failure
+            detail = f"raw {type(exc).__name__}: {exc}"
+            refused = False
+        else:
+            detail = "ancestor swap was accepted"
+            refused = False
+        return refused and swapped and not list(outside.iterdir()), detail
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def control_quarantine_persists_before_truncate() -> tuple[bool, str]:
     root = Path(tempfile.mkdtemp(prefix="jsonl-order-"))
     try:
@@ -176,7 +252,7 @@ def control_quarantine_persists_before_truncate() -> tuple[bool, str]:
         real_fsync_dir = jsonl_durable._fsync_dir
         real_truncate = os.ftruncate
 
-        def record_fsync(directory: Path) -> None:
+        def record_fsync(directory: Path, _descriptor: int | None = None) -> None:
             calls.append("fsync:" + directory.relative_to(root).as_posix())
             real_fsync_dir(directory)
 
@@ -613,6 +689,10 @@ def main() -> int:
         ("a complete malformed prior record fails closed without mutation", control_complete_malformed_fails_closed),
         ("a hardlinked journal is refused without writing outside the state tree",
          control_hardlinked_journal_is_refused_without_escape),
+        ("a linked journal ancestor is refused without writing outside the state tree",
+         control_linked_ancestor_is_refused_without_escape),
+        ("a deterministic ancestor swap at leaf open is refused",
+         control_ancestor_swap_is_refused_at_leaf_window),
         ("quarantine directory and evidence persist before journal truncation", control_quarantine_persists_before_truncate),
         ("short writes are retried until the complete record is durable", control_complete_write_loop),
         ("idempotent appends still repair and preserve a torn tail", control_dedupe_still_repairs_tail),

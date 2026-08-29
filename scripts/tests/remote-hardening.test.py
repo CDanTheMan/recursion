@@ -10,6 +10,7 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
+from unittest import mock
 
 SOURCE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SOURCE / "scripts"))
@@ -32,6 +33,20 @@ def child(base: Path, code: str, *args: str) -> subprocess.Popen:
     env["PYTHONPATH"] = str(SOURCE / "scripts") + os.pathsep + env.get("PYTHONPATH", "")
     return subprocess.Popen([PYTHON, "-c", code, str(base), *args],
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+
+
+def link_directory(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError:
+        if os.name != "nt":
+            raise
+        junction = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            capture_output=True, text=True, check=False,
+        )
+        if junction.returncode != 0:
+            raise AssertionError(f"directory link fixture could not be created: {junction.stderr}")
 
 
 BEGIN = r'''
@@ -218,6 +233,110 @@ with tempfile.TemporaryDirectory(prefix="recursion-remote-hardening-") as raw:
         journal_refused = exc.code == "request-invalid"
     check(journal_refused, "journal reads refuse a symlinked storage directory")
 
+    # Every remote durable site uses the same pinned-parent writer/reader seam.  Keep the
+    # fixtures distinct so a later site cannot pass merely because an earlier one rejected the
+    # shared backend root.
+    sites_base = base / "durable-sites"
+    (sites_base / "state/remote/grok-bot/attempts").mkdir(parents=True)
+    (sites_base / "state/remote/grok-bot/sessions").mkdir(parents=True)
+    (sites_base / "state/remote/grok-bot/usage").mkdir(parents=True)
+    sites_outside = base / "durable-sites-outside"
+    sites_outside.mkdir()
+
+    atomic_json_path = sites_base / "state/remote/grok-bot/attempts/a.json"
+    attempts_dir = atomic_json_path.parent
+    attempts_dir.rename(sites_base / "state/remote/grok-bot/attempts-real")
+    link_directory(attempts_dir, sites_outside)
+    try:
+        rb.atomic_json(atomic_json_path, {"site": "attempt-projection"})
+        atomic_json_refused = False
+    except RemoteError as exc:
+        atomic_json_refused = exc.code == "request-invalid"
+    check(atomic_json_refused and not list(sites_outside.iterdir()),
+          "atomic_json refuses a linked ancestor without an outside write")
+    attempts_dir.unlink()
+    (sites_base / "state/remote/grok-bot/attempts-real").rename(attempts_dir)
+
+    atomic_bytes_path = sites_base / "state/linked-state/PAUSE"
+    linked_state = atomic_bytes_path.parent
+    linked_state.mkdir()
+    linked_state.rename(sites_base / "state/real-state")
+    link_directory(linked_state, sites_outside)
+    try:
+        rb.atomic_bytes(atomic_bytes_path, b"PAUSED site\n")
+        atomic_bytes_refused = False
+    except RemoteError as exc:
+        atomic_bytes_refused = exc.code == "request-invalid"
+    check(atomic_bytes_refused and not list(sites_outside.iterdir()),
+          "atomic_bytes (the PAUSE writer) refuses a linked ancestor without an outside write")
+    linked_state.unlink()
+    (sites_base / "state/real-state").rename(linked_state)
+
+    session_path = sites_base / "state/remote/grok-bot/sessions/dispatch-site.json"
+    outside_session = sites_outside / session_path.name
+    outside_session.write_text('{"site":"outside"}\n', encoding="utf-8")
+    sessions_dir = session_path.parent
+    sessions_dir.rename(sites_base / "state/remote/grok-bot/sessions-real")
+    link_directory(sessions_dir, sites_outside)
+    try:
+        rb.read_session(sites_base, "grok-bot", "dispatch-site")
+        session_refused = False
+    except RemoteError as exc:
+        session_refused = exc.code == "request-invalid"
+    check(session_refused, "session reader refuses a linked ancestor before opening outside data")
+    sessions_dir.unlink()
+    (sites_base / "state/remote/grok-bot/sessions-real").rename(sessions_dir)
+
+    usage_path = sites_base / "state/remote/grok-bot/usage/dispatch-site.json"
+    outside_usage = sites_outside / usage_path.name
+    outside_usage.write_text('{"site":"outside"}\n', encoding="utf-8")
+    usage_dir = usage_path.parent
+    usage_dir.rename(sites_base / "state/remote/grok-bot/usage-real")
+    link_directory(usage_dir, sites_outside)
+    try:
+        rb.read_usage(sites_base, "grok-bot", "dispatch-site")
+        usage_refused = False
+    except RemoteError as exc:
+        usage_refused = exc.code == "request-invalid"
+    check(usage_refused, "usage reader refuses a linked ancestor before opening outside data")
+    usage_dir.unlink()
+    (sites_base / "state/remote/grok-bot/usage-real").rename(usage_dir)
+
+    list_path = sites_base / "state/remote/grok-bot/sessions/list-site.json"
+    list_path.write_text('{"site":"inside"}\n', encoding="utf-8")
+    sessions_dir.rename(sites_base / "state/remote/grok-bot/sessions-real")
+    link_directory(sessions_dir, sites_outside)
+    try:
+        rb.list_sessions(sites_base, "grok-bot")
+        list_refused = False
+    except RemoteError as exc:
+        list_refused = exc.code == "request-invalid"
+    check(list_refused, "session enumeration refuses a linked ancestor before opening outside data")
+    sessions_dir.unlink()
+    (sites_base / "state/remote/grok-bot/sessions-real").rename(sessions_dir)
+
+    swap_base = base / "durable-replace-swap"
+    swap_parent = swap_base / "state/remote/grok-bot"
+    swap_parent.mkdir(parents=True)
+    swap_path = swap_parent / "projection.json"
+    swap_old = swap_parent.parent / "grok-bot-old"
+    swap_outside = base / "durable-replace-outside"
+    swap_outside.mkdir()
+
+    def swap_remote_parent(_path: Path) -> None:
+        swap_parent.rename(swap_old)
+        link_directory(swap_parent, swap_outside)
+
+    try:
+        with mock.patch("remote_backend._before_remote_leaf_replace",
+                        side_effect=swap_remote_parent):
+            rb.atomic_json(swap_path, {"site": "must-not-write"})
+        swap_refused = False
+    except RemoteError as exc:
+        swap_refused = exc.code == "request-invalid"
+    check(swap_refused and not list(swap_outside.iterdir()),
+          "remote durable replacement refuses a deterministic ancestor swap")
+
     # The outbound lock gives PAUSE and send a total order: a pause setter waits for an
     # admitted operation, then the next operation sees PAUSE before its transport call.
     safe_base = base / "safe"
@@ -254,6 +373,34 @@ print("paused")
     setter_out, _ = setter.communicate(timeout=30)
     check(setter_out.strip() == "paused" and rb.is_paused(safe_base),
           "PAUSE publishes after admission and blocks the next operation")
+    pause_path = rb.pause_path(safe_base)
+    pause_old = safe_base / "state/PAUSE-old"
+    pause_outside = base / "pause-remove-outside"
+    pause_outside.write_bytes(b"outside pause target\n")
+
+    def swap_pause_leaf(_path: Path) -> None:
+        pause_path.rename(pause_old)
+        os.link(pause_outside, pause_path)
+
+    pause_remove_refused = False
+    try:
+        with mock.patch("remote_backend._before_remote_leaf_remove", side_effect=swap_pause_leaf):
+            rb.remove_runtime_file(pause_path)
+        pause_remove_refused = False
+    except RemoteError as exc:
+        pause_remove_refused = exc.code == "request-invalid"
+    finally:
+        if pause_path.exists() or pause_path.is_symlink():
+            pause_path.unlink()
+        pause_old.rename(pause_path)
+    check(pause_remove_refused and pause_outside.read_bytes() == b"outside pause target\n",
+          "PAUSE removal refuses a checked-leaf swap without touching the outside target")
+    clearer = subprocess.run(
+        [PYTHON, str(SOURCE / "scripts" / "remote-pause.py"), "clear",
+         "--base", str(safe_base)], capture_output=True, text=True, check=False,
+    )
+    check(clearer.returncode == 0 and not rb.is_paused(safe_base),
+          "remote-pause.py clears PAUSE through the pinned parent and same-handle removal")
 
 if failures:
     print(f"{len(failures)} check(s) failed")

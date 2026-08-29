@@ -20,18 +20,16 @@ def main() -> int:
     parser.add_argument("--base", required=True)
     parser.add_argument("--reason", default="")
     args = parser.parse_args()
-    base = Path(args.base).resolve()
+    # Keep the supplied root lexical; remote_backend pins and authenticates every component.
+    base = Path(args.base).absolute()
     with rb.remote_state_lock(base, "pause-control"):
         path = rb.pause_path(base)
         if args.action == "set":
             content = f"PAUSED {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}\n"
             content += f"reason: {args.reason}\n"
             rb.atomic_bytes(path, content.encode("utf-8"))
-        elif path.exists():
-            if path.is_symlink() or not path.is_file():
-                raise rb.RemoteError("request-invalid", "unsafe state/PAUSE path")
-            path.unlink()
-            rb._fsync_directory(path.parent)
+        else:
+            rb.remove_runtime_file(path)
     return 0
 
 

@@ -540,8 +540,16 @@ os.environ["RECURSION_REMOTE_DIR"] = str(directory)
 
 check(raises("manifest-absent", rb.resolve_backend, "not-configured"),
       "an absent manifest is absent (3), not an error")
-check(raises("request-invalid", rb.resolve_backend, "Not A Name"),
-      "a malformed backend name is a request error")
+absolute_backend_name = str(Path.cwd() / "attacker-backend")
+try:
+    rb.resolve_backend(absolute_backend_name)
+except RemoteError as exc:
+    invalid_backend_message = str(exc)
+else:
+    invalid_backend_message = ""
+check(invalid_backend_message.startswith("request-invalid:")
+      and absolute_backend_name not in invalid_backend_message,
+      "a malformed backend name is a symbolic request error without echoing its absolute input")
 check(raises("adapter-disabled", rb.resolve_backend, "cursor-cloud"),
       "with RECURSION_REMOTE_ADAPTERS unset, a valid backend is disabled (3)")
 

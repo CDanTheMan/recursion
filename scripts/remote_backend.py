@@ -131,67 +131,333 @@ def _lstat(path: Path):
         return None
 
 
+def _lexical_absolute(path: Path) -> Path:
+    """Make a path absolute without following a symlink or reparse point."""
+    path = Path(path)
+    return path if path.is_absolute() else Path.cwd() / path
+
+
+def _same_identity(left: os.stat_result, right: os.stat_result) -> bool:
+    return (int(left.st_dev), int(left.st_ino)) == (int(right.st_dev), int(right.st_ino))
+
+
+def _relative_directory_open_supported() -> bool:
+    supported = getattr(os, "supports_dir_fd", set())
+    return os.open in supported and os.stat in supported
+
+
+def _directory_open_flags() -> int:
+    return (os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0))
+
+
+def _directory_create_mode() -> int:
+    # The mode argument is an ACL request on this Windows host; 0o700 creates a directory
+    # that even its creating process cannot reopen.  POSIX keeps the least-privilege mode.
+    return 0o777 if os.name == "nt" else 0o700
+
+
+def _verify_directory_descriptor(descriptor: int) -> os.stat_result:
+    try:
+        info = os.fstat(descriptor)
+    except OSError:
+        raise RemoteError("request-invalid", "unsafe runtime storage directory") from None
+    if not stat.S_ISDIR(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 0x400):
+        raise RemoteError("request-invalid", "unsafe runtime storage directory")
+    return info
+
+
+class _PinnedDirectory:
+    """Hold every parent component open and authenticate its current pathname entry."""
+
+    def __init__(self, path: Path, *, create: bool = True) -> None:
+        self.path = _lexical_absolute(path)
+        self.create = create
+        self.descriptor: int | None = None
+        self._fds: list[int] = []
+        self._components: list[tuple[int, str, int, tuple[int, int]]] = []
+        self._relative = _relative_directory_open_supported()
+
+    def __enter__(self) -> "_PinnedDirectory":
+        try:
+            if self._relative:
+                current = os.open(self.path.anchor, _directory_open_flags())
+                self._fds.append(current)
+                for name in self.path.parts[1:]:
+                    try:
+                        child = os.open(name, _directory_open_flags(), dir_fd=current)
+                    except FileNotFoundError:
+                        if not self.create:
+                            raise RemoteError(
+                                "not-found", "runtime storage directory is absent"
+                            ) from None
+                        created = False
+                        try:
+                            os.mkdir(name, _directory_create_mode(), dir_fd=current)
+                            created = True
+                        except FileExistsError:
+                            pass
+                        if created and os.name != "nt":
+                            os.fsync(current)
+                        child = os.open(name, _directory_open_flags(), dir_fd=current)
+                    child_info = _verify_directory_descriptor(child)
+                    entry_info = os.stat(name, dir_fd=current, follow_symlinks=False)
+                    if not _same_identity(child_info, entry_info):
+                        os.close(child)
+                        raise RemoteError(
+                            "request-invalid", "runtime storage directory changed while opening"
+                        )
+                    self._components.append(
+                        (current, name, child, (int(child_info.st_dev), int(child_info.st_ino)))
+                    )
+                    self._fds.append(child)
+                    current = child
+                self.descriptor = current
+            else:
+                current = Path(self.path.anchor)
+                for name in self.path.parts[1:]:
+                    current /= name
+                    info = _lstat(current)
+                    if info is None:
+                        if not self.create:
+                            raise RemoteError(
+                                "not-found", "runtime storage directory is absent"
+                            )
+                        try:
+                            current.mkdir(mode=_directory_create_mode())
+                        except FileExistsError:
+                            pass
+                        info = _lstat(current)
+                    if info is None or _is_link_or_reparse(current, info) \
+                            or not stat.S_ISDIR(info.st_mode):
+                        raise RemoteError("request-invalid", "unsafe runtime storage directory")
+            self.verify()
+            return self
+        except BaseException as exc:
+            self.close()
+            if isinstance(exc, RemoteError):
+                raise
+            raise RemoteError("request-invalid", "unsafe runtime storage directory") from None
+
+    def __exit__(self, *_: object) -> bool:
+        self.close()
+        return False
+
+    def verify(self) -> None:
+        if self._relative:
+            assert self.descriptor is not None
+            for parent, name, child, identity in self._components:
+                child_info = _verify_directory_descriptor(child)
+                try:
+                    entry_info = os.stat(name, dir_fd=parent, follow_symlinks=False)
+                except OSError:
+                    raise RemoteError(
+                        "request-invalid", "runtime storage directory changed after opening"
+                    ) from None
+                if (int(child_info.st_dev), int(child_info.st_ino)) != identity \
+                        or not _same_identity(child_info, entry_info):
+                    raise RemoteError(
+                        "request-invalid", "runtime storage directory changed after opening"
+                    )
+            _verify_directory_descriptor(self.descriptor)
+            return
+        current = Path(self.path.anchor)
+        for name in self.path.parts[1:]:
+            current /= name
+            info = _lstat(current)
+            if info is None or _is_link_or_reparse(current, info) \
+                    or not stat.S_ISDIR(info.st_mode):
+                raise RemoteError(
+                    "request-invalid", "runtime storage directory changed after opening"
+                )
+
+    def open_leaf(self, name: str, flags: int, mode: int = 0o600) -> int:
+        self.verify()
+        try:
+            if self._relative:
+                assert self.descriptor is not None
+                return os.open(name, flags, mode, dir_fd=self.descriptor)
+            return os.open(self.path / name, flags, mode)
+        except OSError:
+            raise RemoteError("request-invalid", "unsafe runtime storage file") from None
+
+    def leaf_stat(self, name: str) -> os.stat_result | None:
+        try:
+            if self._relative:
+                assert self.descriptor is not None
+                return os.stat(name, dir_fd=self.descriptor, follow_symlinks=False)
+            return (self.path / name).lstat()
+        except FileNotFoundError:
+            return None
+        except OSError:
+            raise RemoteError("request-invalid", "unsafe runtime storage file") from None
+
+    def fsync(self) -> None:
+        if os.name != "nt" and self.descriptor is not None:
+            os.fsync(self.descriptor)
+
+    def close(self) -> None:
+        for descriptor in reversed(self._fds):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        self._fds.clear()
+        self.descriptor = None
+
+
 def _is_link_or_reparse(path: Path, stat_result) -> bool:
-    if path.is_symlink():
+    if stat.S_ISLNK(stat_result.st_mode) or path.is_symlink():
         return True
     # Windows junctions are reparse points but pathlib does not report them as symlinks.
     return bool(getattr(stat_result, "st_file_attributes", 0) & 0x400)
 
 
 def _safe_directory(path: Path) -> Path:
-    """Create/check a directory one component at a time without following symlinks."""
-    path = Path(path)
-    # Work with an absolute lexical path, but do not call resolve(): resolving would follow
-    # an attacker-controlled link before the component checks below get a chance to refuse it.
-    if not path.is_absolute():
-        path = Path.cwd() / path
-    current = Path(path.anchor)
-    for component in path.parts[1:]:
-        current /= component
-        stat_result = _lstat(current)
-        if stat_result is None:
-            try:
-                current.mkdir()
-                _fsync_directory(current.parent)
-            except FileExistsError:
-                # Another process may publish this directory between lstat and mkdir.  It
-                # is safe only after the winning object is checked without following it.
-                stat_result = _lstat(current)
-                if stat_result is None:
-                    raise
-        if stat_result is not None and (
-                _is_link_or_reparse(current, stat_result) or not current.is_dir()):
-            raise RemoteError("request-invalid", "unsafe runtime storage directory")
-    return path
+    """Create/check a directory one component at a time without following links."""
+    with _PinnedDirectory(path):
+        return _lexical_absolute(path)
 
 
 def _safe_file(path: Path, *, create_parent: bool = True) -> Path:
     path = Path(path)
-    if create_parent:
-        _safe_directory(path.parent)
-    stat_result = _lstat(path)
-    if stat_result is not None and (
-            _is_link_or_reparse(path, stat_result)
-            or not stat.S_ISREG(stat_result.st_mode)
-            or int(getattr(stat_result, "st_nlink", 1)) != 1):
-        raise RemoteError("request-invalid", "unsafe runtime storage file")
+    with _PinnedDirectory(path.parent, create=create_parent) as parent:
+        stat_result = parent.leaf_stat(path.name)
+        if stat_result is not None and (
+                _is_link_or_reparse(path, stat_result)
+                or not stat.S_ISREG(stat_result.st_mode)
+                or int(getattr(stat_result, "st_nlink", 1)) != 1):
+            raise RemoteError("request-invalid", "unsafe runtime storage file")
     return path
 
 
 def _safe_existing_lock(path: Path) -> None:
-    stat = _lstat(path)
-    if stat is not None and (_is_link_or_reparse(path, stat) or not path.is_dir()):
+    stat_result = _lstat(path)
+    if stat_result is not None and (
+            _is_link_or_reparse(path, stat_result) or not path.is_dir()):
         raise RemoteError("request-invalid", "unsafe runtime lock path")
 
 
-def _fsync_directory(path: Path) -> None:
+def _fsync_directory(path: Path, descriptor: int | None = None) -> None:
     if os.name == "nt":
         return
-    descriptor = os.open(str(path), os.O_RDONLY)
+    close_descriptor = descriptor is None
+    if descriptor is None:
+        descriptor = os.open(str(path), _directory_open_flags())
     try:
         os.fsync(descriptor)
     finally:
+        if close_descriptor:
+            os.close(descriptor)
+
+
+def _before_remote_leaf_open(_path: Path) -> None:
+    """Test seam for the check-to-open window; production has no side effect."""
+
+
+def _before_remote_leaf_remove(_path: Path) -> None:
+    """Test seam for the checked PAUSE removal window; production has no side effect."""
+
+
+def _before_remote_leaf_replace(_path: Path) -> None:
+    """Test seam for the checked-parent-to-replace window; production has no side effect."""
+
+
+def _verify_runtime_leaf(parent: _PinnedDirectory, name: str,
+                         descriptor: int | None = None) -> os.stat_result | None:
+    parent.verify()
+    info = parent.leaf_stat(name)
+    if info is None:
+        return None
+    if (_is_link_or_reparse(parent.path / name, info)
+            or not stat.S_ISREG(info.st_mode)
+            or int(getattr(info, "st_nlink", 1)) != 1):
+        raise RemoteError("request-invalid", "unsafe runtime storage file")
+    if descriptor is not None:
+        try:
+            opened = os.fstat(descriptor)
+        except OSError:
+            raise RemoteError("request-invalid", "runtime storage file changed after opening") from None
+        if not _same_identity(info, opened):
+            raise RemoteError("request-invalid", "runtime storage file changed after opening")
+    return info
+
+
+def _open_runtime_leaf(parent: _PinnedDirectory, path: Path, flags: int,
+                       mode: int = 0o600,
+                       expected: os.stat_result | None = None) -> tuple[int, os.stat_result]:
+    parent.verify()
+    _before_remote_leaf_open(path)
+    descriptor = parent.open_leaf(path.name, flags, mode)
+    try:
+        info = _verify_runtime_leaf(parent, path.name, descriptor)
+        if info is None:
+            raise RemoteError("request-invalid", "runtime storage file disappeared after opening")
+        if expected is not None and not _same_identity(expected, info):
+            raise RemoteError("request-invalid", "runtime storage file changed before opening")
+        parent.verify()
+        return descriptor, info
+    except BaseException:
         os.close(descriptor)
+        raise
+
+
+def _create_relative_temp(parent: _PinnedDirectory, prefix: str) -> tuple[int, str]:
+    if not parent._relative:
+        try:
+            descriptor, name = tempfile.mkstemp(prefix=prefix, dir=str(parent.path))
+        except OSError:
+            raise RemoteError("request-invalid", "runtime temporary file could not be created") from None
+        return descriptor, Path(name).name
+    assert parent.descriptor is not None
+    flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+    generator = getattr(tempfile, "_get_candidate_names")()
+    for _attempt in range(100):
+        name = prefix + next(generator)
+        try:
+            return os.open(name, flags, 0o600, dir_fd=parent.descriptor), name
+        except FileExistsError:
+            continue
+        except OSError:
+            break
+    raise RemoteError("request-invalid", "runtime temporary file could not be created")
+
+
+def _replace_relative(parent: _PinnedDirectory, temporary: str, target: str,
+                      path: Path | None = None,
+                      expected: os.stat_result | None = None) -> None:
+    parent.verify()
+    if path is not None:
+        _before_remote_leaf_replace(path)
+        parent.verify()
+    current = parent.leaf_stat(target)
+    if expected is None:
+        if current is not None:
+            raise RemoteError("request-invalid", "runtime storage file changed before replacement")
+    elif current is None or not _same_identity(expected, current):
+        raise RemoteError("request-invalid", "runtime storage file changed before replacement")
+    try:
+        if parent._relative:
+            assert parent.descriptor is not None
+            os.replace(temporary, target, src_dir_fd=parent.descriptor, dst_dir_fd=parent.descriptor)
+        else:
+            os.replace(parent.path / temporary, parent.path / target)
+    except OSError:
+        raise RemoteError("request-invalid", "runtime durable replacement could not be completed") from None
+    parent.verify()
+
+
+def _unlink_relative(parent: _PinnedDirectory, name: str) -> None:
+    try:
+        if parent._relative:
+            assert parent.descriptor is not None
+            os.unlink(name, dir_fd=parent.descriptor)
+        else:
+            os.unlink(parent.path / name)
+    except FileNotFoundError:
+        return
+    except OSError:
+        raise RemoteError("request-invalid", "runtime temporary file cleanup failed") from None
 
 
 def diag(message: str) -> None:
@@ -392,8 +658,7 @@ def resolve_backend(name: str, kind: str | None = None) -> dict:
     discover the manifest never parsed.
     """
     if not isinstance(name, str) or not NAME_RE.fullmatch(name):
-        raise RemoteError("request-invalid",
-                          f"invalid backend name {name!r}: must match ^[a-z][a-z0-9-]{{1,31}}$")
+        raise RemoteError("request-invalid", "invalid backend identifier")
     path = manifest_path(name)
     if not path.is_file():
         raise RemoteError("manifest-absent", f"manifest not found: {name}")
@@ -597,9 +862,48 @@ def pause_path(base: Path) -> Path:
     return _safe_file(state / "PAUSE")
 
 
+def _runtime_file_exists(path: Path) -> bool:
+    try:
+        with _PinnedDirectory(path.parent, create=False) as parent:
+            return _verify_runtime_leaf(parent, path.name) is not None
+    except RemoteError as exc:
+        if exc.code == "not-found":
+            return False
+        raise
+
+
 def is_paused(base: Path) -> bool:
     path = pause_path(base)
-    return path.is_file() and not path.is_symlink()
+    return _runtime_file_exists(path)
+
+
+def remove_runtime_file(path: Path) -> bool:
+    """Remove one checked runtime file through its pinned parent directory."""
+    try:
+        with _PinnedDirectory(path.parent, create=False) as parent:
+            expected = _verify_runtime_leaf(parent, path.name)
+            if expected is None:
+                return False
+            _before_remote_leaf_remove(path)
+            parent.verify()
+            current = _verify_runtime_leaf(parent, path.name)
+            if current is None or not _same_identity(expected, current):
+                raise RemoteError("request-invalid", "runtime storage file changed before removal")
+            try:
+                if parent._relative:
+                    assert parent.descriptor is not None
+                    os.unlink(path.name, dir_fd=parent.descriptor)
+                else:
+                    os.unlink(parent.path / path.name)
+            except OSError:
+                raise RemoteError("request-invalid", "runtime storage file could not be removed") from None
+            parent.verify()
+            _fsync_directory(path.parent, parent.descriptor)
+            return True
+    except RemoteError as exc:
+        if exc.code == "not-found":
+            return False
+        raise
 
 
 def assert_not_paused(base: Path, operation: str) -> None:
@@ -809,43 +1113,49 @@ def idempotency_key(backend: str, operation: str, assignment_digest: str,
 def atomic_json(path: Path, value: dict) -> None:
     if not isinstance(value, dict):
         raise RemoteError("request-invalid", "durable JSON records must be objects")
-    _safe_file(path)
-    fd, tmp_name = tempfile.mkstemp(prefix=".remote-", suffix=".tmp", dir=str(path.parent))
-    try:
-        if hasattr(os, "fchmod"):
-            os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            json.dump(value, handle, indent=2, sort_keys=True)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(tmp_name, str(path))
-        _fsync_directory(path.parent)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.remove(tmp_name)
-        raise
+    with _PinnedDirectory(path.parent) as parent:
+        target = _verify_runtime_leaf(parent, path.name)
+        fd, tmp_name = _create_relative_temp(parent, ".remote-")
+        try:
+            if hasattr(os, "fchmod"):
+                os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+                json.dump(value, handle, indent=2, sort_keys=True)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            _replace_relative(parent, tmp_name, path.name, path, target)
+            _fsync_directory(path.parent, parent.descriptor)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+            with contextlib.suppress(OSError, RemoteError):
+                _unlink_relative(parent, tmp_name)
+            raise
 
 
 def atomic_bytes(path: Path, value: bytes) -> None:
     """Atomically replace a runtime file, refusing symlink targets and syncing its parent."""
     if not isinstance(value, bytes):
         raise RemoteError("request-invalid", "atomic runtime content must be bytes")
-    _safe_file(path)
-    fd, tmp_name = tempfile.mkstemp(prefix=".remote-", suffix=".tmp", dir=str(path.parent))
-    try:
-        if hasattr(os, "fchmod"):
-            os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(value)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(tmp_name, str(path))
-        _fsync_directory(path.parent)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.remove(tmp_name)
-        raise
+    with _PinnedDirectory(path.parent) as parent:
+        target = _verify_runtime_leaf(parent, path.name)
+        fd, tmp_name = _create_relative_temp(parent, ".remote-")
+        try:
+            if hasattr(os, "fchmod"):
+                os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(value)
+                handle.flush()
+                os.fsync(handle.fileno())
+            _replace_relative(parent, tmp_name, path.name, path, target)
+            _fsync_directory(path.parent, parent.descriptor)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+            with contextlib.suppress(OSError, RemoteError):
+                _unlink_relative(parent, tmp_name)
+            raise
 
 
 def read_attempts(base: Path, backend: str) -> list[dict]:
@@ -855,7 +1165,7 @@ def read_attempts(base: Path, backend: str) -> list[dict]:
 
 def _read_attempts_unlocked(base: Path, backend: str) -> list[dict]:
     path = attempts_journal(base, backend)
-    if not path.is_file():
+    if not _runtime_file_exists(path):
         return []
     return [row for row in read_jsonl_objects(path) if isinstance(row, dict)]
 
@@ -1131,18 +1441,9 @@ def reconcile_attempt(base: Path, backend: str, attempt_id: str, *, observed: st
 def _read_session_unlocked(base: Path, backend: str, dispatch_id: str) -> dict:
     """Read and screen one session while the caller holds ``remote_state_lock``."""
     path = session_path(base, backend, dispatch_id)
-    if not path.is_file():
-        raise RemoteError("not-found", f"no session record for dispatch {dispatch_id}")
-    try:
-        _safe_file(path, create_parent=False)
-        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
-        descriptor = os.open(str(path), flags)
-        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
-            value = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        raise RemoteError("malformed-response", "session record is unreadable") from exc
+    with _PinnedDirectory(path.parent, create=False) as parent:
+        value = _read_runtime_json(parent, path, "session record is unreadable",
+                                   f"no session record for dispatch {dispatch_id}")
     if not isinstance(value, dict):
         raise RemoteError("malformed-response", "session record is not a JSON object")
     allowed = _session_reference_paths(backend, value)
@@ -1155,6 +1456,28 @@ def _session_reference_paths(backend: str, record: dict) -> set[tuple[str, ...]]
     if backend == "grok-bot" and record.get("kind") == "grok-routine-dispatch":
         return {("endpoint_ref",), ("signing_key_ref",)}
     return set()
+
+
+def _read_runtime_json(parent: _PinnedDirectory, path: Path, malformed_message: str,
+                       missing_message: str) -> object:
+    """Read one runtime record from a parent handle, with same-handle identity checks."""
+    expected = _verify_runtime_leaf(parent, path.name)
+    if expected is None:
+        raise RemoteError("not-found", missing_message)
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor, _info = _open_runtime_leaf(parent, path, flags, expected=expected)
+        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+            value = json.load(handle)
+            _verify_runtime_leaf(parent, path.name, handle.fileno())
+        parent.verify()
+        return value
+    except RemoteError:
+        raise
+    except (OSError, json.JSONDecodeError):
+        raise RemoteError("malformed-response", malformed_message) from None
 
 
 def write_session(base: Path, backend: str, dispatch_id: str, record: dict,
@@ -1180,24 +1503,23 @@ def list_sessions(base: Path, backend: str) -> list[dict]:
     with remote_state_lock(base, backend):
         directory = _safe_directory(remote_root(base, backend) / "sessions")
         out: list[dict] = []
-        for path in sorted(directory.glob("*.json")):
-            try:
-                _safe_file(path, create_parent=False)
-                flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
-                if hasattr(os, "O_NOFOLLOW"):
-                    flags |= os.O_NOFOLLOW
-                descriptor = os.open(str(path), flags)
-                with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
-                    value = json.load(handle)
+        with _PinnedDirectory(directory) as parent:
+            if parent._relative:
+                assert parent.descriptor is not None
+                names = sorted(os.listdir(parent.descriptor))
+            else:
+                names = sorted(path.name for path in directory.glob("*.json"))
+            for name in names:
+                if not name.endswith(".json"):
+                    continue
+                path = directory / name
+                value = _read_runtime_json(parent, path, "session record is unreadable",
+                                            "session record disappeared")
                 if isinstance(value, dict):
                     allowed = _session_reference_paths(backend, value)
                     screen_for_secret_material(value, "session",
                                                allowed_reference_paths=allowed)
                     out.append(value)
-            except OSError as exc:
-                raise RemoteError("malformed-response", "session record is unreadable") from exc
-            except json.JSONDecodeError as exc:
-                raise RemoteError("malformed-response", "session record is not valid JSON") from exc
         return out
 
 
@@ -1216,18 +1538,9 @@ def write_usage(base: Path, backend: str, dispatch_id: str, record: dict,
 def read_usage(base: Path, backend: str, dispatch_id: str) -> dict:
     with remote_state_lock(base, backend):
         path = usage_path(base, backend, dispatch_id)
-        if not path.is_file():
-            raise RemoteError("not-found", f"no usage record for dispatch {dispatch_id}")
-        try:
-            _safe_file(path, create_parent=False)
-            flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
-            if hasattr(os, "O_NOFOLLOW"):
-                flags |= os.O_NOFOLLOW
-            descriptor = os.open(str(path), flags)
-            with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
-                value = json.load(handle)
-        except (OSError, json.JSONDecodeError) as exc:
-            raise RemoteError("malformed-response", "usage record is unreadable") from exc
+        with _PinnedDirectory(path.parent, create=False) as parent:
+            value = _read_runtime_json(parent, path, "usage record is unreadable",
+                                       f"no usage record for dispatch {dispatch_id}")
         if not isinstance(value, dict):
             raise RemoteError("malformed-response", "usage record is not a JSON object")
         screen_for_secret_material(value, "usage")
