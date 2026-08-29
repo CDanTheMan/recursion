@@ -967,12 +967,19 @@ def import_journal(base: Path) -> int:
             journal_records = read_jsonl_objects(journal)
         except JsonlDurabilityError as exc:
             raise ValueError(str(exc)) from exc
-        # read_jsonl_objects preserves journal order and omits only blank lines.  The reviewed
-        # legacy rows are the only non-executable objects and occupy the bounded prefix already
-        # represented by expected_markers; every remaining object was validated before the
-        # checkpoint that makes it eligible for this reconciliation pass.
-        for raw in journal_records[len(expected_markers):]:
+        # read_jsonl_objects preserves journal order and omits only blank lines.  A row that has
+        # no projection is validated at the point where it would be written; this preserves the
+        # old invalid-row filter without revalidating every already-projected row on every import.
+        # Reviewed legacy rows are therefore skipped at their own journal positions rather than
+        # being assumed to form a contiguous prefix.
+        for raw in journal_records:
             record = normalize(raw)
+            present = existing_path(base, record["id"])
+            if present is None:
+                try:
+                    validate_record(base, record)
+                except ValueError:
+                    continue
             prior = seen_decisions.get(record["id"])
             if prior is not None:
                 assert_same_decision(prior, record, f"journal decision {record['id']}")
@@ -981,7 +988,7 @@ def import_journal(base: Path) -> int:
             for raw_match in find_jsonl_objects(journal, "id", record["id"]):
                 assert_same_decision(normalize(raw_match), record,
                                      f"journal decision {record['id']}")
-            if existing_path(base, record["id"]):
+            if present:
                 continue
             atomic_json(queue_root(base) / "pending" / f"{record['id']}.json", record)
             imported += 1
