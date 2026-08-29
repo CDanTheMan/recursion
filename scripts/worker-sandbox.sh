@@ -120,7 +120,7 @@ PY
   if [ -n "$PLAN_EGRESS" ]; then
     [[ "$PLAN_TOKEN" =~ ^[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}$ ]] \
       || { echo "worker-sandbox: assignment proxy capability is absent or malformed" >&2; exit 96; }
-    [[ "$PLAN_ASSIGNMENT" =~ ^[A-Za-z0-9._:-]{1,128}$ ]] \
+    [[ "$PLAN_ASSIGNMENT" =~ ^[A-Za-z0-9._-]{1,255}$ ]] \
       || { echo "worker-sandbox: active assignment identity is absent or malformed" >&2; exit 96; }
   elif [ -n "$PLAN_TOKEN" ]; then
     echo "worker-sandbox: assignment proxy capability supplied for a non-provider plan" >&2

@@ -21,6 +21,7 @@ from typing import Iterable
 NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,63}\Z")
 HOST_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+\Z")
 ENV_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}\Z")
+ASSIGNMENT_RE = re.compile(r"[A-Za-z0-9._-]{1,255}\Z")
 NAMESPACE_RE = re.compile(r"recursion-provider-[a-z0-9-]{1,40}\Z")
 PROXY_ENV = frozenset({"HTTP_PROXY", "HTTPS_PROXY"})
 PROFILE_KEYS = {"schema_version", "id", "provider", "enabled", "namespace", "proxy", "authorities"}
@@ -144,12 +145,11 @@ def proxy_environment(profile: dict, endpoints: Iterable[str], token: str | None
     if token is not None:
         if not re.fullmatch(r"[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}", token):
             raise ProviderProfileError("assignment proxy token is malformed")
-        # Encode the signed assignment identity in the HTTP Basic username as well as the bearer
-        # password.  The proxy compares both values, so a capability minted for A cannot be
-        # replayed with an active-assignment identity for B.  Malformed payloads still fail at the
-        # proxy; retaining the generic username preserves the legacy helper's shape for fixtures.
-        if not isinstance(assignment_identity, str) or not re.fullmatch(
-                r"[A-Za-z0-9._:-]{1,128}", assignment_identity):
+        # Keep the signed assignment identity in the HTTP Basic username.  The canonical alphabet
+        # excludes ':' and all percent-decoding delimiters, so standard proxy clients preserve the
+        # exact username/password split.  The proxy compares both values, binding A's capability
+        # to A rather than allowing a replay with another active-assignment identity.
+        if not isinstance(assignment_identity, str) or not ASSIGNMENT_RE.fullmatch(assignment_identity):
             raise ProviderProfileError("active assignment identity is required")
         value = f"http://{quote(assignment_identity, safe='._-')}:{quote(token, safe='._-')}@{profile['proxy']['host']}:{profile['proxy']['port']}"
     elif os.environ.get("RECURSION_PROVIDER_PROXY_REQUIRED") == "1":

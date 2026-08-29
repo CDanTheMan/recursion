@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import importlib.util
 import asyncio
+import base64
 import pathlib
 import sys
 import unittest
+from unittest import mock
+from urllib.parse import quote, unquote, urlsplit
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -167,6 +170,52 @@ class ConnectContractTest(unittest.TestCase):
         with self.assertRaises(self.proxy.ConnectDenied):
             self.proxy.verify_capability(token, key, now=130, revoked_jtis={"J" * 22})
 
+    def test_assignment_identity_is_basic_userinfo_safe_end_to_end(self):
+        key = b"k" * 32
+        identity = "assignment-a." + "D" * 64
+        token = self.proxy.issue_capability("anthropic", identity, key)
+        encoded_url = f"http://{quote(identity, safe='._-')}:{quote(token, safe='._-')}@127.0.0.1:18080"
+        parsed = urlsplit(encoded_url)
+        self.assertEqual(parsed.username, identity)
+        self.assertEqual(unquote(parsed.username), identity)
+        basic = base64.b64encode(f"{unquote(parsed.username)}:{unquote(parsed.password)}".encode("ascii")).decode()
+        request = (b"CONNECT api.anthropic.com:443 HTTP/1.1\r\n"
+                   + f"Proxy-Authorization: Basic {basic}\r\n\r\n".encode("ascii"))
+        self.assertEqual(self.proxy.parse_connect_request(
+            request, capability_key=key, profile_authorities={"anthropic": self.allowed}),
+            ("api.anthropic.com", 443))
+        with self.assertRaises(ValueError):
+            self.proxy.issue_capability("anthropic", "assignment-a:bad", key)
+        long_identity = "A" * 128 + "." + "D" * 64
+        self.assertEqual(self.proxy.verify_capability(
+            self.proxy.issue_capability("anthropic", long_identity, key), key)["assignment"],
+            long_identity)
+
+    def test_probe_authorization_is_basic_and_live_probe_requires_both_parts(self):
+        token = "A" * 64 + "." + "B" * 64
+        self.assertRaises(ValueError, self.proxy._proxy_authorization, token, None)
+        self.assertRaises(ValueError, self.proxy._proxy_authorization, None, "assignment-a")
+        captured = []
+
+        class Client:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return None
+
+            def sendall(self, data):
+                captured.append(data)
+
+            def recv(self, _size):
+                return b"HTTP/1.1 403 Forbidden\r\n\r\n"
+
+        with mock.patch.object(self.proxy.socket, "create_connection", return_value=Client()):
+            self.proxy.proxy_response(18080, "example.com:443", token, "assignment-a")
+        request = captured[0].decode("ascii")
+        self.assertIn("Proxy-Authorization: Basic ", request)
+        self.assertNotIn("Proxy-Authorization: Bearer ", request)
+
     def test_signed_capability_is_required_when_profile_authorization_is_enabled(self):
         with self.assertRaises(self.proxy.ConnectDenied):
             self.proxy.parse_connect_request(
@@ -302,6 +351,13 @@ class DeploymentContractTest(unittest.TestCase):
         unit = (ROOT / "deploy/systemd/recursion-provider-proxy-phase4.service.example").read_text()
         self.assertIn("--profile-dir /etc/recursion/providers", unit)
         self.assertIn("--enabled-profiles", unit)
+
+    def test_live_probe_requires_ephemeral_basic_assignment_capability(self):
+        network = (ROOT / "scripts/provider-network.sh").read_text()
+        self.assertIn("RECURSION_PROVIDER_PROBE_TOKEN", network)
+        self.assertIn("RECURSION_PROVIDER_PROBE_IDENTITY", network)
+        self.assertIn("--capability-identity", network)
+        self.assertNotIn("--capability-token", network)
 
     def test_profile_selection_refuses_all_disabled_and_selects_only_enabled(self):
         import tempfile

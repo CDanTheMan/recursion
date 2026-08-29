@@ -575,7 +575,9 @@ PY
   )" || { log "engine=$engine provider profile could not be read"; return 95; }
   if [ -n "$profile" ]; then
     key_file="${RECURSION_PROVIDER_CAPABILITY_KEY_FILE:-/etc/recursion/provider-capability.key}"
-    assignment="$ID:$CONTRACT_DIGEST"
+    # Basic userinfo uses ':' as its sole delimiter; keep the canonical assignment identity
+    # entirely in the unescaped userinfo-safe alphabet so standard clients cannot reinterpret it.
+    assignment="$ID.$CONTRACT_DIGEST"
     token="$(python3 "$ROOT/scripts/assignment-token.py" "$profile" "$assignment" \
       --key-file "$key_file" 2>>"$LOG")" \
       || { log "engine=$engine provider assignment capability could not be issued"; return 96; }

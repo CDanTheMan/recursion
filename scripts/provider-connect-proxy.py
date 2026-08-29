@@ -56,6 +56,10 @@ TLS_CLIENT_HELLO = 0x01
 SERVER_NAME_EXTENSION = 0x0000
 HOST_RE = re.compile(r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 HEADER_RE = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+\Z")
+# Control-plane identifiers are 128 characters; the separator and 64-character contract digest
+# make the generated assignment identity at most 193 characters.  Keep a round 255-character
+# ceiling while remaining entirely safe as a Basic userinfo username.
+ASSIGNMENT_RE = re.compile(r"[A-Za-z0-9._-]{1,255}\Z")
 
 
 class MalformedConnect(ValueError):
@@ -81,7 +85,7 @@ def issue_capability(profile: str, assignment: str, secret: bytes, *,
     if len(secret) < 32:
         raise ValueError("capability key is too short")
     if not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", profile) \
-            or not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", assignment):
+            or not ASSIGNMENT_RE.fullmatch(assignment):
         raise ValueError("capability identity is invalid")
     issued = int(time.time()) if now is None else int(now)
     if not 1 <= ttl <= 86400:
@@ -110,7 +114,7 @@ def verify_capability(token: str, secret: bytes, *, now: int | None = None,
     except (ValueError, UnicodeError, json.JSONDecodeError, TypeError, binascii.Error):
         raise ConnectDenied("transport capability is invalid") from None
     if not isinstance(payload, dict) or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", str(payload.get("profile", ""))) \
-            or not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", str(payload.get("assignment", ""))) \
+            or not ASSIGNMENT_RE.fullmatch(str(payload.get("assignment", ""))) \
             or not re.fullmatch(r"[A-Za-z0-9_-]{22,128}", str(payload.get("jti", ""))):
         raise ConnectDenied("transport capability is invalid")
     try:
@@ -664,10 +668,19 @@ def namespace_inventory() -> dict[str, object]:
     return {"interfaces": interfaces, "ipv4_routes": len(routes)}
 
 
-def proxy_response(port: int, authority: str, capability_token: str | None = None) -> bytes:
+def _proxy_authorization(capability_token: str | None, capability_identity: str | None) -> str:
+    if capability_token is None and capability_identity is None:
+        return ""
+    if capability_token is None or capability_identity is None or not ASSIGNMENT_RE.fullmatch(capability_identity):
+        raise ValueError("probe capability requires an exact assignment identity and token")
+    basic = base64.b64encode(f"{capability_identity}:{capability_token}".encode("ascii")).decode("ascii")
+    return f"Proxy-Authorization: Basic {basic}\r\n"
+
+
+def proxy_response(port: int, authority: str, capability_token: str | None = None,
+                   capability_identity: str | None = None) -> bytes:
     with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
-        authorization = f"Proxy-Authorization: Bearer {capability_token}\r\n" \
-            if capability_token else ""
+        authorization = _proxy_authorization(capability_token, capability_identity)
         client.sendall(
             f"CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n{authorization}\r\n".encode("ascii")
         )
@@ -681,7 +694,8 @@ def proxy_response(port: int, authority: str, capability_token: str | None = Non
 
 
 def probe_namespace(namespace: pathlib.Path, port: int, authority: tuple[str, int], live: bool,
-                    capability_token: str | None = None) -> dict[str, object]:
+                    capability_token: str | None = None,
+                    capability_identity: str | None = None) -> dict[str, object]:
     validate_namespace_file(namespace)
     host_fd = os.open("/proc/self/ns/net", os.O_RDONLY | os.O_CLOEXEC)
     provider_fd = os.open(namespace, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
@@ -691,7 +705,7 @@ def probe_namespace(namespace: pathlib.Path, port: int, authority: tuple[str, in
         inventory = namespace_inventory()
         if inventory != {"interfaces": ["lo"], "ipv4_routes": 0}:
             raise RuntimeError("provider namespace is not loopback-only")
-        denied = proxy_response(port, "example.com:443", capability_token)
+        denied = proxy_response(port, "example.com:443", capability_token, capability_identity)
         if not denied.startswith(b"HTTP/1.1 403"):
             raise RuntimeError("provider proxy did not deny an unlisted authority")
         try:
@@ -704,10 +718,11 @@ def probe_namespace(namespace: pathlib.Path, port: int, authority: tuple[str, in
         result["denied_authority"] = True
         result["direct_egress"] = False
         if live:
+            if capability_token is None or capability_identity is None:
+                raise RuntimeError("live probe requires an explicit short-lived assignment capability")
             authority_text = f"{authority[0]}:{authority[1]}"
             with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
-                authorization = f"Proxy-Authorization: Bearer {capability_token}\r\n" \
-                    if capability_token else ""
+                authorization = _proxy_authorization(capability_token, capability_identity)
                 client.sendall(
                     f"CONNECT {authority_text} HTTP/1.1\r\nHost: {authority_text}\r\n"
                     f"{authorization}\r\n".encode("ascii")
@@ -751,6 +766,7 @@ def make_parser() -> argparse.ArgumentParser:
     probe.add_argument("--allow", required=True)
     probe.add_argument("--live", action="store_true")
     probe.add_argument("--capability-token")
+    probe.add_argument("--capability-identity")
     return parser
 
 
@@ -808,8 +824,11 @@ def main() -> int:
             )))
             return 0
         authority = parse_authority(args.allow)
-        result = probe_namespace(args.namespace, args.listen_port, authority, args.live,
-                                 args.capability_token)
+        result = probe_namespace(
+            args.namespace, args.listen_port, authority, args.live,
+            args.capability_token or os.environ.get("RECURSION_PROVIDER_PROBE_TOKEN"),
+            args.capability_identity or os.environ.get("RECURSION_PROVIDER_PROBE_IDENTITY"),
+        )
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
     except (OSError, RuntimeError, ValueError, KeyError) as exc:

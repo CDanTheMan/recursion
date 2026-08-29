@@ -76,6 +76,14 @@ def main() -> int:
         check(authorized.returncode == 0 and "assignment-a:" in authorized.stdout
               and token in authorized.stdout,
               "assignment token is bound into the proxy transport URL", failures)
+        delimiter_identity = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
+             "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh",
+             "--assignment-token", token, "--assignment-identity", "assignment:a"],
+            capture_output=True, text=True, env=env,
+        )
+        check(delimiter_identity.returncode == 96,
+              "Basic userinfo delimiter is refused in assignment identity", failures)
         issued = subprocess.run(
             [sys.executable, str(ROOT / "scripts/assignment-token.py"), "cursor", "assignment-a",
              "--key-file", str(directory / "capability.key")],

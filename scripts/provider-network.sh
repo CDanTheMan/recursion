@@ -91,8 +91,12 @@ PY
     else
       echo "provider-network: probe usage is probe [--engine ENGINE]" >&2; exit 96
     fi
+    [ -n "${RECURSION_PROVIDER_PROBE_TOKEN:-}" ] \
+      && [ -n "${RECURSION_PROVIDER_PROBE_IDENTITY:-}" ] \
+      || { echo "provider-network: live probe requires a short-lived assignment capability" >&2; exit 96; }
     python3 "$ROOT/scripts/provider-connect-proxy.py" probe --live \
-      --namespace "$NS_PATH" --listen-port "$PROXY_PORT" --allow "$authority"
+      --namespace "$NS_PATH" --listen-port "$PROXY_PORT" --allow "$authority" \
+      --capability-identity "$RECURSION_PROVIDER_PROBE_IDENTITY"
     ;;
   *)
     echo "usage: provider-network.sh {create|delete|namespace-check|check|probe} [--engine ENGINE]" >&2

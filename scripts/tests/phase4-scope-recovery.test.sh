@@ -39,6 +39,20 @@ grep -q 'decision projection changed before child action' "$TMP/conduct-hermes.s
 grep -q 'original claimed decision digest is absent' "$TMP/conduct-hermes.sh"
 grep -q 'finalize_claim "$queue_file" "$child_rc" "$claimed_digest"' "$TMP/conduct-hermes.sh"
 ! grep -q 'queue_sha="$(python3 - "$claimed"' "$TMP/conduct-hermes.sh"
+# The parallel claim path must retain the digest before starting its child; otherwise a swap in
+# this former pre-capture window can turn the swapped projection into the terminal-CAS authority.
+python3 - "$TMP/conduct-hermes.sh" <<'PY'
+import re,sys
+text=open(sys.argv[1],encoding='utf-8').read()
+start=text.index('while [ "${#pids[@]}"')
+end=text.index('    done\n    [ "${#pids[@]}"',start)
+parallel=text[start:end]
+pattern=(r'claimed_digest="\$\(sha256sum "\$queue_file".*?\n'
+         r'\s*RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="\$ROOT" \\\n'
+         r'\s*bash "\$ROOT/scripts/conduct-hermes\.sh".*?&')
+if not re.search(pattern,parallel,re.S):
+    raise SystemExit('parallel claim does not capture the original digest before child launch')
+PY
 grep -q 'scope_guard' "$TMP/conduct-hermes.sh"
 mkdir -p "$TMP/state/decision-queue/running" "$TMP/state/decision-queue/failed"
 if python3 -c 'import fcntl' 2>/dev/null; then

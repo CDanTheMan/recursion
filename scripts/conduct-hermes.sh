@@ -277,9 +277,12 @@ print(project or row.get('project') or '')
 PY
 )"
       [ -n "$project" ] || project="unknown-$(basename "$queue_file")"
+      # Capture the digest immediately after claim and before launching a child.  The child may
+      # finish while this loop continues; a later projection swap must never become authority for
+      # the parent's terminal CAS.
+      claimed_digest="$(sha256sum "$queue_file" | awk '{print $1}')" || return 74
       RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
         bash "$ROOT/scripts/conduct-hermes.sh" "${CHILD_SCOPE_ARGS[@]}" --file "$queue_file" 8>&- &
-      claimed_digest="$(sha256sum "$queue_file" | awk '{print $1}')" || return 74
       pids+=("$!"); files+=("$queue_file"); projects+=("$project"); digests+=("$claimed_digest")
     done
     [ "${#pids[@]}" -gt 0 ] || break
