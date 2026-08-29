@@ -537,6 +537,10 @@ try:
     if not isinstance(value, dict):
         raise ValueError("decision is not an object")
     check_value(value)
+    # Keep a downstream type check beside the first dict-only consumer.  If a future mutation or
+    # refactor weakens the front guard, the semantic boundary still refuses a list before .items.
+    if type(value) is not dict:
+        raise ValueError("decision semantic validation requires an object")
     if "schema_version" in value and (type(value["schema_version"]) is not int
                                        or value["schema_version"] != 1):
         raise ValueError("decision schema_version must be the integer 1")
@@ -588,6 +592,8 @@ except ValueError as exc:
     message=str(exc)
     if "JSON constant" in message:
         marker="json-constant"
+    elif "semantic validation" in message:
+        marker="semantic-validation"
     elif "not an object" in message:
         marker="non-object-root"
     elif "nesting" in message:

@@ -18,9 +18,12 @@ import sys
 from pathlib import Path
 
 
-NAME_RE = re.compile(r"^\.secret\.(\d+)\.(\d+)\.[0-9a-f]{16}$")
+NAME_RE = re.compile(r"^\.secret\.([0-9]+)\.([0-9]+)\.[0-9a-f]{16}$")
 DEFAULT_RUNTIME_ROOTS = (Path("/run/recursion-runner"), Path("/run/recursion-backup"))
 MAX_SECRET_ENV_BYTES = 1024 * 1024
+MAX_SECRET_PID_DIGITS = 20
+MAX_SECRET_START_DIGITS = 20
+DEFAULT_NAME_MAX = 255
 
 
 class SecretRuntimeError(ValueError):
@@ -29,6 +32,33 @@ class SecretRuntimeError(ValueError):
 
 class SecretRuntimeCleanupError(SecretRuntimeError):
     """A secret could not be removed durably; the caller must remain non-green."""
+
+
+def _name_max(directory: Path) -> int:
+    try:
+        limit = os.pathconf(str(directory), "PC_NAME_MAX")
+    except (AttributeError, OSError, TypeError, ValueError):
+        return DEFAULT_NAME_MAX
+    return limit if isinstance(limit, int) and limit > 0 else DEFAULT_NAME_MAX
+
+
+def _validate_secret_filename(directory: Path, name: str, *, require_format: bool = False) -> None:
+    if not isinstance(name, str) or not name or "\x00" in name or "/" in name or "\\" in name:
+        raise SecretRuntimeError("secret runtime contains an invalid file name")
+    try:
+        encoded = name.encode("utf-8")
+    except UnicodeError as exc:
+        raise SecretRuntimeError("secret runtime contains an invalid file name") from exc
+    if len(encoded) > _name_max(directory):
+        raise SecretRuntimeError("secret runtime contains an overlong file name")
+    match = NAME_RE.fullmatch(name)
+    if match:
+        pid_text, start_text = match.groups()
+        if (len(pid_text) > MAX_SECRET_PID_DIGITS
+                or len(start_text) > MAX_SECRET_START_DIGITS):
+            raise SecretRuntimeError("secret runtime contains an invalid process identity")
+    elif require_format:
+        raise SecretRuntimeError("secret runtime contains an invalid file name")
 
 
 def process_start(pid: int) -> str | None:
@@ -122,10 +152,20 @@ def scavenge(directory: Path, current_pid: int | None = None) -> int:
     current_pid = os.getpid() if current_pid is None else current_pid
     current_start = process_start(current_pid)
     removed = 0
-    for path in directory.iterdir():
-        match = NAME_RE.fullmatch(path.name)
+    try:
+        entries = list(directory.iterdir())
+    except OSError as exc:
+        raise SecretRuntimeError("secret runtime directory is unreadable") from exc
+    for path in entries:
+        name = path.name
+        if name.startswith(".secret."):
+            # Validate the attacker-controlled name before any lstat/unlink operation.  This is
+            # also the backstop for mocked or non-standard filesystems whose name limit differs
+            # from the normal Linux NAME_MAX.
+            _validate_secret_filename(directory, name)
+        match = NAME_RE.fullmatch(name)
         if not match:
-            if path.name.startswith(".secret."):
+            if name.startswith(".secret."):
                 _validate_secret_file(path)
                 _remove_secret(path)
                 removed += 1
@@ -135,8 +175,6 @@ def scavenge(directory: Path, current_pid: int | None = None) -> int:
             pid = int(match.group(1))
         except (ValueError, OverflowError):
             raise SecretRuntimeError("secret runtime contains an invalid process identity") from None
-        if len(match.group(1)) > 20:
-            raise SecretRuntimeError("secret runtime contains an invalid process identity")
         start = match.group(2)
         if pid == current_pid and current_start == start:
             continue
@@ -152,6 +190,8 @@ def _validate_secret_file(path: Path) -> None:
         info = path.lstat()
     except FileNotFoundError:
         return
+    except OSError as exc:
+        raise SecretRuntimeError("secret runtime file is unreadable") from exc
     if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
             or (getattr(info, "st_file_attributes", 0) & 0x400):
         raise SecretRuntimeError("secret runtime contains a symlink/reparse file")
@@ -168,6 +208,8 @@ def _remove_secret(path: Path) -> None:
         info = path.lstat()
     except FileNotFoundError:
         return
+    except OSError as exc:
+        raise SecretRuntimeCleanupError("secret cleanup could not inspect the file") from exc
     if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
             or (getattr(info, "st_file_attributes", 0) & 0x400):
         raise SecretRuntimeCleanupError("refusing to remove a symlink/reparse secret path")
@@ -196,29 +238,48 @@ def write_env(directory: Path, content: bytes) -> Path:
     if b"\x00" in content:
         raise ValueError("secret environment contains NUL")
     ensure_directory(directory)
-    start = process_start(os.getpid()) or "unknown"
-    if not start.isdigit():
-        raise ValueError("cannot witness current process identity")
-    name = f".secret.{os.getpid()}.{start}.{secrets.token_hex(8)}"
-    path = directory / name
+    pid = os.getpid()
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid < 1:
+        raise SecretRuntimeError("secret runtime contains an invalid process identity")
+    pid_text = str(pid)
+    if not re.fullmatch(r"[0-9]{1,20}", pid_text):
+        raise SecretRuntimeError("secret runtime contains an invalid process identity")
+    start = process_start(pid)
+    if start is None or not re.fullmatch(r"[0-9]{1,20}", start):
+        raise SecretRuntimeError("cannot witness current process identity")
+    token = secrets.token_hex(8)
+    if not re.fullmatch(r"[0-9a-f]{16}", token):
+        raise SecretRuntimeError("secret runtime generated an invalid file name")
+    name = f".secret.{pid_text}.{start}.{token}"
+    _validate_secret_filename(directory, name, require_format=True)
+    try:
+        path = directory / name
+    except (TypeError, ValueError, UnicodeError) as exc:
+        raise SecretRuntimeError("secret runtime generated an invalid file name") from exc
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
-    descriptor = os.open(path, flags, 0o600)
     try:
-        if hasattr(os, "fchmod"):
-            os.fchmod(descriptor, 0o600)
-        with os.fdopen(descriptor, "wb") as output:
-            descriptor = -1
-            output.write(content)
-            output.flush()
-            os.fsync(output.fileno())
-        if hasattr(os, "geteuid") and os.geteuid() == 0:
-            info = path.stat()
-            if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600:
-                raise ValueError("secret environment ownership is unsafe")
-        _validate_secret_file(path)
-        return path
+        descriptor = os.open(path, flags, 0o600)
+    except OSError as exc:
+        raise SecretRuntimeError("secret runtime file could not be created") from exc
+    try:
+        try:
+            if hasattr(os, "fchmod"):
+                os.fchmod(descriptor, 0o600)
+            with os.fdopen(descriptor, "wb") as output:
+                descriptor = -1
+                output.write(content)
+                output.flush()
+                os.fsync(output.fileno())
+            if hasattr(os, "geteuid") and os.geteuid() == 0:
+                info = path.stat()
+                if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600:
+                    raise ValueError("secret environment ownership is unsafe")
+            _validate_secret_file(path)
+            return path
+        except OSError as exc:
+            raise SecretRuntimeError("secret runtime file operation failed") from exc
     except BaseException:
         if descriptor >= 0:
             os.close(descriptor)

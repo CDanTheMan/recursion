@@ -280,7 +280,9 @@ def main() -> int:
               "backup CLI hostile JSON is controlled")
 
     secret_root = scratch / "secret-runtime"
-    secret_root.mkdir(mode=0o777)
+    # The final directory hosts secret files and must remain owner-only.  The product guard
+    # correctly rejects the previous 0777 fixture rather than repairing or accepting it.
+    secret_root.mkdir(mode=0o700)
     old_secret_root = os.environ.get("RECURSION_SECRET_RUNTIME_ROOT")
     os.environ["RECURSION_SECRET_RUNTIME_ROOT"] = str(secret_root)
     try:
