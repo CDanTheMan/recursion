@@ -221,7 +221,8 @@ def _valid_git_ref(value: object) -> bool:
 
 
 def _valid_git_pattern(value: object) -> bool:
-    if not isinstance(value, str) or not value or any(char in value for char in "?["):
+    if not isinstance(value, str) or not value or len(value) > 200 \
+            or any(char in value for char in "?["):
         return False
     probe = value.replace("*", "probe")
     return _valid_git_ref(probe)
@@ -273,6 +274,23 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
         raise ContractError("Git command timed out", "verification-unavailable") from exc
 
 
+def _git_raw(repo: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
+    """Run Git without text decoding or newline translation."""
+    env = {
+        key: value for key, value in os.environ.items()
+        if key in {"PATH", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SystemRoot", "WINDIR"}
+    }
+    env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"})
+    try:
+        return subprocess.run(
+            ["git", "--no-replace-objects", "-c", f"safe.directory={repo}", "-C", str(repo), *args],
+            env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30, check=False,
+        )
+    except _BOUNDARY_ERRORS as exc:
+        raise ContractError("Git command timed out", "verification-unavailable") from exc
+
+
 def _checked_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     """Keep a mocked or alternate _git implementation fail-closed at every caller boundary."""
     try:
@@ -281,10 +299,18 @@ def _checked_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
         raise ContractError("Git command timed out", "verification-unavailable") from exc
 
 
+def _checked_git_raw(repo: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return _git_raw(repo, *args)
+    except _BOUNDARY_ERRORS as exc:
+        raise ContractError("Git command timed out", "verification-unavailable") from exc
+
+
 def _is_reparse_or_link(info: os.stat_result) -> bool:
     return stat.S_ISLNK(info.st_mode) or bool(
-        getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
-    )
+        getattr(info, "st_file_attributes", 0)
+        & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    ) or bool(getattr(info, "st_reparse_tag", 0))
 
 
 def _same_file(left: os.stat_result, right: os.stat_result) -> bool:
@@ -352,10 +378,10 @@ def _pinned_real_directory(path: Path, *, allow_missing: bool = False) -> Iterat
             raise OSError("directory path is empty")
         root = Path(absolute.anchor or os.sep)
         current_fd = os.open(root, flags)
+        handles.append(current_fd)
         root_info = os.fstat(current_fd)
         if _is_reparse_or_link(root_info) or not stat.S_ISDIR(root_info.st_mode):
             raise OSError("directory root is not real")
-        handles.append(current_fd)
         identities.append(root_info)
         for part in parts[1:] if absolute.anchor else parts:
             try:
@@ -367,11 +393,10 @@ def _pinned_real_directory(path: Path, *, allow_missing: bool = False) -> Iterat
                     _verify_directory_handle(fd, expected)
                 yield None
                 return
+            handles.append(next_fd)
             info = os.fstat(next_fd)
             if _is_reparse_or_link(info) or not stat.S_ISDIR(info.st_mode):
-                os.close(next_fd)
                 raise OSError("directory component is not real")
-            handles.append(next_fd)
             identities.append(info)
             current_fd = next_fd
         for fd, expected in zip(handles, identities):
@@ -525,15 +550,11 @@ def _pinned_ledger(path: Path) -> Iterator[int]:
                                     "verification-unavailable") from exc
             if _is_reparse_or_link(info) or not stat.S_ISDIR(info.st_mode):
                 raise ContractError("candidate ledger is not a real directory", "unauthorized-result")
+            fd = _open_pinned_directory(path)
             try:
-                fd = _open_pinned_directory(path)
                 pinned = os.fstat(fd)
                 if _is_reparse_or_link(pinned) or not _same_file(info, pinned):
                     raise OSError("candidate ledger changed while being pinned")
-            except OSError as exc:
-                raise ContractError("candidate ledger could not be pinned",
-                                    "verification-unavailable") from exc
-            try:
                 yield fd
             finally:
                 os.close(fd)
@@ -639,35 +660,37 @@ def _ancestor(repo: Path, ancestor: str, descendant: str) -> bool:
     return result.returncode == 0
 
 
+@contextlib.contextmanager
+def _pinned_git_dir(repo: Path) -> Iterator[Path]:
+    """Resolve Git's directory while the repository's lexical .git entry is pinned."""
+    repository = _lexical_absolute(repo)
+    expected = repository / ".git"
+    try:
+        with _pinned_real_directory(expected) as git_fd:
+            if git_fd is None:
+                raise OSError("repository Git directory was not pinned")
+            result = _checked_git(repo, "rev-parse", "--path-format=absolute", "--git-dir")
+            if result.returncode:
+                raise ContractError("repository Git directory could not be resolved",
+                                    "repository-unavailable")
+            raw = result.stdout.strip()
+            if not raw or "\x00" in raw:
+                raise ValueError("empty or NUL Git directory")
+            path = _lexical_absolute(raw)
+            if os.path.normcase(path) != os.path.normcase(expected):
+                raise OSError("Git directory is not the pinned repository .git entry")
+            yield path
+    except ContractError:
+        raise
+    except _BOUNDARY_ERRORS as exc:
+        raise ContractError("repository Git directory is unavailable", "repository-unavailable") from exc
+
+
 def _git_dir(repo: Path) -> Path:
-    result = _checked_git(repo, "rev-parse", "--path-format=absolute", "--git-dir")
-    if result.returncode:
-        raise ContractError("repository Git directory could not be resolved", "repository-unavailable")
-    try:
-        raw = result.stdout.strip()
-        if not raw or "\x00" in raw:
-            raise ValueError("empty or NUL Git directory")
-        # Git has already supplied the repository-relative authority.  Normalize only
-        # lexically; resolve() would follow a junction before the no-follow check below.
-        path = _lexical_absolute(raw)
-    except ContractError:
-        raise
-    except _BOUNDARY_ERRORS as exc:
-        raise ContractError("repository Git directory is unavailable", "repository-unavailable") from exc
-    try:
-        info = os.lstat(path)
-    except _BOUNDARY_ERRORS as exc:
-        raise ContractError("repository Git directory is unavailable", "repository-unavailable") from exc
-    if _is_reparse_or_link(info) or not stat.S_ISDIR(info.st_mode):
-        raise ContractError("repository Git directory is unavailable", "repository-unavailable")
-    try:
-        with _pinned_real_directory(path):
-            pass
-    except ContractError:
-        raise
-    except _BOUNDARY_ERRORS as exc:
-        raise ContractError("repository Git directory could not be pinned", "repository-unavailable") from exc
-    return path
+    # Keep the historical path-returning helper for callers, while the resolver itself is bound
+    # to a no-follow handle for the complete check-and-use transaction above.
+    with _pinned_git_dir(repo) as path:
+        return path
 
 
 def _require_descriptor_repository(contract: dict[str, Any], repo: Path) -> Path:
@@ -1537,13 +1560,16 @@ def _verify_receipt(contract: dict[str, Any], candidate: dict[str, Any], receipt
             or receipt.get("verifier") != "controller-verifier" \
             or receipt.get("provenance") != "recursion-controller":
         raise ContractError("controller verification receipt provenance is not trusted", "unauthorized-result")
-    diff = _checked_git(repo, "diff", "--binary", source, commit)
+    # Receipt provenance is the exact byte stream emitted by `git diff --binary`.  Do not route
+    # this through text=True: universal-newline decoding would change the authenticated bytes on
+    # Windows, and a re-encode cannot recover the original stream.
+    diff = _checked_git_raw(repo, "diff", "--binary", source, commit)
     if diff.returncode:
         raise ContractError("candidate diff could not be hashed", "verification-unavailable")
     expected = {
         "schema": receipt["schema"], "project_id": contract["id"], "task_id": candidate["task_id"],
         "source_sha": source, "candidate_commit": commit,
-        "diff_sha256": hashlib.sha256(diff.stdout.encode()).hexdigest(),
+        "diff_sha256": hashlib.sha256(diff.stdout).hexdigest(),
         "scope_digest": _json_digest(allowed),
         "gate_digest": (_json_digest(gate_contract) if gate_contract is not None
                         else _gate_digest(contract)),
@@ -1561,15 +1587,7 @@ def _verify_receipt(contract: dict[str, Any], candidate: dict[str, Any], receipt
 
 
 @contextlib.contextmanager
-def _serialization_lock(repo: Path, timeout: float = 10.0) -> Iterator[None]:
-    try:
-        git_dir = _git_dir(repo)
-        lock = git_dir / "recursion-integration.lock"
-    except ContractError:
-        raise
-    except _BOUNDARY_ERRORS as exc:
-        raise ContractError("integration planning lock is unavailable",
-                            "verification-unavailable") from exc
+def _serialization_lock_path(lock: Path, timeout: float = 10.0) -> Iterator[None]:
     deadline = time.monotonic() + timeout
     while True:
         try:
@@ -1665,6 +1683,14 @@ def _serialization_lock(repo: Path, timeout: float = 10.0) -> Iterator[None]:
         time.sleep(0.02)
 
 
+@contextlib.contextmanager
+def _serialization_lock(repo: Path, timeout: float = 10.0) -> Iterator[None]:
+    """Hold the verified repository .git directory for the complete lock transaction."""
+    with _pinned_git_dir(repo) as git_dir:
+        with _serialization_lock_path(git_dir / "recursion-integration.lock", timeout):
+            yield
+
+
 def _canonical_ref(contract: dict[str, Any], task_id: str) -> str:
     return f"refs/heads/{task_branch(contract, task_id)}"
 
@@ -1677,70 +1703,70 @@ def import_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: 
     with _serialization_lock(repo):
         verified = verify_candidate(contract, candidate, repo, receipt=receipt)
         digest = verified["candidate_digest"]
-        git_dir = _git_dir(repo)
-        ledger = git_dir / "recursion-candidates"
-        with _pinned_ledger(ledger) as ledger_fd:
-            idempotency_key = str(verified.get("idempotency_key") or digest)
-            operation_key = _json_digest(["candidate-import", contract["id"], idempotency_key])
-            record_name = f"{operation_key}.json"
-            ref = _canonical_ref(contract, verified["task_id"])
-            current_result = _checked_git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
-            current = current_result.stdout.strip() if current_result.returncode == 0 else ""
-            if current and current != verified["candidate_commit"]:
-                raise ContractError("canonical task ref already names a different candidate", "idempotency-conflict")
-            if current == verified["candidate_commit"]:
-                status = "idempotent"
-            else:
-                created = _checked_git(repo, "update-ref", ref, verified["candidate_commit"], "0" * len(verified["candidate_commit"]))
-                if created.returncode:
-                    # Another coordinator may have won the same import race. Re-read the ref and
-                    # reconcile an identical winner; only a different winner is a real conflict.
-                    raced = _checked_git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
-                    raced_commit = raced.stdout.strip() if raced.returncode == 0 else ""
-                    if raced_commit == verified["candidate_commit"]:
-                        status = "idempotent"
-                    else:
-                        raise ContractError("canonical task ref changed during import", "idempotency-conflict")
+        with _pinned_git_dir(repo) as git_dir:
+            ledger = git_dir / "recursion-candidates"
+            with _pinned_ledger(ledger) as ledger_fd:
+                idempotency_key = str(verified.get("idempotency_key") or digest)
+                operation_key = _json_digest(["candidate-import", contract["id"], idempotency_key])
+                record_name = f"{operation_key}.json"
+                ref = _canonical_ref(contract, verified["task_id"])
+                current_result = _checked_git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
+                current = current_result.stdout.strip() if current_result.returncode == 0 else ""
+                if current and current != verified["candidate_commit"]:
+                    raise ContractError("canonical task ref already names a different candidate", "idempotency-conflict")
+                if current == verified["candidate_commit"]:
+                    status = "idempotent"
                 else:
-                    status = "imported"
-            record = {"schema": SCHEMA, "idempotency_key": verified.get("idempotency_key", digest),
-                      "candidate_digest": digest, "task_id": verified["task_id"],
-                      "canonical_ref": ref.removeprefix("refs/heads/"),
-                      "candidate_commit": verified["candidate_commit"], "status": status}
-            try:
-                try:
-                    record_fd = _open_ledger_file(ledger_fd, record_name, create=False)
-                except FileNotFoundError:
-                    try:
-                        record_fd = _open_ledger_file(ledger_fd, record_name, create=True)
-                    except FileExistsError:
-                        record_fd = _open_ledger_file(ledger_fd, record_name, create=False)
+                    created = _checked_git(repo, "update-ref", ref, verified["candidate_commit"], "0" * len(verified["candidate_commit"]))
+                    if created.returncode:
+                        # Another coordinator may have won the same import race. Re-read the ref and
+                        # reconcile an identical winner; only a different winner is a real conflict.
+                        raced = _checked_git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
+                        raced_commit = raced.stdout.strip() if raced.returncode == 0 else ""
+                        if raced_commit == verified["candidate_commit"]:
+                            status = "idempotent"
+                        else:
+                            raise ContractError("canonical task ref changed during import", "idempotency-conflict")
                     else:
-                        with os.fdopen(record_fd, "w", encoding="utf-8", newline="\n") as stream:
-                            stream.write(json.dumps(record, sort_keys=True, indent=2) + "\n")
-                            stream.flush()
-                            os.fsync(stream.fileno())
-                        if os.name != "nt":
-                            os.fsync(ledger_fd)
-                        record_fd = None
-                if record_fd is not None:
+                        status = "imported"
+                record = {"schema": SCHEMA, "idempotency_key": verified.get("idempotency_key", digest),
+                          "candidate_digest": digest, "task_id": verified["task_id"],
+                          "canonical_ref": ref.removeprefix("refs/heads/"),
+                          "candidate_commit": verified["candidate_commit"], "status": status}
+                try:
                     try:
-                        with os.fdopen(record_fd, "r", encoding="utf-8") as stream:
-                            existing = json.load(stream, parse_constant=_reject_json_constant)
-                    except _BOUNDARY_ERRORS as exc:
-                        raise ContractError("candidate idempotency record is unreadable or unsafe",
-                                            "idempotency-conflict") from exc
-                    if not isinstance(existing, dict):
-                        raise ContractError("candidate idempotency record is not an object",
-                                            "idempotency-conflict")
-                    if existing.get("candidate_digest") != digest:
-                        raise ContractError("candidate idempotency key names a different candidate", "idempotency-conflict")
-            except ContractError:
-                raise
-            except _BOUNDARY_ERRORS as exc:
-                raise ContractError("candidate idempotency record is unreadable or unsafe",
-                                    "idempotency-conflict") from exc
-            return record
+                        record_fd = _open_ledger_file(ledger_fd, record_name, create=False)
+                    except FileNotFoundError:
+                        try:
+                            record_fd = _open_ledger_file(ledger_fd, record_name, create=True)
+                        except FileExistsError:
+                            record_fd = _open_ledger_file(ledger_fd, record_name, create=False)
+                        else:
+                            with os.fdopen(record_fd, "w", encoding="utf-8", newline="\n") as stream:
+                                stream.write(json.dumps(record, sort_keys=True, indent=2) + "\n")
+                                stream.flush()
+                                os.fsync(stream.fileno())
+                            if os.name != "nt":
+                                os.fsync(ledger_fd)
+                            record_fd = None
+                    if record_fd is not None:
+                        try:
+                            with os.fdopen(record_fd, "r", encoding="utf-8") as stream:
+                                existing = json.load(stream, parse_constant=_reject_json_constant)
+                        except _BOUNDARY_ERRORS as exc:
+                            raise ContractError("candidate idempotency record is unreadable or unsafe",
+                                                "idempotency-conflict") from exc
+                        if not isinstance(existing, dict):
+                            raise ContractError("candidate idempotency record is not an object",
+                                                "idempotency-conflict")
+                        if existing.get("candidate_digest") != digest:
+                            raise ContractError("candidate idempotency key names a different candidate", "idempotency-conflict")
+                except ContractError:
+                    raise
+                except _BOUNDARY_ERRORS as exc:
+                    raise ContractError("candidate idempotency record is unreadable or unsafe",
+                                        "idempotency-conflict") from exc
+                return record
 
 
 def classify_stale_base(contract: dict[str, Any], candidate: dict[str, Any], repo: Path,
@@ -1800,10 +1826,20 @@ def _load(path: str) -> dict[str, Any]:
     try:
         value = _strict_json_loads(Path(path).read_text(encoding="utf-8"))
     except _BOUNDARY_ERRORS as exc:
-        raise ContractError(f"cannot read JSON contract {path}") from exc
+        raise ContractError("cannot read JSON contract") from exc
     if not isinstance(value, dict):
-        raise ContractError(f"JSON contract {path} must be an object")
+        raise ContractError("JSON contract must be an object")
     return value
+
+
+_ABSOLUTE_PATH_IN_ERROR = re.compile(
+    r"(?:[A-Za-z]:[\\/]|\\\\|/(?:[^/\s]+/)+)[^\s\"']*"
+)
+
+
+def _public_error_message(message: str) -> str:
+    """Keep JSON CLI diagnostics useful without exposing host paths or OS error text."""
+    return _ABSOLUTE_PATH_IN_ERROR.sub("<path>", message)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1822,11 +1858,11 @@ def main(argv: list[str] | None = None) -> int:
             result: Any = {"valid": True, "schema": SCHEMA, "project_id": contract["id"]}
         else:
             if not args.payload or not args.repo:
-                parser.error(f"{args.command} requires payload and --repo")
+                raise ContractError(f"{args.command} requires payload and --repo")
             payload = _load(args.payload)
             repo = _lexical_absolute(args.repo)
             if args.command != "admit-task" and not args.receipt:
-                parser.error(f"{args.command} requires a controller receipt via --receipt")
+                raise ContractError(f"{args.command} requires a controller receipt via --receipt")
             receipt = _load(args.receipt) if args.receipt else None
             if args.command == "admit-task":
                 result = admit_task(contract, payload, repo)
@@ -1841,18 +1877,18 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, sort_keys=True))
         return 0
     except ContractError as exc:
-        print(json.dumps({"error": exc.code, "message": str(exc)}, sort_keys=True), file=sys.stderr)
+        print(json.dumps({"error": exc.code, "message": _public_error_message(str(exc))}, sort_keys=True), file=sys.stderr)
         return 2
     except _BOUNDARY_ERRORS as exc:
         error = ContractError("repository contract input or I/O was unavailable",
                               "verification-unavailable")
-        print(json.dumps({"error": error.code, "message": str(error)}, sort_keys=True), file=sys.stderr)
+        print(json.dumps({"error": error.code, "message": _public_error_message(str(error))}, sort_keys=True), file=sys.stderr)
         return 2
-    except Exception as exc:
+    except Exception:
         # A CLI boundary must never expose an implementation traceback, even when a mocked or
         # platform-specific filesystem primitive raises outside the normal typed set.
         error = ContractError("repository contract validation failed", "verification-unavailable")
-        print(json.dumps({"error": error.code, "message": str(error)}, sort_keys=True), file=sys.stderr)
+        print(json.dumps({"error": error.code, "message": _public_error_message(str(error))}, sort_keys=True), file=sys.stderr)
         return 2
 
 

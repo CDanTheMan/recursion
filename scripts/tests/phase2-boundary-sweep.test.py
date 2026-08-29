@@ -48,6 +48,19 @@ def run_process(args: list[str], *, input_bytes: bytes | None = None) -> subproc
     return subprocess.run(args, input=input_bytes, capture_output=True, check=False)
 
 
+def git_raw_bytes(repo: Path, *args: str) -> bytes:
+    env = {
+        key: value for key, value in os.environ.items()
+        if key in {"PATH", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SystemRoot", "WINDIR"}
+    }
+    env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"})
+    result = subprocess.run(["git", "--no-replace-objects", "-c", f"safe.directory={repo}",
+                             "-C", str(repo), *args], env=env,
+                            capture_output=True, check=True)
+    return result.stdout
+
+
 class Phase2BoundarySweep(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -112,6 +125,7 @@ class Phase2BoundarySweep(unittest.TestCase):
         ]
 
     def test_every_json_cli_boundary_is_controlled(self) -> None:
+        self.assertNotIn(str(self.root), self.rc._public_error_message(str(self.root)))
         for index, raw in enumerate(self.hostile_json_bytes()):
             path = self.root / f"hostile-{index}.json"
             path.write_bytes(raw)
@@ -120,6 +134,17 @@ class Phase2BoundarySweep(unittest.TestCase):
             with self.subTest(index=index):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertNotIn(b"Traceback", result.stderr)
+
+        missing = self.root / "missing-contract.json"
+        result = run_process([PYTHON, str(SOURCE / "scripts" / "repository_contract.py"),
+                              "validate-project", str(missing)])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn(str(self.root).encode(), result.stderr)
+        self.assertNotIn(str(self.root).replace("\\", "\\\\").encode(), result.stderr)
+        self.assertNotIn(b"missing-contract.json", result.stderr)
+        self.assertNotIn(b"No such file", result.stderr)
+        error = json.loads(result.stderr.decode("utf-8"))
+        self.assertEqual(set(error), {"error", "message"})
 
         valid_path = self.root / "valid.json"
         valid_path.write_text(json.dumps(self.descriptor()), encoding="utf-8")
@@ -147,6 +172,9 @@ class Phase2BoundarySweep(unittest.TestCase):
         self.assertEqual(self.rc._valid_gate_command("git diff --check", allowed_paths=["src"]), True)
 
     def test_gate_cli_hostile_matrix_and_positive_read_only_gate(self) -> None:
+        module = load_gate_module()
+        with self.assertRaises(ValueError):
+            module._validate_git_subcommand(["git", "push"])
         hostile = ["true", "false", "1.0", "999999999999999999999", "1e999", "NaN", "",
                    "[]", "{}", "null", "[[]]", "test -s ../outside", r"test -s \\server\share\x",
                    "test -s C:relative", "test -s ~", "test -s %ENV%", "test -s src/*.txt",
@@ -194,6 +222,15 @@ class Phase2BoundarySweep(unittest.TestCase):
         corpus.extend(
             f"{left} && {right}" for left, right in itertools.product(
                 generated_segments[:5], generated_segments[4:6]))
+        corpus.extend([
+            "test -s [",
+            "[ --check",
+            "[ --check [",
+            "test -s src/[x]",
+            "test -s \"src/[x]\"",
+            "git diff --no-index src/a src/b",
+            "git status --pathspec-from-file=src/list",
+        ])
         mismatches: list[str] = []
         for command in corpus:
             schema_accepts = validator.is_valid(command)
@@ -203,7 +240,12 @@ class Phase2BoundarySweep(unittest.TestCase):
                 controller_gate_files=[])
             if schema_accepts != runtime_accepts:
                 mismatches.append(command)
-        self.assertEqual(mismatches, [], f"schema/runtime gate mismatches: {mismatches}")
+        schema_only = [item for item in mismatches if validator.is_valid(item)]
+        runtime_only = [item for item in mismatches if not validator.is_valid(item)]
+        self.assertEqual(
+            mismatches, [],
+            f"schema/runtime gate mismatches: schema-accept/runtime-reject={len(schema_only)} "
+            f"schema-reject/runtime-accept={len(runtime_only)} values={mismatches}")
 
     def test_runtime_and_schema_descriptor_differential_is_zero(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
@@ -231,8 +273,13 @@ class Phase2BoundarySweep(unittest.TestCase):
                 gate_commands=["bash src/check.sh"],
                 required_gate_profile={"acceptance": "bash src/check.sh", "gate_class": "heavy",
                                        "gate_files": ["src/check.sh"], "controller_gate_files": []}),
+            self.descriptor(external_branch_patterns=["recursion/task/*"]),
+            self.descriptor(external_branch_patterns=["x" * 201]),
+            self.descriptor(gate_commands=["test -s ["]),
         ])
         mismatches: list[tuple[int, bool, bool]] = []
+        schema_only = 0
+        runtime_only = 0
         for index, case in enumerate(cases):
             schema_accepts = not list(validator.iter_errors(case))
             try:
@@ -243,7 +290,14 @@ class Phase2BoundarySweep(unittest.TestCase):
                 runtime_accepts = True
             if schema_accepts != runtime_accepts:
                 mismatches.append((index, schema_accepts, runtime_accepts))
-        self.assertEqual(mismatches, [])
+                if schema_accepts:
+                    schema_only += 1
+                else:
+                    runtime_only += 1
+        self.assertEqual(
+            mismatches, [],
+            f"schema/runtime descriptor mismatches: schema-accept/runtime-reject={schema_only} "
+            f"schema-reject/runtime-accept={runtime_only} values={mismatches}")
         self.assertEqual(validator.is_valid(self.descriptor(schema_version=True)), False)
         self.assertEqual(validator.is_valid(self.descriptor(schema_version=1.0)), False)
         with self.assertRaises(self.rc.ContractError):
@@ -257,9 +311,8 @@ class Phase2BoundarySweep(unittest.TestCase):
         self.rc.validate_project_descriptor(self.descriptor(schema_version=1))
 
     def test_windows_or_posix_controller_key_positive_and_acl_negative(self) -> None:
-        if self.acl_setup_error:
-            self.skipTest(f"host ACL setup denied: {self.acl_setup_error}")
-        self.assertEqual(self.rc._controller_key(), b"sweep-controller-key")
+        if not self.acl_setup_error:
+            self.assertEqual(self.rc._controller_key(), b"sweep-controller-key")
         self.rc._validate_windows_acl_records("S-1-owner", "S-1-owner", [], True)
         with self.assertRaises(OSError):
             self.rc._validate_windows_acl_records(
@@ -284,6 +337,9 @@ class Phase2BoundarySweep(unittest.TestCase):
             with self.subTest(path=path.name):
                 value = json.loads(path.read_text(encoding="utf-8"))
                 self.rc.validate_project_descriptor(value)
+        with self.assertRaises(self.rc.ContractError):
+            self.rc.validate_project_descriptor(
+                self.descriptor(default_branch="feature", integration_branch="feature"))
 
     def test_path_sites_reject_reparses_hardlinks_and_swap_identity(self) -> None:
         workdir = self.repo / "src"
@@ -301,15 +357,17 @@ class Phase2BoundarySweep(unittest.TestCase):
 
         swapped = self.root / "swap.txt"
         swapped.write_text("one\n", encoding="utf-8")
-        initial = os.lstat(swapped)
         replacement = self.root / "replacement.txt"
         replacement.write_text("two\n", encoding="utf-8")
-        swapped.unlink()
-        replacement.rename(swapped)
-        with self.assertRaises(self.rc.ContractError):
-            # A recheck against a previously captured identity must fail closed.
-            if not self.rc._same_file(initial, os.lstat(swapped)):
-                raise self.rc.ContractError("path identity changed")
+        fd = os.open(swapped, os.O_RDONLY)
+        before = os.fstat(fd)
+        after = os.stat(replacement)
+        try:
+            with mock.patch.object(module.os, "fstat", side_effect=[before, after]):
+                with self.assertRaises(ValueError):
+                    module._read_pinned(fd, swapped)
+        finally:
+            os.close(fd)
 
         gate_repo = self.root / "gate-repo"
         gate_repo.mkdir()
@@ -322,7 +380,19 @@ class Phase2BoundarySweep(unittest.TestCase):
         run_process(["git", "-C", str(gate_repo), "config", "user.email", "phase2@example.invalid"])
         run_process(["git", "-C", str(gate_repo), "commit", "-qm", "gate"])
         module = load_gate_module()
+        committed_bytes = gate_file.read_bytes()
+        self.assertEqual(module.clean_tracked_bytes(gate_repo, "src/check.py"), committed_bytes)
+        self.assertEqual(self.rc._git_dir(gate_repo), gate_repo / ".git")
         expected_hash = hashlib.sha256(module.clean_tracked_bytes(gate_repo, "src/check.py")).hexdigest()
+        module._execute_from_verified_files(
+            "python3 src/check.py", gate_repo, None, ["src/check.py"], [],
+            {"src/check.py": expected_hash}, {})
+        gate_file.write_text("print('changed')\n", encoding="utf-8")
+        direct_diff = git_raw_bytes(gate_repo, "diff", "--binary", "HEAD", "--", "src/check.py")
+        product_diff = self.rc._checked_git_raw(
+            gate_repo, "diff", "--binary", "HEAD", "--", "src/check.py").stdout
+        self.assertEqual(product_diff, direct_diff)
+        self.assertEqual(hashlib.sha256(product_diff).hexdigest(), hashlib.sha256(direct_diff).hexdigest())
         gate_file.write_text("print('swapped')\n", encoding="utf-8")
         with self.assertRaises(ValueError):
             module._execute_from_verified_files(
@@ -363,11 +433,60 @@ class Phase2BoundarySweep(unittest.TestCase):
             with self.assertRaises(self.rc.ContractError):
                 with self.rc._pinned_ledger(ledger_junction):
                     pass
+            git_repo = self.root / "git-junction-repo"
+            git_target = self.root / "git-junction-target"
+            git_repo.mkdir()
+            git_target.mkdir()
+            init = run_process(["git", "-C", str(git_repo), "init", "-q", "-b", "main"])
+            self.assertEqual(init.returncode, 0, init.stderr.decode(errors="replace"))
+            redirected_git = git_target / "git-dir"
+            (git_repo / ".git").rename(redirected_git)
+            actual_git_junction = git_repo / ".git"
+            if os.name == "nt":
+                result = run_process(["cmd.exe", "/d", "/c", "mklink", "/J",
+                                      str(actual_git_junction), str(redirected_git)])
+                if result.returncode:
+                    self.skipTest(f".git junction creation is unavailable on this host: {result.stderr!r}")
+            else:
+                actual_git_junction.symlink_to(redirected_git, target_is_directory=True)
+            with self.assertRaises(self.rc.ContractError):
+                self.rc._git_dir(git_repo)
             with mock.patch.object(
                     self.rc, "_checked_git",
                     return_value=SimpleNamespace(returncode=0, stdout=str(junction))):
                 with self.assertRaises(self.rc.ContractError):
                     self.rc._git_dir(self.repo)
+            failure_parent = self.root / "handle-failure-parent"
+            failure_parent.mkdir()
+            with mock.patch.object(module.os, "name", "posix"), \
+                    mock.patch.object(module.os, "open", return_value=123), \
+                    mock.patch.object(module.os, "fstat", side_effect=OSError("fstat failure")), \
+                    mock.patch.object(module.os, "close") as close:
+                with self.assertRaises(ValueError):
+                    with module._pinned_file_parents(failure_parent / "gate.py"):
+                        pass
+            self.assertEqual(close.call_count, 1,
+                             "failed parent pin did not release its opened handle")
+            with mock.patch.object(self.rc.os, "name", "posix"), \
+                    mock.patch.object(self.rc.os, "open", return_value=456), \
+                    mock.patch.object(self.rc.os, "fstat", side_effect=OSError("fstat failure")), \
+                    mock.patch.object(self.rc.os, "close") as close:
+                with self.assertRaises(OSError):
+                    with self.rc._pinned_real_directory(self.root / "repo"):
+                        pass
+            self.assertEqual(close.call_count, 1,
+                             "failed directory pin did not release its opened handle")
+            real_directory = self.root / "repo"
+            real_info = real_directory.stat()
+            with mock.patch.object(self.rc.os, "name", "posix"), \
+                    mock.patch.object(self.rc.os, "open", return_value=789), \
+                    mock.patch.object(self.rc.os, "fstat", side_effect=[real_info, OSError("recheck failure")]), \
+                    mock.patch.object(self.rc.os, "close") as close:
+                with self.assertRaises(OSError):
+                    with self.rc._pinned_real_directory(real_directory):
+                        pass
+            self.assertEqual(close.call_count, 2,
+                             "directory recheck failure did not release its pinned handle")
         finally:
             if junction.exists() or junction.is_symlink():
                 junction.rmdir()
@@ -406,11 +525,10 @@ class Phase2BoundarySweep(unittest.TestCase):
         # Receipt provenance is the complete diff stream.  The ordinary git() helper strips the
         # trailing newline for scalar values such as commit IDs; stripping a patch changes the
         # bytes being authenticated and makes the fixture receipt unlike a controller receipt.
-        diff = subprocess.run(["git", "-C", str(repo), "diff", "--binary", source, commit],
-                              text=True, capture_output=True, check=True).stdout
+        diff = git_raw_bytes(repo, "diff", "--binary", source, commit)
         body = {"schema": "recursion-controller-verifier-receipt/v1", "project_id": "phase2-sweep",
                 "task_id": "task-one", "source_sha": source, "candidate_commit": commit,
-                "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(),
+                "diff_sha256": hashlib.sha256(diff).hexdigest(),
                 "scope_digest": self.rc._json_digest(["src"]),
                 "gate_digest": self.rc._json_digest(["git diff --check"]), "verdict": "pass",
                 "verifier": "controller-verifier", "provenance": "recursion-controller"}
@@ -430,6 +548,17 @@ class Phase2BoundarySweep(unittest.TestCase):
         self.assertIn(result["status"], {"imported", "idempotent"})
         again = self.rc.import_candidate(contract, candidate, repo, receipt=receipt)
         self.assertEqual(again["status"], "idempotent")
+        forged = dict(receipt, diff_sha256="0" * 64)
+        receipt_body = {key: forged[key] for key in (
+            "schema", "project_id", "task_id", "source_sha", "candidate_commit", "diff_sha256",
+            "scope_digest", "gate_digest", "verdict", "verifier", "provenance")}
+        forged["receipt_digest"] = self.rc._json_digest(receipt_body)
+        forged["signature"] = hmac.new(
+            b"sweep-controller-key", forged["receipt_digest"].encode("ascii"), hashlib.sha256
+        ).hexdigest()
+        with self.assertRaises(self.rc.ContractError):
+            self.rc._verify_receipt(
+                contract, candidate, forged, source, commit, ["src/feature.txt"], ["src"], repo)
 
 
 if __name__ == "__main__":

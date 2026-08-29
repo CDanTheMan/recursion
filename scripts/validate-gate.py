@@ -152,7 +152,10 @@ def _open_verified_file(path: Path) -> int:
             close_handle = kernel32.CloseHandle
             close_handle.argtypes = [wintypes.HANDLE]
             close_handle.restype = wintypes.BOOL
-            handle = create_file(str(path), 0x80000000, 0x00000003, None, 3,
+            # Deny write and delete sharing while the verified path is executed below.  A
+            # read-only handle alone is not enough: another opener could otherwise rewrite the
+            # pathname after this handle was hashed and before CreateProcess follows it.
+            handle = create_file(str(path), 0x80000000, 0x00000001, None, 3,
                                  0x00000080 | 0x00200000 | 0x02000000, None)
             handle_value = _native_handle_value(handle)
             if handle_value in {None, ctypes.c_void_p(-1).value}:
@@ -242,12 +245,11 @@ def _pinned_file_parents(path: Path):
                 except OSError:
                     close_handle(native)
                     raise
+                handles.append(fd)
                 pinned = os.fstat(fd)
                 if _is_reparse_or_link(pinned) or not stat.S_ISDIR(pinned.st_mode) \
                         or not _same_file(initial, pinned):
-                    os.close(fd)
                     fail(f"gate file parent changed while being pinned: {path}")
-                handles.append(fd)
                 identities.append(pinned)
             yield
             for fd, expected in zip(handles, identities):
@@ -266,10 +268,10 @@ def _pinned_file_parents(path: Path):
             fail(f"gate file parent is not a real directory: {path}")
         for part in parts[1:-1] if absolute.anchor else parts[:-1]:
             current = os.open(part, flags, dir_fd=current)
+            handles.append(current)
             info = os.fstat(current)
             if _is_reparse_or_link(info) or not stat.S_ISDIR(info.st_mode):
                 fail(f"gate file parent is not a real directory: {path}")
-            handles.append(current)
             identities.append(info)
         yield
         for fd, expected in zip(handles, identities):

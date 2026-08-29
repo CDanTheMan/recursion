@@ -41,6 +41,7 @@
         "maxLength": 4096,
         "allOf": [
           {"not": {"pattern": "[~%$`]"}},
+          {"not": {"pattern": "(?:^|&&)\\s*(?:[^\\s&]+\\s+)+\\["}},
           {"not": {"pattern": "^\\s*(?:bash|sh|python|python3|node)\\s*$"}},
           {"not": {"pattern": "\\s(?!(?:\\[)(?:\\s|$))[^\\s&|]*[*?\\[]"}},
           {"not": {"pattern": "(?:^|[\\s\"'])(?:[A-Za-z]:|\\\\\\\\|//)"}},
@@ -77,6 +78,7 @@
     {"if": {"properties": {"default_branch": {"const": "master"}}}, "then": {"properties": {"integration_branch": {"not": {"const": "master"}}}}},
     {"if": {"properties": {"default_branch": {"const": "develop"}}}, "then": {"properties": {"integration_branch": {"not": {"const": "develop"}}}}},
     {"if": {"properties": {"default_branch": {"const": "trunk"}}}, "then": {"properties": {"integration_branch": {"not": {"const": "trunk"}}}}},
+    {"properties": {"external_branch_patterns": {"not": {"contains": {"pattern": "^recursion/task(?:/|$)"}}}}},
     {"if": {"required": ["gate_commands", "required_gate_profile"], "properties": {"gate_commands": {"const": ["git diff --check"]}, "required_gate_profile": {"properties": {"acceptance": {"not": {"const": "git diff --check"}}}}}}, "then": {"not": {"required": ["required_gate_profile"]}}},
     {"if": {"properties": {"gate_commands": {"contains": {"pattern": "^\\s*(?:bash|sh|python|python3|node)\\s+"}}}}, "then": {"required": ["required_gate_profile"]}}
   ]

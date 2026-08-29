@@ -52,6 +52,19 @@ def git_raw(repo: Path, *args: str) -> str:
     return result.stdout
 
 
+def git_raw_bytes(repo: Path, *args: str) -> bytes:
+    env = {
+        key: value for key, value in os.environ.items()
+        if key in {"PATH", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SystemRoot", "WINDIR"}
+    }
+    env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"})
+    result = subprocess.run(["git", "--no-replace-objects", "-c", f"safe.directory={repo}",
+                             "-C", str(repo), *args], env=env,
+                            capture_output=True, check=True)
+    return result.stdout
+
+
 class RepositoryContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = ExplicitScratch("contract")
@@ -152,13 +165,13 @@ class RepositoryContractTests(unittest.TestCase):
         return {**candidate, "external_branch": branch, "candidate_commit": made_commit}
 
     def receipt(self, candidate: dict[str, object]) -> dict[str, object]:
-        diff = git_raw(self.repo, "diff", "--binary", str(candidate["source_sha"]), str(candidate["candidate_commit"]))
+        diff = git_raw_bytes(self.repo, "diff", "--binary", str(candidate["source_sha"]), str(candidate["candidate_commit"]))
         paths = [item for item in git(self.repo, "diff", "--name-only", str(candidate["source_sha"]), str(candidate["candidate_commit"])).splitlines() if item]
         body = {
             "schema": "recursion-controller-verifier-receipt/v1", "project_id": "test-project",
             "task_id": candidate["task_id"], "source_sha": candidate["source_sha"],
             "candidate_commit": candidate["candidate_commit"],
-            "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(),
+            "diff_sha256": hashlib.sha256(diff).hexdigest(),
             "scope_digest": rc._json_digest(candidate.get("allowed_paths", self.contract["allowed_paths"])),
             "gate_digest": rc._json_digest(self.contract["gate_commands"]),
             "verdict": "pass", "verifier": "controller-verifier", "provenance": "recursion-controller",
@@ -512,11 +525,11 @@ class RepositoryContractTests(unittest.TestCase):
             }
 
         def receipt(item: dict[str, object]) -> dict[str, object]:
-            diff = git_raw(sha_repo, "diff", "--binary", str(item["source_sha"]), commit)
+            diff = git_raw_bytes(sha_repo, "diff", "--binary", str(item["source_sha"]), commit)
             body = {
                 "schema": "recursion-controller-verifier-receipt/v1", "project_id": "test-project",
                 "task_id": "task-one", "source_sha": item["source_sha"],
-                "candidate_commit": commit, "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(),
+                "candidate_commit": commit, "diff_sha256": hashlib.sha256(diff).hexdigest(),
                 "scope_digest": rc._json_digest(["src"]),
                 "gate_digest": rc._json_digest(contract["gate_commands"]), "verdict": "pass",
                 "verifier": "controller-verifier", "provenance": "recursion-controller",
