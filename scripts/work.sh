@@ -656,6 +656,8 @@ GATE_CONTRACT=""
 if [ -x "$ROOT/scripts/validate-gate.py" ]; then
   GATE_STRICT_ARGS=()
   [ -z "$PILOT_ID" ] || GATE_STRICT_ARGS+=(--strict-direct)
+  GATE_STRICT_ARGS+=(--read-only-paths "$SEED $SEED_MANIFEST")
+  [ -n "$PILOT_ID" ] || GATE_STRICT_ARGS+=(--legacy-compound)
   GATE_ERR="$(mktemp "${TMPDIR:-/tmp}/validate-gate.XXXXXX")" || exit 74
   if GATE_CONTRACT="$(python3 "$ROOT/scripts/validate-gate.py" --acceptance "$ACCEPTANCE" \
       --allowed-paths "${ALLOWED_PATHS:-$WORKDIR}" --gate-files "$GATE_FILES" --repo "$REPO_DIR" \

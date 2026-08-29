@@ -32,11 +32,17 @@ def explicit_scratch(prefix: str) -> Path:
     return path
 
 
-def run_gate_result(acceptance: str, strict: bool = True,
-                    gate_files: str = "") -> subprocess.CompletedProcess[bytes]:
+def run_gate_result(
+        acceptance: str, strict: bool = True, gate_files: str = "",
+        read_only_paths: str = "", legacy: bool = False,
+        ) -> subprocess.CompletedProcess[bytes]:
     argv = [sys.executable, str(GATE), "--acceptance", acceptance, "--allowed-paths", "app"]
     if gate_files:
         argv += ["--gate-files", gate_files]
+    if read_only_paths:
+        argv += ["--read-only-paths", read_only_paths]
+    if legacy:
+        argv.append("--legacy-compound")
     if strict:
         argv.append("--strict-direct")
     return subprocess.run(argv, capture_output=True, check=False)
@@ -68,6 +74,45 @@ class DirectGateAdmissionTest(unittest.TestCase):
         self.assertNotEqual(
             result.returncode, 0,
             "path traversal guard accepted traversal in non-path comparison operands",
+        )
+
+    def test_legacy_conditional_gate_is_typed_and_explicit(self):
+        acceptance = "if [ -e app/result.txt ]; then exit 0; else exit 1; fi"
+        self.assertNotEqual(
+            run_gate_result(acceptance, strict=False).returncode,
+            0,
+            "legacy conditional gate was admitted without its explicit caller opt-in",
+        )
+        self.assertEqual(
+            run_gate_result(acceptance, strict=False, legacy=True).returncode,
+            0,
+            "typed legacy conditional gate was not admitted for non-pilot work.sh tasks",
+        )
+        self.assertNotEqual(
+            run_gate_result(acceptance, strict=True, legacy=True).returncode,
+            0,
+            "legacy conditional gate bypassed strict direct admission",
+        )
+        self.assertNotEqual(
+            run_gate_result(
+                "if [ -e /tmp/outside ]; then exit 0; else exit 1; fi",
+                strict=False, legacy=True,
+            ).returncode,
+            0,
+            "legacy conditional gate escaped filesystem operand confinement",
+        )
+
+    def test_declared_read_only_paths_are_admitted_but_not_widened(self):
+        acceptance = "test -s fixtures/truth.json"
+        self.assertEqual(
+            run_gate_result(acceptance, read_only_paths="fixtures").returncode,
+            0,
+            "a declared read-only gate path was rejected",
+        )
+        self.assertNotEqual(
+            run_gate_result(acceptance).returncode,
+            0,
+            "a read-only gate path was admitted without declaration",
         )
 
     def test_non_strict_git_cwd_redirection_guard_isolated_from_subcommand_checks(self):

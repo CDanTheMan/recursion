@@ -475,11 +475,14 @@ def _validate_git_subcommand(words: list[str]) -> None:
 
 
 def _declared_or_allowed(path: str, *, allowed: list[str], controller_root: str | None,
-                         controller_gate_files: list[str]) -> bool:
+                         controller_gate_files: list[str],
+                         read_only_paths: list[str] | None = None) -> bool:
     normalized = path.replace("\\", "/")
     if _path_is_absolute(normalized):
         return _controller_declared(normalized, controller_root, controller_gate_files)
-    return under(normalized, allowed) or normalized in controller_gate_files
+    return (under(normalized, allowed)
+            or under(normalized, read_only_paths or [])
+            or normalized in controller_gate_files)
 
 
 def _path_operand_indexes(words: list[str]) -> set[int]:
@@ -504,7 +507,8 @@ def _path_operand_indexes(words: list[str]) -> set[int]:
 
 
 def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: list[str],
-                         controller_root: str | None, controller_gate_files: list[str]) -> str | None:
+                         controller_root: str | None, controller_gate_files: list[str],
+                         read_only_paths: list[str] | None = None) -> str | None:
     """Apply the strict direct-command policy to parsed argv, including every path operand."""
     if not words:
         return None
@@ -573,10 +577,52 @@ def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: li
                     normalized, controller_root, controller_gate_files):
                 fail(f"acceptance path operand is outside declared controller files: {word}")
             if not _declared_or_allowed(
-                    normalized, allowed=allowed, controller_root=controller_root,
-                    controller_gate_files=controller_gate_files):
+                normalized, allowed=allowed, controller_root=controller_root,
+                controller_gate_files=controller_gate_files,
+                read_only_paths=read_only_paths):
                 fail(f"acceptance path operand is outside allowed/controller-declared paths: {word}")
     return candidate
+
+
+def _validate_legacy_conditional(parsed_segments: list[list[str]], operators: list[str], *,
+                                 allowed: list[str], gate_files: list[str],
+                                 controller_root: str | None,
+                                 controller_gate_files: list[str],
+                                 read_only_paths: list[str]) -> None:
+    """Admit the narrow legacy `if file-test; then exit N; else exit N; fi` shape.
+
+    Non-pilot work.sh tasks historically used this form to express a gate that returns a useful
+    nonzero verdict while still allowing a bounded retry.  It is not part of the strict v2
+    descriptor grammar, so keep it behind an explicit caller opt-in and validate the condition
+    with the same operand policy as direct gates.  In particular, this must not turn the legacy
+    escape hatch into arbitrary semicolon-separated shell.
+    """
+    if operators != [";", ";", ";"] or len(parsed_segments) != 4:
+        fail("legacy conditional gate must use one file test and two numeric exit branches")
+    condition_segment = parsed_segments[0]
+    if condition_segment[:1] != ["if"]:
+        fail("legacy conditional gate must start with if")
+    condition = condition_segment[1:]
+    if condition[:1] == ["["]:
+        if condition[-1:] != ["]"]:
+            fail("legacy conditional file test is missing its closing bracket")
+        condition = ["test", *condition[1:-1]]
+    if condition[:1] != ["test"]:
+        fail("legacy conditional gate must use test or bracket file syntax")
+    validate_direct_argv(
+        condition, allowed=allowed, gate_files=gate_files,
+        controller_root=controller_root, controller_gate_files=controller_gate_files,
+        read_only_paths=read_only_paths,
+    )
+
+    for index, keyword in ((1, "then"), (2, "else")):
+        branch = parsed_segments[index]
+        if (len(branch) != 3 or branch[0] != keyword or branch[1] != "exit"
+                or not re.fullmatch(r"[0-9]+", branch[2])
+                or int(branch[2]) > 255):
+            fail("legacy conditional gate branches must be `then|else exit N`")
+    if parsed_segments[3] != ["fi"]:
+        fail("legacy conditional gate must end with fi")
 
 
 def _execute_from_verified_files(command: str, repo: Path, controller_root: Path | None,
@@ -686,6 +732,9 @@ def main() -> int:
     parser.add_argument("--repo")
     parser.add_argument("--controller-gate-files", default="")
     parser.add_argument("--controller-root")
+    parser.add_argument("--read-only-paths", default="")
+    parser.add_argument("--legacy-compound", action="store_true",
+                        help="admit the narrow legacy conditional gate used by non-pilot work.sh tasks")
     parser.add_argument("--baseline-commit")
     parser.add_argument("--strict-direct", action="store_true")
     parser.add_argument("--execute", action="store_true",
@@ -698,7 +747,10 @@ def main() -> int:
             ord(ch) < 32 and ch not in "\t" for ch in raw_gate
         ):
             fail("acceptance gate must be bounded, single-line, and non-empty")
-        if re.search(r"[~%$`]|(?<!&)&(?!&)|[|;<>]", gate):
+        if args.legacy_compound and args.strict_direct:
+            fail("legacy compound gates are not admitted in strict direct mode")
+        if re.search(r"[~%$`]|(?<!&)&(?!&)|[|<>]", gate) \
+                or (";" in gate and not args.legacy_compound):
             fail("acceptance gate contains shell expansion or metacharacters")
         compact = re.sub(r"\s+", " ", gate)
         if args.strict_direct and (
@@ -741,11 +793,27 @@ def main() -> int:
         allowed = [p.rstrip("/") for p in args.allowed_paths.replace(",", " ").split() if p]
         gate_files = paths(args.gate_files)
         controller_gate_files = paths(args.controller_gate_files)
+        read_only_paths = paths(args.read_only_paths)
+        if ";" in gate:
+            if not args.legacy_compound:
+                fail("legacy compound gate mode is not enabled")
+            _validate_legacy_conditional(
+                parsed_segments, operators, allowed=allowed, gate_files=gate_files,
+                controller_root=args.controller_root,
+                controller_gate_files=controller_gate_files,
+                read_only_paths=read_only_paths,
+            )
         for words in parsed_segments:
+            # The typed legacy conditional validator above has already checked every token and
+            # its one filesystem operand.  Do not reclassify the syntactic `[` token as a glob
+            # when walking the individual semicolon-separated shell segments below.
+            if ";" in gate:
+                continue
             if args.strict_direct:
                 validate_direct_argv(words, allowed=allowed, gate_files=gate_files,
                                      controller_root=args.controller_root,
-                                     controller_gate_files=controller_gate_files)
+                                     controller_gate_files=controller_gate_files,
+                                     read_only_paths=read_only_paths)
             else:
                 candidate = entrypoint(words, args.strict_direct)
                 if PurePosixPath(words[0].replace("\\", "/")).name == "git":
@@ -764,8 +832,9 @@ def main() -> int:
                                 normalized, args.controller_root, controller_gate_files):
                             fail(f"acceptance path operand is outside declared controller files: {word}")
                         if not _declared_or_allowed(
-                                normalized, allowed=allowed, controller_root=args.controller_root,
-                                controller_gate_files=controller_gate_files):
+                            normalized, allowed=allowed, controller_root=args.controller_root,
+                            controller_gate_files=controller_gate_files,
+                            read_only_paths=read_only_paths):
                             fail(f"acceptance path operand is outside allowed/controller-declared paths: {word}")
                 if candidate and PurePosixPath(candidate).is_absolute():
                     if not args.controller_root:
