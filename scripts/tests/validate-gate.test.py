@@ -151,6 +151,57 @@ class DirectGateAdmissionTest(unittest.TestCase):
             0,
         )
 
+    def test_git_redirection_options_are_rejected_by_cli_in_both_modes(self):
+        blocked = (
+            ("--work-tree", "--work-tree=/tmp", "--work-tree /tmp"),
+            ("--git-dir", "--git-dir=/tmp/x", "--git-dir /tmp/x"),
+            ("-C", "-C/tmp", "-C /tmp"),
+            ("--exec-path", "--exec-path=/tmp", "--exec-path /tmp"),
+            ("--namespace", "--namespace=/tmp", "--namespace /tmp"),
+            ("--super-prefix", "--super-prefix=/tmp", "--super-prefix /tmp"),
+            ("-c", "-ccore.worktree=/tmp", "-c core.worktree=/tmp"),
+            ("--config", "--config=/tmp", "--config /tmp"),
+            ("--config-env", "--config-env=GIT_DIR=/tmp", "--config-env GIT_DIR=/tmp"),
+            ("-o", "-o/tmp", "-o /tmp"),
+            ("--output", "--output=/tmp", "--output /tmp"),
+        )
+        for symbol, joined, spaced in blocked:
+            for option_form in (joined, spaced):
+                for acceptance in (
+                    f"git diff {option_form}",
+                    f"test -s app/result.txt && git diff {option_form}",
+                ):
+                    for strict in (False, True):
+                        with self.subTest(symbol=symbol, option_form=option_form,
+                                          acceptance=acceptance, strict=strict):
+                            result = run_gate_result(acceptance, strict=strict)
+                            stderr = result.stderr.decode("utf-8", "replace").strip()
+                            self.assertEqual(result.returncode, 2)
+                            self.assertEqual(
+                                stderr,
+                                "ERR Git gate may not redirect its repository or configuration: "
+                                + symbol,
+                            )
+                            self.assertNotIn("/tmp", stderr)
+                            self.assertNotIn("Traceback", stderr)
+
+    def test_required_positive_controls_are_admitted_in_both_modes(self):
+        for acceptance in (
+            "git diff app",
+            "git status app",
+            "test -s app/result.txt && touch C:/phase5-marker",
+        ):
+            for strict in (False, True):
+                with self.subTest(acceptance=acceptance, strict=strict):
+                    result = run_gate_result(acceptance, strict=strict)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
+        for strict in (False, True):
+            with self.subTest(read_only=True, strict=strict):
+                result = run_gate_result(
+                    "test -s fixtures/truth.json", strict=strict, read_only_paths="fixtures",
+                )
+                self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
+
     def test_declared_read_only_paths_are_admitted_but_not_widened(self):
         acceptance = "test -s fixtures/truth.json"
         self.assertEqual(

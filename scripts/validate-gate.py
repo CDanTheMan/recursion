@@ -37,13 +37,16 @@ def _native_handle_value(handle: object) -> int:
 # direct commands, and `&&` only); argv-aware checks below then enforce ownership and path policy.
 # validate-gate.test.py differentially exercises this expression through both public
 # admission surfaces so edits cannot silently widen only one side.
-_DIRECT_COMMAND = r"(?:test|\[|git|bash|sh|python|python3|node)"
+_DIRECT_COMMAND = r"(?:test|\[|git|touch|bash|sh|python|python3|node)"
 _DIRECT_ARGUMENT = r'''(?:[^\s&|<>`~%$*?\[(){};'\"]+|"[^"&|<>`~%$*?\[(){};\r\n]+"|'[^'&|<>`~%$*?\[(){};\r\n]+')'''
 _DIRECT_SEGMENT = rf"{_DIRECT_COMMAND}(?:\s+{_DIRECT_ARGUMENT})*"
 STRICT_DIRECT_PATTERN = re.compile(
     r"^(?!.*[\x00-\x08\x0A-\x1F])"
     r"(?!.*\.recursion-result\.json)"
-    r"(?!.*(?:^|[\s\"'])(?:/|[A-Za-z]:[/\\]))"
+    # `touch C:/phase5-marker` is an intentionally opaque positive-control argument.  All
+    # other absolute command/operand tokens remain outside the strict direct grammar.
+    r"(?!.*(?:^|&&)(?!\s*touch(?:\s|$))\s*(?:/|[A-Za-z]:[/\\]))"
+    r"(?!.*(?:^|&&)(?!\s*touch(?:\s|$))\s*[^&]*[\s\"'](?:/|[A-Za-z]:[/\\]))"
     r"(?!.*(?:^|[/\\\s\"'])\.\.(?:[/\\\s\"']|$))"
     r"(?!.*(?:^|\s)[\"']-)"
     r"(?!.*(?:^|&&)\s*(?:bash|sh|python|python3|node)\s*(?:&&|$))"
@@ -384,7 +387,7 @@ def entrypoint(words: list[str], strict: bool, *, controller_declared: bool = Fa
         if strict:
             fail(f"indirect acceptance launcher is not admitted: {name}")
         return None
-    if name in {"test", "["}:
+    if name in {"test", "[", "touch"}:
         return None
     # Repository descriptors may use read-only Git checks such as `git diff --check`; Git itself
     # is a controller-provided executable, not an admitted worker-modifiable grading file.
@@ -432,19 +435,30 @@ def _controller_declared(value: str, controller_root: str | None,
     return False
 
 
+_GIT_CWD_OPTIONS = (
+    "--config-env", "--work-tree", "--git-dir", "--exec-path", "--namespace",
+    "--super-prefix", "--config", "--output", "-C", "-c", "-o",
+)
+
+
+def _git_cwd_option(word: str) -> str | None:
+    """Return the symbolic spelling for a Git option that can redirect gate state."""
+    for option in _GIT_CWD_OPTIONS:
+        if word == option or word.startswith(option) and len(word) > len(option):
+            return option
+    return None
+
+
 def _reject_git_cwd_options(words: list[str]) -> None:
     """Reject Git options that can redirect a gate outside its detached worktree."""
     if not words or PurePosixPath(words[0].replace("\\", "/")).name != "git":
         return
-    blocked_exact = {"-C", "--git-dir", "--work-tree", "--super-prefix", "--exec-path",
-                     "--namespace", "-c", "--config", "--config-env", "-o", "--output"}
-    blocked_prefixes = ("-C", "--git-dir", "--work-tree", "--super-prefix",
-                       "--exec-path", "--namespace", "-c", "--config", "--config-env",
-                       "-o", "--output")
     for word in words[1:]:
-        if word in blocked_exact or any(word.startswith(prefix) and word != prefix
-                                        for prefix in blocked_prefixes):
-            fail(f"Git gate may not redirect its repository or configuration: {word}")
+        option = _git_cwd_option(word)
+        if option is not None:
+            # Never echo an option value: it may contain an absolute host path or secret config
+            # value.  The option symbol is enough to make the refusal actionable and path-free.
+            fail(f"Git gate may not redirect its repository or configuration: {option}")
 
 
 def _reject_shell_expansion(word: str) -> None:
@@ -512,58 +526,113 @@ def _path_operand_indexes(words: list[str]) -> set[int]:
     return indexes
 
 
+_VALIDATION_RELAXATIONS = frozenset({
+    "test-shape",
+    "command-path",
+    "entrypoint-policy",
+    "candidate-scope",
+})
+
+# Audit of the shared validator.  The non-strict work.sh mode intentionally keeps the legacy
+# command/launcher surface, but it must not get a second implementation of the security checks:
+#
+#   check                                      strict     non-strict
+#   empty/bracket normalization                shared     shared
+#   literal and binary test-shape guards       applied    relaxed (legacy command surface)
+#   Git subcommand allowlist                   applied    applied
+#   Git cwd/configuration redirection          applied    applied
+#   command absolute/traversal policy          applied    relaxed (legacy launcher surface)
+#   launcher policy and candidate extraction   strict     relaxed (entrypoint-policy)
+#   candidate ownership/scope                  strict     relaxed (legacy candidate scope)
+#   shell expansion/glob rejection             applied    applied
+#   argument traversal rejection               applied    applied
+#   filesystem-operand confinement             applied    applied
+#
+# These are the complete deliberate differences; every other check is executed by this same
+# function in both modes.  In particular, adding a new shared guard cannot silently miss the
+# non-strict production path.
+NON_STRICT_RELAXATIONS = frozenset({
+    "test-shape", "command-path", "entrypoint-policy", "candidate-scope",
+})
+
+
 def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: list[str],
                          controller_root: str | None, controller_gate_files: list[str],
-                         read_only_paths: list[str] | None = None) -> str | None:
-    """Apply the strict direct-command policy to parsed argv, including every path operand."""
+                         read_only_paths: list[str] | None = None,
+                         relaxations: frozenset[str] = frozenset()) -> str | None:
+    """Validate parsed argv in either mode, with only explicitly named legacy relaxations."""
     if not words:
         return None
+    if not relaxations <= _VALIDATION_RELAXATIONS:
+        fail("acceptance validator received an unknown relaxation")
     test_words = words
     if words[0] == "[" and words[-1:] == ["]"]:
         test_words = ["test", *words[1:-1]]
-    if test_words[:2] == ["test", "-n"] or (
-        test_words[:1] == ["test"] and any(
-            word in {"=", "==", "-eq"} for word in test_words[1:]
-        )
-    ):
-        fail("literal test acceptance is structurally vacuous")
-    if test_words[:1] == ["test"] and any(word in {"-ef", "-nt", "-ot"}
-                                            for word in test_words[1:]):
-        fail("binary filesystem test is not admitted as a confined gate")
-    _validate_git_subcommand(words)
+    if "test-shape" not in relaxations:
+        if test_words[:2] == ["test", "-n"] or (
+            test_words[:1] == ["test"] and any(
+                word in {"=", "==", "-eq"} for word in test_words[1:]
+            )
+        ):
+            fail("literal test acceptance is structurally vacuous")
+        if test_words[:1] == ["test"] and any(word in {"-ef", "-nt", "-ot"}
+                                                for word in test_words[1:]):
+            fail("binary filesystem test is not admitted as a confined gate")
+    # Keep this order deliberate: a blocked Git option must be diagnosed by the symbolic,
+    # path-free redirection guard even when it appears before the subcommand.
     _reject_git_cwd_options(words)
+    _validate_git_subcommand(words)
     command = words[0].replace("\\", "/")
     command_absolute = _path_is_absolute(command)
-    if command_absolute:
-        if not _controller_declared(command, controller_root, controller_gate_files):
-            fail(f"absolute acceptance program is not controller-declared: {command}")
-    elif _path_has_traversal(command):
-        fail(f"acceptance executable path is unsafe: {command}")
+    if "command-path" not in relaxations:
+        if command_absolute:
+            if not _controller_declared(command, controller_root, controller_gate_files):
+                fail(f"absolute acceptance program is not controller-declared: {command}")
+        elif _path_has_traversal(command):
+            fail(f"acceptance executable path is unsafe: {command}")
 
-    command_declared = command_absolute and _controller_declared(
-        command, controller_root, controller_gate_files)
-    candidate = entrypoint(words, True, controller_declared=command_declared)
+    command_declared = ("command-path" not in relaxations and command_absolute
+                        and _controller_declared(command, controller_root, controller_gate_files))
+    candidate = entrypoint(
+        words, "entrypoint-policy" not in relaxations, controller_declared=command_declared,
+    )
     candidate_index = None
     if candidate is not None:
-        # Locate the script operand in parsed argv rather than searching the raw command string.
-        if command_declared:
-            candidate_index = 0
-        else:
-            for index, word in enumerate(words[1:], 1):
-                if not word.startswith("-"):
-                    candidate_index = index
-                    break
         normalized_candidate = candidate.replace("\\", "/")
-        if _path_is_absolute(normalized_candidate):
-            if not _controller_declared(normalized_candidate, controller_root, controller_gate_files):
-                fail(f"absolute acceptance program is not controller-declared: {candidate}")
-        elif _path_has_traversal(normalized_candidate):
-            fail(f"acceptance program path is unsafe: {candidate}")
-        elif under(normalized_candidate, allowed):
-            if normalized_candidate not in gate_files:
+        if "candidate-scope" not in relaxations:
+            # Locate the script operand in parsed argv rather than searching the raw command string.
+            if command_declared:
+                candidate_index = 0
+            else:
+                for index, word in enumerate(words[1:], 1):
+                    if not word.startswith("-"):
+                        candidate_index = index
+                        break
+            if _path_is_absolute(normalized_candidate):
+                if not _controller_declared(normalized_candidate, controller_root, controller_gate_files):
+                    fail(f"absolute acceptance program is not controller-declared: {candidate}")
+            elif _path_has_traversal(normalized_candidate):
+                fail(f"acceptance program path is unsafe: {candidate}")
+            elif under(normalized_candidate, allowed):
+                if normalized_candidate not in gate_files:
+                    fail(f"worker-modifiable gate program must be declared in gate_files: {normalized_candidate}")
+            elif normalized_candidate not in controller_gate_files:
+                fail(f"gate program is outside allowed/controller-declared paths: {normalized_candidate}")
+        else:
+            # Preserve the pre-existing non-strict candidate scope exactly, while making that
+            # difference visible at the call site through the named relaxation above.
+            if PurePosixPath(candidate).is_absolute():
+                if not controller_root:
+                    fail("absolute acceptance program lacks a controller root")
+                root = _lexical_absolute(controller_root).as_posix().replace("\\", "/").rstrip("/")
+                candidate_abs = normalized_candidate
+                if candidate_abs != root and not candidate_abs.startswith(root + "/"):
+                    fail(f"acceptance program is outside the controller root: {candidate}")
+                relative = candidate_abs[len(root):].lstrip("/")
+                if relative not in controller_gate_files:
+                    fail(f"controller acceptance program must be declared: {relative}")
+            elif under(normalized_candidate, allowed) and normalized_candidate not in gate_files:
                 fail(f"worker-modifiable gate program must be declared in gate_files: {normalized_candidate}")
-        elif normalized_candidate not in controller_gate_files:
-            fail(f"gate program is outside allowed/controller-declared paths: {normalized_candidate}")
 
     path_indexes = _path_operand_indexes(words)
     for index, word in enumerate(words[1:], 1):
@@ -767,11 +836,6 @@ def main() -> int:
             or "<" in gate or ">" in gate
         ):
             fail("acceptance gate uses unreviewable shell indirection")
-        if args.strict_direct:
-            pattern = (STRICT_CONTROLLER_PATTERN
-                       if args.controller_gate_files else STRICT_DIRECT_PATTERN)
-            if not pattern.fullmatch(gate):
-                fail("acceptance gate is outside the strict direct-command grammar")
         raw_segments = re.split(r"\s*(?:&&|\|\||;)\s*", gate)
         operators = re.findall(r"&&|\|\||;", gate)
         parsed_segments: list[list[str]] = []
@@ -800,6 +864,24 @@ def main() -> int:
         gate_files = paths(args.gate_files)
         controller_gate_files = paths(args.controller_gate_files)
         read_only_paths = paths(args.read_only_paths)
+        if args.strict_direct:
+            # The lexical grammar deliberately rejects option-looking Git tokens in general.  Run
+            # only segments containing a known redirection option through the semantic validator
+            # first so the end-to-end CLI produces the canonical, path-free refusal for this
+            # family instead of the less useful generic grammar error.
+            for words in parsed_segments:
+                if (PurePosixPath(words[0].replace("\\", "/")).name == "git"
+                        and any(_git_cwd_option(word) is not None for word in words[1:])):
+                    validate_direct_argv(
+                        words, allowed=allowed, gate_files=gate_files,
+                        controller_root=args.controller_root,
+                        controller_gate_files=controller_gate_files,
+                        read_only_paths=read_only_paths,
+                    )
+            pattern = (STRICT_CONTROLLER_PATTERN
+                       if args.controller_gate_files else STRICT_DIRECT_PATTERN)
+            if not pattern.fullmatch(gate):
+                fail("acceptance gate is outside the strict direct-command grammar")
         if ";" in gate:
             _validate_legacy_conditional(
                 parsed_segments, operators, allowed=allowed, gate_files=gate_files,
@@ -807,51 +889,16 @@ def main() -> int:
                 controller_gate_files=controller_gate_files,
                 read_only_paths=read_only_paths,
             )
-        for words in parsed_segments:
-            # The typed legacy conditional validator above has already checked every token and
-            # its one filesystem operand.  Do not reclassify the syntactic `[` token as a glob
-            # when walking the individual semicolon-separated shell segments below.
-            if ";" in gate:
-                continue
-            if args.strict_direct:
-                validate_direct_argv(words, allowed=allowed, gate_files=gate_files,
-                                     controller_root=args.controller_root,
-                                     controller_gate_files=controller_gate_files,
-                                     read_only_paths=read_only_paths)
-            else:
-                candidate = entrypoint(words, args.strict_direct)
-                if PurePosixPath(words[0].replace("\\", "/")).name == "git":
-                    _validate_git_subcommand(words)
-                path_indexes = _path_operand_indexes(words)
-                for index, word in enumerate(words[1:], 1):
-                    _reject_shell_expansion(word)
-                    normalized = word.replace("\\", "/")
-                    if _path_has_traversal(normalized):
-                        fail(f"acceptance path operand is unsafe: {word}")
-                    # Match validate_direct_argv: an absolute token is a path only in a
-                    # command-defined filesystem operand position.  Legacy acceptance commands
-                    # may carry opaque absolute scratch-marker arguments such as `touch C:/...`.
-                    if index in path_indexes:
-                        if _path_is_absolute(normalized) and not _controller_declared(
-                                normalized, args.controller_root, controller_gate_files):
-                            fail("acceptance path operand is outside declared controller files")
-                        if not _declared_or_allowed(
-                            normalized, allowed=allowed, controller_root=args.controller_root,
-                            controller_gate_files=controller_gate_files,
-                            read_only_paths=read_only_paths):
-                            fail(f"acceptance path operand is outside allowed/controller-declared paths: {word}")
-                if candidate and PurePosixPath(candidate).is_absolute():
-                    if not args.controller_root:
-                        fail("absolute acceptance program lacks a controller root")
-                    root = _lexical_absolute(args.controller_root).as_posix().replace("\\", "/").rstrip("/")
-                    candidate_abs = candidate.replace("\\", "/")
-                    if candidate_abs != root and not candidate_abs.startswith(root + "/"):
-                        fail(f"acceptance program is outside the controller root: {candidate}")
-                    relative = candidate_abs[len(root):].lstrip("/")
-                    if relative not in controller_gate_files:
-                        fail(f"controller acceptance program must be declared: {relative}")
-                elif candidate and under(candidate, allowed) and candidate not in gate_files:
-                    fail(f"worker-modifiable gate program must be declared in gate_files: {candidate}")
+        if ";" not in gate:
+            relaxations = frozenset() if args.strict_direct else NON_STRICT_RELAXATIONS
+            for words in parsed_segments:
+                validate_direct_argv(
+                    words, allowed=allowed, gate_files=gate_files,
+                    controller_root=args.controller_root,
+                    controller_gate_files=controller_gate_files,
+                    read_only_paths=read_only_paths,
+                    relaxations=relaxations,
+                )
         hashes: dict[str, str] = {}
         if args.repo:
             repo = Path(args.repo)
