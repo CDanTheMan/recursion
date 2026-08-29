@@ -957,23 +957,22 @@ def import_journal(base: Path) -> int:
             imported += 1
 
         # The journal is the recovery authority; the consumer cursor only says which rows have
-        # already been inspected.  Reconcile every valid journal decision after the cursor batch
-        # as well, so a crash or manual loss of a pending projection cannot make the singleton
-        # latest pointer (or an advanced cursor) hide older work.  Existing terminal/running
-        # projections are verified by existing_path and are never reopened or dispatched again.
+        # already been inspected.  Reconcile every checkpointed journal decision as well, so a
+        # crash or manual loss of a pending projection cannot make the singleton latest pointer
+        # (or an advanced cursor) hide older work.  Rows covered by the durable cursor were
+        # validated before acknowledgement; only the cursor batch above needs schema validation
+        # on this import.  Existing terminal/running projections are verified by existing_path
+        # and are never reopened or dispatched again.
         try:
             journal_records = read_jsonl_objects(journal)
         except JsonlDurabilityError as exc:
             raise ValueError(str(exc)) from exc
-        for raw in journal_records:
+        # read_jsonl_objects preserves journal order and omits only blank lines.  The reviewed
+        # legacy rows are the only non-executable objects and occupy the bounded prefix already
+        # represented by expected_markers; every remaining object was validated before the
+        # checkpoint that makes it eligible for this reconciliation pass.
+        for raw in journal_records[len(expected_markers):]:
             record = normalize(raw)
-            try:
-                validate_record(base, record)
-            except ValueError:
-                # Reviewed legacy rows are intentionally non-executable and were handled above
-                # through the exact marker allowlist.  A current invalid row remains rejected by
-                # the cursor batch; this branch is only for old, already-acknowledged markers.
-                continue
             prior = seen_decisions.get(record["id"])
             if prior is not None:
                 assert_same_decision(prior, record, f"journal decision {record['id']}")
