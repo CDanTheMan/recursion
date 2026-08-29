@@ -1703,12 +1703,12 @@ class DurableFabricStore:
             recovery_state = {"running": "query_running", "terminal": "query_terminal", "unknown": "query_unknown"}[state]
             if lease["status"] != "recovery_required":
                 return "duplicate" if lease["recovery_state"] == recovery_state else "ignored"
+            current = _epoch(controller_now)
+            if current < _epoch(lease["created_at"]):
+                raise ReconciliationError("INVALID_CONTROLLER_TIME", "trusted controller time predates lease creation")
+            if current < _epoch(lease["updated_at"]):
+                raise ReconciliationError("INVALID_CONTROLLER_TIME", "trusted controller time moves lease lifecycle backwards")
             if state == "terminal":
-                current = _epoch(controller_now)
-                if current < _epoch(lease["created_at"]):
-                    raise ReconciliationError("INVALID_CONTROLLER_TIME", "trusted controller time predates lease creation")
-                if current < _epoch(lease["updated_at"]):
-                    raise ReconciliationError("INVALID_CONTROLLER_TIME", "trusted controller time moves lease lifecycle backwards")
                 if current >= _epoch(lease["expires_at"]):
                     self._expire_due_locked(controller_now)
                     raise ReconciliationError("LATE_RESULT", "recovered result arrived at or after lease expiry")
