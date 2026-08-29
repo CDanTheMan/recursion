@@ -22,6 +22,48 @@ PY
   mv -f "$temporary" "$file"
 }
 
+check_staged_python_dependencies(){
+  local root="$1"
+  if SOURCE_SCRIPTS="$SRC/scripts" STAGED_SCRIPTS="$root/scripts" python3 - <<'PY'
+import ast
+import os
+from pathlib import Path
+
+source = Path(os.environ["SOURCE_SCRIPTS"])
+staged = Path(os.environ["STAGED_SCRIPTS"])
+first_party = {path.stem for path in source.glob("*.py")}
+missing = []
+found = []
+for script in sorted(staged.glob("*.py")):
+    try:
+        tree = ast.parse(script.read_text(encoding="utf-8"), filename=str(script))
+    except (OSError, SyntaxError, UnicodeError) as exc:
+        print(f"dependency guard: cannot parse {script.name}: {exc}")
+        missing.append((script.name, "<parse>"))
+        continue
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".", 1)[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            imported.add(node.module.split(".", 1)[0])
+    for dependency in sorted(imported & first_party):
+        found.append(f"{script.name}->{dependency}")
+        if not (staged / f"{dependency}.py").is_file():
+            missing.append((script.name, dependency))
+print("dependency guard: first-party imports " + (", ".join(found) or "none"))
+if missing:
+    for script, dependency in missing:
+        print(f"dependency guard: missing {dependency}.py required by {script}")
+    raise SystemExit(1)
+PY
+  then
+    ok "staged Python fixtures contain every first-party imported module"
+  else
+    no "a staged Python fixture is missing a first-party imported module"
+  fi
+}
+
 # 1. The Telegram-facing gateway must have no direct execution path. A message is recorded once;
 # only the durable actuator may later act. The current gateway skill explicitly authorizes both.
 OPS="$SRC/loop/hermes-skills/recursion-ops/SKILL.md"
@@ -40,7 +82,9 @@ cp "$SRC/scripts/taskctl.sh" "$A/scripts/"
 cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
   "$SRC/scripts/runtime-state.py" "$A/scripts/"
 cp "$SRC/scripts/decision-queue.py" "$SRC/scripts/validate-control-state.py" \
-  "$SRC/scripts/validate-decision.py" "$SRC/scripts/engine_contract.py" "$A/scripts/"
+  "$SRC/scripts/validate-decision.py" "$SRC/scripts/engine_contract.py" \
+  "$SRC/scripts/assignment.py" "$A/scripts/"
+check_staged_python_dependencies "$A"
 cat > "$A/scripts/author.sh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s|%s|%s\n' "$1" "$2" "$3" > "$AUTHOR_LOG"
@@ -62,7 +106,10 @@ fi
 # 3. An instruction cannot become handled without a link to a succeeded durable action.
 I="$TMP/intake"; mkdir -p "$I/scripts" "$I/state/instructions"
 cp "$SRC/scripts/intake.sh" "$I/scripts/"
-cp "$SRC/scripts/runtime-state.py" "$I/scripts/"
+cp "$SRC/scripts/runtime-state.py" "$SRC/scripts/transition_receipt.py" \
+  "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/instruction_routing.py" \
+  "$SRC/scripts/pilot_instruction.py" "$I/scripts/"
+check_staged_python_dependencies "$I"
 cat > "$I/state/instructions/00000042.md" <<'T'
 id: 42
 received: 2026-08-06T00:00:00Z
@@ -129,6 +176,8 @@ DROOT="$TMP/pending"; mkdir -p "$DROOT/scripts" "$DROOT/state/tasks" "$DROOT/loo
 for helper in conduct-hermes.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py decision-queue.py validate-control-state.py validate-decision.py engine_contract.py; do
   cp "$SRC/scripts/$helper" "$DROOT/scripts/"
 done
+cp "$SRC/scripts/assignment.py" "$DROOT/scripts/"
+check_staged_python_dependencies "$DROOT"
 cat > "$DROOT/scripts/work.sh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$1" >> "$PENDING_LOG"

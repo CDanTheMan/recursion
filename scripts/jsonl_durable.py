@@ -2128,7 +2128,7 @@ def _append_jsonl_at(root_descriptor: int, journal_name: str, value: dict,
     finally:
         if connection is not None:
             connection.close()
-        _unlock_descriptor(journal_descriptor)
+        _unlock_file_descriptor(journal_descriptor)
         os.close(journal_descriptor)
 
 

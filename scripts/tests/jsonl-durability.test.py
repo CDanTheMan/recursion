@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -360,6 +361,108 @@ def control_interrupted_index_advance_replays_exactly() -> tuple[bool, str]:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def control_pinned_posix_append_and_finally_preserve_original() -> tuple[bool, str]:
+    """Exercise the descriptor-pinned append path, including its error cleanup."""
+    if os.name == "nt":
+        return True, "POSIX descriptor-pinned append is platform-scoped"
+    if not getattr(os, "supports_dir_fd", None) or not Path("/proc/self/fd").is_dir():
+        return False, "POSIX descriptor-pinned append prerequisites are unavailable"
+
+    root = Path(tempfile.mkdtemp(prefix="jsonl-pinned-posix-"))
+    descriptors: list[int] = []
+    try:
+        cache = root / "cache"
+        cache.mkdir()
+        root_descriptor = os.open(root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        cache_descriptor = os.open(cache, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        descriptors.extend((root_descriptor, cache_descriptor))
+        identity = "phase3/pinned/events.jsonl"
+        first = jsonl_durable.append_jsonl_at(
+            root_descriptor, "events.jsonl", {"id": "pinned"},
+            cache_descriptor, identity, dedupe_field="id", dedupe_value="pinned",
+        )
+        cache_name = jsonl_durable.index_cache_name(identity)
+        jsonl_durable.validate_durable_leaf_at(cache_descriptor, cache_name)
+        duplicate = jsonl_durable.append_jsonl_at(
+            root_descriptor, "events.jsonl", {"id": "pinned"},
+            cache_descriptor, identity, dedupe_field="id", dedupe_value="pinned",
+        )
+        if not first.appended or duplicate.appended \
+                or (root / "events.jsonl").read_bytes() != b'{"id":"pinned"}\n':
+            return False, f"first={first!r} duplicate={duplicate!r}"
+
+        failure_root = root / "failure"
+        failure_cache = failure_root / "cache"
+        failure_cache.mkdir(parents=True)
+        failure_root_descriptor = os.open(
+            failure_root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        )
+        failure_cache_descriptor = os.open(
+            failure_cache, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        )
+        descriptors.extend((failure_root_descriptor, failure_cache_descriptor))
+        original = RuntimeError("original pinned append body failure")
+        with mock.patch.object(jsonl_durable, "_update_index_after_append",
+                               side_effect=original):
+            try:
+                jsonl_durable.append_jsonl_at(
+                    failure_root_descriptor, "events.jsonl", {"id": "failure"},
+                    failure_cache_descriptor, "phase3/pinned/failure.jsonl",
+                )
+            except RuntimeError as exc:
+                if exc is not original:
+                    return False, f"finally replaced original exception with {exc!r}"
+            except BaseException as exc:  # noqa: BLE001 - cleanup masking is the control.
+                return False, f"finally replaced original exception with {type(exc).__name__}: {exc}"
+            else:
+                return False, "the injected append-body failure was swallowed"
+        return True, "pinned append success/dedupe and original body exception survived finally"
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, sqlite3.DatabaseError) as exc:
+        return False, f"pinned append leaked {type(exc).__name__}: {exc}"
+    finally:
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_rebuild_in_place_first_build_and_retention() -> tuple[bool, str]:
+    """Prove first-build, valid-retention, and corrupt-cache rebuild are distinct."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-rebuild-in-place-"))
+    try:
+        path = root / "events.jsonl"
+        first = append_jsonl(path, {"id": "first"}, rebuild_in_place=True)
+        indexes = list((root / "jsonl-index").glob("*.sqlite3"))
+        if not first.appended or len(indexes) != 1:
+            return False, f"first={first!r} index_count={len(indexes)}"
+        index = indexes[0]
+        retained_bytes = index.read_bytes()
+        with mock.patch.object(
+            jsonl_durable, "_rebuild_index_in_place",
+            side_effect=AssertionError("a valid retained cache was rebuilt"),
+        ):
+            duplicate = append_jsonl(
+                path, {"id": "first"}, dedupe_field="id", dedupe_value="first",
+                rebuild_in_place=True,
+            )
+        if duplicate.appended or index.read_bytes() != retained_bytes:
+            return False, f"valid cache was not retained: {duplicate!r}"
+        index.write_bytes(b"not-a-sqlite-cache")
+        rebuilt = append_jsonl(path, {"id": "second"}, rebuild_in_place=True)
+        return (
+            rebuilt.appended and read_jsonl_objects(path) == [{"id": "first"}, {"id": "second"}]
+        ), repr(rebuilt)
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, sqlite3.DatabaseError,
+            AssertionError) as exc:
+        return False, f"rebuild-in-place control leaked {type(exc).__name__}: {exc}"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def control_project_appenders_fail_closed_on_quarantine() -> tuple[bool, str]:
     if os.name == "nt":
         sys.modules.setdefault("fcntl", type("FcntlStub", (), {"LOCK_EX": 2, "LOCK_NB": 4,
@@ -671,6 +774,10 @@ def main() -> int:
          control_index_rebuilds_after_change_or_cache_loss),
         ("a crash between journal fsync and index advance replays exactly once",
          control_interrupted_index_advance_replays_exactly),
+        ("the POSIX descriptor-pinned append succeeds and preserves its original body exception",
+         control_pinned_posix_append_and_finally_preserve_original),
+        ("rebuild_in_place distinguishes first build, retained cache, and corrupt-cache rebuild",
+         control_rebuild_in_place_first_build_and_retention),
         ("both project event appenders stop on an open repaired-tail mismatch",
          control_project_appenders_fail_closed_on_quarantine),
         ("runtime rotation refuses malformed source events instead of archiving them", control_runtime_rotation_rejects_malformed),
