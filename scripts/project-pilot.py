@@ -81,18 +81,18 @@ def read_json(path: Path, unavailable_code: int = 4,
     invalid_code = unavailable_code if malformed_code is None else malformed_code
     try:
         if path.stat().st_size > 262144:
-            fail(f"state record exceeds the 256 KiB read bound: {path}", invalid_code)
+            fail("state record exceeds the 256 KiB read bound", invalid_code)
         raw = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
             RecursionError) as exc:
-        fail(f"cannot read validated state {path}: {exc}", unavailable_code)
+        fail("cannot read validated state", unavailable_code)
     try:
         value = json.loads(raw)
     except (json.JSONDecodeError, ValueError, TypeError, OverflowError,
             RecursionError) as exc:
-        fail(f"cannot read validated state {path}: {exc}", invalid_code)
+        fail("cannot read validated state", invalid_code)
     if not isinstance(value, dict):
-        fail(f"state record is not an object: {path}", invalid_code)
+        fail("state record is not an object", invalid_code)
     return value
 
 
@@ -103,7 +103,7 @@ def read_required_json(path: Path, absent: str, *, unavailable_code: int = 4) ->
     except FileNotFoundError:
         fail(absent)
     except OSError as exc:
-        fail(f"cannot inspect validated state {path}: {exc}", unavailable_code)
+        fail("cannot inspect validated state", unavailable_code)
     return read_json(path, unavailable_code=unavailable_code, malformed_code=4)
 
 
@@ -111,7 +111,7 @@ def fields(path: Path, unavailable_code: int | None = None) -> dict[str, str]:
     result: dict[str, str] = {}
     try:
         if path.stat().st_size > 131072:
-            fail(f"state record exceeds the 128 KiB read bound: {path}", unavailable_code or 4)
+            fail("state record exceeds the 128 KiB read bound", unavailable_code or 4)
         for line in path.read_text(encoding="utf-8", errors="surrogateescape").splitlines():
             if ":" in line and not line.startswith((" ", "\t")):
                 key, value = line.split(":", 1)
@@ -119,7 +119,7 @@ def fields(path: Path, unavailable_code: int | None = None) -> dict[str, str]:
     except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
             RecursionError) as exc:
         if unavailable_code is not None:
-            fail(f"cannot read status state {path}: {exc}", unavailable_code)
+            fail("cannot read status state", unavailable_code)
     return result
 
 
@@ -131,9 +131,9 @@ def status_files(directory: Path, suffix: str | None, limit: int | None,
     except FileNotFoundError:
         return []
     except OSError as exc:
-        fail(f"cannot inspect status state {directory}: {exc}", 74)
+        fail("cannot inspect status state", 74)
     if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
-        fail(f"status state is not a real directory: {directory}", 74)
+        fail("status state is not a real directory", 74)
     try:
         with os.scandir(directory) as entries:
             paths = []
@@ -141,17 +141,17 @@ def status_files(directory: Path, suffix: str | None, limit: int | None,
                 if suffix is not None and not entry.name.endswith(suffix):
                     continue
                 if entry.is_symlink():
-                    fail(f"status state record is a symlink: {directory / entry.name}", 74)
+                    fail("status state record is a symlink", 74)
                 if entry.is_file(follow_symlinks=False):
                     paths.append(directory / entry.name)
                 elif not entry.is_dir(follow_symlinks=False):
-                    fail(f"status state record has an unsupported type: {directory / entry.name}", 74)
+                    fail("status state record has an unsupported type", 74)
     except FileNotFoundError:
         # Runtime directories are created lazily; disappearance before the scan proves no records
         # were readable at this instant and must not be conflated with a permission failure.
         return []
     except OSError as exc:
-        fail(f"cannot enumerate status state {directory}: {exc}", 74)
+        fail("cannot enumerate status state", 74)
     ordered = sorted(paths)
     if limit is None:
         return ordered
@@ -165,7 +165,7 @@ def rows(base: Path, unavailable_code: int = 4) -> list[dict[str, str]]:
     try:
         lines = registry.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
-        fail(f"portfolio unavailable: {exc}", unavailable_code)
+        fail("portfolio unavailable", unavailable_code)
     for line in lines:
         if not line or line.startswith("#"):
             continue
@@ -2148,5 +2148,5 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError,
             AttributeError, OverflowError, RecursionError) as exc:
-        print(f"project-pilot: invalid input or state: {exc}", file=sys.stderr)
+        print("project-pilot: invalid input or state", file=sys.stderr)
         raise SystemExit(4)

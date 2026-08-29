@@ -68,7 +68,7 @@ P="$TMP/pilot"; mkdir -p "$P/scripts" "$P/state/project-config" "$P/state/pilots
   "$P/state/goals" "$P/state/tasks" "$P/state/runs" "$P/state/instructions" "$P/state/actions" \
   "$P/state/.locks" "$P/loop/logs"
 for script in project-pilot.py project_authority.py conduct-hermes.sh validate-decision.py validate-control-state.py \
-              engine_contract.py decision-queue.py taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
+              engine_contract.py phase5_safety.py decision-queue.py taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
               instruction_routing.py pilot_instruction.py seed_contract.py runtime-state.py; do
   cp "$SRC/scripts/$script" "$P/scripts/"
 done
@@ -150,7 +150,7 @@ echo "ok    pilot task verb is charter-, goal-, dependency-, gate-, and action-c
 # key, clean clone, and exact remote OID becomes active and records the proof.
 A="$TMP/activation"; mkdir -p "$A/scripts" "$A/state/project-config" "$A/state/pilots" "$A/state/.locks"
 cp "$SRC/scripts/project-pilot.py" "$SRC/scripts/project_authority.py" "$SRC/scripts/pilot_instruction.py" \
-   "$SRC/scripts/engine_contract.py" "$SRC/scripts/seed_contract.py" "$SRC/scripts/jsonl_durable.py" \
+   "$SRC/scripts/engine_contract.py" "$SRC/scripts/phase5_safety.py" "$SRC/scripts/seed_contract.py" "$SRC/scripts/jsonl_durable.py" \
    "$SRC/scripts/transition_receipt.py" "$SRC/scripts/runtime-state.py" "$A/scripts/"
 KEY="$TMP/activation-key"; : > "$KEY"; chmod 600 "$KEY"
 ORIGIN="$TMP/activation.git"; SEED="$TMP/activation-seed"; CLONE="$TMP/activation-clone"

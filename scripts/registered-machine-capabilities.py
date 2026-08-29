@@ -79,10 +79,10 @@ def read_descriptor(machine: str) -> dict:
     try:
         raw = read_bytes(path, label="machine descriptor", private=True)
         value = decode_json(raw, "machine descriptor")
-    except FileNotFoundError as exc:
-        raise LookupError(f"machine descriptor is absent: {path}") from exc
-    except BoundaryError as exc:
-        raise ValueError(f"machine descriptor is unreadable: {path}") from exc
+    except FileNotFoundError:
+        raise LookupError("machine descriptor is absent") from None
+    except BoundaryError:
+        raise ValueError("machine descriptor is unreadable") from None
     if not isinstance(value, dict) or set(value) != MACHINE_KEYS:
         raise ValueError("machine descriptor has invalid fields")
     if not isinstance(value["schema_version"], int) or isinstance(value["schema_version"], bool) \
@@ -104,8 +104,8 @@ def emit(path: Path, value: dict) -> None:
                               allow_nan=False) + "\n").encode("utf-8")
         atomic_write(path, encoded, replace=False, mode=0o600,
                      label="capability output")
-    except BoundaryError as exc:
-        raise OSError(str(exc)) from exc
+    except BoundaryError:
+        raise OSError("capability output is unavailable") from None
 
 
 def main(argv: list[str]) -> int:
@@ -126,11 +126,15 @@ def main(argv: list[str]) -> int:
                  "source": "declared-local", "capabilities": descriptor["capabilities"],
                  "adapter_enabled": True}
         emit(Path(args.emit), value)
-    except LookupError as exc:
-        return fail(str(exc), 3)
-    except (ValueError, OSError, TypeError, OverflowError, RecursionError,
-            UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except LookupError:
+        return fail("machine descriptor is absent", 3)
+    except ValueError as exc:
         return fail(str(exc), 2)
+    except OSError:
+        return fail("capability output is unavailable", 2)
+    except (TypeError, OverflowError, RecursionError, UnicodeDecodeError,
+            json.JSONDecodeError):
+        return fail("machine descriptor is unreadable", 2)
     return 0
 
 
