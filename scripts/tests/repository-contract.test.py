@@ -38,9 +38,19 @@ class ExplicitScratch:
         self.name = str(self.path)
 
     def cleanup(self) -> None:
-        # Cleanup is limited to this test-owned scratch directory; host-denied Git mappings must
-        # not mask the assertion result.
-        shutil.rmtree(self.path, ignore_errors=True)
+        # Cleanup is limited to this test-owned scratch directory.  Surface cleanup failures so a
+        # reparse point cannot silently leak outside the fixture's ownership boundary.
+        shutil.rmtree(self.path)
+
+
+def remove_reparse_point(path: Path) -> None:
+    """Remove a fixture-created junction/symlink without following its target."""
+    if not (path.exists() or path.is_symlink()):
+        return
+    if os.name == "nt":
+        path.rmdir()
+    else:
+        path.unlink()
 
 
 def git(repo: Path, *args: str) -> str:
@@ -79,6 +89,7 @@ class RepositoryContractTests(unittest.TestCase):
                 capture_output=True, check=False,
             )
             if acl.returncode:
+                self.temp.cleanup()
                 raise unittest.SkipTest("fixture key ACL could not be made owner-only")
         self.old_controller_key_path = rc.CONTROLLER_KEY_PATH
         rc.CONTROLLER_KEY_PATH = self.key_path
@@ -304,16 +315,20 @@ class RepositoryContractTests(unittest.TestCase):
         outside = Path(self.temp.name) / "ledger-outside"
         outside.mkdir()
         ledger = Path(self.temp.name) / "ledger"
-        if os.name == "nt":
-            linked = subprocess.run(["cmd.exe", "/c", "mklink", "/J", str(ledger), str(outside)],
-                                    capture_output=True, check=False)
-            if linked.returncode:
-                self.skipTest("junction creation is unavailable on this host")
-        else:
-            ledger.symlink_to(outside, target_is_directory=True)
-        with self.assertRaisesRegex(rc.ContractError, "ledger"):
-            with rc._pinned_ledger(ledger):
-                self.fail("reparse ledger was pinned")
+        try:
+            if os.name == "nt":
+                linked = subprocess.run(["cmd.exe", "/c", "mklink", "/J", str(ledger), str(outside)],
+                                        capture_output=True, check=False)
+                if linked.returncode:
+                    self.skipTest("junction creation is unavailable on this host")
+            else:
+                ledger.symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(rc.ContractError, "ledger"):
+                with rc._pinned_ledger(ledger):
+                    self.fail("reparse ledger was pinned")
+        finally:
+            remove_reparse_point(ledger)
+        self.assertFalse(ledger.exists() or ledger.is_symlink())
         self.assertEqual(list(outside.iterdir()), [])
 
     def test_windows_ledger_pins_parent_components_with_delete_sharing_denied(self) -> None:
