@@ -45,8 +45,43 @@ def under(path: str, roots: list[str]) -> bool:
     return "." in roots or any(path == root.rstrip("/") or path.startswith(root.rstrip("/") + "/") for root in roots)
 
 
-def clean_tracked_bytes(repo: Path, item: str) -> bytes:
-    """Return the committed gate bytes and reject index/worktree substitution."""
+def clean_tracked_bytes(repo: Path, item: str, commit: str | None = None) -> bytes:
+    """Return exact committed bytes and reject index/worktree or mode substitution.
+
+    A contract may name a source commit explicitly.  In that mode both the Git object and
+    the materialized file must still be the same clean regular file; hashing ``HEAD`` alone
+    would let a post-creation working-tree edit survive until evidence consumption.
+    """
+    path = repo / item
+    try:
+        mode = path.stat().st_mode
+        if not path.is_file() or path.is_symlink():
+            raise OSError("not a regular file")
+    except OSError as exc:
+        fail(f"gate file is not a regular non-symlink file: {item}")
+    if mode & 0o170000 not in (0o100000,):
+        fail(f"gate file has a non-regular mode: {item}")
+    target = commit or "HEAD"
+    if commit:
+        resolved = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "--verify", f"{commit}^{{commit}}"],
+            capture_output=True, text=True, check=False,
+        )
+        if resolved.returncode or resolved.stdout.strip() != commit:
+            fail(f"gate source commit is not the exact immutable commit: {commit}")
+        tree = subprocess.run(
+            ["git", "-C", str(repo), "ls-tree", "-z", commit, "--", item],
+            capture_output=True, check=False,
+        )
+        rows = [row for row in tree.stdout.split(b"\0") if row]
+        if tree.returncode or len(rows) != 1:
+            fail(f"gate file is absent from the exact source commit: {item}")
+        header, _, tree_path = rows[0].partition(b"\t")
+        if tree_path.decode("utf-8", "strict") != item:
+            fail(f"gate file path resolution is not exact: {item}")
+        git_mode = header.split(b" ", 1)[0]
+        if git_mode not in {b"100644", b"100755"}:
+            fail(f"gate file has a non-regular Git mode: {item}")
     tracked = subprocess.run(
         ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", item],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
@@ -54,16 +89,15 @@ def clean_tracked_bytes(repo: Path, item: str) -> bytes:
     if tracked.returncode:
         fail(f"gate file is not tracked: {item}")
     committed = subprocess.run(
-        ["git", "-C", str(repo), "show", f"HEAD:{item}"], capture_output=True, check=False,
+        ["git", "-C", str(repo), "show", f"{target}:{item}"], capture_output=True, check=False,
     )
     if committed.returncode:
-        fail(f"gate file is absent from HEAD: {item}")
-    path = repo / item
+        fail(f"gate file is absent from {target}: {item}")
     dirty = subprocess.run(
-        ["git", "-C", str(repo), "diff", "--quiet", "HEAD", "--", item], check=False,
+        ["git", "-C", str(repo), "diff", "--quiet", target, "--", item], check=False,
     )
-    if not path.is_file() or dirty.returncode:
-        fail(f"gate file differs from clean HEAD: {item}")
+    if dirty.returncode:
+        fail(f"gate file differs from clean {target}: {item}")
     return committed.stdout
 
 
@@ -129,8 +163,10 @@ def main() -> int:
     parser.add_argument("--allowed-paths", default=".")
     parser.add_argument("--gate-files", default="")
     parser.add_argument("--repo")
+    parser.add_argument("--source-commit")
     parser.add_argument("--controller-gate-files", default="")
     parser.add_argument("--controller-root")
+    parser.add_argument("--controller-commit")
     parser.add_argument("--strict-direct", action="store_true")
     args = parser.parse_args()
     try:
@@ -191,15 +227,18 @@ def main() -> int:
         if args.repo:
             repo = Path(args.repo)
             for item in gate_files:
-                hashes[item] = hashlib.sha256(clean_tracked_bytes(repo, item)).hexdigest()
+                hashes[item] = hashlib.sha256(clean_tracked_bytes(repo, item, args.source_commit)).hexdigest()
         controller_hashes: dict[str, str] = {}
         if controller_gate_files:
             if not args.controller_root:
                 fail("controller gate files require --controller-root")
             controller = Path(args.controller_root)
             for item in controller_gate_files:
-                controller_hashes[item] = hashlib.sha256(clean_tracked_bytes(controller, item)).hexdigest()
-        print(json.dumps({"acceptance_sha256": hashlib.sha256(gate.encode()).hexdigest(),
+                controller_hashes[item] = hashlib.sha256(
+                    clean_tracked_bytes(controller, item, args.controller_commit)
+                ).hexdigest()
+        print(json.dumps({"acceptance": gate,
+                          "acceptance_sha256": hashlib.sha256(gate.encode()).hexdigest(),
                           "gate_files": hashes,
                           "controller_gate_files": controller_hashes}, sort_keys=True))
     except ValueError as exc:

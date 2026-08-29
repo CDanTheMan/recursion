@@ -103,8 +103,8 @@ def test_legacy_manifest_still_resolves_without_new_fields() -> None:
         "schema_version": 1, "name": "legacyeng", "description": "compat",
         "executable": "legacyeng", "argv": ["{{EXE}}", "-p", "{{PROMPT}}"],
         "model": {"required": False, "argv_suffix": ["--model", "{{MODEL}}"]},
-        "roles": ["implementer"], "billing": {"basis": "local", "provider": "local"},
-        "network": {"policy": "provider-only", "endpoints": []},
+        "roles": ["implementer"], "billing": {"basis": "local", "provider": "sentry-local"},
+        "network": {"policy": "provider-only", "profile": "sentry-local", "endpoints": []},
         "availability_probe": None, "concurrency_cap": None, "env_passthrough": [],
     }
     with tempfile.TemporaryDirectory() as tmp:
@@ -116,11 +116,31 @@ def test_legacy_manifest_still_resolves_without_new_fields() -> None:
         check(result.returncode == 0, "v1 manifest without Phase 5 fields remains valid")
 
 
+def test_provider_network_requires_profile() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        directory = Path(tmp)
+        manifest = {
+            "schema_version": 1, "name": "missingprofile", "description": "invalid",
+            "executable": "missingprofile", "argv": ["{{EXE}}", "-p", "{{PROMPT}}"],
+            "model": {"required": False, "argv_suffix": []}, "roles": ["implementer"],
+            "billing": {"basis": "local", "provider": "sentry-local"},
+            "network": {"policy": "provider-only", "endpoints": []},
+            "availability_probe": None, "concurrency_cap": None, "env_passthrough": [],
+        }
+        (directory / "missingprofile.json").write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(RESOLVER), "missingprofile", "--validate"],
+            capture_output=True, text=True, env=dict(os.environ, RECURSION_ENGINE_DIR=str(directory)),
+        )
+        check(result.returncode == 2, "runtime resolver rejects provider-only network without profile")
+
+
 def main() -> int:
     test_runtime_tree_is_complete_and_read_only()
     test_cursor_manifest_carries_phase5_contract()
     test_machine_adapter_is_disabled_and_local_only_when_explicitly_enabled()
     test_legacy_manifest_still_resolves_without_new_fields()
+    test_provider_network_requires_profile()
     if failures:
         print(f"phase5-runtime-contract.test: {len(failures)} FAILED")
         return 1

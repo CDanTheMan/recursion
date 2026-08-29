@@ -37,6 +37,7 @@ from transition_receipt import (
     fields_mutation, json_mutation, resume_transition,
 )
 from seed_contract import SeedContractError, copy_seed_paths, validate_contract
+from assignment import canonical_bytes, load_assignment
 
 
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -1160,6 +1161,24 @@ def task_evidence(base: Path, repo: Path, task: dict[str, str], runs: list[dict]
     verifier_id = str(link.get("verifier_run_id") or "")
     verifier = next((row for row in verifiers if row.get("id") == verifier_id), verifiers[-1])
     verification = verifier.get("verification") if isinstance(verifier.get("verification"), dict) else {}
+    strict_assignment = task.get("evidence_contract") == "worker-result-v1" \
+        or bool(implementer.get("assignment_file"))
+    if strict_assignment:
+        assignment_file = implementer.get("assignment_file")
+        try:
+            assigned, assigned_digest = load_assignment(str(assignment_file or ""))
+        except (OSError, ValueError, SystemExit) as exc:
+            return False, f"immutable assignment provenance is unavailable: {exc}", {}
+        if implementer.get("assignment_digest") != assigned_digest:
+            return False, "implementer assignment digest is absent or stale", {}
+        embedded = implementer.get("assignment")
+        if not isinstance(embedded, dict) or canonical_bytes(embedded) != canonical_bytes(assigned):
+            return False, "implementer assignment evidence is not the validated assignment", {}
+        machine = gate
+        if machine.get("acceptance") != assigned["gate_contract"]["acceptance"] \
+                or machine.get("gate_contract_digest") != assigned["gate_digest"] \
+                or machine.get("acceptance_sha256") != assigned["gate_contract"]["acceptance_sha256"]:
+            return False, "machine gate lacks independently authenticated assignment provenance", {}
     valid = bool(
         re.fullmatch(r"[0-9a-f]{40,64}", commit)
         and gate.get("commit_oid") == commit
@@ -1847,12 +1866,15 @@ def canonical_digest(value: object) -> str:
 def _observed_goal_gate(base: Path, worktree: Path, goal: dict[str, str],
                         config: dict) -> dict | None:
     """Run the execution validator against the goal worktree and parse its contract."""
+    source_commit = git_output(worktree, "rev-parse", "--verify", "HEAD")
+    controller_commit = git_output(base, "rev-parse", "--verify", "HEAD")
     validator = subprocess.run(
         [sys.executable, str(base / "scripts/validate-gate.py"),
          "--acceptance", goal["acceptance_suite"],
          "--allowed-paths", ",".join(config.get("allowed_paths") or []),
          "--gate-files", goal.get("gate_files", ""), "--repo", str(worktree),
-         "--controller-root", str(base),
+         "--source-commit", source_commit, "--controller-root", str(base),
+         "--controller-commit", controller_commit,
          "--controller-gate-files", goal.get("controller_gate_files", ""),
          "--strict-direct"],
         text=True, capture_output=True, check=False,

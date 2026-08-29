@@ -31,8 +31,9 @@ BASE_MANIFEST = {
     "argv": ["{{EXE}}", "-p", "{{PROMPT}}"],
     "model": {"required": False, "argv_suffix": ["--model", "{{MODEL}}"]},
     "roles": ["implementer"],
-    "billing": {"basis": "flat-subscription", "provider": "sample-provider"},
-    "network": {"policy": "provider-only", "endpoints": ["sample.example.com"]},
+    "billing": {"basis": "flat-subscription", "provider": "google-gemini"},
+    "network": {"policy": "provider-only", "profile": "gemini",
+                 "endpoints": ["generativelanguage.googleapis.com"]},
     "availability_probe": None,
     "concurrency_cap": None,
     "env_passthrough": [],
@@ -131,6 +132,31 @@ def test_mutations() -> None:
     bad_passthrough = copy.deepcopy(BASE_MANIFEST)
     bad_passthrough["env_passthrough"] = ["lower_case"]
     run_case("env_passthrough lowercase entry rejected", "sampleeng.json", "sampleeng", bad_passthrough, 2)
+
+    cross_provider_passthrough = copy.deepcopy(BASE_MANIFEST)
+    cross_provider_passthrough["env_passthrough"] = ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"]
+    run_case("provider-scoped env cross-smuggle rejected", "sampleeng.json", "sampleeng",
+             cross_provider_passthrough, 2)
+
+    missing_profile = copy.deepcopy(BASE_MANIFEST)
+    del missing_profile["network"]["profile"]
+    run_case("provider-only network without profile rejected", "sampleeng.json", "sampleeng",
+             missing_profile, 2)
+
+    for engine, provider, profile, endpoints, forbidden in (
+        ("gemini-test", "google-gemini", "gemini", ["generativelanguage.googleapis.com"],
+         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"),
+        ("opencode-test", "openrouter-via-opencode", "openrouter", ["openrouter.ai", "api.deepseek.com"],
+         "GEMINI_API_KEY"),
+        ("cursor-test", "cursor", "cursor", ["api.cursor.com", "api2.cursor.sh"],
+         "OPENROUTER_API_KEY"),
+    ):
+        cross = copy.deepcopy(BASE_MANIFEST)
+        cross["name"] = engine
+        cross["billing"]["provider"] = provider
+        cross["network"] = {"policy": "provider-only", "profile": profile, "endpoints": endpoints}
+        cross["env_passthrough"] = [forbidden]
+        run_case(f"{profile} provider env cross-smuggle rejected", f"{engine}.json", engine, cross, 2)
 
     bad_probe = copy.deepcopy(BASE_MANIFEST)
     bad_probe["availability_probe"] = {

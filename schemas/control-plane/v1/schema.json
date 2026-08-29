@@ -134,12 +134,18 @@
         "gate_class": {"enum": ["light", "heavy"]},
         "gate_contract": {
           "type": "object",
-          "required": ["acceptance_sha256", "gate_files"],
+          "required": ["acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"],
+          "additionalProperties": false,
           "properties": {
+            "acceptance": {"type": "string", "minLength": 1},
             "acceptance_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "gate_files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
             "controller_gate_files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
-          }
+          },
+          "anyOf": [
+            {"properties": {"gate_files": {"minProperties": 1}}},
+            {"properties": {"controller_gate_files": {"minProperties": 1}}}
+          ]
         },
         "gate_files": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
         "controller_gate_files": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},

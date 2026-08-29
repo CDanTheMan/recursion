@@ -110,27 +110,38 @@ for element in argv:
     print("ARG=" + element)
 for element in suffix:
     print("MSFX=" + element)
-for name in plan.get("env_passthrough") or []:
-    if not isinstance(name, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", name):
-        raise SystemExit(92)
-    print("ENVP=" + name)
+env_names = plan.get("env_passthrough")
+if not isinstance(env_names, list) or not all(isinstance(v, str) for v in env_names) \
+        or len(set(env_names)) != len(env_names):
+    raise SystemExit(92)
 network = plan.get("network")
-if network is not None:
-    if not isinstance(network, dict) or network.get("policy") != "provider-only" \
-            or not isinstance(network.get("profile"), str) \
-            or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", network["profile"]) \
-            or not isinstance(network.get("endpoints"), list) \
-            or not all(isinstance(v, str) and re.fullmatch(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?", v) for v in network["endpoints"]):
-        raise SystemExit(92)
+if not isinstance(network, dict) or network.get("policy") != "provider-only" \
+        or not isinstance(network.get("profile"), str) \
+        or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", network["profile"]) \
+        or not isinstance(network.get("endpoints"), list) \
+        or len(set(network["endpoints"])) != len(network["endpoints"]) \
+        or not all(isinstance(v, str) and re.fullmatch(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?", v) for v in network["endpoints"]):
+    raise SystemExit(92)
+try:
     profile_config = json.load(open(os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts", "provider-egress-profiles.json")))
     profile = profile_config.get("profiles", {}).get(network["profile"])
-    if not isinstance(profile, dict) or profile.get("provider") != plan.get("billing", {}).get("provider") \
-            or sorted(profile.get("endpoints", [])) != sorted(network["endpoints"]):
+except (OSError, ValueError, TypeError):
+    raise SystemExit(92)
+if not isinstance(profile, dict) or profile.get("provider") != plan.get("billing", {}).get("provider") \
+        or sorted(profile.get("endpoints", [])) != sorted(network["endpoints"]):
+    raise SystemExit(92)
+allowed_env = profile.get("env_allowlist")
+if not isinstance(allowed_env, list) or len(set(allowed_env)) != len(allowed_env):
+    raise SystemExit(92)
+for name in env_names:
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", name) \
+            or name not in allowed_env:
         raise SystemExit(92)
-    print("NETPROFILE=" + network["profile"])
-    print("NETPROVIDER=" + str(plan.get("billing", {}).get("provider", "")))
-    for endpoint in network["endpoints"]:
-        print("NETEND=" + endpoint)
+    print("ENVP=" + name)
+print("NETPROFILE=" + network["profile"])
+print("NETPROVIDER=" + str(plan.get("billing", {}).get("provider", "")))
+for endpoint in network["endpoints"]:
+    print("NETEND=" + endpoint)
 layout = plan.get("runtime_layout")
 if layout is not None:
     if not isinstance(layout, dict) or layout.get("mode") not in ("executable-only", "sibling-tree"):

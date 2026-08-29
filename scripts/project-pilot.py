@@ -999,10 +999,13 @@ def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict) -> dict:
         fail(f"pilot plan {label} gate validator returned malformed evidence")
     hashes = contract.get("gate_files") if isinstance(contract, dict) else None
     controller_hashes = contract.get("controller_gate_files") if isinstance(contract, dict) else None
-    if not re.fullmatch(r"[0-9a-f]{64}", str(contract.get("acceptance_sha256") or "")) \
+    if set(contract) != {"acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"} \
+            or contract.get("acceptance") != gate["acceptance"] \
+            or not re.fullmatch(r"[0-9a-f]{64}", str(contract.get("acceptance_sha256") or "")) \
             or not isinstance(hashes, dict) or set(hashes) != set(gate["gate_files"]) \
             or not isinstance(controller_hashes, dict) \
             or set(controller_hashes) != set(gate.get("controller_gate_files") or []) \
+            or (not hashes and not controller_hashes) \
             or any(not re.fullmatch(r"[0-9a-f]{64}", str(digest))
                    for digest in [*hashes.values(), *controller_hashes.values()]):
         fail(f"pilot plan {label} gate validator returned incomplete evidence")

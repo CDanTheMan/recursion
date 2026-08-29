@@ -95,13 +95,20 @@
         },
         "provider": {
           "type": "string",
-          "minLength": 1
+          "enum": [
+            "anthropic-claude-code",
+            "cursor",
+            "google-gemini",
+            "openrouter-via-opencode",
+            "sentry-local"
+          ],
+          "description": "Reviewed provider identity; new providers require a profile and an explicit schema/runtime allowlist update."
         }
       }
     },
     "network": {
       "type": "object",
-      "required": ["policy", "endpoints"],
+      "required": ["policy", "profile", "endpoints"],
       "additionalProperties": false,
       "properties": {
         "policy": {
@@ -109,7 +116,7 @@
         },
         "profile": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{1,63}$"
+          "enum": ["anthropic", "cursor", "gemini", "openrouter", "sentry-local"]
         },
         "endpoints": {
           "type": "array",
@@ -165,10 +172,15 @@
       "type": "array",
       "items": {
         "type": "string",
-        "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        "enum": [
+          "ANTHROPIC_API_KEY",
+          "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+          "GEMINI_API_KEY",
+          "OPENROUTER_API_KEY"
+        ]
       },
       "uniqueItems": true,
-      "description": "Env var names (not values) copied from the controller environment into the unit when set. Possibly empty. No duplicates."
+      "description": "Env var names (not values) copied from the controller environment into the unit when set. The runtime resolver additionally requires each name to be in the exact reviewed allowlist of network.profile; the union here is only the public-schema vocabulary. Possibly empty. No duplicates."
     },
     "runtime_layout": {
       "description": "Optional v1-compatible runtime layout. sibling-tree stages the executable's complete parent directory read-only; executable-only preserves the original single-file behavior.",
@@ -233,5 +245,44 @@
         "marker": { "type": ["string", "null"] }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"network": {"properties": {"profile": {"const": "anthropic"}}}}},
+      "then": {"properties": {
+        "billing": {"properties": {"provider": {"const": "anthropic-claude-code"}}},
+        "env_passthrough": {"items": {"enum": [
+          "ANTHROPIC_API_KEY", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
+        ]}}
+      }}
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"profile": {"const": "cursor"}}}}},
+      "then": {"properties": {
+        "billing": {"properties": {"provider": {"const": "cursor"}}},
+        "env_passthrough": {"maxItems": 0}
+      }}
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"profile": {"const": "gemini"}}}}},
+      "then": {"properties": {
+        "billing": {"properties": {"provider": {"const": "google-gemini"}}},
+        "env_passthrough": {"items": {"enum": ["GEMINI_API_KEY"]}
+      }}}
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"profile": {"const": "openrouter"}}}}},
+      "then": {"properties": {
+        "billing": {"properties": {"provider": {"const": "openrouter-via-opencode"}}},
+        "env_passthrough": {"items": {"enum": ["OPENROUTER_API_KEY"]}
+      }}}
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"profile": {"const": "sentry-local"}}}}},
+      "then": {"properties": {
+        "billing": {"properties": {"provider": {"const": "sentry-local"}}},
+        "env_passthrough": {"maxItems": 0}
+      }}
+    }
+  ]
 }

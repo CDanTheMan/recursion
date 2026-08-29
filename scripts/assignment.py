@@ -13,7 +13,8 @@ import os
 import re
 import stat
 import subprocess
-from pathlib import Path
+import sys
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 ID_RE = re.compile(r"[a-z][a-z0-9-]{1,63}\Z")
@@ -26,6 +27,7 @@ SANDBOXES = frozenset({
 })
 REQUIRED = frozenset({
     "task_id", "project_id", "source_repository", "source_branch", "source_sha",
+    "controller_repository", "controller_sha",
     "seed_manifest_digest", "engine", "provider", "capacity_pool", "model", "host",
     "sandbox_profile", "network_profile", "network_endpoints", "allowed_paths", "gate_digest",
     "gate_contract", "role_assignments", "publication_policy",
@@ -70,6 +72,26 @@ def _canonical_source(value: Any) -> str:
     return os.path.normcase(str(resolved))
 
 
+def _canonical_controller(value: Any) -> str:
+    raw = _text(value, "controller_repository")
+    path = Path(raw)
+    if not path.is_absolute():
+        raise AssignmentError("controller_repository must be absolute")
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as exc:
+        raise AssignmentError("controller_repository is unavailable") from exc
+    if not resolved.is_dir():
+        raise AssignmentError("controller_repository is not a directory")
+    probe = subprocess.run(
+        ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
+        capture_output=True, text=True, check=False,
+    )
+    if probe.returncode != 0 or Path(probe.stdout.strip()).resolve() != resolved:
+        raise AssignmentError("controller_repository is not the canonical Git worktree root")
+    return os.path.normcase(str(resolved))
+
+
 def _git_commit_exists(repo: str, sha: str) -> None:
     result = subprocess.run(
         ["git", "-C", repo, "cat-file", "-e", f"{sha}^{{commit}}"],
@@ -83,6 +105,44 @@ def _git_commit_exists(repo: str, sha: str) -> None:
     )
     if resolved.returncode != 0 or resolved.stdout.strip().lower() != sha.lower():
         raise AssignmentError("source_sha is not the exact immutable commit identity")
+
+
+def _git_head_is(repo: str, sha: str, label: str) -> None:
+    resolved = subprocess.run(
+        ["git", "-C", repo, "rev-parse", "--verify", "HEAD"],
+        capture_output=True, text=True, check=False,
+    )
+    if resolved.returncode or resolved.stdout.strip().lower() != sha.lower():
+        raise AssignmentError(f"{label} HEAD is not the assigned immutable commit")
+
+
+def _clean_controller_file(repo: str, sha: str, relative: str) -> None:
+    pure = PurePosixPath(relative)
+    path = Path(repo, *pure.parts)
+    if pure.is_absolute() or not pure.parts or pure.as_posix() != relative or "\\" in relative \
+            or ".." in pure.parts or not path.is_file() or path.is_symlink():
+        raise AssignmentError(f"controller file is not a clean regular file: {relative}")
+    tracked = subprocess.run(
+        ["git", "-C", repo, "ls-files", "--error-unmatch", "--", relative],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    clean = subprocess.run(
+        ["git", "-C", repo, "diff", "--quiet", sha, "--", relative],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    tree = subprocess.run(
+        ["git", "-C", repo, "ls-tree", "-z", sha, "--", relative],
+        capture_output=True, check=False,
+    )
+    committed = subprocess.run(
+        ["git", "-C", repo, "show", f"{sha}:{relative}"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    rows = [row for row in tree.stdout.split(b"\0") if row]
+    mode = rows[0].split(b" ", 1)[0] if len(rows) == 1 else b""
+    if tracked.returncode or clean.returncode or tree.returncode or len(rows) != 1 \
+            or mode not in {b"100644", b"100755"} or committed.returncode:
+        raise AssignmentError(f"controller file differs from its exact clean commit: {relative}")
 
 
 def _provider_profiles() -> dict[str, Any]:
@@ -138,9 +198,15 @@ def _validate_binding(engine: str, provider: str, profile: str, endpoints: Any, 
             raise AssignmentError(f"{where} network profile/provider/endpoints disagree")
 
 
-def _validate_gate_contract(value: Any, expected_digest: str) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != {"acceptance_sha256", "gate_files", "controller_gate_files"}:
+def _validate_gate_contract(value: Any, expected_digest: str, *, source_repo: str,
+                            source_sha: str, controller_repo: str, controller_sha: str,
+                            allowed_paths: list[str]) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"
+    }:
         raise AssignmentError("gate_contract is not the validated gate contract")
+    if not isinstance(value["acceptance"], str) or not value["acceptance"]:
+        raise AssignmentError("gate_contract acceptance program is absent")
     if not isinstance(value["acceptance_sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", value["acceptance_sha256"]):
         raise AssignmentError("gate_contract acceptance digest is invalid")
     for field in ("gate_files", "controller_gate_files"):
@@ -153,9 +219,37 @@ def _validate_gate_contract(value: Any, expected_digest: str) -> dict[str, Any]:
                     or any(part in {"", ".", ".."} for part in path.split("/")) \
                     or not isinstance(item_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", item_digest):
                 raise AssignmentError(f"gate_contract.{field} contains an unsafe entry")
+    if not value["gate_files"] and not value["controller_gate_files"]:
+        raise AssignmentError("gate_contract has no independently hashed gate/controller source")
     actual = hashlib.sha256(canonical_bytes(value)).hexdigest()
     if actual != expected_digest:
         raise AssignmentError("gate_digest does not hash the validated gate contract")
+    _clean_controller_file(controller_repo, controller_sha, "scripts/validate-gate.py")
+    command = [
+        str(Path(controller_repo) / "scripts" / "validate-gate.py"),
+        "--acceptance", value["acceptance"], "--allowed-paths", ",".join(allowed_paths),
+        "--gate-files", ",".join(value["gate_files"]), "--repo", source_repo,
+        "--source-commit", source_sha, "--controller-root", controller_repo,
+        "--controller-commit", controller_sha,
+        "--controller-gate-files", ",".join(value["controller_gate_files"]),
+        "--strict-direct",
+    ]
+    try:
+        verified = subprocess.run(
+            [sys.executable, *command],
+            capture_output=True, text=True, check=False, timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise AssignmentError("strict gate provenance validation was unavailable") from exc
+    if verified.returncode != 0:
+        detail = (verified.stderr or verified.stdout or "strict gate validation failed").strip()
+        raise AssignmentError(f"gate_contract provenance is not independently valid: {detail}")
+    try:
+        observed = json.loads(verified.stdout)
+    except json.JSONDecodeError as exc:
+        raise AssignmentError("strict gate validator returned malformed provenance") from exc
+    if observed != value:
+        raise AssignmentError("gate_contract differs from independently validated provenance")
     return value
 
 
@@ -185,11 +279,16 @@ def validate_assignment(value: Any) -> dict[str, Any]:
         _text(value[field], field, ID_RE if field in {"task_id", "project_id", "capacity_pool", "host"} else VALUE_RE)
     provider = _text(value["provider"], "provider", VALUE_RE)
     source = _canonical_source(value["source_repository"])
+    controller = _canonical_controller(value["controller_repository"])
     branch = _text(value["source_branch"], "source_branch", BRANCH_RE)
     if ".." in branch or branch.endswith("/") or branch.endswith("."):
         raise AssignmentError("source_branch is unsafe")
     sha = _text(value["source_sha"], "source_sha", SHA_RE)
     _git_commit_exists(source, sha)
+    controller_sha = _text(value["controller_sha"], "controller_sha", SHA_RE)
+    _git_commit_exists(controller, controller_sha)
+    _git_head_is(source, sha, "source repository")
+    _git_head_is(controller, controller_sha, "controller repository")
     seed = value["seed_manifest_digest"]
     if not isinstance(seed, str) or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in seed) \
             or (seed and not SHA_RE.fullmatch(seed)):
@@ -206,7 +305,10 @@ def validate_assignment(value: Any) -> dict[str, Any]:
     ):
         raise AssignmentError("allowed_paths is not a safe nonempty relative-path list")
     gate_digest = _text(value["gate_digest"], "gate_digest", SHA_RE)
-    gate_contract = _validate_gate_contract(value["gate_contract"], gate_digest)
+    gate_contract = _validate_gate_contract(
+        value["gate_contract"], gate_digest, source_repo=source, source_sha=sha,
+        controller_repo=controller, controller_sha=controller_sha, allowed_paths=paths,
+    )
     _text(value["publication_policy"], "publication_policy", VALUE_RE)
     policy = _pool_policy(value["capacity_pool"])
     if value["provider"] not in policy.get("providers", []):
@@ -237,6 +339,7 @@ def validate_assignment(value: Any) -> dict[str, Any]:
             raise AssignmentError(f"capacity_pool is not authorized for role {role} provider")
     normalized = dict(value)
     normalized["source_repository"] = source
+    normalized["controller_repository"] = controller
     normalized["source_branch"] = branch
     normalized["source_sha"] = sha
     normalized["gate_contract"] = gate_contract

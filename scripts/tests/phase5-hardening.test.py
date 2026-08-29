@@ -31,16 +31,21 @@ def check(ok: bool, label: str) -> None:
     print(f"ok - {label}")
 
 
-def valid_assignment(repo: Path) -> dict:
+def valid_assignment(repo: Path, controller: Path) -> dict:
     source_sha = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
-    gate_contract = {"acceptance_sha256": hashlib.sha256(b"test -s result").hexdigest(),
-                     "gate_files": {}, "controller_gate_files": {}}
+    gate_bytes = subprocess.check_output(["git", "-C", str(repo), "show", "HEAD:scripts/gate.sh"])
+    gate_contract = {"acceptance": "bash scripts/gate.sh",
+                     "acceptance_sha256": hashlib.sha256(b"bash scripts/gate.sh").hexdigest(),
+                     "gate_files": {"scripts/gate.sh": hashlib.sha256(gate_bytes).hexdigest()},
+                     "controller_gate_files": {}}
     gate_digest = hashlib.sha256(assignment.canonical_bytes(gate_contract)).hexdigest()
     role = {"engine": "cursor", "provider": "cursor", "model": "cursor-primary",
             "network_profile": "cursor",
             "network_endpoints": ["api.cursor.com", "api2.cursor.sh"]}
+    controller_sha = subprocess.check_output(["git", "-C", str(controller), "rev-parse", "HEAD"], text=True).strip()
     return {"task_id": "task-1", "project_id": "project-1", "source_repository": str(repo),
-            "source_branch": "codex/v2-cursor-runtime", "source_sha": source_sha,
+            "source_branch": "main", "source_sha": source_sha,
+            "controller_repository": str(controller), "controller_sha": controller_sha,
             "seed_manifest_digest": "", "engine": "cursor", "provider": "cursor",
             "capacity_pool": "cursor-ultra-grok-bot", "model": "cursor-primary",
             "host": "gs-recursion", "sandbox_profile": "strict-linux", "network_profile": "cursor",
@@ -53,10 +58,22 @@ def valid_assignment(repo: Path) -> dict:
 def main() -> int:
     with tempfile.TemporaryDirectory() as raw:
         tmp = Path(raw)
-        source = tmp / "source"; source.mkdir()
+        source = tmp / "source"; (source / "scripts").mkdir(parents=True)
+        (source / "scripts/gate.sh").write_text("#!/bin/sh\ntest -s result.txt\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q", "-b", "main", str(source)], check=True)
+        subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(source), "-c", "user.name=t", "-c", "user.email=t@t",
+                        "commit", "-qm", "source"], check=True)
+        controller = tmp / "controller"; (controller / "scripts").mkdir(parents=True)
+        (controller / "scripts/validate-gate.py").write_bytes(
+            (ROOT / "scripts/validate-gate.py").read_bytes())
+        subprocess.run(["git", "init", "-q", "-b", "main", str(controller)], check=True)
+        subprocess.run(["git", "-C", str(controller), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(controller), "-c", "user.name=t", "-c", "user.email=t@t",
+                        "commit", "-qm", "controller"], check=True)
         executable = source / "cursor-agent"; executable.write_text("#!/bin/sh\n", encoding="utf-8")
         executable.chmod(0o755)
-        value = valid_assignment(ROOT)
+        value = valid_assignment(source, controller)
         first = assignment.digest(value)
         tampered = dict(value); tampered["host"] = "cursor-cloud"
         check(assignment.digest(tampered) != first, "assignment digest changes when host is tampered")
@@ -64,6 +81,14 @@ def main() -> int:
         try: assignment.validate_assignment(bad_pool)
         except assignment.AssignmentError: pass
         else: raise AssertionError("arbitrary pool accepted")
+        fake = dict(value)
+        fake["gate_contract"] = {"acceptance": "true",
+            "acceptance_sha256": hashlib.sha256(b"true").hexdigest(),
+            "gate_files": {}, "controller_gate_files": {}}
+        fake["gate_digest"] = hashlib.sha256(assignment.canonical_bytes(fake["gate_contract"])).hexdigest()
+        try: assignment.validate_assignment(fake)
+        except assignment.AssignmentError: pass
+        else: raise AssertionError("fabricated true/empty gate contract accepted")
         bad_role = dict(value); bad_role["role_assignments"] = {"implementer": value["role_assignments"]["implementer"],
             "verifier": {"engine":"gemini", "provider":"google-gemini", "model":"review",
                          "network_profile":"gemini", "network_endpoints":["generativelanguage.googleapis.com"]}}
@@ -176,6 +201,20 @@ def main() -> int:
                       str(evidence), "0" * 40, "test -s different-result", "0", "gate.log"]
         check(subprocess.run(wrong_gate, capture_output=True).returncode != 0,
               "evidence recomputes and rejects a wrong gate contract")
+        original_gate = (source / "scripts/gate.sh").read_bytes()
+        (source / "scripts/gate.sh").write_text("#!/bin/sh\ntrue\n", encoding="utf-8")
+        tampered_gate_finish = [sys.executable, str(ROOT / "scripts/worker-evidence.py"), "finish",
+                                str(evidence), "failed", "tampered-gate", "1"]
+        check(subprocess.run(tampered_gate_finish, capture_output=True).returncode != 0,
+              "evidence consumption rejects a post-creation gate-file change")
+        (source / "scripts/gate.sh").write_bytes(original_gate)
+        original_validator = (controller / "scripts/validate-gate.py").read_bytes()
+        (controller / "scripts/validate-gate.py").write_bytes(original_validator + b"\n# post-creation drift\n")
+        tampered_controller_finish = [sys.executable, str(ROOT / "scripts/worker-evidence.py"), "finish",
+                                      str(evidence), "failed", "tampered-controller", "1"]
+        check(subprocess.run(tampered_controller_finish, capture_output=True).returncode != 0,
+              "evidence consumption rejects a post-creation controller-file change")
+        (controller / "scripts/validate-gate.py").write_bytes(original_validator)
         assignment_path.write_text(json.dumps({**value, "network_profile": "gemini"}), encoding="utf-8")
         tampered_finish = [sys.executable, str(ROOT / "scripts/worker-evidence.py"), "finish",
                            str(evidence), "failed", "tampered", "1"]

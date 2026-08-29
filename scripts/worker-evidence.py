@@ -121,6 +121,8 @@ def main() -> int:
     if args.command == "start":
         if args.pid < 1 or args.process_group < 1:
             raise SystemExit("worker-evidence: invalid process identity")
+        if not args.assignment_file or not args.assignment_digest:
+            raise SystemExit("worker-evidence: strict evidence requires an immutable assignment")
         value = {"schema_version": 1, "id": args.run_id, "task_id": args.task_id,
                  "worker": f"{args.role}:{args.model_alias}", "role": args.role,
                  "model_alias": args.model_alias, "worktree": args.worktree,
@@ -184,14 +186,19 @@ def main() -> int:
                 seed["verified_after"] = True
             value["seed_evidence"] = seed
     elif args.command == "gate":
-        if assignment is not None:
-            contract = assignment["gate_contract"]
-            expected_acceptance = contract["acceptance_sha256"]
-            observed_acceptance = hashlib.sha256(args.acceptance.encode()).hexdigest()
-            if observed_acceptance != expected_acceptance:
-                raise SystemExit("worker-evidence: gate command does not match the assigned gate contract")
+        if assignment is None:
+            raise SystemExit("worker-evidence: gate evidence has no validated assignment provenance")
+        contract = assignment["gate_contract"]
+        if args.acceptance != contract["acceptance"]:
+            raise SystemExit("worker-evidence: gate command does not match the assigned acceptance program")
+        expected_acceptance = contract["acceptance_sha256"]
+        observed_acceptance = hashlib.sha256(args.acceptance.encode()).hexdigest()
+        if observed_acceptance != expected_acceptance:
+            raise SystemExit("worker-evidence: gate command does not match the assigned gate contract")
         value["machine_gate"] = {"commit_oid": args.commit_oid,
                                   "acceptance_sha256": hashlib.sha256(args.acceptance.encode()).hexdigest(),
+                                  "gate_contract_digest": assignment["gate_digest"],
+                                  "acceptance": args.acceptance,
                                   "exit_code": args.exit_code, "passed": args.exit_code == 0,
                                   "log": args.log, "checked_at": now()}
     elif args.command == "verify":

@@ -26,15 +26,16 @@ STUB_MANIFEST = {
     "argv": ["{{EXE}}", "-p", "{{PROMPT}}"],
     "model": {"required": False, "argv_suffix": ["--model", "{{MODEL}}"]},
     "roles": ["implementer"],
-    "billing": {"basis": "metered", "provider": "test-provider"},
-    "network": {"policy": "provider-only", "endpoints": []},
+    "billing": {"basis": "metered", "provider": "google-gemini"},
+    "network": {"policy": "provider-only", "profile": "gemini",
+                 "endpoints": ["generativelanguage.googleapis.com"]},
     "availability_probe": {
         "type": "http",
         "url_env": "RECURSION_ENGINE_STUBENG_HEALTH_URL",
         "timeout_s": 5,
     },
     "concurrency_cap": 1,
-    "env_passthrough": ["STUBENG_API_KEY"],
+    "env_passthrough": ["GEMINI_API_KEY"],
 }
 
 EXPECTED_PLAN = {
@@ -44,14 +45,16 @@ EXPECTED_PLAN = {
     "argv": ["{{EXE}}", "-p", "{{PROMPT}}"],
     "model_required": False,
     "model_argv_suffix": ["--model", "{{MODEL}}"],
-    "billing": {"basis": "metered", "provider": "test-provider"},
+    "billing": {"basis": "metered", "provider": "google-gemini"},
     "availability_probe": {
         "type": "http",
         "url_env": "RECURSION_ENGINE_STUBENG_HEALTH_URL",
         "timeout_s": 5,
     },
     "concurrency_cap": 1,
-    "env_passthrough": ["STUBENG_API_KEY"],
+    "env_passthrough": ["GEMINI_API_KEY"],
+    "network": {"policy": "provider-only", "profile": "gemini",
+                 "endpoints": ["generativelanguage.googleapis.com"]},
 }
 
 failures: list[str] = []

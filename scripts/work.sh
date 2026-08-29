@@ -702,12 +702,18 @@ fi
 # records any declared gate files whose hashes become part of the exact-commit evidence.
 GATE_CONTRACT=""
 if [ -x "$ROOT/scripts/validate-gate.py" ]; then
+  GATE_SOURCE_COMMIT="$(git -C "$REPO_DIR" rev-parse --verify HEAD 2>/dev/null || true)"
+  GATE_CONTROLLER_COMMIT="$(git -C "$ROOT" rev-parse --verify HEAD 2>/dev/null || true)"
+  [ -n "$GATE_SOURCE_COMMIT" ] && [ -n "$GATE_CONTROLLER_COMMIT" ] \
+    || { log "exact source/controller commits could not be established for gate admission"; exit 74; }
   GATE_STRICT_ARGS=()
   [ -z "$PILOT_ID" ] || GATE_STRICT_ARGS+=(--strict-direct)
   GATE_ERR="$(mktemp "${TMPDIR:-/tmp}/validate-gate.XXXXXX")" || exit 74
   if GATE_CONTRACT="$(python3 "$ROOT/scripts/validate-gate.py" --acceptance "$ACCEPTANCE" \
       --allowed-paths "${ALLOWED_PATHS:-$WORKDIR}" --gate-files "$GATE_FILES" --repo "$REPO_DIR" \
+      --source-commit "$GATE_SOURCE_COMMIT" \
       --controller-root "$ROOT" --controller-gate-files "$CONTROLLER_GATE_FILES" \
+      --controller-commit "$GATE_CONTROLLER_COMMIT" \
       "${GATE_STRICT_ARGS[@]}" 2>"$GATE_ERR")"; then
     gate_rc=0
   else gate_rc=$?; fi
@@ -927,17 +933,21 @@ PY
   [ -n "$GATE_CONTRACT" ] || { log "strict Phase 5 requires the validated gate contract"; return 1; }
   ASSIGNMENT_FILE="$ROOT/state/runs/$ID-assignment-$STAMP-$$.json"
   mkdir -p "$ROOT/state/runs"
+  CONTROLLER_SHA="$(git -C "$ROOT" rev-parse --verify HEAD 2>/dev/null || true)"
+  [ -n "$CONTROLLER_SHA" ] || return 1
   ASSIGNMENT_DIGEST="$(PYTHONPATH="$ROOT/scripts" python3 - "$ASSIGNMENT_FILE" "$ID" "$PROJECT_ID" "$REPO_DIR" "$source_branch" "$BASE_COMMIT" \
+    "$ROOT" "$CONTROLLER_SHA" \
     "$SEED_MANIFEST_SHA256" "$ENGINE" "$impl_provider" "$CAPACITY_POOL" "$host" "strict-linux" "$impl_profile" \
     "$impl_endpoints" "$GATE_CONTRACT" "$impl_provider" "$RESOLVED_MODEL" "$VERIFIER_ENGINE" "$verifier_provider" \
     "$verifier_profile" "$verifier_endpoints" "$RESOLVED_VERIFIER_MODEL" <<'PY'
 import hashlib, json, os, sys, tempfile
 from assignment import digest, validate_assignment
-(path, task, project, repo, branch, sha, seed, engine, provider, pool, host, sandbox, profile,
+(path, task, project, repo, branch, sha, controller_repo, controller_sha, seed, engine, provider, pool, host, sandbox, profile,
  paths, endpoints, gate_contract, _, model, verifier_engine, verifier_provider, verifier_profile,
  verifier_endpoints, verifier_model) = sys.argv[1:]
 gate = hashlib.sha256(json.dumps(json.loads(gate_contract), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 value = {"task_id":task, "project_id":project, "source_repository":repo, "source_branch":branch,
+         "controller_repository":controller_repo, "controller_sha":controller_sha,
          "source_sha":sha, "seed_manifest_digest":seed, "engine":engine, "provider":provider,
          "capacity_pool":pool, "model":model, "host":host, "sandbox_profile":sandbox,
          "network_profile":profile, "network_endpoints":json.loads(endpoints),

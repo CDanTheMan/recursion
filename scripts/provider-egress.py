@@ -11,6 +11,7 @@ from pathlib import Path
 
 PROFILE_RE = re.compile(r"[a-z][a-z0-9-]{1,63}\Z")
 HOST_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\Z")
+ENV_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}\Z")
 ROOT = Path(__file__).resolve().parent
 
 
@@ -29,6 +30,10 @@ def load(profile: str) -> dict:
         raise ValueError("provider profile namespace is invalid")
     if not isinstance(item.get("proxy_port"), int) or not 1024 <= item["proxy_port"] <= 65535:
         raise ValueError("provider profile proxy port is invalid")
+    env_allowlist = item.get("env_allowlist")
+    if not isinstance(env_allowlist, list) or len(set(env_allowlist)) != len(env_allowlist) \
+            or any(not isinstance(v, str) or not ENV_RE.fullmatch(v) for v in env_allowlist):
+        raise ValueError("provider profile env allowlist is invalid")
     return {"profile": profile, **item}
 
 

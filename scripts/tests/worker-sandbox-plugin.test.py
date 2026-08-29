@@ -3,10 +3,8 @@
 
 Frozen contract: docs/plans/engine-plugin-architecture.md, "Controls" #4, and the
 worked spec handed down with this control set. Requires bash (Git Bash on Windows,
-plain bash elsewhere); SKIPs (exit 0) if bash is unavailable. --engine-plan does not
-exist in scripts/worker-sandbox.sh today, so cases (3)-(5) below are expected to fail;
-(1)-(2) exercise validation paths whose current-day result is observed and reported
-below, not assumed (see inline notes).
+plain bash elsewhere); SKIPs (exit 0) if bash is unavailable. The plan must carry the
+reviewed provider profile and its scoped environment allowlist through logical launch.
 """
 
 from __future__ import annotations
@@ -92,6 +90,9 @@ def main() -> int:
         scripts_dir.mkdir(parents=True, exist_ok=True)
         sandbox_copy = scripts_dir / "worker-sandbox.sh"
         sandbox_copy.write_bytes(SANDBOX_SCRIPT.read_bytes())
+        (scripts_dir / "provider-egress-profiles.json").write_bytes(
+            (SOURCE / "scripts" / "provider-egress-profiles.json").read_bytes()
+        )
         sandbox_copy_posix = to_posix(sandbox_copy)
 
         wt_local = root_local / "wt"
@@ -122,10 +123,12 @@ def main() -> int:
             "argv": ["{{EXE}}", "-p", "{{PROMPT}}"],
             "model_required": False,
             "model_argv_suffix": ["--model", "{{MODEL}}"],
-            "billing": {"basis": "metered", "provider": "test-provider"},
+            "billing": {"basis": "metered", "provider": "google-gemini"},
+            "network": {"policy": "provider-only", "profile": "gemini",
+                         "endpoints": ["generativelanguage.googleapis.com"]},
             "availability_probe": None,
             "concurrency_cap": None,
-            "env_passthrough": ["STUBENG_API_KEY"],
+            "env_passthrough": ["GEMINI_API_KEY"],
         }
         plan_path = root_local / "plan.json"
         plan_path.write_bytes((json.dumps(plan, indent=2) + "\n").encode("utf-8"))
@@ -140,7 +143,7 @@ def main() -> int:
                 "RECURSION_PYTHON": to_posix(Path(sys.executable)),
             }
         )
-        common_tail = ["--worktree", wt_posix, "--role", "implementer", "--network-policy", "none"]
+        common_tail = ["--worktree", wt_posix, "--role", "implementer", "--network-policy", "provider-only"]
 
         def invoke(engine_args: list[str], prompt: str, env: dict, model: str | None = None):
             args = engine_args + common_tail + ["--prompt", prompt]
@@ -149,8 +152,6 @@ def main() -> int:
             return bash_run(sandbox_copy_posix, args, bin_dir_posix, env)
 
         # --- (1) builtin engine + --engine-plan must be refused (contract: exit 92) ---
-        # NOTE: today's argument parser has no --engine-plan case at all, so this currently
-        # exits 2 ("unknown argument") rather than 92 -- observed below, not assumed.
         result = invoke(["--engine", "claude", "--engine-plan", plan_posix], "hi", dict(base_env))
         check(
             result.returncode == 92,
@@ -206,11 +207,11 @@ def main() -> int:
         argv_out_5 = root_local / "argv-5.out"
         env5 = dict(base_env)
         env5["STUB_ARGV_OUT"] = to_posix(argv_out_5)
-        env5["STUBENG_API_KEY"] = "sekret"
+        env5["GEMINI_API_KEY"] = "sekret"
         result = invoke(["--engine", "stubeng", "--engine-plan", plan_posix], "hi", env5)
         check(result.returncode == 0, f"plugin engine with env_passthrough executes (got {result.returncode})")
         check(
-            "worker-sandbox: env-passthrough STUBENG_API_KEY" in result.stderr,
+            "worker-sandbox: env-passthrough GEMINI_API_KEY" in result.stderr,
             "logical mode declares the plan's env_passthrough names on stderr",
         )
 

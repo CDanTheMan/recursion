@@ -41,6 +41,22 @@ def main() -> int:
     target["runtime_layout"]["target"] = "."
     if not list(validator.iter_errors(target)):
         failures.append("schema accepted dot runtime target")
+    target = copy.deepcopy(cursor)
+    del target["network"]["profile"]
+    if not list(validator.iter_errors(target)):
+        failures.append("schema accepted provider-only network without profile")
+    for provider, profile, endpoints, forbidden in (
+        ("anthropic-claude-code", "anthropic", ["api.anthropic.com"], "GEMINI_API_KEY"),
+        ("google-gemini", "gemini", ["generativelanguage.googleapis.com"], "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"),
+        ("openrouter-via-opencode", "openrouter", ["openrouter.ai", "api.deepseek.com"], "GEMINI_API_KEY"),
+        ("cursor", "cursor", ["api.cursor.com", "api2.cursor.sh"], "OPENROUTER_API_KEY"),
+    ):
+        target = copy.deepcopy(cursor)
+        target["billing"]["provider"] = provider
+        target["network"] = {"policy": "provider-only", "profile": profile, "endpoints": endpoints}
+        target["env_passthrough"] = [forbidden]
+        if not list(validator.iter_errors(target)):
+            failures.append(f"schema accepted {profile} provider env cross-smuggle")
     if failures:
         print("\n".join(failures))
         return 1

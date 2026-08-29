@@ -51,8 +51,8 @@ REQUIRED_TOP_LEVEL_KEYS = TOP_LEVEL_KEYS - {"runtime_layout", "execution", "auth
 MODEL_KEYS = {"required", "argv_suffix"}
 BILLING_KEYS = {"basis", "provider"}
 BILLING_BASES = {"flat-subscription", "metered", "local"}
-NETWORK_KEYS = {"policy", "endpoints"}
-NETWORK_OPTIONAL_KEYS = {"profile"}
+NETWORK_KEYS = {"policy", "profile", "endpoints"}
+NETWORK_OPTIONAL_KEYS = set()
 PROBE_KEYS = {"type", "url_env", "timeout_s"}
 RUNTIME_LAYOUT_KEYS = {"mode", "source", "root", "target", "entrypoint"}
 EXECUTION_KEYS = {"structured_output", "output_format", "cancellation", "exit_codes"}
@@ -143,7 +143,18 @@ def validate_billing(billing: object) -> None:
         raise ManifestError("billing.provider must be a nonempty string")
 
 
-def validate_network(network: object) -> None:
+def provider_profiles() -> dict:
+    profile_path = Path(__file__).resolve().parent / "provider-egress-profiles.json"
+    try:
+        profiles = json.loads(profile_path.read_text(encoding="utf-8"))["profiles"]
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise ManifestError("provider profile registry is unavailable") from exc
+    if not isinstance(profiles, dict):
+        raise ManifestError("provider profile registry is invalid")
+    return profiles
+
+
+def validate_network(network: object, provider: str | None = None) -> dict:
     if not isinstance(network, dict):
         raise ManifestError("network must be a JSON object")
     missing = NETWORK_KEYS - network.keys()
@@ -161,18 +172,22 @@ def validate_network(network: object) -> None:
             raise ManifestError(f"network.endpoints contains an invalid hostname {item!r}")
     if len(set(endpoints)) != len(endpoints):
         raise ManifestError("network.endpoints must not contain duplicates")
-    if "profile" in obj:
-        profile = obj["profile"]
-        if not isinstance(profile, str) or not PROVIDER_PROFILE_RE.fullmatch(profile):
-            raise ManifestError("network.profile is invalid")
-        profile_path = Path(__file__).resolve().parent / "provider-egress-profiles.json"
-        try:
-            profiles = json.loads(profile_path.read_text(encoding="utf-8"))["profiles"]
-            declared = profiles[profile]
-            if not isinstance(declared, dict) or not isinstance(declared.get("endpoints"), list):
-                raise KeyError(profile)
-        except (OSError, ValueError, KeyError, TypeError):
-            raise ManifestError("network.profile is not a declared provider profile")
+    profile = obj["profile"]
+    if not isinstance(profile, str) or not PROVIDER_PROFILE_RE.fullmatch(profile):
+        raise ManifestError("network.profile is invalid")
+    declared = provider_profiles().get(profile)
+    if not isinstance(declared, dict) or not isinstance(declared.get("endpoints"), list):
+        raise ManifestError("network.profile is not a declared provider profile")
+    if provider is not None and declared.get("provider") != provider:
+        raise ManifestError("network.profile provider does not match billing.provider")
+    if sorted(declared["endpoints"]) != sorted(endpoints):
+        raise ManifestError("network.endpoints do not match the declared provider profile")
+    allowlist = declared.get("env_allowlist")
+    if not isinstance(allowlist, list) or len(set(allowlist)) != len(allowlist) \
+            or any(not isinstance(v, str) or not ENV_NAME_RE.fullmatch(v) for v in allowlist):
+        raise ManifestError("provider profile env allowlist is invalid")
+    return {"profile": profile, "provider": declared.get("provider"),
+            "endpoints": list(declared["endpoints"]), "env_allowlist": list(allowlist)}
 
 
 def validate_probe(probe: object) -> None:
@@ -188,7 +203,7 @@ def validate_probe(probe: object) -> None:
         raise ManifestError("availability_probe.timeout_s must be an integer in 1..60")
 
 
-def validate_env_passthrough(names: object) -> None:
+def validate_env_passthrough(names: object, allowed: list[str]) -> None:
     if not isinstance(names, list):
         raise ManifestError("env_passthrough must be a list of strings")
     if len(set(names)) != len(names):
@@ -196,6 +211,8 @@ def validate_env_passthrough(names: object) -> None:
     for item in names:
         if not isinstance(item, str) or not ENV_NAME_RE.fullmatch(item):
             raise ManifestError(f"env_passthrough contains an invalid env var name {item!r}")
+        if item not in allowed:
+            raise ManifestError(f"env_passthrough name {item!r} is not allowlisted for this provider/profile")
 
 
 def validate_relative_path(value: object, where: str, *, allow_empty: bool = False) -> None:
@@ -303,22 +320,12 @@ def validate_manifest(data: object, engine: str) -> dict:
     validate_model(obj["model"])
     validate_roles(obj["roles"])
     validate_billing(obj["billing"])
-    if isinstance(obj["network"], dict) and "profile" in obj["network"]:
-        profile_path = Path(__file__).resolve().parent / "provider-egress-profiles.json"
-        try:
-            profile = json.loads(profile_path.read_text(encoding="utf-8"))["profiles"][obj["network"]["profile"]]
-        except (OSError, ValueError, KeyError, TypeError):
-            raise ManifestError("network.profile is not a declared provider profile")
-        if profile.get("provider") != obj["billing"].get("provider"):
-            raise ManifestError("network.profile provider does not match billing.provider")
-        if sorted(profile.get("endpoints", [])) != sorted(obj["network"].get("endpoints", [])):
-            raise ManifestError("network.endpoints do not match the declared provider profile")
-    validate_network(obj["network"])
+    network = validate_network(obj["network"], obj["billing"]["provider"])
     validate_probe(obj["availability_probe"])
     cap = obj["concurrency_cap"]
     if cap is not None and not (is_plain_int(cap) and cap >= 1):
         raise ManifestError("concurrency_cap must be null or an integer >= 1")
-    validate_env_passthrough(obj["env_passthrough"])
+    validate_env_passthrough(obj["env_passthrough"], network["env_allowlist"])
     validate_runtime_layout(obj.get("runtime_layout"))
     validate_execution(obj.get("execution"))
     validate_auth(obj.get("auth"))
