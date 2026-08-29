@@ -82,10 +82,13 @@ def strict_schema_validator(schema: dict):
 
 def differential_mismatches(resolver: Any, validator: Any,
                             cases: list[tuple[str, dict]],
-                            runtime_validate: Callable[[dict], Any] | None = None) -> list[str]:
+                            runtime_validate: Callable[[dict], Any] | None = None
+                            ) -> tuple[list[str], int, int]:
     """Compare the real declared-draft validator with the product validator without masking errors."""
     validate = runtime_validate or resolver.validate_manifest
     mismatches: list[str] = []
+    forward = 0
+    reverse = 0
     for label, candidate in cases:
         schema_valid = not list(validator.iter_errors(candidate))
         runtime_valid = True
@@ -95,7 +98,11 @@ def differential_mismatches(resolver: Any, validator: Any,
             runtime_valid = False
         if schema_valid != runtime_valid:
             mismatches.append(f"{label}: schema={schema_valid} runtime={runtime_valid}")
-    return mismatches
+            if schema_valid:
+                forward += 1
+            else:
+                reverse += 1
+    return mismatches, forward, reverse
 
 
 def signed_token(proxy: Any, payload: bytes, key: bytes) -> str:
@@ -209,6 +216,20 @@ def main() -> int:
     }
     check(resolver.validate_manifest(base_manifest, "sampleeng")["name"] == "sampleeng",
           "legitimate engine manifest is accepted")
+    content_name_mismatch = copy.deepcopy(base_manifest)
+    content_name_mismatch["name"] = "othername"
+    check(resolver.validate_manifest(content_name_mismatch, "sampleeng")["name"] == "othername",
+          "engine content validation accepts a schema-valid name without filename context")
+    filename_binding_dir = scratch / "filename-binding"
+    filename_binding_dir.mkdir()
+    filename_binding_path = filename_binding_dir / "sampleeng.json"
+    filename_binding_path.write_text(json.dumps(content_name_mismatch) + "\n", encoding="utf-8")
+    try:
+        resolver.load_manifest(filename_binding_path, "sampleeng")
+    except resolver.ManifestError:
+        check(True, "engine loader refuses a name that does not match its filename stem")
+    else:
+        check(False, "engine loader refuses a name that does not match its filename stem")
     for field, value in (("schema_version", True), ("schema_version", 1.0),
                          ("concurrency_cap", True), ("concurrency_cap", 1.0),
                          ("concurrency_cap", -1), ("availability_probe", {
@@ -310,6 +331,26 @@ def main() -> int:
                                        env=env, capture_output=True, text=True)
     check(backup_result.returncode == 0 and not result_has_raw_error_or_path(backup_result, snapshot),
           "legitimate runtime snapshot is accepted")
+    digest_victim = scratch / "digest-victim"
+    digest_replacement = scratch / "digest-replacement"
+    digest_victim.write_bytes(b"original digest input\n")
+    digest_replacement.write_bytes(b"replacement digest input\n")
+    real_open = runtime.os.open
+    def swapping_open(path: object, flags: int, *args: Any) -> int:
+        if Path(path) == digest_victim:
+            os.replace(digest_victim, scratch / "digest-victim-original")
+            os.replace(digest_replacement, digest_victim)
+        return real_open(path, flags, *args)
+    digest_swap_refused = False
+    runtime.os.open = swapping_open
+    try:
+        try:
+            runtime.digest(digest_victim)
+        except RuntimeError as exc:
+            digest_swap_refused = str(exc) == "runtime digest path changed while opening"
+    finally:
+        runtime.os.open = real_open
+    check(digest_swap_refused, "runtime digest refuses a deterministic open-path replacement")
     if backup_result.returncode == 0:
         manifest = json.loads((snapshot / "manifest.json").read_text(encoding="utf-8"))
         check(runtime.load_manifest(snapshot)["schema_version"] == 1, "legitimate runtime manifest loads")
@@ -511,7 +552,8 @@ def main() -> int:
           and "operator lock path is outside the supported lock namespace" in
           (runtime_namespace_probe.stdout + runtime_namespace_probe.stderr)
           and "runtime-state: operation refused" in
-          (runtime_namespace_probe.stdout + runtime_namespace_probe.stderr),
+          (runtime_namespace_probe.stdout + runtime_namespace_probe.stderr)
+          and not result_has_raw_error_or_path(runtime_namespace_probe, conduct_root),
           "runtime-state lock namespace refusal names its precondition")
     runtime_owner_probe = run_runtime(
         conduct_root, "lock-acquire",
@@ -840,7 +882,7 @@ def main() -> int:
         cases: list[tuple[str, dict]] = [("baseline", copy.deepcopy(base_manifest))]
         field_values: dict[tuple[str, ...], tuple[Any, ...]] = {
             ("schema_version",): (True, 1.0, 0, 1),
-            ("name",): (None, 1, "", "Sampleeng", "sampleeng\n", "claude", "sampleeng"),
+            ("name",): (None, 1, "", "Sampleeng", "sampleeng\n", "claude", "othername", "sampleeng"),
             ("description",): (None, 1, "", "valid description"),
             ("executable",): (None, 1, "", "Sampleeng", "sampleeng\n", "sampleeng"),
             ("argv",): (
@@ -917,9 +959,12 @@ def main() -> int:
                     return candidate
                 return resolver.validate_manifest(candidate, "sampleeng")
 
-        mismatches = differential_mismatches(resolver, validator, cases, runtime_validate)
+        mismatches, forward_mismatches, reverse_mismatches = differential_mismatches(
+            resolver, validator, cases, runtime_validate
+        )
         check(not mismatches, "engine schema/runtime differential has zero mismatches")
         print(f"SCHEMA_DIFFERENTIAL cases={len(cases)} mismatches={len(mismatches)}")
+        print(f"SCHEMA_DIFFERENTIAL_DIRECTIONS forward={forward_mismatches} reverse={reverse_mismatches}")
         for mismatch in mismatches:
             print(f"  {mismatch}")
     finally:

@@ -405,7 +405,7 @@ def queue_lock(base: Path):
         descriptor = os.open(lock_path, flags, 0o600)
         opened = os.fstat(descriptor)
         observed = lock_path.lstat()
-        if _is_reparse(observed) or not stat.S_ISREG(opened.st_mode) \
+        if _is_reparse_info(observed) or not stat.S_ISREG(opened.st_mode) \
                 or (opened.st_dev, opened.st_ino) != (observed.st_dev, observed.st_ino) \
                 or (expected is not None and
                     (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino)):

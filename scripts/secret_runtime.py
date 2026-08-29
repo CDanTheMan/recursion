@@ -87,10 +87,14 @@ def _validate_component(path: Path, label: str, *, final: bool = False) -> None:
     if not stat.S_ISDIR(info.st_mode):
         raise SecretRuntimeError(f"{label} contains a non-directory component")
     mode = stat.S_IMODE(info.st_mode)
-    if os.name != "nt" and ((final and mode & 0o077) or (not final and mode & 0o022)):
+    # A sticky shared parent such as /tmp is safe for a private child: the sticky bit prevents
+    # unrelated users from removing or renaming entries they do not own.  The final runtime
+    # directory remains owner-only, while non-sticky writable parents are still refused.
+    if os.name != "nt" and (
+            (final and mode & 0o077)
+            or (not final and mode & 0o022 and not (mode & stat.S_ISVTX))
+    ):
         raise SecretRuntimeError(f"{label} is group/other accessible")
-    if os.name != "nt" and not final and mode & 0o002 and not (mode & stat.S_ISVTX):
-        raise SecretRuntimeError(f"{label} is world-writable without sticky confinement")
     if hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0:
         raise SecretRuntimeError(f"{label} is not root-owned")
 

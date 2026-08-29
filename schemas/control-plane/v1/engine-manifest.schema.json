@@ -33,7 +33,7 @@
       "not": {
         "enum": ["claude", "hermes", "gate", "none", "deepseek", "openrouter"]
       },
-      "description": "Must equal the manifest filename stem (e.g. gemini.json -> \"gemini\"), and must not collide with a builtin engine name (claude, hermes, gate, none, deepseek, openrouter)."
+      "description": "Must match this content pattern and must not collide with a builtin engine name (claude, hermes, gate, none, deepseek, openrouter). The resolver separately binds name to the manifest filename stem (e.g. gemini.json -> \"gemini\") before use, because Draft-7 validation has no filename context."
     },
     "description": {
       "type": "string",

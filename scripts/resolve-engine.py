@@ -206,15 +206,19 @@ def validate_env_passthrough(names: object) -> None:
         raise ManifestError("env_passthrough must not contain duplicates")
 
 
-def validate_manifest(data: object, engine: str) -> dict:
+def validate_manifest(data: object, engine: str | None = None) -> dict:
+    """Validate manifest content; filename binding is checked by ``load_manifest``.
+
+    JSON Schema validates a manifest object without knowing which filename will carry it.  Keep
+    this function at that same content-validation boundary so schema/runtime differential checks
+    compare like with like; the file/engine binding is enforced immediately before use below.
+    """
     obj = require_object_keys(data, TOP_LEVEL_KEYS, "manifest")
     if not is_plain_int(obj["schema_version"]) or obj["schema_version"] != 1:
         raise ManifestError("schema_version must be 1")
     name = obj["name"]
     if not isinstance(name, str) or not NAME_RE.fullmatch(name):
         raise ManifestError("name must match ^[a-z][a-z0-9-]{1,31}$")
-    if name != engine:
-        raise ManifestError(f"name {name!r} does not match manifest filename stem {engine!r}")
     if name in BUILTIN_ENGINES:
         raise ManifestError(f"name {name!r} collides with a builtin engine")
     if not isinstance(obj["description"], str) or not obj["description"]:
@@ -292,7 +296,13 @@ def load_manifest(path: Path, engine: str) -> dict:
         data = json.loads(raw, parse_constant=reject_json_constant)
     except (ValueError, TypeError, UnicodeError, OverflowError, RecursionError) as exc:
         raise ManifestError("engine manifest is not valid JSON") from exc
-    return validate_manifest(data, engine)
+    filename_stem = path.name[:-len(".json")] if path.name.endswith(".json") else ""
+    if not NAME_RE.fullmatch(filename_stem) or filename_stem != engine:
+        raise ManifestError("engine manifest filename stem is invalid")
+    validated = validate_manifest(data, engine)
+    if validated["name"] != filename_stem:
+        raise ManifestError("manifest name does not match its filename stem")
+    return validated
 
 
 def enabled_env_name(engine: str) -> str:

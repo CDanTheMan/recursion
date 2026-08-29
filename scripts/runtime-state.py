@@ -194,23 +194,36 @@ def reconcile_transition_receipts(root: Path) -> None:
 def digest(path: Path) -> str:
     _reject_reparse_components(path, "runtime digest path")
     value = hashlib.sha256()
+    try:
+        expected = path.lstat()
+    except OSError as exc:
+        raise RuntimeError("runtime digest path is unreadable") from exc
+    if _is_reparse(expected) or not stat.S_ISREG(expected.st_mode):
+        raise RuntimeError("runtime digest path is not a regular file")
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     try:
         descriptor = os.open(path, flags)
     except (OSError, ValueError, TypeError) as exc:
-        raise RuntimeError(f"runtime digest path is unreadable: {path}") from exc
+        raise RuntimeError("runtime digest path is unreadable") from exc
     try:
         info = os.fstat(descriptor)
-        if _is_reparse(info) or not stat.S_ISREG(info.st_mode):
-            raise RuntimeError(f"runtime digest path is not a regular file: {path}")
+        if _is_reparse(info) or not stat.S_ISREG(info.st_mode) \
+                or (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns) != (
+                    expected.st_dev, expected.st_ino, expected.st_size, expected.st_mtime_ns
+                ):
+            raise RuntimeError("runtime digest path changed while opening")
         with os.fdopen(descriptor, "rb") as source:
             descriptor = -1
             for chunk in iter(lambda: source.read(1024 * 1024), b""):
                 value.update(chunk)
+            final = os.fstat(source.fileno())
+            if (final.st_dev, final.st_ino, final.st_size, final.st_mtime_ns) != (
+                    info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns):
+                raise RuntimeError("runtime digest path changed while reading")
     except (OSError, ValueError, TypeError) as exc:
-        raise RuntimeError(f"runtime digest path is unreadable: {path}") from exc
+        raise RuntimeError("runtime digest path is unreadable") from exc
     finally:
         if descriptor >= 0:
             try:
@@ -1527,7 +1540,7 @@ def _operator_lock_path(root: Path, raw: Path) -> Path:
         path.name,
     )
     if path.parent != lock_root or supported is None:
-        raise RuntimeError(f"operator lock path is outside the supported lock namespace: {raw}")
+        raise RuntimeError("operator lock path is outside the supported lock namespace")
     return path
 
 
