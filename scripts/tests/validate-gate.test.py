@@ -93,6 +93,14 @@ class DirectGateAdmissionTest(unittest.TestCase):
             0,
             "legacy conditional gate bypassed strict direct admission",
         )
+        # This semicolon-free case reaches the strict/legacy opt-in guard itself.  If that
+        # guard is weakened, strict direct validation admits the otherwise valid command.
+        isolated = run_gate_result("test -s app/result.txt", strict=True, legacy=True)
+        self.assertEqual(isolated.returncode, 2)
+        self.assertEqual(
+            isolated.stderr.decode("utf-8", "replace").strip(),
+            "ERR legacy compound gates are not admitted in strict direct mode",
+        )
         self.assertNotEqual(
             run_gate_result(
                 "if [ -e /tmp/outside ]; then exit 0; else exit 1; fi",
@@ -100,6 +108,47 @@ class DirectGateAdmissionTest(unittest.TestCase):
             ).returncode,
             0,
             "legacy conditional gate escaped filesystem operand confinement",
+        )
+
+    def test_hostile_absolute_path_refusals_are_symbolic_and_positive_paths_remain_admitted(self):
+        git_result = run_gate_result("git status --pathspec-from-file=/tmp/paths")
+        self.assertEqual(git_result.returncode, 2)
+        self.assertEqual(
+            git_result.stderr.decode("utf-8", "replace").strip(),
+            "ERR Git gate option is not confined to the detached worktree: --pathspec-from-file",
+        )
+
+        module = load_gate_module()
+        with self.assertRaisesRegex(
+                ValueError, "^acceptance path operand is outside declared controller files$"):
+            # Direct invocation reaches validate_direct_argv's strict path-operand guard;
+            # strict CLI grammar rejects this absolute command earlier by design.
+            module.validate_direct_argv(
+                ["test", "-s", "/tmp/outside"], allowed=["app"], gate_files=[],
+                controller_root=None, controller_gate_files=[],
+            )
+
+        non_strict = run_gate_result("test -s /tmp/outside", strict=False)
+        self.assertEqual(non_strict.returncode, 2)
+        self.assertEqual(
+            non_strict.stderr.decode("utf-8", "replace").strip(),
+            "ERR acceptance path operand is outside declared controller files",
+        )
+        strict = run_gate_result("test -s /tmp/outside", strict=True)
+        self.assertNotEqual(strict.returncode, 0)
+        self.assertNotIn("/tmp/", strict.stderr.decode("utf-8", "replace"))
+        for result in (git_result, non_strict, strict):
+            self.assertNotIn("Traceback", result.stderr.decode("utf-8", "replace"))
+
+        self.assertEqual(
+            run_gate_result(
+                "test -s app/result.txt && touch /tmp/phase5-marker", strict=False,
+            ).returncode,
+            0,
+        )
+        self.assertEqual(
+            run_gate_result("test -s fixtures/truth.json", read_only_paths="fixtures").returncode,
+            0,
         )
 
     def test_declared_read_only_paths_are_admitted_but_not_widened(self):

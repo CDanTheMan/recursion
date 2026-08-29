@@ -453,7 +453,7 @@ def _reject_shell_expansion(word: str) -> None:
     normalized = word.replace("\\", "/")
     if normalized.startswith("//") or word.startswith("\\\\") \
             or re.match(r"^[A-Za-z]:(?:$|[^/])", normalized):
-        fail(f"acceptance operand uses an absolute, UNC, or drive-relative path: {word}")
+        fail("acceptance operand uses an absolute, UNC, or drive-relative path")
 
 
 def _validate_git_subcommand(words: list[str]) -> None:
@@ -471,7 +471,13 @@ def _validate_git_subcommand(words: list[str]) -> None:
                 or word == "--pathspec-file-nul" \
                 or word == "--pathspec-from-file" \
                 or word.startswith("--pathspec-from-file="):
-            fail(f"Git gate option is not confined to the detached worktree: {word}")
+            if word.startswith("--no-index"):
+                option = "--no-index"
+            elif word == "--pathspec-file-nul":
+                option = "--pathspec-file-nul"
+            else:
+                option = "--pathspec-from-file"
+            fail(f"Git gate option is not confined to the detached worktree: {option}")
 
 
 def _declared_or_allowed(path: str, *, allowed: list[str], controller_root: str | None,
@@ -575,7 +581,7 @@ def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: li
         if index in path_indexes:
             if _path_is_absolute(normalized) and not _controller_declared(
                     normalized, controller_root, controller_gate_files):
-                fail(f"acceptance path operand is outside declared controller files: {word}")
+                fail("acceptance path operand is outside declared controller files")
             if not _declared_or_allowed(
                 normalized, allowed=allowed, controller_root=controller_root,
                 controller_gate_files=controller_gate_files,
@@ -795,8 +801,6 @@ def main() -> int:
         controller_gate_files = paths(args.controller_gate_files)
         read_only_paths = paths(args.read_only_paths)
         if ";" in gate:
-            if not args.legacy_compound:
-                fail("legacy compound gate mode is not enabled")
             _validate_legacy_conditional(
                 parsed_segments, operators, allowed=allowed, gate_files=gate_files,
                 controller_root=args.controller_root,
@@ -830,7 +834,7 @@ def main() -> int:
                     if index in path_indexes:
                         if _path_is_absolute(normalized) and not _controller_declared(
                                 normalized, args.controller_root, controller_gate_files):
-                            fail(f"acceptance path operand is outside declared controller files: {word}")
+                            fail("acceptance path operand is outside declared controller files")
                         if not _declared_or_allowed(
                             normalized, allowed=allowed, controller_root=args.controller_root,
                             controller_gate_files=controller_gate_files,

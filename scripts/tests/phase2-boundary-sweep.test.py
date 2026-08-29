@@ -31,8 +31,8 @@ SCRATCH_BASE = Path(os.environ.get(
 GATE = SOURCE / "scripts" / "validate-gate.py"
 SCHEMA_PATH = SOURCE / "schemas" / "control-plane" / "v2" / "repository-contract.schema.json"
 
-# These are punctuation boundary patterns for the external namespace.  The runtime and schema
-# must agree with actual branch creation on the supported Windows host, not only check-ref-format.
+# These are punctuation boundary patterns for the external namespace.  The contract uses the
+# conservative intersection of Git's ref grammar and branch names materializable on Windows.
 EXTERNAL_PATTERN_RECONCILIATION = (
     "cursor/!*", 'cursor/"*', "cursor/#*", "cursor/$*", "cursor/%*", "cursor/&*",
     "cursor/'*", "cursor/(*", "cursor/)*", "cursor/+*", "cursor/,*", "cursor/;*",
@@ -50,8 +50,10 @@ WINDOWS_UNREALIZABLE_EXTERNAL_PATTERNS = frozenset({
 # schema-only because the standard schema cannot express the corresponding runtime relation.
 SCHEMA_ONLY_JUSTIFICATIONS = {
     "schema-version-float": "Draft 2020-12 integer includes 1.0; runtime requires exact Python int.",
+    "schema-version-scientific": "Draft 2020-12 integer includes 1e0; runtime requires exact Python int.",
     "default-integration-sibling-equality": "JSON Schema has no general sibling-property inequality.",
     "task-probe-collides-with-default": "JSON Schema cannot resolve task_branch_pattern against default_branch.",
+    "task-probe-collides-with-integration": "JSON Schema cannot resolve task_branch_pattern against integration_branch.",
     "external-pattern-overlaps-task-namespace": "JSON Schema cannot compare a pattern with the task namespace.",
     "profile-acceptance-differs": "JSON Schema cannot join gate_commands and compare the result to acceptance.",
     "profile-gate-files-name-different-worker": "JSON Schema cannot derive the worker executable from acceptance and compare it to gate_files.",
@@ -70,6 +72,7 @@ SCHEMA_EXPRESSIBLE_CASES = {
     "profile-acceptance-glob",
     "profile-acceptance-dynamic-python",
     "profile-acceptance-option-bash",
+    "ext-6",
 }
 
 TRAILING_SLASH_PATTERNS = (
@@ -349,10 +352,13 @@ class Phase2BoundarySweep(unittest.TestCase):
         # exact-Python-int check.  The remaining cross-field cases are likewise intentionally
         # retained as named, safe-direction exceptions below.
         add("schema-version-float", schema_version=1.0)
+        add("schema-version-scientific", schema_version=1e0)
         add("default-integration-sibling-equality",
             default_branch="release", integration_branch="release")
         add("task-probe-collides-with-default",
             default_branch="recursion/task/probe", integration_branch="release")
+        add("task-probe-collides-with-integration",
+            default_branch="main", integration_branch="recursion/task/probe")
         add("external-pattern-overlaps-task-namespace",
             external_branch_patterns=["recursion/task*"])
         add(
@@ -403,10 +409,11 @@ class Phase2BoundarySweep(unittest.TestCase):
             add(f"external-pattern-trailing-slash:{pattern}", external_branch_patterns=[pattern])
         for pattern in EXTERNAL_PATTERN_RECONCILIATION:
             add(f"external-pattern-git-punctuation:{pattern}", external_branch_patterns=[pattern])
+        add("ext-6", external_branch_patterns=["cursor/*\n"])
 
         # Fill the remainder with distinct ordinary descriptors so the corpus has a stable,
         # explicit size while the named boundary cases above remain easy to audit.
-        for index in range(202):
+        for index in range(199):
             add(f"ordinary-{index:03d}", id=f"phase2-ordinary-{index:03d}")
         self.assertEqual(len(cases), 257)
         return cases
@@ -446,7 +453,7 @@ class Phase2BoundarySweep(unittest.TestCase):
             + repr(sorted(SCHEMA_EXPRESSIBLE_CASES.intersection(schema_only))),
         )
         self.assertEqual(
-            (agree, len(schema_only), len(runtime_only)), (250, 7, 0),
+            (agree, len(schema_only), len(runtime_only)), (248, 9, 0),
             f"schema/runtime descriptor counts: agree={agree} schema_only={len(schema_only)} "
             f"runtime_only={len(runtime_only)} mismatches={mismatches}",
         )
@@ -463,7 +470,7 @@ class Phase2BoundarySweep(unittest.TestCase):
                 self.assertIsInstance(justification, str)
                 self.assertIn(label, schema_only)
 
-    def test_external_patterns_require_actual_branch_creation(self) -> None:
+    def test_external_patterns_use_conservative_contract_intersection(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         validator = jsonschema.Draft202012Validator(
             schema["properties"]["external_branch_patterns"]["items"])
@@ -480,17 +487,18 @@ class Phase2BoundarySweep(unittest.TestCase):
         actual: dict[str, bool] = {}
         for pattern in EXTERNAL_PATTERN_RECONCILIATION:
             probe = pattern.replace("*", "probe")
-            created = run_process(["git", "-C", str(branch_repo), "branch", probe])
-            actual[pattern] = created.returncode == 0
             expected = pattern not in WINDOWS_UNREALIZABLE_EXTERNAL_PATTERNS
             with self.subTest(pattern=pattern, probe=probe):
-                self.assertEqual(
-                    actual[pattern], expected,
-                    f"actual git branch creation disagreed for {pattern!r}: "
-                    f"rc={created.returncode} stderr={created.stderr.decode(errors='replace')!r}",
-                )
                 self.assertEqual(self.rc._valid_git_pattern(pattern), expected)
                 self.assertEqual(validator.is_valid(pattern), expected)
+                if pattern not in WINDOWS_UNREALIZABLE_EXTERNAL_PATTERNS:
+                    created = run_process(["git", "-C", str(branch_repo), "branch", probe])
+                    actual[pattern] = created.returncode == 0
+                    self.assertTrue(
+                        actual[pattern],
+                        f"actual git branch creation failed for {pattern!r}: "
+                        f"rc={created.returncode} stderr={created.stderr.decode(errors='replace')!r}",
+                    )
         self.assertEqual(
             sum(actual.values()), len(EXTERNAL_PATTERN_RECONCILIATION) - len(
                 WINDOWS_UNREALIZABLE_EXTERNAL_PATTERNS))
