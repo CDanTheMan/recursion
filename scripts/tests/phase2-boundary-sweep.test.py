@@ -247,6 +247,18 @@ class Phase2BoundarySweep(unittest.TestCase):
                                 "validate-project", str(valid_path)])
         self.assertEqual(accepted.returncode, 0, accepted.stderr.decode(errors="replace"))
 
+    def test_unicode_external_pattern_is_refused_by_repository_cli(self) -> None:
+        path = self.root / "unicode-pattern.json"
+        path.write_text(json.dumps(self.descriptor(external_branch_patterns=["Δ"]),
+                                   ensure_ascii=False), encoding="utf-8")
+        result = run_process([PYTHON, str(SOURCE / "scripts" / "repository_contract.py"),
+                              "validate-project", str(path)])
+        self.assertEqual(result.returncode, 2)
+        self.assertNotIn(b"Traceback", result.stderr)
+        error = json.loads(result.stderr.decode("utf-8"))
+        self.assertEqual(error["error"], "contract-invalid")
+        self.assertIn("external_branch_patterns", error["message"])
+
     def test_shared_hostile_matrix_reaches_runtime_entrypoints(self) -> None:
         hostile: list[object] = [True, False, 1.0, 10 ** 200, float("inf"), "", [], {}, None,
                                  [[[]]], [[]]]
@@ -361,6 +373,7 @@ class Phase2BoundarySweep(unittest.TestCase):
             default_branch="main", integration_branch="recursion/task/probe")
         add("external-pattern-overlaps-task-namespace",
             external_branch_patterns=["recursion/task*"])
+        add("external-pattern-unicode", external_branch_patterns=["Δ"])
         add(
             "profile-acceptance-differs",
             gate_commands=["python3 src/check.py"],
@@ -415,7 +428,7 @@ class Phase2BoundarySweep(unittest.TestCase):
         # explicit size while the named boundary cases above remain easy to audit.
         for index in range(199):
             add(f"ordinary-{index:03d}", id=f"phase2-ordinary-{index:03d}")
-        self.assertEqual(len(cases), 257)
+        self.assertEqual(len(cases), 258)
         return cases
 
     def test_runtime_and_schema_descriptor_differential_uses_stock_validator(self) -> None:
@@ -453,7 +466,7 @@ class Phase2BoundarySweep(unittest.TestCase):
             + repr(sorted(SCHEMA_EXPRESSIBLE_CASES.intersection(schema_only))),
         )
         self.assertEqual(
-            (agree, len(schema_only), len(runtime_only)), (248, 9, 0),
+            (agree, len(schema_only), len(runtime_only)), (249, 9, 0),
             f"schema/runtime descriptor counts: agree={agree} schema_only={len(schema_only)} "
             f"runtime_only={len(runtime_only)} mismatches={mismatches}",
         )

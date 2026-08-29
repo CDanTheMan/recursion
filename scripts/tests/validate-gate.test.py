@@ -141,15 +141,51 @@ class DirectGateAdmissionTest(unittest.TestCase):
             self.assertNotIn("Traceback", result.stderr.decode("utf-8", "replace"))
 
         self.assertEqual(
-            run_gate_result(
-                "test -s app/result.txt && touch /tmp/phase5-marker", strict=False,
-            ).returncode,
-            0,
-        )
-        self.assertEqual(
             run_gate_result("test -s fixtures/truth.json", read_only_paths="fixtures").returncode,
             0,
         )
+
+    def test_touch_is_not_an_admitted_acceptance_command(self):
+        for acceptance in ("touch", "touch app/a", "touch /tmp/phase5-marker", "touch C:/phase5-marker"):
+            for strict in (False, True):
+                with self.subTest(acceptance=acceptance, strict=strict):
+                    result = run_gate_result(acceptance, strict=strict)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("acceptance", result.stderr.decode("utf-8", "replace"))
+
+    def test_legacy_direct_mode_has_no_hostile_relaxations(self):
+        hostile = (
+            ("test a = b", "ERR literal test acceptance is structurally vacuous"),
+            ("test a != b", "ERR literal test acceptance is structurally vacuous"),
+            ("bash -c true", "ERR dynamic bash acceptance programs are not admitted"),
+            ("python3 -c true", "ERR dynamic python3 acceptance programs are not admitted"),
+            ("env test -s app/a", "ERR indirect acceptance launcher is not admitted: env"),
+            ("./outside.sh", "ERR acceptance executable path is unsafe: ./outside.sh"),
+            ("../outside.sh", "ERR acceptance executable path is unsafe: ../outside.sh"),
+            ("bash ../../evil.sh", "ERR acceptance program path is unsafe: ../../evil.sh"),
+        )
+        for acceptance, expected in hostile:
+            with self.subTest(acceptance=acceptance):
+                result = run_gate_result(acceptance, strict=False, legacy=True)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stderr.decode("utf-8", "replace").strip(), expected)
+
+    def test_launcher_guards_are_reachable_from_cli(self):
+        cases = (
+            ("/usr/bin/python3 app/check.py", "ERR path-qualified acceptance launcher is not admitted: /usr/bin/python3"),
+            ("command python3 app/check.py", "ERR shell reserved word or wrapper is not admitted: command"),
+            ("env test -s app/a", "ERR indirect acceptance launcher is not admitted: env"),
+            ("pytest app/check.py", "ERR bare acceptance launcher is not admitted: pytest"),
+            ("python3", "ERR python3 acceptance has no explicit grading program"),
+            ("python3 -c true", "ERR dynamic python3 acceptance programs are not admitted"),
+            ("python3 --version", "ERR option-bearing python3 acceptance programs are not admitted: --version"),
+            ("python3 ../outside.py", "ERR acceptance program path is unsafe: ../outside.py"),
+        )
+        for acceptance, expected in cases:
+            with self.subTest(acceptance=acceptance):
+                result = run_gate_result(acceptance, strict=True)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stderr.decode("utf-8", "replace").strip(), expected)
 
     def test_git_redirection_options_are_rejected_by_cli_in_both_modes(self):
         blocked = (
@@ -189,7 +225,6 @@ class DirectGateAdmissionTest(unittest.TestCase):
         for acceptance in (
             "git diff app",
             "git status app",
-            "test -s app/result.txt && touch C:/phase5-marker",
         ):
             for strict in (False, True):
                 with self.subTest(acceptance=acceptance, strict=strict):
@@ -237,10 +272,11 @@ class DirectGateAdmissionTest(unittest.TestCase):
             # refused by the downstream RESERVED wrapper guard.
             module.entrypoint(["/usr/bin/python3", "app/check.py"], True)
 
-    def test_non_path_absolute_argument_is_opaque_but_path_operands_remain_confined(self):
+    def test_absolute_path_operands_remain_confined_in_both_modes(self):
         marker = str(Path(tempfile.gettempdir()) / "phase5-marker")
-        self.assertEqual(run_gate(f"test -s app/result.txt && touch {marker}", strict=False), 0)
-        self.assertNotEqual(run_gate(f"test -s {marker}", strict=False), 0)
+        for strict in (False, True):
+            with self.subTest(strict=strict):
+                self.assertNotEqual(run_gate(f"test -s {marker}", strict=strict), 0)
 
     def test_grouped_success_guard_classifies_the_inner_literal(self):
         module = load_gate_module()
@@ -253,7 +289,8 @@ class DirectGateAdmissionTest(unittest.TestCase):
         admitted = (
             "test -s app/result.txt",
             "test -s app/result.txt && test -s app/other.txt",
-            "test a != b",
+            "git diff app",
+            "git status app",
         )
         for gate in admitted:
             with self.subTest(gate=gate):
@@ -428,7 +465,7 @@ class DirectGateAdmissionTest(unittest.TestCase):
             "test -s $(echo app/a)", "test -s `echo app/a`", "test -s $APP_FILE",
             "command test -s app/a", "exec test -s app/a", "env test -s app/a",
             "bash -c true", "sh -e app/check.sh", "python -m check", "node -e x",
-            "test -n foo", "[ -n foo ]", "test a = b", "[ a == b ]",
+            "test -n foo", "[ -n foo ]", "test a = b", "test a != b", "[ a == b ]", "[ a != b ]",
             "test -s /tmp/a", "test -s C:\\tmp\\a", "test -s ../a",
             "test -s app/../a", "test -s app\\..\\a", "python3 app\\..\\check.py",
             "git -C app diff", "git -Capp diff", "git -c core.pager=cat diff",
@@ -439,7 +476,8 @@ class DirectGateAdmissionTest(unittest.TestCase):
             "git -o app/out diff", "git --output app/out diff", "git --output=app/out diff",
             'test "-s" app/a', 'python3 app/check.py "--eval"',
             'git diff "--work-tree=app"', "bash", "python3", "node",
-            "test -s .recursion-result.json", " " * 4090 + "git diff --check",
+            "test -s .recursion-result.json", "touch", "touch app/a",
+            " " * 4090 + "git diff --check",
         )
         quoting_and_paths = (
             'test -s "app/result file.txt"', "test -s 'app/result file.txt'",

@@ -221,6 +221,7 @@ def _valid_git_ref(value: object) -> bool:
 
 def _valid_git_pattern(value: object) -> bool:
     if not isinstance(value, str) or not value or len(value) > 200 \
+            or any(ord(char) < 0x21 or ord(char) > 0x7E for char in value) \
             or any(char in value for char in "?[\"<>|"):
         return False
     probe = value.replace("*", "probe")
