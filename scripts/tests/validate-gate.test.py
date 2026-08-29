@@ -7,8 +7,8 @@ import json
 import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 import jsonschema
@@ -16,6 +16,17 @@ import jsonschema
 
 SOURCE = Path(__file__).resolve().parents[2]
 GATE = SOURCE / "scripts" / "validate-gate.py"
+SCRATCH_ROOT = Path(__import__("os").environ.get(
+    "RECURSION_PHASE2_SCRATCH",
+    r"C:\Users\Lucas\AppData\Local\Temp\codex-w2c-2d5c9f",
+))
+
+
+def explicit_scratch(prefix: str) -> Path:
+    SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
+    path = SCRATCH_ROOT / f"{prefix}-{uuid.uuid4().hex}"
+    path.mkdir()
+    return path
 
 
 def run_gate_result(acceptance: str, strict: bool = True,
@@ -260,10 +271,9 @@ class GateFileIdentityTest(unittest.TestCase):
         assert spec.loader is not None
         spec.loader.exec_module(module)
         try:
-            raw = tempfile.mkdtemp(prefix="validate-gate-")
+            repo = explicit_scratch("validate-gate")
         except OSError as exc:
-            self.skipTest(f"temporary test repository is unavailable on this host: {exc}")
-        repo = Path(raw)
+            self.skipTest(f"explicit scratch repository is unavailable on this host: {exc}")
         try:
             try:
                 subprocess.run(["git", "-C", str(repo), "init", "-q", "-b", "main"], check=True)
@@ -297,10 +307,9 @@ class GateFileIdentityTest(unittest.TestCase):
         assert spec.loader is not None
         spec.loader.exec_module(module)
         try:
-            raw = tempfile.mkdtemp(prefix="validate-gate-baseline-")
+            repo = explicit_scratch("validate-gate-baseline")
         except OSError as exc:
-            self.skipTest(f"temporary test repository is unavailable on this host: {exc}")
-        repo = Path(raw)
+            self.skipTest(f"explicit scratch repository is unavailable on this host: {exc}")
         try:
             try:
                 subprocess.run(["git", "-C", str(repo), "init", "-q", "-b", "main"], check=True)

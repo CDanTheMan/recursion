@@ -8,9 +8,10 @@ import hashlib
 import hmac
 import inspect
 import os
+import shutil
 import subprocess
-import tempfile
 import unittest
+import uuid
 from unittest import mock
 from pathlib import Path
 import jsonschema
@@ -18,6 +19,27 @@ import jsonschema
 import sys
 sys.path.insert(0, str(Path(__file__).parents[1]))
 import repository_contract as rc
+
+
+SCRATCH_ROOT = Path(os.environ.get(
+    "RECURSION_PHASE2_SCRATCH",
+    r"C:\Users\Lucas\AppData\Local\Temp\codex-w2c-2d5c9f",
+))
+
+
+class ExplicitScratch:
+    """Fixture-local scratch allocation; do not delegate cleanup to TemporaryDirectory."""
+
+    def __init__(self, prefix: str) -> None:
+        SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
+        self.path = SCRATCH_ROOT / f"{prefix}-{uuid.uuid4().hex}"
+        self.path.mkdir()
+        self.name = str(self.path)
+
+    def cleanup(self) -> None:
+        # Cleanup is limited to this test-owned scratch directory; host-denied Git mappings must
+        # not mask the assertion result.
+        shutil.rmtree(self.path, ignore_errors=True)
 
 
 def git(repo: Path, *args: str) -> str:
@@ -32,10 +54,18 @@ def git_raw(repo: Path, *args: str) -> str:
 
 class RepositoryContractTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp = tempfile.TemporaryDirectory(prefix="recursion-v2-contract-")
+        self.temp = ExplicitScratch("contract")
         self.key_path = Path(self.temp.name) / "controller.key"
         self.key_path.write_text("hermetic-controller-key\n", encoding="utf-8")
         os.chmod(self.key_path, 0o600)
+        if os.name == "nt":
+            account = f"{os.environ.get('USERDOMAIN', '')}\\{os.environ['USERNAME']}"
+            acl = subprocess.run(
+                ["icacls", str(self.key_path), "/inheritance:r", "/grant:r", f"{account}:F"],
+                capture_output=True, check=False,
+            )
+            if acl.returncode:
+                raise unittest.SkipTest("fixture key ACL could not be made owner-only")
         self.old_controller_key_path = rc.CONTROLLER_KEY_PATH
         rc.CONTROLLER_KEY_PATH = self.key_path
         self.old_receipt_key = os.environ.get("RECURSION_VERIFIER_RECEIPT_KEY")

@@ -23,9 +23,45 @@ set -euo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"; cd "$ROOT"
 fsync_dir(){ python3 - "$1" <<'PY' >/dev/null 2>&1
 import os,sys
-fd=os.open(sys.argv[1],os.O_RDONLY)
-try: os.fsync(fd)
-finally: os.close(fd)
+try:
+  fd=os.open(sys.argv[1],os.O_RDONLY)
+  try:
+    os.fsync(fd)
+  finally:
+    os.close(fd)
+except (ValueError,TypeError,OverflowError,RecursionError,UnicodeDecodeError,OSError):
+  raise SystemExit(74)
+PY
+}
+atomic_replace_checked(){ python3 - "$1" "$2" <<'PY'
+import os,stat,sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+import repository_contract as rc
+
+try:
+    source = rc._lexical_absolute(sys.argv[1])
+    target = rc._lexical_absolute(sys.argv[2])
+    if source.parent != target.parent:
+        raise ValueError("atomic replacement must stay in one directory")
+    source_info = os.lstat(source)
+    if rc._is_reparse_or_link(source_info) or not stat.S_ISREG(source_info.st_mode) \
+            or getattr(source_info, "st_nlink", 1) != 1:
+        raise ValueError("replacement source is not a private regular file")
+    with rc._pinned_real_directory(target.parent) as parent_fd:
+        if parent_fd is None:
+            raise OSError("replacement directory was not pinned")
+        current = os.lstat(source)
+        if rc._is_reparse_or_link(current) or not stat.S_ISREG(current.st_mode) \
+                or getattr(current, "st_nlink", 1) != 1 or not rc._same_file(source_info, current):
+            raise OSError("replacement source changed while being pinned")
+        if os.name == "nt":
+            os.replace(source, target)
+        else:
+            os.replace(source.name, target.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+except (ValueError,TypeError,OverflowError,RecursionError,UnicodeDecodeError,OSError) as exc:
+    print(f"plan: atomic replacement refused: {exc}", file=sys.stderr)
+    raise SystemExit(74)
 PY
 }
 PLANNER_LOCK_HELD=0; PLANNER_LOCK=""
@@ -133,18 +169,24 @@ SOURCE_BRANCH=""; SOURCE_SHA=""; PROJECT_CONFIG=""; REPO_CANONICAL="$REPO"
 for candidate_config in state/project-config/*.json; do
   [ -f "$candidate_config" ] || continue
   project_match="$(python3 - "$candidate_config" "$REPO" <<'PY'
-import json,sys
+import json,os,sys
 from pathlib import Path
 try:
-    value=json.load(open(sys.argv[1],encoding='utf-8'))
+    def reject_constant(value):
+        raise ValueError("non-standard JSON constant")
+    with open(sys.argv[1],encoding='utf-8') as stream:
+        value=json.load(stream, parse_constant=reject_constant)
+    if not isinstance(value,dict):
+        print('invalid'); raise SystemExit(0)
     configured_raw=value.get('repo')
-    if not isinstance(configured_raw,str) or not configured_raw.strip():
+    if not isinstance(configured_raw,str) or not configured_raw.strip() \
+       or any(char in configured_raw for char in '~%`*?'):
         print('invalid')
     else:
-        configured=Path(configured_raw).expanduser().resolve(strict=False)
-        requested=Path(str(sys.argv[2] or '')).expanduser().resolve(strict=False)
+        configured=Path(os.path.abspath(configured_raw))
+        requested=Path(os.path.abspath(str(sys.argv[2] or '')))
         print(value.get('status','invalid') if configured == requested else 'no')
-except (OSError,ValueError):
+except (json.JSONDecodeError,ValueError,TypeError,OverflowError,RecursionError,UnicodeDecodeError,OSError):
     print('invalid')
 PY
 )"
@@ -167,18 +209,29 @@ done
 if [ -n "$PROJECT_CONFIG" ]; then
   [ -d "${REPO:-}/.git" ] || { echo "plan: registered project checkout is unavailable; exact source SHA cannot be admitted" >&2; exit 74; }
   observed_root="$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null || true)"
-  canonical_root="$(python3 - "$REPO" <<'PY'
-from pathlib import Path
-import sys
-print(Path(sys.argv[1]).expanduser().resolve(strict=False))
+canonical_root="$(python3 - "$REPO" <<'PY'
+import os,sys
+try:
+  print(os.path.abspath(sys.argv[1]))
+except (ValueError,TypeError,OverflowError,OSError):
+  raise SystemExit(74)
 PY
 )"
   [ -n "$observed_root" ] && [ "$canonical_root" = "$observed_root" ] \
     || { echo "plan: registered project path is not the exact Git worktree root" >&2; exit 74; }
   REPO_CANONICAL="$canonical_root"
-  SOURCE_BRANCH="$(python3 - "$PROJECT_CONFIG" <<'PY'
+SOURCE_BRANCH="$(python3 - "$PROJECT_CONFIG" <<'PY'
 import json,sys
-print(json.load(open(sys.argv[1],encoding='utf-8')).get('default_branch',''))
+try:
+  def reject_constant(value):
+    raise ValueError("non-standard JSON constant")
+  with open(sys.argv[1],encoding='utf-8') as stream:
+    value=json.load(stream, parse_constant=reject_constant)
+  if not isinstance(value,dict):
+    raise ValueError("descriptor must be an object")
+  print(value.get('default_branch',''))
+except (json.JSONDecodeError,ValueError,TypeError,OverflowError,RecursionError,UnicodeDecodeError,OSError):
+  raise SystemExit(74)
 PY
 )"
   SOURCE_SHA="$(git -C "$REPO" rev-parse --verify "refs/heads/$SOURCE_BRANCH^{commit}" 2>/dev/null || true)"
@@ -222,9 +275,15 @@ task = {"id": task_id, "source_branch": source_branch, "source_sha": source_sha,
         "acceptance": acceptance, "goal": goal, "gate_files": gate_files,
         "controller_gate_files": controller_gate_files}
 try:
-    rc.admit_task(rc.validate_project_descriptor(json.loads(Path(descriptor_path).read_text(encoding="utf-8"))),
-                  task, Path(repo), new_generation=True)
-except rc.ContractError as exc:
+    def reject_constant(value):
+        raise ValueError("non-standard JSON constant")
+    descriptor = json.loads(Path(descriptor_path).read_text(encoding="utf-8"),
+                             parse_constant=reject_constant)
+    if not isinstance(descriptor, dict):
+        raise ValueError("descriptor must be an object")
+    rc.admit_task(rc.validate_project_descriptor(descriptor), task, Path(repo), new_generation=True)
+except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError,
+        UnicodeDecodeError, OSError) as exc:
     print(f"plan: generated task violates active repository contract: {exc}", file=sys.stderr)
     raise SystemExit(6)
 PY
@@ -263,9 +322,13 @@ tmp_task="$(mktemp "$TASKDIR/.${ID}.tmp.XXXXXX")"
 } > "$tmp_task"
 python3 - "$tmp_task" <<'PY'
 import os,sys
-with open(sys.argv[1],'rb') as f: os.fsync(f.fileno())
+try:
+  with open(sys.argv[1],'rb') as f:
+    os.fsync(f.fileno())
+except (ValueError,TypeError,OverflowError,RecursionError,UnicodeDecodeError,OSError):
+  raise SystemExit(74)
 PY
-mv -f -- "$tmp_task" "$TASK"
+atomic_replace_checked "$tmp_task" "$TASK"
 fsync_dir "$TASKDIR"
 
 # mark the roadmap item as queued ([~]) so it is not re-emitted; it flips to [x] when the task passes.
@@ -276,9 +339,13 @@ case "$line" in '- [ ] '*) ;; *) rm -f -- "$tmp_rm" "$TASK"; echo "plan: roadmap
 sed -i "${LN}s/^- \[ \] /- [~] /" "$tmp_rm"
 python3 - "$tmp_rm" <<'PY'
 import os,sys
-with open(sys.argv[1],'rb') as f: os.fsync(f.fileno())
+try:
+  with open(sys.argv[1],'rb') as f:
+    os.fsync(f.fileno())
+except (ValueError,TypeError,OverflowError,RecursionError,UnicodeDecodeError,OSError):
+  raise SystemExit(74)
 PY
-mv -f -- "$tmp_rm" "$RM"
+atomic_replace_checked "$tmp_rm" "$RM"
 fsync_dir "$(dirname "$RM")"
 echo "planned $ID -> $TASK"
 echo "  goal: $GOAL"

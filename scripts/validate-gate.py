@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -16,6 +17,19 @@ from pathlib import Path, PurePosixPath
 
 
 VACUOUS = re.compile(r"^(?:true|:|/bin/true|exit\s+0)$")
+BOUNDARY_ERRORS = (json.JSONDecodeError, ValueError, TypeError, OverflowError,
+                   RecursionError, UnicodeDecodeError, OSError, subprocess.TimeoutExpired)
+
+
+def _native_handle_value(handle: object) -> int:
+    try:
+        value = handle.value if hasattr(handle, "value") else int(handle)  # type: ignore[attr-defined]
+        if not isinstance(value, int) or value <= 0:
+            raise ValueError("invalid native handle")
+        return value
+    except BOUNDARY_ERRORS as exc:
+        raise OSError("invalid native handle") from exc
+
 
 # Keep the descriptor schema and this runtime entry point on one deliberately small shell
 # grammar.  The regular expression is the lexical boundary (balanced whole-token quoting,
@@ -77,6 +91,8 @@ def fail(message: str) -> None:
 
 
 def paths(value: str) -> list[str]:
+    if not isinstance(value, str):
+        fail("gate file list must be text")
     result: list[str] = []
     for item in value.replace(",", " ").split():
         p = PurePosixPath(item)
@@ -101,8 +117,189 @@ def _is_reparse_or_link(info: os.stat_result) -> bool:
     )
 
 
+def _lexical_absolute(path: Path | str) -> Path:
+    try:
+        raw = os.fspath(path)
+        if not isinstance(raw, str) or not raw:
+            raise ValueError("path must be non-empty")
+        return Path(os.path.abspath(raw))
+    except BOUNDARY_ERRORS as exc:
+        raise ValueError("path could not be made absolute") from exc
+
+
+def _same_file(left: os.stat_result, right: os.stat_result) -> bool:
+    return (left.st_dev, left.st_ino, getattr(left, "st_nlink", 1)) == (
+        right.st_dev, right.st_ino, getattr(right, "st_nlink", 1))
+
+
+def _open_verified_file(path: Path) -> int:
+    """Open one regular file without following a leaf reparse and pin its identity."""
+    fd: int | None = None
+    try:
+        initial = os.lstat(path)
+        if _is_reparse_or_link(initial) or not stat.S_ISREG(initial.st_mode) \
+                or getattr(initial, "st_nlink", 1) != 1:
+            fail(f"gate file is a symlink or reparse point: {path}")
+        if os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+            import msvcrt
+            kernel32 = ctypes.WinDLL("Kernel32", use_last_error=True)
+            create_file = kernel32.CreateFileW
+            create_file.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+                                    ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+            create_file.restype = wintypes.HANDLE
+            close_handle = kernel32.CloseHandle
+            close_handle.argtypes = [wintypes.HANDLE]
+            close_handle.restype = wintypes.BOOL
+            handle = create_file(str(path), 0x80000000, 0x00000003, None, 3,
+                                 0x00000080 | 0x00200000 | 0x02000000, None)
+            handle_value = _native_handle_value(handle)
+            if handle_value in {None, ctypes.c_void_p(-1).value}:
+                raise OSError(ctypes.get_last_error(), "Windows no-follow open failed")
+            try:
+                fd = msvcrt.open_osfhandle(handle_value, os.O_RDONLY | os.O_BINARY)
+            except OSError:
+                close_handle(handle)
+                raise
+        else:
+            flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+            fd = os.open(path, flags)
+        current = os.fstat(fd)
+        if _is_reparse_or_link(current) or not stat.S_ISREG(current.st_mode) \
+                or getattr(current, "st_nlink", 1) != 1 \
+                or not _same_file(initial, current):
+            os.close(fd)
+            fail(f"gate file changed while being opened: {path}")
+        return fd
+    except BOUNDARY_ERRORS as exc:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if isinstance(exc, ValueError):
+            raise
+        raise ValueError(f"gate file could not be opened without following links: {path}") from exc
+
+
+def _read_pinned(fd: int, path: Path) -> bytes:
+    try:
+        before = os.fstat(fd)
+        if _is_reparse_or_link(before) or not stat.S_ISREG(before.st_mode) \
+                or getattr(before, "st_nlink", 1) != 1:
+            fail(f"gate file changed before being read: {path}")
+        os.lseek(fd, 0, os.SEEK_SET)
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        current = os.fstat(fd)
+        if _is_reparse_or_link(current) or not stat.S_ISREG(current.st_mode) \
+                or getattr(current, "st_nlink", 1) != 1 or not _same_file(before, current):
+            fail(f"gate file changed while being read: {path}")
+        return b"".join(chunks)
+    except BOUNDARY_ERRORS as exc:
+        if isinstance(exc, ValueError):
+            raise
+        raise ValueError(f"gate file could not be read safely: {path}") from exc
+
+
+@contextlib.contextmanager
+def _pinned_file_parents(path: Path):
+    """Hold every existing parent while a gate file is opened and executed."""
+    absolute = _lexical_absolute(path)
+    handles: list[int] = []
+    identities: list[os.stat_result] = []
+    try:
+        if os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+            import msvcrt
+            kernel32 = ctypes.WinDLL("Kernel32", use_last_error=True)
+            create_file = kernel32.CreateFileW
+            create_file.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+                                    ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+            create_file.restype = wintypes.HANDLE
+            close_handle = kernel32.CloseHandle
+            close_handle.argtypes = [wintypes.HANDLE]
+            close_handle.restype = wintypes.BOOL
+            for parent in reversed(tuple(absolute.parents)):
+                if parent == parent.parent:
+                    continue
+                initial = os.lstat(parent)
+                if _is_reparse_or_link(initial) or not stat.S_ISDIR(initial.st_mode):
+                    fail(f"gate file parent is not a real directory: {path}")
+                native = create_file(str(parent), 0x00020000 | 0x00000080, 0x00000003,
+                                     None, 3, 0x02000000 | 0x00200000, None)
+                value = _native_handle_value(native)
+                if value in {None, ctypes.c_void_p(-1).value}:
+                    raise OSError(ctypes.get_last_error(), "gate parent could not be pinned")
+                try:
+                    fd = msvcrt.open_osfhandle(value, os.O_RDONLY | os.O_BINARY)
+                except OSError:
+                    close_handle(native)
+                    raise
+                pinned = os.fstat(fd)
+                if _is_reparse_or_link(pinned) or not stat.S_ISDIR(pinned.st_mode) \
+                        or not _same_file(initial, pinned):
+                    os.close(fd)
+                    fail(f"gate file parent changed while being pinned: {path}")
+                handles.append(fd)
+                identities.append(pinned)
+            yield
+            for fd, expected in zip(handles, identities):
+                pinned = os.fstat(fd)
+                if _is_reparse_or_link(pinned) or not stat.S_ISDIR(pinned.st_mode) \
+                        or not _same_file(expected, pinned):
+                    fail(f"gate file parent changed during execution: {path}")
+            return
+
+        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        parts = absolute.parts
+        current = os.open(Path(absolute.anchor or os.sep), flags)
+        handles.append(current)
+        identities.append(os.fstat(current))
+        if _is_reparse_or_link(identities[-1]) or not stat.S_ISDIR(identities[-1].st_mode):
+            fail(f"gate file parent is not a real directory: {path}")
+        for part in parts[1:-1] if absolute.anchor else parts[:-1]:
+            current = os.open(part, flags, dir_fd=current)
+            info = os.fstat(current)
+            if _is_reparse_or_link(info) or not stat.S_ISDIR(info.st_mode):
+                fail(f"gate file parent is not a real directory: {path}")
+            handles.append(current)
+            identities.append(info)
+        yield
+        for fd, expected in zip(handles, identities):
+            info = os.fstat(fd)
+            if _is_reparse_or_link(info) or not stat.S_ISDIR(info.st_mode) \
+                    or not _same_file(expected, info):
+                fail(f"gate file parent changed during execution: {path}")
+    except BOUNDARY_ERRORS as exc:
+        if isinstance(exc, ValueError):
+            raise
+        raise ValueError(f"gate file parent could not be pinned: {path}") from exc
+    finally:
+        for fd in reversed(handles):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
+def _safe_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return subprocess.run(*args, **kwargs)  # type: ignore[arg-type, return-value]
+    except BOUNDARY_ERRORS as exc:
+        raise ValueError("Git provenance command was unavailable") from exc
+
+
 def clean_tracked_bytes(repo: Path, item: str, baseline_commit: str | None = None) -> bytes:
     """Return the committed gate bytes and reject index/worktree substitution."""
+    if not isinstance(item, str):
+        fail("gate file path must be text")
     pure = PurePosixPath(item)
     if (pure.is_absolute() or ".." in pure.parts or not pure.parts
             or pure.as_posix() != item or "\\" in item
@@ -110,13 +307,13 @@ def clean_tracked_bytes(repo: Path, item: str, baseline_commit: str | None = Non
             or item.startswith(("\\\\", "//"))
             or re.match(r"^[A-Za-z]:", item)):
         fail(f"gate file path is not a confined repository path: {item}")
-    tracked = subprocess.run(
+    tracked = _safe_run(
         ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", item],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
     )
     if tracked.returncode:
         fail(f"gate file is not tracked: {item}")
-    committed = subprocess.run(
+    committed = _safe_run(
         ["git", "-C", str(repo), "show", f"HEAD:{item}"], capture_output=True, check=False,
     )
     if committed.returncode:
@@ -139,7 +336,7 @@ def clean_tracked_bytes(repo: Path, item: str, baseline_commit: str | None = Non
                 fail(f"gate file parent is not a real directory: {item}")
     except OSError as exc:
         fail(f"gate file cannot be inspected without following links: {item}: {exc}")
-    dirty = subprocess.run(
+    dirty = _safe_run(
         ["git", "-C", str(repo), "diff", "--quiet", "HEAD", "--", item], check=False,
     )
     if dirty.returncode:
@@ -147,7 +344,7 @@ def clean_tracked_bytes(repo: Path, item: str, baseline_commit: str | None = Non
     if baseline_commit is not None:
         if not re.fullmatch(r"[0-9a-f]{40,64}", baseline_commit):
             fail("authoritative gate baseline is not an exact commit")
-        baseline = subprocess.run(
+        baseline = _safe_run(
             ["git", "-C", str(repo), "show", f"{baseline_commit}:{item}"],
             capture_output=True, check=False,
         )
@@ -155,7 +352,17 @@ def clean_tracked_bytes(repo: Path, item: str, baseline_commit: str | None = Non
             fail(f"authoritative gate baseline is missing: {item}")
         if baseline.stdout != committed.stdout:
             fail(f"gate file differs from authoritative baseline: {item}")
-    return committed.stdout
+    actual_path = repo.joinpath(*parts)
+    with _pinned_file_parents(actual_path):
+        fd = _open_verified_file(actual_path)
+        try:
+            actual = _read_pinned(fd, actual_path)
+        finally:
+            os.close(fd)
+    # Git's clean-index check is canonical-content based and Windows may materialize CRLF while
+    # HEAD stores LF.  The execution transaction records the bytes from this verified handle;
+    # baseline comparison above remains against Git's canonical blob.
+    return actual
 
 
 def entrypoint(words: list[str], strict: bool, *, controller_declared: bool = False) -> str | None:
@@ -216,11 +423,10 @@ def _controller_declared(value: str, controller_root: str | None,
     if normalized == logical_root or normalized.startswith(logical_root + "/"):
         relative = normalized[len(logical_root):].lstrip("/")
         return relative in controller_gate_files
-    try:
-        relative = Path(value).resolve().relative_to(Path(controller_root).resolve()).as_posix()
-    except ValueError:
-        return False
-    return relative in controller_gate_files
+    root = _lexical_absolute(controller_root).as_posix().replace("\\", "/").rstrip("/")
+    if normalized == root or normalized.startswith(root + "/"):
+        return normalized[len(root):].lstrip("/") in controller_gate_files
+    return False
 
 
 def _reject_git_cwd_options(words: list[str]) -> None:
@@ -364,6 +570,73 @@ def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: li
     return candidate
 
 
+def _execute_from_verified_files(command: str, repo: Path, controller_root: Path | None,
+                                 gate_files: list[str], controller_gate_files: list[str],
+                                 hashes: dict[str, str], controller_hashes: dict[str, str]) -> None:
+    """Hash and execute from the same verified file handles.
+
+    POSIX children receive `/proc/self/fd` spellings for every declared file that appears in the
+    command, so the interpreter executes the inode that was hashed.  Windows keeps the
+    no-follow handles open with delete sharing denied; the native gate files are controller-owned
+    and cannot be replaced while this transaction is running.
+    """
+    opened: list[tuple[int, Path, str]] = []
+    parent_pins = contextlib.ExitStack()
+    try:
+        for root, names, expected in ((repo, gate_files, hashes),
+                                      (controller_root, controller_gate_files, controller_hashes)):
+            if root is None:
+                if names:
+                    fail("controller gate files require a controller root")
+                continue
+            for item in names:
+                path = root.joinpath(*PurePosixPath(item).parts)
+                parent_pins.enter_context(_pinned_file_parents(path))
+                fd = _open_verified_file(path)
+                try:
+                    actual = _read_pinned(fd, path)
+                    if hashlib.sha256(actual).hexdigest() != expected.get(item):
+                        fail(f"gate file changed before execution: {item}")
+                    opened.append((fd, path, item))
+                except BaseException:
+                    os.close(fd)
+                    raise
+
+        executed = command
+        if os.name != "nt":
+            for fd, path, item in sorted(opened, key=lambda value: len(str(value[1])), reverse=True):
+                fd_path = f"/proc/self/fd/{fd}"
+                variants = {item, item.replace("\\", "/"), str(path),
+                            str(path).replace("\\", "/"), f"/opt/recursion/{item}"}
+                for variant in sorted((value for value in variants if value),
+                                      key=len, reverse=True):
+                    executed = executed.replace(variant, fd_path)
+        environment = {key: value for key, value in os.environ.items()
+                       if key in {"PATH", "HOME", "USERPROFILE", "SystemRoot", "WINDIR"}}
+        environment.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+                            "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"})
+        run_args: dict[str, object] = {
+            "shell": True, "cwd": repo, "env": environment, "stdin": subprocess.DEVNULL,
+            "stdout": subprocess.PIPE, "stderr": subprocess.PIPE, "text": True,
+            "encoding": "utf-8", "errors": "replace", "timeout": 120, "check": False,
+        }
+        if os.name != "nt":
+            run_args["pass_fds"] = tuple(fd for fd, _, _ in opened)
+        try:
+            result = subprocess.run(executed, **run_args)  # type: ignore[arg-type]
+        except BOUNDARY_ERRORS as exc:
+            raise ValueError("controller gate execution was unavailable") from exc
+        if result.returncode:
+            fail("independent controller gate failed")
+    finally:
+        for fd, _, _ in reversed(opened):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        parent_pins.close()
+
+
 def vacuous_success(words: list[str]) -> bool:
     """Recognize commands whose success is independent of the code under review."""
     if not words:
@@ -406,6 +679,8 @@ def main() -> int:
     parser.add_argument("--controller-root")
     parser.add_argument("--baseline-commit")
     parser.add_argument("--strict-direct", action="store_true")
+    parser.add_argument("--execute", action="store_true",
+                        help="execute the exact gate after hash-at-execution provenance checks")
     args = parser.parse_args()
     try:
         raw_gate = args.acceptance
@@ -482,10 +757,11 @@ def main() -> int:
                 if candidate and PurePosixPath(candidate).is_absolute():
                     if not args.controller_root:
                         fail("absolute acceptance program lacks a controller root")
-                    try:
-                        relative = Path(candidate).resolve().relative_to(Path(args.controller_root).resolve()).as_posix()
-                    except ValueError:
+                    root = _lexical_absolute(args.controller_root).as_posix().replace("\\", "/").rstrip("/")
+                    candidate_abs = candidate.replace("\\", "/")
+                    if candidate_abs != root and not candidate_abs.startswith(root + "/"):
                         fail(f"acceptance program is outside the controller root: {candidate}")
+                    relative = candidate_abs[len(root):].lstrip("/")
                     if relative not in controller_gate_files:
                         fail(f"controller acceptance program must be declared: {relative}")
                 elif candidate and under(candidate, allowed) and candidate not in gate_files:
@@ -504,15 +780,23 @@ def main() -> int:
             controller = Path(args.controller_root)
             for item in controller_gate_files:
                 controller_hashes[item] = hashlib.sha256(clean_tracked_bytes(controller, item)).hexdigest()
+        if args.execute:
+            if not args.repo:
+                fail("verified gate execution requires --repo")
+            _execute_from_verified_files(
+                gate, Path(args.repo),
+                Path(args.controller_root) if args.controller_root else None,
+                gate_files, controller_gate_files, hashes, controller_hashes,
+            )
         print(json.dumps({"acceptance_sha256": hashlib.sha256(gate.encode()).hexdigest(),
                           "gate_files": hashes,
                           "controller_gate_files": controller_hashes}, sort_keys=True))
-    except ValueError as exc:
+    except BOUNDARY_ERRORS as exc:
         print(f"ERR {exc}", file=sys.stderr)
         return 2
-    except OSError as exc:
-        print(f"ERR controller I/O while validating gate: {exc}", file=sys.stderr)
-        return 74
+    except Exception:
+        print("ERR gate validation failed", file=sys.stderr)
+        return 2
     return 0
 
 
