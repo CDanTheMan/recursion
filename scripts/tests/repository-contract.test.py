@@ -10,6 +10,7 @@ import inspect
 import os
 import shutil
 import subprocess
+import tempfile
 import unittest
 import uuid
 from unittest import mock
@@ -23,7 +24,7 @@ import repository_contract as rc
 
 SCRATCH_ROOT = Path(os.environ.get(
     "RECURSION_PHASE2_SCRATCH",
-    r"C:\Users\Lucas\AppData\Local\Temp\codex-w2c-2d5c9f",
+    tempfile.gettempdir(),
 ))
 
 
@@ -423,6 +424,16 @@ class RepositoryContractTests(unittest.TestCase):
         widened = dict(candidate, allowed_paths=["."])
         with self.assertRaisesRegex(rc.ContractError, "widens"):
             rc.verify_candidate(self.contract, widened, self.repo, receipt=self.receipt(widened))
+
+    def test_directory_handle_identity_recheck_is_not_vacuous(self) -> None:
+        expected = os.stat(self.repo)
+        changed = os.stat(self.temp.path)
+        with mock.patch.object(rc.os, "fstat", return_value=changed):
+            with self.assertRaisesRegex(
+                    OSError, "directory identity changed while pinned",
+                    msg="directory handle recheck accepted a different directory",
+            ):
+                rc._verify_directory_handle(123, expected)
 
     def test_allow_canonical_requires_exact_task_branch(self) -> None:
         candidate = self.candidate()

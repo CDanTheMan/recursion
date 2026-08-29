@@ -85,6 +85,7 @@ n="$(wc -l < "$TMP/crash.log" | tr -d ' ')"
 # 3. Two simultaneous planners must reserve different task IDs and roadmap items atomically.
 P="$TMP/planners"; mkdir -p "$P/scripts" "$P/state/tasks" "$P/state/roadmaps" "$TMP/plan-bin" "$TMP/arrivals"
 cp "$SRC/scripts/plan.sh" "$P/scripts/"
+cp "$SRC/scripts/repository_contract.py" "$P/scripts/"
 cp "$SRC/scripts/runtime-state.py" "$P/scripts/"
 cat > "$P/state/roadmaps/race.md" <<'RMAP'
 engine: none

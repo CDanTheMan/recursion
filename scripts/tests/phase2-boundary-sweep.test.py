@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 import uuid
 from pathlib import Path
@@ -25,7 +26,7 @@ SOURCE = Path(__file__).parents[2]
 PYTHON = sys.executable
 SCRATCH_BASE = Path(os.environ.get(
     "RECURSION_PHASE2_SCRATCH",
-    r"C:\Users\Lucas\AppData\Local\Temp\codex-w2c-2d5c9f",
+    tempfile.gettempdir(),
 ))
 GATE = SOURCE / "scripts" / "validate-gate.py"
 SCHEMA_PATH = SOURCE / "schemas" / "control-plane" / "v2" / "repository-contract.schema.json"
@@ -252,6 +253,13 @@ class Phase2BoundarySweep(unittest.TestCase):
         validator = StrictDraft202012Validator(schema)
         cases = [
             self.descriptor(),
+            self.descriptor(id="phase2-sweep\n"),
+            self.descriptor(default_branch="feature\n"),
+            self.descriptor(integration_branch="recursion/integration\n"),
+            self.descriptor(task_branch_pattern="recursion/task/{task_id}\n"),
+            self.descriptor(external_branch_patterns=["cursor/*\n"]),
+            self.descriptor(eligible_hosts=["gs-recursion\n"]),
+            self.descriptor(eligible_pools=["local\n"]),
             self.descriptor(default_branch="main", integration_branch="main"),
             self.descriptor(external_branch_patterns=["recursion/*"]),
             self.descriptor(allowed_paths=["src//nested"]),
@@ -398,6 +406,16 @@ class Phase2BoundarySweep(unittest.TestCase):
             module._execute_from_verified_files(
                 "python3 src/check.py", gate_repo, None, ["src/check.py"], [],
                 {"src/check.py": expected_hash}, {})
+
+    def test_directory_handle_identity_recheck_is_not_vacuous(self) -> None:
+        expected = self.repo.stat()
+        changed = self.root.stat()
+        with mock.patch.object(self.rc.os, "fstat", return_value=changed):
+            with self.assertRaisesRegex(
+                    OSError, "directory identity changed while pinned",
+                    msg="directory handle recheck accepted a different directory",
+            ):
+                self.rc._verify_directory_handle(123, expected)
 
     def test_path_sites_reject_junction_leaf_and_ancestor(self) -> None:
         target = self.root / "junction-target"

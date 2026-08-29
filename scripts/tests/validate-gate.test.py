@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import json
+import importlib.util
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 import uuid
 from pathlib import Path
@@ -16,9 +19,9 @@ import jsonschema
 
 SOURCE = Path(__file__).resolve().parents[2]
 GATE = SOURCE / "scripts" / "validate-gate.py"
-SCRATCH_ROOT = Path(__import__("os").environ.get(
+SCRATCH_ROOT = Path(os.environ.get(
     "RECURSION_PHASE2_SCRATCH",
-    r"C:\Users\Lucas\AppData\Local\Temp\codex-w2c-2d5c9f",
+    tempfile.gettempdir(),
 ))
 
 
@@ -43,7 +46,57 @@ def run_gate(acceptance: str, strict: bool = True, gate_files: str = "") -> int:
     return run_gate_result(acceptance, strict, gate_files).returncode
 
 
+def load_gate_module():
+    spec = importlib.util.spec_from_file_location("validate_gate_isolated", GATE)
+    if spec is None or spec.loader is None:
+        raise AssertionError("validate-gate module could not be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class DirectGateAdmissionTest(unittest.TestCase):
+    def test_strict_direct_pattern_rejects_an_incomplete_command_chain(self):
+        module = load_gate_module()
+        self.assertIsNone(
+            module.STRICT_DIRECT_PATTERN.fullmatch("git diff --check &&"),
+            "strict direct grammar accepted an incomplete command chain",
+        )
+
+    def test_non_strict_path_traversal_guard_isolated_from_scope_checks(self):
+        result = run_gate_result("test app/../left != app/../right", strict=False)
+        self.assertNotEqual(
+            result.returncode, 0,
+            "path traversal guard accepted traversal in non-path comparison operands",
+        )
+
+    def test_non_strict_git_cwd_redirection_guard_isolated_from_subcommand_checks(self):
+        module = load_gate_module()
+        with self.assertRaisesRegex(
+                ValueError, "Git gate may not redirect",
+                msg="Git cwd redirection guard accepted an otherwise allowed read-only subcommand",
+        ):
+            module.validate_direct_argv(
+                ["git", "diff", "--work-tree=/tmp"],
+                allowed=["app"], gate_files=[], controller_root=None,
+                controller_gate_files=[],
+            )
+
+    def test_reserved_word_guard_rejects_a_path_qualified_reserved_command(self):
+        module = load_gate_module()
+        with self.assertRaisesRegex(
+                ValueError, "shell reserved word or wrapper",
+                msg="reserved-word guard accepted a path-qualified wrapper",
+        ):
+            module.entrypoint(["/usr/bin/time", "python3", "app/check.py"], True)
+
+    def test_grouped_success_guard_classifies_the_inner_literal(self):
+        module = load_gate_module()
+        self.assertTrue(
+            module.vacuous_success(["(", "true", ")"]),
+            "grouped literal success was not classified as vacuous",
+        )
+
     def test_reviewed_direct_commands_are_admitted(self):
         admitted = (
             "test -s app/result.txt",

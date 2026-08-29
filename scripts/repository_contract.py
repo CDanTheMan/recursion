@@ -332,7 +332,7 @@ def _lexical_absolute(path: Path | str) -> Path:
 def _verify_directory_handle(fd: int, expected: os.stat_result) -> None:
     current = os.fstat(fd)
     if _is_reparse_or_link(current) or not stat.S_ISDIR(current.st_mode) \
-            or not _same_file(expected, current):
+            or (expected.st_dev, expected.st_ino) != (current.st_dev, current.st_ino):
         raise OSError("directory identity changed while pinned")
 
 
