@@ -484,11 +484,14 @@ case "$ENGINE" in
         esac
         ENV_CONTENT+="$plan_env_name=$plan_env_value"$'\n'
       done
-      if [ -n "$ENV_CONTENT" ]; then
-        ENGINE_ENV_FILE="$(printf '%s' "$ENV_CONTENT" | "$PYTHON_BIN" "$ROOT/scripts/secret_runtime.py" \
-          write-env --directory "$SECRET_RUNTIME_DIR")" || exit 95
-        RUN+=(--property "EnvironmentFile=$ENGINE_ENV_FILE")
-      fi
+    fi
+    # Proxy coordinates and the assignment-scoped Basic capability are required even
+    # for engines such as Cursor that deliberately admit no controller env passthrough.
+    # Materialize every accumulated secret/environment value, not only passthrough values.
+    if [ -n "$ENV_CONTENT" ]; then
+      ENGINE_ENV_FILE="$(printf '%s' "$ENV_CONTENT" | "$PYTHON_BIN" "$ROOT/scripts/secret_runtime.py" \
+        write-env --directory "$SECRET_RUNTIME_DIR")" || exit 95
+      RUN+=(--property "EnvironmentFile=$ENGINE_ENV_FILE")
     fi
     build_plan_argv "$INNER_EXE"
     RUN+=(/usr/bin/env "${PLAN_RUN[@]}")

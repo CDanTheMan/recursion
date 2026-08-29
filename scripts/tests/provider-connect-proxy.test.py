@@ -421,6 +421,20 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn("token-free plan", work)
         self.assertNotIn('print("TOKEN=" + token)', worker)
 
+    def test_proxy_environment_is_materialized_without_passthrough_names(self):
+        worker = (ROOT / "scripts/worker-sandbox.sh").read_text()
+        passthrough_start = worker.index('if [ "${#PLAN_ENV_PASS[@]}" -gt 0 ]; then')
+        passthrough_end = worker.index("\n    fi", passthrough_start)
+        environment_writer = worker.index('if [ -n "$ENV_CONTENT" ]; then', passthrough_start)
+        self.assertLess(
+            passthrough_end, environment_writer,
+            "EnvironmentFile creation must not be nested under nonempty env_passthrough",
+        )
+        environment_start = worker.index('ENV_CONTENT=""')
+        self.assertLess(worker.index("HTTP_PROXY=http://127.0.0.1:*", environment_start), environment_writer)
+        self.assertLess(worker.index("RECURSION_ASSIGNMENT_PROXY_TOKEN=", environment_start), environment_writer)
+        self.assertLess(worker.index("RECURSION_ASSIGNMENT_IDENTITY=", environment_start), environment_writer)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
