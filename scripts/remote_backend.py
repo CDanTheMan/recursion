@@ -53,7 +53,13 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
-from jsonl_durable import append_jsonl as durable_append_jsonl, read_jsonl_objects
+from jsonl_durable import (
+    _win_close_lock_parent_pins,
+    _win_pin_lock_parent,
+    _win_validate_lock_parent_pins,
+    append_jsonl as durable_append_jsonl,
+    read_jsonl_objects,
+)
 from remote_assignment import (  # noqa: F401  (re-exported for the adapters)
     EXIT_DEFER,
     EXIT_INVALID,
@@ -317,6 +323,14 @@ def _safe_directory(path: Path) -> Path:
     """Create/check a directory one component at a time without following links."""
     with _PinnedDirectory(path):
         return _lexical_absolute(path)
+
+
+def _pinned_directory_child(parent: _PinnedDirectory, name: str) -> Path:
+    """Address a child through a retained POSIX directory descriptor."""
+    if (os.name != "nt" and parent._relative and parent.descriptor is not None
+            and Path("/proc/self/fd").is_dir()):
+        return Path("/proc/self/fd") / str(parent.descriptor) / name
+    return parent.path / name
 
 
 def _safe_file(path: Path, *, create_parent: bool = True) -> Path:
@@ -1053,27 +1067,66 @@ class RemoteStateLock:
         self.base = Path(base)
         self.backend = backend
         self.path: Path | None = None
+        self._lock_parent: _PinnedDirectory | None = None
+        self._native_lock_parent_pins: list[tuple[Path, int, tuple[int, int, int]]] = []
 
     def __enter__(self) -> "RemoteStateLock":
         runtime = _runtime_state()
-        lock_root = _safe_directory(self.base / "state" / ".locks")
+        lock_parent: _PinnedDirectory | None = None
+        if os.name == "nt":
+            self._native_lock_parent_pins = _win_pin_lock_parent(
+                self.base / "state" / ".locks", create=True
+            )
+            candidate = self.base / "state" / ".locks" / "remote-state.lock"
+        else:
+            lock_parent = _PinnedDirectory(self.base / "state" / ".locks", create=True)
+            lock_parent.__enter__()
+            candidate = _pinned_directory_child(lock_parent, "remote-state.lock")
+        acquired = False
         # One admission/state lock covers every remote backend and PAUSE writer.  A
         # backend-specific lock would leave the PAUSE transition racing a sender from the
         # other adapter.
-        candidate = lock_root / "remote-state.lock"
-        _safe_existing_lock(candidate)
-        runtime.acquire_witnessed_directory_lock(candidate, "remote-state", os.getpid())
-        self.path = candidate
-        return self
+        try:
+            _safe_existing_lock(candidate)
+            # On POSIX candidate is rooted at /proc/self/fd/<pinned-parent>, so the
+            # runtime lock publisher never re-resolves the checked parent pathname.
+            runtime.acquire_witnessed_directory_lock(candidate, "remote-state", os.getpid())
+            acquired = True
+            if self._native_lock_parent_pins:
+                _win_validate_lock_parent_pins(self._native_lock_parent_pins)
+            elif lock_parent is not None:
+                lock_parent.verify()
+            self.path = candidate
+            self._lock_parent = lock_parent
+            lock_parent = None
+            return self
+        except BaseException:
+            if acquired:
+                with contextlib.suppress(RuntimeError, OSError):
+                    runtime.release_witnessed_directory_lock(
+                        candidate, "remote-state", os.getpid())
+            if lock_parent is not None:
+                lock_parent.close()
+            if self._native_lock_parent_pins:
+                _win_close_lock_parent_pins(self._native_lock_parent_pins)
+                self._native_lock_parent_pins = []
+            raise
 
     def __exit__(self, *_: object) -> None:
         if self.path is None:
             return
         runtime = _runtime_state()
+        parent = self._lock_parent
         try:
             runtime.release_witnessed_directory_lock(
                 self.path, "remote-state", os.getpid())
         finally:
+            if parent is not None:
+                parent.close()
+            self._lock_parent = None
+            if self._native_lock_parent_pins:
+                _win_close_lock_parent_pins(self._native_lock_parent_pins)
+                self._native_lock_parent_pins = []
             self.path = None
 
 
@@ -1120,7 +1173,12 @@ def atomic_json(path: Path, value: dict) -> None:
             if hasattr(os, "fchmod"):
                 os.fchmod(fd, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-                json.dump(value, handle, indent=2, sort_keys=True)
+                try:
+                    json.dump(value, handle, indent=2, sort_keys=True, allow_nan=False)
+                except (TypeError, ValueError, OverflowError, RecursionError):
+                    raise RemoteError(
+                        "request-invalid", "durable JSON records must contain finite JSON"
+                    ) from None
                 handle.write("\n")
                 handle.flush()
                 os.fsync(handle.fileno())
