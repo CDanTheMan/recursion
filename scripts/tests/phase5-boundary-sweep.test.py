@@ -1066,11 +1066,24 @@ def _boundary_mutant(scratch: Path, label: str, old: str, new: str):
     return _module_mutant(scratch, label, Path(__file__), old, new)
 
 
+class MutationSkipped(Exception):
+    """A mutation oracle is unavailable on the current platform."""
+
+
 def _kill_mutation(rows: list[dict[str, str]], guard: str, mutated_file: str,
                    failing_case: str, original_case, mutant_case) -> None:
     """Run one mutation as an individual test; a surviving mutant is a defect."""
     try:
         original_case()
+    except MutationSkipped as exc:
+        rows.append({
+            "guard": guard,
+            "mutated": mutated_file,
+            "case": failing_case,
+            "assertion": f"SKIP - {exc}",
+        })
+        print(f"ok - individual mutation skipped: {guard} ({exc})")
+        return
     except AssertionError as exc:
         raise AssertionError(f"mutation oracle failed for {guard}: {exc}") from exc
     try:
@@ -1287,34 +1300,43 @@ def run_individual_guard_mutations(scratch: Path) -> None:
         scratch, "private-staging", ROOT / "scripts" / "runtime-layout.py", private_old, private_new,
     )
     private_line = containing_line(runtime_text, private_old, "scripts/runtime-layout.py")
-    private_marker = private_old
 
     def private_staging_case(module) -> None:
         source = scratch / f"private-source-{secrets.token_hex(4)}"
         destination = scratch / f"private-destination-{secrets.token_hex(4)}"
+        if os.name == "nt":
+            raise MutationSkipped(
+                "POSIX directory modes do not seal the staging window on Windows"
+            )
         source.mkdir()
         (source / "payload").write_bytes(b"payload\n")
         observed: list[int] = []
-        if os.name == "nt":
-            if private_marker not in getattr(module, "_MUTATION_SOURCE", private_marker):
-                raise AssertionError("POSIX staging mode was widened from owner-only 0700")
-            return
         real_chmod = module.chmod_directory
 
         def observe(path, mode):
             if Path(path) == destination and not observed:
+                # This hook runs immediately before the root's first child is
+                # published.  Neutralize the host umask so a 0755 mutant cannot
+                # be silently narrowed to 0700 and survive the oracle.
                 observed.append(stat.S_IMODE(os.lstat(path).st_mode))
             real_chmod(path, mode)
 
+        previous_umask = os.umask(0)
         module.chmod_directory = observe
         try:
             module._copy_tree(source, destination)
         finally:
             module.chmod_directory = real_chmod
+            os.umask(previous_umask)
             _remove_mutation_tree(destination)
             _remove_mutation_tree(source)
-        if not observed or observed[0] & 0o022:
-            raise AssertionError("runtime destination was writable before publication completed")
+        if not observed:
+            raise AssertionError("first-child publication hook did not observe the runtime destination")
+        if observed[0] != 0o700:
+            raise AssertionError(
+                f"runtime destination was not owner-only before first child publication "
+                f"(mode={oct(observed[0])})"
+            )
 
     _kill_mutation(
         rows, "owner-only private runtime staging", private_line,
