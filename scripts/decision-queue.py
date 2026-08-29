@@ -401,25 +401,31 @@ def queue_lock(base: Path):
         raise RuntimeError("decision queue lock has an unsafe type")
     flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
     descriptor = -1
+    lock = None
     try:
-        descriptor = os.open(lock_path, flags, 0o600)
-        opened = os.fstat(descriptor)
-        observed = lock_path.lstat()
-        if _is_reparse_info(observed) or not stat.S_ISREG(opened.st_mode) \
-                or (opened.st_dev, opened.st_ino) != (observed.st_dev, observed.st_ino) \
-                or (expected is not None and
-                    (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino)):
-            raise RuntimeError("decision queue lock changed while opening")
-        with os.fdopen(descriptor, "a+", encoding="utf-8") as lock:
+        try:
+            descriptor = os.open(lock_path, flags, 0o600)
+            opened = os.fstat(descriptor)
+            observed = lock_path.lstat()
+            if _is_reparse_info(observed) or not stat.S_ISREG(opened.st_mode) \
+                    or (opened.st_dev, opened.st_ino) != (observed.st_dev, observed.st_ino) \
+                    or (expected is not None and
+                        (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino)):
+                raise RuntimeError("decision queue lock changed while opening")
+            lock = os.fdopen(descriptor, "a+", encoding="utf-8")
             descriptor = -1
-            try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError as exc:
-                raise RuntimeError("decision queue lock is contended; refusing an unlocked mutation") from exc
-            yield
-    except (OSError, ValueError, TypeError) as exc:
-        raise RuntimeError("decision queue lock is unavailable") from exc
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("decision queue lock is contended; refusing an unlocked mutation") from exc
+        except (OSError, ValueError, TypeError) as exc:
+            raise RuntimeError("decision queue lock is unavailable") from exc
+        yield
     finally:
+        if lock is not None:
+            try:
+                lock.close()
+            except OSError:
+                pass
         if descriptor != -1:
             try:
                 os.close(descriptor)

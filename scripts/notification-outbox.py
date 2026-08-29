@@ -98,6 +98,18 @@ def _record_int(record: dict, key: str, default: int = 0, minimum: int = 0) -> i
     return _plain_int(default if value is None else value, key, minimum)
 
 
+def _text_int(value: object, label: str, default: int = 0, minimum: int = 0) -> int:
+    """Parse an integer stored in the string-backed Markdown control-plane format."""
+    if value is None:
+        return _plain_int(default, label, minimum)
+    if type(value) is str and re.fullmatch(r"-?[0-9]+", value):
+        try:
+            value = int(value, 10)
+        except (ValueError, OverflowError):
+            pass
+    return _plain_int(value, label, minimum)
+
+
 def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
     raw = os.environ.get(name, str(default))
     try:
@@ -1389,7 +1401,7 @@ def build_chain(base: Path, project: str, goal_id: str) -> dict:
             and rejection_task.get("transition_reason") == "task-contract-invalid"
             and rejection_task.get("contract_rejection_event_id") == rejection.get("id")
             and rejection_task.get("last_transition_id") == transition_id
-            and _record_int(rejection_task, "attempts", 0) == 0
+            and _text_int(rejection_task.get("attempts"), "attempts", 0) == 0
             and detail.get("attempts") == 0 and detail.get("reason") == "task-contract-invalid"
             and detail.get("stage") == "controller-pre-worker"
             and not runs and not commits and not gates and not verifiers and not review
