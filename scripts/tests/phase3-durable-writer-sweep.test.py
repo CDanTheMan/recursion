@@ -481,6 +481,56 @@ def test_assignment_battery(root: Path) -> None:
                 race_outside.unlink(missing_ok=True)
             check(not race_final.exists(), f"{label} leaves no published FINAL")
 
+        # A single hostile-link result is not a race rate.  Repeat the exact
+        # pre-publication window so a timing-dependent acceptance cannot hide behind one
+        # favorable sample; every trial must refuse and leave no FINAL.
+        rate_trials = 10
+        rate_refusals = 0
+        for trial in range(rate_trials):
+            race_root = root / f"assignment-record-race-rate-{trial}"
+            race_value = base_assignment(f"task-record-race-rate-{trial}")
+            race_task = race_root / race_value["task_id"]
+            race_alias = race_root / "outside-record.json"
+            race_final = race_task / f"{race_value['assignment_digest']}.json"
+            armed = True
+
+            def rate_hook(current: str) -> None:
+                nonlocal armed
+                if not armed or current != "pre-record-hardlink":
+                    return
+                armed = False
+                temporary_candidates = sorted(race_task.glob(
+                    f".{race_value['assignment_digest']}.json.[0-9]*"
+                ))
+                if len(temporary_candidates) != 1:
+                    raise AssertionError(
+                        "assignment rate hook did not observe exactly one private record temporary"
+                    )
+                race_alias.hardlink_to(temporary_candidates[0])
+
+            previous = amod._assignment_persistence_hook
+            amod._assignment_persistence_hook = rate_hook
+            try:
+                try:
+                    amod.persist_assignment(race_root, race_value)
+                except error_types as exc:
+                    check("Traceback" not in str(exc),
+                          f"assignment hostile hardlink rate trial {trial} is typed")
+                    rate_refusals += 1
+                except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+                        UnicodeError, sqlite3.DatabaseError) as exc:
+                    check(False, f"assignment hostile hardlink rate trial {trial} leaked raw "
+                          f"{type(exc).__name__}: {exc}")
+                else:
+                    check(False, f"assignment hostile hardlink rate trial {trial} was accepted")
+            finally:
+                amod._assignment_persistence_hook = previous
+                race_alias.unlink(missing_ok=True)
+            check(not race_final.exists(),
+                  f"assignment hostile hardlink rate trial {trial} leaves no FINAL")
+        check(rate_refusals == rate_trials,
+              f"assignment hostile hardlink refusal rate is {rate_refusals}/{rate_trials}")
+
     validated = False
     try:
         amod.validate_assignment(loaded, require_source_evidence=True)

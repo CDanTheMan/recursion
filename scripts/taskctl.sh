@@ -375,13 +375,15 @@ heartbeat)
     || { rc=$?; _unlock; exit "$rc"; }
   _unlock ;;
 
-# Phase 3 (D-016): stamp the live lease with the immutable assignment digest resolved for
-# the arm currently holding it, so a lease carries assignment identity, not just an owner
-# string. Additive frontmatter field -- legacy readers that never look for it are unaffected.
+# Phase 3 (D-016): validate and persist an immutable assignment candidate without changing
+# the live lease binding. `set-assignment` stamps the lease for the first implementer run;
+# verifier and retry runs reuse/persist their exact record without rebinding that lease.
 persist-assignment)
   AFILE="${1:?usage: taskctl persist-assignment <assignment-file>}"
+  EXPECTED_TASK="${2:-}"; EXPECTED_DIGEST="${3:-}"
   _lock || exit $?
-  _persist_assignment_locked "$AFILE" "$ID" "$DIGEST" || { rc=$?; _unlock; exit "$rc"; }
+  _persist_assignment_locked "$AFILE" "$EXPECTED_TASK" "$EXPECTED_DIGEST" \
+    || { rc=$?; _unlock; exit "$rc"; }
   _unlock ;;
 
 set-assignment)

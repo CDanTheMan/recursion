@@ -1281,11 +1281,15 @@ def _persist_assignment_posix(root: Path, value: dict, encoded: bytes) -> Path:
                 os.close(record_result[0])
             except OSError:
                 pass
-        if cache_fd is not None:
-            os.close(cache_fd)
-        if task_fd is not None:
-            os.close(task_fd)
-        os.close(root_fd)
+        # Closing one descriptor must not prevent cleanup of its siblings.  In particular,
+        # a publication assertion or an earlier cleanup can leave one descriptor already
+        # closed; an ensuing EBADF must not retain the task/root pins across the operation.
+        for descriptor in (cache_fd, task_fd, root_fd):
+            if descriptor is not None:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
 
 
 def _persist_assignment_windows(root: Path, value: dict, encoded: bytes) -> Path:
@@ -1367,10 +1371,16 @@ def _persist_assignment_windows(root: Path, value: dict, encoded: bytes) -> Path
     finally:
         for descriptor in (index_handle, published_record_handle):
             if descriptor is not None:
-                os.close(descriptor)
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
         for pins in (cache_pins, task_pins, root_pins):
             for _, handle in reversed(pins):
-                _KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+                try:
+                    _KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+                except OSError:
+                    pass
 
 
 def persist_assignment(root: Path, value: dict, *, capacity_pool_dir: Path | None = None) -> Path:

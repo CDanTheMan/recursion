@@ -1052,14 +1052,24 @@ PY
   ASSIGNMENT_DIGEST=""; ASSIGNMENT_FILE=""
   if [ "$STRICT_PHASE5" = 1 ]; then
     local arm_provider=""
-    case "$active_engine" in
-      claude) arm_provider="anthropic-claude-code" ;;
-      hermes) arm_provider="hermes-tool-calls" ;;
-      *) arm_provider="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["billing"]["provider"])' \
-           "$engine_plan" 2>>"$LOG")" || return 95 ;;
-    esac
-    resolve_run_assignment "$role" "$wt" "$active_engine" "$engine_plan" "$resolved_model" \
-      "$arm_provider" "$commit_oid" || return 95
+    # The assignment is immutable for the task lease, not for each worker attempt.  A retry
+    # must reuse the exact digest that was bound before attempt one; re-resolving here would
+    # include a new created_at and then taskctl would correctly reject the new digest as a
+    # lease mutation before the retry worker could launch.
+    if [ "$role" = implementer ] && [ "${attempt:-1}" != 1 ]; then
+      ASSIGNMENT_DIGEST="$(field assignment_digest)"
+      ASSIGNMENT_FILE="$ROOT/state/assignments/$ID/$ASSIGNMENT_DIGEST.json"
+      [ -n "$ASSIGNMENT_DIGEST" ] && [ -f "$ASSIGNMENT_FILE" ] || return 98
+    else
+      case "$active_engine" in
+        claude) arm_provider="anthropic-claude-code" ;;
+        hermes) arm_provider="hermes-tool-calls" ;;
+        *) arm_provider="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["billing"]["provider"])' \
+             "$engine_plan" 2>>"$LOG")" || return 95 ;;
+      esac
+      resolve_run_assignment "$role" "$wt" "$active_engine" "$engine_plan" "$resolved_model" \
+        "$arm_provider" "$commit_oid" || return 95
+    fi
   fi
 
   local -a cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine "$active_engine" --worktree "$wt"
@@ -1088,12 +1098,21 @@ PY
     if [ "$role" = implementer ]; then
       LEASE_ATTEMPT="$(field attempts)"
       [ -n "$LEASE_ATTEMPT" ] || return 98
-      RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" \
-        bash "$TASKCTL" set-assignment "$ID" "$ASSIGNMENT_DIGEST" "$ASSIGNMENT_FILE" \
-          "$LEASE_OWNER" "$LEASE_ATTEMPT" "$run_id" >>"$LOG" 2>&1 || return 98
+      if [ "${attempt:-1}" = 1 ]; then
+        RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" \
+          bash "$TASKCTL" set-assignment "$ID" "$ASSIGNMENT_DIGEST" "$ASSIGNMENT_FILE" \
+            "$LEASE_OWNER" "$LEASE_ATTEMPT" "$run_id" >>"$LOG" 2>&1 || return 98
+      else
+        # Keep the lease's assignment_run_id bound to the first arm while proving that the
+        # reused immutable record is still present and valid for this retry evidence.
+        RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" \
+          bash "$TASKCTL" persist-assignment "$ASSIGNMENT_FILE" "$ID" "$ASSIGNMENT_DIGEST" \
+            >>"$LOG" 2>&1 || return 98
+      fi
     else
       RECURSION_ROOT="$ROOT" TASKCTL_FILE="$TASK" \
-        bash "$TASKCTL" persist-assignment "$ASSIGNMENT_FILE" >>"$LOG" 2>&1 || return 98
+        bash "$TASKCTL" persist-assignment "$ASSIGNMENT_FILE" "$ID" "$ASSIGNMENT_DIGEST" \
+          >>"$LOG" 2>&1 || return 98
     fi
     ASSIGNMENT_FILE="$ROOT/state/assignments/$ID/$ASSIGNMENT_DIGEST.json"
     [ -f "$ASSIGNMENT_FILE" ] || { log "persisted assignment file is absent before worker evidence"; return 98; }

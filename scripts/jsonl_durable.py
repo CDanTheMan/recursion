@@ -343,21 +343,33 @@ class _PinnedIndexConnection(sqlite3.Connection):
         self._durable_index_path = None
         journal_pins = self._durable_journal_parent_pins
         self._durable_journal_parent_pins = []
-        if descriptor is not None:
-            os.close(descriptor)
-        if pins:
-            _close_durable_parent_pins(pins)
-        if journal_pins:
-            _close_durable_parent_pins(journal_pins)
+        # Each resource is released independently.  A stale/double-closed leaf must not
+        # prevent the pinned parents (or the journal parents transferred by _verified_descriptor)
+        # from being released on the same error path.
+        try:
+            if descriptor is not None:
+                os.close(descriptor)
+        finally:
+            try:
+                if pins:
+                    _close_durable_parent_pins(pins)
+            finally:
+                if journal_pins:
+                    _close_durable_parent_pins(journal_pins)
 
     def _detach_durable_leaf(self) -> int | None:
         """Transfer the verification descriptor to a caller before closing SQLite."""
         descriptor = self._durable_leaf_descriptor
+        pins = self._durable_parent_pins
         self._durable_leaf_descriptor = None
         self._durable_leaf_identity = None
         self._durable_leaf_path = None
         self._durable_index_path = None
         self._durable_parent_pins = []
+        # The descriptor is transferred, but the parent pins belong to this connection and
+        # must not be silently orphaned when the old publication path detaches the leaf.
+        if pins:
+            _close_durable_parent_pins(pins)
         return descriptor
 
     def close(self) -> None:
