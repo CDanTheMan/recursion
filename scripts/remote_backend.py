@@ -1163,57 +1163,78 @@ def idempotency_key(backend: str, operation: str, assignment_digest: str,
     })
 
 
+def _durable_runtime_path(path: object) -> Path:
+    try:
+        return Path(path)
+    except (TypeError, ValueError, AttributeError):
+        raise RemoteError("request-invalid", "durable runtime path is invalid") from None
+
+
 def atomic_json(path: Path, value: dict) -> None:
-    if not isinstance(value, dict):
-        raise RemoteError("request-invalid", "durable JSON records must be objects")
-    with _PinnedDirectory(path.parent) as parent:
-        target = _verify_runtime_leaf(parent, path.name)
-        fd, tmp_name = _create_relative_temp(parent, ".remote-")
-        try:
-            if hasattr(os, "fchmod"):
-                os.fchmod(fd, 0o600)
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-                try:
-                    json.dump(value, handle, indent=2, sort_keys=True, allow_nan=False)
-                except (TypeError, ValueError, OverflowError, RecursionError):
-                    raise RemoteError(
-                        "request-invalid", "durable JSON records must contain finite JSON"
-                    ) from None
-                handle.write("\n")
-                handle.flush()
-                os.fsync(handle.fileno())
-            _replace_relative(parent, tmp_name, path.name, path, target)
-            _fsync_directory(path.parent, parent.descriptor)
-        except BaseException:
-            with contextlib.suppress(OSError):
-                os.close(fd)
-            with contextlib.suppress(OSError, RemoteError):
-                _unlink_relative(parent, tmp_name)
-            raise
+    path = _durable_runtime_path(path)
+    try:
+        if not isinstance(value, dict):
+            raise RemoteError("request-invalid", "durable JSON records must be objects")
+        with _PinnedDirectory(path.parent) as parent:
+            target = _verify_runtime_leaf(parent, path.name)
+            fd, tmp_name = _create_relative_temp(parent, ".remote-")
+            try:
+                if hasattr(os, "fchmod"):
+                    os.fchmod(fd, 0o600)
+                with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+                    try:
+                        json.dump(value, handle, indent=2, sort_keys=True, allow_nan=False)
+                    except (TypeError, ValueError, OverflowError, RecursionError):
+                        raise RemoteError(
+                            "request-invalid", "durable JSON records must contain finite JSON"
+                        ) from None
+                    handle.write("\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                _replace_relative(parent, tmp_name, path.name, path, target)
+                _fsync_directory(path.parent, parent.descriptor)
+            except BaseException:
+                with contextlib.suppress(OSError):
+                    os.close(fd)
+                with contextlib.suppress(OSError, RemoteError):
+                    _unlink_relative(parent, tmp_name)
+                raise
+    except RemoteError:
+        raise
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeError, AttributeError):
+        raise RemoteError("request-invalid", "durable JSON write refused") from None
 
 
 def atomic_bytes(path: Path, value: bytes) -> None:
     """Atomically replace a runtime file, refusing symlink targets and syncing its parent."""
-    if not isinstance(value, bytes):
-        raise RemoteError("request-invalid", "atomic runtime content must be bytes")
-    with _PinnedDirectory(path.parent) as parent:
-        target = _verify_runtime_leaf(parent, path.name)
-        fd, tmp_name = _create_relative_temp(parent, ".remote-")
-        try:
-            if hasattr(os, "fchmod"):
-                os.fchmod(fd, 0o600)
-            with os.fdopen(fd, "wb") as handle:
-                handle.write(value)
-                handle.flush()
-                os.fsync(handle.fileno())
-            _replace_relative(parent, tmp_name, path.name, path, target)
-            _fsync_directory(path.parent, parent.descriptor)
-        except BaseException:
-            with contextlib.suppress(OSError):
-                os.close(fd)
-            with contextlib.suppress(OSError, RemoteError):
-                _unlink_relative(parent, tmp_name)
-            raise
+    path = _durable_runtime_path(path)
+    try:
+        if not isinstance(value, bytes):
+            raise RemoteError("request-invalid", "atomic runtime content must be bytes")
+        with _PinnedDirectory(path.parent) as parent:
+            target = _verify_runtime_leaf(parent, path.name)
+            fd, tmp_name = _create_relative_temp(parent, ".remote-")
+            try:
+                if hasattr(os, "fchmod"):
+                    os.fchmod(fd, 0o600)
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(value)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                _replace_relative(parent, tmp_name, path.name, path, target)
+                _fsync_directory(path.parent, parent.descriptor)
+            except BaseException:
+                with contextlib.suppress(OSError):
+                    os.close(fd)
+                with contextlib.suppress(OSError, RemoteError):
+                    _unlink_relative(parent, tmp_name)
+                raise
+    except RemoteError:
+        raise
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeError, AttributeError):
+        raise RemoteError("request-invalid", "durable byte write refused") from None
 
 
 def read_attempts(base: Path, backend: str) -> list[dict]:
