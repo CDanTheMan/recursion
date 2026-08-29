@@ -12,14 +12,14 @@
   "properties": {
     "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
     "repo": {"type": "string", "minLength": 1, "pattern": "^(?!.*[\\u0000-\\u001F])\\S(?:.*\\S)?$"},
-    "default_branch": {"type": "string", "pattern": "^(?!.*\\.\\.)(?!.*@\\{)(?!.*//)(?!.*\\/$)(?!.*\\.lock$)(?!.*(?:^|/)\\.)(?!.*(?:^|/)\\.lock(?:/|$))[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$"},
-    "integration_branch": {"type": "string", "pattern": "^(?!.*\\.\\.)(?!.*@\\{)(?!.*//)(?!.*\\/$)(?!.*\\.lock$)(?!.*(?:^|/)\\.)(?!.*(?:^|/)\\.lock(?:/|$))[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$"},
-    "task_branch_pattern": {"type": "string", "pattern": "^(?!.*\\.\\.)(?!.*@\\{)(?!.*//)(?!/)(?!.*/$)(?!.*(?:^|/)\\.)(?!.*\\.lock(?:/|$))[A-Za-z0-9][A-Za-z0-9._/-]*\\{task_id\\}[A-Za-z0-9._/-]*$"},
-    "external_branch_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "pattern": "^(?!.*\\.\\.)(?!.*@\\{)(?!.*//)(?!.*\\/$)(?!.*(?:^|/)\\.)(?!.*\\.lock(?:/|$))[A-Za-z0-9][A-Za-z0-9._/*-]{0,199}$"}},
+    "default_branch": {"enum": ["main", "master", "develop", "trunk"]},
+    "integration_branch": {"const": "recursion/integration"},
+    "task_branch_pattern": {"const": "recursion/task/{task_id}"},
+    "external_branch_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["cursor/*", "recursion/extern/*"]}},
     "publication_policy": {"const": "verified-integration-only"},
     "source_policy": {"const": "exact-sha"},
     "gate_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "allowed_paths": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"anyOf": [{"const": "."}, {"type": "string", "minLength": 1, "pattern": "^(?!.*[\\u0000-\\u001F])(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(^|/)\\.\\.?([/]|$))(?!.*[/\\\\]$)(?!^\\s)(?!.*\\s$).+$"}]}},
+    "allowed_paths": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"anyOf": [{"const": "."}, {"type": "string", "minLength": 1, "pattern": "^(?!.*[\\u0000-\\u001F])(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*//)(?!.*(^|/)\\.\\.?([/]|$))(?!.*[/\\\\]$)(?!^\\s)(?!.*\\s$).+$"}]}},
     "gate_commands": {
       "type": "array",
       "minItems": 1,
@@ -29,7 +29,18 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 4096,
-        "pattern": "^(?!.*[\\x00-\\x08\\x0A-\\x1F])(?!.*\\.recursion-result\\.json)(?!.*(?:^|[\\s\\\"'])(?:/|[A-Za-z]:[/\\\\]))(?!.*(?:^|[/\\\\\\s\\\"'])\\.\\.(?:[/\\\\\\s\\\"']|$))(?!.*(?:^|\\s)[\\\"']-)(?!.*(?:^|&&)\\s*(?:bash|sh|python|python3|node)\\s*(?:&&|$))(?!.*(?:^|&&)\\s*(?:bash|sh|python|python3|node)\\s+-)(?!.*(?:^|&&)\\s*(?:test|\\[)\\s+-n(?:\\s|$))(?!.*(?:^|&&)\\s*(?:test|\\[)(?:(?!&&).)*\\s(?:=|==|-eq)\\s)(?!.*(?:^|&&)\\s*git(?:(?!&&).)*\\s(?:-C|-c|-o|--(?:git-dir|work-tree|super-prefix|exec-path|namespace|config|config-env|output))[^\\s&]*(?=\\s|&&|$))\\s*(?:test|\\[|git|bash|sh|python|python3|node)(?:\\s+(?:[^\\s&|<>`$(){};'\\\"]+|\"[^\"&|<>`$(){};\\r\\n]+\"|'[^'&|<>`$(){};\\r\\n]+'))*(?:\\s*&&\\s*(?:test|\\[|git|bash|sh|python|python3|node)(?:\\s+(?:[^\\s&|<>`$(){};'\\\"]+|\"[^\"&|<>`$(){};\\r\\n]+\"|'[^'&|<>`$(){};\\r\\n]+'))*)*\\s*$"
+        "pattern": "^(?!.*[\\x00-\\x08\\x0A-\\x1F])(?!.*\\.recursion-result\\.json)(?!.*(?:^|[\\s\\\"'])\\\\\\\\)(?!.*(?:^|[\\s\\\"']|[/\\\\])\\./)(?!.*(?:^|[\\s\\\"'])(?:/|[A-Za-z]:[/\\\\]))(?!.*(?:^|[/\\\\\\s\\\"'])\\.\\.(?:[/\\\\\\s\\\"']|$))(?!.*(?:^|\\s)[\\\"']-)(?!.*(?:^|&&)\\s*(?:bash|sh|python|python3|node)\\s*(?:&&|$))(?!.*(?:^|&&)\\s*(?:bash|sh|python|python3|node)\\s+-)(?!.*(?:^|&&)\\s*(?:test|\\[)\\s+-n(?:\\s|$))(?!.*(?:^|&&)\\s*(?:test|\\[)(?:(?!&&).)*\\s(?:=|==|-eq)\\s)(?!.*(?:^|&&)\\s*git(?:(?!&&).)*\\s(?:-C|-c|-o|--(?:git-dir|work-tree|super-prefix|exec-path|namespace|config|config-env|output))[^\\s&]*(?=\\s|&&|$))\\s*(?:test|\\[|git|bash|sh|python|python3|node)(?:\\s+(?:[^\\s&|<>`$(){};'\\\"]+|\"[^\"&|<>`$(){};\\r\\n]+\"|'[^'&|<>`$(){};\\r\\n]+'))*(?:\\s*&&\\s*(?:test|\\[|git|bash|sh|python|python3|node)(?:\\s+(?:[^\\s&|<>`$(){};'\\\"]+|\"[^\"&|<>`$(){};\\r\\n]+\"|'[^'&|<>`$(){};\\r\\n]+'))*)*\\s*$"
+      }
+    },
+    "required_gate_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["acceptance", "gate_class", "gate_files", "controller_gate_files"],
+      "properties": {
+        "acceptance": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "gate_class": {"enum": ["light", "heavy"]},
+        "gate_files": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "pattern": "^(?!\\.$)(?!.*[\\u0000-\\u001F])(?!.*[\\s,])(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*//)(?!.*(^|/)\\.\\.?([/]|$))(?!.*[/\\\\]$)(?!^\\s)(?!.*\\s$).+$"}},
+        "controller_gate_files": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "pattern": "^(?!\\.$)(?!.*[\\u0000-\\u001F])(?!.*[\\s,])(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*//)(?!.*(^|/)\\.\\.?([/]|$))(?!.*[/\\\\]$)(?!^\\s)(?!.*\\s$).+$"}}
       }
     },
     "eligible_hosts": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F]+$"}},

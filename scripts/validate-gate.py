@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shlex
+import stat
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
@@ -69,8 +70,18 @@ def under(path: str, roots: list[str]) -> bool:
     return "." in roots or any(path == root.rstrip("/") or path.startswith(root.rstrip("/") + "/") for root in roots)
 
 
+def _is_reparse_or_link(info: os.stat_result) -> bool:
+    return stat.S_ISLNK(info.st_mode) or bool(
+        getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    )
+
+
 def clean_tracked_bytes(repo: Path, item: str) -> bytes:
     """Return the committed gate bytes and reject index/worktree substitution."""
+    pure = PurePosixPath(item)
+    if pure.is_absolute() or ".." in pure.parts or not pure.parts \
+            or pure.as_posix() != item or "\\" in item:
+        fail(f"gate file path is not a confined repository path: {item}")
     tracked = subprocess.run(
         ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", item],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
@@ -82,11 +93,28 @@ def clean_tracked_bytes(repo: Path, item: str) -> bytes:
     )
     if committed.returncode:
         fail(f"gate file is absent from HEAD: {item}")
-    path = repo / item
+    path = repo
+    parts = PurePosixPath(item).parts
+    try:
+        root_info = os.lstat(path)
+        if _is_reparse_or_link(root_info) or not stat.S_ISDIR(root_info.st_mode):
+            fail(f"gate repository root is not a real directory: {repo}")
+        for index, part in enumerate(parts):
+            path = path / part
+            info = os.lstat(path)
+            if _is_reparse_or_link(info):
+                fail(f"gate file is a symlink or reparse point: {item}")
+            if index == len(parts) - 1:
+                if not stat.S_ISREG(info.st_mode):
+                    fail(f"gate file is not a regular file: {item}")
+            elif not stat.S_ISDIR(info.st_mode):
+                fail(f"gate file parent is not a real directory: {item}")
+    except OSError as exc:
+        fail(f"gate file cannot be inspected without following links: {item}: {exc}")
     dirty = subprocess.run(
         ["git", "-C", str(repo), "diff", "--quiet", "HEAD", "--", item], check=False,
     )
-    if not path.is_file() or dirty.returncode:
+    if dirty.returncode:
         fail(f"gate file differs from clean HEAD: {item}")
     return committed.stdout
 
@@ -272,6 +300,7 @@ def main() -> int:
             any(token in gate for token in ("`", "$", "<(", ">(", "||", ";", "(", ")", "{", "}"))
             or re.search(r"(?<!\|)\|(?!\|)", gate)
             or re.search(r"(?<![&])&(?![&])", gate)
+            or re.search(r"(?:^|[\s\"']|[/\\])\./", gate)
             or "<" in gate or ">" in gate
         ):
             fail("acceptance gate uses unreviewable shell indirection")

@@ -163,6 +163,75 @@ class RepositoryContractTests(unittest.TestCase):
                 "allowed_paths": ["src"],
             }, wrong)
 
+    def test_task_gate_and_workdir_fields_are_bound_to_the_descriptor(self) -> None:
+        base = {"id": "task-one", "source_branch": "main", "source_sha": self.source,
+                "allowed_paths": ["src"]}
+        for field, value in (("acceptance", "true"), ("gate_command", "true"),
+                             ("gate_commands", ["git status"]), ("workdir", "../../outside"),
+                             ("workdir", "C:/outside"), ("workdir", r"\\server\share\outside")):
+            with self.subTest(field=field, value=value), self.assertRaises(rc.ContractError):
+                rc.admit_task(self.contract, {**base, field: value}, self.repo)
+
+        accepted = rc.admit_task(self.contract, {**base, "acceptance": "git diff --check",
+                                                 "gate_command": "git diff --check", "workdir": "."},
+                                 self.repo)
+        self.assertEqual(accepted["workdir"], ".")
+
+    def test_git_timeout_is_a_typed_fail_closed_refusal(self) -> None:
+        timeout = subprocess.TimeoutExpired(["git"], 30)
+        with mock.patch.object(rc.subprocess, "run", side_effect=timeout):
+            with self.assertRaisesRegex(rc.ContractError, "timed out") as raised:
+                rc._git(self.repo, "status")
+        self.assertEqual(raised.exception.code, "verification-unavailable")
+
+    def test_windows_acl_uses_actual_owner_and_rejects_other_user_write(self) -> None:
+        with mock.patch.dict(os.environ, {"USERNAME": "attacker"}, clear=False):
+            with self.assertRaisesRegex(OSError, "non-owner"):
+                rc._validate_windows_acl_records(
+                    "S-1-owner", "S-1-owner", [("S-1-attacker", 0, 0x001F01FF, 0)], True)
+        with self.assertRaisesRegex(OSError, "owner"):
+            rc._validate_windows_acl_records(
+                "S-1-attacker", "S-1-controller", [("S-1-attacker", 0, 0x001F01FF, 0)], True)
+
+    def test_declared_gate_profile_must_match_executed_gate_and_evidence(self) -> None:
+        divergent = dict(
+            self.contract,
+            required_gate_profile={"acceptance": "test -s src/result.txt", "gate_class": "light",
+                                   "gate_files": [], "controller_gate_files": []},
+        )
+        with self.assertRaisesRegex(rc.ContractError, "diverges"):
+            rc.validate_project_descriptor(divergent)
+
+        profile_contract = dict(
+            self.contract,
+            gate_commands=["git diff --check"],
+            required_gate_profile={"acceptance": "git diff --check", "gate_class": "light",
+                                   "gate_files": [], "controller_gate_files": []},
+        )
+        bad_evidence = {"acceptance_sha256": "0" * 64, "gate_files": {},
+                        "controller_gate_files": {}}
+        proc = subprocess.CompletedProcess(["validate-gate"], 0,
+                                           json.dumps(bad_evidence), "")
+        with mock.patch.object(rc.subprocess, "run", return_value=proc):
+            with self.assertRaisesRegex(rc.ContractError, "evidence"):
+                rc._observed_gate_contract(profile_contract, self.repo)
+
+    def test_reparse_ledger_is_refused_before_any_record_can_escape(self) -> None:
+        outside = Path(self.temp.name) / "ledger-outside"
+        outside.mkdir()
+        ledger = Path(self.temp.name) / "ledger"
+        if os.name == "nt":
+            linked = subprocess.run(["cmd.exe", "/c", "mklink", "/J", str(ledger), str(outside)],
+                                    capture_output=True, check=False)
+            if linked.returncode:
+                self.skipTest("junction creation is unavailable on this host")
+        else:
+            ledger.symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(rc.ContractError, "ledger"):
+            with rc._pinned_ledger(ledger):
+                self.fail("reparse ledger was pinned")
+        self.assertEqual(list(outside.iterdir()), [])
+
     def test_runtime_descriptor_uniqueness_and_namespace_overlap(self) -> None:
         invalid_repo = dict(self.contract, repo=7)
         with self.assertRaisesRegex(rc.ContractError, "repo"):
@@ -387,6 +456,21 @@ class RepositoryContractTests(unittest.TestCase):
         for command in ("bash -c true", "python3 -c true", "command true", "exec true", "test -n foo"):
             with self.assertRaises(rc.ContractError):
                 rc.validate_project_descriptor(dict(self.contract, gate_commands=[command]))
+
+    def test_schema_rejects_the_runtime_descriptor_mismatch_matrix(self) -> None:
+        schema = json.loads((Path(__file__).parents[2] /
+                             "schemas/control-plane/v2/repository-contract.schema.json").read_text())
+        validator = jsonschema.Draft202012Validator(schema)
+        refused = (
+            dict(self.contract, default_branch="main", integration_branch="main"),
+            dict(self.contract, external_branch_patterns=["recursion/*"]),
+            dict(self.contract, allowed_paths=["src//nested"]),
+            dict(self.contract, gate_commands=["python3 ./src/check.py"]),
+            dict(self.contract, gate_commands=[r"test -s \\server\share\result.txt"]),
+        )
+        for descriptor in refused:
+            with self.subTest(descriptor=descriptor):
+                self.assertTrue(list(validator.iter_errors(descriptor)))
 
     def test_schema_and_runtime_gate_grammar_differential_corpus(self) -> None:
         schema = json.loads((Path(__file__).parents[2] /

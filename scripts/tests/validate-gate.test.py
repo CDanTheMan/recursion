@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -215,6 +217,45 @@ class WindowsPathToleranceTest(unittest.TestCase):
         declared = run_gate("python3 app\\check.py", gate_files="app/check.py")
         self.assertNotEqual(undeclared, 0)
         self.assertEqual(declared, 0)
+
+
+class GateFileIdentityTest(unittest.TestCase):
+    def test_tracked_symlink_gate_file_is_rejected_without_following(self):
+        spec = __import__("importlib.util").util.spec_from_file_location("validate_gate", GATE)
+        module = __import__("importlib.util").util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        try:
+            raw = tempfile.mkdtemp(prefix="validate-gate-")
+        except OSError as exc:
+            self.skipTest(f"temporary test repository is unavailable on this host: {exc}")
+        repo = Path(raw)
+        try:
+            try:
+                subprocess.run(["git", "-C", str(repo), "init", "-q", "-b", "main"], check=True)
+            except (OSError, subprocess.CalledProcessError) as exc:
+                self.skipTest(f"temporary test repository is unavailable on this host: {exc}")
+            (repo / "app").mkdir()
+            target = repo / "outside.txt"
+            target.write_text("outside\n", encoding="utf-8")
+            gate = repo / "app" / "check.py"
+            gate.write_text("print('gate')\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+            subprocess.run(["git", "-C", str(repo), "config", "user.name", "gate-test"], check=True)
+            subprocess.run(["git", "-C", str(repo), "config", "user.email", "gate-test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(repo), "commit", "-qm", "base"], check=True)
+            gate.unlink()
+            try:
+                gate.symlink_to(target)
+            except OSError as exc:
+                self.skipTest(f"symlink creation is unavailable on this host: {exc}")
+            with self.assertRaisesRegex(ValueError, "symlink or reparse"):
+                module.clean_tracked_bytes(repo, "app/check.py")
+        finally:
+            try:
+                shutil.rmtree(repo)
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":

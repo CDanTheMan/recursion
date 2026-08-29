@@ -26,13 +26,18 @@ ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 note(){ printf 'note  %s\n' "$1"; }
 
-python3 - "$SRC/scripts/plan.sh" <<'PY'
+if python3 - "$SRC/scripts/plan.sh" <<'PY'
 import re, sys
 source = open(sys.argv[1], encoding="utf-8").read()
 assert 're.split(r"[\\s,]+", allowed_raw)' in source
 assert re.split(r"[\s,]+", "user-client/render, docs\ttools") == ["user-client/render", "docs", "tools"]
 print("ok    planner allowed_paths parser preserves slash paths and splits spaces/tabs/commas")
 PY
+then
+  :
+else
+  no "planner allowed_paths parser preserves slash paths and splits spaces/tabs/commas"
+fi
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/root"
