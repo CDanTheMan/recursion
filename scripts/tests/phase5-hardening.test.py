@@ -10,6 +10,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,7 +41,9 @@ def valid_assignment(repo: Path, controller: Path) -> dict:
                      "controller_gate_files": {}}
     gate_digest = hashlib.sha256(assignment.canonical_bytes(gate_contract)).hexdigest()
     role = {"engine": "cursor", "provider": "cursor", "model": "cursor-primary",
-            "network_profile": "cursor",
+            "network_policy": "provider-only", "network_profile": "cursor",
+            "argv": ["{{EXE}}", "-p", "{{PROMPT}}", "--output-format", "text", "--force",
+                     "--model", "{{MODEL}}"],
             "network_endpoints": ["api.cursor.com", "api2.cursor.sh"]}
     controller_sha = subprocess.check_output(["git", "-C", str(controller), "rev-parse", "HEAD"], text=True).strip()
     return {"task_id": "task-1", "project_id": "project-1", "source_repository": str(repo),
@@ -48,8 +51,9 @@ def valid_assignment(repo: Path, controller: Path) -> dict:
             "controller_repository": str(controller), "controller_sha": controller_sha,
             "seed_manifest_digest": "", "engine": "cursor", "provider": "cursor",
             "capacity_pool": "cursor-ultra-grok-bot", "model": "cursor-primary",
-            "host": "gs-recursion", "sandbox_profile": "strict-linux", "network_profile": "cursor",
-            "network_endpoints": ["api.cursor.com", "api2.cursor.sh"],
+            "host": "gs-recursion", "sandbox_profile": "strict-linux", "network_policy": "provider-only",
+            "network_profile": "cursor", "network_endpoints": ["api.cursor.com", "api2.cursor.sh"],
+            "argv": list(role["argv"]),
             "allowed_paths": ["scripts"], "gate_digest": gate_digest, "gate_contract": gate_contract,
             "role_assignments": {"implementer": role, "verifier": dict(role)},
             "publication_policy": "verified-integration-only"}
@@ -64,13 +68,18 @@ def main() -> int:
         subprocess.run(["git", "-C", str(source), "add", "."], check=True)
         subprocess.run(["git", "-C", str(source), "-c", "user.name=t", "-c", "user.email=t@t",
                         "commit", "-qm", "source"], check=True)
-        controller = tmp / "controller"; (controller / "scripts").mkdir(parents=True)
+        controller = tmp / "controller"; (controller / "scripts" / "engines").mkdir(parents=True)
         (controller / "scripts/validate-gate.py").write_bytes(
             (ROOT / "scripts/validate-gate.py").read_bytes())
+        for name in ("provider-egress-profiles.json", "capacity-pools.json"):
+            shutil.copy2(ROOT / "scripts" / name, controller / "scripts" / name)
+        shutil.copy2(ROOT / "scripts" / "engines" / "cursor.json",
+                     controller / "scripts" / "engines" / "cursor.json")
         subprocess.run(["git", "init", "-q", "-b", "main", str(controller)], check=True)
         subprocess.run(["git", "-C", str(controller), "add", "."], check=True)
         subprocess.run(["git", "-C", str(controller), "-c", "user.name=t", "-c", "user.email=t@t",
                         "commit", "-qm", "controller"], check=True)
+        os.environ["RECURSION_ROOT"] = str(controller)
         executable = source / "cursor-agent"; executable.write_text("#!/bin/sh\n", encoding="utf-8")
         executable.chmod(0o755)
         value = valid_assignment(source, controller)
@@ -105,6 +114,31 @@ def main() -> int:
             try: assignment.validate_assignment(bad)
             except assignment.AssignmentError: pass
             else: raise AssertionError(f"{label} accepted")
+
+        wrong_branch = dict(value); wrong_branch["source_branch"] = "develop"
+        try: assignment.validate_assignment(wrong_branch)
+        except assignment.AssignmentError: pass
+        else: raise AssertionError("syntactically valid wrong source branch accepted")
+
+        alternate = tmp / "alternate-controller"
+        subprocess.run(["git", "clone", "-q", str(controller), str(alternate)], check=True)
+        alternate_value = dict(value); alternate_value["controller_repository"] = str(alternate)
+        try: assignment.validate_assignment(alternate_value)
+        except assignment.AssignmentError: pass
+        else: raise AssertionError("alternate canonical controller root accepted")
+        for relative, label in (
+            ("scripts/provider-egress-profiles.json", "provider profile"),
+            ("scripts/capacity-pools.json", "capacity pool policy"),
+            ("scripts/engines/cursor.json", "engine manifest"),
+        ):
+            tampered_policy = controller / relative
+            original_policy = tampered_policy.read_bytes()
+            tampered_policy.write_bytes(original_policy + b"\n")
+            try:
+                assignment.validate_assignment(value)
+            except assignment.AssignmentError: pass
+            else: raise AssertionError(f"tampered controller {label} accepted")
+            tampered_policy.write_bytes(original_policy)
 
         for field, bad in (("signal", "HUP"), ("overlap", [0])):
             execution = {"structured_output": False, "output_format":"text",
@@ -220,6 +254,38 @@ def main() -> int:
                            str(evidence), "failed", "tampered", "1"]
         check(subprocess.run(tampered_finish, capture_output=True).returncode != 0,
               "evidence consumption rejects assignment tampering")
+        assignment_path.write_text(json.dumps(value), encoding="utf-8")
+
+        execution_path = tmp / "execution.json"
+        execution = {
+            "engine": "cursor", "provider": "cursor", "profile": "cursor",
+            "endpoints": ["api.cursor.com", "api2.cursor.sh"], "model": "cursor-primary",
+            "argv": value["role_assignments"]["implementer"]["argv"],
+            "assignment_digest": first, "assignment_identity": first,
+            "network": {"policy": "provider-only", "profile": "cursor", "provider": "cursor",
+                         "endpoints": ["api.cursor.com", "api2.cursor.sh"]},
+        }
+        execution_path.write_text(json.dumps(execution), encoding="utf-8")
+        for field, bad in (
+            ("engine", "gemini"), ("provider", "google-gemini"), ("profile", "gemini"),
+            ("endpoints", ["generativelanguage.googleapis.com"]), ("model", "wrong-model"),
+            ("argv", ["{{EXE}}", "--wrong"]), ("assignment_digest", "0" * 64),
+            ("assignment_identity", "0" * 64),
+        ):
+            mutated = dict(execution); mutated[field] = bad
+            execution_path.write_text(json.dumps(mutated), encoding="utf-8")
+            result = subprocess.run([
+                sys.executable, str(ROOT / "scripts/worker-evidence.py"), "finish", str(evidence),
+                "succeeded", "done", "0", "--execution-evidence", str(execution_path),
+            ], capture_output=True, text=True, env=os.environ.copy())
+            check(result.returncode != 0 and "Traceback" not in result.stderr,
+                  f"execution evidence mismatch is rejected deterministically: {field}")
+        execution_path.write_text(json.dumps(execution), encoding="utf-8")
+        valid_finish = subprocess.run([
+            sys.executable, str(ROOT / "scripts/worker-evidence.py"), "finish", str(evidence),
+            "succeeded", "done", "0", "--execution-evidence", str(execution_path),
+        ], capture_output=True, text=True, env=os.environ.copy())
+        check(valid_finish.returncode == 0, "matching execution evidence is accepted")
 
     print("phase5-hardening.test: ALL PASS")
     return 0

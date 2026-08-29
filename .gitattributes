@@ -5,3 +5,9 @@ scripts/notify.sh text eol=lf
 scripts/install-cron.sh text eol=lf
 # Parser-read registry: the last column must not grow a CR on Windows checkouts.
 state/portfolio.tsv text eol=lf
+
+# Controller policy and provenance helpers are authenticated against Git blob bytes.
+scripts/validate-gate.py text eol=lf
+scripts/provider-egress-profiles.json text eol=lf
+scripts/capacity-pools.json text eol=lf
+scripts/engines/*.json text eol=lf

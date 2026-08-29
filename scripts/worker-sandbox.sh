@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 export RECURSION_ROOT="$ROOT"
 PYTHON="${RECURSION_PYTHON:-python3}"
-ENGINE=""; WT=""; PROMPT=""; MODEL=""; USAGE_FILE=""; ROLE="implementer"
+ENGINE=""; WT=""; PROMPT=""; MODEL=""; USAGE_FILE=""; ROLE="implementer"; ASSIGNMENT_DIGEST=""
 NETWORK_POLICY="provider-only"; READ_ONLY_WORKTREE=0; EVIDENCE_DIR=""
 GATE_COMMAND=""; WORKDIR_PATH="."; READ_ONLY_PATHS=(); ENGINE_PLAN=""
 EXECUTION_EVIDENCE=""
@@ -24,11 +24,13 @@ while [ $# -gt 0 ]; do
     --read-only-path) READ_ONLY_PATHS+=("${2:-}"); shift 2 ;;
     --evidence-dir) EVIDENCE_DIR="${2:-}"; shift 2 ;;
     --execution-evidence) EXECUTION_EVIDENCE="${2:-}"; shift 2 ;;
+    --assignment-digest) ASSIGNMENT_DIGEST="${2:-}"; shift 2 ;;
     --gate-command) GATE_COMMAND="${2:-}"; shift 2 ;;
     --workdir) WORKDIR_PATH="${2:-}"; shift 2 ;;
     *) echo "worker-sandbox: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+[ -z "$ASSIGNMENT_DIGEST" ] || export RECURSION_ASSIGNMENT_DIGEST="$ASSIGNMENT_DIGEST"
 case "$ENGINE" in
   claude|hermes|gate)
     [ -z "$ENGINE_PLAN" ] || { echo "worker-sandbox: builtin engines take no engine plan" >&2; exit 92; } ;;
@@ -40,12 +42,13 @@ case "$ENGINE" in
     [[ "$ENGINE" =~ ^[a-z][a-z0-9-]{1,31}$ ]] \
       || { echo "worker-sandbox: invalid engine" >&2; exit 92; } ;;
 esac
-PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ENV_PASS=(); PLAN_OK=0; PLAN_MREQ=0
+PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ARGV_JSON='[]'; PLAN_MODEL_SUFFIX_JSON='[]'; PLAN_ENV_PASS=(); PLAN_OK=0; PLAN_MREQ=0
 PLAN_RUNTIME_MODE="executable-only"; PLAN_RUNTIME_SOURCE=""; PLAN_RUNTIME_TARGET=""; PLAN_RUNTIME_ENTRY=""
 PLAN_AUTH_REQUIRED=0; PLAN_AUTH_MODE="none"; PLAN_AUTH_MARKER=""
 PLAN_OUTPUT_FORMAT="text"; PLAN_STRUCTURED=0; PLAN_CANCEL_SIGNAL="TERM"; PLAN_CANCEL_GRACE=5
 PLAN_EXIT_CODES='{"success":[0],"auth":[1,2],"runtime":[126,127],"egress":[60,65]}'
-PLAN_NETWORK_PROFILE=""; PLAN_NETWORK_PROVIDER=""; PLAN_NETWORK_ENDPOINTS=(); PLAN_PROXY_PORT=""
+PLAN_NETWORK_POLICY=""; PLAN_NETWORK_PROFILE=""; PLAN_NETWORK_PROVIDER=""; PLAN_NETWORK_ENDPOINTS=(); PLAN_PROXY_PORT=""
+PLAN_CONTROLLER_ROOT=""; PLAN_CONTROLLER_SHA=""
 ENGINE_ENV_FILE=""
 if [ -n "$ENGINE_PLAN" ]; then
   [ -f "$ENGINE_PLAN" ] || { echo "worker-sandbox: engine plan is missing" >&2; exit 92; }
@@ -53,6 +56,8 @@ if [ -n "$ENGINE_PLAN" ]; then
     plan_line="${plan_line%$'\r'}"   # a Windows-native python3 emits CRLF; the box's does not
     case "$plan_line" in
       EXE=*)  PLAN_EXE="${plan_line#EXE=}" ;;
+      ARGVJSON=*) PLAN_ARGV_JSON="${plan_line#ARGVJSON=}" ;;
+      MSFXJSON=*) PLAN_MODEL_SUFFIX_JSON="${plan_line#MSFXJSON=}" ;;
       ARG=*)  PLAN_ARGV+=("${plan_line#ARG=}") ;;
       MSFX=*) PLAN_MODEL_SUFFIX+=("${plan_line#MSFX=}") ;;
       ENVP=*) PLAN_ENV_PASS+=("${plan_line#ENVP=}") ;;
@@ -60,9 +65,12 @@ if [ -n "$ENGINE_PLAN" ]; then
       RTSOURCE=*) PLAN_RUNTIME_SOURCE="${plan_line#RTSOURCE=}" ;;
       RTTARGET=*) PLAN_RUNTIME_TARGET="${plan_line#RTTARGET=}" ;;
       RTENTRY=*) PLAN_RUNTIME_ENTRY="${plan_line#RTENTRY=}" ;;
+      NETPOLICY=*) PLAN_NETWORK_POLICY="${plan_line#NETPOLICY=}" ;;
       NETPROFILE=*) PLAN_NETWORK_PROFILE="${plan_line#NETPROFILE=}" ;;
       NETPROVIDER=*) PLAN_NETWORK_PROVIDER="${plan_line#NETPROVIDER=}" ;;
       NETEND=*) PLAN_NETWORK_ENDPOINTS+=("${plan_line#NETEND=}") ;;
+      CTRROOT=*) PLAN_CONTROLLER_ROOT="${plan_line#CTRROOT=}" ;;
+      CTRSHA=*) PLAN_CONTROLLER_SHA="${plan_line#CTRSHA=}" ;;
       AUTHREQ=1) PLAN_AUTH_REQUIRED=1 ;;
       AUTHMODE=*) PLAN_AUTH_MODE="${plan_line#AUTHMODE=}" ;;
       AUTHMARKER=*) PLAN_AUTH_MARKER="${plan_line#AUTHMARKER=}" ;;
@@ -106,6 +114,8 @@ for element in suffix:
 if plan.get("model_required"):
     print("MREQ=1")
 print("EXE=" + exe)
+print("ARGVJSON=" + json.dumps(argv, separators=(",", ":")))
+print("MSFXJSON=" + json.dumps(suffix, separators=(",", ":")))
 for element in argv:
     print("ARG=" + element)
 for element in suffix:
@@ -115,12 +125,18 @@ if not isinstance(env_names, list) or not all(isinstance(v, str) for v in env_na
         or len(set(env_names)) != len(env_names):
     raise SystemExit(92)
 network = plan.get("network")
-if not isinstance(network, dict) or network.get("policy") != "provider-only" \
+if not isinstance(network, dict) or network.get("policy") not in ("provider-only", "none") \
         or not isinstance(network.get("profile"), str) \
         or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", network["profile"]) \
         or not isinstance(network.get("endpoints"), list) \
         or len(set(network["endpoints"])) != len(network["endpoints"]) \
         or not all(isinstance(v, str) and re.fullmatch(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?", v) for v in network["endpoints"]):
+    raise SystemExit(92)
+if network["policy"] == "provider-only" and not network["endpoints"]:
+    raise SystemExit(92)
+if network["policy"] == "none" and (network["profile"] != "sentry-local"
+                                      or plan.get("billing", {}).get("provider") != "sentry-local"
+                                      or network["endpoints"]):
     raise SystemExit(92)
 try:
     profile_config = json.load(open(os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts", "provider-egress-profiles.json")))
@@ -138,6 +154,60 @@ for name in env_names:
             or name not in allowed_env:
         raise SystemExit(92)
     print("ENVP=" + name)
+authority = plan.get("authority")
+if authority is not None:
+    if not isinstance(authority, dict) or set(authority) != {"controller_repository", "controller_sha", "policy_files"}:
+        raise SystemExit(92)
+    root = os.path.realpath(os.environ.get("RECURSION_ROOT", "."))
+    if os.path.realpath(str(authority.get("controller_repository", ""))) != root \
+            or not isinstance(authority.get("controller_sha"), str) \
+            or not re.fullmatch(r"[0-9a-f]{40,64}", authority["controller_sha"]):
+        raise SystemExit(92)
+    files = authority.get("policy_files")
+    if not isinstance(files, dict) or set(files) != {"scripts/engines/" + engine + ".json",
+                                                   "scripts/provider-egress-profiles.json"} \
+            or any(not isinstance(v, str) or not re.fullmatch(r"[0-9a-f]{64}", v) for v in files.values()):
+        raise SystemExit(92)
+    import subprocess
+    def rooted(relative):
+        try:
+            return os.path.commonpath([root, os.path.realpath(os.path.join(root, relative))]) == root
+        except ValueError:
+            return False
+    if not rooted("scripts/provider-egress-profiles.json") or not rooted("scripts/engines/" + engine + ".json"):
+        raise SystemExit(92)
+    head = subprocess.run(["git", "-C", root, "rev-parse", "--verify", "HEAD"],
+                          capture_output=True, text=True, check=False)
+    if head.returncode or head.stdout.strip() != authority["controller_sha"]:
+        raise SystemExit(92)
+    relative = "scripts/provider-egress-profiles.json"
+    committed = subprocess.run(["git", "-C", root, "show", f"{authority['controller_sha']}:{relative}"],
+                                capture_output=True, check=False)
+    try:
+        live = open(os.path.join(root, relative), "rb").read()
+    except OSError:
+        raise SystemExit(92)
+    if committed.returncode or live != committed.stdout \
+            or __import__("hashlib").sha256(live).hexdigest() != files[relative]:
+        raise SystemExit(92)
+    manifest_relative = "scripts/engines/" + engine + ".json"
+    manifest_path = os.path.join(root, manifest_relative)
+    manifest_committed = subprocess.run(
+        ["git", "-C", root, "show", f"{authority['controller_sha']}:{manifest_relative}"],
+        capture_output=True, check=False,
+    )
+    try:
+        manifest_live = open(manifest_path, "rb").read()
+    except OSError:
+        raise SystemExit(92)
+    if manifest_committed.returncode or manifest_live != manifest_committed.stdout \
+            or __import__("hashlib").sha256(manifest_live).hexdigest() != files[manifest_relative]:
+        raise SystemExit(92)
+    print("CTRROOT=" + str(authority["controller_repository"]))
+    print("CTRSHA=" + authority["controller_sha"])
+elif os.environ.get("RECURSION_ASSIGNMENT_DIGEST"):
+    raise SystemExit(92)
+print("NETPOLICY=" + network["policy"])
 print("NETPROFILE=" + network["profile"])
 print("NETPROVIDER=" + str(plan.get("billing", {}).get("provider", "")))
 for endpoint in network["endpoints"]:
@@ -220,7 +290,7 @@ PY
   # on its own configured default, off-alias and off-evidence.
   [ "$PLAN_MREQ" != 1 ] || [ -n "$MODEL" ] \
     || { echo "worker-sandbox: engine plan requires a model and none was given" >&2; exit 92; }
-  [ -z "$PLAN_NETWORK_PROFILE" ] || [ "$NETWORK_POLICY" = provider-only ] \
+  [ -z "$PLAN_NETWORK_PROFILE" ] || [ "$NETWORK_POLICY" = "$PLAN_NETWORK_POLICY" ] \
     || { echo "worker-sandbox: provider network plan cannot be downgraded to a different policy" >&2; exit 92; }
 fi
 export RECURSION_AUTH_REQUIRED="$PLAN_AUTH_REQUIRED"
@@ -251,17 +321,26 @@ write_execution_evidence(){ # status rc classification; controller-owned, never 
     "$PYTHON" - "$EXECUTION_EVIDENCE" "$ENGINE" "$MODEL" "$status" "$rc" "$classification" \
       "$PLAN_RUNTIME_MODE" "$PLAN_RUNTIME_TARGET" "$PLAN_RUNTIME_ENTRY" "$PLAN_OUTPUT_FORMAT" \
       "$PLAN_STRUCTURED" "$PLAN_CANCEL_SIGNAL" "$PLAN_CANCEL_GRACE" "$PLAN_EXIT_CODES" \
-      "$PLAN_NETWORK_PROFILE" "$PLAN_NETWORK_PROVIDER" "${PLAN_NETWORK_ENDPOINTS[*]}" \
+      "$PLAN_NETWORK_POLICY" "$PLAN_NETWORK_PROFILE" "$PLAN_NETWORK_PROVIDER" "${PLAN_NETWORK_ENDPOINTS[*]}" \
+      "$ASSIGNMENT_DIGEST" "$PLAN_ARGV_JSON" "$PLAN_MODEL_SUFFIX_JSON" \
       "${PLAN_RUN[@]}" <<'PY'
 import json, os, sys, tempfile
 path, engine, model, status, rc, classification = sys.argv[1:7]
 runtime_mode, runtime_target, runtime_entry = sys.argv[7:10]
 output_format, structured, cancel_signal, cancel_grace, exit_codes = sys.argv[10:15]
-network_profile, network_provider, network_endpoints = sys.argv[15:18]
-argv = sys.argv[18:]
+network_policy, network_profile, network_provider, network_endpoints = sys.argv[15:19]
+assignment_digest, argv_json, suffix_json = sys.argv[19:22]
+argv = sys.argv[22:]
+declared_argv = json.loads(argv_json)
+if model:
+    declared_argv.extend(json.loads(suffix_json))
 value = {"schema_version": 1, "engine": engine, "status": status,
          "exit_code": int(rc), "exit_classification": classification,
-         "model": model, "argv": argv,
+         "model": model, "argv": declared_argv, "executed_argv": argv,
+         "assignment_digest": assignment_digest,
+         "assignment_identity": assignment_digest,
+         "provider": network_provider, "profile": network_profile,
+         "endpoints": network_endpoints.split(),
          "real_execution_capability": "unproven-without-auth",
          "auth_required": os.environ.get("RECURSION_AUTH_REQUIRED", "0") == "1",
          "output_format": output_format, "structured_output": structured == "1",
@@ -269,7 +348,7 @@ value = {"schema_version": 1, "engine": engine, "status": status,
          "exit_codes": json.loads(exit_codes) if exit_codes else {},
          "runtime_layout": {"mode": runtime_mode}}
 if network_profile:
-    value["network"] = {"policy": "provider-only", "profile": network_profile,
+    value["network"] = {"policy": network_policy, "profile": network_profile,
                          "provider": network_provider, "endpoints": network_endpoints.split()}
 if runtime_mode == "sibling-tree":
     value["runtime_layout"].update(target=runtime_target, entrypoint=runtime_entry)
@@ -418,12 +497,21 @@ if [ "$NETWORK_POLICY" = provider-only ]; then
   else
     echo "worker-sandbox: refusal=missing-egress provider profile is absent" >&2; exit 96
   fi
-  PROVIDER_JSON="$("$PYTHON" "$ROOT/scripts/provider-egress.py" "$PROVIDER_PROFILE" --provider "$PLAN_NETWORK_PROVIDER" $(printf -- '--endpoint %q ' "${PLAN_NETWORK_ENDPOINTS[@]}"))" \
+  PROVIDER_ARGS=("$PROVIDER_PROFILE" --provider "$PLAN_NETWORK_PROVIDER")
+  for provider_endpoint in "${PLAN_NETWORK_ENDPOINTS[@]}"; do PROVIDER_ARGS+=(--endpoint "$provider_endpoint"); done
+  if [ -n "$PLAN_CONTROLLER_ROOT" ] || [ -n "$PLAN_CONTROLLER_SHA" ]; then
+    [ -n "$PLAN_CONTROLLER_ROOT" ] && [ -n "$PLAN_CONTROLLER_SHA" ] \
+      || { echo "worker-sandbox: refusal=missing-egress incomplete controller policy provenance" >&2; exit 96; }
+    PROVIDER_ARGS+=(--controller-root "$PLAN_CONTROLLER_ROOT" --controller-commit "$PLAN_CONTROLLER_SHA")
+  fi
+  PROVIDER_JSON="$("$PYTHON" "$ROOT/scripts/provider-egress.py" "${PROVIDER_ARGS[@]}")" \
     || { echo "worker-sandbox: refusal=missing-egress provider profile is invalid" >&2; exit 96; }
   PROVIDER_NETNS="/run/netns/$("$PYTHON" -c 'import json,sys; print(json.loads(sys.argv[1])["namespace"])' "$PROVIDER_JSON")"
   PROVIDER_PROXY_PORT="$("$PYTHON" -c 'import json,sys; print(json.loads(sys.argv[1])["proxy_port"])' "$PROVIDER_JSON")"
   export RECURSION_PROVIDER_PROFILE="$PROVIDER_PROFILE" RECURSION_PROVIDER_ID="$PLAN_NETWORK_PROVIDER"
   export RECURSION_PROVIDER_ENDPOINTS="${PLAN_NETWORK_ENDPOINTS[*]}"
+  [ -z "$PLAN_CONTROLLER_ROOT" ] || export RECURSION_CONTROLLER_ROOT="$PLAN_CONTROLLER_ROOT"
+  [ -z "$PLAN_CONTROLLER_SHA" ] || export RECURSION_CONTROLLER_COMMIT="$PLAN_CONTROLLER_SHA"
   [ -e "$PROVIDER_NETNS" ] && mountpoint -q "$PROVIDER_NETNS" \
     || { echo "worker-sandbox: refusal=missing-egress provider-only network namespace capability is absent" >&2; exit 96; }
   netns_owner="$(stat -c %u "$PROVIDER_NETNS" 2>/dev/null || true)"

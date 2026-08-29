@@ -112,7 +112,7 @@
       "additionalProperties": false,
       "properties": {
         "policy": {
-          "const": "provider-only"
+          "enum": ["provider-only", "none"]
         },
         "profile": {
           "type": "string",
@@ -280,8 +280,24 @@
     {
       "if": {"properties": {"network": {"properties": {"profile": {"const": "sentry-local"}}}}},
       "then": {"properties": {
-        "billing": {"properties": {"provider": {"const": "sentry-local"}}},
-        "env_passthrough": {"maxItems": 0}
+        "billing": {"properties": {"basis": {"const": "local"}, "provider": {"const": "sentry-local"}}},
+        "env_passthrough": {"maxItems": 0},
+        "network": {
+          "properties": {"policy": {"const": "none"}, "endpoints": {"maxItems": 0}}
+        }
+      }}
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"policy": {"const": "provider-only"}}}}},
+      "then": {"properties": {"network": {"properties": {"endpoints": {"minItems": 1}}}}}
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"policy": {"const": "none"}}}}},
+      "then": {"properties": {
+        "billing": {"properties": {"basis": {"const": "local"}, "provider": {"const": "sentry-local"}}},
+        "network": {"properties": {
+          "profile": {"const": "sentry-local"}, "endpoints": {"maxItems": 0}
+        }}
       }}
     }
   ]

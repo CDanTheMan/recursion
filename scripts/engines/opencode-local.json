@@ -24,15 +24,11 @@
     "provider": "sentry-local"
   },
   "network": {
-    "policy": "provider-only",
+    "policy": "none",
     "profile": "sentry-local",
     "endpoints": []
   },
-  "availability_probe": {
-    "type": "http",
-    "url_env": "RECURSION_ENGINE_OPENCODE_LOCAL_HEALTH_URL",
-    "timeout_s": 5
-  },
+  "availability_probe": null,
   "concurrency_cap": 1,
   "env_passthrough": [],
   "runtime_layout": { "mode": "executable-only" },

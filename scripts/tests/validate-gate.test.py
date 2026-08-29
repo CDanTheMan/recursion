@@ -103,6 +103,18 @@ class DirectGateAdmissionTest(unittest.TestCase):
             with self.subTest(gate=gate):
                 self.assertNotEqual(run_gate(gate), 0)
 
+    def test_interpreter_and_file_operand_traversals_are_refused_even_with_another_hashed_gate(self):
+        traversal = (
+            "python3 ../outside.py && test -s app/result.txt",
+            "python3 app/../outside.py && test -s app/result.txt",
+            "python3 app/sub/../../outside.py && test -s app/result.txt",
+            'python3 "app\\..\\outside.py" && test -s app/result.txt',
+            "test -s ../outside.txt && python3 app/check.py",
+        )
+        for gate in traversal:
+            with self.subTest(gate=gate):
+                self.assertNotEqual(run_gate(gate, gate_files="app/check.py"), 0)
+
 
 class WindowsPathToleranceTest(unittest.TestCase):
     """Backslash-carrying gate programs. Quoted backslashes survive POSIX shlex, so the

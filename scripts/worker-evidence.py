@@ -27,7 +27,13 @@ def iso(epoch: int) -> str:
 
 
 def load(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit("worker-evidence: evidence file is unreadable") from exc
+    if not isinstance(value, dict):
+        raise SystemExit("worker-evidence: evidence file must contain an object")
+    return value
 
 
 def atomic(path: Path, value: dict) -> None:
@@ -55,10 +61,16 @@ def maybe_json(path: str | None) -> object:
     # The sandbox pre-truncates the hermes usage file before mounting it; a worker that exits
     # without writing leaves it empty. An empty file means "no usage data", the same fact as
     # an absent file — it must not crash `finish` and lose the whole run record.
-    raw = Path(path).read_text(encoding="utf-8")
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise SystemExit("worker-evidence: auxiliary evidence is unreadable") from exc
     if not raw.strip():
         return {}
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit("worker-evidence: auxiliary evidence is malformed") from exc
 
 
 def refresh_assignment(value: dict) -> dict | None:
@@ -79,6 +91,44 @@ def refresh_assignment(value: dict) -> dict | None:
     if not isinstance(embedded, dict) or canonical_bytes(embedded) != canonical_bytes(assignment):
         raise SystemExit("worker-evidence: embedded assignment does not match its source file")
     return assignment
+
+
+def validate_execution_evidence(execution: object, run: dict, assignment: dict) -> dict:
+    """Bind every execution fact to the role-specific immutable assignment.
+
+    The execution writer is controller-owned, but its JSON file is still an input at finish
+    time.  Reconciliation cannot recover a missing comparison after this transition, so finish
+    rejects any absent, extra, or cross-role engine/provider/argv identity here.
+    """
+    if not isinstance(execution, dict):
+        raise SystemExit("worker-evidence: execution evidence must be an object")
+    role = run.get("role")
+    role_spec = assignment.get("role_assignments", {}).get(role)
+    if not isinstance(role_spec, dict):
+        raise SystemExit("worker-evidence: execution evidence role is not assigned")
+    expected = {
+        "engine": role_spec.get("engine"),
+        "provider": role_spec.get("provider"),
+        "profile": role_spec.get("network_profile"),
+        "endpoints": role_spec.get("network_endpoints"),
+        "model": role_spec.get("model"),
+        "argv": role_spec.get("argv"),
+    }
+    for field, expected_value in expected.items():
+        if execution.get(field) != expected_value:
+            raise SystemExit(f"worker-evidence: execution evidence {field} mismatch")
+    assignment_digest = run.get("assignment_digest")
+    if not assignment_digest or execution.get("assignment_digest") != assignment_digest \
+            or execution.get("assignment_identity") != assignment_digest:
+        raise SystemExit("worker-evidence: execution evidence assignment identity mismatch")
+    network = execution.get("network")
+    if not isinstance(network, dict) or network != {
+        "policy": role_spec.get("network_policy"),
+        "profile": expected["profile"], "provider": expected["provider"],
+        "endpoints": expected["endpoints"],
+    }:
+        raise SystemExit("worker-evidence: execution evidence network binding mismatch")
+    return execution
 
 
 def main() -> int:
@@ -174,8 +224,8 @@ def main() -> int:
         usage = maybe_json(args.usage_file)
         if isinstance(usage, dict):
             value["usage"] = usage
-        execution = maybe_json(args.execution_evidence)
-        if isinstance(execution, dict):
+        if args.execution_evidence:
+            execution = validate_execution_evidence(maybe_json(args.execution_evidence), value, assignment or {})
             value["execution"] = execution
         if args.commit_oid:
             value["commit_oid"] = args.commit_oid
@@ -219,4 +269,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        print(f"worker-evidence: invalid evidence transition: {exc}", file=sys.stderr)
+        raise SystemExit(2)

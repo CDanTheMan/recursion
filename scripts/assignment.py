@@ -29,7 +29,8 @@ REQUIRED = frozenset({
     "task_id", "project_id", "source_repository", "source_branch", "source_sha",
     "controller_repository", "controller_sha",
     "seed_manifest_digest", "engine", "provider", "capacity_pool", "model", "host",
-    "sandbox_profile", "network_profile", "network_endpoints", "allowed_paths", "gate_digest",
+    "sandbox_profile", "network_policy", "network_profile", "network_endpoints", "argv",
+    "allowed_paths", "gate_digest",
     "gate_contract", "role_assignments", "publication_policy",
 })
 
@@ -89,6 +90,13 @@ def _canonical_controller(value: Any) -> str:
     )
     if probe.returncode != 0 or Path(probe.stdout.strip()).resolve() != resolved:
         raise AssignmentError("controller_repository is not the canonical Git worktree root")
+    configured = os.environ.get("RECURSION_ROOT", "").strip()
+    try:
+        expected = Path(configured).resolve(strict=True) if configured else Path(__file__).resolve().parent.parent
+    except OSError as exc:
+        raise AssignmentError("canonical controller root is unavailable") from exc
+    if resolved != expected:
+        raise AssignmentError("controller_repository is not the canonical controller root")
     return os.path.normcase(str(resolved))
 
 
@@ -116,18 +124,21 @@ def _git_head_is(repo: str, sha: str, label: str) -> None:
         raise AssignmentError(f"{label} HEAD is not the assigned immutable commit")
 
 
-def _clean_controller_file(repo: str, sha: str, relative: str) -> None:
+def _controller_file_bytes(repo: str, sha: str, relative: str) -> bytes:
     pure = PurePosixPath(relative)
     path = Path(repo, *pure.parts)
+    try:
+        path.resolve(strict=True).relative_to(Path(repo).resolve(strict=True))
+        regular = path.is_file() and not path.is_symlink()
+    except OSError as exc:
+        raise AssignmentError(f"controller file is unavailable: {relative}") from exc
+    except ValueError as exc:
+        raise AssignmentError(f"controller file resolves outside the canonical root: {relative}") from exc
     if pure.is_absolute() or not pure.parts or pure.as_posix() != relative or "\\" in relative \
-            or ".." in pure.parts or not path.is_file() or path.is_symlink():
+            or any(part in {"", ".", ".."} for part in pure.parts) or not regular:
         raise AssignmentError(f"controller file is not a clean regular file: {relative}")
     tracked = subprocess.run(
         ["git", "-C", repo, "ls-files", "--error-unmatch", "--", relative],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
-    )
-    clean = subprocess.run(
-        ["git", "-C", repo, "diff", "--quiet", sha, "--", relative],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
     )
     tree = subprocess.run(
@@ -135,20 +146,38 @@ def _clean_controller_file(repo: str, sha: str, relative: str) -> None:
         capture_output=True, check=False,
     )
     committed = subprocess.run(
-        ["git", "-C", repo, "show", f"{sha}:{relative}"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        ["git", "-C", repo, "show", f"{sha}:{relative}"], capture_output=True, check=False,
     )
     rows = [row for row in tree.stdout.split(b"\0") if row]
     mode = rows[0].split(b" ", 1)[0] if len(rows) == 1 else b""
-    if tracked.returncode or clean.returncode or tree.returncode or len(rows) != 1 \
-            or mode not in {b"100644", b"100755"} or committed.returncode:
-        raise AssignmentError(f"controller file differs from its exact clean commit: {relative}")
-
-
-def _provider_profiles() -> dict[str, Any]:
-    path = Path(__file__).resolve().parent / "provider-egress-profiles.json"
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        live = path.read_bytes()
+    except OSError as exc:
+        raise AssignmentError(f"controller file is unreadable: {relative}") from exc
+    if tracked.returncode or tree.returncode or len(rows) != 1 \
+            or mode not in {b"100644", b"100755"} or committed.returncode \
+            or live != committed.stdout:
+        raise AssignmentError(f"controller file differs from its exact clean commit: {relative}")
+    return committed.stdout
+
+
+def _clean_controller_file(repo: str, sha: str, relative: str) -> None:
+    _controller_file_bytes(repo, sha, relative)
+
+
+def _provider_profiles(controller_repo: str | None = None, controller_sha: str | None = None) -> dict[str, Any]:
+    if (controller_repo is None) != (controller_sha is None):
+        raise AssignmentError("controller policy provenance is incomplete")
+    if controller_repo is not None:
+        raw = _controller_file_bytes(controller_repo, controller_sha, "scripts/provider-egress-profiles.json")
+    else:
+        path = Path(__file__).resolve().parent / "provider-egress-profiles.json"
+        try:
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise AssignmentError("provider profile registry is invalid") from exc
+    try:
+        value = json.loads(raw.decode("utf-8"))
         profiles = value["profiles"]
         if not isinstance(profiles, dict):
             raise TypeError
@@ -157,38 +186,66 @@ def _provider_profiles() -> dict[str, Any]:
         raise AssignmentError("provider profile registry is invalid") from exc
 
 
-def _engine_binding(engine: str) -> tuple[str, str, list[str]]:
+def _engine_binding(engine: str, controller_repo: str, controller_sha: str) -> tuple[str, str, list[str], str, list[str], list[str] | None]:
     if engine == "claude":
-        provider, profile = "anthropic-claude-code", "anthropic"
+        provider, profile, policy = "anthropic-claude-code", "anthropic", "provider-only"
     elif engine == "none":
-        return "none", "none", []
+        return "none", "none", [], "none", [], None
     else:
-        path = Path(__file__).resolve().parent / "engines" / f"{engine}.json"
+        if not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", engine):
+            raise AssignmentError(f"engine manifest binding is unavailable for {engine}")
+        relative = f"scripts/engines/{engine}.json"
         try:
-            manifest = json.loads(path.read_text(encoding="utf-8"))
+            manifest = json.loads(_controller_file_bytes(controller_repo, controller_sha, relative).decode("utf-8"))
             provider = manifest["billing"]["provider"]
             profile = manifest["network"]["profile"]
             endpoints = manifest["network"]["endpoints"]
+            policy = manifest["network"]["policy"]
+            argv = manifest["argv"]
+            suffix = manifest["model"]["argv_suffix"]
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
             raise AssignmentError(f"engine manifest binding is unavailable for {engine}") from exc
-        if not isinstance(provider, str) or not isinstance(profile, str) or not isinstance(endpoints, list):
+        if not isinstance(provider, str) or not isinstance(profile, str) or not isinstance(endpoints, list) \
+                or not isinstance(policy, str) or not isinstance(argv, list) or not isinstance(suffix, list):
             raise AssignmentError(f"engine manifest binding is invalid for {engine}")
-        return provider, profile, endpoints
-    profiles = _provider_profiles()
+        return provider, profile, endpoints, policy, argv, suffix
+    profiles = _provider_profiles(controller_repo, controller_sha)
     try:
         endpoints = profiles[profile]["endpoints"]
     except (KeyError, TypeError) as exc:
         raise AssignmentError(f"provider profile is unavailable for {engine}") from exc
-    return provider, profile, endpoints
+    return provider, profile, endpoints, policy, [], None
 
 
-def _validate_binding(engine: str, provider: str, profile: str, endpoints: Any, where: str) -> None:
-    expected_provider, expected_profile, expected_endpoints = _engine_binding(engine)
-    if (provider, profile) != (expected_provider, expected_profile):
+def _declared_argv(argv: list[str], suffix: list[str] | None, model: str) -> list[str]:
+    result = list(argv)
+    if model and suffix:
+        result.extend(suffix)
+    return result
+
+
+def _validate_argv(value: Any, where: str) -> list[str]:
+    if not isinstance(value, list) or not value \
+            or any(not isinstance(item, str) or not item or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in item)
+                   for item in value):
+        raise AssignmentError(f"{where} argv is invalid")
+    return value
+
+
+def _validate_binding(engine: str, provider: str, profile: str, endpoints: Any, policy: str,
+                      argv: Any, model: str, where: str, *, controller_repo: str,
+                      controller_sha: str) -> None:
+    expected_provider, expected_profile, expected_endpoints, expected_policy, expected_argv, suffix = \
+        _engine_binding(engine, controller_repo, controller_sha)
+    if (provider, profile, policy) != (expected_provider, expected_profile, expected_policy):
         raise AssignmentError(f"{where} engine/provider/network profile does not match its manifest")
     if not isinstance(endpoints, list) or endpoints != expected_endpoints:
         raise AssignmentError(f"{where} network endpoints do not match its manifest/profile")
-    profiles = _provider_profiles()
+    declared_argv = _validate_argv(argv, where)
+    expected_declared = _declared_argv(expected_argv, suffix, model)
+    if expected_argv and declared_argv != expected_declared:
+        raise AssignmentError(f"{where} argv does not match its immutable engine manifest")
+    profiles = _provider_profiles(controller_repo, controller_sha)
     if profile != "none":
         try:
             profile_value = profiles[profile]
@@ -196,6 +253,12 @@ def _validate_binding(engine: str, provider: str, profile: str, endpoints: Any, 
             raise AssignmentError(f"{where} network profile is not declared") from exc
         if profile_value.get("provider") != provider or profile_value.get("endpoints") != endpoints:
             raise AssignmentError(f"{where} network profile/provider/endpoints disagree")
+        if policy == "provider-only" and not endpoints:
+            raise AssignmentError(f"{where} networked provider profile must declare an endpoint")
+        if policy == "none" and (provider != "sentry-local" or profile != "sentry-local" or endpoints):
+            raise AssignmentError(f"{where} no-egress policy is reserved for sentry-local")
+    elif policy != "none" or provider != "none" or endpoints:
+        raise AssignmentError(f"{where} no-egress binding is invalid")
 
 
 def _validate_gate_contract(value: Any, expected_digest: str, *, source_repo: str,
@@ -253,13 +316,13 @@ def _validate_gate_contract(value: Any, expected_digest: str, *, source_repo: st
     return value
 
 
-def _pool_policy(pool: str) -> dict[str, Any]:
-    path = Path(__file__).resolve().parent / "capacity-pools.json"
+def _authenticated_pool_policy(pool: str, controller_repo: str, controller_sha: str) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        raw = _controller_file_bytes(controller_repo, controller_sha, "scripts/capacity-pools.json")
+        value = json.loads(raw.decode("utf-8"))
         pools = value["pools"]
         policy = pools[pool]
-    except (OSError, ValueError, KeyError, TypeError):
+    except (OSError, UnicodeDecodeError, ValueError, KeyError, TypeError, json.JSONDecodeError):
         raise AssignmentError("capacity_pool is not a declared local pool")
     if not isinstance(policy, dict):
         raise AssignmentError("capacity_pool policy is invalid")
@@ -289,6 +352,18 @@ def validate_assignment(value: Any) -> dict[str, Any]:
     _git_commit_exists(controller, controller_sha)
     _git_head_is(source, sha, "source repository")
     _git_head_is(controller, controller_sha, "controller repository")
+    branch_ref = subprocess.run(
+        ["git", "-C", source, "symbolic-ref", "--quiet", "--short", "HEAD"],
+        capture_output=True, text=True, check=False,
+    )
+    if branch_ref.returncode or branch_ref.stdout.strip() != branch:
+        raise AssignmentError("source_branch does not identify the checked-out source authority")
+    branch_tip = subprocess.run(
+        ["git", "-C", source, "rev-parse", "--verify", f"refs/heads/{branch}"],
+        capture_output=True, text=True, check=False,
+    )
+    if branch_tip.returncode or branch_tip.stdout.strip().lower() != sha.lower():
+        raise AssignmentError("source_branch does not identify source_sha")
     seed = value["seed_manifest_digest"]
     if not isinstance(seed, str) or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in seed) \
             or (seed and not SHA_RE.fullmatch(seed)):
@@ -310,7 +385,9 @@ def validate_assignment(value: Any) -> dict[str, Any]:
         controller_repo=controller, controller_sha=controller_sha, allowed_paths=paths,
     )
     _text(value["publication_policy"], "publication_policy", VALUE_RE)
-    policy = _pool_policy(value["capacity_pool"])
+    _text(value["network_policy"], "network_policy")
+    top_argv = _validate_argv(value["argv"], "assignment")
+    policy = _authenticated_pool_policy(value["capacity_pool"], controller, controller_sha)
     if value["provider"] not in policy.get("providers", []):
         raise AssignmentError("capacity_pool is not authorized for provider")
     if value["host"] not in policy.get("hosts", []):
@@ -325,16 +402,23 @@ def validate_assignment(value: Any) -> dict[str, Any]:
             or any(not isinstance(item, str) or not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", item) for item in top_endpoints) \
             or len(set(top_endpoints)) != len(top_endpoints):
         raise AssignmentError("network_endpoints is invalid")
-    _validate_binding(value["engine"], provider, value["network_profile"], top_endpoints, "implementer")
+    _validate_binding(value["engine"], provider, value["network_profile"], top_endpoints,
+                      value["network_policy"], top_argv, value["model"], "implementer",
+                      controller_repo=controller, controller_sha=controller_sha)
     for role, spec in roles.items():
-        if not isinstance(spec, dict) or set(spec) != {"engine", "provider", "model", "network_profile", "network_endpoints"}:
+        if not isinstance(spec, dict) or set(spec) != {
+            "engine", "provider", "model", "network_policy", "network_profile", "network_endpoints", "argv"
+        }:
             raise AssignmentError(f"role_assignments.{role} is invalid")
         role_engine = _text(spec["engine"], f"role_assignments.{role}.engine", VALUE_RE)
         role_provider = _text(spec["provider"], f"role_assignments.{role}.provider", VALUE_RE)
+        role_policy = _text(spec["network_policy"], f"role_assignments.{role}.network_policy")
         role_profile = _text(spec["network_profile"], f"role_assignments.{role}.network_profile", VALUE_RE)
-        _text(spec["model"], f"role_assignments.{role}.model")
+        role_model = _text(spec["model"], f"role_assignments.{role}.model")
         role_endpoints = spec["network_endpoints"]
-        _validate_binding(role_engine, role_provider, role_profile, role_endpoints, f"role_assignments.{role}")
+        _validate_binding(role_engine, role_provider, role_profile, role_endpoints, role_policy,
+                          spec["argv"], role_model, f"role_assignments.{role}",
+                          controller_repo=controller, controller_sha=controller_sha)
         if role_provider not in policy.get("providers", []):
             raise AssignmentError(f"capacity_pool is not authorized for role {role} provider")
     normalized = dict(value)
@@ -342,6 +426,7 @@ def validate_assignment(value: Any) -> dict[str, Any]:
     normalized["controller_repository"] = controller
     normalized["source_branch"] = branch
     normalized["source_sha"] = sha
+    normalized["argv"] = top_argv
     normalized["gate_contract"] = gate_contract
     return normalized
 

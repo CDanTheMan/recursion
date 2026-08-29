@@ -45,6 +45,17 @@ def main() -> int:
     del target["network"]["profile"]
     if not list(validator.iter_errors(target)):
         failures.append("schema accepted provider-only network without profile")
+    local = json.loads((ENGINES / "opencode-local.json").read_text())
+    if list(validator.iter_errors(local)):
+        failures.append("schema rejected the declared sentry-local no-egress engine")
+    target = copy.deepcopy(local)
+    target["network"]["policy"] = "provider-only"
+    if not list(validator.iter_errors(target)):
+        failures.append("schema accepted endpointless provider-only sentry-local network")
+    target = copy.deepcopy(local)
+    target["network"]["profile"] = "cursor"
+    if not list(validator.iter_errors(target)):
+        failures.append("schema accepted no-egress policy for a networked profile")
     for provider, profile, endpoints, forbidden in (
         ("anthropic-claude-code", "anthropic", ["api.anthropic.com"], "GEMINI_API_KEY"),
         ("google-gemini", "gemini", ["generativelanguage.googleapis.com"], "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"),

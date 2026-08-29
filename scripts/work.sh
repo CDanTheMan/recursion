@@ -553,12 +553,20 @@ engine_is_builtin(){ case "$1" in none|claude|hermes|gate|deepseek|openrouter) r
 plugin_probe_ok(){ # plan-file: absent probe passes; a declared probe needs a 2xx from its URL.
   # Probe from inside the provider-only namespace when it exists, so "reachable" is measured
   # where the worker will actually run, not on the controller's unrestricted network.
-  local plan="$1" profile provider endpoints namespace profile_json
+  local plan="$1" profile provider endpoints namespace profile_json controller_root controller_sha policy
   profile="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["network"]["profile"])' "$plan" 2>/dev/null || true)"
   provider="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["billing"]["provider"])' "$plan" 2>/dev/null || true)"
   endpoints="$(python3 -c 'import json,sys; print(" ".join(json.load(open(sys.argv[1]))["network"]["endpoints"]))' "$plan" 2>/dev/null || true)"
+  policy="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["network"]["policy"])' "$plan" 2>/dev/null || true)"
   [ -n "$profile" ] && [ -n "$provider" ] || return 1
-  profile_json="$(python3 "$ROOT/scripts/provider-egress.py" "$profile" --provider "$provider" $(printf -- '--endpoint %q ' $endpoints) 2>/dev/null)" || return 1
+  [ "$policy" = provider-only ] || return 0
+  controller_root="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("authority",{}).get("controller_repository", ""))' "$plan" 2>/dev/null || true)"
+  controller_sha="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("authority",{}).get("controller_sha", ""))' "$plan" 2>/dev/null || true)"
+  [ -n "$controller_root" ] && [ -n "$controller_sha" ] || return 1
+  local -a profile_args=("$profile" --provider "$provider" --controller-root "$controller_root" --controller-commit "$controller_sha")
+  local endpoint
+  for endpoint in $endpoints; do profile_args+=(--endpoint "$endpoint"); done
+  profile_json="$(python3 "$ROOT/scripts/provider-egress.py" "${profile_args[@]}" 2>/dev/null)" || return 1
   namespace="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["namespace"])' "$profile_json")"
   [ -e "/run/netns/$namespace" ] && command -v ip >/dev/null 2>&1 || return 1
   local -a runner=(ip netns exec "$namespace" python3)
@@ -602,7 +610,7 @@ plugin_slot_acquire(){ # engine cap: a witnessed per-slot lock, held for the run
 plugin_resolve_plan(){ # role engine plan-path: emit the plan or log the refusal (rc 92)
   local role="$1" engine="$2" plan_path="$3" rc
   if python3 "$ROOT/scripts/resolve-engine.py" "$engine" --role "$role" \
-      --emit-plan "$plan_path" 2>>"$LOG"; then
+      --emit-plan "$plan_path" --controller-root "$ROOT" --controller-commit "$CONTROLLER_SHA" 2>>"$LOG"; then
     rc=0
   else rc=$?; fi
   if [ "$rc" -ne 0 ]; then
@@ -645,6 +653,8 @@ plugin_engine_admission(){
     log "plugin admission entered with no plugin engine"; return 92
   fi
   [ -f "$ROOT/scripts/resolve-engine.py" ] || { log "engine plugin resolver is missing"; return 95; }
+  CONTROLLER_SHA="$(git -C "$ROOT" rev-parse --verify HEAD 2>/dev/null || true)"
+  [ -n "$CONTROLLER_SHA" ] || { log "controller commit could not be established for engine admission"; return 95; }
   plan_dir="$ROOT/state/runs"
   mkdir -p "$plan_dir" 2>/dev/null || { log "engine plan directory could not be created"; return 95; }
   mkdir -p "$ROOT/state/.locks" 2>/dev/null || { log "engine slot lock directory could not be created"; return 95; }
@@ -879,6 +889,7 @@ make_phase5_assignment(){
   [ "$STRICT_PHASE5" = 1 ] || return 0
   [ -n "$CAPACITY_POOL" ] && [ "$CAPACITY_POOL" != unassigned ] || { log "strict Phase 5 requires a declared capacity pool"; return 1; }
   local impl_provider verifier_provider impl_profile verifier_profile impl_endpoints verifier_endpoints source_branch host
+  local impl_policy verifier_policy impl_argv verifier_argv
   impl_provider="$(python3 - "$ENGINE" "${ENGINE_PLAN_IMPLEMENTER:-}" <<'PY'
 import json,sys
 engine, path = sys.argv[1:]
@@ -930,6 +941,42 @@ PY
   source_branch="$SOURCE_BRANCH"
   [ -n "$source_branch" ] || source_branch="$(git -C "$REPO_DIR" symbolic-ref --short HEAD 2>/dev/null || printf 'detached')"
   host="${RECURSION_HOST_ID:-gs-recursion}"
+  impl_policy="$(python3 - "$ENGINE" "${ENGINE_PLAN_IMPLEMENTER:-}" <<'PY'
+import json,sys
+engine,path=sys.argv[1:]
+if path: print(json.load(open(path,encoding="utf-8"))["network"]["policy"])
+else: print("provider-only")
+PY
+  )" || return 1
+  verifier_policy="$(python3 - "$VERIFIER_ENGINE" "${ENGINE_PLAN_VERIFIER:-}" <<'PY'
+import json,sys
+engine,path=sys.argv[1:]
+if path: print(json.load(open(path,encoding="utf-8"))["network"]["policy"])
+else: print("provider-only")
+PY
+  )" || return 1
+  [ "$NETWORK_POLICY" = "$impl_policy" ] && [ "$impl_policy" = "$verifier_policy" ] \
+    || { log "task network policy does not match the immutable engine policy"; return 1; }
+  impl_argv="$(python3 - "$ENGINE" "${ENGINE_PLAN_IMPLEMENTER:-}" "$RESOLVED_MODEL" <<'PY'
+import json,sys
+engine,path,model=sys.argv[1:]
+if path:
+    plan=json.load(open(path,encoding="utf-8")); value=list(plan["argv"])
+    if model: value.extend(plan["model_argv_suffix"])
+else: value=[engine,"{{PROMPT}}"]
+print(json.dumps(value,separators=(",",":")))
+PY
+  )" || return 1
+  verifier_argv="$(python3 - "$VERIFIER_ENGINE" "${ENGINE_PLAN_VERIFIER:-}" "$RESOLVED_VERIFIER_MODEL" <<'PY'
+import json,sys
+engine,path,model=sys.argv[1:]
+if path:
+    plan=json.load(open(path,encoding="utf-8")); value=list(plan["argv"])
+    if model: value.extend(plan["model_argv_suffix"])
+else: value=[engine,"{{PROMPT}}"]
+print(json.dumps(value,separators=(",",":")))
+PY
+  )" || return 1
   [ -n "$GATE_CONTRACT" ] || { log "strict Phase 5 requires the validated gate contract"; return 1; }
   ASSIGNMENT_FILE="$ROOT/state/runs/$ID-assignment-$STAMP-$$.json"
   mkdir -p "$ROOT/state/runs"
@@ -939,22 +986,26 @@ PY
     "$ROOT" "$CONTROLLER_SHA" \
     "$SEED_MANIFEST_SHA256" "$ENGINE" "$impl_provider" "$CAPACITY_POOL" "$host" "strict-linux" "$impl_profile" \
     "$impl_endpoints" "$GATE_CONTRACT" "$impl_provider" "$RESOLVED_MODEL" "$VERIFIER_ENGINE" "$verifier_provider" \
-    "$verifier_profile" "$verifier_endpoints" "$RESOLVED_VERIFIER_MODEL" <<'PY'
+     "$verifier_profile" "$verifier_endpoints" "$RESOLVED_VERIFIER_MODEL" \
+     "$impl_policy" "$verifier_policy" "$impl_argv" "$verifier_argv" <<'PY'
 import hashlib, json, os, sys, tempfile
 from assignment import digest, validate_assignment
 (path, task, project, repo, branch, sha, controller_repo, controller_sha, seed, engine, provider, pool, host, sandbox, profile,
  paths, endpoints, gate_contract, _, model, verifier_engine, verifier_provider, verifier_profile,
- verifier_endpoints, verifier_model) = sys.argv[1:]
+ verifier_endpoints, verifier_model, impl_policy, verifier_policy, impl_argv_json, verifier_argv_json) = sys.argv[1:]
 gate = hashlib.sha256(json.dumps(json.loads(gate_contract), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 value = {"task_id":task, "project_id":project, "source_repository":repo, "source_branch":branch,
          "controller_repository":controller_repo, "controller_sha":controller_sha,
          "source_sha":sha, "seed_manifest_digest":seed, "engine":engine, "provider":provider,
          "capacity_pool":pool, "model":model, "host":host, "sandbox_profile":sandbox,
+         "network_policy":impl_policy, "argv":json.loads(impl_argv_json),
          "network_profile":profile, "network_endpoints":json.loads(endpoints),
          "allowed_paths":paths.split(), "gate_digest":gate, "gate_contract":json.loads(gate_contract),
          "publication_policy":"verified-integration-only",
-         "role_assignments":{"implementer":{"engine":engine,"provider":provider,"model":model},
-                             "verifier":{"engine":verifier_engine,"provider":verifier_provider,"model":verifier_model}}}
+         "role_assignments":{"implementer":{"engine":engine,"provider":provider,"model":model,
+                              "network_policy":impl_policy,"argv":json.loads(impl_argv_json)},
+                             "verifier":{"engine":verifier_engine,"provider":verifier_provider,"model":verifier_model,
+                              "network_policy":verifier_policy,"argv":json.loads(verifier_argv_json)}}}
 value["role_assignments"]["implementer"].update(network_profile=profile, network_endpoints=json.loads(endpoints))
 value["role_assignments"]["verifier"].update(network_profile=verifier_profile, network_endpoints=json.loads(verifier_endpoints))
 value = validate_assignment(value); serialized=json.dumps(value, indent=2, sort_keys=True)+"\n"
@@ -1066,7 +1117,7 @@ ARM_USAGE="${ARMLOG%.out}.usage.json"
 run_model_supervised(){ # role worktree prompt resolved-model alias usage deadline run-id [commit] [implementer-run] [evidence-dir] [readonly]
   local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
   local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
-  local evidence_dir="${11:-}" readonly="${12:-0}" engine_plan="" provider=""
+  local evidence_dir="${11:-}" readonly="${12:-0}" engine_plan="" provider="" plan_network_policy=""
   local cancel_signal=TERM cancel_grace=5
   # Cross-engine verification (D-015): each role runs on its own contract engine.
   local active_engine="$ENGINE"
@@ -1125,10 +1176,16 @@ print(json.dumps({"schema_version": 1, "provider": plan["billing"]["provider"],
 PY
     ) || return 98
   fi
+  if [ -n "$engine_plan" ]; then
+    plan_network_policy="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1],encoding="utf-8"))["network"]["policy"])' "$engine_plan" 2>/dev/null)" \
+      || return 95
+    [ "$NETWORK_POLICY" = "$plan_network_policy" ] || return 92
+  fi
   local -a cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine "$active_engine" --worktree "$wt"
     --prompt "$prompt" --role "$role" --network-policy "$NETWORK_POLICY")
   [ -n "$resolved_model" ] && cmd+=(--model "$resolved_model")
   [ -z "$engine_plan" ] || cmd+=(--engine-plan "$engine_plan" --execution-evidence "$ROOT/state/runs/$run_id-execution.json")
+  [ "$STRICT_PHASE5" != 1 ] || cmd+=(--assignment-digest "$ASSIGNMENT_DIGEST")
   [ "$active_engine" != hermes ] || cmd+=(--usage-file "$usage")
   [ "$readonly" != 1 ] || cmd+=(--read-only-worktree)
   [ -z "$evidence_dir" ] || cmd+=(--evidence-dir "$evidence_dir")

@@ -104,7 +104,7 @@ def test_legacy_manifest_still_resolves_without_new_fields() -> None:
         "executable": "legacyeng", "argv": ["{{EXE}}", "-p", "{{PROMPT}}"],
         "model": {"required": False, "argv_suffix": ["--model", "{{MODEL}}"]},
         "roles": ["implementer"], "billing": {"basis": "local", "provider": "sentry-local"},
-        "network": {"policy": "provider-only", "profile": "sentry-local", "endpoints": []},
+        "network": {"policy": "none", "profile": "sentry-local", "endpoints": []},
         "availability_probe": None, "concurrency_cap": None, "env_passthrough": [],
     }
     with tempfile.TemporaryDirectory() as tmp:
@@ -113,7 +113,34 @@ def test_legacy_manifest_still_resolves_without_new_fields() -> None:
         env = dict(os.environ, RECURSION_ENGINE_DIR=str(directory))
         result = subprocess.run([sys.executable, str(RESOLVER), "legacyeng", "--validate"],
                                 capture_output=True, text=True, env=env)
-        check(result.returncode == 0, "v1 manifest without Phase 5 fields remains valid")
+        check(result.returncode == 0, "v1 local/no-egress manifest without Phase 5 fields remains valid")
+
+
+def test_sentry_local_manifest_is_available_without_egress() -> None:
+    result = subprocess.run(
+        [sys.executable, str(RESOLVER), "opencode-local", "--validate"],
+        capture_output=True, text=True,
+    )
+    check(result.returncode == 0, "sentry-local engine remains available as a no-egress engine")
+
+
+def test_endpointless_networked_profile_is_rejected() -> None:
+    base = {
+        "schema_version": 1, "name": "endpointless", "description": "invalid",
+        "executable": "endpointless", "argv": ["{{EXE}}", "-p", "{{PROMPT}}"],
+        "model": {"required": False, "argv_suffix": []}, "roles": ["implementer"],
+        "billing": {"basis": "local", "provider": "sentry-local"},
+        "network": {"policy": "provider-only", "profile": "sentry-local", "endpoints": []},
+        "availability_probe": None, "concurrency_cap": None, "env_passthrough": [],
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        directory = Path(tmp)
+        (directory / "endpointless.json").write_text(json.dumps(base) + "\n", encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(RESOLVER), "endpointless", "--validate"],
+            capture_output=True, text=True, env=dict(os.environ, RECURSION_ENGINE_DIR=str(directory)),
+        )
+        check(result.returncode == 2, "provider-only policy rejects a declared endpointless profile")
 
 
 def test_provider_network_requires_profile() -> None:
@@ -140,6 +167,8 @@ def main() -> int:
     test_cursor_manifest_carries_phase5_contract()
     test_machine_adapter_is_disabled_and_local_only_when_explicitly_enabled()
     test_legacy_manifest_still_resolves_without_new_fields()
+    test_sentry_local_manifest_is_available_without_egress()
+    test_endpointless_networked_profile_is_rejected()
     test_provider_network_requires_profile()
     if failures:
         print(f"phase5-runtime-contract.test: {len(failures)} FAILED")

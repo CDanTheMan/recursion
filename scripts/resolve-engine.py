@@ -10,9 +10,11 @@ controller. See docs/plans/engine-plugin-architecture.md Component 2.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -143,10 +145,68 @@ def validate_billing(billing: object) -> None:
         raise ManifestError("billing.provider must be a nonempty string")
 
 
-def provider_profiles() -> dict:
-    profile_path = Path(__file__).resolve().parent / "provider-egress-profiles.json"
+def canonical_controller_root(value: str) -> Path:
     try:
-        profiles = json.loads(profile_path.read_text(encoding="utf-8"))["profiles"]
+        requested = Path(value).resolve(strict=True)
+        configured = Path(os.environ.get("RECURSION_ROOT", "")).resolve(strict=True) \
+            if os.environ.get("RECURSION_ROOT", "").strip() else Path(__file__).resolve().parent.parent
+    except OSError as exc:
+        raise ManifestError("controller root is unavailable") from exc
+    if requested != configured:
+        raise ManifestError("controller root is not the canonical controller root")
+    return requested
+
+
+def authenticated_file(root: Path, commit: str, relative: str) -> tuple[bytes, str]:
+    pure = Path(relative)
+    path = root.joinpath(*pure.parts)
+    try:
+        path.resolve(strict=True).relative_to(root.resolve(strict=True))
+        regular = path.is_file() and not path.is_symlink()
+    except OSError as exc:
+        raise ManifestError(f"controller policy file is unavailable: {relative}") from exc
+    except ValueError as exc:
+        raise ManifestError(f"controller policy file resolves outside the canonical root: {relative}") from exc
+    if pure.is_absolute() or "\\" in relative or any(part in {"", ".", ".."} for part in pure.parts) \
+            or not regular:
+        raise ManifestError(f"controller policy file is not a regular file: {relative}")
+    tracked = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "--error-unmatch", "--", relative],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    tree = subprocess.run(
+        ["git", "-C", str(root), "ls-tree", "-z", commit, "--", relative],
+        capture_output=True, check=False,
+    )
+    committed = subprocess.run(
+        ["git", "-C", str(root), "show", f"{commit}:{relative}"],
+        capture_output=True, check=False,
+    )
+    rows = [row for row in tree.stdout.split(b"\0") if row]
+    mode = rows[0].split(b" ", 1)[0] if len(rows) == 1 else b""
+    try:
+        live = path.read_bytes()
+    except OSError as exc:
+        raise ManifestError(f"controller policy file is unreadable: {relative}") from exc
+    if tracked.returncode or tree.returncode or committed.returncode or len(rows) != 1 \
+            or mode not in {b"100644", b"100755"} or live != committed.stdout:
+        raise ManifestError(f"controller policy file differs from controller_sha: {relative}")
+    return committed.stdout, hashlib.sha256(committed.stdout).hexdigest()
+
+
+def provider_profiles(controller_root: Path | None = None, controller_commit: str | None = None) -> dict:
+    if (controller_root is None) != (controller_commit is None):
+        raise ManifestError("controller policy provenance is incomplete")
+    if controller_root is not None:
+        raw, _ = authenticated_file(controller_root, controller_commit, "scripts/provider-egress-profiles.json")
+    else:
+        profile_path = Path(__file__).resolve().parent / "provider-egress-profiles.json"
+        try:
+            raw = profile_path.read_bytes()
+        except OSError as exc:
+            raise ManifestError("provider profile registry is unavailable") from exc
+    try:
+        profiles = json.loads(raw.decode("utf-8"))["profiles"]
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
         raise ManifestError("provider profile registry is unavailable") from exc
     if not isinstance(profiles, dict):
@@ -154,7 +214,8 @@ def provider_profiles() -> dict:
     return profiles
 
 
-def validate_network(network: object, provider: str | None = None) -> dict:
+def validate_network(network: object, provider: str | None = None, billing_basis: str | None = None,
+                     controller_root: Path | None = None, controller_commit: str | None = None) -> dict:
     if not isinstance(network, dict):
         raise ManifestError("network must be a JSON object")
     missing = NETWORK_KEYS - network.keys()
@@ -162,8 +223,8 @@ def validate_network(network: object, provider: str | None = None) -> dict:
     if missing or extra:
         raise ManifestError("network has invalid fields")
     obj = network
-    if obj["policy"] != "provider-only":
-        raise ManifestError('network.policy must be "provider-only"')
+    if obj["policy"] not in {"provider-only", "none"}:
+        raise ManifestError('network.policy must be "provider-only" or "none"')
     endpoints = obj["endpoints"]
     if not isinstance(endpoints, list):
         raise ManifestError("network.endpoints must be a list of strings")
@@ -175,13 +236,18 @@ def validate_network(network: object, provider: str | None = None) -> dict:
     profile = obj["profile"]
     if not isinstance(profile, str) or not PROVIDER_PROFILE_RE.fullmatch(profile):
         raise ManifestError("network.profile is invalid")
-    declared = provider_profiles().get(profile)
+    declared = provider_profiles(controller_root, controller_commit).get(profile)
     if not isinstance(declared, dict) or not isinstance(declared.get("endpoints"), list):
         raise ManifestError("network.profile is not a declared provider profile")
     if provider is not None and declared.get("provider") != provider:
         raise ManifestError("network.profile provider does not match billing.provider")
     if sorted(declared["endpoints"]) != sorted(endpoints):
         raise ManifestError("network.endpoints do not match the declared provider profile")
+    if obj["policy"] == "provider-only" and not endpoints:
+        raise ManifestError("networked provider profiles must declare at least one endpoint")
+    if obj["policy"] == "none" and (provider != "sentry-local" or profile != "sentry-local"
+                                       or endpoints or billing_basis != "local"):
+        raise ManifestError("network.policy none is reserved for the local sentry profile")
     allowlist = declared.get("env_allowlist")
     if not isinstance(allowlist, list) or len(set(allowlist)) != len(allowlist) \
             or any(not isinstance(v, str) or not ENV_NAME_RE.fullmatch(v) for v in allowlist):
@@ -292,7 +358,8 @@ def validate_auth(auth: object) -> None:
         raise ManifestError("auth.marker is only valid for runner-home-marker auth")
 
 
-def validate_manifest(data: object, engine: str) -> dict:
+def validate_manifest(data: object, engine: str, *, controller_root: Path | None = None,
+                      controller_commit: str | None = None) -> dict:
     if not isinstance(data, dict):
         raise ManifestError("manifest must be a JSON object")
     missing = REQUIRED_TOP_LEVEL_KEYS - data.keys()
@@ -320,7 +387,8 @@ def validate_manifest(data: object, engine: str) -> dict:
     validate_model(obj["model"])
     validate_roles(obj["roles"])
     validate_billing(obj["billing"])
-    network = validate_network(obj["network"], obj["billing"]["provider"])
+    network = validate_network(obj["network"], obj["billing"]["provider"], obj["billing"]["basis"],
+                               controller_root, controller_commit)
     validate_probe(obj["availability_probe"])
     cap = obj["concurrency_cap"]
     if cap is not None and not (is_plain_int(cap) and cap >= 1):
@@ -343,23 +411,39 @@ def manifest_path(engine: str) -> Path:
     return manifest_dir() / f"{engine}.json"
 
 
-def load_manifest(path: Path, engine: str) -> dict:
+def load_manifest(path: Path, engine: str, *, controller_root: Path | None = None,
+                  controller_commit: str | None = None) -> tuple[dict, dict[str, str]]:
+    provenance: dict[str, str] = {}
     try:
-        raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
+        if controller_root is not None:
+            relative = f"scripts/engines/{engine}.json"
+            expected = (controller_root / relative).resolve(strict=True)
+            if path.resolve(strict=True) != expected:
+                raise ManifestError("manifest path is not under the canonical controller root")
+            raw_bytes, manifest_digest = authenticated_file(controller_root, controller_commit, relative)
+            provenance[relative] = manifest_digest
+            raw = raw_bytes.decode("utf-8")
+        else:
+            raw = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
         raise ManifestError(f"could not read manifest {path}: {exc}") from exc
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise ManifestError(f"manifest {path} is not valid JSON: {exc}") from exc
-    return validate_manifest(data, engine)
+    if controller_root is not None:
+        _, profile_digest = authenticated_file(controller_root, controller_commit,
+                                               "scripts/provider-egress-profiles.json")
+        provenance["scripts/provider-egress-profiles.json"] = profile_digest
+    return validate_manifest(data, engine, controller_root=controller_root, controller_commit=controller_commit), provenance
 
 
 def enabled_env_name(engine: str) -> str:
     return "RECURSION_ENGINE_" + engine.upper().replace("-", "_") + "_ENABLED"
 
 
-def build_plan(data: dict) -> dict:
+def build_plan(data: dict, provenance: dict[str, str] | None = None,
+               controller_root: Path | None = None, controller_commit: str | None = None) -> dict:
     plan = {
         "schema_version": 1,
         "engine": data["name"],
@@ -380,6 +464,12 @@ def build_plan(data: dict) -> dict:
             "policy": data["network"]["policy"],
             "profile": data["network"]["profile"],
             "endpoints": list(data["network"]["endpoints"]),
+        }
+    if provenance is not None and controller_root is not None and controller_commit is not None:
+        plan["authority"] = {
+            "controller_repository": str(controller_root),
+            "controller_sha": controller_commit,
+            "policy_files": dict(sorted(provenance.items())),
         }
     if "runtime_layout" in data:
         layout = data["runtime_layout"]
@@ -420,6 +510,8 @@ def parse_args(argv: list) -> argparse.Namespace:
     parser.add_argument("--validate", action="store_true")
     parser.add_argument("--role", choices=ROLE_CHOICES)
     parser.add_argument("--emit-plan", metavar="PATH")
+    parser.add_argument("--controller-root", metavar="PATH")
+    parser.add_argument("--controller-commit", metavar="SHA")
     return parser.parse_args(argv)
 
 
@@ -442,13 +534,30 @@ def main() -> int:
         diag(f"{engine!r} is a builtin engine, not a plugin")
         return 2
 
-    path = manifest_path(engine)
+    if (args.controller_root is None) != (args.controller_commit is None):
+        diag("--controller-root and --controller-commit must be supplied together")
+        return 2
+    controller_root = None
+    if args.controller_root is not None:
+        try:
+            controller_root = canonical_controller_root(args.controller_root)
+            head = subprocess.run(
+                ["git", "-C", str(controller_root), "rev-parse", "--verify", "HEAD"],
+                capture_output=True, text=True, check=False,
+            )
+            if head.returncode or head.stdout.strip() != args.controller_commit:
+                raise ManifestError("controller HEAD is not the exact immutable controller commit")
+        except ManifestError as exc:
+            diag(str(exc))
+            return 2
+    path = manifest_path(engine) if controller_root is None else controller_root / "scripts" / "engines" / f"{engine}.json"
     if not path.is_file():
         diag(f"manifest not found: {path}")
         return 3
 
     try:
-        data = load_manifest(path, engine)
+        data, provenance = load_manifest(path, engine, controller_root=controller_root,
+                                          controller_commit=args.controller_commit)
     except ManifestError as exc:
         diag(str(exc))
         return 2
@@ -468,7 +577,7 @@ def main() -> int:
         diag(f"role {args.role!r} is not permitted for engine {engine!r}")
         return 2
 
-    plan = build_plan(data)
+    plan = build_plan(data, provenance, controller_root, args.controller_commit)
     out_path = Path(args.emit_plan)
     try:
         write_plan_atomically(plan, out_path)

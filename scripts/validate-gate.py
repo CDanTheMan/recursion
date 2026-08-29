@@ -45,6 +45,36 @@ def under(path: str, roots: list[str]) -> bool:
     return "." in roots or any(path == root.rstrip("/") or path.startswith(root.rstrip("/") + "/") for root in roots)
 
 
+def resolved_under(repo: Path, candidate: str, roots: list[str]) -> bool:
+    """Require a lexical gate path to remain inside the materialized allowed tree."""
+    try:
+        repo_root = repo.resolve(strict=True)
+        candidate_path = (repo / candidate).resolve(strict=False)
+        resolved_roots = [(repo / root).resolve(strict=False) for root in roots]
+        candidate_path.relative_to(repo_root)
+        return any(candidate_path == root or root in candidate_path.parents for root in resolved_roots)
+    except (OSError, ValueError):
+        return False
+
+
+def canonical_controller_root(value: str) -> Path:
+    """Return the one controller root this process is authorized to inspect.
+
+    A commit is not a root identity: two worktrees can expose the same commit while one
+    carries attacker-controlled live policy files.  The controller exports RECURSION_ROOT
+    before invoking this helper; direct use falls back to the checked-out helper root.
+    """
+    try:
+        requested = Path(value).resolve(strict=True)
+        configured = Path(os.environ.get("RECURSION_ROOT", "")).resolve(strict=True) \
+            if os.environ.get("RECURSION_ROOT", "").strip() else Path(__file__).resolve().parent.parent
+    except OSError as exc:
+        fail("controller root is unavailable")
+    if requested != configured:
+        fail("controller root is not the canonical controller root")
+    return requested
+
+
 def clean_tracked_bytes(repo: Path, item: str, commit: str | None = None) -> bytes:
     """Return exact committed bytes and reject index/worktree or mode substitution.
 
@@ -53,6 +83,10 @@ def clean_tracked_bytes(repo: Path, item: str, commit: str | None = None) -> byt
     would let a post-creation working-tree edit survive until evidence consumption.
     """
     path = repo / item
+    try:
+        path.resolve(strict=False).relative_to(repo.resolve(strict=True))
+    except (OSError, ValueError) as exc:
+        fail(f"gate file resolves outside the source repository: {item}")
     try:
         mode = path.stat().st_mode
         if not path.is_file() or path.is_symlink():
@@ -130,6 +164,32 @@ def entrypoint(words: list[str], strict: bool) -> str | None:
             continue
         return PurePosixPath(word.replace("\\", "/")).as_posix()
     fail(f"{name} acceptance has no explicit grading program")
+
+
+def validate_test_paths(words: list[str], allowed: list[str], gate_files: list[str], repo: Path | None) -> None:
+    """Check file operands of direct ``test``/``[`` commands as well as launchers.
+
+    The shell grammar is deliberately narrow, but a direct file test still executes a path
+    lookup.  Only operands of the file-test operators are classified as paths; comparisons
+    such as ``test a != b`` remain ordinary scalar comparisons.
+    """
+    test_words = words
+    if words[:1] == ["["] and words[-1:] == ["]"]:
+        test_words = ["test", *words[1:-1]]
+    if test_words[:1] != ["test"]:
+        return
+    file_operators = {"-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-p", "-r", "-s", "-S", "-t", "-u", "-w", "-x"}
+    for index, word in enumerate(test_words[1:-1], 1):
+        if word not in file_operators:
+            continue
+        candidate = test_words[index + 1].replace("\\", "/")
+        if not candidate or PurePosixPath(candidate).is_absolute() \
+                or any(part in {"", ".", ".."} for part in candidate.split("/")):
+            fail(f"acceptance file operand is outside the allowed tree: {candidate!r}")
+        if not under(candidate, allowed):
+            fail(f"acceptance file operand is outside the allowed tree: {candidate}")
+        if repo is not None and not resolved_under(repo, candidate, allowed):
+            fail(f"acceptance file operand resolves outside the allowed tree: {candidate}")
 
 
 def vacuous_success(words: list[str]) -> bool:
@@ -210,19 +270,42 @@ def main() -> int:
         allowed = [p.rstrip("/") for p in args.allowed_paths.replace(",", " ").split() if p]
         gate_files = paths(args.gate_files)
         controller_gate_files = paths(args.controller_gate_files)
+        if args.controller_root:
+            controller_root = canonical_controller_root(args.controller_root)
+            if args.controller_commit:
+                clean_head = subprocess.run(
+                    ["git", "-C", str(controller_root), "rev-parse", "--verify", "HEAD"],
+                    capture_output=True, text=True, check=False,
+                )
+                if clean_head.returncode or clean_head.stdout.strip() != args.controller_commit:
+                    fail("controller HEAD is not the exact immutable controller commit")
+        else:
+            controller_root = None
         for words in parsed_segments:
+            validate_test_paths(words, allowed, gate_files, Path(args.repo) if args.repo else None)
             candidate = entrypoint(words, args.strict_direct)
+            if candidate:
+                candidate_path = PurePosixPath(candidate)
+                if any(part in {"", ".", ".."} for part in candidate.split("/")):
+                    fail(f"acceptance program uses an unsafe path: {candidate}")
             if candidate and PurePosixPath(candidate).is_absolute():
-                if not args.controller_root:
+                if controller_root is None:
                     fail("absolute acceptance program lacks a controller root")
                 try:
-                    relative = Path(candidate).resolve().relative_to(Path(args.controller_root).resolve()).as_posix()
+                    relative = Path(candidate).resolve(strict=True).relative_to(controller_root).as_posix()
                 except ValueError:
                     fail(f"acceptance program is outside the controller root: {candidate}")
+                except OSError:
+                    fail(f"acceptance program is unavailable: {candidate}")
                 if relative not in controller_gate_files:
                     fail(f"controller acceptance program must be declared: {relative}")
-            elif candidate and under(candidate, allowed) and candidate not in gate_files:
-                fail(f"worker-modifiable gate program must be declared in gate_files: {candidate}")
+            elif candidate:
+                if not under(candidate, allowed):
+                    fail(f"acceptance program is outside the allowed tree: {candidate}")
+                if args.repo and not resolved_under(Path(args.repo), candidate, allowed):
+                    fail(f"acceptance program resolves outside the allowed tree: {candidate}")
+                if candidate not in gate_files:
+                    fail(f"worker-modifiable gate program must be declared in gate_files: {candidate}")
         hashes: dict[str, str] = {}
         if args.repo:
             repo = Path(args.repo)
@@ -230,9 +313,9 @@ def main() -> int:
                 hashes[item] = hashlib.sha256(clean_tracked_bytes(repo, item, args.source_commit)).hexdigest()
         controller_hashes: dict[str, str] = {}
         if controller_gate_files:
-            if not args.controller_root:
+            if controller_root is None:
                 fail("controller gate files require --controller-root")
-            controller = Path(args.controller_root)
+            controller = controller_root
             for item in controller_gate_files:
                 controller_hashes[item] = hashlib.sha256(
                     clean_tracked_bytes(controller, item, args.controller_commit)
