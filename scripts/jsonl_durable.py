@@ -526,8 +526,14 @@ def _posix_pin_durable_parent(path: Path, *, create: bool = True) -> list[tuple[
     descriptors remain live for the whole operation, so later creates, appends, and
     replacements can use the final descriptor rather than resolving the pathname again.
     """
-    if os.name == "nt" or not hasattr(os, "supports_dir_fd") or not os.supports_dir_fd:
+    if os.name == "nt":
         return []
+    required_dir_fd = (os.open, os.mkdir, os.stat)
+    if (not hasattr(os, "supports_dir_fd")
+            or not all(function in os.supports_dir_fd for function in required_dir_fd)):
+        raise JsonlDurabilityError(
+            "POSIX durable pinning requires openat-capable directory descriptors"
+        )
     nofollow = getattr(os, "O_NOFOLLOW", 0)
     directory_flag = getattr(os, "O_DIRECTORY", 0)
     if not nofollow or not directory_flag:
@@ -540,10 +546,16 @@ def _posix_pin_durable_parent(path: Path, *, create: bool = True) -> list[tuple[
     current = Path(absolute.anchor)
     try:
         current_fd = os.open(current, flags)
-        anchor_stat = os.fstat(current_fd)
-        if not stat.S_ISDIR(anchor_stat.st_mode):
-            raise JsonlDurabilityError(f"POSIX durable parent anchor is not a directory: {current}")
-        pins.append((current, current_fd, (int(anchor_stat.st_dev), int(anchor_stat.st_ino))))
+        try:
+            anchor_stat = os.fstat(current_fd)
+            if not stat.S_ISDIR(anchor_stat.st_mode):
+                raise JsonlDurabilityError(
+                    f"POSIX durable parent anchor is not a directory: {current}"
+                )
+            pins.append((current, current_fd, (int(anchor_stat.st_dev), int(anchor_stat.st_ino))))
+        except BaseException:
+            os.close(current_fd)
+            raise
         for component in absolute.parts[1:]:
             current = current / component
             try:
@@ -552,20 +564,19 @@ def _posix_pin_durable_parent(path: Path, *, create: bool = True) -> list[tuple[
             except FileExistsError:
                 pass
             child_fd = os.open(component, flags, dir_fd=current_fd)
-            child_stat = os.fstat(child_fd)
-            child_identity = (int(child_stat.st_dev), int(child_stat.st_ino))
             try:
+                child_stat = os.fstat(child_fd)
+                child_identity = (int(child_stat.st_dev), int(child_stat.st_ino))
                 named_stat = os.stat(component, dir_fd=current_fd, follow_symlinks=False)
+                if (not stat.S_ISDIR(child_stat.st_mode)
+                        or stat.S_ISLNK(named_stat.st_mode)
+                        or (int(named_stat.st_dev), int(named_stat.st_ino)) != child_identity):
+                    raise JsonlDurabilityError(
+                        f"POSIX durable parent changed or is not a directory: {current}"
+                    )
             except BaseException:
                 os.close(child_fd)
                 raise
-            if (not stat.S_ISDIR(child_stat.st_mode)
-                    or stat.S_ISLNK(named_stat.st_mode)
-                    or (int(named_stat.st_dev), int(named_stat.st_ino)) != child_identity):
-                os.close(child_fd)
-                raise JsonlDurabilityError(
-                    f"POSIX durable parent changed or is not a directory: {current}"
-                )
             pins.append((current, child_fd, child_identity))
             current_fd = child_fd
         return pins
@@ -1634,12 +1645,11 @@ def _verified_descriptor(path: Path, max_record_bytes: int) \
     pins = (_win_pin_durable_parent(path.parent, create=False)
             if os.name == "nt" else _posix_pin_durable_parent(path.parent, create=False))
     journal_pins = pins
-    pins = []
     try:
         revalidate_durable_parent_pins(journal_pins)
         descriptor = _open_durable_leaf(
             path, os.O_RDONLY | getattr(os, "O_BINARY", 0),
-            directory_fd=pins[-1][1] if os.name != "nt" else None,
+            directory_fd=journal_pins[-1][1] if os.name != "nt" else None,
         )
         revalidate_durable_parent_pins(journal_pins)
     except BaseException:

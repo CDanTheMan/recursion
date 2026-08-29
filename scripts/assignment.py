@@ -586,7 +586,42 @@ def _open_private_at(directory: int, prefix: str) -> tuple[int, str]:
     raise AssignmentError("could not allocate an assignment temporary")
 
 
+def _open_record_lock_posix(task_directory: int, digest: str) -> int:
+    """Acquire a stable per-record lock through the already-pinned task directory."""
+    lock_name = f".{digest}.json.lock"
+    descriptor = os.open(
+        lock_name,
+        os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0),
+        0o600,
+        dir_fd=task_directory,
+    )
+    try:
+        lock_path = jsonl_durable._pinned_fd_path(task_directory, lock_name)
+        lock_identity = jsonl_durable._capture_opened_leaf(lock_path, descriptor)
+        jsonl_durable._lock_file_descriptor(descriptor)
+        jsonl_durable._revalidate_opened_leaf(lock_path, descriptor, lock_identity)
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
 def _persist_record_posix(
+        task_directory: int, digest: str, encoded: bytes
+) -> tuple[int, tuple[int, ...], bool] | None:
+    """Persist one record while serializing its check/link/cleanup transaction."""
+    lock_descriptor = _open_record_lock_posix(task_directory, digest)
+    try:
+        return _persist_record_posix_unlocked(task_directory, digest, encoded)
+    finally:
+        try:
+            jsonl_durable._unlock_file_descriptor(lock_descriptor)
+        finally:
+            os.close(lock_descriptor)
+
+
+def _persist_record_posix_unlocked(
         task_directory: int, digest: str, encoded: bytes
 ) -> tuple[int, tuple[int, ...], bool] | None:
     final_name = f"{digest}.json"
@@ -692,7 +727,7 @@ def _persist_record_posix(
                 raise jsonl_durable.JsonlDurabilityError(
                     "assignment temporary gained an outside hard link"
                 )
-        except BaseException:
+        except BaseException as exc:
             if primary_error is None:
                 primary_error = exc
 
