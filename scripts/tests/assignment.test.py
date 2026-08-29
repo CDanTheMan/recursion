@@ -403,6 +403,58 @@ def test_windows_durable_lock_atomically_rejects_reparse_leaf(tmp_path: Path) ->
         os.rmdir(lock_path)
 
 
+def test_windows_durable_lock_pins_parent_through_leaf_open(tmp_path: Path) -> None:
+    if os.name != "nt":
+        check(True, "Windows durable-lock parent pinning control is platform-scoped")
+        return
+
+    journal_parent = tmp_path / "lock-parent-race"
+    journal_parent.mkdir()
+    journal = journal_parent / "index.jsonl"
+    lock_path = journal_parent / f".{journal.name}.lock"
+    saved_parent = journal_parent.with_name(journal_parent.name + ".renamed")
+    outside = tmp_path / "outside-parent-lock-target"
+    outside.mkdir()
+    outside_lock = outside / lock_path.name
+    durable = amod.jsonl_durable
+    original = durable.ensure_no_symlink
+    armed = True
+
+    def race(path: Path) -> None:
+        nonlocal armed
+        original(path)
+        if armed and Path(path) == lock_path:
+            armed = False
+            # The final precheck has completed.  A vulnerable implementation permits
+            # this rename+junction replacement before CreateFileW opens the lock leaf.
+            journal_parent.rename(saved_parent)
+            _make_directory_link(journal_parent, outside)
+
+    durable.ensure_no_symlink = race
+    refused_typed = False
+    try:
+        try:
+            with durable.durable_lock(journal):
+                pass
+        except durable.JsonlDurabilityError:
+            refused_typed = True
+        except Exception as exc:
+            check(False, f"a raced Windows lock-parent swap is typed ({type(exc).__name__})")
+    finally:
+        durable.ensure_no_symlink = original
+        # Restore the local fixture if this test is run against a vulnerable build.
+        if saved_parent.exists():
+            if journal_parent.exists():
+                os.rmdir(journal_parent)
+            saved_parent.rename(journal_parent)
+
+    check(refused_typed, "a rename+junction swap after the final lock precheck is refused typed")
+    check(not armed, "the Windows lock-parent race runs after the final pathname precheck")
+    check(not outside_lock.exists(), "a raced Windows lock parent creates no outside lock")
+    check(not lock_path.exists(), "a refused Windows lock-parent race leaks no local lock file")
+    check(not saved_parent.exists(), "a refused Windows lock-parent race leaks no renamed tree")
+
+
 def _persist_worker(args: tuple[str, dict]) -> str:
     root_name, value = args
     sys.path.insert(0, str(SCRIPTS))
@@ -574,6 +626,8 @@ def main() -> int:
         test_windows_publication_failure_cleans_private_temp(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_windows_durable_lock_atomically_rejects_reparse_leaf(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_windows_durable_lock_pins_parent_through_leaf_open(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_persist_32_process_idempotency(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:

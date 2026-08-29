@@ -40,9 +40,12 @@ if os.name == "nt":
     _LOCK_GENERIC_WRITE = 0x40000000
     _LOCK_SHARE_READ = 0x00000001
     _LOCK_SHARE_WRITE = 0x00000002
+    _LOCK_OPEN_EXISTING = 3
     _LOCK_OPEN_ALWAYS = 4
     _LOCK_FILE_ATTRIBUTE_NORMAL = 0x00000080
+    _LOCK_FILE_ATTRIBUTE_DIRECTORY = 0x00000010
     _LOCK_FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
+    _LOCK_FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
     _LOCK_FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
     _LOCK_FILE_ATTRIBUTE_TAG_INFO = 9
 
@@ -51,6 +54,23 @@ if os.name == "nt":
             ("FileAttributes", ctypes.c_uint32),
             ("ReparseTag", ctypes.c_uint32),
             ("Reserved", ctypes.c_uint32),
+        ]
+
+    class _LOCK_FILETIME_STRUCT(ctypes.Structure):
+        _fields_ = [("low", ctypes.c_uint32), ("high", ctypes.c_uint32)]
+
+    class _LOCK_BY_HANDLE_FILE_INFORMATION_STRUCT(ctypes.Structure):
+        _fields_ = [
+            ("FileAttributes", ctypes.c_uint32),
+            ("CreationTime", _LOCK_FILETIME_STRUCT),
+            ("LastAccessTime", _LOCK_FILETIME_STRUCT),
+            ("LastWriteTime", _LOCK_FILETIME_STRUCT),
+            ("VolumeSerialNumber", ctypes.c_uint32),
+            ("FileSizeHigh", ctypes.c_uint32),
+            ("FileSizeLow", ctypes.c_uint32),
+            ("NumberOfLinks", ctypes.c_uint32),
+            ("FileIndexHigh", ctypes.c_uint32),
+            ("FileIndexLow", ctypes.c_uint32),
         ]
 
     _LOCK_KERNEL32.CreateFileW.argtypes = [
@@ -62,8 +82,115 @@ if os.name == "nt":
         ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32,
     ]
     _LOCK_KERNEL32.GetFileInformationByHandleEx.restype = ctypes.c_int
+    _LOCK_KERNEL32.GetFileInformationByHandle.argtypes = [
+        ctypes.c_void_p, ctypes.POINTER(_LOCK_BY_HANDLE_FILE_INFORMATION_STRUCT),
+    ]
+    _LOCK_KERNEL32.GetFileInformationByHandle.restype = ctypes.c_int
     _LOCK_KERNEL32.CloseHandle.argtypes = [ctypes.c_void_p]
     _LOCK_KERNEL32.CloseHandle.restype = ctypes.c_int
+
+
+def _win_lock_handle_attributes(handle: int) -> int:
+    info = _LOCK_FILE_ATTRIBUTE_TAG_INFO_STRUCT()
+    if not _LOCK_KERNEL32.GetFileInformationByHandleEx(
+            ctypes.c_void_p(handle), _LOCK_FILE_ATTRIBUTE_TAG_INFO,
+            ctypes.byref(info), ctypes.sizeof(info)):
+        raise OSError(ctypes.get_last_error(), "cannot inspect Windows durable-lock path")
+    return int(info.FileAttributes)
+
+
+def _win_lock_handle_identity(handle: int) -> tuple[int, int, int]:
+    info = _LOCK_BY_HANDLE_FILE_INFORMATION_STRUCT()
+    if not _LOCK_KERNEL32.GetFileInformationByHandle(
+            ctypes.c_void_p(handle), ctypes.byref(info)):
+        raise OSError(ctypes.get_last_error(), "cannot identify Windows durable-lock path")
+    return int(info.VolumeSerialNumber), int(info.FileIndexHigh), int(info.FileIndexLow)
+
+
+def _win_open_lock_directory(path: Path) -> int:
+    """Pin one real directory without granting delete/rename sharing."""
+    handle = _LOCK_KERNEL32.CreateFileW(
+        str(path), _LOCK_GENERIC_READ,
+        _LOCK_SHARE_READ | _LOCK_SHARE_WRITE, None, _LOCK_OPEN_EXISTING,
+        _LOCK_FILE_FLAG_BACKUP_SEMANTICS | _LOCK_FILE_FLAG_OPEN_REPARSE_POINT, None,
+    )
+    if handle in (None, _LOCK_INVALID_HANDLE):
+        raise OSError(ctypes.get_last_error(), f"cannot pin Windows durable-lock directory {path}")
+    try:
+        attributes = _win_lock_handle_attributes(int(handle))
+        if attributes & _LOCK_FILE_ATTRIBUTE_REPARSE_POINT:
+            raise JsonlDurabilityError(
+                f"durable JSONL lock parent is a reparse point: {path}"
+            )
+        if not attributes & _LOCK_FILE_ATTRIBUTE_DIRECTORY:
+            raise JsonlDurabilityError(
+                f"durable JSONL lock parent is not a directory: {path}"
+            )
+        return int(handle)
+    except BaseException:
+        _LOCK_KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+        raise
+
+
+def _win_pin_lock_parent(path: Path) -> list[tuple[Path, int, tuple[int, int, int]]]:
+    """Create and pin every parent component before the lock leaf is opened.
+
+    Each already-pinned parent denies delete sharing before its child is created or
+    inspected.  Consequently no checked prefix can be renamed and replaced with a
+    junction while a later component or the lock leaf is opened by pathname.
+    """
+    absolute = Path(os.path.abspath(path))
+    parts = absolute.parts
+    if not parts:
+        raise JsonlDurabilityError("cannot pin an empty Windows durable-lock parent")
+    pins: list[tuple[Path, int, tuple[int, int, int]]] = []
+    current = Path(parts[0])
+    try:
+        handle = _win_open_lock_directory(current)
+        try:
+            identity = _win_lock_handle_identity(handle)
+        except BaseException:
+            _LOCK_KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+            raise
+        pins.append((current, handle, identity))
+        for component in parts[1:]:
+            current = current / component
+            try:
+                current.mkdir(mode=0o700)
+            except FileExistsError:
+                pass
+            handle = _win_open_lock_directory(current)
+            try:
+                identity = _win_lock_handle_identity(handle)
+            except BaseException:
+                _LOCK_KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+                raise
+            pins.append((current, handle, identity))
+        return pins
+    except BaseException:
+        for _, handle, _ in reversed(pins):
+            _LOCK_KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+        raise
+
+
+def _win_validate_lock_parent_pins(
+        pins: list[tuple[Path, int, tuple[int, int, int]]]) -> None:
+    """Prove the post-open path still resolves to every pinned directory identity."""
+    for path, _, identity in pins:
+        current = _win_open_lock_directory(path)
+        try:
+            if _win_lock_handle_identity(current) != identity:
+                raise JsonlDurabilityError(
+                    f"durable JSONL lock parent changed while opening lock: {path}"
+                )
+        finally:
+            _LOCK_KERNEL32.CloseHandle(ctypes.c_void_p(current))
+
+
+def _win_close_lock_parent_pins(
+        pins: list[tuple[Path, int, tuple[int, int, int]]]) -> None:
+    for _, handle, _ in reversed(pins):
+        _LOCK_KERNEL32.CloseHandle(ctypes.c_void_p(handle))
 
 
 def _open_durable_lock(path: Path) -> int:
@@ -82,12 +209,7 @@ def _open_durable_lock(path: Path) -> int:
     if handle in (None, _LOCK_INVALID_HANDLE):
         raise OSError(ctypes.get_last_error(), f"cannot open Windows durable lock {path}")
     try:
-        info = _LOCK_FILE_ATTRIBUTE_TAG_INFO_STRUCT()
-        if not _LOCK_KERNEL32.GetFileInformationByHandleEx(
-                ctypes.c_void_p(handle), _LOCK_FILE_ATTRIBUTE_TAG_INFO,
-                ctypes.byref(info), ctypes.sizeof(info)):
-            raise OSError(ctypes.get_last_error(), "cannot inspect Windows durable lock")
-        if info.FileAttributes & _LOCK_FILE_ATTRIBUTE_REPARSE_POINT:
+        if _win_lock_handle_attributes(int(handle)) & _LOCK_FILE_ATTRIBUTE_REPARSE_POINT:
             raise JsonlDurabilityError(f"durable JSONL lock is a reparse point: {path}")
         descriptor = msvcrt.open_osfhandle(
             int(handle), os.O_RDWR | getattr(os, "O_BINARY", 0),
@@ -187,19 +309,27 @@ def durable_lock(path: Path):
     lock and crash/torn-tail/index checks.  The lock file is intentionally retained so a
     missing journal has the same serialization identity as a later append.
     """
-    path = Path(path)
-    ensure_no_symlink(path)
-    ensure_no_symlink(path.parent)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    ensure_no_symlink(path.parent)
-    ensure_no_symlink(path)
-    lock_path = path.parent / f".{path.name}.lock"
-    ensure_no_symlink(lock_path)
+    path = Path(os.path.abspath(path)) if os.name == "nt" else Path(path)
+    parent_pins: list[tuple[Path, int, tuple[int, int, int]]] = []
+    descriptor: int | None = None
+    locked = False
     try:
+        ensure_no_symlink(path)
+        ensure_no_symlink(path.parent)
+        if os.name == "nt":
+            parent_pins = _win_pin_lock_parent(path.parent)
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_no_symlink(path.parent)
+        ensure_no_symlink(path)
+        lock_path = path.parent / f".{path.name}.lock"
+        # This is deliberately the final pathname precheck.  On Windows every parent
+        # component is already pinned without delete sharing, so a rename+junction swap
+        # attempted here is rejected by the kernel before the lock leaf can be opened.
+        ensure_no_symlink(lock_path)
         descriptor = _open_durable_lock(lock_path)
-    except OSError as exc:
-        raise JsonlDurabilityError(f"cannot open durable JSONL transaction lock: {lock_path}: {exc}") from exc
-    try:
+        if os.name == "nt":
+            _win_validate_lock_parent_pins(parent_pins)
         # msvcrt.locking needs a byte to lock; this also makes creation durable.
         if os.fstat(descriptor).st_size == 0:
             os.write(descriptor, b"\0")
@@ -207,12 +337,37 @@ def durable_lock(path: Path):
             if os.name != "nt":
                 _fsync_dir(path.parent)
         _lock_file_descriptor(descriptor)
+        locked = True
+    except JsonlDurabilityError:
+        try:
+            if descriptor is not None:
+                os.close(descriptor)
+        finally:
+            if parent_pins:
+                _win_close_lock_parent_pins(parent_pins)
+        raise
+    except OSError as exc:
+        try:
+            if descriptor is not None:
+                os.close(descriptor)
+        finally:
+            if parent_pins:
+                _win_close_lock_parent_pins(parent_pins)
+        raise JsonlDurabilityError(
+            f"cannot establish durable JSONL transaction lock for {path}: {exc}"
+        ) from exc
+    try:
         yield
     finally:
         try:
-            _unlock_file_descriptor(descriptor)
+            if locked:
+                _unlock_file_descriptor(descriptor)
         finally:
-            os.close(descriptor)
+            try:
+                os.close(descriptor)
+            finally:
+                if parent_pins:
+                    _win_close_lock_parent_pins(parent_pins)
 
 
 @dataclass(frozen=True)
