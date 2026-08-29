@@ -56,10 +56,9 @@ POLICY_RECORD_SOURCES = {"controller-engine-policy-v1", "engine-manifest-v1"}
 
 # Provider receipt names are an allowlist, not a heuristic.  A usage file can be edited by
 # the worker, so an arbitrary nonempty evidence_source is never enough to call its numbers
-# grounded provider spend.
-PROVIDER_RECEIPT_SOURCES = {
-    "openrouter-via-opencode": {"opencode-usage-v1"},
-}
+# grounded provider spend.  ``receipt-v1`` is the controller's generic provider-receipt
+# profile; engine-specific sources are derived below from the trusted engine manifests.
+GENERIC_PROVIDER_RECEIPT_SOURCE = "receipt-v1"
 
 # The only provider->engine pair not derivable from a manifest (claude is a builtin).
 BUILTIN_PROVIDER_ENGINES = {"anthropic-claude-code": "claude"}
@@ -235,8 +234,13 @@ def classify_cost(usage: dict) -> tuple[int | None, float | None, str]:
     if evidence_source in POLICY_RECORD_SOURCES:
         return tokens, cost, "policy-record"
     provider = nonempty_str(usage.get("provider"))
-    if basis == "metered" and provider in PROVIDER_RECEIPT_SOURCES \
-            and evidence_source in PROVIDER_RECEIPT_SOURCES[provider]:
+    trusted_engines = provider_engine_map()
+    trusted_engines.update(BUILTIN_PROVIDER_ENGINES)
+    engine = trusted_engines.get(provider)
+    allowed_sources = {GENERIC_PROVIDER_RECEIPT_SOURCE}
+    if engine is not None:
+        allowed_sources.add(f"{engine}-usage-v1")
+    if basis == "metered" and engine is not None and evidence_source in allowed_sources:
         return tokens, cost, "receipt"
     return None, None, "unreconciled"
 

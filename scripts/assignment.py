@@ -821,13 +821,20 @@ def _persist_assignment_windows(root: Path, value: dict, encoded: bytes) -> Path
         cache_handle = _win_open_file(cache_file, _OPEN_ALWAYS)
         _persist_record_windows(task, value["assignment_digest"], encoded)
         _assignment_persistence_hook("pre-index-open")
-        with jsonl_durable.durable_lock(index):
-            jsonl_durable.append_jsonl(
-                index, _assignment_index_record(value),
-                dedupe_field="assignment_digest", dedupe_value=value["assignment_digest"],
-                index_root=cache, index_identity=identity, rebuild_in_place=True,
-                hook=_assignment_persistence_hook,
-            )
+        for attempt in range(8):
+            try:
+                with jsonl_durable.durable_lock(index):
+                    jsonl_durable.append_jsonl(
+                        index, _assignment_index_record(value),
+                        dedupe_field="assignment_digest", dedupe_value=value["assignment_digest"],
+                        index_root=cache, index_identity=identity, rebuild_in_place=True,
+                        hook=_assignment_persistence_hook,
+                    )
+                break
+            except jsonl_durable.JsonlDurabilityError as exc:
+                if str(exc) != "durable JSONL transaction lock is contended" or attempt == 7:
+                    raise
+                time.sleep(0.01)
         return assignment_path(root, value["task_id"], value["assignment_digest"])
     except (OSError, jsonl_durable.JsonlDurabilityError) as exc:
         raise AssignmentError(f"pinned Windows assignment persistence failed: {exc}") from exc
