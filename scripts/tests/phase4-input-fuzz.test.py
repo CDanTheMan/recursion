@@ -668,7 +668,8 @@ def main() -> int:
                   "conduct-hermes refuses a tampered immutable snapshot with the digest message")
 
     # Each mutation is applied to a fresh fixture and only the named guard is disabled.  The
-    # normal assertion must then fail: acceptance is expected for typed extra fields and the
+    # original assertion includes the typed boundary marker from the enabled-guard control and
+    # must fail once that guard is removed: acceptance is expected for typed extra fields and the
     # UTF-8 case, while the root/constant cases must reach a specific downstream signal.
     conduct_source = (conduct_root / conduct_script).read_text(encoding="utf-8")
     mutation_specs: list[tuple[str, str, str, str, bytes | None, str, str]] = [
@@ -710,7 +711,9 @@ def main() -> int:
         occurrences = conduct_source.count(needle)
         check(occurrences == 1, f"conduct-hermes mutation {label} marker is unique")
         if occurrences != 1:
-            mutation_rows.append(f"{label} -> guard disabled -> MUTATION MARKER NOT UNIQUE")
+            mutation_rows.append(
+                f"{label} -> expected {expected_marker}; guard disabled -> MUTATION MARKER NOT UNIQUE"
+            )
             continue
         mutant_root = scratch / f"conduct-mutant-{index}"
         stage_conduct_fixture(mutant_root)
@@ -728,11 +731,14 @@ def main() -> int:
         result = run_conduct(mutant_root, decision)
         if is_git_bash_acl_artifact(result):
             check(True, f"conduct-hermes mutation {label} is a truthful host-ACL skip")
-            mutation_rows.append(f"{label} -> {guard_description} disabled -> HOST-ACL SKIP")
+            mutation_rows.append(
+                f"{label} -> {guard_description} disabled; expected {expected_marker} -> HOST-ACL SKIP"
+            )
             continue
         text_output = conduct_text(result)
         if expected_mutation_outcome == "accepted":
             assertion_failed = result.returncode == 0 and "done (verb=noop rc=0)" in text_output \
+                and expected_marker not in text_output \
                 and not result_has_raw_error_or_path(result, mutant_root)
         else:
             assertion_failed = result.returncode != 0 and expected_mutation_outcome in text_output \
@@ -752,7 +758,10 @@ def main() -> int:
                     "boundary=controlled-input-failure",
                 ) if marker in text_output
             })) or f"controlled rc={result.returncode}"
-        mutation_rows.append(f"{label} -> {guard_description} disabled -> assertion observed ({observed})")
+        mutation_rows.append(
+            f"{label} -> {guard_description} disabled; expected {expected_marker} -> "
+            f"assertion observed ({observed})"
+        )
 
     print("CONDUCT_MUTATION_TABLE")
     for row in mutation_rows:
