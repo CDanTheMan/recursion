@@ -240,7 +240,7 @@ def _windows_open(path: Path, *, directory: bool, write: bool, create: bool = Fa
     kernel32.CreateFileW.restype = wintypes.HANDLE
     desired_access = 0 if directory else (0x40000000 if write else 0x80000000)
     if rename and not directory:
-        desired_access |= 0x00010000  # DELETE is required by SetFileInformationByHandle(FileRenameInfo).
+        desired_access |= 0x00010000  # DELETE is required by SetFileInformationByHandle.
     share_mode = 0x00000001 | 0x00000002  # FILE_SHARE_READ | FILE_SHARE_WRITE
     if not deny_delete:
         share_mode |= 0x00000004  # FILE_SHARE_DELETE; directory pins deliberately omit it.
@@ -262,29 +262,76 @@ def _close_windows(handle: Any) -> None:
     _windows_kernel32().CloseHandle(handle)
 
 
-def _windows_replace_by_handle(source_descriptor: int, directory_handle: Any, destination_name: str) -> None:
-    """Atomically rename an open temporary file within an already-pinned directory."""
+def _windows_path_is_reparse(path: Path) -> bool:
+    try:
+        info = os.lstat(path)
+    except OSError as exc:
+        raise ReconciliationError("UNSAFE_STORE_PATH", "store ancestor cannot be inspected safely") from exc
+    return bool(stat.S_ISLNK(info.st_mode) or
+                int(getattr(info, "st_file_attributes", 0)) & _WINDOWS_FILE_ATTRIBUTE_REPARSE_POINT or
+                int(getattr(info, "st_reparse_tag", 0)))
+
+
+class _WindowsPinnedDirectory:
+    """Native pins and identities for every component of a store directory path."""
+
+    def __init__(self, entries: Sequence[tuple[Path, Any, tuple[int, int, int]]]):
+        self.entries = tuple(entries)
+        self.handle = self.entries[-1][1]
+
+    def validate(self) -> None:
+        """Confirm the pinned objects and their current path names still agree."""
+        for path, handle, expected_identity in self.entries:
+            identity, is_directory, _, is_reparse = _leaf_info_for_handle(handle)
+            if (not is_directory or is_reparse or identity != expected_identity or
+                    _windows_path_is_reparse(path)):
+                raise ReconciliationError("UNSAFE_STORE_PATH", "store ancestor identity changed")
+            probe, probe_identity, probe_directory, _, probe_reparse = _windows_open(
+                path, directory=True, write=False, deny_delete=True)
+            try:
+                if (not probe_directory or probe_reparse or probe_identity != expected_identity):
+                    raise ReconciliationError("UNSAFE_STORE_PATH", "store ancestor identity changed")
+            finally:
+                _close_windows(probe)
+
+
+def _validate_pinned_directory(directory: Any) -> None:
+    if os.name == "nt":
+        directory.validate()
+
+
+def _windows_replace_by_handle(source_descriptor: int, destination_path: Path) -> None:
+    """Atomically replace an absolute destination from an open temporary handle."""
     import ctypes
     from ctypes import wintypes
     import msvcrt
 
-    if not destination_name or Path(destination_name).name != destination_name:
-        raise OSError("destination name must be a single path component")
+    destination = Path(destination_path)
+    if not destination.is_absolute():
+        raise OSError("destination path must be absolute")
 
-    class RenameInfo(ctypes.Structure):
+    class RenameInfoEx(ctypes.Structure):
+        # FILE_RENAME_INFO_EX on x64 is DWORD Flags, an aligned HANDLE,
+        # DWORD FileNameLength, and a variable-length UTF-16 name.
         _fields_ = [
-            ("replace_if_exists", ctypes.c_ubyte),
+            ("flags", wintypes.DWORD),
             ("root_directory", wintypes.HANDLE),
             ("file_name_length", wintypes.DWORD),
             ("file_name", wintypes.WCHAR * 1),
         ]
 
-    encoded_name = destination_name.encode("utf-16-le")
-    name_offset = RenameInfo.file_name.offset
-    buffer = ctypes.create_string_buffer(name_offset + len(encoded_name))
-    info = ctypes.cast(buffer, ctypes.POINTER(RenameInfo)).contents
-    info.replace_if_exists = 1
-    info.root_directory = wintypes.HANDLE(_windows_handle_value(directory_handle))
+    encoded_name = str(destination).encode("utf-16-le")
+    name_offset = RenameInfoEx.file_name.offset
+    # The API's required size is sizeof(FILE_RENAME_INFO_EX) plus the name,
+    # not merely the variable-tail offset plus the name.  On x64 the aligned
+    # structure is four bytes larger than FileName's offset.
+    buffer_size = ctypes.sizeof(RenameInfoEx) + len(encoded_name)
+    buffer = ctypes.create_string_buffer(buffer_size)
+    info = ctypes.cast(buffer, ctypes.POINTER(RenameInfoEx)).contents
+    # FileRenameInfoEx permits replacing the still-open original leaf.  The
+    # destination is absolute, so RootDirectory must be NULL.
+    info.flags = 0x00000001 | 0x00000002  # REPLACE_IF_EXISTS | POSIX_SEMANTICS
+    info.root_directory = None
     info.file_name_length = len(encoded_name)
     ctypes.memmove(ctypes.addressof(buffer) + name_offset, encoded_name, len(encoded_name))
 
@@ -292,7 +339,7 @@ def _windows_replace_by_handle(source_descriptor: int, directory_handle: Any, de
     kernel32.SetFileInformationByHandle.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
     kernel32.SetFileInformationByHandle.restype = wintypes.BOOL
     source_handle = wintypes.HANDLE(msvcrt.get_osfhandle(source_descriptor))
-    if not kernel32.SetFileInformationByHandle(source_handle, 3, ctypes.byref(buffer), len(buffer)):
+    if not kernel32.SetFileInformationByHandle(source_handle, 22, ctypes.byref(buffer), buffer_size):
         error = ctypes.get_last_error()
         raise OSError(error, "cannot atomically replace durable store leaf")
 
@@ -306,15 +353,23 @@ def _pin_store_directory(path: Path):
             ancestors.reverse()
             ancestors.append(path)
             for ancestor in ancestors:
-                handle, _, is_directory, _, is_reparse = _windows_open(
+                # lstat is an independent path-level check.  The native open
+                # below also uses OPEN_REPARSE_POINT, but keeping both checks
+                # makes a junction swap fail even on filesystems where the
+                # handle's basic attributes do not expose the reparse bit.
+                if _windows_path_is_reparse(ancestor):
+                    raise ReconciliationError("UNSAFE_STORE_PATH", "store parent is not a real directory")
+                handle, identity, is_directory, _, is_reparse = _windows_open(
                     ancestor, directory=True, write=False, deny_delete=True)
                 if not is_directory or is_reparse:
                     _close_windows(handle)
                     raise ReconciliationError("UNSAFE_STORE_PATH", "store parent is not a real directory")
-                handles.append(handle)
-            yield handles[-1]
+                handles.append((ancestor, handle, identity))
+            pinned = _WindowsPinnedDirectory(handles)
+            pinned.validate()
+            yield pinned
         finally:
-            for handle in reversed(handles):
+            for _, handle, _ in reversed(handles):
                 _close_windows(handle)
         return
 
@@ -364,12 +419,13 @@ def _validate_leaf_info(info: Any, *, identity: Any = None) -> Any:
 
 
 def _open_leaf_in_directory(directory: Any, path: Path, *, write: bool, create: bool, append: bool = False,
-                            exclusive: bool = False, rename: bool = False, deny_delete: bool = False,
+                            exclusive: bool = False, deny_delete: bool = False, rename: bool = False,
                             expected_identity: Any = None) -> tuple[int, Any]:
+    _validate_pinned_directory(directory)
     if os.name == "nt":
         handle, identity, is_directory, links, is_reparse = _windows_open(
-            path, directory=False, write=write, create=create, exclusive=exclusive, rename=rename,
-            deny_delete=deny_delete)
+            path, directory=False, write=write, create=create, exclusive=exclusive, deny_delete=deny_delete,
+            rename=rename)
         try:
             actual = _validate_leaf_info((identity, is_directory, links, is_reparse), identity=expected_identity)
             import msvcrt
@@ -411,14 +467,14 @@ def _open_store_leaf(path: Path, *, write: bool, create: bool, append: bool = Fa
         descriptor, identity = _open_leaf_in_directory(directory, path, write=write, create=create, append=append,
                                                        expected_identity=expected_identity, deny_delete=deny_delete)
         try:
-            yield descriptor, identity
+            yield descriptor, identity, directory
         finally:
             os.close(descriptor)
 
 
 def _read_store_bytes(path: Path, *, expected_identity: Any = None) -> tuple[bytes, Any] | None:
     try:
-        with _open_store_leaf(path, write=False, create=False, expected_identity=expected_identity) as (descriptor, identity):
+        with _open_store_leaf(path, write=False, create=False, expected_identity=expected_identity) as (descriptor, identity, _):
             chunks: list[bytes] = []
             while True:
                 chunk = os.read(descriptor, 1024 * 1024)
@@ -436,15 +492,17 @@ def _read_store_bytes(path: Path, *, expected_identity: Any = None) -> tuple[byt
 
 def _append_bytes(path: Path, data: bytes, *, expected_identity: Any = None) -> Any:
     try:
-        with _open_store_leaf(path, write=True, create=True, append=True, expected_identity=expected_identity) as (descriptor, identity):
+        with _open_store_leaf(path, write=True, create=True, append=True, expected_identity=expected_identity) as (descriptor, identity, directory):
             view = memoryview(data)
             while view:
+                _validate_pinned_directory(directory)
                 _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=identity)
                 written = os.write(descriptor, view)
                 if written <= 0:
                     raise OSError("journal write made no progress")
                 view = view[written:]
             os.fsync(descriptor)
+            _validate_pinned_directory(directory)
             _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=identity)
             return identity
     except ReconciliationError:
@@ -485,6 +543,7 @@ def _replace_store_bytes(path: Path, data: bytes, *, expected_identity: Any = No
                         raise OSError("store replacement write made no progress")
                     view = view[written:]
                 os.fsync(temporary_descriptor)
+                _validate_pinned_directory(directory)
                 _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)
                 if current_descriptor is not None:
                     # Keep the original leaf open until the replacement is
@@ -492,7 +551,10 @@ def _replace_store_bytes(path: Path, data: bytes, *, expected_identity: Any = No
                     # handle, so an unlink/hardlink swap cannot be accepted.
                     _validate_leaf_info(_leaf_info_for_descriptor(current_descriptor), identity=current)
                 if os.name == "nt":
-                    _windows_replace_by_handle(temporary_descriptor, directory, path.name)
+                    # The parent and every ancestor remain pinned with delete
+                    # sharing denied for this absolute-path replacement.
+                    _validate_pinned_directory(directory)
+                    _windows_replace_by_handle(temporary_descriptor, path)
                 else:
                     os.replace(temporary_name, path.name, src_dir_fd=directory, dst_dir_fd=directory)
                 replaced = True
@@ -577,6 +639,9 @@ def _safe_store_path(path: Path | str, root: Path | str | None) -> tuple[Path, P
         relative = target_abs.relative_to(root_abs)
     except ValueError as exc:
         raise ReconciliationError("STORE_OUTSIDE_ROOT", "durable store path is outside the configured store root") from exc
+    # The loop above ends at the filesystem root; restart from the configured
+    # root before checking each in-root component, including every ancestor.
+    current = root_abs
     for part in relative.parts:
         current = current / part
         if _file_is_reparse_or_symlink(current):
@@ -622,7 +687,7 @@ def _journal_lock(lock_path: Path):
         lock = _THREAD_LOCKS.setdefault(key, threading.RLock())
     with lock:
         _ensure_store_directory(lock_path.parent)
-        with _open_store_leaf(lock_path, write=True, create=True) as (descriptor, _):
+        with _open_store_leaf(lock_path, write=True, create=True) as (descriptor, _, _directory):
             try:
                 if os.name == "nt":
                     import msvcrt
