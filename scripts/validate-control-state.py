@@ -20,18 +20,17 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 class FirstPartyImportError(ImportError):
-    """A required controller module is absent from the importing script's tree."""
+    """A required controller module is absent or malformed in the importing tree."""
 
 
 try:
     from phase5_safety import (BoundaryError, decode_json, is_plain_int,
                                read_bounded_stream, read_bytes)
     from engine_contract import alias_role_ok, default_registry_path, pilot_engine_ok
-except ModuleNotFoundError as exc:
-    if exc.name not in {"phase5_safety", "engine_contract"}:
-        raise
+except Exception as exc:
+    module_name = getattr(exc, "name", None) or "phase5_safety/engine_contract"
     import_error = FirstPartyImportError(
-        f"first-party module '{exc.name}' not found; searched {_SCRIPT_DIR}"
+        f"first-party module '{module_name}' is unavailable or malformed; searched {_SCRIPT_DIR}"
     )
     if __name__ == "__main__":
         print(f"validate-control-state: first-party import failed: {import_error}", file=sys.stderr)

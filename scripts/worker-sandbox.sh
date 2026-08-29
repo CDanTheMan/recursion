@@ -237,21 +237,27 @@ from pathlib import Path
 sys.path.insert(0, os.path.abspath(os.environ.get("RECURSION_SCRIPTS_DIR", ".")))
 try:
     from phase5_safety import BoundaryError, decode_json, is_plain_int, read_bytes
-except ModuleNotFoundError as exc:
-    if exc.name != "phase5_safety":
-        raise
+except Exception as exc:
+    module_name = getattr(exc, "name", None) or "phase5_safety"
     print(
-        f"worker-sandbox: first-party module 'phase5_safety' not found; searched "
+        f"worker-sandbox: first-party module '{module_name}' is unavailable or malformed; searched "
         f"{os.path.abspath(os.environ.get('RECURSION_SCRIPTS_DIR', '.'))}",
         file=sys.stderr,
     )
     raise SystemExit(95)
 
+class PlanRefusal(Exception):
+    pass
+
 def _no_traceback(exc_type, exc, tb):
-    print("worker-sandbox: malformed engine plan", file=sys.stderr)
+    print("worker-sandbox: refusal=invalid-engine-plan", file=sys.stderr)
     sys.stderr.flush()
     os._exit(92)
 sys.excepthook = _no_traceback
+# Validation guards below historically raised SystemExit(92), which bypasses the
+# parser's typed-exception hook. Keep the exit code while making every guard a
+# distinguishable plan refusal for the boundary sweep.
+SystemExit = PlanRefusal
 try:
     raw_plan = read_bytes(Path(sys.argv[1]), label="engine plan")
     if raw_plan is None:

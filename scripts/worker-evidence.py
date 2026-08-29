@@ -18,7 +18,7 @@ if str(sys_path) not in sys.path:
     sys.path.insert(0, str(sys_path))
 
 class FirstPartyImportError(ImportError):
-    """A required controller module is absent from the importing script's tree."""
+    """A required controller module is absent or malformed in the importing tree."""
 
 
 try:
@@ -27,11 +27,10 @@ try:
     from assignment import (AssignmentError, canonical_bytes, load_assignment,
                             validate_assignment as assignment_validate,
                             validate_execution_evidence as assignment_execution_evidence)
-except ModuleNotFoundError as exc:
-    if exc.name not in {"phase5_safety", "assignment"}:
-        raise
+except Exception as exc:
+    module_name = getattr(exc, "name", None) or "phase5_safety/assignment"
     import_error = FirstPartyImportError(
-        f"first-party module '{exc.name}' not found; searched {sys_path}"
+        f"first-party module '{module_name}' is unavailable or malformed; searched {sys_path}"
     )
     if __name__ == "__main__":
         print(f"worker-evidence: first-party import failed: {import_error}", file=sys.stderr)
@@ -82,9 +81,8 @@ def start_evidence_path(path: Path) -> Path:
 
 
 def evidence_key_path(controller_repository: str) -> Path:
-    override = os.environ.get("RECURSION_EVIDENCE_KEY_FILE", "").strip()
-    if override:
-        return Path(override)
+    if os.environ.get("RECURSION_EVIDENCE_KEY_FILE", "").strip():
+        raise SystemExit("worker-evidence: caller-supplied evidence key selection is refused")
     return Path(controller_repository) / "state" / ".worker-evidence.key"
 
 
@@ -96,28 +94,36 @@ def load_evidence_key(controller_repository: str) -> bytes:
         if not key or len(key) < 32:
             raise BoundaryError("worker evidence key is too short")
         return key
-    except BoundaryError as missing:
-        # The controller's first strict start provisions the key in its own state
-        # tree.  The key never lives in the run directory and is never emitted.
-        try:
-            ensure_directory(path.parent)
-            try:
-                atomic_write(path, secrets.token_bytes(32), replace=False,
-                             mode=0o600, label="worker evidence key")
-            except BoundaryError as provision_error:
-                # Another legitimate strict start may win first-key provisioning.  Only
-                # accept that race by re-opening the existing controller-owned key below;
-                # malformed or unsafe replacements still fail closed in read_bytes().
-                if "already exists" not in str(provision_error):
-                    raise
-            key = read_bytes(path, label="worker evidence key", max_bytes=1024,
-                             private=True)
-            if len(key) < 32:
+    except (BoundaryError, OSError, TypeError, ValueError, OverflowError,
+            RecursionError) as exc:
+        raise SystemExit("worker-evidence: controller-provisioned evidence key is unavailable") from exc
+
+
+def provision_evidence_key(controller_repository: str) -> None:
+    """Provision the fixed controller key before a worker is launched.
+
+    This is a controller lifecycle operation.  Worker transitions only call
+    load_evidence_key(), and therefore cannot choose a key path or bootstrap a
+    run under a caller-created key.
+    """
+    path = evidence_key_path(controller_repository)
+    try:
+        existing = read_bytes(path, label="worker evidence key", max_bytes=1024,
+                              private=True, optional=True)
+        if existing is not None:
+            if len(existing) < 32:
                 raise BoundaryError("worker evidence key is too short")
-            return key
-        except (BoundaryError, OSError, TypeError, ValueError, OverflowError,
-                RecursionError) as exc:
-            raise SystemExit("worker-evidence: authenticated evidence key is unavailable") from exc
+            return
+        ensure_directory(path.parent)
+        atomic_write(path, secrets.token_bytes(32), replace=False, mode=0o600,
+                     label="worker evidence key")
+        key = read_bytes(path, label="worker evidence key", max_bytes=1024,
+                         private=True)
+        if key is None or len(key) < 32:
+            raise BoundaryError("worker evidence key is too short")
+    except (BoundaryError, OSError, TypeError, ValueError, OverflowError,
+            RecursionError) as exc:
+        raise SystemExit("worker-evidence: controller could not provision evidence key") from exc
 
 
 def _binding_mac(value: dict, key: bytes) -> str:
@@ -261,14 +267,24 @@ def main() -> int:
     finish.add_argument("--execution-evidence")
     finish.add_argument("--seed-evidence")
     finish.add_argument("--seed-verified-after", action="store_true")
+    finish.add_argument("--keep-open", action="store_true")
     finish.add_argument("--commit-oid", default="")
+    seal = sub.add_parser("seal"); seal.add_argument("path"); seal.add_argument("status")
+    seal.add_argument("outcome"); seal.add_argument("exit_code", type=int)
+    provision = sub.add_parser("provision-key"); provision.add_argument("--controller-root", required=True)
     gate = sub.add_parser("gate"); gate.add_argument("path"); gate.add_argument("commit_oid")
     gate.add_argument("acceptance"); gate.add_argument("exit_code", type=int); gate.add_argument("log")
     verify = sub.add_parser("verify"); verify.add_argument("path"); verify.add_argument("commit_oid")
     verify.add_argument("implementer_run_id"); verify.add_argument("verdict_file")
     link = sub.add_parser("link-verifier"); link.add_argument("path"); link.add_argument("verifier_run_id")
     link.add_argument("commit_oid"); link.add_argument("verdict_file")
-    args = parser.parse_args(); path = Path(getattr(args, "path"))
+    args = parser.parse_args()
+    path_arg = getattr(args, "path", None)
+    path = Path(path_arg) if path_arg else None
+
+    if args.command == "provision-key":
+        provision_evidence_key(args.controller_root)
+        return 0
 
     if args.command == "start":
         if args.pid < 1 or args.process_group < 1:
@@ -320,12 +336,17 @@ def main() -> int:
             value["seed_evidence"] = seed
         atomic(path, value); return 0
 
+    if path is None:
+        raise SystemExit("worker-evidence: evidence path is required")
     value = load(path)
     start_binding = load_start_evidence(path)
     for field, start_field in (("id", "run_id"), ("task_id", "task_id"), ("role", "role")):
         if field in value and value[field] != start_binding[start_field]:
             raise SystemExit(f"worker-evidence: mutable run identity changed: {field}")
     assignment = refresh_assignment(value, start_binding)
+    terminal_statuses = {"succeeded", "failed", "blocked", "cancelled", "stale"}
+    if value.get("status") in terminal_statuses:
+        raise SystemExit("worker-evidence: terminal run metadata is immutable")
     # Every record produced by start is strict.  This decision comes from the
     # authenticated durable start binding, never from mutable run JSON fields.
     strict_run = start_binding["kind"] == START_EVIDENCE_KIND
@@ -337,8 +358,8 @@ def main() -> int:
     if args.command == "heartbeat":
         value["heartbeat_at"] = now(); value["lease_expires"] = iso(args.lease_epoch)
     elif args.command == "finish":
-        value.update(status=args.status, outcome=args.outcome, exit_code=args.exit_code,
-                     finished_at=now(), lease_expires="0")
+        if args.status not in terminal_statuses:
+            raise SystemExit("worker-evidence: finish status must be terminal")
         value["result"] = maybe_json(args.result_file)
         scope = maybe_json(args.scope_file)
         if isinstance(scope, dict):
@@ -348,7 +369,11 @@ def main() -> int:
             value["usage"] = usage
         if not args.execution_evidence:
             raise SystemExit("worker-evidence: strict execution evidence is required to finish")
-        execution = validate_execution_evidence(maybe_json(args.execution_evidence), value, assignment)
+        execution_run = dict(value)
+        execution_run.update(status=args.status, exit_code=args.exit_code)
+        execution = validate_execution_evidence(
+            maybe_json(args.execution_evidence), execution_run, assignment,
+        )
         value["execution"] = execution
         if args.commit_oid:
             value["commit_oid"] = args.commit_oid
@@ -358,6 +383,24 @@ def main() -> int:
             if args.seed_verified_after:
                 seed["verified_after"] = True
             value["seed_evidence"] = seed
+        if args.keep_open:
+            value["worker_finished_at"] = now()
+        else:
+            value.update(status=args.status, outcome=args.outcome, exit_code=args.exit_code,
+                         finished_at=now(), lease_expires="0")
+    elif args.command == "seal":
+        if args.status not in terminal_statuses:
+            raise SystemExit("worker-evidence: seal status must be terminal")
+        if value.get("status") != "running":
+            raise SystemExit("worker-evidence: only a running record can be sealed")
+        execution = value.get("execution")
+        if not isinstance(execution, dict):
+            raise SystemExit("worker-evidence: cannot seal without execution evidence")
+        execution_run = dict(value)
+        execution_run.update(status=args.status, exit_code=args.exit_code)
+        validate_execution_evidence(execution, execution_run, assignment)
+        value.update(status=args.status, outcome=args.outcome, exit_code=args.exit_code,
+                     finished_at=now(), lease_expires="0")
     elif args.command == "gate":
         if assignment is None:
             raise SystemExit("worker-evidence: gate evidence has no validated assignment provenance")

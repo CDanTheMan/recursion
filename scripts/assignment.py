@@ -8,6 +8,7 @@ recomputes the digest from canonical JSON.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -21,16 +22,15 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 class FirstPartyImportError(ImportError):
-    """A required controller module is absent from the importing script's tree."""
+    """A required controller module is absent or malformed in the importing tree."""
 
 
 try:
     from phase5_safety import BoundaryError, decode_json, is_plain_int, pinned_directory, read_bytes
-except ModuleNotFoundError as exc:
-    if exc.name != "phase5_safety":
-        raise
+except Exception as exc:
+    module_name = getattr(exc, "name", None) or "phase5_safety"
     raise FirstPartyImportError(
-        f"first-party module 'phase5_safety' not found; searched {_SCRIPT_DIR}"
+        f"first-party module '{module_name}' is unavailable or malformed; searched {_SCRIPT_DIR}"
     ) from None
 
 ID_RE = re.compile(r"[a-z][a-z0-9-]{1,63}\Z")
@@ -191,6 +191,32 @@ def _clean_controller_file(repo: str, sha: str, relative: str) -> None:
     _controller_file_bytes(repo, sha, relative)
 
 
+def _validate_engine_manifest(manifest: object, engine: str, controller_repo: str,
+                              controller_sha: str) -> None:
+    """Run the controller's complete manifest validator before extracting fields.
+
+    Assignment validation is an independent trust boundary.  Repeating only the
+    handful of fields needed for argv/network binding would let an invalid plugin
+    manifest enter an otherwise valid assignment.  The resolver itself is pinned
+    to the same clean controller commit before it is loaded.
+    """
+    relative = "scripts/resolve-engine.py"
+    _clean_controller_file(controller_repo, controller_sha, relative)
+    path = Path(controller_repo, "scripts", "resolve-engine.py")
+    module_name = f"assignment_resolver_{controller_sha[:16]}"
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError("resolver module specification is unavailable")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        validator = getattr(module, "validate_manifest")
+        validator(manifest, engine, controller_root=Path(controller_repo),
+                  controller_commit=controller_sha)
+    except Exception as exc:
+        raise AssignmentError(f"engine manifest for {engine} failed full validation") from exc
+
+
 def _provider_profiles(controller_repo: str | None = None, controller_sha: str | None = None) -> dict[str, Any]:
     if (controller_repo is None) != (controller_sha is None):
         raise AssignmentError("controller policy provenance is incomplete")
@@ -228,6 +254,7 @@ def _engine_binding(engine: str, controller_repo: str, controller_sha: str) -> t
                 _controller_file_bytes(controller_repo, controller_sha, relative),
                 f"engine manifest {engine}",
             )
+            _validate_engine_manifest(manifest, engine, controller_repo, controller_sha)
             provider = manifest["billing"]["provider"]
             profile = manifest["network"]["profile"]
             endpoints = manifest["network"]["endpoints"]
@@ -365,6 +392,17 @@ def _authenticated_pool_policy(pool: str, controller_repo: str, controller_sha: 
     return policy
 
 
+def _validate_allowed_paths(paths: object) -> list[str]:
+    if not isinstance(paths, list) or not paths or any(
+        not isinstance(item, str) or not item or item != "." and item.startswith(("/", "\\"))
+        or ":" in item
+        or any(part in {"", ".", ".."} for part in item.replace("\\", "/").split("/"))
+        or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in item) for item in paths
+    ):
+        raise AssignmentError("allowed_paths is not a safe nonempty relative-path list")
+    return paths
+
+
 def _validate_assignment(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise AssignmentError("assignment must be an object")
@@ -409,14 +447,7 @@ def _validate_assignment(value: Any) -> dict[str, Any]:
     sandbox = _text(value["sandbox_profile"], "sandbox_profile")
     if sandbox not in SANDBOXES:
         raise AssignmentError("sandbox_profile is unsupported")
-    paths = value["allowed_paths"]
-    if not isinstance(paths, list) or not paths or any(
-        not isinstance(item, str) or not item or item != "." and item.startswith(("/", "\\"))
-        or ":" in item
-        or any(part in {"", ".", ".."} for part in item.replace("\\", "/").split("/"))
-        or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in item) for item in paths
-    ):
-        raise AssignmentError("allowed_paths is not a safe nonempty relative-path list")
+    paths = _validate_allowed_paths(value["allowed_paths"])
     gate_digest = _text(value["gate_digest"], "gate_digest", SHA_RE)
     gate_contract = _validate_gate_contract(
         value["gate_contract"], gate_digest, source_repo=source, source_sha=sha,

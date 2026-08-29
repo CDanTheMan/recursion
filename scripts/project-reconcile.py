@@ -38,13 +38,14 @@ from transition_receipt import (
 )
 from seed_contract import SeedContractError, copy_seed_paths, validate_contract
 try:
+    from phase5_safety import BoundaryError, atomic_write
     from assignment import (AssignmentError, canonical_bytes, load_assignment,
                              validate_execution_evidence)
-except ImportError as exc:
-    if "first-party module 'phase5_safety' not found" not in str(exc):
-        raise
+except Exception as exc:
+    module_name = getattr(exc, "name", None) or "phase5_safety/assignment"
     if __name__ == "__main__":
-        print(f"project-reconcile: first-party import failed: {exc}", file=sys.stderr)
+        print(f"project-reconcile: first-party module '{module_name}' is unavailable or malformed",
+              file=sys.stderr)
         raise SystemExit(95)
     raise
 
@@ -124,20 +125,12 @@ def fsync_dir(path: Path) -> None:
 
 
 def atomic_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
-            out.write(text)
-            out.flush()
-            os.fsync(out.fileno())
-        os.replace(name, path)
-        fsync_dir(path.parent)
-    finally:
-        try:
-            os.unlink(name)
-        except FileNotFoundError:
-            pass
+        atomic_write(path, text.encode("utf-8", "surrogateescape"), replace=True,
+                     mode=0o600, label="reconciliation state")
+    except (BoundaryError, OSError, ValueError, TypeError, OverflowError,
+            RecursionError, UnicodeDecodeError) as exc:
+        raise ReconcileError(f"reconciliation state publication failed: {path}", 74) from exc
 
 
 def atomic_json(path: Path, value: dict) -> None:
@@ -155,7 +148,8 @@ def read_json(path: Path, *, unavailable_code: int | None = None) -> dict:
         raise ReconcileError(f"cannot read {path}: {exc}", 74) from exc
     try:
         value = json.loads(raw)
-    except json.JSONDecodeError as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError,
+            OverflowError, RecursionError) as exc:
         raise ReconcileError(f"cannot read {path}: {exc}") from exc
     if not isinstance(value, dict):
         raise ReconcileError(f"state record is not an object: {path}")
@@ -1006,10 +1000,17 @@ def parse_budget(goal: dict[str, str]) -> dict:
 
 
 def safe_int(value: object, default: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    # Markdown projections carry canonical decimal text.  Accept that transport
+    # representation only; floats, booleans, signs, and whitespace must not be
+    # silently coerced into schema integers.
+    if isinstance(value, str) and re.fullmatch(r"(?:0|[1-9][0-9]*)", value):
+        try:
+            return int(value)
+        except (ValueError, OverflowError):
+            return default
+    return default
 
 
 def process_alive(pid: object) -> bool:
@@ -2720,6 +2721,11 @@ def main() -> int:
     except (OSError, subprocess.TimeoutExpired) as exc:
         print(f"project-reconcile: {exc}", file=sys.stderr)
         return 74
+    except (AssignmentError, SeedContractError, AuthorityError, TransitionReceiptError,
+            ValueError, TypeError, KeyError, IndexError, AttributeError,
+            UnicodeError, OverflowError, RecursionError) as exc:
+        print(f"project-reconcile: invalid input or state: {exc}", file=sys.stderr)
+        return 4
     return 0
 
 

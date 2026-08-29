@@ -84,6 +84,7 @@ def main() -> int:
         (controller / "scripts/validate-gate.py").write_bytes(
             (ROOT / "scripts/validate-gate.py").read_bytes())
         shutil.copy2(ROOT / "scripts" / "phase5_safety.py", controller / "scripts" / "phase5_safety.py")
+        shutil.copy2(ROOT / "scripts" / "resolve-engine.py", controller / "scripts" / "resolve-engine.py")
         missing_module = tmp / "missing-phase5-module"; (missing_module / "scripts").mkdir(parents=True)
         shutil.copy2(ROOT / "scripts" / "validate-gate.py", missing_module / "scripts" / "validate-gate.py")
         missing_result = subprocess.run(
@@ -107,6 +108,9 @@ def main() -> int:
         subprocess.run(["git", "-C", str(controller), "add", "."], check=True)
         subprocess.run(["git", "-C", str(controller), "-c", "user.name=t", "-c", "user.email=t@t",
                         "commit", "-qm", "controller"], check=True)
+        (controller / "state").mkdir()
+        key = controller / "state/.worker-evidence.key"
+        key.write_bytes(os.urandom(32)); key.chmod(0o600)
         os.environ["RECURSION_ROOT"] = str(controller)
         executable = source / "cursor-agent"; executable.write_text("#!/bin/sh\n", encoding="utf-8")
         executable.chmod(0o755)

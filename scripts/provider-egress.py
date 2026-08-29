@@ -16,13 +16,35 @@ HOST_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\Z")
 ENV_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}\Z")
 ROOT = Path(__file__).resolve().parent
 
+_SCRIPT_DIR = ROOT
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+class FirstPartyImportError(ImportError):
+    """The controller safety module is absent or malformed."""
+
+
+try:
+    from phase5_safety import BoundaryError, pinned_directory, read_bytes
+except Exception as exc:
+    module_name = getattr(exc, "name", None) or "phase5_safety"
+    import_error = FirstPartyImportError(
+        f"first-party module '{module_name}' is unavailable or malformed; searched {_SCRIPT_DIR}"
+    )
+    if __name__ == "__main__":
+        print(f"provider-egress: first-party import failed: {import_error}", file=sys.stderr)
+        raise SystemExit(95)
+    raise import_error from None
+
 
 def canonical_controller_root(value: str) -> Path:
     try:
-        requested = Path(value).resolve(strict=True)
-        configured = (Path(os.environ.get("RECURSION_ROOT", "")).resolve(strict=True)
-                      if os.environ.get("RECURSION_ROOT", "").strip() else ROOT.parent)
-    except OSError as exc:
+        with pinned_directory(value) as (_, requested_value):
+            requested = Path(requested_value)
+        configured_value = os.environ.get("RECURSION_ROOT", "").strip()
+        with pinned_directory(configured_value or ROOT.parent) as (_, configured_path):
+            configured = Path(configured_path)
+    except (BoundaryError, OSError, ValueError, TypeError) as exc:
         raise ValueError("controller root is unavailable") from exc
     if requested != configured:
         raise ValueError("controller root is not the canonical controller root")
@@ -33,14 +55,15 @@ def authenticated_profile_bytes(root: Path, commit: str) -> bytes:
     relative = "scripts/provider-egress-profiles.json"
     path = root / relative
     try:
-        path.resolve(strict=True).relative_to(root.resolve(strict=True))
-        regular = path.is_file() and not path.is_symlink()
-    except OSError as exc:
-        raise ValueError("provider profile registry is unavailable") from exc
-    except ValueError as exc:
-        raise ValueError("provider profile registry resolves outside the canonical root") from exc
-    if not regular:
-        raise ValueError("provider profile registry is not a regular file")
+        # read_bytes performs the reparse-attribute check, pins the parent, opens
+        # the leaf relative to that pinned handle, and verifies the opened handle
+        # before returning.  Check and use are therefore one operation; no
+        # resolve()/is_symlink() pathname decision can race the read.
+        live = read_bytes(path, label="provider profile registry", private=True)
+        if live is None:
+            raise BoundaryError("provider profile registry is unavailable")
+    except (BoundaryError, OSError, ValueError, TypeError) as exc:
+        raise ValueError("provider profile registry is not a regular non-reparse file") from exc
     head = subprocess.run(["git", "-C", str(root), "rev-parse", "--verify", "HEAD"],
                           capture_output=True, text=True, check=False)
     tree = subprocess.run(["git", "-C", str(root), "ls-tree", "-z", commit, "--", relative],
@@ -49,10 +72,6 @@ def authenticated_profile_bytes(root: Path, commit: str) -> bytes:
                                 capture_output=True, check=False)
     rows = [row for row in tree.stdout.split(b"\0") if row]
     mode = rows[0].split(b" ", 1)[0] if len(rows) == 1 else b""
-    try:
-        live = path.read_bytes()
-    except OSError as exc:
-        raise ValueError("provider profile registry is unreadable") from exc
     if head.returncode or head.stdout.strip() != commit or tree.returncode or committed.returncode or len(rows) != 1 \
             or mode not in {b"100644", b"100755"} or live != committed.stdout:
         raise ValueError("provider profile registry differs from controller commit")
@@ -108,4 +127,8 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
+    try:
+        raise SystemExit(main(sys.argv[1:]))
+    except FirstPartyImportError as exc:
+        print(f"provider-egress: first-party import failed: {exc}", file=sys.stderr)
+        raise SystemExit(95)

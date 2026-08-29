@@ -1213,6 +1213,8 @@ PY
   local worker_pgid rc now_epoch deadline_epoch heartbeat_epoch log_path
   local -a evidence_meta=()
   if [ "$STRICT_PHASE5" = 1 ]; then
+    python3 "$ROOT/scripts/worker-evidence.py" provision-key --controller-root "$ROOT" \
+      >>"$LOG" 2>&1 || { log "controller could not provision the fixed evidence key"; return 98; }
     evidence_meta=(--engine "$active_engine" --provider "$provider" --capacity-pool "$CAPACITY_POOL"
       --model "$resolved_model" --host "${RECURSION_HOST_ID:-gs-recursion}"
       --sandbox-profile strict-linux --assignment-digest "$ASSIGNMENT_DIGEST"
@@ -1397,7 +1399,38 @@ phase5_record_run(){ # status outcome rc [commit]
   args+=(--execution-evidence "$execution_evidence")
   [ -z "$commit_oid" ] || args+=(--commit-oid "$commit_oid")
   [ ! -f "$SEED_EVIDENCE_FILE" ] || args+=(--seed-evidence "$SEED_EVIDENCE_FILE" --seed-verified-after)
+  args+=(--keep-open)
   python3 "$ROOT/scripts/worker-evidence.py" "${args[@]}" >>"$LOG" 2>&1
+}
+
+phase5_seal_run(){ # status outcome rc
+  [ "$STRICT_PHASE5" = 1 ] || return 0
+  local requested_status="$1" outcome="$2" requested_rc="$3"
+  local seal_status="$requested_status" seal_rc="$requested_rc" execution_evidence
+  execution_evidence="$ROOT/state/runs/$LAST_RUN_ID-execution.json"
+  # The worker execution receipt is authoritative for the run's terminal status/code.
+  # A later gate/result decision may reject the candidate without changing the worker's
+  # already-recorded process outcome (for example, a successful worker followed by a red gate).
+  if [ -f "$execution_evidence" ]; then
+    read -r seal_status seal_rc < <(python3 - "$execution_evidence" <<'PY'
+import json, sys
+try:
+    value = json.load(open(sys.argv[1], encoding="utf-8"))
+    status = value.get("status")
+    code = value.get("exit_code")
+    if status == "finished" and isinstance(code, int) and not isinstance(code, bool):
+        print(("succeeded" if code == 0 else "failed"), code)
+    elif status == "cancelled" and code == 143:
+        print("cancelled 143")
+    else:
+        raise SystemExit(1)
+except Exception:
+    raise SystemExit(1)
+PY
+    ) || { seal_status="$requested_status"; seal_rc="$requested_rc"; }
+  fi
+  python3 "$ROOT/scripts/worker-evidence.py" seal "$LAST_RUN_EVIDENCE" "$seal_status" "$outcome" "$seal_rc" \
+    >>"$LOG" 2>&1
 }
 
 phase5_validate_result(){
@@ -1435,6 +1468,8 @@ Phase-5 evidence contract: $EVIDENCE_CONTRACT" 2>>"$LOG" || return 1
 
 phase5_reject(){ # short board note, evidence-backed reason
   local note="$1" reason="$2" escalation_key
+  [ "$STRICT_PHASE5" != 1 ] || [ -z "${LAST_RUN_EVIDENCE:-}" ] \
+    || phase5_seal_run failed phase5-rejected 98 || true
   board finish "$ID" blocked - "$note"
   escalation_key="phase5-reject:$ID:${CANDIDATE_OID:-${IMPLEMENTER_RUN_ID:-none}}:$note"
   complete_terminal_escalation escalated "$reason" "$escalation_key" || exit $?
@@ -1566,7 +1601,7 @@ Explicit non-goals: ${NON_GOALS:-none}."
   head="$(git -C "$verify_wt" rev-parse HEAD 2>/dev/null || true)"
   dirty="$(git -C "$verify_wt" status --porcelain --untracked-files=all 2>/dev/null || true)"
   if [ "$head" != "$CANDIDATE_OID" ] || [ -n "$dirty" ] || ! verify_seed_integrity "$verify_wt"; then
-    python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed verifier-mutated-source 99 \
+    python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" succeeded verifier-mutated-source 0 \
       --execution-evidence "$ROOT/state/runs/$VERIFIER_RUN_ID-execution.json" \
       --commit-oid "$CANDIDATE_OID" \
       ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} >>"$LOG" 2>&1 || true
@@ -1576,7 +1611,7 @@ Explicit non-goals: ${NON_GOALS:-none}."
   fi
   if ! python3 "$ROOT/scripts/validate-verifier-result.py" "$verdict" --commit "$CANDIDATE_OID" \
       --implementer-run "$impl_run" >"$evidence_dir/validated-verdict.json" 2>>"$LOG"; then
-    python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed invalid-verdict 99 \
+    python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" succeeded invalid-verdict 0 \
       --execution-evidence "$ROOT/state/runs/$VERIFIER_RUN_ID-execution.json" \
       --commit-oid "$CANDIDATE_OID" >>"$LOG" 2>&1 || true
     git -C "$REPO_DIR" worktree remove "$verify_wt" >/dev/null 2>&1 || true
@@ -1586,16 +1621,21 @@ Explicit non-goals: ${NON_GOALS:-none}."
   mv -f "$evidence_dir/validated-verdict.json" "$verdict"
   local -a finish_args=(finish "$LAST_RUN_EVIDENCE" succeeded verified 0
     --result-file "$verdict" --commit-oid "$CANDIDATE_OID"
-    --execution-evidence "$ROOT/state/runs/$VERIFIER_RUN_ID-execution.json")
+    --execution-evidence "$ROOT/state/runs/$VERIFIER_RUN_ID-execution.json" --keep-open)
   [ ! -f "$SEED_EVIDENCE_FILE" ] \
     || finish_args+=(--seed-evidence "$SEED_EVIDENCE_FILE" --seed-verified-after)
   [ -z "$LAST_USAGE_FILE" ] || [ ! -f "$LAST_USAGE_FILE" ] \
     || finish_args+=(--usage-file "$LAST_USAGE_FILE")
-  python3 "$ROOT/scripts/worker-evidence.py" "${finish_args[@]}" >>"$LOG" 2>&1 || return 98
   python3 "$ROOT/scripts/worker-evidence.py" verify "$LAST_RUN_EVIDENCE" "$CANDIDATE_OID" \
     "$impl_run" "$verdict" >>"$LOG" 2>&1 || return 98
   python3 "$ROOT/scripts/worker-evidence.py" link-verifier "$impl_evidence" "$VERIFIER_RUN_ID" \
     "$CANDIDATE_OID" "$verdict" >>"$LOG" 2>&1 || return 98
+  python3 "$ROOT/scripts/worker-evidence.py" "${finish_args[@]}" >>"$LOG" 2>&1 || return 98
+  python3 "$ROOT/scripts/worker-evidence.py" seal "$LAST_RUN_EVIDENCE" succeeded verified 0 \
+    >>"$LOG" 2>&1 || return 98
+  LAST_RUN_EVIDENCE="$impl_evidence"
+  python3 "$ROOT/scripts/worker-evidence.py" seal "$LAST_RUN_EVIDENCE" succeeded candidate-committed 0 \
+    >>"$LOG" 2>&1 || return 98
   local verdict_value; verdict_value="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["verdict"])' "$verdict")"
   git -C "$REPO_DIR" worktree remove "$verify_wt" >/dev/null 2>&1 || true
   LAST_RUN_EVIDENCE="$impl_evidence"; LAST_RUN_ID="$impl_run"; IMPLEMENTER_RUN_ID="$impl_run"
@@ -1758,6 +1798,7 @@ fi
 # A deliberate, reasoned block is a GOOD outcome (CLAUDE.md: escalate, don't guess). Record it
 # as blocked with the arm's own question rather than running a gate that is certain to fail.
 if read_result "$WT" && [ "$RESULT_STATUS" = "blocked" ]; then
+  phase5_seal_run succeeded worker-blocked 0 || exit $?
   pause_checkpoint "blocked-result transition" || exit 75
   board finish "$ID" blocked - "arm blocked on ambiguity"
   # Record the ask as an ANSWERABLE item, not just a notification. assist.sh open returns 3 when
@@ -1802,6 +1843,7 @@ else
   [ "$rc" -ne 75 ] || { log "acceptance gate deferred before execution; no gate evidence or later step ran"; exit 75; }
   [ "$rc" -ne 76 ] || { log "heavy-gate release failed; refusing retry or later actuation"; exit 76; }
   phase5_require_gate_record "$rc" || exit $?
+  phase5_seal_run failed gate-failed "$rc" || exit $?
   log "acceptance FAILED (exit $rc), attempt 1"
   # A deliberate NO-OP (rc=2 no-progress with NO implementation change) will not benefit from a
   # retry — the arm chose not to ship (0x68, overlay-0x6c both did this). "No change" is proven
@@ -1860,6 +1902,7 @@ else
         [ "$rc" -ne 75 ] || { log "retry acceptance gate deferred before execution; no gate evidence or later step ran"; exit 75; }
         [ "$rc" -ne 76 ] || { log "heavy-gate release failed after retry; refusing later actuation"; exit 76; }
         phase5_require_gate_record "$rc" || exit $?
+        phase5_seal_run failed gate-failed "$rc" || exit $?
       fi
     else
       rc="$retry_arc"

@@ -27,11 +27,11 @@ from transition_receipt import (
 )
 try:
     from engine_contract import alias_role_ok, default_registry_path, pilot_engine_ok
-except ImportError as exc:
-    if "first-party module 'phase5_safety' not found" not in str(exc):
-        raise
+except Exception as exc:
+    module_name = getattr(exc, "name", None) or "engine_contract"
     if __name__ == "__main__":
-        print(f"project-pilot: first-party import failed: {exc}", file=sys.stderr)
+        print(f"project-pilot: first-party module '{module_name}' is unavailable or malformed",
+              file=sys.stderr)
         raise SystemExit(95)
     raise
 from pilot_instruction import require_affirmative_command
@@ -83,11 +83,13 @@ def read_json(path: Path, unavailable_code: int = 4,
         if path.stat().st_size > 262144:
             fail(f"state record exceeds the 256 KiB read bound: {path}", invalid_code)
         raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
         fail(f"cannot read validated state {path}: {exc}", unavailable_code)
     try:
         value = json.loads(raw)
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
         fail(f"cannot read validated state {path}: {exc}", invalid_code)
     if not isinstance(value, dict):
         fail(f"state record is not an object: {path}", invalid_code)
@@ -114,7 +116,8 @@ def fields(path: Path, unavailable_code: int | None = None) -> dict[str, str]:
             if ":" in line and not line.startswith((" ", "\t")):
                 key, value = line.split(":", 1)
                 result.setdefault(key.strip(), value.strip())
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
         if unavailable_code is not None:
             fail(f"cannot read status state {path}: {exc}", unavailable_code)
     return result
@@ -1196,12 +1199,19 @@ def validate_seed_binding(cfg: dict, value: dict) -> dict | None:
 
 def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: object,
                   bind_gate_contract: bool = False, check_remote: bool = False) -> dict:
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
+    if not isinstance(value, dict) or not isinstance(value.get("schema_version"), int) \
+            or isinstance(value.get("schema_version"), bool) or value.get("schema_version") != 1:
         fail("pilot plan must be a schema_version 1 object")
-    if len(json.dumps(value, sort_keys=True, separators=(",", ":"))) > 65536:
-        fail("pilot plan exceeds the 64 KiB bound")
-    # Return a canonical value without mutating the model decision or stored record in memory.
-    value = json.loads(json.dumps(value))
+    try:
+        encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        if len(encoded) > 65536:
+            fail("pilot plan exceeds the 64 KiB bound")
+        # Return a canonical value without mutating the model decision or stored record in memory.
+        value = json.loads(encoded)
+    except SystemExit:
+        raise
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        fail(f"pilot plan contains malformed JSON values: {type(exc).__name__}")
     if value.get("id") != plan_id or value.get("project_id") != project or not IDENT.fullmatch(plan_id):
         fail("pilot plan identity does not match its decision")
     validate_authority_binding(cfg, value, check_remote=check_remote)
@@ -1259,6 +1269,11 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
     if isinstance(cost, bool) or not isinstance(cost, (int, float)) or cost < 0 \
             or not isinstance(budget.get("publication_required"), bool):
         fail("pilot plan has an invalid cost or publication budget")
+    if "max_retries" in budget and (
+            isinstance(budget["max_retries"], bool)
+            or not isinstance(budget["max_retries"], int)
+            or budget["max_retries"] < 0):
+        fail("pilot plan has an invalid integer budget")
     task_ids: list[str] = []
     for task in tasks:
         if not isinstance(task, dict): fail("pilot plan task is not an object")
@@ -1600,7 +1615,9 @@ def active_source_pin(base: Path, project: str) -> dict | None:
         value = read_json(path, unavailable_code=74, malformed_code=4)
         if value.get("project_id") != project or value.get("status") not in {"armed", "open"}:
             continue
-        if value.get("schema_version") != 1 \
+        if not isinstance(value.get("schema_version"), int) \
+                or isinstance(value.get("schema_version"), bool) \
+                or value.get("schema_version") != 1 \
                 or not IDENT.fullmatch(str(value.get("id") or "")) \
                 or path.stem != value.get("id") \
                 or not IDENT.fullmatch(str(value.get("goal_id") or "")) \
@@ -2127,4 +2144,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError,
+            AttributeError, OverflowError, RecursionError) as exc:
+        print(f"project-pilot: invalid input or state: {exc}", file=sys.stderr)
+        raise SystemExit(4)

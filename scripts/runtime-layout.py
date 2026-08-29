@@ -23,17 +23,16 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 class FirstPartyImportError(ImportError):
-    """A required controller module is absent from the importing script's tree."""
+    """A required controller module is absent or malformed in the importing tree."""
 
 
 try:
     from phase5_safety import (BoundaryError, atomic_write, chmod_directory,
                                ensure_directory, pinned_directory, read_bytes, verify_leaf)
-except ModuleNotFoundError as exc:
-    if exc.name != "phase5_safety":
-        raise
+except Exception as exc:
+    module_name = getattr(exc, "name", None) or "phase5_safety"
     import_error = FirstPartyImportError(
-        f"first-party module 'phase5_safety' not found; searched {_SCRIPT_DIR}"
+        f"first-party module '{module_name}' is unavailable or malformed; searched {_SCRIPT_DIR}"
     )
     if __name__ == "__main__":
         print(f"runtime-layout: first-party import failed: {import_error}", file=sys.stderr)

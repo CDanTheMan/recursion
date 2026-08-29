@@ -11,8 +11,8 @@ import ctypes
 import json
 import math
 import os
+import secrets
 import stat
-import tempfile
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -147,7 +147,7 @@ def _verify_regular(fd: int, label: str, before: os.stat_result | None = None) -
     return info
 
 
-def _win_handle(path: str, directory: bool) -> int:
+def _win_handle(path: str, directory: bool, *, add_file: bool = False) -> int:
     # Open with OPEN_REPARSE_POINT so the final component is inspected, not
     # traversed.  Omitting FILE_SHARE_DELETE pins the directory and its ancestors
     # against rename/delete while the caller uses the child handle.
@@ -157,6 +157,8 @@ def _win_handle(path: str, directory: bool) -> int:
                        ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p]
     create.restype = ctypes.c_void_p
     access = 0x80000000 if not directory else 0x00000080  # GENERIC_READ / FILE_READ_ATTRIBUTES
+    if directory and add_file:
+        access = 0x80000000 | 0x00000002  # GENERIC_READ | FILE_ADD_FILE
     share = 0x00000001 | 0x00000002  # FILE_SHARE_READ | FILE_SHARE_WRITE; deny delete
     flags = 0x02000000 | 0x00200000 if directory else 0x00200000  # BACKUP_SEMANTICS / OPEN_REPARSE_POINT
     handle = create(path, access, share, None, 3, flags, None)  # OPEN_EXISTING
@@ -171,9 +173,44 @@ def _win_handle(path: str, directory: bool) -> int:
         raise
 
 
-def _open_directory(path: str) -> int:
+def _win_create_temp(parent: str, basename: str) -> tuple[int, str]:
+    """Create a same-directory temporary file with DELETE access already granted."""
+    try:
+        import msvcrt
+        import ctypes.wintypes as wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create = kernel32.CreateFileW
+        create.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32,
+                           ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32,
+                           ctypes.c_void_p]
+        create.restype = ctypes.c_void_p
+        access = 0x80000000 | 0x40000000 | 0x00010000  # GENERIC_READ/WRITE | DELETE
+        share = 0x00000001 | 0x00000002 | 0x00000004
+        flags = 0x00000080 | 0x00200000  # FILE_ATTRIBUTE_NORMAL | OPEN_REPARSE_POINT
+        for attempt in range(32):
+            name = f".{basename}.{os.getpid()}.{secrets.token_hex(8)}-{attempt}"
+            path = os.path.join(parent, name)
+            handle = create(path, access, share, None, 1, flags, None)  # CREATE_NEW
+            if handle in (None, ctypes.c_void_p(-1).value):
+                error = ctypes.get_last_error()
+                if error == 80:  # ERROR_FILE_EXISTS
+                    continue
+                raise OSError(error, "cannot create atomic publication temporary")
+            try:
+                return msvcrt.open_osfhandle(handle, os.O_RDWR | getattr(os, "O_BINARY", 0)), path
+            except BaseException:
+                kernel32.CloseHandle(handle)
+                raise
+        raise BoundaryError("could not allocate temporary output")
+    except BoundaryError:
+        raise
+    except (ImportError, OSError, ValueError, TypeError, OverflowError) as exc:
+        raise BoundaryError("could not allocate temporary output") from exc
+
+
+def _open_directory(path: str, *, add_file: bool = False) -> int:
     if os.name == "nt":
-        return _win_handle(path, True)
+        return _win_handle(path, True, add_file=add_file)
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     return os.open(path, flags)
 
@@ -190,6 +227,89 @@ def _open_file_at(path: str, parent_fd: int) -> int:
         return _open_file(path)
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
     return os.open(os.path.basename(path), flags, dir_fd=parent_fd)
+
+
+def _win_fd_handle(fd: int):
+    try:
+        import msvcrt
+        import ctypes.wintypes as wintypes
+        value = msvcrt.get_osfhandle(fd)
+    except (ImportError, OSError, ValueError, TypeError) as exc:
+        raise BoundaryError("Windows file handle is unavailable") from exc
+    if value in (-1, None):
+        raise BoundaryError("Windows file handle is invalid")
+    return wintypes.HANDLE(value)
+
+
+def _win_final_path(fd: int) -> str:
+    try:
+        import ctypes.wintypes as wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        getter = kernel32.GetFinalPathNameByHandleW
+        getter.argtypes = [wintypes.HANDLE, ctypes.c_wchar_p, wintypes.DWORD, wintypes.DWORD]
+        getter.restype = wintypes.DWORD
+        size = 512
+        while size <= 32768:
+            buffer = ctypes.create_unicode_buffer(size)
+            length = getter(_win_fd_handle(fd), buffer, size, 0)
+            if length == 0:
+                raise OSError(ctypes.get_last_error(), "GetFinalPathNameByHandleW failed")
+            if length < size:
+                value = buffer.value
+                if value.startswith("\\\\?\\"):
+                    value = value[4:]
+                return value
+            size *= 2
+        raise BoundaryError("pinned directory path is too long")
+    except BoundaryError:
+        raise
+    except (ImportError, OSError, ValueError, TypeError, OverflowError) as exc:
+        raise BoundaryError("pinned directory path is unavailable") from exc
+
+
+def _win_rename_by_handle(source_fd: int, parent_fd: int, name: str,
+                          *, replace: bool) -> None:
+    """Rename an open file beneath an already pinned Windows parent handle.
+
+    SetFileInformationByHandle consumes the source handle.  The destination is
+    derived from the already pinned parent handle; the parent handle denies
+    rename/delete while it is held, and the destination identity is rechecked
+    immediately before this call.  This keeps the commit independent of the
+    caller's mutable pathname namespace.
+    """
+    try:
+        import ctypes.wintypes as wintypes
+        class FileRenameInfo(ctypes.Structure):
+            _fields_ = [
+                ("ReplaceIfExists", wintypes.BOOLEAN),
+                ("RootDirectory", wintypes.HANDLE),
+                ("FileNameLength", wintypes.DWORD),
+                ("FileName", wintypes.WCHAR * 1),
+            ]
+        destination = os.path.join(_win_final_path(parent_fd), name)
+        encoded = destination.encode("utf-16-le")
+        size = FileRenameInfo.FileName.offset + len(encoded) + 2
+        buffer = ctypes.create_string_buffer(size)
+        info = FileRenameInfo.from_buffer(buffer)
+        info.ReplaceIfExists = bool(replace)
+        # Windows accepts a fully qualified name for FileRenameInfo.  The name
+        # is obtained from the pinned parent handle, never from the caller's
+        # destination pathname, so a swapped parent pathname cannot redirect it.
+        info.RootDirectory = None
+        info.FileNameLength = len(encoded) + 2
+        ctypes.memmove(ctypes.addressof(info) + FileRenameInfo.FileName.offset,
+                       encoded, len(encoded))
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        setter = kernel32.SetFileInformationByHandle
+        setter.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
+        setter.restype = wintypes.BOOL
+        if not setter(_win_fd_handle(source_fd), 3, ctypes.byref(info), len(buffer)):
+            error = ctypes.get_last_error()
+            raise OSError(error, "SetFileInformationByHandle(FileRenameInfo) failed")
+    except BoundaryError:
+        raise
+    except (ImportError, OSError, ValueError, TypeError, OverflowError) as exc:
+        raise BoundaryError("atomic publication could not commit by pinned handle") from exc
 
 
 def _absolute_lexical(path: Path | str) -> str:
@@ -219,7 +339,7 @@ def absolute_lexical(path: Path | str) -> str:
 
 
 @contextmanager
-def pinned_directory(path: Path | str) -> Iterator[tuple[int, str]]:
+def pinned_directory(path: Path | str, *, for_publication: bool = False) -> Iterator[tuple[int, str]]:
     """Pin every directory component without following a reparse/symlink."""
     absolute = _absolute_lexical(path)
     if os.name == "nt":
@@ -242,7 +362,7 @@ def pinned_directory(path: Path | str) -> Iterator[tuple[int, str]]:
                 raise BoundaryError("path root is a reparse point")
             for component in components:
                 current = os.path.join(current, component)
-                child = (_open_directory(current) if os.name == "nt"
+                child = (_open_directory(current, add_file=for_publication and component == components[-1]) if os.name == "nt"
                          else os.open(component, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
                                      | getattr(os, "O_NOFOLLOW", 0), dir_fd=descriptor))
                 stack.callback(os.close, child)
@@ -264,7 +384,7 @@ def _pinned_parent(path: Path | str) -> Iterator[tuple[int, str]]:
     name = os.path.basename(absolute)
     if not name or name in {".", ".."}:
         raise BoundaryError("path must name a file")
-    with pinned_directory(parent) as (descriptor, _):
+    with pinned_directory(parent, for_publication=True) as (descriptor, _):
         yield descriptor, absolute
 
 
@@ -338,7 +458,7 @@ def read_text(path: Path | str, *, label: str = "file", max_bytes: int = MAX_FIL
 def verify_leaf(path: Path | str, *, allow_directory: bool = True) -> os.stat_result | None:
     """Verify one existing leaf without following a link/reparse substitution.
 
-    The result is false only when the leaf is absent.  A directory is pinned with
+    The result is None only when the leaf is absent.  A directory is pinned with
     the same no-follow rules as its ancestors; a regular file is opened relative to
     its pinned parent and its pre-open identity is checked against the file handle.
     """
@@ -348,7 +468,7 @@ def verify_leaf(path: Path | str, *, allow_directory: bool = True) -> os.stat_re
             try:
                 before = os.lstat(absolute)
             except FileNotFoundError:
-                return False
+                return None
             if _reparse(before):
                 raise BoundaryError(f"path is a reparse point: {path}")
             if stat.S_ISDIR(before.st_mode):
@@ -366,7 +486,7 @@ def verify_leaf(path: Path | str, *, allow_directory: bool = True) -> os.stat_re
                 os.close(fd)
             return after
     except FileNotFoundError:
-        return False
+        return None
     except BoundaryError:
         raise
     except (OSError, ValueError, TypeError, OverflowError, RecursionError) as exc:
@@ -463,6 +583,8 @@ def atomic_write(path: Path | str, data: bytes, *, replace: bool = True,
                 existing_before = os.lstat(absolute)
             except FileNotFoundError:
                 existing_before = None
+            if existing_before is not None and _reparse(existing_before):
+                raise BoundaryError(f"{label} is a reparse point")
             try:
                 existing = _open_file_at(absolute, parent_fd)
             except FileNotFoundError:
@@ -477,10 +599,11 @@ def atomic_write(path: Path | str, data: bytes, *, replace: bool = True,
                 if not replace:
                     raise BoundaryError(f"{label} already exists")
             temporary = ""
+            fd = -1
+            committed = False
             if os.name == "nt":
-                fd, temporary = tempfile.mkstemp(
-                    prefix=f".{os.path.basename(absolute)}.",
-                    dir=os.path.dirname(absolute) or os.curdir)
+                fd, temporary = _win_create_temp(
+                    _win_final_path(parent_fd), os.path.basename(absolute))
             else:
                 flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
                 for attempt in range(32):
@@ -493,23 +616,53 @@ def atomic_write(path: Path | str, data: bytes, *, replace: bool = True,
                 else:
                     raise BoundaryError(f"could not allocate temporary {label}")
             try:
-                with os.fdopen(fd, "wb") as handle:
-                    handle.write(bytes(data))
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                    _verify_regular(handle.fileno(), str(path))
-                    if os.name != "nt":
-                        os.fchmod(handle.fileno(), mode)
+                view = memoryview(bytes(data))
+                while view:
+                    written = os.write(fd, view)
+                    if not written:
+                        raise OSError("atomic publication made no write progress")
+                    view = view[written:]
+                os.fsync(fd)
+                _verify_regular(fd, str(path))
+                if os.name != "nt":
+                    os.fchmod(fd, mode)
                 if os.name == "nt":
-                    os.chmod(temporary, mode)
-                    if replace:
-                        os.replace(temporary, absolute)
-                    else:
-                        os.rename(temporary, absolute)
+                    _verify_regular(fd, str(path))
+                    try:
+                        commit_before = os.lstat(absolute)
+                    except FileNotFoundError:
+                        commit_before = None
+                    if (existing_before is None) != (commit_before is None):
+                        raise BoundaryError(f"{label} changed before publication")
+                    if commit_before is not None:
+                        commit_fd = _open_file_at(absolute, parent_fd)
+                        try:
+                            _verify_regular(commit_fd, str(path), commit_before)
+                        finally:
+                            os.close(commit_fd)
+                    _win_rename_by_handle(fd, parent_fd, os.path.basename(absolute),
+                                          replace=replace)
+                    committed = True
                 else:
+                    # Re-open and verify the destination immediately before the
+                    # directory-handle-relative commit.  A missing target uses
+                    # link+noreplace below, so a concurrent creator can only make
+                    # the commit fail; an existing target must retain its identity.
+                    try:
+                        commit_before = os.lstat(absolute)
+                    except FileNotFoundError:
+                        commit_before = None
+                    if (existing_before is None) != (commit_before is None):
+                        raise BoundaryError(f"{label} changed before publication")
+                    if commit_before is not None:
+                        commit_fd = _open_file_at(absolute, parent_fd)
+                        try:
+                            _verify_regular(commit_fd, str(path), commit_before)
+                        finally:
+                            os.close(commit_fd)
                     if replace:
-                        os.replace(temporary, os.path.basename(absolute),
-                                   src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+                        os.rename(temporary, os.path.basename(absolute),
+                                  src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
                     else:
                         # link()+unlink() is the POSIX equivalent of rename-noreplace:
                         # the destination is never overwritten after the initial check.
@@ -517,18 +670,20 @@ def atomic_write(path: Path | str, data: bytes, *, replace: bool = True,
                                 src_dir_fd=parent_fd, dst_dir_fd=parent_fd,
                                 follow_symlinks=False)
                         os.unlink(temporary, dir_fd=parent_fd)
-                published = _open_file_at(absolute, parent_fd)
-                try:
-                    _verify_regular(published, str(path))
-                finally:
-                    os.close(published)
+                    committed = True
+                _verify_regular(fd, str(path))
                 if os.name != "nt":
                     os.fsync(parent_fd)
             finally:
+                if fd >= 0:
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
                 try:
-                    if os.name == "nt":
+                    if temporary and not committed and os.name == "nt":
                         os.unlink(temporary)
-                    else:
+                    elif temporary and not committed:
                         os.unlink(temporary, dir_fd=parent_fd)
                 except FileNotFoundError:
                     pass

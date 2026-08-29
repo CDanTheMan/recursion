@@ -39,6 +39,7 @@ def load_module(name: str, path: Path):
 
 resolver = load_module("phase5_sweep_resolver", ROOT / "scripts" / "resolve-engine.py")
 runtime_layout = load_module("phase5_sweep_runtime", ROOT / "scripts" / "runtime-layout.py")
+provider_egress = load_module("phase5_sweep_provider", ROOT / "scripts" / "provider-egress.py")
 validate_gate = load_module("phase5_sweep_gate", ROOT / "scripts" / "validate-gate.py")
 control_state = load_module("phase5_sweep_control", ROOT / "scripts" / "validate-control-state.py")
 registered = load_module("phase5_sweep_registered", ROOT / "scripts" / "registered-machine-capabilities.py")
@@ -68,13 +69,13 @@ def run_command(command: list[str | Path], *, env: dict[str, str] | None = None,
     return result
 
 
-def expect_typed(call, label: str) -> None:
+def expect_typed(call, label: str, marker: str) -> None:
     try:
         call()
     except (assignment.AssignmentError, phase5_safety.BoundaryError,
             resolver.ManifestError, runtime_layout.LayoutError, ValueError,
-            LookupError, SystemExit):
-        print(f"ok - typed refusal: {label}")
+            LookupError, SystemExit) as exc:
+        check(marker in str(exc), f"typed refusal identifies {label}")
     else:
         raise AssertionError(f"hostile input was accepted: {label}")
 
@@ -95,6 +96,28 @@ HOSTILE_JSON = [
     ("non-object-root", b"[[]]"),
     ("invalid-utf8", b"\xff\xfe\xfa"),
 ]
+
+CONTROL_MARKERS = {
+    "true": b"record must be a JSON object", "false": b"record must be a JSON object",
+    "one-point-zero": b"record must be a JSON object", "negative-one": b"record must be a JSON object",
+    "empty-string": b"record must be a JSON object", "array": b"record must be a JSON object",
+    "null": b"record must be a JSON object", "non-object-root": b"record must be a JSON object",
+    "object": b"missing required field(s)", "huge-int": b"control-state record is malformed",
+    "infinite-exp": b"contains a non-finite number", "nan": b"control-state record is malformed",
+    "deep-json": b"exceeds the maximum JSON nesting depth", "invalid-utf8": b"control-state record is malformed",
+}
+ENGINE_MARKERS = {
+    "true": b"manifest must be a JSON object", "false": b"manifest must be a JSON object",
+    "one-point-zero": b"manifest must be a JSON object", "negative-one": b"manifest must be a JSON object",
+    "empty-string": b"manifest must be a JSON object", "array": b"manifest must be a JSON object",
+    "null": b"manifest must be a JSON object", "non-object-root": b"manifest must be a JSON object",
+    "object": b"manifest missing required key(s)", "huge-int": b"is not valid JSON",
+    "infinite-exp": b"contains a non-finite number", "nan": b"is not valid JSON",
+    "deep-json": b"exceeds the maximum JSON nesting depth", "invalid-utf8": b"could not read manifest",
+}
+MACHINE_UNREADABLE = {"huge-int", "infinite-exp", "nan", "deep-json", "invalid-utf8"}
+WORKER_OBJECT = {"true", "false", "one-point-zero", "negative-one", "empty-string",
+                 "array", "null", "non-object-root"}
 
 
 def write(path: Path, data: bytes) -> None:
@@ -133,13 +156,15 @@ def run_json_cli_sweep(scratch: Path) -> None:
         control_result = run_command([
             PYTHON, ROOT / "scripts" / "validate-control-state.py", "project", control_path
         ])
-        check(control_result.returncode != 0, f"control-state refuses {label}")
+        check(control_result.returncode == 2 and CONTROL_MARKERS[label] in control_result.stderr,
+              f"control-state typed refusal for {label}")
 
         engine_env = dict(base_env, RECURSION_ENGINE_DIR=str(engine_dir))
         engine_result = run_command([
             PYTHON, ROOT / "scripts" / "resolve-engine.py", "sampleeng", "--validate"
         ], env=engine_env)
-        check(engine_result.returncode != 0, f"resolve-engine refuses {label}")
+        check(engine_result.returncode == 2 and ENGINE_MARKERS[label] in engine_result.stderr,
+              f"resolve-engine typed refusal for {label}")
 
         machine_env = dict(base_env, RECURSION_MACHINE_DIR=str(machine_dir),
                            RECURSION_REGISTERED_MACHINE_ADAPTER="1",
@@ -148,16 +173,24 @@ def run_json_cli_sweep(scratch: Path) -> None:
             PYTHON, ROOT / "scripts" / "registered-machine-capabilities.py", "machine-1",
             "--emit", scratch / f"cap-{label}.json",
         ], env=machine_env)
-        check(machine_result.returncode != 0, f"registered capabilities refuses {label}")
+        machine_marker = (b"machine descriptor is unreadable" if label in MACHINE_UNREADABLE
+                          else b"machine descriptor has invalid fields")
+        check(machine_result.returncode == 2 and machine_marker in machine_result.stderr,
+              f"registered capabilities typed refusal for {label}")
 
         evidence_result = run_command([
             PYTHON, ROOT / "scripts" / "worker-evidence.py", "finish", run_path,
             "failed", "hostile", "1",
         ], env=base_env)
-        check(evidence_result.returncode != 0, f"worker evidence refuses {label}")
+        evidence_marker = (b"evidence file must contain an object" if label in WORKER_OBJECT
+                           else (b"immutable start evidence is unavailable"
+                                 if label == "object" else b"evidence file is unreadable"))
+        check(evidence_result.returncode == 1 and evidence_marker in evidence_result.stderr,
+              f"worker evidence typed refusal for {label}")
 
         try:
-            expect_typed(lambda: assignment.load_assignment(run_path), f"assignment loader {label}")
+            expect_typed(lambda: assignment.load_assignment(run_path), f"assignment loader {label}",
+                         "assignment")
         except AssertionError:
             raise
 
@@ -186,6 +219,11 @@ def run_json_cli_sweep(scratch: Path) -> None:
 
 
 def run_path_sweep(scratch: Path) -> None:
+    _, controller, assignment_value, controller_sha = make_assignment_fixture(scratch)
+    os.environ["RECURSION_ROOT"] = str(controller)
+    positive_profile = provider_egress.load("cursor", str(controller), controller_sha)
+    check(positive_profile["provider"] == "cursor",
+          "legitimate controller-bound provider profile is accepted")
     for label, value in (
         ("traversal", "../outside"),
         ("windows-traversal", r"..\outside"),
@@ -193,12 +231,16 @@ def run_path_sweep(scratch: Path) -> None:
         ("drive-relative", "C:outside"),
     ):
         expect_typed(lambda value=value: runtime_layout._safe_entrypoint(value),
-                     f"runtime entrypoint path {label}")
+                     f"runtime entrypoint path {label}", "confined relative path")
         expect_typed(lambda value=value: resolver.validate_relative_path(value, "path"),
-                     f"manifest path {label}")
-        expect_typed(lambda value=value: validate_gate.paths(value), f"gate path {label}")
-        expect_typed(lambda value=value: assignment.validate_assignment({"allowed_paths": [value]}),
-                     f"assignment path {label}")
+                     f"manifest path {label}", "relative path")
+        expect_typed(lambda value=value: validate_gate.paths(value), f"gate path {label}",
+                     "unsafe gate file")
+        expect_typed(lambda value=value: assignment._validate_allowed_paths([value]),
+                     f"assignment path {label}", "allowed_paths is")
+
+    check(assignment._validate_allowed_paths(["scripts"]) == ["scripts"],
+          "legitimate assignment allowed_paths validation succeeds")
 
     source = scratch / "layout-source"
     source.mkdir()
@@ -209,18 +251,53 @@ def run_path_sweep(scratch: Path) -> None:
     hardlink = source / "hardlink"
     os.link(executable, hardlink)
     expect_typed(lambda: runtime_layout._copy_tree(source, scratch / "hardlink-destination", "engine"),
-                 "runtime staging hardlink substitution")
+                 "runtime staging hardlink substitution", "hardlinked file")
     outside = scratch / "outside.txt"
     outside.write_bytes(b"outside")
+    profile_path = controller / "scripts" / "provider-egress-profiles.json"
+    profile_backup = scratch / "provider-egress-profiles.json.backup"
+    profile_backup.write_bytes(profile_path.read_bytes())
+    profile_replaced = False
+    profile_symlink = False
+    profile_junction = False
+    try:
+        profile_path.unlink()
+        profile_replaced = True
+        try:
+            profile_path.symlink_to(outside)
+            profile_symlink = True
+        except (OSError, NotImplementedError):
+            profile_junction_result = subprocess.run(
+                ["cmd.exe", "/c", "mklink", "/J", str(profile_path), str(scratch)],
+                capture_output=True,
+            )
+            if profile_junction_result.returncode == 0:
+                profile_junction = True
+            else:
+                print("ok - provider profile reparse battery skipped because link creation is unavailable")
+    except (OSError, NotImplementedError):
+        print("ok - provider profile reparse battery skipped because this Windows account cannot replace the profile")
+    else:
+        if profile_symlink or profile_junction:
+            expect_typed(lambda: provider_egress.load("cursor", str(controller), controller_sha),
+                         "provider profile reparse leaf", "regular non-reparse")
+    finally:
+        if profile_symlink:
+            profile_path.unlink()
+        if profile_junction:
+            subprocess.run(["cmd.exe", "/c", "rmdir", str(profile_path)],
+                           capture_output=True)
+        if profile_replaced:
+            profile_path.write_bytes(profile_backup.read_bytes())
     linked = source / "linked.txt"
     try:
         linked.symlink_to(outside)
     except (OSError, NotImplementedError):
         print("ok - symlink battery skipped because this Windows account cannot create symlinks")
     else:
-        expect_typed(lambda: phase5_safety.verify_leaf(linked), "final symlink leaf")
+        expect_typed(lambda: phase5_safety.verify_leaf(linked), "final symlink leaf", "reparse")
         expect_typed(lambda: runtime_layout._copy_tree(source, scratch / "symlink-destination", "engine"),
-                     "runtime staging symlink source")
+                     "runtime staging symlink source", "link")
 
     outside_dir = scratch / "outside-dir"
     outside_dir.mkdir()
@@ -230,7 +307,7 @@ def run_path_sweep(scratch: Path) -> None:
         capture_output=True,
     )
     if junction_result.returncode == 0:
-        expect_typed(lambda: runtime_layout._safe_source(junction), "Windows junction runtime source")
+        expect_typed(lambda: runtime_layout._safe_source(junction), "Windows junction runtime source", "unavailable")
     else:
         print("ok - junction battery skipped because junction creation is unavailable")
 
@@ -241,7 +318,7 @@ def run_path_sweep(scratch: Path) -> None:
         pass
     else:
         expect_typed(lambda: phase5_safety.atomic_write(output_link, b"overwrite"),
-                     "atomic publish refuses final symlink")
+                     "atomic publish refuses final symlink", "reparse")
 
     gate_root = scratch / "gate-root"
     (gate_root / "scripts").mkdir(parents=True)
@@ -253,8 +330,8 @@ def run_path_sweep(scratch: Path) -> None:
     except (OSError, NotImplementedError):
         pass
     else:
-        expect_typed(lambda: validate_gate.resolved_under(gate_root, "scripts/linked.sh", ["scripts"]),
-                     "gate final symlink leaf")
+        check(not validate_gate.resolved_under(gate_root, "scripts/linked.sh", ["scripts"]),
+              "gate final symlink leaf is refused")
 
     gate_ok = run_command([
         PYTHON, ROOT / "scripts" / "validate-gate.py",
@@ -289,7 +366,8 @@ def make_assignment_fixture(scratch: Path) -> tuple[Path, Path, dict, str]:
     controller = fixture / "assignment-controller"
     (controller / "scripts" / "engines").mkdir(parents=True)
     for relative in (
-        "validate-gate.py", "phase5_safety.py", "provider-egress-profiles.json", "capacity-pools.json",
+        "validate-gate.py", "phase5_safety.py", "resolve-engine.py",
+        "provider-egress-profiles.json", "capacity-pools.json",
     ):
         source_path = ROOT / "scripts" / relative
         if relative == "phase5_safety.py":
@@ -306,6 +384,9 @@ def make_assignment_fixture(scratch: Path) -> tuple[Path, Path, dict, str]:
     subprocess.run(["git", "-C", str(controller), "add", "."], check=True)
     subprocess.run(["git", "-C", str(controller), "-c", "user.name=t", "-c", "user.email=t@t",
                     "commit", "-qm", "controller"], check=True)
+    (controller / "state").mkdir()
+    key = controller / "state/.worker-evidence.key"
+    key.write_bytes(os.urandom(32)); key.chmod(0o600)
 
     source_sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
     controller_sha = subprocess.check_output(["git", "-C", str(controller), "rev-parse", "HEAD"], text=True).strip()
@@ -343,8 +424,7 @@ def make_assignment_fixture(scratch: Path) -> tuple[Path, Path, dict, str]:
 def run_sidecar_battery(scratch: Path) -> None:
     source, controller, value, _ = make_assignment_fixture(scratch)
     os.environ["RECURSION_ROOT"] = str(controller)
-    key_path = scratch / "evidence-key"
-    os.environ["RECURSION_EVIDENCE_KEY_FILE"] = str(key_path)
+    os.environ.pop("RECURSION_EVIDENCE_KEY_FILE", None)
     assignment_path = scratch / "assignment.json"
     assignment_path.write_text(json.dumps(value), encoding="utf-8")
     normalized, digest = assignment.load_assignment(assignment_path)
@@ -366,8 +446,18 @@ def run_sidecar_battery(scratch: Path) -> None:
     original_sidecar = sidecar.read_bytes()
     original_evidence = evidence.read_bytes()
 
+    caller_key = scratch / "caller-selected-key"
+    caller_key.write_bytes(os.urandom(32))
+    caller_selected = run_command(start_command, env=dict(
+        os.environ, RECURSION_EVIDENCE_KEY_FILE=str(caller_key)))
+    check(caller_selected.returncode != 0 and
+          b"caller-supplied evidence key selection is refused" in caller_selected.stderr,
+          "caller-selected evidence key is explicitly refused")
+
     recreated = run_command(start_command, env=dict(os.environ))
-    check(recreated.returncode != 0, "start sidecar recreation is refused")
+    check(recreated.returncode != 0 and
+          b"immutable start evidence already exists" in recreated.stderr,
+          "start sidecar recreation is refused by the immutable binding guard")
     check(sidecar.read_bytes() == original_sidecar, "sidecar recreation cannot replace the original binding")
 
     forged = json.loads(original_sidecar.decode("utf-8"))
@@ -378,7 +468,9 @@ def run_sidecar_battery(scratch: Path) -> None:
         PYTHON, ROOT / "scripts" / "worker-evidence.py", "finish", evidence,
         "succeeded", "forged", "0",
     ], env=dict(os.environ))
-    check(forged_finish.returncode != 0, "edited start sidecar is refused")
+    check(forged_finish.returncode != 0 and
+          b"immutable start evidence is unavailable" in forged_finish.stderr,
+          "edited start sidecar is refused by authentication")
     sidecar.write_bytes(original_sidecar)
     sidecar.chmod(0o444)
     evidence.write_bytes(original_evidence)
@@ -403,7 +495,9 @@ def run_sidecar_battery(scratch: Path) -> None:
         PYTHON, ROOT / "scripts" / "worker-evidence.py", "finish", evidence,
         "succeeded", "cross-bound", "0",
     ], env=dict(os.environ))
-    check(cross_bound.returncode != 0, "cross-assignment/run sidecar binding is refused")
+    check(cross_bound.returncode != 0 and
+          b"immutable start evidence is unavailable" in cross_bound.stderr,
+          "cross-assignment/run sidecar binding is refused by identity")
     sidecar.write_bytes(original_sidecar)
     sidecar.chmod(0o444)
     evidence.write_bytes(original_evidence)
@@ -424,6 +518,14 @@ def run_sidecar_battery(scratch: Path) -> None:
         "succeeded", "done", "0", "--execution-evidence", execution_path,
     ], env=dict(os.environ))
     check(finished.returncode == 0, "legitimate strict evidence finish succeeds")
+    terminal_bytes = evidence.read_bytes()
+    immutable = run_command([
+        PYTHON, ROOT / "scripts" / "worker-evidence.py", "heartbeat", evidence, "2000000000",
+    ], env=dict(os.environ))
+    check(immutable.returncode != 0 and
+          b"terminal run metadata is immutable" in immutable.stderr and
+          evidence.read_bytes() == terminal_bytes,
+          "terminal run metadata is immutable")
 
 
 def run_worker_plan_sweep(scratch: Path) -> None:
@@ -433,6 +535,27 @@ def run_worker_plan_sweep(scratch: Path) -> None:
     shutil.copy2(ROOT / "scripts" / "phase5_safety.py", worker_root / "scripts" / "phase5_safety.py")
     shutil.copy2(ROOT / "scripts" / "provider-egress-profiles.json",
                  worker_root / "scripts" / "provider-egress-profiles.json")
+    engines = worker_root / "scripts" / "engines"
+    engines.mkdir()
+    manifest = json.loads((ROOT / "scripts" / "engines" / "cursor.json").read_text(encoding="utf-8"))
+    manifest["name"] = "sampleeng"
+    write(engines / "sampleeng.json", json.dumps(manifest).encode("utf-8"))
+    subprocess.run(["git", "init", "-q", "-b", "main", str(worker_root)], check=True)
+    subprocess.run(["git", "-C", str(worker_root), "config", "core.autocrlf", "false"], check=True)
+    subprocess.run(["git", "-C", str(worker_root), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worker_root), "-c", "user.name=t", "-c", "user.email=t@t",
+                    "commit", "-qm", "controller"], check=True)
+    controller_sha = subprocess.check_output(
+        ["git", "-C", str(worker_root), "rev-parse", "HEAD"], text=True,
+    ).strip()
+    policy_files = {
+        "scripts/engines/sampleeng.json": hashlib.sha256(
+            (engines / "sampleeng.json").read_bytes()
+        ).hexdigest(),
+        "scripts/provider-egress-profiles.json": hashlib.sha256(
+            (worker_root / "scripts" / "provider-egress-profiles.json").read_bytes()
+        ).hexdigest(),
+    }
     worktree = worker_root / "worktree"
     worktree.mkdir()
     for label, raw in HOSTILE_JSON:
@@ -444,7 +567,31 @@ def run_worker_plan_sweep(scratch: Path) -> None:
             "--model", "model", "--network-policy", "none",
         ], env=dict(os.environ, RECURSION_ROOT=str(worker_root), RECURSION_PYTHON=str(PYTHON),
                     RECURSION_TEST_WORKER="logical"))
-        check(result.returncode != 0, f"worker plan parser refuses {label}")
+        if b"CreateFileMapping" in result.stderr and b"Win32 error 5" in result.stderr:
+            print("ok - worker plan battery skipped because Git Bash hit the documented CreateFileMapping ACL artifact")
+            return
+        check(result.returncode == 92 and b"refusal=invalid-engine-plan" in result.stderr,
+              f"worker plan parser refuses {label} with a typed plan refusal")
+
+    positive_plan = {
+        "schema_version": 1, "engine": "sampleeng", "executable": "true",
+        "argv": ["{{EXE}}", "{{PROMPT}}"], "model_required": False,
+        "model_argv_suffix": [], "env_passthrough": [],
+        "billing": {"basis": "local", "provider": "sentry-local"},
+        "network": {"policy": "none", "profile": "sentry-local", "endpoints": []},
+        "authority": {"controller_repository": str(worker_root),
+                       "controller_sha": controller_sha, "policy_files": policy_files},
+    }
+    positive_path = scratch / "plan-positive.json"
+    write(positive_path, json.dumps(positive_plan).encode("utf-8"))
+    positive = run_command([
+        BASH, worker_root / "scripts" / "worker-sandbox.sh", "--engine", "sampleeng",
+        "--engine-plan", positive_path, "--worktree", worktree, "--prompt", "prompt",
+        "--model", "model", "--network-policy", "none",
+    ], env=dict(os.environ, RECURSION_ROOT=str(worker_root), RECURSION_PYTHON=str(PYTHON),
+                RECURSION_TEST_WORKER="logical"))
+    check(positive.returncode == 0 and b"refusal=invalid-engine-plan" not in positive.stderr,
+          "well-formed worker engine plan succeeds in the same fixture")
 
 
 def run_differential() -> None:
@@ -465,6 +612,8 @@ def run_differential() -> None:
     ]
     fields = tuple(base)
     mismatches: list[str] = []
+    schema_only: list[str] = []
+    runtime_only: list[str] = []
     cases: list[tuple[str, dict]] = [("baseline", base)]
     for field in fields:
         for index, candidate in enumerate(candidate_values):
@@ -527,8 +676,15 @@ def run_differential() -> None:
             runtime_ok = True
         if schema_ok != runtime_ok:
             mismatches.append(f"{label}: schema={schema_ok} runtime={runtime_ok}")
+            if schema_ok:
+                schema_only.append(label)
+            else:
+                runtime_only.append(label)
     if mismatches:
         print("schema/runtime mismatches:\n" + "\n".join(mismatches))
+    print(f"schema/runtime numeric parity: schema_only={len(schema_only)} runtime_only={len(runtime_only)}")
+    check(not schema_only and not runtime_only,
+          "schema/runtime numeric parity has zero mismatches in both directions")
     check(not mismatches, "schema/runtime differential corpus has zero mismatches")
     check(schema_accepts(base), "schema accepts the positive differential baseline")
     resolver.validate_manifest(base, "sampleeng")
