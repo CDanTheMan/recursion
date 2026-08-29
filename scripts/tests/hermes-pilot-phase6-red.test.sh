@@ -25,11 +25,13 @@ copy_controller(){
     "$r/state/decision-queue/pending" "$r/state/decision-queue/running" \
     "$r/state/decision-queue/succeeded" "$r/state/decision-queue/failed" \
     "$r/state/.locks" "$r/state/evidence" "$r/loop/logs"
-  for s in conduct-hermes.sh decision-queue.py validate-decision.py validate-control-state.py \
+  for s in conduct-hermes.sh decision-queue.py validate-decision.py validate-control-state.py assignment.py \
            project-pilot.py remote_evidence.py engine_contract.py project_authority.py pilot_instruction.py project-reconcile.py jsonl_durable.py transition_receipt.py runtime-state.py taskctl.sh worker-sandbox.sh validate-gate.py; do
     [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$r/scripts/"
   done
   [ ! -f "$SRC/scripts/seed_contract.py" ] || cp "$SRC/scripts/seed_contract.py" "$r/scripts/"
+  python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$r/scripts" \
+    || { no "phase 6 controller fixture is missing a staged first-party dependency"; }
   chmod +x "$r/scripts/"* 2>/dev/null || true
   if ! python3 -c 'import fcntl' >/dev/null 2>&1; then
     cat > "$r/scripts/fcntl.py" <<'PY'

@@ -26,6 +26,8 @@ for s in work.sh worker-sandbox.sh taskctl.sh jsonl_durable.py transition_receip
   [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$R/scripts/"
 done
 chmod +x "$R/scripts/"* 2>/dev/null || true
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$R/scripts" \
+  || { no "phase 5 fixture is missing a staged first-party dependency"; }
 printf 'protected\n' > "$R/scripts/protected.sh"
 printf 'test\n' > "$R/scripts/tests/existing.test.cjs"
 printf '{"truth":1}\n' > "$R/fixtures/truth.json"

@@ -43,22 +43,9 @@ usage = importlib.util.module_from_spec(USAGE_SPEC)
 USAGE_SPEC.loader.exec_module(usage)
 
 try:
-    from jsonschema import Draft7Validator, Draft202012Validator, validators
+    from jsonschema import Draft7Validator, Draft202012Validator
 except ImportError as exc:  # pragma: no cover - the required verification environment has it.
     raise SystemExit(f"phase3 sweep: jsonschema unavailable: {exc}")
-
-
-STRICT_INTEGER_CHECKER = Draft7Validator.TYPE_CHECKER.redefine(
-    "integer", lambda _checker, value: isinstance(value, int) and not isinstance(value, bool)
-)
-StrictDraft7Validator = validators.extend(Draft7Validator, type_checker=STRICT_INTEGER_CHECKER)
-STRICT_RUN_INTEGER_CHECKER = Draft202012Validator.TYPE_CHECKER.redefine(
-    "integer", lambda _checker, value: isinstance(value, int) and not isinstance(value, bool)
-)
-StrictDraft202012Validator = validators.extend(
-    Draft202012Validator, type_checker=STRICT_RUN_INTEGER_CHECKER
-)
-
 
 failures: list[str] = []
 
@@ -124,6 +111,63 @@ def test_jsonl_battery(root: Path) -> None:
     outcome = jd.append_jsonl(normal, {"id": "normal"})
     check(outcome.appended and jd.read_jsonl_objects(normal) == [{"id": "normal"}],
           "JSONL normal append/read still succeeds")
+
+    if os.name == "nt":
+        check(True, "POSIX racing ancestor-pinning regression is platform-scoped")
+    else:
+        ancestor_root = root / "jsonl-racing-ancestor"
+        ancestor_parent = ancestor_root / "store"
+        ancestor_parent.mkdir(parents=True)
+        ancestor_outside = ancestor_root / "outside"
+        ancestor_outside.mkdir()
+        ancestor_saved = ancestor_root / "store.pinned"
+        ancestor_path = ancestor_parent / "events.jsonl"
+        ancestor_armed = True
+
+        def ancestor_hook(stage: str) -> None:
+            nonlocal ancestor_armed
+            if ancestor_armed and stage == "pre-journal-write":
+                ancestor_armed = False
+                ancestor_parent.rename(ancestor_saved)
+                ancestor_parent.symlink_to(ancestor_outside, target_is_directory=True)
+
+        expect_refusal(lambda: jd.append_jsonl(
+            ancestor_path, {"id": "racing-ancestor"}, hook=ancestor_hook
+        ), "JSONL racing ancestor swap", error_types)
+        if ancestor_parent.is_symlink():
+            ancestor_parent.unlink()
+        if ancestor_saved.exists():
+            ancestor_saved.rename(ancestor_parent)
+        check(not ancestor_armed, "JSONL ancestor swap hook runs after the pinned leaf open")
+        check(not (ancestor_outside / "events.jsonl").exists()
+              and not (ancestor_outside / "jsonl-index").exists(),
+              "JSONL racing ancestor swap writes nothing outside the pinned root")
+
+        atomic_parent = root / "atomic-racing-ancestor" / "store"
+        atomic_parent.mkdir(parents=True)
+        atomic_outside = atomic_parent.parent / "outside"
+        atomic_outside.mkdir()
+        atomic_saved = atomic_parent.with_name("store.pinned")
+        atomic_path = atomic_parent / "record.json"
+        atomic_armed = True
+
+        def atomic_ancestor_hook(stage: str) -> None:
+            nonlocal atomic_armed
+            if atomic_armed and stage == "pre-write":
+                atomic_armed = False
+                atomic_parent.rename(atomic_saved)
+                atomic_parent.symlink_to(atomic_outside, target_is_directory=True)
+
+        expect_refusal(lambda: jd.atomic_bytes(
+            atomic_path, b"racing-ancestor\n", hook=atomic_ancestor_hook
+        ), "JSONL atomic racing ancestor swap", error_types)
+        if atomic_parent.is_symlink():
+            atomic_parent.unlink()
+        if atomic_saved.exists():
+            atomic_saved.rename(atomic_parent)
+        check(not atomic_armed, "JSONL atomic ancestor swap hook runs inside the pinned window")
+        check(not (atomic_outside / "record.json").exists(),
+              "JSONL atomic racing ancestor swap writes nothing outside the pinned root")
 
     hardlink_root = root / "jsonl-hardlink"
     path = hardlink_root / "events.jsonl"
@@ -386,6 +430,47 @@ def test_assignment_battery(root: Path) -> None:
     check(persisted.is_file() and loaded == value, "valid assignment persists and loads")
     check(persisted.stat().st_nlink == 1 and persisted.is_relative_to(valid_root),
           "published assignment record has exactly one link inside the assignment root")
+
+    if os.name == "nt":
+        check(True, "POSIX assignment post-link nlink regressions are platform-scoped")
+    else:
+        for stage, label in (
+            ("pre-record-hardlink", "assignment temporary hardlink before publication"),
+            ("post-record-hardlink", "assignment temporary hardlink after publication"),
+            ("post-record-validation", "assignment FINAL hardlink after validation"),
+            ("post-record-index", "assignment FINAL hardlink after index publication"),
+        ):
+            race_root = root / f"assignment-{stage}"
+            race_outside = race_root / "outside-alias.json"
+            race_value = base_assignment(f"task-{stage}")
+            race_final = race_root / race_value["task_id"] / (
+                f"{race_value['assignment_digest']}.json"
+            )
+            armed = True
+
+            def assignment_hook(current: str, *, stage=stage) -> None:
+                nonlocal armed
+                if not armed or current != stage:
+                    return
+                armed = False
+                if stage in {"pre-record-hardlink", "post-record-hardlink"}:
+                    temporary = next(race_final.parent.glob(
+                        f".{race_value['assignment_digest']}.json.*"
+                    ))
+                    race_outside.hardlink_to(temporary)
+                else:
+                    race_outside.hardlink_to(race_final)
+
+            previous = amod._assignment_persistence_hook
+            amod._assignment_persistence_hook = assignment_hook
+            try:
+                expect_refusal(lambda: amod.persist_assignment(race_root, race_value),
+                               label, error_types)
+            finally:
+                amod._assignment_persistence_hook = previous
+                race_outside.unlink(missing_ok=True)
+            check(not race_final.exists(), f"{label} leaves no published FINAL")
+
     validated = False
     try:
         amod.validate_assignment(loaded, require_source_evidence=True)
@@ -904,7 +989,10 @@ def test_worker_battery(root: Path) -> None:
 def test_capacity_pool_differential() -> None:
     schema_path = SOURCE / "schemas" / "control-plane" / "v1" / "capacity-pool-manifest.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    validator = StrictDraft7Validator(schema)
+    # jsonschema's stock validator is authoritative here.  JSON Schema's numeric model
+    # intentionally treats 1 and 1.0 as the same number; the runtime boundary may still
+    # reject a Python float, which is a documented schema-only exception below.
+    validator = Draft7Validator(schema)
     base = {
         "schema_version": 1, "id": "pool", "kind": "subscription",
         "billing_basis": "metered", "provider": "cursor",
@@ -968,9 +1056,13 @@ def test_capacity_pool_differential() -> None:
         else:
             candidate.update(optional)
         corpus.append(candidate)
+    float_version = copy.deepcopy(base)
+    float_version["schema_version"] = 1.0
+    corpus.append(float_version)
 
     schema_only = 0
     runtime_only = 0
+    schema_only_cases: list[str] = []
     for candidate in corpus:
         schema_valid = not list(validator.iter_errors(candidate))
         pool_id = candidate.get("id") if isinstance(candidate.get("id"), str) else "pool"
@@ -986,15 +1078,20 @@ def test_capacity_pool_differential() -> None:
             runtime_valid = True
         if schema_valid and not runtime_valid:
             schema_only += 1
+            schema_only_cases.append(
+                "capacity-pool: schema_version=1.0 (JSON Schema integer/number equality)"
+            )
             print(f"mismatch: capacity-pool schema=true runtime=false candidate={candidate!r}")
         elif runtime_valid and not schema_valid:
             runtime_only += 1
             print(f"mismatch: schema={schema_valid} runtime={runtime_valid} candidate={candidate!r}")
-    check(schema_only == 0 and runtime_only == 0,
-          f"capacity-pool schema/runtime differential has zero mismatches in both directions "
-          f"({len(corpus)} cases; schema-only={schema_only}, runtime-only={runtime_only})")
-    float_version = copy.deepcopy(base)
-    float_version["schema_version"] = 1.0
+    expected_schema_only = [
+        "capacity-pool: schema_version=1.0 (JSON Schema integer/number equality)"
+    ]
+    check(runtime_only == 0 and schema_only_cases == expected_schema_only,
+          f"capacity-pool stock schema/runtime parity has runtime-only=0 and the enumerated "
+          f"schema-only set ({len(corpus)} cases; schema-only={schema_only_cases}; "
+          f"runtime-only={runtime_only})")
     expect_refusal(lambda: amod.validate_capacity_pool(float_version, "pool"),
                    "capacity-pool runtime rejects float-for-integer schema version", (amod.AssignmentError,))
 
@@ -1003,7 +1100,7 @@ def test_run_schema_differential() -> None:
     schema_path = SOURCE / "schemas" / "control-plane" / "v1" / "schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     wrapper = {"$schema": schema["$schema"], "$defs": schema["$defs"], "$ref": "#/$defs/run"}
-    validator = StrictDraft202012Validator(wrapper)
+    validator = Draft202012Validator(wrapper)
     base = {
         "schema_version": 1, "id": "run", "task_id": "task", "worker": "implementer:legacy",
         "worktree": "C:/work", "base_commit": "a" * 40, "pid": 1, "process_group": 0,
@@ -1059,6 +1156,7 @@ def test_run_schema_differential() -> None:
 
     schema_only = 0
     runtime_only = 0
+    schema_only_cases: list[str] = []
     for candidate in corpus:
         schema_valid = not list(validator.iter_errors(candidate))
         try:
@@ -1072,13 +1170,22 @@ def test_run_schema_differential() -> None:
             runtime_valid = True
         if schema_valid and not runtime_valid:
             schema_only += 1
+            schema_only_cases.append(
+                "run: " + ", ".join(sorted(
+                    key for key in ("schema_version", "pid", "process_group")
+                    if isinstance(candidate.get(key), float)
+                ))
+            )
             print(f"mismatch: run schema=true runtime=false candidate={candidate!r}")
         elif runtime_valid and not schema_valid:
             runtime_only += 1
             print(f"mismatch: run schema=false runtime=true candidate={candidate!r}")
-    check(schema_only == 0 and runtime_only == 0,
-          f"run schema/runtime differential has zero mismatches in both directions "
-          f"({len(corpus)} cases; schema-only={schema_only}, runtime-only={runtime_only})")
+    schema_only_cases.sort()
+    check(runtime_only == 0,
+          f"run stock schema/runtime differential has runtime-only=0 "
+          f"({len(corpus)} cases; schema-only={schema_only}; runtime-only={runtime_only})")
+    check(schema_only_cases == ["run: pid", "run: process_group", "run: schema_version"],
+          f"run stock schema-only set is enumerated ({schema_only_cases})")
     nonfinite = copy.deepcopy(base)
     nonfinite["extra"] = float("nan")
     expect_refusal(lambda: run_contract.validate_run(nonfinite),

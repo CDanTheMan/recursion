@@ -16,7 +16,8 @@ cp "$SRC/scripts/taskctl.sh" "$R/scripts/"
 cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
   "$SRC/scripts/runtime-state.py" "$R/scripts/"
 cp "$SRC/scripts/decision-queue.py" "$SRC/scripts/validate-control-state.py" \
-  "$SRC/scripts/validate-decision.py" "$SRC/scripts/engine_contract.py" "$R/scripts/"
+  "$SRC/scripts/validate-decision.py" "$SRC/scripts/engine_contract.py" \
+  "$SRC/scripts/assignment.py" "$R/scripts/"
 normalize_head_decision(){
   local file="$1" temporary="$1.normalized"
   python3 - "$file" <<'PY' | RECURSION_ROOT="$R" python3 "$R/scripts/decision-queue.py" normalize > "$temporary"
@@ -35,6 +36,8 @@ cat > "$R/scripts/work.sh" <<'STUB'
 printf '%s\n' "$1" >> "$ACTION_LOG"
 STUB
 chmod +x "$R/scripts/"*.sh
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$R/scripts" \
+  || { no "replay fixture is missing a staged first-party dependency"; }
 cat > "$R/state/tasks/replay-task.md" <<'T'
 id: replay-task
 goal_id: goal-1
@@ -137,8 +140,10 @@ fi
 # 4. Task start must enforce an active parent goal and passed dependencies.
 TROOT="$TMP/taskctl"; mkdir -p "$TROOT/scripts" "$TROOT/state/tasks" "$TROOT/state/goals"
 cp "$SRC/scripts/taskctl.sh" "$TROOT/scripts/"
-cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
+cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" "$SRC/scripts/assignment.py" \
   "$SRC/scripts/runtime-state.py" "$TROOT/scripts/"
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$TROOT/scripts" \
+  || { no "taskctl fixture is missing a staged first-party dependency"; }
 printf 'id: active\nstatus: active\n' > "$TROOT/state/goals/active.md"
 printf 'id: blocked\nstatus: blocked\n' > "$TROOT/state/goals/blocked.md"
 cat > "$TROOT/state/tasks/dep.md" <<'T'
@@ -172,8 +177,10 @@ done
 
 # 5. A contended state lock must fail closed, never time out and write unlocked.
 LROOT="$TMP/lock"; mkdir -p "$LROOT/scripts" "$LROOT/state/.locks"
-cp "$SRC/scripts/taskctl.sh" "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
+cp "$SRC/scripts/taskctl.sh" "$SRC/scripts/assignment.py" "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
   "$SRC/scripts/runtime-state.py" "$LROOT/scripts/"; mkdir "$LROOT/state/.locks/taskctl.lock"
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$LROOT/scripts" \
+  || { no "lock fixture is missing a staged first-party dependency"; }
 set +e
 RECURSION_ROOT="$LROOT" timeout 20s bash "$LROOT/scripts/taskctl.sh" event probe '' locked \
   >"$TMP/lock.out" 2>&1; lock_rc=$?
@@ -188,8 +195,10 @@ fi
 # never a torn projection or a second state transition.
 AROOT="$TMP/atomic"; mkdir -p "$AROOT/scripts" "$AROOT/state/tasks" "$AROOT/state/goals"
 cp "$SRC/scripts/taskctl.sh" "$AROOT/scripts/"
-cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
+cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" "$SRC/scripts/assignment.py" \
   "$SRC/scripts/runtime-state.py" "$AROOT/scripts/"
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$AROOT/scripts" \
+  || { no "atomic fixture is missing a staged first-party dependency"; }
 printf 'id: g\nstatus: active\n' > "$AROOT/state/goals/g.md"
 cat > "$AROOT/state/tasks/a.md" <<'T'
 id: a

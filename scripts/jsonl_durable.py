@@ -303,12 +303,12 @@ def _durable_path(path: Path) -> Path:
 class _PinnedIndexConnection(sqlite3.Connection):
     """SQLite connection that releases the native cache pins when it closes."""
 
-    _durable_parent_pins: list[tuple[Path, int, tuple[int, int, int]]] = []
+    _durable_parent_pins: list[tuple[Path, int, tuple[int, ...]]] = []
     _durable_leaf_descriptor: int | None = None
     _durable_leaf_identity: tuple[int, ...] | None = None
     _durable_leaf_path: Path | None = None
     _durable_index_path: Path | None = None
-    _durable_journal_parent_pins: list[tuple[Path, int, tuple[int, int, int]]] = []
+    _durable_journal_parent_pins: list[tuple[Path, int, tuple[int, ...]]] = []
 
     def _release_durable_pins(self) -> None:
         pins = self._durable_parent_pins
@@ -323,9 +323,9 @@ class _PinnedIndexConnection(sqlite3.Connection):
         if descriptor is not None:
             os.close(descriptor)
         if pins:
-            _win_close_lock_parent_pins(pins)
+            _close_durable_parent_pins(pins)
         if journal_pins:
-            _win_close_lock_parent_pins(journal_pins)
+            _close_durable_parent_pins(journal_pins)
 
     def _detach_durable_leaf(self) -> int | None:
         """Transfer the verification descriptor to a caller before closing SQLite."""
@@ -517,10 +517,100 @@ def _win_pin_durable_parent(path: Path, *, create: bool = True) -> list[tuple[Pa
     return _win_pin_lock_parent(Path(path), create=create)
 
 
+def _posix_pin_durable_parent(path: Path, *, create: bool = True) -> list[tuple[Path, int, tuple[int, int]]]:
+    """Open every POSIX parent component and retain the descriptor for each one.
+
+    A pathname check cannot pin a directory: a peer can rename that directory after the
+    check and replace it with a symlink or another tree.  Every child below is therefore
+    opened relative to the already pinned parent, with ``O_NOFOLLOW|O_DIRECTORY``.  The
+    descriptors remain live for the whole operation, so later creates, appends, and
+    replacements can use the final descriptor rather than resolving the pathname again.
+    """
+    if os.name == "nt" or not hasattr(os, "supports_dir_fd") or not os.supports_dir_fd:
+        return []
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    directory_flag = getattr(os, "O_DIRECTORY", 0)
+    if not nofollow or not directory_flag:
+        raise JsonlDurabilityError("O_NOFOLLOW and O_DIRECTORY are required for POSIX durable pinning")
+    absolute = Path(os.path.abspath(path))
+    if not absolute.anchor:
+        raise JsonlDurabilityError("cannot pin a relative POSIX durable parent")
+    flags = os.O_RDONLY | directory_flag | nofollow | getattr(os, "O_CLOEXEC", 0)
+    pins: list[tuple[Path, int, tuple[int, int]]] = []
+    current = Path(absolute.anchor)
+    try:
+        current_fd = os.open(current, flags)
+        anchor_stat = os.fstat(current_fd)
+        if not stat.S_ISDIR(anchor_stat.st_mode):
+            raise JsonlDurabilityError(f"POSIX durable parent anchor is not a directory: {current}")
+        pins.append((current, current_fd, (int(anchor_stat.st_dev), int(anchor_stat.st_ino))))
+        for component in absolute.parts[1:]:
+            current = current / component
+            try:
+                if create:
+                    os.mkdir(component, mode=0o700, dir_fd=current_fd)
+            except FileExistsError:
+                pass
+            child_fd = os.open(component, flags, dir_fd=current_fd)
+            child_stat = os.fstat(child_fd)
+            child_identity = (int(child_stat.st_dev), int(child_stat.st_ino))
+            try:
+                named_stat = os.stat(component, dir_fd=current_fd, follow_symlinks=False)
+            except BaseException:
+                os.close(child_fd)
+                raise
+            if (not stat.S_ISDIR(child_stat.st_mode)
+                    or stat.S_ISLNK(named_stat.st_mode)
+                    or (int(named_stat.st_dev), int(named_stat.st_ino)) != child_identity):
+                os.close(child_fd)
+                raise JsonlDurabilityError(
+                    f"POSIX durable parent changed or is not a directory: {current}"
+                )
+            pins.append((current, child_fd, child_identity))
+            current_fd = child_fd
+        return pins
+    except BaseException:
+        for _, descriptor, _ in reversed(pins):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        raise
+
+
 def revalidate_durable_parent_pins(
-        pins: list[tuple[Path, int, tuple[int, int, int]]]) -> None:
-    if pins:
+        pins: list[tuple[Path, int, tuple[int, ...]]]) -> None:
+    if not pins:
+        return
+    if os.name == "nt":
         _win_validate_lock_parent_pins(pins)
+        return
+    for path, descriptor, expected in pins:
+        try:
+            actual = os.fstat(descriptor)
+            named = os.stat(path, follow_symlinks=False)
+        except OSError as exc:
+            raise JsonlDurabilityError(
+                f"POSIX durable parent changed while writing: {path}"
+            ) from exc
+        if (not stat.S_ISDIR(actual.st_mode) or not stat.S_ISDIR(named.st_mode)
+                or stat.S_ISLNK(named.st_mode)
+                or (int(actual.st_dev), int(actual.st_ino)) != expected
+                or (int(named.st_dev), int(named.st_ino)) != expected):
+            raise JsonlDurabilityError(f"POSIX durable parent changed while writing: {path}")
+
+
+def _close_durable_parent_pins(pins: list[tuple[Path, int, tuple[int, ...]]]) -> None:
+    if not pins:
+        return
+    if os.name == "nt":
+        _win_close_lock_parent_pins(pins)
+        return
+    for _, descriptor, _ in reversed(pins):
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
 
 
 def _revalidate_index_connection(connection: sqlite3.Connection,
@@ -557,20 +647,37 @@ def _install_serialized_cache_path(index_path: Path, cache_bytes: bytes,
 @contextmanager
 def pinned_durable_parent(path: Path, *, create: bool = True):
     """Pin a durable parent tree while a by-name leaf is created or published."""
-    pins = _win_pin_durable_parent(Path(path), create=create)
+    pins = (_win_pin_durable_parent(Path(path), create=create)
+            if os.name == "nt" else _posix_pin_durable_parent(Path(path), create=create))
     try:
         revalidate_durable_parent_pins(pins)
         yield pins
     finally:
-        if pins:
-            _win_close_lock_parent_pins(pins)
+        _close_durable_parent_pins(pins)
 
 
-def _open_durable_leaf(path: Path, flags: int, mode: int = 0o600) -> int:
+def _open_durable_leaf(path: Path, flags: int, mode: int = 0o600,
+                       *, directory_fd: int | None = None) -> int:
     """Open a durable regular leaf and prove its identity before returning it."""
     path = Path(path)
     if os.name != "nt":
-        descriptor = os.open(path, flags | getattr(os, "O_NOFOLLOW", 0), mode)
+        open_name: str | Path = path
+        validation_path = path
+        if directory_fd is not None:
+            if not path.name or path.name in {".", ".."}:
+                raise JsonlDurabilityError("invalid pinned durable leaf name")
+            open_name = path.name
+            validation_path = _pinned_fd_path(directory_fd, path.name)
+        descriptor = os.open(
+            open_name, flags | getattr(os, "O_NOFOLLOW", 0), mode,
+            **({"dir_fd": directory_fd} if directory_fd is not None else {}),
+        )
+        try:
+            _validate_opened_leaf(validation_path, descriptor)
+            return descriptor
+        except BaseException:
+            os.close(descriptor)
+            raise
     else:
         if msvcrt is None:  # pragma: no cover - CPython on Windows always provides msvcrt.
             raise JsonlDurabilityError("Windows durable persistence requires msvcrt")
@@ -619,16 +726,19 @@ def read_durable_bytes(path: Path, *, max_bytes: int = 64 * 1024 * 1024) -> byte
             revalidate_durable_parent_pins(pins)
             try:
                 descriptor = _open_durable_leaf(
-                    path, os.O_RDONLY | getattr(os, "O_BINARY", 0)
+                    path, os.O_RDONLY | getattr(os, "O_BINARY", 0),
+                    directory_fd=pins[-1][1] if os.name != "nt" else None,
                 )
             except FileNotFoundError:
                 return None
+            opened_path = (_pinned_fd_path(pins[-1][1], path.name)
+                           if os.name != "nt" else path)
             try:
-                identity = _capture_opened_leaf(path, descriptor)
+                identity = _capture_opened_leaf(opened_path, descriptor)
                 chunks: list[bytes] = []
                 total = 0
                 while True:
-                    _revalidate_opened_leaf(path, descriptor, identity)
+                    _revalidate_opened_leaf(opened_path, descriptor, identity)
                     chunk = os.read(descriptor, min(COPY_CHUNK_BYTES, max_bytes - total + 1))
                     if not chunk:
                         return b"".join(chunks)
@@ -885,14 +995,17 @@ def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600,
     path = Path(path)
     if not isinstance(value, bytes):
         raise JsonlDurabilityError("durable atomic write requires bytes")
-    if os.name != "nt":
-        ensure_no_symlink(path.parent)
-        path.parent.mkdir(parents=True, exist_ok=True)
     with pinned_durable_parent(path.parent, create=True) as pins:
-        ensure_no_symlink(path)
-        validate_durable_leaf(path, allow_missing=True)
-        descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
-        temporary = Path(name)
+        parent_fd = pins[-1][1] if os.name != "nt" else None
+        if parent_fd is not None:
+            validate_durable_leaf_at(parent_fd, path.name, allow_missing=True)
+            descriptor, name = _open_unique_at(parent_fd, f".{path.name}.tmp.", mode)
+            temporary = _pinned_fd_path(parent_fd, name)
+        else:
+            ensure_no_symlink(path)
+            validate_durable_leaf(path, allow_missing=True)
+            descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
+            temporary = Path(name)
         try:
             leaf_identity = _capture_opened_leaf(temporary, descriptor)
             if hasattr(os, "fchmod"):  # absent on Windows; NTFS mode bits are meaningless
@@ -911,11 +1024,18 @@ def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600,
             _revalidate_opened_leaf(temporary, descriptor, leaf_identity)
             os.close(descriptor)
             descriptor = -1
-            validate_durable_leaf(temporary)
-            revalidate_durable_parent_pins(pins)
-            validate_durable_leaf(path, allow_missing=True)
-            os.replace(temporary, path)
-            _fsync_dir(path.parent)
+            if parent_fd is not None:
+                validate_durable_leaf_at(parent_fd, name)
+                revalidate_durable_parent_pins(pins)
+                validate_durable_leaf_at(parent_fd, path.name, allow_missing=True)
+                os.replace(name, path.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+                os.fsync(parent_fd)
+            else:
+                validate_durable_leaf(temporary)
+                revalidate_durable_parent_pins(pins)
+                validate_durable_leaf(path, allow_missing=True)
+                os.replace(temporary, path)
+                _fsync_dir(path.parent)
         except BaseException:
             # Cleanup must never replace the primary exception: close the descriptor first
             # (Windows cannot unlink an open file) and swallow only the cleanup's own OSError.
@@ -925,7 +1045,12 @@ def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600,
             except OSError:
                 pass
             try:
-                temporary.unlink(missing_ok=True)
+                if parent_fd is not None:
+                    os.unlink(name, dir_fd=parent_fd)
+                else:
+                    temporary.unlink(missing_ok=True)
+            except FileNotFoundError:
+                pass
             except OSError:
                 pass
             raise
@@ -976,18 +1101,19 @@ def _ensure_index_root(path: Path, index_root: Path | None = None,
         root = Path(index_root)
         identity = index_identity if index_identity is not None else path.name
     try:
-        if os.name != "nt":
-            ensure_no_symlink(root.parent)
-            ensure_no_symlink(root)
-            root.mkdir(mode=0o700, exist_ok=True)
         with pinned_durable_parent(root, create=True) as pins:
             revalidate_durable_parent_pins(pins)
-            if not root.is_dir():
+            if os.name != "nt":
+                descriptor = pins[-1][1]
+                metadata = os.fstat(descriptor)
+                if not stat.S_ISDIR(metadata.st_mode):
+                    raise JsonlDurabilityError(f"JSONL index root has unsafe type: {root}")
+                try:
+                    os.fchmod(descriptor, 0o700)
+                except OSError:
+                    pass
+            elif not root.is_dir():
                 raise JsonlDurabilityError(f"JSONL index root has unsafe type: {root}")
-            try:
-                os.chmod(root, 0o700)
-            except OSError:
-                pass
             revalidate_durable_parent_pins(pins)
     except JsonlDurabilityError:
         raise
@@ -1001,9 +1127,7 @@ def _index_path(path: Path, index_root: Path | None = None,
                 index_identity: str | None = None) -> tuple[Path, str]:
     root, identity = _ensure_index_root(path, index_root, index_identity)
     name = index_cache_name(identity)
-    candidate = root / name
-    validate_durable_leaf(candidate, allow_missing=True)
-    return candidate, identity
+    return root / name, identity
 
 
 def index_cache_name(identity: str) -> str:
@@ -1507,16 +1631,20 @@ def _verified_descriptor(path: Path, max_record_bytes: int) \
     if not isinstance(max_record_bytes, int) or isinstance(max_record_bytes, bool) \
             or max_record_bytes < 0:
         raise JsonlDurabilityError("JSONL max_record_bytes must be a non-negative integer")
-    pins = _win_pin_durable_parent(path.parent, create=False)
+    pins = (_win_pin_durable_parent(path.parent, create=False)
+            if os.name == "nt" else _posix_pin_durable_parent(path.parent, create=False))
     journal_pins = pins
     pins = []
     try:
         revalidate_durable_parent_pins(journal_pins)
-        descriptor = _open_durable_leaf(path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+        descriptor = _open_durable_leaf(
+            path, os.O_RDONLY | getattr(os, "O_BINARY", 0),
+            directory_fd=pins[-1][1] if os.name != "nt" else None,
+        )
         revalidate_durable_parent_pins(journal_pins)
     except BaseException:
         if journal_pins:
-            _win_close_lock_parent_pins(journal_pins)
+            _close_durable_parent_pins(journal_pins)
         raise
     try:
         _lock_descriptor(descriptor)
@@ -1530,7 +1658,7 @@ def _verified_descriptor(path: Path, max_record_bytes: int) \
     except BaseException:
         os.close(descriptor)
         if journal_pins:
-            _win_close_lock_parent_pins(journal_pins)
+            _close_durable_parent_pins(journal_pins)
         raise
 
 
@@ -1887,7 +2015,8 @@ def _append_jsonl_unpinned(path: Path, value: dict,
                            dedupe_field: str | None = None, dedupe_value: object = None, *,
                            index_root: Path | None = None, index_identity: str | None = None,
                            rebuild_in_place: bool = False,
-                           hook: Callable[[str], None] | None = None) -> AppendOutcome:
+                           hook: Callable[[str], None] | None = None,
+                           parent_directory: int | None = None) -> AppendOutcome:
     """Repair a torn tail, validate committed rows, and durably append one object.
 
     The exact torn bytes and fail-closed escalation metadata are stored in the canonical
@@ -1905,15 +2034,19 @@ def _append_jsonl_unpinned(path: Path, value: dict,
         raise JsonlDurabilityError(f"JSONL append value is not serializable: {path}") from exc
     if len(encoded) - 1 > max_record_bytes:
         raise JsonlDurabilityError(f"new JSONL record exceeds {max_record_bytes} bytes: {path}")
-    ensure_no_symlink(path.parent)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    ensure_no_symlink(path.parent)
-    ensure_no_symlink(path)
+    if parent_directory is None:
+        ensure_no_symlink(path.parent)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_no_symlink(path.parent)
+        ensure_no_symlink(path)
+    journal_path = (_pinned_fd_path(parent_directory, path.name)
+                    if parent_directory is not None else path)
     descriptor = _open_durable_leaf(
-        path, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0), 0o600
+        path, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0), 0o600,
+        directory_fd=parent_directory,
     )
     try:
-        leaf_identity = _capture_opened_leaf(path, descriptor)
+        leaf_identity = _capture_opened_leaf(journal_path, descriptor)
     except BaseException:
         os.close(descriptor)
         raise
@@ -1921,17 +2054,21 @@ def _append_jsonl_unpinned(path: Path, value: dict,
     connection: sqlite3.Connection | None = None
     try:
         _lock_descriptor(descriptor)
-        _revalidate_opened_leaf(path, descriptor, leaf_identity)
+        _revalidate_opened_leaf(journal_path, descriptor, leaf_identity)
         size = os.fstat(descriptor).st_size
         committed = size
         if size:
-            _revalidate_opened_leaf(path, descriptor, leaf_identity)
+            _revalidate_opened_leaf(journal_path, descriptor, leaf_identity)
         if size and _read_at(descriptor, 1, size - 1) != b"\n":
             committed = _last_newline(descriptor, size)
             evidence = _quarantine_tail(path, descriptor, committed, size, hook)
-            _revalidate_opened_leaf(path, descriptor, leaf_identity)
+            _revalidate_opened_leaf(journal_path, descriptor, leaf_identity)
             os.ftruncate(descriptor, committed)
             os.fsync(descriptor)
+        # Resolve the derived-cache destination before any caller hook can rename the
+        # journal parent.  The later publication still re-pins this saved path, so a
+        # swapped ancestor is refused rather than followed.
+        index_path, _ = _index_path(path, index_root, index_identity)
         connection, _rebuilt = _open_verified_index(
             path, descriptor, committed, max_record_bytes,
             index_root=index_root, index_identity=index_identity,
@@ -1941,11 +2078,13 @@ def _append_jsonl_unpinned(path: Path, value: dict,
             return AppendOutcome(appended=False, quarantine=evidence)
         if hook is not None:
             hook("pre-journal-write")
-        _write_all(descriptor, encoded, leaf_path=path, leaf_identity=leaf_identity)
+        _write_all(descriptor, encoded, leaf_path=journal_path, leaf_identity=leaf_identity)
         os.fsync(descriptor)
-        _fsync_dir(path.parent)
-        _update_index_after_append(connection, descriptor, path, encoded, max_record_bytes)
-        index_path, _ = _index_path(path, index_root, index_identity)
+        if parent_directory is not None:
+            os.fsync(parent_directory)
+        else:
+            _fsync_dir(path.parent)
+        _update_index_after_append(connection, descriptor, journal_path, encoded, max_record_bytes)
         if not hasattr(connection, "serialize"):
             raise JsonlDurabilityError("SQLite serialization is unavailable for cache update")
         _install_serialized_cache_path(index_path, connection.serialize(), hook)
@@ -1964,21 +2103,13 @@ def append_jsonl(path: Path, value: dict,
                  hook: Callable[[str], None] | None = None) -> AppendOutcome:
     try:
         path = Path(path)
-        if os.name != "nt":
-            ensure_no_symlink(path.parent)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            return _append_jsonl_unpinned(
-                path, value, max_record_bytes, dedupe_field, dedupe_value,
-                index_root=index_root, index_identity=index_identity,
-                rebuild_in_place=rebuild_in_place, hook=hook,
-            )
         with pinned_durable_parent(path.parent, create=True) as pins:
-            ensure_no_symlink(path.parent)
             revalidate_durable_parent_pins(pins)
             result = _append_jsonl_unpinned(
                 path, value, max_record_bytes, dedupe_field, dedupe_value,
                 index_root=index_root, index_identity=index_identity,
                 rebuild_in_place=rebuild_in_place, hook=hook,
+                parent_directory=pins[-1][1] if os.name != "nt" else None,
             )
             revalidate_durable_parent_pins(pins)
             return result

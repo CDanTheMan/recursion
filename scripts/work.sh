@@ -1313,7 +1313,7 @@ acquire_heavy(){
   local waited=0 out
   while :; do
     pause_checkpoint "heavy-gate wait" || return 75
-    out="$(RECURSION_ROOT="$ROOT" RECURSION_HEAVY_TAG="$ID" RECURSION_HEAVY_PID="$$" \
+    out="$(RECURSION_ROOT="$ROOT" RECURSION_HEAVY_TAG="$ID" RECURSION_HEAVY_PID="$OWNER_PID" \
       bash "$ROOT/scripts/capacity.sh" heavy acquire "$ID" 2>&1)"
     case "$out" in ACQUIRED*) HEAVY_HELD=1; log "heavy-gate lock acquired after ${waited}s"; return 0 ;; esac
     waited=$((waited+10))
@@ -1326,7 +1326,7 @@ acquire_heavy(){
 }
 release_heavy(){
   [ "$HEAVY_HELD" = "1" ] || return 0
-  if ! RECURSION_ROOT="$ROOT" RECURSION_HEAVY_PID="$$" \
+  if ! RECURSION_ROOT="$ROOT" RECURSION_HEAVY_PID="$OWNER_PID" \
       bash "$ROOT/scripts/capacity.sh" heavy release >/dev/null 2>&1; then
     log "heavy-gate lock release failed closed"
     return 76

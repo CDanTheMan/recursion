@@ -13,10 +13,12 @@ R="$TMP/root"
 mkdir -p "$R/scripts" "$R/state/project-config" "$R/state/pilots" "$R/state/goals" \
   "$R/state/tasks" "$R/state/runs" "$R/state/instructions" "$R/state/.locks" \
   "$R/loop/logs" "$R/.worktrees"
-for s in project-pilot.py remote_evidence.py engine_contract.py project_authority.py pilot_instruction.py instruction_routing.py seed_contract.py intake.sh author.sh resync.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh validate-control-state.py; do
+for s in project-pilot.py remote_evidence.py assignment.py engine_contract.py project_authority.py pilot_instruction.py instruction_routing.py seed_contract.py intake.sh author.sh resync.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh validate-control-state.py; do
   [ -f "$SRC/scripts/$s" ] && cp "$SRC/scripts/$s" "$R/scripts/$s"
 done
 chmod +x "$R/scripts/"* 2>/dev/null || true
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$R/scripts" \
+  || { no "phase 4 fixture is missing a staged first-party dependency"; }
 : > "$R/.env"
 PILOT="$R/scripts/project-pilot.py"
 GIT="git -c user.name=t -c user.email=t@t -c init.defaultBranch=main"

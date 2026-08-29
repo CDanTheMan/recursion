@@ -94,8 +94,11 @@ try:
     if expected_task and (value.get('task_id') != expected_task or value.get('assignment_digest') != expected_digest):
         raise assignment.AssignmentError('assignment candidate identity does not match the lease binding')
     assignment.persist_assignment(root/'state/assignments', value)
-except (OSError, json.JSONDecodeError, assignment.AssignmentError) as exc:
-    raise SystemExit(f'taskctl: invalid assignment candidate: {exc}')
+except (OSError, UnicodeDecodeError, json.JSONDecodeError, assignment.AssignmentError,
+        TypeError, ValueError, OverflowError, RecursionError):
+    # Exception text can contain absolute paths, parser offsets, or host OS details.
+    # The shell boundary has a stable public diagnostic and no data-bearing traceback.
+    raise SystemExit('taskctl: invalid assignment candidate')
 PY
 }
 

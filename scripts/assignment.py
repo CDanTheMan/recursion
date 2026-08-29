@@ -586,17 +586,51 @@ def _open_private_at(directory: int, prefix: str) -> tuple[int, str]:
     raise AssignmentError("could not allocate an assignment temporary")
 
 
-def _persist_record_posix(task_directory: int, digest: str, encoded: bytes) -> None:
+def _persist_record_posix(
+        task_directory: int, digest: str, encoded: bytes
+) -> tuple[int, tuple[int, ...], bool] | None:
     final_name = f"{digest}.json"
     jsonl_durable.validate_durable_leaf_at(task_directory, final_name, allow_missing=True)
     existing = _read_at_directory(task_directory, final_name)
     if existing is not None:
         if existing != encoded:
             raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
-        return
+        descriptor = os.open(
+            final_name,
+            os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=task_directory,
+        )
+        try:
+            identity = jsonl_durable._capture_opened_leaf(
+                jsonl_durable._pinned_fd_path(task_directory, final_name), descriptor
+            )
+            return descriptor, identity, False
+        except BaseException:
+            os.close(descriptor)
+            raise
     _assignment_persistence_hook("pre-mkstemp")
     descriptor, temporary_name = _open_private_at(task_directory, f".{final_name}.")
     temporary = jsonl_durable._pinned_fd_path(task_directory, temporary_name)
+    final_path = jsonl_durable._pinned_fd_path(task_directory, final_name)
+    publication_succeeded = False
+    primary_error: BaseException | None = None
+    descriptor_closed = False
+    held_descriptor: int | None = None
+    held_identity: tuple[int, ...] | None = None
+
+    def close_descriptor() -> None:
+        nonlocal descriptor_closed, primary_error
+        if descriptor_closed:
+            return
+        try:
+            os.close(descriptor)
+            descriptor_closed = True
+        except OSError as exc:
+            if primary_error is None:
+                primary_error = AssignmentError(
+                    "assignment temporary close failed; refusing publication"
+                )
+                primary_error.__cause__ = exc
     try:
         temporary_identity = jsonl_durable._capture_opened_leaf(temporary, descriptor)
         _assignment_persistence_hook("pre-record-write")
@@ -607,6 +641,7 @@ def _persist_record_posix(task_directory: int, digest: str, encoded: bytes) -> N
         _assignment_persistence_hook("pre-record-publish")
         jsonl_durable._revalidate_opened_leaf(temporary, descriptor, temporary_identity)
         jsonl_durable.validate_durable_leaf_at(task_directory, final_name, allow_missing=True)
+        _assignment_persistence_hook("pre-record-hardlink")
         try:
             os.link(
                 temporary_name, final_name,
@@ -615,16 +650,120 @@ def _persist_record_posix(task_directory: int, digest: str, encoded: bytes) -> N
             )
         except FileExistsError:
             existing = _read_at_directory(task_directory, final_name)
+            if existing == encoded:
+                jsonl_durable._revalidate_opened_leaf(temporary, descriptor, temporary_identity)
+                held_descriptor = os.open(
+                    final_name,
+                    os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=task_directory,
+                )
+                try:
+                    held_identity = jsonl_durable._capture_opened_leaf(
+                        final_path, held_descriptor
+                    )
+                except BaseException:
+                    os.close(held_descriptor)
+                    held_descriptor = None
+                    raise
             if existing != encoded:
                 raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
-    finally:
+        else:
+            publication_succeeded = True
+            # The temporary is deliberately still present here.  A peer that links it
+            # during this hook must be detected by the held descriptor after cleanup.
+            _assignment_persistence_hook("post-record-hardlink")
+    except BaseException as exc:
+        primary_error = exc
+
+    try:
+        os.unlink(temporary_name, dir_fd=task_directory)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        if primary_error is None:
+            primary_error = AssignmentError(
+                "assignment temporary cleanup failed; refusing publication"
+            )
+            primary_error.__cause__ = exc
+
+    if not publication_succeeded and held_descriptor is not None:
         try:
-            os.unlink(temporary_name, dir_fd=task_directory)
-        except FileNotFoundError:
-            pass
-        finally:
-            os.close(descriptor)
-    os.fsync(task_directory)
+            if jsonl_durable._leaf_identity(descriptor) != temporary_identity:
+                raise jsonl_durable.JsonlDurabilityError(
+                    "assignment temporary gained an outside hard link"
+                )
+        except BaseException:
+            if primary_error is None:
+                primary_error = exc
+
+    if primary_error is not None:
+        close_descriptor()
+        if held_descriptor is not None:
+            try:
+                os.close(held_descriptor)
+            except OSError:
+                pass
+        if publication_succeeded:
+            try:
+                os.unlink(final_name, dir_fd=task_directory)
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                cleanup_error = AssignmentError(
+                    "assignment final cleanup failed after publication refusal"
+                )
+                cleanup_error.__cause__ = exc
+                raise cleanup_error from primary_error
+        raise primary_error
+
+    if publication_succeeded:
+        try:
+            # This is descriptor-bound: the handle identity and its post-unlink nlink
+            # are checked against the pinned FINAL name before the operation succeeds.
+            jsonl_durable._revalidate_opened_leaf(final_path, descriptor, temporary_identity)
+            _assignment_persistence_hook("post-record-validation")
+            # The second check makes the exact post-validation race regression
+            # deterministic while documenting the unavoidable final return boundary.
+            jsonl_durable._revalidate_opened_leaf(final_path, descriptor, temporary_identity)
+        except BaseException as exc:
+            try:
+                os.unlink(final_name, dir_fd=task_directory)
+            except FileNotFoundError:
+                pass
+            except OSError as cleanup_exc:
+                cleanup_error = AssignmentError(
+                    "assignment final cleanup failed after link validation refusal"
+                )
+                cleanup_error.__cause__ = cleanup_exc
+                close_descriptor()
+                raise cleanup_error from exc
+            close_descriptor()
+            raise
+    if not publication_succeeded:
+        close_descriptor()
+        if primary_error is not None:
+            if held_descriptor is not None:
+                try:
+                    os.close(held_descriptor)
+                except OSError:
+                    pass
+            raise primary_error
+    try:
+        os.fsync(task_directory)
+    except BaseException:
+        if publication_succeeded:
+            close_descriptor()
+        if held_descriptor is not None:
+            try:
+                os.close(held_descriptor)
+            except OSError:
+                pass
+        raise
+    if publication_succeeded:
+        return descriptor, temporary_identity, True
+    if held_descriptor is not None and held_identity is not None:
+        return held_descriptor, held_identity, False
+    return None
 
 
 def _assert_posix_pin(path: Path, descriptor: int, label: str) -> None:
@@ -763,34 +902,72 @@ if os.name == "nt":
         finally:
             os.close(descriptor)
 
-    def _win_validate_published_record(path: Path, expected_identity: tuple[int, ...]) -> None:
-        """Validate the FINAL name after publication and private-link cleanup.
+    def _win_validate_published_record(path: Path, expected_identity: tuple[int, ...]) -> int:
+        """Validate and retain a handle for the FINAL name after private-link cleanup.
 
         CreateHardLinkW necessarily leaves the private temporary as a second name until
         that name is removed.  The post-publication check is therefore the authority for
         the published invariant: FINAL must resolve, without following a reparse point, to
         the expected regular file and that file must have exactly one link remaining.  The
-        caller pins the root/task directory, so that sole remaining link is FINAL inside
-        the assignment root.
+        returned handle is retained by the caller through the rest of publication.  Its
+        delete-sharing denial closes the validation-to-return gap as far as Windows sharing
+        semantics permit; a final post-handle check still remains the fail-closed guard.
         """
+        handle = _win_open_file(path, _OPEN_EXISTING)
+        descriptor = _win_fd(handle, os.O_RDONLY | getattr(os, "O_BINARY", 0))
         try:
-            identity, links = jsonl_durable._win_open_leaf_identity(path)
-        except jsonl_durable.JsonlDurabilityError:
+            native = int(jsonl_durable.msvcrt.get_osfhandle(descriptor))
+            attributes = jsonl_durable._win_lock_handle_attributes(native)
+            if attributes & jsonl_durable._LOCK_FILE_ATTRIBUTE_REPARSE_POINT:
+                raise jsonl_durable.JsonlDurabilityError(
+                    f"Windows published assignment record is a reparse point: {path}"
+                )
+            identity = jsonl_durable._win_lock_handle_identity(native)
+            links = jsonl_durable._win_lock_handle_links(native)
+            if identity != expected_identity:
+                raise jsonl_durable.JsonlDurabilityError(
+                    f"Windows published assignment record identity changed: {path}"
+                )
+            if links != 1:
+                raise jsonl_durable.JsonlDurabilityError(
+                    f"Windows published assignment record has {links} hard links: {path}"
+                )
+            path_identity, path_links = jsonl_durable._win_open_leaf_identity(path)
+            if path_identity != expected_identity or path_links != 1:
+                raise jsonl_durable.JsonlDurabilityError(
+                    f"Windows published assignment record changed by name: {path}"
+                )
+            return descriptor
+        except BaseException:
+            os.close(descriptor)
             raise
-        except OSError as exc:
+
+    def _win_revalidate_held_published_record(
+            path: Path, descriptor: int, expected_identity: tuple[int, ...]) -> None:
+        native = int(jsonl_durable.msvcrt.get_osfhandle(descriptor))
+        identity = jsonl_durable._win_lock_handle_identity(native)
+        links = jsonl_durable._win_lock_handle_links(native)
+        if identity != expected_identity or links != 1:
             raise jsonl_durable.JsonlDurabilityError(
-                f"cannot revalidate Windows published assignment record: {path}"
-            ) from exc
-        if identity != expected_identity:
-            raise jsonl_durable.JsonlDurabilityError(
-                f"Windows published assignment record identity changed: {path}"
+                f"Windows published assignment record changed while held: {path}"
             )
-        if links != 1:
+        path_identity, path_links = jsonl_durable._win_open_leaf_identity(path)
+        if path_identity != expected_identity or path_links != 1:
             raise jsonl_durable.JsonlDurabilityError(
-                f"Windows published assignment record has {links} hard links: {path}"
+                f"Windows published assignment record changed by name: {path}"
             )
 
-    def _persist_record_windows(task_path: Path, digest: str, encoded: bytes) -> None:
+    def _win_delete_file(path: Path, *, missing_ok: bool = False) -> None:
+        if _KERNEL32.DeleteFileW(str(path)):
+            return
+        error = ctypes.get_last_error()
+        if missing_ok and error in (2, 3):
+            return
+        raise OSError(error, f"cannot remove Windows durable file {path}")
+
+    def _persist_record_windows(
+            task_path: Path, digest: str, encoded: bytes
+    ) -> tuple[int, tuple[int, ...], bool] | None:
         # A Windows hard-link publication has a deliberate transient: after the final
         # link is created, the private temporary still contributes a second link until
         # cleanup.  Serialize this digest's record publication so another worker cannot
@@ -800,9 +977,11 @@ if os.name == "nt":
         # untrusted pre-existing leaf.
         final = task_path / f"{digest}.json"
         with jsonl_durable.durable_lock(final):
-            _persist_record_windows_unlocked(task_path, digest, encoded)
+            return _persist_record_windows_unlocked(task_path, digest, encoded)
 
-    def _persist_record_windows_unlocked(task_path: Path, digest: str, encoded: bytes) -> None:
+    def _persist_record_windows_unlocked(
+            task_path: Path, digest: str, encoded: bytes
+    ) -> tuple[int, tuple[int, ...], bool] | None:
         final = task_path / f"{digest}.json"
         jsonl_durable.validate_durable_leaf(final, allow_missing=True)
         existing = _win_read_file(final)
@@ -824,10 +1003,20 @@ if os.name == "nt":
                     raise
         if handle is None or temporary is None:
             raise AssignmentError("could not allocate a unique Windows assignment temporary")
-        descriptor = _win_fd(handle, os.O_WRONLY | getattr(os, "O_BINARY", 0))
-        handle = None
+        try:
+            descriptor = _win_fd(handle, os.O_WRONLY | getattr(os, "O_BINARY", 0))
+            handle = None
+        except BaseException:
+            try:
+                _win_delete_file(temporary, missing_ok=True)
+            except OSError as cleanup_error:
+                raise AssignmentError(
+                    "Windows assignment temporary cleanup failed after handle adoption refusal"
+                ) from cleanup_error
+            raise
         publication_succeeded = False
         primary_error: BaseException | None = None
+        temporary_identity: tuple[int, ...] | None = None
         try:
             temporary_identity = jsonl_durable._capture_opened_leaf(temporary, descriptor)
             _assignment_persistence_hook("pre-record-write")
@@ -874,28 +1063,60 @@ if os.name == "nt":
             # example, if an attacker races a junction into the immutable leaf).  The
             # task directory is handle-pinned without delete sharing, so this pathname
             # still names our private temporary and is safe to remove on every exit.
-            if not _KERNEL32.DeleteFileW(str(temporary)):
-                error = ctypes.get_last_error()
-                if error not in (2, 3) and primary_error is None:
-                    primary_error = OSError(error, "cannot remove Windows assignment temporary")
+            try:
+                _win_delete_file(temporary, missing_ok=True)
+            except OSError as exc:
+                if primary_error is None:
+                    primary_error = exc
+                else:
+                    primary_error = AssignmentError(
+                        "Windows assignment temporary cleanup failed after an earlier refusal"
+                    )
+                    primary_error.__cause__ = exc
 
         if primary_error is not None:
             if publication_succeeded:
                 # The record is not trusted unless the post-publication invariant below
                 # succeeds.  Remove only the FINAL directory entry; any attacker-owned
                 # hardlink elsewhere is never followed or overwritten by this cleanup.
-                _KERNEL32.DeleteFileW(str(final))
+                try:
+                    _win_delete_file(final, missing_ok=True)
+                except OSError as cleanup_error:
+                    raise AssignmentError(
+                        "Windows assignment final cleanup failed after publication refusal"
+                    ) from cleanup_error
             raise primary_error
 
         if publication_succeeded:
+            if temporary_identity is None:  # pragma: no cover - publication implies capture.
+                raise jsonl_durable.JsonlDurabilityError(
+                    "Windows assignment publication has no temporary identity"
+                )
+            published_descriptor: int | None = None
             try:
-                _win_validate_published_record(final, temporary_identity)
-            except BaseException:
+                published_descriptor = _win_validate_published_record(final, temporary_identity)
+                _assignment_persistence_hook("post-record-validation")
+                _win_revalidate_held_published_record(
+                    final, published_descriptor, temporary_identity
+                )
+                return published_descriptor, temporary_identity, True
+            except BaseException as exc:
                 # A hostile hardlink is detectable only after the temporary pathname has
                 # been removed: FINAL then reports nlink=2.  Fail closed by removing the
                 # published directory entry before returning the typed refusal.
-                _KERNEL32.DeleteFileW(str(final))
-                raise
+                if published_descriptor is not None:
+                    try:
+                        os.close(published_descriptor)
+                    except OSError:
+                        pass
+                try:
+                    _win_delete_file(final, missing_ok=True)
+                except OSError as cleanup_error:
+                    raise AssignmentError(
+                        "Windows assignment final cleanup failed after link validation refusal"
+                    ) from cleanup_error
+                raise exc
+        return None
 
 
 def _assignment_index_record(value: dict) -> dict:
@@ -911,6 +1132,7 @@ def _persist_assignment_posix(root: Path, value: dict, encoded: bytes) -> Path:
     root_fd = _posix_open_directory(root)
     task_fd: int | None = None
     cache_fd: int | None = None
+    record_result: tuple[int, tuple[int, ...], bool] | None = None
     try:
         task_id = value["task_id"]
         try:
@@ -942,7 +1164,7 @@ def _persist_assignment_posix(root: Path, value: dict, encoded: bytes) -> Path:
             cache_fd, jsonl_durable.index_cache_name(identity), allow_missing=True
         )
 
-        _persist_record_posix(task_fd, value["assignment_digest"], encoded)
+        record_result = _persist_record_posix(task_fd, value["assignment_digest"], encoded)
         _assignment_persistence_hook("pre-index-open")
         jsonl_durable.append_jsonl_at(
             root_fd, "index.jsonl", _assignment_index_record(value), cache_fd, identity,
@@ -952,11 +1174,48 @@ def _persist_assignment_posix(root: Path, value: dict, encoded: bytes) -> Path:
         os.fsync(root_fd)
         _assert_posix_pin(root, root_fd, "root")
         _assert_posix_pin(root / task_id, task_fd, "task directory")
+        if record_result is not None:
+            record_descriptor, record_identity, created = record_result
+            final_path = jsonl_durable._pinned_fd_path(
+                task_fd, f"{value['assignment_digest']}.json"
+            )
+            try:
+                jsonl_durable._revalidate_opened_leaf(
+                    final_path, record_descriptor, record_identity
+                )
+                _assignment_persistence_hook("post-record-index")
+                jsonl_durable._revalidate_opened_leaf(
+                    final_path, record_descriptor, record_identity
+                )
+                # POSIX has no atomic link-count snapshot plus descriptor close.  The
+                # descriptor remains held through the index commit and this final check;
+                # a peer can still add a link in the unavoidable close/return boundary,
+                # which is an explicit residual rather than a claimed closed race.
+            except BaseException:
+                if created:
+                    try:
+                        os.unlink(
+                            f"{value['assignment_digest']}.json", dir_fd=task_fd
+                        )
+                    except FileNotFoundError:
+                        pass
+                    except OSError as cleanup_exc:
+                        cleanup_error = AssignmentError(
+                            "assignment final cleanup failed after post-index refusal"
+                        )
+                        cleanup_error.__cause__ = cleanup_exc
+                        raise cleanup_error
+                raise
         return assignment_path(root, value["task_id"], value["assignment_digest"])
     except (OSError, TypeError, ValueError, OverflowError, RecursionError,
             UnicodeDecodeError, jsonl_durable.JsonlDurabilityError) as exc:
         raise AssignmentError(f"pinned assignment persistence failed: {exc}") from exc
     finally:
+        if record_result is not None:
+            try:
+                os.close(record_result[0])
+            except OSError:
+                pass
         if cache_fd is not None:
             os.close(cache_fd)
         if task_fd is not None:
@@ -971,6 +1230,9 @@ def _persist_assignment_windows(root: Path, value: dict, encoded: bytes) -> Path
     task_pins: list[tuple[Path, int]] = []
     cache_pins: list[tuple[Path, int]] = []
     index_handle: int | None = None
+    published_record_handle: int | None = None
+    published_record_identity: tuple[int, ...] | None = None
+    published_record_created = False
     try:
         task_pins = _win_pin_directory(task)
         cache = root / ".jsonl-index"
@@ -984,7 +1246,12 @@ def _persist_assignment_windows(root: Path, value: dict, encoded: bytes) -> Path
             cache / jsonl_durable.index_cache_name(identity), allow_missing=True
         )
         jsonl_durable._revalidate_opened_leaf(index, index_handle, index_identity)
-        _persist_record_windows(task, value["assignment_digest"], encoded)
+        record_result = _persist_record_windows(
+            task, value["assignment_digest"], encoded
+        )
+        if record_result is not None:
+            (published_record_handle, published_record_identity,
+             published_record_created) = record_result
         _assignment_persistence_hook("pre-index-open")
         for attempt in range(8):
             try:
@@ -1001,12 +1268,39 @@ def _persist_assignment_windows(root: Path, value: dict, encoded: bytes) -> Path
                 if str(exc) != "durable JSONL transaction lock is contended" or attempt == 7:
                     raise
                 time.sleep(0.01)
+        if published_record_handle is not None and published_record_identity is not None:
+            final = task / f"{value['assignment_digest']}.json"
+            _assignment_persistence_hook("post-record-index")
+            _win_revalidate_held_published_record(
+                final, published_record_handle, published_record_identity
+            )
+            # The public API returns only a Path, so the held descriptor must be closed in
+            # finally.  Windows has no atomic "revalidate link count and close" primitive;
+            # a privileged non-participant may still add a hardlink in that final close/
+            # return boundary.  The handle's no-delete-sharing interval and this last
+            # descriptor/path check bound that residual; it is not claimed as impossible.
         return assignment_path(root, value["task_id"], value["assignment_digest"])
-    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
-            UnicodeDecodeError, jsonl_durable.JsonlDurabilityError) as exc:
+    except (AssignmentError, OSError, TypeError, ValueError, OverflowError,
+            RecursionError, UnicodeDecodeError,
+            jsonl_durable.JsonlDurabilityError) as exc:
+        if published_record_created:
+            if published_record_handle is not None:
+                try:
+                    os.close(published_record_handle)
+                except OSError:
+                    pass
+                published_record_handle = None
+            try:
+                _win_delete_file(
+                    task / f"{value['assignment_digest']}.json", missing_ok=True
+                )
+            except OSError as cleanup_error:
+                raise AssignmentError(
+                    "Windows assignment final cleanup failed after persistence refusal"
+                ) from cleanup_error
         raise AssignmentError(f"pinned Windows assignment persistence failed: {exc}") from exc
     finally:
-        for descriptor in (index_handle,):
+        for descriptor in (index_handle, published_record_handle):
             if descriptor is not None:
                 os.close(descriptor)
         for pins in (cache_pins, task_pins, root_pins):

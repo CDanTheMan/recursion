@@ -280,8 +280,10 @@ def main() -> int:
         else:
             record = json.load(sys.stdin)
         validate(args.kind, record)
-    except (OSError, json.JSONDecodeError, ValueError) as exc:
-        print(f"ERR {exc}", file=sys.stderr)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError,
+            TypeError, OverflowError, RecursionError):
+        # Keep parser/OS details and absolute input paths out of this public boundary.
+        print("ERR invalid input", file=sys.stderr)
         return 2
     print("OK")
     return 0

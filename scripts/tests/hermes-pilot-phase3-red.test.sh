@@ -24,43 +24,11 @@ PY
 
 check_staged_python_dependencies(){
   local root="$1"
-  if SOURCE_SCRIPTS="$SRC/scripts" STAGED_SCRIPTS="$root/scripts" python3 - <<'PY'
-import ast
-import os
-from pathlib import Path
-
-source = Path(os.environ["SOURCE_SCRIPTS"])
-staged = Path(os.environ["STAGED_SCRIPTS"])
-first_party = {path.stem for path in source.glob("*.py")}
-missing = []
-found = []
-for script in sorted(staged.glob("*.py")):
-    try:
-        tree = ast.parse(script.read_text(encoding="utf-8"), filename=str(script))
-    except (OSError, SyntaxError, UnicodeError) as exc:
-        print(f"dependency guard: cannot parse {script.name}: {exc}")
-        missing.append((script.name, "<parse>"))
-        continue
-    imported = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imported.update(alias.name.split(".", 1)[0] for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            imported.add(node.module.split(".", 1)[0])
-    for dependency in sorted(imported & first_party):
-        found.append(f"{script.name}->{dependency}")
-        if not (staged / f"{dependency}.py").is_file():
-            missing.append((script.name, dependency))
-print("dependency guard: first-party imports " + (", ".join(found) or "none"))
-if missing:
-    for script, dependency in missing:
-        print(f"dependency guard: missing {dependency}.py required by {script}")
-    raise SystemExit(1)
-PY
+  if python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$root/scripts"
   then
-    ok "staged Python fixtures contain every first-party imported module"
+    ok "staged fixtures contain every static, dynamic, shell, and nested first-party dependency"
   else
-    no "a staged Python fixture is missing a first-party imported module"
+    no "a staged fixture is missing a first-party dependency"
   fi
 }
 
@@ -132,6 +100,7 @@ fi
 H="$TMP/decide"; mkdir -p "$H/scripts" "$H/state/tasks" "$H/state/roadmaps" "$H/loop/logs" "$TMP/hermes-bin"
 cp "$SRC/scripts/hermes-decide.sh" "$H/scripts/"
 cp "$SRC/scripts/validate-decision.py" "$H/scripts/"
+check_staged_python_dependencies "$H"
 printf 'authority\n' > "$H/CONTROL_PLANE.md"; printf 'scope\n' > "$H/ANCHOR.md"
 : > "$H/state/DECISIONS.md"; : > "$H/state/PROPOSALS.md"
 cat > "$TMP/hermes-bin/hermes" <<'STUB'
