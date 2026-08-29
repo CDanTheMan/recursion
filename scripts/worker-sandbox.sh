@@ -498,7 +498,14 @@ PY
     plan_parser_rc=$?
   fi
   if [ "$plan_parser_rc" -ne 0 ]; then
-    if [[ "$plan_parser_output" == *"worker-sandbox: first-party module 'phase5_safety' not found; searched "* ]]; then
+    if [[ "$plan_parser_output" == *"worker-sandbox: refusal=invalid-engine-plan"* ]]; then
+      # The embedded parser deliberately emits a typed marker for a plan refusal.
+      # Command substitution captures stderr along with stdout, so forward only
+      # that marker here; parser startup failures must remain a separate class.
+      echo "worker-sandbox: refusal=invalid-engine-plan" >&2
+      exit 92
+    fi
+    if [[ "$plan_parser_output" == *"worker-sandbox: first-party module"*"unavailable or malformed; searched "* ]]; then
       printf '%s\n' "$plan_parser_output" >&2
     fi
     echo "worker-sandbox: engine plan parser failed before plan validation (exit $plan_parser_rc)" >&2

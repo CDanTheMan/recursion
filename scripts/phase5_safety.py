@@ -626,6 +626,12 @@ def atomic_write(path: Path | str, data: bytes, *, replace: bool = True,
                 _verify_regular(fd, str(path))
                 if os.name != "nt":
                     os.fchmod(fd, mode)
+                else:
+                    # Windows exposes the owner-write bit through its read-only
+                    # file attribute.  Apply the requested mode while the
+                    # same-directory temporary is still private, so runtime
+                    # files are non-writable before the atomic publication.
+                    os.chmod(temporary, mode)
                 if os.name == "nt":
                     _verify_regular(fd, str(path))
                     try:
