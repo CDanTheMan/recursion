@@ -33,10 +33,10 @@ except (ValueError,TypeError,OverflowError,RecursionError,UnicodeDecodeError,OSE
   raise SystemExit(74)
 PY
 }
-atomic_replace_checked(){ python3 - "$1" "$2" <<'PY'
+atomic_replace_checked(){ python3 - "$1" "$2" "$ROOT" <<'PY'
 import os,stat,sys
 from pathlib import Path
-sys.path.insert(0, str(Path.cwd() / "scripts"))
+sys.path.insert(0, str(Path(sys.argv[3]) / "scripts"))
 import repository_contract as rc
 
 try:
@@ -257,15 +257,15 @@ fi
 # writing anything.  In particular, a permissive roadmap default (such as `allowed_paths: .`)
 # must not widen a descriptor restricted to a subtree.
 if [ -n "$PROJECT_CONFIG" ]; then
-  python3 - "$PROJECT_CONFIG" "$REPO_CANONICAL" "$ID" "$SOURCE_BRANCH" "$SOURCE_SHA" \
+  python3 - "$ROOT" "$PROJECT_CONFIG" "$REPO_CANONICAL" "$ID" "$SOURCE_BRANCH" "$SOURCE_SHA" \
     "${ALLOWED:-${WORKDIR:-.}}" "$WORKDIR" "$ACC" "$GOAL" "$GATE_FILES" \
     "$CONTROLLER_GATE_FILES" <<'PY'
 import json, re, sys
 from pathlib import Path
-sys.path.insert(0, str(Path.cwd() / "scripts"))
+sys.path.insert(0, str(Path(sys.argv[1]) / "scripts"))
 import repository_contract as rc
 
-descriptor_path, repo, task_id, source_branch, source_sha, allowed_raw, workdir, acceptance, goal, \
+_, descriptor_path, repo, task_id, source_branch, source_sha, allowed_raw, workdir, acceptance, goal, \
     gate_files_raw, controller_gate_files_raw = sys.argv[1:]
 allowed = [item for item in re.split(r"[\s,]+", allowed_raw) if item]
 gate_files = [item for item in re.split(r"[\s,]+", gate_files_raw) if item]

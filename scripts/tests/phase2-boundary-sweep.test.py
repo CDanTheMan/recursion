@@ -387,7 +387,11 @@ class Phase2BoundarySweep(unittest.TestCase):
         candidate = {"project_id": "phase2-sweep", "task_id": "task-one", "source_branch": "main",
                      "source_sha": source, "external_branch": "cursor/task-one",
                      "candidate_commit": commit, "idempotency_key": "sweep-import"}
-        diff = git("diff", "--binary", source, commit)
+        # Receipt provenance is the complete diff stream.  The ordinary git() helper strips the
+        # trailing newline for scalar values such as commit IDs; stripping a patch changes the
+        # bytes being authenticated and makes the fixture receipt unlike a controller receipt.
+        diff = subprocess.run(["git", "-C", str(repo), "diff", "--binary", source, commit],
+                              text=True, capture_output=True, check=True).stdout
         body = {"schema": "recursion-controller-verifier-receipt/v1", "project_id": "phase2-sweep",
                 "task_id": "task-one", "source_sha": source, "candidate_commit": commit,
                 "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(),
