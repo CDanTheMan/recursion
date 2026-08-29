@@ -295,7 +295,8 @@ PY
 fi
 if [ "$ENGINE" = claude ]; then
   # Builtin strict runs still emit the same assignment-bound execution record as plugins.
-  PLAN_ARGV_JSON='["claude","{{PROMPT}}"]'
+  PLAN_ARGV_JSON='["claude","-p","{{PROMPT}}","--permission-mode","acceptEdits","--allowedTools","Bash(node:*)"]'
+  PLAN_MODEL_SUFFIX_JSON='["--model","{{MODEL}}"]'
   PLAN_NETWORK_POLICY="$NETWORK_POLICY"
   PLAN_NETWORK_PROFILE="anthropic"
   PLAN_NETWORK_PROVIDER="anthropic-claude-code"

@@ -131,18 +131,21 @@ def validate_model(model: object) -> None:
 def validate_roles(roles: object) -> None:
     if not isinstance(roles, list) or not roles:
         raise ManifestError("roles must be a nonempty list")
+    if not all(isinstance(role, str) for role in roles):
+        raise ManifestError("roles must contain only strings")
     if len(set(roles)) != len(roles):
         raise ManifestError("roles must not contain duplicates")
     if not all(role in ROLE_CHOICES for role in roles):
         raise ManifestError(f"roles must be a subset of {ROLE_CHOICES}")
 
 
-def validate_billing(billing: object) -> None:
+def validate_billing(billing: object) -> dict:
     obj = require_object_keys(billing, BILLING_KEYS, "billing")
-    if obj["basis"] not in BILLING_BASES:
+    if not isinstance(obj["basis"], str) or obj["basis"] not in BILLING_BASES:
         raise ManifestError(f"billing.basis must be one of {sorted(BILLING_BASES)}")
     if not isinstance(obj["provider"], str) or not obj["provider"] or has_control(obj["provider"]):
         raise ManifestError("billing.provider must be a nonempty string")
+    return obj
 
 
 def canonical_controller_root(value: str) -> Path:
@@ -223,7 +226,7 @@ def validate_network(network: object, provider: str | None = None, billing_basis
     if missing or extra:
         raise ManifestError("network has invalid fields")
     obj = network
-    if obj["policy"] not in {"provider-only", "none"}:
+    if not isinstance(obj["policy"], str) or obj["policy"] not in {"provider-only", "none"}:
         raise ManifestError('network.policy must be "provider-only" or "none"')
     endpoints = obj["endpoints"]
     if not isinstance(endpoints, list):
@@ -239,6 +242,10 @@ def validate_network(network: object, provider: str | None = None, billing_basis
     declared = provider_profiles(controller_root, controller_commit).get(profile)
     if not isinstance(declared, dict) or not isinstance(declared.get("endpoints"), list):
         raise ManifestError("network.profile is not a declared provider profile")
+    declared_endpoints = declared["endpoints"]
+    if any(not isinstance(item, str) or not ENDPOINT_RE.fullmatch(item) or has_control(item)
+           for item in declared_endpoints) or len(set(declared_endpoints)) != len(declared_endpoints):
+        raise ManifestError("declared provider profile endpoints are invalid")
     if provider is not None and declared.get("provider") != provider:
         raise ManifestError("network.profile provider does not match billing.provider")
     if sorted(declared["endpoints"]) != sorted(endpoints):
@@ -249,8 +256,9 @@ def validate_network(network: object, provider: str | None = None, billing_basis
                                        or endpoints or billing_basis != "local"):
         raise ManifestError("network.policy none is reserved for the local sentry profile")
     allowlist = declared.get("env_allowlist")
-    if not isinstance(allowlist, list) or len(set(allowlist)) != len(allowlist) \
-            or any(not isinstance(v, str) or not ENV_NAME_RE.fullmatch(v) for v in allowlist):
+    if not isinstance(allowlist, list) or not all(isinstance(v, str) for v in allowlist) \
+            or len(set(allowlist)) != len(allowlist) \
+            or any(not ENV_NAME_RE.fullmatch(v) for v in allowlist):
         raise ManifestError("provider profile env allowlist is invalid")
     return {"profile": profile, "provider": declared.get("provider"),
             "endpoints": list(declared["endpoints"]), "env_allowlist": list(allowlist)}
@@ -271,6 +279,8 @@ def validate_probe(probe: object) -> None:
 
 def validate_env_passthrough(names: object, allowed: list[str]) -> None:
     if not isinstance(names, list):
+        raise ManifestError("env_passthrough must be a list of strings")
+    if not all(isinstance(item, str) for item in names):
         raise ManifestError("env_passthrough must be a list of strings")
     if len(set(names)) != len(names):
         raise ManifestError("env_passthrough must not contain duplicates")
@@ -301,7 +311,7 @@ def validate_runtime_layout(layout: object) -> None:
         raise ManifestError("runtime_layout missing required key(s): mode")
     obj = layout
     mode = obj["mode"]
-    if mode not in {"executable-only", "sibling-tree"}:
+    if not isinstance(mode, str) or mode not in {"executable-only", "sibling-tree"}:
         raise ManifestError('runtime_layout.mode must be "executable-only" or "sibling-tree"')
     if mode == "executable-only":
         if any(obj.get(key) is not None for key in ("source", "root", "target", "entrypoint")):
@@ -326,10 +336,10 @@ def validate_execution(execution: object) -> None:
     if not isinstance(structured, bool):
         raise ManifestError("execution.structured_output must be a boolean")
     output_format = obj["output_format"]
-    if output_format not in {"text", "json"}:
+    if not isinstance(output_format, str) or output_format not in {"text", "json"}:
         raise ManifestError('execution.output_format must be "text" or "json"')
     cancel = require_object_keys(obj["cancellation"], CANCELLATION_KEYS, "execution.cancellation")
-    if cancel["signal"] not in {"TERM", "INT"}:
+    if not isinstance(cancel["signal"], str) or cancel["signal"] not in {"TERM", "INT"}:
         raise ManifestError("execution.cancellation.signal must be TERM or INT")
     if not is_plain_int(cancel["grace_s"]) or not (1 <= cancel["grace_s"] <= 60):
         raise ManifestError("execution.cancellation.grace_s must be an integer in 1..60")
@@ -348,7 +358,7 @@ def validate_auth(auth: object) -> None:
     if auth is None:
         return
     obj = require_object_keys(auth, AUTH_KEYS, "auth")
-    if obj["mode"] not in {"none", "runner-home-marker"}:
+    if not isinstance(obj["mode"], str) or obj["mode"] not in {"none", "runner-home-marker"}:
         raise ManifestError('auth.mode must be "none" or "runner-home-marker"')
     if not is_plain_bool(obj["required"]):
         raise ManifestError("auth.required must be a boolean")
@@ -358,8 +368,8 @@ def validate_auth(auth: object) -> None:
         raise ManifestError("auth.marker is only valid for runner-home-marker auth")
 
 
-def validate_manifest(data: object, engine: str, *, controller_root: Path | None = None,
-                      controller_commit: str | None = None) -> dict:
+def _validate_manifest(data: object, engine: str, *, controller_root: Path | None = None,
+                       controller_commit: str | None = None) -> dict:
     if not isinstance(data, dict):
         raise ManifestError("manifest must be a JSON object")
     missing = REQUIRED_TOP_LEVEL_KEYS - data.keys()
@@ -386,8 +396,8 @@ def validate_manifest(data: object, engine: str, *, controller_root: Path | None
     validate_argv(obj["argv"])
     validate_model(obj["model"])
     validate_roles(obj["roles"])
-    validate_billing(obj["billing"])
-    network = validate_network(obj["network"], obj["billing"]["provider"], obj["billing"]["basis"],
+    billing = validate_billing(obj["billing"])
+    network = validate_network(obj["network"], billing["provider"], billing["basis"],
                                controller_root, controller_commit)
     validate_probe(obj["availability_probe"])
     cap = obj["concurrency_cap"]
@@ -398,6 +408,18 @@ def validate_manifest(data: object, engine: str, *, controller_root: Path | None
     validate_execution(obj.get("execution"))
     validate_auth(obj.get("auth"))
     return obj
+
+
+def validate_manifest(data: object, engine: str, *, controller_root: Path | None = None,
+                      controller_commit: str | None = None) -> dict:
+    """Expose one typed failure domain for all malformed manifest inputs."""
+    try:
+        return _validate_manifest(data, engine, controller_root=controller_root,
+                                  controller_commit=controller_commit)
+    except ManifestError:
+        raise
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
+        raise ManifestError("manifest contains invalid field types") from exc
 
 
 def manifest_dir() -> Path:
@@ -555,7 +577,12 @@ def main() -> int:
             diag(str(exc))
             return 2
     path = manifest_path(engine) if controller_root is None else controller_root / "scripts" / "engines" / f"{engine}.json"
-    if not path.is_file():
+    try:
+        present = path.is_file()
+    except OSError as exc:
+        diag(f"could not inspect manifest {path}: {exc}")
+        return 2
+    if not present:
         diag(f"manifest not found: {path}")
         return 3
 
@@ -564,6 +591,9 @@ def main() -> int:
                                           controller_commit=args.controller_commit)
     except ManifestError as exc:
         diag(str(exc))
+        return 2
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
+        diag(f"invalid manifest {path}: {exc}")
         return 2
 
     if args.validate:

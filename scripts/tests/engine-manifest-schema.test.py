@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import subprocess
 import sys
@@ -17,6 +18,11 @@ except ImportError as exc:  # pragma: no cover - the hardening environment suppl
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = json.loads((ROOT / "schemas/control-plane/v1/engine-manifest.schema.json").read_text())
 ENGINES = ROOT / "scripts/engines"
+
+resolver_spec = importlib.util.spec_from_file_location("resolve_engine", ROOT / "scripts/resolve-engine.py")
+assert resolver_spec is not None and resolver_spec.loader is not None
+resolver = importlib.util.module_from_spec(resolver_spec)
+resolver_spec.loader.exec_module(resolver)
 
 
 def main() -> int:
@@ -56,6 +62,40 @@ def main() -> int:
     target["network"]["profile"] = "cursor"
     if not list(validator.iter_errors(target)):
         failures.append("schema accepted no-egress policy for a networked profile")
+
+    # The published schema and the runtime validator must speak the same language for
+    # the Phase 5 layout defaults/null compatibility and exit-code disjointness.
+    sibling_missing_target = copy.deepcopy(cursor)
+    del sibling_missing_target["runtime_layout"]["target"]
+    schema_ok = not list(validator.iter_errors(sibling_missing_target))
+    try:
+        runtime_ok = resolver.validate_runtime_layout(sibling_missing_target["runtime_layout"]) is None
+    except resolver.ManifestError:
+        runtime_ok = False
+    if not (schema_ok and runtime_ok):
+        failures.append("schema/runtime disagree on sibling-tree default target")
+
+    executable_null_source = copy.deepcopy(local)
+    executable_null_source["runtime_layout"]["source"] = None
+    schema_ok = not list(validator.iter_errors(executable_null_source))
+    try:
+        runtime_ok = resolver.validate_runtime_layout(executable_null_source["runtime_layout"]) is None
+    except resolver.ManifestError:
+        runtime_ok = False
+    if not (schema_ok and runtime_ok):
+        failures.append("schema/runtime disagree on executable-only null source")
+
+    overlapping_exit_codes = copy.deepcopy(cursor)
+    overlapping_exit_codes["execution"]["exit_codes"]["auth"] = [0]
+    schema_ok = not list(validator.iter_errors(overlapping_exit_codes))
+    try:
+        resolver.validate_execution(overlapping_exit_codes["execution"])
+    except resolver.ManifestError:
+        runtime_ok = False
+    else:
+        runtime_ok = True
+    if schema_ok != runtime_ok or schema_ok:
+        failures.append("schema/runtime disagree on overlapping execution exit codes")
     for provider, profile, endpoints, forbidden in (
         ("anthropic-claude-code", "anthropic", ["api.anthropic.com"], "GEMINI_API_KEY"),
         ("google-gemini", "gemini", ["generativelanguage.googleapis.com"], "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"),

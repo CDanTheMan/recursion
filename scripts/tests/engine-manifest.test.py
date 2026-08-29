@@ -10,6 +10,7 @@ Component 1 (manifests) and Component 2 (resolver --validate mode) land.
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import os
 import subprocess
@@ -20,6 +21,11 @@ from pathlib import Path
 SOURCE = Path(__file__).resolve().parents[2]
 RESOLVE_ENGINE = SOURCE / "scripts" / "resolve-engine.py"
 ENGINES_DIR = SOURCE / "scripts" / "engines"
+
+resolver_spec = importlib.util.spec_from_file_location("resolve_engine", RESOLVE_ENGINE)
+assert resolver_spec is not None and resolver_spec.loader is not None
+resolver = importlib.util.module_from_spec(resolver_spec)
+resolver_spec.loader.exec_module(resolver)
 
 SHIPPED_MANIFESTS = ["gemini.json", "cursor.json", "opencode.json", "opencode-local.json"]
 
@@ -171,10 +177,31 @@ def test_mutations() -> None:
     run_case("concurrency_cap 0 rejected", "sampleeng.json", "sampleeng", bad_cap, 2)
 
 
+def test_malformed_container_elements_are_typed() -> None:
+    for field in ("roles", "env_passthrough"):
+        malformed = copy.deepcopy(BASE_MANIFEST)
+        malformed[field] = [[]]
+        try:
+            resolver.validate_manifest(malformed, "sampleeng")
+        except resolver.ManifestError:
+            pass
+        except Exception as exc:  # the regression must not leak TypeError from set()
+            check(False, f"{field} malformed element raises ManifestError, not {type(exc).__name__}")
+        else:
+            check(False, f"{field} malformed element rejected with ManifestError")
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_dir = Path(tmp)
+            write_manifest(tmp_dir, "sampleeng.json", malformed)
+            result = run_validate("sampleeng", tmp_dir)
+            check(result.returncode == 2 and "Traceback" not in result.stderr,
+                  f"{field} malformed element is a typed resolver refusal")
+
+
 def main() -> int:
     test_shipped_manifests()
     test_missing_file()
     test_mutations()
+    test_malformed_container_elements_are_typed()
 
     if failures:
         print(f"engine-manifest.test: {len(failures)} FAILED")

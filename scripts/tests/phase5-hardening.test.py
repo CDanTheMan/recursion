@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import copy
 import importlib.util
 import os
 import stat
@@ -242,6 +243,22 @@ def main() -> int:
         check(result.returncode == 0, "evidence start accepts independently recomputed assignment")
         recorded = json.loads(evidence.read_text(encoding="utf-8"))
         check(recorded["assignment_digest"] == first, "evidence records recomputed assignment digest")
+        start_evidence = evidence.with_name(f".{evidence.name}.start")
+        check(start_evidence.is_file(), "evidence records an independent durable start binding")
+        downgraded = dict(recorded)
+        for field in ("assignment_file", "assignment_digest", "assignment"):
+            downgraded.pop(field, None)
+        evidence.write_text(json.dumps(downgraded), encoding="utf-8")
+        downgraded_finish = subprocess.run([
+            sys.executable, str(ROOT / "scripts/worker-evidence.py"), "finish", str(evidence),
+            "succeeded", "downgraded", "0",
+        ], capture_output=True, text=True, env=os.environ.copy())
+        after_downgrade = json.loads(evidence.read_text(encoding="utf-8"))
+        check(downgraded_finish.returncode != 0
+              and "execution evidence is required" in downgraded_finish.stderr
+              and after_downgrade.get("status") == "running",
+              "strict run cannot be downgraded by deleting mutable assignment fields")
+        evidence.write_text(json.dumps(recorded), encoding="utf-8")
         mismatch = cmd.copy(); mismatch[mismatch.index("--assignment-digest") + 1] = "f" * 64
         check(subprocess.run(mismatch, capture_output=True).returncode != 0,
               "evidence rejects caller-supplied digest mismatch")
@@ -307,6 +324,34 @@ def main() -> int:
             "succeeded", "done", "0", "--execution-evidence", str(execution_path),
         ], capture_output=True, text=True, env=os.environ.copy())
         check(valid_finish.returncode == 0, "matching execution evidence is accepted")
+
+        claude = copy.deepcopy(value)
+        claude["engine"] = "claude"
+        claude["provider"] = "anthropic-claude-code"
+        claude["capacity_pool"] = "claude-max"
+        claude["network_profile"] = "anthropic"
+        claude["network_endpoints"] = ["api.anthropic.com"]
+        claude["argv"] = list(assignment.CLAUDE_ARGV) + ["--model", "{{MODEL}}"]
+        for role_spec in claude["role_assignments"].values():
+            role_spec.update(engine="claude", provider="anthropic-claude-code",
+                              network_policy="provider-only", network_profile="anthropic",
+                              network_endpoints=["api.anthropic.com"],
+                              argv=list(claude["argv"]), model="cursor-primary")
+        check(assignment._engine_binding("claude", str(controller), controller_sha)[4]
+              == assignment.CLAUDE_ARGV,
+              "builtin Claude binding exposes its exact hardcoded argv")
+        try:
+            assignment.validate_assignment(claude)
+        except assignment.AssignmentError as exc:
+            raise AssertionError(f"exact builtin Claude argv was rejected: {exc}")
+        attacker_argv = copy.deepcopy(claude)
+        attacker_argv["argv"] = ["ATTACKER"]
+        try:
+            assignment.validate_assignment(attacker_argv)
+        except assignment.AssignmentError:
+            pass
+        else:
+            raise AssertionError("builtin Claude accepted attacker-controlled argv")
 
         source_sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
         task = {"id": "task-1", "candidate_commit": source_sha, "evidence_contract": "worker-result-v1"}

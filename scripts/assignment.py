@@ -25,6 +25,9 @@ SANDBOXES = frozenset({
     "strict-linux", "workspace-linux", "vendor-cloud", "remote-linux",
     "windows-interactive", "trusted-interactive", "account-shared-supervisor",
 })
+CLAUDE_ARGV = ["claude", "-p", "{{PROMPT}}", "--permission-mode", "acceptEdits",
+               "--allowedTools", "Bash(node:*)"]
+CLAUDE_MODEL_SUFFIX = ["--model", "{{MODEL}}"]
 REQUIRED = frozenset({
     "task_id", "project_id", "source_repository", "source_branch", "source_sha",
     "controller_repository", "controller_sha",
@@ -189,6 +192,7 @@ def _provider_profiles(controller_repo: str | None = None, controller_sha: str |
 def _engine_binding(engine: str, controller_repo: str, controller_sha: str) -> tuple[str, str, list[str], str, list[str], list[str] | None]:
     if engine == "claude":
         provider, profile, policy = "anthropic-claude-code", "anthropic", "provider-only"
+        expected_argv, suffix = CLAUDE_ARGV, CLAUDE_MODEL_SUFFIX
     elif engine == "none":
         return "none", "none", [], "none", [], None
     else:
@@ -214,6 +218,8 @@ def _engine_binding(engine: str, controller_repo: str, controller_sha: str) -> t
         endpoints = profiles[profile]["endpoints"]
     except (KeyError, TypeError) as exc:
         raise AssignmentError(f"provider profile is unavailable for {engine}") from exc
+    if engine == "claude":
+        return provider, profile, endpoints, policy, expected_argv, suffix
     return provider, profile, endpoints, policy, [], None
 
 
@@ -224,8 +230,8 @@ def _declared_argv(argv: list[str], suffix: list[str] | None, model: str) -> lis
     return result
 
 
-def _validate_argv(value: Any, where: str) -> list[str]:
-    if not isinstance(value, list) or not value \
+def _validate_argv(value: Any, where: str, *, allow_empty: bool = False) -> list[str]:
+    if not isinstance(value, list) or (not allow_empty and not value) \
             or any(not isinstance(item, str) or not item or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in item)
                    for item in value):
         raise AssignmentError(f"{where} argv is invalid")
@@ -241,9 +247,9 @@ def _validate_binding(engine: str, provider: str, profile: str, endpoints: Any, 
         raise AssignmentError(f"{where} engine/provider/network profile does not match its manifest")
     if not isinstance(endpoints, list) or endpoints != expected_endpoints:
         raise AssignmentError(f"{where} network endpoints do not match its manifest/profile")
-    declared_argv = _validate_argv(argv, where)
+    declared_argv = _validate_argv(argv, where, allow_empty=engine == "none")
     expected_declared = _declared_argv(expected_argv, suffix, model)
-    if expected_argv and declared_argv != expected_declared:
+    if declared_argv != expected_declared:
         raise AssignmentError(f"{where} argv does not match its immutable engine manifest")
     profiles = _provider_profiles(controller_repo, controller_sha)
     if profile != "none":
@@ -386,7 +392,7 @@ def validate_assignment(value: Any) -> dict[str, Any]:
     )
     _text(value["publication_policy"], "publication_policy", VALUE_RE)
     _text(value["network_policy"], "network_policy")
-    top_argv = _validate_argv(value["argv"], "assignment")
+    top_argv = _validate_argv(value["argv"], "assignment", allow_empty=value["engine"] == "none")
     policy = _authenticated_pool_policy(value["capacity_pool"], controller, controller_sha)
     if value["provider"] not in policy.get("providers", []):
         raise AssignmentError("capacity_pool is not authorized for provider")

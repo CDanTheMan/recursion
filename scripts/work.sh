@@ -963,6 +963,12 @@ engine,path,model=sys.argv[1:]
 if path:
     plan=json.load(open(path,encoding="utf-8")); value=list(plan["argv"])
     if model: value.extend(plan["model_argv_suffix"])
+elif engine == "claude":
+    value=["claude","-p","{{PROMPT}}","--permission-mode","acceptEdits",
+           "--allowedTools","Bash(node:*)"]
+    if model: value.extend(["--model","{{MODEL}}"])
+elif engine == "none":
+    value=[]
 else: value=[engine,"{{PROMPT}}"]
 print(json.dumps(value,separators=(",",":")))
 PY
@@ -973,6 +979,12 @@ engine,path,model=sys.argv[1:]
 if path:
     plan=json.load(open(path,encoding="utf-8")); value=list(plan["argv"])
     if model: value.extend(plan["model_argv_suffix"])
+elif engine == "claude":
+    value=["claude","-p","{{PROMPT}}","--permission-mode","acceptEdits",
+           "--allowedTools","Bash(node:*)"]
+    if model: value.extend(["--model","{{MODEL}}"])
+elif engine == "none":
+    value=[]
 else: value=[engine,"{{PROMPT}}"]
 print(json.dumps(value,separators=(",",":")))
 PY

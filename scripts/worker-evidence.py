@@ -19,6 +19,9 @@ from assignment import (AssignmentError, canonical_bytes, load_assignment,
                         validate_execution_evidence as assignment_execution_evidence)
 
 
+START_EVIDENCE_KIND = "worker-evidence-start-v1"
+
+
 def now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
@@ -56,6 +59,60 @@ def atomic(path: Path, value: dict) -> None:
             os.unlink(name)
 
 
+def start_evidence_path(path: Path) -> Path:
+    """Return the non-run-glob sidecar that records the immutable start binding."""
+    return path.with_name(f".{path.name}.start")
+
+
+def write_start_evidence(path: Path, value: dict) -> None:
+    """Create the start binding exactly once; later transitions never rewrite it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    encoded = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+    try:
+        descriptor = os.open(path, flags, 0o444)
+    except FileExistsError as exc:
+        raise SystemExit("worker-evidence: immutable start evidence already exists") from exc
+    try:
+        with os.fdopen(descriptor, "wb") as out:
+            out.write(encoded); out.flush(); os.fsync(out.fileno())
+        try:
+            os.chmod(path, 0o444)
+        except OSError:
+            pass
+    except BaseException:
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def load_start_evidence(path: Path) -> dict:
+    """Load and authenticate the start binding independently of mutable run JSON."""
+    candidate = start_evidence_path(path)
+    try:
+        candidate.lstat()
+        if not candidate.is_file() or candidate.is_symlink():
+            raise OSError("start evidence is not a regular non-symlink file")
+        value = json.loads(candidate.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit("worker-evidence: immutable start evidence is unavailable") from exc
+    if not isinstance(value, dict) or set(value) != {
+        "schema_version", "kind", "run_id", "task_id", "role", "assignment_file",
+        "assignment_digest", "assignment", "binding_sha256",
+    }:
+        raise SystemExit("worker-evidence: immutable start evidence is malformed")
+    binding = {key: value[key] for key in (
+        "schema_version", "kind", "run_id", "task_id", "role", "assignment_file",
+        "assignment_digest", "assignment",
+    )}
+    expected = hashlib.sha256(canonical_bytes(binding)).hexdigest()
+    if value["kind"] != START_EVIDENCE_KIND or value["binding_sha256"] != expected:
+        raise SystemExit("worker-evidence: immutable start evidence authentication failed")
+    return value
+
+
 def maybe_json(path: str | None) -> object:
     if not path or not Path(path).is_file():
         return {}
@@ -74,7 +131,7 @@ def maybe_json(path: str | None) -> object:
         raise SystemExit("worker-evidence: auxiliary evidence is malformed") from exc
 
 
-def refresh_assignment(value: dict) -> dict | None:
+def refresh_assignment(value: dict, start: dict) -> dict:
     """Re-read the immutable assignment whenever evidence is consumed.
 
     A valid assignment at process start is not enough: the file, embedded copy, or
@@ -82,13 +139,15 @@ def refresh_assignment(value: dict) -> dict | None:
     Recomputing here makes every evidence transition bind to the same source commit,
     engine/provider profile, and validated gate contract.
     """
-    assignment_file = value.get("assignment_file")
-    if not assignment_file:
-        return None
+    assignment_file = start["assignment_file"]
     assignment, computed = load_assignment(assignment_file)
-    if computed != value.get("assignment_digest"):
+    if computed != start["assignment_digest"]:
         raise SystemExit("worker-evidence: assignment changed after run start")
-    embedded = value.get("assignment")
+    if "assignment_file" in value and value["assignment_file"] != assignment_file:
+        raise SystemExit("worker-evidence: mutable assignment binding changed")
+    if "assignment_digest" in value and value["assignment_digest"] != computed:
+        raise SystemExit("worker-evidence: mutable assignment binding changed")
+    embedded = value.get("assignment", assignment)
     if not isinstance(embedded, dict) or canonical_bytes(embedded) != canonical_bytes(assignment):
         raise SystemExit("worker-evidence: embedded assignment does not match its source file")
     return assignment
@@ -175,16 +234,33 @@ def main() -> int:
             value["assignment"] = assignment
             value["assignment_digest"] = computed
             value["assignment_file"] = str(assignment_path.resolve())
+        binding = {
+            "schema_version": 1, "kind": START_EVIDENCE_KIND, "run_id": args.run_id,
+            "task_id": args.task_id, "role": args.role,
+            "assignment_file": value["assignment_file"],
+            "assignment_digest": value["assignment_digest"], "assignment": value["assignment"],
+        }
+        binding["binding_sha256"] = hashlib.sha256(canonical_bytes(binding)).hexdigest()
+        write_start_evidence(start_evidence_path(path), binding)
         seed = maybe_json(args.seed_evidence)
         if isinstance(seed, dict) and seed:
             value["seed_evidence"] = seed
         atomic(path, value); return 0
 
     value = load(path)
-    assignment = refresh_assignment(value)
-    strict_run = any(field in value for field in ("assignment_file", "assignment_digest", "assignment"))
-    if strict_run and assignment is None:
-        raise SystemExit("worker-evidence: strict run has no validated assignment provenance")
+    start_binding = load_start_evidence(path)
+    for field, start_field in (("id", "run_id"), ("task_id", "task_id"), ("role", "role")):
+        if field in value and value[field] != start_binding[start_field]:
+            raise SystemExit(f"worker-evidence: mutable run identity changed: {field}")
+    assignment = refresh_assignment(value, start_binding)
+    # Every record produced by start is strict.  This decision comes from the
+    # authenticated durable start binding, never from mutable run JSON fields.
+    strict_run = start_binding["kind"] == START_EVIDENCE_KIND
+    if not strict_run:
+        raise SystemExit("worker-evidence: immutable start evidence is not strict")
+    value["assignment_file"] = start_binding["assignment_file"]
+    value["assignment_digest"] = start_binding["assignment_digest"]
+    value["assignment"] = assignment
     if args.command == "heartbeat":
         value["heartbeat_at"] = now(); value["lease_expires"] = iso(args.lease_epoch)
     elif args.command == "finish":
@@ -197,14 +273,10 @@ def main() -> int:
         usage = maybe_json(args.usage_file)
         if isinstance(usage, dict):
             value["usage"] = usage
-        if strict_run:
-            if not args.execution_evidence:
-                raise SystemExit("worker-evidence: strict execution evidence is required to finish")
-            execution = validate_execution_evidence(maybe_json(args.execution_evidence), value, assignment)
-            value["execution"] = execution
-        elif args.execution_evidence:
-            execution = validate_execution_evidence(maybe_json(args.execution_evidence), value, {})
-            value["execution"] = execution
+        if not args.execution_evidence:
+            raise SystemExit("worker-evidence: strict execution evidence is required to finish")
+        execution = validate_execution_evidence(maybe_json(args.execution_evidence), value, assignment)
+        value["execution"] = execution
         if args.commit_oid:
             value["commit_oid"] = args.commit_oid
         seed = maybe_json(args.seed_evidence)
