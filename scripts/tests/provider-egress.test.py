@@ -14,13 +14,50 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from provider_contract import (DEPLOYED_PROFILE_DIR, ProviderProfileError, assert_endpoints_match,
                                engine_profile, load_profile, profile_directory,
-                               proxy_environment)  # noqa: E402
+                               proxy_environment, validate_profile)  # noqa: E402
 
 
 def check(condition: bool, label: str, failures: list[str]) -> None:
     print(("ok - " if condition else "FAIL - ") + label)
     if not condition:
         failures.append(label)
+
+
+def test_malformed_profile_inputs(failures: list[str], profiles: list[Path]) -> None:
+    """Every hostile profile value is typed at the shared validator and CLI boundary."""
+    cases = (
+        ("proxy.env=[[]]", lambda profile: profile["proxy"].update(env=[[]])),
+        ("authorities=[[]]", lambda profile: profile.update(authorities=[[]])),
+        ("proxy.env is a dict", lambda profile: profile["proxy"].update(env={})),
+        ("proxy.env is null", lambda profile: profile["proxy"].update(env=None)),
+        ("authority has a 5000-digit port", lambda profile: profile.update(
+            authorities=["api.cursor.com:" + "9" * 5000])),
+        ("authority has a non-numeric port", lambda profile: profile.update(
+            authorities=["api.cursor.com:not-a-port"])),
+    )
+    source = next(path for path in profiles if path.stem == "cursor")
+    for label, mutate in cases:
+        bad = json.loads(source.read_text(encoding="utf-8"))
+        mutate(bad)
+        try:
+            validate_profile(bad, "cursor")
+        except ProviderProfileError:
+            check(True, f"{label} raises ProviderProfileError", failures)
+        except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
+            check(False, f"{label} raises ProviderProfileError (raw {type(exc).__name__})", failures)
+        else:
+            check(False, f"{label} raises ProviderProfileError", failures)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "cursor.json").write_text(json.dumps(bad) + "\n", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/provider-egress.py"), "validate", "cursor"],
+                capture_output=True, text=True,
+                env=dict(os.environ, RECURSION_PROVIDER_DIR=str(directory)),
+            )
+        check(result.returncode == 2 and "Traceback" not in result.stderr,
+              f"{label} CLI is a controlled non-zero refusal", failures)
 
 
 def main() -> int:
@@ -167,6 +204,7 @@ def main() -> int:
         check(True, "credential-shaped profile fields fail closed", failures)
     else:
         check(False, "credential-shaped profile fields fail closed", failures)
+    test_malformed_profile_inputs(failures, profiles)
     if failures:
         print(f"provider-egress.test: {len(failures)} FAILED")
         return 1

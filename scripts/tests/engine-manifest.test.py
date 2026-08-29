@@ -10,6 +10,7 @@ Component 1 (manifests) and Component 2 (resolver --validate mode) land.
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import os
 import subprocess
@@ -20,6 +21,7 @@ from pathlib import Path
 SOURCE = Path(__file__).resolve().parents[2]
 RESOLVE_ENGINE = SOURCE / "scripts" / "resolve-engine.py"
 ENGINES_DIR = SOURCE / "scripts" / "engines"
+sys.path.insert(0, str(SOURCE / "scripts"))
 
 SHIPPED_MANIFESTS = ["gemini.json", "cursor.json", "opencode.json", "opencode-local.json"]
 
@@ -75,6 +77,87 @@ def run_case(label: str, filename: str, engine_arg: str, data: dict, expected: i
             result.returncode == expected,
             f"{label} (exit {result.returncode}, want {expected})",
         )
+
+
+def load_resolver():
+    spec = importlib.util.spec_from_file_location("resolve_engine_test_module", RESOLVE_ENGINE)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load resolve-engine")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run_hostile_case(label: str, data: dict) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        write_manifest(tmp_dir, "sampleeng.json", data)
+        result = run_validate("sampleeng", tmp_dir)
+        check(result.returncode == 2, f"{label} exits 2 (got {result.returncode})")
+        check("Traceback" not in result.stderr, f"{label} has no raw traceback")
+
+
+def test_malformed_values() -> None:
+    resolver = load_resolver()
+    cases = (
+        ("roles=[[]]", lambda data: data.update(roles=[[]])),
+        ("env_passthrough=[[]]", lambda data: data.update(env_passthrough=[[]])),
+        ("billing.basis=[]", lambda data: data["billing"].update(basis=[])),
+    )
+    for label, mutate in cases:
+        data = copy.deepcopy(BASE_MANIFEST)
+        mutate(data)
+        try:
+            resolver.validate_manifest(data, "sampleeng")
+        except resolver.ManifestError:
+            check(True, f"{label} raises ManifestError")
+        except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
+            check(False, f"{label} raises ManifestError (raw {type(exc).__name__})")
+        else:
+            check(False, f"{label} raises ManifestError")
+        run_hostile_case(label, data)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        provider_dir = tmp_dir / "providers"
+        provider_dir.mkdir()
+        profile = json.loads(
+            (SOURCE / "scripts/providers/cursor.json").read_text(encoding="utf-8")
+        )
+        profile["authorities"] = ["api.cursor.com:" + "9" * 5000, "api2.cursor.sh:443"]
+        (provider_dir / "cursor.json").write_text(json.dumps(profile) + "\n", encoding="utf-8")
+        data = copy.deepcopy(BASE_MANIFEST)
+        data["billing"]["provider"] = "cursor"
+        data["network"] = {
+            "policy": "provider-only",
+            "endpoints": ["api.cursor.com", "api2.cursor.sh"],
+            "profile": "cursor",
+        }
+        manifest = tmp_dir / "sampleeng.json"
+        write_manifest(tmp_dir, manifest.name, data)
+        env = dict(os.environ, RECURSION_PROVIDER_DIR=str(provider_dir))
+        old_provider_dir = os.environ.get("RECURSION_PROVIDER_DIR")
+        os.environ["RECURSION_PROVIDER_DIR"] = str(provider_dir)
+        try:
+            try:
+                resolver.validate_manifest(data, "sampleeng")
+            except resolver.ManifestError:
+                check(True, "5000-digit port raises ManifestError in resolver")
+            except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
+                check(False, f"5000-digit port raises ManifestError (raw {type(exc).__name__})")
+            else:
+                check(False, "5000-digit port raises ManifestError in resolver")
+        finally:
+            if old_provider_dir is None:
+                os.environ.pop("RECURSION_PROVIDER_DIR", None)
+            else:
+                os.environ["RECURSION_PROVIDER_DIR"] = old_provider_dir
+        result = subprocess.run(
+            [sys.executable, str(RESOLVE_ENGINE), "sampleeng", "--validate"],
+            capture_output=True, text=True, env=dict(env, RECURSION_ENGINE_DIR=str(tmp_dir)),
+        )
+        check(result.returncode == 2 and "Traceback" not in result.stderr,
+              "5000-digit port CLI is a controlled non-zero refusal")
 
 
 def test_shipped_manifests() -> None:
@@ -152,6 +235,7 @@ def main() -> int:
     test_shipped_manifests()
     test_missing_file()
     test_mutations()
+    test_malformed_values()
 
     if failures:
         print(f"engine-manifest.test: {len(failures)} FAILED")

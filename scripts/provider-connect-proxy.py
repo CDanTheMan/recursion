@@ -142,7 +142,7 @@ def load_revoked_jtis(path: pathlib.Path | None) -> set[str]:
         raise ConnectDenied("capability revocation state ownership/mode is unsafe")
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
+    except (OSError, UnicodeError, ValueError, RecursionError):
         raise ConnectDenied("capability revocation state is invalid") from None
     revoked = value.get("revoked_jtis", []) if isinstance(value, dict) else None
     if not isinstance(revoked, list) or any(not isinstance(item, str) or

@@ -67,6 +67,16 @@ def main() -> int:
             else:
                 raise AssertionError("unsafe malformed secret permissions were repaired/accepted")
             malformed.chmod(0o600)
+        try:
+            hostile_name = Path(f".secret.{'9' * 5000}.1.0123456789abcdef")
+            with mock.patch.object(runtime.Path, "iterdir", return_value=[hostile_name]):
+                runtime.scavenge(directory)
+        except runtime.SecretRuntimeError:
+            pass
+        except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
+            raise AssertionError(f"overlong secret PID raised raw {type(exc).__name__}") from exc
+        else:
+            raise AssertionError("overlong secret PID was not rejected")
         runtime.scavenge(directory)
         assert active.exists(), "live process credential was scavenged"
         assert not stale.exists(), "stale credential survived startup scavenging"

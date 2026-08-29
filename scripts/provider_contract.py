@@ -63,9 +63,17 @@ def parse_authority(value: object) -> tuple[str, int]:
         raise ProviderProfileError("authority must be a canonical DNS name and explicit port")
     if _is_ip_literal(host.lower()):
         raise ProviderProfileError("IP-literal authorities are forbidden")
-    if port_text != str(int(port_text, 10)):
+    # A canonical TCP port is at most five decimal digits.  Check the bound before int():
+    # Python deliberately raises ValueError for much larger decimal strings, which must not
+    # escape the provider-profile error boundary.
+    if len(port_text) > 5:
+        raise ProviderProfileError("authority port is out of range")
+    try:
+        port = int(port_text, 10)
+    except ValueError:
+        raise ProviderProfileError("authority port is not canonical") from None
+    if port_text != str(port):
         raise ProviderProfileError("authority port is not canonical")
-    port = int(port_text, 10)
     if not 1 <= port <= 65535:
         raise ProviderProfileError("authority port is out of range")
     return host.lower(), port
@@ -109,15 +117,19 @@ def validate_profile(value: object, expected_id: str | None = None) -> dict:
             or not 1 <= proxy["port"] <= 65535:
         raise ProviderProfileError("proxy.port must be an integer in 1..65535")
     env = proxy["env"]
-    if not isinstance(env, list) or len(set(env)) != len(env) \
+    if not isinstance(env, list) \
             or not all(isinstance(name, str) and ENV_RE.fullmatch(name) for name in env):
+        raise ProviderProfileError("proxy.env must contain unique environment variable names")
+    if len(set(env)) != len(env):
         raise ProviderProfileError("proxy.env must contain unique environment variable names")
     if set(env) != PROXY_ENV:
         raise ProviderProfileError("proxy.env must inject exactly HTTP_PROXY and HTTPS_PROXY")
     authorities = profile["authorities"]
-    if not isinstance(authorities, list) or len(set(authorities)) != len(authorities):
+    if not isinstance(authorities, list) or not all(isinstance(item, str) for item in authorities):
         raise ProviderProfileError("authorities must be a unique list")
     parsed = [parse_authority(item) for item in authorities]
+    if len(set(authorities)) != len(authorities):
+        raise ProviderProfileError("authorities must be a unique list")
     if not parsed:
         raise ProviderProfileError("at least one provider authority is required")
     return profile
@@ -126,7 +138,7 @@ def validate_profile(value: object, expected_id: str | None = None) -> dict:
 def load_profile(path: Path, expected_id: str | None = None) -> dict:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise ProviderProfileError(f"provider profile is unreadable: {path}") from exc
     return validate_profile(raw, expected_id)
 

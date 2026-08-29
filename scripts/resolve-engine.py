@@ -114,15 +114,15 @@ def validate_model(model: object) -> None:
 def validate_roles(roles: object) -> None:
     if not isinstance(roles, list) or not roles:
         raise ManifestError("roles must be a nonempty list")
+    if not all(isinstance(role, str) and role in ROLE_CHOICES for role in roles):
+        raise ManifestError(f"roles must be a subset of {ROLE_CHOICES}")
     if len(set(roles)) != len(roles):
         raise ManifestError("roles must not contain duplicates")
-    if not all(role in ROLE_CHOICES for role in roles):
-        raise ManifestError(f"roles must be a subset of {ROLE_CHOICES}")
 
 
 def validate_billing(billing: object) -> None:
     obj = require_object_keys(billing, BILLING_KEYS, "billing")
-    if obj["basis"] not in BILLING_BASES:
+    if not isinstance(obj["basis"], str) or obj["basis"] not in BILLING_BASES:
         raise ManifestError(f"billing.basis must be one of {sorted(BILLING_BASES)}")
     if not isinstance(obj["provider"], str) or not obj["provider"]:
         raise ManifestError("billing.provider must be a nonempty string")
@@ -167,11 +167,11 @@ def validate_probe(probe: object) -> None:
 def validate_env_passthrough(names: object) -> None:
     if not isinstance(names, list):
         raise ManifestError("env_passthrough must be a list of strings")
-    if len(set(names)) != len(names):
-        raise ManifestError("env_passthrough must not contain duplicates")
     for item in names:
         if not isinstance(item, str) or not ENV_NAME_RE.fullmatch(item):
             raise ManifestError(f"env_passthrough contains an invalid env var name {item!r}")
+    if len(set(names)) != len(names):
+        raise ManifestError("env_passthrough must not contain duplicates")
 
 
 def validate_manifest(data: object, engine: str) -> dict:
@@ -230,7 +230,7 @@ def load_manifest(path: Path, engine: str) -> dict:
         raise ManifestError(f"could not read manifest {path}: {exc}") from exc
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError as exc:
+    except (ValueError, RecursionError) as exc:
         raise ManifestError(f"manifest {path} is not valid JSON: {exc}") from exc
     return validate_manifest(data, engine)
 

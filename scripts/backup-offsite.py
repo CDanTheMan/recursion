@@ -85,7 +85,7 @@ def _secret_ref(value: object, where: str) -> None:
 def load_policy(path: Path) -> dict:
     try:
         policy = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise BackupPolicyError(f"backup policy is unreadable: {path}") from exc
     policy = _object(policy, POLICY_KEYS, "policy")
     if policy["schema_version"] != 1 or not isinstance(policy["enabled"], bool):
@@ -218,7 +218,11 @@ def private_workspace(path: Path):
     for stale in path.iterdir():
         match = WORK_RE.fullmatch(stale.name)
         if match:
-            observed = secret_runtime.process_start(int(match.group(1)))
+            try:
+                stale_pid = int(match.group(1))
+            except ValueError:
+                raise BackupPolicyError("backup runtime contains an invalid process identity") from None
+            observed = secret_runtime.process_start(stale_pid)
             if observed is None or observed != match.group(2):
                 if stale.is_symlink() or not stale.is_dir():
                     stale.unlink(missing_ok=True)

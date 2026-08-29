@@ -99,7 +99,11 @@ def scavenge(directory: Path, current_pid: int | None = None) -> int:
                 removed += 1
             continue
         _validate_secret_file(path)
-        pid, start = int(match.group(1)), match.group(2)
+        try:
+            pid = int(match.group(1))
+        except ValueError:
+            raise SecretRuntimeError("secret runtime contains an invalid process identity") from None
+        start = match.group(2)
         if pid == current_pid and current_start == start:
             continue
         observed = process_start(pid)
