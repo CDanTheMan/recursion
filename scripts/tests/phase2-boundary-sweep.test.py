@@ -49,6 +49,15 @@ def run_process(args: list[str], *, input_bytes: bytes | None = None) -> subproc
     return subprocess.run(args, input=input_bytes, capture_output=True, check=False)
 
 
+def remove_reparse_point(path: Path) -> None:
+    if not (path.exists() or path.is_symlink()):
+        return
+    if os.name == "nt":
+        path.rmdir()
+    else:
+        path.unlink()
+
+
 def git_raw_bytes(repo: Path, *args: str) -> bytes:
     env = {
         key: value for key, value in os.environ.items()
@@ -506,11 +515,12 @@ class Phase2BoundarySweep(unittest.TestCase):
             self.assertEqual(close.call_count, 2,
                              "directory recheck failure did not release its pinned handle")
         finally:
-            if junction.exists() or junction.is_symlink():
-                junction.rmdir()
-            ledger_junction = self.root / "ledger-junction"
-            if ledger_junction.exists() or ledger_junction.is_symlink():
-                ledger_junction.rmdir()
+            for reparse_point in (
+                    junction,
+                    self.root / "ledger-junction",
+                    self.root / "git-junction-repo" / ".git",
+            ):
+                remove_reparse_point(reparse_point)
 
     def test_normal_candidate_import_publish_path_is_bound(self) -> None:
         # This is a real fixture import, including the controller gate and idempotency record.
