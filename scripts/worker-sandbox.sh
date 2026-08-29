@@ -205,7 +205,7 @@ if authority is not None:
         raise SystemExit(92)
     print("CTRROOT=" + str(authority["controller_repository"]))
     print("CTRSHA=" + authority["controller_sha"])
-elif os.environ.get("RECURSION_ASSIGNMENT_DIGEST"):
+else:
     raise SystemExit(92)
 print("NETPOLICY=" + network["policy"])
 print("NETPROFILE=" + network["profile"])
@@ -292,6 +292,14 @@ PY
     || { echo "worker-sandbox: engine plan requires a model and none was given" >&2; exit 92; }
   [ -z "$PLAN_NETWORK_PROFILE" ] || [ "$NETWORK_POLICY" = "$PLAN_NETWORK_POLICY" ] \
     || { echo "worker-sandbox: provider network plan cannot be downgraded to a different policy" >&2; exit 92; }
+fi
+if [ "$ENGINE" = claude ]; then
+  # Builtin strict runs still emit the same assignment-bound execution record as plugins.
+  PLAN_ARGV_JSON='["claude","{{PROMPT}}"]'
+  PLAN_NETWORK_POLICY="$NETWORK_POLICY"
+  PLAN_NETWORK_PROFILE="anthropic"
+  PLAN_NETWORK_PROVIDER="anthropic-claude-code"
+  PLAN_NETWORK_ENDPOINTS=(api.anthropic.com)
 fi
 export RECURSION_AUTH_REQUIRED="$PLAN_AUTH_REQUIRED"
 build_plan_argv(){ # resolved-exe -> PLAN_RUN: exact-element placeholder substitution only
@@ -438,8 +446,13 @@ case "${RECURSION_TEST_WORKER:-}" in
         ;;
       claude)
         command -v claude >/dev/null 2>&1 || exit 90
-        cd "$WT"; claude -p "$PROMPT" --permission-mode acceptEdits \
-          --allowedTools 'Bash(node:*)' ${MODEL:+--model "$MODEL"}
+        write_execution_evidence started 0 prepared || exit 95
+        cd "$WT"
+        if claude -p "$PROMPT" --permission-mode acceptEdits \
+          --allowedTools 'Bash(node:*)' ${MODEL:+--model "$MODEL"}; then logical_rc=0; else logical_rc=$?; fi
+        logical_class="$(classify_exit_code "$logical_rc")"
+        write_execution_evidence finished "$logical_rc" "$logical_class" || exit 95
+        exit "$logical_rc"
         ;;
       hermes)
         command -v hermes >/dev/null 2>&1 || exit 94
@@ -722,6 +735,7 @@ case "$ENGINE" in
       PATH=/usr/local/bin:/usr/bin:/bin /bin/bash -c "$GATE_COMMAND")
     ;;
   claude)
+    write_execution_evidence started 0 prepared || exit 95
     RUN+=(/usr/bin/env "$INNER_EXE" -p "$PROMPT" --permission-mode acceptEdits --allowedTools 'Bash(node:*)')
     [ -n "$MODEL" ] && RUN+=(--model "$MODEL")
     ;;

@@ -457,3 +457,56 @@ def load_assignment(path: str | Path) -> tuple[dict[str, Any], str]:
         raise AssignmentError("assignment file is unreadable") from exc
     normalized = validate_assignment(value)
     return normalized, hashlib.sha256(canonical_bytes(normalized)).hexdigest()
+
+
+def validate_execution_evidence(execution: Any, run: dict[str, Any],
+                                assignment: dict[str, Any]) -> dict[str, Any]:
+    """Validate controller-owned execution facts against one immutable role assignment."""
+    if not isinstance(execution, dict):
+        raise AssignmentError("execution evidence must be an object")
+    role = run.get("role")
+    roles = assignment.get("role_assignments")
+    role_spec = roles.get(role) if isinstance(roles, dict) else None
+    if not isinstance(role_spec, dict):
+        raise AssignmentError("execution evidence role is not assigned")
+    expected = {
+        "engine": role_spec.get("engine"),
+        "provider": role_spec.get("provider"),
+        "profile": role_spec.get("network_profile"),
+        "endpoints": role_spec.get("network_endpoints"),
+        "model": role_spec.get("model"),
+        "argv": role_spec.get("argv"),
+    }
+    for field, expected_value in expected.items():
+        if execution.get(field) != expected_value:
+            raise AssignmentError(f"execution evidence {field} mismatch")
+    assignment_digest = run.get("assignment_digest")
+    if not isinstance(assignment_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", assignment_digest) \
+            or execution.get("assignment_digest") != assignment_digest \
+            or execution.get("assignment_identity") != assignment_digest:
+        raise AssignmentError("execution evidence assignment identity mismatch")
+    network = execution.get("network")
+    if not isinstance(network, dict) or network != {
+        "policy": role_spec.get("network_policy"),
+        "profile": expected["profile"], "provider": expected["provider"],
+        "endpoints": expected["endpoints"],
+    }:
+        raise AssignmentError("execution evidence network binding mismatch")
+
+    run_status = run.get("status")
+    execution_status = execution.get("status")
+    if run_status == "cancelled":
+        if execution_status != "cancelled" or execution.get("exit_code") != 143:
+            raise AssignmentError("execution evidence status is not coherent with cancelled run")
+    elif run_status in {"succeeded", "failed"}:
+        if execution_status == "finished":
+            if execution.get("exit_code") != run.get("exit_code"):
+                raise AssignmentError("execution evidence exit code is not coherent with run")
+        elif execution_status == "cancelled":
+            if execution.get("exit_code") != 143 or run.get("exit_code") not in {75, 124, 143}:
+                raise AssignmentError("execution evidence status is not coherent with run")
+        else:
+            raise AssignmentError("execution evidence status is not coherent with run")
+    else:
+        raise AssignmentError("run status is not terminal")
+    return execution

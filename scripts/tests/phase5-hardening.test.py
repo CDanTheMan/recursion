@@ -11,11 +11,20 @@ import subprocess
 import sys
 import tempfile
 import shutil
+import types
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 import assignment
+try:
+    import fcntl  # type: ignore  # noqa: F401
+except ImportError:
+    sys.modules["fcntl"] = types.SimpleNamespace(LOCK_EX=2, LOCK_NB=4, flock=lambda *_args: None)
+reconcile_spec = importlib.util.spec_from_file_location("phase5_reconcile", ROOT / "scripts/project-reconcile.py")
+assert reconcile_spec is not None and reconcile_spec.loader is not None
+reconcile = importlib.util.module_from_spec(reconcile_spec)
+reconcile_spec.loader.exec_module(reconcile)
 spec = importlib.util.spec_from_file_location("resolve_engine", ROOT / "scripts/resolve-engine.py")
 resolve_engine = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
@@ -160,6 +169,9 @@ def main() -> int:
         work = (ROOT / "scripts/work.sh").read_text()
         check("quarantine: termination was not confirmed" in work and 'arc" = 96' in work,
               "controller retains worktree when process-group cancellation is unconfirmed")
+        check('[ "$STRICT_PHASE5" != 1 ] || cmd+=(--execution-evidence' in work
+              and 'args+=(--execution-evidence "$execution_evidence")' in work,
+              "strict worker launch and finish always carry execution evidence")
         arc96 = work.split('if [ "$arc" = "96" ]; then', 1)[1].split('case "$arc" in', 1)[0]
         check("complete_terminal_escalation" not in arc96 and "quarantine_unconfirmed" in arc96,
               "arc=96 records escalation without terminalizing or clearing the lease")
@@ -215,6 +227,8 @@ def main() -> int:
 
         assignment_path = tmp / "assignment.json"
         assignment_path.write_text(json.dumps(value), encoding="utf-8")
+        assigned, assigned_digest = assignment.load_assignment(assignment_path)
+        check(assigned_digest == first, "assignment file digest is stable after serialization")
         evidence = tmp / "evidence.json"
         cmd = [sys.executable, str(ROOT / "scripts/worker-evidence.py"), "start",
                "--path", str(evidence), "--run-id", "run-1", "--task-id", "task-1",
@@ -262,10 +276,17 @@ def main() -> int:
             "endpoints": ["api.cursor.com", "api2.cursor.sh"], "model": "cursor-primary",
             "argv": value["role_assignments"]["implementer"]["argv"],
             "assignment_digest": first, "assignment_identity": first,
+            "status": "finished", "exit_code": 0,
             "network": {"policy": "provider-only", "profile": "cursor", "provider": "cursor",
                          "endpoints": ["api.cursor.com", "api2.cursor.sh"]},
         }
         execution_path.write_text(json.dumps(execution), encoding="utf-8")
+        missing_execution = subprocess.run([
+            sys.executable, str(ROOT / "scripts/worker-evidence.py"), "finish", str(evidence),
+            "succeeded", "done", "0",
+        ], capture_output=True, text=True, env=os.environ.copy())
+        check(missing_execution.returncode != 0 and "execution evidence is required" in missing_execution.stderr,
+              "strict finish refuses absent execution evidence")
         for field, bad in (
             ("engine", "gemini"), ("provider", "google-gemini"), ("profile", "gemini"),
             ("endpoints", ["generativelanguage.googleapis.com"]), ("model", "wrong-model"),
@@ -286,6 +307,64 @@ def main() -> int:
             "succeeded", "done", "0", "--execution-evidence", str(execution_path),
         ], capture_output=True, text=True, env=os.environ.copy())
         check(valid_finish.returncode == 0, "matching execution evidence is accepted")
+
+        source_sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+        task = {"id": "task-1", "candidate_commit": source_sha, "evidence_contract": "worker-result-v1"}
+        implementer_run = {
+            "id": "impl-run", "task_id": "task-1", "role": "implementer", "status": "succeeded",
+            "exit_code": 0, "assignment_file": str(assignment_path.resolve()),
+            "assignment_digest": first, "assignment": assigned, "commit_oid": source_sha,
+            "machine_gate": {
+                "commit_oid": source_sha, "acceptance": value["gate_contract"]["acceptance"],
+                "gate_contract_digest": value["gate_digest"],
+                "acceptance_sha256": value["gate_contract"]["acceptance_sha256"],
+                "passed": True, "exit_code": 0,
+            },
+            "verification": {"verifier_run_id": "verify-run", "commit_oid": source_sha, "verdict": "pass"},
+            "execution": dict(execution),
+        }
+        verifier_run = {
+            "id": "verify-run", "task_id": "task-1", "role": "verifier", "status": "succeeded",
+            "exit_code": 0, "assignment_digest": first, "commit_oid": source_sha,
+            "verification": {
+                "commit_oid": source_sha, "implementer_run_id": "impl-run", "verdict": "pass",
+            },
+            "execution": dict(execution),
+        }
+        runs = [implementer_run, verifier_run]
+        valid_reconcile, reconcile_reason, _ = reconcile.task_evidence(
+            controller, source, task, runs, require_local_review_ref=False,
+        )
+        check(valid_reconcile and reconcile_reason == "verified",
+              "reconciliation verifies matching execution evidence")
+        absent = dict(implementer_run)
+        absent.pop("execution")
+        absent_valid, _, _ = reconcile.task_evidence(
+            controller, source, task, [absent, verifier_run], require_local_review_ref=False,
+        )
+        check(not absent_valid, "reconciliation refuses absent execution evidence")
+        incoherent_run = dict(implementer_run)
+        incoherent_execution = dict(execution)
+        incoherent_execution["status"] = "started"
+        incoherent_run["execution"] = incoherent_execution
+        incoherent_valid, _, _ = reconcile.task_evidence(
+            controller, source, task, [incoherent_run, verifier_run], require_local_review_ref=False,
+        )
+        check(not incoherent_valid, "reconciliation refuses execution evidence with incoherent run status")
+        for field, bad in (
+            ("engine", "gemini"), ("provider", "google-gemini"), ("profile", "gemini"),
+            ("endpoints", ["generativelanguage.googleapis.com"]), ("model", "wrong-model"),
+            ("argv", ["{{EXE}}", "--wrong"]), ("assignment_digest", "0" * 64),
+            ("assignment_identity", "0" * 64),
+        ):
+            mutated_run = dict(implementer_run)
+            mutated_execution = dict(execution)
+            mutated_execution[field] = bad
+            mutated_run["execution"] = mutated_execution
+            mutated_valid, _, _ = reconcile.task_evidence(
+                controller, source, task, [mutated_run, verifier_run], require_local_review_ref=False,
+            )
+            check(not mutated_valid, f"reconciliation rejects mismatched execution field: {field}")
 
     print("phase5-hardening.test: ALL PASS")
     return 0

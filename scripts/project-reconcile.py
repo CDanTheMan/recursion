@@ -37,7 +37,8 @@ from transition_receipt import (
     fields_mutation, json_mutation, resume_transition,
 )
 from seed_contract import SeedContractError, copy_seed_paths, validate_contract
-from assignment import canonical_bytes, load_assignment
+from assignment import (AssignmentError, canonical_bytes, load_assignment,
+                         validate_execution_evidence)
 
 
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -1162,7 +1163,7 @@ def task_evidence(base: Path, repo: Path, task: dict[str, str], runs: list[dict]
     verifier = next((row for row in verifiers if row.get("id") == verifier_id), verifiers[-1])
     verification = verifier.get("verification") if isinstance(verifier.get("verification"), dict) else {}
     strict_assignment = task.get("evidence_contract") == "worker-result-v1" \
-        or bool(implementer.get("assignment_file"))
+        or any(field in implementer for field in ("assignment_file", "assignment_digest", "assignment"))
     if strict_assignment:
         assignment_file = implementer.get("assignment_file")
         try:
@@ -1179,6 +1180,15 @@ def task_evidence(base: Path, repo: Path, task: dict[str, str], runs: list[dict]
                 or machine.get("gate_contract_digest") != assigned["gate_digest"] \
                 or machine.get("acceptance_sha256") != assigned["gate_contract"]["acceptance_sha256"]:
             return False, "machine gate lacks independently authenticated assignment provenance", {}
+        for role, run in (("implementer", implementer), ("verifier", verifier)):
+            if run.get("assignment_digest") != assigned_digest:
+                return False, f"{role} assignment digest is absent or stale", {"commit_oid": commit}
+            try:
+                validate_execution_evidence(run.get("execution"), run, assigned)
+            except AssignmentError as exc:
+                return False, f"{role} execution evidence is absent or mismatched: {exc}", {
+                    "commit_oid": commit,
+                }
     valid = bool(
         re.fullmatch(r"[0-9a-f]{40,64}", commit)
         and gate.get("commit_oid") == commit

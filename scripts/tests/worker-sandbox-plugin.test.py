@@ -10,6 +10,7 @@ reviewed provider profile and its scoped environment allowlist through logical l
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import shutil
 import subprocess
@@ -93,6 +94,8 @@ def main() -> int:
         (scripts_dir / "provider-egress-profiles.json").write_bytes(
             (SOURCE / "scripts" / "provider-egress-profiles.json").read_bytes()
         )
+        engines_dir = scripts_dir / "engines"
+        engines_dir.mkdir()
         sandbox_copy_posix = to_posix(sandbox_copy)
 
         wt_local = root_local / "wt"
@@ -130,6 +133,42 @@ def main() -> int:
             "concurrency_cap": None,
             "env_passthrough": ["GEMINI_API_KEY"],
         }
+        manifest = {
+            "schema_version": 1,
+            "name": "stubeng",
+            "description": "logical worker sandbox fixture",
+            "executable": "stubeng",
+            "argv": plan["argv"],
+            "model": {"required": False, "argv_suffix": plan["model_argv_suffix"]},
+            "roles": ["implementer"],
+            "billing": plan["billing"],
+            "network": plan["network"],
+            "availability_probe": None,
+            "concurrency_cap": None,
+            "env_passthrough": plan["env_passthrough"],
+        }
+        manifest_bytes = (json.dumps(manifest, indent=2) + "\n").encode("utf-8")
+        manifest_path = engines_dir / "stubeng.json"
+        manifest_path.write_bytes(manifest_bytes)
+        profile_bytes = (scripts_dir / "provider-egress-profiles.json").read_bytes()
+        subprocess.run(["git", "init", "-q", "-b", "main", str(root_local)], check=True)
+        subprocess.run(["git", "-C", str(root_local), "add", "scripts"], check=True)
+        subprocess.run(
+            ["git", "-C", str(root_local), "-c", "user.name=test", "-c", "user.email=test@example.invalid",
+             "commit", "-qm", "controller fixture"],
+            check=True,
+        )
+        controller_sha = subprocess.check_output(
+            ["git", "-C", str(root_local), "rev-parse", "HEAD"], text=True,
+        ).strip()
+        plan["authority"] = {
+            "controller_repository": root_posix,
+            "controller_sha": controller_sha,
+            "policy_files": {
+                "scripts/engines/stubeng.json": hashlib.sha256(manifest_bytes).hexdigest(),
+                "scripts/provider-egress-profiles.json": hashlib.sha256(profile_bytes).hexdigest(),
+            },
+        }
         plan_path = root_local / "plan.json"
         plan_path.write_bytes((json.dumps(plan, indent=2) + "\n").encode("utf-8"))
         plan_posix = to_posix(plan_path)
@@ -163,6 +202,18 @@ def main() -> int:
         check(
             result.returncode == 92,
             f"non-builtin engine without --engine-plan exits 92 (got {result.returncode})",
+        )
+
+        # A plan-shaped file without authenticated controller provenance is not executable,
+        # even when the logical provider capability is available.
+        unbound_plan = root_local / "plan-unbound.json"
+        unbound = dict(plan)
+        unbound.pop("authority")
+        unbound_plan.write_bytes((json.dumps(unbound, indent=2) + "\n").encode("utf-8"))
+        result = invoke(["--engine", "stubeng", "--engine-plan", to_posix(unbound_plan)], "hi", dict(base_env))
+        check(
+            result.returncode == 92,
+            f"unbound execution plan is refused before launch (got {result.returncode})",
         )
 
         # --- (3) valid plan: prompt is one exact argv element, no --model when none passed ---

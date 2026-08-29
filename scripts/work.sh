@@ -1184,7 +1184,8 @@ PY
   local -a cmd=(bash "$ROOT/scripts/worker-sandbox.sh" --engine "$active_engine" --worktree "$wt"
     --prompt "$prompt" --role "$role" --network-policy "$NETWORK_POLICY")
   [ -n "$resolved_model" ] && cmd+=(--model "$resolved_model")
-  [ -z "$engine_plan" ] || cmd+=(--engine-plan "$engine_plan" --execution-evidence "$ROOT/state/runs/$run_id-execution.json")
+  [ -z "$engine_plan" ] || cmd+=(--engine-plan "$engine_plan")
+  [ "$STRICT_PHASE5" != 1 ] || cmd+=(--execution-evidence "$ROOT/state/runs/$run_id-execution.json")
   [ "$STRICT_PHASE5" != 1 ] || cmd+=(--assignment-digest "$ASSIGNMENT_DIGEST")
   [ "$active_engine" != hermes ] || cmd+=(--usage-file "$usage")
   [ "$readonly" != 1 ] || cmd+=(--read-only-worktree)
@@ -1232,7 +1233,8 @@ PY
       kill -0 -- "-$worker_pgid" 2>/dev/null \
         && { log "worker group still alive after cancellation"; return 96; }
       [ "$STRICT_PHASE5" != 1 ] || python3 "$ROOT/scripts/worker-evidence.py" finish \
-        "$LAST_RUN_EVIDENCE" cancelled pause 75 >>"$LOG" 2>&1 || true
+        "$LAST_RUN_EVIDENCE" cancelled pause 75 \
+        --execution-evidence "$ROOT/state/runs/$run_id-execution.json" >>"$LOG" 2>&1 || true
       log "$role process group $worker_pgid terminated before gates/publication"
       return 75
     fi
@@ -1243,6 +1245,7 @@ PY
       wait "$worker_pgid" 2>/dev/null || true
       kill -0 -- "-$worker_pgid" 2>/dev/null && return 96
       python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed timeout 124 \
+        --execution-evidence "$ROOT/state/runs/$run_id-execution.json" \
         >>"$LOG" 2>&1 || true
       return 97
     fi
@@ -1255,7 +1258,8 @@ PY
         terminate_worker_group "$worker_pgid" "$cancel_signal" "$cancel_grace" || { wait "$worker_pgid" 2>/dev/null || true; return 96; }
         wait "$worker_pgid" 2>/dev/null || true
         [ "$STRICT_PHASE5" != 1 ] || python3 "$ROOT/scripts/worker-evidence.py" finish \
-          "$LAST_RUN_EVIDENCE" cancelled "$WINDOW_AUTHORITY_FAILURE" 75 >>"$LOG" 2>&1 || true
+          "$LAST_RUN_EVIDENCE" cancelled "$WINDOW_AUTHORITY_FAILURE" 75 \
+          --execution-evidence "$ROOT/state/runs/$run_id-execution.json" >>"$LOG" 2>&1 || true
         return 75
       fi
       if [ "$STRICT_PHASE5" = 1 ]; then
@@ -1277,8 +1281,7 @@ PY
       *) execution_outcome=engine-exit ;;
     esac
     local -a refusal_finish=(finish "$LAST_RUN_EVIDENCE" failed "$execution_outcome" "$rc")
-    execution_evidence="$ROOT/state/runs/$run_id-execution.json"
-    [ ! -f "$execution_evidence" ] || refusal_finish+=(--execution-evidence "$execution_evidence")
+    refusal_finish+=(--execution-evidence "$ROOT/state/runs/$run_id-execution.json")
     python3 "$ROOT/scripts/worker-evidence.py" "${refusal_finish[@]}" >>"$LOG" 2>&1 || true
   fi
   return "$rc"
@@ -1379,7 +1382,7 @@ phase5_record_run(){ # status outcome rc [commit]
   [ -z "$LAST_SCOPE_FILE" ] || args+=(--scope-file "$LAST_SCOPE_FILE")
   [ -z "$LAST_USAGE_FILE" ] || [ ! -f "$LAST_USAGE_FILE" ] || args+=(--usage-file "$LAST_USAGE_FILE")
   execution_evidence="$ROOT/state/runs/$LAST_RUN_ID-execution.json"
-  [ ! -f "$execution_evidence" ] || args+=(--execution-evidence "$execution_evidence")
+  args+=(--execution-evidence "$execution_evidence")
   [ -z "$commit_oid" ] || args+=(--commit-oid "$commit_oid")
   [ ! -f "$SEED_EVIDENCE_FILE" ] || args+=(--seed-evidence "$SEED_EVIDENCE_FILE" --seed-verified-after)
   python3 "$ROOT/scripts/worker-evidence.py" "${args[@]}" >>"$LOG" 2>&1
@@ -1552,6 +1555,7 @@ Explicit non-goals: ${NON_GOALS:-none}."
   dirty="$(git -C "$verify_wt" status --porcelain --untracked-files=all 2>/dev/null || true)"
   if [ "$head" != "$CANDIDATE_OID" ] || [ -n "$dirty" ] || ! verify_seed_integrity "$verify_wt"; then
     python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed verifier-mutated-source 99 \
+      --execution-evidence "$ROOT/state/runs/$VERIFIER_RUN_ID-execution.json" \
       --commit-oid "$CANDIDATE_OID" \
       ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} >>"$LOG" 2>&1 || true
     git -C "$REPO_DIR" worktree remove "$verify_wt" >/dev/null 2>&1 || true
@@ -1561,6 +1565,7 @@ Explicit non-goals: ${NON_GOALS:-none}."
   if ! python3 "$ROOT/scripts/validate-verifier-result.py" "$verdict" --commit "$CANDIDATE_OID" \
       --implementer-run "$impl_run" >"$evidence_dir/validated-verdict.json" 2>>"$LOG"; then
     python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed invalid-verdict 99 \
+      --execution-evidence "$ROOT/state/runs/$VERIFIER_RUN_ID-execution.json" \
       --commit-oid "$CANDIDATE_OID" >>"$LOG" 2>&1 || true
     git -C "$REPO_DIR" worktree remove "$verify_wt" >/dev/null 2>&1 || true
     LAST_RUN_EVIDENCE="$impl_evidence"; IMPLEMENTER_RUN_ID="$impl_run"
@@ -1568,7 +1573,8 @@ Explicit non-goals: ${NON_GOALS:-none}."
   fi
   mv -f "$evidence_dir/validated-verdict.json" "$verdict"
   local -a finish_args=(finish "$LAST_RUN_EVIDENCE" succeeded verified 0
-    --result-file "$verdict" --commit-oid "$CANDIDATE_OID")
+    --result-file "$verdict" --commit-oid "$CANDIDATE_OID"
+    --execution-evidence "$ROOT/state/runs/$VERIFIER_RUN_ID-execution.json")
   [ ! -f "$SEED_EVIDENCE_FILE" ] \
     || finish_args+=(--seed-evidence "$SEED_EVIDENCE_FILE" --seed-verified-after)
   [ -z "$LAST_USAGE_FILE" ] || [ ! -f "$LAST_USAGE_FILE" ] \

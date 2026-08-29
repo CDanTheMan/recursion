@@ -15,7 +15,8 @@ from pathlib import Path
 sys_path = Path(__file__).resolve().parent
 if str(sys_path) not in sys.path:
     sys.path.insert(0, str(sys_path))
-from assignment import canonical_bytes, load_assignment
+from assignment import (AssignmentError, canonical_bytes, load_assignment,
+                        validate_execution_evidence as assignment_execution_evidence)
 
 
 def now() -> str:
@@ -94,41 +95,10 @@ def refresh_assignment(value: dict) -> dict | None:
 
 
 def validate_execution_evidence(execution: object, run: dict, assignment: dict) -> dict:
-    """Bind every execution fact to the role-specific immutable assignment.
-
-    The execution writer is controller-owned, but its JSON file is still an input at finish
-    time.  Reconciliation cannot recover a missing comparison after this transition, so finish
-    rejects any absent, extra, or cross-role engine/provider/argv identity here.
-    """
-    if not isinstance(execution, dict):
-        raise SystemExit("worker-evidence: execution evidence must be an object")
-    role = run.get("role")
-    role_spec = assignment.get("role_assignments", {}).get(role)
-    if not isinstance(role_spec, dict):
-        raise SystemExit("worker-evidence: execution evidence role is not assigned")
-    expected = {
-        "engine": role_spec.get("engine"),
-        "provider": role_spec.get("provider"),
-        "profile": role_spec.get("network_profile"),
-        "endpoints": role_spec.get("network_endpoints"),
-        "model": role_spec.get("model"),
-        "argv": role_spec.get("argv"),
-    }
-    for field, expected_value in expected.items():
-        if execution.get(field) != expected_value:
-            raise SystemExit(f"worker-evidence: execution evidence {field} mismatch")
-    assignment_digest = run.get("assignment_digest")
-    if not assignment_digest or execution.get("assignment_digest") != assignment_digest \
-            or execution.get("assignment_identity") != assignment_digest:
-        raise SystemExit("worker-evidence: execution evidence assignment identity mismatch")
-    network = execution.get("network")
-    if not isinstance(network, dict) or network != {
-        "policy": role_spec.get("network_policy"),
-        "profile": expected["profile"], "provider": expected["provider"],
-        "endpoints": expected["endpoints"],
-    }:
-        raise SystemExit("worker-evidence: execution evidence network binding mismatch")
-    return execution
+    try:
+        return assignment_execution_evidence(execution, run, assignment)
+    except AssignmentError as exc:
+        raise SystemExit(f"worker-evidence: {exc}") from exc
 
 
 def main() -> int:
@@ -212,6 +182,9 @@ def main() -> int:
 
     value = load(path)
     assignment = refresh_assignment(value)
+    strict_run = any(field in value for field in ("assignment_file", "assignment_digest", "assignment"))
+    if strict_run and assignment is None:
+        raise SystemExit("worker-evidence: strict run has no validated assignment provenance")
     if args.command == "heartbeat":
         value["heartbeat_at"] = now(); value["lease_expires"] = iso(args.lease_epoch)
     elif args.command == "finish":
@@ -224,8 +197,13 @@ def main() -> int:
         usage = maybe_json(args.usage_file)
         if isinstance(usage, dict):
             value["usage"] = usage
-        if args.execution_evidence:
-            execution = validate_execution_evidence(maybe_json(args.execution_evidence), value, assignment or {})
+        if strict_run:
+            if not args.execution_evidence:
+                raise SystemExit("worker-evidence: strict execution evidence is required to finish")
+            execution = validate_execution_evidence(maybe_json(args.execution_evidence), value, assignment)
+            value["execution"] = execution
+        elif args.execution_evidence:
+            execution = validate_execution_evidence(maybe_json(args.execution_evidence), value, {})
             value["execution"] = execution
         if args.commit_oid:
             value["commit_oid"] = args.commit_oid

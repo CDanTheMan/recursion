@@ -444,6 +444,8 @@ def enabled_env_name(engine: str) -> str:
 
 def build_plan(data: dict, provenance: dict[str, str] | None = None,
                controller_root: Path | None = None, controller_commit: str | None = None) -> dict:
+    if provenance is None or controller_root is None or controller_commit is None:
+        raise ManifestError("authenticated controller provenance is required to build an execution plan")
     plan = {
         "schema_version": 1,
         "engine": data["name"],
@@ -465,12 +467,11 @@ def build_plan(data: dict, provenance: dict[str, str] | None = None,
             "profile": data["network"]["profile"],
             "endpoints": list(data["network"]["endpoints"]),
         }
-    if provenance is not None and controller_root is not None and controller_commit is not None:
-        plan["authority"] = {
-            "controller_repository": str(controller_root),
-            "controller_sha": controller_commit,
-            "policy_files": dict(sorted(provenance.items())),
-        }
+    plan["authority"] = {
+        "controller_repository": str(controller_root),
+        "controller_sha": controller_commit,
+        "policy_files": dict(sorted(provenance.items())),
+    }
     if "runtime_layout" in data:
         layout = data["runtime_layout"]
         if layout is None or layout["mode"] == "executable-only":
@@ -536,6 +537,9 @@ def main() -> int:
 
     if (args.controller_root is None) != (args.controller_commit is None):
         diag("--controller-root and --controller-commit must be supplied together")
+        return 2
+    if not args.validate and args.controller_root is None:
+        diag("--controller-root and --controller-commit are required to emit an execution plan")
         return 2
     controller_root = None
     if args.controller_root is not None:
