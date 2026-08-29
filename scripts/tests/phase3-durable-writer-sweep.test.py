@@ -454,9 +454,19 @@ def test_assignment_battery(root: Path) -> None:
                     return
                 armed = False
                 if stage in {"pre-record-hardlink", "post-record-hardlink"}:
-                    temporary = next(race_final.parent.glob(
-                        f".{race_value['assignment_digest']}.json.*"
+                    # The per-digest record lock is named `.{digest}.json.lock` and
+                    # shares the broad prefix above.  Assignment temporaries append
+                    # the writer PID immediately after that prefix, so require the
+                    # numeric suffix and reject an ambiguous fixture instead of
+                    # attaching the hostile link to the lock inode.
+                    temporary_candidates = sorted(race_final.parent.glob(
+                        f".{race_value['assignment_digest']}.json.[0-9]*"
                     ))
+                    if len(temporary_candidates) != 1:
+                        raise AssertionError(
+                            "assignment hook did not observe exactly one private record temporary"
+                        )
+                    temporary = temporary_candidates[0]
                     race_outside.hardlink_to(temporary)
                 else:
                     race_outside.hardlink_to(race_final)
