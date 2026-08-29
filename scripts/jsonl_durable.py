@@ -31,6 +31,74 @@ except ImportError:  # pragma: no cover - production is Linux.
     msvcrt = None  # type: ignore[assignment]
 
 
+if os.name == "nt":
+    import ctypes
+
+    _LOCK_KERNEL32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _LOCK_INVALID_HANDLE = ctypes.c_void_p(-1).value
+    _LOCK_GENERIC_READ = 0x80000000
+    _LOCK_GENERIC_WRITE = 0x40000000
+    _LOCK_SHARE_READ = 0x00000001
+    _LOCK_SHARE_WRITE = 0x00000002
+    _LOCK_OPEN_ALWAYS = 4
+    _LOCK_FILE_ATTRIBUTE_NORMAL = 0x00000080
+    _LOCK_FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
+    _LOCK_FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+    _LOCK_FILE_ATTRIBUTE_TAG_INFO = 9
+
+    class _LOCK_FILE_ATTRIBUTE_TAG_INFO_STRUCT(ctypes.Structure):
+        _fields_ = [
+            ("FileAttributes", ctypes.c_uint32),
+            ("ReparseTag", ctypes.c_uint32),
+            ("Reserved", ctypes.c_uint32),
+        ]
+
+    _LOCK_KERNEL32.CreateFileW.argtypes = [
+        ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
+        ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
+    ]
+    _LOCK_KERNEL32.CreateFileW.restype = ctypes.c_void_p
+    _LOCK_KERNEL32.GetFileInformationByHandleEx.argtypes = [
+        ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32,
+    ]
+    _LOCK_KERNEL32.GetFileInformationByHandleEx.restype = ctypes.c_int
+    _LOCK_KERNEL32.CloseHandle.argtypes = [ctypes.c_void_p]
+    _LOCK_KERNEL32.CloseHandle.restype = ctypes.c_int
+
+
+def _open_durable_lock(path: Path) -> int:
+    """Atomically open a regular lock leaf without following a Windows reparse point."""
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
+    if os.name != "nt":
+        return os.open(path, flags | getattr(os, "O_NOFOLLOW", 0), 0o600)
+
+    if msvcrt is None:  # pragma: no cover - CPython on Windows always provides it.
+        raise JsonlDurabilityError("Windows durable locking requires msvcrt")
+    handle = _LOCK_KERNEL32.CreateFileW(
+        str(path), _LOCK_GENERIC_READ | _LOCK_GENERIC_WRITE,
+        _LOCK_SHARE_READ | _LOCK_SHARE_WRITE, None, _LOCK_OPEN_ALWAYS,
+        _LOCK_FILE_ATTRIBUTE_NORMAL | _LOCK_FILE_FLAG_OPEN_REPARSE_POINT, None,
+    )
+    if handle in (None, _LOCK_INVALID_HANDLE):
+        raise OSError(ctypes.get_last_error(), f"cannot open Windows durable lock {path}")
+    try:
+        info = _LOCK_FILE_ATTRIBUTE_TAG_INFO_STRUCT()
+        if not _LOCK_KERNEL32.GetFileInformationByHandleEx(
+                ctypes.c_void_p(handle), _LOCK_FILE_ATTRIBUTE_TAG_INFO,
+                ctypes.byref(info), ctypes.sizeof(info)):
+            raise OSError(ctypes.get_last_error(), "cannot inspect Windows durable lock")
+        if info.FileAttributes & _LOCK_FILE_ATTRIBUTE_REPARSE_POINT:
+            raise JsonlDurabilityError(f"durable JSONL lock is a reparse point: {path}")
+        descriptor = msvcrt.open_osfhandle(
+            int(handle), os.O_RDWR | getattr(os, "O_BINARY", 0),
+        )
+        handle = None  # the CRT descriptor now owns the native handle
+        return descriptor
+    finally:
+        if handle not in (None, _LOCK_INVALID_HANDLE):
+            _LOCK_KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+
+
 DEFAULT_MAX_RECORD_BYTES = 4 * 1024 * 1024
 COPY_CHUNK_BYTES = 1024 * 1024
 INDEX_SCHEMA_VERSION = 1
@@ -127,10 +195,8 @@ def durable_lock(path: Path):
     ensure_no_symlink(path)
     lock_path = path.parent / f".{path.name}.lock"
     ensure_no_symlink(lock_path)
-    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
-    flags |= getattr(os, "O_NOFOLLOW", 0)
     try:
-        descriptor = os.open(lock_path, flags, 0o600)
+        descriptor = _open_durable_lock(lock_path)
     except OSError as exc:
         raise JsonlDurabilityError(f"cannot open durable JSONL transaction lock: {lock_path}: {exc}") from exc
     try:

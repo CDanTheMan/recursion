@@ -328,6 +328,81 @@ def test_persist_rejects_deterministic_swaps(tmp_path: Path) -> None:
         check(outside_after == outside_before, f"{label} creates no outside file")
 
 
+def test_windows_publication_failure_cleans_private_temp(tmp_path: Path) -> None:
+    if os.name != "nt":
+        check(True, "Windows publication cleanup control is platform-scoped")
+        return
+
+    root = tmp_path / "windows-publication-cleanup"
+    outside = tmp_path / "outside-publication-target"
+    outside.mkdir()
+    value = amod.resolve_assignment(
+        **BASE_KWARGS, created_at="2026-08-28T00:00:00Z",
+    )
+    final = root / value["task_id"] / f"{value['assignment_digest']}.json"
+    armed = True
+
+    def hook(stage: str) -> None:
+        nonlocal armed
+        if armed and stage == "pre-mkstemp":
+            armed = False
+            _make_leaf_link(final, outside)
+
+    previous = amod._assignment_persistence_hook
+    amod._assignment_persistence_hook = hook
+    try:
+        try:
+            amod.persist_assignment(root, value)
+            check(False, "a raced Windows reparse leaf refuses assignment publication")
+        except amod.AssignmentError:
+            check(True, "a raced Windows reparse leaf refuses assignment publication")
+    finally:
+        amod._assignment_persistence_hook = previous
+
+    leftovers = list(final.parent.glob(f".{value['assignment_digest']}.json.*.tmp"))
+    check(not leftovers, "failed Windows hard-link publication removes its private temporary")
+    check(not any(outside.iterdir()), "failed Windows publication creates no outside file")
+    if final.exists():
+        os.rmdir(final)
+
+
+def test_windows_durable_lock_atomically_rejects_reparse_leaf(tmp_path: Path) -> None:
+    if os.name != "nt":
+        check(True, "Windows atomic durable-lock control is platform-scoped")
+        return
+
+    journal = tmp_path / "lock-race" / "index.jsonl"
+    journal.parent.mkdir(parents=True)
+    lock_path = journal.parent / f".{journal.name}.lock"
+    outside = tmp_path / "outside-lock-target"
+    outside.mkdir()
+    durable = amod.jsonl_durable
+    original = durable.ensure_no_symlink
+    armed = True
+
+    def race(path: Path) -> None:
+        nonlocal armed
+        original(path)
+        if armed and Path(path) == lock_path:
+            armed = False
+            _make_leaf_link(lock_path, outside)
+
+    durable.ensure_no_symlink = race
+    try:
+        try:
+            with durable.durable_lock(journal):
+                pass
+            check(False, "a raced Windows durable-lock reparse leaf is refused atomically")
+        except durable.JsonlDurabilityError:
+            check(True, "a raced Windows durable-lock reparse leaf is refused atomically")
+    finally:
+        durable.ensure_no_symlink = original
+
+    check(not any(outside.iterdir()), "a raced Windows durable-lock leaf creates no outside file")
+    if lock_path.exists():
+        os.rmdir(lock_path)
+
+
 def _persist_worker(args: tuple[str, dict]) -> str:
     root_name, value = args
     sys.path.insert(0, str(SCRIPTS))
@@ -495,6 +570,10 @@ def main() -> int:
         test_persist_rejects_linked_paths_before_writes(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_persist_rejects_deterministic_swaps(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_windows_publication_failure_cleans_private_temp(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_windows_durable_lock_atomically_rejects_reparse_leaf(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_persist_32_process_idempotency(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:

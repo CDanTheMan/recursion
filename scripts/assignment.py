@@ -689,14 +689,21 @@ if os.name == "nt":
                 _KERNEL32.DeleteFileW(str(temporary))
             finally:
                 raise
-        if not _KERNEL32.CreateHardLinkW(str(final), str(temporary), None):
-            error = ctypes.get_last_error()
-            if error not in (80, 183):  # ERROR_FILE_EXISTS / ERROR_ALREADY_EXISTS
-                raise OSError(error, "CreateHardLinkW failed")
-            existing = _win_read_file(final)
-            if existing != encoded:
-                raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
-        _KERNEL32.DeleteFileW(str(temporary))
+        try:
+            if not _KERNEL32.CreateHardLinkW(str(final), str(temporary), None):
+                error = ctypes.get_last_error()
+                if error not in (80, 183):  # ERROR_FILE_EXISTS / ERROR_ALREADY_EXISTS
+                    raise OSError(error, "CreateHardLinkW failed")
+                existing = _win_read_file(final)
+                if existing != encoded:
+                    raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
+        finally:
+            # Publication can fail after the private file is completely durable (for
+            # example, if an attacker races a junction into the immutable leaf).  The
+            # task directory is handle-pinned without delete sharing, so this pathname
+            # still names our private temporary and is safe to remove on every exit.
+            if not _KERNEL32.DeleteFileW(str(temporary)):
+                raise OSError(ctypes.get_last_error(), "cannot remove Windows assignment temporary")
 
 
 def _assignment_index_record(value: dict) -> dict:
