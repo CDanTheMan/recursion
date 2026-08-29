@@ -20,7 +20,28 @@
 #     - [x] Scaffold a minimal Next.js shell
 #     - [ ] Add a landing page with a hero + CTA        <- plan.sh emits THIS, marks it [~]
 set -euo pipefail
-ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"; cd "$ROOT"
+CODE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT="${RECURSION_ROOT:-$(cd "$CODE_ROOT/.." && pwd -P)}"; cd "$ROOT"
+require_repository_contract(){ python3 - "$CODE_ROOT" <<'PY'
+import importlib
+import sys
+from pathlib import Path
+
+code_root = Path(sys.argv[1])
+sys.path.insert(0, str(code_root))
+try:
+    importlib.import_module("repository_contract")
+except Exception as exc:
+    missing = getattr(exc, "name", None) or "repository_contract"
+    print(
+        f"plan: required module 'repository_contract' could not be imported; "
+        f"missing module '{missing}'; searched code root: {code_root}",
+        file=sys.stderr,
+    )
+    raise SystemExit(74)
+PY
+}
+require_repository_contract
 fsync_dir(){ python3 - "$1" <<'PY' >/dev/null 2>&1
 import os,sys
 try:
@@ -33,11 +54,22 @@ except (ValueError,TypeError,OverflowError,RecursionError,UnicodeDecodeError,OSE
   raise SystemExit(74)
 PY
 }
-atomic_replace_checked(){ python3 - "$1" "$2" "$ROOT" <<'PY'
+atomic_replace_checked(){ python3 - "$1" "$2" "$CODE_ROOT" <<'PY'
 import os,stat,sys
 from pathlib import Path
-sys.path.insert(0, str(Path(sys.argv[3]) / "scripts"))
-import repository_contract as rc
+
+code_root = Path(sys.argv[3])
+sys.path.insert(0, str(code_root))
+try:
+    import repository_contract as rc
+except Exception as exc:
+    missing = getattr(exc, "name", None) or "repository_contract"
+    print(
+        f"plan: required module 'repository_contract' could not be imported; "
+        f"missing module '{missing}'; searched code root: {code_root}",
+        file=sys.stderr,
+    )
+    raise SystemExit(74)
 
 try:
     source = rc._lexical_absolute(sys.argv[1])
@@ -192,9 +224,9 @@ PY
 )"
   case "$project_match" in
     active)
-      [ -f "$ROOT/scripts/repository_contract.py" ] \
-        || { echo "plan: active project validator is unavailable; refusing descriptor use" >&2; exit 74; }
-      python3 "$ROOT/scripts/repository_contract.py" validate-project "$candidate_config" >/dev/null \
+      [ -f "$CODE_ROOT/repository_contract.py" ] \
+        || { echo "plan: required module 'repository_contract' not found; searched code root: $CODE_ROOT" >&2; exit 74; }
+      python3 "$CODE_ROOT/repository_contract.py" validate-project "$candidate_config" >/dev/null \
         || { echo "plan: active project descriptor failed v2 validation: $candidate_config" >&2; exit 6; }
       PROJECT_CONFIG="$candidate_config"; break;;
     invalid)
@@ -257,13 +289,24 @@ fi
 # writing anything.  In particular, a permissive roadmap default (such as `allowed_paths: .`)
 # must not widen a descriptor restricted to a subtree.
 if [ -n "$PROJECT_CONFIG" ]; then
-  python3 - "$ROOT" "$PROJECT_CONFIG" "$REPO_CANONICAL" "$ID" "$SOURCE_BRANCH" "$SOURCE_SHA" \
+  python3 - "$CODE_ROOT" "$PROJECT_CONFIG" "$REPO_CANONICAL" "$ID" "$SOURCE_BRANCH" "$SOURCE_SHA" \
     "${ALLOWED:-${WORKDIR:-.}}" "$WORKDIR" "$ACC" "$GOAL" "$GATE_FILES" \
     "$CONTROLLER_GATE_FILES" <<'PY'
 import json, re, sys
 from pathlib import Path
-sys.path.insert(0, str(Path(sys.argv[1]) / "scripts"))
-import repository_contract as rc
+
+code_root = Path(sys.argv[1])
+sys.path.insert(0, str(code_root))
+try:
+    import repository_contract as rc
+except Exception as exc:
+    missing = getattr(exc, "name", None) or "repository_contract"
+    print(
+        f"plan: required module 'repository_contract' could not be imported; "
+        f"missing module '{missing}'; searched code root: {code_root}",
+        file=sys.stderr,
+    )
+    raise SystemExit(74)
 
 _, descriptor_path, repo, task_id, source_branch, source_sha, allowed_raw, workdir, acceptance, goal, \
     gate_files_raw, controller_gate_files_raw = sys.argv[1:]

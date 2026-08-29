@@ -44,6 +44,7 @@ R="$TMP/root"
 mkdir -p "$R/scripts" "$R/state/roadmaps" "$R/state/tasks" "$R/state/goals" "$R/state/.locks"
 cp "$SRC/scripts/plan.sh" "$R/scripts/"
 cp "$SRC/scripts/runtime-state.py" "$R/scripts/"
+cp "$SRC/scripts/repository_contract.py" "$R/scripts/"
 chmod +x "$R"/scripts/plan.sh "$R"/scripts/runtime-state.py 2>/dev/null
 
 # The planner lock witnesses the caller's process start time before it will hold a lock. Under
@@ -134,6 +135,18 @@ plan(){ # plan <workstream> -> rc; stdout in $TMP/out, stderr in $TMP/err
   echo $?
 }
 header_of(){ awk 'NF==0{exit} {print}' "$R/state/tasks/$1.md" 2>/dev/null; }
+
+# --- 0. a missing first-party module is diagnosed without a traceback -----------------------
+mv -- "$R/scripts/repository_contract.py" "$TMP/repository_contract.py"
+rc="$(plan missing-module)"
+if [ "$rc" != 0 ] && grep -q "required module 'repository_contract'" "$TMP/err" \
+   && grep -q "searched code root: $R/scripts" "$TMP/err" \
+   && ! grep -q 'Traceback' "$TMP/err"; then
+  ok "a missing planner module fails closed with its module and searched code root"
+else
+  no "missing planner module was not diagnosed cleanly (rc=$rc): $(cat "$TMP/err")"
+fi
+mv -- "$TMP/repository_contract.py" "$R/scripts/repository_contract.py"
 
 # --- 1. CONTROL: an ordinary roadmap still plans -------------------------------------------
 roadmap clean

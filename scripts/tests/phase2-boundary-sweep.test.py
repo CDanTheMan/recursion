@@ -59,6 +59,14 @@ class Phase2BoundarySweep(unittest.TestCase):
         cls.key = cls.root / "controller.key"
         cls.key.write_text("sweep-controller-key\n", encoding="utf-8")
         os.chmod(cls.key, 0o600)
+        cls.inherited_key = cls.root / "inherited-controller.key"
+        cls.inherited_key.write_text("sweep-controller-key\n", encoding="utf-8")
+        cls.acl_setup_error = None
+        if os.name == "nt":
+            account = f"{os.environ.get('USERDOMAIN', '')}\\{os.environ['USERNAME']}"
+            acl = run_process(["icacls", str(cls.key), "/inheritance:r", "/grant:r", f"{account}:F"])
+            if acl.returncode:
+                cls.acl_setup_error = acl.stderr.decode(errors="replace").strip()
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -249,11 +257,8 @@ class Phase2BoundarySweep(unittest.TestCase):
         self.rc.validate_project_descriptor(self.descriptor(schema_version=1))
 
     def test_windows_or_posix_controller_key_positive_and_acl_negative(self) -> None:
-        if os.name == "nt":
-            account = f"{os.environ.get('USERDOMAIN', '')}\\{os.environ['USERNAME']}"
-            acl = run_process(["icacls", str(self.key), "/inheritance:r", "/grant:r", f"{account}:F"])
-            if acl.returncode:
-                self.skipTest(f"host ACL setup denied: {acl.stderr.decode(errors='replace').strip()}")
+        if self.acl_setup_error:
+            self.skipTest(f"host ACL setup denied: {self.acl_setup_error}")
         self.assertEqual(self.rc._controller_key(), b"sweep-controller-key")
         self.rc._validate_windows_acl_records("S-1-owner", "S-1-owner", [], True)
         with self.assertRaises(OSError):
@@ -262,6 +267,15 @@ class Phase2BoundarySweep(unittest.TestCase):
         with self.assertRaises(OSError):
             self.rc._validate_windows_acl_records(
                 "S-1-owner", "S-1-owner", [("S-1-foreign", 0x10, 0x001F01FF, 0)], True)
+
+    def test_windows_inherited_write_controller_key_is_rejected(self) -> None:
+        if os.name != "nt":
+            self.skipTest("inherited Windows ACLs are not available on this host")
+        self.rc.CONTROLLER_KEY_PATH = self.inherited_key
+        with self.assertRaises(self.rc.ContractError) as failure:
+            self.rc._controller_key()
+        self.assertIn("controller key ACL grants inherited write access",
+                      str(failure.exception.__cause__))
 
     def test_all_nine_project_configs_still_admit(self) -> None:
         configs = sorted((SOURCE / "state" / "project-config").glob("*.json"))
@@ -365,6 +379,8 @@ class Phase2BoundarySweep(unittest.TestCase):
         # This is a real fixture import, including the controller gate and idempotency record.
         # If the host denies Git's temporary worktree mapping, report that environment seam rather
         # than replacing the positive path with a mocked verifier.
+        if self.acl_setup_error:
+            self.skipTest(f"host ACL setup denied: {self.acl_setup_error}")
         repo = self.root / "import-repo"
         repo.mkdir()
         def git(*args: str) -> str:
