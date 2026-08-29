@@ -155,6 +155,30 @@ class ConnectContractTest(unittest.TestCase):
         with self.assertRaises(self.proxy.ConnectDenied):
             self.proxy.verify_capability(token, key, now=100)
 
+    def test_capability_timestamps_reject_boolean_float_and_nonfinite_numbers(self):
+        key = b"k" * 32
+        valid = self.proxy.issue_capability("anthropic", "assignment-a", key, now=1, ttl=60,
+                                            jti="J" * 22)
+        self.assertEqual(self.proxy.verify_capability(valid, key, now=1)["assignment"],
+                         "assignment-a")
+        for payload in (
+            b'{"assignment":"assignment-a","exp":2,"iat":true,"jti":"JJJJJJJJJJJJJJJJJJJJJJ","nbf":true,"profile":"anthropic"}',
+            b'{"assignment":"assignment-a","exp":2,"iat":1.0,"jti":"JJJJJJJJJJJJJJJJJJJJJJ","nbf":1,"profile":"anthropic"}',
+            b'{"assignment":"assignment-a","exp":1e999,"iat":1,"jti":"JJJJJJJJJJJJJJJJJJJJJJ","nbf":1,"profile":"anthropic"}',
+            b'{"assignment":"assignment-a","exp":2,"iat":1,"jti":"JJJJJJJJJJJJJJJJJJJJJJ","nbf":1,"profile":"anthropic","x":NaN}',
+            b'{"assignment":"assignment-a","exp":2,"iat":1,"jti":"JJJJJJJJJJJJJJJJJJJJJJ","nbf":1,"profile":"anthropic","x":Infinity}',
+        ):
+            encoded = base64.urlsafe_b64encode(payload).rstrip(b"=")
+            signature = hmac.new(key, encoded, hashlib.sha256).digest()
+            token = encoded.decode("ascii") + "." + base64.urlsafe_b64encode(signature).rstrip(b"=").decode("ascii")
+            with self.subTest(payload=payload):
+                with self.assertRaises(self.proxy.ConnectDenied):
+                    self.proxy.verify_capability(token, key, now=1)
+        for kwargs in ({"now": True}, {"now": 1.0}, {"ttl": True}, {"ttl": 1.0}):
+            with self.subTest(kwargs=kwargs):
+                with self.assertRaises(ValueError):
+                    self.proxy.issue_capability("anthropic", "assignment-a", key, **kwargs)
+
     def test_signed_capability_must_match_active_assignment(self):
         key = b"k" * 32
         token = self.proxy.issue_capability("anthropic", "assignment-a", key)
@@ -479,7 +503,8 @@ class DeploymentContractTest(unittest.TestCase):
             "EnvironmentFile creation must not be nested under nonempty env_passthrough",
         )
         environment_start = worker.index('ENV_CONTENT=""')
-        self.assertLess(worker.index("HTTP_PROXY=http://127.0.0.1:*", environment_start), environment_writer)
+        self.assertLess(worker.index("egress_lines=", environment_start), environment_writer)
+        self.assertIn("@127\\.0\\.0\\.1", worker[environment_start:environment_writer])
         self.assertLess(worker.index("RECURSION_ASSIGNMENT_PROXY_TOKEN=", environment_start), environment_writer)
         self.assertLess(worker.index("RECURSION_ASSIGNMENT_IDENTITY=", environment_start), environment_writer)
 

@@ -20,6 +20,7 @@ from pathlib import Path
 
 NAME_RE = re.compile(r"^\.secret\.(\d+)\.(\d+)\.[0-9a-f]{16}$")
 DEFAULT_RUNTIME_ROOTS = (Path("/run/recursion-runner"), Path("/run/recursion-backup"))
+MAX_SECRET_ENV_BYTES = 1024 * 1024
 
 
 class SecretRuntimeError(ValueError):
@@ -31,13 +32,16 @@ class SecretRuntimeCleanupError(SecretRuntimeError):
 
 
 def process_start(pid: int) -> str | None:
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid < 1:
+        return None
     if os.name == "nt":
         # The production proof runs on Linux (/proc start times).  Windows review fixtures still
         # get PID-scoped cleanup; a PID other than this process is considered stale.
         return str(pid) if pid == os.getpid() else None
     try:
-        raw = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
-    except (OSError, UnicodeDecodeError):
+        with Path(f"/proc/{pid}/stat").open("rb") as source:
+            raw = source.read(4097).decode("ascii", "strict")
+    except (OSError, UnicodeDecodeError, ValueError):
         return None
     tail = raw.rsplit(")", 1)[-1].split()
     return tail[19] if len(tail) > 19 else None
@@ -46,12 +50,30 @@ def process_start(pid: int) -> str | None:
 def _approved_root(directory: Path) -> Path:
     configured = os.environ.get("RECURSION_SECRET_RUNTIME_ROOT", "").strip()
     roots = (Path(configured),) if configured else DEFAULT_RUNTIME_ROOTS
+    _reject_reparse_components(directory, "secret runtime directory")
     for root in roots:
-        if not root.is_absolute() or root != root.resolve(strict=False):
+        if not root.is_absolute() or any(part in {".", ".."} for part in root.parts):
             continue
         if directory == root:
             return root
     raise SecretRuntimeError("secret runtime directory is not an approved canonical runtime root")
+
+
+def _reject_reparse_components(path: Path, label: str) -> None:
+    if not isinstance(path, Path) or not path.is_absolute():
+        raise SecretRuntimeError(f"{label} must be an absolute path")
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise SecretRuntimeError(f"{label} is unreadable") from exc
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+                or (getattr(info, "st_file_attributes", 0) & 0x400):
+            raise SecretRuntimeError(f"{label} contains a symlink/reparse component")
 
 
 def _validate_component(path: Path, label: str, *, final: bool = False) -> None:
@@ -59,7 +81,8 @@ def _validate_component(path: Path, label: str, *, final: bool = False) -> None:
         info = path.lstat()
     except FileNotFoundError:
         return
-    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0):
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+            or (getattr(info, "st_file_attributes", 0) & 0x400):
         raise SecretRuntimeError(f"{label} contains a symlink/reparse component")
     if not stat.S_ISDIR(info.st_mode):
         raise SecretRuntimeError(f"{label} contains a non-directory component")
@@ -73,14 +96,19 @@ def _validate_component(path: Path, label: str, *, final: bool = False) -> None:
 
 
 def ensure_directory(directory: Path) -> None:
-    if not directory.is_absolute() or directory != directory.resolve(strict=False):
+    if not directory.is_absolute() or any(part in {".", ".."} for part in directory.parts):
         raise SecretRuntimeError("secret runtime directory must be canonical and absolute")
+    _reject_reparse_components(directory, "secret runtime directory")
     root = _approved_root(directory)
     current = Path(root.anchor)
     for component in root.parts[1:]:
         current /= component
-        if not current.exists():
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
             current.mkdir(mode=0o700)
+        except OSError as exc:
+            raise SecretRuntimeError("secret runtime parent is unreadable") from exc
         _validate_component(current, "secret runtime parent", final=current == root)
     _validate_component(root, "secret runtime directory", final=True)
 
@@ -101,8 +129,10 @@ def scavenge(directory: Path, current_pid: int | None = None) -> int:
         _validate_secret_file(path)
         try:
             pid = int(match.group(1))
-        except ValueError:
+        except (ValueError, OverflowError):
             raise SecretRuntimeError("secret runtime contains an invalid process identity") from None
+        if len(match.group(1)) > 20:
+            raise SecretRuntimeError("secret runtime contains an invalid process identity")
         start = match.group(2)
         if pid == current_pid and current_start == start:
             continue
@@ -118,7 +148,8 @@ def _validate_secret_file(path: Path) -> None:
         info = path.lstat()
     except FileNotFoundError:
         return
-    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0):
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+            or (getattr(info, "st_file_attributes", 0) & 0x400):
         raise SecretRuntimeError("secret runtime contains a symlink/reparse file")
     if not stat.S_ISREG(info.st_mode):
         raise SecretRuntimeError("secret runtime contains a non-regular secret file")
@@ -133,7 +164,8 @@ def _remove_secret(path: Path) -> None:
         info = path.lstat()
     except FileNotFoundError:
         return
-    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0):
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+            or (getattr(info, "st_file_attributes", 0) & 0x400):
         raise SecretRuntimeCleanupError("refusing to remove a symlink/reparse secret path")
     try:
         path.unlink()
@@ -153,8 +185,10 @@ def _remove_secret(path: Path) -> None:
 
 
 def write_env(directory: Path, content: bytes) -> Path:
-    if not content:
+    if not isinstance(content, bytes) or not content:
         raise ValueError("secret environment is empty")
+    if len(content) > MAX_SECRET_ENV_BYTES:
+        raise ValueError("secret environment is too large")
     if b"\x00" in content:
         raise ValueError("secret environment contains NUL")
     ensure_directory(directory)
@@ -204,7 +238,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(write_env(args.directory, sys.stdin.buffer.read()))
         return 0
-    except (OSError, ValueError, SecretRuntimeError) as exc:
+    except (OSError, ValueError, TypeError, UnicodeError, OverflowError, RecursionError,
+            SecretRuntimeError) as exc:
         print(f"secret-runtime: {exc}", file=sys.stderr)
         return 2
 

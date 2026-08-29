@@ -38,6 +38,8 @@ test "$(grep -cx 'NS=recursion-provider-only' "$ROOT/scripts/provider-network.sh
 sed "s/^NS=recursion-provider-only$/NS=$NS/" \
   "$ROOT/scripts/provider-network.sh" >"$TMP/provider-network.sh"
 cp "$ROOT/scripts/provider-connect-proxy.py" "$TMP/provider-connect-proxy.py"
+cp "$ROOT/scripts/provider_contract.py" "$TMP/provider_contract.py"
+cp "$ROOT/scripts/assignment-token.py" "$TMP/assignment-token.py"
 grep -qx "NS=$NS" "$TMP/provider-network.sh"
 if grep -qx 'NS=recursion-provider-only' "$TMP/provider-network.sh"; then
   echo "provider-network-root: namespace rewrite did not take effect" >&2
@@ -106,6 +108,25 @@ upstream_pid=$!
 for _ in $(seq 1 50); do [ -s "$TMP/port" ] && break; sleep 0.05; done
 [ -s "$TMP/port" ] || { echo "provider-network-root: fixture failed" >&2; exit 1; }
 port="$(cat "$TMP/port")"
+python3 - "$TMP/profiles" "$port" "$NS" <<'PY'
+import json, pathlib, sys
+directory = pathlib.Path(sys.argv[1])
+directory.mkdir(mode=0o700)
+port = int(sys.argv[2])
+namespace = sys.argv[3]
+profile = {
+    "schema_version": 1, "id": "fixture", "provider": "fixture", "enabled": True,
+    "namespace": namespace,
+    "proxy": {"type": "connect-proxy", "host": "127.0.0.1", "port": 18080,
+               "env": ["HTTP_PROXY", "HTTPS_PROXY"]},
+    "authorities": [f"fixture.invalid:{port}"],
+}
+(directory / "fixture.json").write_text(json.dumps(profile) + "\n", encoding="utf-8")
+PY
+head -c 32 /dev/urandom >"$TMP/capability.key"
+chmod 0600 "$TMP/capability.key"
+token="$(python3 "$ROOT/scripts/assignment-token.py" fixture assignment-a \
+  --key-file "$TMP/capability.key")"
 
 systemd-run --quiet --collect --unit "$UNIT" --service-type=exec \
   --property "ExecStartPre=/bin/bash $TMP/proxy-precheck.sh" \
@@ -128,8 +149,8 @@ systemd-run --quiet --collect --unit "$UNIT" --service-type=exec \
   --setenv RECURSION_PROVIDER_PROXY_TEST=1 \
   python3 "$TMP/provider-connect-proxy.py" serve \
     --namespace "/run/netns/$NS" --listen-port 18080 \
-    --allow "fixture.invalid:$port" --resolve "fixture.invalid=127.0.0.1" \
-    --drop-user nobody
+    --profile-dir "$TMP/profiles" --profile fixture \
+    --capability-key-file "$TMP/capability.key" --drop-user nobody
 
 for _ in $(seq 1 50); do
   ip netns exec "$NS" python3 - <<'PY' >/dev/null 2>&1 && break || true
@@ -150,9 +171,14 @@ grep -Eq '^NoNewPrivs:[[:space:]]+1$' "/proc/$proxy_pid/status"
 grep -Eq '^AF_NETLINK_DENIED errno=(1|97)$' "$TMP/proxy.out"
 grep -Fxq PROXY_PRECHECK_OK "$TMP/proxy.out"
 
-PROVIDER_FIXTURE_PORT="$port" ip netns exec "$NS" python3 - <<'PY'
-import os, socket
+PROVIDER_FIXTURE_PORT="$port" PROVIDER_FIXTURE_TOKEN="$token" PROVIDER_FIXTURE_ID=assignment-a \
+  ip netns exec "$NS" python3 - <<'PY'
+import base64, os, socket
 port = int(os.environ["PROVIDER_FIXTURE_PORT"])
+token = os.environ["PROVIDER_FIXTURE_TOKEN"]
+identity = os.environ["PROVIDER_FIXTURE_ID"]
+auth = base64.b64encode(f"{identity}:{token}".encode("ascii")).decode("ascii")
+authorization = f"Proxy-Authorization: Basic {auth}\r\n".encode("ascii")
 
 def client_hello(sni):
     host = sni.encode("ascii")
@@ -169,7 +195,7 @@ secret = b"must-not-appear-in-proxy-output"
 hello = client_hello("fixture.invalid")
 with socket.create_connection(("127.0.0.1", 18080), timeout=2) as s:
     request = (f"CONNECT fixture.invalid:{port} HTTP/1.1\r\n".encode()
-               + b"Proxy-Authorization: " + secret + b"\r\n\r\n")
+               + authorization + b"\r\n")
     s.sendall(request)
     response = s.recv(4096)
     assert response.startswith(b"HTTP/1.1 200"), response
@@ -181,12 +207,12 @@ with socket.create_connection(("127.0.0.1", 18080), timeout=2) as s:
         echoed += block
     assert echoed == hello, echoed
 with socket.create_connection(("127.0.0.1", 18080), timeout=2) as s:
-    s.sendall(f"CONNECT fixture.invalid:{port} HTTP/1.1\r\n\r\n".encode())
+    s.sendall(f"CONNECT fixture.invalid:{port} HTTP/1.1\r\n".encode() + authorization + b"\r\n")
     assert s.recv(64).startswith(b"HTTP/1.1 200")
     s.sendall(client_hello("wrong.example.com"))
     assert s.recv(64) == b"", "wrong-SNI tunnel was not failed closed"
 with socket.create_connection(("127.0.0.1", 18080), timeout=2) as s:
-    s.sendall(f"CONNECT fixture.invalid:{port} HTTP/1.1\r\n\r\n".encode())
+    s.sendall(f"CONNECT fixture.invalid:{port} HTTP/1.1\r\n".encode() + authorization + b"\r\n")
     assert s.recv(64).startswith(b"HTTP/1.1 200")
     s.sendall(b"not-a-tls-record")
     assert s.recv(64) == b"", "non-TLS tunnel was not failed closed"

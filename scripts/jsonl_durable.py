@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import sqlite3
+import stat
 import tempfile
 import time
 from dataclasses import dataclass
@@ -30,10 +32,108 @@ COPY_CHUNK_BYTES = 1024 * 1024
 INDEX_SCHEMA_VERSION = 1
 INDEX_AUTHORITY = "jsonl-verification-index-v1"
 ZERO_CHAIN_SHA256 = "0" * 64
+MAX_INDEX_ATTEMPTS = 10000
+MAX_LOCK_DELAY_S = 5.0
 
 
 class JsonlDurabilityError(RuntimeError):
     """The existing journal cannot safely accept or expose another record."""
+
+
+def _is_reparse(info: os.stat_result) -> bool:
+    return stat.S_ISLNK(info.st_mode) or bool(
+        getattr(info, "st_reparse_tag", 0)
+        or (getattr(info, "st_file_attributes", 0) & 0x400)
+    )
+
+
+def _lexical_path(path: Path) -> Path:
+    candidate = Path(path)
+    if any(part in {".", ".."} for part in candidate.parts):
+        raise JsonlDurabilityError(f"JSONL path contains traversal components: {path}")
+    if not candidate.is_absolute():
+        candidate = Path(os.path.abspath(candidate))
+    return candidate
+
+
+def _reject_reparse_components(path: Path) -> Path:
+    """Audit path components without resolving links, including Windows reparse points."""
+    candidate = _lexical_path(path)
+    current = Path(candidate.anchor or os.sep)
+    for part in candidate.parts[1:] if candidate.anchor else candidate.parts:
+        current /= part
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            break
+        except OSError as exc:
+            raise JsonlDurabilityError(f"cannot inspect JSONL path component: {current}") from exc
+        if _is_reparse(info):
+            raise JsonlDurabilityError(f"JSONL path component is a reparse point: {current}")
+    return candidate
+
+
+def _existing_regular(path: Path, label: str) -> os.stat_result | None:
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise JsonlDurabilityError(f"cannot inspect {label}: {path}") from exc
+    if _is_reparse(info) or not stat.S_ISREG(info.st_mode):
+        raise JsonlDurabilityError(f"{label} is not a regular non-reparse file: {path}")
+    return info
+
+
+def _same_identity(left: os.stat_result, right: os.stat_result) -> bool:
+    return (left.st_dev, left.st_ino, left.st_size) == (right.st_dev, right.st_ino, right.st_size)
+
+
+def _open_verified_file(path: Path, flags: int, mode: int = 0o600,
+                        expected: os.stat_result | None = None) -> tuple[int, os.stat_result]:
+    path = _reject_reparse_components(path)
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags | nofollow, mode)
+    except (OSError, ValueError, TypeError) as exc:
+        raise JsonlDurabilityError(f"cannot open JSONL file: {path}") from exc
+    try:
+        observed = os.fstat(descriptor)
+        if _is_reparse(observed) or not stat.S_ISREG(observed.st_mode):
+            raise JsonlDurabilityError(f"opened JSONL path is not a regular file: {path}")
+        if expected is not None and not _same_identity(expected, observed):
+            raise JsonlDurabilityError(f"JSONL file changed while opening: {path}")
+        return descriptor, observed
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
+
+def _parse_json(raw: str | bytes) -> object:
+    try:
+        return json.loads(raw, parse_constant=_reject_json_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError,
+            OverflowError, RecursionError) as exc:
+        raise JsonlDurabilityError(f"malformed JSONL index value: {exc}") from exc
+
+
+def _validate_record_limit(value: object) -> int:
+    if type(value) is not int or not 1 <= value <= DEFAULT_MAX_RECORD_BYTES:
+        raise JsonlDurabilityError("invalid JSONL record-size bound")
+    return value
+
+
+def _chain_bytes(value: object, label: str) -> bytes:
+    if not isinstance(value, str) or len(value) != 64:
+        raise JsonlDurabilityError(f"invalid JSONL chain digest: {label}")
+    try:
+        return bytes.fromhex(value)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise JsonlDurabilityError(f"invalid JSONL chain digest: {label}") from exc
 
 
 @dataclass(frozen=True)
@@ -100,13 +200,23 @@ def _lock_descriptor(descriptor: int) -> None:
     """Bound contention between appenders that have distinct higher-level action locks."""
     if fcntl is None:
         return
+    attempts_raw = os.environ.get("RECURSION_JSONL_LOCK_ATTEMPTS", "100")
     try:
-        attempts = max(1, int(os.environ.get("RECURSION_JSONL_LOCK_ATTEMPTS", "100")))
-    except ValueError:
+        if len(attempts_raw) > 6:
+            raise ValueError("lock attempt bound is too long")
+        attempts = max(1, int(attempts_raw))
+        attempts = min(attempts, MAX_INDEX_ATTEMPTS)
+    except (TypeError, ValueError, OverflowError):
         attempts = 100
+    delay_raw = os.environ.get("RECURSION_JSONL_LOCK_DELAY_S", "0.01")
     try:
-        delay = max(0.0, float(os.environ.get("RECURSION_JSONL_LOCK_DELAY_S", "0.01")))
-    except ValueError:
+        if len(delay_raw) > 32:
+            raise ValueError("lock delay bound is too long")
+        delay = float(delay_raw)
+        if not math.isfinite(delay):
+            raise ValueError("lock delay must be finite")
+        delay = min(max(0.0, delay), MAX_LOCK_DELAY_S)
+    except (TypeError, ValueError, OverflowError):
         delay = 0.01
     for attempt in range(attempts):
         try:
@@ -119,6 +229,9 @@ def _lock_descriptor(descriptor: int) -> None:
 
 
 def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
+    path = _reject_reparse_components(path)
+    _reject_reparse_components(path.parent)
+    existing = _existing_regular(path, "JSONL atomic target")
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
     temporary = Path(name)
@@ -129,6 +242,12 @@ def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
             _write_all(output.fileno(), value)
             output.flush()
             os.fsync(output.fileno())
+        _reject_reparse_components(path.parent)
+        current = _existing_regular(path, "JSONL atomic target")
+        if (existing is None) != (current is None) or (
+                existing is not None and current is not None and
+                (existing.st_dev, existing.st_ino) != (current.st_dev, current.st_ino)):
+            raise JsonlDurabilityError(f"JSONL atomic target changed while publishing: {path}")
         os.replace(temporary, path)
         _fsync_dir(path.parent)
     except BaseException:
@@ -146,34 +265,41 @@ def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
 
 
 def _journal_identity(path: Path) -> tuple[Path, str]:
-    resolved = path.resolve(strict=False)
-    for parent in (resolved.parent, *resolved.parents):
+    lexical = _reject_reparse_components(path)
+    for parent in (lexical.parent, *lexical.parents):
         if parent.name == "state":
             try:
-                relative = resolved.relative_to(parent.parent).as_posix()
+                relative = lexical.relative_to(parent.parent).as_posix()
             except ValueError:
                 break
             return parent / "jsonl-quarantine", relative
-    return resolved.parent / "jsonl-quarantine", resolved.name
+    return lexical.parent / "jsonl-quarantine", lexical.name
 
 
 def _index_identity(path: Path) -> tuple[Path, str]:
     """Return the derived-cache directory and stable journal identity."""
-    resolved = path.resolve(strict=False)
-    for parent in (resolved.parent, *resolved.parents):
+    lexical = _reject_reparse_components(path)
+    for parent in (lexical.parent, *lexical.parents):
         if parent.name == "state":
             try:
-                relative = resolved.relative_to(parent.parent).as_posix()
+                relative = lexical.relative_to(parent.parent).as_posix()
             except ValueError:
                 break
             return parent / "jsonl-index", relative
-    return resolved.parent / "jsonl-index", resolved.name
+    return lexical.parent / "jsonl-index", lexical.name
 
 
 def _ensure_index_root(path: Path) -> tuple[Path, str]:
     root, identity = _index_identity(path)
-    if root.exists():
-        if root.is_symlink() or not root.is_dir():
+    _reject_reparse_components(root.parent)
+    try:
+        root_info = os.lstat(root)
+    except FileNotFoundError:
+        root_info = None
+    except OSError as exc:
+        raise JsonlDurabilityError(f"cannot inspect JSONL index root: {root}") from exc
+    if root_info is not None:
+        if _is_reparse(root_info) or not stat.S_ISDIR(root_info.st_mode):
             raise JsonlDurabilityError(f"JSONL index root has unsafe type: {root}")
     else:
         root.mkdir(mode=0o700)
@@ -189,8 +315,7 @@ def _index_path(path: Path) -> tuple[Path, str]:
     root, identity = _ensure_index_root(path)
     name = hashlib.sha256(identity.encode("utf-8")).hexdigest() + ".sqlite3"
     candidate = root / name
-    if candidate.exists() and (candidate.is_symlink() or not candidate.is_file()):
-        raise JsonlDurabilityError(f"JSONL index has unsafe type: {candidate}")
+    _existing_regular(candidate, "JSONL verification index")
     return candidate, identity
 
 
@@ -276,7 +401,9 @@ def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int) -> dic
         }
         encoded = (json.dumps(evidence, sort_keys=True, separators=(",", ":")) + "\n").encode()
         if metadata.exists():
-            prior = json.loads(metadata.read_text(encoding="utf-8"))
+            prior = _parse_json(metadata.read_bytes())
+            if not isinstance(prior, dict):
+                raise JsonlDurabilityError(f"JSONL quarantine metadata is not an object: {metadata}")
             immutable = ("kind", "journal", "journal_offset", "original_bytes", "tail_bytes",
                          "tail_sha256", "payload")
             if any(prior.get(key) != evidence.get(key) for key in immutable):
@@ -321,8 +448,8 @@ def _iter_complete_lines(descriptor: int, limit: int, path: Path,
                 pass
             else:
                 try:
-                    value = json.loads(raw.decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                    value = _parse_json(raw)
+                except JsonlDurabilityError as exc:
                     raise JsonlDurabilityError(
                         f"malformed complete JSONL record {line_number}: {path}: {exc}"
                     ) from exc
@@ -331,7 +458,7 @@ def _iter_complete_lines(descriptor: int, limit: int, path: Path,
                         f"JSON object required at JSONL record {line_number}: {path}"
                     )
             raw_sha256 = hashlib.sha256(line).digest()
-            chain = hashlib.sha256(bytes.fromhex(chain) + raw_sha256).hexdigest()
+            chain = hashlib.sha256(_chain_bytes(chain, str(path)) + raw_sha256).hexdigest()
             yield VerifiedLine(
                 sequence=line_number, start=start, end=offset, raw=line, value=value,
                 chain_sha256=chain
@@ -493,6 +620,8 @@ def _rebuild_index(index_path: Path, identity: str, descriptor: int, stat: os.st
             os.fsync(cache_fd)
         finally:
             os.close(cache_fd)
+        _reject_reparse_components(index_path.parent)
+        _existing_regular(index_path, "JSONL verification index")
         os.replace(temporary, index_path)
         _fsync_dir(index_path.parent)
     except BaseException:
@@ -508,7 +637,8 @@ def _open_verified_index(path: Path, descriptor: int, size: int,
     if stat.st_size != size:
         raise JsonlDurabilityError(f"JSONL size changed while opening verification index: {path}")
     index_path, identity = _index_path(path)
-    if index_path.exists():
+    index_info = _existing_regular(index_path, "JSONL verification index")
+    if index_info is not None:
         connection: sqlite3.Connection | None = None
         try:
             connection = sqlite3.connect(index_path)
@@ -534,11 +664,13 @@ def _open_verified_index(path: Path, descriptor: int, size: int,
 def _rows_to_lines(rows: Iterator[tuple]) -> tuple[VerifiedLine, ...]:
     result: list[VerifiedLine] = []
     for sequence, start, end, raw, value_json, chain in rows:
-        value = json.loads(value_json) if value_json is not None else None
+        value = _parse_json(value_json) if value_json is not None else None
         if value is not None and not isinstance(value, dict):
             raise JsonlDurabilityError("JSONL verification index contains a non-object value")
+        if not all(type(item) is int for item in (sequence, start, end)) or not isinstance(raw, (bytes, bytearray)):
+            raise JsonlDurabilityError("JSONL verification index contains invalid row types")
         result.append(VerifiedLine(
-            sequence=int(sequence), start=int(start), end=int(end), raw=bytes(raw), value=value,
+            sequence=sequence, start=start, end=end, raw=bytes(raw), value=value,
             chain_sha256=str(chain),
         ))
     return tuple(result)
@@ -546,10 +678,19 @@ def _rows_to_lines(rows: Iterator[tuple]) -> tuple[VerifiedLine, ...]:
 
 def _verified_descriptor(path: Path, max_record_bytes: int) \
         -> tuple[int, sqlite3.Connection, bool]:
-    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+    path = _reject_reparse_components(path)
+    expected = _existing_regular(path, "JSONL journal")
+    if expected is None:
+        raise JsonlDurabilityError(f"JSONL journal is absent: {path}")
+    descriptor, opened = _open_verified_file(
+        path, os.O_RDONLY | getattr(os, "O_BINARY", 0), expected=expected
+    )
     try:
         _lock_descriptor(descriptor)
-        size = os.fstat(descriptor).st_size
+        current = os.fstat(descriptor)
+        if not _same_identity(expected, current) or not _same_identity(opened, current):
+            raise JsonlDurabilityError(f"JSONL journal changed before verification: {path}")
+        size = current.st_size
         if size and _read_at(descriptor, 1, size - 1) != b"\n":
             raise JsonlDurabilityError(f"unterminated JSONL tail: {path}")
         connection, rebuilt = _open_verified_index(path, descriptor, size, max_record_bytes)
@@ -561,14 +702,19 @@ def _verified_descriptor(path: Path, max_record_bytes: int) \
 
 def read_jsonl_objects(path: Path, max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES) -> list[dict]:
     """Read objects from an intact journal through its verified derived index."""
-    if not path.is_file():
+    max_record_bytes = _validate_record_limit(max_record_bytes)
+    path = _reject_reparse_components(path)
+    if _existing_regular(path, "JSONL journal") is None:
         return []
     descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
     try:
         rows = connection.execute(
             "SELECT value_json FROM records WHERE value_json IS NOT NULL ORDER BY sequence"
         )
-        return [json.loads(row[0]) for row in rows]
+        values = [_parse_json(row[0]) for row in rows]
+        if not all(isinstance(value, dict) for value in values):
+            raise JsonlDurabilityError("JSONL verification index contains a non-object value")
+        return values
     finally:
         connection.close()
         os.close(descriptor)
@@ -577,9 +723,11 @@ def read_jsonl_objects(path: Path, max_record_bytes: int = DEFAULT_MAX_RECORD_BY
 def read_jsonl_prefix(path: Path, count: int,
                       max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES) -> tuple[VerifiedLine, ...]:
     """Return at most *count* verified physical lines from the journal prefix."""
-    if count < 0:
+    max_record_bytes = _validate_record_limit(max_record_bytes)
+    if type(count) is not int or count < 0:
         raise JsonlDurabilityError("JSONL prefix count cannot be negative")
-    if not path.is_file() or count == 0:
+    path = _reject_reparse_components(path)
+    if _existing_regular(path, "JSONL journal") is None or count == 0:
         return ()
     descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
     try:
@@ -596,21 +744,23 @@ def read_jsonl_prefix(path: Path, count: int,
 def find_jsonl_objects(path: Path, field: str, value: object,
                        max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES) -> list[dict]:
     """Find exact top-level field matches without rescanning verified journal bytes."""
-    if not path.is_file():
+    max_record_bytes = _validate_record_limit(max_record_bytes)
+    path = _reject_reparse_components(path)
+    if _existing_regular(path, "JSONL journal") is None:
         return []
     descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
     try:
         if field == "id":
-            encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+            encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
             rows = connection.execute(
                 "SELECT value_json FROM records WHERE object_id_json=? ORDER BY sequence",
                 (encoded,),
             )
-            return [json.loads(row[0]) for row in rows]
+            return [_parse_json(row[0]) for row in rows]
         result = []
         for row in connection.execute(
                 "SELECT value_json FROM records WHERE value_json IS NOT NULL ORDER BY sequence"):
-            candidate = json.loads(row[0])
+            candidate = _parse_json(row[0])
             if candidate.get(field) == value:
                 result.append(candidate)
         return result
@@ -637,7 +787,9 @@ def read_jsonl_since(path: Path, consumer: str,
     """
     if not consumer or len(consumer) > 128:
         raise JsonlDurabilityError("invalid JSONL index consumer")
-    if not path.is_file():
+    max_record_bytes = _validate_record_limit(max_record_bytes)
+    path = _reject_reparse_components(path)
+    if _existing_regular(path, "JSONL journal") is None:
         return IndexedBatch((), 0, ZERO_CHAIN_SHA256, False)
     descriptor, connection, rebuilt = _verified_descriptor(path, max_record_bytes)
     try:
@@ -667,7 +819,9 @@ def acknowledge_jsonl(path: Path, consumer: str, batch: IndexedBatch,
     """Durably advance a consumer after its selected projections are durable."""
     if not consumer or len(consumer) > 128:
         raise JsonlDurabilityError("invalid JSONL index consumer")
-    if not path.is_file():
+    max_record_bytes = _validate_record_limit(max_record_bytes)
+    path = _reject_reparse_components(path)
+    if _existing_regular(path, "JSONL journal") is None:
         if batch.verified_size == 0:
             return
         raise JsonlDurabilityError(f"JSONL disappeared before acknowledgement: {path}")
@@ -706,13 +860,14 @@ def _duplicate_in_index(connection: sqlite3.Connection, field: str | None,
     if field is None:
         return False
     if field == "id":
-        encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+        encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
         return connection.execute(
             "SELECT 1 FROM records WHERE object_id_json=? LIMIT 1", (encoded,)
         ).fetchone() is not None
     for row in connection.execute(
             "SELECT value_json FROM records WHERE value_json IS NOT NULL ORDER BY sequence"):
-        if json.loads(row[0]).get(field) == value:
+        candidate = _parse_json(row[0])
+        if isinstance(candidate, dict) and candidate.get(field) == value:
             return True
     return False
 
@@ -729,11 +884,11 @@ def _update_index_after_append(connection: sqlite3.Connection, descriptor: int, 
     if stat.st_size != old_size + len(encoded):
         raise JsonlDurabilityError(f"JSONL size changed during indexed append: {path}")
     try:
-        value = json.loads(encoded[:-1].decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:  # defensive; caller encoded it.
+        value = _parse_json(encoded[:-1])
+    except JsonlDurabilityError as exc:  # defensive; caller encoded it.
         raise JsonlDurabilityError(f"new JSONL record cannot be indexed: {path}") from exc
     raw_digest = hashlib.sha256(encoded).digest()
-    chain = hashlib.sha256(bytes.fromhex(prior_chain) + raw_digest).hexdigest()
+    chain = hashlib.sha256(_chain_bytes(prior_chain, str(path)) + raw_digest).hexdigest()
     line = VerifiedLine(line_count + 1, old_size, stat.st_size, encoded, value, chain)
     try:
         connection.execute("BEGIN IMMEDIATE")
@@ -757,19 +912,31 @@ def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RE
     """
     if not isinstance(value, dict):
         raise JsonlDurabilityError("JSONL append requires an object")
-    encoded = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    max_record_bytes = _validate_record_limit(max_record_bytes)
+    try:
+        encoded = (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+                   + "\n").encode("utf-8")
+    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeError) as exc:
+        raise JsonlDurabilityError("JSONL append value is not canonical JSON") from exc
     if len(encoded) - 1 > max_record_bytes:
         raise JsonlDurabilityError(f"new JSONL record exceeds {max_record_bytes} bytes: {path}")
+    path = _reject_reparse_components(path)
+    _reject_reparse_components(path.parent)
+    expected = _existing_regular(path, "JSONL journal")
     path.parent.mkdir(parents=True, exist_ok=True)
-    existed = path.exists()
-    descriptor = os.open(
-        path, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0), 0o600
-    )
+    existed = expected is not None
+    flags = os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0)
+    if not existed:
+        flags |= getattr(os, "O_EXCL", 0)
+    descriptor, opened = _open_verified_file(path, flags, 0o600, expected=expected)
     evidence: dict | None = None
     connection: sqlite3.Connection | None = None
     try:
         _lock_descriptor(descriptor)
-        size = os.fstat(descriptor).st_size
+        current = os.fstat(descriptor)
+        if not _same_identity(opened, current):
+            raise JsonlDurabilityError(f"JSONL journal changed before append: {path}")
+        size = current.st_size
         committed = size
         if size and _read_at(descriptor, 1, size - 1) != b"\n":
             committed = _last_newline(descriptor, size)

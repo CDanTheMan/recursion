@@ -26,6 +26,23 @@ def load_issue():
     return module.issue_capability
 
 
+def _reject_reparse_components(path: pathlib.Path) -> None:
+    if not path.is_absolute() or any(part in {".", ".."} for part in path.parts):
+        raise ValueError("provider capability key path is not canonical")
+    current = pathlib.Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise ValueError("provider capability key is unavailable") from exc
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+                or (getattr(info, "st_file_attributes", 0) & 0x400):
+            raise ValueError("provider capability key is unavailable")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="assignment-token")
     parser.add_argument("profile")
@@ -35,18 +52,38 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         path = args.key_file
-        if path.is_symlink() or not path.is_file():
+        _reject_reparse_components(path)
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode):
             raise ValueError("provider capability key is unavailable")
-        info = path.stat()
         if stat.S_IMODE(info.st_mode) & 0o077:
             raise ValueError("provider capability key ownership/mode is unsafe")
         if hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0:
             raise ValueError("provider capability key ownership/mode is unsafe")
-        secret = path.read_bytes()
+        if info.st_size < 32 or info.st_size > 1024 * 1024:
+            raise ValueError("provider capability key has an invalid size")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(path, flags)
+        try:
+            opened_info = os.fstat(descriptor)
+            if stat.S_ISLNK(opened_info.st_mode) or getattr(opened_info, "st_reparse_tag", 0) \
+                    or (getattr(opened_info, "st_file_attributes", 0) & 0x400) \
+                    or not stat.S_ISREG(opened_info.st_mode) or opened_info.st_size != info.st_size:
+                raise ValueError("provider capability key is unavailable")
+            with os.fdopen(descriptor, "rb") as source:
+                descriptor = -1
+                secret = source.read(1024 * 1024 + 1)
+        finally:
+            if descriptor != -1:
+                os.close(descriptor)
+        if len(secret) > 1024 * 1024:
+            raise ValueError("provider capability key has an invalid size")
         token = load_issue()(args.profile, args.assignment, secret)
         sys.stdout.write(token + "\n")
         return 0
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, TypeError, UnicodeError, OverflowError, RecursionError) as exc:
         print(f"assignment-token: {exc}", file=sys.stderr)
         return 96
 

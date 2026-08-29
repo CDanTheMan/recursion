@@ -21,10 +21,15 @@ ALIAS_NAME_RE = re.compile(r"[a-z][a-z0-9-]{2,31}")
 ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}")
 ENGINE_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
 VALID_ROLES = {"implementer", "verifier"}
+MAX_REGISTRY_BYTES = 1024 * 1024
 
 
 class RegistryError(Exception):
     """The alias registry is absent, unreadable, or does not match the schema."""
+
+
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
 
 
 def _registry_path() -> Path:
@@ -37,14 +42,18 @@ def _registry_path() -> Path:
 def load_registry() -> dict[str, tuple[str, set[str]]]:
     path = _registry_path()
     try:
-        raw = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
+        raw = path.read_bytes()
+        if len(raw) > MAX_REGISTRY_BYTES:
+            raise RegistryError(f"alias registry {path} exceeds the 1 MiB bound")
+        text = raw.decode("utf-8")
+    except (OSError, UnicodeDecodeError, RegistryError) as exc:
         raise RegistryError(f"alias registry {path} is missing or unreadable ({exc})") from exc
     try:
-        doc = json.loads(raw)
-    except json.JSONDecodeError as exc:
+        doc = json.loads(text, parse_constant=_reject_json_constant)
+    except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError) as exc:
         raise RegistryError(f"alias registry {path} is not valid JSON ({exc})") from exc
-    if not isinstance(doc, dict) or doc.get("schema_version") != 1:
+    if not isinstance(doc, dict) or type(doc.get("schema_version")) is not int \
+            or doc["schema_version"] != 1:
         raise RegistryError(f"alias registry {path} has an invalid schema")
     aliases = doc.get("aliases")
     if not isinstance(aliases, dict):
@@ -67,7 +76,7 @@ def load_registry() -> dict[str, tuple[str, set[str]]]:
     return resolved
 
 
-def main() -> int:
+def _run_main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("alias")
     parser.add_argument("role", choices=("implementer", "verifier"))
@@ -103,6 +112,15 @@ def main() -> int:
             return 2
     print(value)
     return 0
+
+
+def main() -> int:
+    try:
+        return _run_main()
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError,
+            UnicodeError, json.JSONDecodeError) as exc:
+        print(f"model-alias: {exc}", file=sys.stderr)
+        return 4
 
 
 if __name__ == "__main__":

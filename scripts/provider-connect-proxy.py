@@ -54,6 +54,7 @@ MAX_CLIENT_HELLO = 65536
 MAX_CAPABILITY_TOKEN = 8192
 MAX_CAPABILITY_PAYLOAD = 4096
 MAX_CAPABILITY_SIGNATURE = 64
+MAX_REVOCATION_BYTES = 1024 * 1024
 TLS_HANDSHAKE = 0x16
 TLS_CLIENT_HELLO = 0x01
 SERVER_NAME_EXTENSION = 0x0000
@@ -81,20 +82,35 @@ class ClientHelloMismatch(ValueError):
     """The ClientHello SNI does not match the CONNECT authority."""
 
 
+def _plain_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _reject_json_constant(name: str) -> object:
+    raise ValueError(f"non-finite JSON number {name} is forbidden")
+
+
+def _json_no_constants(value: str) -> object:
+    return json.loads(value, parse_constant=_reject_json_constant)
+
+
 def issue_capability(profile: str, assignment: str, secret: bytes, *,
                      now: int | None = None, ttl: int = CAPABILITY_TTL_SECONDS,
                      jti: str | None = None) -> str:
     """Create an opaque, signed transport capability for exactly one assignment/profile."""
-    if len(secret) < 32:
+    if not isinstance(secret, bytes) or len(secret) < 32:
         raise ValueError("capability key is too short")
-    if not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", profile) \
+    if not isinstance(profile, str) or not isinstance(assignment, str) \
+            or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", profile) \
             or not ASSIGNMENT_RE.fullmatch(assignment):
         raise ValueError("capability identity is invalid")
-    issued = int(time.time()) if now is None else int(now)
-    if not 1 <= ttl <= 86400:
+    if now is not None and not _plain_int(now):
+        raise ValueError("capability timestamp is invalid")
+    if not _plain_int(ttl) or not 1 <= ttl <= 86400:
         raise ValueError("capability lifetime is invalid")
-    nonce = jti or secrets.token_urlsafe(24)
-    if not re.fullmatch(r"[A-Za-z0-9_-]{22,128}", nonce):
+    issued = int(time.time()) if now is None else now
+    nonce = secrets.token_urlsafe(24) if jti is None else jti
+    if not isinstance(nonce, str) or not re.fullmatch(r"[A-Za-z0-9_-]{22,128}", nonce):
         raise ValueError("capability nonce is invalid")
     payload = json.dumps({"assignment": assignment, "profile": profile,
                           "iat": issued, "nbf": issued,
@@ -108,33 +124,50 @@ def issue_capability(profile: str, assignment: str, secret: bytes, *,
 def verify_capability(token: str, secret: bytes, *, now: int | None = None,
                       revoked_jtis: set[str] | None = None) -> dict[str, str]:
     try:
-        if not isinstance(token, str) or len(token) > MAX_CAPABILITY_TOKEN:
+        if not isinstance(token, str) or not isinstance(secret, bytes) or len(secret) < 32 or len(token) > MAX_CAPABILITY_TOKEN:
             raise ValueError
         encoded, signed = token.split(".", 1)
         observed = _decode_capability_segment(signed, MAX_CAPABILITY_SIGNATURE)
         expected = hmac.new(secret, encoded.encode("ascii"), hashlib.sha256).digest()
         if not hmac.compare_digest(observed, expected):
             raise ValueError
-        payload = json.loads(_decode_capability_segment(encoded, MAX_CAPABILITY_PAYLOAD))
-    except (ValueError, UnicodeError, json.JSONDecodeError, TypeError, binascii.Error, RecursionError):
+        payload = _json_no_constants(
+            _decode_capability_segment(encoded, MAX_CAPABILITY_PAYLOAD).decode("utf-8", "strict")
+        )
+    except (ValueError, UnicodeError, json.JSONDecodeError, TypeError, OverflowError,
+            binascii.Error, RecursionError):
         raise ConnectDenied("transport capability is invalid") from None
-    if not isinstance(payload, dict) or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", str(payload.get("profile", ""))) \
-            or not ASSIGNMENT_RE.fullmatch(str(payload.get("assignment", ""))) \
-            or not re.fullmatch(r"[A-Za-z0-9_-]{22,128}", str(payload.get("jti", ""))):
+    if not isinstance(payload, dict):
+        raise ConnectDenied("transport capability is invalid")
+    profile = payload.get("profile")
+    assignment = payload.get("assignment")
+    jti = payload.get("jti")
+    if not isinstance(profile, str) or not isinstance(assignment, str) or not isinstance(jti, str):
         raise ConnectDenied("transport capability is invalid")
     try:
-        issued = int(payload["iat"]); not_before = int(payload["nbf"]); expires = int(payload["exp"])
-    except (KeyError, TypeError, ValueError):
-        raise ConnectDenied("transport capability is invalid") from None
-    current = int(time.time()) if now is None else int(now)
+        identities_valid = bool(re.fullmatch(r"[a-z][a-z0-9-]{1,63}", profile)) \
+            and bool(ASSIGNMENT_RE.fullmatch(assignment)) \
+            and bool(re.fullmatch(r"[A-Za-z0-9_-]{22,128}", jti))
+    except (TypeError, RecursionError):
+        identities_valid = False
+    if not identities_valid:
+        raise ConnectDenied("transport capability is invalid")
+    issued = payload.get("iat")
+    not_before = payload.get("nbf")
+    expires = payload.get("exp")
+    if not all(_plain_int(value) for value in (issued, not_before, expires)):
+        raise ConnectDenied("transport capability is invalid")
+    if now is not None and not _plain_int(now):
+        raise ConnectDenied("transport capability is invalid")
+    current = int(time.time()) if now is None else now
     if issued != not_before or expires <= issued or expires - issued > 86400 \
             or not_before > current + CAPABILITY_CLOCK_SKEW_SECONDS \
             or expires < current - CAPABILITY_CLOCK_SKEW_SECONDS:
         raise ConnectDenied("transport capability is expired or not yet valid")
-    jti = str(payload["jti"])
+    jti = payload["jti"]
     if revoked_jtis is not None and jti in revoked_jtis:
         raise ConnectDenied("transport capability has been revoked")
-    return {"profile": str(payload["profile"]), "assignment": str(payload["assignment"]), "jti": jti}
+    return {"profile": profile, "assignment": assignment, "jti": jti}
 
 
 def _decode_capability_segment(value: str, maximum: int) -> bytes:
@@ -142,7 +175,10 @@ def _decode_capability_segment(value: str, maximum: int) -> bytes:
             or not CAPABILITY_B64_RE.fullmatch(value) or len(value) % 4 == 1:
         raise ValueError("capability encoding is invalid")
     padded = value.encode("ascii") + b"=" * (-len(value) % 4)
-    decoded = base64.urlsafe_b64decode(padded)
+    try:
+        decoded = base64.urlsafe_b64decode(padded)
+    except (binascii.Error, ValueError, TypeError) as exc:
+        raise ValueError("capability encoding is invalid") from exc
     if len(decoded) > maximum:
         raise ValueError("capability encoding is too large")
     canonical = base64.urlsafe_b64encode(decoded).rstrip(b"=").decode("ascii")
@@ -151,18 +187,84 @@ def _decode_capability_segment(value: str, maximum: int) -> bytes:
     return decoded
 
 
+def _reject_reparse_components(path: pathlib.Path, label: str) -> None:
+    if not isinstance(path, pathlib.Path) or not path.is_absolute() \
+            or any(part in {".", ".."} for part in path.parts):
+        raise ValueError(f"{label} must be a canonical absolute path")
+    current = pathlib.Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise ValueError(f"{label} is unavailable") from exc
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+                or (getattr(info, "st_file_attributes", 0) & 0x400):
+            raise ValueError(f"{label} contains a symlink/reparse component")
+
+
+def _read_regular_file(path: pathlib.Path, label: str, maximum: int) -> bytes:
+    _reject_reparse_components(path, label)
+    try:
+        expected = path.lstat()
+    except OSError as exc:
+        raise ValueError(f"{label} is unavailable") from exc
+    if stat.S_ISLNK(expected.st_mode) or getattr(expected, "st_reparse_tag", 0) \
+            or (getattr(expected, "st_file_attributes", 0) & 0x400) \
+            or not stat.S_ISREG(expected.st_mode):
+        raise ValueError(f"{label} is unavailable")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except (OSError, ValueError, TypeError) as exc:
+        raise ValueError(f"{label} is unavailable") from exc
+    try:
+        info = os.fstat(descriptor)
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+                or (getattr(info, "st_file_attributes", 0) & 0x400) \
+                or not stat.S_ISREG(info.st_mode) \
+                or (info.st_dev, info.st_ino) != (expected.st_dev, expected.st_ino) \
+                or info.st_size != expected.st_size or info.st_size < 0 or info.st_size > maximum:
+            raise ValueError(f"{label} is unavailable")
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = -1
+            value = source.read(maximum + 1)
+        if len(value) > maximum:
+            raise ValueError(f"{label} exceeds its size bound")
+        return value
+    except (OSError, ValueError, TypeError, OverflowError) as exc:
+        raise ValueError(f"{label} is unreadable") from exc
+    finally:
+        if descriptor != -1:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
 def load_revoked_jtis(path: pathlib.Path | None) -> set[str]:
     """Load only a root-owned, mode-0600 revocation set from ephemeral runtime state."""
     if path is None:
         return set()
-    if path.is_symlink() or not path.is_file():
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise ConnectDenied("capability revocation state is unavailable") from exc
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+            or (getattr(info, "st_file_attributes", 0) & 0x400) \
+            or not stat.S_ISREG(info.st_mode):
         raise ConnectDenied("capability revocation state is unavailable")
-    info = path.stat()
     if stat.S_IMODE(info.st_mode) != 0o600 or (hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0):
         raise ConnectDenied("capability revocation state ownership/mode is unsafe")
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError, RecursionError):
+        value = json.loads(_read_regular_file(path, "capability revocation state", MAX_REVOCATION_BYTES)
+                           .decode("utf-8", "strict"), parse_constant=_reject_json_constant)
+    except (OSError, UnicodeError, ValueError, TypeError, OverflowError, RecursionError,
+            json.JSONDecodeError):
         raise ConnectDenied("capability revocation state is invalid") from None
     revoked = value.get("revoked_jtis", []) if isinstance(value, dict) else None
     if not isinstance(revoked, list) or any(not isinstance(item, str) or
@@ -173,7 +275,10 @@ def load_revoked_jtis(path: pathlib.Path | None) -> set[str]:
 
 
 def parse_allowlist(values: Iterable[str]) -> set[tuple[str, int]]:
-    allowed = {parse_authority(value) for value in values}
+    try:
+        allowed = {parse_authority(value) for value in values}
+    except (TypeError, ValueError) as exc:
+        raise ValueError("provider authority allowlist is invalid") from exc
     if not allowed:
         raise ValueError("at least one provider authority is required")
     return allowed
@@ -188,6 +293,8 @@ def parse_connect_request(
     active_assignment: str | None = None,
     revoked_jtis: set[str] | None = None,
 ) -> tuple[str, int]:
+    if not isinstance(request, bytes):
+        raise MalformedConnect("request must be bytes")
     if len(request) > MAX_REQUEST or not request.endswith(b"\r\n\r\n"):
         raise MalformedConnect("request framing is invalid")
     if request[:-4].find(b"\r\n\r\n") >= 0 or b"\x00" in request:
@@ -232,7 +339,7 @@ def parse_connect_request(
             try:
                 basic = base64.b64decode(proxy_authorization[6:], validate=True).decode("ascii")
                 active_identity, token = basic.split(":", 1)
-            except (ValueError, UnicodeError, binascii.Error):
+            except (ValueError, TypeError, UnicodeError, binascii.Error, OverflowError):
                 raise ConnectDenied("transport authorization is invalid") from None
         else:
             raise ConnectDenied("Basic assignment identity is required")
@@ -661,15 +768,24 @@ def namespace_inventory() -> dict[str, object]:
     interfaces = sorted(name for _, name in socket.if_nameindex())
     routes = []
     route_file = pathlib.Path("/proc/net/route")
-    if route_file.exists():
-        routes = [line for line in route_file.read_text().splitlines()[1:] if line.strip()]
+    try:
+        with route_file.open("rb") as source:
+            raw = source.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            raise ValueError("route table is too large")
+        routes = [line for line in raw.decode("ascii", "strict").splitlines()[1:] if line.strip()]
+    except (OSError, UnicodeError, ValueError, TypeError, OverflowError):
+        raise RuntimeError("provider namespace route table is unreadable") from None
     return {"interfaces": interfaces, "ipv4_routes": len(routes)}
 
 
 def _proxy_authorization(capability_token: str | None, capability_identity: str | None) -> str:
     if capability_token is None and capability_identity is None:
         return ""
-    if capability_token is None or capability_identity is None or not ASSIGNMENT_RE.fullmatch(capability_identity):
+    if capability_token is None or capability_identity is None \
+            or not isinstance(capability_token, str) or not isinstance(capability_identity, str) \
+            or not re.fullmatch(r"[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}", capability_token) \
+            or not ASSIGNMENT_RE.fullmatch(capability_identity):
         raise ValueError("probe capability requires an exact assignment identity and token")
     basic = base64.b64encode(f"{capability_identity}:{capability_token}".encode("ascii")).decode("ascii")
     return f"Proxy-Authorization: Basic {basic}\r\n"
@@ -791,13 +907,14 @@ def main() -> int:
                 if args.capability_key_file is None:
                     raise ValueError("shared provider proxy requires an assignment capability key")
                 key_path = args.capability_key_file
-                if key_path.is_symlink() or not key_path.is_file():
+                _reject_reparse_components(key_path, "provider capability key")
+                key_info = key_path.lstat()
+                if not stat.S_ISREG(key_info.st_mode):
                     raise ValueError("provider capability key is unavailable")
-                key_info = key_path.stat()
                 if key_info.st_mode & 0o077 or (
                         hasattr(os, "geteuid") and os.geteuid() == 0 and key_info.st_uid != 0):
                     raise ValueError("provider capability key ownership/mode is unsafe")
-                capability_key = key_path.read_bytes()
+                capability_key = _read_regular_file(key_path, "provider capability key", 1024 * 1024)
                 if len(capability_key) < 32:
                     raise ValueError("provider capability key is too short")
                 profile_authorities = {
@@ -808,6 +925,8 @@ def main() -> int:
                 if args.capability_key_file is not None:
                     raise ValueError("capability keys require --profile-dir")
                 allowed = parse_allowlist(args.allow)
+            if not _plain_int(args.listen_port) or not _plain_int(args.concurrency):
+                raise ValueError("listener or concurrency must be integer values")
             resolutions = parse_resolutions(args.resolve, args.namespace)
             listener = open_listener_in_namespace(args.namespace, args.listen_port)
             drop_privileges(args.drop_user)
@@ -830,7 +949,8 @@ def main() -> int:
     except ConnectDenied as exc:
         print(f"provider-connect-proxy: {exc}", file=sys.stderr)
         return 96
-    except (OSError, RuntimeError, ValueError, KeyError, RecursionError) as exc:
+    except (OSError, RuntimeError, ValueError, TypeError, UnicodeError, OverflowError,
+            KeyError, RecursionError) as exc:
         print(f"provider-connect-proxy: {exc}", file=sys.stderr)
         return 96
 

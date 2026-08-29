@@ -39,8 +39,8 @@ def main(argv: list[str] | None = None) -> int:
     admission.add_argument("engine")
     admission.add_argument("--endpoint", action="append", dest="endpoints")
     args = parser.parse_args(argv)
-    directory = profile_directory(Path(__file__).resolve().parent)
     try:
+        directory = profile_directory(Path(__file__).resolve().parent)
         if args.command == "validate":
             profile = profile_for_provider(args.provider, directory)
             print(json.dumps({"id": profile["id"], "enabled": profile["enabled"]}, sort_keys=True))
@@ -60,7 +60,8 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"engine": args.engine, "profile": profile["id"],
                               "authorities": profile["authorities"]}, sort_keys=True))
         return 0
-    except (OSError, ValueError, ProviderProfileError) as exc:
+    except (OSError, ValueError, TypeError, UnicodeError, OverflowError,
+            RecursionError, json.JSONDecodeError, ProviderProfileError) as exc:
         print(f"provider-egress: {exc}", file=sys.stderr)
         return 96 if args.command in {"inject", "admit-engine"} else 2
 

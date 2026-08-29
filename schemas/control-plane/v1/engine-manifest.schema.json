@@ -21,11 +21,15 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
+      "type": "integer",
       "const": 1
     },
     "name": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]{1,31}$",
+      "not": {
+        "enum": ["claude", "hermes", "gate", "none", "deepseek", "openrouter"]
+      },
       "description": "Must equal the manifest filename stem (e.g. gemini.json -> \"gemini\"), and must not collide with a builtin engine name (claude, hermes, gate, none, deepseek, openrouter)."
     },
     "description": {
@@ -47,8 +51,24 @@
         }
       ],
       "additionalItems": {
-        "type": "string",
-        "minLength": 1
+        "allOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "anyOf": [
+              {
+                "not": {
+                  "pattern": "^\\{\\{.*\\}\\}$"
+                }
+              },
+              {
+                "enum": ["{{PROMPT}}", "{{MODEL}}"]
+              }
+            ]
+          }
+        ]
       },
       "contains": {
         "const": "{{PROMPT}}"
@@ -67,8 +87,24 @@
         "argv_suffix": {
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "allOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "anyOf": [
+                  {
+                    "not": {
+                      "pattern": "^\\{\\{.*\\}\\}$"
+                    }
+                  },
+                  {
+                    "const": "{{MODEL}}"
+                  }
+                ]
+              }
+            ]
           },
           "description": "Appended to argv only when a model is present. Each element is either a plain literal string or the placeholder {{MODEL}}; {{MODEL}} may appear at most once."
         }
@@ -116,7 +152,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+            "pattern": "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
           },
           "description": "Documentation and deployment input for the provider-only allowlist enforced by the root-owned provider netns/proxy on the box. Empty list allowed (e.g. tunnel-local engines)."
         }

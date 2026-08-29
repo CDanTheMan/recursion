@@ -52,8 +52,95 @@ MAX_SFTP_ERROR = 64 * 1024
 MAX_TOOL_ARGS_JSON = 64 * 1024
 MAX_TOOL_ARGS = 64
 MAX_TOOL_ARG_LENGTH = 4096
+MAX_POLICY_BYTES = 2 * 1024 * 1024
+MAX_CREDENTIAL_BYTES = 1024 * 1024
 PIPE_JOIN_TIMEOUT = 5.0
 PROCESS_TIMEOUT = 300.0
+
+
+def _is_reparse(info: os.stat_result) -> bool:
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+        or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def _reject_reparse_components(path: Path, label: str) -> None:
+    """Check every existing component before any later resolution or use."""
+    if not isinstance(path, Path) or not path.is_absolute() \
+            or any(part in {".", ".."} for part in path.parts):
+        raise BackupPolicyError(f"{label} must be an absolute path")
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise BackupPolicyError(f"{label} is unreadable") from exc
+        if _is_reparse(info):
+            raise BackupPolicyError(f"{label} contains a symlink/reparse component")
+
+
+def _validate_real_directory(path: Path, label: str) -> Path:
+    _reject_reparse_components(path, label)
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise BackupPolicyError(f"{label} is unavailable") from exc
+    if _is_reparse(info) or not stat.S_ISDIR(info.st_mode):
+        raise BackupPolicyError(f"{label} must be a real directory")
+    return path
+
+
+def _directory_identity(path: Path, label: str) -> tuple[int, int, int, int]:
+    _validate_real_directory(path, label)
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise BackupPolicyError(f"{label} is unavailable") from exc
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
+def _read_real_file(path: Path, label: str, maximum: int) -> bytes:
+    """Read a bounded regular file through one descriptor after reparse checks."""
+    _reject_reparse_components(path, label)
+    try:
+        expected = path.lstat()
+    except OSError as exc:
+        raise BackupPolicyError(f"{label} is unavailable") from exc
+    if _is_reparse(expected) or not stat.S_ISREG(expected.st_mode):
+        raise BackupPolicyError(f"{label} is unavailable")
+    flags = os.O_RDONLY
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except (OSError, ValueError, TypeError) as exc:
+        raise BackupPolicyError(f"{label} is unavailable") from exc
+    try:
+        info = os.fstat(descriptor)
+        if _is_reparse(info) or not stat.S_ISREG(info.st_mode) \
+                or (info.st_dev, info.st_ino) != (expected.st_dev, expected.st_ino) \
+                or info.st_size != expected.st_size:
+            raise BackupPolicyError(f"{label} is unavailable")
+        if info.st_size < 0 or info.st_size > maximum:
+            raise BackupPolicyError(f"{label} exceeds the bounded size")
+        with os.fdopen(descriptor, "rb", closefd=True) as source:
+            descriptor = -1
+            value = source.read(maximum + 1)
+        if len(value) > maximum:
+            raise BackupPolicyError(f"{label} exceeds the bounded size")
+        return value
+    except (OSError, ValueError, TypeError, OverflowError) as exc:
+        raise BackupPolicyError(f"{label} is unreadable") from exc
+    finally:
+        if descriptor != -1:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
 
 
 def _object(value: object, keys: set[str], where: str) -> dict:
@@ -75,8 +162,12 @@ def _positive(value: object, where: str, maximum: int = 3650) -> int:
 
 
 def _absolute(value: object, where: str) -> None:
+    normalized = value.replace("\\", "/") if isinstance(value, str) else ""
     if not isinstance(value, str) or (not Path(value).is_absolute() and not value.startswith("/")) \
-            or "\x00" in value:
+            or "\x00" in value or value.startswith(("\\\\", "//", "~")) \
+            or "%" in value or re.match(r"^[A-Za-z]:[^\\/].*", value) \
+            or any(part in {".", ".."} for part in normalized.split("/")) \
+            or "//" in normalized[1:]:
         raise BackupPolicyError(f"{where} must be an absolute path")
 
 
@@ -87,8 +178,11 @@ def _secret_ref(value: object, where: str) -> None:
 
 def load_policy(path: Path) -> dict:
     try:
-        policy = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError, RecursionError) as exc:
+        raw = _read_real_file(path, "backup policy", MAX_POLICY_BYTES)
+        policy = json.loads(raw.decode("utf-8"),
+                            parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            json.JSONDecodeError, RecursionError, BackupPolicyError) as exc:
         raise BackupPolicyError(f"backup policy is unreadable: {path}") from exc
     policy = _object(policy, POLICY_KEYS, "policy")
     if not isinstance(policy["schema_version"], int) or isinstance(policy["schema_version"], bool) \
@@ -169,13 +263,18 @@ def _credential_path(ref: str) -> Path:
     if not directory:
         raise BackupPolicyError("systemd credentials directory is unavailable")
     path = Path(directory) / name
-    if path.is_symlink() or not path.is_file():
+    _reject_reparse_components(path, "credential path")
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise BackupPolicyError("referenced credential is unavailable") from exc
+    if _is_reparse(info) or not stat.S_ISREG(info.st_mode):
         raise BackupPolicyError("referenced credential is unavailable")
-    mode = stat.S_IMODE(path.stat().st_mode)
+    mode = stat.S_IMODE(info.st_mode)
     if os.name != "nt" and mode & 0o077:
         raise BackupPolicyError("referenced credential is group/other accessible")
     if os.name != "nt" and hasattr(os, "geteuid") and os.geteuid() == 0 \
-            and path.stat().st_uid != 0:
+            and info.st_uid != 0:
         raise BackupPolicyError("referenced credential is not root-owned")
     return path
 
@@ -183,15 +282,16 @@ def _credential_path(ref: str) -> Path:
 def authenticate_policy(path: Path, policy: dict) -> None:
     key_path = _credential_path(policy["authentication"]["key_ref"])
     signature = Path(policy["authentication"]["signature_file"])
-    if signature.is_symlink() or not signature.is_file():
-        raise BackupPolicyError("authenticated policy signature is unavailable")
+    key = _read_real_file(key_path, "authentication key", MAX_CREDENTIAL_BYTES)
+    signature_bytes = _read_real_file(signature, "policy signature", 256)
     try:
-        expected = signature.read_text(encoding="ascii").strip()
-    except (OSError, UnicodeDecodeError) as exc:
+        expected = signature_bytes.decode("ascii").strip()
+    except UnicodeDecodeError as exc:
         raise BackupPolicyError("authenticated policy signature is unreadable") from exc
     if not re.fullmatch(r"[0-9a-f]{64}", expected):
         raise BackupPolicyError("authenticated policy signature has invalid shape")
-    observed = hmac.new(key_path.read_bytes(), path.read_bytes(), hashlib.sha256).hexdigest()
+    policy_bytes = _read_real_file(path, "backup policy", MAX_POLICY_BYTES)
+    observed = hmac.new(key, policy_bytes, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, observed):
         raise BackupPolicyError("authenticated policy signature does not match")
 
@@ -205,12 +305,26 @@ def require_execution(path: Path, policy: dict, execute: bool) -> None:
 
 
 def _safe_runtime_dir(path: Path) -> None:
-    if not path.is_absolute() or path.is_symlink() or (path.exists() and not path.is_dir()):
+    _reject_reparse_components(path, "backup runtime directory")
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        info = None
+    except OSError as exc:
+        raise BackupPolicyError("backup runtime directory is unreadable") from exc
+    if info is not None and (_is_reparse(info) or not stat.S_ISDIR(info.st_mode)):
         raise BackupPolicyError("backup runtime directory has an unsafe type")
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if os.name != "nt" and stat.S_IMODE(path.stat().st_mode) & 0o077:
+    _reject_reparse_components(path, "backup runtime directory")
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise BackupPolicyError("backup runtime directory is unavailable") from exc
+    if _is_reparse(info) or not stat.S_ISDIR(info.st_mode):
+        raise BackupPolicyError("backup runtime directory has an unsafe type")
+    if os.name != "nt" and stat.S_IMODE(info.st_mode) & 0o077:
         raise BackupPolicyError("backup runtime directory is group/other accessible")
-    if hasattr(os, "geteuid") and os.geteuid() == 0 and path.stat().st_uid != 0:
+    if hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0:
         raise BackupPolicyError("backup runtime directory is not root-owned")
 
 
@@ -224,11 +338,19 @@ def private_workspace(path: Path):
         if match:
             try:
                 stale_pid = int(match.group(1))
-            except ValueError:
+            except (ValueError, OverflowError):
                 raise BackupPolicyError("backup runtime contains an invalid process identity") from None
+            if len(match.group(1)) > 20:
+                raise BackupPolicyError("backup runtime contains an invalid process identity")
             observed = secret_runtime.process_start(stale_pid)
             if observed is None or observed != match.group(2):
-                if stale.is_symlink() or not stale.is_dir():
+                try:
+                    stale_info = stale.lstat()
+                except FileNotFoundError:
+                    continue
+                except OSError as exc:
+                    raise BackupPolicyError("backup runtime stale entry is unreadable") from exc
+                if _is_reparse(stale_info) or not stat.S_ISDIR(stale_info.st_mode):
                     stale.unlink(missing_ok=True)
                 else:
                     shutil.rmtree(stale)
@@ -247,27 +369,36 @@ def private_workspace(path: Path):
 
 
 def _validate_canonical_directory(path: Path, label: str) -> Path:
-    if not path.is_absolute() or path != path.resolve(strict=False):
+    _reject_reparse_components(path, label)
+    if not path.is_absolute() or any(part in {".", ".."} for part in path.parts):
         raise BackupPolicyError(f"{label} must be a canonical absolute directory")
     current = Path(path.anchor)
     for component in path.parts[1:]:
         current /= component
-        if current.exists() or current.is_symlink():
+        try:
             info = current.lstat()
-            if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0):
-                raise BackupPolicyError(f"{label} has a symlink/reparse parent")
-            if not stat.S_ISDIR(info.st_mode) or (os.name != "nt" and (
-                    stat.S_IMODE(info.st_mode) & 0o022 and
-                    not (stat.S_IMODE(info.st_mode) & stat.S_ISVTX))):
-                raise BackupPolicyError(f"{label} parent ownership/mode is unsafe")
-            if hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0:
-                raise BackupPolicyError(f"{label} parent is not root-owned")
-        else:
-            current.mkdir(mode=0o700)
-    if not path.exists():
-        path.mkdir(mode=0o700)
+        except FileNotFoundError:
+            try:
+                current.mkdir(mode=0o700)
+            except FileExistsError:
+                pass
+            try:
+                info = current.lstat()
+            except OSError as exc:
+                raise BackupPolicyError(f"{label} parent is unavailable") from exc
+        except OSError as exc:
+            raise BackupPolicyError(f"{label} parent is unreadable") from exc
+        if _is_reparse(info):
+            raise BackupPolicyError(f"{label} has a symlink/reparse parent")
+        if not stat.S_ISDIR(info.st_mode) or (os.name != "nt" and (
+                stat.S_IMODE(info.st_mode) & 0o022 and
+                not (stat.S_IMODE(info.st_mode) & stat.S_ISVTX))):
+            raise BackupPolicyError(f"{label} parent ownership/mode is unsafe")
+        if hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0:
+            raise BackupPolicyError(f"{label} parent is not root-owned")
+    _reject_reparse_components(path, label)
     info = path.lstat()
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode) \
+    if _is_reparse(info) or not stat.S_ISDIR(info.st_mode) \
             or (os.name != "nt" and stat.S_IMODE(info.st_mode) & 0o077):
         raise BackupPolicyError(f"{label} ownership/mode is unsafe")
     if hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0:
@@ -283,7 +414,11 @@ def pause_transfer(root: Path):
     try:
         with lock:
             pause = root / "state/PAUSE"
-            if not pause.is_file():
+            try:
+                pause_info = pause.lstat()
+            except OSError as exc:
+                raise BackupPolicyError("PAUSE admission is unavailable") from exc
+            if _is_reparse(pause_info) or not stat.S_ISREG(pause_info.st_mode):
                 raise BackupPolicyError("PAUSE admission is absent; refusing external transfer")
             yield
     except RuntimeError as exc:
@@ -295,6 +430,8 @@ def _run(argv: list[str], *, input_bytes: bytes | None = None,
          file_size_limit: int | None = None) -> subprocess.CompletedProcess[bytes]:
     if not argv or any(not isinstance(item, str) or not item for item in argv):
         raise BackupPolicyError("external tool argv is invalid")
+    if input_bytes is not None and not isinstance(input_bytes, bytes):
+        raise BackupPolicyError("external tool input is invalid")
     try:
         popen_kwargs = dict(stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if os.name == "nt":
@@ -304,7 +441,7 @@ def _run(argv: list[str], *, input_bytes: bytes | None = None,
         process = subprocess.Popen(argv, preexec_fn=(
                                        _limit_file_size(file_size_limit) if file_size_limit is not None
                                        and os.name != "nt" else None), **popen_kwargs)
-    except OSError as exc:
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as exc:
         raise BackupPolicyError(f"required backup tool is unavailable: {argv[0]}") from exc
     captured: dict[str, bytes] = {}
     overflow = threading.Event()
@@ -342,7 +479,10 @@ def _run(argv: list[str], *, input_bytes: bytes | None = None,
         returncode = process.wait(timeout=PROCESS_TIMEOUT)
     except subprocess.TimeoutExpired as exc:
         _terminate_process_tree(process)
-        process.wait(timeout=PIPE_JOIN_TIMEOUT)
+        try:
+            process.wait(timeout=PIPE_JOIN_TIMEOUT)
+        except subprocess.TimeoutExpired as exc:
+            raise BackupPolicyError("backup tool did not terminate after its bounded runtime") from exc
         raise BackupPolicyError("backup tool exceeded its bounded runtime") from exc
     for thread in threads:
         thread.join(PIPE_JOIN_TIMEOUT)
@@ -400,8 +540,10 @@ def _tool(name: str, environment_name: str) -> list[str]:
     if len(raw_extra) > MAX_TOOL_ARGS_JSON:
         raise BackupPolicyError(f"backup tool arguments are invalid: {name}")
     try:
-        extra = json.loads(raw_extra)
-    except (ValueError, RecursionError) as exc:
+        extra = json.loads(raw_extra,
+                           parse_constant=lambda constant: (_ for _ in ()).throw(ValueError(constant)))
+    except (json.JSONDecodeError, ValueError, TypeError, UnicodeError, OverflowError,
+            RecursionError) as exc:
         raise BackupPolicyError(f"backup tool arguments are invalid: {name}") from exc
     if not isinstance(extra, list) or len(extra) > MAX_TOOL_ARGS \
             or not all(isinstance(item, str) and item and len(item) <= MAX_TOOL_ARG_LENGTH for item in extra):
@@ -589,9 +731,17 @@ def reconcile_remote(policy: dict) -> dict:
 
 
 def write_evidence(directory: Path, evidence: dict) -> Path:
-    if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+    _reject_reparse_components(directory, "evidence directory")
+    try:
+        info = directory.lstat()
+    except FileNotFoundError:
+        info = None
+    except OSError as exc:
+        raise BackupPolicyError("evidence directory is unreadable") from exc
+    if info is not None and (_is_reparse(info) or not stat.S_ISDIR(info.st_mode)):
         raise BackupPolicyError("evidence directory has an unsafe type")
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    _validate_real_directory(directory, "evidence directory")
     directory.chmod(0o700)
     raw = (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
     target = directory / f"backup-evidence-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{time.time_ns()}-{hashlib.sha256(raw).hexdigest()[:12]}.json"
@@ -604,7 +754,8 @@ def write_evidence(directory: Path, evidence: dict) -> Path:
             output.write(raw)
             output.flush()
             os.fsync(output.fileno())
-        os.replace(temporary, target)
+        _validate_real_directory(directory, "evidence directory")
+        _publish_file_noreplace(temporary, target, "evidence file")
         if os.name != "nt":
             descriptor = os.open(directory, os.O_RDONLY)
             try:
@@ -622,10 +773,41 @@ def archive_snapshot(snapshot: Path, target: Path) -> None:
         archive.add(snapshot, arcname="snapshot", recursive=True)
 
 
+def _publish_file_noreplace(source: Path, target: Path, label: str) -> None:
+    """Publish a same-directory file without replacing a concurrent owner."""
+    _reject_reparse_components(source, f"{label} source")
+    _reject_reparse_components(target.parent, f"{label} parent")
+    _reject_reparse_components(target, label)
+    try:
+        source_info = source.lstat()
+    except OSError as exc:
+        raise BackupPolicyError(f"{label} source is unavailable") from exc
+    if _is_reparse(source_info) or not stat.S_ISREG(source_info.st_mode):
+        raise BackupPolicyError(f"{label} source is unsafe")
+    try:
+        os.link(source, target, follow_symlinks=False)
+    except FileExistsError as exc:
+        raise BackupPolicyError(f"{label} already exists") from exc
+    except (OSError, ValueError, TypeError) as exc:
+        raise BackupPolicyError(f"{label} could not be published") from exc
+    try:
+        source.unlink()
+    except (OSError, ValueError, TypeError) as exc:
+        raise BackupPolicyError(f"{label} temporary cleanup failed") from exc
+    if os.name != "nt":
+        try:
+            descriptor = os.open(target.parent, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        except OSError as exc:
+            raise BackupPolicyError(f"{label} directory durability failed") from exc
+
+
 def encrypt(archive: Path, ciphertext: Path, policy: dict) -> None:
     recipient = Path(policy["encryption"]["recipient_file"])
-    if recipient.is_symlink() or not recipient.is_file():
-        raise BackupPolicyError("age recipient file is unavailable")
+    _read_real_file(recipient, "age recipient file", MAX_CREDENTIAL_BYTES)
     _run([*_tool("age", "RECURSION_AGE_TOOL"), "--encrypt", "--recipient-file",
           str(recipient), "--output", str(ciphertext), str(archive)])
 
@@ -662,7 +844,13 @@ def extract_snapshot(archive: Path, target: Path) -> Path:
 
 def execute_backup(config_path: Path, policy: dict) -> dict:
     root = Path(policy["source"]["runtime_root"])
-    if not (root / "state/PAUSE").is_file():
+    pause = root / "state/PAUSE"
+    _reject_reparse_components(pause, "backup PAUSE path")
+    try:
+        pause_info = pause.lstat()
+    except OSError as exc:
+        raise BackupPolicyError("PAUSE is required for backup admission") from exc
+    if _is_reparse(pause_info) or not stat.S_ISREG(pause_info.st_mode):
         raise BackupPolicyError("PAUSE is required for backup admission")
     snapshot_directory = _validate_canonical_directory(
         Path(policy["source"]["snapshot_directory"]), "snapshot directory"
@@ -680,7 +868,14 @@ def execute_backup(config_path: Path, policy: dict) -> dict:
         validate_archive_bounds(archive, policy["archive_limits"])
         encrypt(archive, ciphertext, policy)
         durable = snapshot_directory / name
-        if durable.exists() or durable.is_symlink():
+        _reject_reparse_components(durable, "durable snapshot path")
+        try:
+            durable_info = durable.lstat()
+        except FileNotFoundError:
+            durable_info = None
+        except OSError as exc:
+            raise BackupPolicyError("durable snapshot path is unreadable") from exc
+        if durable_info is not None:
             raise BackupPolicyError(f"snapshot artifact already exists: {durable}")
         temporary = snapshot_directory / f".{name}.tmp.{os.getpid()}.{time.time_ns()}"
         try:
@@ -689,13 +884,9 @@ def execute_backup(config_path: Path, policy: dict) -> dict:
                 output.flush()
                 os.fsync(output.fileno())
             os.chmod(temporary, 0o600)
-            os.replace(temporary, durable)
-            if os.name != "nt":
-                descriptor = os.open(snapshot_directory, os.O_RDONLY)
-                try:
-                    os.fsync(descriptor)
-                finally:
-                    os.close(descriptor)
+            _validate_real_directory(snapshot_directory, "snapshot directory")
+            _reject_reparse_components(durable, "durable snapshot path")
+            _publish_file_noreplace(temporary, durable, "durable snapshot")
         except BaseException:
             try:
                 temporary.unlink()
@@ -748,11 +939,16 @@ def execute_restore(config_path: Path, policy: dict, artifact: str | None) -> di
 
 def restore_drill(root: Path, snapshot: Path) -> None:
     runtime = runtime_module()
-    if not root.is_dir() or root.is_symlink() or not snapshot.is_dir() or snapshot.is_symlink():
-        raise BackupPolicyError("restore drill requires real root and snapshot directories")
+    root_identity = _directory_identity(root, "restore drill root")
+    snapshot_identity = _directory_identity(snapshot, "restore drill snapshot")
     with tempfile.TemporaryDirectory(prefix="recursion-restore-drill-") as temporary:
         target = Path(temporary) / "root"
-        shutil.copytree(root, target, symlinks=False)
+        if _directory_identity(root, "restore drill root") != root_identity \
+                or _directory_identity(snapshot, "restore drill snapshot") != snapshot_identity:
+            raise BackupPolicyError("restore drill input directory changed before use")
+        shutil.copytree(root, target, symlinks=True)
+        if _directory_identity(snapshot, "restore drill snapshot") != snapshot_identity:
+            raise BackupPolicyError("restore drill snapshot changed before restore")
         with contextlib.redirect_stdout(io.StringIO()):
             runtime.restore(target, snapshot)
         manifest = runtime.load_manifest(snapshot)
@@ -800,7 +996,7 @@ def main(argv: list[str] | None = None) -> int:
                               "execution": "disabled-until-explicit-enable-and-execute",
                               "off_host_restore": "pending live evidence"}, sort_keys=True))
         elif args.command == "restore-drill":
-            restore_drill(args.root.resolve(), args.snapshot.resolve())
+            restore_drill(args.root, args.snapshot)
         else:
             require_execution(args.config, policy, args.execute)
             if args.command == "backup":
@@ -815,7 +1011,9 @@ def main(argv: list[str] | None = None) -> int:
                 evidence["evidence_path"] = str(write_evidence(Path(policy["log_rotation"]["directory"]), evidence))
                 print(json.dumps(evidence, sort_keys=True))
         return 0
-    except (OSError, ValueError, BackupPolicyError, tarfile.TarError, RecursionError) as exc:
+    except (OSError, ValueError, TypeError, UnicodeError, OverflowError, BackupPolicyError,
+            tarfile.TarError, RecursionError, subprocess.TimeoutExpired,
+            subprocess.SubprocessError) as exc:
         print(f"backup-offsite: {exc}", file=sys.stderr)
         return 2
 

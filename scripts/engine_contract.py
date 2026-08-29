@@ -17,6 +17,7 @@ ENGINE_NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
 ALIAS_NAME_RE = re.compile(r"[a-z][a-z0-9-]{2,31}")
 ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}")
 ROLES = frozenset({"implementer", "verifier"})
+MAX_REGISTRY_BYTES = 1024 * 1024
 
 LEGACY_ALIASES = {
     "sonnet-routine": frozenset({"implementer"}),
@@ -45,14 +46,23 @@ def default_registry_path(script_dir: Path | str) -> Path:
     return Path(script_dir) / "engines" / "model-aliases.json"
 
 
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
+
 def _load_registry(registry_path: Path | str) -> dict[str, frozenset[str]] | None:
     """Return alias -> roles from a valid registry, or None when the registry is
     absent, unparseable, schema-invalid, or redefines a legacy alias (poisoned)."""
     try:
-        raw = json.loads(Path(registry_path).read_text(encoding="utf-8"))
-    except (OSError, ValueError, UnicodeDecodeError):
+        raw_bytes = Path(registry_path).read_bytes()
+        if len(raw_bytes) > MAX_REGISTRY_BYTES:
+            return None
+        raw = json.loads(raw_bytes.decode("utf-8"), parse_constant=_reject_json_constant)
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError, UnicodeError,
+            json.JSONDecodeError):
         return None
-    if not isinstance(raw, dict) or raw.get("schema_version") != 1:
+    if not isinstance(raw, dict) or type(raw.get("schema_version")) is not int \
+            or raw["schema_version"] != 1:
         return None
     aliases = raw.get("aliases")
     if not isinstance(aliases, dict):

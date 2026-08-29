@@ -240,6 +240,33 @@ def test_mutations() -> None:
     baseline = copy.deepcopy(BASE_MANIFEST)
     run_case("valid manifest in temp dir validates", "sampleeng.json", "sampleeng", baseline, 0)
 
+    resolver = load_resolver()
+    for value in (True, 1.0):
+        bad_version = copy.deepcopy(baseline)
+        bad_version["schema_version"] = value
+        try:
+            resolver.validate_manifest(bad_version, "sampleeng")
+        except resolver.ManifestError:
+            check(True, f"schema_version={value!r} is rejected by the runtime validator")
+        else:
+            check(False, f"schema_version={value!r} is rejected by the runtime validator")
+
+    import jsonschema
+    schema = json.loads(
+        (SOURCE / "schemas/control-plane/v1/engine-manifest.schema.json").read_text(encoding="utf-8")
+    )
+    strict_checker = jsonschema.Draft7Validator.TYPE_CHECKER.redefine(
+        "integer", lambda _checker, instance: type(instance) is int
+    )
+    strict_validator = jsonschema.validators.extend(
+        jsonschema.Draft7Validator, type_checker=strict_checker
+    )(schema)
+    for value in (True, 1.0):
+        bad_version = copy.deepcopy(baseline)
+        bad_version["schema_version"] = value
+        check(bool(list(strict_validator.iter_errors(bad_version))),
+              f"schema_version={value!r} is constrained by the Draft-7 schema")
+
     missing_field = copy.deepcopy(BASE_MANIFEST)
     del missing_field["roles"]
     run_case("missing required field (roles) rejected", "sampleeng.json", "sampleeng", missing_field, 2)

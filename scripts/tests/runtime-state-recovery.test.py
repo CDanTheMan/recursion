@@ -70,6 +70,22 @@ def main() -> int:
         paths = {record["path"] for record in manifest["files"]}
         require("state/.openrouter-usage.json" in paths, "OpenRouter usage was omitted")
 
+        malformed = parent / "malformed-snapshot"
+        shutil.copytree(snapshot, malformed)
+        (malformed / "manifest.json").write_text("{", encoding="utf-8")
+        result = run_runtime(root, "restore", str(malformed))
+        require(result.returncode != 0, "malformed backup manifest was accepted", result)
+        require("Traceback" not in result.stderr and "JSONDecodeError" not in result.stderr,
+                "malformed backup manifest leaked a raw parser exception", result)
+        shutil.copytree(snapshot, parent / "boolean-snapshot")
+        boolean_manifest = parent / "boolean-snapshot" / "manifest.json"
+        boolean_manifest.write_text(
+            json.dumps({**manifest, "schema_version": True}) + "\n", encoding="utf-8"
+        )
+        result = run_runtime(root, "restore", str(parent / "boolean-snapshot"))
+        require(result.returncode != 0, "boolean backup manifest schema_version was accepted", result)
+        require("Traceback" not in result.stderr, "boolean backup manifest leaked a traceback", result)
+
         (root / "state/events.jsonl").write_text('{"event":"after"}\n', encoding="utf-8")
         (root / "state/.openrouter-usage.json").unlink()
         (root / "state/goals/goal.md").write_text("status: changed\n", encoding="utf-8")

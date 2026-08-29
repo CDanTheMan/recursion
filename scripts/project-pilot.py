@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows uses the mkdir mutex below.
+    fcntl = None  # type: ignore[assignment]
 import hashlib
 import json
 import os
@@ -53,6 +56,25 @@ HEAD_ONLY = {
     "priority-set", "reprioritize", "portfolio-add", "register", "policy-set", "spending",
     "credentials", "deploy", "merge", "pause", "resume", "model-policy", "control-plane",
 }
+MAX_PILOT_JSON_BYTES = 256 * 1024
+
+
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
+
+def _parse_json_arg(raw: str) -> object:
+    if len(raw.encode("utf-8")) > MAX_PILOT_JSON_BYTES:
+        raise ValueError("pilot JSON argument exceeds the 256 KiB bound")
+    return json.loads(raw, parse_constant=_reject_json_constant)
+
+
+def _json_copy(value: object) -> object:
+    try:
+        return json.loads(json.dumps(value, allow_nan=False),
+                          parse_constant=_reject_json_constant)
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        fail(f"input is not canonical JSON: {exc}")
 
 
 def root() -> Path:
@@ -65,21 +87,26 @@ def fail(message: str, code: int = 4) -> None:
 
 
 def compact(value: object) -> None:
-    print(json.dumps(value, sort_keys=True, separators=(",", ":")))
+    try:
+        print(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False))
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        fail(f"output is not canonical JSON: {exc}")
 
 
 def read_json(path: Path, unavailable_code: int = 4,
               malformed_code: int | None = None) -> dict:
     invalid_code = unavailable_code if malformed_code is None else malformed_code
     try:
-        if path.stat().st_size > 262144:
+        with path.open("rb") as source:
+            raw_bytes = source.read(MAX_PILOT_JSON_BYTES + 1)
+        if len(raw_bytes) > MAX_PILOT_JSON_BYTES:
             fail(f"state record exceeds the 256 KiB read bound: {path}", invalid_code)
-        raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
+        raw = raw_bytes.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
         fail(f"cannot read validated state {path}: {exc}", unavailable_code)
     try:
-        value = json.loads(raw)
-    except json.JSONDecodeError as exc:
+        value = json.loads(raw, parse_constant=_reject_json_constant)
+    except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError) as exc:
         fail(f"cannot read validated state {path}: {exc}", invalid_code)
     if not isinstance(value, dict):
         fail(f"state record is not an object: {path}", invalid_code)
@@ -422,10 +449,20 @@ def event_serialization_lock(base: Path):
     """Share taskctl's mkdir mutex and never append through runtime-state rotation."""
     lock_dir = base / "state/.locks"; lock_dir.mkdir(parents=True, exist_ok=True)
     runtime_lock = lock_dir / "runtime-state.lock"; path = lock_dir / "taskctl.lock"
-    try: attempts = max(1, int(os.environ.get("RECURSION_LOCK_ATTEMPTS", "100")))
-    except ValueError: attempts = 100
-    try: delay = max(0.0, float(os.environ.get("RECURSION_LOCK_DELAY_S", "0.1")))
-    except ValueError: delay = 0.1
+    try:
+        raw_attempts = os.environ.get("RECURSION_LOCK_ATTEMPTS", "100")
+        if len(raw_attempts) > 6:
+            raise ValueError("lock attempt bound is too long")
+        attempts = max(1, int(raw_attempts))
+    except (TypeError, ValueError, OverflowError):
+        attempts = 100
+    try:
+        raw_delay = os.environ.get("RECURSION_LOCK_DELAY_S", "0.1")
+        if len(raw_delay) > 32:
+            raise ValueError("lock delay bound is too long")
+        delay = max(0.0, float(raw_delay))
+    except (TypeError, ValueError, OverflowError):
+        delay = 0.1
     held = False
     try:
         for _ in range(attempts):
@@ -453,8 +490,9 @@ def event_serialization_lock(base: Path):
 def registry_lock(base: Path):
     lock_dir = base / "state/.locks"; lock_dir.mkdir(parents=True, exist_ok=True)
     with (lock_dir / "project-registry.lock").open("a+", encoding="utf-8") as lock:
-        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError: fail("project registry lock is contended", 73)
+        if fcntl is not None:
+            try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError: fail("project registry lock is contended", 73)
         yield
 
 
@@ -463,8 +501,9 @@ def goal_state_lock(base: Path, goal_id: str):
     """Serialize Phase 4 task creation with Phase 6 goal verification/transitions."""
     lock_dir = base / "state/.locks"; lock_dir.mkdir(parents=True, exist_ok=True)
     with (lock_dir / f"reconcile-{goal_id}.lock").open("a+", encoding="utf-8") as lock:
-        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError: fail("goal state lock is contended", 73)
+        if fcntl is not None:
+            try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError: fail("goal state lock is contended", 73)
         yield
 
 
@@ -472,8 +511,9 @@ def goal_state_lock(base: Path, goal_id: str):
 def phase8_lock(base: Path, identity: str, *, contended_code: int = 73):
     lock_dir = base / "state/.locks"; lock_dir.mkdir(parents=True, exist_ok=True)
     with (lock_dir / f"phase8-{identity}.lock").open("a+", encoding="utf-8") as lock:
-        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError: fail("Phase 8 state lock is contended", contended_code)
+        if fcntl is not None:
+            try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError: fail("Phase 8 state lock is contended", contended_code)
         yield
 
 
@@ -782,8 +822,9 @@ def load_gate_profile_promotion(base: Path, cfg: dict, promotion_id: str) -> dic
     if len(raw) > 65536:
         fail("gate-profile promotion binding exceeds the 64 KiB bound")
     try:
-        binding = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        binding = json.loads(raw.decode("utf-8"), parse_constant=_reject_json_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
         fail(f"gate-profile promotion binding is malformed: {exc}")
     expected_keys = {
         "schema", "promotion_id", "project_id", "source_head", "profile",
@@ -812,8 +853,9 @@ def load_gate_profile_promotion(base: Path, cfg: dict, promotion_id: str) -> dic
     if hashlib.sha256(profile_raw).hexdigest() != profile_sha256:
         fail("promoted measured profile bytes differ from the immutable binding")
     try:
-        profile = json.loads(profile_raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        profile = json.loads(profile_raw.decode("utf-8"), parse_constant=_reject_json_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
         fail(f"promoted measured profile is malformed: {exc}")
     worlds = profile.get("worlds") if isinstance(profile, dict) else None
     roles = [world.get("role") for world in worlds if isinstance(world, dict)] \
@@ -908,8 +950,10 @@ def available_gate_profile_promotions(base: Path, cfg: dict) -> list[dict]:
         if committed.returncode or len(committed.stdout) > 65536:
             continue
         try:
-            candidate = json.loads(committed.stdout.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+            candidate = json.loads(committed.stdout.decode("utf-8"),
+                                  parse_constant=_reject_json_constant)
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError,
+                OverflowError, RecursionError):
             continue
         # Inventory discovery must not couple one project's status to another project's
         # malformed or dirty descriptor. Exact selection remains strict in
@@ -994,8 +1038,8 @@ def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict) -> dict:
         detail = (proc.stderr or proc.stdout or "gate validation failed").strip()
         fail(f"pilot plan {label} has an invalid repository gate: {detail}")
     try:
-        contract = json.loads(proc.stdout)
-    except json.JSONDecodeError:
+        contract = json.loads(proc.stdout, parse_constant=_reject_json_constant)
+    except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError):
         fail(f"pilot plan {label} gate validator returned malformed evidence")
     hashes = contract.get("gate_files") if isinstance(contract, dict) else None
     controller_hashes = contract.get("controller_gate_files") if isinstance(contract, dict) else None
@@ -1067,7 +1111,7 @@ def live_promoted_authority_contract(cfg: dict) -> dict:
 def bind_authority_contract(cfg: dict, value: object) -> dict:
     if not isinstance(value, dict):
         fail("pilot plan must be an object")
-    plan = json.loads(json.dumps(value))
+    plan = _json_copy(value)
     selection = plan.get("gate_profile_selection")
     if selection is None:
         observed = live_authority_contract(cfg, check_remote=True)
@@ -1148,7 +1192,7 @@ def bind_seed_contract(cfg: dict, value: object) -> dict:
     """Add controller-observed seed identity before the plan receives its canonical digest."""
     if not isinstance(value, dict):
         fail("pilot plan must be an object")
-    plan = json.loads(json.dumps(value))
+    plan = _json_copy(value)
     try:
         observed = inspect_repository(Path(str(cfg["repo"])))
     except (OSError, SeedContractError) as exc:
@@ -1185,12 +1229,13 @@ def validate_seed_binding(cfg: dict, value: dict) -> dict | None:
 
 def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: object,
                   bind_gate_contract: bool = False, check_remote: bool = False) -> dict:
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
+    if not isinstance(value, dict) or type(value.get("schema_version")) is not int \
+            or value["schema_version"] != 1:
         fail("pilot plan must be a schema_version 1 object")
     if len(json.dumps(value, sort_keys=True, separators=(",", ":"))) > 65536:
         fail("pilot plan exceeds the 64 KiB bound")
     # Return a canonical value without mutating the model decision or stored record in memory.
-    value = json.loads(json.dumps(value))
+    value = _json_copy(value)
     if value.get("id") != plan_id or value.get("project_id") != project or not IDENT.fullmatch(plan_id):
         fail("pilot plan identity does not match its decision")
     validate_authority_binding(cfg, value, check_remote=check_remote)
@@ -1389,7 +1434,7 @@ def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
     raw_plan = decision.get("plan")
     if not isinstance(raw_plan, dict):
         fail("pilot plan must be an object")
-    plan = json.loads(json.dumps(raw_plan))
+    plan = _json_copy(raw_plan)
     plan = bind_gate_profile_selection(base, cfg, plan)
     plan = bind_authority_contract(cfg, plan)
     plan = bind_seed_contract(cfg, plan)
@@ -1589,7 +1634,7 @@ def active_source_pin(base: Path, project: str) -> dict | None:
         value = read_json(path, unavailable_code=74, malformed_code=4)
         if value.get("project_id") != project or value.get("status") not in {"armed", "open"}:
             continue
-        if value.get("schema_version") != 1 \
+        if type(value.get("schema_version")) is not int or value["schema_version"] != 1 \
                 or not IDENT.fullmatch(str(value.get("id") or "")) \
                 or path.stem != value.get("id") \
                 or not IDENT.fullmatch(str(value.get("goal_id") or "")) \
@@ -2051,7 +2096,7 @@ def execute(base: Path, decision_path: Path) -> dict:
     return execute_value(base, read_json(decision_path))
 
 
-def main() -> int:
+def _run_main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("verify-registry")
@@ -2108,11 +2153,21 @@ def main() -> int:
                         "source_head": "-"})
     else:
         try:
-            decision = json.loads(args.decision)
-        except json.JSONDecodeError as exc:
+            decision = _parse_json_arg(args.decision)
+        except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError) as exc:
             fail(f"frozen decision JSON is invalid: {exc}")
         compact(execute_value(base, decision))
     return 0
+
+
+def main() -> int:
+    try:
+        return _run_main()
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError,
+            UnicodeError, json.JSONDecodeError, subprocess.TimeoutExpired,
+            subprocess.SubprocessError) as exc:
+        print(f"project-pilot: {exc}", file=sys.stderr)
+        return 4
 
 
 if __name__ == "__main__":

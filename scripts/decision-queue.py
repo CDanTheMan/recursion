@@ -10,16 +10,22 @@ authoritative record of whether actuation actually ran.
 from __future__ import annotations
 
 import argparse
-import fcntl
+import base64
 import hashlib
 import json
 import os
 import re
 import subprocess
+import stat
 import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - production is Linux; parser tests run on Windows.
+    fcntl = None  # type: ignore[assignment]
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
@@ -34,6 +40,8 @@ from jsonl_durable import (
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 TERMINAL_DIRS = ("succeeded", "failed")
 QUEUE_DIRS = ("pending", "running", *TERMINAL_DIRS)
+MAX_QUEUE_JSON_BYTES = 2 * 1024 * 1024
+MAX_QUEUE_JOURNAL_BYTES = 64 * 1024 * 1024
 LEGACY_PRE_SCHEMA_NOOP_SHA256 = (
     # One-time Phase 8 compatibility allowlist. These are the exact immutable line digests
     # captured from the five 2026-08-07 pre-schema PAUSE noops. Adding any digest is a reviewed
@@ -92,15 +100,121 @@ def fsync_dir(path: Path) -> None:
         os.close(fd)
 
 
+def _is_reparse(path: Path) -> bool:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise RuntimeError(f"queue path is unreadable: {path}") from exc
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+        or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def _reject_reparse_components(path: Path, label: str) -> None:
+    if not isinstance(path, Path) or not path.is_absolute() \
+            or any(part in {".", ".."} for part in path.parts):
+        raise RuntimeError(f"{label} must be a canonical absolute path")
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise RuntimeError(f"{label} is unreadable") from exc
+        if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+                or bool(getattr(info, "st_file_attributes", 0) & 0x400):
+            raise RuntimeError(f"{label} contains a symlink/reparse component")
+
+
+def _path_identity(path: Path, label: str) -> tuple[int, int, int, int]:
+    _reject_reparse_components(path, label)
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise ValueError(f"{label} is unavailable") from exc
+    if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+            or bool(getattr(info, "st_file_attributes", 0) & 0x400) \
+            or not stat.S_ISREG(info.st_mode):
+        raise ValueError(f"{label} is not a regular file")
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
+def _load_json_bytes(raw: bytes, label: str) -> object:
+    if len(raw) > MAX_QUEUE_JSON_BYTES:
+        raise ValueError(f"{label} exceeds the bounded JSON input size")
+    try:
+        return json.loads(raw.decode("utf-8", "strict"), parse_constant=lambda name: (
+            (_ for _ in ()).throw(ValueError(f"non-finite JSON number {name} is forbidden"))))
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
+        raise ValueError(f"{label} is invalid JSON") from exc
+
+
+def _read_json_path_bytes(path: Path, label: str) -> bytes:
+    _reject_reparse_components(path, label)
+    try:
+        expected = path.lstat()
+    except OSError as exc:
+        raise ValueError(f"{label} is unreadable") from exc
+    if _is_reparse(path) or not stat.S_ISREG(expected.st_mode):
+        raise ValueError(f"{label} is not a regular file")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise ValueError(f"{label} is unreadable") from exc
+    try:
+        info = os.fstat(descriptor)
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+                or (getattr(info, "st_file_attributes", 0) & 0x400) \
+                or not stat.S_ISREG(info.st_mode) \
+                or (info.st_dev, info.st_ino) != (expected.st_dev, expected.st_ino) \
+                or info.st_size != expected.st_size:
+            raise ValueError(f"{label} is not a regular file")
+        if info.st_size > MAX_QUEUE_JSON_BYTES:
+            raise ValueError(f"{label} exceeds the bounded JSON input size")
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = -1
+            raw = source.read(MAX_QUEUE_JSON_BYTES + 1)
+        if len(raw) > MAX_QUEUE_JSON_BYTES:
+            raise ValueError(f"{label} exceeds the bounded JSON input size")
+        return raw
+    except BaseException:
+        if descriptor >= 0:
+            os.close(descriptor)
+        raise
+
+
+def _load_json_path(path: Path, label: str) -> object:
+    return _load_json_bytes(_read_json_path_bytes(path, label), label)
+
+
 def ensure_directory(path: Path) -> None:
+    _reject_reparse_components(path, "queue directory")
     missing: list[Path] = []
     current = path
-    while not current.exists():
+    while True:
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            info = None
+        except OSError as exc:
+            raise RuntimeError(f"queue directory is unreadable: {current}") from exc
+        if info is not None:
+            if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+                    or bool(getattr(info, "st_file_attributes", 0) & 0x400) \
+                    or not stat.S_ISDIR(info.st_mode):
+                raise RuntimeError(f"queue directory has an unsafe type: {current}")
+            break
         missing.append(current)
         if current.parent == current:
             break
         current = current.parent
     path.mkdir(parents=True, exist_ok=True)
+    _reject_reparse_components(path, "queue directory")
     for created in reversed(missing):
         fsync_dir(created)
         fsync_dir(created.parent)
@@ -108,14 +222,22 @@ def ensure_directory(path: Path) -> None:
 
 def atomic_json(path: Path, value: dict) -> None:
     ensure_directory(path.parent)
+    _reject_reparse_components(path, "queue JSON target")
+    try:
+        encoded = (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n").encode("utf-8")
+    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeError) as exc:
+        raise ValueError("queue record is not canonically JSON serializable") from exc
+    if len(encoded) > MAX_QUEUE_JSON_BYTES:
+        raise ValueError("queue record exceeds the bounded JSON input size")
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
     tmp = Path(tmp_name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
-            json.dump(value, out, sort_keys=True, separators=(",", ":"))
-            out.write("\n")
+            out.write(encoded.decode("utf-8"))
             out.flush()
             os.fsync(out.fileno())
+        _reject_reparse_components(path.parent, "queue JSON parent")
+        _reject_reparse_components(path, "queue JSON target")
         os.replace(tmp, path)
         fsync_dir(path.parent)
     except BaseException:
@@ -127,7 +249,10 @@ def atomic_json(path: Path, value: dict) -> None:
 
 
 def atomic_bytes(path: Path, value: bytes) -> None:
+    if not isinstance(value, bytes):
+        raise ValueError("queue byte payload is invalid")
     ensure_directory(path.parent)
+    _reject_reparse_components(path, "queue byte target")
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
     tmp = Path(tmp_name)
     try:
@@ -135,6 +260,8 @@ def atomic_bytes(path: Path, value: bytes) -> None:
             out.write(value)
             out.flush()
             os.fsync(out.fileno())
+        _reject_reparse_components(path.parent, "queue byte parent")
+        _reject_reparse_components(path, "queue byte target")
         os.replace(tmp, path)
         fsync_dir(path.parent)
     except BaseException:
@@ -156,19 +283,53 @@ def write_all(fd: int, value: bytes) -> None:
 
 @contextmanager
 def queue_lock(base: Path):
+    if fcntl is None:
+        raise RuntimeError("decision queue locking is unavailable on this platform")
     lock_dir = base / "state/.locks"
     ensure_directory(lock_dir)
     lock_path = lock_dir / "decision-queue.lock"
-    with lock_path.open("a+", encoding="utf-8") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise RuntimeError("decision queue lock is contended; refusing an unlocked mutation") from exc
-        yield
+    _reject_reparse_components(lock_path, "decision queue lock")
+    try:
+        expected = lock_path.lstat()
+    except FileNotFoundError:
+        expected = None
+    except OSError as exc:
+        raise RuntimeError("decision queue lock is unreadable") from exc
+    if expected is not None and (_is_reparse(lock_path) or not stat.S_ISREG(expected.st_mode)):
+        raise RuntimeError("decision queue lock has an unsafe type")
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = -1
+    try:
+        descriptor = os.open(lock_path, flags, 0o600)
+        opened = os.fstat(descriptor)
+        observed = lock_path.lstat()
+        if _is_reparse(observed) or not stat.S_ISREG(opened.st_mode) \
+                or (opened.st_dev, opened.st_ino) != (observed.st_dev, observed.st_ino) \
+                or (expected is not None and
+                    (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino)):
+            raise RuntimeError("decision queue lock changed while opening")
+        with os.fdopen(descriptor, "a+", encoding="utf-8") as lock:
+            descriptor = -1
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise RuntimeError("decision queue lock is contended; refusing an unlocked mutation") from exc
+            yield
+    except (OSError, ValueError, TypeError) as exc:
+        raise RuntimeError("decision queue lock is unavailable") from exc
+    finally:
+        if descriptor != -1:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
 
 
 def digest(value: object) -> str:
-    raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    try:
+        raw = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeError) as exc:
+        raise ValueError("decision value is not canonically JSON serializable") from exc
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -209,6 +370,9 @@ def normalize(raw: dict, stamp: str | None = None, provider: str | None = None,
               usage: dict | None = None) -> dict:
     if not isinstance(raw, dict):
         raise ValueError("decision must be a JSON object")
+    if "schema_version" in raw and (type(raw["schema_version"]) is not int
+                                     or raw["schema_version"] != 1):
+        raise ValueError("decision schema_version must be the integer 1")
     args = raw.get("args", raw.get("arguments", [])) or []
     verb = raw.get("verb", "")
     goal = raw.get("goal", raw.get("goal_id", ""))
@@ -256,13 +420,20 @@ def normalize(raw: dict, stamp: str | None = None, provider: str | None = None,
 
 def validate_record(base: Path, record: dict) -> None:
     validator = base / "scripts/validate-control-state.py"
-    proc = subprocess.run(
-        [sys.executable, str(validator), "decision"],
-        input=json.dumps(record),
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    try:
+        payload = json.dumps(record, allow_nan=False)
+        proc = subprocess.run(
+            [sys.executable, str(validator), "decision"],
+            input=payload,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeError) as exc:
+        raise ValueError("decision cannot be serialized for validation") from exc
+    except (OSError, subprocess.TimeoutExpired, subprocess.SubprocessError) as exc:
+        raise ValueError("decision schema validation was unavailable") from exc
     if proc.returncode:
         raise ValueError((proc.stderr or proc.stdout or "decision schema validation failed").strip())
 
@@ -270,7 +441,20 @@ def validate_record(base: Path, record: dict) -> None:
 def existing_path(base: Path, decision_id: str) -> Path | None:
     for state in QUEUE_DIRS:
         candidate = queue_root(base) / state / f"{decision_id}.json"
-        if candidate.exists():
+        try:
+            info = candidate.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise ValueError(f"queue projection is unreadable: {candidate}") from exc
+        if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+                or bool(getattr(info, "st_file_attributes", 0) & 0x400):
+            raise ValueError(f"queue projection is a symlink/reparse path: {candidate}")
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError(f"queue projection has an unsafe type: {candidate}")
+        if info.st_size > MAX_QUEUE_JSON_BYTES:
+            raise ValueError(f"queue projection is too large: {candidate}")
+        if stat.S_ISREG(info.st_mode):
             return candidate
     return None
 
@@ -286,8 +470,8 @@ def validate_committed_journal_objects(data: bytes) -> list[dict]:
         if not line.strip():
             continue
         try:
-            value = json.loads(line)
-        except json.JSONDecodeError as exc:
+            value = _load_json_bytes(line.encode("utf-8"), f"decision journal line {number}")
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError, RecursionError) as exc:
             raise ValueError(f"invalid decision journal line {number}: {exc}") from exc
         if not isinstance(value, dict):
             raise ValueError(f"invalid decision journal line {number}: JSON object required")
@@ -301,7 +485,15 @@ def append_journal(base: Path, record: dict) -> bool:
     # are inspected without normalization or rewriting.
     journal = base / "state/decisions.jsonl"
     ensure_directory(journal.parent)
-    if journal.exists():
+    try:
+        journal_info = journal.lstat()
+    except FileNotFoundError:
+        journal_info = None
+    except OSError as exc:
+        raise ValueError("decision journal is unreadable") from exc
+    if journal_info is not None:
+        if _is_reparse(journal) or not stat.S_ISREG(journal_info.st_mode):
+            raise ValueError("decision journal has an unsafe type")
         repair_decision_journal_tail(base, journal)
     try:
         matches = find_jsonl_objects(journal, "id", record.get("id"))
@@ -338,6 +530,7 @@ def reviewed_legacy_marker(raw: dict, line: str, number: int, record: dict) -> d
             or raw.get("args") != []
             or raw.get("arguments") != []
             or raw.get("actor") != "head-hermes"
+            or type(raw.get("schema_version")) is not int
             or raw.get("schema_version") != 1
             or raw.get("provider") != "openai-codex"
             or raw.get("project") != "recursion"
@@ -398,8 +591,8 @@ def enqueue(base: Path, record: dict, journal: bool) -> Path:
         present = existing_path(base, record["id"])
         if present:
             try:
-                existing = json.loads(present.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as exc:
+                existing = _load_json_path(present, "existing decision projection")
+            except (OSError, ValueError, TypeError, UnicodeError, RecursionError) as exc:
                 raise ValueError(f"existing decision projection is unreadable: {present}") from exc
             assert_same_decision(existing, record, str(present))
             return present
@@ -434,15 +627,28 @@ def quarantine_torn_tail(base: Path, journal: Path, data: bytes) -> bytes:
         "tail_sha256": tail_sha,
         "payload": payload.relative_to(base).as_posix(),
     }
-    if payload.exists():
-        if payload.read_bytes() != tail:
+    try:
+        payload_info = payload.lstat()
+    except FileNotFoundError:
+        payload_info = None
+    except OSError as exc:
+        raise ValueError(f"torn-tail quarantine payload is unreadable: {payload.name}") from exc
+    if payload_info is not None:
+        if _is_reparse(payload) or not stat.S_ISREG(payload_info.st_mode) \
+                or payload.read_bytes() != tail:
             raise ValueError(f"torn-tail quarantine payload mismatch: {payload.name}")
     else:
         atomic_bytes(payload, tail)
-    if metadata_path.exists():
+    try:
+        metadata_info = metadata_path.lstat()
+    except FileNotFoundError:
+        metadata_info = None
+    except OSError as exc:
+        raise ValueError(f"torn-tail quarantine metadata is unreadable: {metadata_path.name}") from exc
+    if metadata_info is not None:
         try:
-            observed = json.loads(metadata_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+            observed = _load_json_path(metadata_path, "torn-tail quarantine metadata")
+        except (OSError, ValueError, TypeError, UnicodeError, RecursionError) as exc:
             raise ValueError(f"invalid torn-tail quarantine metadata: {metadata_path.name}") from exc
         if observed != metadata:
             raise ValueError(f"torn-tail quarantine metadata mismatch: {metadata_path.name}")
@@ -463,8 +669,14 @@ def quarantine_torn_tail(base: Path, journal: Path, data: bytes) -> bytes:
 
 def repair_decision_journal_tail(base: Path, journal: Path) -> None:
     """Inspect one byte in the steady state; copy the journal only for a torn tail."""
-    if not journal.is_file():
+    try:
+        journal_info = journal.lstat()
+    except FileNotFoundError:
         return
+    except OSError as exc:
+        raise ValueError("decision journal is unreadable") from exc
+    if _is_reparse(journal) or not stat.S_ISREG(journal_info.st_mode):
+        raise ValueError("decision journal has an unsafe type")
     with journal.open("rb") as source:
         source.seek(0, os.SEEK_END)
         size = source.tell()
@@ -473,7 +685,11 @@ def repair_decision_journal_tail(base: Path, journal: Path) -> None:
         source.seek(-1, os.SEEK_END)
         if source.read(1) == b"\n":
             return
-    quarantine_torn_tail(base, journal, journal.read_bytes())
+    with journal.open("rb") as source:
+        data = source.read(MAX_QUEUE_JOURNAL_BYTES + 1)
+    if len(data) > MAX_QUEUE_JOURNAL_BYTES:
+        raise ValueError("decision journal exceeds the bounded input size")
+    quarantine_torn_tail(base, journal, data)
 
 
 def _line_text(raw: bytes) -> str:
@@ -511,16 +727,30 @@ def _expected_legacy_markers(base: Path, journal: Path) -> dict[Path, dict]:
 
 def _validate_legacy_marker_store(base: Path, expected_markers: dict[Path, dict]) -> None:
     legacy_root = queue_root(base) / "legacy"
-    observed_markers = set(legacy_root.glob("*.json")) if legacy_root.exists() else set()
+    try:
+        legacy_info = legacy_root.lstat()
+    except FileNotFoundError:
+        legacy_info = None
+    except OSError as exc:
+        raise ValueError("legacy decision marker directory is unreadable") from exc
+    if legacy_info is not None and (_is_reparse(legacy_root) or not stat.S_ISDIR(legacy_info.st_mode)):
+        raise ValueError("legacy decision marker directory has an unsafe type")
+    observed_markers = set(legacy_root.glob("*.json")) if legacy_info is not None else set()
     unexpected = observed_markers - expected_markers.keys()
     if unexpected:
         raise ValueError(f"unexpected legacy decision marker: {sorted(unexpected)[0].name}")
     for path, expected in expected_markers.items():
-        if not path.exists():
+        try:
+            marker_info = path.lstat()
+        except FileNotFoundError:
+            marker_info = None
+        except OSError as exc:
+            raise ValueError(f"legacy decision marker is unreadable: {path}") from exc
+        if marker_info is None:
             continue
         try:
-            observed = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+            observed = _load_json_path(path, "legacy decision marker")
+        except (OSError, ValueError, TypeError, UnicodeError, RecursionError) as exc:
             raise ValueError(f"invalid legacy decision marker {path.name}: {exc}") from exc
         if observed != expected:
             raise ValueError(f"legacy decision marker mismatch: {path.name}")
@@ -528,11 +758,27 @@ def _validate_legacy_marker_store(base: Path, expected_markers: dict[Path, dict]
 
 def import_journal(base: Path) -> int:
     journal = base / "state/decisions.jsonl"
-    if not journal.exists():
+    try:
+        journal_info = journal.lstat()
+    except FileNotFoundError:
+        journal_info = None
+    except OSError as exc:
+        raise ValueError("decision journal is unreadable") from exc
+    if journal_info is None:
         legacy = queue_root(base) / "legacy"
-        if legacy.exists() and any(legacy.glob("*.json")):
+        try:
+            legacy_info = legacy.lstat()
+        except FileNotFoundError:
+            legacy_info = None
+        except OSError as exc:
+            raise ValueError("legacy decision marker directory is unreadable") from exc
+        if legacy_info is not None and (_is_reparse(legacy) or not stat.S_ISDIR(legacy_info.st_mode)):
+            raise ValueError("legacy decision marker directory has an unsafe type")
+        if legacy_info is not None and any(legacy.glob("*.json")):
             raise ValueError("legacy decision markers exist without the append-only source journal")
         return 0
+    if _is_reparse(journal) or not stat.S_ISREG(journal_info.st_mode):
+        raise ValueError("decision journal has an unsafe type")
     with queue_lock(base):
         repair_decision_journal_tail(base, journal)
         expected_markers = _expected_legacy_markers(base, journal)
@@ -578,7 +824,13 @@ def import_journal(base: Path) -> int:
         for kind, value in prepared:
             if kind == "legacy":
                 path = legacy_marker_path(base, value)
-                if not path.exists():
+                try:
+                    marker_info = path.lstat()
+                except FileNotFoundError:
+                    marker_info = None
+                except OSError as exc:
+                    raise ValueError(f"legacy decision marker is unreadable: {path}") from exc
+                if marker_info is None:
                     atomic_json(path, value)
                 continue
             if value["id"] in seen_decisions:
@@ -587,8 +839,8 @@ def import_journal(base: Path) -> int:
             present = existing_path(base, value["id"])
             if present:
                 try:
-                    existing = json.loads(present.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError) as exc:
+                    existing = _load_json_path(present, "existing decision projection")
+                except (OSError, ValueError, TypeError, UnicodeError, RecursionError) as exc:
                     raise ValueError(f"existing decision projection is unreadable: {present}") from exc
                 assert_same_decision(existing, value, str(present))
                 continue
@@ -599,11 +851,12 @@ def import_journal(base: Path) -> int:
         return imported
 
 
-def validate_projection_authority(base: Path, path: Path) -> dict:
-    try:
-        record = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError(f"decision projection is unreadable: {path}") from exc
+def validate_projection_authority(base: Path, path: Path, raw: bytes | None = None) -> dict:
+    if raw is None:
+        raw = _read_json_path_bytes(path, f"decision projection {path}")
+    record = _load_json_bytes(raw, f"decision projection {path}")
+    if not isinstance(record, dict):
+        raise ValueError(f"decision projection is not an object: {path}")
     validate_record(base, record)
     assert_same_decision(record, record, str(path))
     decision_id = str(record.get("id") or "")
@@ -628,22 +881,32 @@ def claim(base: Path) -> Path | None:
         if not pending:
             return None
         source = pending[0]
-        validate_projection_authority(base, source)
+        raw = _read_json_path_bytes(source, f"pending decision {source}")
+        source_identity = _path_identity(source, f"pending decision {source}")
+        validate_projection_authority(base, source, raw)
         target = queue_root(base) / "running" / source.name
+        _reject_reparse_components(target.parent, "running decision directory")
         target.parent.mkdir(parents=True, exist_ok=True)
+        if _path_identity(source, f"pending decision {source}") != source_identity:
+            raise ValueError("decision projection changed during claim")
         os.replace(source, target)
         fsync_dir(source.parent)
         fsync_dir(target.parent)
         return target
 
 
-def claim_pending(base: Path, kind: str, excluded_projects: set[str], allowed_verbs: set[str]) -> Path | None:
+def claim_pending(base: Path, kind: str, excluded_projects: set[str], allowed_verbs: set[str],
+                  with_snapshot: bool = False) -> Path | tuple[Path, str, str] | None:
     """Claim one pending projection without treating another running claim as singleton state."""
     if kind not in {"work", "non-work", "any"}:
         raise ValueError("claim kind must be work, non-work, or any")
     with queue_lock(base):
         for source in sorted((queue_root(base) / "pending").glob("*.json")):
-            record = json.loads(source.read_text(encoding="utf-8"))
+            raw = _read_json_path_bytes(source, f"pending decision {source}")
+            source_identity = _path_identity(source, f"pending decision {source}")
+            record = _load_json_bytes(raw, f"pending decision {source}")
+            if not isinstance(record, dict):
+                raise ValueError(f"pending decision is not an object: {source}")
             is_work = record.get("verb") == "work"
             if allowed_verbs and str(record.get("verb") or "") not in allowed_verbs:
                 continue
@@ -653,55 +916,103 @@ def claim_pending(base: Path, kind: str, excluded_projects: set[str], allowed_ve
                 continue
             if str(record.get("project") or "") in excluded_projects:
                 continue
-            validate_projection_authority(base, source)
+            validate_projection_authority(base, source, raw)
             target = queue_root(base) / "running" / source.name
+            _reject_reparse_components(target.parent, "running decision directory")
             target.parent.mkdir(parents=True, exist_ok=True)
+            if _path_identity(source, f"pending decision {source}") != source_identity:
+                raise ValueError("decision projection changed during claim")
             os.replace(source, target)
             fsync_dir(source.parent); fsync_dir(target.parent)
+            source_sha256 = hashlib.sha256(raw).hexdigest()
+            moved = _read_json_path_bytes(target, f"running decision {target}")
+            if hashlib.sha256(moved).hexdigest() != source_sha256:
+                raise ValueError("decision projection changed during claim")
+            if with_snapshot:
+                return target, source_sha256, base64.b64encode(raw).decode("ascii")
             return target
     return None
 
 
+def snapshot(base: Path, source: Path) -> tuple[str, str]:
+    """Return an authenticated immutable running projection snapshot under the queue lock."""
+    running_root = queue_root(base) / "running"
+    if source.parent != running_root or source.suffix != ".json" or _is_reparse(source):
+        raise ValueError("refusing to snapshot a path outside the running decision queue")
+    with queue_lock(base):
+        raw = _read_json_path_bytes(source, f"decision projection {source}")
+        validate_projection_authority(base, source, raw)
+        return hashlib.sha256(raw).hexdigest(), base64.b64encode(raw).decode("ascii")
+
+
 def transition(base: Path, source: Path, outcome: str, evidence: str,
                expected_sha256: str | None = None) -> Path:
-    resolved = source.resolve()
-    running_root = (queue_root(base) / "running").resolve()
-    if resolved.parent != running_root or outcome not in (*TERMINAL_DIRS, "pending"):
+    running_root = queue_root(base) / "running"
+    if source.parent != running_root or source.suffix != ".json" \
+            or outcome not in (*TERMINAL_DIRS, "pending") or _is_reparse(source):
         raise ValueError("refusing an invalid decision queue transition")
+    if expected_sha256 is not None and not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
+        raise ValueError("decision projection digest is invalid")
     with queue_lock(base):
-        raw = resolved.read_bytes()
-        if expected_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_sha256:
+        raw = _read_json_path_bytes(source, f"decision projection {source}")
+        source_identity = _path_identity(source, f"decision projection {source}")
+        observed_sha256 = hashlib.sha256(raw).hexdigest()
+        if expected_sha256 is not None and observed_sha256 != expected_sha256:
             raise ValueError("decision projection changed before queue transition")
-        record = json.loads(raw.decode("utf-8"))
+        record = _load_json_bytes(raw, f"decision projection {source}")
+        if not isinstance(record, dict):
+            raise ValueError("decision projection is not an object")
         if outcome == "pending":
             record["status"] = "queued"
         else:
             record["status"] = "executed" if outcome == "succeeded" else "refused"
             record["result_evidence"] = evidence
-        target = queue_root(base) / outcome / resolved.name
+        target = queue_root(base) / outcome / source.name
         atomic_json(target, record)
-        resolved.unlink()
-        fsync_dir(resolved.parent)
+        try:
+            if _path_identity(source, f"decision projection {source}") != source_identity \
+                    or hashlib.sha256(_read_json_path_bytes(source, f"decision projection {source}")).hexdigest() != observed_sha256:
+                raise ValueError("decision projection changed before queue transition")
+            source.unlink()
+        except OSError as exc:
+            raise ValueError("decision projection could not be removed after transition") from exc
+        fsync_dir(source.parent)
         return target
 
 
-def action_status(base: Path, decision_file: Path) -> str:
-    record = json.loads(decision_file.read_text(encoding="utf-8"))
+def action_status(base: Path, decision_file: Path, expected_sha256: str | None = None) -> str:
+    raw = _read_json_path_bytes(decision_file, "action decision projection")
+    observed_sha256 = hashlib.sha256(raw).hexdigest()
+    if expected_sha256 is not None:
+        if not re.fullmatch(r"[0-9a-f]{64}", expected_sha256) \
+                or observed_sha256 != expected_sha256:
+            raise ValueError("action decision projection changed before status inspection")
+    record = _load_json_bytes(raw, "action decision projection")
+    if not isinstance(record, dict):
+        raise ValueError("action decision projection is not an object")
     key = record.get("idempotency_key") or f"decision:{record.get('id') or digest(record)}"
     action_id = "action-" + hashlib.sha256(str(key).encode()).hexdigest()[:24]
     path = base / "state/actions" / f"{action_id}.json"
-    if not path.exists():
-        return "absent"
     try:
-        return str(json.loads(path.read_text(encoding="utf-8")).get("status") or "unknown")
-    except (OSError, json.JSONDecodeError):
+        _path_identity(path, "action record")
+    except ValueError as exc:
+        if "unavailable" in str(exc):
+            return "absent"
+        raise
+    try:
+        value = _load_json_path(path, "action record")
+        return str(value.get("status") or "unknown") if isinstance(value, dict) else "corrupt"
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
         return "corrupt"
 
 
 def load_usage(path: str | None) -> dict | None:
     if not path:
         return None
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    value = _load_json_path(Path(path), "usage record")
+    if not isinstance(value, dict):
+        raise ValueError("usage record must be an object")
+    return value
 
 
 def main() -> int:
@@ -718,8 +1029,12 @@ def main() -> int:
     pending.add_argument("--kind", choices=("work", "non-work", "any"), default="any")
     pending.add_argument("--exclude-project", action="append", default=[])
     pending.add_argument("--verb", action="append", default=[])
+    pending.add_argument("--with-snapshot", action="store_true")
+    snap = sub.add_parser("snapshot")
+    snap.add_argument("file")
     status = sub.add_parser("action-status")
     status.add_argument("file")
+    status.add_argument("--expected-sha256")
     for name in ("succeed", "fail", "defer"):
         cmd = sub.add_parser(name)
         cmd.add_argument("file")
@@ -729,8 +1044,18 @@ def main() -> int:
     base = root()
     try:
         if args.command in {"normalize", "enqueue"}:
+            try:
+                incoming = _load_json_bytes(
+                    sys.stdin.buffer.read(MAX_QUEUE_JSON_BYTES + 1), "decision input"
+                )
+            except AttributeError:
+                incoming = _load_json_bytes(
+                    sys.stdin.read(MAX_QUEUE_JSON_BYTES + 1).encode("utf-8"), "decision input"
+                )
+            if not isinstance(incoming, dict):
+                raise ValueError("decision must be a JSON object")
             record = normalize(
-                json.load(sys.stdin),
+                incoming,
                 stamp=args.stamp,
                 provider=args.provider,
                 usage=load_usage(args.usage_file),
@@ -750,17 +1075,31 @@ def main() -> int:
                 return 0
             return 4
         elif args.command == "claim-pending":
-            path = claim_pending(base, args.kind, set(args.exclude_project), set(args.verb))
+            result = claim_pending(base, args.kind, set(args.exclude_project), set(args.verb),
+                                   args.with_snapshot)
+            if isinstance(result, tuple):
+                path, digest_value, snapshot_value = result
+                print(path)
+                print(digest_value)
+                print(snapshot_value)
+                return 0
+            path = result
             if path:
                 print(path)
                 return 0
             return 4
         elif args.command == "action-status":
-            print(action_status(base, Path(args.file)))
+            print(action_status(base, Path(args.file), args.expected_sha256))
+        elif args.command == "snapshot":
+            digest_value, snapshot_value = snapshot(base, Path(args.file))
+            print(digest_value)
+            print(snapshot_value)
         else:
             outcome = {"succeed": "succeeded", "fail": "failed", "defer": "pending"}[args.command]
             print(transition(base, Path(args.file), outcome, args.evidence, args.expected_sha256))
-    except (OSError, ValueError, json.JSONDecodeError, RuntimeError) as exc:
+    except (OSError, ValueError, TypeError, UnicodeError, OverflowError, RecursionError,
+            json.JSONDecodeError, RuntimeError, subprocess.TimeoutExpired,
+            subprocess.SubprocessError) as exc:
         print(f"decision-queue: {exc}", file=sys.stderr)
         return 73
     return 0

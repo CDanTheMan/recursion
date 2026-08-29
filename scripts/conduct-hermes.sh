@@ -28,7 +28,10 @@ cd "$ROOT"
 RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 
 FILE=""; DRY=0; PAUSED_SAFE=0; RECOVER_ONLY=0; NON_WORK_ONLY=0; WORK_ONLY=0
-DECISION_SNAPSHOT_B64=""; DECISION_FILE_DIGEST=""
+# A queue claim supplies these immutable bytes through the child environment. Direct --file
+# invocation captures them below. The child never re-reads a path as its decision authority.
+DECISION_SNAPSHOT_B64="${RECURSION_DECISION_SNAPSHOT_B64:-}"
+DECISION_FILE_DIGEST="${RECURSION_DECISION_FILE_DIGEST:-}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --file) FILE="$2"; shift 2 ;;
@@ -55,15 +58,16 @@ scope_allows_file(){
   local path="$1" verb
   if [ "$NON_WORK_ONLY" = 0 ] && [ "$WORK_ONLY" = 0 ]; then return 0; fi
   verb="$(python3 - "$path" "${DECISION_SNAPSHOT_B64:-}" <<'PY' 2>/dev/null
-import json,sys
-import base64
+import base64,binascii,json,sys
 try:
     if sys.argv[2]:
-        value=base64.b64decode(sys.argv[2]).decode("utf-8")
+        value=base64.b64decode(sys.argv[2], validate=True).decode("utf-8")
     else:
-        value=open(sys.argv[1], encoding="utf-8").read()
-    print(json.loads(value).get("verb", ""))
-except (OSError,ValueError,TypeError):
+        value=open(sys.argv[1], encoding="utf-8").read(2 * 1024 * 1024 + 1)
+    if len(value) > 2 * 1024 * 1024: raise ValueError("decision is too large")
+    row=json.loads(value, parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+    print(row.get("verb", "") if isinstance(row, dict) else "")
+except (OSError,ValueError,TypeError,UnicodeError,binascii.Error,RecursionError):
     raise SystemExit(2)
 PY
 )" || return 2
@@ -77,8 +81,12 @@ scope_guard(){
   local scope_rc current_digest
   [ -n "${DECISION_SNAPSHOT_B64:-}" ] || { log "REFUSED - immutable decision snapshot is absent"; return 74; }
   current_digest="$(python3 - "${DECISION_SNAPSHOT_B64}" <<'PY' 2>/dev/null
-import base64,hashlib,sys
-print(hashlib.sha256(base64.b64decode(sys.argv[1])).hexdigest())
+import base64,binascii,hashlib,sys
+try:
+    raw=base64.b64decode(sys.argv[1], validate=True)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
+except (ValueError,TypeError,binascii.Error): raise SystemExit(2)
+print(hashlib.sha256(raw).hexdigest())
 PY
 )" || return 74
   [ "$current_digest" = "$DECISION_FILE_DIGEST" ] || { log "REFUSED - immutable decision snapshot digest changed"; return 74; }
@@ -89,8 +97,10 @@ PY
   source_digest="$(python3 - "$FILE" <<'PY' 2>/dev/null
 import hashlib,sys
 try:
-    with open(sys.argv[1], "rb") as source: print(hashlib.sha256(source.read()).hexdigest())
-except OSError: raise SystemExit(2)
+    with open(sys.argv[1], "rb") as source: raw=source.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
+    print(hashlib.sha256(raw).hexdigest())
+except (OSError,ValueError): raise SystemExit(2)
 PY
 )" || { log "REFUSED - decision disappeared before child action"; return 74; }
   [ "$source_digest" = "$DECISION_FILE_DIGEST" ] || { log "REFUSED - decision projection changed before child action"; return 74; }
@@ -105,10 +115,39 @@ LOG="$ROOT/loop/logs/$DATE-conduct-hermes.log"; mkdir -p "$(dirname "$LOG")"
 log(){ echo "[$(date -Is)] conduct-hermes: $*" | tee -a "$LOG" >&2; }
 ev(){ bash scripts/taskctl.sh event "$1" "" "$2" >/dev/null 2>&1 || true; }
 
+claim_from_queue(){
+  local output; local -a fields
+  CLAIMED_FILE=""; CLAIMED_DIGEST=""; CLAIMED_SNAPSHOT=""
+  output="$(python3 "$ROOT/scripts/decision-queue.py" claim-pending "$@" --with-snapshot)"
+  CLAIM_RC=$?
+  [ "$CLAIM_RC" -eq 0 ] || return "$CLAIM_RC"
+  mapfile -t fields <<< "$output"
+  [ "${#fields[@]}" -eq 3 ] && [ -n "${fields[0]}" ] \
+    && [[ "${fields[1]}" =~ ^[0-9a-f]{64}$ ]] && [ -n "${fields[2]}" ] \
+    || { log "REFUSED - queue claim returned an invalid immutable snapshot"; return 74; }
+  CLAIMED_FILE="${fields[0]}"; CLAIMED_DIGEST="${fields[1]}"; CLAIMED_SNAPSHOT="${fields[2]}"
+}
+
+snapshot_running(){
+  local output; local -a fields
+  output="$(python3 "$ROOT/scripts/decision-queue.py" snapshot "$1")" || return 74
+  mapfile -t fields <<< "$output"
+  [ "${#fields[@]}" -eq 2 ] && [[ "${fields[0]}" =~ ^[0-9a-f]{64}$ ]] && [ -n "${fields[1]}" ] \
+    || { log "REFUSED - running decision snapshot is invalid"; return 74; }
+  CLAIMED_DIGEST="${fields[0]}"; CLAIMED_SNAPSHOT="${fields[1]}"
+}
+
+run_claimed_child(){
+  local path="$1" digest="$2" snapshot="$3"; shift 3
+  RECURSION_DECISION_FILE_DIGEST="$digest" RECURSION_DECISION_SNAPSHOT_B64="$snapshot" \
+    RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
+    bash "$ROOT/scripts/conduct-hermes.sh" "$@" --file "$path" 8>&-
+}
+
 drain_queue(){
   local queue_file claim_rc child_rc action_state aggregate=0 project global first i claimed_digest
   local import_error import_rc
-  local -a pids=() files=() projects=() digests=() claim_args=()
+  local -a pids=() files=() projects=() digests=() snapshots=() claim_args=()
   [ "$DRY" = 0 ] || { log "--dry-run requires an explicit --file"; return 2; }
   [ -x "$ROOT/scripts/decision-queue.py" ] \
     || { log "durable decision queue helper is absent"; return 74; }
@@ -130,7 +169,14 @@ drain_queue(){
   fi
   for quarantine_record in "$ROOT/state/decision-queue/quarantine"/*.json; do
     [ -f "$quarantine_record" ] || continue
-    quarantine_sha="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("tail_sha256", ""))' \
+    quarantine_sha="$(python3 -c 'import json,sys
+try:
+    with open(sys.argv[1],"rb") as source: raw=source.read(65537)
+    if len(raw)>65536: raise ValueError("quarantine metadata is too large")
+    value=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    print(value.get("tail_sha256","") if isinstance(value,dict) else "")
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)' \
       "$quarantine_record" 2>/dev/null || true)"
     [ -n "$quarantine_sha" ] || continue
     RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/taskctl.sh" esc-record \
@@ -140,26 +186,25 @@ drain_queue(){
   done
 
   finalize_claim(){
-    local claimed="$1" result_rc="$2" queue_sha="$3" state reconcile_rc=0
+    local claimed="$1" result_rc="$2" queue_sha="$3" queue_snapshot="$4" state reconcile_rc=0
     # queue_sha is captured immediately after claim and retained across child execution.  Never
     # hash the post-action path here: that would let a swapped projection become the authority
     # used by terminalization after the immutable child snapshot has completed.
     [[ "$queue_sha" =~ ^[0-9a-f]{64}$ ]] || { log "original claimed decision digest is absent"; return 74; }
-    state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed")" || return $?
+    state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed" --expected-sha256 "$queue_sha")" || return $?
     case "$state" in
       succeeded|failed|cancelled|pending)
         # The child can die after writing its terminal/deferred action but before projecting the
         # coupled instruction. Reconcile that handshake idempotently before moving the decision;
         # otherwise the parent would hide the only projection capable of recovery.
-        RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-          bash "$ROOT/scripts/conduct-hermes.sh" --recover-only "${CHILD_SCOPE_ARGS[@]}" \
-            --file "$claimed" 8>&- \
+        run_claimed_child "$claimed" "$queue_sha" "$queue_snapshot" \
+          --recover-only "${CHILD_SCOPE_ARGS[@]}" 8>&- \
           >/dev/null 2>&1 || reconcile_rc=$?
         case "$state:$reconcile_rc" in
           succeeded:0|failed:1|cancelled:1|pending:75) : ;;
           *) log "instruction/action recovery failed state=$state rc=$reconcile_rc; preserving $claimed"; return 74 ;;
         esac
-        state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed")" || return $?
+        state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed" --expected-sha256 "$queue_sha")" || return $?
         case "$state" in
           succeeded) python3 "$ROOT/scripts/decision-queue.py" succeed "$claimed" "action succeeded" --expected-sha256 "$queue_sha" >/dev/null ;;
           failed|cancelled)
@@ -198,23 +243,24 @@ drain_queue(){
   # its own durable action reaches terminal state.
   for queue_file in "$ROOT/state/decision-queue/running"/*.json; do
     [ -f "$queue_file" ] || continue
+    snapshot_running "$queue_file" || return 74
+    DECISION_SNAPSHOT_B64="$CLAIMED_SNAPSHOT"; DECISION_FILE_DIGEST="$CLAIMED_DIGEST"
     scope_allows_file "$queue_file"; scope_rc=$?
     if [ "$scope_rc" -ne 0 ]; then
       [ "$scope_rc" -eq 1 ] || { log "recovery scope could not inspect $queue_file; preserving it"; return 74; }
       continue
     fi
-    action_state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$queue_file")" || return $?
+    action_state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$queue_file" --expected-sha256 "$CLAIMED_DIGEST")" || return $?
     case "$action_state" in
-      absent) python3 "$ROOT/scripts/decision-queue.py" defer "$queue_file" "recovered claim had no action" >/dev/null || return $? ;;
+      absent) python3 "$ROOT/scripts/decision-queue.py" defer "$queue_file" "recovered claim had no action" \
+        --expected-sha256 "$CLAIMED_DIGEST" >/dev/null || return $? ;;
       succeeded|failed|cancelled|running|pending)
         # Re-enter only the recovery path so the coupled instruction is acknowledged/released
         # before the decision projection becomes terminal. No verb is dispatched here.
-        claimed_digest="$(sha256sum "$queue_file" | awk '{print $1}')" || return 74
-        RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-          bash "$ROOT/scripts/conduct-hermes.sh" --recover-only "${CHILD_SCOPE_ARGS[@]}" \
-            --file "$queue_file" 8>&-
+        run_claimed_child "$queue_file" "$CLAIMED_DIGEST" "$CLAIMED_SNAPSHOT" \
+          --recover-only "${CHILD_SCOPE_ARGS[@]}"
         child_rc=$?
-        finalize_claim "$queue_file" "$child_rc" "$claimed_digest" || return $?
+        finalize_claim "$queue_file" "$child_rc" "$CLAIMED_DIGEST" "$CLAIMED_SNAPSHOT" || return $?
         ;;
       *) log "corrupt recovered action state '$action_state'"; return 74 ;;
     esac
@@ -224,20 +270,20 @@ drain_queue(){
   # same loop drains before any worker dispatch, preserving the goal/task CAS order.
   while [ "$WORK_ONLY" = 0 ]; do
     if [ "$PAUSED_SAFE" = 1 ]; then
-      queue_file="$(python3 "$ROOT/scripts/decision-queue.py" claim-pending --kind non-work \
+      claim_from_queue --kind non-work \
         --verb noop --verb pilot-plan-propose --verb pilot-plan-approve --verb pilot-window-open \
-        --verb pilot-window-close --verb assist-answer --verb routing-refuse)"
+        --verb pilot-window-close --verb assist-answer --verb routing-refuse
+      claim_rc=$?
     else
-      queue_file="$(python3 "$ROOT/scripts/decision-queue.py" claim-pending --kind non-work)"
+      claim_from_queue --kind non-work
+      claim_rc=$?
     fi
-    claim_rc=$?
     [ "$claim_rc" -ne 4 ] || break
     [ "$claim_rc" -eq 0 ] || return "$claim_rc"
-    claimed_digest="$(sha256sum "$queue_file" | awk '{print $1}')" || return 74
-    RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-      bash "$ROOT/scripts/conduct-hermes.sh" "${CHILD_SCOPE_ARGS[@]}" --file "$queue_file" 8>&-
+    queue_file="$CLAIMED_FILE"; claimed_digest="$CLAIMED_DIGEST"; claimed_snapshot="$CLAIMED_SNAPSHOT"
+    run_claimed_child "$queue_file" "$claimed_digest" "$claimed_snapshot" "${CHILD_SCOPE_ARGS[@]}"
     child_rc=$?
-    finalize_claim "$queue_file" "$child_rc" "$claimed_digest" || return $?
+    finalize_claim "$queue_file" "$child_rc" "$claimed_digest" "$claimed_snapshot" || return $?
   done
 
   [ "$PAUSED_SAFE" = 0 ] || return "$aggregate"
@@ -248,52 +294,42 @@ drain_queue(){
   # global ceiling proves isolation; project/goal/window admission is rechecked in --file.
   global="${RECURSION_PILOT_GLOBAL_CONCURRENCY:-1}"
   case "$global" in ''|*[!0-9]*) log "invalid global pilot concurrency '$global'"; return 4 ;; esac
+  [ "${#global}" -le 3 ] || { log "global pilot concurrency is too large"; return 4; }
+  global=$((10#$global))
   [ "$global" -ge 1 ] && [ "$global" -le 16 ] || { log "global pilot concurrency must be 1..16"; return 4; }
   while :; do
     while [ "${#pids[@]}" -lt "$global" ]; do
       claim_args=(claim-pending --kind work)
       for project in "${projects[@]}"; do claim_args+=(--exclude-project "$project"); done
-      queue_file="$(python3 "$ROOT/scripts/decision-queue.py" "${claim_args[@]}")"
+      claim_from_queue "${claim_args[@]:1}"
       claim_rc=$?
       [ "$claim_rc" -ne 4 ] || break
       [ "$claim_rc" -eq 0 ] || return "$claim_rc"
-      project="$(python3 - "$queue_file" "$ROOT" <<'PY'
-import json,sys
-from pathlib import Path
-decision=Path(sys.argv[1]); root=Path(sys.argv[2])
-row=json.loads(decision.read_text(encoding='utf-8'))
-args=row.get('arguments') or row.get('args') or []
-project=''
-if args:
-    task=root/'state/tasks'/f'{args[0]}.md'
-    try:
-        for line in task.read_text(encoding='utf-8').splitlines():
-            key,sep,value=line.partition(':')
-            if sep and key.strip() in {'project_id','project','workstream'} and value.strip():
-                project=value.strip(); break
-    except OSError:
-        pass
-print(project or row.get('project') or '')
+      queue_file="$CLAIMED_FILE"; claimed_digest="$CLAIMED_DIGEST"; claimed_snapshot="$CLAIMED_SNAPSHOT"
+      project="$(python3 - "$claimed_snapshot" <<'PY'
+import base64,binascii,json,sys
+try:
+    raw=base64.b64decode(sys.argv[1], validate=True)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
+    row=json.loads(raw.decode("utf-8"), parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+except (ValueError,TypeError,UnicodeError,binascii.Error,OverflowError,RecursionError,json.JSONDecodeError):
+    raise SystemExit(2)
+print(row.get('project') if isinstance(row, dict) else '')
 PY
 )"
       [ -n "$project" ] || project="unknown-$(basename "$queue_file")"
-      # Capture the digest immediately after claim and before launching a child.  The child may
-      # finish while this loop continues; a later projection swap must never become authority for
-      # the parent's terminal CAS.
-      claimed_digest="$(sha256sum "$queue_file" | awk '{print $1}')" || return 74
-      RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-        bash "$ROOT/scripts/conduct-hermes.sh" "${CHILD_SCOPE_ARGS[@]}" --file "$queue_file" 8>&- &
-      pids+=("$!"); files+=("$queue_file"); projects+=("$project"); digests+=("$claimed_digest")
+      run_claimed_child "$queue_file" "$claimed_digest" "$claimed_snapshot" "${CHILD_SCOPE_ARGS[@]}" &
+      pids+=("$!"); files+=("$queue_file"); projects+=("$project"); digests+=("$claimed_digest"); snapshots+=("$claimed_snapshot")
     done
     [ "${#pids[@]}" -gt 0 ] || break
     first="${pids[0]}"; queue_file="${files[0]}"
     wait "$first"; child_rc=$?
-    finalize_claim "$queue_file" "$child_rc" "${digests[0]}" || return $?
-    pids=("${pids[@]:1}"); files=("${files[@]:1}"); projects=("${projects[@]:1}"); digests=("${digests[@]:1}")
+    finalize_claim "$queue_file" "$child_rc" "${digests[0]}" "${snapshots[0]}" || return $?
+    pids=("${pids[@]:1}"); files=("${files[@]:1}"); projects=("${projects[@]:1}"); digests=("${digests[@]:1}"); snapshots=("${snapshots[@]:1}")
     if [ -f "$ROOT/state/PAUSE" ]; then
       for ((i=0; i<${#pids[@]}; i++)); do
         wait "${pids[$i]}"; child_rc=$?
-        finalize_claim "${files[$i]}" "$child_rc" "${digests[$i]}" || true
+        finalize_claim "${files[$i]}" "$child_rc" "${digests[$i]}" "${snapshots[$i]}" || true
       done
       return 75
     fi
@@ -306,12 +342,35 @@ if [ -z "$FILE" ]; then
   exit $?
 fi
 
-[ -f "$FILE" ] || { log "no decision file at $FILE"; exit 2; }
+python3 - "$FILE" <<'PY' 2>/dev/null || { log "no safe decision file at $FILE"; exit 2; }
+import os,stat,sys
+from pathlib import Path
+try:
+    path=Path(sys.argv[1])
+    if not path.is_absolute() or any(part in {".", ".."} for part in path.parts):
+        raise ValueError("decision file must be a canonical absolute path")
+    current=Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        info=current.lstat()
+        if stat.S_ISLNK(info.st_mode) or getattr(info,"st_reparse_tag",0): raise ValueError("reparse path")
+    flags=os.O_RDONLY|getattr(os,"O_BINARY",0)|getattr(os,"O_NOFOLLOW",0)
+    descriptor=os.open(path,flags)
+    try:
+        info=os.fstat(descriptor)
+        if stat.S_ISLNK(info.st_mode) or getattr(info,"st_reparse_tag",0) or not stat.S_ISREG(info.st_mode): raise ValueError("not regular")
+    finally:
+        os.close(descriptor)
+except (OSError,ValueError,TypeError,UnicodeError,OverflowError):
+    raise SystemExit(2)
+PY
+if [ -z "$DECISION_SNAPSHOT_B64" ] || [ -z "$DECISION_FILE_DIGEST" ]; then
 SNAPSHOT_BUNDLE="$(python3 - "$FILE" <<'PY' 2>/dev/null
 import base64,hashlib,sys
 try:
-    with open(sys.argv[1], "rb") as source: raw=source.read()
-except OSError: raise SystemExit(2)
+    with open(sys.argv[1], "rb") as source: raw=source.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
+except (OSError, ValueError, TypeError): raise SystemExit(2)
 print(hashlib.sha256(raw).hexdigest())
 print(base64.b64encode(raw).decode("ascii"))
 PY
@@ -319,6 +378,10 @@ PY
 DECISION_FILE_DIGEST="${SNAPSHOT_BUNDLE%%$'\n'*}"
 DECISION_SNAPSHOT_B64="${SNAPSHOT_BUNDLE#*$'\n'}"
 unset SNAPSHOT_BUNDLE
+else
+  [[ "$DECISION_FILE_DIGEST" =~ ^[0-9a-f]{64}$ ]] && [ -n "$DECISION_SNAPSHOT_B64" ] \
+    || { log "REFUSED - supplied decision snapshot is malformed"; exit 74; }
+fi
 # Do this before validation, action identity, consume, acknowledge, or release.  An out-of-scope
 # file remains untouched so its owning actuator can recover it.
 scope_allows_file "$FILE"; scope_rc=$?
@@ -329,8 +392,13 @@ scope_allows_file "$FILE"; scope_rc=$?
 
 VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify reconcile-goal task-transition goal-transition verify-goal publish-task notification-reconcile notification-deliver notification-portfolio notification-audit notification-recover routing-refuse"
 RAW_DECISION="$(python3 - "$DECISION_SNAPSHOT_B64" <<'PY'
-import base64,sys
-sys.stdout.write(base64.b64decode(sys.argv[1]).decode("utf-8"))
+import base64,binascii,sys
+try:
+    raw=base64.b64decode(sys.argv[1], validate=True)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
+    sys.stdout.write(raw.decode("utf-8", "strict"))
+except (ValueError,TypeError,UnicodeError,binascii.Error,OverflowError):
+    raise SystemExit(2)
 PY
 )" || { log "REFUSED - decision snapshot could not be decoded"; exit 74; }
 VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$RAW_DECISION" 2>&1)"
@@ -339,7 +407,12 @@ case "$VALID" in
   *) log "REFUSED - ${VALID:-decision validation produced no output}"; exit 5 ;;
 esac
 
-read_field(){ python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get(sys.argv[2],"") or "")' "$DECISION_JSON" "$1" 2>/dev/null; }
+read_field(){ python3 -c 'import json,sys
+try:
+    value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    print(value.get(sys.argv[2],"") or "" if isinstance(value,dict) else "")
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)' "$DECISION_JSON" "$1" 2>/dev/null; }
 VERB="$(read_field verb)"; WHY="$(read_field why)"; GOAL="$(read_field goal)"
 ACTOR="$(read_field actor)"
 DECISION_PROJECT="$(read_field project)"
@@ -347,11 +420,20 @@ DECISION_SOURCE="$(read_field decision_source)"
 ROUTED_DECIDER="$(read_field routed_decider)"
 DECISION_ID="$(read_field id)"; IDEMPOTENCY_KEY="$(read_field idempotency_key)"
 INSTRUCTION_ID="$(read_field instruction_id)"
-ARGS_JSON="$(python3 -c 'import json,sys;print(json.dumps(json.loads(sys.argv[1]).get("args") or [],separators=(",",":")))' "$DECISION_JSON")" \
+ARGS_JSON="$(python3 -c 'import json,sys
+try:
+    value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    if not isinstance(value,dict): raise ValueError("decision is not an object")
+    print(json.dumps(value.get("args") or [],separators=(",",":"),allow_nan=False))
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)' "$DECISION_JSON")" \
   || { log "REFUSED - could not freeze decision arguments"; exit 5; }
 ACTION_PAYLOAD_SHA256="$(python3 - "$DECISION_JSON" <<'PY'
 import hashlib,json,sys
-row=json.loads(sys.argv[1])
+try:
+ row=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+ raise SystemExit(2)
 payload={
     'actor':row.get('actor') or '', 'verb':row.get('verb') or '',
     'args':row.get('args',row.get('arguments',[])) or [], 'text':row.get('text') or '',
@@ -360,7 +442,7 @@ payload={
     'decision_source':row.get('decision_source') or '',
     'routed_decider':row.get('routed_decider') or '',
 }
-raw=json.dumps(payload,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
+raw=json.dumps(payload,sort_keys=True,separators=(',',':'),ensure_ascii=False,allow_nan=False).encode()
 print(hashlib.sha256(raw).hexdigest())
 PY
 )" || { log "REFUSED - could not freeze complete action payload"; exit 5; }
@@ -368,7 +450,12 @@ DECISION_PAYLOAD_SHA256="$(read_field decision_payload_sha256)"
 [ -n "$DECISION_PAYLOAD_SHA256" ] && [ "$DECISION_PAYLOAD_SHA256" = "$ACTION_PAYLOAD_SHA256" ] \
   || { log "REFUSED - decision authority/effect digest is absent or inconsistent"; exit 5; }
 mapfile -t ARGS < <(python3 -c 'import json,sys
-for a in json.loads(sys.argv[1]): sys.stdout.buffer.write(a.encode()+b"\n")' "$ARGS_JSON" 2>/dev/null)
+try:
+    value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    if not isinstance(value,list) or any(not isinstance(a,str) for a in value): raise ValueError("args are invalid")
+    for a in value: sys.stdout.buffer.write(a.encode()+b"\n")
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)' "$ARGS_JSON" 2>/dev/null)
 
 [ -n "$VERB" ] || { log "decision has no verb"; exit 2; }
 
@@ -481,15 +568,23 @@ action_lock(){
   return 0
 }
 action_field(){
-  python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2],"") or "")' \
-    "$ACTION_FILE" "$1" 2>/dev/null
+  python3 -c 'import json,sys
+try:
+    with open(sys.argv[1],"rb") as source: raw=source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError("action is too large")
+    value=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    print(value.get(sys.argv[2],"") or "" if isinstance(value,dict) else "")
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)' "$ACTION_FILE" "$1" 2>/dev/null
 }
 action_owned_running(){
   ACTION_EXPECTED_OWNER="$$@$(hostname)" python3 - "$ACTION_FILE" <<'PY' 2>/dev/null
 import json,os,sys
 try:
-    row=json.load(open(sys.argv[1],encoding='utf-8'))
-except (OSError,json.JSONDecodeError):
+    with open(sys.argv[1],"rb") as source: raw=source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError("action is too large")
+    row=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
     raise SystemExit(1)
 raise SystemExit(0 if row.get('status') == 'running' and
                  row.get('lease_owner') == os.environ['ACTION_EXPECTED_OWNER'] else 1)
@@ -503,8 +598,14 @@ action_identity_matches(){
     python3 - "$ACTION_FILE" <<'PY' 2>/dev/null
 import json,os,sys
 try:
-    row=json.load(open(sys.argv[1],encoding='utf-8'))
-except (OSError,json.JSONDecodeError):
+    with open(sys.argv[1],"rb") as source: raw=source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError("action is too large")
+    row=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(1)
+try:
+    expected_args=json.loads(os.environ['ACTION_EXPECTED_ARGS'],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
     raise SystemExit(1)
 expected={
     'id':os.environ['ACTION_EXPECTED_ID'],
@@ -512,7 +613,7 @@ expected={
     'decision_id':os.environ.get('ACTION_EXPECTED_DECISION') or None,
     'instruction_id':os.environ.get('ACTION_EXPECTED_INSTRUCTION') or None,
     'verb':os.environ['ACTION_EXPECTED_VERB'],
-    'arguments':json.loads(os.environ['ACTION_EXPECTED_ARGS']),
+    'arguments':expected_args,
     'goal_id':os.environ.get('ACTION_EXPECTED_GOAL') or None,
     'action_payload_sha256':os.environ['ACTION_EXPECTED_PAYLOAD'],
 }
@@ -537,14 +638,22 @@ path,journal=sys.argv[1:3]
 now=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
 status=os.environ['ACTION_STATUS']
 try:
-    with open(path,encoding='utf-8') as src: record=json.load(src)
+    with open(path,'rb') as src:
+        raw=src.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError('action is too large')
+    record=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
 except FileNotFoundError:
+    try:
+      arguments=json.loads(os.environ['ACTION_ARGS'],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+      if not isinstance(arguments,list) or any(not isinstance(a,str) for a in arguments): raise ValueError('action arguments invalid')
+    except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+      raise SystemExit(2)
     record={
       'schema_version':1,'id':os.environ['ACTION_ID'],
       'decision_id':os.environ.get('ACTION_DECISION') or None,
       'instruction_id':os.environ.get('ACTION_INSTRUCTION') or None,
       'idempotency_key':os.environ['ACTION_KEY'],'verb':os.environ['ACTION_VERB'],
-      'arguments':json.loads(os.environ['ACTION_ARGS']),
+      'arguments':arguments,
       'goal_id':os.environ.get('ACTION_GOAL') or None,'status':'pending',
       'actor':os.environ.get('ACTION_ACTOR') or None,
       'project':os.environ.get('ACTION_PROJECT') or None,
@@ -554,10 +663,22 @@ except FileNotFoundError:
       'lease_owner':None,'lease_expires':None,'attempts':0,'result_evidence':None,
       'created_at':now,'updated_at':now,
     }
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)
+if not isinstance(record,dict):
+    raise SystemExit(2)
+attempts=record.get('attempts')
+if type(attempts) is not int or attempts < 0:
+    raise SystemExit(2)
 if status=='running':
-    record['attempts']=int(record.get('attempts') or 0)+1
+    try:
+      lease=int(os.environ.get('RECURSION_ACTION_LEASE_S','3600'),10)
+    except (TypeError,ValueError,OverflowError):
+      raise SystemExit(2)
+    if not 1 <= lease <= 86400: raise SystemExit(2)
+    record['attempts']=attempts+1
     record['lease_owner']=os.environ['ACTION_OWNER']
-    record['lease_expires']=int(time.time())+int(os.environ.get('RECURSION_ACTION_LEASE_S','3600'))
+    record['lease_expires']=int(time.time())+lease
 elif status in ('pending','succeeded','failed','cancelled'):
     record['lease_owner']=None; record['lease_expires']=None
 record['status']=status
@@ -566,9 +687,12 @@ record['updated_at']=now
 event={'schema_version':1,'ts':now,'action_id':record['id'],'status':status,
        'attempt':record['attempts'],'idempotency_key':record['idempotency_key'],
        'evidence':record['result_evidence']}
-commit_transition(__import__('pathlib').Path(sys.argv[3]).parent,
-                  [json_mutation(__import__('pathlib').Path(path),record)],event,
-                  journal='state/action-events.jsonl')
+try:
+    commit_transition(__import__('pathlib').Path(sys.argv[3]).parent,
+                      [json_mutation(__import__('pathlib').Path(path),record)],event,
+                      journal='state/action-events.jsonl')
+except (OSError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)
 PY
   rc=$?
   [ "$rc" -eq 0 ] || log "failed durable action transition status=$status rc=$rc"
@@ -773,8 +897,10 @@ proven=[]
 for aid in sorted(annotated):
     action_path=root/'state/actions'/f'{aid}.json'
     try:
-        action=json.loads(action_path.read_text(encoding='utf-8'))
-    except (OSError,json.JSONDecodeError):
+        raw=action_path.read_bytes()
+        if len(raw)>2*1024*1024: raise ValueError('action is too large')
+        action=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
         continue
     if (action.get('id') == aid and str(action.get('instruction_id') or '') == iid
             and action.get('status') == 'failed'
@@ -852,7 +978,13 @@ case "$VERB" in
     P0="${ARGS[0]:-}"; [ -n "$P0" ] || { log "$VERB needs a project"; exit 2; }
     EXPECTED_ACTOR="$(python3 - "$ROOT/state/project-config/$P0.json" <<'PY' 2>/dev/null
 import json,sys
-print(json.load(open(sys.argv[1],encoding='utf-8')).get('pilot_id',''))
+try:
+    with open(sys.argv[1],'rb') as source: raw=source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError('project config is too large')
+    value=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    print(value.get('pilot_id','') if isinstance(value,dict) else '')
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)
 PY
 )"
     [ -n "$EXPECTED_ACTOR" ] && [ "$ACTOR" = "$EXPECTED_ACTOR" ] \
@@ -876,7 +1008,13 @@ PY
     [ -n "$P0" ] && [ -n "$A1" ] || { log "$VERB needs project and object identity"; exit 2; }
     EXPECTED_ACTOR="$(python3 - "$ROOT/state/project-config/$P0.json" <<'PY' 2>/dev/null
 import json,sys
-print(json.load(open(sys.argv[1],encoding='utf-8')).get('pilot_id',''))
+try:
+    with open(sys.argv[1],'rb') as source: raw=source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError('project config is too large')
+    value=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    print(value.get('pilot_id','') if isinstance(value,dict) else '')
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)
 PY
 )"
     if [ "$VERB" = notification-portfolio ]; then

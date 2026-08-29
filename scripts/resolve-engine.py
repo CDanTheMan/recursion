@@ -13,18 +13,19 @@ import argparse
 import json
 import os
 import re
+import stat
 import sys
 import tempfile
 from pathlib import Path
 
-from provider_contract import ProviderProfileError, assert_endpoints_match, profile_directory, profile_for_provider
+from provider_contract import HOST_RE, ProviderProfileError, assert_endpoints_match, profile_directory, profile_for_provider
 
 PROG = "resolve-engine"
 
 NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
 PROFILE_NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,63}")
 ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}")
-ENDPOINT_RE = re.compile(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?")
+ENDPOINT_RE = HOST_RE
 
 BUILTIN_ENGINES = {"claude", "hermes", "gate", "none", "deepseek", "openrouter"}
 ROLE_CHOICES = ("implementer", "verifier")
@@ -50,10 +51,33 @@ BILLING_BASES = {"flat-subscription", "metered", "local"}
 NETWORK_KEYS = {"policy", "endpoints"}
 NETWORK_OPTIONAL_KEYS = {"profile"}
 PROBE_KEYS = {"type", "url_env", "timeout_s"}
+MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 
 
 class ManifestError(Exception):
     """A manifest file exists but violates the contract (exit code 2)."""
+
+
+def reject_reparse_components(path: Path, where: str) -> None:
+    if not isinstance(path, Path) or not path.is_absolute() \
+            or any(part in {".", ".."} for part in path.parts):
+        raise ManifestError(f"{where} must be a canonical absolute path")
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise ManifestError(f"{where} is unreadable") from exc
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+                or (getattr(info, "st_file_attributes", 0) & 0x400):
+            raise ManifestError(f"{where} contains a symlink/reparse component")
+
+
+def reject_json_constant(name: str) -> object:
+    raise ValueError(f"non-finite JSON number {name} is forbidden")
 
 
 def diag(message: str) -> None:
@@ -225,13 +249,41 @@ def manifest_path(engine: str) -> Path:
 
 
 def load_manifest(path: Path, engine: str) -> dict:
+    reject_reparse_components(path, "engine manifest")
     try:
-        raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
+        info = path.lstat()
+        if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+                or bool(getattr(info, "st_file_attributes", 0) & 0x400) \
+                or not stat.S_ISREG(info.st_mode) or info.st_size > MAX_MANIFEST_BYTES:
+            raise ManifestError(f"manifest {path} is unavailable or too large")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(path, flags)
+        try:
+            opened_info = os.fstat(descriptor)
+            if stat.S_ISLNK(opened_info.st_mode) or bool(getattr(opened_info, "st_reparse_tag", 0)) \
+                    or bool(getattr(opened_info, "st_file_attributes", 0) & 0x400) \
+                    or not stat.S_ISREG(opened_info.st_mode) \
+                    or (opened_info.st_dev, opened_info.st_ino) != (info.st_dev, info.st_ino) \
+                    or opened_info.st_size != info.st_size:
+                raise ManifestError(f"manifest {path} changed while reading")
+            with os.fdopen(descriptor, "rb") as source:
+                descriptor = -1
+                raw_bytes = source.read(MAX_MANIFEST_BYTES + 1)
+        finally:
+            if descriptor != -1:
+                os.close(descriptor)
+        if len(raw_bytes) > MAX_MANIFEST_BYTES:
+            raise ManifestError(f"manifest {path} is too large")
+        raw = raw_bytes.decode("utf-8", "strict")
+    except ManifestError:
+        raise
+    except (OSError, UnicodeError, ValueError, TypeError, OverflowError) as exc:
         raise ManifestError(f"could not read manifest {path}: {exc}") from exc
     try:
-        data = json.loads(raw)
-    except (ValueError, RecursionError) as exc:
+        data = json.loads(raw, parse_constant=reject_json_constant)
+    except (ValueError, TypeError, UnicodeError, OverflowError, RecursionError) as exc:
         raise ManifestError(f"manifest {path} is not valid JSON: {exc}") from exc
     return validate_manifest(data, engine)
 
@@ -267,11 +319,15 @@ def build_plan(data: dict) -> dict:
 
 def write_plan_atomically(plan: dict, out_path: Path) -> None:
     directory = out_path.parent if str(out_path.parent) else Path(".")
+    reject_reparse_components(directory, "engine plan output directory")
+    reject_reparse_components(out_path, "engine plan output")
     fd, tmp_name = tempfile.mkstemp(prefix=".engine-plan-", suffix=".tmp", dir=str(directory))
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            json.dump(plan, handle, indent=2, sort_keys=False)
+            json.dump(plan, handle, indent=2, sort_keys=False, allow_nan=False)
             handle.write("\n")
+        reject_reparse_components(directory, "engine plan output directory")
+        reject_reparse_components(out_path, "engine plan output")
         os.replace(tmp_name, str(out_path))
     except BaseException:
         try:
@@ -314,7 +370,14 @@ def main() -> int:
         return 2
 
     path = manifest_path(engine)
-    if not path.is_file():
+    try:
+        path_info = path.lstat()
+    except OSError:
+        path_info = None
+    if path_info is None or stat.S_ISLNK(path_info.st_mode) \
+            or bool(getattr(path_info, "st_reparse_tag", 0)) \
+            or bool(getattr(path_info, "st_file_attributes", 0) & 0x400) \
+            or not stat.S_ISREG(path_info.st_mode):
         diag(f"manifest not found: {path}")
         return 3
 
@@ -342,8 +405,13 @@ def main() -> int:
     plan = build_plan(data)
     out_path = Path(args.emit_plan)
     try:
+        reject_reparse_components(out_path.parent, "engine plan output directory")
+    except ManifestError as exc:
+        diag(str(exc))
+        return 2
+    try:
         write_plan_atomically(plan, out_path)
-    except OSError as exc:
+    except (OSError, TypeError, ValueError, UnicodeError, OverflowError, RecursionError) as exc:
         diag(f"failed to write plan to {out_path}: {exc}")
         return 2
 

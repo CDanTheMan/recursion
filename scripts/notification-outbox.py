@@ -53,6 +53,7 @@ PROJECT_EVENTS = {
     "goal-achieved", "goal-stopped", "project-digest",
 }
 TERMINAL_EVENT_TYPES = {"goal-achieved", "goal-stopped"}
+MAX_OUTBOX_JSON_BYTES = 1024 * 1024
 # Reviewed legacy allowlist: source kinds whose legitimate rows predate durable transition
 # receipts and that the pre-hardening suites pin as raw rows. The daily digest/journal brief
 # reuse one stable source id across occurrences and keep projecting raw ONLY under their exact
@@ -72,6 +73,42 @@ CONTRACT_REJECTION_CATEGORIES = {
 
 class OutboxError(RuntimeError):
     pass
+
+
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
+
+def _parse_json(raw: str | bytes) -> object:
+    try:
+        return json.loads(raw, parse_constant=_reject_json_constant)
+    except (UnicodeError, json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
+        raise OutboxError(f"notification JSON is invalid: {exc}") from exc
+
+
+def _plain_int(value: object, label: str, minimum: int = 0) -> int:
+    if type(value) is not int or value < minimum:
+        raise OutboxError(f"{label} must be an integer >= {minimum}")
+    return value
+
+
+def _record_int(record: dict, key: str, default: int = 0, minimum: int = 0) -> int:
+    value = record.get(key)
+    return _plain_int(default if value is None else value, key, minimum)
+
+
+def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    raw = os.environ.get(name, str(default))
+    try:
+        if len(raw) > 32:
+            raise ValueError("value is too long")
+        value = int(raw, 10)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise OutboxError(f"{name} is not a bounded integer") from exc
+    if not minimum <= value <= maximum:
+        raise OutboxError(f"{name} is outside its bounds")
+    return value
 
 
 def base_root() -> Path:
@@ -137,9 +174,17 @@ def append_jsonl(path: Path, value: dict) -> None:
 
 
 def read_json(path: Path) -> dict:
-    value = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        raw = path.read_bytes()
+    except (OSError, ValueError, TypeError) as exc:
+        raise OutboxError(f"notification JSON is unreadable: {path}") from exc
+    if len(raw) > MAX_OUTBOX_JSON_BYTES:
+        raise OutboxError(f"notification JSON exceeds the 1 MiB bound: {path}")
+    value = _parse_json(raw)
     if not isinstance(value, dict):
         raise OutboxError(f"JSON object required: {path}")
+    if "schema_version" in value and type(value["schema_version"]) is not int:
+        raise OutboxError(f"schema_version must be an integer: {path}")
     return value
 
 
@@ -157,23 +202,24 @@ def read_fields(path: Path) -> dict[str, str]:
 
 
 def stable_id(prefix: str, *parts: object) -> str:
-    raw = json.dumps(parts, sort_keys=True, separators=(",", ":"), default=str).encode()
+    try:
+        raw = json.dumps(parts, sort_keys=True, separators=(",", ":"),
+                         default=str, allow_nan=False).encode()
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        raise OutboxError(f"notification identity is not canonical: {exc}") from exc
     return f"{prefix}-{hashlib.sha256(raw).hexdigest()[:24]}"
 
 
 def canonical_digest(value: object) -> str:
-    raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    try:
+        raw = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        raise OutboxError(f"notification digest input is not canonical: {exc}") from exc
     return hashlib.sha256(raw).hexdigest()
 
 
 def canonical_event_seq(value: dict) -> int:
-    try:
-        sequence = int(value.get("event_seq") or 0)
-    except (TypeError, ValueError) as exc:
-        raise OutboxError("canonical notification event sequence is invalid") from exc
-    if sequence < 0:
-        raise OutboxError("canonical notification event sequence is invalid")
-    return sequence
+    return _record_int(value, "event_seq", 0, 0)
 
 
 def commit_json_projection(base: Path, path: Path, value: dict, event: dict,
@@ -343,7 +389,8 @@ def authenticated_contract_rejection(base: Path, raw: dict,
     evidence = str(action.get("result_evidence") or "")
     pilot_id = task.get("pilot_id")
     if action_path.name != f"{action.get('id')}.json" \
-            or action.get("schema_version") != 1 or action.get("status") != "failed" \
+            or type(action.get("schema_version")) is not int or action["schema_version"] != 1 \
+            or action.get("status") != "failed" \
             or action.get("attempts") != 1 or action.get("instruction_id") is not None \
             or action.get("project") != project or action.get("actor") != pilot_id \
             or action.get("routed_decider") != pilot_id \
@@ -443,7 +490,7 @@ def authenticated_routing_refusal(base: Path, raw: dict, prepared: dict) -> None
         raise OutboxError(f"routing-refusal action receipt is invalid: {exc}") from exc
     action_event = action_prepared.get("event") if isinstance(action_prepared.get("event"), dict) else {}
     action_ids = {item.strip() for item in (fields.get("action_ids") or "").split(",") if item.strip()}
-    attempts = int(action.get("attempts") or 0)
+    attempts = _record_int(action, "attempts", 0, 0)
     if action_path.name != f"{action.get('id')}.json" or action.get("status") != "succeeded" \
             or action.get("actor") != detail.get("routed_actor") \
             or action.get("routed_decider") != detail.get("routed_actor") \
@@ -591,7 +638,7 @@ def authenticated_window_projection(base: Path, raw: dict, prepared: dict) -> No
         raise OutboxError("pilot-window projection disagrees with its canonical window record")
     kind = str(event.get("event") or "")
     status = str(frozen.get("status") or "")
-    duration = int(frozen.get("expires_at_epoch") or 0) - int(frozen.get("opened_at_epoch") or 0)
+    duration = _record_int(frozen, "expires_at_epoch") - _record_int(frozen, "opened_at_epoch")
     if kind == "pilot-window-armed":
         if status != "armed" or str(frozen.get("instruction_id") or "") != instruction_id:
             raise OutboxError("pilot-window arm projection disagrees with the frozen armed record")
@@ -631,7 +678,7 @@ def authenticated_window_projection(base: Path, raw: dict, prepared: dict) -> No
             or plan_record.get("plan_digest") != plan_digest:
         raise OutboxError("pilot-window projection disagrees with the exact approved plan digest")
     if kind in {"pilot-window-armed", "pilot-window-opened"} \
-            and (duration <= 0 or int(frozen.get("duration_seconds") or duration) != duration):
+            and (duration <= 0 or _record_int(frozen, "duration_seconds", duration) != duration):
         raise OutboxError("pilot-window projection carries inconsistent duration authority")
 
 
@@ -1049,9 +1096,7 @@ def create_delivery(base: Path, event: dict, destination: str) -> dict:
             raise OutboxError("existing delivery pair disagrees with canonical event/routing content")
         return prior
     delivery_id = stable_id("delivery", event["id"], destination)
-    maximum = int(os.environ.get("RECURSION_DELIVERY_MAX_ATTEMPTS", "3"))
-    if not 1 <= maximum <= 20:
-        raise OutboxError("delivery attempt budget must be 1..20")
+    maximum = _env_int("RECURSION_DELIVERY_MAX_ATTEMPTS", 3, 1, 20)
     record = {
         "schema_version": 1, "id": delivery_id, "event_id": event["id"],
         "project_id": event["project_id"], "goal_id": event.get("goal_id") or None,
@@ -1069,7 +1114,7 @@ def escalate(base: Path, key: str, title: str, pointer: str, project: str) -> No
     process = subprocess.run(
         ["bash", str(base / "scripts/taskctl.sh"), "esc-record", key, title, project, pointer],
         cwd=base, env={**os.environ, "RECURSION_ROOT": str(base)},
-        text=True, capture_output=True, check=False,
+        text=True, capture_output=True, check=False, timeout=30,
     )
     if process.returncode:
         detail = (process.stderr or process.stdout or "taskctl escalation failed").strip()
@@ -1344,7 +1389,7 @@ def build_chain(base: Path, project: str, goal_id: str) -> dict:
             and rejection_task.get("transition_reason") == "task-contract-invalid"
             and rejection_task.get("contract_rejection_event_id") == rejection.get("id")
             and rejection_task.get("last_transition_id") == transition_id
-            and int(rejection_task.get("attempts") or 0) == 0
+            and _record_int(rejection_task, "attempts", 0) == 0
             and detail.get("attempts") == 0 and detail.get("reason") == "task-contract-invalid"
             and detail.get("stage") == "controller-pre-worker"
             and not runs and not commits and not gates and not verifiers and not review
@@ -1412,9 +1457,12 @@ def terminal_report_event(base: Path, terminal: dict, create: bool) -> dict | No
                     and task_ids <= set(chain["_authenticated_finished_tasks"])
         publication_required = True
         try:
-            budget = json.loads(chain["goal"].get("budget") or "{}")
+            budget = _parse_json(chain["goal"].get("budget") or "{}")
+            if not isinstance(budget, dict):
+                raise OutboxError("goal budget is not an object")
             publication_required = bool(budget.get("publication_required", True))
-        except (TypeError, json.JSONDecodeError):
+        except (TypeError, ValueError, json.JSONDecodeError, OverflowError, RecursionError,
+                UnicodeError, OutboxError):
             publication_required = True
         if terminal["event_type"] == "goal-achieved" and publication_required:
             prerequisites = prerequisites and bool(chain["review_branch"])
@@ -1503,8 +1551,8 @@ def valid_receipt(base: Path, delivery: dict) -> dict | None:
 
 
 def backoff(attempt: int) -> int:
-    base = int(os.environ.get("RECURSION_DELIVERY_BACKOFF_BASE_S", "10"))
-    maximum = int(os.environ.get("RECURSION_DELIVERY_BACKOFF_MAX_S", "300"))
+    base = _env_int("RECURSION_DELIVERY_BACKOFF_BASE_S", 10, 1, 86400)
+    maximum = _env_int("RECURSION_DELIVERY_BACKOFF_MAX_S", 300, 1, 86400)
     if base < 1 or maximum < 1 or base > maximum or maximum > 86400:
         raise OutboxError("delivery backoff bounds are invalid")
     return min(maximum, base * (2 ** max(0, attempt - 1)))
@@ -1595,11 +1643,14 @@ def deliver(base: Path, project: str, delivery_id: str) -> None:
     if record.get("status") == "running":
         dead_letter(base, record, "prior attempt outcome is ambiguous and has no transport evidence")
         return
-    due = int(record.get("next_attempt_at") or 0)
+    due = _plain_int(record.get("next_attempt_at") if record.get("next_attempt_at") is not None else 0,
+                     "delivery next_attempt_at")
     if due > now_epoch():
         return
-    attempt = int(record.get("attempt") or 0) + 1
-    maximum = int(record.get("max_attempts") or 0)
+    attempt = _plain_int(record.get("attempt") if record.get("attempt") is not None else 0,
+                         "delivery attempt") + 1
+    maximum = _plain_int(record.get("max_attempts") if record.get("max_attempts") is not None else 0,
+                         "delivery max_attempts")
     if maximum < 1 or attempt > maximum:
         dead_letter(base, record, "delivery retry budget exhausted")
         return
@@ -1615,7 +1666,8 @@ def deliver(base: Path, project: str, delivery_id: str) -> None:
         "--evidence", str(base / receipt_relative), str(event["message"]),
     ]
     process = subprocess.run(command, cwd=base, env={**os.environ, "RECURSION_ROOT": str(base)},
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+                             timeout=120)
     record = read_json(path)
     record["receipt_path"] = receipt_relative
     receipt = valid_receipt(base, record)
@@ -1761,14 +1813,16 @@ def require_actuator() -> None:
 
 
 def decision_key(*parts: object) -> str:
-    return "phase7:" + hashlib.sha256(json.dumps(parts, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    try:
+        encoded = json.dumps(parts, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        raise OutboxError(f"notification decision identity is not canonical: {exc}") from exc
+    return "phase7:" + hashlib.sha256(encoded).hexdigest()
 
 
 def retry_key_parts(base: Path, verb: str, key_parts: list[object]) -> list[object]:
     """Derive a bounded retry identity from the canonical terminal action chain."""
-    maximum = int(os.environ.get("RECURSION_NOTIFICATION_ACTION_MAX_ATTEMPTS", "3"))
-    if not 1 <= maximum <= 10:
-        raise OutboxError("notification action attempt budget must be 1..10")
+    maximum = _env_int("RECURSION_NOTIFICATION_ACTION_MAX_ATTEMPTS", 3, 1, 10)
     original = list(key_parts)
     candidate = list(original)
     for attempt_number in range(1, maximum + 1):
@@ -1786,8 +1840,9 @@ def retry_key_parts(base: Path, verb: str, key_parts: list[object]) -> list[obje
             # Reuse the final failed identity so decision-queue deduplication enforces the bound.
             return candidate
         try:
-            attempts = int(record.get("attempts") or 0)
-        except (TypeError, ValueError) as exc:
+            attempts = _plain_int(record.get("attempts") if record.get("attempts") is not None else 0,
+                                  "notification action attempts")
+        except (TypeError, ValueError, OutboxError) as exc:
             raise OutboxError(f"notification action attempts are invalid: {action_id}") from exc
         failure_nonce = stable_id(
             "notification-action-failure", action_id, record["status"], attempts,
@@ -1808,7 +1863,7 @@ def enqueue(base: Path, actor: str, verb: str, args: list[str], goal_id: str,
     process = subprocess.run(
         [sys.executable, str(base / "scripts/decision-queue.py"), "enqueue"],
         input=json.dumps(raw), text=True, capture_output=True, cwd=base,
-        env={**os.environ, "RECURSION_ROOT": str(base)}, check=False,
+        env={**os.environ, "RECURSION_ROOT": str(base)}, check=False, timeout=30,
     )
     if process.returncode:
         raise OutboxError((process.stderr or process.stdout or "decision enqueue failed").strip())
@@ -1882,7 +1937,8 @@ def schedule(base: Path, project: str | None) -> int:
                 count += 1
         for _, record in delivery_records(base, project_id):
             status = record.get("status")
-            due = int(record.get("next_attempt_at") or 0)
+            due = _plain_int(record.get("next_attempt_at") if record.get("next_attempt_at") is not None else 0,
+                             "delivery next_attempt_at")
             receipt = valid_receipt(base, record) if status == "running" else None
             if (status in {"pending", "failed"} and due <= now_epoch()) or status == "running":
                 enqueue(base, actor, "notification-deliver", [project_id, str(record["id"])],
@@ -1984,7 +2040,8 @@ def main() -> int:
             audit_goal(base, args.project, args.goal)
         else:
             recover(base, args.project, args.goal)
-    except (OSError, ValueError, json.JSONDecodeError, OutboxError) as exc:
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError, UnicodeError,
+            json.JSONDecodeError, subprocess.TimeoutExpired, OutboxError) as exc:
         print(f"notification-outbox: {exc}", file=sys.stderr)
         return 75 if "PAUSE" in str(exc) else 4
     return 0
