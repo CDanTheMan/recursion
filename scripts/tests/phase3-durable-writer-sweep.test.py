@@ -215,16 +215,23 @@ def test_jsonl_battery(root: Path) -> None:
     race_target = race_atomic / "record.json"
     race_alias = race_atomic / "outside.json"
     armed = True
+    alias_created = False
 
     def atomic_hook(stage: str) -> None:
-        nonlocal armed
+        nonlocal armed, alias_created
         if armed and stage == "pre-write":
             armed = False
             temp = next(race_atomic.glob(".record.json.tmp.*"))
             make_link(race_alias, temp, directory=False)
+            alias_created = True
+        elif alias_created and stage == "pre-replace":
+            # If _write_all's same-handle guard is removed, this cleanup lets the
+            # later publication checks pass, proving they are not masking the guard.
+            race_alias.unlink(missing_ok=True)
 
     expect_refusal(lambda: jd.atomic_bytes(race_target, b"race\n", hook=atomic_hook),
                    "JSONL atomic replacement post-validation hardlink", error_types)
+    race_alias.unlink(missing_ok=True)
     check(not armed and not race_target.exists(), "JSONL atomic post-validation race leaves no target")
 
     atomic_junction_leaf = root / "jsonl-atomic-junction-leaf"
@@ -587,13 +594,17 @@ def test_assignment_battery(root: Path) -> None:
     race_output = output_race / "copy.json"
     race_alias = output_race / "outside-copy.json"
     armed = True
+    alias_created = False
 
     def output_hook(stage: str) -> None:
-        nonlocal armed
+        nonlocal armed, alias_created
         if armed and stage == "pre-write":
             armed = False
             temp = next(output_race.glob(".copy.json.tmp.*"))
             make_link(race_alias, temp, directory=False)
+            alias_created = True
+        elif alias_created and stage == "pre-replace":
+            race_alias.unlink(missing_ok=True)
 
     previous = amod._assignment_persistence_hook
     amod._assignment_persistence_hook = output_hook
@@ -602,6 +613,7 @@ def test_assignment_battery(root: Path) -> None:
                        "assignment atomic output post-validation hardlink", error_types)
     finally:
         amod._assignment_persistence_hook = previous
+        race_alias.unlink(missing_ok=True)
     check(not armed and not race_output.exists(), "assignment atomic output race leaves no target")
 
     output_junction_leaf = root / "assignment-output-junction-leaf"
@@ -757,13 +769,17 @@ def test_worker_battery(root: Path) -> None:
     race_path = race_root / "run.json"
     race_alias = race_root / "outside.json"
     armed = True
+    alias_created = False
 
     def worker_hook(stage: str) -> None:
-        nonlocal armed
+        nonlocal armed, alias_created
         if armed and stage == "pre-write":
             armed = False
             temp = next(race_root.glob(".run.json.tmp.*"))
             make_link(race_alias, temp, directory=False)
+            alias_created = True
+        elif alias_created and stage == "pre-replace":
+            race_alias.unlink(missing_ok=True)
 
     previous = worker._atomic_publish_hook
     worker._atomic_publish_hook = worker_hook
@@ -772,6 +788,7 @@ def test_worker_battery(root: Path) -> None:
                        "worker evidence post-validation hardlink", error_types)
     finally:
         worker._atomic_publish_hook = previous
+        race_alias.unlink(missing_ok=True)
     check(not armed and not race_path.exists(), "worker evidence race leaves no target")
 
     worker_junction_leaf = root / "worker-atomic-junction-leaf"

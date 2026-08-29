@@ -764,6 +764,18 @@ if os.name == "nt":
             os.close(descriptor)
 
     def _persist_record_windows(task_path: Path, digest: str, encoded: bytes) -> None:
+        # A Windows hard-link publication has a deliberate transient: after the final
+        # link is created, the private temporary still contributes a second link until
+        # cleanup.  Serialize this digest's record publication so another worker cannot
+        # mistake that legitimate in-flight state for a hostile pre-existing hardlink.
+        # The durable lock is established below the already-pinned task directory; the
+        # record validator can therefore keep its strict one-link rule for every
+        # untrusted pre-existing leaf.
+        final = task_path / f"{digest}.json"
+        with jsonl_durable.durable_lock(final):
+            _persist_record_windows_unlocked(task_path, digest, encoded)
+
+    def _persist_record_windows_unlocked(task_path: Path, digest: str, encoded: bytes) -> None:
         final = task_path / f"{digest}.json"
         jsonl_durable.validate_durable_leaf(final, allow_missing=True)
         existing = _win_read_file(final)
