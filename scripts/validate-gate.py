@@ -19,6 +19,7 @@ from pathlib import Path, PurePosixPath
 VACUOUS = re.compile(r"^(?:true|:|/bin/true|exit\s+0)$")
 BOUNDARY_ERRORS = (json.JSONDecodeError, ValueError, TypeError, OverflowError,
                    RecursionError, UnicodeDecodeError, OSError, subprocess.TimeoutExpired)
+GATE_FILE_PATH_INVALID = "gate-file-path-invalid"
 
 
 def _native_handle_value(handle: object) -> int:
@@ -100,9 +101,9 @@ def paths(value: str) -> list[str]:
                 or any(char in item for char in "~%$`*?[")
                 or item.startswith(("\\\\", "//"))
                 or re.match(r"^[A-Za-z]:", item)):
-            fail(f"unsafe gate file: {item!r}")
+            fail(GATE_FILE_PATH_INVALID)
         if "\\" in item or p.as_posix() != item:
-            fail(f"unsafe gate file: {item!r}")
+            fail(GATE_FILE_PATH_INVALID)
         result.append(p.as_posix())
     return result
 

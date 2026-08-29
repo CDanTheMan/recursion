@@ -107,6 +107,20 @@ class DirectGateAdmissionTest(unittest.TestCase):
             with self.subTest(gate=gate):
                 self.assertEqual(run_gate(gate), 0)
 
+    def test_unsafe_gate_file_path_is_typed_and_symbolic(self):
+        for path in ("/tmp/private-gate.py", r"C:\tmp\private-gate.py"):
+            with self.subTest(path=path):
+                result = run_gate_result("git diff --check", gate_files=path)
+                stderr = result.stderr.decode("utf-8", "replace")
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(stderr.strip(), "ERR gate-file-path-invalid")
+                self.assertNotIn(path, stderr)
+
+        self.assertEqual(
+            run_gate_result("git diff --check", gate_files="app/check.py").returncode,
+            0,
+        )
+
     def test_declared_worktree_gate_programs_are_admitted(self):
         admitted = (
             ("bash app/check.sh", "app/check.sh"),

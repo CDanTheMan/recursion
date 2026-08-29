@@ -16,7 +16,7 @@
     "default_branch": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^(?!.*[\\r\\n])(?!.*//)(?!.*\\.\\.)(?!.*@\\{)(?!.*(?:^|/)[^/]*\\.lock(?:/|$))(?!.*(?:^|/)\\.)(?!.*\\.$)(?!.*/$)[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$"},
     "integration_branch": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^(?!.*[\\r\\n])(?!.*//)(?!.*\\.\\.)(?!.*@\\{)(?!.*(?:^|/)[^/]*\\.lock(?:/|$))(?!.*(?:^|/)\\.)(?!.*\\.$)(?!.*/$)[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$"},
     "task_branch_pattern": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^(?!.*[\\r\\n])(?!.*//)(?!.*\\.\\.)(?!.*@\\{)(?!.*(?:^|/)[^/]*\\.lock(?:/|$))(?!.*(?:^|/)\\.)(?!.*\\.$)(?!.*\\{task_id\\}.*\\{task_id\\})[A-Za-z0-9][A-Za-z0-9._/-]*\\{task_id\\}[A-Za-z0-9._/-]*$"},
-    "external_branch_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "allOf": [{"not": {"contains": {"const": "recursion/*"}}}], "items": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^(?!.*[\\r\\n])(?!\\*{1,2}$)(?!.*//)(?!.*\\.\\.)(?!.*@\\{)(?!.*(?:^|/)[^/]*\\.lock(?:/|$))(?!.*(?:^|/)\\.)(?!.*\\.$)[A-Za-z0-9][A-Za-z0-9._/*-]{0,199}$"}},
+    "external_branch_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "allOf": [{"not": {"contains": {"const": "recursion/*"}}}], "items": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^(?!\\*{1,2}$)(?!/)(?!-)(?!.*//)(?!.*\\.\\.)(?!.*@\\{)(?!.*(?:^|/)[^/]*\\.lock(?:/|$))(?!.*(?:^|/)\\.)(?!.*\\.$)(?!.*\\/$)(?!.*[~^:?])(?!.*\\\\)(?!.*\\[)[\\u0021-\\u007E]{1,200}$"}},
     "publication_policy": {"const": "verified-integration-only"},
     "source_policy": {"const": "exact-sha"},
     "gate_digest": {"type": "string", "pattern": "^(?!0{64}$)[0-9a-f]{64}$"},
