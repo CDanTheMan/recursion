@@ -351,6 +351,15 @@ check(cc.map_vendor_state("QUEUED") == "created"
 check(raises("malformed-response", cc.map_vendor_state, "SOMETHING_NEW"),
       "an unrecognised vendor state is refused -- guessing 'finished' imports a half-built "
       "candidate")
+hostile_status = "Bearer ghp_" + "z" * 36
+try:
+    cc.map_vendor_state(hostile_status)
+except RemoteError as exc:
+    hostile_status_error = str(exc)
+else:
+    hostile_status_error = ""
+check(hostile_status not in hostile_status_error,
+      "an unrecognised vendor state never echoes credential-shaped material")
 check(raises("malformed-response", cc.map_vendor_state, None),
       "a missing vendor state is refused")
 
@@ -367,6 +376,14 @@ check([item.get("event") for item in events] == ["start", "edit"],
 transport.stream_payload = ["data: {oops"]
 check(raises("malformed-response", lambda: list(adapter.stream_events(DISPATCH))),
       "a malformed stream line is a typed error, never a silently skipped line")
+try:
+    list(adapter.stream_events(DISPATCH))
+except RemoteError as exc:
+    stream_error = str(exc)
+else:
+    stream_error = ""
+check("oops" not in stream_error and "JSONDecodeError" not in stream_error,
+      "a malformed provider stream hides parser text")
 
 # --- cancel ------------------------------------------------------------------------------------------------
 
@@ -409,6 +426,25 @@ base, transport, adapter = with_session()
 transport.route("GET", "/v0/agents/agent-1/artifacts", payload={"artifacts": [{"name": "x"}]})
 check(raises("malformed-response", adapter.list_artifacts, DISPATCH),
       "an artifact entry with no id is a malformed-response")
+
+for hostile_id in ("../secret", "a/b", "a?token=1", "a#fragment", ".", "..", "a%2Fb"):
+    base, transport, adapter = with_session()
+    transport.route("GET", "/v0/agents/agent-1/artifacts",
+                    payload={"artifacts": [{"id": hostile_id, "bytes": 1}]})
+    check(raises("malformed-response", adapter.list_artifacts, DISPATCH),
+          f"a provider artifact id {hostile_id!r} is one safe URL path segment")
+
+for byte_count in (True, 1.0, "1", -1):
+    base, transport, adapter = with_session()
+    transport.route("GET", "/v0/agents/agent-1/artifacts",
+                    payload={"artifacts": [{"id": "a-1", "bytes": byte_count}]})
+    check(raises("malformed-response", adapter.list_artifacts, DISPATCH),
+          f"artifact byte count {byte_count!r} is rejected unless it is an exact non-negative int")
+
+for hostile_id in ("../secret", "a/b", "a?token=1", "a#fragment", ".", ".."):
+    base, transport, adapter = with_session()
+    check(raises("request-invalid", adapter.download_artifact, DISPATCH, hostile_id),
+          f"download refuses artifact id {hostile_id!r} before constructing a provider URL")
 
 # --- usage and pool attribution ----------------------------------------------------------------------------------
 

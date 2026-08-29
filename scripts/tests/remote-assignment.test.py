@@ -134,6 +134,9 @@ check(raises("assignment-invalid", ra.validate_https_url,
 check(ra.validate_https_url("https://hooks.example.com/r/1?k=2", "endpoint",
                             allow_query=True).endswith("?k=2"),
       "a webhook URL may carry a query string when the caller allows one")
+check(raises("assignment-invalid", ra.validate_https_url,
+             "https://[::1", "endpoint"),
+      "malformed URL authority syntax is a typed assignment refusal, not a ValueError")
 
 # --- structural refusals ------------------------------------------------------------------
 
@@ -207,6 +210,15 @@ check(raises("assignment-invalid", ra.validate_assignment,
       "an allowed_path escaping the worktree is refused")
 check(raises("assignment-invalid", ra.validate_assignment, variant(allowed_paths=["/etc"])),
       "an absolute allowed_path is refused")
+hostile_path = "C:/attacker/credential.txt"
+try:
+    ra.validate_assignment(variant(allowed_paths=[hostile_path]))
+except ra.RemoteError as exc:
+    path_error = str(exc)
+else:
+    path_error = ""
+check(hostile_path not in path_error and "absolute path" in path_error,
+      "an absolute allowed_path refusal uses a stable symbolic message without echoing the path")
 check(raises("assignment-invalid", ra.validate_assignment,
              variant(allowed_paths=["a/b", "a/b"])),
       "a duplicate allowed_path is refused")

@@ -21,6 +21,7 @@ Hermetic: tempdirs only, no network, no box environment.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shutil
@@ -31,7 +32,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from jsonschema import Draft7Validator
+from jsonschema import Draft7Validator, validators
 
 SOURCE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SOURCE / "scripts"))
@@ -168,6 +169,29 @@ for example in example_paths:
 check(not sorted((SOURCE / "scripts" / "remote").glob("*.json")),
       "scripts/remote/ ships no loadable manifest -- an example cannot resolve by accident")
 
+# Manifest boundary errors use the symbolic backend name only.  A caller-controlled manifest
+# directory and parser input must not put an absolute path or JSON parser/OS text into stderr.
+unreadable_manifest = tempdir()
+try:
+    rb.load_manifest(unreadable_manifest, "cursor-cloud")
+except RemoteError as exc:
+    unreadable_message = str(exc)
+else:
+    unreadable_message = ""
+check(unreadable_message == "manifest-invalid: could not read manifest cursor-cloud",
+      "an unreadable manifest has a stable symbolic refusal")
+
+malformed_manifest = tempdir() / "cursor-cloud.json"
+malformed_manifest.write_text("{not-json", encoding="utf-8")
+try:
+    rb.load_manifest(malformed_manifest, "cursor-cloud")
+except RemoteError as exc:
+    malformed_message = str(exc)
+else:
+    malformed_message = ""
+check(malformed_message == "manifest-invalid: manifest cursor-cloud is not valid JSON",
+      "malformed manifest JSON hides its path and parser details")
+
 # --- manifest validation ----------------------------------------------------------------------
 
 check(rb.validate_manifest(CURSOR_MANIFEST, "cursor-cloud")["name"] == "cursor-cloud",
@@ -273,7 +297,24 @@ REMOTE_SCHEMA = json.loads(
     (SOURCE / "schemas" / "control-plane" / "v1" / "remote-backend.schema.json")
     .read_text(encoding="utf-8")
 )
-SCHEMA_VALIDATOR = Draft7Validator(REMOTE_SCHEMA)
+def strict_schema_validator(schema: dict) -> Draft7Validator:
+    """Use the runtime's exact Python integer policy while retaining Draft-7 semantics.
+
+    JSON Schema's default Python type checker deliberately treats 1.0 as an integer,
+    while the runtime contract requires an actual int and rejects bool.  The sibling
+    phase controls use this same Draft-7 TypeChecker refinement for Python-object parity.
+    """
+    checker = Draft7Validator.TYPE_CHECKER.redefine_many({
+        "integer": lambda _checker, value: type(value) is int,
+        "number": lambda _checker, value: (
+            type(value) is int or (type(value) is float and math.isfinite(value))
+        ),
+    })
+    strict_class = validators.extend(Draft7Validator, type_checker=checker)
+    return strict_class(schema)
+
+
+SCHEMA_VALIDATOR = strict_schema_validator(REMOTE_SCHEMA)
 SCHEMA_VALIDATOR.check_schema(REMOTE_SCHEMA)
 PUBLICATION_SCHEMA = REMOTE_SCHEMA["properties"]["publication"]["properties"]
 
@@ -420,6 +461,7 @@ public_endpoint_cases = [
     ("https://user:pass@api.cursor.com", False),
     ("https://api.cursor.com?token=1", False),
     ("https://api.cursor.com#fragment", False),
+    ("https://[::1", False),
     ("http://api.cursor.com", False),
 ]
 for candidate, expected in public_endpoint_cases:
@@ -441,6 +483,7 @@ resolved_endpoint_cases = [
     ("https://hooks.example.com?route=1", True),
     ("https:///x", False),
     ("https://:443", False),
+    ("https://[::1", False),
     ("https://user:pass@hooks.example.com/routines/abc", False),
     ("https://hooks.example.com/routines/abc#fragment", False),
     ("http://hooks.example.com/routines/abc", False),
@@ -455,6 +498,33 @@ for candidate, expected in resolved_endpoint_cases:
     check(schema_accepts_manifest(GROK_MANIFEST) and runtime == expected,
           f"endpoint_ref schema/runtime differential for resolved value {candidate!r}")
 os.environ.pop("GROK_ROUTINE_WEBHOOK_URL", None)
+
+# Generated boundary corpus: Python runtime values that specifically exercise Draft-7's
+# permissive numeric semantics and its pre-newline `$` behavior.  The strict TypeChecker above
+# is still Draft7Validator 4.26.0, but uses the same exact-int policy as the runtime.
+parity_corpus = [
+    ("timeout_seconds", 1.0),
+    ("max_attempts", 1.0),
+    ("concurrency_lease", 1.0),
+    ("name", "cursor-cloud\n"),
+    ("capacity_pool", "cursor-cloud-pool\n"),
+    ("host_id", "cursor-cloud\n"),
+    ("endpoint", "https://api.cursor.com\n"),
+    ("credential_ref", "secret:CURSOR_CLOUD_API_KEY\n"),
+    ("publication", with_publication(CURSOR_MANIFEST, default_branch="main\n")["publication"]),
+]
+parity_results = []
+for field, value in parity_corpus:
+    candidate_manifest = (mutated(CURSOR_MANIFEST, **{field: value})
+                          if field != "publication" else mutated(CURSOR_MANIFEST, publication=value))
+    schema = schema_accepts_manifest(candidate_manifest)
+    runtime = runtime_accepts_manifest(candidate_manifest, "cursor-cloud")
+    parity_results.append((field, schema, runtime))
+schema_only = sum(schema and not runtime for _, schema, runtime in parity_results)
+runtime_only = sum(runtime and not schema for _, schema, runtime in parity_results)
+check(schema_only == 0 and runtime_only == 0,
+      f"generated schema/runtime parity corpus has schema-only={schema_only}, "
+      f"runtime-only={runtime_only} across {len(parity_results)} cases")
 
 # Draft7 validates each branch independently but cannot generically compare two sibling values.
 # Keep the equality case accepted by the schema as an explicit semantic boundary, while the
@@ -632,6 +702,15 @@ check(raises("malformed-response", rb.TransportResponse(200, {}, b"not json").js
       "a non-JSON body is a typed malformed-response")
 check(raises("malformed-response", rb.TransportResponse(200, {}, b"[1,2]").json),
       "a JSON array where an object belongs is a malformed-response")
+provider_secret = "Bearer ghp_" + "z" * 36
+try:
+    rb.TransportResponse(200, {}, (b'{"token":"' + provider_secret.encode() + b'')).json()
+except RemoteError as exc:
+    provider_json_error = str(exc)
+else:
+    provider_json_error = ""
+check("JSONDecodeError" not in provider_json_error and provider_secret not in provider_json_error,
+      "malformed provider JSON exposes neither parser text nor credential-shaped material")
 
 # --- status classification -------------------------------------------------------------------------
 

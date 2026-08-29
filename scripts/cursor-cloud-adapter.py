@@ -42,6 +42,7 @@ import argparse
 import fnmatch
 import hashlib
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -126,6 +127,7 @@ VENDOR_STATE_MAP = {
     "CANCELLED": "cancelled", "CANCELED": "cancelled",
     "ERROR": "failed", "FAILED": "failed", "EXPIRED": "failed",
 }
+ARTIFACT_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._~-]*\Z")
 
 
 def diag(message: str) -> None:
@@ -138,9 +140,16 @@ def map_vendor_state(raw: object) -> str:
     mapped = VENDOR_STATE_MAP.get(raw.strip().upper())
     if mapped is None:
         raise RemoteError("malformed-response",
-                          f"vendor reported an unrecognised state {raw!r}; refusing to guess "
-                          "whether the run is terminal")
+                          "vendor reported an unrecognised state; refusing to guess whether "
+                          "the run is terminal")
     return mapped
+
+
+def validate_artifact_id(value: object, *, code: str) -> str:
+    """Accept only one unreserved URL path segment from the provider."""
+    if not isinstance(value, str) or not ARTIFACT_ID_RE.fullmatch(value):
+        raise RemoteError(code, "artifact id must be a single safe URL path segment")
+    return value
 
 
 def branch_is_allowed(branch: str, publication: dict) -> bool:
@@ -472,9 +481,9 @@ class CursorCloudAdapter:
                     return
                 try:
                     event = json.loads(text)
-                except json.JSONDecodeError as exc:
+                except (json.JSONDecodeError, ValueError, TypeError, RecursionError):
                     raise RemoteError("malformed-response",
-                                      f"stream carried a line that is not JSON: {exc}") from exc
+                                      "stream carried a line that is not JSON") from None
                 if not isinstance(event, dict):
                     raise RemoteError("malformed-response", "stream event is not a JSON object")
                 yield event
@@ -541,15 +550,19 @@ class CursorCloudAdapter:
             for item in artifacts:
                 if not isinstance(item, dict) or not isinstance(item.get("id"), str):
                     raise RemoteError("malformed-response", "artifact entry has no string id")
-                out.append({"id": item["id"], "name": str(item.get("name") or ""),
-                            "bytes": int(item.get("bytes") or 0)})
+                artifact_id = validate_artifact_id(item["id"], code="malformed-response")
+                byte_count = item.get("bytes")
+                if type(byte_count) is not int or byte_count < 0:
+                    raise RemoteError("malformed-response",
+                                      "artifact byte count is not a non-negative integer")
+                out.append({"id": artifact_id, "name": str(item.get("name") or ""),
+                            "bytes": byte_count})
             return out
 
     def download_artifact(self, dispatch_id: str, artifact_id: str) -> tuple[bytes, dict]:
         """Return the bytes and an evidence row. Artifacts are ADVISORY: a vendor-produced
         file is an input to verification, never the verification."""
-        if not isinstance(artifact_id, str) or not artifact_id.strip():
-            raise RemoteError("request-invalid", "artifact id must be a nonempty string")
+        artifact_id = validate_artifact_id(artifact_id, code="request-invalid")
         with outbound_admission(self.base, self.name, "a Cursor Cloud artifact download"):
             session = read_session(self.base, self.name, dispatch_id, lock_held=True)
             assert_not_paused(self.base, "a Cursor Cloud artifact download")

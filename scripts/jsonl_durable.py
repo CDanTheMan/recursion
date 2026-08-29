@@ -13,6 +13,7 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import tempfile
 import time
 from dataclasses import dataclass
@@ -83,6 +84,36 @@ def _write_all(descriptor: int, value: bytes) -> None:
         if written <= 0:
             raise OSError("JSONL write made no progress")
         view = view[written:]
+
+
+def _verify_journal_descriptor(descriptor: int,
+                               expected_identity: tuple[int, int] | None = None) \
+        -> tuple[int, int]:
+    """Authenticate the opened journal leaf, never a later pathname lookup."""
+    try:
+        info = os.fstat(descriptor)
+    except OSError:
+        raise JsonlDurabilityError("JSONL journal leaf could not be inspected safely") from None
+    identity = (int(info.st_dev), int(info.st_ino))
+    if not stat.S_ISREG(info.st_mode) or int(getattr(info, "st_nlink", 0)) != 1:
+        raise JsonlDurabilityError("JSONL journal leaf is not a single-link regular file")
+    if expected_identity is not None and identity != expected_identity:
+        raise JsonlDurabilityError("JSONL journal identity changed before append")
+    return identity
+
+
+def _open_journal_leaf(path: Path, flags: int, mode: int = 0o600) \
+        -> tuple[int, tuple[int, int]]:
+    try:
+        descriptor = os.open(path, flags, mode)
+    except OSError:
+        raise JsonlDurabilityError("JSONL journal leaf could not be opened safely") from None
+    try:
+        identity = _verify_journal_descriptor(descriptor)
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor, identity
 
 
 def _read_at(descriptor: int, count: int, offset: int) -> bytes:
@@ -549,7 +580,7 @@ def _verified_descriptor(path: Path, max_record_bytes: int) \
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
-    descriptor = os.open(path, flags)
+    descriptor, _identity = _open_journal_leaf(path, flags)
     try:
         _lock_descriptor(descriptor)
         size = os.fstat(descriptor).st_size
@@ -764,20 +795,23 @@ def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RE
     if len(encoded) - 1 > max_record_bytes:
         raise JsonlDurabilityError(f"new JSONL record exceeds {max_record_bytes} bytes: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    existed = path.exists()
     flags = os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0)
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
-    descriptor = os.open(path, flags, 0o600)
+    descriptor: int | None = None
+    identity: tuple[int, int] | None = None
     evidence: dict | None = None
     connection: sqlite3.Connection | None = None
     try:
+        descriptor, identity = _open_journal_leaf(path, flags)
         _lock_descriptor(descriptor)
         size = os.fstat(descriptor).st_size
         committed = size
         if size and _read_at(descriptor, 1, size - 1) != b"\n":
             committed = _last_newline(descriptor, size)
+            _verify_journal_descriptor(descriptor, identity)
             evidence = _quarantine_tail(path, descriptor, committed, size)
+            _verify_journal_descriptor(descriptor, identity)
             os.ftruncate(descriptor, committed)
             os.fsync(descriptor)
         connection, _rebuilt = _open_verified_index(
@@ -785,13 +819,14 @@ def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RE
         )
         if _duplicate_in_index(connection, dedupe_field, dedupe_value):
             return AppendOutcome(appended=False, quarantine=evidence)
+        _verify_journal_descriptor(descriptor, identity)
         _write_all(descriptor, encoded)
         os.fsync(descriptor)
-        if not existed:
-            _fsync_dir(path.parent)
+        _fsync_dir(path.parent)
         _update_index_after_append(connection, descriptor, path, encoded, max_record_bytes)
     finally:
         if connection is not None:
             connection.close()
-        os.close(descriptor)
+        if descriptor is not None:
+            os.close(descriptor)
     return AppendOutcome(appended=True, quarantine=evidence)

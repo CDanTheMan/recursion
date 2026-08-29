@@ -368,7 +368,12 @@ def validate_https_url(value: object, field: str, *, require_path: bool = False,
         raise RemoteError(code, f"{field} must be a nonempty string")
     if CONTROL_CHAR_RE.search(value):
         raise RemoteError(code, f"{field} contains a control character")
-    parts = urlsplit(value)
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        # urlsplit raises for malformed authority syntax (for example an unmatched
+        # IPv6 bracket).  Parser details are not part of the boundary contract.
+        raise RemoteError(code, f"{field} is not a well-formed https URL") from None
     if parts.scheme != "https":
         raise RemoteError(code,
                           f"{field} must be an https:// URL (got scheme {parts.scheme!r}); "
@@ -398,11 +403,11 @@ def validate_allowed_paths(value: object) -> list[str]:
         if CONTROL_CHAR_RE.search(item):
             raise _invalid("allowed_paths entry contains a control character")
         if item.startswith("/") or (len(item) > 1 and item[1] == ":"):
-            raise _invalid(f"allowed_paths entry {item!r} is absolute")
+            raise _invalid("allowed_paths contains an absolute path")
         if "\\" in item:
-            raise _invalid(f"allowed_paths entry {item!r} is not a POSIX path")
+            raise _invalid("allowed_paths contains a non-POSIX path")
         if any(segment == ".." for segment in item.split("/")):
-            raise _invalid(f"allowed_paths entry {item!r} escapes the worktree")
+            raise _invalid("allowed_paths contains a path that escapes the worktree")
         out.append(item)
     if len(set(out)) != len(out):
         raise _invalid("allowed_paths contains a duplicate")

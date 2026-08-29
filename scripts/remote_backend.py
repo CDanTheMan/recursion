@@ -43,6 +43,7 @@ import json
 import os
 import re
 import socket
+import stat
 import sys
 import tempfile
 import time
@@ -147,19 +148,20 @@ def _safe_directory(path: Path) -> Path:
     current = Path(path.anchor)
     for component in path.parts[1:]:
         current /= component
-        stat = _lstat(current)
-        if stat is None:
+        stat_result = _lstat(current)
+        if stat_result is None:
             try:
                 current.mkdir()
                 _fsync_directory(current.parent)
             except FileExistsError:
                 # Another process may publish this directory between lstat and mkdir.  It
                 # is safe only after the winning object is checked without following it.
-                stat = _lstat(current)
-                if stat is None:
+                stat_result = _lstat(current)
+                if stat_result is None:
                     raise
-        if stat is not None and (_is_link_or_reparse(current, stat) or not current.is_dir()):
-            raise RemoteError("request-invalid", f"unsafe runtime storage path: {current}")
+        if stat_result is not None and (
+                _is_link_or_reparse(current, stat_result) or not current.is_dir()):
+            raise RemoteError("request-invalid", "unsafe runtime storage directory")
     return path
 
 
@@ -167,16 +169,19 @@ def _safe_file(path: Path, *, create_parent: bool = True) -> Path:
     path = Path(path)
     if create_parent:
         _safe_directory(path.parent)
-    stat = _lstat(path)
-    if stat is not None and (_is_link_or_reparse(path, stat) or not path.is_file()):
-        raise RemoteError("request-invalid", f"unsafe runtime storage file: {path}")
+    stat_result = _lstat(path)
+    if stat_result is not None and (
+            _is_link_or_reparse(path, stat_result)
+            or not stat.S_ISREG(stat_result.st_mode)
+            or int(getattr(stat_result, "st_nlink", 1)) != 1):
+        raise RemoteError("request-invalid", "unsafe runtime storage file")
     return path
 
 
 def _safe_existing_lock(path: Path) -> None:
     stat = _lstat(path)
     if stat is not None and (_is_link_or_reparse(path, stat) or not path.is_dir()):
-        raise RemoteError("request-invalid", f"unsafe runtime lock path: {path}")
+        raise RemoteError("request-invalid", "unsafe runtime lock path")
 
 
 def _fsync_directory(path: Path) -> None:
@@ -298,8 +303,9 @@ def validate_manifest(data: object, name: str) -> dict:
         raise _bad("cursor-cloud requires endpoint and endpoint_ref must be null")
     if data["kind"] == "grok-routine" and (endpoint is not None or endpoint_ref is None):
         raise _bad("grok-routine requires endpoint_ref and endpoint must be null")
-    if (endpoint is None) == (endpoint_ref is None):
-        raise _bad("exactly one of endpoint / endpoint_ref must be set; the other must be null")
+    # The two exhaustive kind-specific branches above enforce endpoint exclusivity.  A
+    # standalone XOR check would be unreachable and would look like an independent control
+    # while every violating shape had already been refused by its kind branch.
     if endpoint is not None:
         validate_https_url(endpoint, "endpoint", code="manifest-invalid")
     else:
@@ -368,12 +374,13 @@ def validate_manifest(data: object, name: str) -> dict:
 def load_manifest(path: Path, name: str) -> dict:
     try:
         raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise _bad(f"could not read manifest {path}: {exc}") from exc
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError):
+        raise _bad(f"could not read manifest {name}") from None
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise _bad(f"manifest {path} is not valid JSON: {exc}") from exc
+    except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError):
+        raise _bad(f"manifest {name} is not valid JSON") from None
     return validate_manifest(data, name)
 
 
@@ -389,7 +396,7 @@ def resolve_backend(name: str, kind: str | None = None) -> dict:
                           f"invalid backend name {name!r}: must match ^[a-z][a-z0-9-]{{1,31}}$")
     path = manifest_path(name)
     if not path.is_file():
-        raise RemoteError("manifest-absent", f"manifest not found: {path}")
+        raise RemoteError("manifest-absent", f"manifest not found: {name}")
     data = load_manifest(path, name)
     if kind is not None and data["kind"] != kind:
         raise _bad(f"backend {name!r} is kind {data['kind']!r}, not {kind!r}")
@@ -442,9 +449,10 @@ class TransportResponse:
     def json(self) -> dict:
         try:
             value = json.loads(self.body.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError,
+                OverflowError, RecursionError):
             raise RemoteError("malformed-response",
-                              f"response body is not valid UTF-8 JSON: {exc}") from exc
+                              "response body is not valid UTF-8 JSON") from None
         if not isinstance(value, dict):
             raise RemoteError("malformed-response", "response body is not a JSON object")
         return value
@@ -1231,25 +1239,25 @@ def read_usage(base: Path, backend: str, dispatch_id: str) -> dict:
 def validate_directory() -> int:
     directory = manifest_dir()
     if not directory.is_dir():
-        diag(f"remote backend directory not found: {directory}")
+        diag("remote backend directory not found")
         return EXIT_UNAVAILABLE
     paths = sorted(directory.glob("*.json"))
     invalid = 0
     for path in paths:
         stem = path.name[: -len(".json")]
         if not NAME_RE.fullmatch(stem):
-            diag(f"{path.name}: filename stem must match ^[a-z][a-z0-9-]{{1,31}}$")
+            diag("manifest filename has an invalid backend identifier")
             invalid += 1
             continue
         try:
             load_manifest(path, stem)
         except RemoteError as exc:
-            diag(f"{path.name}: {exc.message}")
+            diag(f"manifest {stem}: {exc.message}")
             invalid += 1
     if invalid:
-        diag(f"{invalid} of {len(paths)} manifest(s) invalid in {directory}")
+        diag(f"{invalid} of {len(paths)} manifest(s) invalid")
         return EXIT_INVALID
-    diag(f"{len(paths)} manifest(s) valid in {directory}")
+    diag(f"{len(paths)} manifest(s) valid")
     return EXIT_OK
 
 

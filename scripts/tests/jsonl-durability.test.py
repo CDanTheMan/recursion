@@ -138,6 +138,34 @@ def control_complete_malformed_fails_closed() -> tuple[bool, str]:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def control_hardlinked_journal_is_refused_without_escape() -> tuple[bool, str]:
+    """A journal hardlink must not turn an append into a write outside state/."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-hardlink-"))
+    try:
+        state = root / "state"
+        state.mkdir()
+        outside = root / "outside-target.jsonl"
+        original = b'{"id":"outside-original"}\n'
+        outside.write_bytes(original)
+        journal = state / "events.jsonl"
+        os.link(outside, journal)
+        try:
+            append_jsonl(journal, {"id": "must-not-escape"})
+        except JsonlDurabilityError as exc:
+            refused = True
+            detail = str(exc)
+        except BaseException as exc:  # noqa: BLE001 - raw refusal is a control failure
+            refused = False
+            detail = f"raw {type(exc).__name__}: {exc}"
+        else:
+            refused = False
+            detail = "hardlinked journal append was accepted"
+        unchanged = outside.read_bytes() == original and journal.read_bytes() == original
+        return refused and unchanged, detail
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def control_quarantine_persists_before_truncate() -> tuple[bool, str]:
     root = Path(tempfile.mkdtemp(prefix="jsonl-order-"))
     try:
@@ -583,6 +611,8 @@ def main() -> int:
     controls = (
         ("a torn prior tail is quarantined byte-exactly before a complete append", control_torn_tail),
         ("a complete malformed prior record fails closed without mutation", control_complete_malformed_fails_closed),
+        ("a hardlinked journal is refused without writing outside the state tree",
+         control_hardlinked_journal_is_refused_without_escape),
         ("quarantine directory and evidence persist before journal truncation", control_quarantine_persists_before_truncate),
         ("short writes are retried until the complete record is durable", control_complete_write_loop),
         ("idempotent appends still repair and preserve a torn tail", control_dedupe_still_repairs_tail),
