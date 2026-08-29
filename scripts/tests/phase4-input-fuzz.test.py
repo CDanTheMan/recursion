@@ -26,7 +26,26 @@ from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = sys.executable
-BASH = Path(r"C:\Program Files\Git\bin\bash.exe")
+
+
+def find_bash() -> Path | None:
+    discovered = shutil.which("bash")
+    if discovered:
+        candidate = Path(discovered)
+        if candidate.is_file():
+            return candidate
+    if os.name == "nt":
+        program_files = os.environ.get("ProgramFiles") or os.environ.get("ProgramW6432")
+        if program_files:
+            candidate = Path(program_files) / "Git/bin/bash.exe"
+        else:
+            candidate = Path(Path(sys.executable).anchor) / "Program Files/Git/bin/bash.exe"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+BASH = find_bash()
 ABSOLUTE_PATH_RE = re.compile(
     r"(?:[A-Za-z]:[\\/]|\\\\[^\\s/\\]+[\\/]|(?<![A-Za-z0-9_])/(?:[^\\s/]+/)+[^\\s/]+)"
 )
@@ -112,6 +131,9 @@ def signed_token(proxy: Any, payload: bytes, key: bytes) -> str:
 
 
 def main() -> int:
+    if BASH is None:
+        print("phase4-input-fuzz: SKIP (no usable bash interpreter found)")
+        return 77
     failures: list[str] = []
     scratch = Path(tempfile.gettempdir()) / f"phase4-input-fuzz-{os.getpid()}-{time.time_ns()}"
     try:
@@ -281,8 +303,11 @@ def main() -> int:
 
     secret_root = scratch / "secret-runtime"
     # The final directory hosts secret files and must remain owner-only.  The product guard
-    # correctly rejects the previous 0777 fixture rather than repairing or accepting it.
-    secret_root.mkdir(mode=0o700)
+    # correctly rejects the previous 0777 fixture rather than repairing or accepting it on Linux.
+    # Windows mode bits are not a portable ACL contract, and mode=0700 creates an inaccessible
+    # review-host ACL, so retain a writable fixture there while the product's Windows tolerance
+    # remains exercised.
+    secret_root.mkdir(mode=0o777 if os.name == "nt" else 0o700)
     old_secret_root = os.environ.get("RECURSION_SECRET_RUNTIME_ROOT")
     os.environ["RECURSION_SECRET_RUNTIME_ROOT"] = str(secret_root)
     try:
