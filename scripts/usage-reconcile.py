@@ -69,6 +69,7 @@ COST_BASES = ("receipt", "policy-record", "unreconciled")
 OPENROUTER_CREDITS_URL = "https://openrouter.ai/api/v1/credits"
 SNAPSHOT_TIMEOUT_S = 15
 SNAPSHOT_MAX_BYTES = 1 << 20
+MAX_INPUT_BYTES = 8 * 1024 * 1024
 
 # One page, hard cap (CLAUDE.md "Bounded output"). Rows beyond the budget are dropped
 # with an explicit count -- never appended.
@@ -164,7 +165,7 @@ def atomic_text(path: Path, text: str) -> None:
     except JsonlDurabilityError:
         raise
     except (OSError, TypeError, ValueError, UnicodeEncodeError) as exc:
-        raise UsageError(f"cannot write report to {path}: {exc}") from exc
+        raise UsageError("cannot write report") from exc
 
 
 # --- engine derivation ------------------------------------------------------------------
@@ -187,7 +188,7 @@ def provider_engine_map() -> dict:
         return mapping
     for path in candidates:
         try:
-            raw = read_durable_bytes(path)
+            raw = read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
             if raw is None:
                 continue
             data = json.loads(raw.decode("utf-8"))
@@ -331,7 +332,7 @@ def evidence_files(runs_dir: Path) -> list:
         with os.scandir(runs_dir) as iterator:
             entries = sorted(iterator, key=lambda entry: entry.name)
     except (OSError, JsonlDurabilityError) as exc:
-        raise UsageError(f"cannot read runs directory {runs_dir}: {exc}") from exc
+        raise UsageError("cannot read runs directory") from exc
     for entry in entries:
         candidate = Path(entry.path)
         try:
@@ -357,8 +358,8 @@ def evidence_files(runs_dir: Path) -> list:
 def existing_run_ids(ledger: Path) -> set:
     try:
         rows = read_jsonl_objects(ledger)
-    except JsonlDurabilityError as exc:
-        raise UsageError(f"ledger is unusable: {exc}") from exc
+    except JsonlDurabilityError:
+        raise UsageError("ledger is unusable") from None
     return {row["run_id"] for row in rows
             if isinstance(row, dict) and isinstance(row.get("run_id"), str)}
 
@@ -367,8 +368,8 @@ def command_ingest(args: argparse.Namespace) -> int:
     runs_dir, ledger = Path(args.runs_dir), Path(args.ledger)
     try:
         paths = evidence_files(runs_dir)
-    except UsageError as exc:
-        diag(str(exc))
+    except UsageError:
+        diag("cannot read evidence directory")
         return 2
     seen = existing_run_ids(ledger)
     mapping = provider_engine_map()
@@ -376,7 +377,7 @@ def command_ingest(args: argparse.Namespace) -> int:
 
     for path in paths:
         try:
-            raw = read_durable_bytes(path)
+            raw = read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
             if raw is None:
                 raise OSError(f"evidence file disappeared: {path}")
             data = json.loads(raw.decode("utf-8"))
@@ -405,8 +406,8 @@ def command_ingest(args: argparse.Namespace) -> int:
             assignment_root = runs_dir.parent / "assignments" if runs_dir.name != "runs" else runs_dir.parent / "assignments"
             outcome = append_jsonl(ledger, normalize(data, mapping, assignment_root),
                                    dedupe_field="run_id", dedupe_value=run_id)
-        except JsonlDurabilityError as exc:
-            diag(f"ledger append failed: {exc}")
+        except JsonlDurabilityError:
+            diag("ledger append failed")
             return 1
         seen.add(run_id)
         counts["ingested" if outcome.appended else "duplicate"] += 1
@@ -635,8 +636,8 @@ def command_rollup(args: argparse.Namespace) -> int:
         return 2
     try:
         rows = read_jsonl_objects(ledger)
-    except JsonlDurabilityError as exc:
-        diag(f"ledger is unusable: {exc}")
+    except JsonlDurabilityError:
+        diag("ledger is unusable")
         return 2
     rollup = build_rollup(rows, week)
     report_path = out_dir / f"usage-{week}.md"
@@ -645,8 +646,8 @@ def command_rollup(args: argparse.Namespace) -> int:
         atomic_text(report_path, render_report(rollup, ledger))
         atomic_text(json_path, json.dumps(rollup, indent=2, sort_keys=True) + "\n")
     except (UsageError, JsonlDurabilityError, OSError, TypeError, ValueError,
-            OverflowError, RecursionError, UnicodeDecodeError) as exc:
-        diag(f"cannot write report to {out_dir}: {exc}")
+            OverflowError, RecursionError, UnicodeDecodeError):
+        diag("cannot write report")
         return 1
     print(f"{PROG}: wrote {report_path.as_posix()} ({rollup['totals']['runs']} runs)")
     return 0
@@ -694,7 +695,10 @@ def command_snapshot(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        payload = json.loads(raw.decode("utf-8"))
+        payload = json.loads(
+            raw.decode("utf-8"),
+            parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+        )
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError,
             OverflowError, RecursionError):
         diag("openrouter response is not valid JSON")
@@ -713,8 +717,8 @@ def command_snapshot(args: argparse.Namespace) -> int:
               "evidence_source": "openrouter-credits-v1"}
     try:
         append_jsonl(Path(args.ledger), record)
-    except JsonlDurabilityError as exc:
-        diag(f"ledger append failed: {exc}")
+    except JsonlDurabilityError:
+        diag("ledger append failed")
         return 1
     print(f"{PROG}: openrouter snapshot recorded")
     return 0
@@ -724,13 +728,13 @@ def command_quota(args: argparse.Namespace) -> int:
     pool_dir = Path(args.capacity_pool_dir) if args.capacity_pool_dir else assignment_mod.capacity_pool_dir()
     try:
         pool = assignment_mod.load_capacity_pool(pool_dir, args.pool_id)
-    except assignment_mod.AssignmentError as exc:
-        diag(str(exc))
+    except assignment_mod.AssignmentError:
+        diag("capacity pool is invalid")
         return 2
     try:
         rows = read_jsonl_objects(Path(args.ledger))
-    except JsonlDurabilityError as exc:
-        diag(f"ledger is unusable: {exc}")
+    except JsonlDurabilityError:
+        diag("ledger is unusable")
         return 2
 
     period = pool["quota"]["period"]
@@ -766,18 +770,38 @@ def command_quota(args: argparse.Namespace) -> int:
             if row.get("provider") != persisted["provider"] or row.get("capacity_pool") != persisted.get("capacity_pool"):
                 diag(f"quota row attribution disagrees with persisted assignment: {row.get('run_id')}")
                 return 2
+            if row.get("engine") != persisted.get("engine") \
+                    or row.get("billing_basis") != persisted.get("billing_basis"):
+                diag(f"quota row authority disagrees with persisted assignment: {row.get('run_id')}")
+                return 2
             pool_id = persisted.get("capacity_pool")
         if pool_id != args.pool_id:
             continue
         bucket = period_key_of(period, row.get("finished_at")) or period_key_of(period, row.get("started_at"))
         if bucket != key:
             continue
-        if pool.get("billing_basis") == "metered" and row.get("cost_basis") != "receipt":
-            diag(f"metered quota row has no valid provider receipt: {row.get('run_id')!r}")
-            return 2
+        if pool.get("billing_basis") == "metered":
+            # ``cost_basis`` is a ledger projection, not an authority claim. Recompute the
+            # receipt classification from the allowlisted provider source and trusted engine
+            # mapping so a hand-edited row cannot turn policy/unreconciled numbers into quota
+            # consumption merely by writing cost_basis="receipt".
+            receipt_usage = {
+                "provider": row.get("provider"),
+                "billing_basis": row.get("billing_basis"),
+                "evidence_source": row.get("evidence_source"),
+                "tokens": row.get("tokens"),
+                "cost_usd": row.get("cost_usd"),
+            }
+            receipt_tokens, receipt_cost, receipt_basis = classify_cost(receipt_usage)
+            if receipt_basis != "receipt" or receipt_tokens is None or receipt_cost is None:
+                diag(f"metered quota row has no valid provider receipt: {row.get('run_id')!r}")
+                return 2
+            row_tokens, row_cost = receipt_tokens, receipt_cost
+        else:
+            row_tokens, row_cost = row.get("tokens") or 0, row.get("cost_usd") or 0.0
         runs += 1
-        tokens += row.get("tokens") or 0
-        cost += row.get("cost_usd") or 0.0
+        tokens += row_tokens
+        cost += row_cost
 
     meters = {"usd": cost, "tokens": tokens, "requests": runs}
     consumed = meters.get(unit) if unit else None
@@ -837,8 +861,8 @@ def main() -> int:
         return handlers[args.command](args)
     except (UsageError, JsonlDurabilityError, assignment_mod.AssignmentError,
             OSError, TypeError, ValueError, OverflowError, RecursionError,
-            UnicodeDecodeError, json.JSONDecodeError) as exc:
-        diag(str(exc))
+            UnicodeDecodeError, json.JSONDecodeError):
+        diag("invalid input or durable state")
         return 2
 
 

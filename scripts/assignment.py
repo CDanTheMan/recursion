@@ -52,6 +52,7 @@ import jsonl_durable  # noqa: E402  (pinned assignment index transaction)
 PROG = "assignment"
 SCHEMA_VERSION = 1
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+MAX_INPUT_BYTES = 8 * 1024 * 1024
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_STATE_ROOT = ROOT / "state" / "assignments"
@@ -239,7 +240,7 @@ def load_capacity_pool(pool_dir: Path, pool_id: str) -> dict:
     except (TypeError, ValueError) as exc:
         raise AssignmentError("capacity-pool directory is not a path") from exc
     try:
-        raw_bytes = jsonl_durable.read_durable_bytes(path)
+        raw_bytes = jsonl_durable.read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
         if raw_bytes is None:
             raise CapacityPoolNotFound(f"capacity-pool manifest not found: {path}")
         raw = raw_bytes.decode("utf-8")
@@ -259,7 +260,7 @@ def engine_contract_attribution(engine: str) -> tuple[str | None, str | None]:
         return "anthropic-claude-code", "flat-subscription"
     path = Path(os.environ.get("RECURSION_ENGINE_DIR") or Path(__file__).resolve().parent / "engines") / f"{engine}.json"
     try:
-        raw = jsonl_durable.read_durable_bytes(path)
+        raw = jsonl_durable.read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
         if raw is None:
             return None, None
         data = json.loads(raw.decode("utf-8"))
@@ -896,7 +897,6 @@ def _persist_assignment_windows(root: Path, value: dict, encoded: bytes) -> Path
     task_pins: list[tuple[Path, int]] = []
     cache_pins: list[tuple[Path, int]] = []
     index_handle: int | None = None
-    cache_handle: int | None = None
     try:
         task_pins = _win_pin_directory(task)
         cache = root / ".jsonl-index"
@@ -906,26 +906,20 @@ def _persist_assignment_windows(root: Path, value: dict, encoded: bytes) -> Path
         index_handle = _win_fd(index_native, os.O_RDWR | getattr(os, "O_BINARY", 0))
         index_identity = jsonl_durable._capture_opened_leaf(index, index_handle)
         identity = f"assignment-root/{value['task_id']}/index.jsonl"
-        cache_file = cache / jsonl_durable.index_cache_name(identity)
-        # Pin and revalidate the cache leaf for the whole SQLite transaction.  The
-        # durability layer's Windows in-place rebuild never replaces this handle-protected
-        # leaf.
-        cache_native = _win_open_file(cache_file, _OPEN_ALWAYS)
-        cache_handle = _win_fd(cache_native, os.O_RDWR | getattr(os, "O_BINARY", 0))
-        cache_identity = jsonl_durable._capture_opened_leaf(cache_file, cache_handle)
+        jsonl_durable.validate_durable_leaf(
+            cache / jsonl_durable.index_cache_name(identity), allow_missing=True
+        )
         jsonl_durable._revalidate_opened_leaf(index, index_handle, index_identity)
-        jsonl_durable._revalidate_opened_leaf(cache_file, cache_handle, cache_identity)
         _persist_record_windows(task, value["assignment_digest"], encoded)
         _assignment_persistence_hook("pre-index-open")
         for attempt in range(8):
             try:
                 with jsonl_durable.durable_lock(index):
                     jsonl_durable._revalidate_opened_leaf(index, index_handle, index_identity)
-                    jsonl_durable._revalidate_opened_leaf(cache_file, cache_handle, cache_identity)
                     jsonl_durable.append_jsonl(
                         index, _assignment_index_record(value),
                         dedupe_field="assignment_digest", dedupe_value=value["assignment_digest"],
-                        index_root=cache, index_identity=identity, rebuild_in_place=True,
+                        index_root=cache, index_identity=identity,
                         hook=_assignment_persistence_hook,
                     )
                 break
@@ -938,7 +932,7 @@ def _persist_assignment_windows(root: Path, value: dict, encoded: bytes) -> Path
             UnicodeDecodeError, jsonl_durable.JsonlDurabilityError) as exc:
         raise AssignmentError(f"pinned Windows assignment persistence failed: {exc}") from exc
     finally:
-        for descriptor in (index_handle, cache_handle):
+        for descriptor in (index_handle,):
             if descriptor is not None:
                 os.close(descriptor)
         for pins in (cache_pins, task_pins, root_pins):
@@ -998,7 +992,7 @@ def load_assignment(root: Path, task_id: str, digest: str) -> dict | None:
     try:
         root = Path(root)
         path = assignment_path(root, task_id, digest)
-        raw = jsonl_durable.read_durable_bytes(path)
+        raw = jsonl_durable.read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
     except (AssignmentError, jsonl_durable.JsonlDurabilityError, TypeError, ValueError,
             OSError, OverflowError, RecursionError, UnicodeDecodeError):
         return None
@@ -1192,7 +1186,7 @@ def command_resolve(args: argparse.Namespace) -> int:
         source_evidence = None
         if args.source_evidence_file:
             raw_source_evidence = jsonl_durable.read_durable_bytes(
-                Path(args.source_evidence_file)
+                Path(args.source_evidence_file), max_bytes=MAX_INPUT_BYTES
             )
             if raw_source_evidence is None:
                 raise AssignmentError("source evidence file is absent")
@@ -1213,15 +1207,15 @@ def command_resolve(args: argparse.Namespace) -> int:
         if not args.no_persist:
             persist_assignment(root, value)
     except (AssignmentError, OSError, json.JSONDecodeError, TypeError, ValueError,
-            OverflowError, RecursionError, UnicodeDecodeError) as exc:
-        diag(str(exc))
+            OverflowError, RecursionError, UnicodeDecodeError):
+        diag("invalid input or durable state")
         return 2
     if args.out:
         try:
             _atomic_write(Path(args.out), json.dumps(value, indent=2, sort_keys=True) + "\n")
         except (AssignmentError, OSError, TypeError, ValueError, OverflowError,
-                RecursionError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            diag(f"failed to write --out copy: {exc}")
+                RecursionError, UnicodeDecodeError, json.JSONDecodeError):
+            diag("failed to write --out copy")
             return 2
     print(json.dumps(value, sort_keys=True))
     return 0
@@ -1276,8 +1270,8 @@ def main() -> int:
         handlers = {"resolve": command_resolve, "show": command_show}
         return handlers[args.command](args)
     except (AssignmentError, OSError, json.JSONDecodeError, TypeError, ValueError,
-            OverflowError, RecursionError, UnicodeDecodeError) as exc:
-        diag(str(exc))
+            OverflowError, RecursionError, UnicodeDecodeError):
+        diag("invalid input or durable state")
         return 2
 
 

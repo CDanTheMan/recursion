@@ -85,6 +85,12 @@ def read_events_for_run(run_path: Path) -> list[dict]:
 def _append_remote_event_locked(*, path: Path, run: dict, event_type: str, session_id: str,
                         branch: str, commit: str, artifacts: list[str], cancelled_at: str,
                         cancellation_reason: str, terminal_status: str) -> dict:
+    if not isinstance(event_type, str) or not isinstance(session_id, str) \
+            or not isinstance(branch, str) or not isinstance(commit, str) \
+            or not isinstance(artifacts, list) or not all(isinstance(item, str) for item in artifacts) \
+            or not isinstance(cancelled_at, str) or not isinstance(cancellation_reason, str) \
+            or not isinstance(terminal_status, str):
+        raise RemoteEvidenceError("remote evidence arguments have invalid types")
     digest = run.get("assignment_digest")
     record = run.get("assignment")
     run_id = run.get("id")

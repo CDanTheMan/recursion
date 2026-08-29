@@ -15,6 +15,7 @@ import io
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -27,21 +28,36 @@ sys.path.insert(0, str(SCRIPTS))
 
 import assignment as amod  # noqa: E402
 import jsonl_durable as jd  # noqa: E402
+import run_contract  # noqa: E402
 
 WORKER_SPEC = importlib.util.spec_from_file_location("phase3_worker_evidence", SCRIPTS / "worker-evidence.py")
-assert WORKER_SPEC is not None and WORKER_SPEC.loader is not None
+if WORKER_SPEC is None or WORKER_SPEC.loader is None:
+    raise SystemExit("phase3 sweep: worker-evidence loader unavailable")
 worker = importlib.util.module_from_spec(WORKER_SPEC)
 WORKER_SPEC.loader.exec_module(worker)
 
 USAGE_SPEC = importlib.util.spec_from_file_location("phase3_usage_reconcile", SCRIPTS / "usage-reconcile.py")
-assert USAGE_SPEC is not None and USAGE_SPEC.loader is not None
+if USAGE_SPEC is None or USAGE_SPEC.loader is None:
+    raise SystemExit("phase3 sweep: usage-reconcile loader unavailable")
 usage = importlib.util.module_from_spec(USAGE_SPEC)
 USAGE_SPEC.loader.exec_module(usage)
 
 try:
-    from jsonschema import Draft7Validator
+    from jsonschema import Draft7Validator, Draft202012Validator, validators
 except ImportError as exc:  # pragma: no cover - the required verification environment has it.
     raise SystemExit(f"phase3 sweep: jsonschema unavailable: {exc}")
+
+
+STRICT_INTEGER_CHECKER = Draft7Validator.TYPE_CHECKER.redefine(
+    "integer", lambda _checker, value: isinstance(value, int) and not isinstance(value, bool)
+)
+StrictDraft7Validator = validators.extend(Draft7Validator, type_checker=STRICT_INTEGER_CHECKER)
+STRICT_RUN_INTEGER_CHECKER = Draft202012Validator.TYPE_CHECKER.redefine(
+    "integer", lambda _checker, value: isinstance(value, int) and not isinstance(value, bool)
+)
+StrictDraft202012Validator = validators.extend(
+    Draft202012Validator, type_checker=STRICT_RUN_INTEGER_CHECKER
+)
 
 
 failures: list[str] = []
@@ -60,7 +76,8 @@ def expect_refusal(action, label: str, error_types: tuple[type[BaseException], .
         action()
     except error_types as exc:
         check("Traceback" not in str(exc), f"{label} is refused with a typed error")
-    except Exception as exc:  # noqa: BLE001 - raw exception is exactly the defect under test.
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeError, sqlite3.DatabaseError) as exc:
         check(False, f"{label} leaked raw {type(exc).__name__}: {exc}")
     else:
         check(False, f"{label} was accepted")
@@ -242,12 +259,13 @@ def test_jsonl_battery(root: Path) -> None:
     if indexes:
         index = indexes[0]
         rebuild_outside = rebuild_root / "outside-index.sqlite3"
-        rebuild_outside.write_bytes(index.read_bytes())
+        rebuild_original = index.read_bytes()
+        rebuild_outside.write_bytes(rebuild_original)
         index.unlink()
         make_link(index, rebuild_outside, directory=False)
         expect_refusal(lambda: jd.read_jsonl_objects(rebuild_path),
                        "JSONL pre-existing hardlinked SQLite index", error_types)
-        check(rebuild_outside.read_bytes() == index.read_bytes(),
+        check(rebuild_outside.read_bytes() == rebuild_original,
               "JSONL hardlinked SQLite index leaves outside untouched")
 
     rebuild_race = root / "jsonl-rebuild-race"
@@ -261,7 +279,7 @@ def test_jsonl_battery(root: Path) -> None:
 
     def rebuild_hook(stage: str) -> None:
         nonlocal armed
-        if armed and stage == "pre-sqlite-open":
+        if armed and stage == "pre-write":
             temps = list((rebuild_race / "jsonl-index").glob("*.sqlite3.tmp.*"))
             if not temps:
                 temps = list((rebuild_race / "jsonl-index").glob(".*.tmp.*"))
@@ -330,8 +348,13 @@ def test_assignment_battery(root: Path) -> None:
     persisted = amod.persist_assignment(valid_root, value)
     loaded = amod.load_assignment(valid_root, value["task_id"], value["assignment_digest"])
     check(persisted.is_file() and loaded == value, "valid assignment persists and loads")
-    amod.validate_assignment(loaded, require_source_evidence=True)
-    check(True, "valid assignment validates after durable load")
+    validated = False
+    try:
+        amod.validate_assignment(loaded, require_source_evidence=True)
+        validated = True
+    except amod.AssignmentError:
+        validated = False
+    check(validated, "valid assignment validates after durable load")
     forged_after_read = valid_root / "forged-after-read.json"
     forged_after_read.write_text('{"forged":true}\n', encoding="utf-8")
     original_read = amod.jsonl_durable.read_durable_bytes
@@ -582,12 +605,14 @@ def test_assignment_battery(root: Path) -> None:
     amod.persist_assignment(index_root, first)
     index = index_root / "index.jsonl"
     index_alias = index_root / "outside-index.jsonl"
-    index_alias.write_bytes(index.read_bytes())
+    index_original = index.read_bytes()
+    index_alias.write_bytes(index_original)
     index.unlink()
     make_link(index, index_alias, directory=False)
     expect_refusal(lambda: amod.persist_assignment(index_root, base_assignment("task-index-two")),
                    "assignment pre-existing hardlinked index leaf", error_types)
-    check(index_alias.read_bytes() != b"", "assignment hardlinked index remains outside-owned")
+    check(index_alias.read_bytes() == index_original,
+          "assignment hardlinked index remains outside-owned")
 
     # A normal new assignment after a clean cache proves the legitimate index/cache path.
     clean = root / "assignment-clean-cache"
@@ -601,7 +626,8 @@ def test_assignment_battery(root: Path) -> None:
     cache_identity = f"assignment-root/{cache_value['task_id']}/index.jsonl"
     cache_file = cache_root / ".jsonl-index" / jd.index_cache_name(cache_identity)
     cache_alias = cache_root / "outside-cache.sqlite3"
-    cache_alias.write_bytes(cache_file.read_bytes())
+    cache_original = cache_file.read_bytes()
+    cache_alias.write_bytes(cache_original)
     cache_file.unlink()
     make_link(cache_file, cache_alias, directory=False)
     cache_value_two = copy.deepcopy(cache_value)
@@ -609,7 +635,8 @@ def test_assignment_battery(root: Path) -> None:
     cache_value_two["assignment_digest"] = amod.canonical_digest(cache_value_two)
     expect_refusal(lambda: amod.persist_assignment(cache_root, cache_value_two),
                    "assignment pre-existing hardlinked SQLite cache", error_types)
-    check(cache_alias.read_bytes() != b"", "assignment hardlinked SQLite cache remains outside-owned")
+    check(cache_alias.read_bytes() == cache_original,
+          "assignment hardlinked SQLite cache remains outside-owned")
 
     junction_leaf = root / "assignment-junction-leaf"
     jvalue = base_assignment("task-junction-leaf")
@@ -736,7 +763,7 @@ def test_worker_battery(root: Path) -> None:
 def test_capacity_pool_differential() -> None:
     schema_path = SOURCE / "schemas" / "control-plane" / "v1" / "capacity-pool-manifest.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    validator = Draft7Validator(schema)
+    validator = StrictDraft7Validator(schema)
     base = {
         "schema_version": 1, "id": "pool", "kind": "subscription",
         "billing_basis": "metered", "provider": "cursor",
@@ -809,7 +836,8 @@ def test_capacity_pool_differential() -> None:
             amod.validate_capacity_pool(candidate, pool_id)
         except amod.AssignmentError:
             runtime_valid = False
-        except Exception as exc:  # noqa: BLE001 - differential must expose raw boundary leaks.
+        except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+                UnicodeError, sqlite3.DatabaseError) as exc:
             runtime_valid = False
             check(False, f"capacity-pool differential leaked {type(exc).__name__}: {exc}")
         else:
@@ -822,6 +850,77 @@ def test_capacity_pool_differential() -> None:
     float_version["schema_version"] = 1.0
     expect_refusal(lambda: amod.validate_capacity_pool(float_version, "pool"),
                    "capacity-pool runtime rejects float-for-integer schema version", (amod.AssignmentError,))
+
+
+def test_run_schema_differential() -> None:
+    schema_path = SOURCE / "schemas" / "control-plane" / "v1" / "schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    wrapper = {"$schema": schema["$schema"], "$defs": schema["$defs"], "$ref": "#/$defs/run"}
+    validator = StrictDraft202012Validator(wrapper)
+    base = {
+        "schema_version": 1, "id": "run", "task_id": "task", "worker": "implementer:legacy",
+        "worktree": "C:/work", "base_commit": "a" * 40, "pid": 1, "process_group": 0,
+        "lease_expires": "2026-08-28T00:10:00Z", "deadline": "2026-08-28T00:10:00Z",
+        "usage": {}, "result": {}, "status": "running",
+    }
+    corpus: list[dict] = [copy.deepcopy(base)]
+    for required_key in ("schema_version", "id", "task_id", "worker", "worktree", "base_commit",
+                         "pid", "lease_expires", "deadline", "usage", "result", "status"):
+        candidate = copy.deepcopy(base)
+        candidate.pop(required_key)
+        corpus.append(candidate)
+    for key, bad_values in {
+        "schema_version": [True, 1.0, 2],
+        "id": ["bad id", 7], "task_id": ["bad/task", None], "worker": ["", 7],
+        "worktree": ["", None], "base_commit": ["not-a-sha", 7],
+        "pid": [True, 1.0, -1, "1"], "process_group": [True, 0.0, -1, "0"],
+        "lease_expires": ["", 7], "deadline": ["", None], "usage": [[], None],
+        "result": [None, 7, True], "status": ["unknown", 7],
+        "role": ["worker", 7], "model_alias": ["A", 7],
+        "network_policy": ["internet", 7], "assignment_digest": ["x", 7],
+        "assignment": [[], None], "project_id": ["bad/id", 7], "capacity_pool": [7, []],
+        "metered_approved": [1, "true"], "allowed_paths": [[], [7]],
+    }.items():
+        for bad in bad_values:
+            candidate = copy.deepcopy(base)
+            candidate[key] = bad
+            corpus.append(candidate)
+    bound = copy.deepcopy(base)
+    bound.update({
+        "assignment_digest": "b" * 64,
+        "project_id": "project", "engine": "claude", "provider": "anthropic-claude-code",
+        "capacity_pool": None, "billing_basis": "flat-subscription", "metered_approved": False,
+        "host": "host", "model": None, "sandbox_profile": "strict-linux",
+        "network_profile": "provider-only", "source_repository": "/repo", "source_branch": "main",
+        "source_sha": "a" * 40, "source_evidence": {}, "allowed_paths": ["app"],
+        "publication_policy": "verified-integration-only", "default_branch": "main",
+        "integration_branch": "integration", "assignment": {},
+    })
+    corpus.append(bound)
+    missing_projection = copy.deepcopy(bound)
+    missing_projection.pop("provider")
+    corpus.append(missing_projection)
+
+    mismatches = 0
+    for candidate in corpus:
+        schema_valid = not list(validator.iter_errors(candidate))
+        try:
+            run_contract.validate_run(candidate)
+        except run_contract.RunContractError:
+            runtime_valid = False
+        except (OSError, TypeError, ValueError, OverflowError, RecursionError, UnicodeError) as exc:
+            runtime_valid = False
+            check(False, f"run differential leaked {type(exc).__name__}: {exc}")
+        else:
+            runtime_valid = True
+        if schema_valid != runtime_valid:
+            mismatches += 1
+            print(f"mismatch: run schema={schema_valid} runtime={runtime_valid} candidate={candidate!r}")
+    check(mismatches == 0, f"run schema/runtime generated differential has zero mismatches ({len(corpus)} cases)")
+    nonfinite = copy.deepcopy(base)
+    nonfinite["extra"] = float("nan")
+    expect_refusal(lambda: run_contract.validate_run(nonfinite),
+                   "run runtime rejects non-finite extension values", (run_contract.RunContractError,))
 
 
 def test_quota_receipt_boundary(root: Path) -> None:
@@ -851,6 +950,18 @@ def test_quota_receipt_boundary(root: Path) -> None:
     report = json.loads(output.getvalue())
     check(status == 0 and report["consumed"] == 1.5 and report["status"] == "exceeded",
           "legitimate provider receipt counts and an exceeded pool reports exceeded")
+    forged = {
+        "schema_version": 1, "record": "run", "run_id": "forged-receipt-claim",
+        "task_id": "receipt-task", "capacity_pool": "quota-pool", "provider": "cursor",
+        "billing_basis": "metered", "cost_basis": "receipt",
+        "evidence_source": "engine-manifest-v1", "tokens": 10, "cost_usd": 99.0,
+        "started_at": timestamp, "finished_at": timestamp,
+    }
+    jd.append_jsonl(ledger, forged)
+    with contextlib.redirect_stdout(io.StringIO()):
+        forged_status = usage.command_quota(args)
+    check(forged_status == 2,
+          "a ledger row that forges cost_basis=receipt without a provider receipt is refused")
     args.period = "1900-W01"
     with contextlib.redirect_stdout(io.StringIO()):
         override_status = usage.command_quota(args)
@@ -858,15 +969,24 @@ def test_quota_receipt_boundary(root: Path) -> None:
 
 
 def main() -> int:
-    root = Path(tempfile.gettempdir()) / f"recursion-phase3-sweep-{uuid.uuid4().hex}"
-    root.mkdir(parents=True, exist_ok=False)
+    configured_root = os.environ.get("RECURSION_PHASE3_ROOT", "").strip()
+    root = Path(configured_root) if configured_root else (
+        Path(tempfile.gettempdir()) / f"recursion-phase3-sweep-{uuid.uuid4().hex}"
+    )
+    if root.exists():
+        if any(root.iterdir()):
+            raise SystemExit("phase3 sweep: configured root must be empty")
+    else:
+        root.mkdir(parents=True, exist_ok=False)
     try:
         test_jsonl_battery(root)
         test_assignment_battery(root)
         test_worker_battery(root)
         test_capacity_pool_differential()
+        test_run_schema_differential()
         test_quota_receipt_boundary(root)
-    except Exception as exc:  # noqa: BLE001 - harness reports a concrete failure, never hides it.
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeError, sqlite3.DatabaseError, AssertionError) as exc:
         failures.append(f"harness leaked raw {type(exc).__name__}: {exc}")
         print(f"FAIL - harness leaked raw {type(exc).__name__}: {exc}")
     finally:

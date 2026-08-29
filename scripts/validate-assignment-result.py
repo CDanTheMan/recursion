@@ -32,12 +32,13 @@ from pathlib import Path, PurePosixPath
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import assignment as assignment_mod  # noqa: E402
 from jsonl_durable import (JsonlDurabilityError, append_jsonl, durable_lock,
-                           ensure_no_symlink, find_jsonl_objects)  # noqa: E402
+                           find_jsonl_objects, read_durable_bytes)  # noqa: E402
 
 PROG = "validate-assignment-result"
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 PROTECTED_BRANCHES = frozenset({"main", "master", "recursion/integration"})
 SHA_RE = assignment_mod.SHA_RE
+MAX_INPUT_BYTES = 8 * 1024 * 1024
 
 
 class RefusalError(Exception):
@@ -55,12 +56,12 @@ def now_epoch() -> int:
     return int(time.time())
 
 
-def _epoch_of(text: str | None) -> int | None:
-    if not text:
+def _epoch_of(text: object) -> int | None:
+    if not isinstance(text, str) or not text:
         return None
     try:
         return calendar.timegm(time.strptime(text, TS_FORMAT))
-    except ValueError:
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError, UnicodeError):
         return None
 
 
@@ -91,13 +92,18 @@ def path_within_allowed(path: str, allowed_paths: list[str]) -> bool:
 
 def load_run_evidence(path: str) -> dict:
     try:
-        ensure_no_symlink(Path(path))
-    except JsonlDurabilityError as exc:
-        raise RefusalError(2, f"run evidence path is unsafe: {exc}") from exc
-    try:
-        value = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise RefusalError(2, f"run evidence unreadable: {exc}") from exc
+        raw = read_durable_bytes(Path(path), max_bytes=MAX_INPUT_BYTES)
+        if raw is None:
+            raise RefusalError(2, "run evidence is unreadable")
+        value = json.loads(
+            raw.decode("utf-8"),
+            parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+        )
+    except RefusalError:
+        raise
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError,
+            OverflowError, RecursionError, JsonlDurabilityError):
+        raise RefusalError(2, "run evidence is unreadable") from None
     if not isinstance(value, dict):
         raise RefusalError(2, "run evidence is not a JSON object")
     return value
@@ -218,8 +224,8 @@ def _check_locked(args: argparse.Namespace) -> dict:
     if args.record:
         try:
             prior = find_jsonl_objects(ledger, "run_id", args.run_id)
-        except JsonlDurabilityError as exc:
-            raise RefusalError(2, f"results ledger is unusable: {exc}") from exc
+        except JsonlDurabilityError:
+            raise RefusalError(2, "results ledger is unusable") from None
         if prior:
             stable = {key: item for key, item in record.items() if key != "verified_at"}
             if any({key: item for key, item in row.items() if key != "verified_at"} == stable
@@ -228,13 +234,13 @@ def _check_locked(args: argparse.Namespace) -> dict:
             raise RefusalError(2, f"run_id {args.run_id} has a conflicting accepted result")
         try:
             outcome = append_jsonl(ledger, record, dedupe_field="run_id", dedupe_value=args.run_id)
-        except JsonlDurabilityError as exc:
-            raise RefusalError(2, f"results ledger append failed: {exc}") from exc
+        except JsonlDurabilityError:
+            raise RefusalError(2, "results ledger append failed") from None
         if not outcome.appended:
             try:
                 existing = find_jsonl_objects(ledger, "run_id", args.run_id)
-            except JsonlDurabilityError as exc:
-                raise RefusalError(2, f"results ledger changed during append: {exc}") from exc
+            except JsonlDurabilityError:
+                raise RefusalError(2, "results ledger changed during append") from None
             if not existing:
                 raise RefusalError(2, "results ledger append lost its compare-and-swap result")
             stable = {key: item for key, item in record.items() if key != "verified_at"}
@@ -250,8 +256,8 @@ def check(args: argparse.Namespace) -> dict:
     try:
         with durable_lock(ledger):
             return _check_locked(args)
-    except JsonlDurabilityError as exc:
-        raise RefusalError(2, f"results ledger transaction lock failed: {exc}") from exc
+    except JsonlDurabilityError:
+        raise RefusalError(2, "results ledger transaction lock failed") from None
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -279,6 +285,13 @@ def main() -> int:
         diag(exc.reason)
         print(json.dumps({"status": "refused", "code": exc.code, "reason": exc.reason}, sort_keys=True))
         return exc.code
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, json.JSONDecodeError,
+            JsonlDurabilityError):
+        diag("invalid input or durable state")
+        print(json.dumps({"status": "refused", "code": 2,
+                          "reason": "invalid input or durable state"}, sort_keys=True))
+        return 2
     print(json.dumps(record, sort_keys=True))
     return 0
 

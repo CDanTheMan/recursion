@@ -12,6 +12,8 @@ import json
 import re
 from pathlib import Path
 
+from jsonl_durable import read_durable_bytes
+
 BUILTIN_ENGINES = frozenset({"claude", "hermes", "gate", "none", "deepseek", "openrouter"})
 ENGINE_NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
 ALIAS_NAME_RE = re.compile(r"[a-z][a-z0-9-]{2,31}")
@@ -23,6 +25,7 @@ LEGACY_ALIASES = {
     "opus-complex": frozenset({"implementer", "verifier"}),
     "opus-review": frozenset({"verifier"}),
 }
+MAX_INPUT_BYTES = 8 * 1024 * 1024
 
 
 def plugin_engine_name_ok(name: object) -> bool:
@@ -49,8 +52,15 @@ def _load_registry(registry_path: Path | str) -> dict[str, frozenset[str]] | Non
     """Return alias -> roles from a valid registry, or None when the registry is
     absent, unparseable, schema-invalid, or redefines a legacy alias (poisoned)."""
     try:
-        raw = json.loads(Path(registry_path).read_text(encoding="utf-8"))
-    except (OSError, ValueError, UnicodeDecodeError):
+        encoded = read_durable_bytes(Path(registry_path), max_bytes=MAX_INPUT_BYTES)
+        if encoded is None:
+            return None
+        raw = json.loads(
+            encoded.decode("utf-8"),
+            parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+        )
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError,
+            UnicodeDecodeError):
         return None
     if not isinstance(raw, dict) or raw.get("schema_version") != 1:
         return None

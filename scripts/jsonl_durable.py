@@ -307,6 +307,7 @@ class _PinnedIndexConnection(sqlite3.Connection):
     _durable_leaf_descriptor: int | None = None
     _durable_leaf_identity: tuple[int, ...] | None = None
     _durable_leaf_path: Path | None = None
+    _durable_index_path: Path | None = None
     _durable_journal_parent_pins: list[tuple[Path, int, tuple[int, int, int]]] = []
 
     def _release_durable_pins(self) -> None:
@@ -316,6 +317,7 @@ class _PinnedIndexConnection(sqlite3.Connection):
         self._durable_leaf_descriptor = None
         self._durable_leaf_identity = None
         self._durable_leaf_path = None
+        self._durable_index_path = None
         journal_pins = self._durable_journal_parent_pins
         self._durable_journal_parent_pins = []
         if descriptor is not None:
@@ -331,6 +333,7 @@ class _PinnedIndexConnection(sqlite3.Connection):
         self._durable_leaf_descriptor = None
         self._durable_leaf_identity = None
         self._durable_leaf_path = None
+        self._durable_index_path = None
         self._durable_parent_pins = []
         return descriptor
 
@@ -483,35 +486,28 @@ def validate_durable_leaf(path: Path, *, allow_missing: bool = False) -> None:
 
 
 def _connect_verified_index(index_path: Path) -> sqlite3.Connection:
-    pins = _win_pin_durable_parent(index_path.parent)
-    leaf_descriptor: int | None = None
+    """Load a verified cache into memory without giving SQLite a switchable pathname.
+
+    ``sqlite3.connect(index_path)`` opens its own native file handle after the caller's
+    validation.  On Windows an attacker can add a hardlink in that interval, leaving the
+    SQLite-owned handle outside the authority boundary even when a second validation handle
+    still reports the original identity.  A verification index is a rebuildable derivative,
+    so keep SQLite entirely in memory and publish only a serialized replacement through the
+    pinned durable writer.
+    """
     connection: sqlite3.Connection | None = None
     try:
-        revalidate_durable_parent_pins(pins)
-        validate_durable_leaf(index_path)
-        # SQLite owns its own pathname-opened descriptor.  Retain a second descriptor for
-        # same-handle identity/link-count checks immediately before every cache mutation;
-        # otherwise a hardlink can be added after the pathname check and SQLite would write
-        # through an inode that has escaped the intended root.
-        leaf_descriptor = _open_durable_leaf(index_path, os.O_RDWR)
-        leaf_identity = _capture_opened_leaf(index_path, leaf_descriptor)
-        connection = sqlite3.connect(index_path, factory=_PinnedIndexConnection)
-        connection._durable_parent_pins = pins
-        connection._durable_leaf_descriptor = leaf_descriptor
-        connection._durable_leaf_identity = leaf_identity
-        connection._durable_leaf_path = index_path
-        leaf_descriptor = None
-        pins = []
-        revalidate_durable_parent_pins(connection._durable_parent_pins)
-        _revalidate_index_connection(connection, index_path)
+        index_path = Path(index_path)
+        raw = read_durable_bytes(index_path)
+        if raw is None:
+            raise FileNotFoundError(index_path)
+        connection = sqlite3.connect(":memory:", factory=_PinnedIndexConnection)
+        connection._durable_index_path = index_path
+        connection.deserialize(raw)
         return connection
     except BaseException:
         if connection is not None:
             connection.close()
-        if leaf_descriptor is not None:
-            os.close(leaf_descriptor)
-        if pins:
-            _win_close_lock_parent_pins(pins)
         raise
 
 
@@ -532,6 +528,10 @@ def _revalidate_index_connection(connection: sqlite3.Connection,
     descriptor = getattr(connection, "_durable_leaf_descriptor", None)
     identity = getattr(connection, "_durable_leaf_identity", None)
     target = getattr(connection, "_durable_leaf_path", None) or index_path
+    if descriptor is None and getattr(connection, "_durable_index_path", None) is not None:
+        # The cache is memory-backed.  Its eventual disk publication is validated by the
+        # serialized durable writer, so there is no disk handle to revalidate here.
+        return
     if descriptor is None or identity is None or target is None:
         raise JsonlDurabilityError(
             f"JSONL verification cache has no revalidation handle: {target or '<unknown>'}"
@@ -544,6 +544,14 @@ def _maybe_revalidate_index_connection(connection: sqlite3.Connection) -> None:
     revalidate_durable_parent_pins(getattr(connection, "_durable_parent_pins", []))
     if getattr(connection, "_durable_leaf_descriptor", None) is not None:
         _revalidate_index_connection(connection)
+
+
+def _install_serialized_cache_path(index_path: Path, cache_bytes: bytes,
+                                   hook: Callable[[str], None] | None = None) -> None:
+    """Publish a memory-backed SQLite cache through the pinned atomic byte writer."""
+    if not isinstance(cache_bytes, bytes):
+        raise JsonlDurabilityError("serialized JSONL verification cache is not bytes")
+    atomic_bytes(index_path, cache_bytes, hook=hook)
 
 
 @contextmanager
@@ -1357,26 +1365,15 @@ def _write_metadata(connection: sqlite3.Connection, identity: str, stat: os.stat
 def _rebuild_index_unpinned(index_path: Path, identity: str, descriptor: int,
                              stat: os.stat_result, journal: Path, max_record_bytes: int,
                              hook: Callable[[str], None] | None = None) -> None:
-    temporary_fd, temporary_name = tempfile.mkstemp(
-        prefix=f".{index_path.name}.tmp.", dir=index_path.parent
-    )
-    temporary = Path(temporary_name)
+    """Build a cache in memory, then publish one serialized durable replacement."""
     connection: sqlite3.Connection | None = None
     try:
-        temporary_identity = _capture_opened_leaf(temporary, temporary_fd)
         if hook is not None:
             hook("pre-sqlite-open")
-        _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
-        connection = sqlite3.connect(temporary, factory=_PinnedIndexConnection)
-        connection._durable_leaf_descriptor = temporary_fd
-        connection._durable_leaf_identity = temporary_identity
-        connection._durable_leaf_path = temporary
-        connection._durable_parent_pins = []
-        _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
+        connection = sqlite3.connect(":memory:", factory=_PinnedIndexConnection)
+        connection._durable_index_path = index_path
         _create_index_schema(connection)
-        _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
         _maybe_revalidate_index_connection(connection)
-        _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
         connection.execute("BEGIN IMMEDIATE")
         line_count = 0
         chain = ZERO_CHAIN_SHA256
@@ -1387,31 +1384,18 @@ def _rebuild_index_unpinned(index_path: Path, identity: str, descriptor: int,
         _write_metadata(
             connection, identity, stat, max_record_bytes, line_count, chain
         )
-        _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
         _maybe_revalidate_index_connection(connection)
         connection.commit()
-        temporary_fd = connection._detach_durable_leaf() or temporary_fd
-        connection.close()
-        connection = None
-        _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
-        os.fsync(temporary_fd)
-        if hook is not None:
-            hook("pre-replace")
-        _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
-        validate_durable_leaf(index_path, allow_missing=True)
-        os.close(temporary_fd)
-        temporary_fd = -1
-        validate_durable_leaf(temporary)
-        os.replace(temporary, index_path)
-        _fsync_dir(index_path.parent)
+        if not hasattr(connection, "serialize"):
+            raise JsonlDurabilityError("SQLite serialization is unavailable for cache rebuild")
+        _install_serialized_cache_path(index_path, connection.serialize(), hook)
     except BaseException:
         if connection is not None:
             connection.close()
-            temporary_fd = -1
-        if temporary_fd >= 0:
-            os.close(temporary_fd)
-        temporary.unlink(missing_ok=True)
         raise
+    finally:
+        if connection is not None:
+            connection.close()
 
 
 def _rebuild_index(index_path: Path, identity: str, descriptor: int,
@@ -1836,17 +1820,21 @@ def _rebuild_index_in_place_unpinned(
         hook: Callable[[str], None] | None = None) -> None:
     """Rebuild a cache without replacing its leaf name.
 
-    Windows directory handles opened without delete sharing pin the cache leaf.  Replacing
-    that leaf would therefore fail with a sharing violation; rebuilding the already-pinned
-    file in place keeps the same race-free name and remains crash-safe through SQLite's
-    rollback journal and FULL synchronous mode.
+    The historical name is retained for callers that already pin the cache directory.  The
+    cache itself is rebuilt in memory and published through the same serialized durable
+    replacement as the pathname API; SQLite never mutates a pathname-opened cache leaf.
     """
-    if hook is not None:
-        hook("pre-replace")
-    validate_durable_leaf(index_path)
     connection: sqlite3.Connection | None = None
     try:
-        connection = _connect_verified_index(index_path)
+        if hook is not None:
+            hook("pre-replace")
+        validate_durable_leaf(index_path)
+        raw = read_durable_bytes(index_path)
+        if raw is None:
+            raise FileNotFoundError(index_path)
+        connection = sqlite3.connect(":memory:", factory=_PinnedIndexConnection)
+        connection._durable_index_path = index_path
+        connection.deserialize(raw)
         if hook is not None:
             hook("pre-sqlite-write")
         _revalidate_index_connection(connection)
@@ -1874,6 +1862,9 @@ def _rebuild_index_in_place_unpinned(
         _write_metadata(connection, identity, stat, max_record_bytes, line_count, chain)
         _maybe_revalidate_index_connection(connection)
         connection.commit()
+        if not hasattr(connection, "serialize"):
+            raise JsonlDurabilityError("SQLite serialization is unavailable for cache rebuild")
+        _install_serialized_cache_path(index_path, connection.serialize(), hook)
     except BaseException:
         if connection is not None:
             connection.rollback()
@@ -1957,6 +1948,10 @@ def _append_jsonl_unpinned(path: Path, value: dict,
         os.fsync(descriptor)
         _fsync_dir(path.parent)
         _update_index_after_append(connection, descriptor, path, encoded, max_record_bytes)
+        index_path, _ = _index_path(path, index_root, index_identity)
+        if not hasattr(connection, "serialize"):
+            raise JsonlDurabilityError("SQLite serialization is unavailable for cache update")
+        _install_serialized_cache_path(index_path, connection.serialize(), hook)
     finally:
         if connection is not None:
             connection.close()

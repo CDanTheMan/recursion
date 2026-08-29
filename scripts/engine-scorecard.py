@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import calendar
 import json
+import math
 import statistics
 import sys
 import time
@@ -48,10 +49,14 @@ from pathlib import Path
 from typing import Any
 
 import assignment
+from jsonl_durable import JsonlDurabilityError, atomic_bytes, ensure_no_symlink, read_durable_bytes
 
 SCHEMA_VERSION = 1
 MAX_TABLE_ROWS = 25  # bounded-output rule: prioritize by activity, drop the rest, never append
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+MAX_INPUT_BYTES = 8 * 1024 * 1024
+MAX_INPUT_LINES = 20000
+MAX_FIELD_BYTES = 1 << 20
 
 # Canonical escalation-identity event kinds (taskctl.sh: "the ONE writer for ... escalation
 # identity"). Deliberately narrow: this is the identity-bearing pair, not every event that
@@ -79,13 +84,26 @@ class TaskInfo:
 def parse_task_header(text: str) -> dict[str, str]:
     """Header fields end at the first blank line; body lines never supply a field
     (work.sh reads verifier_engine the same way, precisely to prevent that)."""
+    if not isinstance(text, str):
+        return {}
+    try:
+        if len(text.encode("utf-8", "strict")) > MAX_INPUT_BYTES:
+            return {}
+    except UnicodeError:
+        return {}
     fields: dict[str, str] = {}
     for line in text.splitlines():
         if not line.strip():
             break
         if ":" in line and not line.startswith((" ", "\t")):
             key, _, value = line.partition(":")
-            fields.setdefault(key.strip(), value.strip())
+            clean_key, clean_value = key.strip(), value.strip()
+            try:
+                within_bound = len(clean_value.encode("utf-8", "strict")) <= MAX_FIELD_BYTES
+            except UnicodeError:
+                within_bound = False
+            if clean_key and within_bound:
+                fields.setdefault(clean_key, clean_value)
     return fields
 
 
@@ -96,12 +114,20 @@ def load_tasks(root: Path) -> tuple[dict[str, TaskInfo], int, int]:
     tasks: dict[str, TaskInfo] = {}
     parsed = 0
     skipped = 0
-    if not task_dir.is_dir():
+    try:
+        ensure_no_symlink(task_dir)
+        if not task_dir.is_dir():
+            return tasks, 0, 0
+        paths = sorted(task_dir.glob("*.md"))
+    except (OSError, ValueError, JsonlDurabilityError):
         return tasks, 0, 0
-    for path in sorted(task_dir.glob("*.md")):
+    for path in paths[:MAX_INPUT_LINES]:
         try:
-            text = path.read_text(encoding="utf-8", errors="surrogateescape")
-        except OSError:
+            raw = read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
+            if raw is None:
+                raise OSError
+            text = raw.decode("utf-8", "strict")
+        except (OSError, UnicodeDecodeError, JsonlDurabilityError, ValueError):
             skipped += 1
             continue
         fields = parse_task_header(text)
@@ -132,18 +158,25 @@ def load_events(root: Path) -> tuple[list[dict], int, int, str]:
     parsed = 0
     skipped = 0
     max_ts = ""
-    if not path.is_file():
-        return events, 0, 0, ""
     try:
-        raw = path.read_text(encoding="utf-8", errors="surrogateescape")
-    except OSError:
+        raw_bytes = read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
+        if raw_bytes is None:
+            return events, 0, 0, ""
+        raw = raw_bytes.decode("utf-8", "strict")
+    except (OSError, UnicodeDecodeError, JsonlDurabilityError, ValueError):
         return events, 0, 0, ""
-    for line in raw.splitlines():
+    lines = raw.splitlines()
+    skipped += max(0, len(lines) - MAX_INPUT_LINES)
+    for line in lines[:MAX_INPUT_LINES]:
         if not line.strip():
             continue
         try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
+            record = json.loads(
+                line,
+                parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+            )
+        except (json.JSONDecodeError, TypeError, ValueError, OverflowError, RecursionError,
+                UnicodeDecodeError):
             skipped += 1
             continue
         if not isinstance(record, dict) or not isinstance(record.get("event"), str):
@@ -189,7 +222,7 @@ def _parse_ts(value: Any) -> int | None:
         return None
     try:
         return calendar.timegm(time.strptime(value, TS_FORMAT))
-    except ValueError:
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError, UnicodeError):
         return None
 
 
@@ -201,13 +234,24 @@ def load_runs(root: Path) -> tuple[list[RunRecord], int, int, bool]:
     runs: list[RunRecord] = []
     parsed = 0
     skipped = 0
-    if not runs_dir.is_dir():
+    try:
+        ensure_no_symlink(runs_dir)
+        if not runs_dir.is_dir():
+            return runs, 0, 0, True
+        paths = sorted(runs_dir.glob("*.json"))
+    except (OSError, ValueError, JsonlDurabilityError):
         return runs, 0, 0, True
-    for path in sorted(runs_dir.glob("*.json")):
+    for path in paths[:MAX_INPUT_LINES]:
         try:
-            text = path.read_text(encoding="utf-8", errors="surrogateescape")
-            record = json.loads(text)
-        except (OSError, json.JSONDecodeError):
+            raw = read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
+            if raw is None:
+                raise OSError
+            record = json.loads(
+                raw.decode("utf-8", "strict"),
+                parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+            )
+        except (OSError, UnicodeDecodeError, JsonlDurabilityError, json.JSONDecodeError,
+                TypeError, ValueError, OverflowError, RecursionError):
             skipped += 1
             continue
         if not isinstance(record, dict):
@@ -360,6 +404,13 @@ def build_buckets(
 # --------------------------------------------------------------------------------------
 
 def _fmt_duration(seconds: int) -> str:
+    if isinstance(seconds, bool) or not isinstance(seconds, (int, float)):
+        return "n/a"
+    try:
+        if not math.isfinite(float(seconds)) or seconds < 0:
+            return "n/a"
+    except (TypeError, ValueError, OverflowError):
+        return "n/a"
     seconds = int(seconds)
     if seconds < 60:
         return f"{seconds}s"
@@ -373,7 +424,9 @@ def _fmt_duration(seconds: int) -> str:
 def _cell(value: object) -> str:
     """Neutralize header-sourced text for the markdown table: task headers are worker-adjacent
     input, and a raw ESC byte or '|' would corrupt (or ANSI-style) a report a human cats."""
-    text = str(value)
+    text = value if isinstance(value, str) else str(value)
+    if len(text.encode("utf-8", "replace")) > MAX_FIELD_BYTES:
+        text = text.encode("utf-8", "replace")[:MAX_FIELD_BYTES].decode("utf-8", "ignore")
     text = "".join("?" if (ord(ch) < 0x20 or ord(ch) == 0x7F) else ch for ch in text)
     return text.replace("|", "\\|")
 
@@ -522,45 +575,44 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", default=None, help="also write machine-readable JSON here")
     args = parser.parse_args(argv)
 
-    root = Path(args.root) if args.root else Path(__file__).resolve().parent.parent
-    if not root.is_dir():
-        print(f"engine-scorecard: --root is not a directory: {root}", file=sys.stderr)
-        return 2
-
-    tasks, tasks_parsed, tasks_skipped = load_tasks(root)
-    events, events_parsed, events_skipped, events_max_ts = load_events(root)
-    events_absent = not (root / "state" / "events.jsonl").is_file()
-    runs, runs_parsed, runs_skipped, runs_absent = load_runs(root)
-
-    buckets, unknown_task_runs, unattributed_escalations = build_buckets(tasks, runs, events)
-
-    data = render_json(
-        root, tasks_parsed, tasks_skipped,
-        events_parsed, events_skipped, events_max_ts, events_absent,
-        runs_parsed, runs_skipped, runs_absent,
-        buckets, unknown_task_runs, unattributed_escalations,
-    )
-    report = render_markdown(data)
-
-    if args.out:
-        try:
-            Path(args.out).write_text(report, encoding="utf-8")
-        except OSError as exc:
-            print(f"engine-scorecard: cannot write --out {args.out}: {exc}", file=sys.stderr)
+    try:
+        root = Path(args.root) if args.root else Path(__file__).resolve().parent.parent
+        ensure_no_symlink(root)
+        if not root.is_dir():
+            print("engine-scorecard: --root is not a directory", file=sys.stderr)
             return 2
-    else:
-        sys.stdout.write(report)
 
-    if args.json:
-        try:
-            Path(args.json).write_text(
-                json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        tasks, tasks_parsed, tasks_skipped = load_tasks(root)
+        events, events_parsed, events_skipped, events_max_ts = load_events(root)
+        events_path = root / "state" / "events.jsonl"
+        events_absent = read_durable_bytes(events_path, max_bytes=MAX_INPUT_BYTES) is None
+        runs, runs_parsed, runs_skipped, runs_absent = load_runs(root)
+
+        buckets, unknown_task_runs, unattributed_escalations = build_buckets(tasks, runs, events)
+
+        data = render_json(
+            root, tasks_parsed, tasks_skipped,
+            events_parsed, events_skipped, events_max_ts, events_absent,
+            runs_parsed, runs_skipped, runs_absent,
+            buckets, unknown_task_runs, unattributed_escalations,
+        )
+        report = render_markdown(data)
+
+        if args.out:
+            atomic_bytes(Path(args.out), report.encode("utf-8"))
+        else:
+            sys.stdout.write(report)
+
+        if args.json:
+            atomic_bytes(
+                Path(args.json),
+                (json.dumps(data, indent=2, sort_keys=True) + "\n").encode("utf-8"),
             )
-        except OSError as exc:
-            print(f"engine-scorecard: cannot write --json {args.json}: {exc}", file=sys.stderr)
-            return 2
-
-    return 0
+        return 0
+    except (OSError, UnicodeDecodeError, UnicodeEncodeError, JsonlDurabilityError,
+            TypeError, ValueError, OverflowError, RecursionError, json.JSONDecodeError):
+        print("engine-scorecard: invalid input or durable state", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

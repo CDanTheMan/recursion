@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import time
 from pathlib import Path
@@ -14,6 +15,7 @@ import assignment as assignment_mod
 from jsonl_durable import (
     JsonlDurabilityError, atomic_bytes, read_durable_bytes,
 )
+from run_contract import RunContractError, validate_run
 
 
 class WorkerEvidenceError(Exception):
@@ -21,6 +23,7 @@ class WorkerEvidenceError(Exception):
 
 
 _atomic_publish_hook = None
+MAX_INPUT_BYTES = 8 * 1024 * 1024
 
 RUN_STATUSES = frozenset({
     "pending", "prepared", "running", "succeeded", "failed", "blocked", "cancelled", "stale",
@@ -31,6 +34,14 @@ def now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+def validate_run_evidence(value: object) -> dict:
+    """Apply the control-plane run schema at every worker state boundary."""
+    try:
+        return validate_run(value)
+    except RunContractError as exc:
+        raise WorkerEvidenceError(str(exc)) from None
+
+
 def iso(epoch: int) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
 
@@ -39,16 +50,18 @@ def load(path: Path) -> dict:
     try:
         if not isinstance(path, Path):
             raise WorkerEvidenceError("run evidence path must be a path")
-        raw = read_durable_bytes(path)
+        raw = read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
         if raw is None:
-            raise OSError(f"run evidence is absent: {path}")
-        value = json.loads(raw.decode("utf-8"))
+            raise WorkerEvidenceError("run evidence is absent")
+        value = json.loads(
+            raw.decode("utf-8"),
+            parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+        )
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, JsonlDurabilityError,
             TypeError, ValueError,
             OverflowError, RecursionError) as exc:
-        raise WorkerEvidenceError(f"run evidence is not valid JSON: {path}") from exc
-    if not isinstance(value, dict):
-        raise WorkerEvidenceError("run evidence is not an object")
+        raise WorkerEvidenceError("run evidence is not valid JSON") from exc
+    validate_run_evidence(value)
     digest = value.get("assignment_digest")
     if digest:
         parent = path.parent
@@ -57,11 +70,11 @@ def load(path: Path) -> dict:
         try:
             assignment_mod.validate_assignment(persisted, require_source_evidence=True)
         except assignment_mod.AssignmentError as exc:
-            raise SystemExit(f"worker-evidence: persisted assignment is unusable: {exc}") from exc
+            raise WorkerEvidenceError("persisted assignment is unusable") from exc
         try:
             assignment_mod.require_assignment_projection(value, persisted)
         except assignment_mod.AssignmentError as exc:
-            raise SystemExit(f"worker-evidence: run attribution disagrees with persisted assignment: {exc}") from exc
+            raise WorkerEvidenceError("run attribution disagrees with persisted assignment") from exc
     return value
 
 
@@ -73,7 +86,7 @@ def atomic(path: Path, value: dict) -> None:
         atomic_bytes(path, encoded, hook=_atomic_publish_hook)
     except (JsonlDurabilityError, OSError, TypeError, ValueError, OverflowError,
             RecursionError, UnicodeEncodeError) as exc:
-        raise WorkerEvidenceError(f"evidence publication refused: {path}") from exc
+        raise WorkerEvidenceError("evidence publication refused") from exc
 
 
 def maybe_json(path: str | None) -> object:
@@ -85,7 +98,7 @@ def maybe_json(path: str | None) -> object:
         if not path:
             return {}
         candidate = Path(path)
-        raw = read_durable_bytes(candidate)
+        raw = read_durable_bytes(candidate, max_bytes=MAX_INPUT_BYTES)
     except (OSError, JsonlDurabilityError, TypeError, ValueError, OverflowError,
             RecursionError, UnicodeDecodeError) as exc:
         raise WorkerEvidenceError("evidence input path is invalid") from exc
@@ -97,14 +110,17 @@ def maybe_json(path: str | None) -> object:
     try:
         text = raw.decode("utf-8")
     except (UnicodeDecodeError, TypeError, ValueError) as exc:
-        raise WorkerEvidenceError(f"evidence input is unreadable: {path}") from exc
+        raise WorkerEvidenceError("evidence input is unreadable") from exc
     if not text.strip():
         return {}
     try:
-        return json.loads(text)
+        return json.loads(
+            text,
+            parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+        )
     except (json.JSONDecodeError, TypeError, ValueError, OverflowError, RecursionError,
             UnicodeDecodeError) as exc:
-        raise WorkerEvidenceError(f"evidence input is not valid JSON: {path}") from exc
+        raise WorkerEvidenceError("evidence input is not valid JSON") from exc
 
 
 def assignment_from(path: str, digest: str, task_id: str, role: str = "", run_path: Path | None = None) -> dict:
@@ -115,18 +131,21 @@ def assignment_from(path: str, digest: str, task_id: str, role: str = "", run_pa
             expected = assignment_mod.assignment_path(assignment_root, task_id, digest)
         except assignment_mod.AssignmentError as exc:
             raise SystemExit(2) from exc
-        if os.path.realpath(path) != os.path.realpath(expected):
+        if os.path.normcase(os.path.abspath(path)) != os.path.normcase(os.path.abspath(expected)):
             raise SystemExit(2)
     try:
-        raw = read_durable_bytes(Path(path))
+        raw = read_durable_bytes(Path(path), max_bytes=MAX_INPUT_BYTES)
         if raw is None:
-            raise OSError(f"assignment is absent: {path}")
-        value = json.loads(raw.decode("utf-8"))
+            raise WorkerEvidenceError("assignment is absent")
+        value = json.loads(
+            raw.decode("utf-8"),
+            parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+        )
         assignment_mod.validate_assignment(value, require_source_evidence=True)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, JsonlDurabilityError,
             TypeError, ValueError,
             OverflowError, RecursionError, assignment_mod.AssignmentError) as exc:
-        raise SystemExit(f"worker-evidence: invalid persisted assignment: {exc}") from exc
+        raise WorkerEvidenceError("invalid persisted assignment") from exc
     if value.get("assignment_digest") != digest or value.get("task_id") != task_id \
             or (role and value.get("role") != role):
         raise SystemExit(2)
@@ -138,10 +157,16 @@ def copy_assignment(value: dict) -> dict:
 
 
 def validate_usage(usage: object, assignment: dict | None) -> None:
-    if assignment is None or not isinstance(usage, dict) or not usage:
+    if assignment is None or usage is None or usage == {}:
         return
+    if not isinstance(usage, dict):
+        raise WorkerEvidenceError("usage evidence must be an object")
     provider = usage.get("provider")
     basis = usage.get("billing_basis")
+    if provider is not None and not isinstance(provider, str):
+        raise WorkerEvidenceError("usage provider must be a string")
+    if basis is not None and not isinstance(basis, str):
+        raise WorkerEvidenceError("usage billing basis must be a string")
     if provider is not None and provider != assignment.get("provider"):
         raise SystemExit("worker-evidence: usage provider disagrees with persisted assignment")
     if basis is not None and basis != assignment.get("billing_basis"):
@@ -150,8 +175,15 @@ def validate_usage(usage: object, assignment: dict | None) -> None:
         raise SystemExit("worker-evidence: unapproved metered usage is refused")
     for key, minimum in (("tokens", 0), ("cost_usd", 0)):
         item = usage.get(key)
-        if item is not None and (isinstance(item, bool) or not isinstance(item, (int, float)) or item < minimum):
-            raise SystemExit(f"worker-evidence: invalid usage {key}")
+        if item is not None:
+            valid = isinstance(item, (int, float)) and not isinstance(item, bool)
+            if valid:
+                try:
+                    valid = math.isfinite(float(item)) and item >= minimum
+                except (OverflowError, ValueError, TypeError):
+                    valid = False
+            if not valid:
+                raise WorkerEvidenceError(f"invalid usage {key}")
 
 
 def _main() -> int:
@@ -215,7 +247,7 @@ def _main() -> int:
     args = parser.parse_args(); path = Path(getattr(args, "path"))
 
     if args.command == "start":
-        if args.pid < 1 or args.process_group < 1:
+        if args.pid < 1 or args.process_group < 1 or args.deadline_epoch < 0:
             raise SystemExit("worker-evidence: invalid process identity")
         if bool(args.assignment_digest) != bool(args.assignment_file):
             raise SystemExit(2)
@@ -241,6 +273,7 @@ def _main() -> int:
         if args.attempt is not None:
             if args.attempt < 1: raise SystemExit(2)
             value["attempt"] = args.attempt
+        validate_run_evidence(value)
         atomic(path, value); return 0
 
     if args.command == "prepare":
@@ -262,6 +295,7 @@ def _main() -> int:
         if args.commit_oid: value["verification_commit"] = args.commit_oid
         seed = maybe_json(args.seed_evidence)
         if isinstance(seed, dict) and seed: value["seed_evidence"] = seed
+        validate_run_evidence(value)
         atomic(Path(args.path), value); return 0
 
     if args.command == "activate":
@@ -277,7 +311,8 @@ def _main() -> int:
         digest = value.get("assignment_digest")
         if digest:
             try: assignment_mod.validate_assignment(value.get("assignment"), require_source_evidence=True)
-            except assignment_mod.AssignmentError as exc: raise SystemExit(str(exc)) from exc
+            except assignment_mod.AssignmentError as exc:
+                raise WorkerEvidenceError("assignment is invalid") from exc
         try:
             event = append_remote_event(
                 path=path, run=value, event_type=args.event_type, session_id=args.session_id,
@@ -286,11 +321,13 @@ def _main() -> int:
                 terminal_status=args.terminal_status,
             )
         except RemoteEvidenceError as exc:
-            raise SystemExit(str(exc)) from exc
+            raise WorkerEvidenceError("remote evidence is invalid") from exc
         print(json.dumps(event, sort_keys=True)); return 0
 
     value = load(path)
     if args.command == "heartbeat":
+        if args.lease_epoch < 0:
+            raise WorkerEvidenceError("invalid heartbeat lease epoch")
         value["heartbeat_at"] = now(); value["lease_expires"] = iso(args.lease_epoch)
     elif args.command == "finish":
         if args.status not in RUN_STATUSES:
@@ -334,6 +371,7 @@ def _main() -> int:
                                   "commit_oid": args.commit_oid,
                                   "verdict": verdict.get("verdict") if isinstance(verdict, dict) else None,
                                   "evidence": verdict, "checked_at": now()}
+    validate_run_evidence(value)
     atomic(path, value)
     return 0
 
@@ -345,7 +383,7 @@ def main() -> int:
         raise SystemExit(f"worker-evidence: {exc}") from None
     except (OSError, JsonlDurabilityError, TypeError, ValueError, OverflowError, RecursionError,
             UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise SystemExit(f"worker-evidence: invalid input or durable state: {exc}") from None
+        raise SystemExit("worker-evidence: invalid input or durable state") from None
 
 
 if __name__ == "__main__":
