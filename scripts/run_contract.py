@@ -168,6 +168,15 @@ def validate_run(value: object) -> dict[str, Any]:
         raise RunContractError("run evidence result must be an object or string")
     if value.get("status") not in RUN_STATUSES:
         raise RunContractError("run evidence status is invalid")
+    # A prepared record is the one pre-launch boundary and may retain the schema's optional
+    # process_group compatibility.  Every later state is an active worker boundary, where
+    # validate-control-state.py requires both live process identities and worker-evidence.py
+    # activate() produces both fields together.
+    if value["status"] != "prepared":
+        if value.get("pid", 0) < 1:
+            raise RunContractError("run evidence active pid must be positive")
+        if not isinstance(value.get("process_group"), int) or value["process_group"] < 1:
+            raise RunContractError("run evidence active process_group must be positive")
 
     if "assignment_digest" in value:
         conditional = {

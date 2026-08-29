@@ -1163,7 +1163,7 @@ def test_run_schema_differential() -> None:
     validator = Draft202012Validator(wrapper)
     base = {
         "schema_version": 1, "id": "run", "task_id": "task", "worker": "implementer:legacy",
-        "worktree": "C:/work", "base_commit": "a" * 40, "pid": 1, "process_group": 0,
+        "worktree": "C:/work", "base_commit": "a" * 40, "pid": 1, "process_group": 1,
         "lease_expires": "2026-08-28T00:10:00Z", "deadline": "2026-08-28T00:10:00Z",
         "usage": {}, "result": {}, "status": "running",
     }
@@ -1250,6 +1250,15 @@ def test_run_schema_differential() -> None:
     nonfinite["extra"] = float("nan")
     expect_refusal(lambda: run_contract.validate_run(nonfinite),
                    "run runtime rejects non-finite extension values", (run_contract.RunContractError,))
+
+    active_missing_group = copy.deepcopy(base)
+    active_missing_group.pop("process_group")
+    expect_refusal(lambda: run_contract.validate_run(active_missing_group),
+                   "active run without process_group is refused", (run_contract.RunContractError,))
+    control_state_missing_group = copy.deepcopy(active_missing_group)
+    expect_refusal(lambda: worker.validate_run_evidence(control_state_missing_group),
+                   "worker evidence agrees active run needs process_group",
+                   (worker.WorkerEvidenceError,))
 
 
 def test_quota_receipt_boundary(root: Path) -> None:

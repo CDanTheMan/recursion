@@ -1069,6 +1069,11 @@ PY
       esac
       resolve_run_assignment "$role" "$wt" "$active_engine" "$engine_plan" "$resolved_model" \
         "$arm_provider" "$commit_oid" || return 95
+      # Keep the controller-private candidate identity separate from ASSIGNMENT_FILE.  The
+      # latter is deliberately repointed at the durable digest record below and persists in
+      # the caller's shell; capturing it after that point would make a retry delete its own
+      # assignment.  This local is populated only by a fresh resolution, never by re-entry.
+      candidate_assignment="$ASSIGNMENT_FILE"
     fi
   fi
 
@@ -1092,7 +1097,6 @@ PY
   deadline_epoch="$(( $(date +%s) + deadline_s ))"; heartbeat_epoch=0
   LAST_RUN_ID="$run_id"; LAST_RUN_EVIDENCE="$ROOT/state/runs/$run_id.json"
   if [ "$STRICT_PHASE5" = 1 ]; then
-    candidate_assignment="$ASSIGNMENT_FILE"
     mkdir -p "$ROOT/state/runs"
     if [ "$role" = implementer ]; then
       LEASE_ATTEMPT="$(field attempts)"
@@ -1115,7 +1119,20 @@ PY
     fi
     ASSIGNMENT_FILE="$ROOT/state/assignments/$ID/$ASSIGNMENT_DIGEST.json"
     [ -f "$ASSIGNMENT_FILE" ] || { log "persisted assignment file is absent before worker evidence"; return 98; }
-    [ -z "$candidate_assignment" ] || rm -f -- "$candidate_assignment" || return 98
+    if [ -n "$candidate_assignment" ]; then
+      case "$candidate_assignment" in
+        "$ROOT/state/assignments/$ID"/.candidate-*.json)
+          rm -f -- "$candidate_assignment" || return 98
+          ;;
+        *)
+          # Cleanup is allowed to remove only the private resolver output.  A stale or
+          # accidentally repopulated value must fail closed rather than risk deleting the
+          # durable assignment that was just checked above.
+          log "assignment cleanup refused non-candidate path: $candidate_assignment"
+          return 98
+          ;;
+      esac
+    fi
     python3 "$ROOT/scripts/worker-evidence.py" prepare --path "$LAST_RUN_EVIDENCE" --run-id "$run_id" \
       --task-id "$ID" --role "$role" --model-alias "$alias" --worktree "$wt" \
       --base-commit "$BASE_COMMIT" \
