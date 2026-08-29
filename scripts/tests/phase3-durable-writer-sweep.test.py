@@ -384,6 +384,8 @@ def test_assignment_battery(root: Path) -> None:
     persisted = amod.persist_assignment(valid_root, value)
     loaded = amod.load_assignment(valid_root, value["task_id"], value["assignment_digest"])
     check(persisted.is_file() and loaded == value, "valid assignment persists and loads")
+    check(persisted.stat().st_nlink == 1 and persisted.is_relative_to(valid_root),
+          "published assignment record has exactly one link inside the assignment root")
     validated = False
     try:
         amod.validate_assignment(loaded, require_source_evidence=True)
@@ -578,6 +580,58 @@ def test_assignment_battery(root: Path) -> None:
         amod._assignment_persistence_hook = previous
     check(not armed and race_alias.read_bytes() == b"", "assignment record race creates no outside bytes")
     race_alias.unlink(missing_ok=True)
+
+    if os.name != "nt":
+        check(True, "Windows hostile assignment hardlink publication race is platform-scoped")
+    else:
+        hostile_root = root / "assignment-hostile-record-race"
+        hostile_value = base_assignment("task-hostile-record-race")
+        hostile_task = hostile_root / hostile_value["task_id"]
+        hostile_final = hostile_task / f"{hostile_value['assignment_digest']}.json"
+        # This directory is outside the hostile assignment root but still under the
+        # sweep's disposable root, so a failed test cannot strand scratch state.
+        hostile_outside = root / "assignment-hostile-outside"
+        hostile_outside.mkdir()
+        hostile_alias = hostile_outside / "attacker-alias.json"
+        armed = True
+        alias_created = False
+
+        def hostile_hook(stage: str) -> None:
+            nonlocal armed, alias_created
+            if not armed or stage != "pre-record-hardlink":
+                return
+            armed = False
+            temporary = next(hostile_task.glob(f".{hostile_value['assignment_digest']}.json.*.tmp"))
+            # This is a separate, non-cooperating process from the writer's perspective:
+            # the hook invokes the native Windows hardlink utility without taking the
+            # per-digest durable lock.
+            make_link(hostile_alias, temporary, directory=False)
+            alias_created = True
+
+        previous = amod._assignment_persistence_hook
+        amod._assignment_persistence_hook = hostile_hook
+        try:
+            expect_refusal(
+                lambda: amod.persist_assignment(hostile_root, hostile_value),
+                "assignment hostile hardlink after final check", error_types,
+            )
+        finally:
+            amod._assignment_persistence_hook = previous
+
+        check(not armed and alias_created,
+              "assignment hostile linker actually races the pre-CreateHardLinkW window")
+        check(not hostile_final.exists(),
+              "assignment hostile hardlink refusal leaves no published final record")
+        check(not list(hostile_task.glob(f".{hostile_value['assignment_digest']}.json.*.tmp")),
+              "assignment hostile hardlink refusal removes the private temporary")
+        check(hostile_alias.exists() and hostile_alias.stat().st_size > 0,
+              "assignment hostile hardlink probe exists outside the assignment root")
+        # The probe is deliberately attacker-owned; remove only the test's known probe so
+        # the following assertion checks that the writer left no outside artifact behind.
+        hostile_alias.unlink(missing_ok=True)
+        check(not any(hostile_outside.iterdir()),
+              "assignment hostile refusal leaves no writer-owned outside artifact")
+        hostile_outside.rmdir()
 
     output_root = root / "assignment-output"
     output_root.mkdir(parents=True)

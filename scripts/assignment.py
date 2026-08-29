@@ -763,6 +763,33 @@ if os.name == "nt":
         finally:
             os.close(descriptor)
 
+    def _win_validate_published_record(path: Path, expected_identity: tuple[int, ...]) -> None:
+        """Validate the FINAL name after publication and private-link cleanup.
+
+        CreateHardLinkW necessarily leaves the private temporary as a second name until
+        that name is removed.  The post-publication check is therefore the authority for
+        the published invariant: FINAL must resolve, without following a reparse point, to
+        the expected regular file and that file must have exactly one link remaining.  The
+        caller pins the root/task directory, so that sole remaining link is FINAL inside
+        the assignment root.
+        """
+        try:
+            identity, links = jsonl_durable._win_open_leaf_identity(path)
+        except jsonl_durable.JsonlDurabilityError:
+            raise
+        except OSError as exc:
+            raise jsonl_durable.JsonlDurabilityError(
+                f"cannot revalidate Windows published assignment record: {path}"
+            ) from exc
+        if identity != expected_identity:
+            raise jsonl_durable.JsonlDurabilityError(
+                f"Windows published assignment record identity changed: {path}"
+            )
+        if links != 1:
+            raise jsonl_durable.JsonlDurabilityError(
+                f"Windows published assignment record has {links} hard links: {path}"
+            )
+
     def _persist_record_windows(task_path: Path, digest: str, encoded: bytes) -> None:
         # A Windows hard-link publication has a deliberate transient: after the final
         # link is created, the private temporary still contributes a second link until
@@ -799,6 +826,8 @@ if os.name == "nt":
             raise AssignmentError("could not allocate a unique Windows assignment temporary")
         descriptor = _win_fd(handle, os.O_WRONLY | getattr(os, "O_BINARY", 0))
         handle = None
+        publication_succeeded = False
+        primary_error: BaseException | None = None
         try:
             temporary_identity = jsonl_durable._capture_opened_leaf(temporary, descriptor)
             _assignment_persistence_hook("pre-record-write")
@@ -809,6 +838,9 @@ if os.name == "nt":
             _assignment_persistence_hook("pre-record-publish")
             jsonl_durable._revalidate_opened_leaf(temporary, descriptor, temporary_identity)
             jsonl_durable.validate_durable_leaf(final, allow_missing=True)
+            # This is the hostile-link injection point: the final identity/nlink checks
+            # above have passed, but CreateHardLinkW has not yet consumed the temporary.
+            _assignment_persistence_hook("pre-record-hardlink")
             if not _KERNEL32.CreateHardLinkW(str(final), str(temporary), None):
                 error = ctypes.get_last_error()
                 if error not in (80, 183):  # ERROR_FILE_EXISTS / ERROR_ALREADY_EXISTS
@@ -816,24 +848,54 @@ if os.name == "nt":
                 existing = _win_read_file(final)
                 if existing != encoded:
                     raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
-        except BaseException:
-            try:
-                _KERNEL32.DeleteFileW(str(temporary))
-            finally:
-                raise
+                # A failed publication leaves the temporary with one expected link.  If
+                # a non-participant linked it during the window, refuse before cleanup so
+                # the attacker cannot turn a successful idempotent check into an escape.
+                temporary_links = jsonl_durable._win_lock_handle_links(
+                    int(jsonl_durable.msvcrt.get_osfhandle(descriptor))
+                )
+                if temporary_links != 1:
+                    raise jsonl_durable.JsonlDurabilityError(
+                        f"Windows assignment temporary has {temporary_links} hard links: {temporary}"
+                    )
+            else:
+                publication_succeeded = True
+                # After CreateHardLinkW the expected temporary link count is two.  The
+                # authoritative one-link assertion happens below, after private cleanup.
+        except BaseException as exc:
+            primary_error = exc
         finally:
             try:
                 os.close(descriptor)
             except OSError:
-                pass
+                if primary_error is None:
+                    primary_error = OSError("cannot close Windows assignment temporary")
             # Publication can fail after the private file is completely durable (for
             # example, if an attacker races a junction into the immutable leaf).  The
             # task directory is handle-pinned without delete sharing, so this pathname
             # still names our private temporary and is safe to remove on every exit.
             if not _KERNEL32.DeleteFileW(str(temporary)):
                 error = ctypes.get_last_error()
-                if error not in (2, 3):  # already removed by the failed publication path
-                    raise OSError(error, "cannot remove Windows assignment temporary")
+                if error not in (2, 3) and primary_error is None:
+                    primary_error = OSError(error, "cannot remove Windows assignment temporary")
+
+        if primary_error is not None:
+            if publication_succeeded:
+                # The record is not trusted unless the post-publication invariant below
+                # succeeds.  Remove only the FINAL directory entry; any attacker-owned
+                # hardlink elsewhere is never followed or overwritten by this cleanup.
+                _KERNEL32.DeleteFileW(str(final))
+            raise primary_error
+
+        if publication_succeeded:
+            try:
+                _win_validate_published_record(final, temporary_identity)
+            except BaseException:
+                # A hostile hardlink is detectable only after the temporary pathname has
+                # been removed: FINAL then reports nlink=2.  Fail closed by removing the
+                # published directory entry before returning the typed refusal.
+                _KERNEL32.DeleteFileW(str(final))
+                raise
 
 
 def _assignment_index_record(value: dict) -> dict:

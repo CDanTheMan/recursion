@@ -555,7 +555,8 @@ def test_persist_40_process_idempotency(tmp_path: Path) -> None:
             os.environ["RECURSION_DURABLE_LOCK_ATTEMPTS"] = old_attempts
     check(all(result == "ok" for result in results), "40 concurrent persistence workers succeed idempotently")
     record = root / value["task_id"] / f"{value['assignment_digest']}.json"
-    check(record.is_file(), "40-process persistence leaves one immutable assignment record")
+    check(record.is_file() and record.stat().st_nlink == 1,
+          "40-process persistence leaves one immutable single-link assignment record")
     index = root / "index.jsonl"
     rows = [json.loads(line) for line in index.read_text(encoding="utf-8").splitlines() if line]
     check(len(rows) == 1 and rows[0]["assignment_digest"] == value["assignment_digest"],
