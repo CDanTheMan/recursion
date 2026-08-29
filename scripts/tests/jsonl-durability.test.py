@@ -226,7 +226,11 @@ def control_ancestor_swap_is_refused_at_leaf_window() -> tuple[bool, str]:
             swapped = True
 
         try:
-            with mock.patch("jsonl_durable._before_journal_leaf_open", side_effect=swap_ancestor):
+            with mock.patch(
+                    "jsonl_durable._before_journal_leaf_open",
+                    side_effect=swap_ancestor) as seam, \
+                    mock.patch("jsonl_durable._open_durable_leaf",
+                               wraps=jsonl_durable._open_durable_leaf) as leaf_open:
                 append_jsonl(linked / "events.jsonl", {"id": "must-not-write"})
         except JsonlDurabilityError as exc:
             detail = str(exc)
@@ -237,7 +241,10 @@ def control_ancestor_swap_is_refused_at_leaf_window() -> tuple[bool, str]:
         else:
             detail = "ancestor swap was accepted"
             refused = False
-        return refused and swapped and not list(outside.iterdir()), detail
+        return (
+            refused and swapped and seam.call_count == 1 and not leaf_open.called
+            and not list(outside.iterdir())
+        ), detail
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -353,6 +360,9 @@ def control_index_rebuilds_after_change_or_cache_loss() -> tuple[bool, str]:
         indexes[0].write_bytes(b"not-a-sqlite-database")
         if [row["id"] for row in read_jsonl_objects(path)] != ["one", "two"]:
             return False, "corrupt derived cache did not rebuild from the journal"
+        indexes[0].unlink()
+        if [row["id"] for row in read_jsonl_objects(path)] != ["one", "two"]:
+            return False, "missing derived cache did not rebuild from the journal"
         changed = b'{"id":"one"}\n{"id":xxxxx}\n'
         if len(changed) != len(original):
             return False, "fixture mutation is not size preserving"
@@ -360,7 +370,7 @@ def control_index_rebuilds_after_change_or_cache_loss() -> tuple[bool, str]:
         try:
             read_jsonl_objects(path)
         except JsonlDurabilityError as exc:
-            return "malformed complete JSONL record" in str(exc), str(exc)
+            return "malformed JSONL value" in str(exc), str(exc)
         return False, "same-size journal mutation reused stale verification state"
     finally:
         shutil.rmtree(root, ignore_errors=True)
@@ -455,7 +465,7 @@ def control_runtime_rotation_rejects_malformed() -> tuple[bool, str]:
         return (
             result.returncode != 0 and source.read_bytes() == original and not archives
             and "source event journal is corrupt" in detail
-            and "malformed complete JSONL record" in detail
+            and "malformed JSONL value" in detail
         ), detail
     finally:
         shutil.rmtree(root, ignore_errors=True)

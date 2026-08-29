@@ -2308,7 +2308,9 @@ def _append_jsonl_unpinned(path: Path, value: dict,
                            index_root: Path | None = None, index_identity: str | None = None,
                            rebuild_in_place: bool = False,
                            hook: Callable[[str], None] | None = None,
-                           parent_directory: int | None = None) -> AppendOutcome:
+                           parent_directory: int | None = None,
+                           parent_pins: list[tuple[Path, int, tuple[int, ...]]] | None = None
+                           ) -> AppendOutcome:
     """Repair a torn tail, validate committed rows, and durably append one object.
 
     The exact torn bytes and fail-closed escalation metadata are stored in the canonical
@@ -2332,6 +2334,11 @@ def _append_jsonl_unpinned(path: Path, value: dict,
     journal_path = (_pinned_fd_path(parent_directory, path.name)
                     if parent_directory is not None else path)
     _before_journal_leaf_open(path)
+    # The hook is the deterministic check-to-open seam used by the race control.  Revalidate
+    # the already-pinned parent chain immediately after it, before opening the leaf or deriving
+    # any cache pathname from the now-attacker-controlled spelling of ``path``.
+    if parent_pins is not None:
+        revalidate_durable_parent_pins(parent_pins)
     descriptor = _open_durable_leaf(
         path, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0), 0o600,
         directory_fd=parent_directory,
@@ -2401,6 +2408,7 @@ def append_jsonl(path: Path, value: dict,
                 index_root=index_root, index_identity=index_identity,
                 rebuild_in_place=rebuild_in_place, hook=hook,
                 parent_directory=pins[-1][1] if os.name != "nt" else None,
+                parent_pins=pins,
             )
             revalidate_durable_parent_pins(pins)
             return result
