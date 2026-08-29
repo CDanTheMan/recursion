@@ -10,7 +10,6 @@ reviewed provider profile and its scoped environment allowlist through logical l
 from __future__ import annotations
 
 import json
-import hashlib
 import os
 import shutil
 import subprocess
@@ -150,7 +149,6 @@ def main() -> int:
         manifest_bytes = (json.dumps(manifest, indent=2) + "\n").encode("utf-8")
         manifest_path = engines_dir / "stubeng.json"
         manifest_path.write_bytes(manifest_bytes)
-        profile_bytes = (scripts_dir / "provider-egress-profiles.json").read_bytes()
         subprocess.run(["git", "init", "-q", "-b", "main", str(root_local)], check=True)
         subprocess.run(["git", "-C", str(root_local), "add", "scripts"], check=True)
         subprocess.run(
@@ -161,16 +159,25 @@ def main() -> int:
         controller_sha = subprocess.check_output(
             ["git", "-C", str(root_local), "rev-parse", "HEAD"], text=True,
         ).strip()
-        plan["authority"] = {
-            "controller_repository": root_posix,
-            "controller_sha": controller_sha,
-            "policy_files": {
-                "scripts/engines/stubeng.json": hashlib.sha256(manifest_bytes).hexdigest(),
-                "scripts/provider-egress-profiles.json": hashlib.sha256(profile_bytes).hexdigest(),
-            },
-        }
         plan_path = root_local / "plan.json"
-        plan_path.write_bytes((json.dumps(plan, indent=2) + "\n").encode("utf-8"))
+        resolver_env = dict(os.environ)
+        resolver_env.update({
+            "RECURSION_ROOT": str(root_local),
+            "RECURSION_ENGINE_PLUGINS": "1",
+            "RECURSION_ENGINE_STUBENG_ENABLED": "1",
+        })
+        resolved = subprocess.run(
+            [sys.executable, str(SOURCE / "scripts" / "resolve-engine.py"), "stubeng",
+             "--role", "implementer", "--emit-plan", str(plan_path),
+             "--controller-root", str(root_local), "--controller-commit", controller_sha],
+            capture_output=True, text=True, env=resolver_env,
+        )
+        check(
+            resolved.returncode == 0,
+            f"resolve-engine emits an authenticated plugin plan (got {resolved.returncode}, stderr={resolved.stderr.strip()!r})",
+        )
+        if resolved.returncode == 0 and plan_path.exists():
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
         plan_posix = to_posix(plan_path)
 
         base_env = dict(os.environ)
@@ -208,7 +215,7 @@ def main() -> int:
         # even when the logical provider capability is available.
         unbound_plan = root_local / "plan-unbound.json"
         unbound = dict(plan)
-        unbound.pop("authority")
+        unbound.pop("authority", None)
         unbound_plan.write_bytes((json.dumps(unbound, indent=2) + "\n").encode("utf-8"))
         result = invoke(["--engine", "stubeng", "--engine-plan", to_posix(unbound_plan)], "hi", dict(base_env))
         check(
