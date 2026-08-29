@@ -9,11 +9,14 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
+import types
 from pathlib import Path
 
 try:
@@ -23,7 +26,25 @@ except ImportError as exc:  # pragma: no cover - supplied by the Phase 5 image
 
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = Path(sys.executable)
-BASH = shutil.which("bash") or (r"C:\Program Files\Git\bin\bash.exe" if os.name == "nt" else None)
+
+
+def discover_bash() -> str | None:
+    """Find bash from PATH, then from the Windows installation directories."""
+    discovered = shutil.which("bash")
+    if discovered:
+        return discovered
+    if os.name == "nt":
+        for variable in ("ProgramFiles", "ProgramW6432"):
+            program_files = os.environ.get(variable, "").strip()
+            if not program_files:
+                continue
+            candidate = Path(program_files) / "Git" / "bin" / "bash.exe"
+            if candidate.is_file():
+                return str(candidate)
+    return None
+
+
+BASH = discover_bash()
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import assignment
@@ -259,7 +280,50 @@ def _has_lf_attribute(relative: str) -> bool:
     return result.returncode == 0 and result.stdout.strip().endswith(": eol: lf")
 
 
-def _enumerated_controller_paths() -> set[str]:
+def _normalise_auth_path(value: str) -> str:
+    if value == "scripts/engines/{engine}.json":
+        return "scripts/engines/*.json"
+    return value
+
+
+def _enumerated_shell_auth_paths(source: Path) -> set[str]:
+    """Find shell/embedded-script Git-blob comparisons against live controller bytes.
+
+    Production shell helpers may embed Python, so this intentionally looks for the
+    same small semantic shape in both languages: a path variable is used by a Git
+    ``show`` call and by a live-file read/comparison in the same helper.
+    """
+    try:
+        text = source.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return set()
+    assignments: dict[str, set[str]] = {}
+    for line in text.splitlines():
+        match = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$", line)
+        if not match:
+            continue
+        name, expression = match.groups()
+        literals = set(re.findall(r"['\"](scripts/[^'\"]+)['\"]", expression))
+        if "scripts/engines/" in expression and "engine" in expression:
+            literals = {value for value in literals if not value.endswith("/")}
+            literals.add("scripts/engines/{engine}.json")
+        if literals:
+            assignments[name] = literals
+    result: set[str] = set()
+    for line in text.splitlines():
+        is_git_show = bool(re.search(r"\bgit\s+[^#\n]*\bshow\b", line)) \
+            or bool(re.search(r"['\"]show['\"]", line))
+        if not is_git_show:
+            continue
+        for name, values in assignments.items():
+            if re.search(rf"\b{re.escape(name)}\b", line):
+                result.update(values)
+        result.update(re.findall(r"(?::|['\"])(scripts/[^'\"\s]+)", line))
+    return {_normalise_auth_path(value) for value in result
+            if value.startswith("scripts/")}
+
+
+def _enumerated_controller_paths(extra_shell_sources: tuple[Path, ...] = ()) -> set[str]:
     sources = (
         ROOT / 'scripts' / 'assignment.py',
         ROOT / 'scripts' / 'resolve-engine.py',
@@ -292,6 +356,13 @@ def _enumerated_controller_paths() -> set[str]:
     if 'scripts/engines/{engine}.json' in result:
         result.remove('scripts/engines/{engine}.json')
         result.add('scripts/engines/*.json')
+    shell_sources = [
+        source for source in (ROOT / "scripts").rglob("*.sh")
+        if "tests" not in source.relative_to(ROOT / "scripts").parts
+        and "audit" not in source.relative_to(ROOT / "scripts").parts
+    ]
+    for source in (*shell_sources, *extra_shell_sources):
+        result.update(_enumerated_shell_auth_paths(source))
     return result
 
 
@@ -301,7 +372,7 @@ def _assert_controller_paths_pinned(paths: tuple[str, ...]) -> None:
         raise AssertionError("authenticated controller paths are not LF-pinned: " + ", ".join(missing))
 
 
-def run_controller_authentication_pin_sweep() -> None:
+def run_controller_authentication_pin_sweep(scratch: Path) -> None:
     """Check the complete byte-vs-blob inventory through Git's attribute engine."""
     enumerated = _enumerated_controller_paths()
     expected = {
@@ -314,17 +385,30 @@ def run_controller_authentication_pin_sweep() -> None:
     for relative in sorted(enumerated):
         check(True, f"byte-authenticated controller path is pinned LF: {relative}")
 
-    # Mutation proof for this coverage guard: adding a newly authenticated,
-    # unpinned file to the inventory must make the assertion fail.
-    future_unpinned = "scripts/phase5-future-authenticator.py"
+    # Mutation proof for this coverage guard: a new embedded shell authenticator is
+    # discovered and then fails the pin assertion until its path is pinned.
+    future_source = scratch / "future-authenticator.sh"
+    future_source.write_text(
+        """#!/bin/sh
+relative = \"scripts/future-authenticator.json\"
+committed = subprocess.run([\"git\", \"-C\", root, \"show\", f\"{sha}:{relative}\"])
+live = read_bytes(Path(root) / relative)
+if live != committed.stdout:
+    raise SystemExit(1)
+""",
+        encoding="utf-8",
+    )
+    future_unpinned = "scripts/future-authenticator.json"
+    mutated = _enumerated_controller_paths((future_source,))
+    check(future_unpinned in mutated,
+          "shell authenticator discovery sees a newly added embedded byte comparison")
     try:
-        augmented = tuple(sorted(enumerated)) + (future_unpinned,)
-        _assert_controller_paths_pinned(augmented)
+        _assert_controller_paths_pinned(tuple(sorted(mutated)))
     except AssertionError as exc:
         check(future_unpinned in str(exc),
-              "byte-authentication pin coverage fails for a newly added unpinned path")
+              "byte-authentication pin coverage fails for a newly discovered unpinned shell path")
     else:
-        raise AssertionError("byte-authentication pin coverage accepted a newly added unpinned path")
+        raise AssertionError("byte-authentication pin coverage accepted a newly discovered unpinned shell path")
 
 
 def run_path_sweep(scratch: Path) -> None:
@@ -577,6 +661,45 @@ def make_assignment_fixture(scratch: Path) -> tuple[Path, Path, dict, str]:
     return source, controller, value, controller_sha
 
 
+def run_resolver_symbolic_refusal_sweep(scratch: Path) -> None:
+    source, controller, _, controller_sha = make_assignment_fixture(scratch)
+    _ = source
+    env = dict(
+        os.environ,
+        RECURSION_ROOT=str(controller),
+        RECURSION_ENGINE_PLUGINS="1",
+        RECURSION_ENGINE_CURSOR_ENABLED="1",
+    )
+    hostile_name = str(controller / "leak")
+    invalid_name = run_command([
+        PYTHON, ROOT / "scripts" / "resolve-engine.py", hostile_name, "--validate",
+    ], env=env)
+    check(invalid_name.returncode == 2
+          and b"refusal=invalid-engine-name" in invalid_name.stderr
+          and hostile_name.encode() not in invalid_name.stderr,
+          "invalid engine refusal is symbolic and does not disclose caller input")
+
+    output_path = controller / "scripts"
+    publication = run_command([
+        PYTHON, ROOT / "scripts" / "resolve-engine.py", "cursor", "--role", "implementer",
+        "--emit-plan", output_path, "--controller-root", controller,
+        "--controller-commit", controller_sha,
+    ], env=env)
+    check(publication.returncode == 2
+          and b"refusal=plan-publication-failed" in publication.stderr
+          and str(output_path).encode() not in publication.stderr,
+          "plan publication refusal is symbolic and does not disclose its absolute target")
+
+    valid_output = scratch / "resolver-positive-plan.json"
+    legitimate = run_command([
+        PYTHON, ROOT / "scripts" / "resolve-engine.py", "cursor", "--role", "implementer",
+        "--emit-plan", valid_output, "--controller-root", controller,
+        "--controller-commit", controller_sha,
+    ], env=env)
+    check(legitimate.returncode == 0 and valid_output.is_file(),
+          "legitimate authenticated resolver plan publication still succeeds")
+
+
 def run_sidecar_battery(scratch: Path) -> None:
     source, controller, value, _ = make_assignment_fixture(scratch)
     os.environ["RECURSION_ROOT"] = str(controller)
@@ -750,14 +873,37 @@ def run_worker_plan_sweep(scratch: Path) -> None:
           "well-formed worker engine plan succeeds in the same fixture")
 
 
+EXPECTED_SCHEMA_ONLY = {
+    "schema_version[2]",
+    "concurrency_cap[2]",
+    "float-availability_probe.timeout_s",
+    "float-execution.cancellation.grace_s",
+    "float-execution.exit_codes.auth",
+}
+
+
+def _assert_no_runtime_only(runtime_only: list[str]) -> None:
+    check(not runtime_only,
+          "schema/runtime differential has zero runtime-only cases (runtime is never looser)")
+
+
+def _assert_expected_schema_only(schema_only: list[str]) -> None:
+    check(set(schema_only) == EXPECTED_SCHEMA_ONLY,
+          "schema-only cases are exactly the five justified zero-fraction numeric cases")
+
+
+def _assert_no_new_schema_mismatches(mismatches: list[str]) -> None:
+    check(set(label.split(":", 1)[0] for label in mismatches) == EXPECTED_SCHEMA_ONLY,
+          "no new unjustified schema/runtime mismatch appeared")
+
+
 def run_differential() -> None:
-    strict_types = jsonschema.Draft7Validator.TYPE_CHECKER.redefine(
-        "integer", lambda _checker, value: isinstance(value, int) and not isinstance(value, bool)
-    )
-    strict_validator = jsonschema.validators.extend(
-        jsonschema.Draft7Validator, type_checker=strict_types
-    )
-    validator = strict_validator(SCHEMA)
+    # The stock Draft-7 validator is authoritative.  In Draft-7/2020-12 JSON
+    # Schema, 1.0 is an integer because its fractional part is zero; the runtime
+    # deliberately has the stricter Python-int contract, which a standard schema
+    # cannot express.  A custom integer checker here would mask that safe-direction
+    # difference instead of proving parity.
+    validator = jsonschema.Draft7Validator(SCHEMA)
     base = json.loads((ROOT / "scripts" / "engines" / "cursor.json").read_text(encoding="utf-8"))
     base["name"] = "sampleeng"
     deep_value: list[object] = []
@@ -821,11 +967,11 @@ def run_differential() -> None:
         mutate(mutated)
         cases.append((f"terminal-{label}", mutated))
 
-    # The runtime intentionally requires plain Python ints. jsonschema's
-    # default numeric checker treats 1.0 as an integer by equality, so the
-    # differential validator below uses the same strict integer definition as
-    # the controller. Every integer field is probed, including nested exit
-    # classification values.
+    # Probe every integer field.  The five expected schema-only cases below are
+    # deliberately retained as an explicit, justified exception: they are JSON
+    # numbers with zero fractional part and are therefore inexpressible as a
+    # standard-schema rejection.  Every schema-only case must remain in this list,
+    # and every runtime-only case remains a hard failure.
     numeric_cases: list[tuple[str, dict]] = []
     probe_numeric = copy.deepcopy(base)
     probe_numeric["availability_probe"] = {"type": "http", "url_env": "CURSOR_URL", "timeout_s": 1.0}
@@ -893,17 +1039,344 @@ def run_differential() -> None:
         print("schema/runtime mismatches:\n" + "\n".join(mismatches))
     print(f"schema/runtime differential corpus: cases={len(cases)} "
           f"schema_only={len(schema_only)} runtime_only={len(runtime_only)}")
-    check(not schema_only and not runtime_only,
-          "schema/runtime numeric parity has zero mismatches in both directions")
-    check(not mismatches, "schema/runtime differential corpus has zero mismatches")
+    _assert_no_runtime_only(runtime_only)
+    _assert_expected_schema_only(schema_only)
+    _assert_no_new_schema_mismatches(mismatches)
     check(schema_accepts(base), "schema accepts the positive differential baseline")
     resolver.validate_manifest(base, "sampleeng")
     print("ok - runtime accepts the positive differential baseline")
 
 
+def _module_mutant(scratch: Path, label: str, source_path: Path, old: str, new: str):
+    original = source_path.read_text(encoding="utf-8")
+    if original.count(old) != 1:
+        raise AssertionError(f"mutation target for {label} was not unique")
+    mutated_source = original.replace(old, new, 1)
+    mutant_path = scratch / f"mutation-{label}.py"
+    mutant_path.write_text(mutated_source, encoding="utf-8")
+    module = types.ModuleType(f"phase5_mutant_{label}")
+    module.__file__ = str(source_path.resolve())
+    module.__name__ = f"phase5_mutant_{label}"
+    module._MUTATION_SOURCE = mutated_source
+    exec(compile(mutated_source, str(mutant_path), "exec"), module.__dict__)
+    return module, mutant_path
+
+
+def _boundary_mutant(scratch: Path, label: str, old: str, new: str):
+    return _module_mutant(scratch, label, Path(__file__), old, new)
+
+
+def _kill_mutation(rows: list[dict[str, str]], guard: str, mutated_file: str,
+                   failing_case: str, original_case, mutant_case) -> None:
+    """Run one mutation as an individual test; a surviving mutant is a defect."""
+    try:
+        original_case()
+    except AssertionError as exc:
+        raise AssertionError(f"mutation oracle failed for {guard}: {exc}") from exc
+    try:
+        mutant_case()
+    except AssertionError as exc:
+        rows.append({
+            "guard": guard,
+            "mutated": mutated_file,
+            "case": failing_case,
+            "assertion": str(exc),
+        })
+        print(f"ok - individual mutation killed: {guard}")
+    else:
+        raise AssertionError(
+            f"mutation survived for {guard}; zero failures for {mutated_file} "
+            f"on {failing_case}"
+        )
+
+
+def _resolver_mutant(scratch: Path, label: str, old: str, new: str) -> Path:
+    original = (ROOT / "scripts" / "resolve-engine.py").read_text(encoding="utf-8")
+    if original.count(old) != 1:
+        raise AssertionError(f"resolver mutation target for {label} was not unique")
+    mutant_scripts = scratch / f"mutation-resolver-{label}" / "scripts"
+    mutant_scripts.mkdir(parents=True, exist_ok=True)
+    mutant_path = mutant_scripts / "resolve-engine.py"
+    mutant_path.write_text(original.replace(old, new, 1), encoding="utf-8")
+    shutil.copy2(ROOT / "scripts" / "phase5_safety.py", mutant_scripts / "phase5_safety.py")
+    return mutant_path
+
+
+def _remove_mutation_tree(path: Path) -> None:
+    if not path.exists():
+        return
+    for child in sorted(path.rglob("*"), key=lambda item: len(item.parts), reverse=True):
+        if child.is_dir():
+            try:
+                os.chmod(child, 0o700)
+            except OSError:
+                pass
+    shutil.rmtree(path, ignore_errors=True)
+
+
+def run_individual_guard_mutations(scratch: Path) -> None:
+    """Individually kill every meaningful Phase 5 guard added in this round.
+
+    The composite sweeps above establish the normal contract.  These probes mutate
+    one guard at a time in a scratch copy and then run the focused negative case that
+    must fail.  This keeps a vacuous composite assertion from counting as proof.
+    """
+    scratch.mkdir(parents=True, exist_ok=True)
+    rows: list[dict[str, str]] = []
+    boundary_source = Path(__file__).resolve().relative_to(ROOT).as_posix()
+    boundary_text = Path(__file__).read_text(encoding="utf-8")
+    resolver_text = (ROOT / "scripts" / "resolve-engine.py").read_text(encoding="utf-8")
+    runtime_text = (ROOT / "scripts" / "runtime-layout.py").read_text(encoding="utf-8")
+
+    def line_of(text: str, needle: str) -> str:
+        return f"{boundary_source}:{text.splitlines().index(needle) + 1}"
+
+    def containing_line(text: str, needle: str, path: str) -> str:
+        return f"{path}:{next(index for index, line in enumerate(text.splitlines(), 1) if needle in line)}"
+
+    def differential_case(function_name: str, argument, message: str) -> None:
+        def case(module) -> None:
+            try:
+                getattr(module, function_name)(argument)
+            except AssertionError:
+                return
+            raise AssertionError(message)
+        return case
+
+    runtime_old = "    check(not runtime_only,\n"
+    runtime_new = "    check(True,\n"
+    runtime_mutant, _ = _boundary_mutant(scratch, "runtime-only", runtime_old, runtime_new)
+    runtime_line = line_of(boundary_text, runtime_old.rstrip("\n"))
+    runtime_case = differential_case(
+        "_assert_no_runtime_only", ["synthetic-runtime-only"],
+        "runtime-only differential case was accepted",
+    )
+    _kill_mutation(
+        rows, "stock differential runtime_only==0", runtime_line,
+        "synthetic runtime-only schema mismatch", lambda: runtime_case(sys.modules[__name__]),
+        lambda: runtime_case(runtime_mutant),
+    )
+
+    schema_old = "    check(set(schema_only) == EXPECTED_SCHEMA_ONLY,\n"
+    schema_new = "    check(True,\n"
+    schema_mutant, _ = _boundary_mutant(scratch, "schema-only", schema_old, schema_new)
+    schema_line = line_of(boundary_text, schema_old.rstrip("\n"))
+    schema_case = differential_case(
+        "_assert_expected_schema_only", ["unexpected-schema-only"],
+        "new unjustified schema-only case was accepted",
+    )
+    _kill_mutation(
+        rows, "stock differential schema_only enumeration", schema_line,
+        "synthetic unjustified schema-only mismatch", lambda: schema_case(sys.modules[__name__]),
+        lambda: schema_case(schema_mutant),
+    )
+
+    mismatch_old = "    check(set(label.split(\":\", 1)[0] for label in mismatches) == EXPECTED_SCHEMA_ONLY,\n"
+    mismatch_new = "    check(True,\n"
+    mismatch_mutant, _ = _boundary_mutant(scratch, "new-mismatch", mismatch_old, mismatch_new)
+    mismatch_line = line_of(boundary_text, mismatch_old.rstrip("\n"))
+    mismatch_case = differential_case(
+        "_assert_no_new_schema_mismatches", ["unexpected-case: schema=True runtime=False"],
+        "new unjustified schema/runtime mismatch was accepted",
+    )
+    _kill_mutation(
+        rows, "stock differential new-mismatch guard", mismatch_line,
+        "synthetic new schema/runtime mismatch", lambda: mismatch_case(sys.modules[__name__]),
+        lambda: mismatch_case(mismatch_mutant),
+    )
+
+    future_source = scratch / "mutation-future-authenticator.sh"
+    future_source.write_text(
+        "relative = \"scripts/future-authenticator.json\"\n"
+        "committed = subprocess.run([\"git\", \"show\", relative])\n"
+        "live = read_bytes(Path(root) / relative)\n"
+        "if live != committed.stdout: raise SystemExit(1)\n",
+        encoding="utf-8",
+    )
+    future_path = "scripts/future-authenticator.json"
+    discovery_old = "        result.update(_enumerated_shell_auth_paths(source))\n"
+    discovery_new = "        pass\n"
+    discovery_mutant, _ = _boundary_mutant(scratch, "shell-discovery", discovery_old, discovery_new)
+    discovery_line = line_of(boundary_text, discovery_old.rstrip("\n"))
+
+    def shell_discovery_case(module) -> None:
+        if future_path not in module._enumerated_controller_paths((future_source,)):
+            raise AssertionError("new embedded shell authenticator was not discovered")
+
+    _kill_mutation(
+        rows, "shell authenticator discovery", discovery_line,
+        future_path, lambda: shell_discovery_case(sys.modules[__name__]),
+        lambda: shell_discovery_case(discovery_mutant),
+    )
+
+    pin_old = (
+        "def _assert_controller_paths_pinned(paths: tuple[str, ...]) -> None:\n"
+        "    missing = [relative for relative in paths if not _has_lf_attribute(relative)]\n"
+        "    if missing:\n"
+        "        raise AssertionError(\"authenticated controller paths are not LF-pinned: \" + \", \".join(missing))\n"
+    )
+    pin_new = "def _assert_controller_paths_pinned(paths: tuple[str, ...]) -> None:\n    return\n"
+    pin_mutant, _ = _boundary_mutant(scratch, "pin-coverage", pin_old, pin_new)
+    pin_line = line_of(boundary_text, "    missing = [relative for relative in paths if not _has_lf_attribute(relative)]")
+
+    def pin_case(module) -> None:
+        try:
+            module._assert_controller_paths_pinned((future_path,))
+        except AssertionError:
+            return
+        raise AssertionError("new unpinned authenticated path was accepted")
+
+    _kill_mutation(
+        rows, "authenticated-path LF pin coverage", pin_line,
+        future_path, lambda: pin_case(sys.modules[__name__]),
+        lambda: pin_case(pin_mutant),
+    )
+
+    mutation_fixture = scratch / "mutation-fixture"
+    mutation_fixture.mkdir(parents=True, exist_ok=True)
+    _, mutation_controller, _, mutation_controller_sha = make_assignment_fixture(mutation_fixture)
+    resolver_env = dict(
+        os.environ, RECURSION_ROOT=str(mutation_controller),
+        RECURSION_ENGINE_PLUGINS="1", RECURSION_ENGINE_CURSOR_ENABLED="1",
+    )
+    hostile_name = str(mutation_controller / "mutation-caller-controlled-name")
+    invalid_old = "        diag(REFUSAL_INVALID_ENGINE_NAME)\n"
+    invalid_new = "        diag(f\"invalid engine name {engine!r}\")\n"
+    invalid_mutant = _resolver_mutant(scratch, "invalid-name", invalid_old, invalid_new)
+    invalid_line = containing_line(resolver_text, invalid_old.strip(), "scripts/resolve-engine.py")
+
+    def invalid_case(path: Path) -> None:
+        result = subprocess.run(
+            [PYTHON, path, hostile_name, "--validate"],
+            cwd=ROOT, env=resolver_env, capture_output=True,
+        )
+        if result.returncode != 2 or hostile_name.encode() in result.stderr \
+                or b"invalid engine name" in result.stderr:
+            raise AssertionError("invalid engine refusal disclosed caller-controlled path")
+
+    _kill_mutation(
+        rows, "invalid-engine symbolic refusal", invalid_line,
+        hostile_name, lambda: invalid_case(ROOT / "scripts" / "resolve-engine.py"),
+        lambda: invalid_case(invalid_mutant),
+    )
+
+    publication_old = "        diag(REFUSAL_PLAN_PUBLICATION)\n"
+    publication_new = "        diag(f\"failed to write plan to {out_path}: publication error\")\n"
+    publication_mutant = _resolver_mutant(scratch, "plan-publication", publication_old, publication_new)
+    publication_line = containing_line(resolver_text, publication_old.strip(), "scripts/resolve-engine.py")
+    publication_target = mutation_controller / "scripts"
+
+    def publication_case(path: Path) -> None:
+        result = subprocess.run(
+            [PYTHON, path, "cursor", "--role", "implementer", "--emit-plan", publication_target,
+             "--controller-root", mutation_controller, "--controller-commit", mutation_controller_sha],
+            cwd=ROOT, env=resolver_env, capture_output=True,
+        )
+        if result.returncode != 2 or str(publication_target).encode() in result.stderr:
+            raise AssertionError("plan publication refusal disclosed caller-controlled path")
+
+    _kill_mutation(
+        rows, "plan-publication symbolic refusal", publication_line,
+        str(publication_target), lambda: publication_case(ROOT / "scripts" / "resolve-engine.py"),
+        lambda: publication_case(publication_mutant),
+    )
+
+    private_old = "os.mkdir(os.path.basename(str(destination)), 0o700, dir_fd=destination_parent_fd)"
+    private_new = "os.mkdir(os.path.basename(str(destination)), 0o755, dir_fd=destination_parent_fd)"
+    private_mutant, _ = _module_mutant(
+        scratch, "private-staging", ROOT / "scripts" / "runtime-layout.py", private_old, private_new,
+    )
+    private_line = containing_line(runtime_text, private_old, "scripts/runtime-layout.py")
+    private_marker = private_old
+
+    def private_staging_case(module) -> None:
+        source = scratch / f"private-source-{secrets.token_hex(4)}"
+        destination = scratch / f"private-destination-{secrets.token_hex(4)}"
+        source.mkdir()
+        (source / "payload").write_bytes(b"payload\n")
+        observed: list[int] = []
+        if os.name == "nt":
+            if private_marker not in getattr(module, "_MUTATION_SOURCE", private_marker):
+                raise AssertionError("POSIX staging mode was widened from owner-only 0700")
+            return
+        real_chmod = module.chmod_directory
+
+        def observe(path, mode):
+            if Path(path) == destination and not observed:
+                observed.append(stat.S_IMODE(os.lstat(path).st_mode))
+            real_chmod(path, mode)
+
+        module.chmod_directory = observe
+        try:
+            module._copy_tree(source, destination)
+        finally:
+            module.chmod_directory = real_chmod
+            _remove_mutation_tree(destination)
+            _remove_mutation_tree(source)
+        if not observed or observed[0] & 0o022:
+            raise AssertionError("runtime destination was writable before publication completed")
+
+    _kill_mutation(
+        rows, "owner-only private runtime staging", private_line,
+        "destination mode before first child publication", lambda: private_staging_case(runtime_layout),
+        lambda: private_staging_case(private_mutant),
+    )
+
+    final_old = "        source_after_lock = _tree_snapshot(source)\n"
+    final_new = "        source_after_lock = source_after_copy\n"
+    final_mutant, _ = _module_mutant(
+        scratch, "post-lock-scan", ROOT / "scripts" / "runtime-layout.py", final_old, final_new,
+    )
+    final_line = containing_line(runtime_text, final_old.strip(), "scripts/runtime-layout.py")
+
+    def final_scan_case(module) -> None:
+        source = scratch / f"final-source-{secrets.token_hex(4)}"
+        destination = scratch / f"final-destination-{secrets.token_hex(4)}"
+        source.mkdir()
+        payload = source / "payload"
+        payload.write_bytes(b"original\n")
+        real_snapshot = module._tree_snapshot
+        source_snapshots = 0
+        changed = False
+
+        def tampering_snapshot(path):
+            nonlocal source_snapshots, changed
+            result = real_snapshot(path)
+            if Path(path) == source:
+                source_snapshots += 1
+                if source_snapshots == 2 and not changed:
+                    payload.write_bytes(b"tampered-after-publication\n")
+                    changed = True
+            return result
+
+        module._tree_snapshot = tampering_snapshot
+        try:
+            try:
+                module._copy_tree(source, destination)
+            except module.LayoutError:
+                return
+        finally:
+            module._tree_snapshot = real_snapshot
+            _remove_mutation_tree(destination)
+            _remove_mutation_tree(source)
+        raise AssertionError("post-lock source mutation was accepted by the final scan")
+
+    _kill_mutation(
+        rows, "post-lock completeness and identity scan", final_line,
+        "source mutation after child publication", lambda: final_scan_case(runtime_layout),
+        lambda: final_scan_case(final_mutant),
+    )
+
+    if len(rows) != 9:
+        raise AssertionError(f"individual mutation table is incomplete: {len(rows)} rows, expected 9")
+    print("individual guard mutation table:")
+    for row in rows:
+        print("  " + " | ".join(f"{key}={value}" for key, value in row.items()))
+
+
 def main() -> int:
     if BASH is None or not Path(BASH).is_file():
-        print("SKIP - bash interpreter not found on PATH or at the Windows-only fallback (exit 77)")
+        print("SKIP - bash interpreter was not discoverable on PATH or via ProgramFiles/ProgramW6432 (exit 77)")
         return 77
     supplied = os.environ.get("PHASE5_SWEEP_ROOT", "").strip()
     owned = not supplied
@@ -918,12 +1391,14 @@ def main() -> int:
         scratch.mkdir()
     try:
         run_json_cli_sweep(scratch)
-        run_controller_authentication_pin_sweep()
+        run_controller_authentication_pin_sweep(scratch)
+        run_resolver_symbolic_refusal_sweep(scratch)
         run_path_sweep(scratch)
         run_publication_race_probe(scratch)
         run_sidecar_battery(scratch)
         run_worker_plan_sweep(scratch)
         run_differential()
+        run_individual_guard_mutations(scratch)
     finally:
         if owned:
             shutil.rmtree(scratch, ignore_errors=True)

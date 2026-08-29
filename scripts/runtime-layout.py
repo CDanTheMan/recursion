@@ -11,6 +11,7 @@ or socket into the worker namespace.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import shutil
 import stat
@@ -218,9 +219,81 @@ def _safe_entrypoint(value: str) -> str:
     return value
 
 
+def _tree_snapshot(root: Path) -> dict[str, tuple]:
+    """Return topology, identity, mode, and content for a link-free tree."""
+    snapshot: dict[str, tuple] = {}
+    for current, directories, files in _scan_tree(root):
+        relative = current.relative_to(root).as_posix()
+        try:
+            info = os.lstat(current)
+        except (OSError, ValueError, TypeError) as exc:
+            raise LayoutError("runtime tree entry disappeared during final scan") from exc
+        if _is_link_or_reparse(current) or not stat.S_ISDIR(info.st_mode):
+            raise LayoutError("runtime tree changed into a non-directory during final scan")
+        snapshot[relative] = (
+            "dir", int(getattr(info, "st_dev", 0)), int(getattr(info, "st_ino", 0)),
+            int(getattr(info, "st_nlink", 0)), stat.S_IMODE(info.st_mode),
+        )
+        for name in files:
+            path = current / name
+            try:
+                before = os.lstat(path)
+            except (OSError, ValueError, TypeError) as exc:
+                raise LayoutError("runtime tree file disappeared during final scan") from exc
+            if _is_link_or_reparse(path) or not stat.S_ISREG(before.st_mode) \
+                    or int(getattr(before, "st_nlink", 0)) != 1:
+                if int(getattr(before, "st_nlink", 0)) != 1:
+                    raise LayoutError("runtime tree contains a hardlinked file during final scan")
+                raise LayoutError("runtime tree contains an unsafe file during final scan")
+            try:
+                payload = read_bytes(path, label="runtime final scan")
+                after = os.lstat(path)
+            except (BoundaryError, OSError, ValueError, TypeError) as exc:
+                raise LayoutError("runtime tree file could not be verified after locking") from exc
+            if _is_link_or_reparse(path) or not stat.S_ISREG(after.st_mode) \
+                    or int(getattr(after, "st_nlink", 0)) != 1 \
+                    or (getattr(before, "st_dev", 0), getattr(before, "st_ino", 0),
+                        getattr(before, "st_nlink", 0)) \
+                    != (getattr(after, "st_dev", 0), getattr(after, "st_ino", 0),
+                        getattr(after, "st_nlink", 0)):
+                raise LayoutError("runtime tree file identity changed during final scan")
+            snapshot[(current / name).relative_to(root).as_posix()] = (
+                "file", int(getattr(after, "st_dev", 0)), int(getattr(after, "st_ino", 0)),
+                int(getattr(after, "st_nlink", 0)), int(after.st_size),
+                hashlib.sha256(payload).hexdigest(), stat.S_IMODE(after.st_mode),
+            )
+    return snapshot
+
+
+def _identity_view(snapshot: dict[str, tuple]) -> dict[str, tuple]:
+    return {
+        path: (entry[0], entry[1], entry[2], entry[3])
+        for path, entry in snapshot.items()
+    }
+
+
+def _content_view(snapshot: dict[str, tuple]) -> dict[str, tuple]:
+    return {
+        path: ((entry[0],) if entry[0] == "dir"
+               else (entry[0], entry[4], entry[5]))
+        for path, entry in snapshot.items()
+    }
+
+
+def _assert_locked(snapshot: dict[str, tuple]) -> None:
+    # Windows ACLs, not POSIX directory mode bits, seal directories.  Files are
+    # still published with the read-only attribute by atomic_write and remain
+    # checked on both platforms.
+    writable = [path for path, entry in snapshot.items()
+                if (os.name != "nt" or entry[0] == "file") and entry[-1] & 0o222]
+    if writable:
+        raise LayoutError("runtime tree remained writable after locking")
+
+
 def _copy_tree(source: Path, destination: Path, entrypoint: str | None = None) -> None:
     created = False
     directories_to_lock: list[Path] = []
+    locked_directories: list[Path] = []
     try:
         source = _safe_source(source)
         destination = Path(destination)
@@ -228,14 +301,20 @@ def _copy_tree(source: Path, destination: Path, entrypoint: str | None = None) -
             raise LayoutError("runtime destination must be absolute")
         if entrypoint:
             entrypoint = _safe_entrypoint(entrypoint)
+        source_before = _tree_snapshot(source)
         ensure_directory(destination.parent)
         with pinned_directory(source), pinned_directory(destination.parent) as (destination_parent_fd, _):
             metadata = _entry_metadata(source)
             try:
                 if os.name == "nt":
+                    # Python's POSIX mode argument can map to a restrictive ACL
+                    # under Git Bash; Windows sealing is handled by ACLs, while
+                    # the private POSIX mode below closes the staging window.
                     os.mkdir(destination)
                 else:
-                    os.mkdir(os.path.basename(str(destination)), dir_fd=destination_parent_fd)
+                    # Keep the complete staged tree inaccessible to other users
+                    # until every child has been published and verified.
+                    os.mkdir(os.path.basename(str(destination)), 0o700, dir_fd=destination_parent_fd)
             except FileExistsError as exc:
                 raise LayoutError(f"runtime destination already exists: {destination}") from exc
             created = True
@@ -268,6 +347,7 @@ def _copy_tree(source: Path, destination: Path, entrypoint: str | None = None) -
                     relative = current_path.relative_to(source)
                     target_dir = destination / relative
                     ensure_directory(target_dir)
+                    chmod_directory(target_dir, 0o700)
                     directories_to_lock.append(target_dir)
                     for name in files:
                         source_file = current_path / name
@@ -305,9 +385,39 @@ def _copy_tree(source: Path, destination: Path, entrypoint: str | None = None) -
             if os.name != "nt" and not (stat.S_IMODE(entry_info.st_mode) & 0o111):
                 _remove_created_tree(destination)
                 raise LayoutError("runtime entrypoint is not executable")
+
+        source_after_copy = _tree_snapshot(source)
+        if _identity_view(source_before) != _identity_view(source_after_copy) \
+                or _content_view(source_before) != _content_view(source_after_copy):
+            raise LayoutError("runtime source changed during staging")
+        before_lock = _tree_snapshot(destination)
         for target_dir in directories_to_lock:
             chmod_directory(target_dir, 0o555)
+            locked_directories.append(target_dir)
+
+        # The final scan is deliberately after the lock.  It proves that no entry
+        # disappeared, appeared, or changed identity/content across publication and
+        # sealing, and that every directory and file is actually non-writable.
+        source_after_lock = _tree_snapshot(source)
+        after_lock = _tree_snapshot(destination)
+        if _identity_view(source_after_copy) != _identity_view(source_after_lock) \
+                or _content_view(source_after_copy) != _content_view(source_after_lock):
+            raise LayoutError("runtime source changed while staging was sealed")
+        if _identity_view(before_lock) != _identity_view(after_lock) \
+                or _content_view(before_lock) != _content_view(after_lock):
+            raise LayoutError("runtime tree changed while staging was sealed")
+        if _content_view(source_after_lock) != _content_view(after_lock):
+            raise LayoutError("staged runtime is incomplete or differs from its source")
+        _assert_locked(after_lock)
     except BaseException:
+        # A failed post-lock verification must not leave a half-published destination
+        # that blocks recovery.  Re-open write permission only for this owner's
+        # immediate cleanup; successful returns never pass through this branch.
+        for target_dir in reversed(locked_directories):
+            try:
+                chmod_directory(target_dir, 0o700)
+            except (BoundaryError, OSError, ValueError, TypeError):
+                pass
         if created:
             _remove_created_tree(destination)
         raise

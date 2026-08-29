@@ -19,8 +19,26 @@ from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[2]
 SANDBOX_SCRIPT = SOURCE / "scripts" / "worker-sandbox.sh"
-BASH = shutil.which("bash") or (r"C:\Program Files\Git\bin\bash.exe" if os.name == "nt" else None)
-CYGPATH = shutil.which("cygpath") or (r"C:\Program Files\Git\usr\bin\cygpath.exe" if os.name == "nt" else None)
+
+
+def discover_windows_tool(name: str, relative: tuple[str, ...]) -> str | None:
+    """Find a tool on PATH, then under an environment-selected Windows install root."""
+    discovered = shutil.which(name)
+    if discovered:
+        return discovered
+    if os.name == "nt":
+        for variable in ("ProgramFiles", "ProgramW6432"):
+            program_files = os.environ.get(variable, "").strip()
+            if not program_files:
+                continue
+            candidate = Path(program_files).joinpath(*relative)
+            if candidate.is_file():
+                return str(candidate)
+    return None
+
+
+BASH = discover_windows_tool("bash", ("Git", "bin", "bash.exe"))
+CYGPATH = discover_windows_tool("cygpath", ("Git", "usr", "bin", "cygpath.exe"))
 
 failures: list[str] = []
 
@@ -92,7 +110,7 @@ def bash_run(sandbox_script_posix: str, argv_after_script: list[str], extra_path
 def main() -> int:
     check_embedded_plan_parser()
     if BASH is None:
-        print("SKIP - bash not found on PATH")
+        print("SKIP - bash interpreter was not discoverable on PATH or via ProgramFiles/ProgramW6432")
         return 0
 
     mktemp = subprocess.run([BASH, "-lc", "mktemp -d"], capture_output=True, text=True)

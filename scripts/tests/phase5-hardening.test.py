@@ -212,6 +212,13 @@ def main() -> int:
         work = (ROOT / "scripts/work.sh").read_text()
         check("quarantine: termination was not confirmed" in work and 'arc" = 96' in work,
               "controller retains worktree when process-group cancellation is unconfirmed")
+        check(
+            'if [ "$STRICT_PHASE5" = 1 ]; then' in work
+            and "existing worktree is retained as a quarantine" in work
+            and "removing stale legacy worktree before fresh dispatch" in work
+            and 'git -C "$REPO_DIR" worktree remove --force "$wt"' in work,
+            "strict Phase 5 quarantines existing worktrees while legacy reruns retain forced removal",
+        )
         check('[ "$STRICT_PHASE5" != 1 ] || cmd+=(--execution-evidence' in work
               and 'args+=(--execution-evidence "$execution_evidence")' in work,
               "strict worker launch and finish always carry execution evidence")

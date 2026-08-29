@@ -27,13 +27,11 @@ resolver_spec.loader.exec_module(resolver)
 
 def main() -> int:
     jsonschema.Draft7Validator.check_schema(SCHEMA)
-    strict_types = jsonschema.Draft7Validator.TYPE_CHECKER.redefine(
-        "integer", lambda _checker, value: isinstance(value, int) and not isinstance(value, bool)
-    )
-    strict_validator = jsonschema.validators.extend(
-        jsonschema.Draft7Validator, type_checker=strict_types
-    )
-    validator = strict_validator(SCHEMA)
+    # Use the stock Draft-7 validator as the schema authority.  Its standard
+    # integer semantics intentionally admit 1.0; the runtime's plain-Python-int
+    # rule is a stricter, safe-direction runtime check and is not expressible in
+    # standard JSON Schema.  Do not replace this checker with a custom one.
+    validator = jsonschema.Draft7Validator(SCHEMA)
     failures: list[str] = []
     for path in sorted(ENGINES.glob("*.json")):
         if path.name == "model-aliases.json":
@@ -91,6 +89,7 @@ def main() -> int:
     if not (schema_ok and runtime_ok):
         failures.append("schema/runtime disagree on executable-only null source")
 
+    numeric_schema_only = []
     for field in ("schema_version", "concurrency_cap"):
         numeric = copy.deepcopy(cursor)
         numeric[field] = 1.0
@@ -101,8 +100,14 @@ def main() -> int:
             runtime_ok = False
         else:
             runtime_ok = True
-        if schema_ok or runtime_ok:
-            failures.append(f"schema/runtime accepted non-integer numeric field: {field}")
+        if schema_ok and not runtime_ok:
+            numeric_schema_only.append(field)
+        else:
+            failures.append(f"schema/runtime numeric semantics changed for field: {field}")
+
+    expected_numeric_schema_only = {"schema_version", "concurrency_cap"}
+    if set(numeric_schema_only) != expected_numeric_schema_only:
+        failures.append("schema/runtime numeric exception inventory changed")
 
     overlapping_exit_codes = copy.deepcopy(cursor)
     overlapping_exit_codes["execution"]["exit_codes"]["auth"] = [0]
@@ -130,6 +135,8 @@ def main() -> int:
     if failures:
         print("\n".join(failures))
         return 1
+    print("schema/runtime differential: schema_only=2 runtime_only=0 "
+          "(zero-fraction integers are standard-schema semantics)")
     print("engine-manifest-schema.test: ALL PASS")
     return 0
 

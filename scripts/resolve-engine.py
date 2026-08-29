@@ -40,6 +40,8 @@ except Exception as exc:
     raise import_error from None
 
 PROG = "resolve-engine"
+REFUSAL_INVALID_ENGINE_NAME = "refusal=invalid-engine-name"
+REFUSAL_PLAN_PUBLICATION = "refusal=plan-publication-failed"
 
 NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
 ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}")
@@ -594,7 +596,7 @@ def main() -> int:
 
     engine = args.engine
     if not NAME_RE.fullmatch(engine):
-        diag(f"invalid engine name {engine!r}: must match ^[a-z][a-z0-9-]{{1,31}}$")
+        diag(REFUSAL_INVALID_ENGINE_NAME)
         return 2
     if engine in BUILTIN_ENGINES:
         diag(f"{engine!r} is a builtin engine, not a plugin")
@@ -664,8 +666,10 @@ def main() -> int:
     out_path = Path(args.emit_plan)
     try:
         write_plan_atomically(plan, out_path)
-    except (OSError, ValueError, TypeError, OverflowError, RecursionError) as exc:
-        diag(f"failed to write plan to {out_path}: {exc}")
+    except (BoundaryError, OSError, ValueError, TypeError, OverflowError, RecursionError):
+        # The output path is caller-controlled.  Keep the refusal symbolic so a
+        # failed publication cannot disclose an absolute path or OS diagnostic.
+        diag(REFUSAL_PLAN_PUBLICATION)
         return 2
 
     return 0

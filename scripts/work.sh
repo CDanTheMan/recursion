@@ -785,8 +785,18 @@ mk_worktree(){
     return 73
   fi
   if [ -e "$wt" ]; then
-    log "existing worktree is retained as a quarantine; refusing to remove it before proving no worker is live: $wt"
-    return 96
+    if [ "$STRICT_PHASE5" = 1 ]; then
+      # Strict runs retain an existing worktree as a quarantine: removing it could
+      # destroy a live or unconfirmed worker's only recovery evidence.
+      log "existing worktree is retained as a quarantine; refusing to remove it before proving no worker is live: $wt"
+      return 96
+    fi
+    # Legacy Phase 0/1 tasks never create process/evidence quarantines. Preserve
+    # their historical rerun contract: discard a stale worktree after the same
+    # per-repository lock, then create the fresh isolated checkout.
+    log "removing stale legacy worktree before fresh dispatch: $wt"
+    git -C "$REPO_DIR" worktree remove --force "$wt" 2>/dev/null || true
+    rm -rf "$wt" 2>/dev/null || true
   fi
   git -C "$REPO_DIR" worktree prune 2>/dev/null || true
   # Fetch latest so the task builds on the FRESHEST merged base — this is what makes work
