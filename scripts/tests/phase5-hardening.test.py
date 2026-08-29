@@ -337,6 +337,7 @@ def main() -> int:
                               network_policy="provider-only", network_profile="anthropic",
                               network_endpoints=["api.anthropic.com"],
                               argv=list(claude["argv"]), model="cursor-primary")
+        controller_sha = subprocess.check_output(["git", "-C", str(controller), "rev-parse", "HEAD"], text=True).strip()
         check(assignment._engine_binding("claude", str(controller), controller_sha)[4]
               == assignment.CLAUDE_ARGV,
               "builtin Claude binding exposes its exact hardcoded argv")
