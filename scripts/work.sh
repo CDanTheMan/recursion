@@ -724,6 +724,7 @@ if [ -x "$ROOT/scripts/validate-gate.py" ]; then
       --source-commit "$GATE_SOURCE_COMMIT" \
       --controller-root "$ROOT" --controller-gate-files "$CONTROLLER_GATE_FILES" \
       --controller-commit "$GATE_CONTROLLER_COMMIT" \
+      --read-only-paths "$SEED" \
       "${GATE_STRICT_ARGS[@]}" 2>"$GATE_ERR")"; then
     gate_rc=0
   else gate_rc=$?; fi
@@ -1007,6 +1008,7 @@ PY
   ASSIGNMENT_DIGEST="$(PYTHONPATH="$ROOT/scripts" python3 - "$ASSIGNMENT_FILE" "$ID" "$PROJECT_ID" "$REPO_DIR" "$source_branch" "$BASE_COMMIT" \
     "$ROOT" "$CONTROLLER_SHA" \
     "$SEED_MANIFEST_SHA256" "$ENGINE" "$impl_provider" "$CAPACITY_POOL" "$host" "strict-linux" "$impl_profile" \
+    "$ALLOWED_PATHS" \
     "$impl_endpoints" "$GATE_CONTRACT" "$impl_provider" "$RESOLVED_MODEL" "$VERIFIER_ENGINE" "$verifier_provider" \
      "$verifier_profile" "$verifier_endpoints" "$RESOLVED_VERIFIER_MODEL" \
      "$impl_policy" "$verifier_policy" "$impl_argv" "$verifier_argv" <<'PY'

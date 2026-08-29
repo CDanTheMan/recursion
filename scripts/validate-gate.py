@@ -198,7 +198,7 @@ def entrypoint(words: list[str], strict: bool) -> str | None:
     fail(f"{name} acceptance has no explicit grading program")
 
 
-def validate_test_paths(words: list[str], allowed: list[str], gate_files: list[str], repo: Path | None) -> None:
+def validate_test_paths(words: list[str], allowed: list[str], read_only_paths: list[str], repo: Path | None) -> None:
     """Check file operands of direct ``test``/``[`` commands as well as launchers.
 
     The shell grammar is deliberately narrow, but a direct file test still executes a path
@@ -218,9 +218,10 @@ def validate_test_paths(words: list[str], allowed: list[str], gate_files: list[s
         if not candidate or PurePosixPath(candidate).is_absolute() \
                 or any(part in {"", ".", ".."} for part in candidate.split("/")):
             fail(f"acceptance file operand is outside the allowed tree: {candidate!r}")
-        if not under(candidate, allowed):
+        roots = [*allowed, *read_only_paths]
+        if not under(candidate, roots):
             fail(f"acceptance file operand is outside the allowed tree: {candidate}")
-        if repo is not None and not resolved_under(repo, candidate, allowed):
+        if repo is not None and not resolved_under(repo, candidate, roots):
             fail(f"acceptance file operand resolves outside the allowed tree: {candidate}")
 
 
@@ -259,6 +260,7 @@ def main() -> int:
     parser.add_argument("--controller-gate-files", default="")
     parser.add_argument("--controller-root")
     parser.add_argument("--controller-commit")
+    parser.add_argument("--read-only-paths", default="")
     parser.add_argument("--strict-direct", action="store_true")
     args = parser.parse_args()
     try:
@@ -300,6 +302,7 @@ def main() -> int:
         if ".recursion-result.json" in gate:
             fail("acceptance gate may not grade the worker's own result report")
         allowed = [p.rstrip("/") for p in args.allowed_paths.replace(",", " ").split() if p]
+        read_only_paths = paths(args.read_only_paths)
         gate_files = paths(args.gate_files)
         controller_gate_files = paths(args.controller_gate_files)
         if args.controller_root:
@@ -314,7 +317,7 @@ def main() -> int:
         else:
             controller_root = None
         for words in parsed_segments:
-            validate_test_paths(words, allowed, gate_files, Path(args.repo) if args.repo else None)
+            validate_test_paths(words, allowed, read_only_paths, Path(args.repo) if args.repo else None)
             candidate = entrypoint(words, args.strict_direct)
             if candidate:
                 candidate_path = PurePosixPath(candidate)
@@ -354,10 +357,13 @@ def main() -> int:
                 controller_hashes[item] = hashlib.sha256(
                     clean_tracked_bytes(controller, item, args.controller_commit)
                 ).hexdigest()
-        print(json.dumps({"acceptance": gate,
-                          "acceptance_sha256": hashlib.sha256(gate.encode()).hexdigest(),
-                          "gate_files": hashes,
-                          "controller_gate_files": controller_hashes}, sort_keys=True))
+        result = {"acceptance": gate,
+                  "acceptance_sha256": hashlib.sha256(gate.encode()).hexdigest(),
+                  "gate_files": hashes,
+                  "controller_gate_files": controller_hashes}
+        if read_only_paths:
+            result["read_only_paths"] = read_only_paths
+        print(json.dumps(result, sort_keys=True))
     except (ValueError, TypeError, OverflowError, RecursionError,
             UnicodeDecodeError, json.JSONDecodeError) as exc:
         print(f"ERR {exc}", file=sys.stderr)

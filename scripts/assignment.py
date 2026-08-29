@@ -325,9 +325,11 @@ def _validate_binding(engine: str, provider: str, profile: str, endpoints: Any, 
 def _validate_gate_contract(value: Any, expected_digest: str, *, source_repo: str,
                             source_sha: str, controller_repo: str, controller_sha: str,
                             allowed_paths: list[str]) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != {
+    if not isinstance(value, dict) or set(value) not in ({
         "acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"
-    }:
+    }, {
+        "acceptance", "acceptance_sha256", "gate_files", "controller_gate_files", "read_only_paths"
+    }):
         raise AssignmentError("gate_contract is not the validated gate contract")
     if not isinstance(value["acceptance"], str) or not value["acceptance"]:
         raise AssignmentError("gate_contract acceptance program is absent")
@@ -343,8 +345,13 @@ def _validate_gate_contract(value: Any, expected_digest: str, *, source_repo: st
                     or any(part in {"", ".", ".."} for part in path.split("/")) \
                     or not isinstance(item_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", item_digest):
                 raise AssignmentError(f"gate_contract.{field} contains an unsafe entry")
-    if not value["gate_files"] and not value["controller_gate_files"]:
-        raise AssignmentError("gate_contract has no independently hashed gate/controller source")
+    read_only_paths = value.get("read_only_paths", [])
+    if not isinstance(read_only_paths, list) or any(
+        not isinstance(path, str) or not path or "\\" in path or path.startswith("/")
+        or ":" in path or any(part in {"", ".", ".."} for part in path.split("/"))
+        for path in read_only_paths
+    ) or len(set(read_only_paths)) != len(read_only_paths):
+        raise AssignmentError("gate_contract.read_only_paths is unsafe")
     actual = hashlib.sha256(canonical_bytes(value)).hexdigest()
     if actual != expected_digest:
         raise AssignmentError("gate_digest does not hash the validated gate contract")
@@ -356,8 +363,9 @@ def _validate_gate_contract(value: Any, expected_digest: str, *, source_repo: st
         "--source-commit", source_sha, "--controller-root", controller_repo,
         "--controller-commit", controller_sha,
         "--controller-gate-files", ",".join(value["controller_gate_files"]),
-        "--strict-direct",
     ]
+    if read_only_paths:
+        command.extend(["--read-only-paths", ",".join(read_only_paths)])
     try:
         verified = subprocess.run(
             [sys.executable, *command],
