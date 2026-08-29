@@ -899,7 +899,8 @@ def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600,
                 os.fchmod(descriptor, mode)
             if hook is not None:
                 hook("pre-write")
-            _revalidate_opened_leaf(temporary, descriptor, leaf_identity)
+            # _write_all performs the required same-handle revalidation immediately before
+            # each os.write; keeping that check there avoids a duplicate fstat per write.
             _write_all(descriptor, value, leaf_path=temporary, leaf_identity=leaf_identity)
             os.fsync(descriptor)
             # Revalidate while the same private descriptor is still open, immediately
@@ -1743,7 +1744,17 @@ def acknowledge_jsonl(path: Path, consumer: str, batch: IndexedBatch,
             (consumer, batch.verified_size, batch.chain_sha256),
         )
         _maybe_revalidate_index_connection(connection)
+        # This verification connection is memory-backed; commit alone would discard the
+        # consumer checkpoint when it closes, so publish the committed image durably.
         connection.commit()
+        index_path = getattr(connection, "_durable_index_path", None)
+        if not isinstance(index_path, Path):
+            raise JsonlDurabilityError(
+                "JSONL acknowledgement index has no durable publication path"
+            )
+        if not hasattr(connection, "serialize"):
+            raise JsonlDurabilityError("SQLite serialization is unavailable for acknowledgement")
+        _install_serialized_cache_path(index_path, connection.serialize())
     except sqlite3.DatabaseError as exc:
         connection.rollback()
         raise JsonlDurabilityError(f"cannot acknowledge JSONL consumer {consumer}: {exc}") from exc
