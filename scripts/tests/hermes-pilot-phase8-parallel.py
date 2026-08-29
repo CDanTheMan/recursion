@@ -163,7 +163,7 @@ def main() -> int:
             passed = linux_overlap(root, env)
             label = "two projects overlap under global=2 while one project remains at capacity=1"
         print(("ok    " if passed else "FAIL  ") + label)
-        return 0 if passed else 1
+        return 77 if os.name == "nt" and passed else (0 if passed else 1)
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
