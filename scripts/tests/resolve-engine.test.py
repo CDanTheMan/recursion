@@ -8,9 +8,12 @@ exist yet, so every case here is expected to fail until Component 2 lands.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import hashlib
 import os
+import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,6 +21,24 @@ from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[2]
 RESOLVE_ENGINE = SOURCE / "scripts" / "resolve-engine.py"
+
+
+@contextmanager
+def test_directory(label: str):
+    configured = os.environ.get("PHASE5_TEST_ROOT", "").strip()
+    if configured:
+        root = Path(configured)
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / f"{label}-{secrets.token_hex(8)}"
+        path.mkdir()
+        try:
+            yield path
+        finally:
+            shutil.rmtree(path, ignore_errors=True)
+    else:
+        with tempfile.TemporaryDirectory() as raw:
+            yield Path(raw)
+
 
 STUB_MANIFEST = {
     "schema_version": 1,
@@ -106,8 +127,7 @@ def run_resolve(
 
 
 def main() -> int:
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_dir = Path(tmp)
+    with test_directory("resolve-engine") as tmp_dir:
         (tmp_dir / "stubeng.json").write_text(
             json.dumps(STUB_MANIFEST, indent=2) + "\n", encoding="utf-8"
         )

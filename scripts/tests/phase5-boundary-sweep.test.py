@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import ast
 import hashlib
 import importlib.util
 import json
@@ -119,6 +120,17 @@ MACHINE_UNREADABLE = {"huge-int", "infinite-exp", "nan", "deep-json", "invalid-u
 WORKER_OBJECT = {"true", "false", "one-point-zero", "negative-one", "empty-string",
                  "array", "null", "non-object-root"}
 
+# Every controller path whose raw materialized bytes are compared with a Git blob
+# in this phase.  The engine path is a template: git check-attr applies the same
+# committed glob to a concrete future engine name.
+CONTROLLER_BYTE_AUTHENTICATED_PATHS = (
+    "scripts/resolve-engine.py",
+    "scripts/validate-gate.py",
+    "scripts/provider-egress-profiles.json",
+    "scripts/capacity-pools.json",
+    "scripts/engines/{engine}.json",
+)
+
 
 def write(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -165,6 +177,11 @@ def run_json_cli_sweep(scratch: Path) -> None:
         ], env=engine_env)
         check(engine_result.returncode == 2 and ENGINE_MARKERS[label] in engine_result.stderr,
               f"resolve-engine typed refusal for {label}")
+        check(str(engine_path).encode() not in engine_result.stderr,
+              f"resolve-engine refusal for {label} does not disclose its absolute path")
+        check(b'codec can\'t decode' not in engine_result.stderr
+              and b'Errno' not in engine_result.stderr,
+              f'resolve-engine refusal for {label} does not disclose raw OS text')
 
         machine_env = dict(base_env, RECURSION_MACHINE_DIR=str(machine_dir),
                            RECURSION_REGISTERED_MACHINE_ADAPTER="1",
@@ -216,6 +233,98 @@ def run_json_cli_sweep(scratch: Path) -> None:
                 RECURSION_REGISTERED_MACHINE_ADAPTER="1",
                 RECURSION_REGISTERED_MACHINE_MACHINE_1_ENABLED="1"))
     check(positive.returncode == 0, "valid machine capability input is accepted")
+
+
+def _literal_auth_path(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for item in node.values:
+            if isinstance(item, ast.Constant) and isinstance(item.value, str):
+                parts.append(item.value)
+            elif isinstance(item, ast.FormattedValue) and isinstance(item.value, ast.Name):
+                parts.append('{' + item.value.id + '}')
+            else:
+                return None
+        return ''.join(parts)
+    return None
+
+
+def _has_lf_attribute(relative: str) -> bool:
+    result = subprocess.run(
+        ["git", "check-attr", "eol", "--", relative], cwd=ROOT,
+        capture_output=True, text=True, check=False,
+    )
+    return result.returncode == 0 and result.stdout.strip().endswith(": eol: lf")
+
+
+def _enumerated_controller_paths() -> set[str]:
+    sources = (
+        ROOT / 'scripts' / 'assignment.py',
+        ROOT / 'scripts' / 'resolve-engine.py',
+        ROOT / 'scripts' / 'provider-egress.py',
+    )
+    result: set[str] = set()
+    for source in sources:
+        tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+        assigned: dict[str, set[str]] = {}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign):
+                continue
+            value = _literal_auth_path(node.value)
+            if value is None:
+                continue
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    assigned.setdefault(target.id, set()).add(value)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            if node.func.id in {'_controller_file_bytes', '_clean_controller_file', 'authenticated_file'} \
+                    and len(node.args) >= 3:
+                value = _literal_auth_path(node.args[2])
+                if value is not None:
+                    result.add(value)
+                elif isinstance(node.args[2], ast.Name):
+                    result.update(assigned.get(node.args[2].id, set()))
+        result.update(assigned.get("relative", set()))
+    if 'scripts/engines/{engine}.json' in result:
+        result.remove('scripts/engines/{engine}.json')
+        result.add('scripts/engines/*.json')
+    return result
+
+
+def _assert_controller_paths_pinned(paths: tuple[str, ...]) -> None:
+    missing = [relative for relative in paths if not _has_lf_attribute(relative)]
+    if missing:
+        raise AssertionError("authenticated controller paths are not LF-pinned: " + ", ".join(missing))
+
+
+def run_controller_authentication_pin_sweep() -> None:
+    """Check the complete byte-vs-blob inventory through Git's attribute engine."""
+    enumerated = _enumerated_controller_paths()
+    expected = {
+        'scripts/engines/*.json' if path == 'scripts/engines/{engine}.json' else path
+        for path in CONTROLLER_BYTE_AUTHENTICATED_PATHS
+    }
+    check(enumerated == expected,
+          'byte-authenticated controller call sites are completely enumerated')
+    _assert_controller_paths_pinned(tuple(sorted(enumerated)))
+    for relative in sorted(enumerated):
+        check(True, f"byte-authenticated controller path is pinned LF: {relative}")
+
+    # Mutation proof for this coverage guard: adding a newly authenticated,
+    # unpinned file to the inventory must make the assertion fail.
+    future_unpinned = "scripts/phase5-future-authenticator.py"
+    try:
+        augmented = tuple(sorted(enumerated)) + (future_unpinned,)
+        _assert_controller_paths_pinned(augmented)
+    except AssertionError as exc:
+        check(future_unpinned in str(exc),
+              "byte-authentication pin coverage fails for a newly added unpinned path")
+    else:
+        raise AssertionError("byte-authentication pin coverage accepted a newly added unpinned path")
 
 
 def run_path_sweep(scratch: Path) -> None:
@@ -349,6 +458,47 @@ def run_path_sweep(scratch: Path) -> None:
         "--source", clean_source, "--destination", scratch / "positive-runtime", "--entrypoint", "engine",
     ])
     check(runtime_ok.returncode == 0, "legitimate runtime staging succeeds through the CLI")
+
+    missing_source = scratch / "missing-runtime-source"
+    missing_runtime = run_command([
+        PYTHON, ROOT / "scripts" / "runtime-layout.py", "stage",
+        "--source", missing_source, "--destination", scratch / "missing-runtime-destination",
+    ])
+    check(missing_runtime.returncode == 2 and str(missing_source).encode() not in missing_runtime.stderr,
+          "missing runtime staging refuses without disclosing the absolute source path")
+
+
+def run_publication_race_probe(scratch: Path) -> None:
+    """Make a concurrent creator appear at the final POSIX publication check."""
+    target = scratch / "publication-race-target"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target_absolute = os.path.abspath(os.fspath(target))
+    real_lstat = phase5_safety.os.lstat
+    lstat_calls = 0
+
+    def race_lstat(path):
+        nonlocal lstat_calls
+        if os.path.abspath(os.fspath(path)) == target_absolute:
+            lstat_calls += 1
+            if lstat_calls == 2:
+                target.write_bytes(b"concurrent creator")
+        return real_lstat(path)
+
+    phase5_safety.os.lstat = race_lstat
+    try:
+        try:
+            phase5_safety.atomic_write(target, b"new publication", label="race output")
+        except phase5_safety.BoundaryError as exc:
+            check("changed before publication" in str(exc),
+                  "publication race is refused at the point of use")
+        else:
+            raise AssertionError("publication race was accepted")
+    finally:
+        phase5_safety.os.lstat = real_lstat
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def make_assignment_fixture(scratch: Path) -> tuple[Path, Path, dict, str]:
@@ -608,7 +758,7 @@ def run_differential() -> None:
     for _ in range(140):
         deep_value = [deep_value]
     candidate_values: list[object] = [
-        True, False, 1.0, -1, 10**1000, float("inf"), float("nan"), "", [], {}, None, deep_value, [[]]
+        True, False, 1.0, -1, 10**1000, float("inf"), float("nan"), "", [], {}, None, "\n", deep_value, [[]]
     ]
     fields = tuple(base)
     mismatches: list[str] = []
@@ -629,6 +779,59 @@ def run_differential() -> None:
     builtin = copy.deepcopy(base)
     builtin["name"] = "claude"
     cases.append(("builtin-name", builtin))
+
+    # Differential probes for every nested constrained string family. A terminal
+    # newline is the important edge: Python fullmatch rejects it while a JSON
+    # Schema pattern accepts it unless the schema uses an absolute end anchor.
+    terminal_string_cases = (
+        ("name", lambda value: value.__setitem__("name", value["name"] + "\n")),
+        ("description", lambda value: value.__setitem__("description", value["description"] + "\n")),
+        ("executable", lambda value: value.__setitem__("executable", value["executable"] + "\n")),
+        ("argv", lambda value: value["argv"].__setitem__(1, value["argv"][1] + "\n")),
+        ("model.argv_suffix", lambda value: value["model"]["argv_suffix"].__setitem__(0, value["model"]["argv_suffix"][0] + "\n")),
+        ("roles", lambda value: value["roles"].__setitem__(0, value["roles"][0] + "\n")),
+        ("billing.basis", lambda value: value["billing"].__setitem__("basis", value["billing"]["basis"] + "\n")),
+        ("billing.provider", lambda value: value["billing"].__setitem__("provider", value["billing"]["provider"] + "\n")),
+        ("network.policy", lambda value: value["network"].__setitem__("policy", value["network"]["policy"] + "\n")),
+        ("network.profile", lambda value: value["network"].__setitem__("profile", value["network"]["profile"] + "\n")),
+        ("network.endpoints", lambda value: value["network"]["endpoints"].__setitem__(0, value["network"]["endpoints"][0] + "\n")),
+        ("availability_probe.type", lambda value: value["availability_probe"].__setitem__("type", "http\n")),
+        ("availability_probe.url_env", lambda value: value["availability_probe"].__setitem__("url_env", "CURSOR_URL\n")),
+        ("runtime_layout.mode", lambda value: value["runtime_layout"].__setitem__("mode", value["runtime_layout"]["mode"] + "\n")),
+        ("runtime_layout.source", lambda value: value["runtime_layout"].__setitem__("source", "executable-directory\n")),
+        ("runtime_layout.root", lambda value: (value["runtime_layout"].pop("source"), value["runtime_layout"].__setitem__("root", "executable-directory\n"))),
+        ("runtime_layout.target", lambda value: value["runtime_layout"].__setitem__("target", value["runtime_layout"]["target"] + "\n")),
+        ("runtime_layout.entrypoint", lambda value: value["runtime_layout"].__setitem__("entrypoint", value["runtime_layout"]["entrypoint"] + "\n")),
+        ("execution.output_format", lambda value: value["execution"].__setitem__("output_format", value["execution"]["output_format"] + "\n")),
+        ("execution.cancellation.signal", lambda value: value["execution"]["cancellation"].__setitem__("signal", value["execution"]["cancellation"]["signal"] + "\n")),
+        ("auth.mode", lambda value: value["auth"].__setitem__("mode", value["auth"]["mode"] + "\n")),
+        ("auth.marker", lambda value: value["auth"].__setitem__("marker", value["auth"]["marker"] + "\n")),
+        ("env_passthrough", lambda value: value.__setitem__("env_passthrough", ["GEMINI_API_KEY\n"])),
+    )
+    for label, mutate in terminal_string_cases:
+        mutated = copy.deepcopy(base)
+        if mutated.get("availability_probe") is None and label.startswith("availability_probe"):
+            mutated["availability_probe"] = {"type": "http", "url_env": "CURSOR_URL", "timeout_s": 5}
+        mutate(mutated)
+        cases.append((f"terminal-{label}", mutated))
+
+    # The runtime intentionally requires plain Python ints. jsonschema's
+    # default numeric checker treats 1.0 as an integer by equality, so the
+    # differential validator below uses the same strict integer definition as
+    # the controller. Every integer field is probed, including nested exit
+    # classification values.
+    numeric_cases: list[tuple[str, dict]] = []
+    probe_numeric = copy.deepcopy(base)
+    probe_numeric["availability_probe"] = {"type": "http", "url_env": "CURSOR_URL", "timeout_s": 1.0}
+    numeric_cases.append(("float-availability_probe.timeout_s", probe_numeric))
+    grace_numeric = copy.deepcopy(base)
+    grace_numeric["execution"]["cancellation"]["grace_s"] = 1.0
+    numeric_cases.append(("float-execution.cancellation.grace_s", grace_numeric))
+    for category in ("success", "auth", "runtime", "egress"):
+        exit_numeric = copy.deepcopy(base)
+        exit_numeric["execution"]["exit_codes"][category][0] = 1.0
+        numeric_cases.append((f"float-execution.exit_codes.{category}", exit_numeric))
+    cases.extend(numeric_cases)
 
     # Exercise every reviewed provider/profile branch, including the order-insensitive
     # two-endpoint profiles and the exact no-egress local branch.  These are positive
@@ -682,7 +885,8 @@ def run_differential() -> None:
                 runtime_only.append(label)
     if mismatches:
         print("schema/runtime mismatches:\n" + "\n".join(mismatches))
-    print(f"schema/runtime numeric parity: schema_only={len(schema_only)} runtime_only={len(runtime_only)}")
+    print(f"schema/runtime differential corpus: cases={len(cases)} "
+          f"schema_only={len(schema_only)} runtime_only={len(runtime_only)}")
     check(not schema_only and not runtime_only,
           "schema/runtime numeric parity has zero mismatches in both directions")
     check(not mismatches, "schema/runtime differential corpus has zero mismatches")
@@ -705,7 +909,9 @@ def main() -> int:
         scratch.mkdir()
     try:
         run_json_cli_sweep(scratch)
+        run_controller_authentication_pin_sweep()
         run_path_sweep(scratch)
+        run_publication_race_probe(scratch)
         run_sidecar_battery(scratch)
         run_worker_plan_sweep(scratch)
         run_differential()

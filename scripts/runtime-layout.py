@@ -220,6 +220,7 @@ def _safe_entrypoint(value: str) -> str:
 
 def _copy_tree(source: Path, destination: Path, entrypoint: str | None = None) -> None:
     created = False
+    directories_to_lock: list[Path] = []
     try:
         source = _safe_source(source)
         destination = Path(destination)
@@ -267,7 +268,7 @@ def _copy_tree(source: Path, destination: Path, entrypoint: str | None = None) -
                     relative = current_path.relative_to(source)
                     target_dir = destination / relative
                     ensure_directory(target_dir)
-                    chmod_directory(target_dir, 0o555)
+                    directories_to_lock.append(target_dir)
                     for name in files:
                         source_file = current_path / name
                         target_file = target_dir / name
@@ -276,7 +277,7 @@ def _copy_tree(source: Path, destination: Path, entrypoint: str | None = None) -
                                 or int(getattr(source_info, "st_nlink", 0)) != 1:
                             raise LayoutError(f"runtime source file is not a single-link regular file: {source_file}")
                         source_mode = stat.S_IMODE(source_info.st_mode)
-                        if entrypoint and candidate.relative_to(source).as_posix() == entrypoint \
+                        if entrypoint and source_file.relative_to(source).as_posix() == entrypoint \
                                 and os.name != "nt" and not (source_mode & 0o111):
                             raise LayoutError("runtime entrypoint is not executable")
                         # read_bytes pins the parent, opens no-follow, checks file-id,
@@ -304,6 +305,8 @@ def _copy_tree(source: Path, destination: Path, entrypoint: str | None = None) -
             if os.name != "nt" and not (stat.S_IMODE(entry_info.st_mode) & 0o111):
                 _remove_created_tree(destination)
                 raise LayoutError("runtime entrypoint is not executable")
+        for target_dir in directories_to_lock:
+            chmod_directory(target_dir, 0o555)
     except BaseException:
         if created:
             _remove_created_tree(destination)
@@ -326,8 +329,10 @@ def main(argv: list[str]) -> int:
             _safe_entrypoint(args.entrypoint)
         _copy_tree(source, destination, args.entrypoint)
     except (LayoutError, BoundaryError, OSError, ValueError, TypeError,
-            OverflowError, RecursionError, UnicodeDecodeError) as exc:
-        print(f"runtime-layout: {exc}", file=sys.stderr)
+            OverflowError, RecursionError, UnicodeDecodeError):
+        # Refusals are intentionally symbolic.  The source and destination are
+        # caller-controlled paths and must not be echoed into the boundary log.
+        print("runtime-layout: invalid runtime staging input", file=sys.stderr)
         return 2
     return 0
 

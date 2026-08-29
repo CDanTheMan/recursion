@@ -2,11 +2,13 @@
 """Adversarial controls for the independent Phase 5 rejection findings."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import hashlib
 import copy
 import importlib.util
 import os
+import secrets
 import stat
 import subprocess
 import sys
@@ -34,6 +36,23 @@ layout_spec = importlib.util.spec_from_file_location("runtime_layout", ROOT / "s
 runtime_layout = importlib.util.module_from_spec(layout_spec)
 assert layout_spec.loader is not None
 layout_spec.loader.exec_module(runtime_layout)
+
+
+@contextmanager
+def test_directory(label: str):
+    configured = os.environ.get("PHASE5_TEST_ROOT", "").strip()
+    if configured:
+        root = Path(configured)
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / f"{label}-{secrets.token_hex(8)}"
+        path.mkdir()
+        try:
+            yield path
+        finally:
+            shutil.rmtree(path, ignore_errors=True)
+    else:
+        with tempfile.TemporaryDirectory() as raw:
+            yield Path(raw)
 
 
 def check(ok: bool, label: str) -> None:
@@ -70,13 +89,13 @@ def valid_assignment(repo: Path, controller: Path) -> dict:
 
 
 def main() -> int:
-    with tempfile.TemporaryDirectory() as raw:
-        tmp = Path(raw)
+    with test_directory("hardening") as tmp:
         source = tmp / "source"; (source / "scripts").mkdir(parents=True)
         # Keep the materialized bytes identical to the committed blob on Windows, where
         # write_text() would otherwise create CRLF while Git's clean filter stores LF.
         (source / "scripts/gate.sh").write_bytes(b"#!/bin/sh\ntest -s result.txt\n")
         subprocess.run(["git", "init", "-q", "-b", "main", str(source)], check=True)
+        subprocess.run(["git", "-C", str(source), "config", "core.autocrlf", "false"], check=True)
         subprocess.run(["git", "-C", str(source), "add", "."], check=True)
         subprocess.run(["git", "-C", str(source), "-c", "user.name=t", "-c", "user.email=t@t",
                         "commit", "-qm", "source"], check=True)
@@ -105,6 +124,7 @@ def main() -> int:
         shutil.copy2(ROOT / "scripts" / "engines" / "cursor.json",
                      controller / "scripts" / "engines" / "cursor.json")
         subprocess.run(["git", "init", "-q", "-b", "main", str(controller)], check=True)
+        subprocess.run(["git", "-C", str(controller), "config", "core.autocrlf", "false"], check=True)
         subprocess.run(["git", "-C", str(controller), "add", "."], check=True)
         subprocess.run(["git", "-C", str(controller), "-c", "user.name=t", "-c", "user.email=t@t",
                         "commit", "-qm", "controller"], check=True)

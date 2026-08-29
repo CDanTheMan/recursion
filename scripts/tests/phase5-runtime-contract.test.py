@@ -3,8 +3,11 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import os
+import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,6 +20,23 @@ RESOLVER = ROOT / "scripts" / "resolve-engine.py"
 failures: list[str] = []
 
 
+@contextmanager
+def test_directory(label: str):
+    configured = os.environ.get("PHASE5_TEST_ROOT", "").strip()
+    if configured:
+        root = Path(configured)
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / f"{label}-{secrets.token_hex(8)}"
+        path.mkdir()
+        try:
+            yield path
+        finally:
+            shutil.rmtree(path, ignore_errors=True)
+    else:
+        with tempfile.TemporaryDirectory() as raw:
+            yield Path(raw)
+
+
 def check(condition: bool, label: str) -> None:
     print(("ok - " if condition else "FAIL - ") + label)
     if not condition:
@@ -24,13 +44,15 @@ def check(condition: bool, label: str) -> None:
 
 
 def test_runtime_tree_is_complete_and_read_only() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        base = Path(tmp)
+    with test_directory("runtime-tree") as base:
         source = base / "cursor-runtime"
         destination = base / "staged"
         source.mkdir()
         (source / "cursor-agent").write_text("#!/bin/sh\n", encoding="utf-8")
         (source / "index.js").write_text("console.log('sibling');\n", encoding="utf-8")
+        nested = source / "lib"
+        nested.mkdir()
+        (nested / "runtime.js").write_text("module.exports = true;\n", encoding="utf-8")
         result = subprocess.run(
             [sys.executable, str(RUNTIME), "stage", "--source", str(source), "--destination", str(destination)],
             capture_output=True, text=True,
@@ -41,6 +63,11 @@ def test_runtime_tree_is_complete_and_read_only() -> None:
         check((destination / "index.js").is_file(), "wrapper sibling runtime file is copied")
         check(not (destination / "index.js").stat().st_mode & 0o222,
               "staged runtime files have no write bit")
+        check((destination / "lib" / "runtime.js").is_file(),
+              "nested sibling runtime file is copied")
+        if os.name != "nt":
+            check(not (destination / "lib").stat().st_mode & 0o222,
+                  "staged runtime directories have no write bit")
         outside = base / "outside.txt"
         outside.write_text("must not copy", encoding="utf-8")
         try:
@@ -56,6 +83,17 @@ def test_runtime_tree_is_complete_and_read_only() -> None:
             check(result.returncode == 2, "runtime tree containing a symlink is refused")
             check(not (second / "escape").exists(), "symlink target is not copied into the worker tree")
 
+        if os.name != "nt":
+            non_executable = base / "non-executable"
+            non_executable.mkdir()
+            (non_executable / "engine").write_text("#!/bin/sh\n", encoding="utf-8")
+            bad = subprocess.run(
+                [sys.executable, str(RUNTIME), "stage", "--source", str(non_executable),
+                 "--destination", str(base / "bad-entrypoint"), "--entrypoint", "engine"],
+                capture_output=True, text=True,
+            )
+            check(bad.returncode == 2, "non-executable declared runtime entrypoint is refused")
+
 
 def test_cursor_manifest_carries_phase5_contract() -> None:
     manifest = json.loads((ROOT / "scripts" / "engines" / "cursor.json").read_text(encoding="utf-8"))
@@ -70,8 +108,7 @@ def test_cursor_manifest_carries_phase5_contract() -> None:
 
 
 def test_machine_adapter_is_disabled_and_local_only_when_explicitly_enabled() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        base = Path(tmp)
+    with test_directory("machine-adapter") as base:
         machine_dir = base / "machines"
         machine_dir.mkdir()
         (machine_dir / "test-machine.json").write_text(json.dumps({
@@ -107,8 +144,7 @@ def test_legacy_manifest_still_resolves_without_new_fields() -> None:
         "network": {"policy": "none", "profile": "sentry-local", "endpoints": []},
         "availability_probe": None, "concurrency_cap": None, "env_passthrough": [],
     }
-    with tempfile.TemporaryDirectory() as tmp:
-        directory = Path(tmp)
+    with test_directory("legacy-manifest") as directory:
         (directory / "legacyeng.json").write_text(json.dumps(base) + "\n", encoding="utf-8")
         env = dict(os.environ, RECURSION_ENGINE_DIR=str(directory))
         result = subprocess.run([sys.executable, str(RESOLVER), "legacyeng", "--validate"],
@@ -133,8 +169,7 @@ def test_endpointless_networked_profile_is_rejected() -> None:
         "network": {"policy": "provider-only", "profile": "sentry-local", "endpoints": []},
         "availability_probe": None, "concurrency_cap": None, "env_passthrough": [],
     }
-    with tempfile.TemporaryDirectory() as tmp:
-        directory = Path(tmp)
+    with test_directory("endpointless-manifest") as directory:
         (directory / "endpointless.json").write_text(json.dumps(base) + "\n", encoding="utf-8")
         result = subprocess.run(
             [sys.executable, str(RESOLVER), "endpointless", "--validate"],
@@ -144,8 +179,7 @@ def test_endpointless_networked_profile_is_rejected() -> None:
 
 
 def test_provider_network_requires_profile() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        directory = Path(tmp)
+    with test_directory("missing-profile-manifest") as directory:
         manifest = {
             "schema_version": 1, "name": "missingprofile", "description": "invalid",
             "executable": "missingprofile", "argv": ["{{EXE}}", "-p", "{{PROMPT}}"],

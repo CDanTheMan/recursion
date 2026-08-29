@@ -483,15 +483,23 @@ def load_manifest(path: Path, engine: str, *, controller_root: Path | None = Non
             provenance[relative] = manifest_digest
             raw = raw_bytes.decode("utf-8")
         else:
-            raw = read_bytes(path, label=f"manifest {path}").decode("utf-8")
-    except (BoundaryError, OSError, UnicodeDecodeError, ValueError, TypeError,
-            OverflowError, RecursionError) as exc:
-        raise ManifestError(f"could not read manifest {path}: {exc}") from exc
+            raw = read_bytes(path, label=f"manifest {engine}").decode("utf-8")
+    except BoundaryError as exc:
+        raise ManifestError(f"could not read manifest {engine}") from exc
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
+        raise ManifestError(f"could not read manifest {engine}") from exc
     try:
-        data = decode_json(raw, f"manifest {path}")
-    except (BoundaryError, json.JSONDecodeError, ValueError, TypeError,
-            OverflowError, RecursionError, UnicodeDecodeError) as exc:
-        raise ManifestError(f"manifest {path} is not valid JSON: {exc}") from exc
+        data = decode_json(raw, f"manifest {engine}")
+    except BoundaryError as exc:
+        message = str(exc)
+        if ("contains a non-finite number" in message
+                or "exceeds the maximum JSON nesting depth" in message):
+            raise ManifestError(message) from exc
+        raise ManifestError(f"manifest {engine} is not valid JSON") from exc
+    except (json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError, UnicodeDecodeError) as exc:
+        raise ManifestError(f"manifest {engine} is not valid JSON") from exc
     if controller_root is not None:
         _, profile_digest = authenticated_file(controller_root, controller_commit,
                                                "scripts/provider-egress-profiles.json")
@@ -617,13 +625,13 @@ def main() -> int:
             return 2
     path = manifest_path(engine) if controller_root is None else controller_root / "scripts" / "engines" / f"{engine}.json"
     try:
-        present = read_bytes(path, label=f"manifest {path}", optional=True)
+        present = read_bytes(path, label=f"manifest {engine}", optional=True)
     except (BoundaryError, OSError, ValueError, TypeError, OverflowError,
             RecursionError, UnicodeDecodeError) as exc:
-        diag(f"could not inspect manifest {path}: {exc}")
+        diag(f"could not inspect manifest {engine}")
         return 2
     if present is None:
-        diag(f"manifest not found: {path}")
+        diag(f"manifest not found: {engine}")
         return 3
 
     try:
@@ -634,7 +642,7 @@ def main() -> int:
         return 2
     except (AttributeError, IndexError, KeyError, TypeError, ValueError,
             OverflowError, RecursionError, UnicodeDecodeError, OSError) as exc:
-        diag(f"invalid manifest {path}: {exc}")
+        diag(f"invalid manifest {engine}")
         return 2
 
     if args.validate:

@@ -87,17 +87,17 @@
     },
     "name": {
       "type": "string",
-      "pattern": "^(?!(?:claude|hermes|gate|none|deepseek|openrouter)$)[a-z][a-z0-9-]{1,31}$",
+      "pattern": "^(?!(?:claude|hermes|gate|none|deepseek|openrouter)\\Z)[a-z][a-z0-9-]{1,31}\\Z",
       "description": "Must equal the manifest filename stem (e.g. gemini.json -> \"gemini\"), and must not collide with a builtin engine name (claude, hermes, gate, none, deepseek, openrouter)."
     },
     "description": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^[^\\u0000-\\u001F\\u007F]+$"
+      "pattern": "^[^\\u0000-\\u001F\\u007F]+\\Z"
     },
     "executable": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]{1,31}$",
+      "pattern": "^[a-z][a-z0-9-]{1,31}\\Z",
       "description": "Basename only (no path separators). Resolved via `command -v` inside the sandbox controller, then bind-mounted read-only exactly like the existing single-executable path. Need not equal `name`."
     },
     "argv": {
@@ -115,7 +115,7 @@
           {
             "type": "string",
             "minLength": 1,
-            "pattern": "^(?!\\{\\{[^}]*\\}\\}$)[^\\u0000-\\u001F\\u007F]+$"
+            "pattern": "^(?!\\{\\{[^}]*\\}\\}\\Z)[^\\u0000-\\u001F\\u007F]+\\Z"
           },
           { "const": "{{PROMPT}}" },
           { "const": "{{MODEL}}" }
@@ -144,7 +144,7 @@
               {
                 "type": "string",
                 "minLength": 1,
-                "pattern": "^(?!\\{\\{[^}]*\\}\\}$)[^\\u0000-\\u001F\\u007F]+$"
+                "pattern": "^(?!\\{\\{[^}]*\\}\\}\\Z)[^\\u0000-\\u001F\\u007F]+\\Z"
               },
               { "const": "{{MODEL}}" }
             ]
@@ -205,7 +205,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+            "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\\Z"
           },
           "uniqueItems": true,
           "description": "Documentation and deployment input for the provider-only allowlist enforced by the root-owned provider netns/proxy on the box. Empty list allowed (e.g. tunnel-local engines)."
@@ -229,7 +229,7 @@
             },
             "url_env": {
               "type": "string",
-              "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+              "pattern": "^[A-Z][A-Z0-9_]{2,63}\\Z"
             },
             "timeout_s": {
               "type": "integer",
@@ -285,11 +285,11 @@
               { "type": "null" }
             ] },
             "target": { "anyOf": [
-              { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/:]+(?:/[^/:]+)*$" },
+              { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*(?:^|/)\\.{1,2}(?:/|\\Z))[^/:\\u0000-\\u001F\\u007F]+(?:/[^/:\\u0000-\\u001F\\u007F]+)*\\Z" },
               { "type": "null" }
             ] },
             "entrypoint": { "anyOf": [
-              { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/:]+(?:/[^/:]+)*$" },
+              { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*(?:^|/)\\.{1,2}(?:/|\\Z))[^/:\\u0000-\\u001F\\u007F]+(?:/[^/:\\u0000-\\u001F\\u007F]+)*\\Z" },
               { "type": "null" }
             ] }
           },
@@ -621,7 +621,7 @@
             { "type": "null" },
             {
               "type": "string",
-              "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/:]+(?:/[^/:]+)*$"
+              "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*(?:^|/)\\.{1,2}(?:/|\\Z))[^/:\\u0000-\\u001F\\u007F]+(?:/[^/:\\u0000-\\u001F\\u007F]+)*\\Z"
             }
           ]
         }

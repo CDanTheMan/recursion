@@ -135,7 +135,9 @@ class WindowsPathToleranceTest(unittest.TestCase):
             self.assertNotEqual(undeclared, 0)
             self.assertEqual(declared, 0)
         else:
-            self.assertEqual(undeclared, 0)
+            # POSIX shlex consumes an unquoted backslash.  The resulting
+            # mangled program is not the declared path and must remain refused.
+            self.assertNotEqual(undeclared, 0)
             self.assertEqual(declared, 0)
 
 

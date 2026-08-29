@@ -10,9 +10,12 @@ Component 1 (manifests) and Component 2 (resolver --validate mode) land.
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
 import importlib.util
 import json
 import os
+import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -48,6 +51,23 @@ BASE_MANIFEST = {
 failures: list[str] = []
 
 
+@contextmanager
+def test_directory(label: str):
+    configured = os.environ.get("PHASE5_TEST_ROOT", "").strip()
+    if configured:
+        root = Path(configured)
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / f"{label}-{secrets.token_hex(8)}"
+        path.mkdir()
+        try:
+            yield path
+        finally:
+            shutil.rmtree(path, ignore_errors=True)
+    else:
+        with tempfile.TemporaryDirectory() as raw:
+            yield Path(raw)
+
+
 def check(condition: bool, label: str) -> None:
     if condition:
         print(f"ok - {label}")
@@ -71,8 +91,7 @@ def write_manifest(engine_dir: Path, filename: str, data: dict) -> None:
 
 
 def run_case(label: str, filename: str, engine_arg: str, data: dict, expected: int) -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_dir = Path(tmp)
+    with test_directory("engine-case") as tmp_dir:
         write_manifest(tmp_dir, filename, data)
         result = run_validate(engine_arg, tmp_dir)
         check(
@@ -93,8 +112,8 @@ def test_shipped_manifests() -> None:
 
 
 def test_missing_file() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        result = run_validate("ghostengine", Path(tmp))
+    with test_directory("missing-manifest") as tmp_dir:
+        result = run_validate("ghostengine", tmp_dir)
         check(result.returncode == 3, f"missing manifest file exits 3 (got {result.returncode})")
 
 
@@ -189,8 +208,7 @@ def test_malformed_container_elements_are_typed() -> None:
             check(False, f"{field} malformed element raises ManifestError, not {type(exc).__name__}")
         else:
             check(False, f"{field} malformed element rejected with ManifestError")
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_dir = Path(tmp)
+        with test_directory("malformed-element") as tmp_dir:
             write_manifest(tmp_dir, "sampleeng.json", malformed)
             result = run_validate("sampleeng", tmp_dir)
             check(result.returncode == 2 and "Traceback" not in result.stderr,
