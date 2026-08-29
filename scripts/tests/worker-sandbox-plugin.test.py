@@ -33,6 +33,25 @@ def check(condition: bool, label: str) -> None:
         failures.append(label)
 
 
+def check_embedded_plan_parser() -> None:
+    """Compile the plan parser heredoc so a shell edit cannot hide a Python parse failure."""
+    script = SANDBOX_SCRIPT.read_text(encoding="utf-8")
+    opening = 'if plan_parser_output="$("$PYTHON" - "$ENGINE_PLAN" "$ENGINE" <<\'PY\' 2>&1\n'
+    closing = "\nPY\n)\"; then"
+    try:
+        body_start = script.index(opening) + len(opening)
+        body_end = script.index(closing, body_start)
+    except ValueError:
+        check(False, "embedded engine-plan parser heredoc is present")
+        return
+    try:
+        compile(script[body_start:body_end], f"{SANDBOX_SCRIPT}:engine-plan-parser", "exec")
+    except SyntaxError as exc:
+        check(False, f"embedded engine-plan parser is syntax-valid ({exc})")
+    else:
+        check(True, "embedded engine-plan parser is syntax-valid")
+
+
 def _cygpath(flag: str, value: str) -> str | None:
     if CYGPATH is None:
         return None
@@ -71,6 +90,7 @@ def bash_run(sandbox_script_posix: str, argv_after_script: list[str], extra_path
 
 
 def main() -> int:
+    check_embedded_plan_parser()
     if BASH is None:
         print("SKIP - bash not found on PATH")
         return 0

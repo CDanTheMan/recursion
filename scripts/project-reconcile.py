@@ -37,8 +37,16 @@ from transition_receipt import (
     fields_mutation, json_mutation, resume_transition,
 )
 from seed_contract import SeedContractError, copy_seed_paths, validate_contract
-from assignment import (AssignmentError, canonical_bytes, load_assignment,
-                         validate_execution_evidence)
+try:
+    from assignment import (AssignmentError, canonical_bytes, load_assignment,
+                             validate_execution_evidence)
+except ImportError as exc:
+    if "first-party module 'phase5_safety' not found" not in str(exc):
+        raise
+    if __name__ == "__main__":
+        print(f"project-reconcile: first-party import failed: {exc}", file=sys.stderr)
+        raise SystemExit(95)
+    raise
 
 
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")

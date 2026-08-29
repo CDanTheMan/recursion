@@ -32,6 +32,7 @@ fi
 # provider-only cannot degrade to the host network when the operator capability is absent.
 N="$TMP/network-controller"; mkdir -p "$N/scripts" "$N/worktree"
 cp "$SRC/scripts/worker-sandbox.sh" "$N/scripts/"
+cp "$SRC/scripts/phase5_safety.py" "$N/scripts/"
 network_rc=0
 RECURSION_ROOT="$N" RECURSION_TEST_WORKER=logical \
   bash "$N/scripts/worker-sandbox.sh" --engine claude --role implementer \

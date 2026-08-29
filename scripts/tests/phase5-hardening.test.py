@@ -81,6 +81,22 @@ def main() -> int:
         controller = tmp / "controller"; (controller / "scripts" / "engines").mkdir(parents=True)
         (controller / "scripts/validate-gate.py").write_bytes(
             (ROOT / "scripts/validate-gate.py").read_bytes())
+        shutil.copy2(ROOT / "scripts" / "phase5_safety.py", controller / "scripts" / "phase5_safety.py")
+        missing_module = tmp / "missing-phase5-module"; (missing_module / "scripts").mkdir(parents=True)
+        shutil.copy2(ROOT / "scripts" / "validate-gate.py", missing_module / "scripts" / "validate-gate.py")
+        missing_result = subprocess.run(
+            [sys.executable, str(missing_module / "scripts/validate-gate.py"),
+             "--acceptance", "test -s result.txt", "--allowed-paths", "scripts"],
+            capture_output=True, text=True,
+        )
+        check(
+            missing_result.returncode == 95
+            and "first-party import failed" in missing_result.stderr
+            and "phase5_safety" in missing_result.stderr
+            and str(missing_module / "scripts") in missing_result.stderr
+            and "Traceback" not in missing_result.stderr,
+            "missing first-party module is a typed, path-named refusal",
+        )
         for name in ("provider-egress-profiles.json", "capacity-pools.json"):
             shutil.copy2(ROOT / "scripts" / name, controller / "scripts" / name)
         shutil.copy2(ROOT / "scripts" / "engines" / "cursor.json",

@@ -13,10 +13,26 @@ import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 
-_SCRIPT_DIR = Path(__file__).parent
+_SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
-from phase5_safety import BoundaryError, decode_json, pinned_directory, read_bytes, verify_leaf
+
+class FirstPartyImportError(ImportError):
+    """A required controller module is absent from the importing script's tree."""
+
+
+try:
+    from phase5_safety import BoundaryError, decode_json, pinned_directory, read_bytes, verify_leaf
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    import_error = FirstPartyImportError(
+        f"first-party module 'phase5_safety' not found; searched {_SCRIPT_DIR}"
+    )
+    if __name__ == "__main__":
+        print(f"validate-gate: first-party import failed: {import_error}", file=sys.stderr)
+        raise SystemExit(95)
+    raise import_error from None
 
 
 VACUOUS = re.compile(r"^(?:true|:|/bin/true|exit\s+0)$")
@@ -353,4 +369,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except FirstPartyImportError as exc:
+        print(f"validate-gate: first-party import failed: {exc}", file=sys.stderr)
+        raise SystemExit(95)

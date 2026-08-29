@@ -46,6 +46,7 @@ chmod +x "$BIN/claude"
 R="$TMP/repo"; mkdir -p "$R/scripts/tests" "$R/apps/chiron" "$R/other" "$R/state/tasks" "$R/loop/logs"
 cp "$SRC/scripts/work.sh" "$R/scripts/"
 cp "$SRC/scripts/worker-sandbox.sh" "$R/scripts/"
+cp "$SRC/scripts/phase5_safety.py" "$R/scripts/"
 chmod +x "$R/scripts/worker-sandbox.sh"
 cp "$SRC/scripts/board.sh" "$R/scripts/" 2>/dev/null || true
 cp "$SRC/scripts/notify.sh" "$R/scripts/" 2>/dev/null || true

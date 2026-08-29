@@ -25,7 +25,15 @@ from transition_receipt import (
     TransitionReceiptError, authenticated_transition, commit_event, commit_transition,
     json_mutation, resume_transition, raw_text_mutation, text_mutation,
 )
-from engine_contract import alias_role_ok, default_registry_path, pilot_engine_ok
+try:
+    from engine_contract import alias_role_ok, default_registry_path, pilot_engine_ok
+except ImportError as exc:
+    if "first-party module 'phase5_safety' not found" not in str(exc):
+        raise
+    if __name__ == "__main__":
+        print(f"project-pilot: first-party import failed: {exc}", file=sys.stderr)
+        raise SystemExit(95)
+    raise
 from pilot_instruction import require_affirmative_command
 from seed_contract import SeedContractError, inspect_repository, validate_contract
 from project_authority import (

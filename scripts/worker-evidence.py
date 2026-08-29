@@ -13,14 +13,30 @@ import sys
 import time
 from pathlib import Path
 
-sys_path = Path(__file__).parent
+sys_path = Path(__file__).resolve().parent
 if str(sys_path) not in sys.path:
     sys.path.insert(0, str(sys_path))
-from assignment import (AssignmentError, canonical_bytes, load_assignment,
-                        validate_assignment as assignment_validate,
-                        validate_execution_evidence as assignment_execution_evidence)
-from phase5_safety import (BoundaryError, atomic_write, decode_json,
-                           read_bytes, ensure_directory, absolute_lexical, MAX_JSON_BYTES)
+
+class FirstPartyImportError(ImportError):
+    """A required controller module is absent from the importing script's tree."""
+
+
+try:
+    from phase5_safety import (BoundaryError, atomic_write, decode_json,
+                               read_bytes, ensure_directory, absolute_lexical, MAX_JSON_BYTES)
+    from assignment import (AssignmentError, canonical_bytes, load_assignment,
+                            validate_assignment as assignment_validate,
+                            validate_execution_evidence as assignment_execution_evidence)
+except ModuleNotFoundError as exc:
+    if exc.name not in {"phase5_safety", "assignment"}:
+        raise
+    import_error = FirstPartyImportError(
+        f"first-party module '{exc.name}' not found; searched {sys_path}"
+    )
+    if __name__ == "__main__":
+        print(f"worker-evidence: first-party import failed: {import_error}", file=sys.stderr)
+        raise SystemExit(95)
+    raise import_error from None
 
 
 START_EVIDENCE_KIND = "worker-evidence-start-v1"
@@ -378,6 +394,9 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
+    except FirstPartyImportError as exc:
+        print(f"worker-evidence: first-party import failed: {exc}", file=sys.stderr)
+        raise SystemExit(95)
     except (AssignmentError, BoundaryError, OSError, UnicodeDecodeError,
             json.JSONDecodeError, ValueError, TypeError, OverflowError,
             RecursionError, KeyError, IndexError, AttributeError) as exc:

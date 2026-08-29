@@ -3,15 +3,23 @@
 # mount namespace as root, then drops to the dedicated runner uid before executing the arm.
 set -euo pipefail
 
-ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT="${RECURSION_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd -P)}"
 PYTHON="${RECURSION_PYTHON:-python3}"
+export RECURSION_SCRIPTS_DIR="$SCRIPT_DIR"
 safe_directory(){
   "$PYTHON" - "$1" <<'PY'
 import os, sys
 from pathlib import Path
-root = os.environ.get("RECURSION_ROOT", ".")
-sys.path.insert(0, os.path.join(root, "scripts"))
-from phase5_safety import BoundaryError, pinned_directory
+script_dir = os.path.abspath(os.environ.get("RECURSION_SCRIPTS_DIR", "."))
+sys.path.insert(0, script_dir)
+try:
+    from phase5_safety import BoundaryError, pinned_directory
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    print(f"worker-sandbox: first-party module 'phase5_safety' not found; searched {script_dir}", file=sys.stderr)
+    raise SystemExit(95)
 try:
     with pinned_directory(Path(sys.argv[1])) as (_, absolute):
         print(absolute)
@@ -23,9 +31,15 @@ safe_mkdir(){
   "$PYTHON" - "$1" <<'PY'
 import os, sys
 from pathlib import Path
-root = os.environ.get("RECURSION_ROOT", ".")
-sys.path.insert(0, os.path.join(root, "scripts"))
-from phase5_safety import BoundaryError, ensure_directory
+script_dir = os.path.abspath(os.environ.get("RECURSION_SCRIPTS_DIR", "."))
+sys.path.insert(0, script_dir)
+try:
+    from phase5_safety import BoundaryError, ensure_directory
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    print(f"worker-sandbox: first-party module 'phase5_safety' not found; searched {script_dir}", file=sys.stderr)
+    raise SystemExit(95)
 try:
     print(ensure_directory(Path(sys.argv[1])))
 except (BoundaryError, OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError, RecursionError):
@@ -36,9 +50,15 @@ safe_leaf(){
   "$PYTHON" - "$1" <<'PY'
 import os, sys
 from pathlib import Path
-root = os.environ.get("RECURSION_ROOT", ".")
-sys.path.insert(0, os.path.join(root, "scripts"))
-from phase5_safety import BoundaryError, verify_leaf
+script_dir = os.path.abspath(os.environ.get("RECURSION_SCRIPTS_DIR", "."))
+sys.path.insert(0, script_dir)
+try:
+    from phase5_safety import BoundaryError, verify_leaf
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    print(f"worker-sandbox: first-party module 'phase5_safety' not found; searched {script_dir}", file=sys.stderr)
+    raise SystemExit(95)
 try:
     value = verify_leaf(Path(sys.argv[1]))
     if value is None:
@@ -52,9 +72,15 @@ safe_file(){
   "$PYTHON" - "$1" <<'PY'
 import os, sys
 from pathlib import Path
-root = os.environ.get("RECURSION_ROOT", ".")
-sys.path.insert(0, os.path.join(root, "scripts"))
-from phase5_safety import BoundaryError, verify_leaf
+script_dir = os.path.abspath(os.environ.get("RECURSION_SCRIPTS_DIR", "."))
+sys.path.insert(0, script_dir)
+try:
+    from phase5_safety import BoundaryError, verify_leaf
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    print(f"worker-sandbox: first-party module 'phase5_safety' not found; searched {script_dir}", file=sys.stderr)
+    raise SystemExit(95)
 try:
     value = verify_leaf(Path(sys.argv[1]), allow_directory=False)
     if value is None:
@@ -68,9 +94,15 @@ safe_remove_tree(){
   "$PYTHON" - "$1" <<'PY'
 import os, shutil, sys
 from pathlib import Path
-root = os.environ.get("RECURSION_ROOT", ".")
-sys.path.insert(0, os.path.join(root, "scripts"))
-from phase5_safety import BoundaryError, verify_leaf
+script_dir = os.path.abspath(os.environ.get("RECURSION_SCRIPTS_DIR", "."))
+sys.path.insert(0, script_dir)
+try:
+    from phase5_safety import BoundaryError, verify_leaf
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    print(f"worker-sandbox: first-party module 'phase5_safety' not found; searched {script_dir}", file=sys.stderr)
+    raise SystemExit(95)
 try:
     path = Path(sys.argv[1])
     value = verify_leaf(path)
@@ -132,41 +164,23 @@ PLAN_CONTROLLER_ROOT=""; PLAN_CONTROLLER_SHA=""
 ENGINE_ENV_FILE=""
 if [ -n "$ENGINE_PLAN" ]; then
   [ -f "$ENGINE_PLAN" ] || { echo "worker-sandbox: engine plan is missing" >&2; exit 92; }
-  while IFS= read -r plan_line; do
-    plan_line="${plan_line%$'\r'}"   # a Windows-native python3 emits CRLF; the box's does not
-    case "$plan_line" in
-      EXE=*)  PLAN_EXE="${plan_line#EXE=}" ;;
-      ARGVJSON=*) PLAN_ARGV_JSON="${plan_line#ARGVJSON=}" ;;
-      MSFXJSON=*) PLAN_MODEL_SUFFIX_JSON="${plan_line#MSFXJSON=}" ;;
-      ARG=*)  PLAN_ARGV+=("${plan_line#ARG=}") ;;
-      MSFX=*) PLAN_MODEL_SUFFIX+=("${plan_line#MSFX=}") ;;
-      ENVP=*) PLAN_ENV_PASS+=("${plan_line#ENVP=}") ;;
-      RTMODE=*) PLAN_RUNTIME_MODE="${plan_line#RTMODE=}" ;;
-      RTSOURCE=*) PLAN_RUNTIME_SOURCE="${plan_line#RTSOURCE=}" ;;
-      RTTARGET=*) PLAN_RUNTIME_TARGET="${plan_line#RTTARGET=}" ;;
-      RTENTRY=*) PLAN_RUNTIME_ENTRY="${plan_line#RTENTRY=}" ;;
-      NETPOLICY=*) PLAN_NETWORK_POLICY="${plan_line#NETPOLICY=}" ;;
-      NETPROFILE=*) PLAN_NETWORK_PROFILE="${plan_line#NETPROFILE=}" ;;
-      NETPROVIDER=*) PLAN_NETWORK_PROVIDER="${plan_line#NETPROVIDER=}" ;;
-      NETEND=*) PLAN_NETWORK_ENDPOINTS+=("${plan_line#NETEND=}") ;;
-      CTRROOT=*) PLAN_CONTROLLER_ROOT="${plan_line#CTRROOT=}" ;;
-      CTRSHA=*) PLAN_CONTROLLER_SHA="${plan_line#CTRSHA=}" ;;
-      AUTHREQ=1) PLAN_AUTH_REQUIRED=1 ;;
-      AUTHMODE=*) PLAN_AUTH_MODE="${plan_line#AUTHMODE=}" ;;
-      AUTHMARKER=*) PLAN_AUTH_MARKER="${plan_line#AUTHMARKER=}" ;;
-      EXOUT=*) PLAN_OUTPUT_FORMAT="${plan_line#EXOUT=}" ;;
-      EXSTRUCT=1) PLAN_STRUCTURED=1 ;;
-      CANCEL=*) PLAN_CANCEL_SIGNAL="${plan_line#CANCEL=}" ;;
-      CGRACE=*) PLAN_CANCEL_GRACE="${plan_line#CGRACE=}" ;;
-      EXCODES=*) PLAN_EXIT_CODES="${plan_line#EXCODES=}" ;;
-      MREQ=1) PLAN_MREQ=1 ;;
-      OK=1)   PLAN_OK=1 ;;
-    esac
-  done < <("$PYTHON" - "$ENGINE_PLAN" "$ENGINE" <<'PY' || true
+  plan_parser_output=""
+  plan_parser_rc=0
+  if plan_parser_output="$("$PYTHON" - "$ENGINE_PLAN" "$ENGINE" <<'PY' 2>&1
 import json, os, re, sys
 from pathlib import Path
-sys.path.insert(0, os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts"))
-from phase5_safety import BoundaryError, decode_json, is_plain_int, read_bytes
+sys.path.insert(0, os.path.abspath(os.environ.get("RECURSION_SCRIPTS_DIR", ".")))
+try:
+    from phase5_safety import BoundaryError, decode_json, is_plain_int, read_bytes
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    print(
+        f"worker-sandbox: first-party module 'phase5_safety' not found; searched "
+        f"{os.path.abspath(os.environ.get('RECURSION_SCRIPTS_DIR', '.'))}",
+        file=sys.stderr,
+    )
+    raise SystemExit(95)
 
 def _no_traceback(exc_type, exc, tb):
     print("worker-sandbox: malformed engine plan", file=sys.stderr)
@@ -336,6 +350,7 @@ if layout is not None:
     if layout.get("mode") == "executable-only":
         if set(layout) != {"mode"}:
             raise SystemExit(92)
+        print("RTMODE=executable-only")
     else:
         if set(layout) != {"mode", "source", "target", "entrypoint"}:
             raise SystemExit(92)
@@ -355,8 +370,6 @@ if layout is not None:
         print("RTSOURCE=" + source)
         print("RTTARGET=" + target)
         print("RTENTRY=" + entry)
-    else:
-        print("RTMODE=executable-only")
 auth = plan.get("auth")
 if auth is not None:
     if not isinstance(auth, dict) or set(auth) != {"mode", "required", "marker"} \
@@ -408,7 +421,50 @@ if execution is not None:
     print("EXCODES=" + json.dumps(codes, sort_keys=True, separators=(",", ":")))
 print("OK=1")
 PY
-)
+)"; then
+    :
+  else
+    plan_parser_rc=$?
+  fi
+  if [ "$plan_parser_rc" -ne 0 ]; then
+    if [[ "$plan_parser_output" == *"worker-sandbox: first-party module 'phase5_safety' not found; searched "* ]]; then
+      printf '%s\n' "$plan_parser_output" >&2
+    fi
+    echo "worker-sandbox: engine plan parser failed before plan validation (exit $plan_parser_rc)" >&2
+    [ "$plan_parser_rc" -eq 92 ] && exit 92
+    exit 95
+  fi
+  while IFS= read -r plan_line; do
+    plan_line="${plan_line%$'\r'}"   # a Windows-native python3 emits CRLF; the box's does not
+    case "$plan_line" in
+      EXE=*)  PLAN_EXE="${plan_line#EXE=}" ;;
+      ARGVJSON=*) PLAN_ARGV_JSON="${plan_line#ARGVJSON=}" ;;
+      MSFXJSON=*) PLAN_MODEL_SUFFIX_JSON="${plan_line#MSFXJSON=}" ;;
+      ARG=*)  PLAN_ARGV+=("${plan_line#ARG=}") ;;
+      MSFX=*) PLAN_MODEL_SUFFIX+=("${plan_line#MSFX=}") ;;
+      ENVP=*) PLAN_ENV_PASS+=("${plan_line#ENVP=}") ;;
+      RTMODE=*) PLAN_RUNTIME_MODE="${plan_line#RTMODE=}" ;;
+      RTSOURCE=*) PLAN_RUNTIME_SOURCE="${plan_line#RTSOURCE=}" ;;
+      RTTARGET=*) PLAN_RUNTIME_TARGET="${plan_line#RTTARGET=}" ;;
+      RTENTRY=*) PLAN_RUNTIME_ENTRY="${plan_line#RTENTRY=}" ;;
+      NETPOLICY=*) PLAN_NETWORK_POLICY="${plan_line#NETPOLICY=}" ;;
+      NETPROFILE=*) PLAN_NETWORK_PROFILE="${plan_line#NETPROFILE=}" ;;
+      NETPROVIDER=*) PLAN_NETWORK_PROVIDER="${plan_line#NETPROVIDER=}" ;;
+      NETEND=*) PLAN_NETWORK_ENDPOINTS+=("${plan_line#NETEND=}") ;;
+      CTRROOT=*) PLAN_CONTROLLER_ROOT="${plan_line#CTRROOT=}" ;;
+      CTRSHA=*) PLAN_CONTROLLER_SHA="${plan_line#CTRSHA=}" ;;
+      AUTHREQ=1) PLAN_AUTH_REQUIRED=1 ;;
+      AUTHMODE=*) PLAN_AUTH_MODE="${plan_line#AUTHMODE=}" ;;
+      AUTHMARKER=*) PLAN_AUTH_MARKER="${plan_line#AUTHMARKER=}" ;;
+      EXOUT=*) PLAN_OUTPUT_FORMAT="${plan_line#EXOUT=}" ;;
+      EXSTRUCT=1) PLAN_STRUCTURED=1 ;;
+      CANCEL=*) PLAN_CANCEL_SIGNAL="${plan_line#CANCEL=}" ;;
+      CGRACE=*) PLAN_CANCEL_GRACE="${plan_line#CGRACE=}" ;;
+      EXCODES=*) PLAN_EXIT_CODES="${plan_line#EXCODES=}" ;;
+      MREQ=1) PLAN_MREQ=1 ;;
+      OK=1)   PLAN_OK=1 ;;
+    esac
+  done <<< "$plan_parser_output"
   [ "$PLAN_OK" = 1 ] || { echo "worker-sandbox: engine plan is invalid" >&2; exit 92; }
   # A group/other-writable plan can be rewritten between resolve and launch by any local
   # process; refuse it in every mode, logical included. Root ownership is asserted only on
@@ -464,8 +520,15 @@ write_execution_evidence(){ # status rc classification; controller-owned, never 
       "${PLAN_RUN[@]}" <<'PY'
 import json, os, re, sys
 from pathlib import Path
-sys.path.insert(0, os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts"))
-from phase5_safety import BoundaryError, atomic_write, decode_json, is_plain_int
+script_dir = os.path.abspath(os.environ.get("RECURSION_SCRIPTS_DIR", "."))
+sys.path.insert(0, script_dir)
+try:
+    from phase5_safety import BoundaryError, atomic_write, decode_json, is_plain_int
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    print(f"worker-sandbox: first-party module 'phase5_safety' not found; searched {script_dir}", file=sys.stderr)
+    raise SystemExit(95)
 path, engine, model, status, rc, classification = sys.argv[1:7]
 runtime_mode, runtime_target, runtime_entry = sys.argv[7:10]
 output_format, structured, cancel_signal, cancel_grace, exit_codes = sys.argv[10:15]
@@ -511,8 +574,15 @@ PY
 classify_exit_code(){
   "$PYTHON" - "$PLAN_EXIT_CODES" "$1" <<'PY'
 import json, sys, os
-sys.path.insert(0, os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts"))
-from phase5_safety import BoundaryError, decode_json, is_plain_int
+script_dir = os.path.abspath(os.environ.get("RECURSION_SCRIPTS_DIR", "."))
+sys.path.insert(0, script_dir)
+try:
+    from phase5_safety import BoundaryError, decode_json, is_plain_int
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    print(f"worker-sandbox: first-party module 'phase5_safety' not found; searched {script_dir}", file=sys.stderr)
+    raise SystemExit(95)
 try:
     codes = decode_json(sys.argv[1], "exit code map")
     code = int(sys.argv[2])
@@ -680,8 +750,15 @@ if [ "$NETWORK_POLICY" = provider-only ]; then
     || { echo "worker-sandbox: refusal=missing-egress provider profile is invalid" >&2; exit 96; }
   PROVIDER_FIELDS="$("$PYTHON" - "$PROVIDER_JSON" <<'PY'
 import json, os, re, sys
-sys.path.insert(0, os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts"))
-from phase5_safety import BoundaryError, decode_json, is_plain_int
+script_dir = os.path.abspath(os.environ.get("RECURSION_SCRIPTS_DIR", "."))
+sys.path.insert(0, script_dir)
+try:
+    from phase5_safety import BoundaryError, decode_json, is_plain_int
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    print(f"worker-sandbox: first-party module 'phase5_safety' not found; searched {script_dir}", file=sys.stderr)
+    raise SystemExit(95)
 try:
     value = decode_json(sys.argv[1], "provider capability")
     if not isinstance(value, dict) or not isinstance(value.get("namespace"), str) \
@@ -771,8 +848,15 @@ case "$ENGINE:$EXE_REAL" in
     "$PYTHON" - "$EXE_REAL" "$SANDBOX_BIN/$ENGINE" <<'PY'
 import os, sys
 from pathlib import Path
-sys.path.insert(0, os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts"))
-from phase5_safety import BoundaryError, copy_regular
+script_dir = os.path.abspath(os.environ.get("RECURSION_SCRIPTS_DIR", "."))
+sys.path.insert(0, script_dir)
+try:
+    from phase5_safety import BoundaryError, copy_regular
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    print(f"worker-sandbox: first-party module 'phase5_safety' not found; searched {script_dir}", file=sys.stderr)
+    raise SystemExit(95)
 try:
     copy_regular(Path(sys.argv[1]), Path(sys.argv[2]), mode=0o550)
 except (BoundaryError, OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError, RecursionError):

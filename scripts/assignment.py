@@ -16,7 +16,22 @@ import sys
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from phase5_safety import BoundaryError, decode_json, is_plain_int, pinned_directory, read_bytes
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+class FirstPartyImportError(ImportError):
+    """A required controller module is absent from the importing script's tree."""
+
+
+try:
+    from phase5_safety import BoundaryError, decode_json, is_plain_int, pinned_directory, read_bytes
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    raise FirstPartyImportError(
+        f"first-party module 'phase5_safety' not found; searched {_SCRIPT_DIR}"
+    ) from None
 
 ID_RE = re.compile(r"[a-z][a-z0-9-]{1,63}\Z")
 SHA_RE = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")

@@ -27,7 +27,7 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 export RECURSION_NO_NOTIFY=1
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/repo"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/roadmaps" "$R/loop/logs"
-for s in conduct-hermes.sh hermes-decide.sh validate-decision.py validate-control-state.py engine_contract.py decision-queue.py taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh plan.sh publish.sh work.sh conduct.sh; do
+for s in conduct-hermes.sh hermes-decide.sh validate-decision.py validate-control-state.py engine_contract.py phase5_safety.py decision-queue.py taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh plan.sh publish.sh work.sh conduct.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null

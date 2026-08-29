@@ -21,7 +21,7 @@ chmod +x "$BIN/claude"
 
 R="$TMP/controller"
 mkdir -p "$R/scripts" "$R/state/tasks" "$R/loop/logs" "$R/app"
-for s in work.sh worker-sandbox.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh; do
+for s in work.sh worker-sandbox.sh phase5_safety.py taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R/scripts/worker-sandbox.sh" 2>/dev/null || true

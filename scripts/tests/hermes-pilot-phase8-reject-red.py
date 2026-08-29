@@ -51,7 +51,7 @@ class RejectFixture:
             (self.root / relative).mkdir(parents=True, exist_ok=True)
         for name in (
             "work.sh", "project-reconcile.py", "transition_receipt.py", "seed_contract.py",
-            "jsonl_durable.py", "runtime-state.py",
+            "jsonl_durable.py", "runtime-state.py", "phase5_safety.py",
         ):
             shutil.copy2(SOURCE / "scripts" / name, self.root / "scripts" / name)
         if os.name == "nt":

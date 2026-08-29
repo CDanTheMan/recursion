@@ -38,7 +38,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/root"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/roadmaps" \
   "$R/state/pilot-windows" "$R/loop/logs" "$TMP/origins"
 for s in resync.sh digest.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh work.sh \
-         worker-sandbox.sh board.sh publish.sh; do
+         worker-sandbox.sh phase5_safety.py board.sh publish.sh; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null

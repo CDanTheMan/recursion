@@ -40,7 +40,7 @@ cp "$SRC/scripts/taskctl.sh" "$A/scripts/"
 cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
   "$SRC/scripts/runtime-state.py" "$A/scripts/"
 cp "$SRC/scripts/decision-queue.py" "$SRC/scripts/validate-control-state.py" \
-  "$SRC/scripts/validate-decision.py" "$SRC/scripts/engine_contract.py" "$A/scripts/"
+  "$SRC/scripts/validate-decision.py" "$SRC/scripts/engine_contract.py" "$SRC/scripts/phase5_safety.py" "$A/scripts/"
 cat > "$A/scripts/author.sh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s|%s|%s\n' "$1" "$2" "$3" > "$AUTHOR_LOG"
@@ -126,7 +126,7 @@ done
 
 # 6. Restart must preserve every pending decision. A singleton latest file drops the older one.
 DROOT="$TMP/pending"; mkdir -p "$DROOT/scripts" "$DROOT/state/tasks" "$DROOT/loop/logs"
-for helper in conduct-hermes.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py decision-queue.py validate-control-state.py validate-decision.py engine_contract.py; do
+for helper in conduct-hermes.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py decision-queue.py validate-control-state.py validate-decision.py engine_contract.py phase5_safety.py; do
   cp "$SRC/scripts/$helper" "$DROOT/scripts/"
 done
 cat > "$DROOT/scripts/work.sh" <<'STUB'

@@ -10,9 +10,25 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 
-from phase5_safety import BoundaryError, decode_json, read_bytes, is_plain_int
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+class FirstPartyImportError(ImportError):
+    """A required controller module is absent from the importing script's tree."""
+
+
+try:
+    from phase5_safety import BoundaryError, decode_json, read_bytes, is_plain_int
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    raise FirstPartyImportError(
+        f"first-party module 'phase5_safety' not found; searched {_SCRIPT_DIR}"
+    ) from None
 
 BUILTIN_ENGINES = frozenset({"claude", "hermes", "gate", "none", "deepseek", "openrouter"})
 ENGINE_NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
