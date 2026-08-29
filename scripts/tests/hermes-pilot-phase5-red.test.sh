@@ -20,7 +20,7 @@ mkdir -p "$BIN" "$R/scripts/tests" "$R/state/tasks" "$R/state/runs" \
   "$R/loop/logs" "$R/app" "$R/fixtures" "$R/other" \
   "$R/user-client/render/data/models"
 for s in assignment.py assist.sh board.sh capacity.sh conduct.sh engine_contract.py git-scope.py \
-         jsonl_durable.py pilot_instruction.py plan.sh project-pilot.py project-reconcile.py project_authority.py \
+         jsonl_durable.py notify.sh pilot_instruction.py plan.sh project-pilot.py project-reconcile.py project_authority.py \
          provider-connect-proxy.py provider-network.sh publish.sh remote_evidence.py resolve-engine.py \
          resolve-model-alias.py resync.sh run_contract.py runtime-state.py seed_contract.py taskctl.sh \
          transition_receipt.py validate-assignment-result.py validate-gate.py validate-verifier-result.py \

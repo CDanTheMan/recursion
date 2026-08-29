@@ -14,7 +14,7 @@ mkdir -p "$R/scripts" "$R/state/project-config" "$R/state/pilots" "$R/state/goal
   "$R/state/tasks" "$R/state/runs" "$R/state/instructions" "$R/state/.locks" \
   "$R/loop/logs" "$R/.worktrees"
 for s in assignment.py assist.sh author.sh board.sh capacity.sh conduct.sh engine_contract.py git-scope.py \
-   instruction_routing.py intake.sh jsonl_durable.py pilot_instruction.py plan.sh project-pilot.py \
+   instruction_routing.py intake.sh jsonl_durable.py notify.sh pilot_instruction.py plan.sh project-pilot.py \
    project-reconcile.py project_authority.py provider-connect-proxy.py provider-network.sh publish.sh \
    remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
    seed_contract.py taskctl.sh transition_receipt.py validate-assignment-result.py validate-control-state.py \
