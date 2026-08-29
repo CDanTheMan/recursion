@@ -73,7 +73,9 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as raw:
         tmp = Path(raw)
         source = tmp / "source"; (source / "scripts").mkdir(parents=True)
-        (source / "scripts/gate.sh").write_text("#!/bin/sh\ntest -s result.txt\n", encoding="utf-8")
+        # Keep the materialized bytes identical to the committed blob on Windows, where
+        # write_text() would otherwise create CRLF while Git's clean filter stores LF.
+        (source / "scripts/gate.sh").write_bytes(b"#!/bin/sh\ntest -s result.txt\n")
         subprocess.run(["git", "init", "-q", "-b", "main", str(source)], check=True)
         subprocess.run(["git", "-C", str(source), "add", "."], check=True)
         subprocess.run(["git", "-C", str(source), "-c", "user.name=t", "-c", "user.email=t@t",

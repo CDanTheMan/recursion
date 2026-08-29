@@ -44,6 +44,19 @@ else
   no "provider-only silently retained host egress or lacks a namespace boundary"
 fi
 
+# The logical test bypass is permitted only for a disposable platform-temp controller.  The
+# checked-out repository is a deliberately non-temp controller on this host and must be refused.
+non_temp_rc=0
+RECURSION_ROOT="$SRC" RECURSION_TEST_WORKER=logical \
+  bash "$N/scripts/worker-sandbox.sh" --engine claude --role implementer \
+  --worktree "$N/worktree" --network-policy provider-only --prompt fixture \
+  >/dev/null 2>&1 || non_temp_rc=$?
+if [ "$non_temp_rc" = 95 ]; then
+  ok "logical test bypass refuses a non-temp controller root"
+else
+  no "logical test bypass accepted a non-temp controller root (rc=$non_temp_rc)"
+fi
+
 if grep -q 'commit_event(base, value)' "$SRC/scripts/project-reconcile.py" \
    && grep -q 'commit_event(base, value)' "$SRC/scripts/project-pilot.py" \
    && grep -q 'append_jsonl(journal_path, event' "$SRC/scripts/transition_receipt.py" \

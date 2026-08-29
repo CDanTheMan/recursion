@@ -46,6 +46,71 @@ except (BoundaryError, OSError, UnicodeDecodeError, ValueError, TypeError, Overf
     raise SystemExit(2)
 PY
 }
+is_disposable_temp_root(){
+  "$PYTHON" - "$1" <<'PY'
+import ntpath
+import os
+import posixpath
+import re
+import sys
+
+windows = os.name == "nt"
+
+
+def canonical(value):
+    if not isinstance(value, str) or not value.strip() or "\x00" in value:
+        return None
+    value = value.strip()
+    if windows:
+        # Git Bash may spell a Windows path as /c/Users/... while the native
+        # environment spells the same path C:\\Users\\....
+        value = value.replace("\\", "/")
+        match = re.match(r"^/([A-Za-z])(?:/(.*))?$", value)
+        if match:
+            value = f"{match.group(1).upper()}:/{match.group(2) or ''}"
+        try:
+            value = os.path.realpath(value)
+            value = ntpath.normcase(ntpath.normpath(value))
+        except (OSError, ValueError, TypeError):
+            return None
+    else:
+        try:
+            value = posixpath.normpath(os.path.realpath(value))
+        except (OSError, ValueError, TypeError):
+            return None
+    try:
+        return value if os.path.isdir(value) else None
+    except OSError:
+        return None
+
+
+def is_descendant(child, parent):
+    try:
+        common = ntpath.commonpath((child, parent)) if windows else posixpath.commonpath((child, parent))
+    except (ValueError, TypeError):
+        return False
+    return child != parent and common == parent
+
+
+root = canonical(sys.argv[1])
+if root is None:
+    raise SystemExit(1)
+temp_values = [os.environ.get(name, "") for name in ("TMPDIR", "TEMP", "TMP")]
+if windows:
+    try:
+        import tempfile
+        temp_values.append(tempfile.gettempdir())
+    except (OSError, RuntimeError, ValueError):
+        pass
+else:
+    temp_values.append("/tmp")
+for value in temp_values:
+    temp_root = canonical(value)
+    if temp_root is not None and is_descendant(root, temp_root):
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
 safe_leaf(){
   "$PYTHON" - "$1" <<'PY'
 import os, sys
@@ -659,8 +724,10 @@ export RECURSION_WORKER_ROLE="$ROLE"
 case "${RECURSION_TEST_WORKER:-}" in
   logical)
     # Existing hermetic envelope tests exercise the logical scope gate, not the OS boundary.
-    # This bypass is accepted only for disposable /tmp controllers and is never valid on /opt.
-    case "$ROOT" in /tmp/*) ;; *) echo "worker-sandbox: test bypass refused" >&2; exit 95;; esac
+    # This bypass is accepted only for disposable platform-temp controllers and is never valid
+    # on /opt, the repository, or a user home.
+    is_disposable_temp_root "$ROOT" \
+      || { echo "worker-sandbox: test bypass refused" >&2; exit 95; }
     if [ "$ENGINE" != gate ]; then
       check_plan_auth || exit $?
     fi
@@ -808,10 +875,9 @@ if getent passwd "$RUNNER_USER" >/dev/null 2>&1; then
   RUNNER_HOME="$(getent passwd "$RUNNER_USER" | cut -d: -f6)"
 else
   # Disposable controls run before sysusers.d is deployed but still use a real non-root uid.
-  case "$ROOT" in
-    /tmp/*) RUNNER_USER=nobody; RUNNER_UID="$(id -u nobody)"; RUNNER_GID="$(id -g nobody)"; RUNNER_HOME="" ;;
-    *) echo "worker-sandbox: dedicated recursion-runner account is missing" >&2; exit 95 ;;
-  esac
+  is_disposable_temp_root "$ROOT" \
+    || { echo "worker-sandbox: dedicated recursion-runner account is missing" >&2; exit 95; }
+  RUNNER_USER=nobody; RUNNER_UID="$(id -u nobody)"; RUNNER_GID="$(id -g nobody)"; RUNNER_HOME=""
 fi
 [ -z "$RUNNER_HOME" ] || RUNNER_HOME="$(safe_directory "$RUNNER_HOME" 2>/dev/null || true)"
 [ -z "$RUNNER_HOME" ] || [ -d "$RUNNER_HOME" ] \
@@ -989,7 +1055,8 @@ if [ "$ENGINE" != gate ] && [ -n "$RUNNER_HOME" ] && [ -d "$RUNNER_HOME" ]; then
   RUN+=(--property "BindReadOnlyPaths=$RUNNER_HOME:/home/runner")
 fi
 if [ "${RECURSION_TEST_WORKER:-}" = sandbox ]; then
-  case "$ROOT" in /tmp/*) ;; *) echo "worker-sandbox: sandbox test env refused" >&2; exit 95;; esac
+  is_disposable_temp_root "$ROOT" \
+    || { echo "worker-sandbox: sandbox test env refused" >&2; exit 95; }
   [ -n "${STUB_ARM_SCRIPT:-}" ] && RUN+=(--setenv STUB_ARM_SCRIPT="$STUB_ARM_SCRIPT")
   for name in STUB_SECRET STUB_LEAK STUB_OUTSIDE STUB_UIDLOG STUB_PUBLISHER STUB_PUBLOG STUB_VERIFIER_SCRIPT; do
     value="${!name:-}"; [ -n "$value" ] && RUN+=(--setenv "$name=$value")
