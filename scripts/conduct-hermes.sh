@@ -204,6 +204,7 @@ except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowE
 
   finalize_claim(){
     local claimed="$1" result_rc="$2" queue_sha="$3" queue_snapshot="$4" state reconcile_rc=0
+    local recovery_error=""
     # queue_sha is captured immediately after claim and retained across child execution.  Never
     # hash the post-action path here: that would let a swapped projection become the authority
     # used by terminalization after the immutable child snapshot has completed.
@@ -214,12 +215,11 @@ except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowE
         # The child can die after writing its terminal/deferred action but before projecting the
         # coupled instruction. Reconcile that handshake idempotently before moving the decision;
         # otherwise the parent would hide the only projection capable of recovery.
-        run_claimed_child "$claimed" "$queue_sha" "$queue_snapshot" \
-          --recover-only "${CHILD_SCOPE_ARGS[@]}" 8>&- \
-          >/dev/null 2>&1 || reconcile_rc=$?
+        recovery_error="$(run_claimed_child "$claimed" "$queue_sha" "$queue_snapshot" \
+          --recover-only "${CHILD_SCOPE_ARGS[@]}" 8>&- 2>&1 >/dev/null)" || reconcile_rc=$?
         case "$state:$reconcile_rc" in
           succeeded:0|failed:1|cancelled:1|pending:75) : ;;
-          *) log "instruction/action recovery failed state=$state rc=$reconcile_rc; preserving $claimed"; return 74 ;;
+          *) log "instruction/action recovery failed state=$state rc=$reconcile_rc; preserving $claimed${recovery_error:+: ${recovery_error:0:240}}"; return 74 ;;
         esac
         state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed" --expected-sha256 "$queue_sha")" || return $?
         case "$state" in
@@ -255,9 +255,21 @@ except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowE
     esac
   }
 
+  # A claim that has already been dispatched (or recovery-inspected) is never returned by
+  # claim-pending again.  If its queue rename/finalization is temporarily incomplete, leave that
+  # projection for the next reconciliation pass instead of hiding independent pending work.  A
+  # missing/corrupt action remains a hard stop; a known running action is safe to leave because no
+  # path below relaunches that running claim, and its deterministic action id rejects a duplicate.
+  claim_is_not_relaunchable(){
+    local claimed="$1" queue_sha="$2" state
+    state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed" \
+      --expected-sha256 "$queue_sha" 2>/dev/null)" || return 1
+    case "$state" in succeeded|failed|cancelled|running) return 0 ;; *) return 1 ;; esac
+  }
+
   # Reconcile projections left running by a prior actuator process before claiming anything
-  # new. A genuinely running action is never double-launched and blocks new admissions until
-  # its own durable action reaches terminal state.
+  # new. Recovery never dispatches the verb; a still-running action is left in place while this
+  # pass drains independent pending projections.
   for queue_file in "$ROOT/state/decision-queue/running"/*.json; do
     [ -f "$queue_file" ] || continue
     snapshot_running "$queue_file" || return 74
@@ -277,7 +289,14 @@ except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowE
         run_claimed_child "$queue_file" "$CLAIMED_DIGEST" "$CLAIMED_SNAPSHOT" \
           --recover-only "${CHILD_SCOPE_ARGS[@]}"
         child_rc=$?
-        finalize_claim "$queue_file" "$child_rc" "$CLAIMED_DIGEST" "$CLAIMED_SNAPSHOT" || return $?
+        finalize_claim "$queue_file" "$child_rc" "$CLAIMED_DIGEST" "$CLAIMED_SNAPSHOT"
+        finalize_rc=$?
+        if [ "$finalize_rc" -ne 0 ]; then
+          claim_is_not_relaunchable "$queue_file" "$CLAIMED_DIGEST" \
+            || return "$finalize_rc"
+          aggregate=1
+          log "recovered queue finalization deferred for an already inspected action; continuing the drain"
+        fi
         ;;
       *) log "corrupt recovered action state '$action_state'"; return 74 ;;
     esac
@@ -300,7 +319,14 @@ except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowE
     queue_file="$CLAIMED_FILE"; claimed_digest="$CLAIMED_DIGEST"; claimed_snapshot="$CLAIMED_SNAPSHOT"
     run_claimed_child "$queue_file" "$claimed_digest" "$claimed_snapshot" "${CHILD_SCOPE_ARGS[@]}"
     child_rc=$?
-    finalize_claim "$queue_file" "$child_rc" "$claimed_digest" "$claimed_snapshot" || return $?
+    finalize_claim "$queue_file" "$child_rc" "$claimed_digest" "$claimed_snapshot"
+    finalize_rc=$?
+    if [ "$finalize_rc" -ne 0 ]; then
+      claim_is_not_relaunchable "$queue_file" "$claimed_digest" \
+        || return "$finalize_rc"
+      aggregate=1
+      log "queue finalization deferred for an already dispatched action; continuing the drain for independent work"
+    fi
   done
 
   [ "$PAUSED_SAFE" = 0 ] || return "$aggregate"
@@ -343,7 +369,14 @@ PY
     [ "${#pids[@]}" -gt 0 ] || break
     first="${pids[0]}"; queue_file="${files[0]}"
     wait "$first"; child_rc=$?
-    finalize_claim "$queue_file" "$child_rc" "${digests[0]}" "${snapshots[0]}" || return $?
+    finalize_claim "$queue_file" "$child_rc" "${digests[0]}" "${snapshots[0]}"
+    finalize_rc=$?
+    if [ "$finalize_rc" -ne 0 ]; then
+      claim_is_not_relaunchable "$queue_file" "${digests[0]}" \
+        || return "$finalize_rc"
+      aggregate=1
+      log "queue finalization deferred for an already dispatched action; continuing the drain for independent work"
+    fi
     pids=("${pids[@]:1}"); files=("${files[@]:1}"); projects=("${projects[@]:1}"); digests=("${digests[@]:1}"); snapshots=("${snapshots[@]:1}")
     if [ -f "$ROOT/state/PAUSE" ]; then
       for ((i=0; i<${#pids[@]}; i++)); do

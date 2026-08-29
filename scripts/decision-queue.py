@@ -51,7 +51,7 @@ if str(_SCRIPT_DIR) not in sys.path:
 
 from jsonl_durable import (
     JsonlDurabilityError, acknowledge_jsonl, append_jsonl as durable_append_jsonl,
-    find_jsonl_objects, read_jsonl_prefix, read_jsonl_since,
+    find_jsonl_objects, read_jsonl_objects, read_jsonl_prefix, read_jsonl_since,
 )
 
 
@@ -922,7 +922,7 @@ def import_journal(base: Path) -> int:
                                      f"journal decision {value['id']}")
 
         imported = 0
-        seen_decisions: set[str] = set()
+        seen_decisions: dict[str, dict] = {}
         for kind, value in prepared:
             if kind == "legacy":
                 path = legacy_marker_path(base, value)
@@ -937,7 +937,7 @@ def import_journal(base: Path) -> int:
                 continue
             if value["id"] in seen_decisions:
                 continue
-            seen_decisions.add(value["id"])
+            seen_decisions[value["id"]] = value
             present = existing_path(base, value["id"])
             if present:
                 try:
@@ -948,6 +948,37 @@ def import_journal(base: Path) -> int:
                 continue
             target = queue_root(base) / "pending" / f"{value['id']}.json"
             atomic_json(target, value)
+            imported += 1
+
+        # The journal is the recovery authority; the consumer cursor only says which rows have
+        # already been inspected.  Reconcile every valid journal decision after the cursor batch
+        # as well, so a crash or manual loss of a pending projection cannot make the singleton
+        # latest pointer (or an advanced cursor) hide older work.  Existing terminal/running
+        # projections are verified by existing_path and are never reopened or dispatched again.
+        try:
+            journal_records = read_jsonl_objects(journal)
+        except JsonlDurabilityError as exc:
+            raise ValueError(str(exc)) from exc
+        for raw in journal_records:
+            record = normalize(raw)
+            try:
+                validate_record(base, record)
+            except ValueError:
+                # Reviewed legacy rows are intentionally non-executable and were handled above
+                # through the exact marker allowlist.  A current invalid row remains rejected by
+                # the cursor batch; this branch is only for old, already-acknowledged markers.
+                continue
+            prior = seen_decisions.get(record["id"])
+            if prior is not None:
+                assert_same_decision(prior, record, f"journal decision {record['id']}")
+            else:
+                seen_decisions[record["id"]] = record
+            for raw_match in find_jsonl_objects(journal, "id", record["id"]):
+                assert_same_decision(normalize(raw_match), record,
+                                     f"journal decision {record['id']}")
+            if existing_path(base, record["id"]):
+                continue
+            atomic_json(queue_root(base) / "pending" / f"{record['id']}.json", record)
             imported += 1
         acknowledge_jsonl(journal, "decision-queue-import", batch)
         return imported
