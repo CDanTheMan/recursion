@@ -826,6 +826,12 @@ def _replace_store_bytes(path: Path, data: bytes, *, expected_identity: Any = No
                         _windows_replace_by_handle(
                             temporary_descriptor, temporary_identity, directory, temporary_path, path)
                     else:
+                        # POSIX os.replace names the source path rather than
+                        # consuming the already-open descriptor. Revalidate
+                        # that same descriptor at the last possible moment so
+                        # a hardlink/replacement race cannot publish a source
+                        # whose identity changed after the earlier probes.
+                        _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)
                         os.replace(temporary_name, path.name, src_dir_fd=directory, dst_dir_fd=directory)
                     committed = True
                     # The source handle is now the newly published leaf.  The
@@ -876,6 +882,20 @@ def _reservation_counts(value: Mapping[Any, Any] | None, field: str) -> dict[Any
     if not isinstance(value, Mapping):
         raise SchemaError("INVALID_FIELD", f"{field} must be an object")
     return {key: _nonnegative_int(count, f"{field}.{key}") for key, count in value.items()}
+
+
+def _identity_bound_mapping(value: Any, field: str, record_type: type,
+                            identity_field: str, parser: Any) -> dict[str, Any]:
+    """Parse a registry map only when its caller key names the parsed object."""
+    parsed: dict[str, Any] = {}
+    for raw_key, item in value.items():
+        key = _id(raw_key, f"{field} key")
+        record = item if isinstance(item, record_type) else parser(item)
+        record = parser(record.to_dict())
+        if getattr(record, identity_field) != key:
+            raise SchemaError("IDENTITY_MISMATCH", f"{field} key does not match {identity_field}")
+        parsed[key] = record
+    return parsed
 
 
 def _file_is_reparse_or_symlink(path: Path) -> bool:
@@ -1544,6 +1564,8 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
         raise SchemaError("UNKNOWN_POLICY", f"unsupported placement policy: {req.policy}")
     if req.policy == "manual-pin" and req.manual_candidate_id is None:
         raise SchemaError("MISSING_FIELD", "manual-pin requires manual_candidate_id")
+    if routing_policy is not None and not isinstance(routing_policy, (RoutingPolicy, Mapping)):
+        raise SchemaError("INVALID_FIELD", "routing_policy must be an object")
     policy = None if routing_policy is None else RoutingPolicy.from_dict(
         routing_policy.to_dict() if isinstance(routing_policy, RoutingPolicy) else routing_policy)
     if policy is not None and policy.authority != "human-owned":
@@ -1552,14 +1574,22 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
         ttl = _finite_number(heartbeat_ttl_s, "heartbeat_ttl_s", minimum=0)
     except SchemaError as exc:
         raise SchemaError("INVALID_FIELD", "heartbeat_ttl_s must be finite and non-negative") from exc
+    if not isinstance(candidates, Sequence) or isinstance(candidates, (str, bytes, bytearray)):
+        raise SchemaError("INVALID_FIELD", "candidates must be an array")
+    if not isinstance(hosts, Mapping):
+        raise SchemaError("INVALID_FIELD", "hosts must be an object")
+    if not isinstance(heartbeats, Mapping):
+        raise SchemaError("INVALID_FIELD", "heartbeats must be an object")
+    if not isinstance(pools, Mapping):
+        raise SchemaError("INVALID_FIELD", "pools must be an object")
     parsed_candidates = [item if isinstance(item, PlacementCandidate) else PlacementCandidate.from_dict(item) for item in candidates]
     parsed_candidates = [PlacementCandidate.from_dict(item.to_dict()) for item in parsed_candidates]
     candidate_ids = [item.candidate_id for item in parsed_candidates]
     if len(candidate_ids) != len(set(candidate_ids)):
         raise SchemaError("DUPLICATE_CANDIDATE", "placement candidates must have unique candidate_id values")
-    parsed_hosts = {key: HostRegistration.from_dict(item.to_dict() if isinstance(item, HostRegistration) else item) for key, item in hosts.items()}
-    parsed_heartbeats = {key: HostHeartbeat.from_dict(item.to_dict() if isinstance(item, HostHeartbeat) else item) for key, item in heartbeats.items()}
-    parsed_pools = {key: PoolStatus.from_dict(item.to_dict() if isinstance(item, PoolStatus) else item) for key, item in pools.items()}
+    parsed_hosts = _identity_bound_mapping(hosts, "hosts", HostRegistration, "host_id", HostRegistration.from_dict)
+    parsed_heartbeats = _identity_bound_mapping(heartbeats, "heartbeats", HostHeartbeat, "host_id", HostHeartbeat.from_dict)
+    parsed_pools = _identity_bound_mapping(pools, "pools", PoolStatus, "pool_id", PoolStatus.from_dict)
     now = time.time() if now_epoch is None else _finite_number(now_epoch, "now_epoch")
     if created_at is None:
         if now_epoch is None:
@@ -2374,6 +2404,7 @@ class VerificationKeyRegistry:
         self.authority_key_path, _ = _safe_store_path(authority, self.root)
         self.lock_path, _ = _safe_store_path(self.path.with_name(self.path.name + ".lock"), self.root)
         self._keys: Mapping[str, bytes] = MappingProxyType({})
+        self._retired_keys: Mapping[str, tuple[bytes, ...]] = MappingProxyType({})
         self._epoch = 0
         self._path_identity = None
         with _journal_lock(self.lock_path):
@@ -2451,17 +2482,23 @@ class VerificationKeyRegistry:
         instance.path, instance.root = registry_path, root_path
         instance.authority_key_path = authority_path
         instance.lock_path, _ = _safe_store_path(registry_path.with_name(registry_path.name + ".lock"), root_path)
-        instance._keys = MappingProxyType({}); instance._epoch = 0
+        instance._keys = MappingProxyType({}); instance._retired_keys = MappingProxyType({}); instance._epoch = 0
         instance._path_identity = None
         with _journal_lock(instance.lock_path):
             instance._write_locked(cls._normalize_keys(verification_keys), 1, secret)
             instance._reload_locked()
         return instance
 
-    def _write_locked(self, keys: Mapping[str, bytes], epoch: int, secret: bytes | None = None) -> None:
+    def _write_locked(self, keys: Mapping[str, bytes], epoch: int, secret: bytes | None = None,
+                      retired_keys: Mapping[str, Sequence[bytes]] | None = None) -> None:
         secret = self._secret(self.authority_key_path) if secret is None else secret
         entries = [{"verifier_identity": identity, "key_hex": value.hex()} for identity, value in sorted(keys.items())]
-        body = {"schema_version": SCHEMA_VERSION, "kind": "verification_key_registry", "registry_epoch": epoch, "keys": entries}
+        retired = retired_keys if retired_keys is not None else self._retired_keys
+        retired_entries = [{"verifier_identity": identity, "key_hex": value.hex()}
+                           for identity, values in sorted(retired.items())
+                           for value in sorted(set(values), key=lambda item: item.hex())]
+        body = {"schema_version": SCHEMA_VERSION, "kind": "verification_key_registry", "registry_epoch": epoch,
+                "keys": entries, "retired_keys": retired_entries}
         body["registry_digest"] = digest_record(body)
         body["authentication_tag"] = hmac.new(secret, body["registry_digest"].encode(), hashlib.sha256).hexdigest()
         self._path_identity = _replace_store_bytes(self.path, _canonical(body), expected_identity=self._path_identity)
@@ -2485,7 +2522,7 @@ class VerificationKeyRegistry:
         except (UnicodeError, ValueError) as exc:
             raise SchemaError("CORRUPT_REGISTRY", "controller verifier registry cannot be read") from exc
         required = {"schema_version", "kind", "registry_epoch", "keys", "registry_digest", "authentication_tag"}
-        _check_keys(state, required, set(), "verification_key_registry")
+        _check_keys(state, required, {"retired_keys"}, "verification_key_registry")
         _schema_version(state["schema_version"], "controller verifier registry")
         if state["kind"] != "verification_key_registry":
             raise SchemaError("SCHEMA_VERSION", "unsupported controller verifier registry schema")
@@ -2494,6 +2531,8 @@ class VerificationKeyRegistry:
             raise SchemaError("INVALID_FIELD", "registry_epoch must be positive")
         digest = _digest(state["registry_digest"], "registry_digest")
         body = {key: state[key] for key in required if key not in {"registry_digest", "authentication_tag"}}
+        if "retired_keys" in state:
+            body["retired_keys"] = state["retired_keys"]
         if digest != digest_record(body):
             raise SchemaError("DIGEST_MISMATCH", "controller verifier registry digest is invalid")
         tag = _digest(state["authentication_tag"], "authentication_tag")
@@ -2517,7 +2556,31 @@ class VerificationKeyRegistry:
             if not value:
                 raise SchemaError("INVALID_FIELD", "registry key is empty")
             normalized[identity] = value
-        self._keys = MappingProxyType(normalized); self._epoch = epoch
+        retired_normalized: dict[str, list[bytes]] = {}
+        retired_entries = state.get("retired_keys", [])
+        if not isinstance(retired_entries, list):
+            raise SchemaError("INVALID_FIELD", "retired verifier keys must be a list")
+        for entry in retired_entries:
+            _check_keys(entry, {"verifier_identity", "key_hex"}, set(), "retired_verification_key")
+            identity = _string(entry["verifier_identity"], "verifier_identity")
+            if _regex_fullmatch(_VERIFIER_IDENTITY, identity, "verifier_identity") is None:
+                raise SchemaError("VERIFIER_UNTRUSTED", "retired registry identity is invalid")
+            key_hex = _string(entry["key_hex"], "key_hex")
+            if _regex_fullmatch(_KEY_HEX, key_hex, "key_hex") is None:
+                raise SchemaError("INVALID_FIELD", "retired registry key encoding is invalid")
+            try:
+                value = bytes.fromhex(key_hex)
+            except _INPUT_ERRORS as exc:
+                raise SchemaError("INVALID_FIELD", "retired registry key encoding is invalid") from exc
+            if not value or value == normalized.get(identity):
+                raise SchemaError("INVALID_FIELD", "retired registry key duplicates an active key")
+            values = retired_normalized.setdefault(identity, [])
+            if value in values:
+                raise SchemaError("CONFLICTING_REPLAY", "retired registry key is duplicated")
+            values.append(value)
+        self._keys = MappingProxyType(normalized)
+        self._retired_keys = MappingProxyType({identity: tuple(values) for identity, values in retired_normalized.items()})
+        self._epoch = epoch
 
     @_typed_boundary("verification key registry")
     def reload(self) -> None:
@@ -2527,6 +2590,10 @@ class VerificationKeyRegistry:
     @property
     def keys(self) -> Mapping[str, bytes]:
         return self._keys
+
+    @property
+    def retired_keys(self) -> Mapping[str, tuple[bytes, ...]]:
+        return self._retired_keys
 
     @property
     def epoch(self) -> int:
@@ -2541,8 +2608,19 @@ class VerificationKeyRegistry:
         if not isinstance(value, bytes) or not value:
             raise SchemaError("INVALID_FIELD", "verifier key must be non-empty")
         with _journal_lock(self.lock_path):
-            self._reload_locked(); updated = dict(self._keys); updated[identity] = bytes(value)
-            self._write_locked(updated, self._epoch + 1); self._reload_locked(); return self._epoch
+            self._reload_locked()
+            value = bytes(value)
+            if value in self._retired_keys.get(identity, ()):
+                raise SchemaError("INVALID_FIELD", "verifier key was previously retired")
+            updated = dict(self._keys)
+            retired = {key: list(values) for key, values in self._retired_keys.items()}
+            previous = updated.get(identity)
+            if previous is not None and previous != value:
+                retired.setdefault(identity, []).append(previous)
+            updated[identity] = value
+            self._write_locked(updated, self._epoch + 1, retired_keys=retired)
+            self._reload_locked()
+            return self._epoch
 
 
 class VerificationReceiptStore:
@@ -2565,14 +2643,20 @@ class VerificationReceiptStore:
             self.verification_registry = VerificationKeyRegistry(
                 verification_registry, authority_key_path=verification_authority_key_path, root=self.root)
         self.verification_keys: Mapping[str, bytes] = MappingProxyType({})
+        self.retired_verification_keys: Mapping[str, tuple[bytes, ...]] = MappingProxyType({})
         self.receipts: dict[str, VerificationReceipt] = {}
         self._path_identity = None
         with _journal_lock(self.lock_path):
             self._reload_locked()
 
-    def _reload_locked(self) -> None:
-        self.verification_registry.reload()
+    def _reload_locked(self, *, registry_locked: bool = False) -> None:
+        if registry_locked:
+            self.verification_registry._reload_locked()
+        else:
+            self.verification_registry.reload()
         self.verification_keys = MappingProxyType(dict(self.verification_registry.keys))
+        self.retired_verification_keys = MappingProxyType(
+            {identity: tuple(keys) for identity, keys in self.verification_registry.retired_keys.items()})
         self.receipts.clear()
         stored = _read_store_bytes(self.path, expected_identity=self._path_identity)
         if stored is None:
@@ -2601,9 +2685,20 @@ class VerificationReceiptStore:
             raise ReconciliationError("VERIFIER_UNREGISTERED", "receipt verifier is not registered")
         return key
 
-    def _authenticate(self, receipt: VerificationReceipt) -> None:
-        expected = hmac.new(self._key(receipt.verifier_identity), receipt.receipt_digest.encode(), hashlib.sha256).hexdigest()
-        if not receipt.authentication_tag or not hmac.compare_digest(expected, receipt.authentication_tag):
+    def _verification_keys(self, verifier_identity: str, *, active_only: bool = False) -> tuple[bytes, ...]:
+        active = self.verification_keys.get(verifier_identity)
+        if active is None:
+            raise ReconciliationError("VERIFIER_UNREGISTERED", "receipt verifier is not registered")
+        if active_only:
+            return (active,)
+        return (active, *self.retired_verification_keys.get(verifier_identity, ()))
+
+    def _authenticate(self, receipt: VerificationReceipt, *, active_only: bool = False) -> None:
+        if not receipt.authentication_tag:
+            raise ReconciliationError("VERIFIER_AUTH_FAILED", "verification receipt authentication failed")
+        expected_tags = (hmac.new(key, receipt.receipt_digest.encode(), hashlib.sha256).hexdigest()
+                         for key in self._verification_keys(receipt.verifier_identity, active_only=active_only))
+        if not any(hmac.compare_digest(expected, receipt.authentication_tag) for expected in expected_tags):
             raise ReconciliationError("VERIFIER_AUTH_FAILED", "verification receipt authentication failed")
 
     @_typed_boundary("verification receipt lookup")
@@ -2634,23 +2729,30 @@ class VerificationReceiptStore:
 
     @_typed_boundary("verification receipt")
     def issue(self, receipt: VerificationReceipt) -> str:
+        if not isinstance(receipt, VerificationReceipt):
+            raise SchemaError("INVALID_RECORD", "verification receipt must be a VerificationReceipt")
         receipt = VerificationReceipt.from_dict(receipt.to_dict())
-        if receipt.authentication_tag:
-            self._authenticate(receipt)
-        else:
-            tag = hmac.new(self._key(receipt.verifier_identity), receipt.receipt_digest.encode(), hashlib.sha256).hexdigest()
-            receipt = replace(receipt, authentication_tag=tag)
         with _journal_lock(self.lock_path):
-            self._reload_locked()
-            old = self.receipts.get(receipt.receipt_id)
-            if old is not None:
-                if old == receipt:
-                    return "duplicate"
-                raise ReconciliationError("CONFLICTING_RECEIPT", "receipt identity already exists")
-            self._path_identity = _append_bytes(self.path, _json_line(receipt.to_dict(), "verification receipt"),
-                                                expected_identity=self._path_identity)
-            self.receipts[receipt.receipt_id] = receipt
-            return "issued"
+            # Rotation and issue share the registry lock. The registry is
+            # reloaded while that lock is held, then the active key is used to
+            # authenticate/sign and the receipt is appended before rotation
+            # can publish a new epoch.
+            with _journal_lock(self.verification_registry.lock_path):
+                self._reload_locked(registry_locked=True)
+                old = self.receipts.get(receipt.receipt_id)
+                if old is not None:
+                    if old == receipt:
+                        return "duplicate"
+                    raise ReconciliationError("CONFLICTING_RECEIPT", "receipt identity already exists")
+                if receipt.authentication_tag:
+                    self._authenticate(receipt, active_only=True)
+                else:
+                    tag = hmac.new(self._key(receipt.verifier_identity), receipt.receipt_digest.encode(), hashlib.sha256).hexdigest()
+                    receipt = replace(receipt, authentication_tag=tag)
+                self._path_identity = _append_bytes(self.path, _json_line(receipt.to_dict(), "verification receipt"),
+                                                    expected_identity=self._path_identity)
+                self.receipts[receipt.receipt_id] = receipt
+                return "issued"
 @_typed_boundary("candidate reference")
 def validate_candidate_refs(*, result_ref: str, default_branch: str = "main",
                             integration_branch: str = "recursion/integration") -> None:

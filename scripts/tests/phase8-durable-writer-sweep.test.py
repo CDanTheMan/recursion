@@ -9,6 +9,8 @@ may deny cleanup of directories held by native directory handles.
 from __future__ import annotations
 
 import copy
+import hashlib
+import hmac
 import json
 import math
 import os
@@ -361,6 +363,78 @@ def _run_case(case: Path, mode: str, hostile: str | None) -> None:
         if outside.read_bytes() != b"outside-before\n":
             raise AssertionError(f"{mode} hardlink race touched bytes outside root")
         return
+    elif hostile == "race-hardlink-create":
+        path.write_bytes(b"inside-before\n")
+        created_link = outside_dir / "inside-hardlink.jsonl"
+        injected = False
+        if mode == "read":
+            original_read = os.read
+
+            def inject_read(descriptor, size):
+                nonlocal injected
+                result = original_read(descriptor, size)
+                if result and not injected:
+                    injected = True
+                    os.link(path, created_link)
+                return result
+
+            context = patch.object(fabric.os, "read", side_effect=inject_read)
+        else:
+            original = fabric._revalidate_destination
+
+            def inject(directory, candidate_path, *, expected_identity, must_exist):
+                nonlocal injected
+                result = original(directory, candidate_path, expected_identity=expected_identity, must_exist=must_exist)
+                if candidate_path == path and not injected:
+                    injected = True
+                    os.link(path, created_link)
+                return result
+
+            context = patch.object(fabric, "_revalidate_destination", side_effect=inject)
+
+        with context:
+            try:
+                _writer(mode, path, root)
+            except fabric.FabricError:
+                pass
+            else:
+                raise AssertionError(f"{mode} accepted hardlink creation race")
+        if not injected:
+            raise AssertionError(f"{mode} hardlink creation hook did not execute")
+        if created_link.exists():
+            created_link.unlink()
+        if outside.read_bytes() != b"outside-before\n":
+            raise AssertionError(f"{mode} hardlink creation race touched bytes outside root")
+        return
+    elif hostile == "race-absent":
+        if mode == "read":
+            raise AssertionError("read has no absent-destination commit to race")
+        calls = 0
+        injected = False
+        original = fabric._revalidate_destination
+
+        def inject(directory, candidate_path, *, expected_identity, must_exist):
+            nonlocal calls, injected
+            result = original(directory, candidate_path, expected_identity=expected_identity, must_exist=must_exist)
+            calls += 1
+            if candidate_path == path and calls == 2 and not must_exist:
+                os.link(outside, path)
+                injected = True
+            return result
+
+        with patch.object(fabric, "_revalidate_destination", side_effect=inject):
+            try:
+                _writer(mode, path, root)
+            except fabric.FabricError:
+                pass
+            else:
+                raise AssertionError(f"{mode} accepted an absent-destination race")
+        if not injected:
+            raise AssertionError(f"{mode} absent-destination race hook did not execute")
+        path.unlink(missing_ok=True)
+        if outside.read_bytes() != b"outside-before\n":
+            raise AssertionError(f"{mode} absent-destination race touched outside bytes")
+        return
     elif hostile == "absent":
         pass
     elif hostile is None:
@@ -370,21 +444,33 @@ def _run_case(case: Path, mode: str, hostile: str | None) -> None:
 
     before = outside.read_bytes()
     try:
-        _writer(mode, path, root)
-    except fabric.FabricError:
+        result = _writer(mode, path, root)
+    except fabric.FabricError as exc:
         if hostile in {None, "absent"}:
             raise
+        if hostile == "junction-leaf" and mode == "append" and str(exc) != "durable store leaf is not a unique regular file":
+            raise AssertionError(f"junction-leaf guard produced unexpected refusal: {exc}") from exc
+        if hostile in {"junction-ancestor", "junction-root"} and mode == "append":
+            expected = ("store parent is not a real directory" if os.name == "nt"
+                        else "store parent cannot be pinned safely")
+            if str(exc) != expected:
+                raise AssertionError(f"{hostile} pin guard produced unexpected refusal: {exc}") from exc
     except (ValueError, TypeError, OverflowError, RecursionError, UnicodeError, OSError) as exc:
         raise AssertionError(f"{mode}/{hostile} leaked {type(exc).__name__}") from exc
     else:
         if hostile not in {None, "absent"}:
             raise AssertionError(f"{mode}/{hostile} was accepted")
+        if hostile == "absent":
+            if mode == "read" and result is not None:
+                raise AssertionError("read/absent returned a record for a missing destination")
+            if mode != "read" and path.read_bytes() != b"writer-payload\n":
+                raise AssertionError(f"{mode}/absent did not publish the expected replacement")
     if outside.read_bytes() != before:
         raise AssertionError(f"{mode}/{hostile} touched bytes outside root")
 
 
 def run_shared_battery(root: Path) -> int:
-    cases = ("hardlink", "race-hardlink", "junction-leaf", "junction-ancestor", "junction-root", "absent")
+    cases = ("hardlink", "race-hardlink", "race-hardlink-create", "junction-leaf", "junction-ancestor", "junction-root", "absent")
     sites = (
         ("journal append", "append"),
         ("receipt issue append", "append"),
@@ -403,6 +489,159 @@ def run_shared_battery(root: Path) -> int:
             total += 1
         print(f"ok    {label}: hardlink/junction/race/absent battery ({len(cases)}/{len(cases)})")
     return total
+
+
+def run_posix_source_race(root: Path) -> int:
+    """Exercise the POSIX source-handle guard and its pre-commit ordering."""
+    if os.name == "nt":
+        lines = Path(fabric.__file__).read_text(encoding="utf-8").splitlines()
+        replace_line = next((index for index, line in enumerate(lines) if "os.replace(" in line), None)
+        if (replace_line is None or
+                "_validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)" not in lines[replace_line - 1] or
+                lines[replace_line - 2].strip() == "if False:"):
+            raise AssertionError("POSIX source guard missing immediately before os.replace")
+        print("ok    POSIX replace source revalidation: structural parity checked (Windows execution skipped)")
+        return 1
+    root.mkdir(parents=True, exist_ok=True)
+    store_root = root / "store"
+    outside = root / "outside"; outside.write_bytes(b"outside-before\n")
+    path = store_root / "store.jsonl"; store_root.mkdir()
+    path.write_bytes(b"inside-before\n")
+    created_link = root / "source-hardlink"
+    injected = False
+    replace_called = False
+    original_revalidate = fabric._revalidate_destination
+    original_replace = fabric.os.replace
+
+    def inject_revalidate(directory, candidate_path, *, expected_identity, must_exist):
+        nonlocal injected
+        result = original_revalidate(directory, candidate_path, expected_identity=expected_identity, must_exist=must_exist)
+        if candidate_path == path and not injected:
+            temporary = next(item for item in store_root.iterdir() if item.name.startswith(".store.jsonl.tmp."))
+            os.link(temporary, created_link)
+            injected = True
+        return result
+
+    def observe_replace(*args, **kwargs):
+        nonlocal replace_called
+        replace_called = True
+        return original_replace(*args, **kwargs)
+
+    try:
+        with patch.object(fabric, "_revalidate_destination", side_effect=inject_revalidate), \
+                patch.object(fabric.os, "replace", side_effect=observe_replace):
+            try:
+                fabric._replace_store_bytes(path, b"writer-payload\n")
+            except fabric.FabricError:
+                pass
+            else:
+                raise AssertionError("POSIX source race was accepted")
+        if not injected:
+            raise AssertionError("POSIX source race hook did not execute")
+        if replace_called:
+            raise AssertionError("POSIX source guard allowed os.replace after source identity changed")
+        if outside.read_bytes() != b"outside-before\n":
+            raise AssertionError("POSIX source race touched bytes outside root")
+    finally:
+        created_link.unlink(missing_ok=True)
+    print("ok    POSIX replace source revalidation: same-handle race refused before os.replace")
+    return 1
+
+
+def run_absent_destination_race(root: Path) -> int:
+    """Prove an absent destination cannot be replaced after a competing create."""
+    root.mkdir(parents=True, exist_ok=True)
+    for mode in ("append", "replace"):
+        _run_case(root / f"{mode}-race-absent", mode, "race-absent")
+    print("ok    absent destination race: atomic no-clobber commit refused competing create")
+    return 2
+
+
+def run_registry_boundaries(root: Path) -> int:
+    """Keep key encoding and verifier identity checks sensitive in runtime and schema."""
+    root.mkdir(parents=True, exist_ok=True)
+    schema_path = Path(__file__).resolve().parents[2] / "schemas" / "control-plane" / "v1" / "execution-fabric.schema.json"
+    validator = _strict_validator(json.loads(schema_path.read_text(encoding="utf-8")))
+    mutations = (("key-hex", "key_hex", "AA"), ("verifier-identity", "verifier_identity", "controller/\n"))
+    checked = 0
+    for label, field, value in mutations:
+        case = root / label; case.mkdir()
+        authority = case / "authority.key"; authority.write_bytes(b"authority")
+        if os.name != "nt":
+            authority.chmod(0o600)
+        registry = fabric.VerificationKeyRegistry.provision(
+            case / "verifiers.json", authority_key_path=authority,
+            verification_keys={"controller/verifier-one": "test-key"}, root=case)
+        state = json.loads(registry.path.read_text(encoding="utf-8"))
+        state["keys"][0][field] = value
+        state["registry_digest"] = fabric.digest_record({key: state[key] for key in
+                                                           state if key not in {"registry_digest", "authentication_tag"}})
+        state["authentication_tag"] = hmac.new(
+            b"authority", state["registry_digest"].encode(), hashlib.sha256).hexdigest()
+        registry.path.write_text(json.dumps(state), encoding="utf-8")
+        if validator.is_valid(state):
+            raise AssertionError(f"{label} schema accepted invalid registry state")
+        try:
+            registry.reload()
+        except fabric.FabricError as exc:
+            if label == "key-hex" and getattr(exc, "code", None) != "INVALID_FIELD":
+                raise AssertionError(f"{label} runtime produced {exc.code}, not INVALID_FIELD")
+            if label == "verifier-identity" and getattr(exc, "code", None) != "VERIFIER_UNTRUSTED":
+                raise AssertionError(f"{label} runtime produced {exc.code}, not VERIFIER_UNTRUSTED")
+        else:
+            raise AssertionError(f"{label} runtime accepted invalid registry state")
+        checked += 1
+        print(f"ok    registry {label}: schema and runtime rejected {value!r}")
+    return checked
+
+
+def run_placement_boundaries() -> int:
+    """Exercise every caller-controlled placement container and identity binding."""
+    host, heartbeat, pool, requirements, candidate, _, _, _ = _records()
+    values = {
+        "candidates": None,
+        "hosts": [],
+        "heartbeats": [],
+        "pools": [],
+    }
+    checked = 0
+    for field, value in values.items():
+        kwargs = {
+            "requirements": requirements, "candidates": [candidate],
+            "hosts": {host.host_id: host}, "heartbeats": {host.host_id: heartbeat},
+            "pools": {pool.pool_id: pool}, "now_epoch": 1787918400, "created_at": NOW,
+        }
+        kwargs[field] = value
+        try:
+            fabric.resolve_placement(**kwargs)
+        except fabric.FabricError as exc:
+            if getattr(exc, "code", None) != "INVALID_FIELD":
+                raise AssertionError(f"placement {field} produced {exc.code}, not INVALID_FIELD")
+        except (ValueError, TypeError, OverflowError, RecursionError, UnicodeError, OSError, AttributeError) as exc:
+            raise AssertionError(f"placement {field} leaked {type(exc).__name__}") from exc
+        else:
+            raise AssertionError(f"placement {field} accepted malformed container")
+        checked += 1
+    identity_cases = (
+        ("hosts", {"host-alias": host}, {host.host_id: heartbeat}, {pool.pool_id: pool}, candidate),
+        ("heartbeats", {host.host_id: host}, {"host-alias": heartbeat}, {pool.pool_id: pool}, candidate),
+        ("pools", {host.host_id: host}, {host.host_id: heartbeat}, {"pool-alias": pool}, candidate),
+    )
+    for field, hosts, heartbeats, pools, selected in identity_cases:
+        if field == "hosts":
+            selected = fabric.PlacementCandidate.from_dict({**candidate.to_dict(), "host_id": "host-alias"})
+            heartbeats = {"host-alias": heartbeat}
+        try:
+            fabric.resolve_placement(requirements, [selected], hosts, heartbeats, pools,
+                                     now_epoch=1787918400, created_at=NOW)
+        except fabric.SchemaError as exc:
+            if getattr(exc, "code", None) != "IDENTITY_MISMATCH":
+                raise AssertionError(f"placement {field} produced {exc.code}, not IDENTITY_MISMATCH")
+        else:
+            raise AssertionError(f"placement {field} accepted a mismatched registry key")
+        checked += 1
+    print(f"ok    placement boundary matrix: {checked} malformed/mismatched containers rejected")
+    return checked
 
 
 def run_positive_controls(root: Path) -> int:
@@ -432,6 +671,12 @@ def run_positive_controls(root: Path) -> int:
     receipts = fabric.VerificationReceiptStore(root / "positive-receipts.jsonl", root=root,
                                                verification_registry=registry)
     receipts.issue(receipt)
+    registry.rotate("controller/verifier-one", "rotated-verifier-key")
+    schema_path = Path(__file__).resolve().parents[2] / "schemas" / "control-plane" / "v1" / "execution-fabric.schema.json"
+    _strict_validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(
+        json.loads(verifier_path.read_text(encoding="utf-8")))
+    if receipts.get(receipt.receipt_id) is None:
+        raise AssertionError("rotated-out receipt was not verifiable from retired key history")
     coordinator = fabric.IntegrationCoordinator(root / "positive-integration.jsonl", root=root,
                                                 receipt_store=receipts)
     coordinator.set_project_policy(project_id="project-one", default_branch="main",
@@ -462,9 +707,13 @@ def main() -> int:
     try:
         differential = run_differential()
         hostile = run_hostile_inputs(run_root / "inputs")
+        placement = run_placement_boundaries()
+        registry = run_registry_boundaries(run_root / "registry")
         shared = run_shared_battery(run_root / "shared")
+        absent_race = run_absent_destination_race(run_root / "absent-race")
+        posix = run_posix_source_race(run_root / "posix")
         positive = run_positive_controls(run_root / "positive")
-        print(f"phase8-durable-writer-sweep: PASS differential={differential} hostile={hostile} shared={shared} positive={positive}")
+        print(f"phase8-durable-writer-sweep: PASS differential={differential} hostile={hostile} placement={placement} registry={registry} shared={shared} absent_race={absent_race} posix={posix} positive={positive}")
         return 0
     finally:
         # Only this harness-owned child is cleaned.  The caller-owned scratch

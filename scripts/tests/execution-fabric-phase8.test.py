@@ -10,11 +10,14 @@ import math
 import multiprocessing
 import os
 from multiprocessing.pool import ThreadPool
+import shutil
 import subprocess
 import threading
 import sys
 import tempfile
 import unittest
+import uuid
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
@@ -146,6 +149,17 @@ def receipt_store(path, temp):
     return VerificationReceiptStore(path, verification_registry=registry), registry
 
 
+@contextmanager
+def author_scratch(prefix="phase8-author"):
+    """Use one explicit author-owned temp directory; avoid ACL-prone TemporaryDirectory."""
+    path = Path(tempfile.gettempdir()) / f"{prefix}-{uuid.uuid4().hex}"
+    path.mkdir()
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
+
+
 def validate_schema_records(path):
     try:
         import jsonschema
@@ -167,6 +181,49 @@ def make_junction(link: Path, target: Path) -> None:
 
 
 class FabricPlacementTests(unittest.TestCase):
+    def test_registry_container_keys_are_bound_to_record_identities(self):
+        registered = host()
+        good_heartbeat = heartbeat(registered)
+        good_pool = pool()
+
+        with self.assertRaises(SchemaError) as error:
+            resolve_placement(requirements(), [candidate(host_id="host-alias")],
+                              {"host-alias": registered}, {"host-alias": good_heartbeat},
+                              {"pool-one": good_pool}, now_epoch=1787918400, created_at=NOW)
+        self.assertEqual(error.exception.code, "IDENTITY_MISMATCH")
+
+        with self.assertRaises(SchemaError) as error:
+            resolve_placement(requirements(), [candidate(host_id="host-alias")],
+                              {"host-alias": host("host-alias")}, {"host-alias": good_heartbeat},
+                              {"pool-one": good_pool}, now_epoch=1787918400, created_at=NOW)
+        self.assertEqual(error.exception.code, "IDENTITY_MISMATCH")
+
+        with self.assertRaises(SchemaError) as error:
+            resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
+                              {registered.host_id: good_heartbeat}, {"pool-alias": good_pool},
+                              now_epoch=1787918400, created_at=NOW)
+        self.assertEqual(error.exception.code, "IDENTITY_MISMATCH")
+
+    def test_malformed_placement_containers_are_typed(self):
+        registered = host()
+        values = {
+            "candidates": None,
+            "hosts": [],
+            "heartbeats": [],
+            "pools": [],
+        }
+        for field, value in values.items():
+            kwargs = {
+                "requirements": requirements(), "candidates": [candidate()],
+                "hosts": {registered.host_id: registered},
+                "heartbeats": {registered.host_id: heartbeat(registered)},
+                "pools": {"pool-one": pool()}, "now_epoch": 1787918400, "created_at": NOW,
+            }
+            kwargs[field] = value
+            with self.assertRaises(SchemaError, msg=field) as error:
+                resolve_placement(**kwargs)
+            self.assertEqual(error.exception.code, "INVALID_FIELD")
+
     def test_registration_and_heartbeat_are_strict_and_bound(self):
         registered = host()
         with self.assertRaises(TypeError):
@@ -852,6 +909,94 @@ class DurableStateTests(unittest.TestCase):
             self.assertEqual(reloaded.issue(rotated), "issued")
             self.assertIsNotNone(VerificationReceiptStore(path, verification_registry=registry).get("receipt-two"))
 
+    def test_receipt_rotation_is_atomic_and_retired_receipts_are_not_replayable(self):
+        registered = host()
+        assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
+                                          {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
+                                          now_epoch=1787918400, created_at=NOW)
+        with author_scratch("phase8-rotation") as temp:
+            store, registry = receipt_store(temp / "receipts.jsonl", temp)
+            first = receipt_for(assignment)
+            self.assertEqual(store.issue(first), "issued")
+            persisted = store.get(first.receipt_id)
+            self.assertIsNotNone(persisted)
+
+            registry.rotate("controller/verifier-one", "rotated-key")
+            reloaded = VerificationReceiptStore(temp / "receipts.jsonl", verification_registry=registry)
+            self.assertEqual(reloaded.get(first.receipt_id), persisted)
+            self.assertEqual(reloaded.require(persisted), persisted)
+
+            replay = VerificationReceipt.build(
+                receipt_id="receipt-replay", assignment_digest=assignment.assignment_digest,
+                source_sha=assignment.source_sha, candidate_id=assignment.candidate_id,
+                result_commit=RESULT, diff_digest="c" * 64, scope_digest="d" * 64,
+                gate_digest="e" * 64, verifier_identity="controller/verifier-one", verified_at=NOW)
+            replay = replace(replay, authentication_tag=hmac.new(
+                b"test-key", replay.receipt_digest.encode(), hashlib.sha256).hexdigest())
+            with self.assertRaises(ReconciliationError) as error:
+                reloaded.issue(replay)
+            self.assertEqual(error.exception.code, "VERIFIER_AUTH_FAILED")
+
+            fresh = receipt_for(assignment)
+            fresh = replace(fresh, receipt_id="receipt-after-rotation")
+            fresh = VerificationReceipt.build(
+                receipt_id=fresh.receipt_id, assignment_digest=fresh.assignment_digest,
+                source_sha=fresh.source_sha, candidate_id=fresh.candidate_id,
+                result_commit=fresh.result_commit, diff_digest=fresh.diff_digest,
+                scope_digest=fresh.scope_digest, gate_digest=fresh.gate_digest,
+                verifier_identity=fresh.verifier_identity, verified_at=fresh.verified_at)
+            self.assertEqual(reloaded.issue(fresh), "issued")
+
+            blocked = threading.Event()
+            release = threading.Event()
+            rotation_write = threading.Event()
+            failures = []
+            race_receipt = VerificationReceipt.build(
+                receipt_id="receipt-rotation-race", assignment_digest=assignment.assignment_digest,
+                source_sha=assignment.source_sha, candidate_id=assignment.candidate_id,
+                result_commit=RESULT, diff_digest="c" * 64, scope_digest="d" * 64,
+                gate_digest="e" * 64, verifier_identity="controller/verifier-one", verified_at=NOW)
+            original_key = reloaded._key
+            original_write = registry._write_locked
+
+            def delayed_key(identity):
+                blocked.set()
+                if not release.wait(5):
+                    raise AssertionError("rotation race release timed out")
+                return original_key(identity)
+
+            def observed_write(*args, **kwargs):
+                rotation_write.set()
+                return original_write(*args, **kwargs)
+
+            def issue_worker():
+                try:
+                    reloaded.issue(race_receipt)
+                except BaseException as exc:  # asserted below
+                    failures.append(exc)
+
+            def rotate_worker():
+                try:
+                    registry.rotate("controller/verifier-one", "third-key")
+                except BaseException as exc:  # asserted below
+                    failures.append(exc)
+
+            with patch.object(reloaded, "_key", side_effect=delayed_key), \
+                    patch.object(registry, "_write_locked", side_effect=observed_write):
+                issuing = threading.Thread(target=issue_worker)
+                issuing.start()
+                self.assertTrue(blocked.wait(2))
+                rotating = threading.Thread(target=rotate_worker)
+                rotating.start()
+                self.assertFalse(rotation_write.wait(0.25))
+                release.set()
+                issuing.join(5); rotating.join(5)
+            self.assertFalse(issuing.is_alive() or rotating.is_alive())
+            self.assertEqual(failures, [])
+            self.assertTrue(rotation_write.is_set())
+            checked = VerificationReceiptStore(temp / "receipts.jsonl", verification_registry=registry)
+            self.assertIsNotNone(checked.get("receipt-rotation-race"))
+
 
 class IntegrationTests(unittest.TestCase):
     def test_admit_revalidates_direct_assignments_before_receipt_binding(self):
@@ -915,7 +1060,7 @@ class IntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             _, registry = receipt_store(Path(temp) / "receipts.jsonl", temp)
             state = json.loads(registry.path.read_text(encoding="utf-8"))
-            invalid_registry = dict(state, keys=[dict(state["keys"][0], key_hex=state["keys"][0]["key_hex"] + "\n")])
+            invalid_registry = dict(state, keys=[dict(state["keys"][0], key_hex="AA")])
             with self.assertRaises(jsonschema.ValidationError):
                 jsonschema.validate(invalid_registry, schema)
 
@@ -954,9 +1099,9 @@ class IntegrationTests(unittest.TestCase):
             path = Path(temp) / "receipts.jsonl"
             _, registry = receipt_store(path, temp)
             state = json.loads(registry.path.read_text(encoding="utf-8"))
-            state["keys"][0]["key_hex"] = "abc"
-            state["registry_digest"] = digest_record({key: state[key] for key in
-                                                        {"schema_version", "kind", "registry_epoch", "keys"}})
+            state["keys"][0]["key_hex"] = "AA"
+            state["registry_digest"] = digest_record({key: value for key, value in state.items()
+                                                        if key not in {"registry_digest", "authentication_tag"}})
             state["authentication_tag"] = hmac.new(b"controller-authority-test-key",
                                                     state["registry_digest"].encode(), hashlib.sha256).hexdigest()
             registry.path.write_text(json.dumps(state), encoding="utf-8")

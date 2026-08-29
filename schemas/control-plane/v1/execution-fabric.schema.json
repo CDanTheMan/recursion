@@ -81,6 +81,9 @@
         "schema_version": { "$ref": "#/$defs/schema_version" }, "kind": { "const": "verification_key_registry" },
         "registry_epoch": { "$ref": "#/$defs/positive_integer" },
         "keys": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false,
+           "required": ["verifier_identity", "key_hex"],
+           "properties": { "verifier_identity": { "type": "string", "pattern": "^controller/.+\\Z" }, "key_hex": { "type": "string", "pattern": "^(?:[0-9a-f]{2})+\\Z" } } } },
+        "retired_keys": { "type": "array", "items": { "type": "object", "additionalProperties": false,
           "required": ["verifier_identity", "key_hex"],
           "properties": { "verifier_identity": { "type": "string", "pattern": "^controller/.+\\Z" }, "key_hex": { "type": "string", "pattern": "^(?:[0-9a-f]{2})+\\Z" } } } },
         "registry_digest": { "$ref": "#/$defs/digest" }, "authentication_tag": { "$ref": "#/$defs/digest" }
