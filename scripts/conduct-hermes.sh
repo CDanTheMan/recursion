@@ -37,6 +37,7 @@ CLI_ERROR=0
 # invocation captures them below. The child never re-reads a path as its decision authority.
 DECISION_SNAPSHOT_B64="${RECURSION_DECISION_SNAPSHOT_B64:-}"
 DECISION_FILE_DIGEST="${RECURSION_DECISION_FILE_DIGEST:-}"
+DECISION_SNAPSHOT_SUPPLIED=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --file)
@@ -101,11 +102,15 @@ sys.stdout.buffer.write(hashlib.sha256(raw).hexdigest().encode("ascii"))
 PY
 )" || { log "REFUSED - immutable decision snapshot digest could not be verified"; return 74; }
   [ "$current_digest" = "$DECISION_FILE_DIGEST" ] || { log "REFUSED - immutable decision snapshot digest changed"; return 74; }
-  # The queue projection is checked against the snapshotted bytes before each action.  The action
-  # itself always consumes DECISION_JSON from that same immutable stream, so a swap after this
-  # observation cannot redirect the validated verb or arguments.
-  local source_digest
-  source_digest="$(python3 - "$FILE" <<'PY'
+  # A queue claim supplies an already-pinned projection and must recheck that projection before
+  # every child action.  A direct --file invocation instead captures its caller-controlled input
+  # once at entry; its immutable snapshot remains the authority even if a validator or another
+  # observer replaces that convenience path after validation.  In both cases the child consumes
+  # DECISION_JSON from the immutable stream, so a replacement cannot redirect the validated verb
+  # or arguments.  A supplied snapshot is the queue/recovery path and keeps the hostile-swap CAS.
+  if [ "$DECISION_SNAPSHOT_SUPPLIED" = 1 ]; then
+    local source_digest
+    source_digest="$(python3 - "$FILE" <<'PY'
 import hashlib,sys
 try:
     with open(sys.argv[1], "rb") as source: raw=source.read(2 * 1024 * 1024 + 1)
@@ -115,8 +120,10 @@ except (OSError,ValueError):
     raise SystemExit(2)
 sys.stdout.buffer.write(hashlib.sha256(raw).hexdigest().encode("ascii"))
 PY
-)" || { log "REFUSED - decision projection digest could not be verified"; return 74; }
-  [ "$source_digest" = "$DECISION_FILE_DIGEST" ] || { log "REFUSED - decision projection changed before child action"; return 74; }
+    )" || { log "REFUSED - decision projection digest could not be verified"; return 74; }
+    [ "$source_digest" = "$DECISION_FILE_DIGEST" ] \
+      || { log "REFUSED - decision projection changed before child action"; return 74; }
+  fi
   scope_allows_file "$FILE"; scope_rc=$?
   [ "$scope_rc" -eq 0 ] && return 0
   [ "$scope_rc" -eq 1 ] && log "REFUSED - decision scope changed before child action" \
@@ -161,7 +168,7 @@ run_claimed_child(){
 }
 
 drain_queue(){
-  local queue_file claim_rc child_rc action_state aggregate=0 project global first i claimed_digest
+  local queue_file claim_rc child_rc finalize_rc action_state aggregate=0 project global first i claimed_digest
   local import_error import_rc
   local -a pids=() files=() projects=() digests=() snapshots=() claim_args=()
   [ "$DRY" = 0 ] || { log "--dry-run requires an explicit --file"; return 2; }
@@ -458,6 +465,7 @@ unset SNAPSHOT_BUNDLE
 else
   [[ "$DECISION_FILE_DIGEST" =~ ^[0-9a-f]{64}$ ]] && [ -n "$DECISION_SNAPSHOT_B64" ] \
     || { log "REFUSED - supplied decision snapshot is malformed"; exit 74; }
+  DECISION_SNAPSHOT_SUPPLIED=1
 fi
 # Do this before validation, action identity, consume, acknowledge, or release.  An out-of-scope
 # file remains untouched so its owning actuator can recover it.

@@ -1078,6 +1078,41 @@ def snapshot(base: Path, source: Path) -> tuple[str, str]:
         return hashlib.sha256(raw).hexdigest(), base64.b64encode(raw).decode("ascii")
 
 
+def action_id_for_decision(record: dict) -> str:
+    key = record.get("idempotency_key") or f"decision:{record.get('id') or digest(record)}"
+    return "action-" + hashlib.sha256(str(key).encode()).hexdigest()[:24]
+
+
+def succeeded_action_matches(base: Path, record: dict) -> bool:
+    """Require the durable action journal to prove a queue success transition."""
+    action_id = action_id_for_decision(record)
+    path = base / "state/actions" / f"{action_id}.json"
+    try:
+        action = _load_json_path(path, "succeeded action record")
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+        return False
+    if not isinstance(action, dict) or action.get("status") != "succeeded":
+        return False
+    arguments = record.get("args", record.get("arguments", [])) or []
+    key = record.get("idempotency_key") or f"decision:{record.get('id') or digest(record)}"
+    expected = {
+        "id": action_id,
+        "idempotency_key": key,
+        "decision_id": record.get("id") or None,
+        "instruction_id": record.get("instruction_id") or None,
+        "verb": record.get("verb") or "",
+        "arguments": arguments,
+        "goal_id": record.get("goal", record.get("goal_id", "")) or None,
+        "action_payload_sha256": decision_payload_digest(record),
+        "actor": record.get("actor") or None,
+        "project": record.get("project") or None,
+        "decision_source": record.get("decision_source") or None,
+        "routed_decider": record.get("routed_decider") or None,
+    }
+    return all(action.get(field) == value for field, value in expected.items()) \
+        and type(action.get("attempts")) is int and action["attempts"] >= 1
+
+
 def transition(base: Path, source: Path, outcome: str, evidence: str,
                expected_sha256: str | None = None) -> Path:
     running_root = queue_root(base) / "running"
@@ -1098,6 +1133,8 @@ def transition(base: Path, source: Path, outcome: str, evidence: str,
             record = _load_json_bytes(raw, "decision projection")
             if not isinstance(record, dict):
                 raise ValueError("decision projection is not an object")
+            if outcome == "succeeded" and not succeeded_action_matches(base, record):
+                raise ValueError("decision cannot reach succeeded without its succeeded action")
             if outcome == "pending":
                 record["status"] = "queued"
             else:
@@ -1114,6 +1151,7 @@ def transition(base: Path, source: Path, outcome: str, evidence: str,
                     os.fstat(descriptor).st_size, os.fstat(descriptor).st_mtime_ns) != source_identity \
                     or (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns) != source_identity:
                 raise ValueError("decision projection changed before queue transition")
+            ensure_directory(target.parent)
             with _pin_directory_chain(target.parent, "transition target"):
                 atomic_json(target, record)
                 try:

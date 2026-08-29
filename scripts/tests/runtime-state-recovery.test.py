@@ -86,6 +86,28 @@ def main() -> int:
         require(result.returncode != 0, "boolean backup manifest schema_version was accepted", result)
         require("Traceback" not in result.stderr, "boolean backup manifest leaked a traceback", result)
 
+        absolute = parent / "absolute-path-snapshot"
+        shutil.copytree(snapshot, absolute)
+        absolute_manifest = json.loads((absolute / "manifest.json").read_text(encoding="utf-8"))
+        absolute_manifest["files"].append({
+            "path": "/tmp/ABSOLUTE-ATTACK-PATH",
+            "sha256": "0" * 64,
+            "size": 0,
+            "mode": "0o600",
+            "uid": os.getuid(),
+            "gid": os.getgid(),
+        })
+        (absolute / "manifest.json").write_text(
+            json.dumps(absolute_manifest, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        result = run_runtime(root, "restore", str(absolute))
+        refusal = result.stdout + result.stderr
+        require(result.returncode == 2, "absolute manifest path was accepted", result)
+        require("unsafe manifest path" in refusal, "absolute manifest path lost its typed refusal", result)
+        require("ABSOLUTE-ATTACK-PATH" not in refusal and "/tmp/" not in refusal,
+                "absolute manifest path leaked through the top-level refusal", result)
+        print("ok    absolute manifest paths are refused without leaking caller paths")
+
         (root / "state/events.jsonl").write_text('{"event":"after"}\n', encoding="utf-8")
         (root / "state/.openrouter-usage.json").unlink()
         (root / "state/goals/goal.md").write_text("status: changed\n", encoding="utf-8")
