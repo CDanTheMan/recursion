@@ -572,7 +572,7 @@ def validate_manifest(data: object, name: str) -> dict:
         raise _bad("name must match ^[a-z][a-z0-9-]{1,31}$")
     if data["name"] != name:
         raise _bad(f"name {data['name']!r} does not match filename stem {name!r}")
-    if data["kind"] not in BACKEND_KINDS:
+    if not isinstance(data["kind"], str) or data["kind"] not in BACKEND_KINDS:
         raise _bad("kind must be one of " + ", ".join(sorted(BACKEND_KINDS)))
     if not isinstance(data["description"], str) or not data["description"]:
         raise _bad("description must be a nonempty string")
@@ -607,7 +607,7 @@ def validate_manifest(data: object, name: str) -> dict:
     for field in ("capacity_pool", "host_id"):
         if not isinstance(data[field], str) or not SLUG_RE.fullmatch(data[field]):
             raise _bad(f"{field} must match ^[a-z][a-z0-9-]{{1,63}}$")
-    if data["billing_basis"] not in BILLING_BASES:
+    if not isinstance(data["billing_basis"], str) or data["billing_basis"] not in BILLING_BASES:
         raise _bad("billing_basis must be one of " + ", ".join(sorted(BILLING_BASES)))
     if not isinstance(data["on_demand"], bool):
         raise _bad("on_demand must be a boolean")

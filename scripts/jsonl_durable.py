@@ -637,21 +637,7 @@ class _PinnedIndexConnection(sqlite3.Connection):
 
 def _reject_symlink_components(path: Path) -> None:
     """Reject links/reparse points before any durable state operation follows them."""
-    absolute = Path(os.path.abspath(path))
-    current = Path(absolute.anchor) if absolute.anchor else Path()
-    parts = absolute.parts[1:] if absolute.anchor else absolute.parts
-    for part in parts:
-        current = current / part
-        try:
-            metadata = os.lstat(current)
-            reparse_attribute = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x0400)
-            if stat.S_ISLNK(metadata.st_mode) or (
-                os.name == "nt"
-                and bool(getattr(metadata, "st_file_attributes", 0) & reparse_attribute)
-            ):
-                raise JsonlDurabilityError(f"JSONL path contains a link or reparse point: {current}")
-        except FileNotFoundError:
-            continue
+    _reject_reparse_components(path)
 
 
 def ensure_no_symlink(path: Path) -> None:
@@ -1364,29 +1350,45 @@ def atomic_bytes(path: Path, value: bytes, mode: int = 0o600,
         raise JsonlDurabilityError(f"durable atomic write refused: {path}: {exc}") from exc
 
 
-def _journal_identity(path: Path) -> tuple[Path, str]:
-    resolved = path.resolve(strict=False)
-    for parent in (resolved.parent, *resolved.parents):
+def _identity_path(path: Path,
+                   parent_pins: list[tuple[Path, int, tuple[int, ...]]] | None = None) -> Path:
+    """Address a journal leaf from the pinned parent spelling, never a fresh resolution."""
+    candidate = Path(path)
+    if parent_pins is not None:
+        if not parent_pins or not candidate.name or candidate.name in {".", ".."} \
+                or Path(candidate.name).name != candidate.name:
+            raise JsonlDurabilityError("invalid pinned JSONL identity leaf")
+        candidate = parent_pins[-1][0] / candidate.name
+    return _lexical_path(candidate)
+
+
+def _journal_identity(path: Path, *,
+                     parent_pins: list[tuple[Path, int, tuple[int, ...]]] | None = None
+                     ) -> tuple[Path, str]:
+    stable = _identity_path(path, parent_pins)
+    for parent in (stable.parent, *stable.parents):
         if parent.name == "state":
             try:
-                relative = resolved.relative_to(parent.parent).as_posix()
+                relative = stable.relative_to(parent.parent).as_posix()
             except ValueError:
                 break
             return parent / "jsonl-quarantine", relative
-    return resolved.parent / "jsonl-quarantine", resolved.name
+    return stable.parent / "jsonl-quarantine", stable.name
 
 
-def _index_identity(path: Path) -> tuple[Path, str]:
+def _index_identity(path: Path, *,
+                    parent_pins: list[tuple[Path, int, tuple[int, ...]]] | None = None
+                    ) -> tuple[Path, str]:
     """Return the derived-cache directory and stable journal identity."""
-    resolved = path.resolve(strict=False)
-    for parent in (resolved.parent, *resolved.parents):
+    stable = _identity_path(path, parent_pins)
+    for parent in (stable.parent, *stable.parents):
         if parent.name == "state":
             try:
-                relative = resolved.relative_to(parent.parent).as_posix()
+                relative = stable.relative_to(parent.parent).as_posix()
             except ValueError:
                 break
             return parent / "jsonl-index", relative
-    return resolved.parent / "jsonl-index", resolved.name
+    return stable.parent / "jsonl-index", stable.name
 
 
 def _ensure_index_root(path: Path, index_root: Path | None = None,
@@ -1452,12 +1454,26 @@ def _last_newline(descriptor: int, size: int) -> int:
 
 
 def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int,
-                     hook: Callable[[str], None] | None = None) -> dict:
-    quarantine, _ = _journal_identity(path)
+                     hook: Callable[[str], None] | None = None,
+                     *,
+                     parent_pins: list[tuple[Path, int, tuple[int, ...]]] | None = None,
+                     quarantine_root: Path | None = None,
+                     journal_identity: str | None = None) -> dict:
+    if parent_pins is not None:
+        revalidate_durable_parent_pins(parent_pins)
+    derived_quarantine, derived_identity = _journal_identity(
+        path, parent_pins=parent_pins)
+    quarantine = Path(quarantine_root) if quarantine_root is not None else derived_quarantine
+    journal_identity = journal_identity if journal_identity is not None else derived_identity
     try:
         with pinned_durable_parent(quarantine, create=True) as pins:
-            result = _quarantine_tail_unpinned(path, descriptor, offset, size, hook)
+            result = _quarantine_tail_unpinned(
+                path, descriptor, offset, size, hook,
+                quarantine=quarantine, journal_identity=journal_identity,
+            )
             revalidate_durable_parent_pins(pins)
+            if parent_pins is not None:
+                revalidate_durable_parent_pins(parent_pins)
             return result
     except JsonlDurabilityError:
         raise
@@ -1467,8 +1483,12 @@ def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int,
 
 
 def _quarantine_tail_unpinned(path: Path, descriptor: int, offset: int, size: int,
-                              hook: Callable[[str], None] | None = None) -> dict:
-    quarantine, journal_name = _journal_identity(path)
+                              hook: Callable[[str], None] | None = None, *,
+                              quarantine: Path | None = None,
+                              journal_identity: str | None = None) -> dict:
+    if quarantine is None or journal_identity is None:
+        quarantine, journal_identity = _journal_identity(path)
+    journal_name = journal_identity
     quarantine.mkdir(parents=True, exist_ok=True, mode=0o777 if os.name == "nt" else 0o700)
     try:
         os.chmod(quarantine, 0o700)
@@ -1909,13 +1929,13 @@ def _rows_to_lines(rows: Iterator[tuple]) -> tuple[VerifiedLine, ...]:
             value = None
         if value is not None and not isinstance(value, dict):
             raise JsonlDurabilityError("JSONL verification index contains a non-object value")
-        try:
-            result.append(VerifiedLine(
-                sequence=int(sequence), start=int(start), end=int(end), raw=bytes(raw), value=value,
-                chain_sha256=str(chain),
-            ))
-        except (TypeError, ValueError, OverflowError) as exc:
-            raise JsonlDurabilityError("JSONL verification index contains invalid row types") from exc
+        if not all(type(item) is int for item in (sequence, start, end)) \
+                or not isinstance(raw, (bytes, bytearray)):
+            raise JsonlDurabilityError("JSONL verification index contains invalid row types")
+        result.append(VerifiedLine(
+            sequence=sequence, start=start, end=end, raw=bytes(raw), value=value,
+            chain_sha256=str(chain),
+        ))
     return tuple(result)
 
 
@@ -2333,6 +2353,16 @@ def _append_jsonl_unpinned(path: Path, value: dict,
         ensure_no_symlink(path)
     journal_path = (_pinned_fd_path(parent_directory, path.name)
                     if parent_directory is not None else path)
+    quarantine_root, quarantine_identity = _journal_identity(
+        path, parent_pins=parent_pins)
+    if index_root is None:
+        stable_index_root, stable_index_identity = _index_identity(
+            path, parent_pins=parent_pins)
+        index_root = stable_index_root
+        if index_identity is None:
+            index_identity = stable_index_identity
+    elif index_identity is None:
+        index_identity = path.name
     _before_journal_leaf_open(path)
     # The hook is the deterministic check-to-open seam used by the race control.  Revalidate
     # the already-pinned parent chain immediately after it, before opening the leaf or deriving
@@ -2359,13 +2389,20 @@ def _append_jsonl_unpinned(path: Path, value: dict,
             _revalidate_opened_leaf(journal_path, descriptor, leaf_identity)
         if size and _read_at(descriptor, 1, size - 1) != b"\n":
             committed = _last_newline(descriptor, size)
-            evidence = _quarantine_tail(path, descriptor, committed, size, hook)
+            evidence = _quarantine_tail(
+                path, descriptor, committed, size, hook,
+                parent_pins=parent_pins,
+                quarantine_root=quarantine_root,
+                journal_identity=quarantine_identity,
+            )
+            if parent_pins is not None:
+                revalidate_durable_parent_pins(parent_pins)
             _revalidate_opened_leaf(journal_path, descriptor, leaf_identity)
             os.ftruncate(descriptor, committed)
             os.fsync(descriptor)
-        # Resolve the derived-cache destination before any caller hook can rename the
-        # journal parent.  The later publication still re-pins this saved path, so a
-        # swapped ancestor is refused rather than followed.
+        # The destination was derived from the pinned journal parent before any caller hook
+        # could rename it.  The later publication still re-pins this saved path, so a swapped
+        # ancestor is refused rather than followed.
         index_path, _ = _index_path(path, index_root, index_identity)
         connection, _rebuilt = _open_verified_index(
             path, descriptor, committed, max_record_bytes,
@@ -2401,6 +2438,7 @@ def append_jsonl(path: Path, value: dict,
                  hook: Callable[[str], None] | None = None) -> AppendOutcome:
     try:
         path = Path(path)
+        path = _durable_path(path)
         with pinned_durable_parent(path.parent, create=True) as pins:
             revalidate_durable_parent_pins(pins)
             result = _append_jsonl_unpinned(

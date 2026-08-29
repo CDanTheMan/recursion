@@ -453,7 +453,7 @@ def validate_assignment(value: object) -> dict:
     normalised["source_sha"] = sha
 
     policy = value["publication_policy"]
-    if policy not in PUBLICATION_POLICIES:
+    if not isinstance(policy, str) or policy not in PUBLICATION_POLICIES:
         raise _invalid("publication_policy must be one of "
                        + ", ".join(sorted(PUBLICATION_POLICIES)))
     normalised["publication_policy"] = policy
