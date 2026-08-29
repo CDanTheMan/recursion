@@ -316,11 +316,45 @@ class JsonlDurabilityError(RuntimeError):
         super().__init__(_public_refusal_message(message))
 
 
-def _durable_path(path: Path) -> Path:
+def _lexical_path(path: Path) -> Path:
+    """Normalize a durable path without resolving attacker-controlled components."""
     try:
-        return Path(path)
+        candidate = Path(path)
     except (TypeError, ValueError) as exc:
         raise JsonlDurabilityError("durable path is invalid") from exc
+    if any(part in {".", ".."} for part in candidate.parts):
+        raise JsonlDurabilityError("JSONL path contains traversal components")
+    if not candidate.is_absolute():
+        candidate = Path(os.path.abspath(candidate))
+    return candidate
+
+
+def _reject_reparse_components(path: Path) -> Path:
+    """Audit path components without resolving links, including Windows reparse points.
+
+    This is an early lexical/type check only.  The authoritative operation still uses
+    Phase 3's pinned parent descriptors and handle identity checks below.
+    """
+    candidate = _lexical_path(path)
+    current = Path(candidate.anchor or os.sep)
+    parts = candidate.parts[1:] if candidate.anchor else candidate.parts
+    for part in parts:
+        current /= part
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            break
+        except OSError as exc:
+            raise JsonlDurabilityError("cannot inspect JSONL path component") from exc
+        if stat.S_ISLNK(info.st_mode) or bool(
+                getattr(info, "st_reparse_tag", 0)
+                or (getattr(info, "st_file_attributes", 0) & 0x400)):
+            raise JsonlDurabilityError("JSONL path component is a reparse point")
+    return candidate
+
+
+def _durable_path(path: Path) -> Path:
+    return _reject_reparse_components(path)
 
 
 class _PinnedIndexConnection(sqlite3.Connection):
@@ -387,21 +421,7 @@ class _PinnedIndexConnection(sqlite3.Connection):
 
 def _reject_symlink_components(path: Path) -> None:
     """Reject links/reparse points before any durable state operation follows them."""
-    absolute = Path(os.path.abspath(path))
-    current = Path(absolute.anchor) if absolute.anchor else Path()
-    parts = absolute.parts[1:] if absolute.anchor else absolute.parts
-    for part in parts:
-        current = current / part
-        try:
-            metadata = os.lstat(current)
-            reparse_attribute = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x0400)
-            if stat.S_ISLNK(metadata.st_mode) or (
-                os.name == "nt"
-                and bool(getattr(metadata, "st_file_attributes", 0) & reparse_attribute)
-            ):
-                raise JsonlDurabilityError(f"JSONL path contains a link or reparse point: {current}")
-        except FileNotFoundError:
-            continue
+    _reject_reparse_components(path)
 
 
 def ensure_no_symlink(path: Path) -> None:
@@ -1661,9 +1681,12 @@ def _rows_to_lines(rows: Iterator[tuple]) -> tuple[VerifiedLine, ...]:
             value = None
         if value is not None and not isinstance(value, dict):
             raise JsonlDurabilityError("JSONL verification index contains a non-object value")
+        if not all(type(item) is int for item in (sequence, start, end)) \
+                or not isinstance(raw, (bytes, bytearray)):
+            raise JsonlDurabilityError("JSONL verification index contains invalid row types")
         try:
             result.append(VerifiedLine(
-                sequence=int(sequence), start=int(start), end=int(end), raw=bytes(raw), value=value,
+                sequence=sequence, start=start, end=end, raw=bytes(raw), value=value,
                 chain_sha256=str(chain),
             ))
         except (TypeError, ValueError, OverflowError) as exc:

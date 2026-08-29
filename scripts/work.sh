@@ -1089,7 +1089,6 @@ PY
   pause_checkpoint "worker launch" || return 75
   local worker_pgid rc now_epoch deadline_epoch heartbeat_epoch log_path
   log_path="$ARMLOG"; [ "$role" != verifier ] || log_path="$ROOT/loop/logs/$DATE-verifier-$ID-$STAMP.out"
-  RECURSION_VERIFICATION_COMMIT="$commit_oid" RECURSION_IMPLEMENTER_RUN_ID="$implementer_run" \
   deadline_epoch="$(( $(date +%s) + deadline_s ))"; heartbeat_epoch=0
   LAST_RUN_ID="$run_id"; LAST_RUN_EVIDENCE="$ROOT/state/runs/$run_id.json"
   if [ "$STRICT_PHASE5" = 1 ]; then
@@ -1127,7 +1126,8 @@ PY
       ${ASSIGNMENT_DIGEST:+--assignment-digest "$ASSIGNMENT_DIGEST" --assignment-file "$ASSIGNMENT_FILE"} \
       >>"$LOG" 2>&1 || return 98
   fi
-  setsid --wait "${cmd[@]}" >"$log_path" 2>&1 &
+  RECURSION_VERIFICATION_COMMIT="$commit_oid" RECURSION_IMPLEMENTER_RUN_ID="$implementer_run" \
+    setsid --wait "${cmd[@]}" >"$log_path" 2>&1 &
   worker_pgid=$!
   log "$role process group=$worker_pgid engine=$active_engine alias=${alias:-legacy} deadline=${deadline_s}s"
   if [ "$STRICT_PHASE5" = 1 ]; then
