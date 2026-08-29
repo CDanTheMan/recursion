@@ -547,6 +547,40 @@ def load_assignment(path: str | Path) -> tuple[dict[str, Any], str]:
     return normalized, hashlib.sha256(canonical_bytes(normalized)).hexdigest()
 
 
+def validate_bound_gate_files(assignment: dict[str, Any], worktree: str | Path) -> None:
+    """Re-prove that every gate file still has its assignment-bound bytes.
+
+    Assignment validation proves the source repository and controller files that were
+    bound before launch.  It deliberately cannot see edits made in the worker worktree.
+    Evidence consumption calls this second check against the live worktree and controller,
+    so a worker cannot rewrite a gate into a newly parseable program and then certify it.
+    """
+    contract = assignment.get("gate_contract")
+    if not isinstance(contract, dict):
+        raise AssignmentError("gate contract is absent while checking bound gate files")
+    roots = (
+        ("worker gate", Path(worktree), contract.get("gate_files", {})),
+        ("controller gate", Path(assignment["controller_repository"]),
+         contract.get("controller_gate_files", {})),
+    )
+    for label, root, files in roots:
+        if not isinstance(files, dict):
+            raise AssignmentError(f"{label} contract is malformed")
+        for relative, expected in files.items():
+            try:
+                path = root.joinpath(*PurePosixPath(relative).parts)
+                observed = read_bytes(path, label=f"{label} {relative}")
+            except (BoundaryError, OSError, TypeError, ValueError) as exc:
+                raise AssignmentError(
+                    f"{label} {relative} is unavailable after assignment binding"
+                ) from exc
+            actual = hashlib.sha256(observed or b"").hexdigest()
+            if actual != expected:
+                raise AssignmentError(
+                    f"{label} {relative} changed after assignment binding"
+                )
+
+
 def validate_execution_evidence(execution: Any, run: dict[str, Any],
                                 assignment: dict[str, Any]) -> dict[str, Any]:
     """Validate controller-owned execution facts against one immutable role assignment."""
@@ -594,6 +628,13 @@ def validate_execution_evidence(execution: Any, run: dict[str, Any],
                 raise AssignmentError("execution evidence exit code is not coherent with run")
         elif execution_status == "cancelled":
             if execution.get("exit_code") != 143 or run.get("exit_code") not in {75, 124, 143}:
+                raise AssignmentError("execution evidence status is not coherent with run")
+        elif execution_status == "started":
+            # A controller-observed deadline can terminate the process group before the
+            # worker-side completion receipt is written.  Only the exact timeout envelope
+            # may preserve that started receipt; ordinary failures still require a finished
+            # or explicitly cancelled execution receipt.
+            if run.get("outcome") != "timeout" or run.get("exit_code") != 124:
                 raise AssignmentError("execution evidence status is not coherent with run")
         else:
             raise AssignmentError("execution evidence status is not coherent with run")

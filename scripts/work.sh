@@ -1001,8 +1001,11 @@ print(json.dumps(value,separators=(",",":")))
 PY
   )" || return 1
   [ -n "$GATE_CONTRACT" ] || { log "strict Phase 5 requires the validated gate contract"; return 1; }
-  ASSIGNMENT_FILE="$ROOT/state/runs/$ID-assignment-$STAMP-$$.json"
-  mkdir -p "$ROOT/state/runs"
+  # Assignments are immutable provenance, not run records.  Keeping them outside state/runs
+  # prevents reconciliation consumers from mistaking the assignment envelope for a worker
+  # or verifier result when they enumerate run evidence.
+  ASSIGNMENT_FILE="$ROOT/state/assignments/$ID-assignment-$STAMP-$$.json"
+  mkdir -p "$ROOT/state/assignments"
   CONTROLLER_SHA="$(git -C "$ROOT" rev-parse --verify HEAD 2>/dev/null || true)"
   [ -n "$CONTROLLER_SHA" ] || return 1
   ASSIGNMENT_DIGEST="$(PYTHONPATH="$ROOT/scripts" python3 - "$ASSIGNMENT_FILE" "$ID" "$PROJECT_ID" "$REPO_DIR" "$source_branch" "$BASE_COMMIT" \
@@ -1237,7 +1240,11 @@ PY
     setsid --wait "${cmd[@]}" >"$log_path" 2>&1 &
   worker_pgid=$!
   UNCONFIRMED_PROCESS_GROUP="$worker_pgid"
-  deadline_epoch="$(( $(date +%s) + deadline_s ))"; heartbeat_epoch=0
+  # date +%s truncates the launch instant.  With the one-second hermetic fixture deadline,
+  # starting near a second boundary could therefore expire a healthy worker before it reached
+  # its first controller observation.  Round the absolute deadline up so the worker receives
+  # the declared interval from the launch observation, while a real overrun still times out.
+  deadline_epoch="$(( $(date +%s) + deadline_s + 1 ))"; heartbeat_epoch=0
   LAST_RUN_ID="$run_id"; LAST_RUN_EVIDENCE="$ROOT/state/runs/$run_id.json"
   log "$role process group=$worker_pgid engine=$active_engine alias=${alias:-legacy} deadline=${deadline_s}s"
   if [ "$STRICT_PHASE5" = 1 ]; then
@@ -1574,7 +1581,23 @@ phase5_assert_gate_commit(){
   [ "$(git -C "$1" rev-parse HEAD 2>/dev/null)" = "$CANDIDATE_OID" ] \
     && git -C "$1" diff --quiet --ignore-submodules -- \
     && git -C "$1" diff --cached --quiet --ignore-submodules -- \
-    && verify_seed_integrity "$1"
+    && verify_seed_integrity "$1" \
+    && phase5_gate_files_unchanged "$1"
+}
+
+phase5_gate_files_unchanged(){
+  [ "$STRICT_PHASE5" = 1 ] || return 0
+  [ -n "$ASSIGNMENT_FILE" ] || return 1
+  PYTHONPATH="$ROOT/scripts" python3 - "$ASSIGNMENT_FILE" "$1" <<'PY'
+import sys
+from assignment import AssignmentError, load_assignment, validate_bound_gate_files
+
+try:
+    assignment, _ = load_assignment(sys.argv[1])
+    validate_bound_gate_files(assignment, sys.argv[2])
+except (AssignmentError, OSError, TypeError, ValueError):
+    raise SystemExit(1)
+PY
 }
 
 run_independent_verifier(){
@@ -1844,6 +1867,10 @@ fi
 PASS=0; rc=0
 if verify "$WT"; then
   if ! phase5_assert_gate_commit "$WT"; then
+    if ! phase5_gate_files_unchanged "$WT"; then
+      phase5_reject "gate mutated candidate" \
+        "MACHINE GATE REFUSED because a gate file changed after assignment binding; exact commit $CANDIDATE_OID was not certified"
+    fi
     phase5_require_gate_record 99 || exit $?
     phase5_reject "gate mutated candidate" \
       "MACHINE GATE MUTATED tracked candidate state; exact commit $CANDIDATE_OID was not certified"
@@ -1903,6 +1930,10 @@ else
       fi
       if verify "$WT"; then
         if ! phase5_assert_gate_commit "$WT"; then
+          if ! phase5_gate_files_unchanged "$WT"; then
+            phase5_reject "retry gate mutated candidate" \
+              "MACHINE GATE REFUSED because a retry gate file changed after assignment binding; exact commit $CANDIDATE_OID was not certified"
+          fi
           phase5_require_gate_record 99 || exit $?
           phase5_reject "retry gate mutated candidate" \
             "MACHINE GATE MUTATED tracked retry state; exact commit $CANDIDATE_OID was not certified"

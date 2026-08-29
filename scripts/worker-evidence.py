@@ -26,6 +26,7 @@ try:
                                read_bytes, ensure_directory, absolute_lexical, MAX_JSON_BYTES)
     from assignment import (AssignmentError, canonical_bytes, load_assignment,
                             validate_assignment as assignment_validate,
+                            validate_bound_gate_files,
                             validate_execution_evidence as assignment_execution_evidence)
 except Exception as exc:
     module_name = getattr(exc, "name", None) or "phase5_safety/assignment"
@@ -41,7 +42,7 @@ except Exception as exc:
 START_EVIDENCE_KIND = "worker-evidence-start-v1"
 START_FIELDS = {
     "schema_version", "kind", "run_id", "task_id", "role", "evidence_path",
-    "assignment_file", "assignment_digest", "assignment",
+    "assignment_file", "assignment_digest", "assignment", "worktree",
 }
 
 
@@ -326,6 +327,7 @@ def main() -> int:
             "schema_version": 1, "kind": START_EVIDENCE_KIND, "run_id": args.run_id,
             "task_id": args.task_id, "role": args.role,
             "evidence_path": os.path.normcase(os.path.abspath(str(path))),
+            "worktree": value["worktree"],
             "assignment_file": value["assignment_file"],
             "assignment_digest": value["assignment_digest"], "assignment": value["assignment"],
         }
@@ -370,7 +372,7 @@ def main() -> int:
         if not args.execution_evidence:
             raise SystemExit("worker-evidence: strict execution evidence is required to finish")
         execution_run = dict(value)
-        execution_run.update(status=args.status, exit_code=args.exit_code)
+        execution_run.update(status=args.status, outcome=args.outcome, exit_code=args.exit_code)
         execution = validate_execution_evidence(
             maybe_json(args.execution_evidence), execution_run, assignment,
         )
@@ -404,6 +406,12 @@ def main() -> int:
     elif args.command == "gate":
         if assignment is None:
             raise SystemExit("worker-evidence: gate evidence has no validated assignment provenance")
+        if value.get("worktree") != start_binding["worktree"]:
+            raise SystemExit("worker-evidence: gate worktree binding changed")
+        try:
+            validate_bound_gate_files(assignment, start_binding["worktree"])
+        except AssignmentError as exc:
+            raise SystemExit(f"worker-evidence: assigned gate bytes changed: {exc}") from exc
         contract = assignment["gate_contract"]
         if args.acceptance != contract["acceptance"]:
             raise SystemExit("worker-evidence: gate command does not match the assigned acceptance program")

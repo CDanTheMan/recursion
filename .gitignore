@@ -53,6 +53,7 @@ state/pilot-requests/
 state/plans/
 state/pilot-windows/
 state/runs/
+state/assignments/
 state/evidence/
 state/recovery/
 state/deliveries/
