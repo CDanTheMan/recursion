@@ -1128,6 +1128,11 @@ def action_status(base: Path, decision_file: Path, expected_sha256: str | None =
         return "corrupt"
 
 
+def emit_line(value: object) -> None:
+    """Write protocol output with LF bytes even when Python runs on Windows."""
+    sys.stdout.buffer.write(str(value).encode("utf-8") + b"\n")
+
+
 def load_usage(path: str | None) -> dict | None:
     if not path:
         return None
@@ -1185,15 +1190,15 @@ def main() -> int:
             validate_record(base, record)
             if args.command == "enqueue":
                 path = enqueue(base, record, journal=True)
-                print(path)
+                emit_line(path)
             else:
-                print(json.dumps(record, sort_keys=True, separators=(",", ":")))
+                emit_line(json.dumps(record, sort_keys=True, separators=(",", ":")))
         elif args.command == "import-journal":
-            print(import_journal(base))
+            emit_line(import_journal(base))
         elif args.command == "claim":
             path = claim(base)
             if path:
-                print(path)
+                emit_line(path)
                 return 0
             return 4
         elif args.command == "claim-pending":
@@ -1201,24 +1206,24 @@ def main() -> int:
                                    args.with_snapshot)
             if isinstance(result, tuple):
                 path, digest_value, snapshot_value = result
-                print(path)
-                print(digest_value)
-                print(snapshot_value)
+                emit_line(path)
+                emit_line(digest_value)
+                emit_line(snapshot_value)
                 return 0
             path = result
             if path:
-                print(path)
+                emit_line(path)
                 return 0
             return 4
         elif args.command == "action-status":
-            print(action_status(base, Path(args.file), args.expected_sha256))
+            emit_line(action_status(base, Path(args.file), args.expected_sha256))
         elif args.command == "snapshot":
             digest_value, snapshot_value = snapshot(base, Path(args.file))
-            print(digest_value)
-            print(snapshot_value)
+            emit_line(digest_value)
+            emit_line(snapshot_value)
         else:
             outcome = {"succeed": "succeeded", "fail": "failed", "defer": "pending"}[args.command]
-            print(transition(base, Path(args.file), outcome, args.evidence, args.expected_sha256))
+            emit_line(transition(base, Path(args.file), outcome, args.evidence, args.expected_sha256))
     except (OSError, ValueError, TypeError, UnicodeError, OverflowError, RecursionError,
             json.JSONDecodeError, RuntimeError, subprocess.TimeoutExpired,
             subprocess.SubprocessError):

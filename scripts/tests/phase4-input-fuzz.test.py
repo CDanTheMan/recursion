@@ -409,29 +409,58 @@ def main() -> int:
                             capture_output=True, text=True)
     check(has_controlled_refusal(result, ("provider-connect-proxy:",)), "provider proxy CLI boundary is controlled")
     conduct_script = Path("scripts/conduct-hermes.sh")
+    # Keep the fixture's runtime closure explicit.  conduct-hermes invokes the queue and
+    # runtime helpers on its durable --file path; transition_receipt imports jsonl_durable, and
+    # the final decision-executed event invokes taskctl.  seed_contract is included with the
+    # first-party boundary helpers so a future shared import cannot silently turn this into an
+    # environmental refusal again.
+    conduct_fixture_scripts = (
+        "conduct-hermes.sh", "validate-decision.py", "decision-queue.py", "runtime-state.py",
+        "transition_receipt.py", "seed_contract.py", "jsonl_durable.py", "taskctl.sh",
+    )
 
     def stage_conduct_fixture(root: Path) -> None:
         root.mkdir(parents=True)
-        # This is a hermetic copy of the actuator's own runtime helpers, not an empty directory.
-        # A positive noop must reach action_transition and taskctl so a hostile case cannot pass
+        # This is a hermetic copy of the actuator's runtime closure, not an empty directory.  A
+        # positive noop must reach action_transition and taskctl so a hostile case cannot pass
         # merely because the validator or durable action machinery is absent.
-        shutil.copytree(ROOT / "scripts", root / "scripts")
+        scripts_dir = root / "scripts"
+        scripts_dir.mkdir()
+        for script_name in conduct_fixture_scripts:
+            shutil.copy2(ROOT / "scripts" / script_name, scripts_dir / script_name)
         for relative in (
             "loop/logs", "state/.locks", "state/actions", "state/decision-queue",
             "state/recovery", "state/instructions", "state/tasks",
         ):
             (root / relative).mkdir(parents=True, exist_ok=True)
+        # Direct --file execution still runs the durable controller path: action transitions append
+        # to action-events.jsonl, and the final decision-executed event goes through taskctl's
+        # events.jsonl writer.  Seed those journals (and the decision journal) so the fixture has
+        # the same empty controller state as a newly initialized checkout.  Keep .env empty so a
+        # host environment cannot retarget the hermetic root, and keep all subprocess scratch
+        # files below this fixture.
+        (root / ".env").write_text("", encoding="utf-8")
+        for relative in ("state/events.jsonl", "state/action-events.jsonl", "state/decisions.jsonl"):
+            (root / relative).write_bytes(b"")
+        (root / "tmp").mkdir()
 
     def write_raw(path: Path, raw: str | bytes) -> None:
         path.write_bytes(raw if isinstance(raw, bytes) else raw.encode("utf-8"))
 
     def run_conduct(root: Path, decision: Path, extra_env: dict[str, str] | None = None):
-        environment = dict(os.environ, RECURSION_ROOT=str(root))
+        environment = dict(os.environ, RECURSION_ROOT=str(root), TMPDIR=str(root / "tmp"))
         if extra_env:
             environment.update(extra_env)
         return subprocess.run(
             [str(BASH), str(root / conduct_script), "--file", str(decision)],
             capture_output=True, text=True, env=environment,
+        )
+
+    def run_runtime(root: Path, *args: str):
+        return subprocess.run(
+            [PYTHON, str(root / "scripts/runtime-state.py"), *args],
+            capture_output=True, text=True,
+            env=dict(os.environ, RECURSION_ROOT=str(root), TMPDIR=str(root / "tmp")),
         )
 
     def conduct_text(result: subprocess.CompletedProcess[str]) -> str:
@@ -472,6 +501,36 @@ def main() -> int:
 
     conduct_root = scratch / "conduct-root"
     stage_conduct_fixture(conduct_root)
+    check(all((conduct_root / "scripts" / name).is_file() for name in conduct_fixture_scripts),
+          "conduct-hermes fixture stages its complete dependency set")
+    print("CONDUCT_FIXTURE_DEPENDENCIES " + ",".join(conduct_fixture_scripts))
+    runtime_namespace_probe = run_runtime(
+        conduct_root, "lock-acquire", str(conduct_root / "state/.locks/a.lock"), "4242"
+    )
+    check(runtime_namespace_probe.returncode != 0
+          and "operator lock path is outside the supported lock namespace" in
+          (runtime_namespace_probe.stdout + runtime_namespace_probe.stderr)
+          and "runtime-state: operation refused" in
+          (runtime_namespace_probe.stdout + runtime_namespace_probe.stderr),
+          "runtime-state lock namespace refusal names its precondition")
+    runtime_owner_probe = run_runtime(
+        conduct_root, "lock-acquire",
+        str(conduct_root / "state/.locks/action-0123456789abcdef01234567.lock"), "4242"
+    )
+    check(runtime_owner_probe.returncode != 0
+          and "cannot witness lock owner process start: 4242" in
+          (runtime_owner_probe.stdout + runtime_owner_probe.stderr),
+          "runtime-state lock owner refusal names its precondition")
+    runtime_live_lock = conduct_root / "state/.locks/action-0123456789abcdef01234568.lock"
+    runtime_live_acquire = run_runtime(
+        conduct_root, "lock-acquire", str(runtime_live_lock), str(os.getpid())
+    )
+    runtime_live_release = run_runtime(
+        conduct_root, "lock-release", str(runtime_live_lock), str(os.getpid())
+    )
+    check(runtime_live_acquire.returncode == 0 and runtime_live_release.returncode == 0
+          and not runtime_live_lock.exists(),
+          "runtime-state lock candidate is acquired and released by a live owner")
     missing_decision = conduct_root / "missing.json"
     result = run_conduct(conduct_root, missing_decision)
     conduct_host_acl = is_git_bash_acl_artifact(result)
@@ -489,8 +548,30 @@ def main() -> int:
     positive_decision = conduct_root / "positive.json"
     write_raw(positive_decision, positive_raw)
     result = run_conduct(conduct_root, positive_decision)
+    positive_action_id = "action-" + hashlib.sha256(
+        conduct_positive["idempotency_key"].encode("utf-8")
+    ).hexdigest()[:24]
+    positive_action = conduct_root / "state/actions" / f"{positive_action_id}.json"
+    try:
+        positive_action_row = json.loads(positive_action.read_text(encoding="utf-8"))
+        positive_action_events = [
+            json.loads(line) for line in
+            (conduct_root / "state/action-events.jsonl").read_text(encoding="utf-8").splitlines()
+            if line
+        ]
+        positive_durable = (
+            positive_action_row.get("id") == positive_action_id
+            and positive_action_row.get("verb") == "noop"
+            and positive_action_row.get("status") == "succeeded"
+            and positive_action_row.get("attempts") == 1
+            and [event.get("status") for event in positive_action_events
+                 if event.get("action_id") == positive_action_id]
+            == ["pending", "running", "succeeded"]
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, AttributeError):
+        positive_durable = False
     conduct_check(result.returncode == 0 and "done (verb=noop rc=0)" in conduct_text(result)
-                  and not result_has_raw_error_or_path(result, conduct_root),
+                  and positive_durable and not result_has_raw_error_or_path(result, conduct_root),
                   "conduct-hermes well-formed decision succeeds in the fixture")
 
     conduct_expected = {
@@ -519,8 +600,13 @@ def main() -> int:
     deep_value: Any = "leaf"
     for _ in range(65):
         deep_value = {"nested": deep_value}
-    utf8_raw = conduct_variant("utf8", text="replacement �")
-    utf8_raw = utf8_raw.replace("�".encode("utf-8"), b"\x80", 1)
+    utf8_probe = "replacement \ufffd"
+    utf8_raw = conduct_variant("utf8", unknown=utf8_probe)
+    # The replacement character is valid JSON after strict decoding, so replacing only its
+    # encoded bytes with a bare continuation byte makes the pre-boundary snapshot invalid while
+    # preserving the exact post-replacement value and action digest.  The mutant must therefore
+    # reach the successful noop, not merely another unrelated refusal.
+    utf8_raw = utf8_raw.replace("\ufffd".encode("utf-8"), b"\x80", 1)
     targeted_cases: list[tuple[str, bytes, str, str, str]] = [
         ("string-length", conduct_variant("string-length", unknown="x" * 4097),
          "boundary=string", "MAX_STRING string-length guard", "string"),
@@ -554,43 +640,73 @@ def main() -> int:
                   and not result_has_raw_error_or_path(result, conduct_root),
                   "conduct-hermes decision path size has a typed refusal")
 
+    # The child receives the immutable bytes and their digest separately from the projection path.
+    # A projection rewrite must remain refused, and a forged snapshot must hit the original
+    # immutable-digest refusal rather than making the integrity check vacuous.
+    tamper_decision = conduct_root / "tamper.json"
+    snapshot_digest = hashlib.sha256(positive_raw).hexdigest()
+    snapshot_b64 = base64.b64encode(positive_raw).decode("ascii")
+    write_raw(tamper_decision, positive_raw.replace(b'"noop"', b'"work"', 1))
+    result = run_conduct(conduct_root, tamper_decision, {
+        "RECURSION_DECISION_FILE_DIGEST": snapshot_digest,
+        "RECURSION_DECISION_SNAPSHOT_B64": snapshot_b64,
+    })
+    conduct_check(result.returncode == 74
+                  and "REFUSED - decision projection changed before child action" in conduct_text(result)
+                  and not result_has_raw_error_or_path(result, conduct_root),
+                  "conduct-hermes refuses a decision projection tampered after snapshot")
+
+    write_raw(tamper_decision, positive_raw)
+    forged_snapshot = base64.b64encode(positive_raw + b" ").decode("ascii")
+    result = run_conduct(conduct_root, tamper_decision, {
+        "RECURSION_DECISION_FILE_DIGEST": snapshot_digest,
+        "RECURSION_DECISION_SNAPSHOT_B64": forged_snapshot,
+    })
+    conduct_check(result.returncode == 74
+                  and "REFUSED - immutable decision snapshot digest changed" in conduct_text(result)
+                  and not result_has_raw_error_or_path(result, conduct_root),
+                  "conduct-hermes refuses a tampered immutable snapshot with the digest message")
+
     # Each mutation is applied to a fresh fixture and only the named guard is disabled.  The
-    # normal assertion must then fail: acceptance is expected for typed extra fields, while the
-    # root/constant/UTF-8 cases must at least reach a different downstream signal.
+    # normal assertion must then fail: acceptance is expected for typed extra fields and the
+    # UTF-8 case, while the root/constant cases must reach a specific downstream signal.
     conduct_source = (conduct_root / conduct_script).read_text(encoding="utf-8")
-    mutation_specs: list[tuple[str, str, str, str, bytes | None, str]] = [
+    mutation_specs: list[tuple[str, str, str, str, bytes | None, str, str]] = [
         ("file-path-size", "decision file path byte-size guard",
          "if not isinstance(raw,str) or not raw or len(raw.encode(\"utf-8\")) > 4096:",
-         "if False:", None, "boundary=decision-path-invalid"),
+         "if False:", None, "boundary=decision-path-invalid", "boundary=decision-path-unavailable"),
         ("string-length", "MAX_STRING value-length guard",
-         "if len(value) > MAX_STRING or any(ord(char) < 32 for char in value):",
-         "if False:", conduct_variant("string-length", unknown="x" * 4097), "boundary=string"),
+         "if len(value) > MAX_STRING or any(ord(char) < 32 for char in value):", "if False:",
+         conduct_variant("string-length", unknown="x" * 4097), "boundary=string", "accepted"),
         ("integer-type", "INTEGER_FIELDS type guard",
          "if key in INTEGER_FIELDS and type(value) is not int:",
-         "if False:", conduct_variant("integer-type", max_tokens=1.0), "boundary=integer-type"),
+         "if False:", conduct_variant("integer-type", max_tokens=1.0), "boundary=integer-type", "accepted"),
         ("real-bool", "REAL_FIELDS numeric/bool guard",
          "if key in REAL_FIELDS and value is not None",
          "if False and value is not None", conduct_variant("real-bool", max_cost_usd=True),
-         "boundary=real-type"),
+         "boundary=real-type", "accepted"),
         ("path-type", "PATH_FIELDS type guard",
          "if value is not None and not isinstance(value, str):",
-         "if False:", conduct_variant("path-type", path=1), "boundary=path-type"),
+         "if False:", conduct_variant("path-type", path=1), "boundary=path-type", "accepted"),
         ("check-path", "PATH_FIELDS check_path guard", "            check_path(value)", "            pass",
-         conduct_variant("path-unsafe", path="../outside"), "boundary=path-unsafe"),
+         conduct_variant("path-unsafe", path="../outside"), "boundary=path-unsafe", "accepted"),
         ("depth", "MAX_DEPTH guard", "if depth > MAX_DEPTH:", "if False:",
-         conduct_variant("depth", unknown=deep_value), "boundary=depth"),
+         conduct_variant("depth", unknown=deep_value), "boundary=depth", "accepted"),
         ("object-root", "non-object root guard", "if not isinstance(value, dict):", "if False:",
-         b"[]", "boundary=non-object-root"),
+         b"[]", "boundary=non-object-root", "boundary=semantic-validation"),
         ("utf8", "strict UTF-8 snapshot decode guard",
-         "sys.stdout.write(raw.decode(\"utf-8\", \"strict\"))",
-         "sys.stdout.write(raw.decode(\"utf-8\", \"replace\"))", utf8_raw, "boundary=utf8-strict"),
+         "text=raw.decode(\"utf-8\", \"strict\")",
+         "text=raw.decode(\"utf-8\", \"replace\")", utf8_raw,
+         "boundary=utf8-strict", "accepted"),
         ("parse-constant", "parse_constant guard",
-         "value=json.loads(raw, parse_int=bounded_int, parse_float=bounded_float,\n                     parse_constant=lambda name: (_ for _ in ()).throw(ValueError(\n                         \"decision JSON constant is forbidden\")))",
-         "value=json.loads(raw, parse_int=bounded_int, parse_float=bounded_float)",
-         conduct_variant("parse-constant", unknown=float("nan")), "boundary=json-constant"),
+         "value=json.loads(text, parse_int=bounded_int, parse_float=bounded_float,\n                     parse_constant=lambda name: (_ for _ in ()).throw(ValueError(\n                         \"decision JSON constant is forbidden\")))",
+         "value=json.loads(text, parse_int=bounded_int, parse_float=bounded_float)",
+         conduct_variant("parse-constant", unknown=float("nan")), "boundary=json-constant",
+         "boundary=non-finite-number"),
     ]
     mutation_rows: list[str] = []
-    for index, (label, guard_description, needle, replacement, raw, expected_marker) in enumerate(mutation_specs):
+    for index, (label, guard_description, needle, replacement, raw, expected_marker,
+                expected_mutation_outcome) in enumerate(mutation_specs):
         occurrences = conduct_source.count(needle)
         check(occurrences == 1, f"conduct-hermes mutation {label} marker is unique")
         if occurrences != 1:
@@ -614,10 +730,16 @@ def main() -> int:
             check(True, f"conduct-hermes mutation {label} is a truthful host-ACL skip")
             mutation_rows.append(f"{label} -> {guard_description} disabled -> HOST-ACL SKIP")
             continue
-        assertion_failed = not conduct_refusal(result, expected_marker, mutant_root)
+        text_output = conduct_text(result)
+        if expected_mutation_outcome == "accepted":
+            assertion_failed = result.returncode == 0 and "done (verb=noop rc=0)" in text_output \
+                and not result_has_raw_error_or_path(result, mutant_root)
+        else:
+            assertion_failed = result.returncode != 0 and expected_mutation_outcome in text_output \
+                and expected_mutation_outcome != expected_marker \
+                and not result_has_raw_error_or_path(result, mutant_root)
         conduct_check(assertion_failed,
                       f"conduct-hermes mutation {label} fails its original assertion")
-        text_output = conduct_text(result)
         if result.returncode == 0:
             observed = "accepted (rc=0)"
         elif result_has_raw_error_or_path(result, mutant_root):

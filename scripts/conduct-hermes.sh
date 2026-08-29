@@ -26,6 +26,10 @@ cd "$ROOT" 2>/dev/null || exit 2
 # caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
 # into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
 RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
+# Native Python witnesses Win32 PIDs. Git Bash's $$ is an MSYS PID, so use the mapped Win32
+# process identity when Git Bash exposes it; on Linux /proc/$$/winpid is absent and $$ is already
+# the native PID. The same owner value must be used for acquire and release.
+_CONDUCT_OWNER_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"
 
 FILE=""; DRY=0; PAUSED_SAFE=0; RECOVER_ONLY=0; NON_WORK_ONLY=0; WORK_ONLY=0
 CLI_ERROR=0
@@ -65,10 +69,12 @@ try:
     if sys.argv[2]:
         value=base64.b64decode(sys.argv[2], validate=True).decode("utf-8")
     else:
-        value=open(sys.argv[1], encoding="utf-8").read(2 * 1024 * 1024 + 1)
+        with open(sys.argv[1], "rb") as source:
+            value=source.read(2 * 1024 * 1024 + 1).decode("utf-8", "strict")
     if len(value) > 2 * 1024 * 1024: raise ValueError("decision is too large")
     row=json.loads(value, parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
-    print(row.get("verb", "") if isinstance(row, dict) else "")
+    value = row.get("verb", "") if isinstance(row, dict) else ""
+    sys.stdout.buffer.write(str(value or "").encode("utf-8"))
 except (OSError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError,
         json.JSONDecodeError,binascii.Error):
     raise SystemExit(2)
@@ -83,29 +89,33 @@ PY
 scope_guard(){
   local scope_rc current_digest
   [ -n "${DECISION_SNAPSHOT_B64:-}" ] || { log "REFUSED - immutable decision snapshot is absent"; return 74; }
-  current_digest="$(python3 - "${DECISION_SNAPSHOT_B64}" <<'PY' 2>/dev/null
+  current_digest="$(python3 - "${DECISION_SNAPSHOT_B64}" <<'PY'
 import base64,binascii,hashlib,sys
 try:
     raw=base64.b64decode(sys.argv[1], validate=True)
     if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
-except (ValueError,TypeError,binascii.Error): raise SystemExit(2)
-print(hashlib.sha256(raw).hexdigest())
+except (ValueError,TypeError,binascii.Error):
+    print("boundary=immutable-snapshot-digest", file=sys.stderr)
+    raise SystemExit(2)
+sys.stdout.buffer.write(hashlib.sha256(raw).hexdigest().encode("ascii"))
 PY
-)" || return 74
+)" || { log "REFUSED - immutable decision snapshot digest could not be verified"; return 74; }
   [ "$current_digest" = "$DECISION_FILE_DIGEST" ] || { log "REFUSED - immutable decision snapshot digest changed"; return 74; }
   # The queue projection is checked against the snapshotted bytes before each action.  The action
   # itself always consumes DECISION_JSON from that same immutable stream, so a swap after this
   # observation cannot redirect the validated verb or arguments.
   local source_digest
-  source_digest="$(python3 - "$FILE" <<'PY' 2>/dev/null
+  source_digest="$(python3 - "$FILE" <<'PY'
 import hashlib,sys
 try:
     with open(sys.argv[1], "rb") as source: raw=source.read(2 * 1024 * 1024 + 1)
     if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
-    print(hashlib.sha256(raw).hexdigest())
-except (OSError,ValueError): raise SystemExit(2)
+except (OSError,ValueError):
+    print("boundary=decision-projection-digest", file=sys.stderr)
+    raise SystemExit(2)
+sys.stdout.buffer.write(hashlib.sha256(raw).hexdigest().encode("ascii"))
 PY
-)" || { log "REFUSED - decision disappeared before child action"; return 74; }
+)" || { log "REFUSED - decision projection digest could not be verified"; return 74; }
   [ "$source_digest" = "$DECISION_FILE_DIGEST" ] || { log "REFUSED - decision projection changed before child action"; return 74; }
   scope_allows_file "$FILE"; scope_rc=$?
   [ "$scope_rc" -eq 0 ] && return 0
@@ -180,7 +190,8 @@ try:
     with open(sys.argv[1],"rb") as source: raw=source.read(65537)
     if len(raw)>65536: raise ValueError("quarantine metadata is too large")
     value=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
-    print(value.get("tail_sha256","") if isinstance(value,dict) else "")
+    value = value.get("tail_sha256","") if isinstance(value,dict) else ""
+    sys.stdout.buffer.write(str(value or "").encode("utf-8"))
 except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
     raise SystemExit(2)' \
       "$quarantine_record" 2>/dev/null || true)"
@@ -321,7 +332,8 @@ try:
 except (OSError,ValueError,TypeError,UnicodeError,binascii.Error,OverflowError,
         RecursionError,json.JSONDecodeError):
     raise SystemExit(2)
-print(row.get('project') if isinstance(row, dict) else '')
+value = row.get('project') if isinstance(row, dict) else ''
+sys.stdout.buffer.write(str(value or '').encode('utf-8'))
 PY
 )"
       [ -n "$project" ] || project="unknown-$(basename "$queue_file")"
@@ -402,12 +414,13 @@ except OSError:
 except (ValueError, TypeError):
     print("boundary=decision-size", file=sys.stderr)
     raise SystemExit(2)
-print(hashlib.sha256(raw).hexdigest())
-print(base64.b64encode(raw).decode("ascii"))
+digest=hashlib.sha256(raw).hexdigest().encode("ascii")
+snapshot=base64.b64encode(raw)
+sys.stdout.buffer.write(digest + b"\t" + snapshot)
 PY
 )" || { log "REFUSED - decision snapshot could not be captured"; exit 74; }
-DECISION_FILE_DIGEST="${SNAPSHOT_BUNDLE%%$'\n'*}"
-DECISION_SNAPSHOT_B64="${SNAPSHOT_BUNDLE#*$'\n'}"
+DECISION_FILE_DIGEST="${SNAPSHOT_BUNDLE%%$'\t'*}"
+DECISION_SNAPSHOT_B64="${SNAPSHOT_BUNDLE#*$'\t'}"
 unset SNAPSHOT_BUNDLE
 else
   [[ "$DECISION_FILE_DIGEST" =~ ^[0-9a-f]{64}$ ]] && [ -n "$DECISION_SNAPSHOT_B64" ] \
@@ -422,24 +435,12 @@ scope_allows_file "$FILE"; scope_rc=$?
 }
 
 VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify reconcile-goal task-transition goal-transition verify-goal publish-task notification-reconcile notification-deliver notification-portfolio notification-audit notification-recover routing-refuse"
-RAW_DECISION="$(python3 - "$DECISION_SNAPSHOT_B64" <<'PY'
-import base64,binascii,sys
-try:
-    raw=base64.b64decode(sys.argv[1], validate=True)
-    if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
-    sys.stdout.write(raw.decode("utf-8", "strict"))
-except (OSError,ValueError,TypeError,UnicodeError,binascii.Error,OverflowError,
-        RecursionError):
-    raise SystemExit(2)
-PY
-)" || { log "REFUSED - decision snapshot could not be decoded: boundary=utf8-strict"; exit 74; }
-
 # CLASS B: the snapshot is caller-controlled bytes until this local boundary has proved that it
 # is bounded JSON with a typed object shape.  The external validator below checks decision
 # semantics; it is not the input boundary and must never be the first code to touch hostile JSON.
 class_b_decision_json(){
   python3 - "$1" <<'PY'
-import json,math,re,sys
+import base64,binascii,json,math,re,sys
 
 MAX_BYTES=2 * 1024 * 1024
 MAX_INTEGER=2**63 - 1
@@ -525,10 +526,12 @@ def check_value(value, depth=0, key=None):
     raise TypeError("decision contains an unsupported value")
 
 try:
-    raw=sys.argv[1]
-    if not isinstance(raw,str) or len(raw.encode("utf-8")) > MAX_BYTES:
+    encoded=sys.argv[1]
+    raw=base64.b64decode(encoded, validate=True)
+    if len(raw) > MAX_BYTES:
         raise ValueError("decision exceeds the bounded input size")
-    value=json.loads(raw, parse_int=bounded_int, parse_float=bounded_float,
+    text=raw.decode("utf-8", "strict")
+    value=json.loads(text, parse_int=bounded_int, parse_float=bounded_float,
                      parse_constant=lambda name: (_ for _ in ()).throw(ValueError(
                          "decision JSON constant is forbidden")))
     if not isinstance(value, dict):
@@ -555,10 +558,17 @@ try:
                 raise TypeError("decision cost has the wrong type")
         if field in {"schema_version"} and isinstance(item,bool):
             raise TypeError("decision integer field is boolean")
-    print(json.dumps(value, sort_keys=True, separators=(",",":"),
-                     ensure_ascii=False, allow_nan=False))
+    output=json.dumps(value, sort_keys=True, separators=(",",":"),
+                      ensure_ascii=False, allow_nan=False).encode("utf-8")
+    sys.stdout.buffer.write(output)
 except json.JSONDecodeError:
     print("boundary=malformed-json", file=sys.stderr)
+    raise SystemExit(2)
+except UnicodeDecodeError:
+    print("boundary=utf8-strict", file=sys.stderr)
+    raise SystemExit(2)
+except binascii.Error:
+    print("boundary=controlled-input-failure", file=sys.stderr)
     raise SystemExit(2)
 except TypeError as exc:
     message=str(exc)
@@ -605,7 +615,7 @@ except (OverflowError,UnicodeDecodeError,UnicodeError,OSError):
 PY
 }
 # PHASE4_CLASS_B_DECISION_BOUNDARY_CALL
-DECISION_JSON="$(class_b_decision_json "$RAW_DECISION")" \
+DECISION_JSON="$(class_b_decision_json "$DECISION_SNAPSHOT_B64")" \
   || { log "REFUSED - decision input boundary rejected"; exit 5; }
 VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$DECISION_JSON" 2>&1)"
 VALID_RC=$?
@@ -624,7 +634,8 @@ esac
 read_field(){ python3 -c 'import json,sys
 try:
     value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
-    print(value.get(sys.argv[2],"") or "" if isinstance(value,dict) else "")
+    value = value.get(sys.argv[2],"") or "" if isinstance(value,dict) else ""
+    sys.stdout.buffer.write(str(value).encode("utf-8"))
 except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,
         RecursionError,OSError):
     raise SystemExit(2)' "$DECISION_JSON" "$1" 2>/dev/null; }
@@ -639,7 +650,7 @@ ARGS_JSON="$(python3 -c 'import json,sys
 try:
     value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
     if not isinstance(value,dict): raise ValueError("decision is not an object")
-    print(json.dumps(value.get("args") or [],separators=(",",":"),allow_nan=False))
+    sys.stdout.buffer.write(json.dumps(value.get("args") or [],separators=(",",":"),allow_nan=False).encode("utf-8"))
 except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,
         RecursionError,OSError):
     raise SystemExit(2)' "$DECISION_JSON")" \
@@ -662,7 +673,7 @@ payload={
     'routed_decider':row.get('routed_decider') or '',
 }
 raw=json.dumps(payload,sort_keys=True,separators=(',',':'),ensure_ascii=False,allow_nan=False).encode()
-print(hashlib.sha256(raw).hexdigest())
+sys.stdout.buffer.write(hashlib.sha256(raw).hexdigest().encode("ascii"))
 PY
 )" || { log "REFUSED - could not freeze complete action payload"; exit 5; }
 DECISION_PAYLOAD_SHA256="$(read_field decision_payload_sha256)"
@@ -672,7 +683,9 @@ ARGS_LINES="$(python3 -c 'import json,sys
 try:
     value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
     if not isinstance(value,list) or any(not isinstance(a,str) for a in value): raise ValueError("args are invalid")
-    for a in value: sys.stdout.buffer.write(a.encode()+b"\n")
+    for index,a in enumerate(value):
+        if index: sys.stdout.buffer.write(b"\n")
+        sys.stdout.buffer.write(a.encode())
 except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,
         RecursionError,OSError):
     raise SystemExit(2)' "$ARGS_JSON" 2>/dev/null)" \
@@ -768,7 +781,7 @@ ACTION_LOCK=""; ACTION_LOCK_HELD=0; ACTION_FILE=""; ACTION_ID=""
 ACTION_CLAIMED=0; ACTION_TERMINAL=0; INSTRUCTION_CONSUMED=0
 action_unlock(){
   [ "$ACTION_LOCK_HELD" = 1 ] || return 0
-  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ACTION_LOCK" "$$" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ACTION_LOCK" "$_CONDUCT_OWNER_PID" \
     >/dev/null 2>&1 || return 74
   ACTION_LOCK_HELD=0
 }
@@ -778,7 +791,7 @@ action_lock(){
   ACTION_LOCK="$ROOT/state/.locks/action-$ACTION_ID.lock"
   [ -x "$ROOT/scripts/runtime-state.py" ] \
     || { log "witnessed action lock helper is absent"; return 73; }
-  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ACTION_LOCK" "$$" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ACTION_LOCK" "$_CONDUCT_OWNER_PID" \
     >/dev/null 2>&1 \
     || { log "action lock contended; refusing duplicate/unlocked dispatch"; return 73; }
   ACTION_LOCK_HELD=1
@@ -797,7 +810,8 @@ try:
     with open(sys.argv[1],"rb") as source: raw=source.read(2*1024*1024+1)
     if len(raw)>2*1024*1024: raise ValueError("action is too large")
     value=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
-    print(value.get(sys.argv[2],"") or "" if isinstance(value,dict) else "")
+    value = value.get(sys.argv[2],"") or "" if isinstance(value,dict) else ""
+    sys.stdout.buffer.write(str(value).encode("utf-8"))
 except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
     raise SystemExit(2)' "$ACTION_FILE" "$1" 2>/dev/null
 }
@@ -1141,7 +1155,7 @@ for aid in sorted(annotated):
         proven.append(aid)
 if len(proven) < 2:
     raise SystemExit(1)
-print(','.join(proven))
+sys.stdout.buffer.write(','.join(proven).encode('utf-8'))
 PY
 }
 
@@ -1214,7 +1228,8 @@ try:
     with open(sys.argv[1],'rb') as source: raw=source.read(2*1024*1024+1)
     if len(raw)>2*1024*1024: raise ValueError('project config is too large')
     value=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
-    print(value.get('pilot_id','') if isinstance(value,dict) else '')
+    value = value.get('pilot_id','') if isinstance(value,dict) else ''
+    sys.stdout.buffer.write(str(value or '').encode('utf-8'))
 except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
     raise SystemExit(2)
 PY
@@ -1244,7 +1259,8 @@ try:
     with open(sys.argv[1],'rb') as source: raw=source.read(2*1024*1024+1)
     if len(raw)>2*1024*1024: raise ValueError('project config is too large')
     value=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
-    print(value.get('pilot_id','') if isinstance(value,dict) else '')
+    value = value.get('pilot_id','') if isinstance(value,dict) else ''
+    sys.stdout.buffer.write(str(value or '').encode('utf-8'))
 except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
     raise SystemExit(2)
 PY

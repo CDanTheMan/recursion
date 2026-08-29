@@ -17,6 +17,7 @@ import importlib.util
 import json
 import os
 import re
+import secrets
 import shutil
 import stat
 import subprocess
@@ -365,6 +366,35 @@ def _lock_failpoint(name: str) -> None:
         os._exit(91)
 
 
+def _new_lock_candidate(path: Path, creator_pid: int, creator_start: str) -> Path:
+    """Create a lock candidate with platform-safe permissions."""
+    if os.name != "nt":
+        return Path(tempfile.mkdtemp(
+            prefix=f".{path.name}.candidate.{creator_pid}.{creator_start}.", dir=path.parent
+        ))
+    # Python's Windows implementation gives mode=0700 temporary directories a restrictive ACL
+    # that the native helper cannot reopen on the review host.  The candidate contains only the
+    # owner witness and is published below the controller-owned lock directory; 0750 preserves
+    # the owner/system/admin boundary while keeping the controller process able to finish its
+    # atomic publication.
+    for _ in range(100):
+        candidate = path.parent / (
+            f".{path.name}.candidate.{creator_pid}.{creator_start}.{secrets.token_hex(8)}"
+        )
+        try:
+            candidate.mkdir(mode=0o750)
+        except FileExistsError:
+            continue
+        try:
+            _reject_reparse_components(candidate, f"{path.name} lock candidate")
+        except BaseException:
+            with contextlib.suppress(OSError, RuntimeError):
+                _safe_remove_tree(candidate)
+            raise
+        return candidate
+    raise RuntimeError(f"{path.name} lock candidate namespace is exhausted")
+
+
 def acquire_witnessed_directory_lock(path: Path, label: str, owner_pid: int) -> None:
     """Publish a fully witnessed mkdir-compatible lock in one no-replace rename."""
     owner_pid, owner_start = _process_identity(owner_pid)
@@ -382,9 +412,7 @@ def acquire_witnessed_directory_lock(path: Path, label: str, owner_pid: int) -> 
     for attempt in range(attempts):
         _assert_runtime_lock_compatible(path, owner_pid, owner_start)
         _cleanup_dead_lock_candidates(path)
-        candidate = Path(tempfile.mkdtemp(
-            prefix=f".{path.name}.candidate.{creator_pid}.{creator_start}.", dir=path.parent
-        ))
+        candidate = _new_lock_candidate(path, creator_pid, creator_start)
         try:
             _lock_failpoint("after-candidate-mkdir")
             atomic_bytes(candidate / "pid", f"{owner_pid}\n".encode("ascii"))
@@ -1537,8 +1565,8 @@ def main() -> int:
             release_witnessed_directory_lock(path, path.name, args.owner_pid)
     except (OSError, ValueError, TypeError, UnicodeError, OverflowError, RecursionError,
             RuntimeError, json.JSONDecodeError, subprocess.TimeoutExpired,
-            subprocess.SubprocessError):
-        print("runtime-state: operation refused", file=sys.stderr)
+            subprocess.SubprocessError) as exc:
+        print(f"runtime-state: operation refused: {exc}", file=sys.stderr)
         return 2
     return 0
 
