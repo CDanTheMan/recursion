@@ -16,6 +16,30 @@ from pathlib import Path, PurePosixPath
 
 VACUOUS = re.compile(r"^(?:true|:|/bin/true|exit\s+0)$")
 
+# Keep the descriptor schema and this runtime entry point on one deliberately small shell
+# grammar.  The regular expression is the lexical boundary (balanced whole-token quoting,
+# direct commands, and `&&` only); argv-aware checks below then enforce ownership and path policy.
+# validate-gate.test.py differentially exercises this expression through both public
+# admission surfaces so edits cannot silently widen only one side.
+_DIRECT_COMMAND = r"(?:test|\[|git|bash|sh|python|python3|node)"
+_DIRECT_ARGUMENT = r'''(?:[^\s&|<>`$(){};'\"]+|"[^"&|<>`$(){};\r\n]+"|'[^'&|<>`$(){};\r\n]+')'''
+_DIRECT_SEGMENT = rf"{_DIRECT_COMMAND}(?:\s+{_DIRECT_ARGUMENT})*"
+STRICT_DIRECT_PATTERN = re.compile(
+    r"^(?!.*[\x00-\x08\x0A-\x1F])"
+    r"(?!.*\.recursion-result\.json)"
+    r"(?!.*(?:^|[\s\"'])(?:/|[A-Za-z]:[/\\]))"
+    r"(?!.*(?:^|[/\\\s\"'])\.\.(?:[/\\\s\"']|$))"
+    r"(?!.*(?:^|\s)[\"']-)"
+    r"(?!.*(?:^|&&)\s*(?:bash|sh|python|python3|node)\s*(?:&&|$))"
+    r"(?!.*(?:^|&&)\s*(?:bash|sh|python|python3|node)\s+-)"
+    r"(?!.*(?:^|&&)\s*(?:test|\[)\s+-n(?:\s|$))"
+    r"(?!.*(?:^|&&)\s*(?:test|\[)(?:(?!&&).)*\s(?:=|==|-eq)\s)"
+    r"(?!.*(?:^|&&)\s*git(?:(?!&&).)*\s"
+    r"(?:-C|-c|-o|--(?:git-dir|work-tree|super-prefix|exec-path|namespace|config|config-env|output))"
+    r"[^\s&]*(?=\s|&&|$))"
+    rf"\s*{_DIRECT_SEGMENT}(?:\s*&&\s*{_DIRECT_SEGMENT})*\s*$"
+)
+
 # Shell reserved words and wrapper/detaching launchers that would let an admission string hide,
 # invert, or detach the actual direct grading program. `env`/`npm`/etc. are already rejected as
 # indirect launchers below; this set is the remaining reserved-word and privilege/detach class.
@@ -73,6 +97,10 @@ def entrypoint(words: list[str], strict: bool) -> str | None:
         return None
     command = words[0].replace("\\", "/")
     name = PurePosixPath(command).name
+    if strict and command != name and name in {
+        "test", "[", "git", "bash", "sh", "python", "python3", "node",
+    }:
+        fail(f"path-qualified acceptance launcher is not admitted: {command}")
     if strict and name in RESERVED:
         fail(f"shell reserved word or wrapper is not admitted: {command}")
     if name in {"env", "npm", "npx", "yarn", "pnpm", "xargs", "find", "make"}:
@@ -143,6 +171,15 @@ def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: li
     """Apply the strict direct-command policy to parsed argv, including every path operand."""
     if not words:
         return None
+    test_words = words
+    if words[0] == "[" and words[-1:] == ["]"]:
+        test_words = ["test", *words[1:-1]]
+    if test_words[:2] == ["test", "-n"] or (
+        test_words[:1] == ["test"] and any(
+            word in {"=", "==", "-eq"} for word in test_words[1:]
+        )
+    ):
+        fail("literal test acceptance is structurally vacuous")
     _reject_git_cwd_options(words)
     command = words[0].replace("\\", "/")
     command_absolute = _path_is_absolute(command)
@@ -224,8 +261,11 @@ def main() -> int:
     parser.add_argument("--strict-direct", action="store_true")
     args = parser.parse_args()
     try:
-        gate = args.acceptance.strip()
-        if not gate or len(gate) > 4096 or any(ord(ch) < 32 and ch not in "\t" for ch in gate):
+        raw_gate = args.acceptance
+        gate = raw_gate.strip()
+        if not gate or len(raw_gate) > 4096 or any(
+            ord(ch) < 32 and ch not in "\t" for ch in raw_gate
+        ):
             fail("acceptance gate must be bounded, single-line, and non-empty")
         compact = re.sub(r"\s+", " ", gate)
         if args.strict_direct and (
@@ -235,6 +275,8 @@ def main() -> int:
             or "<" in gate or ">" in gate
         ):
             fail("acceptance gate uses unreviewable shell indirection")
+        if args.strict_direct and not STRICT_DIRECT_PATTERN.fullmatch(gate):
+            fail("acceptance gate is outside the strict direct-command grammar")
         raw_segments = re.split(r"\s*(?:&&|\|\||;)\s*", gate)
         operators = re.findall(r"&&|\|\||;", gate)
         parsed_segments: list[list[str]] = []
