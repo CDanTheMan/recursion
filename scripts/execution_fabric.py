@@ -637,7 +637,7 @@ def _open_leaf_in_directory(directory: Any, path: Path, *, write: bool, create: 
 
 @contextmanager
 def _open_store_leaf(path: Path, *, write: bool, create: bool, append: bool = False,
-                     expected_identity: Any = None, deny_delete: bool = True):
+                     expected_identity: Any = None, deny_delete: bool = False):
     with _pin_store_directory(path.parent) as directory:
         descriptor, identity = _open_leaf_in_directory(directory, path, write=write, create=create, append=append,
                                                        expected_identity=expected_identity, deny_delete=deny_delete)
@@ -649,7 +649,8 @@ def _open_store_leaf(path: Path, *, write: bool, create: bool, append: bool = Fa
 
 def _read_store_bytes(path: Path, *, expected_identity: Any = None) -> tuple[bytes, Any] | None:
     try:
-        with _open_store_leaf(path, write=False, create=False, expected_identity=expected_identity) as (descriptor, identity, directory):
+        with _open_store_leaf(path, write=False, create=False, expected_identity=expected_identity,
+                              deny_delete=False) as (descriptor, identity, directory):
             chunks: list[bytes] = []
             while True:
                 chunk = os.read(descriptor, 1024 * 1024)
@@ -770,7 +771,7 @@ def _replace_store_bytes(path: Path, data: bytes, *, expected_identity: Any = No
             try:
                 current_descriptor, current = _open_leaf_in_directory(
                     directory, path, write=False, create=False, expected_identity=expected_identity,
-                    deny_delete=True)
+                    deny_delete=False)
             except FileNotFoundError:
                 if expected_identity is not None:
                     raise ReconciliationError("UNSAFE_STORE_PATH", "durable store leaf disappeared")
@@ -815,13 +816,11 @@ def _replace_store_bytes(path: Path, data: bytes, *, expected_identity: Any = No
                 else:
                     _validate_pinned_directory(directory)
                     if os.name == "nt":
-                        # A destination handle opened without delete sharing
-                        # is intentionally retained through validation, but
-                        # Windows will reject the replacement while that
-                        # handle remains open. The final same-handle check has
-                        # completed immediately above; release only that leaf
-                        # handle before the atomic rename. The pinned parent
-                        # handles continue to block ancestor replacement.
+                        # The destination handle shares delete so a hostile
+                        # unlink/relink race remains observable through the
+                        # same-handle link-count check above. Release that
+                        # leaf handle before the atomic rename; the pinned
+                        # parent handles continue to block ancestor replacement.
                         os.close(current_descriptor)
                         current_descriptor = None
                         _windows_replace_by_handle(
@@ -980,7 +979,7 @@ def _journal_lock(lock_path: Path):
         lock = _THREAD_LOCKS.setdefault(key, threading.RLock())
     with lock:
         _ensure_store_directory(lock_path.parent)
-        with _open_store_leaf(lock_path, write=True, create=True) as (descriptor, identity, directory):
+        with _open_store_leaf(lock_path, write=True, create=True, deny_delete=True) as (descriptor, identity, directory):
             _validate_pinned_directory(directory)
             _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=identity)
             try:

@@ -280,6 +280,15 @@ def _writer(mode: str, path: Path, root: Path) -> object:
     raise AssertionError(mode)
 
 
+def _assert_handles_released(path: Path, lock_path: Path, label: str) -> None:
+    """Prove a completed durable operation released its leaf and lock handles."""
+    released = path.with_name(path.name + ".release-check")
+    path.rename(released)
+    released.unlink()
+    lock_path.unlink(missing_ok=True)
+    print(f"ok    handle release: {label}")
+
+
 def _run_case(case: Path, mode: str, hostile: str | None) -> None:
     root = case / "root"
     outside_dir = case / "outside"
@@ -404,6 +413,7 @@ def run_positive_controls(root: Path) -> int:
     fabric_store.create_lease(assignment, lease_id="lease-positive", attempt_id="attempt-positive",
                               remote_session_id="session-positive", now=NOW,
                               expires_at="2026-08-28T12:05:00Z")
+    _assert_handles_released(fabric_path, fabric_store.lock_path, "lease creation")
 
     authority = root / "positive-authority.key"
     authority.write_bytes(b"controller-authority-test-key")
@@ -430,10 +440,15 @@ def run_positive_controls(root: Path) -> int:
                       result_commit=RESULT, assignment=assignment,
                       result_ref="cursor/candidate-one", classification="current-compatible",
                       verification_receipt=receipts.get(receipt.receipt_id))
+    _assert_handles_released(verifier_path, registry.lock_path, "verification registry write")
+    _assert_handles_released(receipts.path, receipts.lock_path, "receipt issue")
+    _assert_handles_released(host_registry.path, host_registry.lock_path, "host-registry update")
+    _assert_handles_released(coordinator.path, coordinator.lock_path, "integration journal append")
     absent = root / "positive-absent-replace.jsonl"
     fabric._replace_store_bytes(absent, b"absent-destination\n", expected_identity=None)
     if absent.read_bytes() != b"absent-destination\n":
         raise AssertionError("absent destination positive replace did not publish exact bytes")
+    _assert_handles_released(absent, root / "positive-absent-replace.jsonl.lock", "absent-destination replace")
     print("ok    positive controls: lease, host registry, verifier registry, receipt, integration, absent replace")
     return 6
 
