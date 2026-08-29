@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import math
 import multiprocessing
@@ -42,6 +43,8 @@ from execution_fabric import (  # noqa: E402
     VerificationReceipt,
     VerificationKeyRegistry,
     VerificationReceiptStore,
+    assignment_digest,
+    digest_record,
 )
 
 
@@ -198,6 +201,17 @@ class FabricPlacementTests(unittest.TestCase):
             self.assertEqual(error.exception.code, "DIGEST_MISMATCH")
             self.assertFalse((Path(temp) / "registry.json").exists())
 
+    def test_model_parameters_reject_non_json_values_with_typed_errors(self):
+        with self.assertRaises(SchemaError) as error:
+            replace(requirements(), model_parameters={"callback": object()})
+        self.assertEqual(error.exception.code, "INVALID_FIELD")
+        registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
+                                                               {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
+                                                               now_epoch=1787918400, created_at=NOW)
+        with self.assertRaises(SchemaError) as error:
+            replace(assignment, model_parameters={"callback": object()})
+        self.assertEqual(error.exception.code, "INVALID_FIELD")
+
     def test_registry_enforces_monotonic_heartbeats_and_governor_reserves_capacity(self):
         registry = HostRegistry()
         registered = host(max_concurrency=1, workload={"implementer": 1})
@@ -305,12 +319,12 @@ class FabricPlacementTests(unittest.TestCase):
                       replace(candidate("fast"), engine="engine-fast", speed_score=9, cost_per_run=1),
                       replace(candidate("review"), engine="engine-review", reviewer_score=10, cost_per_run=2)]
         for policy, expected in (("fastest-eligible", "engine-fast"), ("strongest-reviewer", "engine-review"), ("cheapest-eligible", "engine-fast"),
-                                 ("subscription-first", "engine-fast"), ("weighted-rotation", None)):
+                                  ("subscription-first", "engine-fast"), ("weighted-rotation", "engine-review")):
             req = requirements(task_id=f"task-{policy}", policy=policy, max_cost=5)
             selected, _ = resolve_placement(req, candidates, {registered.host_id: registered},
                                              {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
                                              now_epoch=1787918400, created_at=NOW)
-            self.assertEqual(selected.engine, expected or selected.engine)
+            self.assertEqual(selected.engine, expected)
         manual, _ = resolve_placement(requirements(task_id="task-manual", policy="manual-pin", manual_candidate_id="review", max_cost=5),
                                        candidates, {registered.host_id: registered}, {registered.host_id: heartbeat(registered)},
                                        {"pool-one": pool()}, now_epoch=1787918400, created_at=NOW)
@@ -539,9 +553,33 @@ class DurableStateTests(unittest.TestCase):
                                                 result_digest=RESULT, observed_at="1900-01-01T00:00:00Z",
                                                 controller_now="2026-08-28T12:01:00Z")
             self.assertEqual(error.exception.code, "INVALID_CONTROLLER_TIME")
+            journal_before = path.read_bytes()
+            with self.assertRaises(ReconciliationError) as error:
+                restarted.record_recovery_query("lease-restart", state="running",
+                                                observed_at="2026-08-28T12:01:30Z",
+                                                controller_now="2026-08-28T12:01:30Z")
+            self.assertEqual(error.exception.code, "INVALID_CONTROLLER_TIME")
+            self.assertEqual(path.read_bytes(), journal_before)
             self.assertEqual(restarted.leases["lease-restart"]["updated_at"], "2026-08-28T12:02:00Z")
             self.assertEqual(DurableFabricStore(path).leases["lease-restart"]["recovery_state"], "query_unknown")
             validate_schema_records(path)
+
+    def test_same_task_source_cannot_retry_with_a_new_lease_session(self):
+        registered = host()
+        with tempfile.TemporaryDirectory() as temp:
+            store = DurableFabricStore(Path(temp) / "fabric.jsonl")
+            kwargs = dict(requirements=requirements(), candidates=[candidate()],
+                          hosts={registered.host_id: registered},
+                          heartbeats={registered.host_id: heartbeat(registered)}, pools={"pool-one": pool()},
+                          now=NOW, expires_at="2026-08-28T12:05:00Z")
+            assignment, _ = store.admit_placement(**kwargs, lease_id="lease-placement-one",
+                                                   attempt_id="attempt-placement-one", remote_session_id="session-placement-one")
+            self.assertIsNotNone(assignment)
+            with self.assertRaises(AdmissionError) as error:
+                store.admit_placement(**kwargs, lease_id="lease-placement-two",
+                                      attempt_id="attempt-placement-two", remote_session_id="session-placement-two")
+            self.assertEqual(error.exception.code, "DUPLICATE_LEASE")
+            self.assertEqual(set(store.leases), {"lease-placement-one"})
 
     def test_recovery_terminal_requires_durable_result_evidence(self):
         registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
@@ -640,6 +678,32 @@ class DurableStateTests(unittest.TestCase):
                     DurableFabricStore(link / "fabric.jsonl", root=link)
                 self.assertEqual(error.exception.code, "UNSAFE_STORE_ROOT")
 
+    def test_leaf_hardlink_swaps_are_rejected_before_journal_append_or_receipt_reload(self):
+        registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
+                                                               {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
+                                                               now_epoch=1787918400, created_at=NOW)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "journal-root"; path = root / "fabric.jsonl"
+            store = DurableFabricStore(path, root=root)
+            store.create_lease(assignment, lease_id="lease-leaf", attempt_id="attempt-leaf", remote_session_id="session-leaf",
+                               now=NOW, expires_at="2026-08-28T12:05:00Z")
+            outside = Path(temp) / "outside-journal.jsonl"; outside.write_bytes(b"outside-bytes\n")
+            outside_before = outside.read_bytes(); path.unlink(); os.link(outside, path)
+            with self.assertRaises(ReconciliationError) as error:
+                store._append({"event": "leaf-swap-probe"})
+            self.assertEqual(error.exception.code, "UNSAFE_STORE_PATH")
+            self.assertEqual(outside.read_bytes(), outside_before)
+
+            receipt_root = Path(temp) / "receipt-root"; receipt_path = receipt_root / "receipts.jsonl"
+            receipts, registry = receipt_store(receipt_path, temp)
+            receipt = receipt_for(assignment); receipts.issue(receipt)
+            outside_receipts = Path(temp) / "outside-receipts.jsonl"; outside_receipts.write_bytes(b"outside-receipt-bytes\n")
+            outside_receipts_before = outside_receipts.read_bytes(); receipt_path.unlink(); os.link(outside_receipts, receipt_path)
+            with self.assertRaises(ReconciliationError) as error:
+                VerificationReceiptStore(receipt_path, root=receipt_root, verification_registry=registry)
+            self.assertEqual(error.exception.code, "UNSAFE_STORE_PATH")
+            self.assertEqual(outside_receipts.read_bytes(), outside_receipts_before)
+
     def test_receipt_assignment_binding_cannot_be_rewritten(self):
         registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
                                                                {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
@@ -692,6 +756,81 @@ class DurableStateTests(unittest.TestCase):
 
 
 class IntegrationTests(unittest.TestCase):
+    def test_admit_revalidates_direct_assignments_before_receipt_binding(self):
+        assignment = integration_assignment("candidate-direct", "project-one")
+        malformed = replace(assignment, engine="", provider="", host="../bad", created_at="not-a-timestamp",
+                            source_branch="../bad", allowed_paths=("../outside",))
+        malformed = replace(malformed, assignment_digest=assignment_digest(malformed))
+        receipt = integration_receipt(malformed)
+        with tempfile.TemporaryDirectory() as temp:
+            receipts, _ = receipt_store(Path(temp) / "receipts.jsonl", temp)
+            receipts.issue(receipt)
+            with self.assertRaises(SchemaError) as error:
+                IntegrationCoordinator(receipt_store=receipts).admit(
+                    candidate_id="candidate-direct", project_id="project-one", assignment=malformed,
+                    source_sha=SHA, result_commit=RESULT, classification="current-compatible",
+                    verification_receipt=receipts.get(receipt.receipt_id))
+            self.assertEqual(error.exception.code, "INVALID_FIELD")
+
+    def test_admit_uses_only_the_configured_project_branch_policy(self):
+        assignment = integration_assignment("candidate-policy", "project-one")
+        receipt = integration_receipt(assignment)
+        with tempfile.TemporaryDirectory() as temp:
+            receipts, _ = receipt_store(Path(temp) / "receipts.jsonl", temp)
+            receipts.issue(receipt); receipt = receipts.get(receipt.receipt_id)
+            coordinator = IntegrationCoordinator(receipt_store=receipts)
+            coordinator.set_project_policy(project_id="project-one", default_branch="trunk",
+                                           integration_branch="integration")
+            with self.assertRaises(AdmissionError) as error:
+                coordinator.admit(candidate_id="candidate-policy", project_id="project-one", assignment=assignment,
+                                  source_sha=SHA, result_commit=RESULT, result_ref="trunk",
+                                  default_branch="main", integration_branch="recursion/integration",
+                                  classification="current-compatible", verification_receipt=receipt)
+            self.assertEqual(error.exception.code, "POLICY_MISMATCH")
+            with self.assertRaises(AdmissionError) as error:
+                coordinator.admit(candidate_id="candidate-policy", project_id="project-one", assignment=assignment,
+                                  source_sha=SHA, result_commit=RESULT, result_ref="trunk",
+                                  classification="current-compatible", verification_receipt=receipt)
+            self.assertEqual(error.exception.code, "PROTECTED_REF")
+
+    def test_verifier_identity_and_key_hex_have_runtime_schema_parity(self):
+        registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
+                                                               {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
+                                                               now_epoch=1787918400, created_at=NOW)
+        with self.assertRaises(ReconciliationError) as error:
+            VerificationReceipt.build(receipt_id="receipt-empty-verifier", assignment_digest=assignment.assignment_digest,
+                                       source_sha=assignment.source_sha, candidate_id=assignment.candidate_id,
+                                       result_commit=RESULT, diff_digest="c" * 64, scope_digest="d" * 64,
+                                       gate_digest="e" * 64, verifier_identity="controller/", verified_at=NOW)
+        self.assertEqual(error.exception.code, "VERIFIER_UNTRUSTED")
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "receipts.jsonl"
+            _, registry = receipt_store(path, temp)
+            state = json.loads(registry.path.read_text(encoding="utf-8"))
+            state["keys"][0]["key_hex"] = "abc"
+            state["registry_digest"] = digest_record({key: state[key] for key in
+                                                        {"schema_version", "kind", "registry_epoch", "keys"}})
+            state["authentication_tag"] = hmac.new(b"controller-authority-test-key",
+                                                    state["registry_digest"].encode(), hashlib.sha256).hexdigest()
+            registry.path.write_text(json.dumps(state), encoding="utf-8")
+            with self.assertRaises(SchemaError) as error:
+                registry.reload()
+            self.assertEqual(error.exception.code, "INVALID_FIELD")
+        try:
+            import jsonschema
+        except ImportError as error:
+            raise unittest.SkipTest("PREREQUISITE_MISSING: install jsonschema for schema validation") from error
+        schema = json.loads((Path(__file__).resolve().parents[2] / "schemas" / "control-plane" / "v1" /
+                             "execution-fabric.schema.json").read_text(encoding="utf-8"))
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate({"schema_version": 1, "kind": "verification_key_registry", "registry_epoch": 1,
+                                 "keys": [{"verifier_identity": "controller/verifier", "key_hex": "abc"}],
+                                 "registry_digest": "0" * 64, "authentication_tag": "0" * 64},
+                                schema)
+        invalid_receipt = receipt_for(assignment).to_dict(); invalid_receipt["verifier_identity"] = "controller/"
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(invalid_receipt, schema)
+
     def test_same_project_is_serialized_but_other_projects_can_overlap(self):
         with tempfile.TemporaryDirectory() as temp:
             receipts, registry = receipt_store(Path(temp) / "receipts.jsonl", temp)
