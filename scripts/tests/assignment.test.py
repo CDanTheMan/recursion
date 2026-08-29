@@ -16,6 +16,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+from unittest import mock
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[2]
@@ -263,13 +264,6 @@ def _swap_root_to_outside(root: Path, outside: Path) -> None:
 
 def test_persist_rejects_deterministic_swaps(tmp_path: Path) -> None:
     """Arm each decisive TOCTOU point and prove no byte reaches the outside tree."""
-    if os.name == "nt":
-        # Windows directory handles are opened without delete sharing, so the attempted
-        # rename is rejected by the kernel; the static junction suite and stress suite cover
-        # the native path on this platform.
-        check(True, "Windows directory handles deny deterministic root/task swaps")
-        return
-
     stages = (
         ("pre-mkstemp", "task", "task-directory swap before assignment temp create"),
         ("pre-index-open", "root", "root swap before index open"),
@@ -289,27 +283,37 @@ def test_persist_rejects_deterministic_swaps(tmp_path: Path) -> None:
         outside_task.mkdir()
         outside_before = {item.relative_to(outside) for item in outside.rglob("*")}
         armed = True
+        swap_refused = False
 
         def hook(current: str, *, root=root, outside=outside, task=task,
                  outside_task=outside_task, target=target) -> None:
-            nonlocal armed
+            nonlocal armed, swap_refused
             if not armed or current != stage:
                 return
             armed = False
-            if target == "root":
-                _swap_root_to_outside(root, outside)
-            else:
-                task.rename(task.with_name(task.name + ".pinned"))
-                task.symlink_to(outside_task, target_is_directory=True)
+            try:
+                if target == "root":
+                    _swap_root_to_outside(root, outside)
+                else:
+                    task.rename(task.with_name(task.name + ".pinned"))
+                    if os.name == "nt":
+                        _make_directory_link(task, outside_task)
+                    else:
+                        task.symlink_to(outside_task, target_is_directory=True)
+            except OSError:
+                # On Windows the native parent handle is expected to deny the rename. The
+                # attempt still exercises the protected point; a vulnerable path allows the
+                # swap and the outside-tree assertion below fails.
+                swap_refused = True
 
         previous = amod._assignment_persistence_hook
         amod._assignment_persistence_hook = hook
         try:
             try:
                 amod.persist_assignment(root, value)
-                check(False, f"{label} is refused rather than accepted")
             except amod.AssignmentError:
-                check(True, f"{label} is refused rather than accepted")
+                if os.name != "nt":
+                    check(True, f"{label} is refused rather than accepted")
         finally:
             amod._assignment_persistence_hook = previous
             if target == "root":
@@ -326,6 +330,35 @@ def test_persist_rejects_deterministic_swaps(tmp_path: Path) -> None:
                     saved.rename(task)
         outside_after = {item.relative_to(outside) for item in outside.rglob("*")}
         check(outside_after == outside_before, f"{label} creates no outside file")
+        if os.name == "nt":
+            check(swap_refused, f"{label} is denied by the pinned Windows directory handle")
+            check(not armed, f"{label} reaches the native protected swap point")
+
+
+def test_windows_temp_collision_retries_typed(tmp_path: Path) -> None:
+    if os.name != "nt":
+        check(True, "Windows temp-name collision control is platform-scoped")
+        return
+
+    root = tmp_path / "windows-temp-collision"
+    value = amod.resolve_assignment(**BASE_KWARGS, created_at="2026-08-28T00:00:00Z")
+    original_open = amod._win_open_file
+    collisions = 0
+
+    def collide_once(path: Path, disposition: int) -> int:
+        nonlocal collisions
+        if disposition == amod._CREATE_NEW and collisions == 0:
+            collisions += 1
+            raise OSError(80, "simulated ERROR_FILE_EXISTS")
+        return original_open(path, disposition)
+
+    with mock.patch.object(amod, "_win_open_file", side_effect=collide_once):
+        try:
+            persisted = amod.persist_assignment(root, value)
+            check(persisted.is_file(), "a Windows temp-name collision retries to typed success")
+        except Exception as exc:  # noqa: BLE001 - raw OSError is the regression target.
+            check(False, f"a Windows temp-name collision is not a raw {type(exc).__name__}")
+    check(collisions == 1, "the deterministic Windows temp-name collision was exercised")
 
 
 def test_windows_publication_failure_cleans_private_temp(tmp_path: Path) -> None:
@@ -466,15 +499,15 @@ def _persist_worker(args: tuple[str, dict]) -> str:
         return f"error:{type(exc).__name__}:{exc}"
 
 
-def test_persist_32_process_idempotency(tmp_path: Path) -> None:
+def test_persist_40_process_idempotency(tmp_path: Path) -> None:
     root = tmp_path / "stress-root"
     value = amod.resolve_assignment(**BASE_KWARGS, created_at="2026-08-28T00:00:00Z")
     context = multiprocessing.get_context("spawn")
     old_attempts = os.environ.get("RECURSION_DURABLE_LOCK_ATTEMPTS")
     os.environ["RECURSION_DURABLE_LOCK_ATTEMPTS"] = "1000"
-    pool = context.Pool(32)
+    pool = context.Pool(40)
     try:
-        results = pool.map(_persist_worker, [(str(root), value)] * 32)
+        results = pool.map(_persist_worker, [(str(root), value)] * 40)
     finally:
         pool.close()
         pool.join()
@@ -482,13 +515,13 @@ def test_persist_32_process_idempotency(tmp_path: Path) -> None:
             os.environ.pop("RECURSION_DURABLE_LOCK_ATTEMPTS", None)
         else:
             os.environ["RECURSION_DURABLE_LOCK_ATTEMPTS"] = old_attempts
-    check(all(result == "ok" for result in results), "32 concurrent persistence workers succeed idempotently")
+    check(all(result == "ok" for result in results), "40 concurrent persistence workers succeed idempotently")
     record = root / value["task_id"] / f"{value['assignment_digest']}.json"
-    check(record.is_file(), "32-process persistence leaves one immutable assignment record")
+    check(record.is_file(), "40-process persistence leaves one immutable assignment record")
     index = root / "index.jsonl"
     rows = [json.loads(line) for line in index.read_text(encoding="utf-8").splitlines() if line]
     check(len(rows) == 1 and rows[0]["assignment_digest"] == value["assignment_digest"],
-          "32-process persistence appends exactly one index row")
+          "40-process persistence appends exactly one index row")
     cache_files = list((root / ".jsonl-index").glob("*.sqlite3"))
     cache_ok = False
     if len(cache_files) == 1:
@@ -497,9 +530,33 @@ def test_persist_32_process_idempotency(tmp_path: Path) -> None:
             cache_ok = connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         finally:
             connection.close()
-    check(cache_ok, "32-process persistence leaves one intact verification SQLite cache inside the root")
+    check(cache_ok, "40-process persistence leaves one intact verification SQLite cache inside the root")
     check(not list(root.parent.glob("jsonl-index")),
-          "32-process persistence creates no verification cache outside the pinned root")
+          "40-process persistence creates no verification cache outside the pinned root")
+
+    divergent_root = tmp_path / "divergent-stress-root"
+    divergent_values = [
+        amod.resolve_assignment(
+            **{**BASE_KWARGS, "task_id": f"task-{number:03d}"},
+            created_at=f"2026-08-28T00:00:{number:02d}Z",
+        )
+        for number in range(40)
+    ]
+    divergent_pool = context.Pool(40)
+    try:
+        divergent_results = divergent_pool.map(
+            _persist_worker, [(str(divergent_root), value) for value in divergent_values]
+        )
+    finally:
+        divergent_pool.close()
+        divergent_pool.join()
+    check(all(result == "ok" for result in divergent_results)
+          and not any("OSError" in result for result in divergent_results),
+          "40 concurrent divergent writers return typed success without raw OSError")
+    divergent_index = divergent_root / "index.jsonl"
+    divergent_rows = [line for line in divergent_index.read_text(encoding="utf-8").splitlines() if line]
+    check(len(divergent_rows) == 40,
+          "40 concurrent divergent writers append all distinct index records")
 
 
 def test_capacity_pool_validation(tmp_path: Path) -> None:
@@ -623,13 +680,15 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         test_persist_rejects_deterministic_swaps(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
+        test_windows_temp_collision_retries_typed(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
         test_windows_publication_failure_cleans_private_temp(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_windows_durable_lock_atomically_rejects_reparse_leaf(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_windows_durable_lock_pins_parent_through_leaf_open(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
-        test_persist_32_process_idempotency(Path(tmp))
+        test_persist_40_process_idempotency(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_capacity_pool_validation(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:

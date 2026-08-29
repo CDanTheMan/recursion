@@ -12,6 +12,21 @@ import time
 from pathlib import Path
 
 import assignment as assignment_mod
+from jsonl_durable import (
+    JsonlDurabilityError, pinned_durable_parent, revalidate_durable_parent_pins,
+    validate_durable_leaf,
+)
+
+
+class WorkerEvidenceError(Exception):
+    """Malformed or unsafe evidence input refused before durable publication."""
+
+
+_atomic_publish_hook = None
+
+RUN_STATUSES = frozenset({
+    "pending", "prepared", "running", "succeeded", "failed", "blocked", "cancelled", "stale",
+})
 
 
 def now() -> str:
@@ -23,9 +38,12 @@ def iso(epoch: int) -> str:
 
 
 def load(path: Path) -> dict:
-    value = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise WorkerEvidenceError(f"run evidence is not valid JSON: {path}") from exc
     if not isinstance(value, dict):
-        raise SystemExit("worker-evidence: run evidence is not an object")
+        raise WorkerEvidenceError("run evidence is not an object")
     digest = value.get("assignment_digest")
     if digest:
         parent = path.parent
@@ -44,23 +62,34 @@ def load(path: Path) -> dict:
 
 def atomic(path: Path, value: dict) -> None:
     if path.is_symlink() or (path.parent.exists() and path.parent.is_symlink()):
-        raise OSError(f"refusing symlinked evidence path: {path}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+        raise WorkerEvidenceError(f"refusing symlinked evidence path: {path}")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
-            json.dump(value, out, indent=2, sort_keys=True)
-            out.write("\n"); out.flush(); os.fsync(out.fileno())
-        os.replace(name, path)
-        if os.name != "nt":  # directory fds cannot be opened on Windows (same guard as the sibling modules)
-            dfd = os.open(path.parent, os.O_RDONLY)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with pinned_durable_parent(path.parent) as pins:
+            validate_durable_leaf(path, allow_missing=True)
+            fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
             try:
-                os.fsync(dfd)
+                validate_durable_leaf(Path(name))
+                with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
+                    json.dump(value, out, indent=2, sort_keys=True)
+                    out.write("\n"); out.flush(); os.fsync(out.fileno())
+                if _atomic_publish_hook is not None:
+                    _atomic_publish_hook("pre-replace")
+                revalidate_durable_parent_pins(pins)
+                validate_durable_leaf(Path(name))
+                validate_durable_leaf(path, allow_missing=True)
+                os.replace(name, path)
+                if os.name != "nt":  # directory fds cannot be opened on Windows (same guard as the sibling modules)
+                    dfd = os.open(path.parent, os.O_RDONLY)
+                    try:
+                        os.fsync(dfd)
+                    finally:
+                        os.close(dfd)
             finally:
-                os.close(dfd)
-    finally:
-        if os.path.exists(name):
-            os.unlink(name)
+                if os.path.exists(name):
+                    os.unlink(name)
+    except (JsonlDurabilityError, OSError) as exc:
+        raise WorkerEvidenceError(f"evidence publication refused: {path}") from exc
 
 
 def maybe_json(path: str | None) -> object:
@@ -69,10 +98,16 @@ def maybe_json(path: str | None) -> object:
     # The sandbox pre-truncates the hermes usage file before mounting it; a worker that exits
     # without writing leaves it empty. An empty file means "no usage data", the same fact as
     # an absent file — it must not crash `finish` and lose the whole run record.
-    raw = Path(path).read_text(encoding="utf-8")
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise WorkerEvidenceError(f"evidence input is unreadable: {path}") from exc
     if not raw.strip():
         return {}
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise WorkerEvidenceError(f"evidence input is not valid JSON: {path}") from exc
 
 
 def assignment_from(path: str, digest: str, task_id: str, role: str = "", run_path: Path | None = None) -> dict:
@@ -117,7 +152,7 @@ def validate_usage(usage: object, assignment: dict | None) -> None:
             raise SystemExit(f"worker-evidence: invalid usage {key}")
 
 
-def main() -> int:
+def _main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
     start = sub.add_parser("start")
@@ -256,9 +291,14 @@ def main() -> int:
     if args.command == "heartbeat":
         value["heartbeat_at"] = now(); value["lease_expires"] = iso(args.lease_epoch)
     elif args.command == "finish":
+        if args.status not in RUN_STATUSES:
+            raise WorkerEvidenceError(f"finish status is not in the run schema enum: {args.status!r}")
+        result = maybe_json(args.result_file)
+        if not isinstance(result, (dict, str)):
+            raise WorkerEvidenceError("finish result must be an object or string")
         value.update(status=args.status, outcome=args.outcome, exit_code=args.exit_code,
                      finished_at=now(), lease_expires="0")
-        value["result"] = maybe_json(args.result_file)
+        value["result"] = result
         scope = maybe_json(args.scope_file)
         if isinstance(scope, dict):
             value["changed_files"] = scope.get("entries", [])
@@ -294,6 +334,13 @@ def main() -> int:
                                   "evidence": verdict, "checked_at": now()}
     atomic(path, value)
     return 0
+
+
+def main() -> int:
+    try:
+        return _main()
+    except WorkerEvidenceError as exc:
+        raise SystemExit(f"worker-evidence: {exc}") from None
 
 
 if __name__ == "__main__":

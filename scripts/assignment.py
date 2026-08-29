@@ -622,7 +622,9 @@ if os.name == "nt":
             for component in parts[1:]:
                 current = current / component
                 try:
-                    current.mkdir(mode=0o700)
+                    # NTFS inherits the parent ACL; native handles below provide the
+                    # rename/delete protection, while mode=0o700 can deny this user access.
+                    current.mkdir(mode=0o777)
                 except FileExistsError:
                     pass
                 handles.append((current, _win_open_directory(current)))
@@ -654,6 +656,9 @@ if os.name == "nt":
         import msvcrt
         return msvcrt.open_osfhandle(handle, flags)
 
+    def _win_file_exists_error(exc: OSError) -> bool:
+        return exc.errno in (80, 183) or getattr(exc, "winerror", None) in (80, 183)
+
     def _win_read_file(path: Path) -> bytes | None:
         try:
             handle = _win_open_file(path, _OPEN_EXISTING)
@@ -676,8 +681,19 @@ if os.name == "nt":
                 raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
             return
         _assignment_persistence_hook("pre-mkstemp")
-        temporary = task_path / f".{digest}.json.{os.getpid()}.{time.time_ns():x}.tmp"
-        handle = _win_open_file(temporary, _CREATE_NEW)
+        handle = None
+        temporary = None
+        for _ in range(128):
+            candidate = task_path / f".{digest}.json.{os.getpid()}.{time.time_ns():x}.{os.urandom(8).hex()}.tmp"
+            try:
+                handle = _win_open_file(candidate, _CREATE_NEW)
+                temporary = candidate
+                break
+            except OSError as exc:
+                if not _win_file_exists_error(exc):
+                    raise
+        if handle is None or temporary is None:
+            raise AssignmentError("could not allocate a unique Windows assignment temporary")
         descriptor = _win_fd(handle, os.O_WRONLY | getattr(os, "O_BINARY", 0))
         try:
             with os.fdopen(descriptor, "wb", closefd=True) as output:

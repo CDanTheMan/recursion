@@ -107,6 +107,49 @@ def _win_lock_handle_identity(handle: int) -> tuple[int, int, int]:
     return int(info.VolumeSerialNumber), int(info.FileIndexHigh), int(info.FileIndexLow)
 
 
+def _win_lock_handle_links(handle: int) -> int:
+    info = _LOCK_BY_HANDLE_FILE_INFORMATION_STRUCT()
+    if not _LOCK_KERNEL32.GetFileInformationByHandle(
+            ctypes.c_void_p(handle), ctypes.byref(info)):
+        raise OSError(ctypes.get_last_error(), "cannot inspect Windows durable path links")
+    return int(info.NumberOfLinks)
+
+
+def _win_open_leaf_identity(path: Path) -> tuple[tuple[int, int, int], int]:
+    handle = _LOCK_KERNEL32.CreateFileW(
+        str(path), _LOCK_GENERIC_READ,
+        _LOCK_SHARE_READ | _LOCK_SHARE_WRITE, None, _LOCK_OPEN_EXISTING,
+        _LOCK_FILE_ATTRIBUTE_NORMAL | _LOCK_FILE_FLAG_OPEN_REPARSE_POINT, None,
+    )
+    if handle in (None, _LOCK_INVALID_HANDLE):
+        raise OSError(ctypes.get_last_error(), f"cannot revalidate Windows durable leaf {path}")
+    try:
+        attributes = _win_lock_handle_attributes(int(handle))
+        if attributes & _LOCK_FILE_ATTRIBUTE_REPARSE_POINT:
+            raise JsonlDurabilityError(f"Windows durable leaf is a reparse point: {path}")
+        if attributes & _LOCK_FILE_ATTRIBUTE_DIRECTORY:
+            raise JsonlDurabilityError(f"Windows durable leaf is a directory: {path}")
+        return _win_lock_handle_identity(int(handle)), _win_lock_handle_links(int(handle))
+    finally:
+        _LOCK_KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+
+
+def _win_validate_opened_leaf(path: Path, descriptor: int) -> None:
+    handle = msvcrt.get_osfhandle(descriptor)
+    attributes = _win_lock_handle_attributes(int(handle))
+    if attributes & _LOCK_FILE_ATTRIBUTE_REPARSE_POINT:
+        raise JsonlDurabilityError(f"Windows durable leaf is a reparse point: {path}")
+    if attributes & _LOCK_FILE_ATTRIBUTE_DIRECTORY:
+        raise JsonlDurabilityError(f"Windows durable leaf is a directory: {path}")
+    identity = _win_lock_handle_identity(int(handle))
+    links = _win_lock_handle_links(int(handle))
+    if links != 1:
+        raise JsonlDurabilityError(f"Windows durable leaf has {links} hard links: {path}")
+    path_identity, path_links = _win_open_leaf_identity(path)
+    if path_links != 1 or path_identity != identity:
+        raise JsonlDurabilityError(f"Windows durable leaf changed while opening: {path}")
+
+
 def _win_open_lock_directory(path: Path) -> int:
     """Pin one real directory without granting delete/rename sharing."""
     handle = _LOCK_KERNEL32.CreateFileW(
@@ -156,7 +199,10 @@ def _win_pin_lock_parent(path: Path) -> list[tuple[Path, int, tuple[int, int, in
         for component in parts[1:]:
             current = current / component
             try:
-                current.mkdir(mode=0o700)
+                # Python's Windows mode=0o700 creates a directory ACL that can deny the
+                # current user its own inherited access.  NTFS permissions are inherited
+                # here; the native handles below provide the rename/delete protection.
+                current.mkdir(mode=0o777)
             except FileExistsError:
                 pass
             handle = _win_open_lock_directory(current)
@@ -211,6 +257,9 @@ def _open_durable_lock(path: Path) -> int:
     try:
         if _win_lock_handle_attributes(int(handle)) & _LOCK_FILE_ATTRIBUTE_REPARSE_POINT:
             raise JsonlDurabilityError(f"durable JSONL lock is a reparse point: {path}")
+        links = _win_lock_handle_links(int(handle))
+        if links != 1:
+            raise JsonlDurabilityError(f"durable JSONL lock has {links} hard links: {path}")
         descriptor = msvcrt.open_osfhandle(
             int(handle), os.O_RDWR | getattr(os, "O_BINARY", 0),
         )
@@ -230,6 +279,35 @@ ZERO_CHAIN_SHA256 = "0" * 64
 
 class JsonlDurabilityError(RuntimeError):
     """The existing journal cannot safely accept or expose another record."""
+
+
+class _PinnedIndexConnection(sqlite3.Connection):
+    """SQLite connection that releases the native cache pins when it closes."""
+
+    _durable_parent_pins: list[tuple[Path, int, tuple[int, int, int]]] = []
+    _durable_leaf_descriptor: int | None = None
+
+    def _release_durable_pins(self) -> None:
+        pins = self._durable_parent_pins
+        descriptor = self._durable_leaf_descriptor
+        self._durable_parent_pins = []
+        self._durable_leaf_descriptor = None
+        if descriptor is not None:
+            os.close(descriptor)
+        if pins:
+            _win_close_lock_parent_pins(pins)
+
+    def close(self) -> None:
+        try:
+            super().close()
+        finally:
+            self._release_durable_pins()
+
+    def __del__(self) -> None:  # pragma: no cover - interpreter cleanup is not deterministic.
+        try:
+            self.close()
+        except BaseException:
+            pass
 
 
 def _reject_symlink_components(path: Path) -> None:
@@ -254,6 +332,129 @@ def _reject_symlink_components(path: Path) -> None:
 def ensure_no_symlink(path: Path) -> None:
     """Public path-confinement check used by higher-level append transactions."""
     _reject_symlink_components(Path(path))
+
+
+def _validate_opened_leaf(path: Path, descriptor: int) -> None:
+    metadata = os.fstat(descriptor)
+    if not stat.S_ISREG(metadata.st_mode):
+        raise JsonlDurabilityError(f"JSONL durable leaf is not a regular file: {path}")
+    if metadata.st_nlink != 1:
+        raise JsonlDurabilityError(f"JSONL durable leaf has {metadata.st_nlink} hard links: {path}")
+    if os.name == "nt":
+        _win_validate_opened_leaf(path, descriptor)
+        return
+    try:
+        opened = os.lstat(path)
+    except OSError as exc:
+        raise JsonlDurabilityError(f"JSONL durable leaf disappeared while opening: {path}") from exc
+    if stat.S_ISLNK(opened.st_mode) or opened.st_nlink != 1 \
+            or (opened.st_dev, opened.st_ino) != (metadata.st_dev, metadata.st_ino):
+        raise JsonlDurabilityError(f"JSONL durable leaf changed while opening: {path}")
+
+
+def validate_durable_leaf(path: Path, *, allow_missing: bool = False) -> None:
+    """Reject non-regular, linked, or replaced by-name durable leaves."""
+    path = Path(path)
+    try:
+        metadata = os.lstat(path)
+    except FileNotFoundError:
+        if allow_missing:
+            return
+        raise JsonlDurabilityError(f"JSONL durable leaf is absent: {path}") from None
+    except OSError as exc:
+        raise JsonlDurabilityError(f"cannot inspect JSONL durable leaf {path}: {exc}") from exc
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        raise JsonlDurabilityError(f"JSONL durable leaf has unsafe type: {path}")
+    if metadata.st_nlink != 1:
+        raise JsonlDurabilityError(f"JSONL durable leaf has {metadata.st_nlink} hard links: {path}")
+    if os.name == "nt":
+        identity, links = _win_open_leaf_identity(path)
+        if links != 1:
+            raise JsonlDurabilityError(f"Windows durable leaf has {links} hard links: {path}")
+        # The native open above is the authoritative reparse/type/identity check.  The
+        # lstat check remains useful for detecting a non-Windows link representation.
+        if not identity:
+            raise JsonlDurabilityError(f"cannot identify Windows durable leaf: {path}")
+
+
+def _connect_verified_index(index_path: Path) -> sqlite3.Connection:
+    pins = _win_pin_durable_parent(index_path.parent)
+    leaf_descriptor: int | None = None
+    try:
+        revalidate_durable_parent_pins(pins)
+        validate_durable_leaf(index_path)
+        if os.name == "nt":
+            leaf_descriptor = _open_durable_leaf(index_path, os.O_RDWR)
+        connection = sqlite3.connect(index_path, factory=_PinnedIndexConnection)
+        connection._durable_parent_pins = pins
+        connection._durable_leaf_descriptor = leaf_descriptor
+        leaf_descriptor = None
+        pins = []
+        revalidate_durable_parent_pins(connection._durable_parent_pins)
+        validate_durable_leaf(index_path)
+        return connection
+    except BaseException:
+        if leaf_descriptor is not None:
+            os.close(leaf_descriptor)
+        if pins:
+            _win_close_lock_parent_pins(pins)
+        raise
+
+
+def _win_pin_durable_parent(path: Path) -> list[tuple[Path, int, tuple[int, int, int]]]:
+    if os.name != "nt":
+        return []
+    return _win_pin_lock_parent(Path(path))
+
+
+def revalidate_durable_parent_pins(
+        pins: list[tuple[Path, int, tuple[int, int, int]]]) -> None:
+    if pins:
+        _win_validate_lock_parent_pins(pins)
+
+
+@contextmanager
+def pinned_durable_parent(path: Path):
+    """Pin a durable parent tree while a by-name leaf is created or published."""
+    pins = _win_pin_durable_parent(Path(path))
+    try:
+        revalidate_durable_parent_pins(pins)
+        yield pins
+    finally:
+        if pins:
+            _win_close_lock_parent_pins(pins)
+
+
+def _open_durable_leaf(path: Path, flags: int, mode: int = 0o600) -> int:
+    """Open a durable regular leaf and prove its identity before returning it."""
+    path = Path(path)
+    if os.name != "nt":
+        descriptor = os.open(path, flags | getattr(os, "O_NOFOLLOW", 0), mode)
+    else:
+        if msvcrt is None:  # pragma: no cover - CPython on Windows always provides msvcrt.
+            raise JsonlDurabilityError("Windows durable persistence requires msvcrt")
+        access = _LOCK_GENERIC_WRITE if flags & (os.O_WRONLY | os.O_RDWR) else _LOCK_GENERIC_READ
+        if flags & os.O_RDWR:
+            access |= _LOCK_GENERIC_READ
+        disposition = _LOCK_OPEN_ALWAYS if flags & os.O_CREAT else _LOCK_OPEN_EXISTING
+        handle = _LOCK_KERNEL32.CreateFileW(
+            str(path), access, _LOCK_SHARE_READ | _LOCK_SHARE_WRITE, None, disposition,
+            _LOCK_FILE_ATTRIBUTE_NORMAL | _LOCK_FILE_FLAG_OPEN_REPARSE_POINT, None,
+        )
+        if handle in (None, _LOCK_INVALID_HANDLE):
+            raise OSError(ctypes.get_last_error(), f"cannot open Windows durable leaf {path}")
+        try:
+            descriptor = msvcrt.open_osfhandle(int(handle), flags | getattr(os, "O_BINARY", 0))
+            handle = None
+        finally:
+            if handle not in (None, _LOCK_INVALID_HANDLE):
+                _LOCK_KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+    try:
+        _validate_opened_leaf(path, descriptor)
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
 
 
 def _lock_attempts() -> tuple[int, float]:
@@ -454,29 +655,36 @@ def _lock_descriptor(descriptor: int) -> None:
 
 def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
-    temporary = Path(name)
-    try:
-        if hasattr(os, "fchmod"):  # absent on Windows; NTFS mode bits are meaningless
-            os.fchmod(descriptor, mode)
-        with os.fdopen(descriptor, "wb") as output:
-            _write_all(output.fileno(), value)
-            output.flush()
-            os.fsync(output.fileno())
-        os.replace(temporary, path)
-        _fsync_dir(path.parent)
-    except BaseException:
-        # Cleanup must never replace the primary exception: close the descriptor first
-        # (Windows cannot unlink an open file) and swallow only the cleanup's own OSError.
+    with pinned_durable_parent(path.parent) as pins:
+        ensure_no_symlink(path)
+        validate_durable_leaf(path, allow_missing=True)
+        descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
+        temporary = Path(name)
         try:
-            os.close(descriptor)
-        except OSError:
-            pass
-        try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise
+            _validate_opened_leaf(temporary, descriptor)
+            if hasattr(os, "fchmod"):  # absent on Windows; NTFS mode bits are meaningless
+                os.fchmod(descriptor, mode)
+            with os.fdopen(descriptor, "wb") as output:
+                _write_all(output.fileno(), value)
+                output.flush()
+                os.fsync(output.fileno())
+            validate_durable_leaf(temporary)
+            revalidate_durable_parent_pins(pins)
+            validate_durable_leaf(path, allow_missing=True)
+            os.replace(temporary, path)
+            _fsync_dir(path.parent)
+        except BaseException:
+            # Cleanup must never replace the primary exception: close the descriptor first
+            # (Windows cannot unlink an open file) and swallow only the cleanup's own OSError.
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
 
 
 def _journal_identity(path: Path) -> tuple[Path, str]:
@@ -515,7 +723,7 @@ def _ensure_index_root(path: Path, index_root: Path | None = None,
         if root.is_symlink() or not root.is_dir():
             raise JsonlDurabilityError(f"JSONL index root has unsafe type: {root}")
     else:
-        root.mkdir(mode=0o700)
+        root.mkdir(mode=0o777 if os.name == "nt" else 0o700)
         _fsync_dir(root.parent)
     try:
         os.chmod(root, 0o700)
@@ -529,8 +737,7 @@ def _index_path(path: Path, index_root: Path | None = None,
     root, identity = _ensure_index_root(path, index_root, index_identity)
     name = index_cache_name(identity)
     candidate = root / name
-    if candidate.exists() and (candidate.is_symlink() or not candidate.is_file()):
-        raise JsonlDurabilityError(f"JSONL index has unsafe type: {candidate}")
+    validate_durable_leaf(candidate, allow_missing=True)
     return candidate, identity
 
 
@@ -556,7 +763,7 @@ def _last_newline(descriptor: int, size: int) -> int:
 
 def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int) -> dict:
     quarantine, journal_name = _journal_identity(path)
-    quarantine.mkdir(parents=True, exist_ok=True, mode=0o700)
+    quarantine.mkdir(parents=True, exist_ok=True, mode=0o777 if os.name == "nt" else 0o700)
     try:
         os.chmod(quarantine, 0o700)
     except OSError:
@@ -569,6 +776,7 @@ def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int) -> dic
     payload_tmp = Path(payload_name)
     try:
         try:
+            _validate_opened_leaf(payload_tmp, payload_fd)
             if hasattr(os, "fchmod"):  # absent on Windows; NTFS mode bits are meaningless
                 os.fchmod(payload_fd, 0o600)
             while cursor < size:
@@ -592,6 +800,7 @@ def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int) -> dic
     metadata = quarantine / f"{stem}.json"
     try:
         if payload.exists():
+            validate_durable_leaf(payload)
             existing_digest = hashlib.sha256()
             with payload.open("rb") as current:
                 for chunk in iter(lambda: current.read(COPY_CHUNK_BYTES), b""):
@@ -601,6 +810,7 @@ def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int) -> dic
                 raise JsonlDurabilityError(f"JSONL quarantine payload conflicts: {payload}")
             payload_tmp.unlink(missing_ok=True)
         else:
+            validate_durable_leaf(payload_tmp)
             os.replace(payload_tmp, payload)
             _fsync_dir(quarantine)
         evidence = {
@@ -809,16 +1019,18 @@ def _write_metadata(connection: sqlite3.Connection, identity: str, stat: os.stat
     )
 
 
-def _rebuild_index(index_path: Path, identity: str, descriptor: int, stat: os.stat_result,
-                   journal: Path, max_record_bytes: int,
-                   hook: Callable[[str], None] | None = None) -> None:
+def _rebuild_index_unpinned(index_path: Path, identity: str, descriptor: int,
+                             stat: os.stat_result, journal: Path, max_record_bytes: int,
+                             hook: Callable[[str], None] | None = None) -> None:
     temporary_fd, temporary_name = tempfile.mkstemp(
         prefix=f".{index_path.name}.tmp.", dir=index_path.parent
     )
     temporary = Path(temporary_name)
-    os.close(temporary_fd)
     connection: sqlite3.Connection | None = None
     try:
+        _validate_opened_leaf(temporary, temporary_fd)
+        os.close(temporary_fd)
+        temporary_fd = -1
         connection = sqlite3.connect(temporary)
         _create_index_schema(connection)
         connection.execute("BEGIN IMMEDIATE")
@@ -841,13 +1053,28 @@ def _rebuild_index(index_path: Path, identity: str, descriptor: int, stat: os.st
             os.close(cache_fd)
         if hook is not None:
             hook("pre-replace")
+        validate_durable_leaf(temporary)
+        validate_durable_leaf(index_path, allow_missing=True)
         os.replace(temporary, index_path)
         _fsync_dir(index_path.parent)
     except BaseException:
         if connection is not None:
             connection.close()
+        if temporary_fd >= 0:
+            os.close(temporary_fd)
         temporary.unlink(missing_ok=True)
         raise
+
+
+def _rebuild_index(index_path: Path, identity: str, descriptor: int,
+                   stat: os.stat_result, journal: Path, max_record_bytes: int,
+                   hook: Callable[[str], None] | None = None) -> None:
+    with pinned_durable_parent(index_path.parent) as pins:
+        validate_durable_leaf(index_path, allow_missing=True)
+        _rebuild_index_unpinned(
+            index_path, identity, descriptor, stat, journal, max_record_bytes, hook
+        )
+        revalidate_durable_parent_pins(pins)
 
 
 def _open_verified_index(path: Path, descriptor: int, size: int,
@@ -860,6 +1087,7 @@ def _open_verified_index(path: Path, descriptor: int, size: int,
     if stat.st_size != size:
         raise JsonlDurabilityError(f"JSONL size changed while opening verification index: {path}")
     index_path, identity = _index_path(path, index_root, index_identity)
+    validate_durable_leaf(index_path, allow_missing=True)
     if rebuild_in_place:
         # The caller pins the cache directory and (on Windows) the cache leaf before
         # entering this function.  A missing leaf is created by that caller, so this
@@ -870,7 +1098,8 @@ def _open_verified_index(path: Path, descriptor: int, size: int,
         try:
             if hook is not None:
                 hook("pre-sqlite-open")
-            connection = sqlite3.connect(index_path)
+            validate_durable_leaf(index_path)
+            connection = _connect_verified_index(index_path)
             connection.execute("PRAGMA query_only=ON")
             if _index_matches(connection, identity, stat, max_record_bytes):
                 connection.execute("PRAGMA query_only=OFF")
@@ -887,7 +1116,8 @@ def _open_verified_index(path: Path, descriptor: int, size: int,
         )
         if hook is not None:
             hook("pre-sqlite-open")
-        connection = sqlite3.connect(index_path)
+        validate_durable_leaf(index_path)
+        connection = _connect_verified_index(index_path)
         if not _index_matches(connection, identity, stat, max_record_bytes):
             connection.close()
             raise JsonlDurabilityError(f"rebuilt JSONL verification index is inconsistent: {path}")
@@ -934,7 +1164,10 @@ def _rows_to_lines(rows: Iterator[tuple]) -> tuple[VerifiedLine, ...]:
 
 def _verified_descriptor(path: Path, max_record_bytes: int) \
         -> tuple[int, sqlite3.Connection, bool]:
-    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+    with pinned_durable_parent(path.parent) as pins:
+        revalidate_durable_parent_pins(pins)
+        descriptor = _open_durable_leaf(path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+        revalidate_durable_parent_pins(pins)
     try:
         _lock_descriptor(descriptor)
         size = os.fstat(descriptor).st_size
@@ -1135,9 +1368,10 @@ def _update_index_after_append(connection: sqlite3.Connection, descriptor: int, 
         raise JsonlDurabilityError(f"cannot advance JSONL verification index: {path}: {exc}") from exc
 
 
-def _rebuild_index_in_place(index_path: Path, identity: str, descriptor: int,
-                            stat: os.stat_result, journal: Path, max_record_bytes: int,
-                            hook: Callable[[str], None] | None = None) -> None:
+def _rebuild_index_in_place_unpinned(
+        index_path: Path, identity: str, descriptor: int, stat: os.stat_result,
+        journal: Path, max_record_bytes: int,
+        hook: Callable[[str], None] | None = None) -> None:
     """Rebuild a cache without replacing its leaf name.
 
     Windows directory handles opened without delete sharing pin the cache leaf.  Replacing
@@ -1147,6 +1381,7 @@ def _rebuild_index_in_place(index_path: Path, identity: str, descriptor: int,
     """
     if hook is not None:
         hook("pre-replace")
+    validate_durable_leaf(index_path)
     connection: sqlite3.Connection | None = None
     try:
         connection = sqlite3.connect(index_path)
@@ -1178,11 +1413,23 @@ def _rebuild_index_in_place(index_path: Path, identity: str, descriptor: int,
             connection.close()
 
 
-def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES,
-                 dedupe_field: str | None = None, dedupe_value: object = None, *,
-                 index_root: Path | None = None, index_identity: str | None = None,
-                 rebuild_in_place: bool = False,
-                 hook: Callable[[str], None] | None = None) -> AppendOutcome:
+def _rebuild_index_in_place(index_path: Path, identity: str, descriptor: int,
+                            stat: os.stat_result, journal: Path, max_record_bytes: int,
+                            hook: Callable[[str], None] | None = None) -> None:
+    with pinned_durable_parent(index_path.parent) as pins:
+        validate_durable_leaf(index_path)
+        _rebuild_index_in_place_unpinned(
+            index_path, identity, descriptor, stat, journal, max_record_bytes, hook
+        )
+        revalidate_durable_parent_pins(pins)
+
+
+def _append_jsonl_unpinned(path: Path, value: dict,
+                           max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES,
+                           dedupe_field: str | None = None, dedupe_value: object = None, *,
+                           index_root: Path | None = None, index_identity: str | None = None,
+                           rebuild_in_place: bool = False,
+                           hook: Callable[[str], None] | None = None) -> AppendOutcome:
     """Repair a torn tail, validate committed rows, and durably append one object.
 
     The exact torn bytes and fail-closed escalation metadata are stored in the canonical
@@ -1199,9 +1446,8 @@ def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RE
     ensure_no_symlink(path.parent)
     existed = path.exists()
     ensure_no_symlink(path)
-    descriptor = os.open(
-        path, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0)
-        | getattr(os, "O_NOFOLLOW", 0), 0o600
+    descriptor = _open_durable_leaf(
+        path, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0), 0o600
     )
     evidence: dict | None = None
     connection: sqlite3.Connection | None = None
@@ -1231,6 +1477,32 @@ def append_jsonl(path: Path, value: dict, max_record_bytes: int = DEFAULT_MAX_RE
             connection.close()
         os.close(descriptor)
     return AppendOutcome(appended=True, quarantine=evidence)
+
+
+def append_jsonl(path: Path, value: dict,
+                 max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES,
+                 dedupe_field: str | None = None, dedupe_value: object = None, *,
+                 index_root: Path | None = None, index_identity: str | None = None,
+                 rebuild_in_place: bool = False,
+                 hook: Callable[[str], None] | None = None) -> AppendOutcome:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if os.name != "nt":
+        return _append_jsonl_unpinned(
+            path, value, max_record_bytes, dedupe_field, dedupe_value,
+            index_root=index_root, index_identity=index_identity,
+            rebuild_in_place=rebuild_in_place, hook=hook,
+        )
+    with pinned_durable_parent(path.parent) as pins:
+        ensure_no_symlink(path.parent)
+        revalidate_durable_parent_pins(pins)
+        result = _append_jsonl_unpinned(
+            path, value, max_record_bytes, dedupe_field, dedupe_value,
+            index_root=index_root, index_identity=index_identity,
+            rebuild_in_place=rebuild_in_place, hook=hook,
+        )
+        revalidate_durable_parent_pins(pins)
+        return result
 
 
 def _pinned_fd_path(descriptor: int, name: str) -> Path:

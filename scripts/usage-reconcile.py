@@ -54,6 +54,13 @@ BILLING_BASES = {"flat-subscription", "metered", "local"}
 # this run has no separately-billed marginal cost", not "we measured zero".
 POLICY_RECORD_SOURCES = {"controller-engine-policy-v1", "engine-manifest-v1"}
 
+# Provider receipt names are an allowlist, not a heuristic.  A usage file can be edited by
+# the worker, so an arbitrary nonempty evidence_source is never enough to call its numbers
+# grounded provider spend.
+PROVIDER_RECEIPT_SOURCES = {
+    "openrouter-via-opencode": {"opencode-usage-v1"},
+}
+
 # The only provider->engine pair not derivable from a manifest (claude is a builtin).
 BUILTIN_PROVIDER_ENGINES = {"anthropic-claude-code": "claude"}
 
@@ -227,8 +234,11 @@ def classify_cost(usage: dict) -> tuple[int | None, float | None, str]:
         return None, None, "unreconciled"
     if evidence_source in POLICY_RECORD_SOURCES:
         return tokens, cost, "policy-record"
-    # Anything else reached the usage file from a provider/sandbox, not from work.sh.
-    return tokens, cost, "receipt"
+    provider = nonempty_str(usage.get("provider"))
+    if basis == "metered" and provider in PROVIDER_RECEIPT_SOURCES \
+            and evidence_source in PROVIDER_RECEIPT_SOURCES[provider]:
+        return tokens, cost, "receipt"
+    return None, None, "unreconciled"
 
 
 def normalize(record: dict, mapping: dict, assignment_root: Path | None = None) -> dict:

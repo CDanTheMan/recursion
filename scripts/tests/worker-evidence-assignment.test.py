@@ -11,6 +11,8 @@ and bound to the correct task before anything is embedded (fail closed).
 from __future__ import annotations
 
 import json
+import os
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -36,6 +38,14 @@ def check(condition: bool, label: str) -> None:
 
 def run(args: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(WORKER_EVIDENCE), *args], capture_output=True, text=True)
+
+
+def load_worker_module():
+    spec = importlib.util.spec_from_file_location("worker_evidence_phase3", WORKER_EVIDENCE)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def start_args(path: Path, run_id: str, task_id: str) -> list[str]:
@@ -115,6 +125,104 @@ def test_start_refuses_task_id_mismatch(tmp_path: Path) -> None:
     result = run(start_args(path, "run-wrong-task", "task-DIFFERENT") +
                 ["--assignment-digest", digest, "--assignment-file", str(assignment_file)])
     check(result.returncode == 2, f"an assignment resolved for a different task_id is refused (got {result.returncode})")
+
+
+def test_finish_rejects_malformed_and_off_schema_inputs(tmp_path: Path) -> None:
+    path = tmp_path / "run.json"
+    result = run(start_args(path, "run-finish-validation", "task-1"))
+    check(result.returncode == 0, "finish-validation fixture starts")
+    original = path.read_bytes()
+
+    malformed_usage = tmp_path / "usage.json"
+    malformed_usage.write_text("{not json", encoding="utf-8")
+    malformed = run(["finish", str(path), "succeeded", "done", "0",
+                     "--usage-file", str(malformed_usage)])
+    check(malformed.returncode != 0 and "worker-evidence:" in malformed.stderr
+          and "Traceback" not in malformed.stderr,
+          "malformed usage is a typed refusal without a traceback")
+    check(path.read_bytes() == original, "malformed usage cannot publish a partial finish")
+
+    malformed_run = tmp_path / "malformed-run.json"
+    malformed_run.write_text("[not an object]", encoding="utf-8")
+    loaded = run(["finish", str(malformed_run), "succeeded", "done", "0"])
+    check(loaded.returncode != 0 and "worker-evidence:" in loaded.stderr
+          and "Traceback" not in loaded.stderr,
+          "malformed run evidence is a typed load refusal without a traceback")
+
+    off_enum = run(["finish", str(path), "complete", "done", "0"])
+    check(off_enum.returncode != 0 and "Traceback" not in off_enum.stderr,
+          "off-enum finish status is refused before publication")
+    check(path.read_bytes() == original, "off-enum status leaves the run unchanged")
+
+    result_file = tmp_path / "result.json"
+    result_file.write_text("[]", encoding="utf-8")
+    array_result = run(["finish", str(path), "succeeded", "done", "0",
+                        "--result-file", str(result_file)])
+    check(array_result.returncode != 0 and "Traceback" not in array_result.stderr,
+          "array finish result is refused before publication")
+    check(path.read_bytes() == original, "array result leaves the run unchanged")
+
+
+def _make_directory_link(link: Path, target: Path) -> None:
+    if os.name == "nt":
+        result = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(target)],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise AssertionError(f"could not create Windows junction: {result.stderr or result.stdout}")
+    else:
+        link.symlink_to(target, target_is_directory=True)
+
+
+def test_windows_atomic_publish_rejects_parent_swap(tmp_path: Path) -> None:
+    if os.name != "nt":
+        print("skip - Windows atomic publish parent-swap control is platform-scoped")
+        return
+
+    worker = load_worker_module()
+    parent = tmp_path / "evidence-parent"
+    outside = tmp_path / "outside-evidence"
+    parent.mkdir()
+    outside.mkdir()
+    target = parent / "evidence.json"
+    saved = tmp_path / "evidence-parent-renamed"
+    swap_attempted = False
+    swap_refused = False
+    swapped = False
+
+    def race(stage: str) -> None:
+        nonlocal swap_attempted, swap_refused, swapped
+        if stage != "pre-replace" or swap_attempted:
+            return
+        swap_attempted = True
+        try:
+            parent.rename(saved)
+            _make_directory_link(parent, outside)
+            swapped = True
+        except OSError:
+            swap_refused = True
+
+    worker._atomic_publish_hook = race
+    try:
+        try:
+            worker.atomic(target, {"payload": "inside"})
+            published = True
+        except worker.WorkerEvidenceError:
+            published = False
+    finally:
+        worker._atomic_publish_hook = None
+        if swapped and parent.exists():
+            os.rmdir(parent)
+        if saved.exists():
+            saved.rename(parent)
+
+    check(swap_attempted, "Windows evidence publication reaches the parent-swap seam")
+    check(swap_refused or not published, "Windows parent swap is denied or publication is refused")
+    check(not (outside / "evidence.json").exists(),
+          "a Windows evidence parent swap creates no outside-root evidence")
+    check((parent / "evidence.json").exists() if published else True,
+          "a safely denied Windows parent swap leaves only an in-root publication")
 
 
 def test_remote_evidence(tmp_path: Path) -> None:
@@ -240,6 +348,10 @@ def main() -> int:
         test_start_refuses_digest_mismatch(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_start_refuses_task_id_mismatch(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_finish_rejects_malformed_and_off_schema_inputs(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_windows_atomic_publish_rejects_parent_swap(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_remote_evidence(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:

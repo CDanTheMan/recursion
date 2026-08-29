@@ -206,6 +206,48 @@ def control_dedupe_still_repairs_tail() -> tuple[bool, str]:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def control_hardlinked_leaves_are_rejected() -> tuple[bool, str]:
+    root = Path(tempfile.mkdtemp(prefix="jsonl-hardlink-"))
+    try:
+        path = root / "inside" / "events.jsonl"
+        outside = root / "outside.jsonl"
+        path.parent.mkdir(parents=True)
+        original = b'{"id":"outside-sentinel"}\n'
+        outside.write_bytes(original)
+        try:
+            path.hardlink_to(outside)
+        except OSError as exc:
+            return False, f"hardlink fixture could not be created: {exc}"
+        try:
+            append_jsonl(path, {"id": "must-not-escape"})
+        except JsonlDurabilityError as exc:
+            return outside.read_bytes() == original and path.read_bytes() == original, str(exc)
+        return False, "a hardlinked journal leaf was accepted"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_hardlinked_index_is_rejected() -> tuple[bool, str]:
+    root = Path(tempfile.mkdtemp(prefix="jsonl-index-hardlink-"))
+    try:
+        path = root / "state/events.jsonl"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b'{"id":"one"}\n')
+        read_jsonl_objects(path)
+        index = next((root / "state/jsonl-index").glob("*.sqlite3"))
+        outside = root / "outside-index.sqlite3"
+        outside.write_bytes(index.read_bytes())
+        index.unlink()
+        index.hardlink_to(outside)
+        try:
+            read_jsonl_objects(path)
+        except JsonlDurabilityError as exc:
+            return outside.read_bytes() == index.read_bytes(), str(exc)
+        return False, "a hardlinked verification index was accepted"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def control_verified_index_avoids_prefix_rescan() -> tuple[bool, str]:
     root = Path(tempfile.mkdtemp(prefix="jsonl-index-tail-"))
     try:
@@ -586,6 +628,8 @@ def main() -> int:
         ("quarantine directory and evidence persist before journal truncation", control_quarantine_persists_before_truncate),
         ("short writes are retried until the complete record is durable", control_complete_write_loop),
         ("idempotent appends still repair and preserve a torn tail", control_dedupe_still_repairs_tail),
+        ("hardlinked journal leaves are rejected without an outside-root write", control_hardlinked_leaves_are_rejected),
+        ("hardlinked verification-index leaves are rejected", control_hardlinked_index_is_rejected),
         ("an exact verification index makes steady-state append and reads tail-only",
          control_verified_index_avoids_prefix_rescan),
         ("cache loss rebuilds and journal mutation cannot reuse stale verification",
