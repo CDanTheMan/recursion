@@ -1095,6 +1095,29 @@ def restore_drill(root: Path, snapshot: Path) -> None:
                       "production_proven": False}, sort_keys=True))
 
 
+def _safe_cli_message(exc: BaseException) -> str:
+    """Expose only fixed, useful refusal classes; never reflect paths or OS text."""
+    if not isinstance(exc, BackupPolicyError):
+        return "operation refused"
+    message = str(exc)
+    if message == "backup policy is disabled":
+        return message
+    if message == "mutating backup commands require explicit --execute":
+        return message
+    if message in {
+        "PAUSE admission is unavailable",
+        "PAUSE admission is absent; refusing external transfer",
+        "PAUSE transfer admission failed",
+        "authenticated policy signature is unreadable",
+        "authenticated policy signature has invalid shape",
+        "authenticated policy signature does not match",
+    }:
+        return message
+    if re.fullmatch(r"backup tool arguments are invalid: (?:age|sftp)", message):
+        return "backup tool arguments are invalid"
+    return "operation refused"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="backup-offsite")
     parser.add_argument("--config", type=Path,
@@ -1148,9 +1171,7 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError, TypeError, UnicodeError, OverflowError, BackupPolicyError,
             tarfile.TarError, RecursionError, subprocess.TimeoutExpired,
             subprocess.SubprocessError) as exc:
-        message = "backup policy is disabled" if isinstance(exc, BackupPolicyError) \
-            and "disabled" in str(exc) else "operation refused"
-        print(f"backup-offsite: {message}", file=sys.stderr)
+        print(f"backup-offsite: {_safe_cli_message(exc)}", file=sys.stderr)
         return 2
 
 

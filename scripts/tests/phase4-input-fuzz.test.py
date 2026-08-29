@@ -54,6 +54,11 @@ def result_has_raw_error_or_path(result: subprocess.CompletedProcess[str], *path
         or any(str(path).replace("\\", "/") in normalized for path in paths)
 
 
+def is_git_bash_acl_artifact(result: subprocess.CompletedProcess[str]) -> bool:
+    text = (result.stdout or "") + (result.stderr or "")
+    return result.returncode == 256 and "CreateFileMapping" in text and "Win32 error 5" in text
+
+
 def strict_schema_validator(schema: dict):
     import jsonschema
 
@@ -412,6 +417,37 @@ def main() -> int:
                                 env=dict(os.environ, RECURSION_ROOT=str(conduct_root)))
         check(result.returncode != 0 and not result_has_raw_error_or_path(result, conduct_root),
               f"conduct-hermes hostile JSON {label} is controlled")
+
+    # Mutation proof: remove only the local CLASS B call from a copy of the actuator. The
+    # isolated root intentionally omits validate-decision.py, so a bypass reaches a distinct
+    # downstream-unavailable result for every hostile case. This keeps the corpus and the
+    # controlled-output predicate unchanged while proving the guard is mutation-sensitive.
+    boundary_call = ('DECISION_JSON="$(class_b_decision_json "$RAW_DECISION")" \\\n'
+                     '  || { log "REFUSED - decision input boundary rejected"; exit 5; }')
+    conduct_source = (conduct_root / "scripts/conduct-hermes.sh").read_text(encoding="utf-8")
+    if conduct_source.count(boundary_call) != 1:
+        check(False, "conduct-hermes CLASS B mutation marker is unique")
+    else:
+        mutant_root = scratch / "conduct-mutant-root"
+        (mutant_root / "scripts").mkdir(parents=True)
+        (mutant_root / "loop/logs").mkdir(parents=True)
+        mutated_source = conduct_source.replace(boundary_call, 'DECISION_JSON="$RAW_DECISION"', 1)
+        (mutant_root / "scripts/conduct-hermes.sh").write_text(mutated_source, encoding="utf-8")
+        for index, (label, raw) in enumerate(json_matrix):
+            hostile_decision = mutant_root / f"hostile-{index}.json"
+            hostile_decision.write_text(raw, encoding="utf-8")
+            result = subprocess.run([str(BASH), str(mutant_root / "scripts/conduct-hermes.sh"),
+                                     "--file", str(hostile_decision)],
+                                    capture_output=True, text=True,
+                                    env=dict(os.environ, RECURSION_ROOT=str(mutant_root)))
+            if is_git_bash_acl_artifact(result):
+                check(True, f"conduct-hermes mutation {label} is a truthful host-ACL skip")
+            else:
+                text_output = (result.stdout or "") + (result.stderr or "")
+                reached_unprotected_path = result.returncode != 0 \
+                    and "decision validator is unavailable" in text_output
+                check(reached_unprotected_path,
+                      f"conduct-hermes mutation {label} reaches downstream without the guard")
 
     # Exercise the remaining Phase 4 validator/loader/CLI boundaries with the same raw matrix.
     # These commands are intentionally pointed at the isolated fixture root, so a malformed

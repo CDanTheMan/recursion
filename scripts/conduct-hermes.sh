@@ -20,7 +20,7 @@
 set -uo pipefail
 export LC_ALL=C
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-cd "$ROOT"
+cd "$ROOT" 2>/dev/null || exit 2
 [ -f .env ] && set -a && . ./.env && set +a
 # .env pins RECURSION_ROOT for the deployed checkout. Sourcing it must never RETARGET a
 # caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
@@ -28,23 +28,25 @@ cd "$ROOT"
 RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 
 FILE=""; DRY=0; PAUSED_SAFE=0; RECOVER_ONLY=0; NON_WORK_ONLY=0; WORK_ONLY=0
+CLI_ERROR=0
 # A queue claim supplies these immutable bytes through the child environment. Direct --file
 # invocation captures them below. The child never re-reads a path as its decision authority.
 DECISION_SNAPSHOT_B64="${RECURSION_DECISION_SNAPSHOT_B64:-}"
 DECISION_FILE_DIGEST="${RECURSION_DECISION_FILE_DIGEST:-}"
 while [ $# -gt 0 ]; do
   case "$1" in
-    --file) FILE="$2"; shift 2 ;;
+    --file)
+      if [ "$#" -lt 2 ]; then CLI_ERROR=1; shift; continue; fi
+      [ -z "$FILE" ] || CLI_ERROR=1
+      FILE="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     --paused-safe) PAUSED_SAFE=1; shift ;;
     --recover-only) RECOVER_ONLY=1; shift ;;
     --non-work-only) NON_WORK_ONLY=1; shift ;;
     --work-only) WORK_ONLY=1; shift ;;
-    *) shift ;;
+    *) CLI_ERROR=1; shift ;;
   esac
 done
-[ "$NON_WORK_ONLY" = 0 ] || [ "$WORK_ONLY" = 0 ] \
-  || { echo "conduct-hermes: --non-work-only and --work-only are mutually exclusive" >&2; exit 2; }
 RECOVERY_SCOPE_ARGS=()
 [ "$NON_WORK_ONLY" = 1 ] && RECOVERY_SCOPE_ARGS+=(--non-work-only)
 [ "$WORK_ONLY" = 1 ] && RECOVERY_SCOPE_ARGS+=(--work-only)
@@ -67,7 +69,8 @@ try:
     if len(value) > 2 * 1024 * 1024: raise ValueError("decision is too large")
     row=json.loads(value, parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
     print(row.get("verb", "") if isinstance(row, dict) else "")
-except (OSError,ValueError,TypeError,UnicodeError,binascii.Error,RecursionError):
+except (OSError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError,
+        json.JSONDecodeError,binascii.Error):
     raise SystemExit(2)
 PY
 )" || return 2
@@ -113,6 +116,9 @@ PY
 DATE="$(date +%F)"
 LOG="$ROOT/loop/logs/$DATE-conduct-hermes.log"; mkdir -p "$(dirname "$LOG")"
 log(){ echo "[$(date -Is)] conduct-hermes: $*" | tee -a "$LOG" >&2; }
+[ "$CLI_ERROR" = 0 ] || { log "REFUSED - invalid command-line parameters"; exit 2; }
+[ "$NON_WORK_ONLY" = 0 ] || [ "$WORK_ONLY" = 0 ] \
+  || { log "REFUSED - --non-work-only and --work-only are mutually exclusive"; exit 2; }
 ev(){ bash scripts/taskctl.sh event "$1" "" "$2" >/dev/null 2>&1 || true; }
 
 claim_from_queue(){
@@ -312,7 +318,8 @@ try:
     raw=base64.b64decode(sys.argv[1], validate=True)
     if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
     row=json.loads(raw.decode("utf-8"), parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
-except (ValueError,TypeError,UnicodeError,binascii.Error,OverflowError,RecursionError,json.JSONDecodeError):
+except (OSError,ValueError,TypeError,UnicodeError,binascii.Error,OverflowError,
+        RecursionError,json.JSONDecodeError):
     raise SystemExit(2)
 print(row.get('project') if isinstance(row, dict) else '')
 PY
@@ -342,26 +349,41 @@ if [ -z "$FILE" ]; then
   exit $?
 fi
 
-python3 - "$FILE" <<'PY' 2>/dev/null || { log "no safe decision file at $FILE"; exit 2; }
-import os,stat,sys
+python3 - "$FILE" <<'PY' 2>/dev/null || { log "REFUSED - decision file path is unsafe or unavailable"; exit 2; }
+import os,re,stat,sys
 from pathlib import Path
 try:
-    path=Path(sys.argv[1])
+    raw=sys.argv[1]
+    if not isinstance(raw,str) or not raw or len(raw.encode("utf-8")) > 4096:
+        raise ValueError("decision file path is invalid")
+    normalized=raw.replace("\\", "/")
+    if ("\x00" in raw or any(ord(char) < 32 for char in raw)
+            or raw.startswith(("\\\\", "//", "~")) or "%" in raw
+            or re.match(r"^[A-Za-z]:[^\\/].*", raw)
+            or any(part in {".", ".."} for part in normalized.split("/"))
+            or "//" in normalized[1:]):
+        raise ValueError("decision file path is not canonical")
+    path=Path(raw)
     if not path.is_absolute() or any(part in {".", ".."} for part in path.parts):
         raise ValueError("decision file must be a canonical absolute path")
     current=Path(path.anchor)
     for component in path.parts[1:]:
         current /= component
         info=current.lstat()
-        if stat.S_ISLNK(info.st_mode) or getattr(info,"st_reparse_tag",0): raise ValueError("reparse path")
+        if (stat.S_ISLNK(info.st_mode) or getattr(info,"st_reparse_tag",0)
+                or bool(getattr(info,"st_file_attributes",0) & 0x400)):
+            raise ValueError("reparse path")
     flags=os.O_RDONLY|getattr(os,"O_BINARY",0)|getattr(os,"O_NOFOLLOW",0)
     descriptor=os.open(path,flags)
     try:
         info=os.fstat(descriptor)
-        if stat.S_ISLNK(info.st_mode) or getattr(info,"st_reparse_tag",0) or not stat.S_ISREG(info.st_mode): raise ValueError("not regular")
+        if (stat.S_ISLNK(info.st_mode) or getattr(info,"st_reparse_tag",0)
+                or bool(getattr(info,"st_file_attributes",0) & 0x400)
+                or not stat.S_ISREG(info.st_mode)):
+            raise ValueError("not regular")
     finally:
         os.close(descriptor)
-except (OSError,ValueError,TypeError,UnicodeError,OverflowError):
+except (OSError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
     raise SystemExit(2)
 PY
 if [ -z "$DECISION_SNAPSHOT_B64" ] || [ -z "$DECISION_FILE_DIGEST" ]; then
@@ -397,21 +419,162 @@ try:
     raw=base64.b64decode(sys.argv[1], validate=True)
     if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
     sys.stdout.write(raw.decode("utf-8", "strict"))
-except (ValueError,TypeError,UnicodeError,binascii.Error,OverflowError):
+except (OSError,ValueError,TypeError,UnicodeError,binascii.Error,OverflowError,
+        RecursionError):
     raise SystemExit(2)
 PY
 )" || { log "REFUSED - decision snapshot could not be decoded"; exit 74; }
-VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$RAW_DECISION" 2>&1)"
+
+# CLASS B: the snapshot is caller-controlled bytes until this local boundary has proved that it
+# is bounded JSON with a typed object shape.  The external validator below checks decision
+# semantics; it is not the input boundary and must never be the first code to touch hostile JSON.
+class_b_decision_json(){
+  python3 - "$1" <<'PY' 2>/dev/null
+import json,math,re,sys
+
+MAX_BYTES=2 * 1024 * 1024
+MAX_INTEGER=2**63 - 1
+MAX_STRING=4096
+MAX_ITEMS=256
+MAX_DEPTH=64
+INTEGER_FIELDS={
+    "schema_version", "max_concurrency", "max_tokens", "max_wall_clock_seconds",
+    "max_task_attempts", "max_failures", "max_review_queue", "max_publish_attempts",
+    "deadline_seconds", "verifier_deadline_seconds",
+}
+REAL_FIELDS={"cost_usd", "max_cost_usd", "estimated_cost_usd"}
+PATH_FIELDS={
+    "path", "file", "directory", "root", "runtime_root", "runtime_directory",
+    "snapshot_directory", "recipient_file", "signature_file",
+}
+
+def bounded_int(raw):
+    digits=raw[1:] if raw.startswith("-") else raw
+    if len(digits) > 19:
+        raise ValueError("decision integer is out of range")
+    value=int(raw)
+    if not -MAX_INTEGER - 1 <= value <= MAX_INTEGER:
+        raise ValueError("decision integer is out of range")
+    return value
+
+def bounded_float(raw):
+    value=float(raw)
+    if not math.isfinite(value) or abs(value) > 1e308:
+        raise ValueError("decision number is non-finite or out of range")
+    return value
+
+def check_path(value):
+    normalized=value.replace("\\", "/")
+    if (not value or value.startswith(("\\\\", "//", "~")) or "%" in value
+            or re.match(r"^[A-Za-z]:[^\\/].*", value)
+            or any(part in {".", ".."} for part in normalized.split("/"))
+            or "//" in normalized[1:]):
+        raise ValueError("decision path is unsafe")
+
+def check_value(value, depth=0, key=None):
+    if depth > MAX_DEPTH:
+        raise ValueError("decision nesting is too deep")
+    if key in INTEGER_FIELDS and type(value) is not int:
+        raise TypeError("decision integer field has the wrong type")
+    if key in REAL_FIELDS and value is not None \
+            and (isinstance(value, bool) or not isinstance(value, (int, float))):
+        raise TypeError("decision numeric field has the wrong type")
+    if key in PATH_FIELDS:
+        if value is not None and not isinstance(value, str):
+            raise TypeError("decision path field has the wrong type")
+        if isinstance(value, str):
+            check_path(value)
+    if isinstance(value, str):
+        if len(value) > MAX_STRING or any(ord(char) < 32 for char in value):
+            raise ValueError("decision string is invalid")
+        return
+    if type(value) is int:
+        if not -MAX_INTEGER - 1 <= value <= MAX_INTEGER:
+            raise ValueError("decision integer is out of range")
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value) or abs(value) > 1e308:
+            raise ValueError("decision number is non-finite or out of range")
+        return
+    if value is None or isinstance(value, bool):
+        return
+    if isinstance(value, list):
+        if len(value) > MAX_ITEMS:
+            raise ValueError("decision array is too large")
+        for item in value:
+            check_value(item, depth + 1, key)
+        return
+    if isinstance(value, dict):
+        if len(value) > MAX_ITEMS:
+            raise ValueError("decision object is too large")
+        for key, item in value.items():
+            if (not isinstance(key, str) or len(key) > MAX_STRING
+                    or any(ord(char) < 32 for char in key)):
+                raise ValueError("decision object key is invalid")
+            check_value(item, depth + 1, key)
+        return
+    raise TypeError("decision contains an unsupported value")
+
+try:
+    raw=sys.argv[1]
+    if not isinstance(raw,str) or len(raw.encode("utf-8")) > MAX_BYTES:
+        raise ValueError("decision exceeds the bounded input size")
+    value=json.loads(raw, parse_int=bounded_int, parse_float=bounded_float,
+                     parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+    if not isinstance(value, dict):
+        raise ValueError("decision is not an object")
+    check_value(value)
+    if "schema_version" in value and (type(value["schema_version"]) is not int
+                                       or value["schema_version"] != 1):
+        raise ValueError("decision schema_version must be the integer 1")
+    string_fields={
+        "actor", "confidence", "decision_source", "goal", "goal_id", "id",
+        "idempotency_key", "instruction_id", "project", "provider", "reason",
+        "routed_decider", "status", "text", "ts", "verb", "why", "wrong_if",
+        "decision_payload_sha256",
+    }
+    list_fields={"args", "arguments"}
+    for field, item in value.items():
+        if field in string_fields and item is not None and not isinstance(item,str):
+            raise TypeError("decision field has the wrong type")
+        if field in list_fields:
+            if not isinstance(item,list) or any(not isinstance(arg,str) for arg in item):
+                raise TypeError("decision arguments have the wrong type")
+        if field == "cost_usd":
+            if item is not None and (isinstance(item,bool) or not isinstance(item,(int,float))):
+                raise TypeError("decision cost has the wrong type")
+        if field in {"schema_version"} and isinstance(item,bool):
+            raise TypeError("decision integer field is boolean")
+    print(json.dumps(value, sort_keys=True, separators=(",",":"),
+                     ensure_ascii=False, allow_nan=False))
+except (json.JSONDecodeError,ValueError,TypeError,OverflowError,RecursionError,
+        UnicodeDecodeError,UnicodeError,OSError):
+    raise SystemExit(2)
+PY
+}
+# PHASE4_CLASS_B_DECISION_BOUNDARY_CALL
+DECISION_JSON="$(class_b_decision_json "$RAW_DECISION")" \
+  || { log "REFUSED - decision input boundary rejected"; exit 5; }
+VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$DECISION_JSON" 2>&1)"
+VALID_RC=$?
+if [ "$VALID_RC" -ne 0 ]; then
+  case "$VALID" in
+    ERR\ *) log "REFUSED - decision validation rejected the input" ;;
+    *) log "REFUSED - decision validator is unavailable" ;;
+  esac
+  exit 74
+fi
 case "$VALID" in
   OK\ *) DECISION_JSON="${VALID#OK }" ;;
-  *) log "REFUSED - ${VALID:-decision validation produced no output}"; exit 5 ;;
+  *) log "REFUSED - decision validation rejected the input"; exit 5 ;;
 esac
 
 read_field(){ python3 -c 'import json,sys
 try:
     value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
     print(value.get(sys.argv[2],"") or "" if isinstance(value,dict) else "")
-except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,
+        RecursionError,OSError):
     raise SystemExit(2)' "$DECISION_JSON" "$1" 2>/dev/null; }
 VERB="$(read_field verb)"; WHY="$(read_field why)"; GOAL="$(read_field goal)"
 ACTOR="$(read_field actor)"
@@ -425,14 +588,18 @@ try:
     value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
     if not isinstance(value,dict): raise ValueError("decision is not an object")
     print(json.dumps(value.get("args") or [],separators=(",",":"),allow_nan=False))
-except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,
+        RecursionError,OSError):
     raise SystemExit(2)' "$DECISION_JSON")" \
   || { log "REFUSED - could not freeze decision arguments"; exit 5; }
 ACTION_PAYLOAD_SHA256="$(python3 - "$DECISION_JSON" <<'PY'
 import hashlib,json,sys
 try:
  row=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
-except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,
+        RecursionError,OSError):
+ raise SystemExit(2)
+if not isinstance(row,dict):
  raise SystemExit(2)
 payload={
     'actor':row.get('actor') or '', 'verb':row.get('verb') or '',
@@ -449,13 +616,18 @@ PY
 DECISION_PAYLOAD_SHA256="$(read_field decision_payload_sha256)"
 [ -n "$DECISION_PAYLOAD_SHA256" ] && [ "$DECISION_PAYLOAD_SHA256" = "$ACTION_PAYLOAD_SHA256" ] \
   || { log "REFUSED - decision authority/effect digest is absent or inconsistent"; exit 5; }
-mapfile -t ARGS < <(python3 -c 'import json,sys
+ARGS_LINES="$(python3 -c 'import json,sys
 try:
     value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
     if not isinstance(value,list) or any(not isinstance(a,str) for a in value): raise ValueError("args are invalid")
     for a in value: sys.stdout.buffer.write(a.encode()+b"\n")
-except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
-    raise SystemExit(2)' "$ARGS_JSON" 2>/dev/null)
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,
+        RecursionError,OSError):
+    raise SystemExit(2)' "$ARGS_JSON" 2>/dev/null)" \
+  || { log "REFUSED - could not materialize decision arguments"; exit 5; }
+ARGS=()
+[ -n "$ARGS_LINES" ] && mapfile -t ARGS <<< "$ARGS_LINES"
+unset ARGS_LINES
 
 [ -n "$VERB" ] || { log "decision has no verb"; exit 2; }
 
@@ -463,11 +635,11 @@ except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,Rec
 # validating only at decide time trusts a file anything could have rewritten. -------------
 for a in ${ARGS+"${ARGS[@]}"}; do
   if ! printf '%s' "$a" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._/-]{0,80}$'; then
-    log "REFUSED — unsafe argument: $(printf '%s' "$a" | head -c 60)"
+    log "REFUSED - unsafe decision argument"
     ev decision-refused "unsafe arg for verb=$VERB"; exit 5
   fi
   case "$a" in
-    *..*) log "REFUSED — path traversal in argument: $a"; ev decision-refused "traversal"; exit 5 ;;
+    *..*) log "REFUSED - path traversal in decision argument"; ev decision-refused "traversal"; exit 5 ;;
   esac
 done
 
@@ -586,6 +758,8 @@ try:
     row=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
 except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
     raise SystemExit(1)
+if not isinstance(row,dict):
+    raise SystemExit(1)
 raise SystemExit(0 if row.get('status') == 'running' and
                  row.get('lease_owner') == os.environ['ACTION_EXPECTED_OWNER'] else 1)
 PY
@@ -603,9 +777,13 @@ try:
     row=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
 except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
     raise SystemExit(1)
+if not isinstance(row,dict):
+    raise SystemExit(1)
 try:
     expected_args=json.loads(os.environ['ACTION_EXPECTED_ARGS'],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
-except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError,OSError):
+    raise SystemExit(1)
+if not isinstance(expected_args,list) or any(not isinstance(item,str) for item in expected_args):
     raise SystemExit(1)
 expected={
     'id':os.environ['ACTION_EXPECTED_ID'],
@@ -646,7 +824,7 @@ except FileNotFoundError:
     try:
       arguments=json.loads(os.environ['ACTION_ARGS'],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
       if not isinstance(arguments,list) or any(not isinstance(a,str) for a in arguments): raise ValueError('action arguments invalid')
-    except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError,OSError):
       raise SystemExit(2)
     record={
       'schema_version':1,'id':os.environ['ACTION_ID'],
@@ -901,6 +1079,8 @@ for aid in sorted(annotated):
         if len(raw)>2*1024*1024: raise ValueError('action is too large')
         action=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
     except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+        continue
+    if not isinstance(action,dict):
         continue
     if (action.get('id') == aid and str(action.get('instruction_id') or '') == iid
             and action.get('status') == 'failed'
