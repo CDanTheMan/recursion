@@ -27,6 +27,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+from functools import wraps
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 from types import MappingProxyType
@@ -36,6 +37,13 @@ SCHEMA_VERSION = 1
 FABRIC_SCHEMA = "recursion-execution-fabric-v1"
 ZERO_DIGEST = "0" * 64
 DEFAULT_HEARTBEAT_FUTURE_SKEW = 30.0
+MAX_JSON_BYTES = 1_048_576
+MAX_JSON_DEPTH = 64
+MAX_JSON_NODES = 10_000
+MAX_JSON_INTEGER_BITS = 1024
+MAX_JSON_INTEGER_DIGITS = 310
+# Largest finite IEEE-754 binary64 value expressed exactly as an integer.
+MAX_FINITE_INTEGER = (1 << 1024) - (1 << 971)
 _WINDOWS_FILE_ATTRIBUTE_DIRECTORY = 0x10
 _WINDOWS_FILE_ATTRIBUTE_REPARSE_POINT = 0x400
 
@@ -45,6 +53,14 @@ _ISO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\Z")
 _COMMIT = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?\Z")
 _SECRET_KEY = re.compile(r"(?:secret|token|password|private|credential|api[_-]?key)", re.I)
 _VERIFIER_IDENTITY = re.compile(r"controller/.+\Z")
+_BRANCH = re.compile(r"(?!/)(?!.*//)(?!.*/$)(?!.*\.\.)(?!\.)(?!.*/\.)(?!refs/)(?!HEAD)[A-Za-z0-9_./-]+\Z")
+_ALLOWED_PATH = re.compile(r"(?!/)(?![A-Za-z]:)(?!.*\.\.)[A-Za-z0-9_./-]+\Z")
+_KEY_HEX = re.compile(r"(?:[0-9a-f]{2})+\Z")
+_PLACEMENT_POLICIES = frozenset({"manual-pin", "subscription-first", "local-first", "cheapest-eligible",
+                                "fastest-eligible", "strongest-reviewer", "weighted-rotation"})
+
+_INPUT_ERRORS = (json.JSONDecodeError, ValueError, TypeError, OverflowError,
+                 RecursionError, UnicodeDecodeError, UnicodeError, OSError)
 
 
 class FabricError(ValueError):
@@ -67,6 +83,122 @@ class ReconciliationError(FabricError):
     pass
 
 
+class _JsonInputError(SchemaError):
+    """Internal marker so durable reloads can classify malformed JSON correctly."""
+
+
+def _typed_boundary(kind: str):
+    """Turn hostile Python/JSON boundary failures into a fabric error."""
+    def decorate(function):
+        @wraps(function)
+        def wrapped(*args, **kwargs):
+            try:
+                return function(*args, **kwargs)
+            except FabricError:
+                raise
+            except _INPUT_ERRORS as exc:
+                raise SchemaError("INVALID_INPUT", f"invalid {kind}") from exc
+        return wrapped
+    return decorate
+
+
+def _regex_fullmatch(pattern: re.Pattern[str], value: Any, field: str) -> str | None:
+    try:
+        return pattern.fullmatch(value)  # type: ignore[arg-type]
+    except _INPUT_ERRORS as exc:
+        raise SchemaError("INVALID_FIELD", f"{field} has an invalid value") from exc
+
+
+def _strict_int(value: Any, field: str, *, minimum: int | None = None) -> int:
+    if type(value) is not int or (minimum is not None and value < minimum):
+        qualifier = "integer" if minimum is None else f"integer >= {minimum}"
+        raise SchemaError("INVALID_FIELD", f"{field} must be a {qualifier}")
+    return value
+
+
+def _schema_version(value: Any, kind: str) -> None:
+    if type(value) is not int or value != SCHEMA_VERSION:
+        raise SchemaError("SCHEMA_VERSION", f"unsupported {kind} schema")
+
+
+def _finite_number(value: Any, field: str, *, minimum: float | None = None) -> float:
+    if type(value) not in {int, float}:
+        raise SchemaError("INVALID_FIELD", f"{field} must be a finite number")
+    if type(value) is int and value > MAX_FINITE_INTEGER:
+        raise SchemaError("INVALID_FIELD", f"{field} must be a finite number")
+    try:
+        converted = float(value)
+    except _INPUT_ERRORS as exc:
+        raise SchemaError("INVALID_FIELD", f"{field} must be a finite number") from exc
+    if not math.isfinite(converted) or (minimum is not None and converted < minimum):
+        raise SchemaError("INVALID_FIELD", f"{field} must be a finite number")
+    return converted
+
+
+def _bounded_json_text(text: Any) -> str:
+    if not isinstance(text, str):
+        raise SchemaError("INVALID_JSON", "JSON input must be text")
+    if len(text.encode("utf-8", errors="strict")) > MAX_JSON_BYTES:
+        raise SchemaError("INPUT_TOO_LARGE", "JSON input exceeds the size limit")
+    depth = 0
+    escaped = False
+    in_string = False
+    for char in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char in "[{":
+            depth += 1
+            if depth > MAX_JSON_DEPTH:
+                raise SchemaError("INPUT_TOO_DEEP", "JSON nesting exceeds the depth limit")
+        elif char in "]}":
+            depth -= 1
+            if depth < 0:
+                raise SchemaError("INVALID_JSON", "JSON delimiters are unbalanced")
+    if in_string or depth != 0:
+        # Let the parser provide the ordinary malformed-json classification,
+        # but keep it behind the typed boundary below.
+        return text
+    return text
+
+
+def _json_node_budget(item: Any, field: str, *, depth: int, budget: list[int]) -> None:
+    if depth > MAX_JSON_DEPTH:
+        raise SchemaError("INPUT_TOO_DEEP", f"{field} nesting exceeds the depth limit")
+    budget[0] += 1
+    if budget[0] > MAX_JSON_NODES:
+        raise SchemaError("INPUT_TOO_LARGE", f"{field} contains too many values")
+
+
+def _safe_int(value: Any, field: str, *, base: int | None = None) -> int:
+    try:
+        if base is None:
+            if type(value) is not int:
+                raise TypeError
+            converted = value
+        else:
+            if type(value) is not str:
+                raise TypeError
+            converted = int(value, base)
+    except _INPUT_ERRORS as exc:
+        raise SchemaError("INVALID_FIELD", f"{field} must be an integer") from exc
+    return converted
+
+
+def _json_line(value: Mapping[str, Any], kind: str) -> bytes:
+    try:
+        return (json.dumps(dict(value), sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n").encode("ascii")
+    except _INPUT_ERRORS as exc:
+        raise ReconciliationError("INVALID_RECORD", f"{kind} cannot be serialized") from exc
+
+
 def _check_keys(value: Mapping[str, Any], required: set[str], optional: set[str], kind: str) -> None:
     if not isinstance(value, Mapping):
         raise SchemaError("INVALID_RECORD", f"{kind} must be an object")
@@ -82,7 +214,7 @@ def _check_keys(value: Mapping[str, Any], required: set[str], optional: set[str]
 def _string(value: Any, field: str, *, pattern: re.Pattern[str] | None = None) -> str:
     if not isinstance(value, str) or not value:
         raise SchemaError("INVALID_FIELD", f"{field} must be a non-empty string")
-    if pattern is not None and not pattern.fullmatch(value):
+    if pattern is not None and _regex_fullmatch(pattern, value, field) is None:
         raise SchemaError("INVALID_FIELD", f"{field} has an invalid value")
     return value
 
@@ -104,7 +236,7 @@ def _timestamp(value: Any, field: str) -> str:
     text = _string(value, field, pattern=_ISO)
     try:
         parsed = datetime.fromisoformat(text[:-1] + "+00:00")
-    except ValueError as exc:
+    except _INPUT_ERRORS as exc:
         raise SchemaError("INVALID_TIMESTAMP", f"{field} is not a real UTC timestamp") from exc
     if parsed.tzinfo != timezone.utc:
         raise SchemaError("INVALID_TIMESTAMP", f"{field} must be UTC")
@@ -122,12 +254,7 @@ def _string_list(value: Any, field: str) -> tuple[str, ...]:
 
 def _branch(value: Any, field: str) -> str:
     value = _string(value, field)
-    invalid = (value.startswith("/") or value.endswith("/") or "//" in value or ".." in value or
-               any(part in {".", ".."} or part.startswith(".") for part in value.split("/")) or
-               any(ord(char) < 32 or ord(char) == 127 for char in value) or
-               any(char in value for char in (" ", "~", "^", ":", "?", "*", "[", "\\")) or
-               value.startswith("refs/") or value.startswith("HEAD"))
-    if invalid:
+    if _regex_fullmatch(_BRANCH, value, field) is None:
         raise SchemaError("INVALID_FIELD", f"{field} has an invalid value")
     return value
 
@@ -135,26 +262,34 @@ def _branch(value: Any, field: str) -> str:
 def _allowed_path_list(value: Any, field: str) -> tuple[str, ...]:
     values = _string_list(value, field)
     for item in values:
-        if (item.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", item) or "\\" in item or
-                any(part == ".." for part in item.split("/"))):
+        if _regex_fullmatch(_ALLOWED_PATH, item, field) is None:
             raise SchemaError("INVALID_FIELD", f"{field} contains a path outside the project")
     return values
 
 
 def _nonnegative_int(value: Any, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+    if (type(value) is not int or value < 0 or value.bit_length() > MAX_JSON_INTEGER_BITS or
+            value > MAX_FINITE_INTEGER):
         raise SchemaError("INVALID_FIELD", f"{field} must be a non-negative integer")
     return value
 
 
 def _nonnegative_number(value: Any, field: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)) or value < 0:
+    try:
+        converted = _finite_number(value, field, minimum=0)
+    except SchemaError:
         raise SchemaError("INVALID_FIELD", f"{field} must be a non-negative number")
-    return float(value)
+    return converted
 
 
-def _json_value(item: Any, field: str = "record") -> Any:
-    if item is None or type(item) in {str, int, bool}:
+def _json_value(item: Any, field: str = "record", *, _depth: int = 0, _budget: list[int] | None = None) -> Any:
+    budget = [0] if _budget is None else _budget
+    _json_node_budget(item, field, depth=_depth, budget=budget)
+    if item is None or type(item) in {str, bool}:
+        return item
+    if type(item) is int:
+        if item.bit_length() > MAX_JSON_INTEGER_BITS or item > MAX_FINITE_INTEGER or item < -MAX_FINITE_INTEGER:
+            raise SchemaError("INPUT_TOO_LARGE", f"{field} contains an oversized integer")
         return item
     if type(item) is float:
         if not math.isfinite(item):
@@ -165,10 +300,10 @@ def _json_value(item: Any, field: str = "record") -> Any:
         for key, nested in item.items():
             if type(key) is not str:
                 raise SchemaError("INVALID_FIELD", f"{field} object keys must be strings")
-            normalized[key] = _json_value(nested, f"{field}.{key}")
+            normalized[key] = _json_value(nested, f"{field}.{key}", _depth=_depth + 1, _budget=budget)
         return normalized
-    if isinstance(item, (list, tuple)):
-        return [_json_value(nested, field) for nested in item]
+    if isinstance(item, list):
+        return [_json_value(nested, field, _depth=_depth + 1, _budget=budget) for nested in item]
     raise SchemaError("INVALID_FIELD", f"{field} contains a non-JSON value")
 
 
@@ -180,13 +315,35 @@ def _canonical(value: Mapping[str, Any]) -> bytes:
     normalized = _json_value(value)
     if not isinstance(normalized, dict):
         raise SchemaError("INVALID_RECORD", "canonical values must be objects")
-    return json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    try:
+        return json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    except _INPUT_ERRORS as exc:
+        raise SchemaError("INVALID_RECORD", "canonical values cannot be serialized") from exc
 
 
 def _json_load(text: str) -> Any:
     def reject_constant(value: str) -> Any:
         raise ValueError(f"non-finite JSON number: {value}")
-    return json.loads(text, parse_constant=reject_constant)
+    def parse_int(value: str) -> int:
+        if len(value.lstrip("-")) > MAX_JSON_INTEGER_DIGITS:
+            raise ValueError("JSON integer exceeds the size limit")
+        return int(value)
+    def parse_float(value: str) -> float:
+        parsed = float(value)
+        if not math.isfinite(parsed):
+            raise ValueError("non-finite JSON number")
+        return parsed
+    try:
+        try:
+            bounded = _bounded_json_text(text)
+        except SchemaError as exc:
+            raise _JsonInputError(exc.code, str(exc)) from exc
+        return json.loads(bounded, parse_constant=reject_constant,
+                          parse_int=parse_int, parse_float=parse_float)
+    except _JsonInputError:
+        raise
+    except _INPUT_ERRORS as exc:
+        raise _JsonInputError("INVALID_JSON", "JSON input cannot be decoded") from exc
 
 
 def _windows_kernel32() -> Any:
@@ -195,7 +352,7 @@ def _windows_kernel32() -> Any:
 
 
 def _windows_handle_value(handle: Any) -> int:
-    return int(handle.value if hasattr(handle, "value") else handle)
+    return _safe_int(handle.value if hasattr(handle, "value") else handle, "Windows handle")
 
 
 def _windows_file_info(handle: Any) -> tuple[tuple[int, int, int], bool, int, bool]:
@@ -213,9 +370,11 @@ def _windows_file_info(handle: Any) -> tuple[tuple[int, int, int], bool, int, bo
     kernel32 = _windows_kernel32()
     if not kernel32.GetFileInformationByHandle(handle, ctypes.byref(info)):
         raise OSError(ctypes.get_last_error(), "GetFileInformationByHandle failed")
-    identity = (int(info.volume), int(info.index_high), int(info.index_low))
-    attributes = int(info.attributes)
-    return identity, bool(attributes & _WINDOWS_FILE_ATTRIBUTE_DIRECTORY), int(info.links), bool(attributes & _WINDOWS_FILE_ATTRIBUTE_REPARSE_POINT)
+    identity = (_safe_int(info.volume, "Windows volume"), _safe_int(info.index_high, "Windows file id"),
+                _safe_int(info.index_low, "Windows file id"))
+    attributes = _safe_int(info.attributes, "Windows file attributes")
+    links = _safe_int(info.links, "Windows link count")
+    return identity, bool(attributes & _WINDOWS_FILE_ATTRIBUTE_DIRECTORY), links, bool(attributes & _WINDOWS_FILE_ATTRIBUTE_REPARSE_POINT)
 
 
 def _leaf_info_for_handle(handle: Any) -> tuple[tuple[int, int, int], bool, int, bool]:
@@ -254,12 +413,19 @@ def _windows_open(path: Path, *, directory: bool, write: bool, create: bool = Fa
         identity, is_directory, links, is_reparse = _leaf_info_for_handle(handle)
         return handle, identity, is_directory, links, is_reparse
     except BaseException:
-        kernel32.CloseHandle(handle)
+        _close_windows(handle)
         raise
 
 
 def _close_windows(handle: Any) -> None:
-    _windows_kernel32().CloseHandle(handle)
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = _windows_kernel32()
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    if not kernel32.CloseHandle(handle):
+        raise OSError(ctypes.get_last_error(), "CloseHandle failed")
 
 
 def _windows_path_is_reparse(path: Path) -> bool:
@@ -268,8 +434,8 @@ def _windows_path_is_reparse(path: Path) -> bool:
     except OSError as exc:
         raise ReconciliationError("UNSAFE_STORE_PATH", "store ancestor cannot be inspected safely") from exc
     return bool(stat.S_ISLNK(info.st_mode) or
-                int(getattr(info, "st_file_attributes", 0)) & _WINDOWS_FILE_ATTRIBUTE_REPARSE_POINT or
-                int(getattr(info, "st_reparse_tag", 0)))
+                _safe_int(getattr(info, "st_file_attributes", 0), "file attributes") & _WINDOWS_FILE_ATTRIBUTE_REPARSE_POINT or
+                _safe_int(getattr(info, "st_reparse_tag", 0), "reparse tag"))
 
 
 class _WindowsPinnedDirectory:
@@ -300,37 +466,46 @@ def _validate_pinned_directory(directory: Any) -> None:
         directory.validate()
 
 
-def _windows_replace_by_handle(source_descriptor: int, destination_path: Path) -> None:
-    """Atomically replace an absolute destination from an open temporary handle."""
+def _windows_replace_by_handle(source_descriptor: int, source_identity: Any, directory: Any,
+                               source_path: Path, destination_path: Path) -> None:
+    """Atomically publish a validated root-local temporary leaf."""
     import ctypes
     from ctypes import wintypes
     import msvcrt
 
     destination = Path(destination_path)
-    if not destination.is_absolute():
+    if not destination.is_absolute() or not destination.name:
         raise OSError("destination path must be absolute")
+    source = Path(source_path)
+    if not source.is_absolute() or not source.name:
+        raise OSError("source path must be absolute")
+    _validate_pinned_directory(directory)
+    _validate_leaf_info(_leaf_info_for_descriptor(source_descriptor), identity=source_identity)
 
-    class RenameInfoEx(ctypes.Structure):
-        # FILE_RENAME_INFO_EX on x64 is DWORD Flags, an aligned HANDLE,
-        # DWORD FileNameLength, and a variable-length UTF-16 name.
+    class RenameInfo(ctypes.Structure):
+        # FILE_RENAME_INFO uses a one-byte BOOLEAN followed by an aligned
+        # HANDLE.  FileRenameInfoEx (class 22) is not available on all
+        # supported Windows filesystems and returned ERROR_INVALID_PARAMETER
+        # for ordinary durable files.
         _fields_ = [
-            ("flags", wintypes.DWORD),
+            ("replace_if_exists", ctypes.c_ubyte),
             ("root_directory", wintypes.HANDLE),
             ("file_name_length", wintypes.DWORD),
             ("file_name", wintypes.WCHAR * 1),
         ]
 
     encoded_name = str(destination).encode("utf-16-le")
-    name_offset = RenameInfoEx.file_name.offset
-    # The API's required size is sizeof(FILE_RENAME_INFO_EX) plus the name,
-    # not merely the variable-tail offset plus the name.  On x64 the aligned
-    # structure is four bytes larger than FileName's offset.
-    buffer_size = ctypes.sizeof(RenameInfoEx) + len(encoded_name)
+    name_offset = RenameInfo.file_name.offset
+    # The native variable-tail contract is sizeof(FILE_RENAME_INFO) plus the
+    # UTF-16 name length; allocating only through the tail offset is rejected
+    # by SetFileInformationByHandle with ERROR_INVALID_PARAMETER.
+    buffer_size = ctypes.sizeof(RenameInfo) + len(encoded_name)
     buffer = ctypes.create_string_buffer(buffer_size)
-    info = ctypes.cast(buffer, ctypes.POINTER(RenameInfoEx)).contents
-    # FileRenameInfoEx permits replacing the still-open original leaf.  The
-    # destination is absolute, so RootDirectory must be NULL.
-    info.flags = 0x00000001 | 0x00000002  # REPLACE_IF_EXISTS | POSIX_SEMANTICS
+    info = ctypes.cast(buffer, ctypes.POINTER(RenameInfo)).contents
+    info.replace_if_exists = 1
+    # The absolute path avoids relying on filesystem-specific support for a
+    # non-NULL RootDirectory in FILE_RENAME_INFO. The caller has already
+    # pinned and revalidated this path's complete ancestor chain.
     info.root_directory = None
     info.file_name_length = len(encoded_name)
     ctypes.memmove(ctypes.addressof(buffer) + name_offset, encoded_name, len(encoded_name))
@@ -339,9 +514,9 @@ def _windows_replace_by_handle(source_descriptor: int, destination_path: Path) -
     kernel32.SetFileInformationByHandle.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
     kernel32.SetFileInformationByHandle.restype = wintypes.BOOL
     source_handle = wintypes.HANDLE(msvcrt.get_osfhandle(source_descriptor))
-    if not kernel32.SetFileInformationByHandle(source_handle, 22, ctypes.byref(buffer), buffer_size):
-        error = ctypes.get_last_error()
-        raise OSError(error, "cannot atomically replace durable store leaf")
+    if kernel32.SetFileInformationByHandle(source_handle, 3, ctypes.byref(buffer), buffer_size):
+        return
+    raise OSError(ctypes.get_last_error(), "cannot atomically replace durable store leaf")
 
 
 @contextmanager
@@ -474,13 +649,15 @@ def _open_store_leaf(path: Path, *, write: bool, create: bool, append: bool = Fa
 
 def _read_store_bytes(path: Path, *, expected_identity: Any = None) -> tuple[bytes, Any] | None:
     try:
-        with _open_store_leaf(path, write=False, create=False, expected_identity=expected_identity) as (descriptor, identity, _):
+        with _open_store_leaf(path, write=False, create=False, expected_identity=expected_identity) as (descriptor, identity, directory):
             chunks: list[bytes] = []
             while True:
                 chunk = os.read(descriptor, 1024 * 1024)
                 if not chunk:
                     break
                 chunks.append(chunk)
+            _validate_pinned_directory(directory)
+            _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=identity)
             return b"".join(chunks), identity
     except FileNotFoundError:
         return None
@@ -490,24 +667,98 @@ def _read_store_bytes(path: Path, *, expected_identity: Any = None) -> tuple[byt
         raise ReconciliationError("UNSAFE_STORE_PATH", "durable store leaf cannot be read safely") from exc
 
 
-def _append_bytes(path: Path, data: bytes, *, expected_identity: Any = None) -> Any:
+def _write_new_leaf(directory: Any, path: Path, data: bytes) -> tuple[int, Any]:
+    """Create and fully write a new leaf while it is still private to root."""
+    descriptor, identity = _open_leaf_in_directory(
+        directory, path, write=True, create=True, exclusive=True, deny_delete=False, rename=True)
     try:
-        with _open_store_leaf(path, write=True, create=True, append=True, expected_identity=expected_identity) as (descriptor, identity, directory):
-            view = memoryview(data)
-            while view:
-                _validate_pinned_directory(directory)
-                _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=identity)
-                written = os.write(descriptor, view)
-                if written <= 0:
-                    raise OSError("journal write made no progress")
-                view = view[written:]
-            os.fsync(descriptor)
+        view = memoryview(data)
+        while view:
             _validate_pinned_directory(directory)
             _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=identity)
-            return identity
+            written = os.write(descriptor, view)
+            if written <= 0:
+                raise OSError("durable store write made no progress")
+            view = view[written:]
+        os.fsync(descriptor)
+        _validate_pinned_directory(directory)
+        _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=identity)
+        return descriptor, identity
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _revalidate_destination(directory: Any, path: Path, *, expected_identity: Any,
+                            must_exist: bool) -> None:
+    """Re-open the destination through the pinned parent immediately before commit."""
+    _validate_pinned_directory(directory)
+    try:
+        descriptor, identity = _open_leaf_in_directory(
+            directory, path, write=False, create=False,
+            # The leaf is always opened no-follow. Delete-sharing exclusion is
+            # provided by the pinned parent/ancestor handles; allowing leaf
+            # delete sharing also permits the post-commit probe while the
+            # source handle remains open after an atomic rename.
+            expected_identity=expected_identity if must_exist else None, deny_delete=False)
+    except FileNotFoundError:
+        if must_exist:
+            raise ReconciliationError("UNSAFE_STORE_PATH", "durable store destination disappeared")
+        return
+    try:
+        if not must_exist:
+            raise ReconciliationError("UNSAFE_STORE_PATH", "durable store destination appeared before commit")
+        _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=identity)
+    finally:
+        os.close(descriptor)
+
+
+def _commit_absent_leaf(directory: Any, temporary_path: Path, path: Path,
+                        temporary_descriptor: int, temporary_identity: Any) -> None:
+    """Bind a replacement to an absent directory entry without overwriting a race."""
+    _validate_pinned_directory(directory)
+    try:
+        if os.name == "nt":
+            # os.link has no useful dir_fd implementation on Windows.  The
+            # absolute paths are safe because every ancestor remains pinned.
+            os.link(temporary_path, path, follow_symlinks=False)
+        else:
+            os.link(temporary_path.name, path.name, src_dir_fd=directory, dst_dir_fd=directory,
+                    follow_symlinks=False)
+    except FileExistsError as exc:
+        raise ReconciliationError("UNSAFE_STORE_PATH", "durable store destination appeared before commit") from exc
+    _validate_pinned_directory(directory)
+    try:
+        if os.name == "nt":
+            temporary_path.unlink()
+        else:
+            os.unlink(temporary_path.name, dir_fd=directory)
+    except OSError as exc:
+        raise ReconciliationError("UNSAFE_STORE_PATH", "durable store temporary cannot be retired") from exc
+    # The link operation necessarily makes the inode have two names for this
+    # short interval.  Verify the final single-link invariant only after the
+    # private temporary name has been retired.
+    _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)
+    _revalidate_destination(directory, path, expected_identity=temporary_identity, must_exist=True)
+
+
+def _append_bytes(path: Path, data: bytes, *, expected_identity: Any = None) -> Any:
+    """Append by replacing a fully-written root-local snapshot.
+
+    Writing directly through an existing inode is unsafe: a hardlink can be
+    added after its final handle check and make the append visible outside the
+    configured root.  A private replacement means every byte is written only
+    to a fresh root-local leaf, and the old leaf is never mutated.
+    """
+    try:
+        stored = _read_store_bytes(path, expected_identity=expected_identity)
+        prior, identity = (b"", None) if stored is None else stored
+        if not isinstance(data, bytes):
+            raise TypeError("durable append data must be bytes")
+        return _replace_store_bytes(path, prior + data, expected_identity=identity)
     except ReconciliationError:
         raise
-    except OSError as exc:
+    except _INPUT_ERRORS as exc:
         raise ReconciliationError("UNSAFE_STORE_PATH", "durable store leaf cannot be appended safely") from exc
 
 
@@ -518,76 +769,114 @@ def _replace_store_bytes(path: Path, data: bytes, *, expected_identity: Any = No
             current_descriptor = None
             try:
                 current_descriptor, current = _open_leaf_in_directory(
-                    directory, path, write=False, create=False, expected_identity=expected_identity)
+                    directory, path, write=False, create=False, expected_identity=expected_identity,
+                    deny_delete=True)
             except FileNotFoundError:
                 if expected_identity is not None:
                     raise ReconciliationError("UNSAFE_STORE_PATH", "durable store leaf disappeared")
             temporary_name = f".{path.name}.tmp.{os.getpid()}.{threading.get_ident()}.{secrets.token_hex(8)}"
             temporary_path = path.parent / temporary_name
             temporary_descriptor = None
-            replaced = False
+            committed = False
             try:
+                if not isinstance(data, bytes):
+                    raise TypeError("durable replacement data must be bytes")
+                temporary_descriptor, temporary_identity = _write_new_leaf(directory, temporary_path, data)
                 if os.name == "nt":
+                    # Reopen the flushed private leaf with the access profile
+                    # accepted by FileRenameInfo. The reopen is no-follow and
+                    # identity-bound, so a replacement between the write and
+                    # the commit handle is rejected rather than followed.
+                    written_identity = temporary_identity
+                    os.close(temporary_descriptor)
+                    temporary_descriptor = None
                     temporary_descriptor, temporary_identity = _open_leaf_in_directory(
-                        directory, temporary_path, write=True, create=True, exclusive=True, rename=True,
-                        deny_delete=False)
-                else:
-                    temporary_descriptor = os.open(temporary_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
-                                                   getattr(os, "O_NOFOLLOW", 0), 0o600, dir_fd=directory)
-                    temporary_identity = _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor))
-                view = memoryview(data)
-                while view:
-                    _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)
-                    written = os.write(temporary_descriptor, view)
-                    if written <= 0:
-                        raise OSError("store replacement write made no progress")
-                    view = view[written:]
-                os.fsync(temporary_descriptor)
+                        directory, temporary_path, write=False, create=False, rename=True,
+                        expected_identity=written_identity)
                 _validate_pinned_directory(directory)
                 _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)
                 if current_descriptor is not None:
-                    # Keep the original leaf open until the replacement is
-                    # committed.  The final identity check is from that same
-                    # handle, so an unlink/hardlink swap cannot be accepted.
+                    # The same original handle is retained through commit;
+                    # this catches a hardlink or unlink race even if the
+                    # path-level probe was stale.
                     _validate_leaf_info(_leaf_info_for_descriptor(current_descriptor), identity=current)
-                if os.name == "nt":
-                    # The parent and every ancestor remain pinned with delete
-                    # sharing denied for this absolute-path replacement.
-                    _validate_pinned_directory(directory)
-                    _windows_replace_by_handle(temporary_descriptor, path)
+                _revalidate_destination(directory, path, expected_identity=current, must_exist=current is not None)
+                if current_descriptor is not None:
+                    # Re-check the original handle after the final name probe;
+                    # the probe itself is a deterministic race-injection seam
+                    # in the hostile-writer harness.
+                    _validate_leaf_info(_leaf_info_for_descriptor(current_descriptor), identity=current)
+                _revalidate_destination(directory, path, expected_identity=current, must_exist=current is not None)
+                if current_descriptor is not None:
+                    _validate_leaf_info(_leaf_info_for_descriptor(current_descriptor), identity=current)
+                if current is None:
+                    _commit_absent_leaf(directory, temporary_path, path, temporary_descriptor, temporary_identity)
+                    committed = True
                 else:
-                    os.replace(temporary_name, path.name, src_dir_fd=directory, dst_dir_fd=directory)
-                replaced = True
-                _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)
+                    _validate_pinned_directory(directory)
+                    if os.name == "nt":
+                        # A destination handle opened without delete sharing
+                        # is intentionally retained through validation, but
+                        # Windows will reject the replacement while that
+                        # handle remains open. The final same-handle check has
+                        # completed immediately above; release only that leaf
+                        # handle before the atomic rename. The pinned parent
+                        # handles continue to block ancestor replacement.
+                        os.close(current_descriptor)
+                        current_descriptor = None
+                        _windows_replace_by_handle(
+                            temporary_descriptor, temporary_identity, directory, temporary_path, path)
+                    else:
+                        os.replace(temporary_name, path.name, src_dir_fd=directory, dst_dir_fd=directory)
+                    committed = True
+                    # The source handle is now the newly published leaf.  The
+                    # post-commit probe binds that identity to the pinned name.
+                    if temporary_descriptor is not None:
+                        _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)
+                    _revalidate_destination(directory, path, expected_identity=temporary_identity, must_exist=True)
+                if temporary_descriptor is not None:
+                    _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)
                 return temporary_identity
             finally:
                 if temporary_descriptor is not None:
                     os.close(temporary_descriptor)
                 if current_descriptor is not None:
                     os.close(current_descriptor)
-                if os.name == "nt":
-                    if not replaced:
-                        temporary_path.unlink(missing_ok=True)
-                else:
-                    if not replaced:
-                        try:
+                if not committed:
+                    try:
+                        if os.name == "nt":
+                            temporary_path.unlink(missing_ok=True)
+                        else:
                             os.unlink(temporary_name, dir_fd=directory)
-                        except FileNotFoundError:
-                            pass
+                    except FileNotFoundError:
+                        pass
     except ReconciliationError:
         raise
     except OSError as exc:
         raise ReconciliationError("UNSAFE_STORE_PATH", "durable store replacement was not safe") from exc
 
 
+@_typed_boundary("record")
 def digest_record(value: Mapping[str, Any]) -> str:
     """Return the stable SHA-256 identity excluding only the record digest field."""
+    if not isinstance(value, Mapping):
+        raise SchemaError("INVALID_RECORD", "digest input must be an object")
     body = {key: item for key, item in value.items() if key != "digest"}
     return hashlib.sha256(_canonical(body)).hexdigest()
 
 
 def _frozen_mapping(value: Mapping[str, int], field: str) -> Mapping[str, int]:
+    if not isinstance(value, Mapping):
+        raise SchemaError("INVALID_FIELD", f"{field} must be an object")
     return MappingProxyType(dict(sorted(((_string(key, f"{field} key"), _nonnegative_int(count, f"{field}.{key}")) for key, count in value.items()))))
+
+
+def _reservation_counts(value: Mapping[Any, Any] | None, field: str) -> dict[Any, int]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise SchemaError("INVALID_FIELD", f"{field} must be an object")
+    return {key: _nonnegative_int(count, f"{field}.{key}") for key, count in value.items()}
 
 
 def _file_is_reparse_or_symlink(path: Path) -> bool:
@@ -598,7 +887,7 @@ def _file_is_reparse_or_symlink(path: Path) -> bool:
             info = os.lstat(path)
         except OSError:
             return False
-        if bool(int(getattr(info, "st_file_attributes", 0)) & _WINDOWS_FILE_ATTRIBUTE_REPARSE_POINT):
+        if bool(_safe_int(getattr(info, "st_file_attributes", 0), "file attributes") & _WINDOWS_FILE_ATTRIBUTE_REPARSE_POINT):
             return True
         # lstat on older Python/filesystem combinations does not expose the
         # junction bit consistently.  OPEN_REPARSE_POINT asks the kernel for
@@ -660,7 +949,11 @@ def _ensure_store_directory(path: Path) -> None:
         _ensure_store_directory(path.parent)
         try:
             if os.name == "nt":
-                path.mkdir()
+                # Hold every existing ancestor while the missing component is
+                # created. This closes the check-to-create junction swap
+                # window before any durable leaf can be opened below it.
+                with _pin_store_directory(path.parent):
+                    path.mkdir()
             else:
                 with _pin_store_directory(path.parent) as parent:
                     os.mkdir(path.name, 0o700, dir_fd=parent)
@@ -687,7 +980,9 @@ def _journal_lock(lock_path: Path):
         lock = _THREAD_LOCKS.setdefault(key, threading.RLock())
     with lock:
         _ensure_store_directory(lock_path.parent)
-        with _open_store_leaf(lock_path, write=True, create=True) as (descriptor, _, _directory):
+        with _open_store_leaf(lock_path, write=True, create=True) as (descriptor, identity, directory):
+            _validate_pinned_directory(directory)
+            _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=identity)
             try:
                 if os.name == "nt":
                     import msvcrt
@@ -730,17 +1025,29 @@ class HostRegistration:
     network_endpoints: Mapping[str, tuple[str, ...]] = MappingProxyType({})
 
     def __post_init__(self) -> None:
+        _nonnegative_int(self.max_concurrency, "max_concurrency")
         object.__setattr__(self, "workload_concurrency", _frozen_mapping(self.workload_concurrency, "workload_concurrency"))
-        endpoints = {str(key): tuple(sorted(set(value))) for key, value in self.network_endpoints.items()}
+        if not isinstance(self.network_endpoints, Mapping):
+            raise SchemaError("INVALID_FIELD", "network_endpoints must be an object")
+        endpoints: dict[str, tuple[str, ...]] = {}
+        for profile, values in self.network_endpoints.items():
+            profile = _string(profile, "network_endpoints profile")
+            if isinstance(values, tuple):
+                values = list(values)
+            if not isinstance(values, list):
+                raise SchemaError("INVALID_FIELD", f"network_endpoints.{profile} must be a list of strings")
+            endpoints[profile] = _string_list(values, f"network_endpoints.{profile}")
         object.__setattr__(self, "network_endpoints", MappingProxyType(endpoints))
 
     @classmethod
+    @_typed_boundary("host registration")
     def from_dict(cls, raw: Mapping[str, Any]) -> "HostRegistration":
         required = {"schema_version", "kind", "host_id", "capabilities", "operating_system",
                     "architectures", "sandbox_profiles", "network_profiles", "trust_class",
                     "max_concurrency", "workload_concurrency", "registration_digest", "registered_at", "network_endpoints"}
         _check_keys(raw, required, set(), "host_registration")
-        if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "host_registration":
+        _schema_version(raw["schema_version"], "host registration")
+        if raw["kind"] != "host_registration":
             raise SchemaError("SCHEMA_VERSION", "unsupported host registration schema")
         host_id = _id(raw["host_id"], "host_id")
         caps = _string_list(raw["capabilities"], "capabilities")
@@ -779,6 +1086,7 @@ class HostRegistration:
                 "network_endpoints": {key: list(value) for key, value in self.network_endpoints.items()}}
 
     @classmethod
+    @_typed_boundary("host registration")
     def build(cls, *, host_id: str, capabilities: Iterable[str], operating_system: str,
               architectures: Iterable[str], sandbox_profiles: Iterable[str],
               network_profiles: Iterable[str], trust_class: str, max_concurrency: int,
@@ -802,11 +1110,17 @@ class HostHeartbeat:
     observed_at: str
     lease_epoch: int
 
+    def __post_init__(self) -> None:
+        _nonnegative_int(self.sequence, "sequence")
+        _nonnegative_int(self.lease_epoch, "lease_epoch")
+
     @classmethod
+    @_typed_boundary("host heartbeat")
     def from_dict(cls, raw: Mapping[str, Any]) -> "HostHeartbeat":
         required = {"schema_version", "kind", "host_id", "registration_digest", "sequence", "observed_at", "lease_epoch"}
         _check_keys(raw, required, set(), "host_heartbeat")
-        if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "host_heartbeat":
+        _schema_version(raw["schema_version"], "host heartbeat")
+        if raw["kind"] != "host_heartbeat":
             raise SchemaError("SCHEMA_VERSION", "unsupported host heartbeat schema")
         return cls(_id(raw["host_id"], "host_id"), _digest(raw["registration_digest"], "registration_digest"),
                    _nonnegative_int(raw["sequence"], "sequence"), _timestamp(raw["observed_at"], "observed_at"),
@@ -835,10 +1149,15 @@ class PoolStatus:
     account_quota_remaining: int | None = None
 
     def __post_init__(self) -> None:
-        if isinstance(self.cost_per_run, bool) or not isinstance(self.cost_per_run, (int, float)) or not math.isfinite(float(self.cost_per_run)) or self.cost_per_run < 0:
-            raise SchemaError("INVALID_FIELD", "cost_per_run must be finite and non-negative")
-        if self.account_quota_remaining is not None and (isinstance(self.account_quota_remaining, bool) or not isinstance(self.account_quota_remaining, int) or self.account_quota_remaining < 0):
-            raise SchemaError("INVALID_FIELD", "account_quota_remaining must be a non-negative integer")
+        _nonnegative_int(self.max_concurrency, "max_concurrency")
+        _nonnegative_int(self.in_flight, "in_flight")
+        if self.quota_remaining is not None:
+            _nonnegative_int(self.quota_remaining, "quota_remaining")
+        if self.account_quota_remaining is not None:
+            _nonnegative_int(self.account_quota_remaining, "account_quota_remaining")
+        _nonnegative_number(self.cost_per_run, "cost_per_run")
+        if not isinstance(self.on_demand, bool):
+            raise SchemaError("INVALID_FIELD", "on_demand must be boolean")
 
     def to_dict(self) -> dict[str, Any]:
         return {"schema_version": SCHEMA_VERSION, "kind": "pool_status", "pool_id": self.pool_id,
@@ -850,12 +1169,14 @@ class PoolStatus:
                 "account_quota_remaining": self.account_quota_remaining}
 
     @classmethod
+    @_typed_boundary("pool status")
     def from_dict(cls, raw: Mapping[str, Any]) -> "PoolStatus":
         required = {"schema_version", "kind", "pool_id", "billing_basis", "allowed_roles", "allowed_projects",
                     "allowed_models", "max_concurrency", "in_flight", "quota_remaining", "quota_period",
                     "on_demand", "cost_per_run"}
         _check_keys(raw, required, {"account_id", "account_quota_remaining"}, "pool_status")
-        if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "pool_status":
+        _schema_version(raw["schema_version"], "pool status")
+        if raw["kind"] != "pool_status":
             raise SchemaError("SCHEMA_VERSION", "unsupported pool status schema")
         quota = raw["quota_remaining"]
         if quota is not None:
@@ -889,6 +1210,7 @@ class RoutingPolicy:
     policy_digest: str
 
     @classmethod
+    @_typed_boundary("routing policy")
     def build(cls, *, policy_id: str, allowed_billing_basis: Iterable[str], allow_on_demand: bool,
               authority: str = "human-owned") -> "RoutingPolicy":
         body = {"schema_version": SCHEMA_VERSION, "kind": "routing_policy", "policy_id": policy_id,
@@ -898,10 +1220,12 @@ class RoutingPolicy:
         return cls.from_dict(body)
 
     @classmethod
+    @_typed_boundary("routing policy")
     def from_dict(cls, raw: Mapping[str, Any]) -> "RoutingPolicy":
         required = {"schema_version", "kind", "policy_id", "allowed_billing_basis", "allow_on_demand", "authority", "policy_digest"}
         _check_keys(raw, required, set(), "routing_policy")
-        if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "routing_policy":
+        _schema_version(raw["schema_version"], "routing policy")
+        if raw["kind"] != "routing_policy":
             raise SchemaError("SCHEMA_VERSION", "unsupported routing policy schema")
         if not isinstance(raw["allow_on_demand"], bool):
             raise SchemaError("INVALID_FIELD", "allow_on_demand must be boolean")
@@ -943,8 +1267,7 @@ class PlacementRequirements:
     publication_policy: str = "verified-integration-only"
 
     def __post_init__(self) -> None:
-        if isinstance(self.max_cost_usd, bool) or not isinstance(self.max_cost_usd, (int, float)) or not math.isfinite(float(self.max_cost_usd)) or self.max_cost_usd < 0:
-            raise SchemaError("INVALID_FIELD", "max_cost_usd must be finite and non-negative")
+        _nonnegative_number(self.max_cost_usd, "max_cost_usd")
         if not isinstance(self.model_parameters, Mapping):
             raise SchemaError("INVALID_FIELD", "model_parameters must be an object")
         parameters = _json_value(self.model_parameters, "model_parameters")
@@ -964,16 +1287,20 @@ class PlacementRequirements:
                 "publication_policy": self.publication_policy}
 
     @classmethod
+    @_typed_boundary("placement requirements")
     def from_dict(cls, raw: Mapping[str, Any]) -> "PlacementRequirements":
         required = {"schema_version", "kind", "task_id", "project_id", "role", "capabilities",
                     "operating_system", "sandbox_profile", "network_profile", "billing_basis", "max_cost_usd",
                     "model", "preferred_hosts", "preferred_pools", "source_sha"}
         _check_keys(raw, required, {"policy", "manual_candidate_id", "source_repository", "source_branch", "seed_manifest_digest", "model_parameters", "allowed_paths", "gate_digest", "publication_policy"}, "placement_requirements")
-        if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "placement_requirements":
+        _schema_version(raw["schema_version"], "placement requirements")
+        if raw["kind"] != "placement_requirements":
             raise SchemaError("SCHEMA_VERSION", "unsupported placement requirements schema")
         optional_text = {key: (None if raw[key] is None else _string(raw[key], key))
                          for key in ("operating_system", "sandbox_profile", "network_profile", "model")}
         policy = _string(raw.get("policy", "subscription-first"), "policy")
+        if policy not in _PLACEMENT_POLICIES:
+            raise SchemaError("UNKNOWN_POLICY", f"unsupported placement policy: {policy}")
         manual = raw.get("manual_candidate_id")
         if manual is not None:
             manual = _id(manual, "manual_candidate_id")
@@ -1019,9 +1346,9 @@ class PlacementCandidate:
     def __post_init__(self) -> None:
         for field in ("cost_per_run", "speed_score", "reviewer_score"):
             value = getattr(self, field)
-            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)) or value < 0:
-                raise SchemaError("INVALID_FIELD", f"{field} must be finite and non-negative")
-        if isinstance(self.weight, bool) or not isinstance(self.weight, int) or self.weight <= 0:
+            _nonnegative_number(value, field)
+        _nonnegative_int(self.weight, "weight")
+        if self.weight == 0:
             raise SchemaError("INVALID_FIELD", "weight must be positive")
 
     def to_dict(self) -> dict[str, Any]:
@@ -1034,12 +1361,14 @@ class PlacementCandidate:
                 "weight": self.weight, "required_endpoints": list(self.required_endpoints)}
 
     @classmethod
+    @_typed_boundary("placement candidate")
     def from_dict(cls, raw: Mapping[str, Any]) -> "PlacementCandidate":
         required = {"schema_version", "kind", "candidate_id", "engine", "provider", "pool_id", "model", "host_id",
                     "sandbox_profile", "network_profile", "capabilities", "operating_system", "billing_basis",
                     "cost_per_run", "roles", "enabled"}
         _check_keys(raw, required, {"speed_score", "reviewer_score", "weight", "required_endpoints"}, "placement_candidate")
-        if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "placement_candidate":
+        _schema_version(raw["schema_version"], "placement candidate")
+        if raw["kind"] != "placement_candidate":
             raise SchemaError("SCHEMA_VERSION", "unsupported placement candidate schema")
         if not isinstance(raw["enabled"], bool):
             raise SchemaError("INVALID_FIELD", "enabled must be boolean")
@@ -1111,13 +1440,15 @@ class Assignment:
                 "publication_policy": self.publication_policy, "candidate_id": self.candidate_id}
 
     @classmethod
+    @_typed_boundary("assignment")
     def from_dict(cls, raw: Mapping[str, Any]) -> "Assignment":
         required = {"schema_version", "kind", "task_id", "project_id", "source_sha", "engine", "provider",
                     "capacity_pool", "model", "host", "sandbox_profile", "network_profile", "assignment_digest", "created_at",
                     "account_id", "role", "source_repository", "source_branch", "seed_manifest_digest", "model_parameters",
                     "allowed_paths", "gate_digest", "publication_policy", "candidate_id"}
         _check_keys(raw, required, set(), "assignment")
-        if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "assignment":
+        _schema_version(raw["schema_version"], "assignment")
+        if raw["kind"] != "assignment":
             raise SchemaError("SCHEMA_VERSION", "unsupported assignment schema")
         account_id = raw["account_id"]
         if account_id is not None:
@@ -1144,7 +1475,10 @@ class Assignment:
         return assignment
 
 
+@_typed_boundary("assignment")
 def assignment_digest(assignment: Assignment) -> str:
+    if not isinstance(assignment, Assignment):
+        raise SchemaError("INVALID_RECORD", "assignment digest requires an Assignment")
     body = assignment.to_dict()
     body.pop("assignment_digest", None)
     return hashlib.sha256(_canonical(body)).hexdigest()
@@ -1188,6 +1522,7 @@ class PauseGuard:
             raise AdmissionError("PAUSED", "PAUSE is asserted; execution fabric mutations are halted")
 
 
+@_typed_boundary("placement input")
 def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
                       candidates: Sequence[PlacementCandidate | Mapping[str, Any]],
                       hosts: Mapping[str, HostRegistration | Mapping[str, Any]],
@@ -1206,9 +1541,7 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
     req = PlacementRequirements.from_dict(req.to_dict())
     if pause_guard is not None:
         pause_guard.assert_open()
-    policies = {"manual-pin", "subscription-first", "local-first", "cheapest-eligible", "fastest-eligible",
-                "strongest-reviewer", "weighted-rotation"}
-    if req.policy not in policies:
+    if req.policy not in _PLACEMENT_POLICIES:
         raise SchemaError("UNKNOWN_POLICY", f"unsupported placement policy: {req.policy}")
     if req.policy == "manual-pin" and req.manual_candidate_id is None:
         raise SchemaError("MISSING_FIELD", "manual-pin requires manual_candidate_id")
@@ -1217,11 +1550,9 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
     if policy is not None and policy.authority != "human-owned":
         raise AdmissionError("ROUTING_POLICY_UNTRUSTED", "routing policy is not human-owned")
     try:
-        ttl = float(heartbeat_ttl_s)
-    except (TypeError, ValueError) as exc:
+        ttl = _finite_number(heartbeat_ttl_s, "heartbeat_ttl_s", minimum=0)
+    except SchemaError as exc:
         raise SchemaError("INVALID_FIELD", "heartbeat_ttl_s must be finite and non-negative") from exc
-    if not math.isfinite(ttl) or ttl < 0:
-        raise SchemaError("INVALID_FIELD", "heartbeat_ttl_s must be finite and non-negative")
     parsed_candidates = [item if isinstance(item, PlacementCandidate) else PlacementCandidate.from_dict(item) for item in candidates]
     parsed_candidates = [PlacementCandidate.from_dict(item.to_dict()) for item in parsed_candidates]
     candidate_ids = [item.candidate_id for item in parsed_candidates]
@@ -1230,15 +1561,20 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
     parsed_hosts = {key: HostRegistration.from_dict(item.to_dict() if isinstance(item, HostRegistration) else item) for key, item in hosts.items()}
     parsed_heartbeats = {key: HostHeartbeat.from_dict(item.to_dict() if isinstance(item, HostHeartbeat) else item) for key, item in heartbeats.items()}
     parsed_pools = {key: PoolStatus.from_dict(item.to_dict() if isinstance(item, PoolStatus) else item) for key, item in pools.items()}
-    now = time.time() if now_epoch is None else now_epoch
-    if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(float(now)):
-        raise SchemaError("INVALID_FIELD", "now_epoch must be finite")
+    now = time.time() if now_epoch is None else _finite_number(now_epoch, "now_epoch")
     if created_at is None:
-        created_at = _now_iso() if now_epoch is None else time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now_epoch))
+        if now_epoch is None:
+            created_at = _now_iso()
+        else:
+            try:
+                created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+            except _INPUT_ERRORS as exc:
+                raise SchemaError("INVALID_FIELD", "now_epoch cannot be converted to a timestamp") from exc
     _timestamp(created_at, "created_at")
-    host_used = reserved_host or {}
-    pool_used = reserved_pool or {}
-    workload_used = reserved_workload if reserved_workload is not None else {(host_id, req.role): count for host_id, count in host_used.items()}
+    host_used = _reservation_counts(reserved_host, "reserved_host")
+    pool_used = _reservation_counts(reserved_pool, "reserved_pool")
+    workload_used = (_reservation_counts(reserved_workload, "reserved_workload") if reserved_workload is not None
+                     else {(host_id, req.role): count for host_id, count in host_used.items()})
     trace: list[Rejection] = []
     if paused:
         return None, tuple(Rejection(item.candidate_id, "PAUSED", "PAUSE is asserted; placement is halted")
@@ -1260,7 +1596,7 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
             reason = ("POOL_UNKNOWN", "capacity pool is not registered")
         elif heartbeat is None or heartbeat.registration_digest != host.registration_digest:
             reason = ("HEARTBEAT_MISSING", "host has no heartbeat matching its registration")
-        elif now - _epoch(heartbeat.observed_at) > heartbeat_ttl_s:
+        elif now - _epoch(heartbeat.observed_at) > ttl:
             reason = ("HEARTBEAT_STALE", "host heartbeat exceeded its lease TTL")
         elif not set(req.capabilities) <= set(candidate.capabilities) or not set(req.capabilities) <= set(host.capabilities):
             missing = sorted(set(req.capabilities) - (set(candidate.capabilities) & set(host.capabilities)))
@@ -1293,12 +1629,12 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
             reason = ("ROLE_NOT_ALLOWED", "pool policy excludes this role")
         elif candidate.model not in pool.allowed_models and "*" not in pool.allowed_models:
             reason = ("MODEL_NOT_ALLOWED", "pool policy excludes this model")
-        elif pool.in_flight + int(pool_used.get(pool.pool_id, 0)) >= pool.max_concurrency:
+        elif pool.in_flight + pool_used.get(pool.pool_id, 0) >= pool.max_concurrency:
             reason = ("POOL_CONCURRENCY_EXHAUSTED", "capacity pool concurrency is exhausted")
-        elif pool.quota_remaining is not None and pool.quota_remaining <= int(pool_used.get(pool.pool_id, 0)):
+        elif pool.quota_remaining is not None and pool.quota_remaining <= pool_used.get(pool.pool_id, 0):
             reason = ("POOL_QUOTA_EXHAUSTED", "capacity pool quota is exhausted")
         elif pool.account_id is not None and any(item.account_id == pool.account_id and item.account_quota_remaining is not None for item in parsed_pools.values()):
-            account_used = sum(int(pool_used.get(item.pool_id, 0)) + item.in_flight
+            account_used = sum(pool_used.get(item.pool_id, 0) + item.in_flight
                                for item in parsed_pools.values() if item.account_id == pool.account_id)
             account_limits = [item.account_quota_remaining for item in parsed_pools.values()
                               if item.account_id == pool.account_id and item.account_quota_remaining is not None]
@@ -1320,7 +1656,8 @@ def resolve_placement(requirements: PlacementRequirements | Mapping[str, Any],
             # distribution toward whichever eligible candidate followed it.
             eligible = sorted(eligible, key=lambda item: item.candidate_id)
             total_weight = sum(item.weight for item in eligible)
-            ticket = int(hashlib.sha256(f"{req.task_id}:weighted-rotation".encode()).hexdigest(), 16) % total_weight
+            ticket = _safe_int(hashlib.sha256(f"{req.task_id}:weighted-rotation".encode()).hexdigest(),
+                               "weighted rotation ticket", base=16) % total_weight
             cursor = 0
             for candidate in eligible:
                 cursor += candidate.weight
@@ -1356,7 +1693,7 @@ def _epoch(timestamp: str) -> float:
     # ISO records are UTC and schema-validated; preserve fractional seconds.
     try:
         return datetime.fromisoformat(timestamp[:-1] + "+00:00").timestamp()
-    except (TypeError, ValueError) as exc:
+    except _INPUT_ERRORS as exc:
         raise SchemaError("INVALID_TIMESTAMP", "timestamp is not a real UTC timestamp") from exc
 
 
@@ -1372,10 +1709,13 @@ class HostRegistry:
         self.heartbeats: dict[str, HostHeartbeat] = {}
         self._lock = threading.RLock()
         self.now = _timestamp(now, "now") if now is not None else _now_iso()
-        if not math.isfinite(float(future_skew_s)) or future_skew_s < 0:
-            raise SchemaError("INVALID_FIELD", "future_skew_s must be finite and non-negative")
-        self.future_skew_s = float(future_skew_s)
+        try:
+            skew = _finite_number(future_skew_s, "future_skew_s", minimum=0)
+        except SchemaError as exc:
+            raise SchemaError("INVALID_FIELD", "future_skew_s must be finite and non-negative") from exc
+        self.future_skew_s = skew
 
+    @_typed_boundary("host registration")
     def register(self, registration: HostRegistration) -> str:
         with self._lock:
             if not isinstance(registration, HostRegistration):
@@ -1389,6 +1729,7 @@ class HostRegistry:
             self.heartbeats.pop(registration.host_id, None)
             return "registered"
 
+    @_typed_boundary("host heartbeat")
     def heartbeat(self, value: HostHeartbeat, *, now: str | None = None) -> str:
         with self._lock:
             if not isinstance(value, HostHeartbeat):
@@ -1440,13 +1781,15 @@ class DurableHostRegistry(HostRegistry):
         payload, self._path_identity = stored
         try:
             state = _json_load(payload.decode("utf-8"))
+        except _JsonInputError as exc:
+            raise ReconciliationError("CORRUPT_REGISTRY", "host registry snapshot cannot be decoded") from exc
         except (UnicodeError, ValueError) as exc:
             raise ReconciliationError("CORRUPT_REGISTRY", "host registry snapshot cannot be decoded") from exc
         if not isinstance(state, Mapping):
             raise ReconciliationError("CORRUPT_REGISTRY", "host registry snapshot is not an object")
         required = {"schema_version", "kind", "hosts", "heartbeats", "state_digest"}
         _check_keys(state, required, set(), "host_registry")
-        if state["schema_version"] != SCHEMA_VERSION or state["kind"] != "host_registry":
+        if type(state["schema_version"]) is not int or state["schema_version"] != SCHEMA_VERSION or state["kind"] != "host_registry":
             raise ReconciliationError("SCHEMA_VERSION", "unsupported host registry snapshot")
         if state["state_digest"] != digest_record({key: state[key] for key in required if key != "state_digest"}):
             raise ReconciliationError("DIGEST_MISMATCH", "host registry snapshot digest is invalid")
@@ -1472,10 +1815,12 @@ class DurableHostRegistry(HostRegistry):
         body["state_digest"] = digest_record(body)
         self._path_identity = _replace_store_bytes(self.path, _canonical(body), expected_identity=self._path_identity)
 
+    @_typed_boundary("durable host registration")
     def register(self, registration: HostRegistration) -> str:
         with _journal_lock(self.lock_path):
             self._reload_durable_locked(); result = super().register(registration); self._persist_locked(); return result
 
+    @_typed_boundary("durable host heartbeat")
     def heartbeat(self, value: HostHeartbeat, *, now: str | None = None) -> str:
         with _journal_lock(self.lock_path):
             self._reload_durable_locked(); result = super().heartbeat(value, now=now); self._persist_locked(); return result
@@ -1495,6 +1840,7 @@ class PlacementGovernor:
         self._active: dict[str, Assignment] = {}
         self._lock = threading.RLock()
 
+    @_typed_boundary("governed placement input")
     def place(self, requirements: PlacementRequirements, candidates: Sequence[PlacementCandidate],
               *, now_epoch: float | None = None, created_at: str | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
         if self.pause_guard is not None:
@@ -1570,6 +1916,8 @@ class DurableFabricStore:
                 self._validate_event(event)
                 self._apply(event)
                 self._tail_digest = event["event_digest"]
+            except _JsonInputError as exc:
+                raise ReconciliationError("CORRUPT_JOURNAL", f"invalid fabric journal event at line {number}") from exc
             except FabricError:
                 raise
             except (ValueError, TypeError, KeyError, UnicodeError) as exc:
@@ -1578,7 +1926,7 @@ class DurableFabricStore:
     def _validate_event(self, event: Mapping[str, Any]) -> None:
         kind = event.get("event")
         common = {"event", "schema_version", "event_digest", "prev_event_digest"}
-        if event.get("schema_version") != SCHEMA_VERSION:
+        if type(event.get("schema_version")) is not int or event.get("schema_version") != SCHEMA_VERSION:
             raise ReconciliationError("SCHEMA_VERSION", "unsupported fabric journal event schema")
         if not isinstance(kind, str):
             raise ReconciliationError("INVALID_EVENT", "journal event kind is missing")
@@ -1630,7 +1978,7 @@ class DurableFabricStore:
             raise ReconciliationError("UNKNOWN_EVENT", f"unknown fabric event: {kind}")
 
     def _append(self, event: Mapping[str, Any]) -> None:
-        data = (json.dumps(dict(event), sort_keys=True, separators=(",", ":")) + "\n").encode()
+        data = _json_line(event, "fabric journal event")
         _ensure_store_directory(self.path.parent)
         self._path_identity = _append_bytes(self.path, data, expected_identity=self._path_identity)
 
@@ -1744,6 +2092,7 @@ class DurableFabricStore:
                                   "role": role}, "recovery_state": "none"}
         return self._record_locked(event)
 
+    @_typed_boundary("lease input")
     def create_lease(self, assignment: Assignment | Mapping[str, Any], *, lease_id: str, attempt_id: str, remote_session_id: str,
                      now: str, expires_at: str, role: str = "unknown", paused: bool = False,
                      pause_guard: PauseGuard | None = None) -> dict[str, Any]:
@@ -1761,6 +2110,7 @@ class DurableFabricStore:
             return self._create_lease_locked(assignment, lease_id=lease_id, attempt_id=attempt_id,
                                              remote_session_id=remote_session_id, now=now, expires_at=expires_at, role=role)
 
+    @_typed_boundary("placement admission")
     def admit_placement(self, requirements: PlacementRequirements | Mapping[str, Any],
                         candidates: Sequence[PlacementCandidate | Mapping[str, Any]],
                         hosts: Mapping[str, HostRegistration | Mapping[str, Any]],
@@ -1816,6 +2166,7 @@ class DurableFabricStore:
                      for lease_id, lease in sorted(self.leases.items())
                      if lease["status"] in {"active", "recovery_required"})
 
+    @_typed_boundary("restart reconciliation")
     def reconcile_restart(self, *, now: str) -> tuple[dict[str, Any], ...]:
         """Mark active leases as recovery-required exactly once; never relaunch remotely."""
         _timestamp(now, "now")
@@ -1835,6 +2186,7 @@ class DurableFabricStore:
                 recovered.append(dict(self.leases[lease_id]))
             return tuple(recovered)
 
+    @_typed_boundary("lease expiry")
     def expire(self, *, now: str) -> tuple[str, ...]:
         _timestamp(now, "now")
         with _journal_lock(self.lock_path):
@@ -1851,6 +2203,7 @@ class DurableFabricStore:
                 self._record_locked(event); expired.append(lease_id)
         return tuple(expired)
 
+    @_typed_boundary("recovery observation")
     def record_recovery_query(self, lease_id: str, *, state: str, observed_at: str,
                               terminal_status: str | None = None, result_digest: str | None = None,
                               controller_now: str) -> str:
@@ -1899,6 +2252,7 @@ class DurableFabricStore:
                                  "recovery_state": recovery_state if state != "terminal" else "none"})
             return "recorded"
 
+    @_typed_boundary("result input")
     def accept_result(self, *, attempt_id: str, lease_id: str, assignment_digest_value: str,
                       result_digest: str, status: str, observed_at: str, controller_now: str) -> str:
         _id(attempt_id, "attempt_id"); _id(lease_id, "lease_id"); _digest(assignment_digest_value, "assignment_digest")
@@ -1955,6 +2309,7 @@ class VerificationReceipt:
     authentication_tag: str = ""
 
     @classmethod
+    @_typed_boundary("verification receipt")
     def build(cls, *, receipt_id: str, assignment_digest: str, source_sha: str, candidate_id: str,
               result_commit: str, diff_digest: str, scope_digest: str, gate_digest: str,
               verifier_identity: str, verified_at: str, verification_status: str = "pass") -> "VerificationReceipt":
@@ -1967,10 +2322,12 @@ class VerificationReceipt:
         return cls.from_dict(body)
 
     @classmethod
+    @_typed_boundary("verification receipt")
     def from_dict(cls, raw: Mapping[str, Any]) -> "VerificationReceipt":
         required = {"schema_version", "kind", "receipt_id", "assignment_digest", "source_sha", "candidate_id", "result_commit", "diff_digest", "scope_digest", "gate_digest", "verifier_identity", "verified_at", "verification_status", "receipt_digest"}
         _check_keys(raw, required, {"authentication_tag"}, "verification_receipt")
-        if raw["schema_version"] != SCHEMA_VERSION or raw["kind"] != "verification_receipt":
+        _schema_version(raw["schema_version"], "verification receipt")
+        if raw["kind"] != "verification_receipt":
             raise SchemaError("SCHEMA_VERSION", "unsupported verification receipt schema")
         digest = _digest(raw["receipt_digest"], "receipt_digest")
         if digest != digest_record({key: raw[key] for key in required if key != "receipt_digest"}):
@@ -1980,10 +2337,10 @@ class VerificationReceipt:
         authentication_tag = raw.get("authentication_tag", "")
         if "authentication_tag" in raw and not authentication_tag:
             raise SchemaError("INVALID_FIELD", "authentication_tag cannot be empty when present")
-        if authentication_tag and not _SHA256.fullmatch(authentication_tag):
+        if authentication_tag and _regex_fullmatch(_SHA256, authentication_tag, "authentication_tag") is None:
             raise SchemaError("INVALID_FIELD", "authentication_tag must be a SHA-256 digest")
         verifier_identity = _string(raw["verifier_identity"], "verifier_identity")
-        if not _VERIFIER_IDENTITY.fullmatch(verifier_identity):
+        if _regex_fullmatch(_VERIFIER_IDENTITY, verifier_identity, "verifier_identity") is None:
             raise ReconciliationError("VERIFIER_UNTRUSTED", "verification identity is not controller-owned")
         return cls(_id(raw["receipt_id"], "receipt_id"), _digest(raw["assignment_digest"], "assignment_digest"),
                    _commit(raw["source_sha"], "source_sha"), _id(raw["candidate_id"], "candidate_id"),
@@ -2063,7 +2420,7 @@ class VerificationKeyRegistry:
         normalized: dict[str, bytes] = {}
         for identity, key in keys.items():
             identity = _string(identity, "verifier_identity")
-            if not _VERIFIER_IDENTITY.fullmatch(identity):
+            if _regex_fullmatch(_VERIFIER_IDENTITY, identity, "verifier_identity") is None:
                 raise SchemaError("VERIFIER_UNTRUSTED", "registry identities must be controller-owned")
             if not isinstance(key, (str, bytes)):
                 raise SchemaError("INVALID_FIELD", "verifier keys must be strings or bytes")
@@ -2074,6 +2431,7 @@ class VerificationKeyRegistry:
         return normalized
 
     @classmethod
+    @_typed_boundary("verification key registry")
     def provision(cls, path: Path | str, *, authority_key_path: Path | str,
                   verification_keys: Mapping[str, str | bytes],
                   root: Path | str | None = None) -> "VerificationKeyRegistry":
@@ -2123,11 +2481,14 @@ class VerificationKeyRegistry:
         payload, self._path_identity = stored
         try:
             state = _json_load(payload.decode("utf-8"))
+        except _JsonInputError as exc:
+            raise SchemaError("CORRUPT_REGISTRY", "controller verifier registry cannot be read") from exc
         except (UnicodeError, ValueError) as exc:
             raise SchemaError("CORRUPT_REGISTRY", "controller verifier registry cannot be read") from exc
         required = {"schema_version", "kind", "registry_epoch", "keys", "registry_digest", "authentication_tag"}
         _check_keys(state, required, set(), "verification_key_registry")
-        if state["schema_version"] != SCHEMA_VERSION or state["kind"] != "verification_key_registry":
+        _schema_version(state["schema_version"], "controller verifier registry")
+        if state["kind"] != "verification_key_registry":
             raise SchemaError("SCHEMA_VERSION", "unsupported controller verifier registry schema")
         epoch = _nonnegative_int(state["registry_epoch"], "registry_epoch")
         if epoch < 1:
@@ -2145,20 +2506,21 @@ class VerificationKeyRegistry:
         for entry in state["keys"]:
             _check_keys(entry, {"verifier_identity", "key_hex"}, set(), "verification_key")
             identity = _string(entry["verifier_identity"], "verifier_identity")
-            if not _VERIFIER_IDENTITY.fullmatch(identity) or identity in normalized:
+            if _regex_fullmatch(_VERIFIER_IDENTITY, identity, "verifier_identity") is None or identity in normalized:
                 raise SchemaError("VERIFIER_UNTRUSTED", "controller verifier registry identity is invalid")
             key_hex = _string(entry["key_hex"], "key_hex")
-            if not re.fullmatch(r"(?:[0-9a-f]{2})+", key_hex):
+            if _regex_fullmatch(_KEY_HEX, key_hex, "key_hex") is None:
                 raise SchemaError("INVALID_FIELD", "registry key encoding is invalid")
             try:
                 value = bytes.fromhex(key_hex)
-            except ValueError as exc:
+            except _INPUT_ERRORS as exc:
                 raise SchemaError("INVALID_FIELD", "registry key encoding is invalid") from exc
             if not value:
                 raise SchemaError("INVALID_FIELD", "registry key is empty")
             normalized[identity] = value
         self._keys = MappingProxyType(normalized); self._epoch = epoch
 
+    @_typed_boundary("verification key registry")
     def reload(self) -> None:
         with _journal_lock(self.lock_path):
             self._reload_locked()
@@ -2171,9 +2533,10 @@ class VerificationKeyRegistry:
     def epoch(self) -> int:
         return self._epoch
 
+    @_typed_boundary("verification key rotation")
     def rotate(self, verifier_identity: str, key: str | bytes) -> int:
         identity = _string(verifier_identity, "verifier_identity")
-        if not _VERIFIER_IDENTITY.fullmatch(identity):
+        if _regex_fullmatch(_VERIFIER_IDENTITY, identity, "verifier_identity") is None:
             raise SchemaError("VERIFIER_UNTRUSTED", "registry identities must be controller-owned")
         value = key.encode() if isinstance(key, str) else key
         if not isinstance(value, bytes) or not value:
@@ -2222,7 +2585,11 @@ class VerificationReceiptStore:
         except UnicodeError as exc:
             raise ReconciliationError("CORRUPT_RECEIPT_STORE", "receipt store cannot be decoded safely") from exc
         for line in lines:
-            receipt = VerificationReceipt.from_dict(_json_load(line))
+            try:
+                raw = _json_load(line)
+            except _JsonInputError as exc:
+                raise ReconciliationError("CORRUPT_RECEIPT_STORE", "receipt store contains malformed JSON") from exc
+            receipt = VerificationReceipt.from_dict(raw)
             old = self.receipts.get(receipt.receipt_id)
             if old is not None and old != receipt:
                 raise ReconciliationError("CONFLICTING_REPLAY", "receipt identity has conflicting data")
@@ -2240,12 +2607,14 @@ class VerificationReceiptStore:
         if not receipt.authentication_tag or not hmac.compare_digest(expected, receipt.authentication_tag):
             raise ReconciliationError("VERIFIER_AUTH_FAILED", "verification receipt authentication failed")
 
+    @_typed_boundary("verification receipt lookup")
     def get(self, receipt_id: str) -> VerificationReceipt | None:
         _id(receipt_id, "receipt_id")
         with _journal_lock(self.lock_path):
             self._reload_locked()
             return self.receipts.get(receipt_id)
 
+    @_typed_boundary("verification receipt")
     def require(self, receipt: VerificationReceipt) -> VerificationReceipt:
         stored = self.get(receipt.receipt_id)
         if stored is None or stored != receipt:
@@ -2253,6 +2622,7 @@ class VerificationReceiptStore:
         self._authenticate(stored)
         return stored
 
+    @_typed_boundary("verification receipt digest")
     def require_digest(self, receipt_digest: str) -> VerificationReceipt:
         _digest(receipt_digest, "receipt_digest")
         with _journal_lock(self.lock_path):
@@ -2263,6 +2633,7 @@ class VerificationReceiptStore:
                     return receipt
         raise ReconciliationError("VERIFIER_RECEIPT_NOT_REGISTERED", "receipt digest is not registered")
 
+    @_typed_boundary("verification receipt")
     def issue(self, receipt: VerificationReceipt) -> str:
         receipt = VerificationReceipt.from_dict(receipt.to_dict())
         if receipt.authentication_tag:
@@ -2277,10 +2648,11 @@ class VerificationReceiptStore:
                 if old == receipt:
                     return "duplicate"
                 raise ReconciliationError("CONFLICTING_RECEIPT", "receipt identity already exists")
-            self._path_identity = _append_bytes(self.path, (json.dumps(receipt.to_dict(), sort_keys=True, separators=(",", ":")) + "\n").encode(),
+            self._path_identity = _append_bytes(self.path, _json_line(receipt.to_dict(), "verification receipt"),
                                                 expected_identity=self._path_identity)
             self.receipts[receipt.receipt_id] = receipt
             return "issued"
+@_typed_boundary("candidate reference")
 def validate_candidate_refs(*, result_ref: str, default_branch: str = "main",
                             integration_branch: str = "recursion/integration") -> None:
     """Reject protected or malformed refs using git-check-ref-format rules."""
@@ -2323,6 +2695,7 @@ def classify_stale_base(*, assigned_source_sha: str, current_source_sha: str,
     return "current-compatible"
 
 
+@_typed_boundary("candidate result")
 def verify_candidate_result(*, assignment: Assignment | Mapping[str, Any], receipt: VerificationReceipt | Mapping[str, Any],
                             candidate_id: str, result_commit: str, diff_digest: str, scope_digest: str, gate_digest: str,
                             result_ref: str, default_branch: str = "main",
@@ -2348,7 +2721,7 @@ def verify_candidate_result(*, assignment: Assignment | Mapping[str, Any], recei
         if getattr(receipt, field) != _digest(value, field):
             raise ReconciliationError("VERIFICATION_BINDING_MISMATCH", f"{field} differs from receipt")
     validate_candidate_refs(result_ref=result_ref, default_branch=default_branch, integration_branch=integration_branch)
-    if not _VERIFIER_IDENTITY.fullmatch(receipt.verifier_identity):
+    if _regex_fullmatch(_VERIFIER_IDENTITY, receipt.verifier_identity, "verifier_identity") is None:
         raise ReconciliationError("VERIFIER_UNTRUSTED", "verification identity is not controller-owned")
     return "verified"
 
@@ -2398,13 +2771,15 @@ class IntegrationCoordinator:
                     self.receipt_store.require_digest(event["receipt_digest"])
                 self._apply_event(event)
                 self._tail_digest = event["event_digest"]
+            except _JsonInputError as exc:
+                raise ReconciliationError("CORRUPT_JOURNAL", f"invalid integration event at line {number}") from exc
             except FabricError:
                 raise
             except (ValueError, TypeError, KeyError, UnicodeError) as exc:
                 raise ReconciliationError("CORRUPT_JOURNAL", f"invalid integration event at line {number}") from exc
 
     def _validate_event(self, event: Mapping[str, Any]) -> None:
-        if not isinstance(event, Mapping) or event.get("schema_version") != SCHEMA_VERSION:
+        if not isinstance(event, Mapping) or type(event.get("schema_version")) is not int or event.get("schema_version") != SCHEMA_VERSION:
             raise ReconciliationError("SCHEMA_VERSION", "unsupported integration event")
         _digest(event.get("event_digest"), "event_digest"); _digest(event.get("prev_event_digest"), "prev_event_digest")
         if event["prev_event_digest"] != self._tail_digest:
@@ -2419,6 +2794,7 @@ class IntegrationCoordinator:
         elif kind == "admit":
             _check_keys(event, {"event", "schema_version", "event_digest", "prev_event_digest", "candidate_id", "project_id", "assignment_digest", "source_sha", "result_commit", "source_ref", "result_ref", "default_branch", "integration_branch", "classification", "receipt_digest"}, set(), "integration_admit")
             _id(event["candidate_id"], "candidate_id"); _id(event["project_id"], "project_id"); _commit(event["source_sha"], "source_sha"); _commit(event["result_commit"], "result_commit")
+            _string(event["source_ref"], "source_ref")
             _digest(event["assignment_digest"], "assignment_digest")
             if event["classification"] not in {"current-compatible", "stale-reviewable"}:
                 raise ReconciliationError("STALE_CLASSIFICATION_REQUIRED", "integration journal classification is invalid")
@@ -2434,7 +2810,7 @@ class IntegrationCoordinator:
         body = dict(event); body["schema_version"] = SCHEMA_VERSION; body["prev_event_digest"] = self._tail_digest
         body["event_digest"] = hashlib.sha256(_canonical(body)).hexdigest()
         self._validate_event(body)
-        data = (json.dumps(body, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        data = _json_line(body, "integration journal event")
         self._path_identity = _append_bytes(self.path, data, expected_identity=self._path_identity)
         self._apply_event(body); self._tail_digest = body["event_digest"]
 
@@ -2462,6 +2838,7 @@ class IntegrationCoordinator:
                 raise ReconciliationError("UNKNOWN_CANDIDATE", "completion references no candidate")
             candidate["status"] = "complete"; self._active.pop(candidate["project_id"], None)
 
+    @_typed_boundary("integration policy")
     def set_project_policy(self, *, project_id: str, default_branch: str, integration_branch: str) -> str:
         if self.pause_guard is not None:
             self.pause_guard.assert_open()
@@ -2472,6 +2849,7 @@ class IntegrationCoordinator:
         with _journal_lock(self.lock_path):
             self._reload_locked(); self._record_locked({"event": "policy", "project_id": project_id, "default_branch": default_branch, "integration_branch": integration_branch}); return "set"
 
+    @_typed_boundary("integration admission")
     def admit(self, *, candidate_id: str, project_id: str, source_sha: str, result_commit: str,
               assignment: Assignment | Mapping[str, Any] | None = None,
               source_ref: str = "source", result_ref: str | None = None,
@@ -2540,6 +2918,7 @@ class IntegrationCoordinator:
         self._record_locked({"event": "admit", "candidate_id": candidate_id, "project_id": project_id, "assignment_digest": assignment_digest, "source_sha": source_sha, "result_commit": result_commit, "source_ref": source_ref, "result_ref": result_ref, "default_branch": default, "integration_branch": integration, "classification": classification, "receipt_digest": receipt_digest})
         return "admitted"
 
+    @_typed_boundary("integration completion")
     def complete(self, candidate_id: str) -> str:
         if self.pause_guard is not None:
             self.pause_guard.assert_open()
