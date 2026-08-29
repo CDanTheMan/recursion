@@ -216,6 +216,17 @@ def _windows_file_info(handle: Any) -> tuple[tuple[int, int, int], bool, int, bo
     return identity, bool(attributes & 0x10), int(info.links), bool(attributes & 0x400)
 
 
+def _leaf_info_for_handle(handle: Any) -> tuple[tuple[int, int, int], bool, int, bool]:
+    return _windows_file_info(handle)
+
+
+def _leaf_info_for_descriptor(descriptor: int) -> Any:
+    if os.name == "nt":
+        import msvcrt
+        return _leaf_info_for_handle(msvcrt.get_osfhandle(descriptor))
+    return os.fstat(descriptor)
+
+
 def _windows_open(path: Path, *, directory: bool, write: bool, create: bool = False) -> tuple[Any, tuple[int, int, int], bool, int, bool]:
     import ctypes
     from ctypes import wintypes
@@ -233,7 +244,7 @@ def _windows_open(path: Path, *, directory: bool, write: bool, create: bool = Fa
     if handle is None or _windows_handle_value(handle) in {-1, invalid}:
         raise OSError(ctypes.get_last_error(), f"cannot open durable store path: {path}")
     try:
-        identity, is_directory, links, is_reparse = _windows_file_info(handle)
+        identity, is_directory, links, is_reparse = _leaf_info_for_handle(handle)
         return handle, identity, is_directory, links, is_reparse
     except BaseException:
         kernel32.CloseHandle(handle)
@@ -307,7 +318,7 @@ def _open_leaf_in_directory(directory: Any, path: Path, *, write: bool, create: 
         descriptor = os.open(name, (os.O_WRONLY if write else os.O_RDONLY) | (getattr(os, "O_APPEND", 0) if append else 0) | os.O_CREAT | os.O_EXCL | nofollow,
                              0o600, dir_fd=directory)
         try:
-            actual = _validate_leaf_info(os.fstat(descriptor), identity=expected_identity)
+            actual = _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=expected_identity)
             return descriptor, actual
         except BaseException:
             os.close(descriptor)
@@ -315,7 +326,7 @@ def _open_leaf_in_directory(directory: Any, path: Path, *, write: bool, create: 
     _validate_leaf_info(before, identity=expected_identity)
     descriptor = os.open(name, (os.O_WRONLY if write else os.O_RDONLY) | (getattr(os, "O_APPEND", 0) if append else 0) | nofollow, dir_fd=directory)
     try:
-        actual = _validate_leaf_info(os.fstat(descriptor), identity=before)
+        actual = _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=before)
         return descriptor, actual
     except BaseException:
         os.close(descriptor)
@@ -361,7 +372,7 @@ def _append_bytes(path: Path, data: bytes, *, expected_identity: Any = None) -> 
                     raise OSError("journal write made no progress")
                 view = view[written:]
             os.fsync(descriptor)
-            _validate_leaf_info(os.fstat(descriptor), identity=identity)
+            _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=identity)
             return identity
     except ReconciliationError:
         raise
@@ -402,7 +413,7 @@ def _replace_store_bytes(path: Path, data: bytes, *, expected_identity: Any = No
                                      getattr(os, "O_NOFOLLOW", 0), 0o600, dir_fd=directory)
                 temporary_path = path.parent / temporary_name
                 try:
-                    _validate_leaf_info(os.fstat(descriptor))
+                    _validate_leaf_info(_leaf_info_for_descriptor(descriptor))
                 except BaseException:
                     os.close(descriptor)
                     raise
