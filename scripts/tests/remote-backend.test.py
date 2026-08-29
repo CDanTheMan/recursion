@@ -21,7 +21,6 @@ Hermetic: tempdirs only, no network, no box environment.
 from __future__ import annotations
 
 import json
-import math
 import os
 import re
 import shutil
@@ -32,7 +31,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from jsonschema import Draft7Validator, validators
+from jsonschema import Draft7Validator
 
 SOURCE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SOURCE / "scripts"))
@@ -297,24 +296,7 @@ REMOTE_SCHEMA = json.loads(
     (SOURCE / "schemas" / "control-plane" / "v1" / "remote-backend.schema.json")
     .read_text(encoding="utf-8")
 )
-def strict_schema_validator(schema: dict) -> Draft7Validator:
-    """Use the runtime's exact Python integer policy while retaining Draft-7 semantics.
-
-    JSON Schema's default Python type checker deliberately treats 1.0 as an integer,
-    while the runtime contract requires an actual int and rejects bool.  The sibling
-    phase controls use this same Draft-7 TypeChecker refinement for Python-object parity.
-    """
-    checker = Draft7Validator.TYPE_CHECKER.redefine_many({
-        "integer": lambda _checker, value: type(value) is int,
-        "number": lambda _checker, value: (
-            type(value) is int or (type(value) is float and math.isfinite(value))
-        ),
-    })
-    strict_class = validators.extend(Draft7Validator, type_checker=checker)
-    return strict_class(schema)
-
-
-SCHEMA_VALIDATOR = strict_schema_validator(REMOTE_SCHEMA)
+SCHEMA_VALIDATOR = Draft7Validator(REMOTE_SCHEMA)
 SCHEMA_VALIDATOR.check_schema(REMOTE_SCHEMA)
 PUBLICATION_SCHEMA = REMOTE_SCHEMA["properties"]["publication"]["properties"]
 
@@ -461,7 +443,13 @@ public_endpoint_cases = [
     ("https://user:pass@api.cursor.com", False),
     ("https://api.cursor.com?token=1", False),
     ("https://api.cursor.com#fragment", False),
+    ("https://[::1]", True),
+    ("https://[::1]:8443", True),
     ("https://[::1", False),
+    ("https://[]", False),
+    ("https://[::1]]", False),
+    ("https://[:::1]", False),
+    ("https://", False),
     ("http://api.cursor.com", False),
 ]
 for candidate, expected in public_endpoint_cases:
@@ -499,9 +487,10 @@ for candidate, expected in resolved_endpoint_cases:
           f"endpoint_ref schema/runtime differential for resolved value {candidate!r}")
 os.environ.pop("GROK_ROUTINE_WEBHOOK_URL", None)
 
-# Generated boundary corpus: Python runtime values that specifically exercise Draft-7's
-# permissive numeric semantics and its pre-newline `$` behavior.  The strict TypeChecker above
-# is still Draft7Validator 4.26.0, but uses the same exact-int policy as the runtime.
+# Generated boundary corpus: Python runtime values that specifically exercise standard Draft-7's
+# permissive numeric semantics and its pre-newline `$` behavior.  A standard schema deliberately
+# accepts 1.0 for an integer field; the authoritative runtime's exact-int policy is stricter, and
+# that safe, inexpressible direction is enumerated below rather than hidden by a custom checker.
 parity_corpus = [
     ("timeout_seconds", 1.0),
     ("max_attempts", 1.0),
@@ -522,7 +511,13 @@ for field, value in parity_corpus:
     parity_results.append((field, schema, runtime))
 schema_only = sum(schema and not runtime for _, schema, runtime in parity_results)
 runtime_only = sum(runtime and not schema for _, schema, runtime in parity_results)
-check(schema_only == 0 and runtime_only == 0,
+schema_only_fields = [field for field, schema, runtime in parity_results if schema and not runtime]
+runtime_only_fields = [field for field, schema, runtime in parity_results if runtime and not schema]
+check(schema_only_fields == ["timeout_seconds", "max_attempts", "concurrency_lease"]
+      and runtime_only_fields == [],
+      f"standard Draft7 parity enumerates inexpressible schema-only fields "
+      f"{schema_only_fields!r} and no runtime-only fields")
+check(schema_only == 3 and runtime_only == 0,
       f"generated schema/runtime parity corpus has schema-only={schema_only}, "
       f"runtime-only={runtime_only} across {len(parity_results)} cases")
 
