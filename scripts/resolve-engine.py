@@ -16,14 +16,20 @@ import os
 import re
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+from phase5_safety import (BoundaryError, atomic_write, decode_json,
+                           pinned_directory, read_bytes)
 
 PROG = "resolve-engine"
 
 NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
 ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}")
 ENDPOINT_RE = re.compile(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?")
+COMMIT_RE = re.compile(r"[0-9a-f]{40,64}\Z")
 
 BUILTIN_ENGINES = {"claude", "hermes", "gate", "none", "deepseek", "openrouter"}
 ROLE_CHOICES = ("implementer", "verifier")
@@ -62,6 +68,11 @@ CANCELLATION_KEYS = {"signal", "grace_s"}
 AUTH_KEYS = {"mode", "required", "marker"}
 EXIT_CODE_KEYS = {"success", "auth", "runtime", "egress"}
 PROVIDER_PROFILE_RE = re.compile(r"[a-z][a-z0-9-]{1,63}")
+PROVIDER_CHOICES = frozenset({
+    "anthropic-claude-code", "cursor", "google-gemini",
+    "openrouter-via-opencode", "sentry-local",
+})
+PROFILE_CHOICES = frozenset({"anthropic", "cursor", "gemini", "openrouter", "sentry-local"})
 
 
 class ManifestError(Exception):
@@ -101,6 +112,8 @@ def validate_argv(argv: object) -> None:
         raise ManifestError("argv must be a nonempty list of strings")
     if not all(isinstance(item, str) and item and not has_control(item) for item in argv):
         raise ManifestError("argv elements must be nonempty strings")
+    if len(set(argv)) != len(argv):
+        raise ManifestError("argv must not contain duplicate elements")
     if argv[0] != "{{EXE}}":
         raise ManifestError("argv[0] must be the literal placeholder {{EXE}}")
     if argv.count("{{EXE}}") != 1:
@@ -121,6 +134,8 @@ def validate_model(model: object) -> None:
     suffix = obj["argv_suffix"]
     if not isinstance(suffix, list) or not all(isinstance(item, str) and item and not has_control(item) for item in suffix):
         raise ManifestError("model.argv_suffix must be a list of nonempty strings")
+    if len(set(suffix)) != len(suffix):
+        raise ManifestError("model.argv_suffix must not contain duplicate elements")
     for item in suffix:
         if item.startswith("{{") and item.endswith("}}") and item != "{{MODEL}}":
             raise ManifestError(f"model.argv_suffix contains an unknown placeholder {item!r}")
@@ -129,7 +144,7 @@ def validate_model(model: object) -> None:
 
 
 def validate_roles(roles: object) -> None:
-    if not isinstance(roles, list) or not roles:
+    if not isinstance(roles, list) or not roles or len(roles) > 2:
         raise ManifestError("roles must be a nonempty list")
     if not all(isinstance(role, str) for role in roles):
         raise ManifestError("roles must contain only strings")
@@ -143,17 +158,19 @@ def validate_billing(billing: object) -> dict:
     obj = require_object_keys(billing, BILLING_KEYS, "billing")
     if not isinstance(obj["basis"], str) or obj["basis"] not in BILLING_BASES:
         raise ManifestError(f"billing.basis must be one of {sorted(BILLING_BASES)}")
-    if not isinstance(obj["provider"], str) or not obj["provider"] or has_control(obj["provider"]):
-        raise ManifestError("billing.provider must be a nonempty string")
+    if not isinstance(obj["provider"], str) or obj["provider"] not in PROVIDER_CHOICES:
+        raise ManifestError("billing.provider is not a reviewed provider")
     return obj
 
 
 def canonical_controller_root(value: str) -> Path:
     try:
-        requested = Path(value).resolve(strict=True)
-        configured = Path(os.environ.get("RECURSION_ROOT", "")).resolve(strict=True) \
-            if os.environ.get("RECURSION_ROOT", "").strip() else Path(__file__).resolve().parent.parent
-    except OSError as exc:
+        with pinned_directory(value) as (_, requested_value):
+            requested = Path(requested_value)
+        configured_value = os.environ.get("RECURSION_ROOT", "").strip()
+        with pinned_directory(configured_value or Path(__file__).parent.parent) as (_, configured_path):
+            configured = Path(configured_path)
+    except (BoundaryError, OSError, ValueError, TypeError) as exc:
         raise ManifestError("controller root is unavailable") from exc
     if requested != configured:
         raise ManifestError("controller root is not the canonical controller root")
@@ -161,18 +178,14 @@ def canonical_controller_root(value: str) -> Path:
 
 
 def authenticated_file(root: Path, commit: str, relative: str) -> tuple[bytes, str]:
+    if not isinstance(commit, str) or not COMMIT_RE.fullmatch(commit):
+        raise ManifestError("controller policy commit is not a full hexadecimal object id")
+    if not isinstance(relative, str) or not relative:
+        raise ManifestError("controller policy file path is invalid")
     pure = Path(relative)
-    path = root.joinpath(*pure.parts)
-    try:
-        path.resolve(strict=True).relative_to(root.resolve(strict=True))
-        regular = path.is_file() and not path.is_symlink()
-    except OSError as exc:
-        raise ManifestError(f"controller policy file is unavailable: {relative}") from exc
-    except ValueError as exc:
-        raise ManifestError(f"controller policy file resolves outside the canonical root: {relative}") from exc
-    if pure.is_absolute() or "\\" in relative or any(part in {"", ".", ".."} for part in pure.parts) \
-            or not regular:
+    if pure.is_absolute() or "\\" in relative or any(part in {"", ".", ".."} for part in pure.parts):
         raise ManifestError(f"controller policy file is not a regular file: {relative}")
+    path = root.joinpath(*pure.parts)
     tracked = subprocess.run(
         ["git", "-C", str(root), "ls-files", "--error-unmatch", "--", relative],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
@@ -188,8 +201,8 @@ def authenticated_file(root: Path, commit: str, relative: str) -> tuple[bytes, s
     rows = [row for row in tree.stdout.split(b"\0") if row]
     mode = rows[0].split(b" ", 1)[0] if len(rows) == 1 else b""
     try:
-        live = path.read_bytes()
-    except OSError as exc:
+        live = read_bytes(path, label=f"controller policy file {relative}")
+    except BoundaryError as exc:
         raise ManifestError(f"controller policy file is unreadable: {relative}") from exc
     if tracked.returncode or tree.returncode or committed.returncode or len(rows) != 1 \
             or mode not in {b"100644", b"100755"} or live != committed.stdout:
@@ -203,14 +216,15 @@ def provider_profiles(controller_root: Path | None = None, controller_commit: st
     if controller_root is not None:
         raw, _ = authenticated_file(controller_root, controller_commit, "scripts/provider-egress-profiles.json")
     else:
-        profile_path = Path(__file__).resolve().parent / "provider-egress-profiles.json"
+        profile_path = Path(__file__).parent / "provider-egress-profiles.json"
         try:
-            raw = profile_path.read_bytes()
-        except OSError as exc:
+            raw = read_bytes(profile_path, label="provider profile registry")
+        except BoundaryError as exc:
             raise ManifestError("provider profile registry is unavailable") from exc
     try:
-        profiles = json.loads(raw.decode("utf-8"))["profiles"]
-    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        profiles = decode_json(raw, "provider profile registry")["profiles"]
+    except (BoundaryError, OSError, ValueError, KeyError, TypeError,
+            OverflowError, RecursionError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ManifestError("provider profile registry is unavailable") from exc
     if not isinstance(profiles, dict):
         raise ManifestError("provider profile registry is invalid")
@@ -237,7 +251,8 @@ def validate_network(network: object, provider: str | None = None, billing_basis
     if len(set(endpoints)) != len(endpoints):
         raise ManifestError("network.endpoints must not contain duplicates")
     profile = obj["profile"]
-    if not isinstance(profile, str) or not PROVIDER_PROFILE_RE.fullmatch(profile):
+    if not isinstance(profile, str) or profile not in PROFILE_CHOICES \
+            or not PROVIDER_PROFILE_RE.fullmatch(profile):
         raise ManifestError("network.profile is invalid")
     declared = provider_profiles(controller_root, controller_commit).get(profile)
     if not isinstance(declared, dict) or not isinstance(declared.get("endpoints"), list):
@@ -293,7 +308,7 @@ def validate_env_passthrough(names: object, allowed: list[str]) -> None:
 
 def validate_relative_path(value: object, where: str, *, allow_empty: bool = False) -> None:
     if not isinstance(value, str) or (not value and not allow_empty) \
-            or value.startswith("/") or "\\" in value \
+            or value.startswith("/") or "\\" in value or ":" in value \
             or has_control(value) \
             or any(part in {"", ".", ".."} for part in value.split("/")):
         raise ManifestError(f"{where} must be a relative path without . or .. components")
@@ -324,6 +339,8 @@ def validate_runtime_layout(layout: object) -> None:
         raise ManifestError('runtime_layout.source must be "executable-directory"')
     if obj.get("source") is not None and obj.get("root") is not None and obj["source"] != obj["root"]:
         raise ManifestError("runtime_layout.source and root disagree")
+    if obj.get("source") is not None and obj.get("root") is not None:
+        raise ManifestError("runtime_layout may declare only one of source or root")
     validate_relative_path(obj.get("target", ".recursion-runtime"), "runtime_layout.target")
     validate_relative_path(obj.get("entrypoint"), "runtime_layout.entrypoint")
 
@@ -405,6 +422,10 @@ def _validate_manifest(data: object, engine: str, *, controller_root: Path | Non
         raise ManifestError("concurrency_cap must be null or an integer >= 1")
     validate_env_passthrough(obj["env_passthrough"], network["env_allowlist"])
     validate_runtime_layout(obj.get("runtime_layout"))
+    if "execution" in obj and obj["execution"] is None:
+        raise ManifestError("execution must be an object when present")
+    if "auth" in obj and obj["auth"] is None:
+        raise ManifestError("auth must be an object when present")
     validate_execution(obj.get("execution"))
     validate_auth(obj.get("auth"))
     return obj
@@ -418,7 +439,8 @@ def validate_manifest(data: object, engine: str, *, controller_root: Path | None
                                   controller_commit=controller_commit)
     except ManifestError:
         raise
-    except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError,
+            OverflowError, RecursionError, UnicodeDecodeError, OSError) as exc:
         raise ManifestError("manifest contains invalid field types") from exc
 
 
@@ -426,7 +448,7 @@ def manifest_dir() -> Path:
     override = os.environ.get("RECURSION_ENGINE_DIR", "").strip()
     if override:
         return Path(override)
-    return Path(__file__).resolve().parent / "engines"
+    return Path(__file__).parent / "engines"
 
 
 def manifest_path(engine: str) -> Path:
@@ -439,19 +461,21 @@ def load_manifest(path: Path, engine: str, *, controller_root: Path | None = Non
     try:
         if controller_root is not None:
             relative = f"scripts/engines/{engine}.json"
-            expected = (controller_root / relative).resolve(strict=True)
-            if path.resolve(strict=True) != expected:
+            expected = Path(os.path.abspath(str(controller_root / relative)))
+            if Path(os.path.abspath(str(path))) != expected:
                 raise ManifestError("manifest path is not under the canonical controller root")
             raw_bytes, manifest_digest = authenticated_file(controller_root, controller_commit, relative)
             provenance[relative] = manifest_digest
             raw = raw_bytes.decode("utf-8")
         else:
-            raw = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
+            raw = read_bytes(path, label=f"manifest {path}").decode("utf-8")
+    except (BoundaryError, OSError, UnicodeDecodeError, ValueError, TypeError,
+            OverflowError, RecursionError) as exc:
         raise ManifestError(f"could not read manifest {path}: {exc}") from exc
     try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as exc:
+        data = decode_json(raw, f"manifest {path}")
+    except (BoundaryError, json.JSONDecodeError, ValueError, TypeError,
+            OverflowError, RecursionError, UnicodeDecodeError) as exc:
         raise ManifestError(f"manifest {path} is not valid JSON: {exc}") from exc
     if controller_root is not None:
         _, profile_digest = authenticated_file(controller_root, controller_commit,
@@ -512,19 +536,15 @@ def build_plan(data: dict, provenance: dict[str, str] | None = None,
 
 
 def write_plan_atomically(plan: dict, out_path: Path) -> None:
-    directory = out_path.parent if str(out_path.parent) else Path(".")
-    fd, tmp_name = tempfile.mkstemp(prefix=".engine-plan-", suffix=".tmp", dir=str(directory))
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            json.dump(plan, handle, indent=2, sort_keys=False)
-            handle.write("\n")
-        os.replace(tmp_name, str(out_path))
-    except BaseException:
-        try:
-            os.remove(tmp_name)
-        except OSError:
-            pass
+        encoded = (json.dumps(plan, indent=2, sort_keys=False,
+                              allow_nan=False) + "\n").encode("utf-8")
+        atomic_write(out_path, encoded, replace=True, mode=0o600,
+                     label="engine execution plan")
+    except BoundaryError:
         raise
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError) as exc:
+        raise ManifestError("engine execution plan could not be published") from exc
 
 
 def parse_args(argv: list) -> argparse.Namespace:
@@ -560,6 +580,9 @@ def main() -> int:
     if (args.controller_root is None) != (args.controller_commit is None):
         diag("--controller-root and --controller-commit must be supplied together")
         return 2
+    if args.controller_commit is not None and not COMMIT_RE.fullmatch(args.controller_commit):
+        diag("--controller-commit must be a full hexadecimal object id")
+        return 2
     if not args.validate and args.controller_root is None:
         diag("--controller-root and --controller-commit are required to emit an execution plan")
         return 2
@@ -573,16 +596,18 @@ def main() -> int:
             )
             if head.returncode or head.stdout.strip() != args.controller_commit:
                 raise ManifestError("controller HEAD is not the exact immutable controller commit")
-        except ManifestError as exc:
+        except (ManifestError, OSError, ValueError, TypeError, OverflowError,
+                RecursionError, UnicodeDecodeError) as exc:
             diag(str(exc))
             return 2
     path = manifest_path(engine) if controller_root is None else controller_root / "scripts" / "engines" / f"{engine}.json"
     try:
-        present = path.is_file()
-    except OSError as exc:
+        present = read_bytes(path, label=f"manifest {path}", optional=True)
+    except (BoundaryError, OSError, ValueError, TypeError, OverflowError,
+            RecursionError, UnicodeDecodeError) as exc:
         diag(f"could not inspect manifest {path}: {exc}")
         return 2
-    if not present:
+    if present is None:
         diag(f"manifest not found: {path}")
         return 3
 
@@ -592,7 +617,8 @@ def main() -> int:
     except ManifestError as exc:
         diag(str(exc))
         return 2
-    except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError,
+            OverflowError, RecursionError, UnicodeDecodeError, OSError) as exc:
         diag(f"invalid manifest {path}: {exc}")
         return 2
 
@@ -615,7 +641,7 @@ def main() -> int:
     out_path = Path(args.emit_plan)
     try:
         write_plan_atomically(plan, out_path)
-    except OSError as exc:
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError) as exc:
         diag(f"failed to write plan to {out_path}: {exc}")
         return 2
 
@@ -623,4 +649,10 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (ManifestError, BoundaryError, OSError, UnicodeDecodeError,
+            json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError, KeyError, IndexError, AttributeError) as exc:
+        diag(f"invalid input: {exc}")
+        raise SystemExit(2)

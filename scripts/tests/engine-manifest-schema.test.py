@@ -27,7 +27,13 @@ resolver_spec.loader.exec_module(resolver)
 
 def main() -> int:
     jsonschema.Draft7Validator.check_schema(SCHEMA)
-    validator = jsonschema.Draft7Validator(SCHEMA)
+    strict_types = jsonschema.Draft7Validator.TYPE_CHECKER.redefine(
+        "integer", lambda _checker, value: isinstance(value, int) and not isinstance(value, bool)
+    )
+    strict_validator = jsonschema.validators.extend(
+        jsonschema.Draft7Validator, type_checker=strict_types
+    )
+    validator = strict_validator(SCHEMA)
     failures: list[str] = []
     for path in sorted(ENGINES.glob("*.json")):
         if path.name == "model-aliases.json":
@@ -84,6 +90,19 @@ def main() -> int:
         runtime_ok = False
     if not (schema_ok and runtime_ok):
         failures.append("schema/runtime disagree on executable-only null source")
+
+    for field in ("schema_version", "concurrency_cap"):
+        numeric = copy.deepcopy(cursor)
+        numeric[field] = 1.0
+        schema_ok = not list(validator.iter_errors(numeric))
+        try:
+            resolver.validate_manifest(numeric, "cursor")
+        except resolver.ManifestError:
+            runtime_ok = False
+        else:
+            runtime_ok = True
+        if schema_ok or runtime_ok:
+            failures.append(f"schema/runtime accepted non-integer numeric field: {field}")
 
     overlapping_exit_codes = copy.deepcopy(cursor)
     overlapping_exit_codes["execution"]["exit_codes"]["auth"] = [0]

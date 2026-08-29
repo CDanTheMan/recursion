@@ -10,15 +10,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from pathlib import Path
 
-_SCRIPT_DIR = Path(__file__).resolve().parent
+_SCRIPT_DIR = Path(__file__).parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from engine_contract import alias_role_ok, default_registry_path, pilot_engine_ok
+from phase5_safety import (BoundaryError, decode_json, is_plain_int,
+                           read_bounded_stream, read_bytes)
 
 
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -65,7 +68,19 @@ def require_identifier(value: object, field: str) -> None:
         fail(f"{field} is not a canonical identifier")
 
 
-def validate(kind: str, value: object) -> dict:
+def require_relative_paths(value: object, field: str, *, allow_dot: bool = True) -> None:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        fail(f"{field} must be an array of relative paths")
+    for item in value:
+        if not item or "\\" in item or ":" in item or item.startswith("/") \
+                or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in item):
+            fail(f"{field} contains an unsafe path")
+        parts = item.split("/")
+        if any(part in {"", ".."} or (part == "." and not allow_dot) for part in parts):
+            fail(f"{field} contains an unsafe path")
+
+
+def _validate(kind: str, value: object) -> dict:
     if kind not in REQUIRED:
         fail(f"unknown object type: {kind}")
     if not isinstance(value, dict):
@@ -73,7 +88,7 @@ def validate(kind: str, value: object) -> dict:
     missing = [field for field in REQUIRED[kind] if field not in value]
     if missing:
         fail("missing required field(s): " + ", ".join(missing))
-    if value.get("schema_version") != 1:
+    if not is_plain_int(value.get("schema_version")) or value.get("schema_version") != 1:
         fail("schema_version must be 1")
     require_identifier(value.get("id"), "id")
     if value.get("status") not in STATUSES[kind]:
@@ -99,15 +114,19 @@ def validate(kind: str, value: object) -> dict:
     for field in ("dependencies", "action_ids"):
         if field in value:
             items = value[field]
-            if not isinstance(items, list) or len(items) != len(set(items)):
+            if not isinstance(items, list) \
+                    or any(not isinstance(item, str) for item in items) \
+                    or len(items) != len(set(items)):
                 fail(f"{field} must be a unique array")
             for item in items:
                 require_identifier(item, field)
     for field in ("arguments", "allowed_paths", "non_goals", "required_non_goals", "notification_targets"):
         if field in value and not isinstance(value[field], list):
             fail(f"{field} must be an array")
+    if "allowed_paths" in value:
+        require_relative_paths(value["allowed_paths"], "allowed_paths")
     if "concurrency_limit" in value and (
-        not isinstance(value["concurrency_limit"], int) or value["concurrency_limit"] < 0
+        not is_plain_int(value["concurrency_limit"]) or value["concurrency_limit"] < 0
     ):
         fail("concurrency_limit must be a non-negative integer")
     if kind == "plan":
@@ -138,11 +157,11 @@ def validate(kind: str, value: object) -> dict:
         if missing_budget:
             fail("Phase 6 goal budget is missing: " + ", ".join(missing_budget))
         for field in required_budget - {"max_cost_usd", "publication_required"}:
-            if isinstance(value["budget"][field], bool) or not isinstance(value["budget"][field], int) \
-               or value["budget"][field] < 0:
+            if not is_plain_int(value["budget"][field]) or value["budget"][field] < 0:
                 fail(f"invalid Phase 6 goal budget field: {field}")
         cost = value["budget"]["max_cost_usd"]
-        if isinstance(cost, bool) or not isinstance(cost, (int, float)) or cost < 0:
+        if isinstance(cost, bool) or not isinstance(cost, (int, float)) \
+                or not math.isfinite(cost) or cost < 0:
             fail("invalid Phase 6 goal budget field: max_cost_usd")
         if not isinstance(value["budget"]["publication_required"], bool):
             fail("invalid Phase 6 goal budget field: publication_required")
@@ -178,8 +197,12 @@ def validate(kind: str, value: object) -> dict:
         if "gate_class" in value and value["gate_class"] not in {"light", "heavy"}:
             fail("invalid gate_class policy")
         if not isinstance(value["gate_files"], list) \
+                or any(not isinstance(item, str) for item in value["gate_files"]) \
                 or len(value["gate_files"]) != len(set(value["gate_files"])):
             fail("gate_files must be a unique array")
+        require_relative_paths(value["gate_files"], "gate_files", allow_dot=False)
+        if "controller_gate_files" in value:
+            require_relative_paths(value["controller_gate_files"], "controller_gate_files", allow_dot=False)
         if "gate_contract" in value:
             contract = value["gate_contract"]
             hashes = contract.get("gate_files") if isinstance(contract, dict) else None
@@ -196,12 +219,13 @@ def validate(kind: str, value: object) -> dict:
                            for digest in [*hashes.values(), *controller_hashes.values()]):
                 fail("gate_contract must contain acceptance and tracked-file hashes")
         for field in ("deadline_seconds", "verifier_deadline_seconds"):
-            if not isinstance(value[field], int) or value[field] < 1:
+            if not is_plain_int(value[field]) or value[field] < 1:
                 fail(f"{field} must be a positive integer")
         if str(value.get("acceptance", "")).strip() in {"", "true", ":", "/bin/true", "exit 0"}:
             fail("acceptance gate is structurally vacuous")
     if kind == "run":
-        if "process_group" in value and (not isinstance(value["process_group"], int) or value["process_group"] < 1):
+        if "process_group" in value and (
+                not is_plain_int(value["process_group"]) or value["process_group"] < 1):
             fail("process_group must be a positive integer")
         if "role" in value and value["role"] not in {"implementer", "verifier"}:
             fail("invalid worker role")
@@ -219,10 +243,11 @@ def validate(kind: str, value: object) -> dict:
         fail("action_payload_sha256 must be sha256")
     if kind in {"action", "delivery"}:
         numeric = "attempts" if kind == "action" else "attempt"
-        if not isinstance(value[numeric], int) or value[numeric] < 0:
+        if not is_plain_int(value[numeric]) or value[numeric] < 0:
             fail(f"{numeric} must be a non-negative integer")
     if kind == "delivery":
-        if "max_attempts" in value and (not isinstance(value["max_attempts"], int) or value["max_attempts"] < 1):
+        if "max_attempts" in value and (
+                not is_plain_int(value["max_attempts"]) or value["max_attempts"] < 1):
             fail("max_attempts must be a positive integer")
         if "message_digest" in value and not re.fullmatch(r"[0-9a-f]{64}", str(value["message_digest"])):
             fail("delivery message_digest must be sha256")
@@ -241,6 +266,17 @@ def validate(kind: str, value: object) -> dict:
     return value
 
 
+def validate(kind: str, value: object) -> dict:
+    """Expose one typed validation boundary for every projected control record."""
+    try:
+        return _validate(kind, value)
+    except ValueError:
+        raise
+    except (AttributeError, IndexError, KeyError, TypeError, OverflowError,
+            RecursionError, UnicodeDecodeError, OSError) as exc:
+        raise ValueError("record contains invalid field types") from exc
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("kind", choices=sorted(REQUIRED))
@@ -248,11 +284,16 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.path:
-            record = json.loads(Path(args.path).read_text(encoding="utf-8"))
+            record = decode_json(
+                read_bytes(Path(args.path), label="control-state record"), "control-state record"
+            )
         else:
-            record = json.load(sys.stdin)
+            record = decode_json(read_bounded_stream(sys.stdin.buffer, label="control-state record"),
+                                 "control-state record")
         validate(args.kind, record)
-    except (OSError, json.JSONDecodeError, ValueError) as exc:
+    except (BoundaryError, OSError, json.JSONDecodeError, ValueError, TypeError,
+            OverflowError, RecursionError, UnicodeDecodeError, KeyError,
+            IndexError, AttributeError) as exc:
         print(f"ERR {exc}", file=sys.stderr)
         return 2
     print("OK")

@@ -12,6 +12,8 @@ import json
 import re
 from pathlib import Path
 
+from phase5_safety import BoundaryError, decode_json, read_bytes, is_plain_int
+
 BUILTIN_ENGINES = frozenset({"claude", "hermes", "gate", "none", "deepseek", "openrouter"})
 ENGINE_NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
 ALIAS_NAME_RE = re.compile(r"[a-z][a-z0-9-]{2,31}")
@@ -49,10 +51,13 @@ def _load_registry(registry_path: Path | str) -> dict[str, frozenset[str]] | Non
     """Return alias -> roles from a valid registry, or None when the registry is
     absent, unparseable, schema-invalid, or redefines a legacy alias (poisoned)."""
     try:
-        raw = json.loads(Path(registry_path).read_text(encoding="utf-8"))
-    except (OSError, ValueError, UnicodeDecodeError):
+        raw = decode_json(read_bytes(Path(registry_path), label="model alias registry"),
+                          "model alias registry")
+    except (BoundaryError, OSError, ValueError, TypeError, OverflowError,
+            RecursionError, UnicodeDecodeError, json.JSONDecodeError):
         return None
-    if not isinstance(raw, dict) or raw.get("schema_version") != 1:
+    if not isinstance(raw, dict) or not is_plain_int(raw.get("schema_version")) \
+            or raw.get("schema_version") != 1:
         return None
     aliases = raw.get("aliases")
     if not isinstance(aliases, dict):
@@ -70,7 +75,8 @@ def _load_registry(registry_path: Path | str) -> dict[str, frozenset[str]] | Non
             return None
         # Mirror resolve-model-alias.py's rules exactly (it is the execution authority);
         # duplicated role entries are tolerated there, so they are tolerated here.
-        if not isinstance(roles, list) or not roles or not set(roles) <= ROLES:
+        if not isinstance(roles, list) or not roles or any(not isinstance(role, str) for role in roles) \
+                or not set(roles) <= ROLES:
             return None
         loaded[alias] = frozenset(roles)
     return loaded

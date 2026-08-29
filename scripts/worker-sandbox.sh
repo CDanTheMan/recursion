@@ -4,8 +4,88 @@
 set -euo pipefail
 
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-export RECURSION_ROOT="$ROOT"
 PYTHON="${RECURSION_PYTHON:-python3}"
+safe_directory(){
+  "$PYTHON" - "$1" <<'PY'
+import os, sys
+from pathlib import Path
+root = os.environ.get("RECURSION_ROOT", ".")
+sys.path.insert(0, os.path.join(root, "scripts"))
+from phase5_safety import BoundaryError, pinned_directory
+try:
+    with pinned_directory(Path(sys.argv[1])) as (_, absolute):
+        print(absolute)
+except (BoundaryError, OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError, RecursionError):
+    raise SystemExit(2)
+PY
+}
+safe_mkdir(){
+  "$PYTHON" - "$1" <<'PY'
+import os, sys
+from pathlib import Path
+root = os.environ.get("RECURSION_ROOT", ".")
+sys.path.insert(0, os.path.join(root, "scripts"))
+from phase5_safety import BoundaryError, ensure_directory
+try:
+    print(ensure_directory(Path(sys.argv[1])))
+except (BoundaryError, OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError, RecursionError):
+    raise SystemExit(2)
+PY
+}
+safe_leaf(){
+  "$PYTHON" - "$1" <<'PY'
+import os, sys
+from pathlib import Path
+root = os.environ.get("RECURSION_ROOT", ".")
+sys.path.insert(0, os.path.join(root, "scripts"))
+from phase5_safety import BoundaryError, verify_leaf
+try:
+    value = verify_leaf(Path(sys.argv[1]))
+    if value is None:
+        raise BoundaryError("path is absent")
+    print(os.path.abspath(sys.argv[1]))
+except (BoundaryError, OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError, RecursionError):
+    raise SystemExit(2)
+PY
+}
+safe_file(){
+  "$PYTHON" - "$1" <<'PY'
+import os, sys
+from pathlib import Path
+root = os.environ.get("RECURSION_ROOT", ".")
+sys.path.insert(0, os.path.join(root, "scripts"))
+from phase5_safety import BoundaryError, verify_leaf
+try:
+    value = verify_leaf(Path(sys.argv[1]), allow_directory=False)
+    if value is None:
+        raise BoundaryError("path is absent")
+    print(os.path.abspath(sys.argv[1]))
+except (BoundaryError, OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError, RecursionError):
+    raise SystemExit(2)
+PY
+}
+safe_remove_tree(){
+  "$PYTHON" - "$1" <<'PY'
+import os, shutil, sys
+from pathlib import Path
+root = os.environ.get("RECURSION_ROOT", ".")
+sys.path.insert(0, os.path.join(root, "scripts"))
+from phase5_safety import BoundaryError, verify_leaf
+try:
+    path = Path(sys.argv[1])
+    value = verify_leaf(path)
+    if value is None:
+        raise SystemExit(0)
+    if not value or not value.st_mode:
+        raise BoundaryError("path cannot be inspected")
+    shutil.rmtree(path)
+except (BoundaryError, OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError, RecursionError):
+    raise SystemExit(2)
+PY
+}
+export RECURSION_ROOT="$ROOT"
+ROOT="$(safe_directory "$ROOT")" || { echo "worker-sandbox: controller root is not a pinned directory" >&2; exit 95; }
+export RECURSION_ROOT="$ROOT"
 ENGINE=""; WT=""; PROMPT=""; MODEL=""; USAGE_FILE=""; ROLE="implementer"; ASSIGNMENT_DIGEST=""
 NETWORK_POLICY="provider-only"; READ_ONLY_WORKTREE=0; EVIDENCE_DIR=""
 GATE_COMMAND=""; WORKDIR_PATH="."; READ_ONLY_PATHS=(); ENGINE_PLAN=""
@@ -84,23 +164,42 @@ if [ -n "$ENGINE_PLAN" ]; then
     esac
   done < <("$PYTHON" - "$ENGINE_PLAN" "$ENGINE" <<'PY' || true
 import json, os, re, sys
+from pathlib import Path
+sys.path.insert(0, os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts"))
+from phase5_safety import BoundaryError, decode_json, is_plain_int, read_bytes
+
+def _no_traceback(exc_type, exc, tb):
+    print("worker-sandbox: malformed engine plan", file=sys.stderr)
+    sys.stderr.flush()
+    os._exit(92)
+sys.excepthook = _no_traceback
 try:
-    plan = json.load(open(sys.argv[1]))
-except Exception:
+    raw_plan = read_bytes(Path(sys.argv[1]), label="engine plan")
+    if raw_plan is None:
+        raise BoundaryError("engine plan is absent")
+    plan = decode_json(raw_plan, "engine plan")
+    if not isinstance(plan, dict):
+        raise BoundaryError("engine plan must be an object")
+except (BoundaryError, OSError, UnicodeDecodeError, json.JSONDecodeError,
+        ValueError, TypeError, OverflowError, RecursionError):
     raise SystemExit(92)
 engine = plan.get("engine")
-if plan.get("schema_version") != 1 or engine != sys.argv[2] \
+if not is_plain_int(plan.get("schema_version")) or plan.get("schema_version") != 1 or engine != sys.argv[2] \
         or not isinstance(engine, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", engine):
     raise SystemExit(92)
 exe = plan.get("executable"); argv = plan.get("argv")
 if not isinstance(exe, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", exe):
     raise SystemExit(92)
-if not isinstance(argv, list) or not argv or argv[0] != "{{EXE}}" \
+if not isinstance(argv, list) or not argv or \
+        any(not isinstance(item, str) or not item or any(ord(ch) < 32 or ord(ch) == 127 for ch in item)
+            for item in argv) or len(set(argv)) != len(argv) or argv[0] != "{{EXE}}" \
         or argv.count("{{EXE}}") != 1 or argv.count("{{PROMPT}}") != 1 \
         or argv.count("{{MODEL}}") > 1:
     raise SystemExit(92)
-suffix = plan.get("model_argv_suffix") or []
-if not isinstance(suffix, list) or suffix.count("{{MODEL}}") > 1:
+suffix = plan.get("model_argv_suffix", [])
+if not isinstance(suffix, list) or \
+        any(not isinstance(item, str) or not item or any(ord(ch) < 32 or ord(ch) == 127 for ch in item)
+            for item in suffix) or suffix.count("{{MODEL}}") > 1:
     raise SystemExit(92)
 for element in list(argv) + list(suffix):
     if not isinstance(element, str) or any(ord(ch) < 32 or ord(ch) == 127 for ch in element):
@@ -109,9 +208,12 @@ for element in list(argv) + list(suffix):
             and element not in ("{{EXE}}", "{{PROMPT}}", "{{MODEL}}"):
         raise SystemExit(92)
 for element in suffix:
-    if element in ("{{EXE}}", "{{PROMPT}}"):
+    if element in ("{{EXE}}", "{{PROMPT}}") \
+            or (element.startswith("{{") and element.endswith("}}") and element != "{{MODEL}}"):
         raise SystemExit(92)
-if plan.get("model_required"):
+if not isinstance(plan.get("model_required"), bool):
+    raise SystemExit(92)
+if plan.get("model_required") is True:
     print("MREQ=1")
 print("EXE=" + exe)
 print("ARGVJSON=" + json.dumps(argv, separators=(",", ":")))
@@ -124,13 +226,23 @@ env_names = plan.get("env_passthrough")
 if not isinstance(env_names, list) or not all(isinstance(v, str) for v in env_names) \
         or len(set(env_names)) != len(env_names):
     raise SystemExit(92)
+billing = plan.get("billing")
+if not isinstance(billing, dict) or set(billing) != {"basis", "provider"} \
+        or not isinstance(billing.get("basis"), str) or billing.get("basis") not in ("flat-subscription", "metered", "local") \
+        or not isinstance(billing.get("provider"), str) \
+        or billing.get("provider") not in ("anthropic-claude-code", "cursor", "google-gemini", "openrouter-via-opencode", "sentry-local"):
+    raise SystemExit(92)
 network = plan.get("network")
-if not isinstance(network, dict) or network.get("policy") not in ("provider-only", "none") \
+if not isinstance(network, dict) or set(network) != {"policy", "profile", "endpoints"} \
+        or network.get("policy") not in ("provider-only", "none") \
         or not isinstance(network.get("profile"), str) \
         or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", network["profile"]) \
         or not isinstance(network.get("endpoints"), list) \
-        or len(set(network["endpoints"])) != len(network["endpoints"]) \
-        or not all(isinstance(v, str) and re.fullmatch(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?", v) for v in network["endpoints"]):
+        or any(not isinstance(v, str) or not re.fullmatch(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?", v)
+               for v in network["endpoints"]) \
+        or len(set(network["endpoints"])) != len(network["endpoints"]):
+    raise SystemExit(92)
+if network["profile"] not in ("anthropic", "cursor", "gemini", "openrouter", "sentry-local"):
     raise SystemExit(92)
 if network["policy"] == "provider-only" and not network["endpoints"]:
     raise SystemExit(92)
@@ -139,15 +251,24 @@ if network["policy"] == "none" and (network["profile"] != "sentry-local"
                                       or network["endpoints"]):
     raise SystemExit(92)
 try:
-    profile_config = json.load(open(os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts", "provider-egress-profiles.json")))
-    profile = profile_config.get("profiles", {}).get(network["profile"])
-except (OSError, ValueError, TypeError):
+    profile_raw = read_bytes(
+        Path(os.environ.get("RECURSION_ROOT", ".")) / "scripts" / "provider-egress-profiles.json",
+        label="provider profile registry",
+    )
+    profile_config = decode_json(profile_raw, "provider profile registry")
+    if not isinstance(profile_config, dict) or not isinstance(profile_config.get("profiles"), dict):
+        raise BoundaryError("provider profile registry is invalid")
+    profile = profile_config["profiles"].get(network["profile"])
+except (BoundaryError, OSError, ValueError, TypeError, OverflowError,
+        RecursionError, UnicodeDecodeError, json.JSONDecodeError):
     raise SystemExit(92)
 if not isinstance(profile, dict) or profile.get("provider") != plan.get("billing", {}).get("provider") \
-        or sorted(profile.get("endpoints", [])) != sorted(network["endpoints"]):
+        or not isinstance(profile.get("endpoints"), list) \
+        or sorted(profile["endpoints"]) != sorted(network["endpoints"]):
     raise SystemExit(92)
 allowed_env = profile.get("env_allowlist")
-if not isinstance(allowed_env, list) or len(set(allowed_env)) != len(allowed_env):
+if not isinstance(allowed_env, list) or any(not isinstance(v, str) for v in allowed_env) \
+        or len(set(allowed_env)) != len(allowed_env):
     raise SystemExit(92)
 for name in env_names:
     if not isinstance(name, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", name) \
@@ -155,11 +276,14 @@ for name in env_names:
         raise SystemExit(92)
     print("ENVP=" + name)
 authority = plan.get("authority")
-if authority is not None:
+if isinstance(authority, dict):
     if not isinstance(authority, dict) or set(authority) != {"controller_repository", "controller_sha", "policy_files"}:
         raise SystemExit(92)
-    root = os.path.realpath(os.environ.get("RECURSION_ROOT", "."))
-    if os.path.realpath(str(authority.get("controller_repository", ""))) != root \
+    authority_root = authority.get("controller_repository")
+    if not isinstance(authority_root, str):
+        raise SystemExit(92)
+    root = os.path.abspath(os.environ.get("RECURSION_ROOT", "."))
+    if os.path.normcase(os.path.abspath(authority_root)) != os.path.normcase(root) \
             or not isinstance(authority.get("controller_sha"), str) \
             or not re.fullmatch(r"[0-9a-f]{40,64}", authority["controller_sha"]):
         raise SystemExit(92)
@@ -169,13 +293,6 @@ if authority is not None:
             or any(not isinstance(v, str) or not re.fullmatch(r"[0-9a-f]{64}", v) for v in files.values()):
         raise SystemExit(92)
     import subprocess
-    def rooted(relative):
-        try:
-            return os.path.commonpath([root, os.path.realpath(os.path.join(root, relative))]) == root
-        except ValueError:
-            return False
-    if not rooted("scripts/provider-egress-profiles.json") or not rooted("scripts/engines/" + engine + ".json"):
-        raise SystemExit(92)
     head = subprocess.run(["git", "-C", root, "rev-parse", "--verify", "HEAD"],
                           capture_output=True, text=True, check=False)
     if head.returncode or head.stdout.strip() != authority["controller_sha"]:
@@ -184,10 +301,10 @@ if authority is not None:
     committed = subprocess.run(["git", "-C", root, "show", f"{authority['controller_sha']}:{relative}"],
                                 capture_output=True, check=False)
     try:
-        live = open(os.path.join(root, relative), "rb").read()
-    except OSError:
+        live = read_bytes(Path(root) / relative, label="provider profile registry")
+    except (BoundaryError, OSError, ValueError, TypeError, OverflowError, RecursionError):
         raise SystemExit(92)
-    if committed.returncode or live != committed.stdout \
+    if live is None or committed.returncode or live != committed.stdout \
             or __import__("hashlib").sha256(live).hexdigest() != files[relative]:
         raise SystemExit(92)
     manifest_relative = "scripts/engines/" + engine + ".json"
@@ -197,10 +314,10 @@ if authority is not None:
         capture_output=True, check=False,
     )
     try:
-        manifest_live = open(manifest_path, "rb").read()
-    except OSError:
+        manifest_live = read_bytes(Path(manifest_path), label="engine manifest")
+    except (BoundaryError, OSError, ValueError, TypeError, OverflowError, RecursionError):
         raise SystemExit(92)
-    if manifest_committed.returncode or manifest_live != manifest_committed.stdout \
+    if manifest_live is None or manifest_committed.returncode or manifest_live != manifest_committed.stdout \
             or __import__("hashlib").sha256(manifest_live).hexdigest() != files[manifest_relative]:
         raise SystemExit(92)
     print("CTRROOT=" + str(authority["controller_repository"]))
@@ -216,13 +333,19 @@ layout = plan.get("runtime_layout")
 if layout is not None:
     if not isinstance(layout, dict) or layout.get("mode") not in ("executable-only", "sibling-tree"):
         raise SystemExit(92)
-    if layout.get("mode") == "sibling-tree":
+    if layout.get("mode") == "executable-only":
+        if set(layout) != {"mode"}:
+            raise SystemExit(92)
+    else:
+        if set(layout) != {"mode", "source", "target", "entrypoint"}:
+            raise SystemExit(92)
         source = layout.get("source", layout.get("root"))
         target = layout.get("target", ".recursion-runtime")
         entry = layout.get("entrypoint")
         if source != "executable-directory" or not isinstance(target, str) or not isinstance(entry, str):
             raise SystemExit(92)
-        if target.startswith("/") or entry.startswith("/") or not target or not entry \
+        if target.startswith("/") or entry.startswith("/") or ":" in target or ":" in entry \
+                or not target or not entry \
                 or any(ord(ch) < 32 or ord(ch) == 127 for ch in target + entry) \
                 or "\\" in target or "\\" in entry \
                 or any(part in ("", ".", "..") for part in target.split("/")) \
@@ -236,8 +359,11 @@ if layout is not None:
         print("RTMODE=executable-only")
 auth = plan.get("auth")
 if auth is not None:
-    if not isinstance(auth, dict) or auth.get("mode") not in ("none", "runner-home-marker") \
+    if not isinstance(auth, dict) or set(auth) != {"mode", "required", "marker"} \
+            or auth.get("mode") not in ("none", "runner-home-marker") \
             or not isinstance(auth.get("required"), bool):
+        raise SystemExit(92)
+    if auth["mode"] == "none" and auth.get("marker") is not None:
         raise SystemExit(92)
     if auth.get("mode") == "runner-home-marker":
         marker = auth.get("marker")
@@ -250,7 +376,9 @@ if auth is not None:
         print("AUTHMARKER=" + marker)
 execution = plan.get("execution")
 if execution is not None:
-    if not isinstance(execution, dict):
+    if not isinstance(execution, dict) or set(execution) != {
+            "structured_output", "output_format", "cancellation", "exit_codes"} \
+            or not isinstance(execution.get("structured_output"), bool):
         raise SystemExit(92)
     output = execution.get("output_format", "text")
     if output not in ("text", "json"):
@@ -258,10 +386,12 @@ if execution is not None:
     print("EXOUT=" + output)
     if execution.get("structured_output") is True:
         print("EXSTRUCT=1")
-    cancellation = execution.get("cancellation") or {}
+    cancellation = execution.get("cancellation")
+    if not isinstance(cancellation, dict):
+        raise SystemExit(92)
     if set(cancellation) != {"signal", "grace_s"} \
             or cancellation.get("signal") not in ("TERM", "INT") \
-            or not isinstance(cancellation.get("grace_s"), int) \
+            or not is_plain_int(cancellation.get("grace_s")) \
             or not 1 <= cancellation["grace_s"] <= 60:
         raise SystemExit(92)
     print("CANCEL=" + cancellation["signal"])
@@ -271,7 +401,7 @@ if execution is not None:
         raise SystemExit(92)
     seen = set()
     for values in codes.values():
-        if not isinstance(values, list) or not values or any(not isinstance(v, int) or not 0 <= v <= 255 for v in values) \
+        if not isinstance(values, list) or not values or any(not is_plain_int(v) or not 0 <= v <= 255 for v in values) \
                 or len(set(values)) != len(values) or seen.intersection(values):
             raise SystemExit(92)
         seen.update(values)
@@ -326,58 +456,85 @@ build_plan_argv(){ # resolved-exe -> PLAN_RUN: exact-element placeholder substit
 write_execution_evidence(){ # status rc classification; controller-owned, never worker-written
   local status="$1" rc="$2" classification="$3"
   [ -z "$EXECUTION_EVIDENCE" ] || [ "$ENGINE" = gate ] || {
-    mkdir -p "$(dirname "$EXECUTION_EVIDENCE")" || return 1
     "$PYTHON" - "$EXECUTION_EVIDENCE" "$ENGINE" "$MODEL" "$status" "$rc" "$classification" \
       "$PLAN_RUNTIME_MODE" "$PLAN_RUNTIME_TARGET" "$PLAN_RUNTIME_ENTRY" "$PLAN_OUTPUT_FORMAT" \
       "$PLAN_STRUCTURED" "$PLAN_CANCEL_SIGNAL" "$PLAN_CANCEL_GRACE" "$PLAN_EXIT_CODES" \
       "$PLAN_NETWORK_POLICY" "$PLAN_NETWORK_PROFILE" "$PLAN_NETWORK_PROVIDER" "${PLAN_NETWORK_ENDPOINTS[*]}" \
       "$ASSIGNMENT_DIGEST" "$PLAN_ARGV_JSON" "$PLAN_MODEL_SUFFIX_JSON" \
       "${PLAN_RUN[@]}" <<'PY'
-import json, os, sys, tempfile
+import json, os, re, sys
+from pathlib import Path
+sys.path.insert(0, os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts"))
+from phase5_safety import BoundaryError, atomic_write, decode_json, is_plain_int
 path, engine, model, status, rc, classification = sys.argv[1:7]
 runtime_mode, runtime_target, runtime_entry = sys.argv[7:10]
 output_format, structured, cancel_signal, cancel_grace, exit_codes = sys.argv[10:15]
 network_policy, network_profile, network_provider, network_endpoints = sys.argv[15:19]
 assignment_digest, argv_json, suffix_json = sys.argv[19:22]
 argv = sys.argv[22:]
-declared_argv = json.loads(argv_json)
-if model:
-    declared_argv.extend(json.loads(suffix_json))
-value = {"schema_version": 1, "engine": engine, "status": status,
-         "exit_code": int(rc), "exit_classification": classification,
-         "model": model, "argv": declared_argv, "executed_argv": argv,
-         "assignment_digest": assignment_digest,
-         "assignment_identity": assignment_digest,
-         "provider": network_provider, "profile": network_profile,
-         "endpoints": network_endpoints.split(),
-         "real_execution_capability": "unproven-without-auth",
-         "auth_required": os.environ.get("RECURSION_AUTH_REQUIRED", "0") == "1",
-         "output_format": output_format, "structured_output": structured == "1",
-         "cancellation": {"signal": cancel_signal, "grace_s": int(cancel_grace)},
-         "exit_codes": json.loads(exit_codes) if exit_codes else {},
-         "runtime_layout": {"mode": runtime_mode}}
-if network_profile:
-    value["network"] = {"policy": network_policy, "profile": network_profile,
-                         "provider": network_provider, "endpoints": network_endpoints.split()}
-if runtime_mode == "sibling-tree":
-    value["runtime_layout"].update(target=runtime_target, entrypoint=runtime_entry)
-fd, tmp = tempfile.mkstemp(prefix=".execution-evidence.", dir=os.path.dirname(path) or ".")
-with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
-    json.dump(value, out, indent=2, sort_keys=True); out.write("\n"); out.flush(); os.fsync(out.fileno())
-os.replace(tmp, path)
+try:
+    declared_argv = decode_json(argv_json, "declared argv")
+    suffix = decode_json(suffix_json, "declared model suffix")
+    codes = decode_json(exit_codes, "declared exit codes") if exit_codes else {}
+    if not isinstance(declared_argv, list) or not isinstance(suffix, list) \
+            or not isinstance(codes, dict) \
+            or not is_plain_int(int(rc)) or not is_plain_int(int(cancel_grace)):
+        raise BoundaryError("execution evidence has invalid typed fields")
+    if model:
+        declared_argv.extend(suffix)
+    value = {"schema_version": 1, "engine": engine, "status": status,
+             "exit_code": int(rc), "exit_classification": classification,
+             "model": model, "argv": declared_argv, "executed_argv": argv,
+             "assignment_digest": assignment_digest,
+             "assignment_identity": assignment_digest,
+             "provider": network_provider, "profile": network_profile,
+             "endpoints": network_endpoints.split(),
+             "real_execution_capability": "unproven-without-auth",
+             "auth_required": os.environ.get("RECURSION_AUTH_REQUIRED", "0") == "1",
+             "output_format": output_format, "structured_output": structured == "1",
+             "cancellation": {"signal": cancel_signal, "grace_s": int(cancel_grace)},
+             "exit_codes": codes,
+             "runtime_layout": {"mode": runtime_mode}}
+    if network_profile:
+        value["network"] = {"policy": network_policy, "profile": network_profile,
+                             "provider": network_provider, "endpoints": network_endpoints.split()}
+    if runtime_mode == "sibling-tree":
+        value["runtime_layout"].update(target=runtime_target, entrypoint=runtime_entry)
+    encoded = (json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
+    atomic_write(Path(path), encoded, replace=True, mode=0o600, label="execution evidence")
+except (BoundaryError, OSError, UnicodeDecodeError, json.JSONDecodeError,
+        ValueError, TypeError, OverflowError, RecursionError) as exc:
+    raise SystemExit(95) from exc
 PY
   }
 }
 classify_exit_code(){
   "$PYTHON" - "$PLAN_EXIT_CODES" "$1" <<'PY'
-import json, sys
-codes = json.loads(sys.argv[1]); code = int(sys.argv[2])
-for name, values in codes.items():
-    if code in values:
-        print({"success":"success", "auth":"auth-failed", "runtime":"runtime-failed", "egress":"egress-failed"}[name])
-        break
-else:
-    print("process-exit")
+import json, sys, os
+sys.path.insert(0, os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts"))
+from phase5_safety import BoundaryError, decode_json, is_plain_int
+try:
+    codes = decode_json(sys.argv[1], "exit code map")
+    code = int(sys.argv[2])
+    names = {"success", "auth", "runtime", "egress"}
+    if not isinstance(codes, dict) or set(codes) != names or not is_plain_int(code):
+        raise BoundaryError("exit code map is invalid")
+    seen = set()
+    for name in ("success", "auth", "runtime", "egress"):
+        values = codes[name]
+        if not isinstance(values, list) or not values \
+                or any(not is_plain_int(item) or not 0 <= item <= 255 for item in values) \
+                or len(set(values)) != len(values) or seen.intersection(values):
+            raise BoundaryError("exit code map is invalid")
+        seen.update(values)
+        if code in values:
+            print({"success":"success", "auth":"auth-failed", "runtime":"runtime-failed", "egress":"egress-failed"}[name])
+            break
+    else:
+        print("process-exit")
+except (BoundaryError, json.JSONDecodeError, ValueError, TypeError,
+        OverflowError, RecursionError, UnicodeDecodeError, OSError, KeyError):
+    raise SystemExit(95)
 PY
 }
 check_plan_auth(){
@@ -386,11 +543,12 @@ check_plan_auth(){
     echo "worker-sandbox: refusal=missing-auth invalid runner-home auth contract" >&2; return 90;
   }
   local home="${1:-${RECURSION_TEST_RUNNER_HOME:-${RECURSION_RUNNER_HOME:-${HOME:-}}}}" expected_uid="${2:-$(id -u)}" marker_path="" home_path="" marker_mode="" marker_owner="" marker_type=""
-  home_path="$(realpath -e -- "$home" 2>/dev/null || true)"
+  home_path="$(safe_directory "$home" 2>/dev/null || true)"
   [ -n "$home_path" ] && [ -d "$home_path" ] || { echo "worker-sandbox: refusal=missing-auth runner home is absent" >&2; return 90; }
   marker_path="$home_path/$PLAN_AUTH_MARKER"
   [ -f "$marker_path" ] && [ ! -L "$marker_path" ] || { echo "worker-sandbox: refusal=missing-auth runner auth marker is absent or not regular" >&2; return 90; }
-  [ "$(realpath -e -- "$marker_path" 2>/dev/null || true)" = "$marker_path" ] || { echo "worker-sandbox: refusal=missing-auth auth marker escapes runner home" >&2; return 90; }
+  marker_path="$(safe_file "$marker_path" 2>/dev/null || true)"
+  [ -n "$marker_path" ] || { echo "worker-sandbox: refusal=missing-auth auth marker escapes runner home" >&2; return 90; }
   marker_type="$(stat -c %F -- "$marker_path" 2>/dev/null || true)"
   [ "$marker_type" = "regular file" ] || { echo "worker-sandbox: refusal=missing-auth auth marker is not a regular file" >&2; return 90; }
   marker_owner="$(stat -c %u -- "$marker_path" 2>/dev/null || true)"
@@ -406,9 +564,10 @@ case "$NETWORK_POLICY" in provider-only|none) ;; *) echo "worker-sandbox: invali
   || { echo "worker-sandbox: gate command is missing" >&2; exit 92; }
 [ "$ROLE" != gate ] || [ "$NETWORK_POLICY" = none ] \
   || { echo "worker-sandbox: acceptance gates are offline; provider-only is invalid" >&2; exit 96; }
-[ -d "$WT" ] || { echo "worker-sandbox: worktree is missing" >&2; exit 95; }
-WT="$(realpath -e "$WT")"
-HOST_CWD="$(realpath -e "$WT/${WORKDIR_PATH:-.}" 2>/dev/null || true)"
+[ -n "$WT" ] || { echo "worker-sandbox: worktree is missing" >&2; exit 95; }
+WT="$(safe_directory "$WT")" || { echo "worker-sandbox: worktree is not a pinned directory" >&2; exit 95; }
+case "${WORKDIR_PATH:-.}" in ''|/*|*..*|*\\*|*:*) echo "worker-sandbox: invalid working directory" >&2; exit 95;; esac
+HOST_CWD="$(safe_directory "$WT/${WORKDIR_PATH:-.}" 2>/dev/null || true)"
 case "$HOST_CWD" in
   "$WT"|"$WT"/*) ;;
   *) echo "worker-sandbox: working directory escapes the worktree" >&2; exit 95 ;;
@@ -416,14 +575,14 @@ esac
 SANDBOX_CWD="/workspace${HOST_CWD#$WT}"
 READ_ONLY_HOSTS=(); READ_ONLY_DESTS=()
 for item in "${READ_ONLY_PATHS[@]}"; do
-  case "$item" in ''|/*|*..*) echo "worker-sandbox: invalid read-only worktree path" >&2; exit 95 ;; esac
-  host="$(realpath -e "$WT/$item" 2>/dev/null || true)"
+  case "$item" in ''|/*|*..*|*\\*|*:*) echo "worker-sandbox: invalid read-only worktree path" >&2; exit 95 ;; esac
+  host="$(safe_leaf "$WT/$item" 2>/dev/null || true)"
   case "$host" in
     "$WT"/*) READ_ONLY_HOSTS+=("$host"); READ_ONLY_DESTS+=("/workspace/${item#./}") ;;
     *) echo "worker-sandbox: read-only path escapes or is absent: $item" >&2; exit 95 ;;
   esac
 done
-[ -z "$EVIDENCE_DIR" ] || { mkdir -p "$EVIDENCE_DIR"; EVIDENCE_DIR="$(realpath -e "$EVIDENCE_DIR")"; }
+[ -z "$EVIDENCE_DIR" ] || { EVIDENCE_DIR="$(safe_mkdir "$EVIDENCE_DIR")" || { echo "worker-sandbox: evidence directory is unsafe" >&2; exit 95; }; }
 export RECURSION_WORKER_ROLE="$ROLE"
 [ -z "$EVIDENCE_DIR" ] || export RECURSION_EVIDENCE_DIR="$EVIDENCE_DIR"
 
@@ -431,7 +590,7 @@ case "${RECURSION_TEST_WORKER:-}" in
   logical)
     # Existing hermetic envelope tests exercise the logical scope gate, not the OS boundary.
     # This bypass is accepted only for disposable /tmp controllers and is never valid on /opt.
-    case "$(realpath -m "$ROOT")" in /tmp/*) ;; *) echo "worker-sandbox: test bypass refused" >&2; exit 95;; esac
+    case "$ROOT" in /tmp/*) ;; *) echo "worker-sandbox: test bypass refused" >&2; exit 95;; esac
     if [ "$ENGINE" != gate ]; then
       check_plan_auth || exit $?
     fi
@@ -471,9 +630,8 @@ case "${RECURSION_TEST_WORKER:-}" in
         logical_inner="$logical_exe"
         if [ "$PLAN_RUNTIME_MODE" = sibling-tree ]; then
           logical_runtime_host="$WT/$PLAN_RUNTIME_TARGET"
-          mkdir -p "$(dirname "$logical_runtime_host")"
           "$PYTHON" "$(dirname "$0")/runtime-layout.py" stage \
-            --source "$(dirname "$(realpath -e "$logical_exe")")" --destination "$logical_runtime_host" \
+            --source "$(dirname "$(safe_file "$logical_exe")")" --destination "$logical_runtime_host" \
             --entrypoint "$PLAN_RUNTIME_ENTRY" \
             || { echo "worker-sandbox: refusal=missing-runtime runtime tree could not be staged" >&2; exit 94; }
           logical_inner="$logical_runtime_host/$PLAN_RUNTIME_ENTRY"
@@ -502,7 +660,7 @@ PROVIDER_NETNS=""
 if [ "$NETWORK_POLICY" = provider-only ]; then
   if [ -n "$ENGINE_PLAN" ]; then
     PROVIDER_PROFILE="$PLAN_NETWORK_PROFILE"
-    [ -n "$PROVIDER_PROFILE" ] && [ "$PLAN_NETWORK_PROVIDER" = "$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["billing"]["provider"])' "$ENGINE_PLAN")" ] \
+    [ -n "$PROVIDER_PROFILE" ] && [ -n "$PLAN_NETWORK_PROVIDER" ] \
       || { echo "worker-sandbox: refusal=missing-egress provider profile is not bound to the plan" >&2; exit 96; }
   elif [ "$ENGINE" = claude ]; then
     PROVIDER_PROFILE=anthropic
@@ -520,8 +678,26 @@ if [ "$NETWORK_POLICY" = provider-only ]; then
   fi
   PROVIDER_JSON="$("$PYTHON" "$ROOT/scripts/provider-egress.py" "${PROVIDER_ARGS[@]}")" \
     || { echo "worker-sandbox: refusal=missing-egress provider profile is invalid" >&2; exit 96; }
-  PROVIDER_NETNS="/run/netns/$("$PYTHON" -c 'import json,sys; print(json.loads(sys.argv[1])["namespace"])' "$PROVIDER_JSON")"
-  PROVIDER_PROXY_PORT="$("$PYTHON" -c 'import json,sys; print(json.loads(sys.argv[1])["proxy_port"])' "$PROVIDER_JSON")"
+  PROVIDER_FIELDS="$("$PYTHON" - "$PROVIDER_JSON" <<'PY'
+import json, os, re, sys
+sys.path.insert(0, os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts"))
+from phase5_safety import BoundaryError, decode_json, is_plain_int
+try:
+    value = decode_json(sys.argv[1], "provider capability")
+    if not isinstance(value, dict) or not isinstance(value.get("namespace"), str) \
+            or not re.fullmatch(r"[a-z][a-z0-9-]{0,127}", value.get("namespace", "")) \
+            or not is_plain_int(value.get("proxy_port")) \
+            or not 1 <= value["proxy_port"] <= 65535:
+        raise BoundaryError("provider capability is malformed")
+    print(value["namespace"])
+    print(value["proxy_port"])
+except (BoundaryError, json.JSONDecodeError, ValueError, TypeError,
+        OverflowError, RecursionError, UnicodeDecodeError, OSError):
+    raise SystemExit(96)
+PY
+  )" || { echo "worker-sandbox: refusal=missing-egress provider capability is malformed" >&2; exit 96; }
+  PROVIDER_NETNS="/run/netns/$(printf '%s\n' "$PROVIDER_FIELDS" | sed -n '1p')"
+  PROVIDER_PROXY_PORT="$(printf '%s\n' "$PROVIDER_FIELDS" | sed -n '2p')"
   export RECURSION_PROVIDER_PROFILE="$PROVIDER_PROFILE" RECURSION_PROVIDER_ID="$PLAN_NETWORK_PROVIDER"
   export RECURSION_PROVIDER_ENDPOINTS="${PLAN_NETWORK_ENDPOINTS[*]}"
   [ -z "$PLAN_CONTROLLER_ROOT" ] || export RECURSION_CONTROLLER_ROOT="$PLAN_CONTROLLER_ROOT"
@@ -555,12 +731,12 @@ if getent passwd "$RUNNER_USER" >/dev/null 2>&1; then
   RUNNER_HOME="$(getent passwd "$RUNNER_USER" | cut -d: -f6)"
 else
   # Disposable controls run before sysusers.d is deployed but still use a real non-root uid.
-  case "$(realpath -m "$ROOT")" in
+  case "$ROOT" in
     /tmp/*) RUNNER_USER=nobody; RUNNER_UID="$(id -u nobody)"; RUNNER_GID="$(id -g nobody)"; RUNNER_HOME="" ;;
     *) echo "worker-sandbox: dedicated recursion-runner account is missing" >&2; exit 95 ;;
   esac
 fi
-[ -z "$RUNNER_HOME" ] || RUNNER_HOME="$(realpath -e -- "$RUNNER_HOME" 2>/dev/null || true)"
+[ -z "$RUNNER_HOME" ] || RUNNER_HOME="$(safe_directory "$RUNNER_HOME" 2>/dev/null || true)"
 [ -z "$RUNNER_HOME" ] || [ -d "$RUNNER_HOME" ] \
   || { echo "worker-sandbox: runner home is not a canonical directory" >&2; exit 95; }
 [ "$RUNNER_UID" != 0 ] && [ "$RUNNER_GID" != 0 ] \
@@ -576,7 +752,7 @@ case "$ENGINE" in
   *) EXE="$(command -v "$PLAN_EXE" 2>/dev/null || true)"; [ -n "$EXE" ] \
        || { echo "worker-sandbox: refusal=missing-runtime executable is unavailable" >&2; exit 94; } ;;
 esac
-[ "$ENGINE" = gate ] || EXE_REAL="$(realpath -e "$EXE")" \
+[ "$ENGINE" = gate ] || EXE_REAL="$(safe_file "$EXE")" \
   || { echo "worker-sandbox: refusal=missing-runtime executable cannot be resolved" >&2; exit 94; }
 
 # The disposable worktree is the only writable project mount. A test stub outside /usr is copied
@@ -589,9 +765,20 @@ case "$ENGINE:$EXE_REAL" in
   gate:) ;;
   *:/usr/*) ;;
   *)
-    rm -rf -- "$SANDBOX_BIN"
+    [ ! -e "$SANDBOX_BIN" ] || safe_remove_tree "$SANDBOX_BIN" \
+      || { echo "worker-sandbox: sandbox staging path is unsafe" >&2; exit 95; }
     install -d -o 0 -g "$RUNNER_GID" -m 0710 "$SANDBOX_BIN"
-    install -o 0 -g "$RUNNER_GID" -m 0550 "$EXE_REAL" "$SANDBOX_BIN/$ENGINE"
+    "$PYTHON" - "$EXE_REAL" "$SANDBOX_BIN/$ENGINE" <<'PY'
+import os, sys
+from pathlib import Path
+sys.path.insert(0, os.path.join(os.environ.get("RECURSION_ROOT", "."), "scripts"))
+from phase5_safety import BoundaryError, copy_regular
+try:
+    copy_regular(Path(sys.argv[1]), Path(sys.argv[2]), mode=0o550)
+except (BoundaryError, OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError, RecursionError):
+    raise SystemExit(2)
+PY
+    chown 0:"$RUNNER_GID" "$SANDBOX_BIN/$ENGINE"
     INNER_EXE="/workspace/.recursion-sandbox/$ENGINE"
     ;;
 esac
@@ -599,7 +786,6 @@ if [ "$ENGINE" != gate ] && [ "$PLAN_RUNTIME_MODE" = sibling-tree ]; then
   RUNTIME_HOST="$WT/$PLAN_RUNTIME_TARGET"
   RUNTIME_DEST="/workspace/$PLAN_RUNTIME_TARGET"
   RUNTIME_ENTRY="$PLAN_RUNTIME_ENTRY"
-  mkdir -p "$(dirname "$RUNTIME_HOST")"
   "$PYTHON" "$ROOT/scripts/runtime-layout.py" stage \
     --source "$(dirname "$EXE_REAL")" --destination "$RUNTIME_HOST" \
     --entrypoint "$PLAN_RUNTIME_ENTRY" \
@@ -634,8 +820,8 @@ cleanup(){
     echo "worker-sandbox: quarantine=termination-unconfirmed worktree and evidence retained" >&2
     return 1
   fi
-  rm -rf -- "$SANDBOX_BIN"
-  [ -z "$RUNTIME_HOST" ] || rm -rf -- "$RUNTIME_HOST"
+  [ ! -e "$SANDBOX_BIN" ] || safe_remove_tree "$SANDBOX_BIN" || return 1
+  [ -z "$RUNTIME_HOST" ] || safe_remove_tree "$RUNTIME_HOST" || return 1
   [ -z "$ENGINE_ENV_FILE" ] || rm -f -- "$ENGINE_ENV_FILE"
   chown -R 0:0 "$WT" 2>/dev/null || true
   CLEANUP_DONE=1
@@ -719,7 +905,7 @@ if [ "$ENGINE" != gate ] && [ -n "$RUNNER_HOME" ] && [ -d "$RUNNER_HOME" ]; then
   RUN+=(--property "BindReadOnlyPaths=$RUNNER_HOME:/home/runner")
 fi
 if [ "${RECURSION_TEST_WORKER:-}" = sandbox ]; then
-  case "$(realpath -m "$ROOT")" in /tmp/*) ;; *) echo "worker-sandbox: sandbox test env refused" >&2; exit 95;; esac
+  case "$ROOT" in /tmp/*) ;; *) echo "worker-sandbox: sandbox test env refused" >&2; exit 95;; esac
   [ -n "${STUB_ARM_SCRIPT:-}" ] && RUN+=(--setenv STUB_ARM_SCRIPT="$STUB_ARM_SCRIPT")
   for name in STUB_SECRET STUB_LEAK STUB_OUTSIDE STUB_UIDLOG STUB_PUBLISHER STUB_PUBLOG STUB_VERIFIER_SCRIPT; do
     value="${!name:-}"; [ -n "$value" ] && RUN+=(--setenv "$name=$value")

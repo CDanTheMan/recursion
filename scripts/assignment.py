@@ -11,11 +11,12 @@ import hashlib
 import json
 import os
 import re
-import stat
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+from phase5_safety import BoundaryError, decode_json, is_plain_int, pinned_directory, read_bytes
 
 ID_RE = re.compile(r"[a-z][a-z0-9-]{1,63}\Z")
 SHA_RE = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
@@ -56,20 +57,20 @@ def _canonical_source(value: Any) -> str:
     if not path.is_absolute():
         raise AssignmentError("source_repository must be absolute")
     try:
-        resolved = path.resolve(strict=True)
-    except OSError as exc:
+        with pinned_directory(path) as (_, absolute):
+            resolved = Path(absolute)
+            probe = subprocess.run(
+                ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
+                capture_output=True, text=True, check=False,
+            )
+    except (BoundaryError, OSError, ValueError, TypeError) as exc:
         raise AssignmentError("source_repository is unavailable") from exc
-    if not resolved.is_dir():
-        raise AssignmentError("source_repository is not a directory")
-    probe = subprocess.run(
-        ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
-        capture_output=True, text=True, check=False,
-    )
     if probe.returncode != 0:
         raise AssignmentError("source_repository is not a canonical Git repository")
     try:
-        git_root = Path(probe.stdout.strip()).resolve(strict=True)
-    except OSError as exc:
+        with pinned_directory(probe.stdout.strip()) as (_, git_absolute):
+            git_root = Path(git_absolute)
+    except (BoundaryError, OSError, ValueError, TypeError) as exc:
         raise AssignmentError("source_repository Git root is unavailable") from exc
     if git_root != resolved:
         raise AssignmentError("source_repository must be the canonical Git worktree root")
@@ -82,22 +83,27 @@ def _canonical_controller(value: Any) -> str:
     if not path.is_absolute():
         raise AssignmentError("controller_repository must be absolute")
     try:
-        resolved = path.resolve(strict=True)
-    except OSError as exc:
+        with pinned_directory(path) as (_, absolute):
+            resolved = Path(absolute)
+            probe = subprocess.run(
+                ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
+                capture_output=True, text=True, check=False,
+            )
+    except (BoundaryError, OSError, ValueError, TypeError) as exc:
         raise AssignmentError("controller_repository is unavailable") from exc
-    if not resolved.is_dir():
-        raise AssignmentError("controller_repository is not a directory")
-    probe = subprocess.run(
-        ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
-        capture_output=True, text=True, check=False,
-    )
-    if probe.returncode != 0 or Path(probe.stdout.strip()).resolve() != resolved:
+    try:
+        with pinned_directory(probe.stdout.strip()) as (_, git_absolute):
+            git_root = Path(git_absolute)
+    except (BoundaryError, OSError, ValueError, TypeError) as exc:
+        raise AssignmentError("controller_repository Git root is unavailable") from exc
+    if probe.returncode != 0 or git_root != resolved:
         raise AssignmentError("controller_repository is not the canonical Git worktree root")
     configured = os.environ.get("RECURSION_ROOT", "").strip()
-    try:
-        expected = Path(configured).resolve(strict=True) if configured else Path(__file__).resolve().parent.parent
-    except OSError as exc:
-        raise AssignmentError("canonical controller root is unavailable") from exc
+    expected = Path(configured) if configured else Path(__file__).parent.parent
+    if not expected.is_absolute():
+        expected = Path(os.path.abspath(str(expected)))
+    else:
+        expected = Path(os.path.abspath(str(expected)))
     if resolved != expected:
         raise AssignmentError("controller_repository is not the canonical controller root")
     return os.path.normcase(str(resolved))
@@ -127,18 +133,20 @@ def _git_head_is(repo: str, sha: str, label: str) -> None:
         raise AssignmentError(f"{label} HEAD is not the assigned immutable commit")
 
 
+def _git_branch_is(repo: str, branch: str, sha: str) -> None:
+    resolved = subprocess.run(
+        ["git", "-C", repo, "rev-parse", "--verify", f"refs/heads/{branch}^{{commit}}"],
+        capture_output=True, text=True, check=False,
+    )
+    if resolved.returncode or resolved.stdout.strip().lower() != sha.lower():
+        raise AssignmentError("source_branch does not identify the assigned source commit")
+
+
 def _controller_file_bytes(repo: str, sha: str, relative: str) -> bytes:
     pure = PurePosixPath(relative)
     path = Path(repo, *pure.parts)
-    try:
-        path.resolve(strict=True).relative_to(Path(repo).resolve(strict=True))
-        regular = path.is_file() and not path.is_symlink()
-    except OSError as exc:
-        raise AssignmentError(f"controller file is unavailable: {relative}") from exc
-    except ValueError as exc:
-        raise AssignmentError(f"controller file resolves outside the canonical root: {relative}") from exc
     if pure.is_absolute() or not pure.parts or pure.as_posix() != relative or "\\" in relative \
-            or any(part in {"", ".", ".."} for part in pure.parts) or not regular:
+            or any(part in {"", ".", ".."} for part in pure.parts):
         raise AssignmentError(f"controller file is not a clean regular file: {relative}")
     tracked = subprocess.run(
         ["git", "-C", repo, "ls-files", "--error-unmatch", "--", relative],
@@ -154,8 +162,8 @@ def _controller_file_bytes(repo: str, sha: str, relative: str) -> bytes:
     rows = [row for row in tree.stdout.split(b"\0") if row]
     mode = rows[0].split(b" ", 1)[0] if len(rows) == 1 else b""
     try:
-        live = path.read_bytes()
-    except OSError as exc:
+        live = read_bytes(path, label=f"controller file {relative}")
+    except BoundaryError as exc:
         raise AssignmentError(f"controller file is unreadable: {relative}") from exc
     if tracked.returncode or tree.returncode or len(rows) != 1 \
             or mode not in {b"100644", b"100755"} or committed.returncode \
@@ -174,18 +182,19 @@ def _provider_profiles(controller_repo: str | None = None, controller_sha: str |
     if controller_repo is not None:
         raw = _controller_file_bytes(controller_repo, controller_sha, "scripts/provider-egress-profiles.json")
     else:
-        path = Path(__file__).resolve().parent / "provider-egress-profiles.json"
+        path = Path(__file__).parent / "provider-egress-profiles.json"
         try:
-            raw = path.read_bytes()
-        except OSError as exc:
+            raw = read_bytes(path, label="provider profile registry")
+        except BoundaryError as exc:
             raise AssignmentError("provider profile registry is invalid") from exc
     try:
-        value = json.loads(raw.decode("utf-8"))
+        value = decode_json(raw, "provider profile registry")
         profiles = value["profiles"]
         if not isinstance(profiles, dict):
             raise TypeError
         return profiles
-    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+    except (BoundaryError, OSError, ValueError, KeyError, TypeError,
+            OverflowError, RecursionError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise AssignmentError("provider profile registry is invalid") from exc
 
 
@@ -200,14 +209,18 @@ def _engine_binding(engine: str, controller_repo: str, controller_sha: str) -> t
             raise AssignmentError(f"engine manifest binding is unavailable for {engine}")
         relative = f"scripts/engines/{engine}.json"
         try:
-            manifest = json.loads(_controller_file_bytes(controller_repo, controller_sha, relative).decode("utf-8"))
+            manifest = decode_json(
+                _controller_file_bytes(controller_repo, controller_sha, relative),
+                f"engine manifest {engine}",
+            )
             provider = manifest["billing"]["provider"]
             profile = manifest["network"]["profile"]
             endpoints = manifest["network"]["endpoints"]
             policy = manifest["network"]["policy"]
             argv = manifest["argv"]
             suffix = manifest["model"]["argv_suffix"]
-        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        except (BoundaryError, OSError, ValueError, KeyError, TypeError,
+                OverflowError, RecursionError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise AssignmentError(f"engine manifest binding is unavailable for {engine}") from exc
         if not isinstance(provider, str) or not isinstance(profile, str) or not isinstance(endpoints, list) \
                 or not isinstance(policy, str) or not isinstance(argv, list) or not isinstance(suffix, list):
@@ -314,8 +327,9 @@ def _validate_gate_contract(value: Any, expected_digest: str, *, source_repo: st
         detail = (verified.stderr or verified.stdout or "strict gate validation failed").strip()
         raise AssignmentError(f"gate_contract provenance is not independently valid: {detail}")
     try:
-        observed = json.loads(verified.stdout)
-    except json.JSONDecodeError as exc:
+        observed = decode_json(verified.stdout, "strict gate validator output")
+    except (BoundaryError, json.JSONDecodeError, TypeError, ValueError,
+            OverflowError, RecursionError, UnicodeDecodeError) as exc:
         raise AssignmentError("strict gate validator returned malformed provenance") from exc
     if observed != value:
         raise AssignmentError("gate_contract differs from independently validated provenance")
@@ -325,17 +339,18 @@ def _validate_gate_contract(value: Any, expected_digest: str, *, source_repo: st
 def _authenticated_pool_policy(pool: str, controller_repo: str, controller_sha: str) -> dict[str, Any]:
     try:
         raw = _controller_file_bytes(controller_repo, controller_sha, "scripts/capacity-pools.json")
-        value = json.loads(raw.decode("utf-8"))
+        value = decode_json(raw, "capacity pool policy")
         pools = value["pools"]
         policy = pools[pool]
-    except (OSError, UnicodeDecodeError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+    except (BoundaryError, OSError, UnicodeDecodeError, ValueError, KeyError,
+            TypeError, OverflowError, RecursionError, json.JSONDecodeError):
         raise AssignmentError("capacity_pool is not a declared local pool")
     if not isinstance(policy, dict):
         raise AssignmentError("capacity_pool policy is invalid")
     return policy
 
 
-def validate_assignment(value: Any) -> dict[str, Any]:
+def _validate_assignment(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise AssignmentError("assignment must be an object")
     missing = REQUIRED - value.keys()
@@ -357,6 +372,7 @@ def validate_assignment(value: Any) -> dict[str, Any]:
     controller_sha = _text(value["controller_sha"], "controller_sha", SHA_RE)
     _git_commit_exists(controller, controller_sha)
     _git_head_is(source, sha, "source repository")
+    _git_branch_is(source, branch, sha)
     _git_head_is(controller, controller_sha, "controller repository")
     branch_ref = subprocess.run(
         ["git", "-C", source, "symbolic-ref", "--quiet", "--short", "HEAD"],
@@ -381,6 +397,7 @@ def validate_assignment(value: Any) -> dict[str, Any]:
     paths = value["allowed_paths"]
     if not isinstance(paths, list) or not paths or any(
         not isinstance(item, str) or not item or item != "." and item.startswith(("/", "\\"))
+        or ":" in item
         or any(part in {"", ".", ".."} for part in item.replace("\\", "/").split("/"))
         or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in item) for item in paths
     ):
@@ -437,8 +454,24 @@ def validate_assignment(value: Any) -> dict[str, Any]:
     return normalized
 
 
+def validate_assignment(value: Any) -> dict[str, Any]:
+    """Validate one assignment inside a single typed input boundary."""
+    try:
+        return _validate_assignment(value)
+    except AssignmentError:
+        raise
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError,
+            OverflowError, RecursionError, UnicodeDecodeError, OSError) as exc:
+        raise AssignmentError("assignment contains invalid field types") from exc
+
+
 def canonical_bytes(value: dict[str, Any]) -> bytes:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    try:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"),
+                          ensure_ascii=False, allow_nan=False).encode("utf-8")
+    except (TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError) as exc:
+        raise AssignmentError("assignment cannot be canonically encoded") from exc
 
 
 def digest(value: Any) -> str:
@@ -449,17 +482,12 @@ def digest(value: Any) -> str:
 def load_assignment(path: str | Path) -> tuple[dict[str, Any], str]:
     candidate = Path(path)
     try:
-        info = os.lstat(candidate)
-    except OSError as exc:
-        raise AssignmentError("assignment file is unreadable") from exc
-    if candidate.is_symlink() or not candidate.is_file() \
-            or bool(getattr(info, "st_file_attributes", 0) & 0x400):
-        raise AssignmentError("assignment file must be a regular non-symlink file")
-    if os.name != "nt" and stat.S_IMODE(info.st_mode) & 0o022:
-        raise AssignmentError("assignment file is writable by group or other")
-    try:
-        value = json.loads(candidate.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raw = read_bytes(candidate, label="assignment file", private=True)
+        value = decode_json(raw, "assignment file")
+    except AssignmentError:
+        raise
+    except (BoundaryError, OSError, UnicodeDecodeError, json.JSONDecodeError,
+            ValueError, TypeError, OverflowError, RecursionError) as exc:
         raise AssignmentError("assignment file is unreadable") from exc
     normalized = validate_assignment(value)
     return normalized, hashlib.sha256(canonical_bytes(normalized)).hexdigest()
@@ -470,6 +498,8 @@ def validate_execution_evidence(execution: Any, run: dict[str, Any],
     """Validate controller-owned execution facts against one immutable role assignment."""
     if not isinstance(execution, dict):
         raise AssignmentError("execution evidence must be an object")
+    if not is_plain_int(execution.get("exit_code")) or not is_plain_int(run.get("exit_code")):
+        raise AssignmentError("execution evidence and run exit codes must be integers")
     role = run.get("role")
     roles = assignment.get("role_assignments")
     role_spec = roles.get(role) if isinstance(roles, dict) else None

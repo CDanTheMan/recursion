@@ -5,21 +5,29 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import json
 import os
+import secrets
 import sys
-import tempfile
 import time
 from pathlib import Path
 
-sys_path = Path(__file__).resolve().parent
+sys_path = Path(__file__).parent
 if str(sys_path) not in sys.path:
     sys.path.insert(0, str(sys_path))
 from assignment import (AssignmentError, canonical_bytes, load_assignment,
+                        validate_assignment as assignment_validate,
                         validate_execution_evidence as assignment_execution_evidence)
+from phase5_safety import (BoundaryError, atomic_write, decode_json,
+                           read_bytes, ensure_directory, absolute_lexical, MAX_JSON_BYTES)
 
 
 START_EVIDENCE_KIND = "worker-evidence-start-v1"
+START_FIELDS = {
+    "schema_version", "kind", "run_id", "task_id", "role", "evidence_path",
+    "assignment_file", "assignment_digest", "assignment",
+}
 
 
 def now() -> str:
@@ -32,8 +40,9 @@ def iso(epoch: int) -> str:
 
 def load(path: Path) -> dict:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        value = decode_json(read_bytes(path, label="evidence file"), "evidence file")
+    except (BoundaryError, OSError, UnicodeDecodeError, json.JSONDecodeError,
+            ValueError, TypeError, OverflowError, RecursionError) as exc:
         raise SystemExit("worker-evidence: evidence file is unreadable") from exc
     if not isinstance(value, dict):
         raise SystemExit("worker-evidence: evidence file must contain an object")
@@ -41,93 +50,141 @@ def load(path: Path) -> dict:
 
 
 def atomic(path: Path, value: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
-            json.dump(value, out, indent=2, sort_keys=True)
-            out.write("\n"); out.flush(); os.fsync(out.fileno())
-        os.replace(name, path)
-        if os.name != "nt":  # directory fds cannot be opened on Windows (same guard as the sibling modules)
-            dfd = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(dfd)
-            finally:
-                os.close(dfd)
-    finally:
-        if os.path.exists(name):
-            os.unlink(name)
+        encoded = (json.dumps(value, indent=2, sort_keys=True,
+                              allow_nan=False) + "\n").encode("utf-8")
+        atomic_write(path, encoded, replace=True, mode=0o600, label="evidence output")
+    except (BoundaryError, OSError, TypeError, ValueError, OverflowError,
+            RecursionError) as exc:
+        raise SystemExit("worker-evidence: evidence output could not be published") from exc
 
 
 def start_evidence_path(path: Path) -> Path:
     """Return the non-run-glob sidecar that records the immutable start binding."""
-    return path.with_name(f".{path.name}.start")
+    absolute = Path(absolute_lexical(path))
+    return absolute.with_name(f".{absolute.name}.start")
 
 
-def write_start_evidence(path: Path, value: dict) -> None:
+def evidence_key_path(controller_repository: str) -> Path:
+    override = os.environ.get("RECURSION_EVIDENCE_KEY_FILE", "").strip()
+    if override:
+        return Path(override)
+    return Path(controller_repository) / "state" / ".worker-evidence.key"
+
+
+def load_evidence_key(controller_repository: str) -> bytes:
+    path = evidence_key_path(controller_repository)
+    try:
+        key = read_bytes(path, label="worker evidence key", max_bytes=1024,
+                         private=True)
+        if not key or len(key) < 32:
+            raise BoundaryError("worker evidence key is too short")
+        return key
+    except BoundaryError as missing:
+        # The controller's first strict start provisions the key in its own state
+        # tree.  The key never lives in the run directory and is never emitted.
+        try:
+            ensure_directory(path.parent)
+            try:
+                atomic_write(path, secrets.token_bytes(32), replace=False,
+                             mode=0o600, label="worker evidence key")
+            except BoundaryError as provision_error:
+                # Another legitimate strict start may win first-key provisioning.  Only
+                # accept that race by re-opening the existing controller-owned key below;
+                # malformed or unsafe replacements still fail closed in read_bytes().
+                if "already exists" not in str(provision_error):
+                    raise
+            key = read_bytes(path, label="worker evidence key", max_bytes=1024,
+                             private=True)
+            if len(key) < 32:
+                raise BoundaryError("worker evidence key is too short")
+            return key
+        except (BoundaryError, OSError, TypeError, ValueError, OverflowError,
+                RecursionError) as exc:
+            raise SystemExit("worker-evidence: authenticated evidence key is unavailable") from exc
+
+
+def _binding_mac(value: dict, key: bytes) -> str:
+    try:
+        payload = canonical_bytes(value)
+        return hmac.new(key, payload, hashlib.sha256).hexdigest()
+    except (AssignmentError, TypeError, ValueError, OverflowError,
+            RecursionError, UnicodeDecodeError) as exc:
+        raise SystemExit("worker-evidence: start binding cannot be authenticated") from exc
+
+
+def write_start_evidence(path: Path, value: dict, key: bytes) -> None:
     """Create the start binding exactly once; later transitions never rewrite it."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    encoded = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
     try:
-        descriptor = os.open(path, flags, 0o444)
-    except FileExistsError as exc:
-        raise SystemExit("worker-evidence: immutable start evidence already exists") from exc
-    try:
-        with os.fdopen(descriptor, "wb") as out:
-            out.write(encoded); out.flush(); os.fsync(out.fileno())
-        try:
-            os.chmod(path, 0o444)
-        except OSError:
-            pass
-    except BaseException:
-        try:
-            path.unlink()
-        except OSError:
-            pass
-        raise
+        binding = dict(value)
+        binding["binding_hmac_sha256"] = _binding_mac(value, key)
+        encoded = (json.dumps(binding, indent=2, sort_keys=True,
+                              allow_nan=False) + "\n").encode("utf-8")
+        atomic_write(path, encoded, replace=False, mode=0o444,
+                     label="immutable start evidence")
+    except BoundaryError as exc:
+        if "already exists" in str(exc):
+            raise SystemExit("worker-evidence: immutable start evidence already exists") from exc
+        raise SystemExit("worker-evidence: immutable start evidence could not be written") from exc
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError) as exc:
+        raise SystemExit("worker-evidence: immutable start evidence could not be written") from exc
 
 
 def load_start_evidence(path: Path) -> dict:
     """Load and authenticate the start binding independently of mutable run JSON."""
     candidate = start_evidence_path(path)
     try:
-        candidate.lstat()
-        if not candidate.is_file() or candidate.is_symlink():
-            raise OSError("start evidence is not a regular non-symlink file")
-        value = json.loads(candidate.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        value = decode_json(read_bytes(candidate, label="immutable start evidence"),
+                            "immutable start evidence")
+        if not isinstance(value, dict) or set(value) != START_FIELDS | {"binding_hmac_sha256"}:
+            raise ValueError("immutable start evidence is malformed")
+        embedded = value["assignment"]
+        assignment = validate_assignment_for_sidecar(embedded)
+        if value["assignment_digest"] != hashlib.sha256(canonical_bytes(assignment)).hexdigest():
+            raise ValueError("immutable start evidence assignment digest is invalid")
+        key = load_evidence_key(assignment["controller_repository"])
+        supplied = value.pop("binding_hmac_sha256")
+        expected = _binding_mac(value, key)
+        value["binding_hmac_sha256"] = supplied
+        if not isinstance(supplied, str) or not hmac.compare_digest(supplied, expected):
+            raise ValueError("immutable start evidence authentication failed")
+        if value["evidence_path"] != os.path.normcase(os.path.abspath(str(path))):
+            raise ValueError("immutable start evidence is bound to a different run path")
+    except SystemExit:
+        raise
+    except (BoundaryError, OSError, UnicodeDecodeError, json.JSONDecodeError,
+            ValueError, TypeError, OverflowError, RecursionError, KeyError) as exc:
         raise SystemExit("worker-evidence: immutable start evidence is unavailable") from exc
-    if not isinstance(value, dict) or set(value) != {
-        "schema_version", "kind", "run_id", "task_id", "role", "assignment_file",
-        "assignment_digest", "assignment", "binding_sha256",
-    }:
+    if value["kind"] != START_EVIDENCE_KIND:
         raise SystemExit("worker-evidence: immutable start evidence is malformed")
-    binding = {key: value[key] for key in (
-        "schema_version", "kind", "run_id", "task_id", "role", "assignment_file",
-        "assignment_digest", "assignment",
-    )}
-    expected = hashlib.sha256(canonical_bytes(binding)).hexdigest()
-    if value["kind"] != START_EVIDENCE_KIND or value["binding_sha256"] != expected:
-        raise SystemExit("worker-evidence: immutable start evidence authentication failed")
     return value
 
 
+def validate_assignment_for_sidecar(value: object) -> dict:
+    try:
+        return assignment_validate(value)
+    except AssignmentError as exc:
+        raise ValueError("immutable start evidence assignment is invalid") from exc
+
+
 def maybe_json(path: str | None) -> object:
-    if not path or not Path(path).is_file():
+    if not path:
         return {}
     # The sandbox pre-truncates the hermes usage file before mounting it; a worker that exits
     # without writing leaves it empty. An empty file means "no usage data", the same fact as
     # an absent file — it must not crash `finish` and lose the whole run record.
     try:
-        raw = Path(path).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
+        raw = read_bytes(Path(path), label="auxiliary evidence", max_bytes=MAX_JSON_BYTES,
+                         optional=True)
+    except (BoundaryError, OSError, UnicodeDecodeError, TypeError, ValueError,
+            OverflowError, RecursionError) as exc:
         raise SystemExit("worker-evidence: auxiliary evidence is unreadable") from exc
-    if not raw.strip():
+    if raw is None or not raw.strip():
         return {}
     try:
-        return json.loads(raw)
-    except json.JSONDecodeError as exc:
+        return decode_json(raw, "auxiliary evidence")
+    except (BoundaryError, json.JSONDecodeError, ValueError, TypeError,
+            OverflowError, RecursionError, UnicodeDecodeError) as exc:
         raise SystemExit("worker-evidence: auxiliary evidence is malformed") from exc
 
 
@@ -220,9 +277,8 @@ def main() -> int:
                 value[field] = supplied
         if args.assignment_file:
             assignment_path = Path(args.assignment_file)
-            if not assignment_path.is_file() or assignment_path.is_symlink():
-                raise SystemExit("worker-evidence: assignment file must be a regular non-symlink file")
             assignment, computed = load_assignment(assignment_path)
+            assignment_path = Path(absolute_lexical(assignment_path))
             if args.assignment_digest and args.assignment_digest != computed:
                 raise SystemExit("worker-evidence: assignment digest mismatch")
             role_spec = assignment.get("role_assignments", {}).get(args.role, assignment)
@@ -233,15 +289,16 @@ def main() -> int:
                     raise SystemExit(f"worker-evidence: assignment {field} mismatch")
             value["assignment"] = assignment
             value["assignment_digest"] = computed
-            value["assignment_file"] = str(assignment_path.resolve())
+            value["assignment_file"] = str(assignment_path)
         binding = {
             "schema_version": 1, "kind": START_EVIDENCE_KIND, "run_id": args.run_id,
             "task_id": args.task_id, "role": args.role,
+            "evidence_path": os.path.normcase(os.path.abspath(str(path))),
             "assignment_file": value["assignment_file"],
             "assignment_digest": value["assignment_digest"], "assignment": value["assignment"],
         }
-        binding["binding_sha256"] = hashlib.sha256(canonical_bytes(binding)).hexdigest()
-        write_start_evidence(start_evidence_path(path), binding)
+        key = load_evidence_key(value["assignment"]["controller_repository"])
+        write_start_evidence(start_evidence_path(path), binding, key)
         seed = maybe_json(args.seed_evidence)
         if isinstance(seed, dict) and seed:
             value["seed_evidence"] = seed
@@ -321,6 +378,8 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except Exception as exc:
+    except (AssignmentError, BoundaryError, OSError, UnicodeDecodeError,
+            json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError, KeyError, IndexError, AttributeError) as exc:
         print(f"worker-evidence: invalid evidence transition: {exc}", file=sys.stderr)
         raise SystemExit(2)

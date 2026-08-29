@@ -13,6 +13,11 @@ import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 
+_SCRIPT_DIR = Path(__file__).parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+from phase5_safety import BoundaryError, decode_json, pinned_directory, read_bytes, verify_leaf
+
 
 VACUOUS = re.compile(r"^(?:true|:|/bin/true|exit\s+0)$")
 
@@ -35,7 +40,8 @@ def paths(value: str) -> list[str]:
     result: list[str] = []
     for item in value.replace(",", " ").split():
         p = PurePosixPath(item)
-        if p.is_absolute() or ".." in p.parts or item in {"", "."}:
+        if p.is_absolute() or "\\" in item or ":" in item \
+                or ".." in p.parts or item in {"", "."}:
             fail(f"unsafe gate file: {item!r}")
         result.append(p.as_posix())
     return result
@@ -48,12 +54,23 @@ def under(path: str, roots: list[str]) -> bool:
 def resolved_under(repo: Path, candidate: str, roots: list[str]) -> bool:
     """Require a lexical gate path to remain inside the materialized allowed tree."""
     try:
-        repo_root = repo.resolve(strict=True)
-        candidate_path = (repo / candidate).resolve(strict=False)
-        resolved_roots = [(repo / root).resolve(strict=False) for root in roots]
+        repo_root = Path(os.path.abspath(str(repo)))
+        candidate_path = Path(os.path.abspath(str(repo / candidate)))
+        resolved_roots = [Path(os.path.abspath(str(repo / root))) for root in roots]
         candidate_path.relative_to(repo_root)
-        return any(candidate_path == root or root in candidate_path.parents for root in resolved_roots)
-    except (OSError, ValueError):
+        with pinned_directory(repo_root):
+            with pinned_directory(candidate_path.parent):
+                for root in resolved_roots:
+                    with pinned_directory(root):
+                        if candidate_path == root or root in candidate_path.parents:
+                            # The lexical containment check and the actual leaf
+                            # lookup share pinned, no-follow parent handles.  This
+                            # rejects a final symlink/junction or hardlink swap,
+                            # not only an escaping parent.
+                            verify_leaf(candidate_path)
+                            return True
+        return False
+    except (BoundaryError, OSError, ValueError, TypeError):
         return False
 
 
@@ -65,10 +82,12 @@ def canonical_controller_root(value: str) -> Path:
     before invoking this helper; direct use falls back to the checked-out helper root.
     """
     try:
-        requested = Path(value).resolve(strict=True)
-        configured = Path(os.environ.get("RECURSION_ROOT", "")).resolve(strict=True) \
-            if os.environ.get("RECURSION_ROOT", "").strip() else Path(__file__).resolve().parent.parent
-    except OSError as exc:
+        with pinned_directory(value) as (_, requested_value):
+            requested = Path(requested_value)
+        configured = os.environ.get("RECURSION_ROOT", "").strip() or Path(__file__).parent.parent
+        with pinned_directory(configured) as (_, configured_value):
+            configured = Path(configured_value)
+    except (BoundaryError, OSError, ValueError, TypeError) as exc:
         fail("controller root is unavailable")
     if requested != configured:
         fail("controller root is not the canonical controller root")
@@ -83,18 +102,13 @@ def clean_tracked_bytes(repo: Path, item: str, commit: str | None = None) -> byt
     would let a post-creation working-tree edit survive until evidence consumption.
     """
     path = repo / item
-    try:
-        path.resolve(strict=False).relative_to(repo.resolve(strict=True))
-    except (OSError, ValueError) as exc:
+    if PurePosixPath(item).is_absolute() or "\\" in item or ":" in item \
+            or any(part in {"", ".", ".."} for part in item.split("/")):
         fail(f"gate file resolves outside the source repository: {item}")
     try:
-        mode = path.stat().st_mode
-        if not path.is_file() or path.is_symlink():
-            raise OSError("not a regular file")
-    except OSError as exc:
+        live = read_bytes(path, label=f"gate file {item}")
+    except BoundaryError as exc:
         fail(f"gate file is not a regular non-symlink file: {item}")
-    if mode & 0o170000 not in (0o100000,):
-        fail(f"gate file has a non-regular mode: {item}")
     target = commit or "HEAD"
     if commit:
         resolved = subprocess.run(
@@ -131,6 +145,8 @@ def clean_tracked_bytes(repo: Path, item: str, commit: str | None = None) -> byt
         ["git", "-C", str(repo), "diff", "--quiet", target, "--", item], check=False,
     )
     if dirty.returncode:
+        fail(f"gate file differs from clean {target}: {item}")
+    if live != committed.stdout:
         fail(f"gate file differs from clean {target}: {item}")
     return committed.stdout
 
@@ -292,7 +308,9 @@ def main() -> int:
                 if controller_root is None:
                     fail("absolute acceptance program lacks a controller root")
                 try:
-                    relative = Path(candidate).resolve(strict=True).relative_to(controller_root).as_posix()
+                    relative = Path(os.path.abspath(candidate)).relative_to(
+                        Path(os.path.abspath(str(controller_root)))
+                    ).as_posix()
                 except ValueError:
                     fail(f"acceptance program is outside the controller root: {candidate}")
                 except OSError:
@@ -324,7 +342,8 @@ def main() -> int:
                           "acceptance_sha256": hashlib.sha256(gate.encode()).hexdigest(),
                           "gate_files": hashes,
                           "controller_gate_files": controller_hashes}, sort_keys=True))
-    except ValueError as exc:
+    except (ValueError, TypeError, OverflowError, RecursionError,
+            UnicodeDecodeError, json.JSONDecodeError) as exc:
         print(f"ERR {exc}", file=sys.stderr)
         return 2
     except OSError as exc:

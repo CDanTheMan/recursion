@@ -93,6 +93,9 @@ def main() -> int:
         (scripts_dir / "provider-egress-profiles.json").write_bytes(
             (SOURCE / "scripts" / "provider-egress-profiles.json").read_bytes()
         )
+        (scripts_dir / "phase5_safety.py").write_bytes(
+            (SOURCE / "scripts" / "phase5_safety.py").read_bytes()
+        )
         engines_dir = scripts_dir / "engines"
         engines_dir.mkdir()
         sandbox_copy_posix = to_posix(sandbox_copy)

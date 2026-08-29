@@ -14,8 +14,10 @@ import json
 import os
 import re
 import sys
-import tempfile
 from pathlib import Path
+
+from phase5_safety import (BoundaryError, MAX_FILE_BYTES, atomic_write,
+                           decode_json, pinned_directory, read_bytes)
 
 NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
 MACHINE_KEYS = {"schema_version", "id", "kind", "capabilities"}
@@ -23,15 +25,19 @@ CAPABILITY_RE = re.compile(r"[a-z][a-z0-9-]{1,63}")
 
 
 def is_link_or_reparse(path: Path) -> bool:
-    info = os.lstat(path)
+    try:
+        info = os.lstat(path)
+    except (OSError, ValueError, TypeError):
+        return False
     return os.path.islink(path) or bool(getattr(info, "st_file_attributes", 0) & 0x400)
 
 
 def safe_regular(path: Path) -> None:
-    if is_link_or_reparse(path) or not path.is_file():
-        raise ValueError("machine descriptor must be a regular non-symlink file")
-    if os.name != "nt" and (os.stat(path).st_mode & 0o022):
-        raise ValueError("machine descriptor is writable by group or other")
+    try:
+        read_bytes(path, label="machine descriptor", max_bytes=MAX_FILE_BYTES,
+                   private=True)
+    except BoundaryError as exc:
+        raise ValueError("machine descriptor must be a regular non-symlink file") from exc
 
 
 def fail(message: str, code: int = 2) -> int:
@@ -41,46 +47,46 @@ def fail(message: str, code: int = 2) -> int:
 
 def descriptor_dir() -> Path:
     override = os.environ.get("RECURSION_MACHINE_DIR", "").strip()
-    value = Path(override) if override else Path(__file__).resolve().parent / "machines"
-    if is_link_or_reparse(value) or not value.is_dir():
-        raise ValueError("machine descriptor directory is not a confined directory")
-    return value.resolve()
+    value = Path(override) if override else Path(__file__).parent / "machines"
+    try:
+        with pinned_directory(value) as (_, absolute):
+            return Path(absolute)
+    except (BoundaryError, OSError, ValueError, TypeError) as exc:
+        raise ValueError("machine descriptor directory is not a confined directory") from exc
 
 
 def read_descriptor(machine: str) -> dict:
     path = descriptor_dir() / f"{machine}.json"
     try:
-        safe_regular(path)
-        raw = path.read_text(encoding="utf-8")
-        value = json.loads(raw)
+        raw = read_bytes(path, label="machine descriptor", private=True)
+        value = decode_json(raw, "machine descriptor")
     except FileNotFoundError as exc:
         raise LookupError(f"machine descriptor is absent: {path}") from exc
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except BoundaryError as exc:
         raise ValueError(f"machine descriptor is unreadable: {path}") from exc
     if not isinstance(value, dict) or set(value) != MACHINE_KEYS:
         raise ValueError("machine descriptor has invalid fields")
-    if value["schema_version"] != 1 or value["id"] != machine or value["kind"] != "registered-machine":
+    if not isinstance(value["schema_version"], int) or isinstance(value["schema_version"], bool) \
+            or value["schema_version"] != 1 \
+            or value["id"] != machine or value["kind"] != "registered-machine":
         raise ValueError("machine descriptor identity or schema is invalid")
     capabilities = value["capabilities"]
-    if not isinstance(capabilities, list) or not capabilities or \
-            len(set(capabilities)) != len(capabilities) or \
-            not all(isinstance(item, str) and CAPABILITY_RE.fullmatch(item) for item in capabilities):
+    if not isinstance(capabilities, list) or not capabilities \
+            or any(not isinstance(item, str) or not CAPABILITY_RE.fullmatch(item)
+                   for item in capabilities) \
+            or len(set(capabilities)) != len(capabilities):
         raise ValueError("machine capabilities must be a unique nonempty list of names")
     return value
 
 
 def emit(path: Path, value: dict) -> None:
-    if path.exists() or path.is_symlink():
-        raise OSError("refusing to replace an existing or symlinked capability output")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
-            json.dump(value, out, indent=2, sort_keys=True); out.write("\n"); out.flush(); os.fsync(out.fileno())
-        os.replace(temporary, path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
+        encoded = (json.dumps(value, indent=2, sort_keys=True,
+                              allow_nan=False) + "\n").encode("utf-8")
+        atomic_write(path, encoded, replace=False, mode=0o600,
+                     label="capability output")
+    except BoundaryError as exc:
+        raise OSError(str(exc)) from exc
 
 
 def main(argv: list[str]) -> int:
@@ -103,7 +109,8 @@ def main(argv: list[str]) -> int:
         emit(Path(args.emit), value)
     except LookupError as exc:
         return fail(str(exc), 3)
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, TypeError, OverflowError, RecursionError,
+            UnicodeDecodeError, json.JSONDecodeError) as exc:
         return fail(str(exc), 2)
     return 0
 

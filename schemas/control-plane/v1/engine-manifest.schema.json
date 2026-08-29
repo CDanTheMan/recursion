@@ -19,18 +19,81 @@
     "env_passthrough"
   ],
   "additionalProperties": false,
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "billing": { "properties": { "basis": { "enum": ["flat-subscription", "metered", "local"] }, "provider": { "const": "anthropic-claude-code" } } },
+            "network": { "properties": {
+              "policy": { "const": "provider-only" },
+              "profile": { "const": "anthropic" },
+              "endpoints": { "const": ["api.anthropic.com"] }
+            } },
+            "env_passthrough": { "items": { "enum": ["ANTHROPIC_API_KEY", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] } }
+          }
+        },
+        {
+          "properties": {
+            "billing": { "properties": { "basis": { "enum": ["flat-subscription", "metered", "local"] }, "provider": { "const": "cursor" } } },
+            "network": { "properties": {
+              "policy": { "const": "provider-only" },
+              "profile": { "const": "cursor" },
+              "endpoints": { "minItems": 2, "maxItems": 2, "contains": { "const": "api.cursor.com" }, "items": { "enum": ["api.cursor.com", "api2.cursor.sh"] } }
+            } },
+            "env_passthrough": { "const": [] }
+          }
+        },
+        {
+          "properties": {
+            "billing": { "properties": { "basis": { "enum": ["flat-subscription", "metered", "local"] }, "provider": { "const": "google-gemini" } } },
+            "network": { "properties": {
+              "policy": { "const": "provider-only" },
+              "profile": { "const": "gemini" },
+              "endpoints": { "const": ["generativelanguage.googleapis.com"] }
+            } },
+            "env_passthrough": { "items": { "const": "GEMINI_API_KEY" } }
+          }
+        },
+        {
+          "properties": {
+            "billing": { "properties": { "basis": { "enum": ["flat-subscription", "metered", "local"] }, "provider": { "const": "openrouter-via-opencode" } } },
+            "network": { "properties": {
+              "policy": { "const": "provider-only" },
+              "profile": { "const": "openrouter" },
+              "endpoints": { "minItems": 2, "maxItems": 2, "contains": { "const": "openrouter.ai" }, "items": { "enum": ["openrouter.ai", "api.deepseek.com"] } }
+            } },
+            "env_passthrough": { "items": { "const": "OPENROUTER_API_KEY" } }
+          }
+        },
+        {
+          "properties": {
+            "billing": { "properties": { "basis": { "const": "local" }, "provider": { "const": "sentry-local" } } },
+            "network": { "properties": {
+              "policy": { "const": "none" },
+              "profile": { "const": "sentry-local" },
+              "endpoints": { "const": [] }
+            } },
+            "env_passthrough": { "const": [] }
+          }
+        }
+      ]
+    }
+  ],
   "properties": {
     "schema_version": {
+      "type": "integer",
       "const": 1
     },
     "name": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]{1,31}$",
+      "pattern": "^(?!(?:claude|hermes|gate|none|deepseek|openrouter)$)[a-z][a-z0-9-]{1,31}$",
       "description": "Must equal the manifest filename stem (e.g. gemini.json -> \"gemini\"), and must not collide with a builtin engine name (claude, hermes, gate, none, deepseek, openrouter)."
     },
     "description": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "^[^\\u0000-\\u001F\\u007F]+$"
     },
     "executable": {
       "type": "string",
@@ -42,15 +105,25 @@
       "minItems": 2,
       "items": [
         {
+          "type": "string",
           "const": "{{EXE}}",
           "description": "argv[0] must be the literal placeholder {{EXE}}."
         }
       ],
       "additionalItems": {
-        "type": "string",
-        "minLength": 1
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!\\{\\{[^}]*\\}\\}$)[^\\u0000-\\u001F\\u007F]+$"
+          },
+          { "const": "{{PROMPT}}" },
+          { "const": "{{MODEL}}" }
+        ]
       },
+      "uniqueItems": true,
       "contains": {
+        "type": "string",
         "const": "{{PROMPT}}"
       },
       "description": "Exactly one element must be the literal placeholder {{PROMPT}} (the count is enforced by the resolver; draft-07 `contains` only guarantees at least one). Any element that is wholly of the form {{...}} must be one of the three known placeholders ({{EXE}}, {{PROMPT}}, {{MODEL}}); {{EXE}} may appear only at index 0; {{MODEL}} may appear at most once anywhere in argv. No other templating is permitted."
@@ -67,9 +140,16 @@
         "argv_suffix": {
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!\\{\\{[^}]*\\}\\}$)[^\\u0000-\\u001F\\u007F]+$"
+              },
+              { "const": "{{MODEL}}" }
+            ]
           },
+          "uniqueItems": true,
           "description": "Appended to argv only when a model is present. Each element is either a plain literal string or the placeholder {{MODEL}}; {{MODEL}} may appear at most once."
         }
       }
@@ -77,6 +157,7 @@
     "roles": {
       "type": "array",
       "items": {
+        "type": "string",
         "enum": ["implementer", "verifier"]
       },
       "minItems": 1,
@@ -90,6 +171,7 @@
       "additionalProperties": false,
       "properties": {
         "basis": {
+          "type": "string",
           "enum": ["flat-subscription", "metered", "local"],
           "description": "metered engines are admitted only under RECURSION_ALLOW_METERED=1 (same rule as engine=hermes today)."
         },
@@ -112,6 +194,7 @@
       "additionalProperties": false,
       "properties": {
         "policy": {
+          "type": "string",
           "enum": ["provider-only", "none"]
         },
         "profile": {
@@ -141,6 +224,7 @@
           "additionalProperties": false,
           "properties": {
             "type": {
+              "type": "string",
               "const": "http"
             },
             "url_env": {
@@ -180,7 +264,7 @@
         ]
       },
       "uniqueItems": true,
-      "description": "Env var names (not values) copied from the controller environment into the unit when set. The runtime resolver additionally requires each name to be in the exact reviewed allowlist of network.profile; the union here is only the public-schema vocabulary. Possibly empty. No duplicates."
+      "description": "Env var names (not values) copied from the controller environment into the unit when set. The exact reviewed allowlist is selected by the network profile and enforced by both schema and runtime. Possibly empty. No duplicates."
     },
     "runtime_layout": {
       "description": "Optional v1-compatible runtime layout. sibling-tree stages the executable's complete parent directory read-only; executable-only preserves the original single-file behavior.",
@@ -191,7 +275,7 @@
           "required": ["mode"],
           "additionalProperties": false,
           "properties": {
-            "mode": { "enum": ["executable-only", "sibling-tree"] },
+            "mode": { "type": "string", "enum": ["executable-only", "sibling-tree"] },
             "source": { "anyOf": [
               { "const": "executable-directory" },
               { "type": "null" }
@@ -201,11 +285,11 @@
               { "type": "null" }
             ] },
             "target": { "anyOf": [
-              { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/]+(?:/[^/]+)*$" },
+              { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/:]+(?:/[^/:]+)*$" },
               { "type": "null" }
             ] },
             "entrypoint": { "anyOf": [
-              { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/]+(?:/[^/]+)*$" },
+              { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/:]+(?:/[^/:]+)*$" },
               { "type": "null" }
             ] }
           },
@@ -214,6 +298,7 @@
               "if": { "properties": { "mode": { "const": "sibling-tree" } } },
               "then": {
                 "required": ["entrypoint"],
+                "not": { "required": ["source", "root"] },
                 "anyOf": [
                   {
                     "required": ["source"],
@@ -250,10 +335,10 @@
       "additionalProperties": false,
       "properties": {
         "structured_output": { "type": "boolean" },
-        "output_format": { "enum": ["text", "json"] },
+        "output_format": { "type": "string", "enum": ["text", "json"] },
         "cancellation": {
           "type": "object", "required": ["signal", "grace_s"], "additionalProperties": false,
-          "properties": { "signal": { "enum": ["TERM", "INT"] }, "grace_s": { "type": "integer", "minimum": 1, "maximum": 60 } }
+          "properties": { "signal": { "type": "string", "enum": ["TERM", "INT"] }, "grace_s": { "type": "integer", "minimum": 1, "maximum": 60 } }
         },
         "exit_codes": {
           "type": "object", "required": ["success", "auth", "runtime", "egress"], "additionalProperties": false,
@@ -529,10 +614,28 @@
       "required": ["mode", "required", "marker"],
       "additionalProperties": false,
       "properties": {
-        "mode": { "enum": ["none", "runner-home-marker"] },
+        "mode": { "type": "string", "enum": ["none", "runner-home-marker"] },
         "required": { "type": "boolean" },
-        "marker": { "type": ["string", "null"] }
-      }
+        "marker": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/:]+(?:/[^/:]+)*$"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "runner-home-marker" } } },
+          "then": { "properties": { "marker": { "type": "string" } } }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "none" } } },
+          "then": { "properties": { "marker": { "type": "null" } } }
+        }
+      ]
     }
   },
   "allOf": [
