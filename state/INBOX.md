@@ -99,3 +99,33 @@ touches both phases, so it wants a human yes.
 
 **Not blocking other work.** Phases 3, 4, 5, 6/7 and 8 continue; this surfaces only when Phase 2 and Phase 5
 integrate together.
+
+### Update 2026-08-29 — independent confirmation, and one misleading label
+
+An independent adjudicator was asked the bounded question "is this a Phase 2 defect or the gate
+contract?", explicitly forbidden from resolving this escalation. It returned the contract reading,
+with evidence I then re-verified myself.
+
+```
+base a84525d and 33fb08c^   `test -s app/heavy.txt && touch <marker>`   exit 0
+33fb08c                     same command    exit 2  ERR bare acceptance launcher is not admitted: touch
+base a84525d and 33fb08c    `test -s app/heavy.txt`  (pure predicate)   exit 0, identical acceptance_sha256
+git diff 33fb08c^ 33fb08c -- scripts/work.sh scripts/capacity.sh   -> no heavy-lock change
+```
+
+**The failure line is misleading and should not be read literally.** The fixture prints
+
+```
+gate=$([ -e "$HEAVY_GATE_MARKER" ] && echo ran || echo held)
+```
+
+so `gate=held` means the marker was NOT created, which is the desired outcome. It says nothing
+about the capacity lock. In the observed failure `rc=0 status=escalated gate=held`, only `rc` and
+`status` are wrong: validation refuses the gate terminally before a worktree is leased, so
+contention is never reached. Phase 2's contention path is untouched and sound.
+
+This does not change the options or the recommendation. It removes the possibility that B is
+being recommended to paper over a real fail-closed defect: there is no such defect.
+
+Still needs a human yes. Phase 5 is now at 15/15 with its race suite at 10/10, so A and B both
+cost real rework on an otherwise-clean phase.
