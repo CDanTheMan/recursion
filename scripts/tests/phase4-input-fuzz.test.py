@@ -678,6 +678,31 @@ def main() -> int:
     conduct_check(result.returncode == 0 and "done (verb=noop rc=0)" in conduct_text(result)
                   and not result_has_raw_error_or_path(result, conduct_root),
                   "conduct-hermes in-bounds JSON depth is accepted")
+    empty_in_bounds_value: Any = []
+    for _ in range(63):
+        empty_in_bounds_value = [empty_in_bounds_value]
+    empty_in_bounds_decision = conduct_root / "in-bounds-empty-depth.json"
+    write_raw(empty_in_bounds_decision,
+              conduct_variant("in-bounds-empty-depth", unknown=empty_in_bounds_value))
+    result = run_conduct(conduct_root, empty_in_bounds_decision)
+    conduct_check(result.returncode == 0 and "done (verb=noop rc=0)" in conduct_text(result)
+                  and not result_has_raw_error_or_path(result, conduct_root),
+                  "conduct-hermes maximum empty-container JSON depth is accepted")
+    brace_string = "{}[]" * 512
+    brace_string_decision = conduct_root / "braces-in-string.json"
+    write_raw(brace_string_decision, conduct_variant("braces-in-string", unknown=brace_string))
+    result = run_conduct(conduct_root, brace_string_decision)
+    conduct_check(result.returncode == 0 and "done (verb=noop rc=0)" in conduct_text(result)
+                  and not result_has_raw_error_or_path(result, conduct_root),
+                  "conduct-hermes braces inside a legitimate string are ignored by depth")
+    deep_brace_value: Any = brace_string
+    for _ in range(65):
+        deep_brace_value = {"nested": deep_brace_value}
+    deep_brace_decision = conduct_root / "deep-braces-in-string.json"
+    write_raw(deep_brace_decision, conduct_variant("deep-braces-in-string", unknown=deep_brace_value))
+    result = run_conduct(conduct_root, deep_brace_decision)
+    conduct_check(conduct_refusal(result, "boundary=depth", conduct_root),
+                  "conduct-hermes hostile depth with braces in a string is refused")
     utf8_probe = "replacement \ufffd"
     utf8_raw = conduct_variant("utf8", unknown=utf8_probe)
     # The replacement character is valid JSON after strict decoding, so replacing only its

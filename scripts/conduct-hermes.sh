@@ -486,9 +486,11 @@ def check_depth_limit(depth):
         raise ValueError("decision nesting is too deep")
 
 def check_json_depth(text):
-    # json.loads descends through nested arrays/objects in the platform parser.  Count structure
-    # iteratively first so a hostile document reaches the typed depth boundary before that
-    # parser can exhaust its platform-dependent recursion/stack budget.
+    # json.loads descends through nested arrays/objects in the platform parser.  Count value depth
+    # iteratively first so a hostile document reaches the typed depth boundary before that parser
+    # can exhaust its platform-dependent recursion/stack budget.  An opening container is itself
+    # at the current value depth (the root is 0); values inside it are one level deeper.  Checking
+    # after incrementing would reject a valid empty container one level before check_value does.
     nesting=0
     in_string=False
     escaped=False
@@ -502,14 +504,17 @@ def check_json_depth(text):
                 in_string=False
             continue
         if char == '"':
+            check_depth_limit(nesting)
             in_string=True
         elif char in "[{":
-            nesting += 1
-            # The recursive validator checks the scalar immediately below the deepest
-            # container too, so the structural count is the conservative equivalent depth.
             check_depth_limit(nesting)
+            nesting += 1
         elif char in "]}" and nesting:
             nesting -= 1
+        elif not char.isspace() and char not in ",:":
+            # Numbers and the JSON literals are values at the active nesting depth.  The
+            # grammar/parser remains authoritative for whether the token sequence is valid.
+            check_depth_limit(nesting)
 
 def check_value(value, depth=0, key=None):
     check_depth_limit(depth)
