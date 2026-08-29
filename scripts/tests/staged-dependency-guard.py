@@ -41,9 +41,11 @@ def dependency_names(source: Path) -> dict[str, Path]:
     return result
 
 
-def python_dependencies(path: Path, names: dict[str, Path], source: Path) -> set[str]:
+def python_dependencies(path: Path, names: dict[str, Path], source: Path,
+                        staged: Path | None = None) -> set[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     found: set[str] = set()
+    staged = source if staged is None else staged
     relative_paths = {
         dependency_path.relative_to(source).as_posix(): module
         for module, dependency_path in names.items()
@@ -59,7 +61,7 @@ def python_dependencies(path: Path, names: dict[str, Path], source: Path) -> set
                 found.add(candidate)
                 return
 
-    relative = path.relative_to(source).with_suffix("").as_posix().split("/")
+    relative = path.relative_to(staged).with_suffix("").as_posix().split("/")
     current_package = relative[:-1] if relative[-1] != "__init__" else relative[:-1]
 
     def add_relative(module: str | None, level: int) -> None:
@@ -168,7 +170,7 @@ def main(argv: list[str]) -> int:
         if not path.is_file() or path.suffix not in CODE_SUFFIXES:
             continue
         try:
-            dependencies = (python_dependencies(path, names, source) if path.suffix == ".py"
+            dependencies = (python_dependencies(path, names, source, staged) if path.suffix == ".py"
                             else shell_dependencies(path, names, source))
         except (OSError, SyntaxError, UnicodeError, ValueError):
             missing.append((path.relative_to(staged).as_posix(), "<parse>"))

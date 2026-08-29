@@ -972,8 +972,11 @@ PY
     *) billing_basis="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["billing"]["basis"])' "$engine_plan" 2>>"$LOG")" || return 95 ;;
   esac
   [ "$billing_basis" != metered ] || metered_flag=(--metered-approved)
-  mkdir -p "$ROOT/state/runs"
-  out_file="$ROOT/state/runs/$ID-$role-$STAMP-$$-assignment.json"
+  # This is a controller-private candidate, not run evidence.  Keep it out of state/runs:
+  # Phase 5 consumers scan that directory for implementer/verifier evidence, and an assignment
+  # candidate has task/role fields but no seed_evidence of its own.
+  mkdir -p "$ROOT/state/assignments/$ID"
+  out_file="$ROOT/state/assignments/$ID/.candidate-$role-$STAMP-$$.json"
   local -a acmd=(python3 "$ROOT/scripts/assignment.py" resolve
     --task-id "$ID" --project-id "${PROJECT_ID:-$ID}" --role "$role"
     --source-repository "$REPO_DIR" --source-branch "$src_branch"
@@ -1001,7 +1004,7 @@ PY
 run_model_supervised(){ # role worktree prompt resolved-model alias usage deadline run-id [commit] [implementer-run] [evidence-dir] [readonly] [attempt]
   local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
   local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
-  local evidence_dir="${11:-}" readonly="${12:-0}" attempt="${13:-}" engine_plan=""
+  local evidence_dir="${11:-}" readonly="${12:-0}" attempt="${13:-}" engine_plan="" candidate_assignment=""
   # Cross-engine verification (D-015): each role runs on its own contract engine.
   local active_engine="$ENGINE"
   [ "$role" != verifier ] || active_engine="$VERIFIER_ENGINE"
@@ -1080,6 +1083,7 @@ PY
   deadline_epoch="$(( $(date +%s) + deadline_s ))"; heartbeat_epoch=0
   LAST_RUN_ID="$run_id"; LAST_RUN_EVIDENCE="$ROOT/state/runs/$run_id.json"
   if [ "$STRICT_PHASE5" = 1 ]; then
+    candidate_assignment="$ASSIGNMENT_FILE"
     mkdir -p "$ROOT/state/runs"
     if [ "$role" = implementer ]; then
       LEASE_ATTEMPT="$(field attempts)"
@@ -1093,6 +1097,7 @@ PY
     fi
     ASSIGNMENT_FILE="$ROOT/state/assignments/$ID/$ASSIGNMENT_DIGEST.json"
     [ -f "$ASSIGNMENT_FILE" ] || { log "persisted assignment file is absent before worker evidence"; return 98; }
+    [ -z "$candidate_assignment" ] || rm -f -- "$candidate_assignment" || return 98
     python3 "$ROOT/scripts/worker-evidence.py" prepare --path "$LAST_RUN_EVIDENCE" --run-id "$run_id" \
       --task-id "$ID" --role "$role" --model-alias "$alias" --worktree "$wt" \
       --base-commit "$BASE_COMMIT" \
@@ -1124,10 +1129,15 @@ PY
     fi
     now_epoch="$(date +%s)"
     if [ "$STRICT_PHASE5" = 1 ] && [ "$now_epoch" -ge "$deadline_epoch" ]; then
+      local terminate_rc=0
       log "$role deadline expired; terminating process group $worker_pgid"
-      terminate_worker_group "$worker_pgid" || true
+      terminate_worker_group "$worker_pgid" || terminate_rc=$?
       wait "$worker_pgid" 2>/dev/null || true
-      kill -0 -- "-$worker_pgid" 2>/dev/null && return 96
+      # terminate_worker_group owns the process-group liveness check.  A second kill -0 here
+      # races with reaping setsid --wait's session leader and can turn an already-terminated
+      # timeout into generic arm error 96, skipping the durable timeout evidence and blocked
+      # escalation that the lease controller requires.
+      [ "$terminate_rc" -eq 0 ] || return 96
       python3 "$ROOT/scripts/worker-evidence.py" finish "$LAST_RUN_EVIDENCE" failed timeout 124 \
         >>"$LOG" 2>&1 || true
       return 97

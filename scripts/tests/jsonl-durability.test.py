@@ -228,6 +228,23 @@ def control_hardlinked_leaves_are_rejected() -> tuple[bool, str]:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def control_refusal_text_has_no_path_or_os_details() -> tuple[bool, str]:
+    """Public append refusals expose a typed reason, never caller paths or host errno text."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-refusal-hygiene-"))
+    try:
+        blocker = root / "state"
+        blocker.write_text("not a directory", encoding="utf-8")
+        try:
+            append_jsonl(blocker / "journal.jsonl", {"id": "must-not-append"})
+        except JsonlDurabilityError as exc:
+            message = str(exc)
+            forbidden = (str(root), "[Errno", "[WinError", "Not a directory")
+            return not any(item in message for item in forbidden), message
+        return False, "a journal below a non-directory parent was accepted"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def control_hardlink_created_after_open_is_rejected() -> tuple[bool, str]:
     """A hardlink added after the open-time check must not receive the new record."""
     root = Path(tempfile.mkdtemp(prefix="jsonl-hardlink-race-"))
@@ -765,6 +782,8 @@ def main() -> int:
         ("short writes are retried until the complete record is durable", control_complete_write_loop),
         ("idempotent appends still repair and preserve a torn tail", control_dedupe_still_repairs_tail),
         ("hardlinked journal leaves are rejected without an outside-root write", control_hardlinked_leaves_are_rejected),
+        ("append refusals do not disclose paths or raw OS errors",
+         control_refusal_text_has_no_path_or_os_details),
         ("a post-validation hardlink race is refused before journal bytes escape",
          control_hardlink_created_after_open_is_rejected),
         ("hardlinked verification-index leaves are rejected", control_hardlinked_index_is_rejected),

@@ -7,6 +7,19 @@ SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
+stage_controller_closure(){
+  local root="$1"
+  for helper in assignment.py assist.sh author.sh board.sh branch-review.sh capacity.sh conduct-hermes.sh conduct.sh \
+      decision-queue.py engine_contract.py git-scope.py hermes-decide.sh instruction_routing.py intake.sh \
+      jsonl_durable.py notification-outbox.py notify.sh pilot_instruction.py plan.sh project-pilot.py \
+      project-reconcile.py project_authority.py provider-connect-proxy.py provider-network.sh publish.sh \
+      remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
+      seed_contract.py taskctl.sh transition_receipt.py validate-assignment-result.py validate-control-state.py \
+      validate-decision.py validate-gate.py validate-verifier-result.py validate-worker-result.py work.sh \
+      worker-evidence.py worker-sandbox.sh; do
+    cp "$SRC/scripts/$helper" "$root/scripts/"
+  done
+}
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 normalize_head_decision(){ # root file
   local root="$1" file="$2" temporary="$2.normalized"
@@ -52,6 +65,7 @@ cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
 cp "$SRC/scripts/decision-queue.py" "$SRC/scripts/validate-control-state.py" \
   "$SRC/scripts/validate-decision.py" "$SRC/scripts/engine_contract.py" \
   "$SRC/scripts/assignment.py" "$A/scripts/"
+stage_controller_closure "$A"
 check_staged_python_dependencies "$A"
 cat > "$A/scripts/author.sh" <<'STUB'
 #!/usr/bin/env bash
@@ -77,6 +91,7 @@ cp "$SRC/scripts/intake.sh" "$I/scripts/"
 cp "$SRC/scripts/runtime-state.py" "$SRC/scripts/transition_receipt.py" \
   "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/instruction_routing.py" \
   "$SRC/scripts/pilot_instruction.py" "$I/scripts/"
+stage_controller_closure "$I"
 check_staged_python_dependencies "$I"
 cat > "$I/state/instructions/00000042.md" <<'T'
 id: 42
@@ -100,6 +115,7 @@ fi
 H="$TMP/decide"; mkdir -p "$H/scripts" "$H/state/tasks" "$H/state/roadmaps" "$H/loop/logs" "$TMP/hermes-bin"
 cp "$SRC/scripts/hermes-decide.sh" "$H/scripts/"
 cp "$SRC/scripts/validate-decision.py" "$H/scripts/"
+stage_controller_closure "$H"
 check_staged_python_dependencies "$H"
 printf 'authority\n' > "$H/CONTROL_PLANE.md"; printf 'scope\n' > "$H/ANCHOR.md"
 : > "$H/state/DECISIONS.md"; : > "$H/state/PROPOSALS.md"
@@ -146,6 +162,7 @@ for helper in conduct-hermes.sh taskctl.sh jsonl_durable.py transition_receipt.p
   cp "$SRC/scripts/$helper" "$DROOT/scripts/"
 done
 cp "$SRC/scripts/assignment.py" "$DROOT/scripts/"
+stage_controller_closure "$DROOT"
 check_staged_python_dependencies "$DROOT"
 cat > "$DROOT/scripts/work.sh" <<'STUB'
 #!/usr/bin/env bash

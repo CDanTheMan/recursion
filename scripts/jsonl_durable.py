@@ -289,8 +289,31 @@ INDEX_AUTHORITY = "jsonl-verification-index-v1"
 ZERO_CHAIN_SHA256 = "0" * 64
 
 
+_ABSOLUTE_REFUSAL_PATH = re.compile(
+    r"(?<![A-Za-z0-9_.-])(?:(?:[A-Za-z]:[\\/])|(?:\\\\)|/)[^\s,;)]*"
+)
+
+
+def _public_refusal_message(message: object) -> str:
+    """Keep typed durability refusals useful without echoing caller paths or OS text."""
+    text = str(message)
+    # OSError text is an implementation detail (and can include a relative path as well as
+    # an errno).  The public refusal retains the stable operation prefix only.
+    text = re.split(r": \[(?:Errno|WinError)\b", text, maxsplit=1)[0]
+    if text.startswith("JSONL append refused for "):
+        return "JSONL append refused"
+    if text.startswith("pinned JSONL append refused"):
+        return "pinned JSONL append refused"
+    if text.startswith("durable atomic write refused:"):
+        return "durable atomic write refused"
+    return _ABSOLUTE_REFUSAL_PATH.sub("<path>", text)
+
+
 class JsonlDurabilityError(RuntimeError):
     """The existing journal cannot safely accept or expose another record."""
+
+    def __init__(self, message: object = "") -> None:
+        super().__init__(_public_refusal_message(message))
 
 
 def _durable_path(path: Path) -> Path:
