@@ -19,6 +19,7 @@ import hmac
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -39,6 +40,7 @@ OUTCOMES = {
     "current-compatible", "stale-reviewable", "stale-rebase-required", "invalidated",
     "source-unavailable", "unauthorized-result",
 }
+_GATE_SHELL_EXPANSION = set("~%$`*?[")
 
 
 class ContractError(ValueError):
@@ -57,6 +59,8 @@ def _json_digest(value: Any) -> str:
 def _normalized_path(value: object, *, field: str = "path") -> str:
     if not isinstance(value, str) or not value or any(ord(char) < 32 for char in value):
         raise ContractError(f"{field} must be a non-empty path")
+    if any(char in _GATE_SHELL_EXPANSION for char in value):
+        raise ContractError(f"{field} contains shell expansion or glob syntax")
     if "\\" in value or value != value.strip() or value != "." and (
         value.startswith("./") or value.endswith("/") or "//" in value
     ):
@@ -126,7 +130,13 @@ def _required_gate_profile(contract: dict[str, Any]) -> dict[str, Any] | None:
     controller_gate_files = _normalized_gate_files(
         profile["controller_gate_files"], field="required_gate_profile controller_gate_files")
     expected_acceptance = " && ".join(contract["gate_commands"])
-    if acceptance != expected_acceptance:
+    profile_identity = _gate_identity(acceptance, {
+        "gate_files": gate_files, "controller_gate_files": controller_gate_files,
+    })
+    expected_identity = _gate_identity(expected_acceptance, {
+        "gate_files": gate_files, "controller_gate_files": controller_gate_files,
+    })
+    if profile_identity != expected_identity:
         raise ContractError("required_gate_profile acceptance diverges from gate_commands")
     if not _valid_gate_command(acceptance, allowed_paths=contract["allowed_paths"],
                                gate_files=gate_files,
@@ -163,8 +173,9 @@ def _valid_git_ref(value: object) -> bool:
         result = subprocess.run(
             ["git", "check-ref-format", "--branch", value], stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+            timeout=30,
         )
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         return False
     return result.returncode == 0
 
@@ -222,6 +233,14 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
         raise ContractError("Git command timed out", "verification-unavailable") from exc
 
 
+def _checked_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Keep a mocked or alternate _git implementation fail-closed at every caller boundary."""
+    try:
+        return _git(repo, *args)
+    except subprocess.TimeoutExpired as exc:
+        raise ContractError("Git command timed out", "verification-unavailable") from exc
+
+
 def _is_reparse_or_link(info: os.stat_result) -> bool:
     return stat.S_ISLNK(info.st_mode) or bool(
         getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
@@ -232,7 +251,7 @@ def _same_file(left: os.stat_result, right: os.stat_result) -> bool:
     return (left.st_dev, left.st_ino) == (right.st_dev, right.st_ino)
 
 
-def _open_windows_directory(path: Path) -> int:
+def _open_windows_directory(path: Path, *, share_delete: bool = False) -> int:
     import ctypes
     from ctypes import wintypes
     import msvcrt
@@ -242,7 +261,11 @@ def _open_windows_directory(path: Path) -> int:
                                      ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD,
                                      wintypes.HANDLE]
     kernel32.CreateFileW.restype = wintypes.HANDLE
-    handle = kernel32.CreateFileW(str(path), 0x00120001, 0x00000007, None, 3,
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+    share_mode = 0x00000007 if share_delete else 0x00000003
+    handle = kernel32.CreateFileW(str(path), 0x00120001, share_mode, None, 3,
                                   0x02000000 | 0x00200000, None)
     handle_value = handle.value if hasattr(handle, "value") else int(handle)
     if handle_value in {None, ctypes.c_void_p(-1).value}:
@@ -250,14 +273,14 @@ def _open_windows_directory(path: Path) -> int:
     try:
         return msvcrt.open_osfhandle(handle_value, os.O_RDONLY | os.O_BINARY)
     except OSError:
-        kernel32.CloseHandle(handle)
+        close_handle(handle)
         raise
 
 
 def _open_pinned_directory(path: Path) -> int:
     flags = os.O_RDONLY
     if os.name == "nt":
-        fd = _open_windows_directory(path)
+        fd = _open_windows_directory(path, share_delete=False)
     else:
         flags |= getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
         fd = os.open(path, flags)
@@ -272,35 +295,77 @@ def _open_pinned_directory(path: Path) -> int:
 
 
 @contextlib.contextmanager
+def _pinned_windows_parents(path: Path) -> Iterator[None]:
+    """Hold every existing parent with delete sharing denied while a durable leaf is used."""
+    if os.name != "nt":
+        yield
+        return
+    handles: list[int] = []
+    try:
+        # Open from the volume root toward the leaf so a later parent cannot be renamed after
+        # its identity has been checked.  The volume root itself is not a renameable component.
+        for parent in reversed(tuple(path.parents)):
+            if parent == parent.parent:
+                continue
+            info = os.lstat(parent)
+            if _is_reparse_or_link(info) or not stat.S_ISDIR(info.st_mode):
+                raise OSError("ledger parent is not a real directory")
+            fd = _open_windows_directory(parent, share_delete=False)
+            try:
+                pinned = os.fstat(fd)
+                if _is_reparse_or_link(pinned) or not _same_file(info, pinned):
+                    raise OSError("ledger parent changed while being pinned")
+            except OSError:
+                os.close(fd)
+                raise
+            handles.append(fd)
+        yield
+    finally:
+        for fd in reversed(handles):
+            os.close(fd)
+
+
+@contextlib.contextmanager
 def _pinned_ledger(path: Path) -> Iterator[int]:
     try:
-        info = os.lstat(path)
-    except FileNotFoundError:
-        try:
-            os.mkdir(path, 0o700)
-        except FileExistsError:
-            pass
-        except OSError as exc:
-            raise ContractError("candidate ledger could not be created", "verification-unavailable") from exc
-        try:
-            info = os.lstat(path)
-        except OSError as exc:
-            raise ContractError("candidate ledger could not be inspected", "verification-unavailable") from exc
+        with _pinned_windows_parents(path):
+            try:
+                info = os.lstat(path)
+            except FileNotFoundError:
+                try:
+                    os.mkdir(path, 0o700)
+                except FileExistsError:
+                    pass
+                except OSError as exc:
+                    raise ContractError("candidate ledger could not be created",
+                                        "verification-unavailable") from exc
+                try:
+                    info = os.lstat(path)
+                except OSError as exc:
+                    raise ContractError("candidate ledger could not be inspected",
+                                        "verification-unavailable") from exc
+            except OSError as exc:
+                raise ContractError("candidate ledger could not be inspected",
+                                    "verification-unavailable") from exc
+            if _is_reparse_or_link(info) or not stat.S_ISDIR(info.st_mode):
+                raise ContractError("candidate ledger is not a real directory", "unauthorized-result")
+            try:
+                fd = _open_pinned_directory(path)
+                pinned = os.fstat(fd)
+                if _is_reparse_or_link(pinned) or not _same_file(info, pinned):
+                    raise OSError("candidate ledger changed while being pinned")
+            except OSError as exc:
+                raise ContractError("candidate ledger could not be pinned",
+                                    "verification-unavailable") from exc
+            try:
+                yield fd
+            finally:
+                os.close(fd)
+    except ContractError:
+        raise
     except OSError as exc:
-        raise ContractError("candidate ledger could not be inspected", "verification-unavailable") from exc
-    if _is_reparse_or_link(info) or not stat.S_ISDIR(info.st_mode):
-        raise ContractError("candidate ledger is not a real directory", "unauthorized-result")
-    try:
-        fd = _open_pinned_directory(path)
-        pinned = os.fstat(fd)
-        if _is_reparse_or_link(pinned) or not _same_file(info, pinned):
-            raise OSError("candidate ledger changed while being pinned")
-    except OSError as exc:
-        raise ContractError("candidate ledger could not be pinned", "verification-unavailable") from exc
-    try:
-        yield fd
-    finally:
-        os.close(fd)
+        raise ContractError("candidate ledger could not be pinned",
+                            "verification-unavailable") from exc
 
 
 def _open_windows_relative_file(directory_fd: int, name: str, *, create: bool) -> int:
@@ -372,7 +437,7 @@ def _open_ledger_file(directory_fd: int, name: str, *, create: bool) -> int:
 
 
 def _oid(repo: Path, ref: str, *, missing: str = "source-unavailable") -> str:
-    result = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
+    result = _checked_git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
     value = result.stdout.strip()
     if result.returncode or not OID.fullmatch(value):
         raise ContractError(f"commit is unavailable: {ref}", missing)
@@ -380,14 +445,14 @@ def _oid(repo: Path, ref: str, *, missing: str = "source-unavailable") -> str:
 
 
 def _ancestor(repo: Path, ancestor: str, descendant: str) -> bool:
-    result = _git(repo, "merge-base", "--is-ancestor", ancestor, descendant)
+    result = _checked_git(repo, "merge-base", "--is-ancestor", ancestor, descendant)
     if result.returncode not in (0, 1):
         raise ContractError("Git ancestry could not be measured", "verification-unavailable")
     return result.returncode == 0
 
 
 def _git_dir(repo: Path) -> Path:
-    result = _git(repo, "rev-parse", "--path-format=absolute", "--git-dir")
+    result = _checked_git(repo, "rev-parse", "--path-format=absolute", "--git-dir")
     if result.returncode:
         raise ContractError("repository Git directory could not be resolved", "repository-unavailable")
     path = Path(result.stdout.strip()).resolve()
@@ -535,7 +600,7 @@ def _path_allowed(path: str, allowed: list[str]) -> bool:
 def _tree_entries(repo: Path, commit: str) -> dict[str, tuple[str, str, str]]:
     """Read the candidate tree, retaining modes so symlink/submodule escapes cannot hide."""
     try:
-        result = _git(repo, "ls-tree", "-r", "-t", "-z", "--full-tree", commit)
+        result = _checked_git(repo, "ls-tree", "-r", "-t", "-z", "--full-tree", commit)
     except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
         raise ContractError("candidate tree could not be inspected", "verification-unavailable") from exc
     if result.returncode:
@@ -614,7 +679,7 @@ def _inspect_candidate_tree(repo: Path, commit: str, allowed: list[str]) -> None
         if mode != "120000":
             continue
         try:
-            target_result = _git(repo, "cat-file", "blob", oid)
+            target_result = _checked_git(repo, "cat-file", "blob", oid)
         except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
             raise ContractError("candidate symlink target could not be read", "verification-unavailable") from exc
         if target_result.returncode:
@@ -658,6 +723,13 @@ def admit_task(contract: dict[str, Any], task: dict[str, Any], repo: Path, *, ne
         or any(not isinstance(item, str) for item in task["gate_commands"])
     ):
         raise ContractError("task field gate_commands must be a string array")
+    task_gate_files: list[str] | None = None
+    task_controller_gate_files: list[str] | None = None
+    if "gate_files" in task:
+        task_gate_files = _normalized_gate_files(task["gate_files"], field="task gate_files")
+    if "controller_gate_files" in task:
+        task_controller_gate_files = _normalized_gate_files(
+            task["controller_gate_files"], field="task controller_gate_files")
     if new_generation and any(_contains_legacy_chiron(task.get(key)) for key in (
         "workdir", "acceptance", "gate_command", "gate_commands", "seed", "repo", "goal",
     )):
@@ -665,6 +737,16 @@ def admit_task(contract: dict[str, Any], task: dict[str, Any], repo: Path, *, ne
     if new_generation and any(_contains_legacy_chiron(item) for item in contract["gate_commands"]):
         raise ContractError("new task generation may not target apps/chiron", "unauthorized-result")
     required_gate_profile = _required_gate_profile(contract)
+    if task_gate_files is not None:
+        expected_gate_files = required_gate_profile["gate_files"] if required_gate_profile else []
+        if task_gate_files != expected_gate_files:
+            raise ContractError("task gate_files differ from the repository gate", "unauthorized-result")
+    if task_controller_gate_files is not None:
+        expected_controller_gate_files = (required_gate_profile["controller_gate_files"]
+                                          if required_gate_profile else [])
+        if task_controller_gate_files != expected_controller_gate_files:
+            raise ContractError("task controller_gate_files differ from the repository gate",
+                                "unauthorized-result")
     expected_acceptance = (required_gate_profile["acceptance"] if required_gate_profile
                            else " && ".join(contract["gate_commands"]))
     if "acceptance" in task and task["acceptance"] != expected_acceptance:
@@ -718,6 +800,10 @@ def admit_task(contract: dict[str, Any], task: dict[str, Any], repo: Path, *, ne
         branch_kind(contract, target)
     result = {**task, "source_branch": source_branch, "source_sha": source_sha,
               "source_repository": declared_repo, "task_branch": task_branch(contract, task_id)}
+    if task_gate_files is not None:
+        result["gate_files"] = task_gate_files
+    if task_controller_gate_files is not None:
+        result["controller_gate_files"] = task_controller_gate_files
     if normalized_workdir is not None:
         result["workdir"] = normalized_workdir
     return result
@@ -744,13 +830,24 @@ def _validate_windows_acl_records(owner: str, controller: str,
     write_mask = 0x10000000 | 0x40000000 | 0x00000002 | 0x00000004 | 0x00000010 \
         | 0x00000100 | 0x00010000 | 0x00040000 | 0x00080000
     for ace_sid, ace_flags, mask, ace_type in aces:
-        if ace_flags & 0x10 and mask & write_mask:
+        if ace_flags & 0x10 and ace_sid != owner and mask & write_mask:
             raise OSError("controller key ACL grants inherited write access")
         if ace_type in {0, 5, 9, 11} and ace_sid != owner and mask & write_mask:
             raise OSError("controller key ACL grants explicit non-owner write access")
 
 
 def _check_windows_acl(path: Path, require_owner: bool) -> None:
+    """Typed wrapper around the native ACL inspection implementation."""
+    try:
+        _check_windows_acl_impl(path, require_owner)
+    except ContractError:
+        raise
+    except Exception as exc:
+        raise ContractError("controller key ACL could not be inspected",
+                            "verification-unavailable") from exc
+
+
+def _check_windows_acl_impl(path: Path, require_owner: bool) -> None:
     """Check owner and writable ACEs from the OS security descriptor, not environment text."""
     if os.name != "nt":
         return
@@ -759,6 +856,23 @@ def _check_windows_acl(path: Path, require_owner: bool) -> None:
 
     advapi32 = ctypes.WinDLL("Advapi32", use_last_error=True)
     kernel32 = ctypes.WinDLL("Kernel32", use_last_error=True)
+    get_current_process = kernel32.GetCurrentProcess
+    get_current_process.argtypes = []
+    get_current_process.restype = wintypes.HANDLE
+    open_process_token = advapi32.OpenProcessToken
+    open_process_token.argtypes = [wintypes.HANDLE, wintypes.DWORD,
+                                   ctypes.POINTER(wintypes.HANDLE)]
+    open_process_token.restype = wintypes.BOOL
+    get_token_information = advapi32.GetTokenInformation
+    get_token_information.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.c_void_p,
+                                      wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+    get_token_information.restype = wintypes.BOOL
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+    local_free = kernel32.LocalFree
+    local_free.argtypes = [wintypes.HLOCAL]
+    local_free.restype = wintypes.HLOCAL
     security_descriptor = ctypes.c_void_p()
     owner_sid = ctypes.c_void_p()
     dacl = ctypes.c_void_p()
@@ -783,23 +897,23 @@ def _check_windows_acl(path: Path, require_owner: bool) -> None:
         try:
             return converted.value.casefold()
         finally:
-            kernel32.LocalFree(converted)
+            local_free(converted)
 
     try:
         token = wintypes.HANDLE()
-        if not kernel32.OpenProcessToken(kernel32.GetCurrentProcess(), 8, ctypes.byref(token)):
+        if not open_process_token(get_current_process(), 8, ctypes.byref(token)):
             raise OSError(ctypes.get_last_error(), "controller token could not be inspected")
         try:
             needed = wintypes.DWORD()
-            kernel32.GetTokenInformation(token, 1, None, 0, ctypes.byref(needed))
+            get_token_information(token, 1, None, 0, ctypes.byref(needed))
             if not needed.value:
                 raise OSError(ctypes.get_last_error(), "controller token SID could not be inspected")
             token_info = (ctypes.c_byte * needed.value)()
-            if not kernel32.GetTokenInformation(token, 1, token_info, needed, ctypes.byref(needed)):
+            if not get_token_information(token, 1, token_info, needed, ctypes.byref(needed)):
                 raise OSError(ctypes.get_last_error(), "controller token SID could not be inspected")
             current_sid = ctypes.cast(token_info, ctypes.POINTER(ctypes.c_void_p)).contents.value
         finally:
-            kernel32.CloseHandle(token)
+            close_handle(token)
 
         owner = sid_text(owner_sid)
         controller = sid_text(ctypes.c_void_p(current_sid))
@@ -843,11 +957,12 @@ def _check_windows_acl(path: Path, require_owner: bool) -> None:
                     sid_offset += 16
                 if object_flags & 0x2:
                     sid_offset += 16
-            ace_sid = ctypes.c_void_p.from_address(ace.value + sid_offset)
+            # SID bytes are inline in ACCESS_*_ACE (SidStart), not a pointer-sized field.
+            ace_sid = ctypes.c_void_p(ace.value + sid_offset)
             aces.append((sid_text(ace_sid), ace_flags, mask, ace_type))
         _validate_windows_acl_records(owner, controller, aces, require_owner)
     finally:
-        kernel32.LocalFree(security_descriptor)
+        local_free(security_descriptor)
 
 
 def _controller_key() -> bytes:
@@ -881,51 +996,77 @@ def _controller_key() -> bytes:
                 if parent_mode & 0o022 and not (parent_mode & 0o1000 and parent_mode & 0o002):
                     raise OSError("controller key parent is writable by group or world")
         if os.name == "nt" and key_path == _DEFAULT_CONTROLLER_KEY_PATH:
-            # The fixed production path is additionally checked against the Windows ACL.  Parse
-            # ACE lines (never the path header: a username in C:\Users\name\... is not an ACE),
-            # deny broad principals and inherited write access.  The owner and every writable ACE
-            # are checked from the OS security descriptor, never from caller environment.
-
-            def check_acl(path: Path, require_owner: bool) -> None:
-                _check_windows_acl(path, require_owner)
-                try:
-                    acl = subprocess.run(["icacls", str(path)], capture_output=True, text=True,
-                                          stdin=subprocess.DEVNULL, timeout=10, check=False)
-                except subprocess.TimeoutExpired as exc:
-                    raise OSError("controller key ACL inspection timed out") from exc
-                if acl.returncode or not acl.stdout:
-                    raise OSError("controller key ACL could not be inspected")
-                entries: list[tuple[str, str]] = []
-                for line in acl.stdout.splitlines():
-                    match = re.match(r"^\s*([^:]+):((?:\([^)]+\))+.*)$", line)
-                    if match:
-                        entries.append((match.group(1).strip(), match.group(2).strip()))
-                if not entries:
-                    raise OSError("controller key ACL has no parseable ACEs")
-                broad = {"everyone", "authenticated users", "users", "codexsandboxusers",
-                         "builtin\\users", "nt authority\\authenticated users"}
-                for principal, permissions in entries:
-                    folded = principal.casefold()
-                    if folded in broad or folded.endswith("\\users"):
-                        raise OSError("controller key ACL grants broad access")
-                    if "(i)" in permissions.casefold() and re.search(r"\((?:f|m|w|wd|ad)\)",
-                                                                        permissions, re.I):
-                        raise OSError("controller key ACL grants inherited write access")
-
-            check_acl(key_path, True)
+            # The fixed production path is checked from the OS security descriptor.  No caller
+            # environment value and no localized text rendering is part of the trust decision.
+            _check_windows_acl(key_path, True)
             for parent in (key_path.parent, *key_path.parent.parents):
                 if parent == parent.parent:
                     break
-                check_acl(parent, False)
+                _check_windows_acl(parent, False)
         raw = key_path.read_text(encoding="utf-8").strip()
-    except OSError as exc:
+    except ContractError:
+        raise
+    except Exception as exc:
         raise ContractError("controller verifier key is unavailable", "verification-unavailable") from exc
     if not raw or "\n" in raw or "\r" in raw:
         raise ContractError("controller verifier authentication is unavailable", "verification-unavailable")
     return raw.encode("utf-8")
 
 
-def _observed_gate_contract(contract: dict[str, Any], worktree: Path) -> dict[str, Any] | None:
+def _controller_relative_gate_path(value: str, controller_root: Path) -> str | None:
+    """Resolve both deployed /opt/recursion paths and the local controller checkout."""
+    normalized = value.replace("\\", "/")
+    root = controller_root.resolve().as_posix().rstrip("/")
+    if normalized == root or normalized.startswith(root + "/"):
+        return normalized[len(root):].lstrip("/")
+    logical_root = "/opt/recursion"
+    if normalized == logical_root or normalized.startswith(logical_root + "/"):
+        return normalized[len(logical_root):].lstrip("/")
+    try:
+        return Path(value).resolve().relative_to(controller_root.resolve()).as_posix()
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
+def _gate_identity(value: str, profile: dict[str, Any]) -> tuple[tuple[str, ...], ...]:
+    """Return a path-resolved identity for comparing equivalent gate spellings."""
+    controller_root = Path(__file__).resolve().parents[1]
+    controller_files = set(profile["controller_gate_files"])
+    candidate_files = set(profile["gate_files"])
+    identities: list[tuple[str, ...]] = []
+    for raw_segment in re.split(r"\s*&&\s*", value.strip()):
+        try:
+            words = shlex.split(raw_segment.replace("\\", "/"), posix=True)
+        except ValueError:
+            return ((value.strip(),),)
+        normalized: list[str] = []
+        for word in words:
+            relative = _controller_relative_gate_path(word, controller_root) \
+                if _path_is_absolute_gate_operand(word) else None
+            if relative in controller_files:
+                normalized.append("controller:" + relative)
+            elif word in controller_files:
+                normalized.append("controller:" + word)
+            elif word in candidate_files:
+                normalized.append("candidate:" + word)
+            elif relative is not None:
+                normalized.append("absolute:" + word.casefold())
+            else:
+                normalized.append(word)
+        if normalized and normalized[0].startswith("controller:") \
+                and normalized[0].lower().endswith(".py"):
+            normalized.insert(0, "python3")
+        identities.append(tuple(normalized))
+    return tuple(identities)
+
+
+def _path_is_absolute_gate_operand(value: str) -> bool:
+    normalized = value.replace("\\", "/")
+    return normalized.startswith("/") or bool(re.match(r"^[A-Za-z]:/", normalized))
+
+
+def _observed_gate_contract(contract: dict[str, Any], worktree: Path,
+                           *, baseline_commit: str | None = None) -> dict[str, Any] | None:
     profile = _required_gate_profile(contract)
     if profile is None:
         return None
@@ -937,6 +1078,8 @@ def _observed_gate_contract(contract: dict[str, Any], worktree: Path) -> dict[st
         "--controller-root", str(Path(__file__).resolve().parents[1]),
         "--controller-gate-files", ",".join(profile["controller_gate_files"]), "--strict-direct",
     ]
+    if baseline_commit is not None:
+        args += ["--baseline-commit", baseline_commit]
     try:
         observed = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                   stderr=subprocess.PIPE, text=True, timeout=30, check=False)
@@ -967,15 +1110,16 @@ def _observed_gate_contract(contract: dict[str, Any], worktree: Path) -> dict[st
     return evidence
 
 
-def _run_independent_gates(contract: dict[str, Any], repo: Path, commit: str) -> dict[str, Any] | None:
+def _run_independent_gates(contract: dict[str, Any], repo: Path, commit: str,
+                           *, source: str | None = None) -> dict[str, Any] | None:
     """Run the descriptor's gates on an isolated detached worktree under controller control."""
     with tempfile.TemporaryDirectory(prefix="recursion-gate-") as raw:
         worktree = Path(raw) / "candidate"
-        created = _git(repo, "worktree", "add", "--detach", "--quiet", str(worktree), commit)
+        created = _checked_git(repo, "worktree", "add", "--detach", "--quiet", str(worktree), commit)
         if created.returncode:
             raise ContractError("controller gate worktree could not be created", "verification-unavailable")
         try:
-            gate_contract = _observed_gate_contract(contract, worktree)
+            gate_contract = _observed_gate_contract(contract, worktree, baseline_commit=source)
             env = {key: value for key, value in os.environ.items()
                    if key in {"PATH", "HOME", "USERPROFILE", "SystemRoot", "WINDIR"}}
             env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
@@ -990,7 +1134,7 @@ def _run_independent_gates(contract: dict[str, Any], repo: Path, commit: str) ->
                 if result.returncode:
                     raise ContractError("independent controller gate failed", "unauthorized-result")
         finally:
-            removed = _git(repo, "worktree", "remove", "--force", str(worktree))
+            removed = _checked_git(repo, "worktree", "remove", "--force", str(worktree))
             if removed.returncode:
                 raise ContractError("controller gate worktree cleanup failed", "verification-unavailable")
         return gate_contract
@@ -1031,7 +1175,7 @@ def verify_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: 
     _oid(repo, commit, missing="unauthorized-result")
     if not _ancestor(repo, source, commit):
         raise ContractError("candidate is not descended from its exact source SHA", "unauthorized-result")
-    changed = _git(repo, "diff", "--name-only", source, commit)
+    changed = _checked_git(repo, "diff", "--name-only", source, commit)
     if changed.returncode:
         raise ContractError("candidate diff could not be measured", "verification-unavailable")
     paths = [item for item in changed.stdout.splitlines() if item]
@@ -1042,7 +1186,7 @@ def verify_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: 
     _inspect_candidate_tree(repo, commit, allowed)
     if not isinstance(receipt, dict):
         raise ContractError("controller verification receipt is required separately", "unauthorized-result")
-    gate_contract = _run_independent_gates(contract, repo, commit)
+    gate_contract = _run_independent_gates(contract, repo, commit, source=source)
     _verify_receipt(contract, candidate, receipt, source, commit, paths, allowed, repo,
                     gate_contract=gate_contract)
     result = dict(candidate)
@@ -1065,7 +1209,7 @@ def _verify_receipt(contract: dict[str, Any], candidate: dict[str, Any], receipt
             or receipt.get("verifier") != "controller-verifier" \
             or receipt.get("provenance") != "recursion-controller":
         raise ContractError("controller verification receipt provenance is not trusted", "unauthorized-result")
-    diff = _git(repo, "diff", "--binary", source, commit)
+    diff = _checked_git(repo, "diff", "--binary", source, commit)
     if diff.returncode:
         raise ContractError("candidate diff could not be hashed", "verification-unavailable")
     expected = {
@@ -1149,18 +1293,18 @@ def import_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: 
             operation_key = _json_digest(["candidate-import", contract["id"], idempotency_key])
             record_name = f"{operation_key}.json"
             ref = _canonical_ref(contract, verified["task_id"])
-            current_result = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
+            current_result = _checked_git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
             current = current_result.stdout.strip() if current_result.returncode == 0 else ""
             if current and current != verified["candidate_commit"]:
                 raise ContractError("canonical task ref already names a different candidate", "idempotency-conflict")
             if current == verified["candidate_commit"]:
                 status = "idempotent"
             else:
-                created = _git(repo, "update-ref", ref, verified["candidate_commit"], "0" * len(verified["candidate_commit"]))
+                created = _checked_git(repo, "update-ref", ref, verified["candidate_commit"], "0" * len(verified["candidate_commit"]))
                 if created.returncode:
                     # Another coordinator may have won the same import race. Re-read the ref and
                     # reconcile an identical winner; only a different winner is a real conflict.
-                    raced = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
+                    raced = _checked_git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
                     raced_commit = raced.stdout.strip() if raced.returncode == 0 else ""
                     if raced_commit == verified["candidate_commit"]:
                         status = "idempotent"
@@ -1300,6 +1444,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except ContractError as exc:
         print(json.dumps({"error": exc.code, "message": str(exc)}, sort_keys=True), file=sys.stderr)
+        return 2
+    except subprocess.TimeoutExpired as exc:
+        error = ContractError("Git command timed out", "verification-unavailable")
+        print(json.dumps({"error": error.code, "message": str(error)}, sort_keys=True), file=sys.stderr)
         return 2
 
 

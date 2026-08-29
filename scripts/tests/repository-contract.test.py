@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import hashlib
 import hmac
+import inspect
 import os
 import subprocess
 import tempfile
@@ -184,6 +185,16 @@ class RepositoryContractTests(unittest.TestCase):
                 rc._git(self.repo, "status")
         self.assertEqual(raised.exception.code, "verification-unavailable")
 
+    def test_git_timeout_at_verify_candidate_caller_boundary_is_typed(self) -> None:
+        timeout = subprocess.TimeoutExpired(["git"], 30)
+        candidate = {"project_id": "test-project", "task_id": "task-one", "source_branch": "main",
+                     "source_sha": "a" * 40, "external_branch": "cursor/task-one",
+                     "candidate_commit": "b" * 40}
+        with mock.patch.object(rc, "_git", side_effect=timeout):
+            with self.assertRaisesRegex(rc.ContractError, "timed out") as raised:
+                rc.verify_candidate(self.contract, candidate, self.repo)
+        self.assertEqual(raised.exception.code, "verification-unavailable")
+
     def test_windows_acl_uses_actual_owner_and_rejects_other_user_write(self) -> None:
         with mock.patch.dict(os.environ, {"USERNAME": "attacker"}, clear=False):
             with self.assertRaisesRegex(OSError, "non-owner"):
@@ -192,6 +203,21 @@ class RepositoryContractTests(unittest.TestCase):
         with self.assertRaisesRegex(OSError, "owner"):
             rc._validate_windows_acl_records(
                 "S-1-attacker", "S-1-controller", [("S-1-attacker", 0, 0x001F01FF, 0)], True)
+
+    def test_windows_acl_wrapper_accepts_legitimate_and_types_native_failures(self) -> None:
+        with mock.patch.object(rc, "_check_windows_acl_impl", return_value=None):
+            self.assertIsNone(rc._check_windows_acl(Path("controller.key"), True))
+        foreign = lambda _path, _required: rc._validate_windows_acl_records(
+            "S-1-owner", "S-1-owner", [("S-1-foreign", 0, 0x001F01FF, 0)], True)
+        with mock.patch.object(rc, "_check_windows_acl_impl", side_effect=foreign):
+            with self.assertRaises(rc.ContractError):
+                rc._check_windows_acl(Path("controller.key"), True)
+        with mock.patch.object(rc, "_check_windows_acl_impl",
+                              side_effect=OSError("native ACL failure")):
+            with self.assertRaises(rc.ContractError):
+                rc._check_windows_acl(Path("controller.key"), True)
+        self.assertNotIn("c_void_p.from_address(ace.value + sid_offset)",
+                          inspect.getsource(rc._check_windows_acl_impl))
 
     def test_declared_gate_profile_must_match_executed_gate_and_evidence(self) -> None:
         divergent = dict(
@@ -216,6 +242,20 @@ class RepositoryContractTests(unittest.TestCase):
             with self.assertRaisesRegex(rc.ContractError, "evidence"):
                 rc._observed_gate_contract(profile_contract, self.repo)
 
+    def test_gate_profile_compares_resolved_paths_but_rejects_a_divergent_gate(self) -> None:
+        controller_root = Path(__file__).parents[2].resolve()
+        script = "scripts/gsc-shade-tops-gate.py"
+        profile_path = "scripts/gates/gsc-shade-tops-v1.json"
+        relative = f"python3 {script} --repo . --profile {profile_path}"
+        absolute = f"{controller_root / script} --repo . --profile {controller_root / profile_path}"
+        profile = {"acceptance": absolute, "gate_class": "heavy", "gate_files": [],
+                   "controller_gate_files": [script, profile_path]}
+        contract = dict(self.contract, gate_commands=[relative], required_gate_profile=profile)
+        rc.validate_project_descriptor(contract)
+        divergent = dict(contract, required_gate_profile=dict(profile, acceptance=absolute + " --other-profile"))
+        with self.assertRaisesRegex(rc.ContractError, "diverges"):
+            rc.validate_project_descriptor(divergent)
+
     def test_reparse_ledger_is_refused_before_any_record_can_escape(self) -> None:
         outside = Path(self.temp.name) / "ledger-outside"
         outside.mkdir()
@@ -231,6 +271,47 @@ class RepositoryContractTests(unittest.TestCase):
             with rc._pinned_ledger(ledger):
                 self.fail("reparse ledger was pinned")
         self.assertEqual(list(outside.iterdir()), [])
+
+    def test_windows_ledger_pins_parent_components_with_delete_sharing_denied(self) -> None:
+        if os.name != "nt":
+            self.skipTest("Windows-only parent handle proof")
+        source = inspect.getsource(rc._pinned_windows_parents)
+        self.assertIn("share_delete=False", source)
+        self.assertIn("_same_file(info, pinned)", source)
+
+    def test_windows_ledger_parent_identity_is_revalidated_before_use(self) -> None:
+        if os.name != "nt":
+            self.skipTest("Windows-only parent handle proof")
+        target = Path(__file__).resolve().parents[2] / "scripts" / "tests" / "uncreated-ledger"
+        opened: list[tuple[Path, bool]] = []
+        pinned: list[os.stat_result] = []
+
+        def open_parent(path: Path, *, share_delete: bool) -> int:
+            opened.append((path, share_delete))
+            pinned.append(os.lstat(path))
+            return 1000 + len(pinned) - 1
+
+        def fstat_parent(fd: int) -> os.stat_result:
+            return pinned[fd - 1000]
+
+        with mock.patch.object(rc.os, "name", "nt"), \
+                mock.patch.object(rc, "_open_windows_directory", side_effect=open_parent), \
+                mock.patch.object(rc.os, "fstat", side_effect=fstat_parent), \
+                mock.patch.object(rc.os, "close") as close:
+            with rc._pinned_windows_parents(target):
+                pass
+        self.assertGreaterEqual(len(opened), 2)
+        self.assertTrue(all(share_delete is False for _, share_delete in opened))
+        self.assertEqual(close.call_count, len(opened))
+
+        with mock.patch.object(rc.os, "name", "nt"), \
+                mock.patch.object(rc, "_open_windows_directory", side_effect=open_parent), \
+                mock.patch.object(rc.os, "fstat", side_effect=fstat_parent), \
+                mock.patch.object(rc, "_same_file", side_effect=[True, False]), \
+                mock.patch.object(rc.os, "close"):
+            with self.assertRaises(OSError):
+                with rc._pinned_windows_parents(target):
+                    pass
 
     def test_runtime_descriptor_uniqueness_and_namespace_overlap(self) -> None:
         invalid_repo = dict(self.contract, repo=7)

@@ -138,6 +138,40 @@ class DirectGateAdmissionTest(unittest.TestCase):
             with self.subTest(gate=gate):
                 self.assertNotEqual(run_gate(gate, gate_files="app/check.py"), 0)
 
+    def test_shell_expansion_globs_drive_relative_and_unc_operands_are_refused(self):
+        refused = (
+            "test -s ~",
+            "test -s *",
+            "test -s ?.txt",
+            "test -s %USERPROFILE%",
+            "test -s $TEMP",
+            "test -s `echo app/result.txt`",
+            "test -s C:outside.txt",
+            r"test -s \\server\share\a",
+        )
+        for gate in refused:
+            with self.subTest(gate=gate):
+                result = run_gate_result(gate)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn(b"Traceback", result.stderr)
+
+    def test_git_gate_subcommands_are_read_only_and_non_network(self):
+        admitted = ("git diff --check", "git status --short", "git show HEAD",
+                    "git rev-parse HEAD", "git ls-files", "git cat-file -t HEAD")
+        refused = ("git push", "git fetch", "git clone https://example.invalid/repo",
+                   "git config user.name attacker", "git clean -fd",
+                   "git diff --no-index outside other",
+                   "git status --pathspec-from-file=/tmp/paths", "test src/a -nt outside",
+                   "[ src/a -ef outside ]")
+        for gate in admitted:
+            with self.subTest(admitted=gate):
+                self.assertEqual(run_gate(gate), 0)
+        for gate in refused:
+            with self.subTest(refused=gate):
+                result = run_gate_result(gate)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn(b"Traceback", result.stderr)
+
         # Deterministic public-schema/runtime differential.  The cross-product deliberately
         # exercises spacing and `&&` collation in addition to the enumerated bypass families.
         # Keep this in an existing test so the historical strict-gate acceptance remains 10/10.
@@ -251,6 +285,41 @@ class GateFileIdentityTest(unittest.TestCase):
                 self.skipTest(f"symlink creation is unavailable on this host: {exc}")
             with self.assertRaisesRegex(ValueError, "symlink or reparse"):
                 module.clean_tracked_bytes(repo, "app/check.py")
+        finally:
+            try:
+                shutil.rmtree(repo)
+            except OSError:
+                pass
+
+    def test_candidate_gate_bytes_must_match_authoritative_baseline(self):
+        spec = __import__("importlib.util").util.spec_from_file_location("validate_gate", GATE)
+        module = __import__("importlib.util").util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        try:
+            raw = tempfile.mkdtemp(prefix="validate-gate-baseline-")
+        except OSError as exc:
+            self.skipTest(f"temporary test repository is unavailable on this host: {exc}")
+        repo = Path(raw)
+        try:
+            try:
+                subprocess.run(["git", "-C", str(repo), "init", "-q", "-b", "main"], check=True)
+            except (OSError, subprocess.CalledProcessError) as exc:
+                self.skipTest(f"temporary test repository is unavailable on this host: {exc}")
+            (repo / "app").mkdir()
+            gate = repo / "app" / "check.py"
+            gate.write_text("print('baseline')\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+            subprocess.run(["git", "-C", str(repo), "config", "user.name", "gate-test"], check=True)
+            subprocess.run(["git", "-C", str(repo), "config", "user.email", "gate-test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(repo), "commit", "-qm", "base"], check=True)
+            baseline = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                                      capture_output=True, text=True, check=True).stdout.strip()
+            gate.write_text("print('substituted')\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+            subprocess.run(["git", "-C", str(repo), "commit", "-qm", "candidate"], check=True)
+            with self.assertRaisesRegex(ValueError, "authoritative baseline"):
+                module.clean_tracked_bytes(repo, "app/check.py", baseline)
         finally:
             try:
                 shutil.rmtree(repo)

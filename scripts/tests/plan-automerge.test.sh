@@ -150,6 +150,17 @@ else
   no "plan.sh warned about automerge on a roadmap that has none: $(cat "$TMP/err")"
 fi
 
+# --- 1b. gate authority metadata survives planning ----------------------------------------
+roadmap gated "gate_files: app/check.py" "controller_gate_files: scripts/controller-gate.py"
+rc="$(plan gated)"
+if [ "$rc" = 0 ] && [ -f "$R/state/tasks/gated-001.md" ] \
+   && header_of gated-001 | grep -q '^gate_files: app/check.py$' \
+   && header_of gated-001 | grep -q '^controller_gate_files: scripts/controller-gate.py$'; then
+  ok "planner serializes gate_files and controller_gate_files into gate-evidence tasks"
+else
+  no "planner dropped gate authority metadata (rc=$rc): $(cat "$TMP/err")"
+fi
+
 # --- 2. the field does not reach the task --------------------------------------------------
 roadmap grant "automerge: yes" "automerge_scope: apps/demo"
 rc="$(plan grant)"

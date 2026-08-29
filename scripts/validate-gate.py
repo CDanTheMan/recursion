@@ -23,7 +23,7 @@ VACUOUS = re.compile(r"^(?:true|:|/bin/true|exit\s+0)$")
 # validate-gate.test.py differentially exercises this expression through both public
 # admission surfaces so edits cannot silently widen only one side.
 _DIRECT_COMMAND = r"(?:test|\[|git|bash|sh|python|python3|node)"
-_DIRECT_ARGUMENT = r'''(?:[^\s&|<>`$(){};'\"]+|"[^"&|<>`$(){};\r\n]+"|'[^'&|<>`$(){};\r\n]+')'''
+_DIRECT_ARGUMENT = r'''(?:[^\s&|<>`~%$*?\[(){};'\"]+|"[^"&|<>`~%$*?\[(){};\r\n]+"|'[^'&|<>`~%$*?\[(){};\r\n]+')'''
 _DIRECT_SEGMENT = rf"{_DIRECT_COMMAND}(?:\s+{_DIRECT_ARGUMENT})*"
 STRICT_DIRECT_PATTERN = re.compile(
     r"^(?!.*[\x00-\x08\x0A-\x1F])"
@@ -38,7 +38,27 @@ STRICT_DIRECT_PATTERN = re.compile(
     r"(?!.*(?:^|&&)\s*git(?:(?!&&).)*\s"
     r"(?:-C|-c|-o|--(?:git-dir|work-tree|super-prefix|exec-path|namespace|config|config-env|output))"
     r"[^\s&]*(?=\s|&&|$))"
+    r"(?!.*(?:^|&&)\s*git\s+-)"
+    r"(?!.*(?:^|&&)\s*git\s+(?!(?:diff|status|show|rev-parse|ls-files|cat-file)(?:\s|$))[^\s&]+(?:\s|$))"
     rf"\s*{_DIRECT_SEGMENT}(?:\s*&&\s*{_DIRECT_SEGMENT})*\s*$"
+)
+
+_CONTROLLER_COMMAND = r"(?:/(?:[^\s&|<>`~%$*?\[(){};'\"]+)|[A-Za-z]:[^\s&|<>`~%$*?\[(){};'\"]+)"
+_CONTROLLER_SEGMENT = rf"(?:{_DIRECT_COMMAND}|{_CONTROLLER_COMMAND})(?:\s+{_DIRECT_ARGUMENT})*"
+STRICT_CONTROLLER_PATTERN = re.compile(
+    r"^(?!.*[\x00-\x08\x0A-\x1F])"
+    r"(?!.*\.recursion-result\.json)"
+    r"(?!.*(?:^|[/\\\s\"'])\.\.(?:[/\\\s\"']|$))"
+    r"(?!.*(?:^|&&)\s*(?:bash|sh|python|python3|node)\s*(?:&&|$))"
+    r"(?!.*(?:^|&&)\s*(?:bash|sh|python|python3|node)\s+-)"
+    r"(?!.*(?:^|&&)\s*(?:test|\[)\s+-n(?:\s|$))"
+    r"(?!.*(?:^|&&)\s*(?:test|\[)(?:(?!&&).)*\s(?:=|==|-eq)\s)"
+    r"(?!.*(?:^|&&)\s*git(?:(?!&&).)*\s"
+    r"(?:-C|-c|-o|--(?:git-dir|work-tree|super-prefix|exec-path|namespace|config|config-env|output))"
+    r"[^\s&]*(?=\s|&&|$))"
+    r"(?!.*(?:^|&&)\s*git\s+-)"
+    r"(?!.*(?:^|&&)\s*git\s+(?!(?:diff|status|show|rev-parse|ls-files|cat-file)(?:\s|$))[^\s&]+(?:\s|$))"
+    rf"\s*{_CONTROLLER_SEGMENT}(?:\s*&&\s*{_CONTROLLER_SEGMENT})*\s*$"
 )
 
 # Shell reserved words and wrapper/detaching launchers that would let an admission string hide,
@@ -60,7 +80,12 @@ def paths(value: str) -> list[str]:
     result: list[str] = []
     for item in value.replace(",", " ").split():
         p = PurePosixPath(item)
-        if p.is_absolute() or ".." in p.parts or item in {"", "."}:
+        if (p.is_absolute() or ".." in p.parts or item in {"", "."}
+                or any(char in item for char in "~%$`*?[")
+                or item.startswith(("\\\\", "//"))
+                or re.match(r"^[A-Za-z]:", item)):
+            fail(f"unsafe gate file: {item!r}")
+        if "\\" in item or p.as_posix() != item:
             fail(f"unsafe gate file: {item!r}")
         result.append(p.as_posix())
     return result
@@ -76,11 +101,14 @@ def _is_reparse_or_link(info: os.stat_result) -> bool:
     )
 
 
-def clean_tracked_bytes(repo: Path, item: str) -> bytes:
+def clean_tracked_bytes(repo: Path, item: str, baseline_commit: str | None = None) -> bytes:
     """Return the committed gate bytes and reject index/worktree substitution."""
     pure = PurePosixPath(item)
-    if pure.is_absolute() or ".." in pure.parts or not pure.parts \
-            or pure.as_posix() != item or "\\" in item:
+    if (pure.is_absolute() or ".." in pure.parts or not pure.parts
+            or pure.as_posix() != item or "\\" in item
+            or any(char in item for char in "~%$`*?[")
+            or item.startswith(("\\\\", "//"))
+            or re.match(r"^[A-Za-z]:", item)):
         fail(f"gate file path is not a confined repository path: {item}")
     tracked = subprocess.run(
         ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", item],
@@ -116,10 +144,21 @@ def clean_tracked_bytes(repo: Path, item: str) -> bytes:
     )
     if dirty.returncode:
         fail(f"gate file differs from clean HEAD: {item}")
+    if baseline_commit is not None:
+        if not re.fullmatch(r"[0-9a-f]{40,64}", baseline_commit):
+            fail("authoritative gate baseline is not an exact commit")
+        baseline = subprocess.run(
+            ["git", "-C", str(repo), "show", f"{baseline_commit}:{item}"],
+            capture_output=True, check=False,
+        )
+        if baseline.returncode:
+            fail(f"authoritative gate baseline is missing: {item}")
+        if baseline.stdout != committed.stdout:
+            fail(f"gate file differs from authoritative baseline: {item}")
     return committed.stdout
 
 
-def entrypoint(words: list[str], strict: bool) -> str | None:
+def entrypoint(words: list[str], strict: bool, *, controller_declared: bool = False) -> str | None:
     """Identify the only executable source file in the admitted direct-command class."""
     if not words:
         return None
@@ -127,7 +166,7 @@ def entrypoint(words: list[str], strict: bool) -> str | None:
     name = PurePosixPath(command).name
     if strict and command != name and name in {
         "test", "[", "git", "bash", "sh", "python", "python3", "node",
-    }:
+    } and not controller_declared:
         fail(f"path-qualified acceptance launcher is not admitted: {command}")
     if strict and name in RESERVED:
         fail(f"shell reserved word or wrapper is not admitted: {command}")
@@ -172,6 +211,11 @@ def _controller_declared(value: str, controller_root: str | None,
                          controller_gate_files: list[str]) -> bool:
     if not controller_root or not _path_is_absolute(value):
         return False
+    normalized = value.replace("\\", "/")
+    logical_root = "/opt/recursion"
+    if normalized == logical_root or normalized.startswith(logical_root + "/"):
+        relative = normalized[len(logical_root):].lstrip("/")
+        return relative in controller_gate_files
     try:
         relative = Path(value).resolve().relative_to(Path(controller_root).resolve()).as_posix()
     except ValueError:
@@ -194,6 +238,62 @@ def _reject_git_cwd_options(words: list[str]) -> None:
             fail(f"Git gate may not redirect its repository or configuration: {word}")
 
 
+def _reject_shell_expansion(word: str) -> None:
+    if any(char in word for char in "~%$`*?["):
+        fail(f"acceptance operand contains shell expansion or glob syntax: {word}")
+    normalized = word.replace("\\", "/")
+    if normalized.startswith("//") or word.startswith("\\\\") \
+            or re.match(r"^[A-Za-z]:(?:$|[^/])", normalized):
+        fail(f"acceptance operand uses an absolute, UNC, or drive-relative path: {word}")
+
+
+def _validate_git_subcommand(words: list[str]) -> None:
+    if not words or PurePosixPath(words[0].replace("\\", "/")).name != "git":
+        return
+    if len(words) < 2 or words[1].startswith("-"):
+        fail("Git gate must name an allowed read-only subcommand directly")
+    allowed = {"diff", "status", "show", "rev-parse", "ls-files", "cat-file"}
+    if words[1] not in allowed:
+        fail(f"Git gate subcommand is not read-only and non-network: {words[1]}")
+    # These read-only Git modes can still read or write paths outside the detached worktree.
+    # Keep the allowlist useful for ordinary repository inspection without allowing that escape.
+    for word in words[2:]:
+        if word == "--no-index" or word.startswith("--no-index=") \
+                or word == "--pathspec-file-nul" \
+                or word == "--pathspec-from-file" \
+                or word.startswith("--pathspec-from-file="):
+            fail(f"Git gate option is not confined to the detached worktree: {word}")
+
+
+def _declared_or_allowed(path: str, *, allowed: list[str], controller_root: str | None,
+                         controller_gate_files: list[str]) -> bool:
+    normalized = path.replace("\\", "/")
+    if _path_is_absolute(normalized):
+        return _controller_declared(normalized, controller_root, controller_gate_files)
+    return under(normalized, allowed) or normalized in controller_gate_files
+
+
+def _path_operand_indexes(words: list[str]) -> set[int]:
+    indexes: set[int] = set()
+    test_words = words
+    if words[:1] == ["["] and words[-1:] == ["]"]:
+        test_words = ["test", *words[1:-1]]
+    if test_words[:1] == ["test"]:
+        # Only unary file predicates execute a path.  Comparison operands such as `test a != b`
+        # remain literal values and are intentionally not treated as filesystem paths.
+        file_predicates = {"-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-O", "-G",
+                           "-k", "-p", "-r", "-s", "-S", "-u", "-w", "-x"}
+        indexes.update(index + 1 for index, word in enumerate(test_words[1:], 1)
+                       if word in file_predicates and index + 1 < len(test_words))
+        for index, word in enumerate(test_words[1:], 1):
+            if word in {"-ef", "-nt", "-ot"} and index + 1 < len(test_words):
+                indexes.update({index, index + 1})
+    if PurePosixPath(words[0].replace("\\", "/")).name == "git" and "--" in words[1:]:
+        marker = words.index("--", 1)
+        indexes.update(range(marker + 1, len(words)))
+    return indexes
+
+
 def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: list[str],
                          controller_root: str | None, controller_gate_files: list[str]) -> str | None:
     """Apply the strict direct-command policy to parsed argv, including every path operand."""
@@ -208,6 +308,10 @@ def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: li
         )
     ):
         fail("literal test acceptance is structurally vacuous")
+    if test_words[:1] == ["test"] and any(word in {"-ef", "-nt", "-ot"}
+                                            for word in test_words[1:]):
+        fail("binary filesystem test is not admitted as a confined gate")
+    _validate_git_subcommand(words)
     _reject_git_cwd_options(words)
     command = words[0].replace("\\", "/")
     command_absolute = _path_is_absolute(command)
@@ -217,14 +321,19 @@ def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: li
     elif _path_has_traversal(command):
         fail(f"acceptance executable path is unsafe: {command}")
 
-    candidate = entrypoint(words, True)
+    command_declared = command_absolute and _controller_declared(
+        command, controller_root, controller_gate_files)
+    candidate = entrypoint(words, True, controller_declared=command_declared)
     candidate_index = None
     if candidate is not None:
         # Locate the script operand in parsed argv rather than searching the raw command string.
-        for index, word in enumerate(words[1:], 1):
-            if not word.startswith("-"):
-                candidate_index = index
-                break
+        if command_declared:
+            candidate_index = 0
+        else:
+            for index, word in enumerate(words[1:], 1):
+                if not word.startswith("-"):
+                    candidate_index = index
+                    break
         normalized_candidate = candidate.replace("\\", "/")
         if _path_is_absolute(normalized_candidate):
             if not _controller_declared(normalized_candidate, controller_root, controller_gate_files):
@@ -237,12 +346,21 @@ def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: li
         elif normalized_candidate not in controller_gate_files:
             fail(f"gate program is outside allowed/controller-declared paths: {normalized_candidate}")
 
+    path_indexes = _path_operand_indexes(words)
     for index, word in enumerate(words[1:], 1):
+        _reject_shell_expansion(word)
         normalized = word.replace("\\", "/")
         if index == candidate_index:
             continue
-        if _path_is_absolute(normalized) or _path_has_traversal(normalized):
+        if _path_is_absolute(normalized) and not _controller_declared(
+                normalized, controller_root, controller_gate_files):
+            fail(f"acceptance path operand is outside declared controller files: {word}")
+        if _path_has_traversal(normalized):
             fail(f"acceptance path operand is unsafe: {word}")
+        if index in path_indexes and not _declared_or_allowed(
+                normalized, allowed=allowed, controller_root=controller_root,
+                controller_gate_files=controller_gate_files):
+            fail(f"acceptance path operand is outside allowed/controller-declared paths: {word}")
     return candidate
 
 
@@ -286,6 +404,7 @@ def main() -> int:
     parser.add_argument("--repo")
     parser.add_argument("--controller-gate-files", default="")
     parser.add_argument("--controller-root")
+    parser.add_argument("--baseline-commit")
     parser.add_argument("--strict-direct", action="store_true")
     args = parser.parse_args()
     try:
@@ -295,6 +414,8 @@ def main() -> int:
             ord(ch) < 32 and ch not in "\t" for ch in raw_gate
         ):
             fail("acceptance gate must be bounded, single-line, and non-empty")
+        if re.search(r"[~%$`]|(?<!&)&(?!&)|[|;<>]", gate):
+            fail("acceptance gate contains shell expansion or metacharacters")
         compact = re.sub(r"\s+", " ", gate)
         if args.strict_direct and (
             any(token in gate for token in ("`", "$", "<(", ">(", "||", ";", "(", ")", "{", "}"))
@@ -304,8 +425,11 @@ def main() -> int:
             or "<" in gate or ">" in gate
         ):
             fail("acceptance gate uses unreviewable shell indirection")
-        if args.strict_direct and not STRICT_DIRECT_PATTERN.fullmatch(gate):
-            fail("acceptance gate is outside the strict direct-command grammar")
+        if args.strict_direct:
+            pattern = (STRICT_CONTROLLER_PATTERN
+                       if args.controller_gate_files else STRICT_DIRECT_PATTERN)
+            if not pattern.fullmatch(gate):
+                fail("acceptance gate is outside the strict direct-command grammar")
         raw_segments = re.split(r"\s*(?:&&|\|\||;)\s*", gate)
         operators = re.findall(r"&&|\|\||;", gate)
         parsed_segments: list[list[str]] = []
@@ -340,6 +464,21 @@ def main() -> int:
                                      controller_gate_files=controller_gate_files)
             else:
                 candidate = entrypoint(words, args.strict_direct)
+                if PurePosixPath(words[0].replace("\\", "/")).name == "git":
+                    _validate_git_subcommand(words)
+                path_indexes = _path_operand_indexes(words)
+                for index, word in enumerate(words[1:], 1):
+                    _reject_shell_expansion(word)
+                    normalized = word.replace("\\", "/")
+                    if _path_is_absolute(normalized) and not _controller_declared(
+                            normalized, args.controller_root, controller_gate_files):
+                        fail(f"acceptance path operand is outside declared controller files: {word}")
+                    if _path_has_traversal(normalized):
+                        fail(f"acceptance path operand is unsafe: {word}")
+                    if index in path_indexes and not _declared_or_allowed(
+                            normalized, allowed=allowed, controller_root=args.controller_root,
+                            controller_gate_files=controller_gate_files):
+                        fail(f"acceptance path operand is outside allowed/controller-declared paths: {word}")
                 if candidate and PurePosixPath(candidate).is_absolute():
                     if not args.controller_root:
                         fail("absolute acceptance program lacks a controller root")
@@ -355,7 +494,9 @@ def main() -> int:
         if args.repo:
             repo = Path(args.repo)
             for item in gate_files:
-                hashes[item] = hashlib.sha256(clean_tracked_bytes(repo, item)).hexdigest()
+                hashes[item] = hashlib.sha256(
+                    clean_tracked_bytes(repo, item, args.baseline_commit)
+                ).hexdigest()
         controller_hashes: dict[str, str] = {}
         if controller_gate_files:
             if not args.controller_root:

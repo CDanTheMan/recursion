@@ -109,6 +109,8 @@ AM="$(hget automerge)";    AMS="$(hget automerge_scope)"; MODEL="$(hget model)"
 GOAL_ID="$(hget goal_id)"; DEPS="$(hget dependencies)"; ALLOWED="$(hget allowed_paths)"
 NON_GOALS="$(hget non_goals)"; WORKER_CLASS="$(hget worker_class)"
 GATE_COMMANDS="$(hget gate_commands)"
+GATE_FILES="$(hget gate_files)"
+CONTROLLER_GATE_FILES="$(hget controller_gate_files)"
 GOAL_ID="${GOAL_ID:-goal-$WS}"
 # Phase 2 repository boundary. The frozen in-repository Chiron tree is historical residue, not a
 # destination for new work. A canonical Chiron project may still be planned from /opt/chiron;
@@ -203,17 +205,22 @@ fi
 # must not widen a descriptor restricted to a subtree.
 if [ -n "$PROJECT_CONFIG" ]; then
   python3 - "$PROJECT_CONFIG" "$REPO_CANONICAL" "$ID" "$SOURCE_BRANCH" "$SOURCE_SHA" \
-    "${ALLOWED:-${WORKDIR:-.}}" "$WORKDIR" "$ACC" "$GOAL" <<'PY'
+    "${ALLOWED:-${WORKDIR:-.}}" "$WORKDIR" "$ACC" "$GOAL" "$GATE_FILES" \
+    "$CONTROLLER_GATE_FILES" <<'PY'
 import json, re, sys
 from pathlib import Path
 sys.path.insert(0, str(Path.cwd() / "scripts"))
 import repository_contract as rc
 
-descriptor_path, repo, task_id, source_branch, source_sha, allowed_raw, workdir, acceptance, goal = sys.argv[1:]
+descriptor_path, repo, task_id, source_branch, source_sha, allowed_raw, workdir, acceptance, goal, \
+    gate_files_raw, controller_gate_files_raw = sys.argv[1:]
 allowed = [item for item in re.split(r"[\s,]+", allowed_raw) if item]
+gate_files = [item for item in re.split(r"[\s,]+", gate_files_raw) if item]
+controller_gate_files = [item for item in re.split(r"[\s,]+", controller_gate_files_raw) if item]
 task = {"id": task_id, "source_branch": source_branch, "source_sha": source_sha,
         "source_repository": repo, "allowed_paths": allowed, "workdir": workdir,
-        "acceptance": acceptance, "goal": goal}
+        "acceptance": acceptance, "goal": goal, "gate_files": gate_files,
+        "controller_gate_files": controller_gate_files}
 try:
     rc.admit_task(rc.validate_project_descriptor(json.loads(Path(descriptor_path).read_text(encoding="utf-8"))),
                   task, Path(repo), new_generation=True)
@@ -240,6 +247,8 @@ tmp_task="$(mktemp "$TASKDIR/.${ID}.tmp.XXXXXX")"
   [ -n "$SOURCE_SHA" ] && echo "source_sha: $SOURCE_SHA"
   [ -n "$MODEL" ]   && echo "model: $MODEL"
   echo "acceptance: ${ACC:?roadmap $WS is missing an 'acceptance:' default (no gate => no autonomy)}"
+  echo "gate_files: ${GATE_FILES:-}"
+  echo "controller_gate_files: ${CONTROLLER_GATE_FILES:-}"
   echo "workdir: ${WORKDIR:-.}"
   echo "allowed_paths: ${ALLOWED:-${WORKDIR:-.}}"
   echo "non_goals: $NON_GOALS"
