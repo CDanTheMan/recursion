@@ -23,10 +23,12 @@
     { "$ref": "#/$defs/verification_key_registry" }
   ],
   "$defs": {
-    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
-    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$" },
-    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-    "timestamp": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}\\Z" },
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?\\Z" },
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}\\Z" },
+    "timestamp": { "type": "string", "pattern": "^(?:(?:(?!0000)[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-8]))|(?:[0-9]{2}(?:0[48]|[2468][048]|[13579][26])|(?:0[48]|[2468][048]|[13579][26])00)-02-29)T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z)\\Z" },
+    "source_branch": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*\\.\\.)(?!\\.)(?!.*/\\.)(?!refs/)(?!HEAD)[A-Za-z0-9_./-]+\\Z" },
+    "allowed_path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\.\\.)[A-Za-z0-9_./-]+\\Z" },
     "strings": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
     "host_registration": {
       "type": "object", "additionalProperties": false,
@@ -69,7 +71,7 @@
         "registry_epoch": { "type": "integer", "minimum": 1 },
         "keys": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false,
           "required": ["verifier_identity", "key_hex"],
-          "properties": { "verifier_identity": { "type": "string", "pattern": "^controller/.+" }, "key_hex": { "type": "string", "pattern": "^(?:[0-9a-f]{2})+$" } } } },
+          "properties": { "verifier_identity": { "type": "string", "pattern": "^controller/.+\\Z" }, "key_hex": { "type": "string", "pattern": "^(?:[0-9a-f]{2})+\\Z" } } } },
         "registry_digest": { "$ref": "#/$defs/digest" }, "authentication_tag": { "$ref": "#/$defs/digest" }
       }
     },
@@ -95,8 +97,8 @@
         "operating_system": { "type": ["string", "null"] }, "sandbox_profile": { "type": ["string", "null"] },
         "network_profile": { "type": ["string", "null"] }, "billing_basis": { "$ref": "#/$defs/strings" },
         "max_cost_usd": { "type": "number", "minimum": 0 }, "model": { "type": ["string", "null"] },
-        "preferred_hosts": { "$ref": "#/$defs/strings" }, "preferred_pools": { "$ref": "#/$defs/strings" }, "source_sha": { "$ref": "#/$defs/sha" }, "policy": { "type": "string", "enum": ["manual-pin", "subscription-first", "local-first", "cheapest-eligible", "fastest-eligible", "strongest-reviewer", "weighted-rotation"] }, "manual_candidate_id": { "type": ["string", "null"], "pattern": "^[a-z][a-z0-9-]{1,63}$" },
-        "source_repository": { "type": "string", "minLength": 1 }, "source_branch": { "type": "string", "minLength": 1 }, "seed_manifest_digest": { "$ref": "#/$defs/digest" }, "model_parameters": { "type": "object" }, "allowed_paths": { "$ref": "#/$defs/strings" }, "gate_digest": { "$ref": "#/$defs/digest" }, "publication_policy": { "type": "string", "minLength": 1 }
+        "preferred_hosts": { "$ref": "#/$defs/strings" }, "preferred_pools": { "$ref": "#/$defs/strings" }, "source_sha": { "$ref": "#/$defs/sha" }, "policy": { "type": "string", "enum": ["manual-pin", "subscription-first", "local-first", "cheapest-eligible", "fastest-eligible", "strongest-reviewer", "weighted-rotation"] }, "manual_candidate_id": { "type": ["string", "null"], "pattern": "^[a-z][a-z0-9-]{1,63}\\Z" },
+        "source_repository": { "type": "string", "minLength": 1 }, "source_branch": { "$ref": "#/$defs/source_branch" }, "seed_manifest_digest": { "$ref": "#/$defs/digest" }, "model_parameters": { "type": "object" }, "allowed_paths": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/allowed_path" } }, "gate_digest": { "$ref": "#/$defs/digest" }, "publication_policy": { "type": "string", "minLength": 1 }
       }
     },
     "placement_candidate": {
@@ -119,7 +121,7 @@
         "source_sha": { "$ref": "#/$defs/sha" }, "engine": { "$ref": "#/$defs/id" }, "provider": { "$ref": "#/$defs/id" }, "capacity_pool": { "$ref": "#/$defs/id" }, "account_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }, "role": { "type": "string", "minLength": 1 },
         "model": { "type": "string", "minLength": 1 }, "host": { "$ref": "#/$defs/id" }, "sandbox_profile": { "type": "string", "minLength": 1 }, "network_profile": { "type": "string", "minLength": 1 },
         "assignment_digest": { "$ref": "#/$defs/digest" }, "created_at": { "$ref": "#/$defs/timestamp" },
-        "source_repository": { "type": "string", "minLength": 1 }, "source_branch": { "type": "string", "minLength": 1 }, "seed_manifest_digest": { "$ref": "#/$defs/digest" }, "model_parameters": { "type": "object" }, "allowed_paths": { "$ref": "#/$defs/strings" }, "gate_digest": { "$ref": "#/$defs/digest" }, "publication_policy": { "type": "string", "minLength": 1 }, "candidate_id": { "$ref": "#/$defs/id" }
+        "source_repository": { "type": "string", "minLength": 1 }, "source_branch": { "$ref": "#/$defs/source_branch" }, "seed_manifest_digest": { "$ref": "#/$defs/digest" }, "model_parameters": { "type": "object" }, "allowed_paths": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/allowed_path" } }, "gate_digest": { "$ref": "#/$defs/digest" }, "publication_policy": { "type": "string", "minLength": 1 }, "candidate_id": { "$ref": "#/$defs/id" }
       }
     },
     "placement_rejection": {
@@ -164,7 +166,7 @@
       "properties": {
         "schema_version": { "const": 1 }, "kind": { "const": "verification_receipt" }, "receipt_id": { "$ref": "#/$defs/id" },
         "assignment_digest": { "$ref": "#/$defs/digest" }, "source_sha": { "$ref": "#/$defs/sha" }, "candidate_id": { "$ref": "#/$defs/id" }, "result_commit": { "$ref": "#/$defs/sha" },
-        "diff_digest": { "$ref": "#/$defs/digest" }, "scope_digest": { "$ref": "#/$defs/digest" }, "gate_digest": { "$ref": "#/$defs/digest" }, "verifier_identity": { "type": "string", "pattern": "^controller/.+" }, "verified_at": { "$ref": "#/$defs/timestamp" }, "verification_status": { "const": "pass" }, "receipt_digest": { "$ref": "#/$defs/digest" }, "authentication_tag": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        "diff_digest": { "$ref": "#/$defs/digest" }, "scope_digest": { "$ref": "#/$defs/digest" }, "gate_digest": { "$ref": "#/$defs/digest" }, "verifier_identity": { "type": "string", "pattern": "^controller/.+\\Z" }, "verified_at": { "$ref": "#/$defs/timestamp" }, "verification_status": { "const": "pass" }, "receipt_digest": { "$ref": "#/$defs/digest" }, "authentication_tag": { "type": "string", "pattern": "^[0-9a-f]{64}\\Z" }
       }
     },
     "routing_policy": {

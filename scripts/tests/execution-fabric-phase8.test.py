@@ -10,12 +10,14 @@ import math
 import multiprocessing
 import os
 from multiprocessing.pool import ThreadPool
+import subprocess
 import threading
 import sys
 import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -46,6 +48,7 @@ from execution_fabric import (  # noqa: E402
     assignment_digest,
     digest_record,
 )
+import execution_fabric as fabric  # noqa: E402
 
 
 NOW = "2026-08-28T12:00:00Z"
@@ -152,6 +155,15 @@ def validate_schema_records(path):
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     for line in Path(path).read_text(encoding="utf-8").splitlines():
         jsonschema.validate(json.loads(line), schema)
+
+
+def make_junction(link: Path, target: Path) -> None:
+    if os.name != "nt":
+        raise unittest.SkipTest("junction regression requires Windows")
+    command = [os.environ.get("ComSpec", "cmd.exe"), "/d", "/c", "mklink", "/J", str(link), str(target)]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise unittest.SkipTest(f"junction creation unavailable: {result.stderr.strip() or result.stdout.strip()}")
 
 
 class FabricPlacementTests(unittest.TestCase):
@@ -678,6 +690,92 @@ class DurableStateTests(unittest.TestCase):
                     DurableFabricStore(link / "fabric.jsonl", root=link)
                 self.assertEqual(error.exception.code, "UNSAFE_STORE_ROOT")
 
+    def test_junction_store_root_is_refused_without_writing_to_target(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "store-root"
+            target = Path(temp) / "outside-root"
+            target.mkdir()
+            make_junction(root, target)
+            try:
+                with self.assertRaises(ReconciliationError) as error:
+                    DurableFabricStore(root / "fabric.jsonl", root=root)
+                self.assertEqual(error.exception.code, "UNSAFE_STORE_ROOT")
+                self.assertFalse((target / "fabric.jsonl").exists())
+                self.assertFalse((target / "fabric.jsonl.lock").exists())
+            finally:
+                root.unlink(missing_ok=True)
+
+    def test_ancestor_reparse_swap_is_refused_before_any_durable_write(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "store-root"
+            ancestor = root / "nested"
+            backup = Path(temp) / "nested-real"
+            target = Path(temp) / "outside-ancestor"
+            root.mkdir(); ancestor.mkdir(); target.mkdir()
+            swapped = False
+            original_audit = fabric._file_is_reparse_or_symlink
+
+            def swap_after_audit(path):
+                nonlocal swapped
+                result = original_audit(path)
+                if path == ancestor and not swapped:
+                    ancestor.rename(backup)
+                    make_junction(ancestor, target)
+                    swapped = True
+                return result
+
+            try:
+                with patch.object(fabric, "_file_is_reparse_or_symlink", side_effect=swap_after_audit):
+                    safe_path, _ = fabric._safe_store_path(ancestor / "fabric.jsonl", root)
+                with self.assertRaises(ReconciliationError) as error:
+                    fabric._append_bytes(safe_path, b"ancestor-swap-probe\n")
+                self.assertTrue(swapped)
+                self.assertIn(error.exception.code, {"UNSAFE_STORE_PATH", "UNSAFE_STORE_ROOT"})
+                self.assertFalse((target / "fabric.jsonl").exists())
+                self.assertFalse((target / "fabric.jsonl.lock").exists())
+            finally:
+                ancestor.unlink(missing_ok=True)
+                if backup.exists():
+                    backup.rename(ancestor)
+
+    def test_replace_hardlink_swap_is_rejected_without_touching_outside(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "registry.json"
+            authority = Path(temp) / "authority.key"
+            authority.write_bytes(b"controller-authority-test-key")
+            authority.chmod(0o600)
+            registry = VerificationKeyRegistry.provision(
+                path, authority_key_path=authority,
+                verification_keys={"controller/verifier-one": "test-key"})
+            outside = Path(temp) / "outside-registry.json"
+            outside.write_bytes(b"outside-registry-bytes")
+            outside_before = outside.read_bytes()
+            try:
+                original_open = fabric._open_leaf_in_directory
+                swapped = False
+
+                def swap_after_leaf_open(*args, **kwargs):
+                    nonlocal swapped
+                    result = original_open(*args, **kwargs)
+                    candidate_path = args[1] if len(args) > 1 else kwargs["path"]
+                    if candidate_path == path and not swapped:
+                        path.unlink()
+                        os.link(outside, path)
+                        swapped = True
+                    return result
+
+                # Put the destination hardlink swap in the interval after the
+                # initial identity validation, while the old descriptor is
+                # still open.  The final same-handle check must refuse it.
+                with self.assertRaises(ReconciliationError) as error:
+                    with patch.object(fabric, "_open_leaf_in_directory", side_effect=swap_after_leaf_open):
+                        fabric._replace_store_bytes(path, b"replacement", expected_identity=registry._path_identity)
+                self.assertTrue(swapped)
+                self.assertEqual(error.exception.code, "UNSAFE_STORE_PATH")
+                self.assertEqual(outside.read_bytes(), outside_before)
+            finally:
+                path.unlink(missing_ok=True)
+
     def test_leaf_hardlink_swaps_are_rejected_before_journal_append_or_receipt_reload(self):
         registered = host(); assignment, _ = resolve_placement(requirements(), [candidate()], {registered.host_id: registered},
                                                                {registered.host_id: heartbeat(registered)}, {"pool-one": pool()},
@@ -771,6 +869,55 @@ class IntegrationTests(unittest.TestCase):
                     source_sha=SHA, result_commit=RESULT, classification="current-compatible",
                     verification_receipt=receipts.get(receipt.receipt_id))
             self.assertEqual(error.exception.code, "INVALID_FIELD")
+
+    def test_verify_candidate_result_revalidates_direct_assignments(self):
+        assignment = integration_assignment("candidate-verify-direct", "project-one")
+        malformed = replace(assignment, engine="", source_branch="../bad", allowed_paths=("../outside",))
+        malformed = replace(malformed, assignment_digest=assignment_digest(malformed))
+        receipt = integration_receipt(malformed)
+        with tempfile.TemporaryDirectory() as temp:
+            receipts, _ = receipt_store(Path(temp) / "receipts.jsonl", temp)
+            receipts.issue(receipt)
+            with self.assertRaises(SchemaError) as error:
+                verify_candidate_result(
+                    assignment=malformed, receipt=receipt, candidate_id=malformed.candidate_id,
+                    result_commit=RESULT, diff_digest="c" * 64, scope_digest="d" * 64,
+                    gate_digest="e" * 64, result_ref="cursor/candidate", receipt_store=receipts)
+            self.assertEqual(error.exception.code, "INVALID_FIELD")
+
+    def test_schema_rejects_traversal_assignment_paths_and_impossible_timestamps(self):
+        try:
+            import jsonschema
+        except ImportError as error:
+            raise unittest.SkipTest("PREREQUISITE_MISSING: install jsonschema for schema validation") from error
+        schema_path = Path(__file__).resolve().parents[2] / "schemas" / "control-plane" / "v1" / "execution-fabric.schema.json"
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        assignment = integration_assignment("candidate-schema-adversary", "project-one").to_dict()
+        for field, value in (("source_branch", "../bad"), ("allowed_paths", ["../outside"]),
+                             ("created_at", "2026-02-30T12:00:00Z")):
+            invalid = dict(assignment)
+            invalid[field] = value
+            with self.assertRaises(jsonschema.ValidationError, msg=field):
+                jsonschema.validate(invalid, schema)
+
+    def test_schema_rejects_trailing_newline_verifier_identity_and_key_hex(self):
+        try:
+            import jsonschema
+        except ImportError as error:
+            raise unittest.SkipTest("PREREQUISITE_MISSING: install jsonschema for schema validation") from error
+        schema_path = Path(__file__).resolve().parents[2] / "schemas" / "control-plane" / "v1" / "execution-fabric.schema.json"
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        assignment = integration_assignment("candidate-newline-schema", "project-one")
+        receipt = integration_receipt(assignment).to_dict()
+        invalid_receipt = dict(receipt, verifier_identity="controller/verifier-one\n")
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(invalid_receipt, schema)
+        with tempfile.TemporaryDirectory() as temp:
+            _, registry = receipt_store(Path(temp) / "receipts.jsonl", temp)
+            state = json.loads(registry.path.read_text(encoding="utf-8"))
+            invalid_registry = dict(state, keys=[dict(state["keys"][0], key_hex=state["keys"][0]["key_hex"] + "\n")])
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.validate(invalid_registry, schema)
 
     def test_admit_uses_only_the_configured_project_branch_policy(self):
         assignment = integration_assignment("candidate-policy", "project-one")

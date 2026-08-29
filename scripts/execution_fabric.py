@@ -36,6 +36,8 @@ SCHEMA_VERSION = 1
 FABRIC_SCHEMA = "recursion-execution-fabric-v1"
 ZERO_DIGEST = "0" * 64
 DEFAULT_HEARTBEAT_FUTURE_SKEW = 30.0
+_WINDOWS_FILE_ATTRIBUTE_DIRECTORY = 0x10
+_WINDOWS_FILE_ATTRIBUTE_REPARSE_POINT = 0x400
 
 _ID = re.compile(r"[a-z][a-z0-9-]{1,63}\Z")
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -213,7 +215,7 @@ def _windows_file_info(handle: Any) -> tuple[tuple[int, int, int], bool, int, bo
         raise OSError(ctypes.get_last_error(), "GetFileInformationByHandle failed")
     identity = (int(info.volume), int(info.index_high), int(info.index_low))
     attributes = int(info.attributes)
-    return identity, bool(attributes & 0x10), int(info.links), bool(attributes & 0x400)
+    return identity, bool(attributes & _WINDOWS_FILE_ATTRIBUTE_DIRECTORY), int(info.links), bool(attributes & _WINDOWS_FILE_ATTRIBUTE_REPARSE_POINT)
 
 
 def _leaf_info_for_handle(handle: Any) -> tuple[tuple[int, int, int], bool, int, bool]:
@@ -227,7 +229,8 @@ def _leaf_info_for_descriptor(descriptor: int) -> Any:
     return os.fstat(descriptor)
 
 
-def _windows_open(path: Path, *, directory: bool, write: bool, create: bool = False) -> tuple[Any, tuple[int, int, int], bool, int, bool]:
+def _windows_open(path: Path, *, directory: bool, write: bool, create: bool = False,
+                  exclusive: bool = False, deny_delete: bool = False, rename: bool = False) -> tuple[Any, tuple[int, int, int], bool, int, bool]:
     import ctypes
     from ctypes import wintypes
 
@@ -236,8 +239,12 @@ def _windows_open(path: Path, *, directory: bool, write: bool, create: bool = Fa
                                      wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
     kernel32.CreateFileW.restype = wintypes.HANDLE
     desired_access = 0 if directory else (0x40000000 if write else 0x80000000)
-    share_mode = 0x00000001 | 0x00000002
-    disposition = 4 if create else 3  # OPEN_ALWAYS / OPEN_EXISTING
+    if rename and not directory:
+        desired_access |= 0x00010000  # DELETE is required by SetFileInformationByHandle(FileRenameInfo).
+    share_mode = 0x00000001 | 0x00000002  # FILE_SHARE_READ | FILE_SHARE_WRITE
+    if not deny_delete:
+        share_mode |= 0x00000004  # FILE_SHARE_DELETE; directory pins deliberately omit it.
+    disposition = 1 if exclusive else (4 if create else 3)  # CREATE_NEW / OPEN_ALWAYS / OPEN_EXISTING
     flags = 0x02000000 | 0x00200000  # FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT
     handle = kernel32.CreateFileW(str(path), desired_access, share_mode, None, disposition, flags, None)
     invalid = ctypes.c_void_p(-1).value
@@ -255,30 +262,91 @@ def _close_windows(handle: Any) -> None:
     _windows_kernel32().CloseHandle(handle)
 
 
+def _windows_replace_by_handle(source_descriptor: int, directory_handle: Any, destination_name: str) -> None:
+    """Atomically rename an open temporary file within an already-pinned directory."""
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+
+    if not destination_name or Path(destination_name).name != destination_name:
+        raise OSError("destination name must be a single path component")
+
+    class RenameInfo(ctypes.Structure):
+        _fields_ = [
+            ("replace_if_exists", ctypes.c_ubyte),
+            ("root_directory", wintypes.HANDLE),
+            ("file_name_length", wintypes.DWORD),
+            ("file_name", wintypes.WCHAR * 1),
+        ]
+
+    encoded_name = destination_name.encode("utf-16-le")
+    name_offset = RenameInfo.file_name.offset
+    buffer = ctypes.create_string_buffer(name_offset + len(encoded_name))
+    info = ctypes.cast(buffer, ctypes.POINTER(RenameInfo)).contents
+    info.replace_if_exists = 1
+    info.root_directory = wintypes.HANDLE(_windows_handle_value(directory_handle))
+    info.file_name_length = len(encoded_name)
+    ctypes.memmove(ctypes.addressof(buffer) + name_offset, encoded_name, len(encoded_name))
+
+    kernel32 = _windows_kernel32()
+    kernel32.SetFileInformationByHandle.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
+    kernel32.SetFileInformationByHandle.restype = wintypes.BOOL
+    source_handle = wintypes.HANDLE(msvcrt.get_osfhandle(source_descriptor))
+    if not kernel32.SetFileInformationByHandle(source_handle, 3, ctypes.byref(buffer), len(buffer)):
+        error = ctypes.get_last_error()
+        raise OSError(error, "cannot atomically replace durable store leaf")
+
+
 @contextmanager
 def _pin_store_directory(path: Path):
     if os.name == "nt":
-        handle, _, is_directory, _, is_reparse = _windows_open(path, directory=True, write=False)
-        if not is_directory or is_reparse:
-            _close_windows(handle)
-            raise ReconciliationError("UNSAFE_STORE_PATH", "store parent is not a real directory")
+        handles: list[Any] = []
         try:
-            yield handle
+            ancestors = list(path.parents)
+            ancestors.reverse()
+            ancestors.append(path)
+            for ancestor in ancestors:
+                handle, _, is_directory, _, is_reparse = _windows_open(
+                    ancestor, directory=True, write=False, deny_delete=True)
+                if not is_directory or is_reparse:
+                    _close_windows(handle)
+                    raise ReconciliationError("UNSAFE_STORE_PATH", "store parent is not a real directory")
+                handles.append(handle)
+            yield handles[-1]
         finally:
-            _close_windows(handle)
+            for handle in reversed(handles):
+                _close_windows(handle)
         return
+
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptors: list[int] = []
     try:
-        descriptor = os.open(path, flags)
-        info = os.fstat(descriptor)
+        # Open each component relative to the descriptor for its already-open
+        # parent.  This is the POSIX equivalent of holding every Windows
+        # ancestor handle: a rename/reparse swap cannot redirect the next
+        # component lookup.
+        absolute = Path(os.path.abspath(os.fspath(path)))
+        anchor = absolute.anchor or os.path.sep
+        descriptor = os.open(anchor, flags)
+        descriptors.append(descriptor)
+        for part in absolute.parts[1:]:
+            descriptor = os.open(part, flags, dir_fd=descriptor)
+            descriptors.append(descriptor)
+        info = os.fstat(descriptors[-1])
         if not stat.S_ISDIR(info.st_mode):
             raise OSError("store parent is not a directory")
     except OSError as exc:
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
         raise ReconciliationError("UNSAFE_STORE_PATH", "store parent cannot be pinned safely") from exc
     try:
-        yield descriptor
+        yield descriptors[-1]
     finally:
-        os.close(descriptor)
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
 
 
 def _validate_leaf_info(info: Any, *, identity: Any = None) -> Any:
@@ -296,9 +364,12 @@ def _validate_leaf_info(info: Any, *, identity: Any = None) -> Any:
 
 
 def _open_leaf_in_directory(directory: Any, path: Path, *, write: bool, create: bool, append: bool = False,
+                            exclusive: bool = False, rename: bool = False, deny_delete: bool = False,
                             expected_identity: Any = None) -> tuple[int, Any]:
     if os.name == "nt":
-        handle, identity, is_directory, links, is_reparse = _windows_open(path, directory=False, write=write, create=create)
+        handle, identity, is_directory, links, is_reparse = _windows_open(
+            path, directory=False, write=write, create=create, exclusive=exclusive, rename=rename,
+            deny_delete=deny_delete)
         try:
             actual = _validate_leaf_info((identity, is_directory, links, is_reparse), identity=expected_identity)
             import msvcrt
@@ -334,10 +405,11 @@ def _open_leaf_in_directory(directory: Any, path: Path, *, write: bool, create: 
 
 
 @contextmanager
-def _open_store_leaf(path: Path, *, write: bool, create: bool, append: bool = False, expected_identity: Any = None):
+def _open_store_leaf(path: Path, *, write: bool, create: bool, append: bool = False,
+                     expected_identity: Any = None, deny_delete: bool = True):
     with _pin_store_directory(path.parent) as directory:
         descriptor, identity = _open_leaf_in_directory(directory, path, write=write, create=create, append=append,
-                                                       expected_identity=expected_identity)
+                                                       expected_identity=expected_identity, deny_delete=deny_delete)
         try:
             yield descriptor, identity
         finally:
@@ -367,6 +439,7 @@ def _append_bytes(path: Path, data: bytes, *, expected_identity: Any = None) -> 
         with _open_store_leaf(path, write=True, create=True, append=True, expected_identity=expected_identity) as (descriptor, identity):
             view = memoryview(data)
             while view:
+                _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=identity)
                 written = os.write(descriptor, view)
                 if written <= 0:
                     raise OSError("journal write made no progress")
@@ -384,57 +457,61 @@ def _replace_store_bytes(path: Path, data: bytes, *, expected_identity: Any = No
     try:
         with _pin_store_directory(path.parent) as directory:
             current = None
+            current_descriptor = None
             try:
-                descriptor, current = _open_leaf_in_directory(directory, path, write=False, create=False,
-                                                               expected_identity=expected_identity)
+                current_descriptor, current = _open_leaf_in_directory(
+                    directory, path, write=False, create=False, expected_identity=expected_identity)
             except FileNotFoundError:
                 if expected_identity is not None:
                     raise ReconciliationError("UNSAFE_STORE_PATH", "durable store leaf disappeared")
-            else:
-                os.close(descriptor)
             temporary_name = f".{path.name}.tmp.{os.getpid()}.{threading.get_ident()}.{secrets.token_hex(8)}"
-            if os.name == "nt":
-                temporary_path = path.parent / temporary_name
-                handle, identity, is_directory, links, is_reparse = _windows_open(temporary_path, directory=False, write=True, create=True)
-                descriptor = None
-                try:
-                    _validate_leaf_info((identity, is_directory, links, is_reparse))
-                    import msvcrt
-                    descriptor = msvcrt.open_osfhandle(_windows_handle_value(handle), os.O_WRONLY | getattr(os, "O_BINARY", 0))
-                    handle = None
-                except BaseException:
-                    if descriptor is not None:
-                        os.close(descriptor)
-                    elif handle is not None:
-                        _close_windows(handle)
-                    raise
-            else:
-                descriptor = os.open(temporary_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
-                                     getattr(os, "O_NOFOLLOW", 0), 0o600, dir_fd=directory)
-                temporary_path = path.parent / temporary_name
-                try:
-                    _validate_leaf_info(_leaf_info_for_descriptor(descriptor))
-                except BaseException:
-                    os.close(descriptor)
-                    raise
+            temporary_path = path.parent / temporary_name
+            temporary_descriptor = None
+            replaced = False
             try:
-                with os.fdopen(descriptor, "wb") as output:
-                    output.write(data); output.flush(); os.fsync(output.fileno())
                 if os.name == "nt":
-                    os.replace(temporary_path, path)
+                    temporary_descriptor, temporary_identity = _open_leaf_in_directory(
+                        directory, temporary_path, write=True, create=True, exclusive=True, rename=True,
+                        deny_delete=False)
+                else:
+                    temporary_descriptor = os.open(temporary_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                                                   getattr(os, "O_NOFOLLOW", 0), 0o600, dir_fd=directory)
+                    temporary_identity = _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor))
+                view = memoryview(data)
+                while view:
+                    _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)
+                    written = os.write(temporary_descriptor, view)
+                    if written <= 0:
+                        raise OSError("store replacement write made no progress")
+                    view = view[written:]
+                os.fsync(temporary_descriptor)
+                _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)
+                if current_descriptor is not None:
+                    # Keep the original leaf open until the replacement is
+                    # committed.  The final identity check is from that same
+                    # handle, so an unlink/hardlink swap cannot be accepted.
+                    _validate_leaf_info(_leaf_info_for_descriptor(current_descriptor), identity=current)
+                if os.name == "nt":
+                    _windows_replace_by_handle(temporary_descriptor, directory, path.name)
                 else:
                     os.replace(temporary_name, path.name, src_dir_fd=directory, dst_dir_fd=directory)
-                descriptor, identity = _open_leaf_in_directory(directory, path, write=False, create=False)
-                os.close(descriptor)
-                return identity
+                replaced = True
+                _validate_leaf_info(_leaf_info_for_descriptor(temporary_descriptor), identity=temporary_identity)
+                return temporary_identity
             finally:
+                if temporary_descriptor is not None:
+                    os.close(temporary_descriptor)
+                if current_descriptor is not None:
+                    os.close(current_descriptor)
                 if os.name == "nt":
-                    temporary_path.unlink(missing_ok=True)
+                    if not replaced:
+                        temporary_path.unlink(missing_ok=True)
                 else:
-                    try:
-                        os.unlink(temporary_name, dir_fd=directory)
-                    except FileNotFoundError:
-                        pass
+                    if not replaced:
+                        try:
+                            os.unlink(temporary_name, dir_fd=directory)
+                        except FileNotFoundError:
+                            pass
     except ReconciliationError:
         raise
     except OSError as exc:
@@ -456,21 +533,37 @@ def _file_is_reparse_or_symlink(path: Path) -> bool:
         return True
     if os.name == "nt":
         try:
-            return bool(path.stat().st_file_attributes & 0x400)
-        except (AttributeError, OSError):
+            info = os.lstat(path)
+        except OSError:
             return False
+        if bool(int(getattr(info, "st_file_attributes", 0)) & _WINDOWS_FILE_ATTRIBUTE_REPARSE_POINT):
+            return True
+        # lstat on older Python/filesystem combinations does not expose the
+        # junction bit consistently.  OPEN_REPARSE_POINT asks the kernel for
+        # the final object itself and never follows it.
+        try:
+            handle, _, _, _, is_reparse = _windows_open(path, directory=True, write=False)
+        except OSError:
+            return False
+        try:
+            return is_reparse
+        finally:
+            _close_windows(handle)
     return False
 
 
 def _safe_store_path(path: Path | str, root: Path | str | None) -> tuple[Path, Path]:
     raw = Path(path)
     root_path = Path(root) if root is not None else raw.parent
-    root_abs = root_path.absolute()
-    target_abs = raw.absolute()
+    # Normalize only lexically.  Path.resolve() is intentionally forbidden:
+    # it follows a junction/reparse point and turns an escape into an apparently
+    # safe path before the handle discipline gets a chance to reject it.
+    root_abs = Path(os.path.abspath(os.fspath(root_path)))
+    target_abs = Path(os.path.abspath(os.fspath(raw)))
     try:
         target_abs.relative_to(root_abs)
     except ValueError as exc:
-        raise ReconciliationError("STORE_OUTSIDE_ROOT", "journal path is outside the configured store root") from exc
+        raise ReconciliationError("STORE_OUTSIDE_ROOT", "durable store path is outside the configured store root") from exc
     # Check existing components before creating anything. This rejects symlink/reparse escapes,
     # including a symlinked root or journal, instead of trusting resolve() to hide the boundary.
     current = root_abs
@@ -483,22 +576,38 @@ def _safe_store_path(path: Path | str, root: Path | str | None) -> tuple[Path, P
     try:
         relative = target_abs.relative_to(root_abs)
     except ValueError as exc:
-        raise ReconciliationError("STORE_OUTSIDE_ROOT", "journal path is outside the configured store root") from exc
+        raise ReconciliationError("STORE_OUTSIDE_ROOT", "durable store path is outside the configured store root") from exc
     for part in relative.parts:
         current = current / part
         if _file_is_reparse_or_symlink(current):
-            raise ReconciliationError("UNSAFE_STORE_PATH", "journal path contains a symlink or reparse point")
-    # Canonicalize only after the lexical component audit above.  This both
-    # prevents ``root/../outside`` and gives callers stable paths for atomic
-    # replacement, while the pre-resolve audit prevents a symlink from being
-    # silently followed into an otherwise-contained location.
-    root_canonical = root_abs.resolve(strict=False)
-    target_canonical = target_abs.resolve(strict=False)
+            raise ReconciliationError("UNSAFE_STORE_PATH", "durable store path contains a symlink or reparse point")
+    return target_abs, root_abs
+
+
+def _ensure_store_directory(path: Path) -> None:
+    """Create missing store directories one component at a time, never through a reparse point."""
+    path = Path(os.path.abspath(os.fspath(path)))
     try:
-        target_canonical.relative_to(root_canonical)
-    except ValueError as exc:
-        raise ReconciliationError("STORE_OUTSIDE_ROOT", "journal path resolves outside the configured store root") from exc
-    return target_canonical, root_canonical
+        os.lstat(path)
+    except FileNotFoundError:
+        if path.parent == path:
+            raise ReconciliationError("UNSAFE_STORE_ROOT", "store root cannot be created safely")
+        _ensure_store_directory(path.parent)
+        try:
+            if os.name == "nt":
+                path.mkdir()
+            else:
+                with _pin_store_directory(path.parent) as parent:
+                    os.mkdir(path.name, 0o700, dir_fd=parent)
+        except FileExistsError:
+            pass
+    except OSError as exc:
+        raise ReconciliationError("UNSAFE_STORE_PATH", "store directory cannot be inspected safely") from exc
+    # This is both the post-create validation and the last boundary check
+    # before a caller obtains a leaf handle.  A concurrent replacement with a
+    # junction is therefore observed before any descendant can be created.
+    with _pin_store_directory(path):
+        pass
 
 
 _THREAD_LOCKS: dict[str, threading.RLock] = {}
@@ -512,7 +621,7 @@ def _journal_lock(lock_path: Path):
     with _THREAD_LOCKS_GUARD:
         lock = _THREAD_LOCKS.setdefault(key, threading.RLock())
     with lock:
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_store_directory(lock_path.parent)
         with _open_store_leaf(lock_path, write=True, create=True) as (descriptor, _):
             try:
                 if os.name == "nt":
@@ -976,6 +1085,11 @@ def assignment_digest(assignment: Assignment) -> str:
     return hashlib.sha256(_canonical(body)).hexdigest()
 
 
+def _revalidate_assignment(value: Assignment | Mapping[str, Any]) -> Assignment:
+    """Re-enter the strict wire parser at every caller-controlled Assignment boundary."""
+    return Assignment.from_dict(value.to_dict() if isinstance(value, Assignment) else value)
+
+
 def _candidate_sort_key(candidate: PlacementCandidate, requirements: PlacementRequirements) -> tuple[Any, ...]:
     # Preferences are deterministic tie-breakers, never eligibility relaxations.
     policy = requirements.policy
@@ -1246,9 +1360,7 @@ class DurableHostRegistry(HostRegistry):
                  now: str | None = None, future_skew_s: float = DEFAULT_HEARTBEAT_FUTURE_SKEW):
         super().__init__(now=now, future_skew_s=future_skew_s)
         self.path, self.root = _safe_store_path(path, root)
-        self.root.mkdir(parents=True, exist_ok=True)
-        if self.path.parent != self.root:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_store_directory(self.path.parent)
         self.lock_path = _safe_store_path(self.path.with_name(self.path.name + ".lock"), self.root)[0]
         self._path_identity = None
         with _journal_lock(self.lock_path):
@@ -1339,7 +1451,8 @@ class PlacementGovernor:
                 self._active[assignment.assignment_digest] = assignment
             return assignment, trace
 
-    def release(self, assignment: Assignment) -> str:
+    def release(self, assignment: Assignment | Mapping[str, Any]) -> str:
+        assignment = _revalidate_assignment(assignment)
         with self._lock:
             digest = assignment.assignment_digest
             if digest not in self._active:
@@ -1363,9 +1476,7 @@ class DurableFabricStore:
 
     def __init__(self, path: Path | str, *, root: Path | str | None = None):
         self.path, self.root = _safe_store_path(path, root)
-        self.root.mkdir(parents=True, exist_ok=True)
-        if self.path.parent != self.root:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_store_directory(self.path.parent)
         self.lock_path = _safe_store_path(self.path.with_name(self.path.name + ".lock"), self.root)[0]
         self.leases: dict[str, dict[str, Any]] = {}
         self.attempts: dict[str, dict[str, Any]] = {}
@@ -1455,7 +1566,7 @@ class DurableFabricStore:
 
     def _append(self, event: Mapping[str, Any]) -> None:
         data = (json.dumps(dict(event), sort_keys=True, separators=(",", ":")) + "\n").encode()
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_store_directory(self.path.parent)
         self._path_identity = _append_bytes(self.path, data, expected_identity=self._path_identity)
 
     def _record_locked(self, event: Mapping[str, Any]) -> dict[str, Any]:
@@ -1539,9 +1650,9 @@ class DurableFabricStore:
         else:
             raise ReconciliationError("UNKNOWN_EVENT", f"unknown fabric event: {kind}")
 
-    def _create_lease_locked(self, assignment: Assignment, *, lease_id: str, attempt_id: str,
+    def _create_lease_locked(self, assignment: Assignment | Mapping[str, Any], *, lease_id: str, attempt_id: str,
                              remote_session_id: str, now: str, expires_at: str, role: str = "unknown") -> dict[str, Any]:
-        assignment = Assignment.from_dict(assignment.to_dict())
+        assignment = _revalidate_assignment(assignment)
         _id(lease_id, "lease_id"); _id(attempt_id, "attempt_id"); _id(remote_session_id, "remote_session_id")
         _timestamp(now, "now"); _timestamp(expires_at, "expires_at")
         if _epoch(expires_at) <= _epoch(now):
@@ -1568,13 +1679,14 @@ class DurableFabricStore:
                                   "role": role}, "recovery_state": "none"}
         return self._record_locked(event)
 
-    def create_lease(self, assignment: Assignment, *, lease_id: str, attempt_id: str, remote_session_id: str,
+    def create_lease(self, assignment: Assignment | Mapping[str, Any], *, lease_id: str, attempt_id: str, remote_session_id: str,
                      now: str, expires_at: str, role: str = "unknown", paused: bool = False,
                      pause_guard: PauseGuard | None = None) -> dict[str, Any]:
         if paused:
             raise AdmissionError("PAUSED", "PAUSE is asserted; lease admission is halted")
         if pause_guard is not None:
             pause_guard.assert_open()
+        assignment = _revalidate_assignment(assignment)
         with _journal_lock(self.lock_path):
             if paused:
                 raise AdmissionError("PAUSED", "PAUSE is asserted; lease admission is halted")
@@ -1851,10 +1963,10 @@ class VerificationKeyRegistry:
         if _file_is_reparse_or_symlink(path):
             raise SchemaError("UNSAFE_REGISTRY_PATH", f"{field} is a symlink or reparse point")
         try:
-            info = path.stat()
+            info = path.lstat()
         except OSError as exc:
             raise SchemaError("CONTROLLER_AUTH_REQUIRED", f"{field} is not available") from exc
-        if not path.is_file():
+        if not stat.S_ISREG(info.st_mode):
             raise SchemaError("INVALID_FIELD", f"{field} must be a regular file")
         if getattr(info, "st_nlink", 1) != 1:
             raise SchemaError("UNSAFE_REGISTRY_PATH", f"{field} has unexpected hard links")
@@ -1912,7 +2024,7 @@ class VerificationKeyRegistry:
         secret = cls._secret(authority_path)
         if registry_path.exists():
             raise SchemaError("REGISTRY_EXISTS", "controller verifier registry is already provisioned")
-        registry_path.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_store_directory(registry_path.parent)
         instance = cls.__new__(cls)
         instance.path, instance.root = registry_path, root_path
         instance.authority_key_path = authority_path
@@ -2014,7 +2126,7 @@ class VerificationReceiptStore:
                  verification_authority_key_path: Path | str | None = None,
                  verification_keys: Mapping[str, str | bytes] | None = None):
         self.path, self.root = _safe_store_path(path, root)
-        self.root.mkdir(parents=True, exist_ok=True)
+        _ensure_store_directory(self.path.parent)
         self.lock_path = _safe_store_path(self.path.with_name(self.path.name + ".lock"), self.root)[0]
         if verification_keys is not None:
             raise SchemaError("VERIFICATION_REGISTRY_REQUIRED", "caller-supplied verifier keys cannot bootstrap trust")
@@ -2146,12 +2258,13 @@ def classify_stale_base(*, assigned_source_sha: str, current_source_sha: str,
     return "current-compatible"
 
 
-def verify_candidate_result(*, assignment: Assignment, receipt: VerificationReceipt | Mapping[str, Any],
+def verify_candidate_result(*, assignment: Assignment | Mapping[str, Any], receipt: VerificationReceipt | Mapping[str, Any],
                             candidate_id: str, result_commit: str, diff_digest: str, scope_digest: str, gate_digest: str,
                             result_ref: str, default_branch: str = "main",
                             integration_branch: str = "recursion/integration",
                             receipt_store: VerificationReceiptStore | None = None) -> str:
     """Validate a durable independent-verifier receipt for candidate import admission."""
+    assignment = _revalidate_assignment(assignment)
     receipt = receipt if isinstance(receipt, VerificationReceipt) else VerificationReceipt.from_dict(receipt)
     if receipt_store is None:
         raise ReconciliationError("VERIFIER_AUTH_REQUIRED", "candidate verification requires a controller receipt store")
@@ -2188,9 +2301,7 @@ class IntegrationCoordinator:
         self.path = None if path is None else _safe_store_path(path, root)[0]
         self.root = None if path is None else _safe_store_path(path, root)[1]
         if self.path is not None:
-            self.root.mkdir(parents=True, exist_ok=True)
-            if self.path.parent != self.root:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
+            _ensure_store_directory(self.path.parent)
             self.lock_path = _safe_store_path(self.path.with_name(self.path.name + ".lock"), self.root)[0]
         self._active: dict[str, str] = {}
         self._candidates: dict[str, dict[str, Any]] = {}
@@ -2307,7 +2418,7 @@ class IntegrationCoordinator:
         _id(candidate_id, "candidate_id"); _id(project_id, "project_id"); _commit(source_sha, "source_sha"); _commit(result_commit, "result_commit")
         if assignment is None:
             raise ReconciliationError("ASSIGNMENT_REQUIRED", "integration requires the immutable assignment record")
-        assignment = Assignment.from_dict(assignment.to_dict() if isinstance(assignment, Assignment) else assignment)
+        assignment = _revalidate_assignment(assignment)
         if assignment.project_id != project_id or assignment.source_sha != source_sha:
             raise ReconciliationError("ASSIGNMENT_MISMATCH", "assignment does not match integration source")
         if assignment.candidate_id != candidate_id:
