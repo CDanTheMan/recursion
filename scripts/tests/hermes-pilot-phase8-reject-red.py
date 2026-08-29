@@ -30,6 +30,34 @@ CONTROLS = [
 DIGEST = "a" * 64
 
 
+def _usable_executable(path: str | Path) -> str | None:
+    candidate = Path(path)
+    if candidate.is_file() and os.access(candidate, os.X_OK):
+        return str(candidate)
+    return None
+
+
+def discover_bash() -> str | None:
+    """Find bash on PATH, then under an environment-selected Windows install root."""
+    discovered = shutil.which("bash")
+    if discovered:
+        usable = _usable_executable(discovered)
+        if usable:
+            return usable
+    if os.name == "nt":
+        for variable in ("ProgramFiles", "ProgramW6432"):
+            program_files = os.environ.get(variable, "").strip()
+            if not program_files:
+                continue
+            usable = _usable_executable(Path(program_files) / "Git" / "bin" / "bash.exe")
+            if usable:
+                return usable
+    return None
+
+
+BASH = discover_bash()
+
+
 def fields(path: Path) -> dict[str, str]:
     result: dict[str, str] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -51,7 +79,7 @@ class RejectFixture:
             (self.root / relative).mkdir(parents=True, exist_ok=True)
         for name in (
             "work.sh", "project-reconcile.py", "transition_receipt.py", "seed_contract.py",
-            "jsonl_durable.py", "runtime-state.py", "phase5_safety.py",
+            "jsonl_durable.py", "runtime-state.py", "phase5_safety.py", "assignment.py",
         ):
             shutil.copy2(SOURCE / "scripts" / name, self.root / "scripts" / name)
         if os.name == "nt":
@@ -135,9 +163,9 @@ class RejectFixture:
                         "rjct-task", category, DIGEST, env_extra=env_extra)
 
     def bash(self) -> str:
-        if os.name == "nt":
-            return str(Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe")
-        return "bash"
+        if BASH is None:
+            raise RuntimeError("bash interpreter is unavailable")
+        return BASH
 
     def task_status(self) -> str:
         return fields(self.root / "state/tasks/rjct-task.md").get("status", "")
@@ -227,6 +255,9 @@ def test_projection_divergence_rejection() -> bool:
 
 
 def main() -> int:
+    if BASH is None:
+        print("SKIP - bash interpreter was not discoverable on PATH or via ProgramFiles/ProgramW6432 (exit 77)")
+        return 77
     tests = [
         test_work_rc_preserved, test_clean_rejection_control, test_pause_rejection,
         test_window_revocation_rejection, test_receipt_io_rejection,
