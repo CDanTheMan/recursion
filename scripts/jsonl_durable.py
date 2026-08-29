@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import sqlite3
@@ -158,7 +159,10 @@ def _win_open_lock_directory(path: Path) -> int:
         _LOCK_FILE_FLAG_BACKUP_SEMANTICS | _LOCK_FILE_FLAG_OPEN_REPARSE_POINT, None,
     )
     if handle in (None, _LOCK_INVALID_HANDLE):
-        raise OSError(ctypes.get_last_error(), f"cannot pin Windows durable-lock directory {path}")
+        error = ctypes.get_last_error()
+        if error in (2, 3):
+            raise FileNotFoundError(error, f"cannot pin Windows durable-lock directory {path}")
+        raise OSError(error, f"cannot pin Windows durable-lock directory {path}")
     try:
         attributes = _win_lock_handle_attributes(int(handle))
         if attributes & _LOCK_FILE_ATTRIBUTE_REPARSE_POINT:
@@ -175,7 +179,7 @@ def _win_open_lock_directory(path: Path) -> int:
         raise
 
 
-def _win_pin_lock_parent(path: Path) -> list[tuple[Path, int, tuple[int, int, int]]]:
+def _win_pin_lock_parent(path: Path, *, create: bool = True) -> list[tuple[Path, int, tuple[int, int, int]]]:
     """Create and pin every parent component before the lock leaf is opened.
 
     Each already-pinned parent denies delete sharing before its child is created or
@@ -198,13 +202,14 @@ def _win_pin_lock_parent(path: Path) -> list[tuple[Path, int, tuple[int, int, in
         pins.append((current, handle, identity))
         for component in parts[1:]:
             current = current / component
-            try:
-                # Python's Windows mode=0o700 creates a directory ACL that can deny the
-                # current user its own inherited access.  NTFS permissions are inherited
-                # here; the native handles below provide the rename/delete protection.
-                current.mkdir(mode=0o777)
-            except FileExistsError:
-                pass
+            if create:
+                try:
+                    # Python's Windows mode=0o700 creates a directory ACL that can deny the
+                    # current user its own inherited access.  NTFS permissions are inherited
+                    # here; the native handles below provide the rename/delete protection.
+                    current.mkdir(mode=0o777)
+                except FileExistsError:
+                    pass
             handle = _win_open_lock_directory(current)
             try:
                 identity = _win_lock_handle_identity(handle)
@@ -288,6 +293,13 @@ class JsonlDurabilityError(RuntimeError):
     """The existing journal cannot safely accept or expose another record."""
 
 
+def _durable_path(path: Path) -> Path:
+    try:
+        return Path(path)
+    except (TypeError, ValueError) as exc:
+        raise JsonlDurabilityError("durable path is invalid") from exc
+
+
 class _PinnedIndexConnection(sqlite3.Connection):
     """SQLite connection that releases the native cache pins when it closes."""
 
@@ -295,6 +307,7 @@ class _PinnedIndexConnection(sqlite3.Connection):
     _durable_leaf_descriptor: int | None = None
     _durable_leaf_identity: tuple[int, ...] | None = None
     _durable_leaf_path: Path | None = None
+    _durable_journal_parent_pins: list[tuple[Path, int, tuple[int, int, int]]] = []
 
     def _release_durable_pins(self) -> None:
         pins = self._durable_parent_pins
@@ -303,10 +316,23 @@ class _PinnedIndexConnection(sqlite3.Connection):
         self._durable_leaf_descriptor = None
         self._durable_leaf_identity = None
         self._durable_leaf_path = None
+        journal_pins = self._durable_journal_parent_pins
+        self._durable_journal_parent_pins = []
         if descriptor is not None:
             os.close(descriptor)
         if pins:
             _win_close_lock_parent_pins(pins)
+        if journal_pins:
+            _win_close_lock_parent_pins(journal_pins)
+
+    def _detach_durable_leaf(self) -> int | None:
+        """Transfer the verification descriptor to a caller before closing SQLite."""
+        descriptor = self._durable_leaf_descriptor
+        self._durable_leaf_descriptor = None
+        self._durable_leaf_identity = None
+        self._durable_leaf_path = None
+        self._durable_parent_pins = []
+        return descriptor
 
     def close(self) -> None:
         try:
@@ -433,7 +459,7 @@ def _revalidate_opened_leaf(path: Path, descriptor: int,
 
 def validate_durable_leaf(path: Path, *, allow_missing: bool = False) -> None:
     """Reject non-regular, linked, or replaced by-name durable leaves."""
-    path = Path(path)
+    path = _durable_path(path)
     try:
         metadata = os.lstat(path)
     except FileNotFoundError:
@@ -489,10 +515,10 @@ def _connect_verified_index(index_path: Path) -> sqlite3.Connection:
         raise
 
 
-def _win_pin_durable_parent(path: Path) -> list[tuple[Path, int, tuple[int, int, int]]]:
+def _win_pin_durable_parent(path: Path, *, create: bool = True) -> list[tuple[Path, int, tuple[int, int, int]]]:
     if os.name != "nt":
         return []
-    return _win_pin_lock_parent(Path(path))
+    return _win_pin_lock_parent(Path(path), create=create)
 
 
 def revalidate_durable_parent_pins(
@@ -515,14 +541,15 @@ def _revalidate_index_connection(connection: sqlite3.Connection,
 
 def _maybe_revalidate_index_connection(connection: sqlite3.Connection) -> None:
     """Revalidate disk-backed caches while leaving the in-memory pinned path unchanged."""
+    revalidate_durable_parent_pins(getattr(connection, "_durable_parent_pins", []))
     if getattr(connection, "_durable_leaf_descriptor", None) is not None:
         _revalidate_index_connection(connection)
 
 
 @contextmanager
-def pinned_durable_parent(path: Path):
+def pinned_durable_parent(path: Path, *, create: bool = True):
     """Pin a durable parent tree while a by-name leaf is created or published."""
-    pins = _win_pin_durable_parent(Path(path))
+    pins = _win_pin_durable_parent(Path(path), create=create)
     try:
         revalidate_durable_parent_pins(pins)
         yield pins
@@ -548,7 +575,10 @@ def _open_durable_leaf(path: Path, flags: int, mode: int = 0o600) -> int:
             _LOCK_FILE_ATTRIBUTE_NORMAL | _LOCK_FILE_FLAG_OPEN_REPARSE_POINT, None,
         )
         if handle in (None, _LOCK_INVALID_HANDLE):
-            raise OSError(ctypes.get_last_error(), f"cannot open Windows durable leaf {path}")
+            error = ctypes.get_last_error()
+            if error in (2, 3):
+                raise FileNotFoundError(error, f"cannot open Windows durable leaf {path}")
+            raise OSError(error, f"cannot open Windows durable leaf {path}")
         try:
             descriptor = msvcrt.open_osfhandle(int(handle), flags | getattr(os, "O_BINARY", 0))
             handle = None
@@ -563,14 +593,88 @@ def _open_durable_leaf(path: Path, flags: int, mode: int = 0o600) -> int:
         raise
 
 
+def read_durable_bytes(path: Path, *, max_bytes: int = 64 * 1024 * 1024) -> bytes | None:
+    """Read one regular, one-link leaf while its checked parent tree is pinned.
+
+    The pathname is used only to open the leaf.  All bytes are then read from that same
+    descriptor, and the descriptor identity/link count is checked again immediately before
+    each read.  ``None`` means the leaf or one of its parents is absent.
+    """
+    try:
+        path = Path(path)
+        if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 0:
+            raise JsonlDurabilityError("durable read max_bytes must be a non-negative integer")
+        if os.name != "nt":
+            ensure_no_symlink(path.parent)
+            ensure_no_symlink(path)
+        with pinned_durable_parent(path.parent, create=False) as pins:
+            revalidate_durable_parent_pins(pins)
+            try:
+                descriptor = _open_durable_leaf(
+                    path, os.O_RDONLY | getattr(os, "O_BINARY", 0)
+                )
+            except FileNotFoundError:
+                return None
+            try:
+                identity = _capture_opened_leaf(path, descriptor)
+                chunks: list[bytes] = []
+                total = 0
+                while True:
+                    _revalidate_opened_leaf(path, descriptor, identity)
+                    chunk = os.read(descriptor, min(COPY_CHUNK_BYTES, max_bytes - total + 1))
+                    if not chunk:
+                        return b"".join(chunks)
+                    total += len(chunk)
+                    if total > max_bytes:
+                        raise JsonlDurabilityError(
+                            f"durable read exceeds {max_bytes} bytes: {path}"
+                        )
+                    chunks.append(chunk)
+            finally:
+                os.close(descriptor)
+    except JsonlDurabilityError:
+        raise
+    except FileNotFoundError:
+        return None
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError) as exc:
+        raise JsonlDurabilityError(f"durable read refused: {path}: {exc}") from exc
+
+
+def validate_durable_leaf_at(directory: int, name: str, *, allow_missing: bool = False) -> None:
+    """Validate a single child addressed through a pinned POSIX directory descriptor."""
+    if os.name == "nt" or not isinstance(directory, int) or not isinstance(name, str) \
+            or not name or Path(name).name != name:
+        raise JsonlDurabilityError("invalid pinned durable leaf name")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(name, flags, dir_fd=directory)
+    except FileNotFoundError:
+        if allow_missing:
+            return
+        raise JsonlDurabilityError(f"pinned durable leaf is absent: {name}") from None
+    try:
+        path = _pinned_fd_path(directory, name)
+        identity = _capture_opened_leaf(path, descriptor)
+        _revalidate_opened_leaf(path, descriptor, identity)
+    except (JsonlDurabilityError, OSError) as exc:
+        if isinstance(exc, JsonlDurabilityError):
+            raise
+        raise JsonlDurabilityError(f"cannot validate pinned durable leaf {name}: {exc}") from exc
+    finally:
+        os.close(descriptor)
+
+
 def _lock_attempts() -> tuple[int, float]:
     try:
         attempts = max(1, int(os.environ.get("RECURSION_DURABLE_LOCK_ATTEMPTS", "100")))
-    except ValueError:
+    except (TypeError, ValueError, OverflowError):
         attempts = 100
     try:
         delay = max(0.0, float(os.environ.get("RECURSION_DURABLE_LOCK_DELAY_S", "0.01")))
-    except ValueError:
+        if not math.isfinite(delay):
+            raise ValueError("non-finite durable lock delay")
+    except (TypeError, ValueError, OverflowError):
         delay = 0.01
     return attempts, delay
 
@@ -750,11 +854,13 @@ def _lock_descriptor(descriptor: int) -> None:
         return
     try:
         attempts = max(1, int(os.environ.get("RECURSION_JSONL_LOCK_ATTEMPTS", "100")))
-    except ValueError:
+    except (TypeError, ValueError, OverflowError):
         attempts = 100
     try:
         delay = max(0.0, float(os.environ.get("RECURSION_JSONL_LOCK_DELAY_S", "0.01")))
-    except ValueError:
+        if not math.isfinite(delay):
+            raise ValueError("non-finite JSONL lock delay")
+    except (TypeError, ValueError, OverflowError):
         delay = 0.01
     for attempt in range(attempts):
         try:
@@ -766,9 +872,15 @@ def _lock_descriptor(descriptor: int) -> None:
     raise JsonlDurabilityError("JSONL journal lock is contended; refusing an unlocked append")
 
 
-def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with pinned_durable_parent(path.parent) as pins:
+def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600,
+                  hook: Callable[[str], None] | None = None) -> None:
+    path = Path(path)
+    if not isinstance(value, bytes):
+        raise JsonlDurabilityError("durable atomic write requires bytes")
+    if os.name != "nt":
+        ensure_no_symlink(path.parent)
+        path.parent.mkdir(parents=True, exist_ok=True)
+    with pinned_durable_parent(path.parent, create=True) as pins:
         ensure_no_symlink(path)
         validate_durable_leaf(path, allow_missing=True)
         descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
@@ -777,11 +889,16 @@ def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
             leaf_identity = _capture_opened_leaf(temporary, descriptor)
             if hasattr(os, "fchmod"):  # absent on Windows; NTFS mode bits are meaningless
                 os.fchmod(descriptor, mode)
+            if hook is not None:
+                hook("pre-write")
+            _revalidate_opened_leaf(temporary, descriptor, leaf_identity)
             _write_all(descriptor, value, leaf_path=temporary, leaf_identity=leaf_identity)
             os.fsync(descriptor)
             # Revalidate while the same private descriptor is still open, immediately
             # before publication.  Windows cannot replace an open CRT leaf reliably, so
             # close only after this check and perform the final by-name check below.
+            if hook is not None:
+                hook("pre-replace")
             _revalidate_opened_leaf(temporary, descriptor, leaf_identity)
             os.close(descriptor)
             descriptor = -1
@@ -803,6 +920,18 @@ def _atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
             except OSError:
                 pass
             raise
+
+
+def atomic_bytes(path: Path, value: bytes, mode: int = 0o600,
+                 hook: Callable[[str], None] | None = None) -> None:
+    """Public typed boundary for crash-safe replacement of a durable byte leaf."""
+    try:
+        _atomic_bytes(Path(path), value, mode, hook)
+    except JsonlDurabilityError:
+        raise
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError) as exc:
+        raise JsonlDurabilityError(f"durable atomic write refused: {path}: {exc}") from exc
 
 
 def _journal_identity(path: Path) -> tuple[Path, str]:
@@ -837,16 +966,25 @@ def _ensure_index_root(path: Path, index_root: Path | None = None,
     else:
         root = Path(index_root)
         identity = index_identity if index_identity is not None else path.name
-    if root.exists():
-        if root.is_symlink() or not root.is_dir():
-            raise JsonlDurabilityError(f"JSONL index root has unsafe type: {root}")
-    else:
-        root.mkdir(mode=0o777 if os.name == "nt" else 0o700)
-        _fsync_dir(root.parent)
     try:
-        os.chmod(root, 0o700)
-    except OSError:
-        pass
+        if os.name != "nt":
+            ensure_no_symlink(root.parent)
+            ensure_no_symlink(root)
+            root.mkdir(mode=0o700, exist_ok=True)
+        with pinned_durable_parent(root, create=True) as pins:
+            revalidate_durable_parent_pins(pins)
+            if not root.is_dir():
+                raise JsonlDurabilityError(f"JSONL index root has unsafe type: {root}")
+            try:
+                os.chmod(root, 0o700)
+            except OSError:
+                pass
+            revalidate_durable_parent_pins(pins)
+    except JsonlDurabilityError:
+        raise
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError) as exc:
+        raise JsonlDurabilityError(f"cannot establish JSONL index root {root}: {exc}") from exc
     return root, identity
 
 
@@ -861,7 +999,12 @@ def _index_path(path: Path, index_root: Path | None = None,
 
 def index_cache_name(identity: str) -> str:
     """Return the stable SQLite filename for a journal identity."""
-    return hashlib.sha256(identity.encode("utf-8")).hexdigest() + ".sqlite3"
+    if not isinstance(identity, str):
+        raise JsonlDurabilityError("JSONL index identity must be a string")
+    try:
+        return hashlib.sha256(identity.encode("utf-8")).hexdigest() + ".sqlite3"
+    except (UnicodeEncodeError, TypeError, ValueError) as exc:
+        raise JsonlDurabilityError("JSONL index identity is not encodable") from exc
 
 
 def _last_newline(descriptor: int, size: int) -> int:
@@ -879,7 +1022,23 @@ def _last_newline(descriptor: int, size: int) -> int:
     return 0
 
 
-def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int) -> dict:
+def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int,
+                     hook: Callable[[str], None] | None = None) -> dict:
+    quarantine, _ = _journal_identity(path)
+    try:
+        with pinned_durable_parent(quarantine, create=True) as pins:
+            result = _quarantine_tail_unpinned(path, descriptor, offset, size, hook)
+            revalidate_durable_parent_pins(pins)
+            return result
+    except JsonlDurabilityError:
+        raise
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, sqlite3.DatabaseError) as exc:
+        raise JsonlDurabilityError(f"JSONL quarantine publication refused: {quarantine}") from exc
+
+
+def _quarantine_tail_unpinned(path: Path, descriptor: int, offset: int, size: int,
+                              hook: Callable[[str], None] | None = None) -> dict:
     quarantine, journal_name = _journal_identity(path)
     quarantine.mkdir(parents=True, exist_ok=True, mode=0o777 if os.name == "nt" else 0o700)
     try:
@@ -898,7 +1057,11 @@ def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int) -> dic
             payload_identity = _capture_opened_leaf(payload_tmp, payload_fd)
             if hasattr(os, "fchmod"):  # absent on Windows; NTFS mode bits are meaningless
                 os.fchmod(payload_fd, 0o600)
+            source_identity = _capture_opened_leaf(path, descriptor)
+            if hook is not None:
+                hook("pre-quarantine-payload-write")
             while cursor < size:
+                _revalidate_opened_leaf(path, descriptor, source_identity)
                 chunk = _read_at(descriptor, min(COPY_CHUNK_BYTES, size - cursor), cursor)
                 if not chunk:
                     raise OSError("short JSONL quarantine read")
@@ -920,19 +1083,17 @@ def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int) -> dic
     metadata = quarantine / f"{stem}.json"
     publication_fd = -1
     try:
-        if payload.exists():
-            validate_durable_leaf(payload)
-            existing_digest = hashlib.sha256()
-            with payload.open("rb") as current:
-                for chunk in iter(lambda: current.read(COPY_CHUNK_BYTES), b""):
-                    existing_digest.update(chunk)
-            existing = existing_digest.hexdigest()
-            if existing != tail_sha or payload.stat().st_size != size - offset:
+        existing_payload = read_durable_bytes(payload, max_bytes=max(size - offset, 0))
+        if existing_payload is not None:
+            existing = hashlib.sha256(existing_payload).hexdigest()
+            if existing != tail_sha or len(existing_payload) != size - offset:
                 raise JsonlDurabilityError(f"JSONL quarantine payload conflicts: {payload}")
             payload_tmp.unlink(missing_ok=True)
         else:
             publication_fd = _open_durable_leaf(payload_tmp, os.O_RDONLY)
             publication_identity = _capture_opened_leaf(payload_tmp, publication_fd)
+            if hook is not None:
+                hook("pre-quarantine-payload-replace")
             _revalidate_opened_leaf(payload_tmp, publication_fd, publication_identity)
             # The Windows CRT handle used by _open_durable_leaf does not grant delete
             # sharing, so close only after the same-handle publication check and perform
@@ -962,15 +1123,24 @@ def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int) -> dic
             "requires_human_review": True,
         }
         encoded = (json.dumps(evidence, sort_keys=True, separators=(",", ":")) + "\n").encode()
-        if metadata.exists():
-            prior = json.loads(metadata.read_text(encoding="utf-8"))
+        prior_bytes = read_durable_bytes(metadata)
+        if prior_bytes is not None:
+            try:
+                prior = json.loads(prior_bytes.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError, TypeError,
+                    ValueError, OverflowError, RecursionError) as exc:
+                raise JsonlDurabilityError(
+                    f"JSONL quarantine metadata is not valid JSON: {metadata}"
+                ) from exc
+            if not isinstance(prior, dict):
+                raise JsonlDurabilityError(f"JSONL quarantine metadata is not an object: {metadata}")
             immutable = ("kind", "journal", "journal_offset", "original_bytes", "tail_bytes",
                          "tail_sha256", "payload")
             if any(prior.get(key) != evidence.get(key) for key in immutable):
                 raise JsonlDurabilityError(f"JSONL quarantine metadata conflicts: {metadata}")
             evidence = prior
         else:
-            _atomic_bytes(metadata, encoded)
+            _atomic_bytes(metadata, encoded, hook=hook)
         return evidence
     except BaseException:
         if publication_fd >= 0:
@@ -985,6 +1155,7 @@ def _quarantine_tail(path: Path, descriptor: int, offset: int, size: int) -> dic
 def _iter_complete_lines(descriptor: int, limit: int, path: Path,
                          max_record_bytes: int) -> Iterator[VerifiedLine]:
     """Stream and validate physical lines up to *limit* with bounded memory."""
+    leaf_identity = _capture_opened_leaf(path, descriptor)
     with os.fdopen(os.dup(descriptor), "rb", closefd=True) as source:
         source.seek(0)
         remaining = limit
@@ -992,6 +1163,7 @@ def _iter_complete_lines(descriptor: int, limit: int, path: Path,
         offset = 0
         chain = ZERO_CHAIN_SHA256
         while remaining:
+            _revalidate_opened_leaf(path, descriptor, leaf_identity)
             line = source.readline(min(remaining, max_record_bytes + 2))
             if not line:
                 raise JsonlDurabilityError(f"short JSONL read before offset {limit}: {path}")
@@ -1014,7 +1186,8 @@ def _iter_complete_lines(descriptor: int, limit: int, path: Path,
             else:
                 try:
                     value = json.loads(raw.decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError,
+                        OverflowError, RecursionError) as exc:
                     raise JsonlDurabilityError(
                         f"malformed complete JSONL record {line_number}: {path}: {exc}"
                     ) from exc
@@ -1040,13 +1213,11 @@ def _iter_complete_objects(descriptor: int, limit: int, path: Path,
 
 
 def _create_index_schema(connection: sqlite3.Connection) -> None:
-    _maybe_revalidate_index_connection(connection)
-    connection.executescript(
-        """
-        PRAGMA journal_mode=DELETE;
-        PRAGMA synchronous=FULL;
-        PRAGMA foreign_keys=ON;
-        CREATE TABLE metadata (
+    statements = (
+        "PRAGMA journal_mode=DELETE",
+        "PRAGMA synchronous=FULL",
+        "PRAGMA foreign_keys=ON",
+        """CREATE TABLE metadata (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             schema_version INTEGER NOT NULL,
             authority TEXT NOT NULL,
@@ -1059,8 +1230,8 @@ def _create_index_schema(connection: sqlite3.Connection) -> None:
             ctime_ns INTEGER NOT NULL,
             line_count INTEGER NOT NULL,
             chain_sha256 TEXT NOT NULL
-        );
-        CREATE TABLE records (
+        )""",
+        """CREATE TABLE records (
             sequence INTEGER PRIMARY KEY,
             start_offset INTEGER NOT NULL UNIQUE,
             end_offset INTEGER NOT NULL UNIQUE,
@@ -1069,17 +1240,18 @@ def _create_index_schema(connection: sqlite3.Connection) -> None:
             chain_sha256 TEXT NOT NULL,
             value_json TEXT,
             object_id_json TEXT
-        );
-        CREATE INDEX records_object_id ON records(object_id_json);
-        CREATE TABLE consumers (
+        )""",
+        "CREATE INDEX records_object_id ON records(object_id_json)",
+        """CREATE TABLE consumers (
             name TEXT PRIMARY KEY,
             end_offset INTEGER NOT NULL,
             chain_sha256 TEXT NOT NULL
-        );
-        """
+        )""",
+        f"PRAGMA user_version={INDEX_SCHEMA_VERSION}",
     )
-    _maybe_revalidate_index_connection(connection)
-    connection.execute(f"PRAGMA user_version={INDEX_SCHEMA_VERSION}")
+    for statement in statements:
+        _maybe_revalidate_index_connection(connection)
+        connection.execute(statement)
 
 
 def _stat_fields(stat: os.stat_result) -> tuple[str, str, int, int, int]:
@@ -1090,14 +1262,33 @@ def _stat_fields(stat: os.stat_result) -> tuple[str, str, int, int, int]:
 
 
 def _metadata(connection: sqlite3.Connection) -> tuple | None:
+    _maybe_revalidate_index_connection(connection)
     return connection.execute(
         "SELECT schema_version,authority,journal_identity,max_record_bytes,device,inode,size,"
         "mtime_ns,ctime_ns,line_count,chain_sha256 FROM metadata WHERE singleton=1"
     ).fetchone()
 
 
+def _index_integer(value: object, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise JsonlDurabilityError(f"JSONL verification index {label} is not an integer")
+    return value
+
+
+def _validate_indexed_batch(batch: IndexedBatch) -> None:
+    if not isinstance(batch, IndexedBatch):
+        raise JsonlDurabilityError("invalid JSONL acknowledgement batch")
+    _index_integer(batch.verified_size, "acknowledgement size")
+    if batch.verified_size < 0:
+        raise JsonlDurabilityError("JSONL acknowledgement size cannot be negative")
+    if not isinstance(batch.chain_sha256, str) \
+            or not re.fullmatch(r"[0-9a-f]{64}", batch.chain_sha256):
+        raise JsonlDurabilityError("invalid JSONL acknowledgement chain")
+
+
 def _index_matches(connection: sqlite3.Connection, identity: str, stat: os.stat_result,
                    max_record_bytes: int) -> bool:
+    _maybe_revalidate_index_connection(connection)
     if connection.execute("PRAGMA user_version").fetchone()[0] != INDEX_SCHEMA_VERSION:
         return False
     row = _metadata(connection)
@@ -1108,12 +1299,14 @@ def _index_matches(connection: sqlite3.Connection, identity: str, stat: os.stat_
     )
     if row[:9] != expected:
         return False
-    line_count, chain = int(row[9]), str(row[10])
+    line_count = _index_integer(row[9], "line count")
+    chain = str(row[10])
+    file_size = _index_integer(stat.st_size, "journal size")
     summary = connection.execute(
         "SELECT COUNT(*),COALESCE(MIN(start_offset),0),COALESCE(MAX(end_offset),0),"
         "COALESCE(MAX(sequence),0) FROM records"
     ).fetchone()
-    if summary != (line_count, 0, int(stat.st_size), line_count):
+    if summary != (line_count, 0, file_size, line_count):
         return False
     if line_count:
         last = connection.execute(
@@ -1171,9 +1364,18 @@ def _rebuild_index_unpinned(index_path: Path, identity: str, descriptor: int,
     connection: sqlite3.Connection | None = None
     try:
         temporary_identity = _capture_opened_leaf(temporary, temporary_fd)
-        connection = sqlite3.connect(temporary)
+        if hook is not None:
+            hook("pre-sqlite-open")
+        _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
+        connection = sqlite3.connect(temporary, factory=_PinnedIndexConnection)
+        connection._durable_leaf_descriptor = temporary_fd
+        connection._durable_leaf_identity = temporary_identity
+        connection._durable_leaf_path = temporary
+        connection._durable_parent_pins = []
         _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
         _create_index_schema(connection)
+        _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
+        _maybe_revalidate_index_connection(connection)
         _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
         connection.execute("BEGIN IMMEDIATE")
         line_count = 0
@@ -1186,15 +1388,13 @@ def _rebuild_index_unpinned(index_path: Path, identity: str, descriptor: int,
             connection, identity, stat, max_record_bytes, line_count, chain
         )
         _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
+        _maybe_revalidate_index_connection(connection)
         connection.commit()
+        temporary_fd = connection._detach_durable_leaf() or temporary_fd
         connection.close()
         connection = None
         _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
-        cache_fd = os.open(temporary, os.O_RDWR | getattr(os, "O_BINARY", 0))
-        try:
-            os.fsync(cache_fd)
-        finally:
-            os.close(cache_fd)
+        os.fsync(temporary_fd)
         if hook is not None:
             hook("pre-replace")
         _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
@@ -1207,6 +1407,7 @@ def _rebuild_index_unpinned(index_path: Path, identity: str, descriptor: int,
     except BaseException:
         if connection is not None:
             connection.close()
+            temporary_fd = -1
         if temporary_fd >= 0:
             os.close(temporary_fd)
         temporary.unlink(missing_ok=True)
@@ -1239,8 +1440,6 @@ def _open_verified_index(path: Path, descriptor: int, size: int,
         # The caller pins the cache directory and (on Windows) the cache leaf before
         # entering this function.  A missing leaf is created by that caller, so this
         # branch never has to make a pathname-based create decision on its own.
-        if not index_path.exists():
-            raise JsonlDurabilityError(f"pinned JSONL verification cache is absent: {index_path}")
         connection: sqlite3.Connection | None = None
         try:
             if hook is not None:
@@ -1251,7 +1450,7 @@ def _open_verified_index(path: Path, descriptor: int, size: int,
             if _index_matches(connection, identity, stat, max_record_bytes):
                 connection.execute("PRAGMA query_only=OFF")
                 return connection, False
-        except sqlite3.DatabaseError:
+        except (FileNotFoundError, JsonlDurabilityError, sqlite3.DatabaseError):
             if connection is not None:
                 connection.close()
             connection = None
@@ -1269,23 +1468,22 @@ def _open_verified_index(path: Path, descriptor: int, size: int,
             connection.close()
             raise JsonlDurabilityError(f"rebuilt JSONL verification index is inconsistent: {path}")
         return connection, True
-    if index_path.exists():
-        connection: sqlite3.Connection | None = None
-        try:
-            if hook is not None:
-                hook("pre-sqlite-open")
-            connection = _connect_verified_index(index_path)
-            connection.execute("PRAGMA query_only=ON")
-            if _index_matches(connection, identity, stat, max_record_bytes):
-                connection.execute("PRAGMA query_only=OFF")
-                retained = connection
-                connection = None
-                return retained, False
-        except sqlite3.DatabaseError:
-            pass
-        finally:
-            if connection is not None:
-                connection.close()
+    connection: sqlite3.Connection | None = None
+    try:
+        if hook is not None:
+            hook("pre-sqlite-open")
+        connection = _connect_verified_index(index_path)
+        connection.execute("PRAGMA query_only=ON")
+        if _index_matches(connection, identity, stat, max_record_bytes):
+            connection.execute("PRAGMA query_only=OFF")
+            retained = connection
+            connection = None
+            return retained, False
+    except (FileNotFoundError, JsonlDurabilityError, sqlite3.DatabaseError):
+        pass
+    finally:
+        if connection is not None:
+            connection.close()
     _rebuild_index(index_path, identity, descriptor, stat, path, max_record_bytes, hook)
     if hook is not None:
         hook("pre-sqlite-open")
@@ -1299,44 +1497,85 @@ def _open_verified_index(path: Path, descriptor: int, size: int,
 def _rows_to_lines(rows: Iterator[tuple]) -> tuple[VerifiedLine, ...]:
     result: list[VerifiedLine] = []
     for sequence, start, end, raw, value_json, chain in rows:
-        value = json.loads(value_json) if value_json is not None else None
+        if value_json is not None:
+            try:
+                value = json.loads(value_json)
+            except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+                raise JsonlDurabilityError("JSONL verification index contains invalid JSON") from exc
+        else:
+            value = None
         if value is not None and not isinstance(value, dict):
             raise JsonlDurabilityError("JSONL verification index contains a non-object value")
-        result.append(VerifiedLine(
-            sequence=int(sequence), start=int(start), end=int(end), raw=bytes(raw), value=value,
-            chain_sha256=str(chain),
-        ))
+        try:
+            result.append(VerifiedLine(
+                sequence=int(sequence), start=int(start), end=int(end), raw=bytes(raw), value=value,
+                chain_sha256=str(chain),
+            ))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise JsonlDurabilityError("JSONL verification index contains invalid row types") from exc
     return tuple(result)
 
 
 def _verified_descriptor(path: Path, max_record_bytes: int) \
         -> tuple[int, sqlite3.Connection, bool]:
-    with pinned_durable_parent(path.parent) as pins:
-        revalidate_durable_parent_pins(pins)
+    path = _durable_path(path)
+    if not isinstance(max_record_bytes, int) or isinstance(max_record_bytes, bool) \
+            or max_record_bytes < 0:
+        raise JsonlDurabilityError("JSONL max_record_bytes must be a non-negative integer")
+    pins = _win_pin_durable_parent(path.parent, create=False)
+    journal_pins = pins
+    pins = []
+    try:
+        revalidate_durable_parent_pins(journal_pins)
         descriptor = _open_durable_leaf(path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
-        revalidate_durable_parent_pins(pins)
+        revalidate_durable_parent_pins(journal_pins)
+    except BaseException:
+        if journal_pins:
+            _win_close_lock_parent_pins(journal_pins)
+        raise
     try:
         _lock_descriptor(descriptor)
         size = os.fstat(descriptor).st_size
         if size and _read_at(descriptor, 1, size - 1) != b"\n":
             raise JsonlDurabilityError(f"unterminated JSONL tail: {path}")
         connection, rebuilt = _open_verified_index(path, descriptor, size, max_record_bytes)
+        connection._durable_journal_parent_pins = journal_pins
+        journal_pins = []
         return descriptor, connection, rebuilt
     except BaseException:
         os.close(descriptor)
+        if journal_pins:
+            _win_close_lock_parent_pins(journal_pins)
         raise
 
 
 def read_jsonl_objects(path: Path, max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES) -> list[dict]:
     """Read objects from an intact journal through its verified derived index."""
-    if not path.is_file():
-        return []
-    descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
+    path = _durable_path(path)
     try:
+        descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
+    except FileNotFoundError:
+        return []
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, sqlite3.DatabaseError) as exc:
+        raise JsonlDurabilityError(f"JSONL verification read refused: {path}: {exc}") from exc
+    try:
+        _maybe_revalidate_index_connection(connection)
         rows = connection.execute(
             "SELECT value_json FROM records WHERE value_json IS NOT NULL ORDER BY sequence"
         )
-        return [json.loads(row[0]) for row in rows]
+        result = []
+        for row in rows:
+            try:
+                value = json.loads(row[0])
+            except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+                raise JsonlDurabilityError(f"JSONL verification index contains invalid JSON: {path}") from exc
+            if not isinstance(value, dict):
+                raise JsonlDurabilityError(f"JSONL verification index contains a non-object value: {path}")
+            result.append(value)
+        return result
+    except sqlite3.DatabaseError as exc:
+        raise JsonlDurabilityError(f"JSONL verification index read failed: {path}: {exc}") from exc
     finally:
         connection.close()
         os.close(descriptor)
@@ -1345,17 +1584,27 @@ def read_jsonl_objects(path: Path, max_record_bytes: int = DEFAULT_MAX_RECORD_BY
 def read_jsonl_prefix(path: Path, count: int,
                       max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES) -> tuple[VerifiedLine, ...]:
     """Return at most *count* verified physical lines from the journal prefix."""
-    if count < 0:
+    path = _durable_path(path)
+    if not isinstance(count, int) or isinstance(count, bool) or count < 0:
         raise JsonlDurabilityError("JSONL prefix count cannot be negative")
-    if not path.is_file() or count == 0:
+    if count == 0:
         return ()
-    descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
     try:
+        descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
+    except FileNotFoundError:
+        return ()
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, sqlite3.DatabaseError) as exc:
+        raise JsonlDurabilityError(f"JSONL verification read refused: {path}: {exc}") from exc
+    try:
+        _maybe_revalidate_index_connection(connection)
         rows = connection.execute(
             "SELECT sequence,start_offset,end_offset,raw,value_json,chain_sha256 FROM records "
             "ORDER BY sequence LIMIT ?", (count,),
         )
         return _rows_to_lines(rows)
+    except sqlite3.DatabaseError as exc:
+        raise JsonlDurabilityError(f"JSONL verification index read failed: {path}: {exc}") from exc
     finally:
         connection.close()
         os.close(descriptor)
@@ -1364,24 +1613,48 @@ def read_jsonl_prefix(path: Path, count: int,
 def find_jsonl_objects(path: Path, field: str, value: object,
                        max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES) -> list[dict]:
     """Find exact top-level field matches without rescanning verified journal bytes."""
-    if not path.is_file():
-        return []
-    descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
+    path = _durable_path(path)
+    if not isinstance(field, str) or not field:
+        raise JsonlDurabilityError("JSONL search field must be a nonempty string")
     try:
+        descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
+    except FileNotFoundError:
+        return []
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, sqlite3.DatabaseError) as exc:
+        raise JsonlDurabilityError(f"JSONL verification read refused: {path}: {exc}") from exc
+    try:
+        _maybe_revalidate_index_connection(connection)
         if field == "id":
-            encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+            try:
+                encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+            except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+                raise JsonlDurabilityError("JSONL search value is not serializable") from exc
             rows = connection.execute(
                 "SELECT value_json FROM records WHERE object_id_json=? ORDER BY sequence",
                 (encoded,),
             )
-            return [json.loads(row[0]) for row in rows]
+            result = []
+            for row in rows:
+                try:
+                    result.append(json.loads(row[0]))
+                except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+                    raise JsonlDurabilityError(f"JSONL verification index contains invalid JSON: {path}") from exc
+            return result
         result = []
         for row in connection.execute(
                 "SELECT value_json FROM records WHERE value_json IS NOT NULL ORDER BY sequence"):
-            candidate = json.loads(row[0])
+            try:
+                candidate = json.loads(row[0])
+            except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+                raise JsonlDurabilityError(f"JSONL verification index contains invalid JSON: {path}") from exc
+            if not isinstance(candidate, dict):
+                raise JsonlDurabilityError(f"JSONL verification index contains a non-object value: {path}")
             if candidate.get(field) == value:
                 result.append(candidate)
         return result
+    except sqlite3.DatabaseError as exc:
+        raise JsonlDurabilityError(f"JSONL verification index read failed: {path}: {exc}") from exc
     finally:
         connection.close()
         os.close(descriptor)
@@ -1390,6 +1663,7 @@ def find_jsonl_objects(path: Path, field: str, value: object,
 def _chain_at(connection: sqlite3.Connection, offset: int) -> str | None:
     if offset == 0:
         return ZERO_CHAIN_SHA256
+    _maybe_revalidate_index_connection(connection)
     row = connection.execute(
         "SELECT chain_sha256 FROM records WHERE end_offset=?", (offset,)
     ).fetchone()
@@ -1403,17 +1677,27 @@ def read_jsonl_since(path: Path, consumer: str,
     Consumer cursors live inside the derived index.  Rebuilding the index intentionally drops
     them, causing a safe full replay from the authoritative journal.
     """
-    if not consumer or len(consumer) > 128:
+    if not isinstance(consumer, str) or not consumer or len(consumer) > 128:
         raise JsonlDurabilityError("invalid JSONL index consumer")
-    if not path.is_file():
-        return IndexedBatch((), 0, ZERO_CHAIN_SHA256, False)
-    descriptor, connection, rebuilt = _verified_descriptor(path, max_record_bytes)
+    path = _durable_path(path)
     try:
+        descriptor, connection, rebuilt = _verified_descriptor(path, max_record_bytes)
+    except FileNotFoundError:
+        return IndexedBatch((), 0, ZERO_CHAIN_SHA256, False)
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, sqlite3.DatabaseError) as exc:
+        raise JsonlDurabilityError(f"JSONL verification read refused: {path}: {exc}") from exc
+    try:
+        _maybe_revalidate_index_connection(connection)
         checkpoint = connection.execute(
             "SELECT end_offset,chain_sha256 FROM consumers WHERE name=?", (consumer,)
         ).fetchone()
-        offset = int(checkpoint[0]) if checkpoint is not None else 0
-        expected_chain = str(checkpoint[1]) if checkpoint is not None else ZERO_CHAIN_SHA256
+        if checkpoint is None:
+            offset = 0
+            expected_chain = ZERO_CHAIN_SHA256
+        else:
+            offset = _index_integer(checkpoint[0], "consumer checkpoint offset")
+            expected_chain = str(checkpoint[1])
         if _chain_at(connection, offset) != expected_chain:
             raise JsonlDurabilityError(f"JSONL consumer checkpoint is inconsistent: {consumer}")
         rows = connection.execute(
@@ -1424,7 +1708,10 @@ def read_jsonl_since(path: Path, consumer: str,
         metadata = _metadata(connection)
         if metadata is None:
             raise JsonlDurabilityError(f"JSONL verification metadata is absent: {path}")
-        return IndexedBatch(lines, int(metadata[6]), str(metadata[10]), rebuilt)
+        verified_size = _index_integer(metadata[6], "journal size")
+        return IndexedBatch(lines, verified_size, str(metadata[10]), rebuilt)
+    except sqlite3.DatabaseError as exc:
+        raise JsonlDurabilityError(f"JSONL verification index read failed: {path}: {exc}") from exc
     finally:
         connection.close()
         os.close(descriptor)
@@ -1433,13 +1720,19 @@ def read_jsonl_since(path: Path, consumer: str,
 def acknowledge_jsonl(path: Path, consumer: str, batch: IndexedBatch,
                       max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES) -> None:
     """Durably advance a consumer after its selected projections are durable."""
-    if not consumer or len(consumer) > 128:
+    if not isinstance(consumer, str) or not consumer or len(consumer) > 128:
         raise JsonlDurabilityError("invalid JSONL index consumer")
-    if not path.is_file():
+    _validate_indexed_batch(batch)
+    path = _durable_path(path)
+    try:
+        descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
+    except FileNotFoundError:
         if batch.verified_size == 0:
             return
-        raise JsonlDurabilityError(f"JSONL disappeared before acknowledgement: {path}")
-    descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
+        raise JsonlDurabilityError(f"JSONL disappeared before acknowledgement: {path}") from None
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, sqlite3.DatabaseError) as exc:
+        raise JsonlDurabilityError(f"JSONL verification read refused: {path}: {exc}") from exc
     try:
         if _chain_at(connection, batch.verified_size) != batch.chain_sha256:
             raise JsonlDurabilityError(
@@ -1448,9 +1741,12 @@ def acknowledge_jsonl(path: Path, consumer: str, batch: IndexedBatch,
         current = connection.execute(
             "SELECT end_offset,chain_sha256 FROM consumers WHERE name=?", (consumer,)
         ).fetchone()
-        if current is not None and int(current[0]) > batch.verified_size:
+        current_offset = None if current is None else _index_integer(
+            current[0], "consumer checkpoint offset"
+        )
+        if current_offset is not None and current_offset > batch.verified_size:
             return
-        if current is not None and int(current[0]) == batch.verified_size \
+        if current_offset is not None and current_offset == batch.verified_size \
                 and str(current[1]) != batch.chain_sha256:
             raise JsonlDurabilityError(f"JSONL consumer checkpoint collision: {consumer}")
         _maybe_revalidate_index_connection(connection)
@@ -1476,14 +1772,24 @@ def _duplicate_in_index(connection: sqlite3.Connection, field: str | None,
                         value: object) -> bool:
     if field is None:
         return False
+    _maybe_revalidate_index_connection(connection)
     if field == "id":
-        encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+        try:
+            encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+        except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+            raise JsonlDurabilityError("JSONL dedupe value is not serializable") from exc
         return connection.execute(
             "SELECT 1 FROM records WHERE object_id_json=? LIMIT 1", (encoded,)
         ).fetchone() is not None
     for row in connection.execute(
             "SELECT value_json FROM records WHERE value_json IS NOT NULL ORDER BY sequence"):
-        if json.loads(row[0]).get(field) == value:
+        try:
+            candidate = json.loads(row[0])
+        except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+            raise JsonlDurabilityError("JSONL verification index contains invalid JSON") from exc
+        if not isinstance(candidate, dict):
+            raise JsonlDurabilityError("JSONL verification index contains a non-object value")
+        if candidate.get(field) == value:
             return True
     return False
 
@@ -1493,18 +1799,22 @@ def _update_index_after_append(connection: sqlite3.Connection, descriptor: int, 
     metadata = _metadata(connection)
     if metadata is None:
         raise JsonlDurabilityError(f"JSONL verification metadata is absent: {path}")
-    old_size = int(metadata[6])
-    line_count = int(metadata[9])
+    old_size = _index_integer(metadata[6], "journal size")
+    line_count = _index_integer(metadata[9], "journal line count")
     prior_chain = str(metadata[10])
     stat = os.fstat(descriptor)
     if stat.st_size != old_size + len(encoded):
         raise JsonlDurabilityError(f"JSONL size changed during indexed append: {path}")
     try:
         value = json.loads(encoded[:-1].decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:  # defensive; caller encoded it.
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError,
+            OverflowError, RecursionError) as exc:  # defensive; caller encoded it.
         raise JsonlDurabilityError(f"new JSONL record cannot be indexed: {path}") from exc
     raw_digest = hashlib.sha256(encoded).digest()
-    chain = hashlib.sha256(bytes.fromhex(prior_chain) + raw_digest).hexdigest()
+    try:
+        chain = hashlib.sha256(bytes.fromhex(prior_chain) + raw_digest).hexdigest()
+    except (TypeError, ValueError) as exc:
+        raise JsonlDurabilityError(f"JSONL verification metadata has an invalid chain: {path}") from exc
     line = VerifiedLine(line_count + 1, old_size, stat.st_size, encoded, value, chain)
     try:
         _maybe_revalidate_index_connection(connection)
@@ -1537,6 +1847,8 @@ def _rebuild_index_in_place_unpinned(
     connection: sqlite3.Connection | None = None
     try:
         connection = _connect_verified_index(index_path)
+        if hook is not None:
+            hook("pre-sqlite-write")
         _revalidate_index_connection(connection)
         connection.execute("PRAGMA journal_mode=DELETE")
         _revalidate_index_connection(connection)
@@ -1545,7 +1857,7 @@ def _rebuild_index_in_place_unpinned(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )]
         for table in tables:
-            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table):
+            if not isinstance(table, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table):
                 raise JsonlDurabilityError(f"unsafe SQLite cache table name: {table!r}")
             _revalidate_index_connection(connection)
             connection.execute(f'DROP TABLE "{table}"')
@@ -1596,13 +1908,18 @@ def _append_jsonl_unpinned(path: Path, value: dict,
     """
     if not isinstance(value, dict):
         raise JsonlDurabilityError("JSONL append requires an object")
-    encoded = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    if not isinstance(max_record_bytes, int) or isinstance(max_record_bytes, bool) \
+            or max_record_bytes < 0:
+        raise JsonlDurabilityError("JSONL max_record_bytes must be a non-negative integer")
+    try:
+        encoded = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeDecodeError) as exc:
+        raise JsonlDurabilityError(f"JSONL append value is not serializable: {path}") from exc
     if len(encoded) - 1 > max_record_bytes:
         raise JsonlDurabilityError(f"new JSONL record exceeds {max_record_bytes} bytes: {path}")
     ensure_no_symlink(path.parent)
     path.parent.mkdir(parents=True, exist_ok=True)
     ensure_no_symlink(path.parent)
-    existed = path.exists()
     ensure_no_symlink(path)
     descriptor = _open_durable_leaf(
         path, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0), 0o600
@@ -1616,11 +1933,14 @@ def _append_jsonl_unpinned(path: Path, value: dict,
     connection: sqlite3.Connection | None = None
     try:
         _lock_descriptor(descriptor)
+        _revalidate_opened_leaf(path, descriptor, leaf_identity)
         size = os.fstat(descriptor).st_size
         committed = size
+        if size:
+            _revalidate_opened_leaf(path, descriptor, leaf_identity)
         if size and _read_at(descriptor, 1, size - 1) != b"\n":
             committed = _last_newline(descriptor, size)
-            evidence = _quarantine_tail(path, descriptor, committed, size)
+            evidence = _quarantine_tail(path, descriptor, committed, size, hook)
             _revalidate_opened_leaf(path, descriptor, leaf_identity)
             os.ftruncate(descriptor, committed)
             os.fsync(descriptor)
@@ -1635,8 +1955,7 @@ def _append_jsonl_unpinned(path: Path, value: dict,
             hook("pre-journal-write")
         _write_all(descriptor, encoded, leaf_path=path, leaf_identity=leaf_identity)
         os.fsync(descriptor)
-        if not existed:
-            _fsync_dir(path.parent)
+        _fsync_dir(path.parent)
         _update_index_after_append(connection, descriptor, path, encoded, max_record_bytes)
     finally:
         if connection is not None:
@@ -1651,24 +1970,31 @@ def append_jsonl(path: Path, value: dict,
                  index_root: Path | None = None, index_identity: str | None = None,
                  rebuild_in_place: bool = False,
                  hook: Callable[[str], None] | None = None) -> AppendOutcome:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if os.name != "nt":
-        return _append_jsonl_unpinned(
-            path, value, max_record_bytes, dedupe_field, dedupe_value,
-            index_root=index_root, index_identity=index_identity,
-            rebuild_in_place=rebuild_in_place, hook=hook,
-        )
-    with pinned_durable_parent(path.parent) as pins:
-        ensure_no_symlink(path.parent)
-        revalidate_durable_parent_pins(pins)
-        result = _append_jsonl_unpinned(
-            path, value, max_record_bytes, dedupe_field, dedupe_value,
-            index_root=index_root, index_identity=index_identity,
-            rebuild_in_place=rebuild_in_place, hook=hook,
-        )
-        revalidate_durable_parent_pins(pins)
-        return result
+    try:
+        path = Path(path)
+        if os.name != "nt":
+            ensure_no_symlink(path.parent)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            return _append_jsonl_unpinned(
+                path, value, max_record_bytes, dedupe_field, dedupe_value,
+                index_root=index_root, index_identity=index_identity,
+                rebuild_in_place=rebuild_in_place, hook=hook,
+            )
+        with pinned_durable_parent(path.parent, create=True) as pins:
+            ensure_no_symlink(path.parent)
+            revalidate_durable_parent_pins(pins)
+            result = _append_jsonl_unpinned(
+                path, value, max_record_bytes, dedupe_field, dedupe_value,
+                index_root=index_root, index_identity=index_identity,
+                rebuild_in_place=rebuild_in_place, hook=hook,
+            )
+            revalidate_durable_parent_pins(pins)
+            return result
+    except JsonlDurabilityError:
+        raise
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, sqlite3.DatabaseError) as exc:
+        raise JsonlDurabilityError(f"JSONL append refused for {path}: {exc}") from exc
 
 
 def _pinned_fd_path(descriptor: int, name: str) -> Path:
@@ -1704,12 +2030,16 @@ def _install_serialized_cache(cache_directory: int, cache_name: str, cache_bytes
     temporary = _pinned_fd_path(cache_directory, temporary_name)
     try:
         temporary_identity = _capture_opened_leaf(temporary, temporary_fd)
+        if hook is not None:
+            hook("pre-write")
+        _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
         _write_all(temporary_fd, cache_bytes, leaf_path=temporary,
                    leaf_identity=temporary_identity)
         os.fsync(temporary_fd)
         if hook is not None:
             hook("pre-replace")
         _revalidate_opened_leaf(temporary, temporary_fd, temporary_identity)
+        validate_durable_leaf_at(cache_directory, cache_name, allow_missing=True)
         os.replace(temporary_name, cache_name,
                    src_dir_fd=cache_directory, dst_dir_fd=cache_directory)
         os.fsync(cache_directory)
@@ -1723,12 +2053,12 @@ def _install_serialized_cache(cache_directory: int, cache_name: str, cache_bytes
         os.close(temporary_fd)
 
 
-def append_jsonl_at(root_descriptor: int, journal_name: str, value: dict,
-                    cache_directory: int, identity: str,
-                    max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES,
-                    dedupe_field: str | None = None,
-                    dedupe_value: object = None,
-                    hook: Callable[[str], None] | None = None) -> AppendOutcome:
+def _append_jsonl_at(root_descriptor: int, journal_name: str, value: dict,
+                     cache_directory: int, identity: str,
+                     max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES,
+                     dedupe_field: str | None = None,
+                     dedupe_value: object = None,
+                     hook: Callable[[str], None] | None = None) -> AppendOutcome:
     """Append a JSONL object using pinned POSIX directory descriptors.
 
     This is intentionally a separate primitive from :func:`append_jsonl`: the latter's
@@ -1739,7 +2069,13 @@ def append_jsonl_at(root_descriptor: int, journal_name: str, value: dict,
         raise JsonlDurabilityError("pinned JSONL persistence is unavailable on this platform")
     if not isinstance(value, dict):
         raise JsonlDurabilityError("JSONL append requires an object")
-    encoded = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    if not isinstance(max_record_bytes, int) or isinstance(max_record_bytes, bool) \
+            or max_record_bytes < 0:
+        raise JsonlDurabilityError("JSONL max_record_bytes must be a non-negative integer")
+    try:
+        encoded = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeDecodeError) as exc:
+        raise JsonlDurabilityError("JSONL append value is not serializable") from exc
     if len(encoded) - 1 > max_record_bytes:
         raise JsonlDurabilityError(f"new JSONL record exceeds {max_record_bytes} bytes")
     cache_name = index_cache_name(identity)
@@ -1754,16 +2090,14 @@ def append_jsonl_at(root_descriptor: int, journal_name: str, value: dict,
     try:
         journal_identity = _capture_opened_leaf(journal, journal_descriptor)
         _lock_descriptor(journal_descriptor)
+        _revalidate_opened_leaf(journal, journal_descriptor, journal_identity)
         size = os.fstat(journal_descriptor).st_size
+        if size:
+            _revalidate_opened_leaf(journal, journal_descriptor, journal_identity)
         if size and _read_at(journal_descriptor, 1, size - 1) != b"\n":
             raise JsonlDurabilityError(f"unterminated pinned JSONL tail: {journal_name}")
         journal_stat = os.fstat(journal_descriptor)
-        try:
-            metadata = os.stat(cache_name, dir_fd=cache_directory, follow_symlinks=False)
-            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
-                raise JsonlDurabilityError("pinned JSONL verification cache has unsafe type")
-        except FileNotFoundError:
-            pass
+        validate_durable_leaf_at(cache_directory, cache_name, allow_missing=True)
         if hook is not None:
             hook("pre-sqlite-open")
         # Keep SQLite entirely in memory for this descriptor-based path.  sqlite3's filename
@@ -1804,3 +2138,22 @@ def append_jsonl_at(root_descriptor: int, journal_name: str, value: dict,
             connection.close()
         _unlock_descriptor(journal_descriptor)
         os.close(journal_descriptor)
+
+
+def append_jsonl_at(root_descriptor: int, journal_name: str, value: dict,
+                    cache_directory: int, identity: str,
+                    max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES,
+                    dedupe_field: str | None = None,
+                    dedupe_value: object = None,
+                    hook: Callable[[str], None] | None = None) -> AppendOutcome:
+    """Typed boundary for the descriptor-pinned POSIX JSONL append primitive."""
+    try:
+        return _append_jsonl_at(
+            root_descriptor, journal_name, value, cache_directory, identity,
+            max_record_bytes, dedupe_field, dedupe_value, hook,
+        )
+    except JsonlDurabilityError:
+        raise
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, sqlite3.DatabaseError) as exc:
+        raise JsonlDurabilityError(f"pinned JSONL append refused: {exc}") from exc

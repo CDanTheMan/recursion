@@ -7,14 +7,12 @@ import argparse
 import hashlib
 import json
 import os
-import tempfile
 import time
 from pathlib import Path
 
 import assignment as assignment_mod
 from jsonl_durable import (
-    JsonlDurabilityError, pinned_durable_parent, revalidate_durable_parent_pins,
-    validate_durable_leaf,
+    JsonlDurabilityError, atomic_bytes, read_durable_bytes,
 )
 
 
@@ -39,8 +37,15 @@ def iso(epoch: int) -> str:
 
 def load(path: Path) -> dict:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        if not isinstance(path, Path):
+            raise WorkerEvidenceError("run evidence path must be a path")
+        raw = read_durable_bytes(path)
+        if raw is None:
+            raise OSError(f"run evidence is absent: {path}")
+        value = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, JsonlDurabilityError,
+            TypeError, ValueError,
+            OverflowError, RecursionError) as exc:
         raise WorkerEvidenceError(f"run evidence is not valid JSON: {path}") from exc
     if not isinstance(value, dict):
         raise WorkerEvidenceError("run evidence is not an object")
@@ -61,52 +66,44 @@ def load(path: Path) -> dict:
 
 
 def atomic(path: Path, value: dict) -> None:
-    if path.is_symlink() or (path.parent.exists() and path.parent.is_symlink()):
-        raise WorkerEvidenceError(f"refusing symlinked evidence path: {path}")
+    if not isinstance(path, Path) or not isinstance(value, dict):
+        raise WorkerEvidenceError("evidence publication requires a path and object")
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with pinned_durable_parent(path.parent) as pins:
-            validate_durable_leaf(path, allow_missing=True)
-            fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-            try:
-                validate_durable_leaf(Path(name))
-                with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
-                    json.dump(value, out, indent=2, sort_keys=True)
-                    out.write("\n"); out.flush(); os.fsync(out.fileno())
-                if _atomic_publish_hook is not None:
-                    _atomic_publish_hook("pre-replace")
-                revalidate_durable_parent_pins(pins)
-                validate_durable_leaf(Path(name))
-                validate_durable_leaf(path, allow_missing=True)
-                os.replace(name, path)
-                if os.name != "nt":  # directory fds cannot be opened on Windows (same guard as the sibling modules)
-                    dfd = os.open(path.parent, os.O_RDONLY)
-                    try:
-                        os.fsync(dfd)
-                    finally:
-                        os.close(dfd)
-            finally:
-                if os.path.exists(name):
-                    os.unlink(name)
-    except (JsonlDurabilityError, OSError) as exc:
+        encoded = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        atomic_bytes(path, encoded, hook=_atomic_publish_hook)
+    except (JsonlDurabilityError, OSError, TypeError, ValueError, OverflowError,
+            RecursionError, UnicodeEncodeError) as exc:
         raise WorkerEvidenceError(f"evidence publication refused: {path}") from exc
 
 
 def maybe_json(path: str | None) -> object:
-    if not path or not Path(path).is_file():
+    try:
+        if path is None:
+            return {}
+        if not isinstance(path, str):
+            raise WorkerEvidenceError("evidence input path must be a string")
+        if not path:
+            return {}
+        candidate = Path(path)
+        raw = read_durable_bytes(candidate)
+    except (OSError, JsonlDurabilityError, TypeError, ValueError, OverflowError,
+            RecursionError, UnicodeDecodeError) as exc:
+        raise WorkerEvidenceError("evidence input path is invalid") from exc
+    if raw is None:
         return {}
     # The sandbox pre-truncates the hermes usage file before mounting it; a worker that exits
     # without writing leaves it empty. An empty file means "no usage data", the same fact as
     # an absent file — it must not crash `finish` and lose the whole run record.
     try:
-        raw = Path(path).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
+        text = raw.decode("utf-8")
+    except (UnicodeDecodeError, TypeError, ValueError) as exc:
         raise WorkerEvidenceError(f"evidence input is unreadable: {path}") from exc
-    if not raw.strip():
+    if not text.strip():
         return {}
     try:
-        return json.loads(raw)
-    except json.JSONDecodeError as exc:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError) as exc:
         raise WorkerEvidenceError(f"evidence input is not valid JSON: {path}") from exc
 
 
@@ -121,9 +118,14 @@ def assignment_from(path: str, digest: str, task_id: str, role: str = "", run_pa
         if os.path.realpath(path) != os.path.realpath(expected):
             raise SystemExit(2)
     try:
-        value = json.loads(Path(path).read_text(encoding="utf-8"))
+        raw = read_durable_bytes(Path(path))
+        if raw is None:
+            raise OSError(f"assignment is absent: {path}")
+        value = json.loads(raw.decode("utf-8"))
         assignment_mod.validate_assignment(value, require_source_evidence=True)
-    except (OSError, json.JSONDecodeError, assignment_mod.AssignmentError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, JsonlDurabilityError,
+            TypeError, ValueError,
+            OverflowError, RecursionError, assignment_mod.AssignmentError) as exc:
         raise SystemExit(f"worker-evidence: invalid persisted assignment: {exc}") from exc
     if value.get("assignment_digest") != digest or value.get("task_id") != task_id \
             or (role and value.get("role") != role):
@@ -341,6 +343,9 @@ def main() -> int:
         return _main()
     except WorkerEvidenceError as exc:
         raise SystemExit(f"worker-evidence: {exc}") from None
+    except (OSError, JsonlDurabilityError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"worker-evidence: invalid input or durable state: {exc}") from None
 
 
 if __name__ == "__main__":

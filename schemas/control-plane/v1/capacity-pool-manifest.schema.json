@@ -7,7 +7,7 @@
   "required": ["schema_version", "id", "kind", "billing_basis", "provider", "quota", "on_demand"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "type": "integer", "const": 1 },
     "id": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
@@ -29,7 +29,7 @@
           "description": "\"observed\" means the reset/limit is measured from provider behavior; \"declared\" means it is a human-entered policy value."
         },
         "limit": {
-          "anyOf": [{ "type": "null" }, { "type": "number", "minimum": 0 }],
+          "anyOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 1.7976931348623157e308 }],
           "description": "null means no declared ceiling (informational reconciliation only)."
         },
         "unit": {

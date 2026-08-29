@@ -26,13 +26,13 @@ import math
 import os
 import re
 import sys
-import tempfile
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from jsonl_durable import JsonlDurabilityError, append_jsonl, read_jsonl_objects
+from jsonl_durable import (JsonlDurabilityError, append_jsonl, ensure_no_symlink,
+                           read_durable_bytes, read_jsonl_objects)
 import assignment as assignment_mod
 
 PROG = "usage-reconcile"
@@ -98,7 +98,7 @@ def plain_number(value: object) -> float | None:
     if isinstance(value, (int, float)):
         try:
             return float(value)
-        except (OverflowError, ValueError):
+        except (OSError, TypeError, OverflowError, ValueError):
             return None
     return None
 
@@ -113,7 +113,7 @@ def epoch_of(value: object) -> int | None:
         return None
     try:
         return calendar.timegm(time.strptime(text, TS_FORMAT))
-    except ValueError:
+    except (OSError, TypeError, OverflowError, ValueError):
         return None
 
 
@@ -133,6 +133,8 @@ def iso_week_of(value: object) -> str | None:
 # to share a "week" case.
 
 def period_key(period: str, struct: time.struct_time) -> str:
+    if not isinstance(period, str) or period not in {"daily", "weekly", "monthly"}:
+        raise UsageError("capacity-pool quota period is invalid")
     if period == "daily":
         return time.strftime("%Y-%m-%d", struct)
     if period == "monthly":
@@ -154,17 +156,15 @@ def current_iso_week() -> str:
 
 
 def atomic_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(name, str(path))
-    finally:
-        if os.path.exists(name):
-            os.unlink(name)
+        if not isinstance(text, str):
+            raise UsageError("report content must be text")
+        from jsonl_durable import atomic_bytes
+        atomic_bytes(Path(path), text.encode("utf-8"))
+    except JsonlDurabilityError:
+        raise
+    except (OSError, TypeError, ValueError, UnicodeEncodeError) as exc:
+        raise UsageError(f"cannot write report to {path}: {exc}") from exc
 
 
 # --- engine derivation ------------------------------------------------------------------
@@ -187,8 +187,12 @@ def provider_engine_map() -> dict:
         return mapping
     for path in candidates:
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            raw = read_durable_bytes(path)
+            if raw is None:
+                continue
+            data = json.loads(raw.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, JsonlDurabilityError,
+                TypeError, ValueError, OverflowError, RecursionError):
             continue
         if not isinstance(data, dict):
             continue
@@ -280,7 +284,8 @@ def normalize(record: dict, mapping: dict, assignment_root: Path | None = None) 
         provider = nonempty_str(usage.get("provider"))
         basis = usage.get("billing_basis")
     tokens, cost, cost_basis = classify_cost(usage)
-    role = record.get("role") if record.get("role") in ROLES else None
+    role_value = record.get("role")
+    role = role_value if isinstance(role_value, str) and role_value in ROLES else None
     started_at = nonempty_str(record.get("started_at"))
     finished_at = nonempty_str(record.get("finished_at"))
     start_epoch, finish_epoch = epoch_of(started_at), epoch_of(finished_at)
@@ -322,18 +327,30 @@ def evidence_files(runs_dir: Path) -> list:
     """Top-level run records plus one level of per-run evidence subdirectories."""
     found: list[Path] = []
     try:
-        entries = sorted(runs_dir.iterdir())
-    except OSError as exc:
+        ensure_no_symlink(runs_dir)
+        with os.scandir(runs_dir) as iterator:
+            entries = sorted(iterator, key=lambda entry: entry.name)
+    except (OSError, JsonlDurabilityError) as exc:
         raise UsageError(f"cannot read runs directory {runs_dir}: {exc}") from exc
     for entry in entries:
-        if entry.is_file() and entry.suffix == ".json":
-            found.append(entry)
-        elif entry.is_dir():
-            try:
-                found.extend(sorted(child for child in entry.iterdir()
-                                    if child.is_file() and child.suffix == ".json"))
-            except OSError:
-                continue
+        candidate = Path(entry.path)
+        try:
+            ensure_no_symlink(candidate)
+            if entry.is_file(follow_symlinks=False) and candidate.suffix == ".json":
+                found.append(candidate)
+            elif entry.is_dir(follow_symlinks=False):
+                with os.scandir(candidate) as children_iterator:
+                    children = sorted(children_iterator, key=lambda child: child.name)
+                for child in children:
+                    child_path = Path(child.path)
+                    try:
+                        ensure_no_symlink(child_path)
+                        if child.is_file(follow_symlinks=False) and child_path.suffix == ".json":
+                            found.append(child_path)
+                    except (OSError, JsonlDurabilityError):
+                        continue
+        except (OSError, JsonlDurabilityError):
+            continue
     return found
 
 
@@ -348,17 +365,24 @@ def existing_run_ids(ledger: Path) -> set:
 
 def command_ingest(args: argparse.Namespace) -> int:
     runs_dir, ledger = Path(args.runs_dir), Path(args.ledger)
-    if not runs_dir.is_dir():
-        diag(f"runs directory absent: {runs_dir}")
+    try:
+        paths = evidence_files(runs_dir)
+    except UsageError as exc:
+        diag(str(exc))
         return 2
     seen = existing_run_ids(ledger)
     mapping = provider_engine_map()
     counts = {"ingested": 0, "duplicate": 0, "incomplete": 0, "malformed": 0, "non-evidence": 0}
 
-    for path in evidence_files(runs_dir):
+    for path in paths:
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            raw = read_durable_bytes(path)
+            if raw is None:
+                raise OSError(f"evidence file disappeared: {path}")
+            data = json.loads(raw.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, JsonlDurabilityError,
+                TypeError,
+                ValueError, OverflowError, RecursionError):
             counts["malformed"] += 1
             diag(f"skipped unreadable evidence file: {path.name}")
             continue
@@ -620,7 +644,8 @@ def command_rollup(args: argparse.Namespace) -> int:
     try:
         atomic_text(report_path, render_report(rollup, ledger))
         atomic_text(json_path, json.dumps(rollup, indent=2, sort_keys=True) + "\n")
-    except OSError as exc:
+    except (UsageError, JsonlDurabilityError, OSError, TypeError, ValueError,
+            OverflowError, RecursionError, UnicodeDecodeError) as exc:
         diag(f"cannot write report to {out_dir}: {exc}")
         return 1
     print(f"{PROG}: wrote {report_path.as_posix()} ({rollup['totals']['runs']} runs)")
@@ -670,7 +695,8 @@ def command_snapshot(args: argparse.Namespace) -> int:
 
     try:
         payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError,
+            OverflowError, RecursionError):
         diag("openrouter response is not valid JSON")
         return 1
     body = payload.get("data") if isinstance(payload, dict) else None
@@ -708,7 +734,10 @@ def command_quota(args: argparse.Namespace) -> int:
         return 2
 
     period = pool["quota"]["period"]
-    key = args.period or current_period_key(period)
+    key = current_period_key(period)
+    if args.period is not None and args.period != key:
+        diag("--period may only name the current capacity-pool period")
+        return 2
     unit = pool["quota"].get("unit")
     limit = pool["quota"].get("limit")
 
@@ -796,17 +825,19 @@ def parse_args(argv: list) -> argparse.Namespace:
     quota.add_argument("--capacity-pool-dir", default=None)
     quota.add_argument("--ledger", default=str(DEFAULT_LEDGER))
     quota.add_argument("--period", default=None, metavar="PERIOD-KEY",
-                       help="override the computed current period key (for reproducible tests/reports)")
+                       help="optional assertion that the requested period is current")
     return parser.parse_args(argv)
 
 
 def main() -> int:
-    args = parse_args(sys.argv[1:])
-    handlers = {"ingest": command_ingest, "rollup": command_rollup,
-                "openrouter-snapshot": command_snapshot, "quota": command_quota}
     try:
+        args = parse_args(sys.argv[1:])
+        handlers = {"ingest": command_ingest, "rollup": command_rollup,
+                    "openrouter-snapshot": command_snapshot, "quota": command_quota}
         return handlers[args.command](args)
-    except UsageError as exc:
+    except (UsageError, JsonlDurabilityError, assignment_mod.AssignmentError,
+            OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, json.JSONDecodeError) as exc:
         diag(str(exc))
         return 2
 

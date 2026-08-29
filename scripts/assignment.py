@@ -42,7 +42,6 @@ import os
 import re
 import stat
 import sys
-import tempfile
 import time
 from pathlib import Path, PurePosixPath
 
@@ -103,6 +102,10 @@ class AssignmentError(Exception):
     """Invalid inputs, a malformed capacity-pool manifest, or a persistence conflict."""
 
 
+class CapacityPoolNotFound(AssignmentError):
+    """The optional default authority directory has no named pool."""
+
+
 def diag(message: str) -> None:
     print(f"{PROG}: {message}", file=sys.stderr)
 
@@ -116,6 +119,8 @@ def _nonempty(value: object) -> bool:
 
 
 def _split_paths(value: str) -> list[str]:
+    if not isinstance(value, str):
+        raise AssignmentError("allowed_paths must be a comma-separated string")
     return _normalize_allowed_paths(
         [item.strip() for item in value.split(",") if item.strip()]
     )
@@ -165,29 +170,37 @@ def _require_keys(obj: object, keys: set, where: str) -> dict:
 
 
 def validate_capacity_pool(data: object, pool_id: str) -> dict:
+    if not isinstance(pool_id, str):
+        raise AssignmentError("capacity-pool id must be a string")
     obj = _require_keys(data, {"schema_version", "id", "kind", "billing_basis", "provider", "quota", "on_demand"}, "capacity-pool manifest")
+    if not all(isinstance(key, str) for key in obj):
+        raise AssignmentError("capacity-pool manifest keys must be strings")
     extra = obj.keys() - CAPACITY_POOL_TOP_KEYS
     if extra:
         raise AssignmentError(f"capacity-pool manifest has unknown key(s): {', '.join(sorted(extra))}")
-    if obj.get("schema_version") != 1:
+    if not isinstance(obj.get("schema_version"), int) or isinstance(obj.get("schema_version"), bool) \
+            or obj.get("schema_version") != 1:
         raise AssignmentError("capacity-pool manifest schema_version must be 1")
     if obj.get("id") != pool_id:
         raise AssignmentError(f"capacity-pool id {obj.get('id')!r} does not match filename stem {pool_id!r}")
     if not IDENTIFIER_RE.fullmatch(pool_id):
         raise AssignmentError(f"invalid capacity-pool id {pool_id!r}")
-    if obj.get("kind") not in CAPACITY_POOL_KINDS:
+    if not isinstance(obj.get("kind"), str) or obj.get("kind") not in CAPACITY_POOL_KINDS:
         raise AssignmentError(f"capacity-pool kind must be one of {sorted(CAPACITY_POOL_KINDS)}")
-    if obj.get("billing_basis") not in CAPACITY_POOL_BILLING_BASES:
+    if not isinstance(obj.get("billing_basis"), str) \
+            or obj.get("billing_basis") not in CAPACITY_POOL_BILLING_BASES:
         raise AssignmentError(f"capacity-pool billing_basis must be one of {sorted(CAPACITY_POOL_BILLING_BASES)}")
     if not _nonempty(obj.get("provider")) or not PROVIDER_RE.fullmatch(obj["provider"]):
         raise AssignmentError("capacity-pool provider must be a nonempty lowercase-kebab string")
     quota = _require_keys(obj.get("quota"), {"period", "source"}, "capacity-pool quota")
+    if not all(isinstance(key, str) for key in quota):
+        raise AssignmentError("capacity-pool quota keys must be strings")
     extra_quota = quota.keys() - QUOTA_KEYS
     if extra_quota:
         raise AssignmentError(f"capacity-pool quota has unknown key(s): {', '.join(sorted(extra_quota))}")
-    if quota.get("period") not in QUOTA_PERIODS:
+    if not isinstance(quota.get("period"), str) or quota.get("period") not in QUOTA_PERIODS:
         raise AssignmentError(f"capacity-pool quota.period must be one of {sorted(QUOTA_PERIODS)}")
-    if quota.get("source") not in QUOTA_SOURCES:
+    if not isinstance(quota.get("source"), str) or quota.get("source") not in QUOTA_SOURCES:
         raise AssignmentError(f"capacity-pool quota.source must be one of {sorted(QUOTA_SOURCES)}")
     limit = quota.get("limit")
     if limit is not None:
@@ -201,33 +214,42 @@ def validate_capacity_pool(data: object, pool_id: str) -> dict:
         if not valid_limit:
             raise AssignmentError("capacity-pool quota.limit must be null or a non-negative number")
     unit = quota.get("unit")
-    if unit is not None and not _nonempty(unit):
+    if unit is not None and (not isinstance(unit, str) or len(unit) < 1):
         raise AssignmentError("capacity-pool quota.unit must be null or a nonempty string")
     if not isinstance(obj.get("on_demand"), bool):
         raise AssignmentError("capacity-pool on_demand must be a boolean")
     roles = obj.get("roles")
-    if roles is not None and (not isinstance(roles, list) or not all(isinstance(r, str) and r for r in roles)):
+    if roles is not None and (not isinstance(roles, list) or not roles
+                              or not all(isinstance(r, str) and len(r) >= 1 for r in roles)):
         raise AssignmentError("capacity-pool roles must be null or a list of nonempty strings")
     host_id = obj.get("host_id")
-    if host_id is not None and not _nonempty(host_id):
+    if host_id is not None and (not isinstance(host_id, str) or len(host_id) < 1):
         raise AssignmentError("capacity-pool host_id must be null or a nonempty string")
     fallback = obj.get("fallback_policy")
-    if fallback is not None and fallback not in FALLBACK_POLICIES:
+    if fallback is not None and (not isinstance(fallback, str) or fallback not in FALLBACK_POLICIES):
         raise AssignmentError(f"capacity-pool fallback_policy must be null or one of {sorted(FALLBACK_POLICIES)}")
     return obj
 
 
 def load_capacity_pool(pool_dir: Path, pool_id: str) -> dict:
-    if not IDENTIFIER_RE.fullmatch(pool_id or ""):
+    if not isinstance(pool_id, str) or not IDENTIFIER_RE.fullmatch(pool_id):
         raise AssignmentError(f"invalid capacity-pool id {pool_id!r}")
-    path = pool_dir / f"{pool_id}.json"
     try:
-        raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
+        path = Path(pool_dir) / f"{pool_id}.json"
+    except (TypeError, ValueError) as exc:
+        raise AssignmentError("capacity-pool directory is not a path") from exc
+    try:
+        raw_bytes = jsonl_durable.read_durable_bytes(path)
+        if raw_bytes is None:
+            raise CapacityPoolNotFound(f"capacity-pool manifest not found: {path}")
+        raw = raw_bytes.decode("utf-8")
+    except CapacityPoolNotFound:
+        raise
+    except (OSError, UnicodeDecodeError, jsonl_durable.JsonlDurabilityError) as exc:
         raise AssignmentError(f"capacity-pool manifest not found: {path} ({exc})") from exc
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, TypeError, ValueError, RecursionError, OverflowError) as exc:
         raise AssignmentError(f"capacity-pool manifest {path} is not valid JSON: {exc}") from exc
     return validate_capacity_pool(data, pool_id)
 
@@ -237,10 +259,14 @@ def engine_contract_attribution(engine: str) -> tuple[str | None, str | None]:
         return "anthropic-claude-code", "flat-subscription"
     path = Path(os.environ.get("RECURSION_ENGINE_DIR") or Path(__file__).resolve().parent / "engines") / f"{engine}.json"
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        raw = jsonl_durable.read_durable_bytes(path)
+        if raw is None:
+            return None, None
+        data = json.loads(raw.decode("utf-8"))
         billing = data.get("billing") if isinstance(data, dict) else None
         if isinstance(billing, dict): return billing.get("provider"), billing.get("basis")
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, jsonl_durable.JsonlDurabilityError,
+            json.JSONDecodeError, TypeError, ValueError, OverflowError, RecursionError):
         pass
     return None, None
 
@@ -293,8 +319,13 @@ def canonical_source_evidence(value: object, repository: str, branch: str, sha: 
 # --- assignment resolution ----------------------------------------------------------------
 
 def canonical_digest(value: dict) -> str:
+    if not isinstance(value, dict):
+        raise AssignmentError("assignment digest input must be an object")
     payload = {key: item for key, item in value.items() if key != "assignment_digest"}
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    try:
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeEncodeError) as exc:
+        raise AssignmentError("assignment digest input is not serializable") from exc
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -310,55 +341,63 @@ def resolve_assignment(
     integration_branch: str = "recursion/integration",
     created_at: str | None = None,
 ) -> dict:
-    if not IDENTIFIER_RE.fullmatch(task_id or ""):
+    if not isinstance(task_id, str) or not IDENTIFIER_RE.fullmatch(task_id):
         raise AssignmentError(f"invalid task_id {task_id!r}")
-    if not IDENTIFIER_RE.fullmatch(project_id or ""):
+    if not isinstance(project_id, str) or not IDENTIFIER_RE.fullmatch(project_id):
         raise AssignmentError(f"invalid project_id {project_id!r}")
-    if role not in ROLES:
+    if not isinstance(role, str) or role not in ROLES:
         raise AssignmentError(f"role must be one of {sorted(ROLES)}")
     if not _nonempty(source_repository):
         raise AssignmentError("source_repository must be a nonempty string")
     source_branch = canonical_branch(source_branch, "source_branch")
-    if not SHA_RE.fullmatch(source_sha or ""):
+    if not isinstance(source_sha, str) or not SHA_RE.fullmatch(source_sha):
         raise AssignmentError(f"invalid source_sha {source_sha!r}")
-    if seed_manifest_digest is not None and not DIGEST_RE.fullmatch(seed_manifest_digest):
+    if seed_manifest_digest is not None and (
+            not isinstance(seed_manifest_digest, str) or not DIGEST_RE.fullmatch(seed_manifest_digest)):
         raise AssignmentError(f"invalid seed_manifest_digest {seed_manifest_digest!r}")
-    if not (engine in engine_contract.BUILTIN_ENGINES or engine_contract.plugin_engine_name_ok(engine)):
+    if not isinstance(engine, str) or not (
+            engine in engine_contract.BUILTIN_ENGINES or engine_contract.plugin_engine_name_ok(engine)):
         raise AssignmentError(f"invalid engine {engine!r}")
     if not _nonempty(provider) or not PROVIDER_RE.fullmatch(provider):
         raise AssignmentError(f"invalid provider {provider!r}")
     pool = None
     if capacity_pool is not None:
-        if not IDENTIFIER_RE.fullmatch(capacity_pool):
+        if not isinstance(capacity_pool, str) or not IDENTIFIER_RE.fullmatch(capacity_pool):
             raise AssignmentError(f"invalid capacity_pool {capacity_pool!r}")
         # Referencing a pool must resolve; a caller that names one is asserting it is real.
         pool = load_capacity_pool(capacity_pool_dir or capacity_pool_dir_default(), capacity_pool)
     if model is not None and not _nonempty(model):
         raise AssignmentError("model must be null or a nonempty string")
-    params = dict(model_parameters or {})
+    if model_parameters is not None and not isinstance(model_parameters, dict):
+        raise AssignmentError("model_parameters must be an object")
+    params = dict(model_parameters) if model_parameters is not None else {}
     for key, item in params.items():
-        if not MODEL_PARAM_KEY_RE.fullmatch(key) or not isinstance(item, str):
+        if not isinstance(key, str) or not MODEL_PARAM_KEY_RE.fullmatch(key) \
+                or not isinstance(item, str):
             raise AssignmentError(f"invalid model parameter {key!r}")
     if not _nonempty(host):
         raise AssignmentError("host must be a nonempty string")
-    if sandbox_profile not in SANDBOX_PROFILES:
+    if not isinstance(sandbox_profile, str) or sandbox_profile not in SANDBOX_PROFILES:
         raise AssignmentError(f"sandbox_profile must be one of {sorted(SANDBOX_PROFILES)}")
-    if network_profile not in NETWORK_PROFILES:
+    if not isinstance(network_profile, str) or network_profile not in NETWORK_PROFILES:
         raise AssignmentError(f"network_profile must be one of {sorted(NETWORK_PROFILES)}")
     normalized_allowed_paths = _normalize_allowed_paths(allowed_paths)
-    if gate_digest is not None and not DIGEST_RE.fullmatch(gate_digest):
+    if gate_digest is not None and (
+            not isinstance(gate_digest, str) or not DIGEST_RE.fullmatch(gate_digest)):
         raise AssignmentError(f"invalid gate_digest {gate_digest!r}")
-    if not SLUG_RE.fullmatch(publication_policy or ""):
+    if not isinstance(publication_policy, str) or not SLUG_RE.fullmatch(publication_policy):
         raise AssignmentError(f"invalid publication_policy {publication_policy!r}")
     default_branch = canonical_branch(default_branch, "default_branch")
     integration_branch = canonical_branch(integration_branch, "integration_branch")
     if default_branch == integration_branch:
         raise AssignmentError("default_branch and integration_branch must differ")
+    if source_evidence is None:
+        source_evidence = {"repository": source_repository, "branch": source_branch,
+                           "sha": source_sha, "verified": True}
     source_evidence = canonical_source_evidence(
-        source_evidence or {"repository": source_repository, "branch": source_branch,
-                            "sha": source_sha, "verified": True},
-        source_repository, source_branch, source_sha)
-    if billing_basis is not None and billing_basis not in CAPACITY_POOL_BILLING_BASES:
+        source_evidence, source_repository, source_branch, source_sha)
+    if billing_basis is not None and (
+            not isinstance(billing_basis, str) or billing_basis not in CAPACITY_POOL_BILLING_BASES):
         raise AssignmentError(f"invalid billing_basis {billing_basis!r}")
     engine_provider, engine_basis = engine_contract_attribution(engine)
     if engine_provider is not None and engine_provider != provider:
@@ -380,6 +419,14 @@ def resolve_assignment(
         billing_basis = pool_basis
     if billing_basis == "metered" and not metered_approved:
         raise AssignmentError("metered assignment requires explicit approval")
+
+    if created_at is not None and not isinstance(created_at, str):
+        raise AssignmentError("created_at must be a canonical UTC timestamp string")
+    if created_at is not None:
+        try:
+            datetime.datetime.strptime(created_at, TS_FORMAT)
+        except ValueError as exc:
+            raise AssignmentError("created_at is not a canonical UTC timestamp") from exc
 
     value = {
         "schema_version": SCHEMA_VERSION,
@@ -406,7 +453,7 @@ def resolve_assignment(
         "publication_policy": publication_policy,
         "default_branch": default_branch,
         "integration_branch": integration_branch,
-        "created_at": created_at or now_iso(),
+        "created_at": created_at if created_at is not None else now_iso(),
     }
     value["assignment_digest"] = canonical_digest(value)
     return value
@@ -422,11 +469,17 @@ def assignment_path(root: Path, task_id: str, digest: str) -> Path:
     if not isinstance(task_id, str) or not isinstance(digest, str) \
             or not IDENTIFIER_RE.fullmatch(task_id) or not DIGEST_RE.fullmatch(digest):
         raise AssignmentError("assignment path identity is not canonical")
-    return root / task_id / f"{digest}.json"
+    try:
+        return Path(root) / task_id / f"{digest}.json"
+    except (TypeError, ValueError) as exc:
+        raise AssignmentError("assignment root is not a path") from exc
 
 
 def index_path(root: Path) -> Path:
-    return root / "index.jsonl"
+    try:
+        return Path(root) / "index.jsonl"
+    except (TypeError, ValueError) as exc:
+        raise AssignmentError("assignment root is not a path") from exc
 
 
 def _assignment_persistence_hook(stage: str) -> None:
@@ -452,25 +505,18 @@ def _ensure_output_path_safe(path: Path) -> None:
 
 
 def _atomic_write(path: Path, text: str) -> None:
-    _ensure_output_path_safe(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _ensure_output_path_safe(path)
-    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(name, str(path))
-        if os.name != "nt":
-            dfd = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(dfd)
-            finally:
-                os.close(dfd)
-    finally:
-        if os.path.exists(name):
-            os.unlink(name)
+        if not isinstance(text, str):
+            raise AssignmentError("assignment output must be text")
+        _ensure_output_path_safe(Path(path))
+        jsonl_durable.atomic_bytes(
+            Path(path), text.encode("utf-8"), hook=_assignment_persistence_hook
+        )
+    except jsonl_durable.JsonlDurabilityError as exc:
+        raise AssignmentError(f"assignment output publication refused: {path}") from exc
+    except (OSError, UnicodeEncodeError, TypeError, ValueError, OverflowError,
+            RecursionError) as exc:
+        raise AssignmentError(f"assignment output publication refused: {path}") from exc
 
 
 def _posix_open_directory(path: Path) -> int:
@@ -510,8 +556,11 @@ def _read_at_directory(directory: int, name: str) -> bytes | None:
     except OSError as exc:
         raise AssignmentError(f"cannot open assignment record {name!r}: {exc}") from exc
     try:
+        pinned_path = jsonl_durable._pinned_fd_path(directory, name)
+        identity = jsonl_durable._capture_opened_leaf(pinned_path, descriptor)
         chunks: list[bytes] = []
         while True:
+            jsonl_durable._revalidate_opened_leaf(pinned_path, descriptor, identity)
             chunk = os.read(descriptor, 1024 * 1024)
             if not chunk:
                 return b"".join(chunks)
@@ -538,6 +587,7 @@ def _open_private_at(directory: int, prefix: str) -> tuple[int, str]:
 
 def _persist_record_posix(task_directory: int, digest: str, encoded: bytes) -> None:
     final_name = f"{digest}.json"
+    jsonl_durable.validate_durable_leaf_at(task_directory, final_name, allow_missing=True)
     existing = _read_at_directory(task_directory, final_name)
     if existing is not None:
         if existing != encoded:
@@ -545,14 +595,17 @@ def _persist_record_posix(task_directory: int, digest: str, encoded: bytes) -> N
         return
     _assignment_persistence_hook("pre-mkstemp")
     descriptor, temporary_name = _open_private_at(task_directory, f".{final_name}.")
+    temporary = jsonl_durable._pinned_fd_path(task_directory, temporary_name)
     try:
-        written = memoryview(encoded)
-        while written:
-            count = os.write(descriptor, written)
-            if count <= 0:
-                raise OSError("assignment write made no progress")
-            written = written[count:]
+        temporary_identity = jsonl_durable._capture_opened_leaf(temporary, descriptor)
+        _assignment_persistence_hook("pre-record-write")
+        jsonl_durable._write_all(
+            descriptor, encoded, leaf_path=temporary, leaf_identity=temporary_identity
+        )
         os.fsync(descriptor)
+        _assignment_persistence_hook("pre-record-publish")
+        jsonl_durable._revalidate_opened_leaf(temporary, descriptor, temporary_identity)
+        jsonl_durable.validate_durable_leaf_at(task_directory, final_name, allow_missing=True)
         try:
             os.link(
                 temporary_name, final_name,
@@ -679,7 +732,11 @@ if os.name == "nt":
 
     def _win_fd(handle: int, flags: int) -> int:
         import msvcrt
-        return msvcrt.open_osfhandle(handle, flags)
+        try:
+            return msvcrt.open_osfhandle(handle, flags)
+        except (OSError, TypeError, ValueError) as exc:
+            _KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+            raise AssignmentError("cannot adopt pinned Windows file handle") from exc
 
     def _win_file_exists_error(exc: OSError) -> bool:
         return exc.errno in (80, 183) or getattr(exc, "winerror", None) in (80, 183)
@@ -694,12 +751,20 @@ if os.name == "nt":
             raise
         descriptor = _win_fd(handle, os.O_RDONLY | getattr(os, "O_BINARY", 0))
         try:
-            return os.read(descriptor, 64 * 1024 * 1024)
+            identity = jsonl_durable._capture_opened_leaf(path, descriptor)
+            chunks: list[bytes] = []
+            while True:
+                jsonl_durable._revalidate_opened_leaf(path, descriptor, identity)
+                chunk = os.read(descriptor, 1024 * 1024)
+                if not chunk:
+                    return b"".join(chunks)
+                chunks.append(chunk)
         finally:
             os.close(descriptor)
 
     def _persist_record_windows(task_path: Path, digest: str, encoded: bytes) -> None:
         final = task_path / f"{digest}.json"
+        jsonl_durable.validate_durable_leaf(final, allow_missing=True)
         existing = _win_read_file(final)
         if existing is not None:
             if existing != encoded:
@@ -720,17 +785,17 @@ if os.name == "nt":
         if handle is None or temporary is None:
             raise AssignmentError("could not allocate a unique Windows assignment temporary")
         descriptor = _win_fd(handle, os.O_WRONLY | getattr(os, "O_BINARY", 0))
+        handle = None
         try:
-            with os.fdopen(descriptor, "wb", closefd=True) as output:
-                output.write(encoded)
-                output.flush()
-                os.fsync(output.fileno())
-        except BaseException:
-            try:
-                _KERNEL32.DeleteFileW(str(temporary))
-            finally:
-                raise
-        try:
+            temporary_identity = jsonl_durable._capture_opened_leaf(temporary, descriptor)
+            _assignment_persistence_hook("pre-record-write")
+            jsonl_durable._write_all(
+                descriptor, encoded, leaf_path=temporary, leaf_identity=temporary_identity
+            )
+            os.fsync(descriptor)
+            _assignment_persistence_hook("pre-record-publish")
+            jsonl_durable._revalidate_opened_leaf(temporary, descriptor, temporary_identity)
+            jsonl_durable.validate_durable_leaf(final, allow_missing=True)
             if not _KERNEL32.CreateHardLinkW(str(final), str(temporary), None):
                 error = ctypes.get_last_error()
                 if error not in (80, 183):  # ERROR_FILE_EXISTS / ERROR_ALREADY_EXISTS
@@ -738,13 +803,24 @@ if os.name == "nt":
                 existing = _win_read_file(final)
                 if existing != encoded:
                     raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
+        except BaseException:
+            try:
+                _KERNEL32.DeleteFileW(str(temporary))
+            finally:
+                raise
         finally:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
             # Publication can fail after the private file is completely durable (for
             # example, if an attacker races a junction into the immutable leaf).  The
             # task directory is handle-pinned without delete sharing, so this pathname
             # still names our private temporary and is safe to remove on every exit.
             if not _KERNEL32.DeleteFileW(str(temporary)):
-                raise OSError(ctypes.get_last_error(), "cannot remove Windows assignment temporary")
+                error = ctypes.get_last_error()
+                if error not in (2, 3):  # already removed by the failed publication path
+                    raise OSError(error, "cannot remove Windows assignment temporary")
 
 
 def _assignment_index_record(value: dict) -> dict:
@@ -773,14 +849,7 @@ def _persist_assignment_posix(root: Path, value: dict, encoded: bytes) -> Path:
             dir_fd=root_fd,
         )
 
-        try:
-            descriptor = os.open(
-                "index.jsonl", os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=root_fd
-            )
-        except FileNotFoundError:
-            pass
-        else:
-            os.close(descriptor)
+        jsonl_durable.validate_durable_leaf_at(root_fd, "index.jsonl", allow_missing=True)
 
         cache_name = ".jsonl-index"
         try:
@@ -794,15 +863,9 @@ def _persist_assignment_posix(root: Path, value: dict, encoded: bytes) -> Path:
             dir_fd=root_fd,
         )
         identity = f"assignment-root/{value['task_id']}/index.jsonl"
-        try:
-            descriptor = os.open(
-                jsonl_durable.index_cache_name(identity),
-                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=cache_fd
-            )
-        except FileNotFoundError:
-            pass
-        else:
-            os.close(descriptor)
+        jsonl_durable.validate_durable_leaf_at(
+            cache_fd, jsonl_durable.index_cache_name(identity), allow_missing=True
+        )
 
         _persist_record_posix(task_fd, value["assignment_digest"], encoded)
         _assignment_persistence_hook("pre-index-open")
@@ -815,7 +878,8 @@ def _persist_assignment_posix(root: Path, value: dict, encoded: bytes) -> Path:
         _assert_posix_pin(root, root_fd, "root")
         _assert_posix_pin(root / task_id, task_fd, "task directory")
         return assignment_path(root, value["task_id"], value["assignment_digest"])
-    except (OSError, jsonl_durable.JsonlDurabilityError) as exc:
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, jsonl_durable.JsonlDurabilityError) as exc:
         raise AssignmentError(f"pinned assignment persistence failed: {exc}") from exc
     finally:
         if cache_fd is not None:
@@ -838,17 +902,26 @@ def _persist_assignment_windows(root: Path, value: dict, encoded: bytes) -> Path
         cache = root / ".jsonl-index"
         cache_pins = _win_pin_directory(cache)
         index = root / "index.jsonl"
-        index_handle = _win_open_file(index, _OPEN_ALWAYS)
+        index_native = _win_open_file(index, _OPEN_ALWAYS)
+        index_handle = _win_fd(index_native, os.O_RDWR | getattr(os, "O_BINARY", 0))
+        index_identity = jsonl_durable._capture_opened_leaf(index, index_handle)
         identity = f"assignment-root/{value['task_id']}/index.jsonl"
         cache_file = cache / jsonl_durable.index_cache_name(identity)
-        # Pin the cache leaf for the whole SQLite transaction.  The durability layer's
-        # Windows in-place rebuild never replaces this handle-protected leaf.
-        cache_handle = _win_open_file(cache_file, _OPEN_ALWAYS)
+        # Pin and revalidate the cache leaf for the whole SQLite transaction.  The
+        # durability layer's Windows in-place rebuild never replaces this handle-protected
+        # leaf.
+        cache_native = _win_open_file(cache_file, _OPEN_ALWAYS)
+        cache_handle = _win_fd(cache_native, os.O_RDWR | getattr(os, "O_BINARY", 0))
+        cache_identity = jsonl_durable._capture_opened_leaf(cache_file, cache_handle)
+        jsonl_durable._revalidate_opened_leaf(index, index_handle, index_identity)
+        jsonl_durable._revalidate_opened_leaf(cache_file, cache_handle, cache_identity)
         _persist_record_windows(task, value["assignment_digest"], encoded)
         _assignment_persistence_hook("pre-index-open")
         for attempt in range(8):
             try:
                 with jsonl_durable.durable_lock(index):
+                    jsonl_durable._revalidate_opened_leaf(index, index_handle, index_identity)
+                    jsonl_durable._revalidate_opened_leaf(cache_file, cache_handle, cache_identity)
                     jsonl_durable.append_jsonl(
                         index, _assignment_index_record(value),
                         dedupe_field="assignment_digest", dedupe_value=value["assignment_digest"],
@@ -861,24 +934,36 @@ def _persist_assignment_windows(root: Path, value: dict, encoded: bytes) -> Path
                     raise
                 time.sleep(0.01)
         return assignment_path(root, value["task_id"], value["assignment_digest"])
-    except (OSError, jsonl_durable.JsonlDurabilityError) as exc:
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, jsonl_durable.JsonlDurabilityError) as exc:
         raise AssignmentError(f"pinned Windows assignment persistence failed: {exc}") from exc
     finally:
-        for handle in (index_handle, cache_handle):
-            if handle is not None:
-                _KERNEL32.CloseHandle(ctypes.c_void_p(handle))
+        for descriptor in (index_handle, cache_handle):
+            if descriptor is not None:
+                os.close(descriptor)
         for pins in (cache_pins, task_pins, root_pins):
             for _, handle in reversed(pins):
                 _KERNEL32.CloseHandle(ctypes.c_void_p(handle))
 
 
-def persist_assignment(root: Path, value: dict) -> Path:
-    validate_assignment(value, require_source_evidence=True)
-    root = Path(root)
-    encoded = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    if os.name == "nt":
-        return _persist_assignment_windows(root, value, encoded)
-    return _persist_assignment_posix(root, value, encoded)
+def persist_assignment(root: Path, value: dict, *, capacity_pool_dir: Path | None = None) -> Path:
+    validate_assignment(
+        value, require_source_evidence=True, capacity_pool_dir=capacity_pool_dir
+    )
+    try:
+        root = Path(root)
+        encoded = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeEncodeError) as exc:
+        raise AssignmentError("assignment is not serializable") from exc
+    try:
+        if os.name == "nt":
+            return _persist_assignment_windows(root, value, encoded)
+        return _persist_assignment_posix(root, value, encoded)
+    except AssignmentError:
+        raise
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError) as exc:
+        raise AssignmentError(f"assignment persistence refused: {exc}") from exc
 
 
 def _is_reparse_point(path: Path) -> bool:
@@ -913,34 +998,26 @@ def load_assignment(root: Path, task_id: str, digest: str) -> dict | None:
     try:
         root = Path(root)
         path = assignment_path(root, task_id, digest)
-    except (AssignmentError, TypeError, ValueError):
+        raw = jsonl_durable.read_durable_bytes(path)
+    except (AssignmentError, jsonl_durable.JsonlDurabilityError, TypeError, ValueError,
+            OSError, OverflowError, RecursionError, UnicodeDecodeError):
         return None
-    task_path = root / task_id
-    if _path_contains_reparse_point(root) or _path_contains_reparse_point(task_path) \
-            or _path_contains_reparse_point(path):
-        return None
-    try:
-        root_resolved = root.resolve(strict=True)
-        path_resolved = path.resolve(strict=True)
-        path_resolved.relative_to(root_resolved)
-        root_metadata = os.lstat(root)
-        task_metadata = os.lstat(task_path)
-        leaf_metadata = os.lstat(path)
-    except (OSError, RuntimeError, ValueError):
-        return None
-    if not stat.S_ISDIR(root_metadata.st_mode) or not stat.S_ISDIR(task_metadata.st_mode) \
-            or not stat.S_ISREG(leaf_metadata.st_mode) or _is_reparse_point(path):
+    if raw is None:
         return None
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        value = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError,
+            OverflowError, RecursionError):
         return None
     if not isinstance(value, dict):
         return None
     return value
 
 
-def validate_assignment(value: object, require_source_evidence: bool = False) -> dict:
+def validate_assignment(value: object, require_source_evidence: bool = False,
+                        capacity_pool_dir: Path | None = None) -> dict:
+    if not isinstance(require_source_evidence, bool):
+        raise AssignmentError("require_source_evidence must be boolean")
     if not isinstance(value, dict):
         raise AssignmentError("assignment is not an object")
     required = {"schema_version", "task_id", "project_id", "role", "source_repository", "source_branch",
@@ -982,18 +1059,46 @@ def validate_assignment(value: object, require_source_evidence: bool = False) ->
     provider = value.get("provider")
     if not isinstance(provider, str) or not PROVIDER_RE.fullmatch(provider):
         raise AssignmentError("assignment provider is invalid")
+    engine_provider, engine_basis = engine_contract_attribution(engine)
+    if engine_provider is not None and engine_provider != provider:
+        raise AssignmentError("assignment provider does not match engine manifest")
     capacity_pool = value.get("capacity_pool")
     if capacity_pool is not None and (
             not isinstance(capacity_pool, str) or not IDENTIFIER_RE.fullmatch(capacity_pool)):
         raise AssignmentError("assignment capacity_pool is invalid")
     billing_basis = value.get("billing_basis")
-    if billing_basis not in (None, *CAPACITY_POOL_BILLING_BASES):
+    if billing_basis is not None and (
+            not isinstance(billing_basis, str) or billing_basis not in CAPACITY_POOL_BILLING_BASES):
         raise AssignmentError("assignment billing_basis is invalid")
+    if billing_basis is not None and engine_basis is not None and billing_basis != engine_basis:
+        raise AssignmentError("assignment billing_basis does not match engine manifest")
     metered_approved = value.get("metered_approved")
     if "metered_approved" in value and not isinstance(metered_approved, bool):
         raise AssignmentError("assignment metered_approved must be boolean")
     if billing_basis == "metered" and metered_approved is not True:
         raise AssignmentError("metered assignment is not approved")
+
+    if capacity_pool is not None:
+        pool_dir = capacity_pool_dir if capacity_pool_dir is not None else capacity_pool_dir_default()
+        try:
+            pool = load_capacity_pool(pool_dir, capacity_pool)
+        except CapacityPoolNotFound:
+            # A validator without the authority directory can still validate an assignment
+            # produced by a caller-owned test/controller registry.  When the directory is
+            # explicitly supplied, a missing authority is a hard refusal; malformed
+            # authority is always a hard refusal.
+            if capacity_pool_dir is not None:
+                raise
+        else:
+            if pool["provider"] != provider:
+                raise AssignmentError("capacity pool provider does not match assignment provider")
+            roles = pool.get("roles")
+            if roles is not None and value.get("role") not in roles:
+                raise AssignmentError("assignment role is not allowed by capacity pool")
+            if pool.get("host_id") is not None and pool["host_id"] != value.get("host"):
+                raise AssignmentError("assignment host does not match capacity pool")
+            if billing_basis != pool["billing_basis"]:
+                raise AssignmentError("assignment billing_basis does not match capacity pool")
     model = value.get("model")
     if model is not None and not _nonempty(model):
         raise AssignmentError("assignment model must be null or a nonempty string")
@@ -1044,6 +1149,9 @@ def validate_assignment(value: object, require_source_evidence: bool = False) ->
 
 def assignment_projection(value: dict) -> dict:
     """Return the complete, exact run-evidence projection of an assignment."""
+    if not isinstance(value, dict):
+        raise AssignmentError("assignment projection requires an object")
+    validate_assignment(value, require_source_evidence=True)
     return {key: value[key] for key in ASSIGNMENT_PROJECTION_FIELDS}
 
 
@@ -1051,6 +1159,7 @@ def require_assignment_projection(run: object, persisted: dict) -> dict:
     """Require both nested and top-level run attribution to equal the persisted record."""
     if not isinstance(run, dict):
         raise AssignmentError("run evidence is not an object")
+    validate_assignment(persisted, require_source_evidence=True)
     expected = assignment_projection(persisted)
     nested = run.get("assignment")
     if nested != expected:
@@ -1064,6 +1173,8 @@ def require_assignment_projection(run: object, persisted: dict) -> dict:
 # --- CLI --------------------------------------------------------------------------------
 
 def _parse_model_params(pairs: list[str]) -> dict:
+    if not isinstance(pairs, list) or not all(isinstance(item, str) for item in pairs):
+        raise AssignmentError("--model-param values must be strings")
     params: dict[str, str] = {}
     for item in pairs:
         key, sep, value = item.partition("=")
@@ -1078,6 +1189,14 @@ def command_resolve(args: argparse.Namespace) -> int:
     pool_dir = Path(args.capacity_pool_dir) if args.capacity_pool_dir else capacity_pool_dir()
     try:
         params = _parse_model_params(args.model_param)
+        source_evidence = None
+        if args.source_evidence_file:
+            raw_source_evidence = jsonl_durable.read_durable_bytes(
+                Path(args.source_evidence_file)
+            )
+            if raw_source_evidence is None:
+                raise AssignmentError("source evidence file is absent")
+            source_evidence = json.loads(raw_source_evidence.decode("utf-8"))
         value = resolve_assignment(
             task_id=args.task_id, project_id=args.project_id, role=args.role,
             source_repository=args.source_repository, source_branch=args.source_branch,
@@ -1087,20 +1206,21 @@ def command_resolve(args: argparse.Namespace) -> int:
             sandbox_profile=args.sandbox_profile, network_profile=args.network_profile,
             allowed_paths=_split_paths(args.allowed_paths), gate_digest=args.gate_digest,
             publication_policy=args.publication_policy, capacity_pool_dir=pool_dir,
-            source_evidence=(json.loads(Path(args.source_evidence_file).read_text(encoding="utf-8"))
-                             if args.source_evidence_file else None),
+            source_evidence=source_evidence,
             billing_basis=args.billing_basis, metered_approved=args.metered_approved,
             default_branch=args.default_branch, integration_branch=args.integration_branch,
         )
         if not args.no_persist:
             persist_assignment(root, value)
-    except (AssignmentError, OSError, json.JSONDecodeError) as exc:
+    except (AssignmentError, OSError, json.JSONDecodeError, TypeError, ValueError,
+            OverflowError, RecursionError, UnicodeDecodeError) as exc:
         diag(str(exc))
         return 2
     if args.out:
         try:
             _atomic_write(Path(args.out), json.dumps(value, indent=2, sort_keys=True) + "\n")
-        except OSError as exc:
+        except (AssignmentError, OSError, TypeError, ValueError, OverflowError,
+                RecursionError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             diag(f"failed to write --out copy: {exc}")
             return 2
     print(json.dumps(value, sort_keys=True))
@@ -1151,9 +1271,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def main() -> int:
-    args = parse_args(sys.argv[1:])
-    handlers = {"resolve": command_resolve, "show": command_show}
-    return handlers[args.command](args)
+    try:
+        args = parse_args(sys.argv[1:])
+        handlers = {"resolve": command_resolve, "show": command_show}
+        return handlers[args.command](args)
+    except (AssignmentError, OSError, json.JSONDecodeError, TypeError, ValueError,
+            OverflowError, RecursionError, UnicodeDecodeError) as exc:
+        diag(str(exc))
+        return 2
 
 
 if __name__ == "__main__":
