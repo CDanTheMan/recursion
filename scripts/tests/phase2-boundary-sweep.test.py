@@ -9,7 +9,7 @@ import importlib.util
 import itertools
 import json
 import os
-import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -31,9 +31,8 @@ SCRATCH_BASE = Path(os.environ.get(
 GATE = SOURCE / "scripts" / "validate-gate.py"
 SCHEMA_PATH = SOURCE / "schemas" / "control-plane" / "v2" / "repository-contract.schema.json"
 
-# Git accepts these punctuation characters in a ref after the wildcard is replaced by a
-# non-special probe.  They are literal characters to fnmatch, not shell syntax, so the public
-# schema must describe them instead of silently making the runtime's acceptance surface wider.
+# These are punctuation boundary patterns for the external namespace.  The runtime and schema
+# must agree with actual branch creation on the supported Windows host, not only check-ref-format.
 EXTERNAL_PATTERN_RECONCILIATION = (
     "cursor/!*", 'cursor/"*', "cursor/#*", "cursor/$*", "cursor/%*", "cursor/&*",
     "cursor/'*", "cursor/(*", "cursor/)*", "cursor/+*", "cursor/,*", "cursor/;*",
@@ -42,6 +41,10 @@ EXTERNAL_PATTERN_RECONCILIATION = (
     "!cursor/*", '"cursor/*', "#cursor/*", "$cursor/*", "%cursor/*", "&cursor/*",
     "'cursor/*", "(cursor/*", ")cursor/*", "*cursor/*", "+cursor/*", ",cursor/*",
 )
+
+WINDOWS_UNREALIZABLE_EXTERNAL_PATTERNS = frozenset({
+    'cursor/"*', "cursor/<*", "cursor/>*", "cursor/|*", '"cursor/*',
+})
 
 # The stock Draft 2020-12 validator intentionally remains authoritative.  These cases are
 # schema-only because the standard schema cannot express the corresponding runtime relation.
@@ -53,6 +56,20 @@ SCHEMA_ONLY_JUSTIFICATIONS = {
     "profile-acceptance-differs": "JSON Schema cannot join gate_commands and compare the result to acceptance.",
     "profile-gate-files-name-different-worker": "JSON Schema cannot derive the worker executable from acceptance and compare it to gate_files.",
     "profile-worker-program-undeclared": "JSON Schema cannot require every worker executable in a command string to occur in gate_files.",
+}
+
+# These boundary cases were found by the expanded generated corpus.  They are expressible by
+# the standard schema and therefore must agree with runtime admission, rather than becoming new
+# permanent schema-only exceptions.
+SCHEMA_EXPRESSIBLE_CASES = {
+    "task-pattern-trailing-slash",
+    "profile-acceptance-test-n",
+    "profile-acceptance-comparison",
+    "profile-acceptance-absolute-operand",
+    "profile-acceptance-traversal",
+    "profile-acceptance-glob",
+    "profile-acceptance-dynamic-python",
+    "profile-acceptance-option-bash",
 }
 
 TRAILING_SLASH_PATTERNS = (
@@ -74,12 +91,53 @@ def run_process(args: list[str], *, input_bytes: bytes | None = None) -> subproc
 
 
 def remove_reparse_point(path: Path) -> None:
-    if not (path.exists() or path.is_symlink()):
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
         return
-    if os.name == "nt":
+    def remove() -> None:
+        if os.name == "nt" and stat.S_ISDIR(info.st_mode):
+            path.rmdir()
+        else:
+            path.unlink()
+    try:
+        remove()
+    except PermissionError:
+        if os.name != "nt":
+            raise
+        # Git's private temporary object files can carry the read-only DOS attribute.  This
+        # retry is limited to this test-owned scratch entry and does not suppress the failure.
+        os.chmod(path, stat.S_IWRITE)
+        remove()
+
+
+def remove_tree(path: Path) -> None:
+    """Remove this test-owned tree without traversing symlinks or Windows reparses."""
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+        remove_reparse_point(path)
+        return
+    if not stat.S_ISDIR(info.st_mode):
+        try:
+            path.unlink()
+        except PermissionError:
+            if os.name != "nt":
+                raise
+            os.chmod(path, stat.S_IWRITE)
+            path.unlink()
+        return
+    for child in path.iterdir():
+        remove_tree(child)
+    try:
         path.rmdir()
-    else:
-        path.unlink()
+    except PermissionError:
+        if os.name != "nt":
+            raise
+        os.chmod(path, stat.S_IWRITE)
+        path.rmdir()
 
 
 def git_raw_bytes(repo: Path, *args: str) -> bytes:
@@ -117,9 +175,9 @@ class Phase2BoundarySweep(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
-        # Git's Windows object store may retain host-denied mappings after worktree cleanup.  This
-        # is cleanup of this test's uniquely-created scratch directory only, never a test result.
-        shutil.rmtree(cls.root, ignore_errors=True)
+        # This is cleanup of this test's uniquely-created scratch directory only.  Surface any
+        # refusal and remove reparse entries without traversing their targets.
+        remove_tree(cls.root)
 
     def setUp(self) -> None:
         sys.path.insert(0, str(SOURCE / "scripts"))
@@ -321,6 +379,25 @@ class Phase2BoundarySweep(unittest.TestCase):
                 "gate_files": ["src/check.py"], "controller_gate_files": [],
             },
         )
+        add("task-pattern-trailing-slash",
+            task_branch_pattern="recursion/task/{task_id}/")
+        for label, acceptance in (
+            ("profile-acceptance-test-n", "test -n foo"),
+            ("profile-acceptance-comparison", "test a = b"),
+            ("profile-acceptance-absolute-operand", "test -s /tmp/a"),
+            ("profile-acceptance-traversal", "test -s ../a"),
+            ("profile-acceptance-glob", "test -s src/[x]"),
+            ("profile-acceptance-dynamic-python", "python3 -c true"),
+            ("profile-acceptance-option-bash", "bash -e src/check.sh"),
+        ):
+            add(
+                label,
+                gate_commands=["python3 src/check.py"],
+                required_gate_profile={
+                    "acceptance": acceptance, "gate_class": "light",
+                    "gate_files": ["src/check.py"], "controller_gate_files": [],
+                },
+            )
 
         for pattern in TRAILING_SLASH_PATTERNS:
             add(f"external-pattern-trailing-slash:{pattern}", external_branch_patterns=[pattern])
@@ -329,9 +406,9 @@ class Phase2BoundarySweep(unittest.TestCase):
 
         # Fill the remainder with distinct ordinary descriptors so the corpus has a stable,
         # explicit size while the named boundary cases above remain easy to audit.
-        for index in range(203):
+        for index in range(202):
             add(f"ordinary-{index:03d}", id=f"phase2-ordinary-{index:03d}")
-        self.assertEqual(len(cases), 250)
+        self.assertEqual(len(cases), 257)
         return cases
 
     def test_runtime_and_schema_descriptor_differential_uses_stock_validator(self) -> None:
@@ -363,8 +440,13 @@ class Phase2BoundarySweep(unittest.TestCase):
             "runtime_only descriptor cases are severe: " + repr(runtime_only),
         )
         self.assertEqual(set(schema_only), set(SCHEMA_ONLY_JUSTIFICATIONS))
+        self.assertTrue(
+            SCHEMA_EXPRESSIBLE_CASES.isdisjoint(schema_only),
+            "schema-expressible cases became unjustified schema-only exceptions: "
+            + repr(sorted(SCHEMA_EXPRESSIBLE_CASES.intersection(schema_only))),
+        )
         self.assertEqual(
-            (agree, len(schema_only), len(runtime_only)), (243, 7, 0),
+            (agree, len(schema_only), len(runtime_only)), (250, 7, 0),
             f"schema/runtime descriptor counts: agree={agree} schema_only={len(schema_only)} "
             f"runtime_only={len(runtime_only)} mismatches={mismatches}",
         )
@@ -380,6 +462,38 @@ class Phase2BoundarySweep(unittest.TestCase):
             with self.subTest(schema_only=label):
                 self.assertIsInstance(justification, str)
                 self.assertIn(label, schema_only)
+
+    def test_external_patterns_require_actual_branch_creation(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        validator = jsonschema.Draft202012Validator(
+            schema["properties"]["external_branch_patterns"]["items"])
+        branch_repo = self.root / "external-pattern-branches"
+        branch_repo.mkdir()
+        init = run_process(["git", "-C", str(branch_repo), "init", "-q", "-b", "main"])
+        self.assertEqual(init.returncode, 0, init.stderr.decode(errors="replace"))
+        (branch_repo / "seed.txt").write_text("seed\n", encoding="utf-8")
+        self.assertEqual(
+            run_process(["git", "-C", str(branch_repo), "add", "seed.txt"]).returncode, 0)
+        self.assertEqual(
+            run_process(["git", "-C", str(branch_repo), "-c", "user.name=phase2",
+                         "-c", "user.email=phase2@example.invalid", "commit", "-qm", "seed"]).returncode, 0)
+        actual: dict[str, bool] = {}
+        for pattern in EXTERNAL_PATTERN_RECONCILIATION:
+            probe = pattern.replace("*", "probe")
+            created = run_process(["git", "-C", str(branch_repo), "branch", probe])
+            actual[pattern] = created.returncode == 0
+            expected = pattern not in WINDOWS_UNREALIZABLE_EXTERNAL_PATTERNS
+            with self.subTest(pattern=pattern, probe=probe):
+                self.assertEqual(
+                    actual[pattern], expected,
+                    f"actual git branch creation disagreed for {pattern!r}: "
+                    f"rc={created.returncode} stderr={created.stderr.decode(errors='replace')!r}",
+                )
+                self.assertEqual(self.rc._valid_git_pattern(pattern), expected)
+                self.assertEqual(validator.is_valid(pattern), expected)
+        self.assertEqual(
+            sum(actual.values()), len(EXTERNAL_PATTERN_RECONCILIATION) - len(
+                WINDOWS_UNREALIZABLE_EXTERNAL_PATTERNS))
 
     def test_class_a_json_integer_boundary_is_explicit(self) -> None:
         for value in (True, False, 1.0, 1e999, "1", [], {}, None):

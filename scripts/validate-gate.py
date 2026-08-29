@@ -561,15 +561,21 @@ def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: li
         normalized = word.replace("\\", "/")
         if index == candidate_index:
             continue
-        if _path_is_absolute(normalized) and not _controller_declared(
-                normalized, controller_root, controller_gate_files):
-            fail(f"acceptance path operand is outside declared controller files: {word}")
         if _path_has_traversal(normalized):
             fail(f"acceptance path operand is unsafe: {word}")
-        if index in path_indexes and not _declared_or_allowed(
-                normalized, allowed=allowed, controller_root=controller_root,
-                controller_gate_files=controller_gate_files):
-            fail(f"acceptance path operand is outside allowed/controller-declared paths: {word}")
+        # Only command positions known to be filesystem operands are path policy.  Other
+        # arguments are opaque command data: legacy gates use absolute scratch markers (for
+        # example, `touch C:/...`) and treating every absolute token as a declared controller
+        # file breaks those gates.  Traversal and shell expansion remain rejected for every
+        # argument, while test/Git path operands stay confined below.
+        if index in path_indexes:
+            if _path_is_absolute(normalized) and not _controller_declared(
+                    normalized, controller_root, controller_gate_files):
+                fail(f"acceptance path operand is outside declared controller files: {word}")
+            if not _declared_or_allowed(
+                    normalized, allowed=allowed, controller_root=controller_root,
+                    controller_gate_files=controller_gate_files):
+                fail(f"acceptance path operand is outside allowed/controller-declared paths: {word}")
     return candidate
 
 
@@ -748,15 +754,19 @@ def main() -> int:
                 for index, word in enumerate(words[1:], 1):
                     _reject_shell_expansion(word)
                     normalized = word.replace("\\", "/")
-                    if _path_is_absolute(normalized) and not _controller_declared(
-                            normalized, args.controller_root, controller_gate_files):
-                        fail(f"acceptance path operand is outside declared controller files: {word}")
                     if _path_has_traversal(normalized):
                         fail(f"acceptance path operand is unsafe: {word}")
-                    if index in path_indexes and not _declared_or_allowed(
-                            normalized, allowed=allowed, controller_root=args.controller_root,
-                            controller_gate_files=controller_gate_files):
-                        fail(f"acceptance path operand is outside allowed/controller-declared paths: {word}")
+                    # Match validate_direct_argv: an absolute token is a path only in a
+                    # command-defined filesystem operand position.  Legacy acceptance commands
+                    # may carry opaque absolute scratch-marker arguments such as `touch C:/...`.
+                    if index in path_indexes:
+                        if _path_is_absolute(normalized) and not _controller_declared(
+                                normalized, args.controller_root, controller_gate_files):
+                            fail(f"acceptance path operand is outside declared controller files: {word}")
+                        if not _declared_or_allowed(
+                                normalized, allowed=allowed, controller_root=args.controller_root,
+                                controller_gate_files=controller_gate_files):
+                            fail(f"acceptance path operand is outside allowed/controller-declared paths: {word}")
                 if candidate and PurePosixPath(candidate).is_absolute():
                     if not args.controller_root:
                         fail("absolute acceptance program lacks a controller root")

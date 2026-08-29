@@ -82,13 +82,20 @@ class DirectGateAdmissionTest(unittest.TestCase):
                 controller_gate_files=[],
             )
 
-    def test_reserved_word_guard_rejects_a_path_qualified_reserved_command(self):
+    def test_path_qualified_launcher_guard_is_individually_sensitive(self):
         module = load_gate_module()
         with self.assertRaisesRegex(
-                ValueError, "shell reserved word or wrapper",
-                msg="reserved-word guard accepted a path-qualified wrapper",
+                ValueError, "path-qualified acceptance launcher",
+                msg="path-qualified launcher guard accepted an undeclared direct launcher",
         ):
-            module.entrypoint(["/usr/bin/time", "python3", "app/check.py"], True)
+            # python3 is an admitted direct command, so this reaches line 380 and cannot be
+            # refused by the downstream RESERVED wrapper guard.
+            module.entrypoint(["/usr/bin/python3", "app/check.py"], True)
+
+    def test_non_path_absolute_argument_is_opaque_but_path_operands_remain_confined(self):
+        marker = str(Path(tempfile.gettempdir()) / "phase5-marker")
+        self.assertEqual(run_gate(f"test -s app/result.txt && touch {marker}", strict=False), 0)
+        self.assertNotEqual(run_gate(f"test -s {marker}", strict=False), 0)
 
     def test_grouped_success_guard_classifies_the_inner_literal(self):
         module = load_gate_module()

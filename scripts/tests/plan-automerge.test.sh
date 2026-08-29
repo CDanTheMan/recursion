@@ -59,16 +59,25 @@ else
   cat > "$R/scripts/runtime-state.py" <<'SHIM'
 #!/usr/bin/env python3
 """Fixture-only stand-in for the planner lock. See scripts/tests/plan-automerge.test.sh."""
-import os, shutil, sys
+import os, shutil, stat, sys
 command = sys.argv[1] if len(sys.argv) > 1 else ""
 path = sys.argv[2] if len(sys.argv) > 2 else ""
+def remove_lock(name):
+    info = os.lstat(name)
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+        if os.name == "nt" and stat.S_ISDIR(info.st_mode):
+            os.rmdir(name)
+        else:
+            os.unlink(name)
+    else:
+        shutil.rmtree(name)
 if command == "lock-acquire":
     try:
         os.makedirs(path)
     except FileExistsError:
         raise SystemExit(1)
 elif command == "lock-release":
-    shutil.rmtree(path, ignore_errors=True)
+    remove_lock(path)
 else:
     raise SystemExit(2)
 SHIM

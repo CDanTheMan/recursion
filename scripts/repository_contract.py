@@ -20,7 +20,6 @@ import json
 import os
 import re
 import shlex
-import shutil
 import stat
 import subprocess
 import sys
@@ -222,7 +221,7 @@ def _valid_git_ref(value: object) -> bool:
 
 def _valid_git_pattern(value: object) -> bool:
     if not isinstance(value, str) or not value or len(value) > 200 \
-            or any(char in value for char in "?["):
+            or any(char in value for char in "?[\"<>|"):
         return False
     probe = value.replace("*", "probe")
     return _valid_git_ref(probe)
@@ -311,6 +310,38 @@ def _is_reparse_or_link(info: os.stat_result) -> bool:
         getattr(info, "st_file_attributes", 0)
         & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
     ) or bool(getattr(info, "st_reparse_tag", 0))
+
+
+def _remove_tree_without_following(path: Path) -> None:
+    """Remove a private scratch tree while treating links/reparses as leaf entries."""
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return
+
+    def remove(action: Any) -> None:
+        try:
+            action()
+        except PermissionError:
+            if os.name != "nt":
+                raise
+            # Git may mark files in this private temporary object store read-only.  Clear only
+            # that DOS attribute and retry; any remaining ACL failure is deliberately surfaced.
+            os.chmod(path, stat.S_IWRITE)
+            action()
+
+    if _is_reparse_or_link(info):
+        if os.name == "nt" and stat.S_ISDIR(info.st_mode):
+            remove(path.rmdir)
+        else:
+            remove(path.unlink)
+        return
+    if not stat.S_ISDIR(info.st_mode):
+        remove(path.unlink)
+        return
+    for child in path.iterdir():
+        _remove_tree_without_following(child)
+    remove(path.rmdir)
 
 
 def _same_file(left: os.stat_result, right: os.stat_result) -> bool:
@@ -1485,10 +1516,14 @@ def _run_independent_gates(contract: dict[str, Any], repo: Path, commit: str,
                 raise ContractError("controller gate worktree cleanup failed", "verification-unavailable")
         return gate_contract
     finally:
-        # The host may deny deletion of temporary Git objects after worktree removal.  Cleanup
-        # is best-effort for an already-private, uniquely-owned scratch directory and must not
-        # replace the actual gate or receipt result.
-        shutil.rmtree(raw, ignore_errors=True)
+        # This is one private, uniquely-owned controller scratch directory.  Do not suppress an
+        # ACL or reparse cleanup failure: a failed cleanup is itself a verification-unavailable
+        # result, and links are removed as leaves without traversing their targets.
+        try:
+            _remove_tree_without_following(Path(raw))
+        except OSError as exc:
+            raise ContractError("controller gate scratch cleanup failed",
+                                "verification-unavailable") from exc
 
 
 def verify_candidate(contract: dict[str, Any], candidate: dict[str, Any], repo: Path,
