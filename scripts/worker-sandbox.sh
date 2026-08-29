@@ -821,11 +821,15 @@ if [ "$NETWORK_POLICY" = provider-only ]; then
   fi
   PROVIDER_ARGS=("$PROVIDER_PROFILE" --provider "$PLAN_NETWORK_PROVIDER")
   for provider_endpoint in "${PLAN_NETWORK_ENDPOINTS[@]}"; do PROVIDER_ARGS+=(--endpoint "$provider_endpoint"); done
-  if [ -n "$PLAN_CONTROLLER_ROOT" ] || [ -n "$PLAN_CONTROLLER_SHA" ]; then
-    [ -n "$PLAN_CONTROLLER_ROOT" ] && [ -n "$PLAN_CONTROLLER_SHA" ] \
-      || { echo "worker-sandbox: refusal=missing-egress incomplete controller policy provenance" >&2; exit 96; }
-    PROVIDER_ARGS+=(--controller-root "$PLAN_CONTROLLER_ROOT" --controller-commit "$PLAN_CONTROLLER_SHA")
+  if [ -z "$PLAN_CONTROLLER_ROOT" ] && [ -z "$PLAN_CONTROLLER_SHA" ]; then
+    # Builtin engines have no resolver plan to carry controller provenance.  Bind their
+    # provider policy to this controller checkout before selecting any namespace or port.
+    PLAN_CONTROLLER_ROOT="$ROOT"
+    PLAN_CONTROLLER_SHA="$(git -C "$ROOT" rev-parse --verify HEAD 2>/dev/null || true)"
   fi
+  [ -n "$PLAN_CONTROLLER_ROOT" ] && [ -n "$PLAN_CONTROLLER_SHA" ] \
+    || { echo "worker-sandbox: refusal=missing-egress incomplete controller policy provenance" >&2; exit 96; }
+  PROVIDER_ARGS+=(--controller-root "$PLAN_CONTROLLER_ROOT" --controller-commit "$PLAN_CONTROLLER_SHA")
   PROVIDER_JSON="$("$PYTHON" "$ROOT/scripts/provider-egress.py" "${PROVIDER_ARGS[@]}")" \
     || { echo "worker-sandbox: refusal=missing-egress provider profile is invalid" >&2; exit 96; }
   PROVIDER_FIELDS="$("$PYTHON" - "$PROVIDER_JSON" <<'PY'

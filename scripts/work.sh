@@ -1020,7 +1020,7 @@ from assignment import digest, validate_assignment
 (path, task, project, repo, branch, sha, controller_repo, controller_sha, seed, engine, provider, pool, host, sandbox, profile,
  paths, endpoints, gate_contract, _, model, verifier_engine, verifier_provider, verifier_profile,
  verifier_endpoints, verifier_model, impl_policy, verifier_policy, impl_argv_json, verifier_argv_json) = sys.argv[1:]
-gate = hashlib.sha256(json.dumps(json.loads(gate_contract), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+gate = hashlib.sha256(json.dumps(json.loads(gate_contract), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
 value = {"task_id":task, "project_id":project, "source_repository":repo, "source_branch":branch,
          "controller_repository":controller_repo, "controller_sha":controller_sha,
          "source_sha":sha, "seed_manifest_digest":seed, "engine":engine, "provider":provider,

@@ -10,13 +10,21 @@ PROFILE_JSON=""
 
 load_profile(){
   [ -n "$PROFILE" ] || { echo "provider-network: provider profile is required (default deny)" >&2; return 96; }
+  local controller_root controller_commit
   local -a args=("$PROFILE" --provider "${RECURSION_PROVIDER_ID:-}") endpoint
   for endpoint in ${RECURSION_PROVIDER_ENDPOINTS:-}; do args+=(--endpoint "$endpoint"); done
   if [ -n "${RECURSION_CONTROLLER_ROOT:-}" ] || [ -n "${RECURSION_CONTROLLER_COMMIT:-}" ]; then
     [ -n "${RECURSION_CONTROLLER_ROOT:-}" ] && [ -n "${RECURSION_CONTROLLER_COMMIT:-}" ] \
       || { echo "provider-network: incomplete controller policy provenance" >&2; return 96; }
-    args+=(--controller-root "$RECURSION_CONTROLLER_ROOT" --controller-commit "$RECURSION_CONTROLLER_COMMIT")
+    controller_root="$RECURSION_CONTROLLER_ROOT"
+    controller_commit="$RECURSION_CONTROLLER_COMMIT"
+  else
+    controller_root="$ROOT"
+    controller_commit="$(git -C "$controller_root" rev-parse --verify HEAD 2>/dev/null || true)"
+    [ -n "$controller_commit" ] \
+      || { echo "provider-network: controller policy provenance is unavailable" >&2; return 96; }
   fi
+  args+=(--controller-root "$controller_root" --controller-commit "$controller_commit")
   PROFILE_JSON="$(python3 "$ROOT/scripts/provider-egress.py" "${args[@]}" 2>/dev/null)" \
     || { echo "provider-network: provider profile is invalid or not provisioned" >&2; return 96; }
   NS="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["namespace"])' "$PROFILE_JSON")"
