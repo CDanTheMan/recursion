@@ -51,10 +51,14 @@ IDLE_TIMEOUT = 300.0
 CAPABILITY_TTL_SECONDS = 900
 CAPABILITY_CLOCK_SKEW_SECONDS = 30
 MAX_CLIENT_HELLO = 65536
+MAX_CAPABILITY_TOKEN = 8192
+MAX_CAPABILITY_PAYLOAD = 4096
+MAX_CAPABILITY_SIGNATURE = 64
 TLS_HANDSHAKE = 0x16
 TLS_CLIENT_HELLO = 0x01
 SERVER_NAME_EXTENSION = 0x0000
 HEADER_RE = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+\Z")
+CAPABILITY_B64_RE = re.compile(r"[A-Za-z0-9_-]+\Z")
 # Control-plane identifiers are 128 characters; the separator and 64-character contract digest
 # make the generated assignment identity at most 193 characters.  Keep a round 255-character
 # ceiling while remaining entirely safe as a Basic userinfo username.
@@ -104,13 +108,15 @@ def issue_capability(profile: str, assignment: str, secret: bytes, *,
 def verify_capability(token: str, secret: bytes, *, now: int | None = None,
                       revoked_jtis: set[str] | None = None) -> dict[str, str]:
     try:
+        if not isinstance(token, str) or len(token) > MAX_CAPABILITY_TOKEN:
+            raise ValueError
         encoded, signed = token.split(".", 1)
+        observed = _decode_capability_segment(signed, MAX_CAPABILITY_SIGNATURE)
         expected = hmac.new(secret, encoded.encode("ascii"), hashlib.sha256).digest()
-        observed = base64.urlsafe_b64decode(signed + "=" * (-len(signed) % 4))
         if not hmac.compare_digest(observed, expected):
             raise ValueError
-        payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-    except (ValueError, UnicodeError, json.JSONDecodeError, TypeError, binascii.Error):
+        payload = json.loads(_decode_capability_segment(encoded, MAX_CAPABILITY_PAYLOAD))
+    except (ValueError, UnicodeError, json.JSONDecodeError, TypeError, binascii.Error, RecursionError):
         raise ConnectDenied("transport capability is invalid") from None
     if not isinstance(payload, dict) or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", str(payload.get("profile", ""))) \
             or not ASSIGNMENT_RE.fullmatch(str(payload.get("assignment", ""))) \
@@ -129,6 +135,20 @@ def verify_capability(token: str, secret: bytes, *, now: int | None = None,
     if revoked_jtis is not None and jti in revoked_jtis:
         raise ConnectDenied("transport capability has been revoked")
     return {"profile": str(payload["profile"]), "assignment": str(payload["assignment"]), "jti": jti}
+
+
+def _decode_capability_segment(value: str, maximum: int) -> bytes:
+    if not isinstance(value, str) or not value or len(value) > maximum \
+            or not CAPABILITY_B64_RE.fullmatch(value) or len(value) % 4 == 1:
+        raise ValueError("capability encoding is invalid")
+    padded = value.encode("ascii") + b"=" * (-len(value) % 4)
+    decoded = base64.urlsafe_b64decode(padded)
+    if len(decoded) > maximum:
+        raise ValueError("capability encoding is too large")
+    canonical = base64.urlsafe_b64encode(decoded).rstrip(b"=").decode("ascii")
+    if canonical != value:
+        raise ValueError("capability encoding is not canonical")
+    return decoded
 
 
 def load_revoked_jtis(path: pathlib.Path | None) -> set[str]:
@@ -807,7 +827,10 @@ def main() -> int:
         )
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
-    except (OSError, RuntimeError, ValueError, KeyError) as exc:
+    except ConnectDenied as exc:
+        print(f"provider-connect-proxy: {exc}", file=sys.stderr)
+        return 96
+    except (OSError, RuntimeError, ValueError, KeyError, RecursionError) as exc:
         print(f"provider-connect-proxy: {exc}", file=sys.stderr)
         return 96
 

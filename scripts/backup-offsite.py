@@ -49,6 +49,9 @@ REMOTE_SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 MAX_REMOTE_LISTING = 1000
 MAX_SFTP_OUTPUT = MAX_REMOTE_LISTING * 256
 MAX_SFTP_ERROR = 64 * 1024
+MAX_TOOL_ARGS_JSON = 64 * 1024
+MAX_TOOL_ARGS = 64
+MAX_TOOL_ARG_LENGTH = 4096
 PIPE_JOIN_TIMEOUT = 5.0
 PROCESS_TIMEOUT = 300.0
 
@@ -88,7 +91,8 @@ def load_policy(path: Path) -> dict:
     except (OSError, UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise BackupPolicyError(f"backup policy is unreadable: {path}") from exc
     policy = _object(policy, POLICY_KEYS, "policy")
-    if policy["schema_version"] != 1 or not isinstance(policy["enabled"], bool):
+    if not isinstance(policy["schema_version"], int) or isinstance(policy["schema_version"], bool) \
+            or policy["schema_version"] != 1 or not isinstance(policy["enabled"], bool):
         raise BackupPolicyError("schema_version must be 1 and enabled must be boolean")
     if not isinstance(policy["id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", policy["id"]):
         raise BackupPolicyError("policy.id must be a safe nonempty identifier")
@@ -393,11 +397,14 @@ def _tool(name: str, environment_name: str) -> list[str]:
     if not value:
         raise BackupPolicyError(f"required backup tool is unavailable: {name}")
     raw_extra = os.environ.get(environment_name + "_ARGS_JSON", "[]")
+    if len(raw_extra) > MAX_TOOL_ARGS_JSON:
+        raise BackupPolicyError(f"backup tool arguments are invalid: {name}")
     try:
         extra = json.loads(raw_extra)
-    except json.JSONDecodeError as exc:
+    except (ValueError, RecursionError) as exc:
         raise BackupPolicyError(f"backup tool arguments are invalid: {name}") from exc
-    if not isinstance(extra, list) or not all(isinstance(item, str) and item for item in extra):
+    if not isinstance(extra, list) or len(extra) > MAX_TOOL_ARGS \
+            or not all(isinstance(item, str) and item and len(item) <= MAX_TOOL_ARG_LENGTH for item in extra):
         raise BackupPolicyError(f"backup tool arguments are invalid: {name}")
     return [value, *extra]
 
@@ -808,7 +815,7 @@ def main(argv: list[str] | None = None) -> int:
                 evidence["evidence_path"] = str(write_evidence(Path(policy["log_rotation"]["directory"]), evidence))
                 print(json.dumps(evidence, sort_keys=True))
         return 0
-    except (OSError, ValueError, BackupPolicyError, tarfile.TarError) as exc:
+    except (OSError, ValueError, BackupPolicyError, tarfile.TarError, RecursionError) as exc:
         print(f"backup-offsite: {exc}", file=sys.stderr)
         return 2
 

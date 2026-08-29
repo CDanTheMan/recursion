@@ -60,8 +60,11 @@ try:
     plan = json.load(open(sys.argv[1]))
 except Exception:
     raise SystemExit(92)
+if not isinstance(plan, dict):
+    raise SystemExit(92)
 engine = plan.get("engine")
-if plan.get("schema_version") != 1 or engine != sys.argv[2] \
+if not isinstance(plan.get("schema_version"), int) or isinstance(plan.get("schema_version"), bool) \
+        or plan.get("schema_version") != 1 or engine != sys.argv[2] \
         or not isinstance(engine, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", engine):
     raise SystemExit(92)
 exe = plan.get("executable"); argv = plan.get("argv")

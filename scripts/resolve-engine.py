@@ -22,6 +22,7 @@ from provider_contract import ProviderProfileError, assert_endpoints_match, prof
 PROG = "resolve-engine"
 
 NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
+PROFILE_NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,63}")
 ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}")
 ENDPOINT_RE = re.compile(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?")
 
@@ -147,7 +148,7 @@ def validate_network(network: object) -> None:
         if not isinstance(item, str) or not ENDPOINT_RE.fullmatch(item):
             raise ManifestError(f"network.endpoints contains an invalid hostname {item!r}")
     profile = obj.get("profile")
-    if profile is not None and (not isinstance(profile, str) or not NAME_RE.fullmatch(profile)):
+    if profile is not None and (not isinstance(profile, str) or not PROFILE_NAME_RE.fullmatch(profile)):
         raise ManifestError("network.profile must be a valid provider profile name")
 
 

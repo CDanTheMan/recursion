@@ -95,6 +95,31 @@ def main() -> int:
         assert spec and spec.loader
         backup_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(backup_module)
+        for label, raw_args in (
+            ("5000-digit backup tool argument", "9" * 5000),
+            ("deeply nested backup tool arguments", "[" * 1500 + "]" * 1500),
+        ):
+            old_tool = os.environ.get("RECURSION_AGE_TOOL")
+            old_args = os.environ.get("RECURSION_AGE_TOOL_ARGS_JSON")
+            os.environ["RECURSION_AGE_TOOL"] = sys.executable
+            os.environ["RECURSION_AGE_TOOL_ARGS_JSON"] = raw_args
+            try:
+                backup_module._tool("age", "RECURSION_AGE_TOOL")
+            except backup_module.BackupPolicyError:
+                check(True, f"{label} is a typed refusal")
+            except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
+                check(False, f"{label} is typed (raw {type(exc).__name__})")
+            else:
+                check(False, f"{label} is a typed refusal")
+            finally:
+                if old_tool is None:
+                    os.environ.pop("RECURSION_AGE_TOOL", None)
+                else:
+                    os.environ["RECURSION_AGE_TOOL"] = old_tool
+                if old_args is None:
+                    os.environ.pop("RECURSION_AGE_TOOL_ARGS_JSON", None)
+                else:
+                    os.environ["RECURSION_AGE_TOOL_ARGS_JSON"] = old_args
         with backup_module.pause_transfer(fixture):
             contender = subprocess.run(
                 [sys.executable, "-c", """
@@ -162,6 +187,21 @@ except Exception:
             "restore_drill": {"cadence_days": 30, "required": True},
             "archive_limits": {"max_files": 10000, "max_bytes": 104857600},
         }
+        bool_policy = base / "policy-schema-bool.json"
+        bool_value = dict(value)
+        bool_value["schema_version"] = True
+        bool_policy.write_text(json.dumps(bool_value, indent=2) + "\n", encoding="utf-8")
+        try:
+            backup_module.load_policy(bool_policy)
+        except backup_module.BackupPolicyError:
+            check(True, "boolean backup policy schema_version is rejected by the loader")
+        except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
+            check(False, f"boolean backup policy schema_version is typed (raw {type(exc).__name__})")
+        else:
+            check(False, "boolean backup policy schema_version is rejected by the loader")
+        bool_cli = run("--config", str(bool_policy), "validate")
+        check(bool_cli.returncode == 2 and "Traceback" not in bool_cli.stderr,
+              "boolean backup policy schema_version has a controlled CLI refusal")
         config.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
         signature.write_text(hmac.new(b"config-secret", config.read_bytes(), hashlib.sha256).hexdigest(),
                              encoding="ascii")
@@ -196,6 +236,14 @@ except Exception:
                   "evidence is atomically written without secret values")
             check(not any((base / "runtime").glob(".backup.*")),
                   "plaintext workspace is removed after successful execution")
+            malformed_tool = run(
+                "--config", str(config), "backup", "--execute",
+                env=dict(exec_env, RECURSION_AGE_TOOL_ARGS_JSON="[" * 1500 + "]" * 1500),
+            )
+            check(malformed_tool.returncode == 2
+                  and "backup tool arguments are invalid" in malformed_tool.stderr
+                  and "Traceback" not in malformed_tool.stderr,
+                  "deeply nested backup tool arguments have a controlled CLI refusal")
             (fixture / "state/events.jsonl").write_text("changed\n", encoding="utf-8")
             restore = run("--config", str(config), "restore", "--execute", env=exec_env)
             check(restore.returncode == 0, f"fake SFTP/age restore executes ({restore.stderr.strip()})")

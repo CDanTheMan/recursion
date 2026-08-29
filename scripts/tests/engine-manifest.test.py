@@ -177,6 +177,65 @@ def test_missing_file() -> None:
         check(result.returncode == 3, f"missing manifest file exits 3 (got {result.returncode})")
 
 
+def test_provider_profile_name_schema_runtime_parity() -> None:
+    import jsonschema
+
+    resolver = load_resolver()
+    schema = json.loads(
+        (SOURCE / "schemas/control-plane/v1/engine-manifest.schema.json").read_text(encoding="utf-8")
+    )
+    validator = jsonschema.Draft7Validator(schema)
+    with tempfile.TemporaryDirectory() as tmp:
+        provider_dir = Path(tmp) / "providers"
+        provider_dir.mkdir()
+        old_provider_dir = os.environ.get("RECURSION_PROVIDER_DIR")
+        os.environ["RECURSION_PROVIDER_DIR"] = str(provider_dir)
+        try:
+            for length in (33, 64, 65):
+                profile_name = "p" + "a" * (length - 1)
+                endpoint = "profile.example.com"
+                profile = {
+                    "schema_version": 1,
+                    "id": profile_name,
+                    "provider": profile_name,
+                    "enabled": False,
+                    "namespace": "recursion-provider-only",
+                    "proxy": {"type": "connect-proxy", "host": "127.0.0.1", "port": 18080,
+                              "env": ["HTTP_PROXY", "HTTPS_PROXY"]},
+                    "authorities": [endpoint + ":443"],
+                }
+                (provider_dir / f"{profile_name}.json").write_text(
+                    json.dumps(profile) + "\n", encoding="utf-8"
+                )
+                manifest = copy.deepcopy(BASE_MANIFEST)
+                manifest["billing"]["provider"] = profile_name
+                manifest["network"] = {
+                    "policy": "provider-only", "profile": profile_name, "endpoints": [endpoint]
+                }
+                schema_valid = not list(validator.iter_errors(manifest))
+                try:
+                    resolver.validate_manifest(manifest, "sampleeng")
+                except resolver.ManifestError:
+                    runtime_valid = False
+                except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
+                    runtime_valid = False
+                    check(False, f"{length}-char provider profile has typed runtime validation (raw {type(exc).__name__})")
+                else:
+                    runtime_valid = True
+                expected = length <= 64
+                check(schema_valid == expected,
+                      f"{length}-char provider profile schema boundary is {'accepted' if expected else 'rejected'}")
+                check(runtime_valid == expected,
+                      f"{length}-char provider profile runtime boundary is {'accepted' if expected else 'rejected'}")
+                check(schema_valid == runtime_valid,
+                      f"{length}-char provider profile schema/runtime decisions agree")
+        finally:
+            if old_provider_dir is None:
+                os.environ.pop("RECURSION_PROVIDER_DIR", None)
+            else:
+                os.environ["RECURSION_PROVIDER_DIR"] = old_provider_dir
+
+
 def test_mutations() -> None:
     baseline = copy.deepcopy(BASE_MANIFEST)
     run_case("valid manifest in temp dir validates", "sampleeng.json", "sampleeng", baseline, 0)
@@ -234,6 +293,7 @@ def test_mutations() -> None:
 def main() -> int:
     test_shipped_manifests()
     test_missing_file()
+    test_provider_profile_name_schema_runtime_parity()
     test_mutations()
     test_malformed_values()
 

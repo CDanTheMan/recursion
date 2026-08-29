@@ -26,6 +26,7 @@ def check(condition: bool, label: str, failures: list[str]) -> None:
 def test_malformed_profile_inputs(failures: list[str], profiles: list[Path]) -> None:
     """Every hostile profile value is typed at the shared validator and CLI boundary."""
     cases = (
+        ("schema_version=true", lambda profile: profile.update(schema_version=True)),
         ("proxy.env=[[]]", lambda profile: profile["proxy"].update(env=[[]])),
         ("authorities=[[]]", lambda profile: profile.update(authorities=[[]])),
         ("proxy.env is a dict", lambda profile: profile["proxy"].update(env={})),

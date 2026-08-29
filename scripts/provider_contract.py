@@ -93,7 +93,8 @@ def _require_dict(value: object, keys: set[str], where: str) -> dict:
 
 def validate_profile(value: object, expected_id: str | None = None) -> dict:
     profile = _require_dict(value, PROFILE_KEYS, "provider profile")
-    if profile["schema_version"] != 1:
+    if not isinstance(profile["schema_version"], int) or isinstance(profile["schema_version"], bool) \
+            or profile["schema_version"] != 1:
         raise ProviderProfileError("schema_version must be 1")
     profile_id = profile["id"]
     provider = profile["provider"]

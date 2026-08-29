@@ -6,6 +6,8 @@ from __future__ import annotations
 import importlib.util
 import asyncio
 import base64
+import hashlib
+import hmac
 import pathlib
 import sys
 import unittest
@@ -132,6 +134,26 @@ class ConnectContractTest(unittest.TestCase):
                 request.replace(basic.encode("ascii"), forged_basic.encode("ascii")),
                 capability_key=key, profile_authorities={"anthropic": anthropic},
             )
+
+    def test_capability_rejects_noncanonical_signature_padding_bits(self):
+        key = b"k" * 32
+        token = self.proxy.issue_capability(
+            "anthropic", "assignment-a", key, now=100, ttl=60, jti="J" * 21 + "Z"
+        )
+        self.assertEqual(token.rsplit(".", 1)[1][-1], "A")
+        self.assertEqual(self.proxy.verify_capability(token, key, now=100)["assignment"], "assignment-a")
+        mutated = token[:-1] + "B"
+        with self.assertRaises(self.proxy.ConnectDenied):
+            self.proxy.verify_capability(mutated, key, now=100)
+
+    def test_capability_nested_json_is_a_typed_denial(self):
+        key = b"k" * 32
+        payload = ("[" * 1500 + "]" * 1500).encode("ascii")
+        encoded = base64.urlsafe_b64encode(payload).rstrip(b"=")
+        signature = hmac.new(key, encoded, hashlib.sha256).digest()
+        token = encoded.decode("ascii") + "." + base64.urlsafe_b64encode(signature).rstrip(b"=").decode("ascii")
+        with self.assertRaises(self.proxy.ConnectDenied):
+            self.proxy.verify_capability(token, key, now=100)
 
     def test_signed_capability_must_match_active_assignment(self):
         key = b"k" * 32
