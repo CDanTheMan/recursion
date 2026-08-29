@@ -349,7 +349,7 @@ if [ -z "$FILE" ]; then
   exit $?
 fi
 
-python3 - "$FILE" <<'PY' 2>/dev/null || { log "REFUSED - decision file path is unsafe or unavailable"; exit 2; }
+python3 - "$FILE" <<'PY' || { log "REFUSED - decision file path is unsafe or unavailable"; exit 2; }
 import os,re,stat,sys
 from pathlib import Path
 try:
@@ -383,16 +383,25 @@ try:
             raise ValueError("not regular")
     finally:
         os.close(descriptor)
-except (OSError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+except OSError:
+    print("boundary=decision-path-unavailable", file=sys.stderr)
+    raise SystemExit(2)
+except (ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    print("boundary=decision-path-invalid", file=sys.stderr)
     raise SystemExit(2)
 PY
 if [ -z "$DECISION_SNAPSHOT_B64" ] || [ -z "$DECISION_FILE_DIGEST" ]; then
-SNAPSHOT_BUNDLE="$(python3 - "$FILE" <<'PY' 2>/dev/null
+SNAPSHOT_BUNDLE="$(python3 - "$FILE" <<'PY'
 import base64,hashlib,sys
 try:
     with open(sys.argv[1], "rb") as source: raw=source.read(2 * 1024 * 1024 + 1)
     if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
-except (OSError, ValueError, TypeError): raise SystemExit(2)
+except OSError:
+    print("boundary=decision-snapshot-unavailable", file=sys.stderr)
+    raise SystemExit(2)
+except (ValueError, TypeError):
+    print("boundary=decision-size", file=sys.stderr)
+    raise SystemExit(2)
 print(hashlib.sha256(raw).hexdigest())
 print(base64.b64encode(raw).decode("ascii"))
 PY
@@ -423,13 +432,13 @@ except (OSError,ValueError,TypeError,UnicodeError,binascii.Error,OverflowError,
         RecursionError):
     raise SystemExit(2)
 PY
-)" || { log "REFUSED - decision snapshot could not be decoded"; exit 74; }
+)" || { log "REFUSED - decision snapshot could not be decoded: boundary=utf8-strict"; exit 74; }
 
 # CLASS B: the snapshot is caller-controlled bytes until this local boundary has proved that it
 # is bounded JSON with a typed object shape.  The external validator below checks decision
 # semantics; it is not the input boundary and must never be the first code to touch hostile JSON.
 class_b_decision_json(){
-  python3 - "$1" <<'PY' 2>/dev/null
+  python3 - "$1" <<'PY'
 import json,math,re,sys
 
 MAX_BYTES=2 * 1024 * 1024
@@ -520,7 +529,8 @@ try:
     if not isinstance(raw,str) or len(raw.encode("utf-8")) > MAX_BYTES:
         raise ValueError("decision exceeds the bounded input size")
     value=json.loads(raw, parse_int=bounded_int, parse_float=bounded_float,
-                     parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+                     parse_constant=lambda name: (_ for _ in ()).throw(ValueError(
+                         "decision JSON constant is forbidden")))
     if not isinstance(value, dict):
         raise ValueError("decision is not an object")
     check_value(value)
@@ -547,8 +557,50 @@ try:
             raise TypeError("decision integer field is boolean")
     print(json.dumps(value, sort_keys=True, separators=(",",":"),
                      ensure_ascii=False, allow_nan=False))
-except (json.JSONDecodeError,ValueError,TypeError,OverflowError,RecursionError,
-        UnicodeDecodeError,UnicodeError,OSError):
+except json.JSONDecodeError:
+    print("boundary=malformed-json", file=sys.stderr)
+    raise SystemExit(2)
+except TypeError as exc:
+    message=str(exc)
+    if "integer field" in message:
+        marker="integer-type"
+    elif "numeric field" in message:
+        marker="real-type"
+    elif "path field" in message:
+        marker="path-type"
+    elif "arguments" in message:
+        marker="arguments-type"
+    else:
+        marker="value-type"
+    print("boundary=" + marker, file=sys.stderr)
+    raise SystemExit(2)
+except ValueError as exc:
+    message=str(exc)
+    if "JSON constant" in message:
+        marker="json-constant"
+    elif "not an object" in message:
+        marker="non-object-root"
+    elif "nesting" in message:
+        marker="depth"
+    elif "string" in message:
+        marker="string"
+    elif "path" in message:
+        marker="path-unsafe"
+    elif "non-finite" in message:
+        marker="non-finite-number"
+    elif "integer" in message:
+        marker="integer-range"
+    elif "exceeds" in message or "too large" in message:
+        marker="decision-size"
+    else:
+        marker="value-invalid"
+    print("boundary=" + marker, file=sys.stderr)
+    raise SystemExit(2)
+except RecursionError:
+    print("boundary=depth", file=sys.stderr)
+    raise SystemExit(2)
+except (OverflowError,UnicodeDecodeError,UnicodeError,OSError):
+    print("boundary=controlled-input-failure", file=sys.stderr)
     raise SystemExit(2)
 PY
 }
@@ -559,14 +611,14 @@ VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$DECISION_JSON" 
 VALID_RC=$?
 if [ "$VALID_RC" -ne 0 ]; then
   case "$VALID" in
-    ERR\ *) log "REFUSED - decision validation rejected the input" ;;
+    ERR\ *) log "REFUSED - decision validation rejected the input: boundary=semantic-validation" ;;
     *) log "REFUSED - decision validator is unavailable" ;;
   esac
   exit 74
 fi
 case "$VALID" in
   OK\ *) DECISION_JSON="${VALID#OK }" ;;
-  *) log "REFUSED - decision validation rejected the input"; exit 5 ;;
+  *) log "REFUSED - decision validation rejected the input: boundary=semantic-validation"; exit 5 ;;
 esac
 
 read_field(){ python3 -c 'import json,sys

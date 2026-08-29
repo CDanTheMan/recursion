@@ -59,6 +59,14 @@ def is_git_bash_acl_artifact(result: subprocess.CompletedProcess[str]) -> bool:
     return result.returncode == 256 and "CreateFileMapping" in text and "Win32 error 5" in text
 
 
+def has_controlled_refusal(result: subprocess.CompletedProcess[str], markers: tuple[str, ...],
+                            *paths: Path) -> bool:
+    """Require a product refusal signal in addition to the no-traceback/path invariant."""
+    text = (result.stdout or "") + (result.stderr or "")
+    return result.returncode != 0 and any(marker in text for marker in markers) \
+        and not result_has_raw_error_or_path(result, *paths)
+
+
 def strict_schema_validator(schema: dict):
     import jsonschema
 
@@ -247,7 +255,7 @@ def main() -> int:
         path.write_text(raw, encoding="utf-8")
         result = subprocess.run([PYTHON, str(ROOT / "scripts/backup-offsite.py"), "--config", str(path), "validate"],
                                 capture_output=True, text=True)
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result, path),
+        check(has_controlled_refusal(result, ("backup-offsite:",), path),
               "backup CLI hostile JSON is controlled")
 
     secret_root = scratch / "secret-runtime"
@@ -270,7 +278,7 @@ def main() -> int:
                                  "--directory", str(secret_root)],
                                 input="x" * (secrets_runtime.MAX_SECRET_ENV_BYTES + 1), text=True,
                                 capture_output=True)
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result, secret_root),
+        check(has_controlled_refusal(result, ("secret-runtime:",), secret_root),
               "secret runtime CLI deep input is controlled")
     finally:
         if old_secret_root is None:
@@ -323,7 +331,7 @@ def main() -> int:
         result = subprocess.run([PYTHON, str(ROOT / "scripts/decision-queue.py"), "normalize"],
                                 input=raw, text=True, capture_output=True,
                                 env=dict(os.environ, RECURSION_ROOT=str(queue_base)))
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result, queue_base),
+        check(has_controlled_refusal(result, ("decision-queue:",), queue_base),
               "decision queue hostile input is controlled")
 
     provider_dir = scratch / "providers"
@@ -334,7 +342,7 @@ def main() -> int:
         result = subprocess.run([PYTHON, str(ROOT / "scripts/provider-egress.py"), "validate", "fixture"],
                                 capture_output=True, text=True,
                                 env=dict(os.environ, RECURSION_PROVIDER_DIR=str(provider_dir)))
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result, provider_dir),
+        check(has_controlled_refusal(result, ("provider-egress:",), provider_dir),
               "provider egress hostile profile JSON is controlled")
         (provider_dir / "fixture.json").write_text(json.dumps(profile) + "\n", encoding="utf-8")
     check(subprocess.run([PYTHON, str(ROOT / "scripts/provider-egress.py"), "validate", "fixture"],
@@ -350,7 +358,7 @@ def main() -> int:
                                 capture_output=True, text=True,
                                 env=dict(os.environ, RECURSION_ENGINE_DIR=str(resolver_dir),
                                          RECURSION_PROVIDER_DIR=str(provider_dir)))
-        check(result.returncode == 2 and not result_has_raw_error_or_path(result, resolver_dir),
+        check(result.returncode == 2 and has_controlled_refusal(result, ("resolve-engine:",), resolver_dir),
               f"resolve-engine hostile manifest {index} is controlled")
     valid_resolver = subprocess.run([PYTHON, str(ROOT / "scripts/resolve-engine.py"), "gemini", "--validate"],
                                     capture_output=True, text=True,
@@ -389,65 +397,244 @@ def main() -> int:
         result = subprocess.run([PYTHON, str(ROOT / "scripts/backup-offsite.py"), "restore-drill",
                                  "--root", path_value, "--snapshot", path_value],
                                 capture_output=True, text=True)
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result),
+        check(has_controlled_refusal(result, ("backup-offsite:",)),
               f"backup restore-drill path {path_value!r} is controlled")
         result = subprocess.run([PYTHON, str(ROOT / "scripts/assignment-token.py"), "fixture", "assignment-a",
                                  "--key-file", path_value], capture_output=True, text=True)
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result),
+        check(has_controlled_refusal(result, ("assignment-token:",)),
               f"assignment-token path {path_value!r} is controlled")
 
     result = subprocess.run([PYTHON, str(ROOT / "scripts/provider-connect-proxy.py"), "probe",
                              "--namespace", "/bad", "--allow", "api.fixture.example:443"],
                             capture_output=True, text=True)
-    check(result.returncode != 0 and not result_has_raw_error_or_path(result), "provider proxy CLI boundary is controlled")
+    check(has_controlled_refusal(result, ("provider-connect-proxy:",)), "provider proxy CLI boundary is controlled")
+    conduct_script = Path("scripts/conduct-hermes.sh")
+
+    def stage_conduct_fixture(root: Path) -> None:
+        root.mkdir(parents=True)
+        # This is a hermetic copy of the actuator's own runtime helpers, not an empty directory.
+        # A positive noop must reach action_transition and taskctl so a hostile case cannot pass
+        # merely because the validator or durable action machinery is absent.
+        shutil.copytree(ROOT / "scripts", root / "scripts")
+        for relative in (
+            "loop/logs", "state/.locks", "state/actions", "state/decision-queue",
+            "state/recovery", "state/instructions", "state/tasks",
+        ):
+            (root / relative).mkdir(parents=True, exist_ok=True)
+
+    def write_raw(path: Path, raw: str | bytes) -> None:
+        path.write_bytes(raw if isinstance(raw, bytes) else raw.encode("utf-8"))
+
+    def run_conduct(root: Path, decision: Path, extra_env: dict[str, str] | None = None):
+        environment = dict(os.environ, RECURSION_ROOT=str(root))
+        if extra_env:
+            environment.update(extra_env)
+        return subprocess.run(
+            [str(BASH), str(root / conduct_script), "--file", str(decision)],
+            capture_output=True, text=True, env=environment,
+        )
+
+    def conduct_text(result: subprocess.CompletedProcess[str]) -> str:
+        return (result.stdout or "") + (result.stderr or "")
+
+    def conduct_refusal(result: subprocess.CompletedProcess[str], marker: str,
+                        root: Path) -> bool:
+        text = conduct_text(result)
+        return result.returncode != 0 and marker in text \
+            and "boundary=decision-path-unavailable" not in text \
+            and not result_has_raw_error_or_path(result, root)
+
+    def action_payload_digest(row: dict[str, Any]) -> str:
+        payload = {
+            "actor": row.get("actor") or "", "verb": row.get("verb") or "",
+            "args": row.get("args", row.get("arguments", [])) or [],
+            "text": row.get("text") or "", "plan": row.get("plan") or None,
+            "instruction_id": row.get("instruction_id") or None,
+            "project": row.get("project") or "",
+            "goal": row.get("goal", row.get("goal_id", "")) or "",
+            "decision_source": row.get("decision_source") or "",
+            "routed_decider": row.get("routed_decider") or "",
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                             ensure_ascii=False, allow_nan=False).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    conduct_positive: dict[str, Any] = {
+        "schema_version": 1, "id": "conduct-positive", "actor": "head-hermes",
+        "routed_decider": "head-hermes", "decision_source": "hermes-model", "verb": "noop",
+        "args": [], "goal": "conduct fixture positive control",
+        "wrong_if": "the noop action does not complete", "text": "",
+        "idempotency_key": "conduct-positive-key",
+    }
+    conduct_positive["decision_payload_sha256"] = action_payload_digest(conduct_positive)
+    positive_raw = json.dumps(conduct_positive, ensure_ascii=False,
+                              separators=(",", ":")).encode("utf-8") + b"\n"
+
     conduct_root = scratch / "conduct-root"
-    (conduct_root / "scripts").mkdir(parents=True)
-    (conduct_root / "loop/logs").mkdir(parents=True)
-    shutil.copy2(ROOT / "scripts/conduct-hermes.sh", conduct_root / "scripts/conduct-hermes.sh")
+    stage_conduct_fixture(conduct_root)
     missing_decision = conduct_root / "missing.json"
-    result = subprocess.run([str(BASH), str(conduct_root / "scripts/conduct-hermes.sh"), "--file", str(missing_decision)],
-                            capture_output=True, text=True, env=dict(os.environ, RECURSION_ROOT=str(conduct_root)))
-    check(result.returncode != 0 and not result_has_raw_error_or_path(result, conduct_root), "conduct-hermes CLI boundary is controlled")
+    result = run_conduct(conduct_root, missing_decision)
+    conduct_host_acl = is_git_bash_acl_artifact(result)
+
+    def conduct_check(condition: bool, label: str) -> None:
+        if conduct_host_acl:
+            check(True, label + " (truthful Git Bash host-ACL skip)")
+        else:
+            check(condition, label)
+
+    conduct_check(result.returncode == 2 and "boundary=decision-path-unavailable" in conduct_text(result)
+                  and not result_has_raw_error_or_path(result, conduct_root),
+                  "conduct-hermes missing-file outcome is a distinct controlled refusal")
+
+    positive_decision = conduct_root / "positive.json"
+    write_raw(positive_decision, positive_raw)
+    result = run_conduct(conduct_root, positive_decision)
+    conduct_check(result.returncode == 0 and "done (verb=noop rc=0)" in conduct_text(result)
+                  and not result_has_raw_error_or_path(result, conduct_root),
+                  "conduct-hermes well-formed decision succeeds in the fixture")
+
+    conduct_expected = {
+        "object": "boundary=semantic-validation", "trailing-newline": "boundary=semantic-validation",
+        "deep-json": "boundary=depth", "huge-int": "boundary=integer-range",
+        "1e999": "boundary=non-finite-number", "NaN": "boundary=json-constant",
+        "Infinity": "boundary=json-constant",
+    }
     for index, (label, raw) in enumerate(json_matrix):
         hostile_decision = conduct_root / f"hostile-{index}.json"
-        hostile_decision.write_text(raw, encoding="utf-8")
-        result = subprocess.run([str(BASH), str(conduct_root / "scripts/conduct-hermes.sh"),
-                                 "--file", str(hostile_decision)],
-                                capture_output=True, text=True,
-                                env=dict(os.environ, RECURSION_ROOT=str(conduct_root)))
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result, conduct_root),
-              f"conduct-hermes hostile JSON {label} is controlled")
+        write_raw(hostile_decision, raw)
+        result = run_conduct(conduct_root, hostile_decision)
+        marker = conduct_expected.get(label, "boundary=non-object-root")
+        conduct_check(conduct_refusal(result, marker, conduct_root),
+                      f"conduct-hermes hostile JSON {label} has typed refusal {marker}")
 
-    # Mutation proof: remove only the local CLASS B call from a copy of the actuator. The
-    # isolated root intentionally omits validate-decision.py, so a bypass reaches a distinct
-    # downstream-unavailable result for every hostile case. This keeps the corpus and the
-    # controlled-output predicate unchanged while proving the guard is mutation-sensitive.
-    boundary_call = ('DECISION_JSON="$(class_b_decision_json "$RAW_DECISION")" \\\n'
-                     '  || { log "REFUSED - decision input boundary rejected"; exit 5; }')
-    conduct_source = (conduct_root / "scripts/conduct-hermes.sh").read_text(encoding="utf-8")
-    if conduct_source.count(boundary_call) != 1:
-        check(False, "conduct-hermes CLASS B mutation marker is unique")
-    else:
-        mutant_root = scratch / "conduct-mutant-root"
-        (mutant_root / "scripts").mkdir(parents=True)
-        (mutant_root / "loop/logs").mkdir(parents=True)
-        mutated_source = conduct_source.replace(boundary_call, 'DECISION_JSON="$RAW_DECISION"', 1)
-        (mutant_root / "scripts/conduct-hermes.sh").write_text(mutated_source, encoding="utf-8")
-        for index, (label, raw) in enumerate(json_matrix):
-            hostile_decision = mutant_root / f"hostile-{index}.json"
-            hostile_decision.write_text(raw, encoding="utf-8")
-            result = subprocess.run([str(BASH), str(mutant_root / "scripts/conduct-hermes.sh"),
-                                     "--file", str(hostile_decision)],
-                                    capture_output=True, text=True,
-                                    env=dict(os.environ, RECURSION_ROOT=str(mutant_root)))
-            if is_git_bash_acl_artifact(result):
-                check(True, f"conduct-hermes mutation {label} is a truthful host-ACL skip")
-            else:
-                text_output = (result.stdout or "") + (result.stderr or "")
-                reached_unprotected_path = result.returncode != 0 \
-                    and "decision validator is unavailable" in text_output
-                check(reached_unprotected_path,
-                      f"conduct-hermes mutation {label} reaches downstream without the guard")
+    def conduct_variant(label: str, **changes: Any) -> bytes:
+        row = copy.deepcopy(conduct_positive)
+        row["id"] = f"conduct-{label}"
+        row["idempotency_key"] = f"conduct-{label}-key"
+        row.update(changes)
+        row["decision_payload_sha256"] = action_payload_digest(row)
+        return json.dumps(row, ensure_ascii=False, allow_nan=True,
+                          separators=(",", ":")).encode("utf-8") + b"\n"
+
+    deep_value: Any = "leaf"
+    for _ in range(65):
+        deep_value = {"nested": deep_value}
+    utf8_raw = conduct_variant("utf8", text="replacement �")
+    utf8_raw = utf8_raw.replace("�".encode("utf-8"), b"\x80", 1)
+    targeted_cases: list[tuple[str, bytes, str, str, str]] = [
+        ("string-length", conduct_variant("string-length", unknown="x" * 4097),
+         "boundary=string", "MAX_STRING string-length guard", "string"),
+        ("integer-type", conduct_variant("integer-type", max_tokens=1.0),
+         "boundary=integer-type", "INTEGER_FIELDS type guard", "integer"),
+        ("real-string", conduct_variant("real-string", max_cost_usd="1"),
+         "boundary=real-type", "REAL_FIELDS numeric-type guard", "real"),
+        ("real-bool", conduct_variant("real-bool", max_cost_usd=True),
+         "boundary=real-type", "REAL_FIELDS bool guard", "real"),
+        ("path-type", conduct_variant("path-type", path=1),
+         "boundary=path-type", "PATH_FIELDS type guard", "path-type"),
+        ("path-unsafe", conduct_variant("path-unsafe", path="../outside"),
+         "boundary=path-unsafe", "check_path guard", "check-path"),
+        ("depth", conduct_variant("depth", unknown=deep_value),
+         "boundary=depth", "MAX_DEPTH guard", "depth"),
+        ("non-object-root", b"[]", "boundary=non-object-root", "object-root guard", "root"),
+        ("utf8", utf8_raw, "boundary=utf8-strict", "strict UTF-8 decode guard", "utf8"),
+        ("parse-constant", conduct_variant("parse-constant", unknown=float("nan")),
+         "boundary=json-constant", "parse_constant guard", "constant"),
+    ]
+    for index, (label, raw, marker, _guard, _mutation_key) in enumerate(targeted_cases):
+        decision = conduct_root / f"targeted-{index}.json"
+        write_raw(decision, raw)
+        result = run_conduct(conduct_root, decision)
+        conduct_check(conduct_refusal(result, marker, conduct_root),
+                      f"conduct-hermes targeted JSON {label} has typed refusal {marker}")
+
+    long_path = str(conduct_root / ("long-" + "x" * 4096))
+    result = run_conduct(conduct_root, Path(long_path))
+    conduct_check(result.returncode == 2 and "boundary=decision-path-invalid" in conduct_text(result)
+                  and not result_has_raw_error_or_path(result, conduct_root),
+                  "conduct-hermes decision path size has a typed refusal")
+
+    # Each mutation is applied to a fresh fixture and only the named guard is disabled.  The
+    # normal assertion must then fail: acceptance is expected for typed extra fields, while the
+    # root/constant/UTF-8 cases must at least reach a different downstream signal.
+    conduct_source = (conduct_root / conduct_script).read_text(encoding="utf-8")
+    mutation_specs: list[tuple[str, str, str, str, bytes | None, str]] = [
+        ("file-path-size", "decision file path byte-size guard",
+         "if not isinstance(raw,str) or not raw or len(raw.encode(\"utf-8\")) > 4096:",
+         "if False:", None, "boundary=decision-path-invalid"),
+        ("string-length", "MAX_STRING value-length guard",
+         "if len(value) > MAX_STRING or any(ord(char) < 32 for char in value):",
+         "if False:", conduct_variant("string-length", unknown="x" * 4097), "boundary=string"),
+        ("integer-type", "INTEGER_FIELDS type guard",
+         "if key in INTEGER_FIELDS and type(value) is not int:",
+         "if False:", conduct_variant("integer-type", max_tokens=1.0), "boundary=integer-type"),
+        ("real-bool", "REAL_FIELDS numeric/bool guard",
+         "if key in REAL_FIELDS and value is not None",
+         "if False and value is not None", conduct_variant("real-bool", max_cost_usd=True),
+         "boundary=real-type"),
+        ("path-type", "PATH_FIELDS type guard",
+         "if value is not None and not isinstance(value, str):",
+         "if False:", conduct_variant("path-type", path=1), "boundary=path-type"),
+        ("check-path", "PATH_FIELDS check_path guard", "            check_path(value)", "            pass",
+         conduct_variant("path-unsafe", path="../outside"), "boundary=path-unsafe"),
+        ("depth", "MAX_DEPTH guard", "if depth > MAX_DEPTH:", "if False:",
+         conduct_variant("depth", unknown=deep_value), "boundary=depth"),
+        ("object-root", "non-object root guard", "if not isinstance(value, dict):", "if False:",
+         b"[]", "boundary=non-object-root"),
+        ("utf8", "strict UTF-8 snapshot decode guard",
+         "sys.stdout.write(raw.decode(\"utf-8\", \"strict\"))",
+         "sys.stdout.write(raw.decode(\"utf-8\", \"replace\"))", utf8_raw, "boundary=utf8-strict"),
+        ("parse-constant", "parse_constant guard",
+         "value=json.loads(raw, parse_int=bounded_int, parse_float=bounded_float,\n                     parse_constant=lambda name: (_ for _ in ()).throw(ValueError(\n                         \"decision JSON constant is forbidden\")))",
+         "value=json.loads(raw, parse_int=bounded_int, parse_float=bounded_float)",
+         conduct_variant("parse-constant", unknown=float("nan")), "boundary=json-constant"),
+    ]
+    mutation_rows: list[str] = []
+    for index, (label, guard_description, needle, replacement, raw, expected_marker) in enumerate(mutation_specs):
+        occurrences = conduct_source.count(needle)
+        check(occurrences == 1, f"conduct-hermes mutation {label} marker is unique")
+        if occurrences != 1:
+            mutation_rows.append(f"{label} -> guard disabled -> MUTATION MARKER NOT UNIQUE")
+            continue
+        mutant_root = scratch / f"conduct-mutant-{index}"
+        stage_conduct_fixture(mutant_root)
+        mutant_source = conduct_source.replace(needle, replacement, 1)
+        mutant_script = mutant_root / conduct_script
+        mutant_script.write_text(mutant_source, encoding="utf-8")
+        syntax = subprocess.run([str(BASH), "-n", str(mutant_script)], capture_output=True, text=True)
+        conduct_check(syntax.returncode == 0,
+                      f"conduct-hermes mutation {label} remains bash-syntax-valid")
+        if raw is None:
+            decision = Path(str(mutant_root / ("long-" + "x" * 4096)))
+        else:
+            decision = mutant_root / f"mutation-{label}.json"
+            write_raw(decision, raw)
+        result = run_conduct(mutant_root, decision)
+        if is_git_bash_acl_artifact(result):
+            check(True, f"conduct-hermes mutation {label} is a truthful host-ACL skip")
+            mutation_rows.append(f"{label} -> {guard_description} disabled -> HOST-ACL SKIP")
+            continue
+        assertion_failed = not conduct_refusal(result, expected_marker, mutant_root)
+        conduct_check(assertion_failed,
+                      f"conduct-hermes mutation {label} fails its original assertion")
+        text_output = conduct_text(result)
+        if result.returncode == 0:
+            observed = "accepted (rc=0)"
+        elif result_has_raw_error_or_path(result, mutant_root):
+            observed = "downstream raw failure exposed"
+        else:
+            observed = ", ".join(sorted({
+                marker for marker in (
+                    "boundary=decision-path-unavailable", "boundary=decision-path-invalid",
+                    "boundary=semantic-validation", "boundary=non-finite-number",
+                    "boundary=controlled-input-failure",
+                ) if marker in text_output
+            })) or f"controlled rc={result.returncode}"
+        mutation_rows.append(f"{label} -> {guard_description} disabled -> assertion observed ({observed})")
+
+    print("CONDUCT_MUTATION_TABLE")
+    for row in mutation_rows:
+        print("  " + row)
 
     # Exercise the remaining Phase 4 validator/loader/CLI boundaries with the same raw matrix.
     # These commands are intentionally pointed at the isolated fixture root, so a malformed
@@ -455,33 +642,33 @@ def main() -> int:
     for label, raw in json_matrix:
         result = subprocess.run([PYTHON, str(ROOT / "scripts/validate-control-state.py"), "decision"],
                                 input=raw, text=True, capture_output=True)
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result),
+        check(has_controlled_refusal(result, ("ERR",)),
               f"validate-control-state hostile JSON {label} is controlled")
         result = subprocess.run([PYTHON, str(ROOT / "scripts/validate-decision.py"), "noop", raw],
                                 capture_output=True, text=True)
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result),
+        check(has_controlled_refusal(result, ("ERR",)),
               f"validate-decision hostile JSON {label} is controlled")
         result = subprocess.run(
             [PYTHON, str(ROOT / "scripts/transition_receipt.py"), "--root", str(scratch),
              "apply-fields", "state/missing.json", raw, raw], capture_output=True, text=True,
         )
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result, scratch),
+        check(has_controlled_refusal(result, ("transition-receipt:",), scratch),
               f"transition-receipt hostile JSON {label} is controlled")
         result = subprocess.run(
             [PYTHON, str(ROOT / "scripts/instruction_routing.py"), "--root", str(scratch),
              "route", "hostile", raw, raw], capture_output=True, text=True,
         )
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result, scratch),
+        check(has_controlled_refusal(result, ("instruction-routing:",), scratch),
               f"instruction-routing hostile JSON {label} is controlled")
         result = subprocess.run([PYTHON, str(ROOT / "scripts/project-pilot.py"), "execute-json", raw],
                                 capture_output=True, text=True,
                                 env=dict(os.environ, RECURSION_ROOT=str(scratch)))
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result, scratch),
+        check(has_controlled_refusal(result, ("project-pilot:",), scratch),
               f"project-pilot hostile JSON {label} is controlled")
         result = subprocess.run([PYTHON, str(ROOT / "scripts/seed_contract.py"), "digest",
                                  "--root", str(scratch), "--path", raw],
                                 capture_output=True, text=True)
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result, scratch),
+        check(has_controlled_refusal(result, ("seed-contract:",), scratch),
               f"seed-contract hostile path {label} is controlled")
 
     alias_registry = scratch / "hostile-alias-registry.json"
@@ -490,7 +677,7 @@ def main() -> int:
         result = subprocess.run([PYTHON, str(ROOT / "scripts/resolve-model-alias.py"), "custom", "implementer"],
                                 capture_output=True, text=True,
                                 env=dict(os.environ, RECURSION_ALIAS_REGISTRY=str(alias_registry)))
-        check(result.returncode != 0 and not result_has_raw_error_or_path(result, alias_registry),
+        check(has_controlled_refusal(result, ("model-alias:",), alias_registry),
               f"resolve-model-alias hostile JSON {label} is controlled")
 
     # Differential corpus for every constrained engine-manifest field.  The declared Draft-7
