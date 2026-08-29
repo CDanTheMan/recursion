@@ -9,17 +9,19 @@ or broadened by another.
 from __future__ import annotations
 
 import json
+import ipaddress
 import os
 import re
 import base64
 import binascii
+import socket
 from urllib.parse import quote
 from pathlib import Path
 from typing import Iterable
 
 
 NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,63}\Z")
-HOST_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+\Z")
+HOST_RE = re.compile(r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 ENV_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}\Z")
 ASSIGNMENT_RE = re.compile(r"[A-Za-z0-9._-]{1,255}\Z")
 NAMESPACE_RE = re.compile(r"recursion-provider-[a-z0-9-]{1,40}\Z")
@@ -40,12 +42,27 @@ class ProviderProfileError(ValueError):
     """A provider profile is absent, malformed, disabled, or mismatched."""
 
 
+def _is_ip_literal(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        # inet_aton also recognizes legacy octal, hexadecimal, and shortened IPv4 spellings.
+        try:
+            socket.inet_aton(host)
+        except OSError:
+            return False
+        return True
+    return True
+
+
 def parse_authority(value: object) -> tuple[str, int]:
     if not isinstance(value, str) or value.count(":") != 1:
         raise ProviderProfileError("authority must be a DNS name and explicit port")
     host, port_text = value.rsplit(":", 1)
     if not HOST_RE.fullmatch(host.lower()) or not port_text.isascii() or not port_text.isdecimal():
         raise ProviderProfileError("authority must be a canonical DNS name and explicit port")
+    if _is_ip_literal(host.lower()):
+        raise ProviderProfileError("IP-literal authorities are forbidden")
     if port_text != str(int(port_text, 10)):
         raise ProviderProfileError("authority port is not canonical")
     port = int(port_text, 10)

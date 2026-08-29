@@ -30,10 +30,10 @@ import time
 from collections.abc import Iterable
 
 try:
-    from provider_contract import enabled_allowlist, enabled_profile_names, load_profile
+    from provider_contract import enabled_allowlist, enabled_profile_names, load_profile, parse_authority
 except ModuleNotFoundError:  # importlib-based hermetic tests load this file by path.
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-    from provider_contract import enabled_allowlist, enabled_profile_names, load_profile
+    from provider_contract import enabled_allowlist, enabled_profile_names, load_profile, parse_authority
 
 try:
     import pwd
@@ -54,7 +54,6 @@ MAX_CLIENT_HELLO = 65536
 TLS_HANDSHAKE = 0x16
 TLS_CLIENT_HELLO = 0x01
 SERVER_NAME_EXTENSION = 0x0000
-HOST_RE = re.compile(r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 HEADER_RE = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+\Z")
 # Control-plane identifiers are 128 characters; the separator and 64-character contract digest
 # make the generated assignment identity at most 193 characters.  Keep a round 255-character
@@ -151,27 +150,6 @@ def load_revoked_jtis(path: pathlib.Path | None) -> set[str]:
                                              for item in revoked):
         raise ConnectDenied("capability revocation state is invalid")
     return set(revoked)
-
-
-def parse_authority(value: str) -> tuple[str, int]:
-    if value.count(":") != 1 or any(ch.isspace() for ch in value):
-        raise ValueError("authority must be a DNS name and explicit port")
-    host, port_text = value.rsplit(":", 1)
-    host = host.lower()
-    if not HOST_RE.fullmatch(host) or not port_text.isascii() or not port_text.isdecimal():
-        raise ValueError("authority must be a canonical DNS name and explicit port")
-    try:
-        ipaddress.ip_address(host)
-    except ValueError:
-        pass
-    else:
-        raise ValueError("IP-literal authorities are forbidden")
-    port = int(port_text, 10)
-    if port_text != str(port):
-        raise ValueError("authority port is not canonical")
-    if not 1 <= port <= 65535:
-        raise ValueError("authority port is out of range")
-    return host, port
 
 
 def parse_allowlist(values: Iterable[str]) -> set[tuple[str, int]]:
@@ -765,8 +743,6 @@ def make_parser() -> argparse.ArgumentParser:
     probe.add_argument("--listen-port", type=int, default=18080)
     probe.add_argument("--allow", required=True)
     probe.add_argument("--live", action="store_true")
-    probe.add_argument("--capability-token")
-    probe.add_argument("--capability-identity")
     return parser
 
 
@@ -826,8 +802,8 @@ def main() -> int:
         authority = parse_authority(args.allow)
         result = probe_namespace(
             args.namespace, args.listen_port, authority, args.live,
-            args.capability_token or os.environ.get("RECURSION_PROVIDER_PROBE_TOKEN"),
-            args.capability_identity or os.environ.get("RECURSION_PROVIDER_PROBE_IDENTITY"),
+            os.environ.get("RECURSION_PROVIDER_PROBE_TOKEN"),
+            os.environ.get("RECURSION_PROVIDER_PROBE_IDENTITY"),
         )
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0

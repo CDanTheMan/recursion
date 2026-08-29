@@ -15,6 +15,8 @@ from urllib.parse import quote, unquote, urlsplit
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PROXY = ROOT / "scripts" / "provider-connect-proxy.py"
+sys.path.insert(0, str(ROOT / "scripts"))
+from provider_contract import parse_authority  # noqa: E402
 
 
 def load_proxy():
@@ -77,6 +79,30 @@ class ConnectContractTest(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     self.proxy.parse_allowlist([value])
+
+        self.assertEqual(parse_authority("API.ANTHROPIC.COM:443"), ("api.anthropic.com", 443))
+        hostile = (
+            "0177.0.0.1:443", "0x7f.0x0.0x0.0x1:443", "127.0x0.1:443",
+            "127.1:443", "0x7f000001:443", "2130706433:443", "[::1]:443",
+            "[::ffff:127.0.0.1]:443", "::ffff:127.0.0.1:443", "1.2.3.4.:443",
+            "api.anthropic.com.:443",
+        )
+        for value in hostile:
+            with self.subTest(shared_value=value):
+                with self.assertRaises(ValueError):
+                    self.proxy.parse_allowlist([value])
+                with self.assertRaises(ValueError):
+                    parse_authority(value)
+
+    def test_probe_capability_is_environment_only(self):
+        for option in ("--capability-token", "--capability-identity"):
+            with self.subTest(option=option):
+                with self.assertRaises(SystemExit) as refused:
+                    self.proxy.make_parser().parse_args([
+                        "probe", "--namespace", "/run/netns/recursion-provider-only",
+                        "--allow", "api.anthropic.com:443", option, "argv-secret",
+                    ])
+                self.assertEqual(refused.exception.code, 2)
 
     def test_signed_capability_binds_transport_to_one_profile(self):
         key = b"k" * 32
@@ -356,7 +382,7 @@ class DeploymentContractTest(unittest.TestCase):
         network = (ROOT / "scripts/provider-network.sh").read_text()
         self.assertIn("RECURSION_PROVIDER_PROBE_TOKEN", network)
         self.assertIn("RECURSION_PROVIDER_PROBE_IDENTITY", network)
-        self.assertIn("--capability-identity", network)
+        self.assertNotIn("--capability-identity", network)
         self.assertNotIn("--capability-token", network)
 
     def test_profile_selection_refuses_all_disabled_and_selects_only_enabled(self):

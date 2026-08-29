@@ -69,18 +69,28 @@ def main() -> int:
         token = "A" * 64 + "." + "B" * 64
         authorized = subprocess.run(
             [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
-             "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh",
-             "--assignment-token", token, "--assignment-identity", "assignment-a"],
-            capture_output=True, text=True, env=env,
+             "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh"],
+            capture_output=True, text=True,
+            env=dict(env, RECURSION_ASSIGNMENT_PROXY_TOKEN=token,
+                     RECURSION_ASSIGNMENT_IDENTITY="assignment-a"),
         )
         check(authorized.returncode == 0 and "assignment-a:" in authorized.stdout
               and token in authorized.stdout,
-              "assignment token is bound into the proxy transport URL", failures)
+              "assignment capability flows through the ephemeral environment", failures)
+        for option in ("--assignment-token", "--assignment-identity"):
+            argv_secret = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
+                 "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh", option,
+                 "argv-secret"], capture_output=True, text=True, env=env,
+            )
+            check(argv_secret.returncode == 2 and "HTTP_PROXY=" not in argv_secret.stdout,
+                  f"{option} is not an accepted secret interface", failures)
         delimiter_identity = subprocess.run(
             [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
-             "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh",
-             "--assignment-token", token, "--assignment-identity", "assignment:a"],
-            capture_output=True, text=True, env=env,
+             "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh"],
+            capture_output=True, text=True,
+            env=dict(env, RECURSION_ASSIGNMENT_PROXY_TOKEN=token,
+                     RECURSION_ASSIGNMENT_IDENTITY="assignment:a"),
         )
         check(delimiter_identity.returncode == 96,
               "Basic userinfo delimiter is refused in assignment identity", failures)
