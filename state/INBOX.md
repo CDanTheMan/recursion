@@ -129,3 +129,58 @@ being recommended to paper over a real fail-closed defect: there is no such defe
 
 Still needs a human yes. Phase 5 is now at 15/15 with its race suite at 10/10, so A and B both
 cost real rework on an otherwise-clean phase.
+
+### Update 2026-08-29 (late) â€” the discriminating arm ran, and it changes what option A costs
+
+The experiment the previous update marked pending has now executed on the Linux lane. Same
+fixture, same ref, everything identical except the one gate command:
+
+```
+P2PURE ref=origin/tmp/integ-p2c sha=8056ace
+--- arm A: unmodified fixture ---
+    gate: mktask heavy-contention "test -s app/heavy.txt && touch $HEAVY_GATE_MARKER"
+    FAIL  contended heavy gate did not fail closed (rc=0 status=escalated gate=held)
+--- arm B: pure predicate, everything else identical ---
+    gate: mktask heavy-contention "test -s app/heavy.txt"
+    ok    contended heavy gate defers without executing unlocked
+```
+
+This confirms the contract reading by execution rather than by argument: with a pure predicate,
+Phase 2's heavy-contention deferral works. The gate command is the whole difference.
+
+**The causal chain, stated exactly.** Arm A does not fail on the marker. It fails on the other
+three conditions in the assertion:
+
+```
+[ "$heavy_rc" = 75 ] && [ status = running ] && [ -d worktree ] && [ ! -e "$HEAVY_GATE_MARKER" ]
+        arm A: rc=0, status=escalated      -> two conditions false
+        arm B: rc=75, status=running       -> all true
+```
+
+Phase 2 refuses the side-effecting gate at admission, so the task escalates instead of deferring,
+and the deferral behaviour never gets a chance to be observed. The marker was never the issue.
+
+**What this newly reveals, and it argues against a naive option A.** Under a pure predicate,
+nothing in the fixture creates `$HEAVY_GATE_MARKER`, so `[ ! -e "$HEAVY_GATE_MARKER" ]` is
+trivially true. Arm B passes partly on a condition that can no longer fail. Deleting the `touch`
+therefore does not preserve the assertion â€” it silently converts the non-execution witness into a
+tautology, which is the fabricated-value vacuity form this effort exists to eliminate.
+
+So option A is not "edit one fixture line". It is "re-engineer how the harness witnesses that a
+contended gate body did not execute, without using the gate to instrument itself" â€” plausibly from
+controller run state or the worker log rather than a gate-created file. That is real work in
+another phase, and it is the kind of change that can quietly weaken a red suite if done casually.
+
+**Recommendation unchanged: B**, and the new evidence raises my confidence. B keeps the witness
+mechanism intact while satisfying the vacuity argument in full â€” bare `touch` and absolute paths
+stay refused. Option A remains legitimate but now carries a visible cost that should be priced in
+before it is chosen, not discovered afterward.
+
+**Still not mine to decide.** The evidence now says clearly *what each option costs*. It does not
+say which contract the fabric should have, and that is not recorded in `DECISIONS.md`. Phase 2
+stays blocked and the ordered integration still stalls at step 2 until a human answers.
+
+Everything else continues to move: Phase 6/7 is 15/15 with both mutation proofs holding, Phase 8's
+race rates are 10/10 and 10/10, Phase 5's are 10/10 and 10/10, and Phases 3 and 4 have fresh
+remediations under gate.
+
