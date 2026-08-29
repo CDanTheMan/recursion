@@ -705,14 +705,14 @@ def main() -> int:
     conduct_expected = {
         "object": "boundary=semantic-validation", "trailing-newline": "boundary=semantic-validation",
         "deep-json": "boundary=depth", "huge-int": "boundary=integer-range",
-        "1e999": "boundary=non-finite-number", "NaN": "boundary=json-constant",
-        "Infinity": "boundary=json-constant",
+        "1e999": "boundary=non-finite-number", "NaN": "boundary=non-finite-number",
+        "Infinity": "boundary=non-finite-number",
     }
     for index, (label, raw) in enumerate(json_matrix):
         hostile_decision = conduct_root / f"hostile-{index}.json"
         write_raw(hostile_decision, raw)
         result = run_conduct(conduct_root, hostile_decision)
-        marker = conduct_expected.get(label, "boundary=non-object-root")
+        marker = conduct_expected.get(label, "boundary=semantic-validation")
         conduct_check(conduct_refusal(result, marker, conduct_root),
                       f"conduct-hermes hostile JSON {label} has typed refusal {marker}")
 
@@ -796,10 +796,7 @@ def main() -> int:
          "boundary=path-unsafe", "check_path guard", "check-path"),
         ("depth", conduct_variant("depth", unknown=deep_value),
          "boundary=depth", "MAX_DEPTH guard", "depth"),
-        ("non-object-root", b"[]", "boundary=non-object-root", "object-root guard", "root"),
         ("utf8", utf8_raw, "boundary=utf8-strict", "strict UTF-8 decode guard", "utf8"),
-        ("parse-constant", conduct_variant("parse-constant", unknown=float("nan")),
-         "boundary=json-constant", "parse_constant guard", "constant"),
     ]
     for index, (label, raw, marker, _guard, _mutation_key) in enumerate(targeted_cases):
         decision = conduct_root / f"targeted-{index}.json"
@@ -807,12 +804,6 @@ def main() -> int:
         result = run_conduct(conduct_root, decision)
         conduct_check(conduct_refusal(result, marker, conduct_root),
                       f"conduct-hermes targeted JSON {label} has typed refusal {marker}")
-
-    long_path = str(conduct_root / ("long-" + "x" * 4096))
-    result = run_conduct(conduct_root, Path(long_path))
-    conduct_check(result.returncode == 2 and "boundary=decision-path-invalid" in conduct_text(result)
-                  and not result_has_raw_error_or_path(result, conduct_root),
-                  "conduct-hermes decision path size has a typed refusal")
 
     # The child receives the immutable bytes and their digest separately from the projection path.
     # A projection rewrite must remain refused, and a forged snapshot must hit the original
@@ -841,15 +832,13 @@ def main() -> int:
                   and not result_has_raw_error_or_path(result, conduct_root),
                   "conduct-hermes refuses a tampered immutable snapshot with the digest message")
 
-    # Each mutation is applied to a fresh fixture and only the named guard is disabled.  The
+    # Each live mutation is applied to a fresh fixture and only the named guard is disabled.  The
     # original assertion includes the typed boundary marker from the enabled-guard control and
-    # must fail once that guard is removed: acceptance is expected for typed extra fields and the
-    # UTF-8 case, while the root/constant cases must reach a specific downstream signal.
+    # must fail once that guard is removed.  Three formerly named guards are intentionally absent:
+    # no supported host can open a canonical path over the OS path limit, and semantic/non-finite
+    # validation already owns the two duplicate value refusals.
     conduct_source = (conduct_root / conduct_script).read_text(encoding="utf-8")
     mutation_specs: list[tuple[str, str, str, str, bytes | None, str, str]] = [
-        ("file-path-size", "decision file path byte-size guard",
-         "if not isinstance(raw,str) or not raw or len(raw.encode(\"utf-8\")) > 4096:",
-         "if False:", None, "boundary=decision-path-invalid", "boundary=decision-path-unavailable"),
         ("string-length", "MAX_STRING value-length guard",
          "if len(value) > MAX_STRING or any(ord(char) < 32 for char in value):", "if False:",
          conduct_variant("string-length", unknown="x" * 4097), "boundary=string", "accepted"),
@@ -868,19 +857,29 @@ def main() -> int:
         ("depth", "MAX_DEPTH guard", "if depth <= MAX_DEPTH:\n        return",
          "if True:\n        return",
          conduct_variant("depth", unknown=deep_value), "boundary=depth", "accepted"),
-        ("object-root", "non-object root guard", "if not isinstance(value, dict):", "if False:",
-         b"[]", "boundary=non-object-root", "boundary=semantic-validation"),
         ("utf8", "strict UTF-8 snapshot decode guard",
          "text=raw.decode(\"utf-8\", \"strict\")",
          "text=raw.decode(\"utf-8\", \"replace\")", utf8_raw,
          "boundary=utf8-strict", "accepted"),
-        ("parse-constant", "parse_constant guard",
-         "value=json.loads(text, parse_int=bounded_int, parse_float=bounded_float,\n                     parse_constant=lambda name: (_ for _ in ()).throw(ValueError(\n                         \"decision JSON constant is forbidden\")))",
-         "value=json.loads(text, parse_int=bounded_int, parse_float=bounded_float)",
-         conduct_variant("parse-constant", unknown=float("nan")), "boundary=json-constant",
-         "boundary=non-finite-number"),
     ]
     mutation_rows: list[str] = []
+    removed_guard_specs = [
+        ("file-path-size", "decision file path byte-size guard",
+         "len(raw.encode(\"utf-8\")) > 4096",
+         "removed: no canonical path over the supported OS path limit can reach the child"),
+        ("object-root", "non-object root guard",
+         "    if not isinstance(value, dict):\n        raise ValueError(\"decision is not an object\")",
+         "removed: semantic validation is the sole object-shape owner"),
+        ("parse-constant", "parse_constant guard",
+         "parse_constant=lambda name: (_ for _ in ()).throw(ValueError(\n                         \"decision JSON constant is forbidden\"))",
+         "removed: bounded non-finite-number validation is the sole numeric owner"),
+    ]
+    for label, guard_description, needle, resolution in removed_guard_specs:
+        check(needle not in conduct_source,
+              f"conduct-hermes removed mutation guard {label} is absent")
+        mutation_rows.append(
+            f"{label} -> case={label}; guard={guard_description}; resolution={resolution}"
+        )
     for index, (label, guard_description, needle, replacement, raw, expected_marker,
                 expected_mutation_outcome) in enumerate(mutation_specs):
         occurrences = conduct_source.count(needle)

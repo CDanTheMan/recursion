@@ -366,7 +366,7 @@ import os,re,stat,sys
 from pathlib import Path
 try:
     raw=sys.argv[1]
-    if not isinstance(raw,str) or not raw or len(raw.encode("utf-8")) > 4096:
+    if not isinstance(raw,str) or not raw:
         raise ValueError("decision file path is invalid")
     normalized=raw.replace("\\", "/")
     if ("\x00" in raw or any(ord(char) < 32 for char in raw)
@@ -569,14 +569,10 @@ try:
         raise ValueError("decision exceeds the bounded input size")
     text=raw.decode("utf-8", "strict")
     check_json_depth(text)
-    value=json.loads(text, parse_int=bounded_int, parse_float=bounded_float,
-                     parse_constant=lambda name: (_ for _ in ()).throw(ValueError(
-                         "decision JSON constant is forbidden")))
-    if not isinstance(value, dict):
-        raise ValueError("decision is not an object")
+    value=json.loads(text, parse_int=bounded_int, parse_float=bounded_float)
     check_value(value)
-    # Keep a downstream type check beside the first dict-only consumer.  If a future mutation or
-    # refactor weakens the front guard, the semantic boundary still refuses a list before .items.
+    # Semantic validation owns the root shape.  Keeping this check beside the first dict-only
+    # consumer makes that ownership explicit without duplicating the parser guard.
     if type(value) is not dict:
         raise ValueError("decision semantic validation requires an object")
     if "schema_version" in value and (type(value["schema_version"]) is not int
@@ -628,12 +624,8 @@ except TypeError as exc:
     raise SystemExit(2)
 except ValueError as exc:
     message=str(exc)
-    if "JSON constant" in message:
-        marker="json-constant"
-    elif "semantic validation" in message:
+    if "semantic validation" in message:
         marker="semantic-validation"
-    elif "not an object" in message:
-        marker="non-object-root"
     elif "nesting" in message:
         marker="depth"
     elif "string" in message:

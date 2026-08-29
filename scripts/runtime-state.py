@@ -73,6 +73,16 @@ MANIFEST_SHA256 = re.compile(r"[0-9a-f]{64}")
 MANIFEST_MODE = re.compile(r"0o[0-7]{3}")
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_MANIFEST_FILES = 100000
+_ABSOLUTE_ERROR_PATH = re.compile(
+    r"(?<![A-Za-z0-9_.-])(?:(?:[A-Za-z]:[\\/])|(?:\\\\)|/)[^\s,;)]*"
+)
+
+
+def _public_refusal_message(message: object) -> str:
+    """Preserve stable refusal reasons without echoing caller-controlled paths."""
+    text = str(message)
+    text = re.split(r": \[(?:Errno|WinError)\b", text, maxsplit=1)[0]
+    return _ABSOLUTE_ERROR_PATH.sub("<path>", text)
 
 
 def is_plain_int(value: object) -> bool:
@@ -1060,16 +1070,16 @@ def collect_files(root: Path) -> list[Path]:
 
 def _managed_manifest_path(raw: object) -> str:
     if not isinstance(raw, str) or not raw or "\\" in raw or "\x00" in raw:
-        raise RuntimeError(f"unsafe manifest path: {raw!r}")
+        raise RuntimeError("unsafe manifest path")
     relative = PurePosixPath(raw)
     if relative.is_absolute() or relative.as_posix() != raw or ".." in relative.parts \
             or "." in relative.parts or not relative.parts or relative.parts[0] != "state":
-        raise RuntimeError(f"unsafe manifest path: {raw!r}")
+        raise RuntimeError("unsafe manifest path")
     if raw in RUNTIME_FILE_PATHS:
         return raw
     if any(raw.startswith(directory + "/") for directory in RUNTIME_DIRECTORY_PATHS):
         return raw
-    raise RuntimeError(f"manifest path is outside managed runtime state: {raw}")
+    raise RuntimeError("manifest path is outside managed runtime state")
 
 
 def _native_relative(relative: str) -> Path:
@@ -1579,7 +1589,7 @@ def main() -> int:
     except (OSError, ValueError, TypeError, UnicodeError, OverflowError, RecursionError,
             RuntimeError, json.JSONDecodeError, subprocess.TimeoutExpired,
             subprocess.SubprocessError) as exc:
-        print(f"runtime-state: operation refused: {exc}", file=sys.stderr)
+        print(f"runtime-state: operation refused: {_public_refusal_message(exc)}", file=sys.stderr)
         return 2
     return 0
 
