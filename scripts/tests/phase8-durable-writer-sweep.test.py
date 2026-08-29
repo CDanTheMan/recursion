@@ -491,6 +491,46 @@ def run_shared_battery(root: Path) -> int:
     return total
 
 
+def run_isolated_windows_reparse_guard(root: Path) -> int:
+    """Prove the initial Windows handle reparse bit is independently enforced."""
+    guard_source = Path(fabric.__file__).read_text(encoding="utf-8")
+    expected_guard = "if not is_directory or is_reparse:"
+    if expected_guard not in guard_source:
+        raise AssertionError("Windows handle reparse guard is missing or weakened")
+    if os.name != "nt":
+        print("ok    Windows handle-only reparse guard: structural parity checked (POSIX execution skipped)")
+        return 1
+
+    root.mkdir(parents=True, exist_ok=True)
+    target = root / "real-directory"
+    target.mkdir()
+    original_open = fabric._windows_open
+
+    def report_handle_reparse(path, **kwargs):
+        result = original_open(path, **kwargs)
+        if Path(path) == target:
+            handle, identity, is_directory, links, _ = result
+            return handle, identity, is_directory, links, True
+        return result
+
+    # Make this case depend only on the initial handle tuple.  The independent
+    # path-level check and the later pinned validation are deliberately quiet;
+    # deleting `or is_reparse` must therefore make this case pass.
+    with patch.object(fabric, "_windows_path_is_reparse", return_value=False), \
+            patch.object(fabric, "_windows_open", side_effect=report_handle_reparse), \
+            patch.object(fabric._WindowsPinnedDirectory, "validate", return_value=None):
+        try:
+            with fabric._pin_store_directory(target):
+                pass
+        except fabric.ReconciliationError as exc:
+            if str(exc) != "store parent is not a real directory":
+                raise AssertionError(f"isolated handle reparse guard produced unexpected refusal: {exc}") from exc
+        else:
+            raise AssertionError("isolated handle reparse guard accepted a reparse-marked directory")
+    print("ok    Windows handle-only reparse guard: isolated line-539 sub-guard refused")
+    return 1
+
+
 def run_posix_source_race(root: Path) -> int:
     """Exercise the POSIX source-handle guard and its pre-commit ordering."""
     if os.name == "nt":
@@ -640,6 +680,23 @@ def run_placement_boundaries() -> int:
         else:
             raise AssertionError(f"placement {field} accepted a mismatched registry key")
         checked += 1
+    try:
+        fabric.resolve_placement(requirements, [candidate], {host.host_id: host},
+                                 {host.host_id: heartbeat}, {pool.pool_id: pool},
+                                 now_epoch=1787918400, created_at=NOW, pause_guard=True)
+    except fabric.FabricError as exc:
+        if getattr(exc, "code", None) != "INVALID_INPUT":
+            raise AssertionError(f"pause_guard wrong type produced {exc.code}, not INVALID_INPUT")
+    except (ValueError, TypeError, OverflowError, RecursionError, UnicodeError, OSError, AttributeError) as exc:
+        raise AssertionError(f"pause_guard wrong type leaked {type(exc).__name__}") from exc
+    else:
+        raise AssertionError("pause_guard wrong type was accepted")
+    assignment, _ = fabric.resolve_placement(
+        requirements, [candidate], {host.host_id: host}, {host.host_id: heartbeat}, {pool.pool_id: pool},
+        now_epoch=1787918400, created_at=NOW, pause_guard=fabric.PauseGuard(False))
+    if assignment is None:
+        raise AssertionError("legitimate open pause_guard blocked placement")
+    checked += 1
     print(f"ok    placement boundary matrix: {checked} malformed/mismatched containers rejected")
     return checked
 
@@ -710,10 +767,11 @@ def main() -> int:
         placement = run_placement_boundaries()
         registry = run_registry_boundaries(run_root / "registry")
         shared = run_shared_battery(run_root / "shared")
+        isolated_reparse = run_isolated_windows_reparse_guard(run_root / "isolated-reparse")
         absent_race = run_absent_destination_race(run_root / "absent-race")
         posix = run_posix_source_race(run_root / "posix")
         positive = run_positive_controls(run_root / "positive")
-        print(f"phase8-durable-writer-sweep: PASS differential={differential} hostile={hostile} placement={placement} registry={registry} shared={shared} absent_race={absent_race} posix={posix} positive={positive}")
+        print(f"phase8-durable-writer-sweep: PASS differential={differential} hostile={hostile} placement={placement} registry={registry} shared={shared} isolated_reparse={isolated_reparse} absent_race={absent_race} posix={posix} positive={positive}")
         return 0
     finally:
         # Only this harness-owned child is cleaned.  The caller-owned scratch

@@ -60,7 +60,7 @@ _PLACEMENT_POLICIES = frozenset({"manual-pin", "subscription-first", "local-firs
                                 "fastest-eligible", "strongest-reviewer", "weighted-rotation"})
 
 _INPUT_ERRORS = (json.JSONDecodeError, ValueError, TypeError, OverflowError,
-                 RecursionError, UnicodeDecodeError, UnicodeError, OSError)
+                 RecursionError, UnicodeDecodeError, UnicodeError, OSError, AttributeError)
 
 
 class FabricError(ValueError):
@@ -625,10 +625,10 @@ def _open_leaf_in_directory(directory: Any, path: Path, *, write: bool, create: 
         except BaseException:
             os.close(descriptor)
             raise
-    _validate_leaf_info(before, identity=expected_identity)
+    before_identity = _validate_leaf_info(before, identity=expected_identity)
     descriptor = os.open(name, (os.O_WRONLY if write else os.O_RDONLY) | (getattr(os, "O_APPEND", 0) if append else 0) | nofollow, dir_fd=directory)
     try:
-        actual = _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=before)
+        actual = _validate_leaf_info(_leaf_info_for_descriptor(descriptor), identity=before_identity)
         return descriptor, actual
     except BaseException:
         os.close(descriptor)
