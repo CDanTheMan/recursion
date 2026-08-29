@@ -109,7 +109,9 @@ def main() -> int:
         scripts_dir = root_local / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         sandbox_copy = scripts_dir / "worker-sandbox.sh"
-        sandbox_copy.write_bytes(SANDBOX_SCRIPT.read_bytes())
+        shutil.copy2(SANDBOX_SCRIPT, sandbox_copy)
+        if os.name != "nt":
+            check(bool(sandbox_copy.stat().st_mode & 0o111), "staged worker-sandbox.sh remains executable")
         (scripts_dir / "provider-egress-profiles.json").write_bytes(
             (SOURCE / "scripts" / "provider-egress-profiles.json").read_bytes()
         )

@@ -23,7 +23,7 @@ except ImportError as exc:  # pragma: no cover - supplied by the Phase 5 image
 
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = Path(sys.executable)
-BASH = Path(r"C:\Program Files\Git\bin\bash.exe")
+BASH = shutil.which("bash") or (r"C:\Program Files\Git\bin\bash.exe" if os.name == "nt" else None)
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import assignment
@@ -376,14 +376,17 @@ def run_path_sweep(scratch: Path) -> None:
             profile_path.symlink_to(outside)
             profile_symlink = True
         except (OSError, NotImplementedError):
-            profile_junction_result = subprocess.run(
-                ["cmd.exe", "/c", "mklink", "/J", str(profile_path), str(scratch)],
-                capture_output=True,
-            )
-            if profile_junction_result.returncode == 0:
-                profile_junction = True
+            if os.name == "nt":
+                profile_junction_result = subprocess.run(
+                    ["cmd.exe", "/c", "mklink", "/J", str(profile_path), str(scratch)],
+                    capture_output=True,
+                )
+                if profile_junction_result.returncode == 0:
+                    profile_junction = True
+                else:
+                    print("ok - provider profile reparse battery skipped because link creation is unavailable")
             else:
-                print("ok - provider profile reparse battery skipped because link creation is unavailable")
+                print("ok - provider profile reparse battery skipped because symlinks are unavailable on this host")
     except (OSError, NotImplementedError):
         print("ok - provider profile reparse battery skipped because this Windows account cannot replace the profile")
     else:
@@ -410,15 +413,18 @@ def run_path_sweep(scratch: Path) -> None:
 
     outside_dir = scratch / "outside-dir"
     outside_dir.mkdir()
-    junction = scratch / "junction-source"
-    junction_result = subprocess.run(
-        ["cmd.exe", "/c", "mklink", "/J", str(junction), str(outside_dir)],
-        capture_output=True,
-    )
-    if junction_result.returncode == 0:
-        expect_typed(lambda: runtime_layout._safe_source(junction), "Windows junction runtime source", "unavailable")
+    if os.name == "nt":
+        junction = scratch / "junction-source"
+        junction_result = subprocess.run(
+            ["cmd.exe", "/c", "mklink", "/J", str(junction), str(outside_dir)],
+            capture_output=True,
+        )
+        if junction_result.returncode == 0:
+            expect_typed(lambda: runtime_layout._safe_source(junction), "Windows junction runtime source", "unavailable")
+        else:
+            print("ok - junction battery skipped because junction creation is unavailable")
     else:
-        print("ok - junction battery skipped because junction creation is unavailable")
+        print("ok - Windows junction battery skipped on non-Windows host")
 
     output_link = scratch / "output-link"
     try:
@@ -896,6 +902,9 @@ def run_differential() -> None:
 
 
 def main() -> int:
+    if BASH is None or not Path(BASH).is_file():
+        print("SKIP - bash interpreter not found on PATH or at the Windows-only fallback (exit 77)")
+        return 77
     supplied = os.environ.get("PHASE5_SWEEP_ROOT", "").strip()
     owned = not supplied
     if supplied:
