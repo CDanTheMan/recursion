@@ -246,6 +246,8 @@ def main() -> int:
                 parsed_segments.append(shlex.split(segment))
             except ValueError as exc:
                 fail(f"acceptance gate cannot be parsed: {exc}")
+        if any(not words for words in parsed_segments):
+            fail("acceptance gate contains an empty command segment")
         vacuous = [vacuous_success(words) for words in parsed_segments]
         hides_prior_result = any(op in {"||", ";"} and vacuous[index + 1]
                                  for index, op in enumerate(operators))

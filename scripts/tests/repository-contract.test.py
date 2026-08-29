@@ -392,19 +392,57 @@ class RepositoryContractTests(unittest.TestCase):
         schema = json.loads((Path(__file__).parents[2] /
                              "schemas/control-plane/v2/repository-contract.schema.json").read_text())
         validator = jsonschema.Draft202012Validator(schema)
+        # Keep this corpus deliberately enumerated.  The schema is the admission contract and
+        # validate-gate.py is the runtime parser; every accepted direct segment and every
+        # permitted 1-3 segment `&&` composition must agree across both implementations.
         valid = (
             "git diff --check",
             "test -s src/result.txt",
+            "[ -s src/result.txt ]",
+            "test -e src/a && test -s src/b",
+            "test -e src/a&&test -s src/b",
+            " test -e src/a \t&&\t git diff --check ",
+            "git diff --check && test -s \"src/result file.txt\" && [ -s src/other.txt ]",
+            "test -s src\\result.txt && git status --short",
         )
         refused = (
+            "",
+            "   ",
             "foo /bar",
             "/bin/foo",
             "python3 --version",
+            "bash -c 'test -s src/result.txt'",
+            "command python3 src/check.py",
+            "exec python3 src/check.py",
             "python3 ../check.py",
             "python3 src/../check.py",
+            "test -s src/../result.txt",
+            "test -s /tmp/result.txt",
+            "test -s \"C:\\tmp\\result.txt\"",
+            "test -s src/a & test -s src/b",
+            "test -s src/a &&& test -s src/b",
+            "test -s src/a &&",
+            "test -s src/a && && test -s src/b",
+            "test -s src/a && echo ok",
+            "test -s src/a || test -s src/b",
+            "test -s src/a; test -s src/b",
+            "test -s \"$(echo src/result.txt)\"",
+            "test -s src/result.txt > /tmp/out",
+            "test -s src/result.txt | grep -q x",
             "git -C ../other diff --check",
+            "git -C../other diff --check",
             "git --git-dir=../other/.git diff",
+            "git --git-dir ../other/.git diff",
             "git --work-tree /tmp diff",
+            "git --work-tree=/tmp diff",
+            "git -c core.hooksPath=/tmp diff",
+            "git -ccore.pager=cat diff",
+            "git --config /tmp/cfg diff",
+            "git --config=/tmp/cfg diff",
+            "git --config-env=GIT_DIR=../other diff",
+            "git --output /tmp/out diff",
+            "git --output=/tmp/out diff",
+            "git diff -C ../other --check",
         )
         for command in valid:
             with self.subTest(command=command):
