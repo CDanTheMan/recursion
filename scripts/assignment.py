@@ -607,6 +607,27 @@ def _open_record_lock_posix(task_directory: int, digest: str) -> int:
         raise
 
 
+def _assert_posix_record_links(
+        descriptor: int, identity: tuple[int, ...], expected_links: int, phase: str
+) -> None:
+    """Require an exact descriptor-bound link count at a publication state boundary."""
+    try:
+        metadata = os.fstat(descriptor)
+    except OSError as exc:
+        raise jsonl_durable.JsonlDurabilityError(
+            f"cannot inspect assignment record during {phase}"
+        ) from exc
+    actual_identity = (int(metadata.st_dev), int(metadata.st_ino))
+    if not stat.S_ISREG(metadata.st_mode) or actual_identity != identity:
+        raise jsonl_durable.JsonlDurabilityError(
+            f"assignment record identity changed during {phase}"
+        )
+    if metadata.st_nlink != expected_links:
+        raise jsonl_durable.JsonlDurabilityError(
+            f"assignment record has {metadata.st_nlink} hard links during {phase}"
+        )
+
+
 def _persist_record_posix(
         task_directory: int, digest: str, encoded: bytes
 ) -> tuple[int, tuple[int, ...], bool] | None:
@@ -677,6 +698,10 @@ def _persist_record_posix_unlocked(
         jsonl_durable._revalidate_opened_leaf(temporary, descriptor, temporary_identity)
         jsonl_durable.validate_durable_leaf_at(task_directory, final_name, allow_missing=True)
         _assignment_persistence_hook("pre-record-hardlink")
+        # The hook is the last point at which a peer can add a link before this
+        # publication attempt.  Revalidate the same open descriptor after it so the
+        # link operation cannot consume a temporary already known to be shared.
+        jsonl_durable._revalidate_opened_leaf(temporary, descriptor, temporary_identity)
         try:
             os.link(
                 temporary_name, final_name,
@@ -704,9 +729,13 @@ def _persist_record_posix_unlocked(
                 raise AssignmentError("content-address collision — refusing to overwrite immutable assignment")
         else:
             publication_succeeded = True
-            # The temporary is deliberately still present here.  A peer that links it
-            # during this hook must be detected by the held descriptor after cleanup.
+            # Until cleanup, a successful publication has exactly two names: the
+            # temporary and FINAL.  Check that descriptor-bound state immediately after
+            # the post-publication hook, before cleanup can hide an extra hostile name.
             _assignment_persistence_hook("post-record-hardlink")
+            _assert_posix_record_links(
+                descriptor, temporary_identity, 2, "post-record-hardlink"
+            )
     except BaseException as exc:
         primary_error = exc
 
@@ -753,12 +782,13 @@ def _persist_record_posix_unlocked(
 
     if publication_succeeded:
         try:
-            # This is descriptor-bound: the handle identity and its post-unlink nlink
-            # are checked against the pinned FINAL name before the operation succeeds.
+            # After the temporary unlink, FINAL must be the sole remaining name.  Keep
+            # checking the same descriptor so the link count cannot be confused with a
+            # different file at the pathname.
             jsonl_durable._revalidate_opened_leaf(final_path, descriptor, temporary_identity)
             _assignment_persistence_hook("post-record-validation")
-            # The second check makes the exact post-validation race regression
-            # deterministic while documenting the unavoidable final return boundary.
+            # The hook runs after the first check; revalidate the same descriptor again
+            # before handing the record to the caller.
             jsonl_durable._revalidate_opened_leaf(final_path, descriptor, temporary_identity)
         except BaseException as exc:
             try:
