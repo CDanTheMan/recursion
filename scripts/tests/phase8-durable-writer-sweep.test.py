@@ -25,7 +25,8 @@ from unittest.mock import patch
 
 try:
     import jsonschema
-    from jsonschema import Draft202012Validator, validators
+    from importlib.metadata import version as package_version
+    from jsonschema import Draft202012Validator
 except ImportError as exc:  # pragma: no cover - environment prerequisite
     print(f"phase8-durable-writer-sweep: SKIP (jsonschema unavailable: {exc})")
     raise SystemExit(77)
@@ -37,6 +38,39 @@ import execution_fabric as fabric  # noqa: E402
 NOW = "2026-08-28T12:00:00Z"
 SOURCE = "a" * 40
 RESULT = "b" * 40
+JSONSCHEMA_VERSION = package_version("jsonschema")
+
+
+# Draft 2020-12 defines an integer by its numeric value, so a JSON number such
+# as 1.0 is an integer to the stock validator.  No standard keyword can reject
+# 1.0 while accepting 1; the runtime's exact-Python-int policy is intentionally
+# stricter than the published schema for these ten cases.
+_JUSTIFIED_INTEGER_FLOAT_SCHEMA_ONLY = frozenset({
+    "host_registration.max_concurrency=1.0",
+    "host_registration.workload_concurrency={'implementer': 1.0}",
+    "host_heartbeat.sequence=1.0",
+    "host_heartbeat.lease_epoch=1.0",
+    "pool_status.max_concurrency=1.0",
+    "pool_status.quota_remaining=1.0",
+    "pool_status.account_quota_remaining=1.0",
+    "placement_requirements.schema_version=1.0",
+    "placement_candidate.weight=1.0",
+    "assignment.schema_version=1.0",
+})
+
+# NaN is not a JSON number and Python's jsonschema API can nevertheless be
+# handed one directly.  Its minimum/maximum comparisons are all false, so no
+# standard numeric keyword can reject it.  The runtime parse boundary rejects
+# NaN before records reach this API; these four direct-object cases are the
+# deliberately documented residual parity gap.
+_JUSTIFIED_NAN_SCHEMA_ONLY = frozenset({
+    "pool_status.cost_per_run=NaN",
+    "placement_requirements.model_parameters={'bad': NaN}",
+    "placement_candidate.cost_per_run=NaN",
+    "assignment.model_parameters={'bad': NaN}",
+})
+_JUSTIFIED_SCHEMA_ONLY = (_JUSTIFIED_INTEGER_FLOAT_SCHEMA_ONLY |
+                          _JUSTIFIED_NAN_SCHEMA_ONLY)
 
 
 def _make_junction(link: Path, target: Path) -> None:
@@ -81,15 +115,27 @@ def _records() -> tuple[fabric.HostRegistration, fabric.HostHeartbeat, fabric.Po
     return host, heartbeat, pool, requirements, candidate, assignment, receipt, policy
 
 
-def _strict_validator(schema: dict) -> Draft202012Validator:
-    """Apply the runtime's exact Python numeric policy to JSON Schema types."""
-    checker = Draft202012Validator.TYPE_CHECKER.redefine_many({
-        "integer": lambda _checker, value: type(value) is int,
-        "number": lambda _checker, value: (type(value) in {int, float} and
-                                            math.isfinite(value) if type(value) is float else type(value) is int),
-    })
-    strict_class = validators.extend(Draft202012Validator, type_checker=checker)
-    return strict_class(schema)
+def _stock_validator(schema: dict) -> Draft202012Validator:
+    """Use the shipped schema with the stock Draft 2020-12 validator."""
+    return Draft202012Validator(schema)
+
+
+def _parity_label(kind: str, field: str, value: object) -> str:
+    def render(item: object) -> str:
+        if isinstance(item, float):
+            if math.isnan(item):
+                return "NaN"
+            if math.isinf(item):
+                return "Infinity" if item > 0 else "-Infinity"
+        if isinstance(item, dict):
+            return "{" + ", ".join(f"{render(key)}: {render(nested)}"
+                                   for key, nested in item.items()) + "}"
+        if isinstance(item, list):
+            return "[" + ", ".join(render(nested) for nested in item) + "]"
+        return repr(item)
+
+    rendered = render(value)
+    return f"{kind}.{field}={rendered}"
 
 
 def _runtime_parser(kind: str, value: dict) -> object:
@@ -124,7 +170,7 @@ def _refresh_digest(kind: str, value: dict) -> None:
 def run_differential() -> int:
     schema_path = Path(__file__).resolve().parents[2] / "schemas" / "control-plane" / "v1" / "execution-fabric.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    validator = _strict_validator(schema)
+    validator = _stock_validator(schema)
     host, heartbeat, pool, requirements, candidate, assignment, receipt, policy = _records()
     bases = {item.to_dict()["kind"]: item.to_dict() for item in
              (host, heartbeat, pool, requirements, candidate, assignment, receipt, policy)}
@@ -188,7 +234,9 @@ def run_differential() -> int:
         ("routing_policy", "allow_on_demand", 1),
         )
     )
-    mismatches: list[str] = []
+    runtime_only: list[str] = []
+    schema_only: list[str] = []
+    raw_runtime: list[str] = []
     for kind, field, value in cases:
         candidate_value = copy.deepcopy(bases[kind])
         if field != "valid":
@@ -205,15 +253,29 @@ def run_differential() -> int:
         except fabric.FabricError:
             runtime_ok = False
         except (ValueError, TypeError, OverflowError, RecursionError, UnicodeError, OSError) as exc:
-            mismatches.append(f"{kind}.{field}: raw runtime exception {type(exc).__name__}")
+            raw_runtime.append(f"{_parity_label(kind, field, value)}: {type(exc).__name__}")
             runtime_ok = False
         else:
             runtime_ok = True
-        if schema_ok != runtime_ok:
-            mismatches.append(f"{kind}.{field}={value!r}: schema={schema_ok} runtime={runtime_ok}")
-    if mismatches:
-        raise AssertionError("schema/runtime mismatches:\n" + "\n".join(mismatches))
-    print(f"ok    CLASS D differential: {len(cases)} constrained mutations, zero mismatches/raw exceptions")
+        label = _parity_label(kind, field, value)
+        if runtime_ok and not schema_ok:
+            runtime_only.append(label)
+        elif schema_ok and not runtime_ok:
+            schema_only.append(label)
+    if raw_runtime:
+        raise AssertionError("raw runtime exceptions:\n" + "\n".join(raw_runtime))
+    if runtime_only:
+        raise AssertionError("runtime_only acceptance is unsafe:\n" + "\n".join(runtime_only))
+    actual_schema_only = frozenset(schema_only)
+    if actual_schema_only != _JUSTIFIED_SCHEMA_ONLY:
+        unexpected = sorted(actual_schema_only - _JUSTIFIED_SCHEMA_ONLY)
+        missing = sorted(_JUSTIFIED_SCHEMA_ONLY - actual_schema_only)
+        raise AssertionError(
+            "schema_only set changed; unexpected=" + repr(unexpected) +
+            " missing=" + repr(missing))
+    print(f"ok    CLASS D differential: {len(cases)} stock-schema cases "
+          f"jsonschema={JSONSCHEMA_VERSION} runtime_only={len(runtime_only)} "
+          f"schema_only={len(schema_only)} raw={len(raw_runtime)}")
     return len(cases)
 
 
@@ -228,6 +290,7 @@ def run_hostile_inputs(root: Path) -> int:
         ("1e999", lambda: fabric.PlacementRequirements.from_dict(dict(requirements.to_dict(), max_cost_usd=float("inf")))),
         ("NaN", lambda: fabric.PlacementRequirements.from_dict(dict(requirements.to_dict(), max_cost_usd=float("nan")))),
         ("1e999 JSON", lambda: fabric._json_load("1e999")),
+        ("Infinity JSON", lambda: fabric._json_load("Infinity")),
         ("NaN JSON", lambda: fabric._json_load("NaN")),
         ("huge JSON integer", lambda: fabric._json_load("1" + "0" * 500)),
         ("deeply nested JSON", lambda: fabric._json_load("[" * 65 + "0" + "]" * 65)),
@@ -678,7 +741,7 @@ def run_registry_boundaries(root: Path) -> int:
     """Keep key encoding and verifier identity checks sensitive in runtime and schema."""
     root.mkdir(parents=True, exist_ok=True)
     schema_path = Path(__file__).resolve().parents[2] / "schemas" / "control-plane" / "v1" / "execution-fabric.schema.json"
-    validator = _strict_validator(json.loads(schema_path.read_text(encoding="utf-8")))
+    validator = _stock_validator(json.loads(schema_path.read_text(encoding="utf-8")))
     mutations = (("key-hex", "key_hex", "AA"), ("verifier-identity", "verifier_identity", "controller/\n"))
     checked = 0
     for label, field, value in mutations:
@@ -854,7 +917,7 @@ def run_positive_controls(root: Path) -> int:
     receipts.issue(receipt)
     registry.rotate("controller/verifier-one", "rotated-verifier-key")
     schema_path = Path(__file__).resolve().parents[2] / "schemas" / "control-plane" / "v1" / "execution-fabric.schema.json"
-    _strict_validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(
+    _stock_validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(
         json.loads(verifier_path.read_text(encoding="utf-8")))
     if receipts.get(receipt.receipt_id) is None:
         raise AssertionError("rotated-out receipt was not verifiable from retired key history")
