@@ -2603,7 +2603,12 @@ def _append_jsonl_unpinned(path: Path, value: dict,
     # the already-pinned parent chain immediately after it, before opening the leaf or deriving
     # any cache pathname from the now-attacker-controlled spelling of ``path``.
     if parent_pins is not None:
-        revalidate_durable_parent_pins(parent_pins)
+        try:
+            revalidate_durable_parent_pins(parent_pins)
+        except (JsonlDurabilityError, OSError) as exc:
+            raise JsonlDurabilityError(
+                "JSONL durable parent changed after journal leaf-open seam"
+            ) from exc
     descriptor = _open_durable_leaf(
         path, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0), 0o600,
         directory_fd=parent_directory,

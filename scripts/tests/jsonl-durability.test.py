@@ -256,12 +256,23 @@ def control_quarantine_persists_before_truncate() -> tuple[bool, str]:
         path.parent.mkdir(parents=True)
         path.write_bytes(b'{"id":"committed"}\n{"id":"torn"')
         calls: list[str] = []
-        real_fsync_dir = jsonl_durable._fsync_dir
         real_truncate = os.ftruncate
 
-        def record_fsync(directory: Path, _descriptor: int | None = None) -> None:
-            calls.append("fsync:" + directory.relative_to(root).as_posix())
-            real_fsync_dir(directory)
+        if os.name == "nt":
+            real_fsync_dir = jsonl_durable._fsync_dir
+
+            def record_fsync(directory: Path, _descriptor: int | None = None) -> None:
+                calls.append("fsync:" + directory.relative_to(root).as_posix())
+                real_fsync_dir(directory)
+            fsync_patch = mock.patch("jsonl_durable._fsync_dir", side_effect=record_fsync)
+        else:
+            real_fsync = os.fsync
+
+            def record_fsync(descriptor: int) -> None:
+                target = Path(os.readlink(f"/proc/self/fd/{descriptor}"))
+                calls.append("fsync:" + target.relative_to(root).as_posix())
+                real_fsync(descriptor)
+            fsync_patch = mock.patch("jsonl_durable.os.fsync", side_effect=record_fsync)
 
         def checked_truncate(descriptor: int, size: int) -> None:
             quarantine = root / "state/jsonl-quarantine"
@@ -270,7 +281,7 @@ def control_quarantine_persists_before_truncate() -> tuple[bool, str]:
             calls.append("truncate")
             real_truncate(descriptor, size)
 
-        with mock.patch("jsonl_durable._fsync_dir", side_effect=record_fsync), \
+        with fsync_patch, \
              mock.patch("jsonl_durable.os.ftruncate", side_effect=checked_truncate):
             append_jsonl(path, {"id": "new"})
         parent_sync = calls.index("fsync:state")
