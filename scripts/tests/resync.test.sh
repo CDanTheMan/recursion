@@ -37,8 +37,8 @@ command -v git >/dev/null 2>&1 || { echo "resync.test: git is required"; exit 3;
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/root"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/roadmaps" \
   "$R/state/pilot-windows" "$R/loop/logs" "$TMP/origins"
-for s in assignment.py assist.sh author.sh board.sh capacity.sh conduct.sh digest.sh engine_contract.py git-scope.py \
-         instruction_routing.py intake.sh jsonl_durable.py notify.sh pilot_instruction.py plan.sh project-pilot.py \
+for s in assignment.py assignment_contract.py assist.sh author.sh board.sh capacity.sh conduct.sh digest.sh engine_contract.py git-scope.py \
+         instruction_routing.py intake.sh jsonl_durable.py notify.sh phase5_safety.py pilot_instruction.py plan.sh project-pilot.py \
          project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py publish.sh \
          remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
          seed_contract.py taskctl.sh transition_receipt.py validate-assignment-result.py validate-control-state.py \

@@ -47,6 +47,7 @@ R="$TMP/repo"; mkdir -p "$R/scripts/tests" "$R/apps/chiron" "$R/other" "$R/state
 cp "$SRC/scripts/work.sh" "$R/scripts/"
 cp "$SRC/scripts/assignment-token.py" "$R/scripts/"
 cp "$SRC/scripts/worker-sandbox.sh" "$R/scripts/"
+cp "$SRC/scripts/phase5_safety.py" "$R/scripts/"
 chmod +x "$R/scripts/worker-sandbox.sh"
 cp "$SRC/scripts/board.sh" "$R/scripts/"
 cp "$SRC/scripts/notify.sh" "$R/scripts/"

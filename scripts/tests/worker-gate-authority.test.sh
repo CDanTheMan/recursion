@@ -16,7 +16,7 @@ for s in assignment.py assist.sh author.sh board.sh capacity.sh conduct.sh engin
   remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
   seed_contract.py taskctl.sh transition_receipt.py validate-assignment-result.py validate-control-state.py \
   validate-decision.py validate-gate.py validate-verifier-result.py validate-worker-result.py work.sh assignment-token.py \
-  worker-evidence.py worker-sandbox.sh; do
+  worker-evidence.py worker-sandbox.sh phase5_safety.py; do
   cp "$SRC/scripts/$s" "$R/scripts/"
 done
 : > "$R/.env"
@@ -41,6 +41,7 @@ N="$TMP/network-controller"; mkdir -p "$N/scripts" "$N/worktree"
 cp "$SRC/scripts/worker-sandbox.sh" "$N/scripts/"
 cp "$SRC/scripts/provider-network.sh" "$N/scripts/"
 cp "$SRC/scripts/provider-egress.py" "$N/scripts/"
+cp "$SRC/scripts/phase5_safety.py" "$N/scripts/"
 network_rc=0
 RECURSION_ROOT="$N" RECURSION_TEST_WORKER=logical \
   bash "$N/scripts/worker-sandbox.sh" --engine claude --role implementer \
@@ -50,6 +51,19 @@ if [ "$network_rc" = 96 ] && grep -q 'NetworkNamespacePath=' "$SRC/scripts/worke
   ok "provider-only refuses execution without a controller-owned network capability"
 else
   no "provider-only silently retained host egress or lacks a namespace boundary"
+fi
+
+# The logical test bypass is permitted only for a disposable platform-temp controller.  The
+# checked-out repository is a deliberately non-temp controller on this host and must be refused.
+non_temp_rc=0
+RECURSION_ROOT="$SRC" RECURSION_TEST_WORKER=logical \
+  bash "$N/scripts/worker-sandbox.sh" --engine claude --role implementer \
+  --worktree "$N/worktree" --network-policy provider-only --prompt fixture \
+  >/dev/null 2>&1 || non_temp_rc=$?
+if [ "$non_temp_rc" = 95 ]; then
+  ok "logical test bypass refuses a non-temp controller root"
+else
+  no "logical test bypass accepted a non-temp controller root (rc=$non_temp_rc)"
 fi
 
 if grep -q 'commit_event(base, value)' "$SRC/scripts/project-reconcile.py" \

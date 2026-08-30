@@ -16,9 +16,9 @@ Grounding notes (read the source before changing the joins below):
     "${MODEL_ALIAS:-legacy}" into worker-evidence.py --model-alias, which is the exact
     string this script reads back out of a run record — "legacy" is not invented here,
     it is the literal sentinel the executor already writes).
-  - A run-evidence record (worker-evidence.py) carries task_id/role/model_alias/status/
-    outcome/exit_code/started_at/finished_at but NOT engine — engine is joined from the
-    task header via task_id, using the run's role to pick implementer vs verifier engine.
+  - Phase 5 run evidence carries its resolved engine directly. Older records without it are
+     read through the task-header compatibility join; current assignment facts are not rebuilt
+     from mutable headers when direct evidence exists.
   - Canonical escalation identity events (taskctl.sh esc-record -> emit_event
     escalation-open/escalation-resolve) are written with an EMPTY task field today, so a
     join on events.jsonl's task field will legitimately find zero attributable
@@ -270,6 +270,8 @@ def load_runs(root: Path) -> tuple[list[RunRecord], int, int, bool]:
         finished = _parse_ts(record.get("finished_at"))
         assignment_digest = record.get("assignment_digest") \
             if isinstance(record.get("assignment_digest"), str) and record.get("assignment_digest") else None
+        direct_engine = record.get("engine") \
+            if isinstance(record.get("engine"), str) and record.get("engine") else None
         attribution = {}
         if assignment_digest:
             # Assignment-native records are deliberately joined to the immutable persisted
@@ -278,17 +280,28 @@ def load_runs(root: Path) -> tuple[list[RunRecord], int, int, bool]:
             persisted = assignment.load_assignment(
                 root / "state" / "assignments", task_id, assignment_digest,
             )
-            try:
-                assignment.validate_assignment(persisted, require_source_evidence=True)
-            except assignment.AssignmentError:
-                skipped += 1
-                continue
-            engine = persisted["engine"]
-            attribution = {key: persisted.get(key) for key in (
+            if persisted is None:
+                if direct_engine is None:
+                    skipped += 1
+                    continue
+            else:
+                try:
+                    assignment.validate_assignment(persisted, require_source_evidence=True)
+                except assignment.AssignmentError:
+                    if direct_engine is None:
+                        skipped += 1
+                        continue
+                else:
+                    direct_engine = persisted["engine"]
+                    attribution = {key: persisted.get(key) for key in (
+                        "assignment_digest", "capacity_pool", "provider", "host", "model",
+                        "sandbox_profile", "source_repository", "source_branch", "source_sha")}
+        engine = direct_engine
+        if assignment_digest and not attribution and direct_engine is not None:
+            attribution = {key: record.get(key) for key in (
                 "assignment_digest", "capacity_pool", "provider", "host", "model",
-                "sandbox_profile", "source_repository", "source_branch", "source_sha")}
-        else:
-            engine = None
+                "sandbox_profile", "source_repository", "source_branch", "source_sha")
+                           if key in record}
         runs.append(RunRecord(run_id, task_id, role, alias, status, outcome, started, finished,
                               engine, assignment_digest, attribution))
         parsed += 1
@@ -352,14 +365,13 @@ def build_buckets(
         get(task.engine, task.model_alias).task_status[task.status] += 1
         get(task.verifier_engine, task.verifier_model_alias).verifier_arms += 1
 
-    # Run evidence: an assignment-native run (Phase 3, D-016) carries its own resolved engine
-    # directly on the record -- use it. Only a run without one (pre-Phase-3 evidence) falls
-    # back to joining the task header via task_id + role, which can drift after the run
-    # finishes (docs/audits/recursion-v2-infrastructure-audit-2026-08-28.md).
+    # Run evidence is authoritative when it carries the resolved engine.  Phase 3 assignment
+    # attribution is joined for records that carry its digest; older records fall back to the
+    # task-id compatibility join.
     unknown_task_runs = 0
     by_bucket_task_role: dict[tuple[str, str], Counter[tuple[str, str]]] = {}
     for run in runs:
-        if run.engine is not None:
+        if run.engine:
             engine = run.engine
         else:
             task = tasks.get(run.task_id)

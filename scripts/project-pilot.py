@@ -28,7 +28,15 @@ from transition_receipt import (
     TransitionReceiptError, authenticated_transition, commit_event, commit_transition,
     json_mutation, resume_transition, raw_text_mutation, text_mutation,
 )
-from engine_contract import alias_role_ok, default_registry_path, pilot_engine_ok
+try:
+    from engine_contract import alias_role_ok, default_registry_path, pilot_engine_ok
+except Exception as exc:
+    module_name = getattr(exc, "name", None) or "engine_contract"
+    if __name__ == "__main__":
+        print(f"project-pilot: first-party module '{module_name}' is unavailable or malformed",
+              file=sys.stderr)
+        raise SystemExit(95)
+    raise
 from pilot_instruction import require_affirmative_command
 from seed_contract import SeedContractError, inspect_repository, validate_contract
 from project_authority import (
@@ -106,7 +114,8 @@ def read_json(path: Path, unavailable_code: int = 4,
         if len(raw_bytes) > MAX_PILOT_JSON_BYTES:
             fail("state record exceeds the 256 KiB read bound", invalid_code)
         raw = raw_bytes.decode("utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
         fail("cannot read validated state", unavailable_code)
     try:
         value = json.loads(raw, parse_constant=_reject_json_constant)
@@ -123,7 +132,8 @@ def read_required_json(path: Path, absent: str, *, unavailable_code: int = 4) ->
         path.lstat()
     except FileNotFoundError:
         fail(absent)
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
         fail("cannot inspect validated state", unavailable_code)
     return read_json(path, unavailable_code=unavailable_code, malformed_code=4)
 
@@ -161,7 +171,8 @@ def fields(path: Path, unavailable_code: int | None = None) -> dict[str, str]:
             if ":" in line and not line.startswith((" ", "\t")):
                 key, value = line.split(":", 1)
                 result.setdefault(key.strip(), value.strip())
-    except OSError:
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
         if unavailable_code is not None:
             fail("cannot read status state", unavailable_code)
     return result
@@ -175,7 +186,8 @@ def status_files(directory: Path, suffix: str | None, limit: int | None,
         directory_info = os.lstat(directory)
     except FileNotFoundError:
         return []
-    except OSError:
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
         fail("cannot inspect status state", 74)
     if _is_reparse_info(directory_info) or not stat.S_ISDIR(directory_info.st_mode):
         fail("status state is not a real directory", 74)
@@ -189,7 +201,8 @@ def status_files(directory: Path, suffix: str | None, limit: int | None,
                     entry_info = entry.stat(follow_symlinks=False)
                 except AttributeError:
                     entry_info = None
-                except OSError:
+                except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+                        RecursionError):
                     fail("cannot inspect status state record", 74)
                 if entry.is_symlink() or (entry_info is not None and _is_reparse_info(entry_info)):
                     fail("status state record is a symlink/reparse point", 74)
@@ -201,7 +214,8 @@ def status_files(directory: Path, suffix: str | None, limit: int | None,
         # Runtime directories are created lazily; disappearance before the scan proves no records
         # were readable at this instant and must not be conflated with a permission failure.
         return []
-    except OSError:
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
         fail("cannot enumerate status state", 74)
     ordered = sorted(paths)
     if limit is None:
@@ -215,7 +229,8 @@ def rows(base: Path, unavailable_code: int = 4) -> list[dict[str, str]]:
     registry = base / "state/portfolio.tsv"
     try:
         lines = registry.read_text(encoding="utf-8").splitlines()
-    except OSError:
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
         fail("portfolio unavailable", unavailable_code)
     for line in lines:
         if not line or line.startswith("#"):
@@ -322,7 +337,7 @@ def scoped_state(base: Path, project: str) -> dict:
             try:
                 value["remote_events"] = read_events_for_run(path)
             except RemoteEvidenceError as exc:
-                fail(f"remote evidence is unusable for {path.name}: {exc}", 74)
+                fail("remote evidence is unusable", 74)
             value["file"] = str(path.relative_to(base)); runs.append(value)
     evidence = []
     for path in status_files(base / "state/evidence", None, 100):
@@ -1083,10 +1098,13 @@ def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict) -> dict:
         fail(f"pilot plan {label} gate validator returned malformed evidence")
     hashes = contract.get("gate_files") if isinstance(contract, dict) else None
     controller_hashes = contract.get("controller_gate_files") if isinstance(contract, dict) else None
-    if not re.fullmatch(r"[0-9a-f]{64}", str(contract.get("acceptance_sha256") or "")) \
+    if set(contract) != {"acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"} \
+            or contract.get("acceptance") != gate["acceptance"] \
+            or not re.fullmatch(r"[0-9a-f]{64}", str(contract.get("acceptance_sha256") or "")) \
             or not isinstance(hashes, dict) or set(hashes) != set(gate["gate_files"]) \
             or not isinstance(controller_hashes, dict) \
             or set(controller_hashes) != set(gate.get("controller_gate_files") or []) \
+            or (not hashes and not controller_hashes) \
             or any(not re.fullmatch(r"[0-9a-f]{64}", str(digest))
                    for digest in [*hashes.values(), *controller_hashes.values()]):
         fail(f"pilot plan {label} gate validator returned incomplete evidence")
@@ -1269,13 +1287,19 @@ def validate_seed_binding(cfg: dict, value: dict) -> dict | None:
 
 def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: object,
                   bind_gate_contract: bool = False, check_remote: bool = False) -> dict:
-    if not isinstance(value, dict) or type(value.get("schema_version")) is not int \
-            or value["schema_version"] != 1:
+    if not isinstance(value, dict) or not isinstance(value.get("schema_version"), int) \
+            or isinstance(value.get("schema_version"), bool) or value.get("schema_version") != 1:
         fail("pilot plan must be a schema_version 1 object")
-    if len(json.dumps(value, sort_keys=True, separators=(",", ":"))) > 65536:
-        fail("pilot plan exceeds the 64 KiB bound")
-    # Return a canonical value without mutating the model decision or stored record in memory.
-    value = _json_copy(value)
+    try:
+        encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        if len(encoded) > 65536:
+            fail("pilot plan exceeds the 64 KiB bound")
+        # Return a canonical value without mutating the model decision or stored record in memory.
+        value = json.loads(encoded)
+    except SystemExit:
+        raise
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        fail(f"pilot plan contains malformed JSON values: {type(exc).__name__}")
     if value.get("id") != plan_id or value.get("project_id") != project or not IDENT.fullmatch(plan_id):
         fail("pilot plan identity does not match its decision")
     validate_authority_binding(cfg, value, check_remote=check_remote)
@@ -1333,6 +1357,11 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
     if isinstance(cost, bool) or not isinstance(cost, (int, float)) or cost < 0 \
             or not isinstance(budget.get("publication_required"), bool):
         fail("pilot plan has an invalid cost or publication budget")
+    if "max_retries" in budget and (
+            isinstance(budget["max_retries"], bool)
+            or not isinstance(budget["max_retries"], int)
+            or budget["max_retries"] < 0):
+        fail("pilot plan has an invalid integer budget")
     task_ids: list[str] = []
     for task in tasks:
         if not isinstance(task, dict): fail("pilot plan task is not an object")
@@ -1674,7 +1703,9 @@ def active_source_pin(base: Path, project: str) -> dict | None:
         value = read_json(path, unavailable_code=74, malformed_code=4)
         if value.get("project_id") != project or value.get("status") not in {"armed", "open"}:
             continue
-        if type(value.get("schema_version")) is not int or value["schema_version"] != 1 \
+        if not isinstance(value.get("schema_version"), int) \
+                or isinstance(value.get("schema_version"), bool) \
+                or value.get("schema_version") != 1 \
                 or not IDENT.fullmatch(str(value.get("id") or "")) \
                 or path.stem != value.get("id") \
                 or not IDENT.fullmatch(str(value.get("goal_id") or "")) \
@@ -2211,4 +2242,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError,
+            AttributeError, OverflowError, RecursionError) as exc:
+        print("project-pilot: invalid input or state", file=sys.stderr)
+        raise SystemExit(4)

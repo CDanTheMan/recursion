@@ -10,9 +10,12 @@ Component 1 (manifests) and Component 2 (resolver --validate mode) land.
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
 import importlib.util
 import json
 import os
+import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -22,6 +25,11 @@ SOURCE = Path(__file__).resolve().parents[2]
 RESOLVE_ENGINE = SOURCE / "scripts" / "resolve-engine.py"
 ENGINES_DIR = SOURCE / "scripts" / "engines"
 sys.path.insert(0, str(SOURCE / "scripts"))
+
+resolver_spec = importlib.util.spec_from_file_location("resolve_engine", RESOLVE_ENGINE)
+assert resolver_spec is not None and resolver_spec.loader is not None
+resolver = importlib.util.module_from_spec(resolver_spec)
+resolver_spec.loader.exec_module(resolver)
 
 SHIPPED_MANIFESTS = ["gemini.json", "cursor.json", "opencode.json", "opencode-local.json"]
 
@@ -33,14 +41,32 @@ BASE_MANIFEST = {
     "argv": ["{{EXE}}", "-p", "{{PROMPT}}"],
     "model": {"required": False, "argv_suffix": ["--model", "{{MODEL}}"]},
     "roles": ["implementer"],
-    "billing": {"basis": "flat-subscription", "provider": "sample-provider"},
-    "network": {"policy": "provider-only", "endpoints": ["sample.example.com"]},
+    "billing": {"basis": "flat-subscription", "provider": "google-gemini"},
+    "network": {"policy": "provider-only", "profile": "gemini",
+                 "endpoints": ["generativelanguage.googleapis.com"]},
     "availability_probe": None,
     "concurrency_cap": None,
     "env_passthrough": [],
 }
 
 failures: list[str] = []
+
+
+@contextmanager
+def test_directory(label: str):
+    configured = os.environ.get("PHASE5_TEST_ROOT", "").strip()
+    if configured:
+        root = Path(configured)
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / f"{label}-{secrets.token_hex(8)}"
+        path.mkdir()
+        try:
+            yield path
+        finally:
+            shutil.rmtree(path, ignore_errors=True)
+    else:
+        with tempfile.TemporaryDirectory() as raw:
+            yield Path(raw)
 
 
 def check(condition: bool, label: str) -> None:
@@ -69,8 +95,7 @@ def write_manifest(engine_dir: Path, filename: str, data: dict) -> None:
 
 
 def run_case(label: str, filename: str, engine_arg: str, data: dict, expected: int) -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_dir = Path(tmp)
+    with test_directory("engine-case") as tmp_dir:
         write_manifest(tmp_dir, filename, data)
         result = run_validate(engine_arg, tmp_dir)
         check(
@@ -172,8 +197,8 @@ def test_shipped_manifests() -> None:
 
 
 def test_missing_file() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        result = run_validate("ghostengine", Path(tmp))
+    with test_directory("missing-manifest") as tmp_dir:
+        result = run_validate("ghostengine", tmp_dir)
         check(result.returncode == 3, f"missing manifest file exits 3 (got {result.returncode})")
 
 
@@ -304,6 +329,31 @@ def test_mutations() -> None:
     bad_passthrough["env_passthrough"] = ["lower_case"]
     run_case("env_passthrough lowercase entry rejected", "sampleeng.json", "sampleeng", bad_passthrough, 2)
 
+    cross_provider_passthrough = copy.deepcopy(BASE_MANIFEST)
+    cross_provider_passthrough["env_passthrough"] = ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"]
+    run_case("provider-scoped env cross-smuggle rejected", "sampleeng.json", "sampleeng",
+             cross_provider_passthrough, 2)
+
+    missing_profile = copy.deepcopy(BASE_MANIFEST)
+    del missing_profile["network"]["profile"]
+    run_case("provider-only network without profile rejected", "sampleeng.json", "sampleeng",
+             missing_profile, 2)
+
+    for engine, provider, profile, endpoints, forbidden in (
+        ("gemini-test", "google-gemini", "gemini", ["generativelanguage.googleapis.com"],
+         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"),
+        ("opencode-test", "openrouter-via-opencode", "openrouter", ["openrouter.ai", "api.deepseek.com"],
+         "GEMINI_API_KEY"),
+        ("cursor-test", "cursor", "cursor", ["api.cursor.com", "api2.cursor.sh"],
+         "OPENROUTER_API_KEY"),
+    ):
+        cross = copy.deepcopy(BASE_MANIFEST)
+        cross["name"] = engine
+        cross["billing"]["provider"] = provider
+        cross["network"] = {"policy": "provider-only", "profile": profile, "endpoints": endpoints}
+        cross["env_passthrough"] = [forbidden]
+        run_case(f"{profile} provider env cross-smuggle rejected", f"{engine}.json", engine, cross, 2)
+
     bad_probe = copy.deepcopy(BASE_MANIFEST)
     bad_probe["availability_probe"] = {
         "type": "tcp",
@@ -317,12 +367,32 @@ def test_mutations() -> None:
     run_case("concurrency_cap 0 rejected", "sampleeng.json", "sampleeng", bad_cap, 2)
 
 
+def test_malformed_container_elements_are_typed() -> None:
+    for field in ("roles", "env_passthrough"):
+        malformed = copy.deepcopy(BASE_MANIFEST)
+        malformed[field] = [[]]
+        try:
+            resolver.validate_manifest(malformed, "sampleeng")
+        except resolver.ManifestError:
+            pass
+        except Exception as exc:  # the regression must not leak TypeError from set()
+            check(False, f"{field} malformed element raises ManifestError, not {type(exc).__name__}")
+        else:
+            check(False, f"{field} malformed element rejected with ManifestError")
+        with test_directory("malformed-element") as tmp_dir:
+            write_manifest(tmp_dir, "sampleeng.json", malformed)
+            result = run_validate("sampleeng", tmp_dir)
+            check(result.returncode == 2 and "Traceback" not in result.stderr,
+                  f"{field} malformed element is a typed resolver refusal")
+
+
 def main() -> int:
     test_shipped_manifests()
     test_missing_file()
     test_provider_profile_name_schema_runtime_parity()
     test_mutations()
     test_malformed_values()
+    test_malformed_container_elements_are_typed()
 
     if failures:
         print(f"engine-manifest.test: {len(failures)} FAILED")

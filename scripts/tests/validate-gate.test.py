@@ -61,6 +61,50 @@ def load_gate_module():
     return module
 
 
+def run_gate_cli(
+    acceptance: str,
+    strict: bool = True,
+    gate_files: str = "",
+    allowed_paths: str = "app",
+    controller_root: Path | None = None,
+    controller_commit: str = "",
+    controller_gate_files: str = "",
+) -> subprocess.CompletedProcess[str]:
+    argv = [sys.executable, str(GATE), "--acceptance", acceptance, "--allowed-paths", allowed_paths]
+    if gate_files:
+        argv += ["--gate-files", gate_files]
+    if controller_root is not None:
+        argv += ["--controller-root", str(controller_root)]
+    if controller_commit:
+        argv += ["--controller-commit", controller_commit]
+    if controller_gate_files:
+        argv += ["--controller-gate-files", controller_gate_files]
+    if strict:
+        argv.append("--strict-direct")
+    environment = os.environ.copy()
+    if controller_root is not None:
+        environment["RECURSION_ROOT"] = str(controller_root)
+    return subprocess.run(argv, capture_output=True, text=True, env=environment, check=False)
+
+
+def run_gate(acceptance: str, strict: bool = True, gate_files: str = "") -> int:
+    return run_gate_cli(acceptance, strict, gate_files).returncode
+
+
+def posix_absolute(path: Path) -> str:
+    """Spell a path as a POSIX absolute path on both the Linux product host and this host."""
+    resolved = path.resolve()
+    volume_root = Path(resolved.anchor)
+    return "/" + resolved.relative_to(volume_root).as_posix()
+
+
+def git_head(repository: Path) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+
 class DirectGateAdmissionTest(unittest.TestCase):
     def test_strict_direct_pattern_rejects_an_incomplete_command_chain(self):
         module = load_gate_module()
@@ -502,6 +546,75 @@ class DirectGateAdmissionTest(unittest.TestCase):
                 stderr = result.stderr.decode("utf-8", "replace")
                 self.assertNotIn("Traceback", stderr)
                 self.assertEqual(schema_accepts, result.returncode == 0, stderr)
+
+    def test_interpreter_and_file_operand_traversals_are_refused_even_with_another_hashed_gate(self):
+        traversal = (
+            "python3 ../outside.py && test -s app/result.txt",
+            "python3 app/../outside.py && test -s app/result.txt",
+            "python3 app/sub/../../outside.py && test -s app/result.txt",
+            'python3 "app\\..\\outside.py" && test -s app/result.txt',
+            "test -s ../outside.txt && python3 app/check.py",
+        )
+        for gate in traversal:
+            with self.subTest(gate=gate):
+                self.assertNotEqual(run_gate(gate, gate_files="app/check.py"), 0)
+
+
+class AbsoluteControllerProgramTest(unittest.TestCase):
+    controller_root = SOURCE.resolve()
+    controller_commit = git_head(controller_root)
+    controller_gate_file = "scripts/phase5_safety.py"
+    controller_program = posix_absolute(controller_root / controller_gate_file)
+
+    def run_controller_gate(self, candidate: str, controller_gate_files: str = controller_gate_file):
+        return run_gate_cli(
+            f"python3 {candidate}",
+            allowed_paths=".",
+            controller_root=self.controller_root,
+            controller_commit=self.controller_commit,
+            controller_gate_files=controller_gate_files,
+        )
+
+    def test_absolute_program_under_controller_root_and_declared_is_admitted(self):
+        result = self.run_controller_gate(self.controller_program)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_absolute_program_outside_controller_root_reports_containment_reason(self):
+        candidate = "/validate-gate-outside.py"
+        result = self.run_controller_gate(candidate)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(
+            result.stderr.strip(),
+            f"ERR acceptance program is outside the controller root: {candidate}",
+        )
+
+    def test_absolute_program_under_controller_root_must_be_declared(self):
+        result = self.run_controller_gate(self.controller_program, controller_gate_files="")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(
+            result.stderr.strip(),
+            f"ERR controller acceptance program must be declared: {self.controller_gate_file}",
+        )
+
+    def test_unsafe_program_paths_report_the_unsafe_path_reason(self):
+        refused = (
+            "scripts//gate.py",
+            "/opt/recursion//gate.py",
+            "scripts/./gate.py",
+            "/opt/./gate.py",
+            "scripts/../../gate.py",
+            "/opt/recursion/../gate.py",
+            "scripts/gate.py/",
+            "/opt/recursion/gate.py/",
+        )
+        for candidate in refused:
+            with self.subTest(candidate=candidate):
+                result = self.run_controller_gate(candidate)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(
+                    result.stderr.strip(),
+                    f"ERR acceptance program uses an unsafe path: {candidate}",
+                )
 
 
 class WindowsPathToleranceTest(unittest.TestCase):

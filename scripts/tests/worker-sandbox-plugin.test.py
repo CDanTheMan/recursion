@@ -2,8 +2,11 @@
 """Red control: worker-sandbox.sh --engine-plan generic plugin dispatch, logical mode.
 
 Frozen contract: docs/plans/engine-plugin-architecture.md, "Controls" #4, and the
-worked spec handed down with this control set. Requires Bash, Linux, root, systemd,
-and an explicit environment proof marker; absent prerequisites are non-green (77).
+worked spec handed down with this control set. Requires bash (Git Bash on Windows,
+plain bash elsewhere); on Linux, root/systemd and the explicit environment proof marker
+are required and absent prerequisites are non-green (77). On other platforms, missing
+bash or disposable-fixture prerequisites are skips (exit 0). The plan must carry the
+reviewed provider profile and its scoped environment allowlist through logical launch.
 """
 
 from __future__ import annotations
@@ -19,6 +22,26 @@ from pathlib import Path
 SOURCE = Path(__file__).resolve().parents[2]
 SANDBOX_SCRIPT = SOURCE / "scripts" / "worker-sandbox.sh"
 
+
+def discover_windows_tool(name: str, relative: tuple[str, ...]) -> str | None:
+    """Find a tool on PATH, then under an environment-selected Windows install root."""
+    discovered = shutil.which(name)
+    if discovered:
+        return discovered
+    if os.name == "nt":
+        for variable in ("ProgramFiles", "ProgramW6432"):
+            program_files = os.environ.get(variable, "").strip()
+            if not program_files:
+                continue
+            candidate = Path(program_files).joinpath(*relative)
+            if candidate.is_file():
+                return str(candidate)
+    return None
+
+
+BASH = discover_windows_tool("bash", ("Git", "bin", "bash.exe"))
+CYGPATH = discover_windows_tool("cygpath", ("Git", "usr", "bin", "cygpath.exe"))
+
 failures: list[str] = []
 
 
@@ -30,9 +53,30 @@ def check(condition: bool, label: str) -> None:
         failures.append(label)
 
 
-def _cygpath(flag: str, value: str) -> str | None:
+def check_embedded_plan_parser() -> None:
+    """Compile the plan parser heredoc so a shell edit cannot hide a Python parse failure."""
+    script = SANDBOX_SCRIPT.read_text(encoding="utf-8")
+    opening = 'if plan_parser_output="$("$PYTHON" - "$ENGINE_PLAN" "$ENGINE" <<\'PY\' 2>&1\n'
+    closing = "\nPY\n)\"; then"
     try:
-        result = subprocess.run(["cygpath", flag, value], capture_output=True, text=True)
+        body_start = script.index(opening) + len(opening)
+        body_end = script.index(closing, body_start)
+    except ValueError:
+        check(False, "embedded engine-plan parser heredoc is present")
+        return
+    try:
+        compile(script[body_start:body_end], f"{SANDBOX_SCRIPT}:engine-plan-parser", "exec")
+    except SyntaxError as exc:
+        check(False, f"embedded engine-plan parser is syntax-valid ({exc})")
+    else:
+        check(True, "embedded engine-plan parser is syntax-valid")
+
+
+def _cygpath(flag: str, value: str) -> str | None:
+    if CYGPATH is None:
+        return None
+    try:
+        result = subprocess.run([CYGPATH, flag, value], capture_output=True, text=True)
     except FileNotFoundError:
         return None
     if result.returncode == 0 and result.stdout.strip():
@@ -59,32 +103,36 @@ def to_local_path(posix_path: str) -> Path:
 
 
 def bash_run(sandbox_script_posix: str, argv_after_script: list[str], extra_path_dir_posix: str, env: dict):
-    wrapper = 'export PATH="$1:$PATH"; shift; exec bash "$@"'
-    argv = ["bash", "-c", wrapper, "bash_wrapper", extra_path_dir_posix, sandbox_script_posix] + argv_after_script
+    bash_dir = to_posix(Path(BASH).parent) if os.name == "nt" and BASH else ""
+    wrapper = 'export PATH="$1:$2:$PATH"; shift 2; exec "$1" "${@:2}"'
+    argv = [BASH, "-lc", wrapper, "bash_wrapper", extra_path_dir_posix, bash_dir, sandbox_script_posix] + argv_after_script
     return subprocess.run(argv, capture_output=True, text=True, env=env)
 
 
 def main() -> int:
-    if shutil.which("bash") is None:
-        print("NOT PROVEN - bash not found on PATH")
-        return 77
-    if sys.platform != "linux":
-        print("NOT PROVEN - Linux is required for the worker sandbox proof")
-        return 77
-    if getattr(os, "geteuid", lambda: -1)() != 0:
+    check_embedded_plan_parser()
+    if BASH is None:
+        print("SKIP - bash interpreter was not discoverable on PATH or via ProgramFiles/ProgramW6432")
+        return 0
+    linux_proof_required = sys.platform == "linux"
+    if linux_proof_required and getattr(os, "geteuid", lambda: -1)() != 0:
         print("NOT PROVEN - root is required for the worker sandbox proof")
         return 77
-    if shutil.which("systemd-run") is None:
+    if linux_proof_required and shutil.which("systemd-run") is None:
         print("NOT PROVEN - systemd-run is absent")
         return 77
-    if os.environ.get("RECURSION_PHASE4_LINUX_PROOF") != "1":
+    if linux_proof_required and os.environ.get("RECURSION_PHASE4_LINUX_PROOF") != "1":
         print("NOT PROVEN - explicit Linux/systemd environment proof is absent")
         return 77
 
-    mktemp = subprocess.run(["bash", "-c", "mktemp -d"], capture_output=True, text=True)
+    mktemp = subprocess.run([BASH, "-lc", "mktemp -d"], capture_output=True, text=True)
     if mktemp.returncode != 0 or not mktemp.stdout.strip():
-        print("NOT PROVEN - bash mktemp -d failed; cannot build a /tmp root")
-        return 77
+        print(
+            "NOT PROVEN - bash mktemp -d failed; cannot build a /tmp root"
+            if linux_proof_required
+            else "SKIP - bash mktemp -d failed; cannot build a /tmp root"
+        )
+        return 77 if linux_proof_required else 0
     root_posix = mktemp.stdout.strip()
     root_local = to_local_path(root_posix)
 
@@ -98,7 +146,19 @@ def main() -> int:
             (SOURCE / "scripts" / "secret_runtime.py").read_bytes()
         )
         sandbox_copy = scripts_dir / "worker-sandbox.sh"
-        sandbox_copy.write_bytes(SANDBOX_SCRIPT.read_bytes())
+        shutil.copy2(SANDBOX_SCRIPT, sandbox_copy)
+        if os.name != "nt":
+            check(bool(sandbox_copy.stat().st_mode & 0o111), "staged worker-sandbox.sh remains executable")
+        (scripts_dir / "provider-egress-profiles.json").write_bytes(
+            (SOURCE / "scripts" / "provider-egress-profiles.json").read_bytes()
+        )
+        for helper in ("provider-egress.py", "provider_contract.py"):
+            (scripts_dir / helper).write_bytes((SOURCE / "scripts" / helper).read_bytes())
+        (scripts_dir / "phase5_safety.py").write_bytes(
+            (SOURCE / "scripts" / "phase5_safety.py").read_bytes()
+        )
+        engines_dir = scripts_dir / "engines"
+        engines_dir.mkdir()
         sandbox_copy_posix = to_posix(sandbox_copy)
 
         wt_local = root_local / "wt"
@@ -118,7 +178,7 @@ def main() -> int:
         stub_path.write_bytes(stub_body.encode("utf-8"))
         bin_dir_posix = to_posix(bin_dir)
         chmod_result = subprocess.run(
-            ["bash", "-c", f"chmod +x '{to_posix(stub_path)}'"], capture_output=True, text=True
+            [BASH, "-lc", f"chmod +x '{to_posix(stub_path)}'"], capture_output=True, text=True
         )
         check(chmod_result.returncode == 0, "stub executable is chmod +x")
 
@@ -129,13 +189,59 @@ def main() -> int:
             "argv": ["{{EXE}}", "-p", "{{PROMPT}}"],
             "model_required": False,
             "model_argv_suffix": ["--model", "{{MODEL}}"],
-            "billing": {"basis": "metered", "provider": "test-provider"},
+            "billing": {"basis": "metered", "provider": "google-gemini"},
+            "network": {"policy": "provider-only", "profile": "gemini",
+                         "endpoints": ["generativelanguage.googleapis.com"]},
             "availability_probe": None,
             "concurrency_cap": None,
-            "env_passthrough": ["STUBENG_API_KEY"],
+            "env_passthrough": ["GEMINI_API_KEY"],
         }
+        manifest = {
+            "schema_version": 1,
+            "name": "stubeng",
+            "description": "logical worker sandbox fixture",
+            "executable": "stubeng",
+            "argv": plan["argv"],
+            "model": {"required": False, "argv_suffix": plan["model_argv_suffix"]},
+            "roles": ["implementer"],
+            "billing": plan["billing"],
+            "network": plan["network"],
+            "availability_probe": None,
+            "concurrency_cap": None,
+            "env_passthrough": plan["env_passthrough"],
+        }
+        manifest_bytes = (json.dumps(manifest, indent=2) + "\n").encode("utf-8")
+        manifest_path = engines_dir / "stubeng.json"
+        manifest_path.write_bytes(manifest_bytes)
+        subprocess.run(["git", "init", "-q", "-b", "main", str(root_local)], check=True)
+        subprocess.run(["git", "-C", str(root_local), "add", "scripts"], check=True)
+        subprocess.run(
+            ["git", "-C", str(root_local), "-c", "user.name=test", "-c", "user.email=test@example.invalid",
+             "commit", "-qm", "controller fixture"],
+            check=True,
+        )
+        controller_sha = subprocess.check_output(
+            ["git", "-C", str(root_local), "rev-parse", "HEAD"], text=True,
+        ).strip()
         plan_path = root_local / "plan.json"
-        plan_path.write_bytes((json.dumps(plan, indent=2) + "\n").encode("utf-8"))
+        resolver_env = dict(os.environ)
+        resolver_env.update({
+            "RECURSION_ROOT": str(root_local),
+            "RECURSION_ENGINE_PLUGINS": "1",
+            "RECURSION_ENGINE_STUBENG_ENABLED": "1",
+        })
+        resolved = subprocess.run(
+            [sys.executable, str(SOURCE / "scripts" / "resolve-engine.py"), "stubeng",
+             "--role", "implementer", "--emit-plan", str(plan_path),
+             "--controller-root", str(root_local), "--controller-commit", controller_sha],
+            capture_output=True, text=True, env=resolver_env,
+        )
+        check(
+            resolved.returncode == 0,
+            f"resolve-engine emits an authenticated plugin plan (got {resolved.returncode}, stderr={resolved.stderr.strip()!r})",
+        )
+        if resolved.returncode == 0 and plan_path.exists():
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
         plan_posix = to_posix(plan_path)
 
         base_env = dict(os.environ)
@@ -148,7 +254,7 @@ def main() -> int:
                 "RECURSION_PYTHON": to_posix(Path(sys.executable)),
             }
         )
-        common_tail = ["--worktree", wt_posix, "--role", "implementer", "--network-policy", "none"]
+        common_tail = ["--worktree", wt_posix, "--role", "implementer", "--network-policy", "provider-only"]
 
         def invoke(engine_args: list[str], prompt: str, env: dict, model: str | None = None):
             args = engine_args + common_tail + ["--prompt", prompt]
@@ -169,6 +275,18 @@ def main() -> int:
         check(
             result.returncode == 92,
             f"non-builtin engine without --engine-plan exits 92 (got {result.returncode})",
+        )
+
+        # A plan-shaped file without authenticated controller provenance is not executable,
+        # even when the logical provider capability is available.
+        unbound_plan = root_local / "plan-unbound.json"
+        unbound = dict(plan)
+        unbound.pop("authority", None)
+        unbound_plan.write_bytes((json.dumps(unbound, indent=2) + "\n").encode("utf-8"))
+        result = invoke(["--engine", "stubeng", "--engine-plan", to_posix(unbound_plan)], "hi", dict(base_env))
+        check(
+            result.returncode == 92,
+            f"unbound execution plan is refused before launch (got {result.returncode})",
         )
 
         # --- (3) valid plan: prompt is one exact argv element, no --model when none passed ---
@@ -213,11 +331,11 @@ def main() -> int:
         argv_out_5 = root_local / "argv-5.out"
         env5 = dict(base_env)
         env5["STUB_ARGV_OUT"] = to_posix(argv_out_5)
-        env5["STUBENG_API_KEY"] = "sekret"
+        env5["GEMINI_API_KEY"] = "sekret"
         result = invoke(["--engine", "stubeng", "--engine-plan", plan_posix], "hi", env5)
         check(result.returncode == 0, f"plugin engine with env_passthrough executes (got {result.returncode})")
         check(
-            "worker-sandbox: env-passthrough STUBENG_API_KEY" in result.stderr,
+            "worker-sandbox: env-passthrough GEMINI_API_KEY" in result.stderr,
             "logical mode declares the plan's env_passthrough names on stderr",
         )
 
@@ -250,9 +368,8 @@ def main() -> int:
         )
 
         # --- permission control: plan file ownership/writability (Linux root only) ---
-        if not is_linux_root:
-            print("NOT PROVEN - plan file ownership/permission control requires Linux + root")
-            return 77
+        if os.name == "nt" or not is_linux_root:
+            print("SKIP - plan file ownership/permission control (requires Linux + root)")
         else:
             bad_plan = root_local / "plan-bad-perms.json"
             bad_plan.write_bytes((json.dumps(plan, indent=2) + "\n").encode("utf-8"))
@@ -263,7 +380,7 @@ def main() -> int:
             result = invoke(["--engine", "stubeng", "--engine-plan", to_posix(bad_plan)], "hi", env_bad)
             check(result.returncode == 95, f"group/other-writable plan file is refused (got {result.returncode})")
     finally:
-        subprocess.run(["bash", "-c", f"rm -rf -- '{root_posix}'"], capture_output=True, text=True)
+            subprocess.run([BASH, "-lc", f"rm -rf -- '{root_posix}'"], capture_output=True, text=True)
 
     if failures:
         print(f"worker-sandbox-plugin.test: {len(failures)} FAILED")

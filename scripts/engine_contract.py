@@ -10,7 +10,26 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+
+class FirstPartyImportError(ImportError):
+    """A required controller module is absent from the importing script's tree."""
+
+
+try:
+    from phase5_safety import BoundaryError, decode_json, read_bytes, is_plain_int
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    raise FirstPartyImportError(
+        f"first-party module 'phase5_safety' not found; searched {_SCRIPT_DIR}"
+    ) from None
 
 from jsonl_durable import JsonlDurabilityError, read_durable_bytes
 
@@ -95,7 +114,8 @@ def _load_registry(registry_path: Path | str) -> dict[str, frozenset[str]] | Non
             return None
         # Mirror resolve-model-alias.py's rules exactly (it is the execution authority);
         # duplicated role entries are tolerated there, so they are tolerated here.
-        if not isinstance(roles, list) or not roles or not set(roles) <= ROLES:
+        if not isinstance(roles, list) or not roles or any(not isinstance(role, str) for role in roles) \
+                or not set(roles) <= ROLES:
             return None
         loaded[alias] = frozenset(roles)
     return loaded

@@ -24,14 +24,19 @@
     "provider": "sentry-local"
   },
   "network": {
-    "policy": "provider-only",
+    "policy": "none",
+    "profile": "sentry-local",
     "endpoints": []
   },
-  "availability_probe": {
-    "type": "http",
-    "url_env": "RECURSION_ENGINE_OPENCODE_LOCAL_HEALTH_URL",
-    "timeout_s": 5
-  },
+  "availability_probe": null,
   "concurrency_cap": 1,
-  "env_passthrough": []
+  "env_passthrough": [],
+  "runtime_layout": { "mode": "executable-only" },
+  "execution": {
+    "structured_output": false,
+    "output_format": "text",
+    "cancellation": { "signal": "TERM", "grace_s": 5 },
+    "exit_codes": { "success": [0], "auth": [1, 2], "runtime": [126, 127], "egress": [60, 65] }
+  },
+  "auth": { "mode": "none", "required": false, "marker": null }
 }

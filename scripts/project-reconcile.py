@@ -38,6 +38,18 @@ from transition_receipt import (
 )
 from seed_contract import SeedContractError, copy_seed_paths, validate_contract
 from remote_evidence import RemoteEvidenceError, read_events_for_run
+try:
+    from phase5_safety import BoundaryError, atomic_write
+    from assignment_contract import (AssignmentError as ContractAssignmentError,
+                                     canonical_bytes, load_assignment,
+                                     validate_execution_evidence)
+except Exception as exc:
+    module_name = getattr(exc, "name", None) or "phase5_safety/assignment_contract"
+    if __name__ == "__main__":
+        print(f"project-reconcile: first-party module '{module_name}' is unavailable or malformed",
+              file=sys.stderr)
+        raise SystemExit(95)
+    raise
 
 
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -115,20 +127,12 @@ def fsync_dir(path: Path) -> None:
 
 
 def atomic_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
-            out.write(text)
-            out.flush()
-            os.fsync(out.fileno())
-        os.replace(name, path)
-        fsync_dir(path.parent)
-    finally:
-        try:
-            os.unlink(name)
-        except FileNotFoundError:
-            pass
+        atomic_write(path, text.encode("utf-8", "surrogateescape"), replace=True,
+                     mode=0o600, label="reconciliation state")
+    except (BoundaryError, OSError, ValueError, TypeError, OverflowError,
+            RecursionError, UnicodeDecodeError) as exc:
+        raise ReconcileError(f"reconciliation state publication failed: {path}", 74) from exc
 
 
 def atomic_json(path: Path, value: dict) -> None:
@@ -146,7 +150,8 @@ def read_json(path: Path, *, unavailable_code: int | None = None) -> dict:
         raise ReconcileError(f"cannot read {path}: {exc}", 74) from exc
     try:
         value = json.loads(raw)
-    except json.JSONDecodeError as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError,
+            OverflowError, RecursionError) as exc:
         raise ReconcileError(f"cannot read {path}: {exc}") from exc
     if not isinstance(value, dict):
         raise ReconcileError(f"state record is not an object: {path}")
@@ -997,10 +1002,17 @@ def parse_budget(goal: dict[str, str]) -> dict:
 
 
 def safe_int(value: object, default: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    # Markdown projections carry canonical decimal text.  Accept that transport
+    # representation only; floats, booleans, signs, and whitespace must not be
+    # silently coerced into schema integers.
+    if isinstance(value, str) and re.fullmatch(r"(?:0|[1-9][0-9]*)", value):
+        try:
+            return int(value)
+        except (ValueError, OverflowError):
+            return default
+    return default
 
 
 def process_alive(pid: object) -> bool:
@@ -1168,6 +1180,33 @@ def task_evidence(base: Path, repo: Path, task: dict[str, str], runs: list[dict]
     verifier_id = str(link.get("verifier_run_id") or "")
     verifier = next((row for row in verifiers if row.get("id") == verifier_id), verifiers[-1])
     verification = verifier.get("verification") if isinstance(verifier.get("verification"), dict) else {}
+    strict_assignment = task.get("evidence_contract") == "worker-result-v1" \
+        or any(field in implementer for field in ("assignment_file", "assignment_digest", "assignment"))
+    if strict_assignment:
+        assignment_file = implementer.get("assignment_file")
+        try:
+            assigned, assigned_digest = load_assignment(str(assignment_file or ""))
+        except (OSError, ValueError, SystemExit) as exc:
+            return False, f"immutable assignment provenance is unavailable: {exc}", {}
+        if implementer.get("assignment_digest") != assigned_digest:
+            return False, "implementer assignment digest is absent or stale", {}
+        embedded = implementer.get("assignment")
+        if not isinstance(embedded, dict) or canonical_bytes(embedded) != canonical_bytes(assigned):
+            return False, "implementer assignment evidence is not the validated assignment", {}
+        machine = gate
+        if machine.get("acceptance") != assigned["gate_contract"]["acceptance"] \
+                or machine.get("gate_contract_digest") != assigned["gate_digest"] \
+                or machine.get("acceptance_sha256") != assigned["gate_contract"]["acceptance_sha256"]:
+            return False, "machine gate lacks independently authenticated assignment provenance", {}
+        for role, run in (("implementer", implementer), ("verifier", verifier)):
+            if run.get("assignment_digest") != assigned_digest:
+                return False, f"{role} assignment digest is absent or stale", {"commit_oid": commit}
+            try:
+                validate_execution_evidence(run.get("execution"), run, assigned)
+            except ContractAssignmentError as exc:
+                return False, f"{role} execution evidence is absent or mismatched: {exc}", {
+                    "commit_oid": commit,
+                }
     valid = bool(
         re.fullmatch(r"[0-9a-f]{40,64}", commit)
         and gate.get("commit_oid") == commit
@@ -1855,12 +1894,15 @@ def canonical_digest(value: object) -> str:
 def _observed_goal_gate(base: Path, worktree: Path, goal: dict[str, str],
                         config: dict) -> dict | None:
     """Run the execution validator against the goal worktree and parse its contract."""
+    source_commit = git_output(worktree, "rev-parse", "--verify", "HEAD")
+    controller_commit = git_output(base, "rev-parse", "--verify", "HEAD")
     validator = subprocess.run(
         [sys.executable, str(base / "scripts/validate-gate.py"),
          "--acceptance", goal["acceptance_suite"],
          "--allowed-paths", ",".join(config.get("allowed_paths") or []),
          "--gate-files", goal.get("gate_files", ""), "--repo", str(worktree),
-         "--controller-root", str(base),
+         "--source-commit", source_commit, "--controller-root", str(base),
+         "--controller-commit", controller_commit,
          "--controller-gate-files", goal.get("controller_gate_files", ""),
          "--strict-direct"],
         text=True, capture_output=True, check=False,
@@ -2688,6 +2730,11 @@ def main() -> int:
     except (OSError, subprocess.TimeoutExpired) as exc:
         print(f"project-reconcile: {exc}", file=sys.stderr)
         return 74
+    except (ContractAssignmentError, SeedContractError, AuthorityError, TransitionReceiptError,
+            ValueError, TypeError, KeyError, IndexError, AttributeError,
+            UnicodeError, OverflowError, RecursionError) as exc:
+        print(f"project-reconcile: invalid input or state: {exc}", file=sys.stderr)
+        return 4
     return 0
 
 

@@ -410,9 +410,11 @@ class ClientHelloContractTest(unittest.TestCase):
 
 
 class DeploymentContractTest(unittest.TestCase):
-    def test_v1_production_unit_retains_legacy_capability_boundary(self):
+    def test_production_unit_uses_the_profile_bound_proxy_and_no_anthropic_hardcode(self):
         unit = (ROOT / "deploy/systemd/recursion-provider-proxy.service").read_text()
-        self.assertIn("--allow api.anthropic.com:443", unit)
+        self.assertIn("provider-proxy-service.py", unit)
+        self.assertIn("EnvironmentFile=-/etc/recursion/provider-egress.env", unit)
+        self.assertNotIn("api.anthropic.com:443", unit)
         self.assertNotIn("--resolve", unit)
         self.assertIn("NoNewPrivileges=yes", unit)
         self.assertIn("CapabilityBoundingSet=CAP_SYS_ADMIN", unit)
@@ -464,11 +466,12 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn("NetworkNamespacePath=$PROVIDER_NETNS", worker)
         self.assertIn('provider-network.sh" check', worker)
 
-    def test_claude_uses_only_local_proxy_and_disables_nonessential_traffic(self):
+    def test_all_provider_engines_use_the_profile_bound_local_proxy(self):
         worker = (ROOT / "scripts/worker-sandbox.sh").read_text()
-        self.assertIn("HTTPS_PROXY=http://127.0.0.1:18080", worker)
-        self.assertIn("HTTP_PROXY=http://127.0.0.1:18080", worker)
-        self.assertIn("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", worker)
+        self.assertIn('HTTPS_PROXY="http://127.0.0.1:$PROVIDER_PROXY_PORT"', worker)
+        self.assertIn('HTTP_PROXY="http://127.0.0.1:$PROVIDER_PROXY_PORT"', worker)
+        self.assertIn('RECURSION_PROVIDER_PROFILE="$PROVIDER_PROFILE"', worker)
+        self.assertNotIn("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", worker)
 
     def test_worker_sandbox_masks_host_run_sockets_for_gate_and_model_arms(self):
         worker = (ROOT / "scripts/worker-sandbox.sh").read_text()
@@ -481,7 +484,7 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn("InaccessiblePaths=", inaccessible_lines[0])
         self.assertIn("/opt", inaccessible_lines[1])
         # The provider egress is the loopback CONNECT proxy over TCP, not a host socket.
-        self.assertIn("HTTPS_PROXY=http://127.0.0.1:18080", worker)
+        self.assertIn("HTTPS_PROXY=", worker)
 
     def test_assignment_capability_stays_ephemeral_outside_durable_plans(self):
         worker = (ROOT / "scripts/worker-sandbox.sh").read_text()

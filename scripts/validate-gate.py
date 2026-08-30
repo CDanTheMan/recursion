@@ -15,6 +15,27 @@ import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+class FirstPartyImportError(ImportError):
+    """A required controller module is absent from the importing script's tree."""
+
+
+try:
+    from phase5_safety import BoundaryError, decode_json, pinned_directory, read_bytes, verify_leaf
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    import_error = FirstPartyImportError(
+        f"first-party module 'phase5_safety' not found; searched {_SCRIPT_DIR}"
+    )
+    if __name__ == "__main__":
+        print(f"validate-gate: first-party import failed: {import_error}", file=sys.stderr)
+        raise SystemExit(95)
+    raise import_error from None
+
 
 VACUOUS = re.compile(r"^(?:true|:|/bin/true|exit\s+0)$")
 BOUNDARY_ERRORS = (json.JSONDecodeError, ValueError, TypeError, OverflowError,
@@ -301,7 +322,51 @@ def _safe_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[by
         raise ValueError("Git provenance command was unavailable") from exc
 
 
-def clean_tracked_bytes(repo: Path, item: str, baseline_commit: str | None = None) -> bytes:
+def resolved_under(repo: Path, candidate: str, roots: list[str]) -> bool:
+    """Require a lexical gate path to remain inside the materialized allowed tree."""
+    try:
+        repo_root = Path(os.path.abspath(str(repo)))
+        candidate_path = Path(os.path.abspath(str(repo / candidate)))
+        resolved_roots = [Path(os.path.abspath(str(repo / root))) for root in roots]
+        candidate_path.relative_to(repo_root)
+        with pinned_directory(repo_root):
+            with pinned_directory(candidate_path.parent):
+                for root in resolved_roots:
+                    with pinned_directory(root):
+                        if candidate_path == root or root in candidate_path.parents:
+                            # The lexical containment check and the actual leaf
+                            # lookup share pinned, no-follow parent handles.  This
+                            # rejects a final symlink/junction or hardlink swap,
+                            # not only an escaping parent.
+                            verify_leaf(candidate_path)
+                            return True
+        return False
+    except (BoundaryError, OSError, ValueError, TypeError):
+        return False
+
+
+def canonical_controller_root(value: str) -> Path:
+    """Return the one controller root this process is authorized to inspect.
+
+    A commit is not a root identity: two worktrees can expose the same commit while one
+    carries attacker-controlled live policy files.  The controller exports RECURSION_ROOT
+    before invoking this helper; direct use falls back to the checked-out helper root.
+    """
+    try:
+        with pinned_directory(value) as (_, requested_value):
+            requested = Path(requested_value)
+        configured = os.environ.get("RECURSION_ROOT", "").strip() or Path(__file__).parent.parent
+        with pinned_directory(configured) as (_, configured_value):
+            configured = Path(configured_value)
+    except (BoundaryError, OSError, ValueError, TypeError):
+        fail("controller root is unavailable")
+    if requested != configured:
+        fail("controller root is not the canonical controller root")
+    return requested
+
+
+def clean_tracked_bytes(repo: Path, item: str, baseline_commit: str | None = None, *,
+                        source_commit: str | None = None) -> bytes:
     """Return the committed gate bytes and reject index/worktree substitution."""
     if not isinstance(item, str):
         fail("gate file path must be text")
@@ -312,6 +377,27 @@ def clean_tracked_bytes(repo: Path, item: str, baseline_commit: str | None = Non
             or item.startswith(("\\\\", "//"))
             or re.match(r"^[A-Za-z]:", item)):
         fail(f"gate file path is not a confined repository path: {item}")
+    target = source_commit or "HEAD"
+    if source_commit:
+        resolved = _safe_run(
+            ["git", "-C", str(repo), "rev-parse", "--verify", f"{source_commit}^{{commit}}"],
+            capture_output=True, text=True, check=False,
+        )
+        if resolved.returncode or resolved.stdout.strip() != source_commit:
+            fail(f"gate source commit is not the exact immutable commit: {source_commit}")
+        tree = _safe_run(
+            ["git", "-C", str(repo), "ls-tree", "-z", source_commit, "--", item],
+            capture_output=True, check=False,
+        )
+        rows = [row for row in tree.stdout.split(b"\0") if row]
+        if tree.returncode or len(rows) != 1:
+            fail(f"gate file is absent from the exact source commit: {item}")
+        header, _, tree_path = rows[0].partition(b"\t")
+        if tree_path.decode("utf-8", "strict") != item:
+            fail(f"gate file path resolution is not exact: {item}")
+        git_mode = header.split(b" ", 1)[0]
+        if git_mode not in {b"100644", b"100755"}:
+            fail(f"gate file has a non-regular Git mode: {item}")
     tracked = _safe_run(
         ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", item],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
@@ -319,10 +405,10 @@ def clean_tracked_bytes(repo: Path, item: str, baseline_commit: str | None = Non
     if tracked.returncode:
         fail(f"gate file is not tracked: {item}")
     committed = _safe_run(
-        ["git", "-C", str(repo), "show", f"HEAD:{item}"], capture_output=True, check=False,
+        ["git", "-C", str(repo), "show", f"{target}:{item}"], capture_output=True, check=False,
     )
     if committed.returncode:
-        fail(f"gate file is absent from HEAD: {item}")
+        fail(f"gate file is absent from {target}: {item}")
     path = repo
     parts = PurePosixPath(item).parts
     try:
@@ -342,10 +428,10 @@ def clean_tracked_bytes(repo: Path, item: str, baseline_commit: str | None = Non
     except OSError as exc:
         fail(f"gate file cannot be inspected without following links: {item}: {exc}")
     dirty = _safe_run(
-        ["git", "-C", str(repo), "diff", "--quiet", "HEAD", "--", item], check=False,
+        ["git", "-C", str(repo), "diff", "--quiet", target, "--", item], check=False,
     )
     if dirty.returncode:
-        fail(f"gate file differs from clean HEAD: {item}")
+        fail(f"gate file differs from clean {target}: {item}")
     if baseline_commit is not None:
         if not re.fullmatch(r"[0-9a-f]{40,64}", baseline_commit):
             fail("authoritative gate baseline is not an exact commit")
@@ -395,7 +481,7 @@ def entrypoint(words: list[str], strict: bool, *, controller_declared: bool = Fa
     if name not in {"bash", "sh", "python", "python3", "node"}:
         if strict and "/" not in command:
             fail(f"bare acceptance launcher is not admitted: {name}")
-        return PurePosixPath(command).as_posix() if "/" in command else None
+        return command if "/" in command else None
     for word in words[1:]:
         if word in {"-c", "-e", "--eval", "-m"}:
             if strict:
@@ -405,7 +491,10 @@ def entrypoint(words: list[str], strict: bool, *, controller_declared: bool = Fa
             if strict:
                 fail(f"option-bearing {name} acceptance programs are not admitted: {word}")
             continue
-        return PurePosixPath(word.replace("\\", "/")).as_posix()
+        # Keep the lexical spelling for the path safety check below.  PurePosixPath.as_posix()
+        # would erase the empty, dot, and parent segments that the check must reject.
+        candidate = word.replace("\\", "/")
+        return candidate or "."
     fail(f"{name} acceptance has no explicit grading program")
 
 
@@ -715,6 +804,31 @@ def _execute_from_verified_files(command: str, repo: Path, controller_root: Path
             except OSError:
                 pass
         parent_pins.close()
+def validate_test_paths(words: list[str], allowed: list[str], read_only_paths: list[str], repo: Path | None) -> None:
+    """Check file operands of direct ``test``/``[`` commands as well as launchers.
+
+    The shell grammar is deliberately narrow, but a direct file test still executes a path
+    lookup.  Only operands of the file-test operators are classified as paths; comparisons
+    such as ``test a != b`` remain ordinary scalar comparisons.
+    """
+    test_words = words
+    if words[:1] == ["["] and words[-1:] == ["]"]:
+        test_words = ["test", *words[1:-1]]
+    if test_words[:1] != ["test"]:
+        return
+    file_operators = {"-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-p", "-r", "-s", "-S", "-t", "-u", "-w", "-x"}
+    for index, word in enumerate(test_words[1:-1], 1):
+        if word not in file_operators:
+            continue
+        candidate = test_words[index + 1].replace("\\", "/")
+        if not candidate or PurePosixPath(candidate).is_absolute() \
+                or any(part in {"", ".", ".."} for part in candidate.split("/")):
+            fail(f"acceptance file operand is outside the allowed tree: {candidate!r}")
+        roots = [*allowed, *read_only_paths]
+        if not under(candidate, roots):
+            fail(f"acceptance file operand is outside the allowed tree: {candidate}")
+        if repo is not None and not resolved_under(repo, candidate, roots):
+            fail(f"acceptance file operand resolves outside the allowed tree: {candidate}")
 
 
 def vacuous_success(words: list[str]) -> bool:
@@ -755,12 +869,14 @@ def main() -> int:
     parser.add_argument("--allowed-paths", default=".")
     parser.add_argument("--gate-files", default="")
     parser.add_argument("--repo")
+    parser.add_argument("--source-commit")
     parser.add_argument("--controller-gate-files", default="")
     parser.add_argument("--controller-root")
     parser.add_argument("--read-only-paths", default="")
     parser.add_argument("--legacy-compound", action="store_true",
                         help="admit the narrow legacy conditional gate used by non-pilot work.sh tasks")
     parser.add_argument("--baseline-commit")
+    parser.add_argument("--controller-commit")
     parser.add_argument("--strict-direct", action="store_true")
     parser.add_argument("--execute", action="store_true",
                         help="execute the exact gate after hash-at-execution provenance checks")
@@ -811,19 +927,63 @@ def main() -> int:
         if ".recursion-result.json" in gate:
             fail("acceptance gate may not grade the worker's own result report")
         allowed = [p.rstrip("/") for p in args.allowed_paths.replace(",", " ").split() if p]
+        read_only_paths = paths(args.read_only_paths)
         gate_files = paths(args.gate_files)
         controller_gate_files = paths(args.controller_gate_files)
-        read_only_paths = paths(args.read_only_paths)
+        if args.controller_root:
+            controller_root = canonical_controller_root(args.controller_root)
+            if args.controller_commit:
+                clean_head = subprocess.run(
+                    ["git", "-C", str(controller_root), "rev-parse", "--verify", "HEAD"],
+                    capture_output=True, text=True, check=False,
+                )
+                if clean_head.returncode or clean_head.stdout.strip() != args.controller_commit:
+                    fail("controller HEAD is not the exact immutable controller commit")
+        else:
+            controller_root = None
         if ";" not in gate:
             # Run semantic classification before the lexical fallback so a specific guard owns
             # its CLI refusal.  This is deliberately shared by strict and legacy direct modes;
             # only the typed semicolon conditional below remains a legacy-only surface.
             for words in parsed_segments:
+                # Preserve the lexical spelling for controller-owned program paths before the
+                # Phase 2 argv checks classify worker-owned commands.
+                candidate = entrypoint(words, args.strict_direct)
+                if candidate:
+                    candidate_path = PurePosixPath(candidate)
+                    candidate_parts = candidate.split("/")
+                    if candidate_path.is_absolute():
+                        candidate_parts = candidate_parts[1:]
+                    if any(part in {"", ".", ".."} for part in candidate_parts):
+                        fail(f"acceptance program uses an unsafe path: {candidate}")
+                    if candidate_path.is_absolute():
+                        if controller_root is None:
+                            fail("absolute acceptance program lacks a controller root")
+                        try:
+                            relative = Path(os.path.abspath(candidate)).relative_to(
+                                Path(os.path.abspath(str(controller_root)))
+                            ).as_posix()
+                        except ValueError:
+                            fail(f"acceptance program is outside the controller root: {candidate}")
+                        except OSError:
+                            fail(f"acceptance program is unavailable: {candidate}")
+                        if relative not in controller_gate_files:
+                            fail(f"controller acceptance program must be declared: {relative}")
+                    elif not under(candidate, allowed):
+                        fail(f"acceptance program is outside the allowed tree: {candidate}")
+                    elif args.repo and not resolved_under(
+                            Path(args.repo), candidate, allowed):
+                        fail(f"acceptance program resolves outside the allowed tree: {candidate}")
+                    elif candidate not in gate_files:
+                        fail(f"worker-modifiable gate program must be declared in gate_files: {candidate}")
                 validate_direct_argv(
                     words, allowed=allowed, gate_files=gate_files,
-                    controller_root=args.controller_root,
+                    controller_root=str(controller_root) if controller_root else None,
                     controller_gate_files=controller_gate_files,
                     read_only_paths=read_only_paths,
+                )
+                validate_test_paths(
+                    words, allowed, read_only_paths, Path(args.repo) if args.repo else None,
                 )
             pattern = (STRICT_CONTROLLER_PATTERN
                        if args.controller_gate_files else STRICT_DIRECT_PATTERN)
@@ -832,7 +992,7 @@ def main() -> int:
         if ";" in gate:
             _validate_legacy_conditional(
                 parsed_segments, operators, allowed=allowed, gate_files=gate_files,
-                controller_root=args.controller_root,
+                controller_root=str(controller_root) if controller_root else None,
                 controller_gate_files=controller_gate_files,
                 read_only_paths=read_only_paths,
             )
@@ -841,29 +1001,41 @@ def main() -> int:
             repo = Path(args.repo)
             for item in gate_files:
                 hashes[item] = hashlib.sha256(
-                    clean_tracked_bytes(repo, item, args.baseline_commit)
+                    clean_tracked_bytes(
+                        repo, item, args.baseline_commit, source_commit=args.source_commit,
+                    )
                 ).hexdigest()
         controller_hashes: dict[str, str] = {}
         if controller_gate_files:
-            if not args.controller_root:
+            if controller_root is None:
                 fail("controller gate files require --controller-root")
-            controller = Path(args.controller_root)
+            controller = controller_root
             for item in controller_gate_files:
-                controller_hashes[item] = hashlib.sha256(clean_tracked_bytes(controller, item)).hexdigest()
+                controller_hashes[item] = hashlib.sha256(
+                    clean_tracked_bytes(controller, item, source_commit=args.controller_commit)
+                ).hexdigest()
         if args.execute:
             if not args.repo:
                 fail("verified gate execution requires --repo")
             _execute_from_verified_files(
                 gate, Path(args.repo),
-                Path(args.controller_root) if args.controller_root else None,
+                controller_root,
                 gate_files, controller_gate_files, hashes, controller_hashes,
             )
-        print(json.dumps({"acceptance_sha256": hashlib.sha256(gate.encode()).hexdigest(),
-                          "gate_files": hashes,
-                          "controller_gate_files": controller_hashes}, sort_keys=True))
-    except BOUNDARY_ERRORS as exc:
+        result = {"acceptance": gate,
+                  "acceptance_sha256": hashlib.sha256(gate.encode()).hexdigest(),
+                  "gate_files": hashes,
+                  "controller_gate_files": controller_hashes}
+        if read_only_paths:
+            result["read_only_paths"] = read_only_paths
+        print(json.dumps(result, sort_keys=True))
+    except (ValueError, TypeError, OverflowError, RecursionError,
+            UnicodeDecodeError, json.JSONDecodeError) as exc:
         print(f"ERR {exc}", file=sys.stderr)
         return 2
+    except OSError as exc:
+        print(f"ERR controller I/O while validating gate: {exc}", file=sys.stderr)
+        return 74
     except Exception:
         print("ERR gate validation failed", file=sys.stderr)
         return 2
@@ -871,4 +1043,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except FirstPartyImportError as exc:
+        print(f"validate-gate: first-party import failed: {exc}", file=sys.stderr)
+        raise SystemExit(95)

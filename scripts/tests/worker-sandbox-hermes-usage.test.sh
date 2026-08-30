@@ -49,6 +49,7 @@ trap 'rm -rf "$TMP"' EXIT
 BIN="$TMP/bin"; mkdir -p "$BIN"
 R="$TMP/repo"; mkdir -p "$R/scripts"
 cp "$SANDBOX_SCRIPT" "$R/scripts/worker-sandbox.sh"
+cp "$SRC/scripts/phase5_safety.py" "$R/scripts/phase5_safety.py"
 chmod +x "$R/scripts/worker-sandbox.sh"
 
 # --- stub: id — uid 0 for the bare controller check; a fixed non-root id for the runner lookup.

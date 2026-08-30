@@ -30,7 +30,8 @@ cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
   "$SRC/scripts/runtime-state.py" "$R/scripts/"
 cp "$SRC/scripts/decision-queue.py" "$SRC/scripts/validate-control-state.py" \
   "$SRC/scripts/validate-decision.py" "$SRC/scripts/engine_contract.py" \
-  "$SRC/scripts/assignment.py" "$R/scripts/"
+  "$SRC/scripts/phase5_safety.py" \
+  "$SRC/scripts/assignment.py" "$SRC/scripts/assignment_contract.py" "$R/scripts/"
 stage_controller_closure "$R"
 normalize_head_decision(){
   local file="$1" temporary="$1.normalized"

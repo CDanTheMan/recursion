@@ -7,8 +7,16 @@
   "model": { "required": false, "argv_suffix": ["--model", "{{MODEL}}"] },
   "roles": ["implementer", "verifier"],
   "billing": { "basis": "metered", "provider": "google-gemini" },
-  "network": { "policy": "provider-only", "profile": "google-gemini", "endpoints": ["generativelanguage.googleapis.com"] },
+  "network": { "policy": "provider-only", "profile": "gemini", "endpoints": ["generativelanguage.googleapis.com"] },
   "availability_probe": null,
   "concurrency_cap": null,
-  "env_passthrough": ["GEMINI_API_KEY"]
+  "env_passthrough": ["GEMINI_API_KEY"],
+  "runtime_layout": { "mode": "executable-only" },
+  "execution": {
+    "structured_output": false,
+    "output_format": "text",
+    "cancellation": { "signal": "TERM", "grace_s": 5 },
+    "exit_codes": { "success": [0], "auth": [1, 2], "runtime": [126, 127], "egress": [60, 65] }
+  },
+  "auth": { "mode": "none", "required": false, "marker": null }
 }

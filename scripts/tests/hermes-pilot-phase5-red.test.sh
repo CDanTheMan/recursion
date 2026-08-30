@@ -19,9 +19,9 @@ BIN="$TMP/bin"; R="$TMP/controller"; ORIGIN="$TMP/origin.git"
 mkdir -p "$BIN" "$R/scripts/tests" "$R/state/tasks" "$R/state/runs" \
   "$R/loop/logs" "$R/app" "$R/fixtures" "$R/other" \
   "$R/user-client/render/data/models"
-for s in assignment.py assist.sh board.sh capacity.sh conduct.sh engine_contract.py git-scope.py \
-         jsonl_durable.py notify.sh pilot_instruction.py plan.sh project-pilot.py project-reconcile.py project_authority.py \
-         provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py publish.sh remote_evidence.py resolve-engine.py \
+for s in assignment.py assignment_contract.py assist.sh board.sh capacity.sh capacity-pools.json conduct.sh engine_contract.py git-scope.py \
+         jsonl_durable.py notify.sh phase5_safety.py pilot_instruction.py plan.sh project-pilot.py project-reconcile.py project_authority.py \
+         provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py provider-egress-profiles.json publish.sh remote_evidence.py resolve-engine.py \
          resolve-model-alias.py resync.sh run_contract.py runtime-state.py seed_contract.py taskctl.sh \
          transition_receipt.py validate-assignment-result.py validate-gate.py validate-verifier-result.py \
          validate-worker-result.py work.sh assignment-token.py worker-evidence.py worker-sandbox.sh; do
@@ -79,6 +79,7 @@ verifier_model_alias: opus-review
 deadline_seconds: 1
 verifier_deadline_seconds: 2
 network_policy: provider-only
+capacity_pool: claude-max
 evidence_contract: worker-result-v1
 verification: independent
 expected_change: ${3:-required}

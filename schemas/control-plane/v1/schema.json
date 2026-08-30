@@ -4,6 +4,23 @@
   "title": "Recursion control-plane state v1",
   "type": "object",
   "$defs": {
+    "phase6Budget": {
+      "type": "object",
+      "required": ["max_concurrency", "max_tokens", "max_cost_usd", "max_wall_clock_seconds", "max_task_attempts", "max_failures", "max_review_queue", "max_publish_attempts", "publication_required"],
+      "properties": {
+        "max_concurrency": {"type": "integer", "minimum": 0},
+        "max_tokens": {"type": "integer", "minimum": 0},
+        "max_cost_usd": {"type": "number", "minimum": 0},
+        "max_wall_clock_seconds": {"type": "integer", "minimum": 0},
+        "max_task_attempts": {"type": "integer", "minimum": 0},
+        "max_failures": {"type": "integer", "minimum": 0},
+        "max_review_queue": {"type": "integer", "minimum": 1},
+        "max_publish_attempts": {"type": "integer", "minimum": 0},
+        "max_retries": {"type": "integer", "minimum": 0},
+        "publication_required": {"type": "boolean"}
+      },
+      "additionalProperties": true
+    },
     "identifier": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$(?![\\s\\S])"
@@ -12,7 +29,7 @@
       "type": "object",
       "required": ["schema_version", "id", "repo", "default_branch", "deploy_key_ref", "charter", "topic", "pilot_id", "status"],
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/identifier"},
         "repo": {"type": "string", "minLength": 1},
         "remote": {"type": "string", "minLength": 1},
@@ -36,7 +53,7 @@
       "type": "object",
       "required": ["schema_version", "id", "project_id", "charter", "model_policy", "status"],
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/identifier"},
         "project_id": {"$ref": "#/$defs/identifier"},
         "topic": {"type": ["string", "integer"]},
@@ -80,7 +97,7 @@
       "type": "object",
       "required": ["schema_version", "id", "project_id", "pilot_id", "instruction_id", "plan_digest", "plan", "status"],
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/identifier"},
         "project_id": {"$ref": "#/$defs/identifier"},
         "pilot_id": {"$ref": "#/$defs/identifier"},
@@ -100,13 +117,17 @@
       "type": "object",
       "required": ["schema_version", "id", "project_id", "outcome", "acceptance_suite", "falsifier", "budget", "status"],
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/identifier"},
         "project_id": {"$ref": "#/$defs/identifier"},
         "outcome": {"type": "string", "minLength": 1},
         "acceptance_suite": {"type": "string", "minLength": 1},
         "falsifier": {"type": "string", "minLength": 1},
-        "budget": {"type": ["object", "string"]},
+        "budget": {"anyOf": [
+          {"type": "string"},
+          {"type": "object", "maxProperties": 0},
+          {"$ref": "#/$defs/phase6Budget"}
+        ]},
         "status": {"enum": ["draft", "approved", "active", "verifying", "achieved", "blocked", "abandoned", "budget-exhausted", "paused"]}
       },
       "additionalProperties": true
@@ -115,7 +136,7 @@
       "type": "object",
       "required": ["schema_version", "id", "goal_id", "dependencies", "allowed_paths", "non_goals", "worker_class", "acceptance", "status"],
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/identifier"},
         "goal_id": {"$ref": "#/$defs/identifier"},
         "dependencies": {"type": "array", "items": {"$ref": "#/$defs/identifier"}, "uniqueItems": true},
@@ -134,12 +155,18 @@
         "gate_class": {"enum": ["light", "heavy"]},
         "gate_contract": {
           "type": "object",
-          "required": ["acceptance_sha256", "gate_files"],
+          "required": ["acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"],
+          "additionalProperties": false,
           "properties": {
+            "acceptance": {"type": "string", "minLength": 1},
             "acceptance_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"},
             "gate_files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"}},
             "controller_gate_files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"}}
-          }
+          },
+          "anyOf": [
+            {"properties": {"gate_files": {"minProperties": 1}}},
+            {"properties": {"controller_gate_files": {"minProperties": 1}}}
+          ]
         },
         "gate_files": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
         "controller_gate_files": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
@@ -200,7 +227,7 @@
       "type": "object",
       "required": ["schema_version", "id", "actor", "verb", "arguments", "reason", "goal_id", "idempotency_key", "status", "decision_source"],
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/identifier"},
         "actor": {"type": "string", "minLength": 1, "pattern": "[^\\s]"},
         "verb": {"$ref": "#/$defs/identifier"},
@@ -217,7 +244,7 @@
       "type": "object",
       "required": ["schema_version", "id", "goal_id", "required_actor", "question", "evidence", "status"],
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/identifier"},
         "goal_id": {"$ref": "#/$defs/identifier"},
         "task_id": {"type": ["string", "null"]},
@@ -234,7 +261,7 @@
       "type": "object",
       "required": ["schema_version", "id", "event_id", "destination", "attempt", "acknowledgement", "status"],
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/identifier"},
         "event_id": {"$ref": "#/$defs/identifier"},
         "destination": {"type": "string", "minLength": 1},
@@ -258,7 +285,7 @@
       "type": "object",
       "required": ["schema_version", "id", "source_event_id", "event_type", "project_id", "goal_id", "message", "message_digest", "status"],
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/identifier"},
         "source_event_id": {"$ref": "#/$defs/identifier"},
         "event_type": {"enum": ["goal-accepted", "plan-approved", "worker-launched", "task-passed", "task-failed", "task-blocked", "human-answer-received", "review-branch-published", "goal-verifying", "goal-achieved", "goal-stopped", "pilot-terminal-report", "portfolio-result", "lucas-attention-required", "delivery-dead-letter", "plan-proposed", "pilot-window-armed", "pilot-window-opened", "pilot-window-closed", "portfolio-brief", "project-digest"]},
@@ -276,7 +303,7 @@
       "type": "object",
       "required": ["schema_version", "id", "principal", "topic", "project_id", "deduplication_key", "status", "action_ids"],
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/identifier"},
         "principal": {"type": "string", "minLength": 1},
         "topic": {"type": ["string", "integer"]},
@@ -295,7 +322,7 @@
       "type": "object",
       "required": ["schema_version", "id", "idempotency_key", "verb", "arguments", "goal_id", "status", "lease_expires", "attempts", "result_evidence"],
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/identifier"},
         "decision_id": {"type": ["string", "null"]},
         "instruction_id": {"type": ["string", "null"]},

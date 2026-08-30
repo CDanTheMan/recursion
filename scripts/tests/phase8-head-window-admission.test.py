@@ -41,7 +41,8 @@ class HeadWindowAdmissionTest(unittest.TestCase):
         (self.root / "state/project-config").mkdir(parents=True)
         (self.root / "scripts").mkdir(parents=True)
         for name in (
-            "assignment.py", "assist.sh", "author.sh", "board.sh", "branch-review.sh",
+            "assignment.py", "assignment_contract.py", "phase5_safety.py",
+            "assist.sh", "author.sh", "board.sh", "branch-review.sh",
             "capacity.sh", "conduct-hermes.sh", "conduct.sh", "decision-queue.py",
             "engine_contract.py", "git-scope.py", "hermes-decide.sh", "instruction_routing.py",
             "intake.sh", "jsonl_durable.py", "notification-outbox.py", "notify.sh",
