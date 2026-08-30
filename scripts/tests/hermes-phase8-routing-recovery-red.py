@@ -275,6 +275,38 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def _routing_module():
+    """Import instruction_routing once so the typed refusal can be read directly."""
+    global _ROUTING
+    if _ROUTING is None:
+        import importlib.util
+        import sys
+        scripts = str(SOURCE / "scripts")
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        spec = importlib.util.spec_from_file_location(
+            "instruction_routing_probe", SOURCE / "scripts/instruction_routing.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _ROUTING = module
+    return _ROUTING
+
+
+_ROUTING = None
+
+
+def admit_refusal_reason(fixture: "Fixture") -> str:
+    """Return the typed RoutingError text for the same admission the CLI performs."""
+    routing = _routing_module()
+    try:
+        routing.admit(fixture.root, fixture.root / "state/instructions/00000707.md", enqueue=True)
+    except routing.RoutingError as exc:
+        return str(exc)
+    except Exception as exc:  # noqa: BLE001 - any other type is itself the finding
+        return f"<unexpected {type(exc).__name__}: {exc}>"
+    return "<admitted: no refusal raised>"
+
+
 def require_recovery_rejected(label: str, mutate, expected: str) -> None:
     fixture = Fixture()
     try:
@@ -286,7 +318,14 @@ def require_recovery_rejected(label: str, mutate, expected: str) -> None:
         require(result.returncode == 4 and not fixture.queue("pending")
                 and not fixture.model_marker.exists(),
                 f"{label} did not fail closed rc={result.returncode}: {result.stderr}")
-        require(expected in result.stderr, f"{label} returned the wrong refusal: {result.stderr}")
+        # The CLI boundary deliberately emits one controlled refusal
+        # ("instruction-routing: operation refused") and keeps exception text off a public
+        # boundary, so stderr can no longer say WHICH validation rejected. Dropping that check
+        # would weaken this control to "rejected for any reason at all" -- it would pass even if
+        # the fixture were simply broken. Assert the specific reason against the typed exception
+        # from the same admit() the CLI calls, leaving the boundary correctly opaque.
+        reason = admit_refusal_reason(fixture)
+        require(expected in reason, f"{label} returned the wrong refusal: {reason}")
     finally:
         fixture.close()
 
