@@ -31,7 +31,7 @@ try:
 except Exception as exc:
     module_name = getattr(exc, "name", None) or "phase5_safety/engine_contract"
     import_error = FirstPartyImportError(
-        f"first-party module '{module_name}' is unavailable or malformed"
+        f"first-party module '{module_name}' is unavailable or malformed; searched {_SCRIPT_DIR}"
     )
     if __name__ == "__main__":
         print(f"validate-control-state: first-party import failed: {import_error}", file=sys.stderr)
@@ -45,7 +45,7 @@ MAX_CONTROL_STATE_BYTES = 2 * 1024 * 1024
 def _load_json_bytes(raw: bytes) -> object:
     if len(raw) > MAX_CONTROL_STATE_BYTES:
         raise ValueError("control-state JSON exceeds the 2 MiB bound")
-    return decode_json(raw, "control-state JSON")
+    return decode_json(raw, "control-state record")
 
 
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")

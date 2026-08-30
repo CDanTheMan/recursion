@@ -36,7 +36,7 @@ try:
 except Exception as exc:
     module_name = getattr(exc, "name", None) or "phase5_safety"
     import_error = FirstPartyImportError(
-        f"first-party module '{module_name}' is unavailable or malformed"
+        f"first-party module '{module_name}' is unavailable or malformed; searched {_SCRIPT_DIR}"
     )
     if __name__ == "__main__":
         print(f"provider-egress: first-party import failed: {import_error}", file=sys.stderr)

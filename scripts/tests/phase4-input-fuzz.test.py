@@ -242,8 +242,9 @@ def main() -> int:
         "executable": "sampleeng", "argv": ["{{EXE}}", "-p", "{{PROMPT}}"],
         "model": {"required": False, "argv_suffix": ["--model", "{{MODEL}}"]},
         "roles": ["implementer"],
-        "billing": {"basis": "flat-subscription", "provider": "sample-provider"},
-        "network": {"policy": "provider-only", "endpoints": ["sample.example.com"]},
+        "billing": {"basis": "flat-subscription", "provider": "cursor"},
+        "network": {"policy": "provider-only", "profile": "cursor",
+                    "endpoints": ["api.cursor.com", "api2.cursor.sh"]},
         "availability_probe": None, "concurrency_cap": None, "env_passthrough": [],
     }
     check(resolver.validate_manifest(base_manifest, "sampleeng")["name"] == "sampleeng",
@@ -1049,12 +1050,13 @@ def main() -> int:
             ("billing",): ([], {"basis": "flat-subscription"},
                              {"basis": "flat-subscription", "provider": "sample-provider", "unexpected": True}),
             ("billing", "basis"): (1, "prepaid", "flat-subscription"),
-            ("billing", "provider"): (None, 1, "", "sample-provider"),
+            ("billing", "provider"): (None, 1, "", "cursor"),
             ("network",): ([], {"policy": "provider-only", "endpoints": [], "unexpected": True}),
             ("network", "policy"): (1, "none", "provider-only"),
-            ("network", "profile"): (1, "P", "profile\n", "profile"),
+            ("network", "profile"): (1, "P", "profile\n", "cursor"),
             ("network", "endpoints"): (
-                "not-a-list", [1], [[]], ["bad"], ["sample.example.com\n"], [], ["sample.example.com"],
+                "not-a-list", [1], [[]], ["bad"], ["sample.example.com\n"], [],
+                ["api.cursor.com", "api2.cursor.sh"],
             ),
             ("availability_probe",): (
                 [],
