@@ -149,7 +149,12 @@ def _read_json_path(path: Path, label: str) -> object:
 
 
 def _is_reparse(info: os.stat_result) -> bool:
-    return bool(info.st_mode & stat.S_IFLNK) or bool(
+    # S_IFLNK (0o120000) is a VALUE in the S_IFMT field, not an independent bit, so
+    # `st_mode & S_IFLNK` is not a symlink test: a regular file (0o100644) shares a bit with it
+    # and yields 0o100000, which is truthy. That misclassified every regular file as a symlink
+    # and made _audit_path refuse legitimate instruction files. Directories (0o040755) mask to 0
+    # and escaped, which is why only the final file component tripped it.
+    return stat.S_ISLNK(info.st_mode) or bool(
         getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
     )
 
