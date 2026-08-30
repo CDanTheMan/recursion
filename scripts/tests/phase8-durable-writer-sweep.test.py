@@ -706,6 +706,342 @@ def run_posix_source_race(root: Path) -> int:
     return 1
 
 
+def run_production_writer_convergence(root: Path) -> int:
+    """Exercise every durable production entry point through its shared writer."""
+    root.mkdir(parents=True, exist_ok=True)
+    host, heartbeat, pool, requirements, candidate, assignment, receipt, _ = _records()
+
+    def placement_requirements(task_id: str) -> fabric.PlacementRequirements:
+        return fabric.PlacementRequirements(
+            task_id, requirements.project_id, requirements.role, requirements.capabilities,
+            requirements.operating_system, requirements.sandbox_profile, requirements.network_profile,
+            requirements.billing_basis, requirements.max_cost_usd, requirements.model,
+            requirements.model_parameters, requirements.allowed_paths, requirements.source_sha)
+
+    # Build all stateful fixtures before observing the writers.  The setup
+    # mutations themselves are intentionally not part of the route matrix.
+    host_registry = fabric.DurableHostRegistry(root / "convergence-hosts.json", root=root, now=NOW)
+    fabric_store = fabric.DurableFabricStore(root / "convergence-create.jsonl", root=root)
+    placement_store = fabric.DurableFabricStore(root / "convergence-placement.jsonl", root=root)
+    restart_store = fabric.DurableFabricStore(root / "convergence-restart.jsonl", root=root)
+    expire_store = fabric.DurableFabricStore(root / "convergence-expire.jsonl", root=root)
+    recovery_store = fabric.DurableFabricStore(root / "convergence-recovery.jsonl", root=root)
+    result_store = fabric.DurableFabricStore(root / "convergence-result.jsonl", root=root)
+    for store, lease_id in ((restart_store, "lease-restart"), (expire_store, "lease-expire"),
+                            (recovery_store, "lease-recovery"), (result_store, "lease-result")):
+        store.create_lease(assignment, lease_id=lease_id, attempt_id=f"{lease_id}-attempt",
+                           remote_session_id=f"{lease_id}-session", now=NOW,
+                           expires_at="2026-08-28T12:05:00Z")
+    recovery_store.reconcile_restart(now="2026-08-28T12:01:00Z")
+
+    authority = root / "convergence-authority.key"
+    authority.write_bytes(b"convergence-authority")
+    if os.name != "nt":
+        authority.chmod(0o600)
+    replace_counts = {"calls": 0}
+    append_counts = {"calls": 0}
+    operations: list[tuple[str, str, object]] = []
+
+    def invoke(label: str, expected: str, operation: object) -> None:
+        before = (replace_counts["calls"], append_counts["calls"])
+        operation()
+        after = (replace_counts["calls"], append_counts["calls"])
+        index = 0 if expected == "replace" else 1
+        if after[index] <= before[index]:
+            helper = "_replace_store_bytes" if expected == "replace" else "_append_bytes"
+            raise AssertionError(f"production entry point {label} bypassed {helper}")
+        operations.append((label, expected, after[index] - before[index]))
+
+    original_replace = fabric._replace_store_bytes
+    original_append = fabric._append_bytes
+
+    def observe_replace(path, data, **kwargs):
+        replace_counts["calls"] += 1
+        return original_replace(path, data, **kwargs)
+
+    def observe_append(path, data, **kwargs):
+        append_counts["calls"] += 1
+        return original_append(path, data, **kwargs)
+
+    with patch.object(fabric, "_replace_store_bytes", side_effect=observe_replace), \
+            patch.object(fabric, "_append_bytes", side_effect=observe_append):
+        invoke("DurableHostRegistry.register", "replace",
+               lambda: host_registry.register(host))
+        invoke("DurableHostRegistry.heartbeat", "replace",
+               lambda: host_registry.heartbeat(heartbeat, now=NOW))
+        invoke("DurableFabricStore.create_lease", "append",
+               lambda: fabric_store.create_lease(assignment, lease_id="lease-create",
+                                                 attempt_id="attempt-create", remote_session_id="session-create",
+                                                 now=NOW, expires_at="2026-08-28T12:05:00Z"))
+        invoke("DurableFabricStore.admit_placement", "append",
+               lambda: placement_store.admit_placement(
+                   placement_requirements("task-placement"), [candidate],
+                   {host.host_id: host}, {host.host_id: heartbeat}, {pool.pool_id: pool},
+                   lease_id="lease-placement", attempt_id="attempt-placement",
+                   remote_session_id="session-placement", now=NOW,
+                   expires_at="2026-08-28T12:05:00Z"))
+        invoke("DurableFabricStore.reconcile_restart", "append",
+               lambda: restart_store.reconcile_restart(now="2026-08-28T12:01:00Z"))
+        invoke("DurableFabricStore.expire", "append",
+               lambda: expire_store.expire(now="2026-08-28T12:06:00Z"))
+        invoke("DurableFabricStore.record_recovery_query", "append",
+               lambda: recovery_store.record_recovery_query(
+                   "lease-recovery", state="running", observed_at="2026-08-28T12:02:00Z",
+                   controller_now="2026-08-28T12:02:00Z"))
+        invoke("DurableFabricStore.accept_result", "append",
+               lambda: result_store.accept_result(
+                   attempt_id="lease-result-attempt", lease_id="lease-result",
+                   assignment_digest_value=assignment.assignment_digest, result_digest="f" * 64,
+                   status="succeeded", observed_at=NOW, controller_now="2026-08-28T12:01:00Z"))
+
+        registry_holder: dict[str, fabric.VerificationKeyRegistry] = {}
+
+        def provision_registry() -> None:
+            registry_holder["registry"] = fabric.VerificationKeyRegistry.provision(
+                root / "convergence-verifiers.json", authority_key_path=authority,
+                verification_keys={"controller/verifier-one": "convergence-key"}, root=root)
+
+        invoke("VerificationKeyRegistry.provision", "replace", provision_registry)
+        registry = registry_holder["registry"]
+        invoke("VerificationKeyRegistry.rotate", "replace",
+               lambda: registry.rotate("controller/verifier-one", "convergence-rotated-key"))
+
+        receipt_store = fabric.VerificationReceiptStore(
+            root / "convergence-receipts.jsonl", root=root, verification_registry=registry)
+        invoke("VerificationReceiptStore.issue", "append", lambda: receipt_store.issue(receipt))
+        issued = receipt_store.get(receipt.receipt_id)
+        if issued is None:
+            raise AssertionError("convergence receipt was not issued")
+        coordinator = fabric.IntegrationCoordinator(
+            root / "convergence-integration.jsonl", root=root, receipt_store=receipt_store)
+        invoke("IntegrationCoordinator.set_project_policy", "append",
+               lambda: coordinator.set_project_policy(
+                   project_id="project-one", default_branch="main", integration_branch="integration"))
+        invoke("IntegrationCoordinator.admit", "append",
+               lambda: coordinator.admit(
+                   candidate_id="candidate-one", project_id="project-one", source_sha=SOURCE,
+                   result_commit=RESULT, assignment=assignment, result_ref="cursor/candidate-one",
+                   classification="current-compatible", verification_receipt=issued))
+        invoke("IntegrationCoordinator.complete", "append",
+               lambda: coordinator.complete("candidate-one"))
+
+    labels = {label for label, _, _ in operations}
+    if len(labels) != 14:
+        raise AssertionError(f"production convergence covered {len(labels)} entry points, not 14")
+    print(f"ok    production convergence: {len(labels)} entry points routed through shared commits "
+          f"(append_calls={append_counts['calls']} replace_calls={replace_counts['calls']})")
+    return len(labels)
+
+
+def run_production_commit_races(root: Path) -> int:
+    """Run shared-writer and absent-destination races from production callers."""
+    root.mkdir(parents=True, exist_ok=True)
+    host, _, _, _, _, assignment, _, _ = _records()
+
+    # _replace_store_bytes: mutate the destination into an outside hardlink
+    # after its first final-name probe, then require the production register
+    # path to refuse before publishing.
+    replace_case = root / "production-replace-race"
+    replace_case.mkdir()
+    outside_dir = replace_case / "outside"
+    outside_dir.mkdir()
+    outside = outside_dir / "outside.jsonl"
+    outside.write_bytes(b"outside-before\n")
+    registry_path = replace_case / "hosts.json"
+    registry = fabric.DurableHostRegistry(registry_path, root=replace_case, now=NOW)
+    registry.register(host)
+    changed = host.to_dict()
+    changed["host_id"] = "host-two"
+    changed["registration_digest"] = fabric.digest_record(
+        {key: value for key, value in changed.items() if key != "registration_digest"})
+    replacement_host = fabric.HostRegistration.from_dict(changed)
+    injected = False
+    refused = False
+    refusal_message = ""
+    commit_called = False
+    accepted = False
+    original_revalidate = fabric._revalidate_destination
+
+    def inject_replace(directory, candidate_path, *, expected_identity, must_exist):
+        nonlocal injected
+        result = original_revalidate(directory, candidate_path,
+                                      expected_identity=expected_identity, must_exist=must_exist)
+        if Path(candidate_path) == registry_path and not injected:
+            registry_path.unlink()
+            os.link(outside, registry_path)
+            injected = True
+        return result
+
+    if os.name == "nt":
+        original_commit = fabric._windows_replace_by_handle
+
+        def observe_commit(*args, **kwargs):
+            nonlocal commit_called
+            commit_called = True
+            return original_commit(*args, **kwargs)
+
+        commit_context = patch.object(fabric, "_windows_replace_by_handle", side_effect=observe_commit)
+    else:
+        original_commit = fabric.os.replace
+
+        def observe_commit(*args, **kwargs):
+            nonlocal commit_called
+            commit_called = True
+            return original_commit(*args, **kwargs)
+
+        commit_context = patch.object(fabric.os, "replace", side_effect=observe_commit)
+
+    try:
+        with patch.object(fabric, "_revalidate_destination", side_effect=inject_replace), commit_context:
+            try:
+                registry.register(replacement_host)
+            except fabric.ReconciliationError as exc:
+                refusal_message = str(exc)
+                refused = (getattr(exc, "code", None) == "UNSAFE_STORE_PATH" and
+                           ("identity" in str(exc) or "unique regular file" in str(exc)))
+            else:
+                accepted = True
+        print(f"probe production _replace_store_bytes via DurableHostRegistry.register: "
+              f"adversarial_condition_established={injected} accepted={accepted} refusal={refusal_message!r}")
+        if not injected:
+            raise AssertionError("production replace race did not arm; refusing verdict")
+        if accepted:
+            raise AssertionError("production replace race was accepted")
+        if not refused:
+            raise AssertionError("production replace race was not refused by identity/link-count binding")
+        if commit_called:
+            raise AssertionError("production replace race reached the atomic commit")
+        if outside.read_bytes() != b"outside-before\n":
+            raise AssertionError("production replace race touched outside bytes")
+        print("ok    production _replace_store_bytes race: DurableHostRegistry.register refused before publish")
+    finally:
+        registry_path.unlink(missing_ok=True)
+
+    # _append_bytes: the expiration journal append must reject the same
+    # destination identity race before the replacement reaches the commit.
+    append_case = root / "production-append-race"
+    append_case.mkdir()
+    outside_dir = append_case / "outside"
+    outside_dir.mkdir()
+    outside = outside_dir / "outside.jsonl"
+    outside.write_bytes(b"outside-before\n")
+    store_path = append_case / "fabric.jsonl"
+    store = fabric.DurableFabricStore(store_path, root=append_case)
+    store.create_lease(assignment, lease_id="lease-append-race", attempt_id="attempt-append-race",
+                       remote_session_id="session-append-race", now=NOW,
+                       expires_at="2026-08-28T12:05:00Z")
+    injected = False
+    refused = False
+    refusal_message = ""
+    commit_called = False
+    accepted = False
+
+    def inject_append(directory, candidate_path, *, expected_identity, must_exist):
+        nonlocal injected
+        result = original_revalidate(directory, candidate_path,
+                                      expected_identity=expected_identity, must_exist=must_exist)
+        if Path(candidate_path) == store_path and not injected:
+            store_path.unlink()
+            os.link(outside, store_path)
+            injected = True
+        return result
+
+    if os.name == "nt":
+        original_commit = fabric._windows_replace_by_handle
+
+        def observe_commit(*args, **kwargs):
+            nonlocal commit_called
+            commit_called = True
+            return original_commit(*args, **kwargs)
+
+        commit_context = patch.object(fabric, "_windows_replace_by_handle", side_effect=observe_commit)
+    else:
+        original_commit = fabric.os.replace
+
+        def observe_commit(*args, **kwargs):
+            nonlocal commit_called
+            commit_called = True
+            return original_commit(*args, **kwargs)
+
+        commit_context = patch.object(fabric.os, "replace", side_effect=observe_commit)
+
+    try:
+        with patch.object(fabric, "_revalidate_destination", side_effect=inject_append), commit_context:
+            try:
+                store.expire(now="2026-08-28T12:06:00Z")
+            except fabric.ReconciliationError as exc:
+                refusal_message = str(exc)
+                refused = (getattr(exc, "code", None) == "UNSAFE_STORE_PATH" and
+                           ("identity" in str(exc) or "unique regular file" in str(exc)))
+            else:
+                accepted = True
+        print(f"probe production _append_bytes via DurableFabricStore.expire: "
+              f"adversarial_condition_established={injected} accepted={accepted} refusal={refusal_message!r}")
+        if not injected:
+            raise AssertionError("production append race did not arm; refusing verdict")
+        if accepted:
+            raise AssertionError("production append race was accepted")
+        if not refused:
+            raise AssertionError("production append race was not refused by identity/link-count binding")
+        if commit_called:
+            raise AssertionError("production append race reached the atomic commit")
+        if outside.read_bytes() != b"outside-before\n":
+            raise AssertionError("production append race touched outside bytes")
+        print("ok    production _append_bytes race: DurableFabricStore.expire refused before publish")
+    finally:
+        store_path.unlink(missing_ok=True)
+
+    # Absent-destination arm: establish a competing create at os.link itself
+    # and invoke the no-clobber path through create_lease.
+    absent_case = root / "production-absent-race"
+    absent_case.mkdir()
+    outside_dir = absent_case / "outside"
+    outside_dir.mkdir()
+    outside = outside_dir / "outside.jsonl"
+    outside.write_bytes(b"outside-before\n")
+    absent_path = absent_case / "fabric.jsonl"
+    absent_store = fabric.DurableFabricStore(absent_path, root=absent_case)
+    injected = False
+    refused = False
+    accepted = False
+    original_link = fabric.os.link
+
+    def inject_absent(*args, **kwargs):
+        nonlocal injected
+        if not injected:
+            original_link(outside, absent_path)
+            injected = True
+        return original_link(*args, **kwargs)
+
+    try:
+        with patch.object(fabric.os, "link", side_effect=inject_absent):
+            try:
+                absent_store.create_lease(
+                    assignment, lease_id="lease-absent-race", attempt_id="attempt-absent-race",
+                    remote_session_id="session-absent-race", now=NOW,
+                    expires_at="2026-08-28T12:05:00Z")
+            except fabric.ReconciliationError as exc:
+                refused = (getattr(exc, "code", None) == "UNSAFE_STORE_PATH" and
+                           str(exc) == "durable store destination appeared before commit")
+            else:
+                accepted = True
+        print(f"probe production _commit_absent_leaf via DurableFabricStore.create_lease: "
+              f"adversarial_condition_established={injected} accepted={accepted}")
+        if not injected:
+            raise AssertionError("production absent-destination race did not arm; refusing verdict")
+        if accepted:
+            raise AssertionError("production absent-destination race was accepted")
+        if not refused:
+            raise AssertionError("production absent-destination race was not refused by no-clobber guard")
+        if outside.read_bytes() != b"outside-before\n":
+            raise AssertionError("production absent-destination race touched outside bytes")
+        print("ok    production absent-destination race: DurableFabricStore.create_lease refused competing create")
+    finally:
+        absent_path.unlink(missing_ok=True)
+
+    return 3
+
+
 def run_absent_destination_guard(root: Path) -> int:
     """Exercise the line-730 FileExistsError guard without its outer fallback."""
     root.mkdir(parents=True, exist_ok=True)
@@ -958,8 +1294,10 @@ def main() -> int:
         absent_guard = run_absent_destination_guard(run_root / "absent-guard")
         absent_race = run_absent_destination_race(run_root / "absent-race")
         posix = run_posix_source_race(run_root / "posix")
+        convergence = run_production_writer_convergence(run_root / "production-convergence")
+        production_races = run_production_commit_races(run_root / "production-races")
         positive = run_positive_controls(run_root / "positive")
-        print(f"phase8-durable-writer-sweep: PASS differential={differential} hostile={hostile} placement={placement} registry={registry} shared={shared} isolated_reparse={isolated_reparse} absent_guard={absent_guard} absent_race={absent_race} posix={posix} positive={positive}")
+        print(f"phase8-durable-writer-sweep: PASS differential={differential} hostile={hostile} placement={placement} registry={registry} shared={shared} isolated_reparse={isolated_reparse} absent_guard={absent_guard} absent_race={absent_race} posix={posix} convergence={convergence} production_races={production_races} positive={positive}")
         return 0
     finally:
         # Only this harness-owned child is cleaned.  The caller-owned scratch
