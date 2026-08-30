@@ -296,7 +296,12 @@ writer widened the grammar and bare `touch` became an admissible gate.
 **esc-0003 remains open** and does not block: whether a packaged non-Git controller is a supported
 deployment. Failing closed stays in place meanwhile.
 
-## esc-0004 â€” an active project with a paused pilot fails the Phase 4 audit (2026-08-30)
+## [esc-0011] 2026-08-30 — An active project with a paused pilot fails the Phase 4 audit
+
+<!-- Recorded on 2026-08-30 as "esc-0004", which collided with the physics escalation of that
+     number at the top of this file. Renumbered to esc-0011; commit messages and EVIDENCE.md
+     written before the collision was noticed still say esc-0004. -->
+
 
 **Status:** open, human decision required. Does not block the v2 integration.
 
@@ -350,7 +355,12 @@ Until this is answered, `hermes-pilot-phase4-green.sh` is expected to fail on th
 visible in every gate summary rather than being suppressed.
 
 
-## esc-0005 â€” the Phase 5 merge left two assignment systems wired into each other (2026-08-30)
+## [esc-0012] 2026-08-30 — The Phase 5 merge left two assignment systems wired into each other
+
+<!-- Recorded on 2026-08-30 as "esc-0005", which collided with the physics escalation of that
+     number at the top of this file. Renumbered to esc-0012; commit messages and EVIDENCE.md
+     written before the collision was noticed still say esc-0005. -->
+
 
 **Status:** not blocking; recorded because it is an architecture-level call made during integration,
 not an ordinary defect fix. Read this before merging the remediation.
@@ -430,3 +440,65 @@ tree.
 - `resolve-engine.py` imports `provider_contract` before inserting its own script directory on
   `sys.path`, so suites invoking it from `scripts/tests` can abort before their first assertion.
 
+
+## [esc-0013] 2026-08-30 — Which user runs the PAUSE writers, the offsite backup, and the remote adapters?
+
+**Status:** open, human decision required. Blocks nothing in-tree today, because a separate defect
+(the descriptor-rooted lock path, being repaired) currently refuses every acquisition on POSIX. It
+will block the moment that repair lands.
+
+**Workstream:** recursion-v2 execution fabric, Phase 6/7 integration
+**Blocked on:** a deployment fact — which OS user each of these processes runs as on the box.
+
+### What changed
+
+Phase 6/7 routes `pause.sh` and `resume.sh` through `remote-pause.py`, which takes
+`state/.locks/remote-state.lock` via `remote_backend.remote_state_lock`. That is the same lock the
+remote adapters hold across an outbound send, which is the point: PAUSE and send get one
+linearization. The integration then put `backup-offsite.py` on the same lock, retiring a second
+lock (`pause-transfer`) that had exactly one holder left and therefore excluded nothing.
+
+So three things now contend for one lock: the PAUSE writers, the remote adapters, and the offsite
+backup.
+
+### The measurement
+
+`remote_backend` creates `state/.locks` mode 0700 owned by whoever gets there first. Run at
+`codex/v2-claude-opus` (d1f0a06), where an unrelated defect does not mask the result:
+
+```
+root-first      uid=0    ACQUIRED  .locks uid=0    mode=0o700
+                uid=1000 REFUSED   RemoteError: request-invalid: unsafe runtime storage directory
+nonroot-first   uid=1000 ACQUIRED  .locks uid=1000 mode=0o700
+                uid=0    ACQUIRED  .locks uid=1000 mode=0o700
+```
+
+The failure is **one-directional and ordering-dependent**. If a root process creates the lock chain
+first, every non-root participant is locked out permanently — not degraded, refused. If a non-root
+process creates it first, root can still acquire, because root ignores the mode bits.
+
+`backup-offsite.py` carries explicit root-ownership policy (`os.geteuid() == 0` implies directories
+must be root-owned), which is what suggests it is expected to run as root somewhere. Whether it
+actually does on this box, and whether the supervisor and adapters run as the same user, is not
+something the repository states.
+
+### Why this is not mine to decide
+
+Three in-tree fixes are available and each encodes a different deployment assumption:
+
+1. Create `.locks` group-writable (0770) with a shared group — requires choosing the group, which is
+   a provisioning decision.
+2. Accept a differently-owned-but-safe `.locks` — loosens a check that exists to refuse exactly this
+   shape, and needs the argument for why that is safe here.
+3. Require all three to run as one user — a deployment constraint, and it may already be false.
+
+Picking one silently would write a deployment assumption into a security check. The reviewer who
+raised this reported it as POSIX reasoning and said it had not been executed; it has now been
+executed and it reproduces, so the mechanism is not in doubt — only the deployment is.
+
+### Attribution
+
+This reproduces at `d1f0a06`, before the offsite backup joined the lock. It is inherited from Phase
+6/7's decision to route the PAUSE writers through `remote_backend`, not introduced by the
+integration. Unifying the backup onto the same lock adds a third participant to a coupling that was
+already there and already broken in one direction.
