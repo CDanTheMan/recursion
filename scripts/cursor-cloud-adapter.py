@@ -255,16 +255,25 @@ class CursorCloudAdapter:
             raise RemoteError("request-invalid", "adapter paths are absolute within the API")
         return self.endpoint + path
 
-    def _call(self, method: str, path: str, body: dict | None = None,
-              extra_headers: dict | None = None) -> dict:
+    def _run_url(self, run_id: object, suffix: str = "") -> str:
+        """Build a provider run URL only after revalidating its durable-record input."""
+        checked = validate_run_id(run_id, code="malformed-response")
+        return self._url(f"/v0/agents/{checked}{suffix}")
+
+    def _call_url(self, method: str, url: str, body: dict | None = None,
+                  extra_headers: dict | None = None) -> dict:
         payload = canonical_bytes(body) if body is not None else None
         headers = self._headers()
         headers.update(extra_headers or {})
-        assert_not_paused(self.base, f"{method} {path}")
-        response = self.transport.request(method, self._url(path), headers, payload,
-                                          self.manifest["timeout_seconds"])
+        assert_not_paused(self.base, f"{method} {url}")
+        response = self.transport.request(method, url, headers, payload,
+                                           self.manifest["timeout_seconds"])
         classify_status(response.status, response.body)
         return response.json()
+
+    def _call(self, method: str, path: str, body: dict | None = None,
+              extra_headers: dict | None = None) -> dict:
+        return self._call_url(method, self._url(path), body, extra_headers)
 
     def _now(self) -> str:
         return now_iso(self.clock)
@@ -445,7 +454,7 @@ class CursorCloudAdapter:
     def get_status(self, dispatch_id: str) -> dict:
         with outbound_admission(self.base, self.name, "a Cursor Cloud status query"):
             session = read_session(self.base, self.name, dispatch_id, lock_held=True)
-            payload = self._call("GET", f"/v0/agents/{session['run_id']}")
+            payload = self._call_url("GET", self._run_url(session.get("run_id")))
             state = map_vendor_state(payload.get("status"))
             session["state"] = state
             session["vendor_state"] = str(payload.get("status"))
@@ -474,7 +483,7 @@ class CursorCloudAdapter:
         payload is a typed error, never a skipped line."""
         with outbound_admission(self.base, self.name, "a Cursor Cloud status stream"):
             session = read_session(self.base, self.name, dispatch_id, lock_held=True)
-            url = self._url(f"/v0/agents/{session['run_id']}/events")
+            url = self._run_url(session.get("run_id"), "/events")
             assert_not_paused(self.base, "a Cursor Cloud status stream")
             for line in self.transport.stream_lines("GET", url, self._headers(), None,
                                                     self.manifest["timeout_seconds"]):
@@ -501,6 +510,7 @@ class CursorCloudAdapter:
         with outbound_admission(self.base, self.name, "a Cursor Cloud cancellation"):
             self._assert_credential()
             session = read_session(self.base, self.name, dispatch_id, lock_held=True)
+            url = self._run_url(session.get("run_id"), "/cancel")
             attempt = self._begin(dispatch_id, "cancel", session["assignment_digest"],
                                   canonical_digest({"run_id": session["run_id"]}),
                                   lock_held=True)
@@ -511,7 +521,7 @@ class CursorCloudAdapter:
                                   f"cancel attempt {attempt.attempt_id} was left open; reconcile "
                                   "the run's observed state before cancelling again")
             try:
-                payload = self._call("POST", f"/v0/agents/{session['run_id']}/cancel")
+                payload = self._call_url("POST", url)
             except RemoteError as exc:
                 if exc.code in AMBIGUOUS_MUTATION_ERRORS:
                     # A cancel transport failure is also ambiguous: the provider may have
@@ -548,7 +558,7 @@ class CursorCloudAdapter:
     def list_artifacts(self, dispatch_id: str) -> list[dict]:
         with outbound_admission(self.base, self.name, "a Cursor Cloud artifact listing"):
             session = read_session(self.base, self.name, dispatch_id, lock_held=True)
-            payload = self._call("GET", f"/v0/agents/{session['run_id']}/artifacts")
+            payload = self._call_url("GET", self._run_url(session.get("run_id"), "/artifacts"))
             artifacts = payload.get("artifacts")
             if not isinstance(artifacts, list):
                 raise RemoteError("malformed-response", "artifacts response is not a list")
@@ -571,9 +581,10 @@ class CursorCloudAdapter:
         artifact_id = validate_artifact_id(artifact_id, code="request-invalid")
         with outbound_admission(self.base, self.name, "a Cursor Cloud artifact download"):
             session = read_session(self.base, self.name, dispatch_id, lock_held=True)
+            url = self._run_url(session.get("run_id"), f"/artifacts/{artifact_id}")
             assert_not_paused(self.base, "a Cursor Cloud artifact download")
             response = self.transport.request(
-                "GET", self._url(f"/v0/agents/{session['run_id']}/artifacts/{artifact_id}"),
+                "GET", url,
                 self._headers(), None, self.manifest["timeout_seconds"])
             classify_status(response.status, response.body)
             row = {
@@ -638,7 +649,7 @@ class CursorCloudAdapter:
         with outbound_admission(self.base, self.name, "a Cursor Cloud usage query"):
             session = read_session(self.base, self.name, dispatch_id, lock_held=True)
             snapshot, basis, on_demand, provider = self._usage_attribution(session)
-            payload = self._call("GET", f"/v0/agents/{session['run_id']}/usage")
+            payload = self._call_url("GET", self._run_url(session.get("run_id"), "/usage"))
             tokens = payload.get("usage") if isinstance(payload.get("usage"), dict) else payload
             counts: dict[str, int] = {}
             for field in ("input_tokens", "output_tokens", "cache_read_tokens", "total_tokens"):
@@ -801,10 +812,15 @@ class CursorCloudAdapter:
                 })
 
             vendor_status = vendor_result.get("status")
-            input_digest = canonical_digest({
-                "vendor_result": vendor_result,
-                "authorized_repositories": authorized_repositories,
-            })
+            try:
+                input_digest = canonical_digest({
+                    "vendor_result": vendor_result,
+                    "authorized_repositories": authorized_repositories,
+                })
+                vendor_report_digest = canonical_digest(vendor_result)
+            except (TypeError, ValueError, OverflowError, UnicodeError):
+                raise RemoteError("malformed-response",
+                                  "vendor result is not finite canonical JSON") from None
             record = {
                 "schema_version": SCHEMA_VERSION,
                 "kind": "cursor-cloud-reconciliation-input",
@@ -822,7 +838,7 @@ class CursorCloudAdapter:
                 # recording nothing would lose attributability when the two later disagree.
                 "advisory_only": {
                     "vendor_reported_state": str(vendor_status) if vendor_status is not None else "",
-                    "vendor_report_digest": canonical_digest(vendor_result),
+                    "vendor_report_digest": vendor_report_digest,
                     "vendor_claim_keys": sorted(str(key) for key in vendor_result),
                 },
                 "reconciliation_input_digest": input_digest,

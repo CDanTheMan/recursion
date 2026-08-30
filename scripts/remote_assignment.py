@@ -184,6 +184,8 @@ SECRET_VALUE_PATTERNS = (
 )
 
 CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+URL_FORBIDDEN_CHAR_RE = re.compile(r"[\x00-\x20\x7f]")
+URL_PORT_RE = re.compile(r"[0-9]+\Z")
 
 
 def validate_secret_ref(value: object, field: str,
@@ -367,25 +369,51 @@ def validate_https_url(value: object, field: str, *, require_path: bool = False,
     """
     if not isinstance(value, str) or not value:
         raise RemoteError(code, f"{field} must be a nonempty string")
-    if CONTROL_CHAR_RE.search(value):
-        raise RemoteError(code, f"{field} contains a control character")
+    # The schema's public endpoint grammar is deliberately ASCII-lowercase and excludes
+    # spaces as well as control characters from both authority and path.  urlsplit lowercases
+    # the parsed scheme and otherwise accepts spaces, so these boundary checks must inspect the
+    # original value before trusting the parser.
+    if not value.startswith("https://"):
+        raise RemoteError(code, f"{field} must use the lowercase https:// scheme")
+    if URL_FORBIDDEN_CHAR_RE.search(value):
+        raise RemoteError(code, f"{field} contains a space or control character")
     try:
         parts = urlsplit(value)
-        # Accessing .port is part of validation: urlsplit defers malformed port text and
-        # out-of-range values until this property is evaluated.
-        parts.port
     except ValueError:
-        # urlsplit raises for malformed authority syntax (for example an unmatched
-        # IPv6 bracket), while .port raises for malformed or out-of-range port text.
-        # Parser details are not part of the boundary contract.
+        # urlsplit raises for malformed authority syntax (for example an unmatched IPv6
+        # bracket). Parser details are not part of the boundary contract.
         raise RemoteError(code, f"{field} is not a well-formed https URL") from None
-    if parts.scheme != "https":
-        raise RemoteError(code,
-                          f"{field} must be an https:// URL (got scheme {parts.scheme!r}); "
-                          "ssh and scp-style remotes imply a key on the remote host")
+    # Validate the authority port without asking urlsplit for ``.port``.  Python converts that
+    # property with int(), whose interpreter digit limit rejects an otherwise valid port with
+    # thousands of leading zeroes. Strip leading zeroes first, so the range comparison remains
+    # bounded while the accepted grammar still agrees with the schema.
+    netloc = parts.netloc
+    port_text: str | None = None
+    if netloc.startswith("["):
+        closing = netloc.find("]")
+        suffix = netloc[closing + 1:] if closing >= 0 else ""
+        if suffix:
+            if not suffix.startswith(":"):
+                raise RemoteError(code, f"{field} is not a well-formed https URL")
+            port_text = suffix[1:]
+    elif ":" in netloc:
+        if netloc.count(":") != 1:
+            raise RemoteError(code, f"{field} is not a well-formed https URL")
+        port_text = netloc.rsplit(":", 1)[1]
+    if port_text is not None:
+        if not URL_PORT_RE.fullmatch(port_text):
+            raise RemoteError(code, f"{field} is not a well-formed https URL")
+        significant_port = port_text.lstrip("0") or "0"
+        if len(significant_port) > 5 or (len(significant_port) == 5
+                                         and significant_port > "65535"):
+            raise RemoteError(code, f"{field} is not a well-formed https URL")
     if "@" in parts.netloc:
         raise RemoteError(code, f"{field} carries userinfo in its authority; that is a credential")
     if "[" in parts.netloc or "]" in parts.netloc:
+        # The preceding ``except ValueError`` parser guard already rejects an unmatched closing
+        # bracket (the review probe ``https://host]`` never reaches this branch). Keep this guard
+        # for bracket forms the parser accepts, where the schema still requires a bracketed
+        # IPv6/IPvFuture literal with only an optional port suffix.
         bracketed = parts.netloc.startswith("[")
         balanced = parts.netloc.count("[") == 1 and parts.netloc.count("]") == 1
         closing = parts.netloc.find("]")
@@ -395,9 +423,9 @@ def validate_https_url(value: object, field: str, *, require_path: bool = False,
             raise RemoteError(code, f"{field} is not a well-formed https URL")
     if not parts.hostname:
         raise RemoteError(code, f"{field} must name a host")
-    if parts.netloc.endswith(":"):
-        raise RemoteError(code, f"{field} is not a well-formed https URL")
-    if parts.fragment or (parts.query and not allow_query):
+    if "#" in value or ("?" in value and not parts.query):
+        raise RemoteError(code, f"{field} must not carry a query string or fragment")
+    if parts.query and not allow_query:
         raise RemoteError(code, f"{field} must not carry a query string or fragment")
     if require_path and not parts.path.strip("/"):
         raise RemoteError(code, f"{field} must name a repository path")

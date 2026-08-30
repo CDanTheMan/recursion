@@ -667,6 +667,10 @@ def load_manifest(path: Path, name: str) -> dict:
             RecursionError):
         raise _bad(f"could not read manifest {name}") from None
     try:
+        # This parser guard gives a non-finite manifest token the correct malformed-JSON
+        # classification. If it is bypassed, validate_manifest's exact integer/range guard for
+        # timeout_seconds still refuses the same probe; keep this guard for the earlier boundary
+        # and its stable error taxonomy.
         data = json.loads(raw, parse_constant=reject_json_constant)
     except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError):
         raise _bad(f"manifest {name} is not valid JSON") from None
@@ -1559,14 +1563,19 @@ def _read_runtime_json(parent: _PinnedDirectory, path: Path, malformed_message: 
     try:
         descriptor, _info = _open_runtime_leaf(parent, path, flags, expected=expected)
         with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
-            value = json.load(handle, parse_constant=reject_json_constant)
+            try:
+                value = json.load(handle, parse_constant=reject_json_constant)
+            except (json.JSONDecodeError, _NonStandardJsonConstant, RecursionError):
+                # RecursionError belongs here only because it can be raised by the JSON parser
+                # while descending through hostile nesting. Verification below is not input
+                # parsing: a RecursionError there must surface as a programming failure.
+                raise RemoteError("malformed-response", malformed_message) from None
             _verify_runtime_leaf(parent, path.name, handle.fileno())
         parent.verify()
         return value
     except RemoteError:
         raise
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError,
-            _NonStandardJsonConstant, RecursionError):
+    except (OSError, UnicodeDecodeError):
         raise RemoteError("malformed-response", malformed_message) from None
 
 
