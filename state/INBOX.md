@@ -184,3 +184,59 @@ Everything else continues to move: Phase 6/7 is 15/15 with both mutation proofs 
 race rates are 10/10 and 10/10, Phase 5's are 10/10 and 10/10, and Phases 3 and 4 have fresh
 remediations under gate.
 
+
+## [esc-0003] 2026-08-29 — Are non-Git controller deployments supported?
+**Workstream:** recursion-v2 execution fabric
+**Pointer:** `scripts/provider-proxy-service.py:24-33`, `scripts/provider-network.sh:21-25`,
+`scripts/worker-sandbox.sh:824-831` (Phase 5, `codex/v2-cursor-runtime` @ `da5e687`).
+**Blocked on:** whether a controller that is not a Git checkout is a supported deployment. Not
+recorded in `DECISIONS.md`.
+**Not blocking Phase 5.** Failing closed is the defensible default and the documented deployment
+satisfies it. This wants a decision, not a hold.
+
+**What changed and why.** An independent review found that the builtin provider path invoked
+`provider-egress.py` with no controller provenance, so egress read the live registry and a
+changed-but-valid registry chose a different namespace and proxy port at rc=0:
+
+```
+baseline rc=0  namespace=recursion-provider-anthropic  proxy_port=18080
+mutated  rc=0  namespace=attacker-netns                proxy_port=1234
+```
+
+The fix derives provenance from the controller checkout when no resolver plan carries it, and
+passes it unconditionally. A second independent review confirmed by execution that this works —
+egress genuinely honours the pin rather than merely accepting it:
+
+```
+pinned baseline                       rc=0  namespace=pinned-a proxy_port=19080
+live registry mutated, pin unchanged  rc=2  "provider profile registry differs from controller commit"
+registry restored                     rc=0  committed namespace/port
+```
+
+**The cost.** Deriving provenance means running `git -C "$ROOT" rev-parse --verify HEAD`. Where
+that cannot answer, the path now refuses at rc=96 instead of using the local registry:
+
+```
+non-Git controller root      rc=96   (parent resolved the local registry without Git)
+git absent from PATH         rc=96
+unborn HEAD                  rc=96
+detached HEAD                works
+shallow / grafted checkout   works when HEAD and the tracked registry object are present
+```
+
+**The question.** If a packaged, non-Git controller is a supported deployment, this is an
+availability regression and needs a supported authenticated packaging path instead. If the
+controller is always a Git checkout — the documented systemd service uses a root-owned
+`/opt/recursion` — then failing closed is correct and this note only needs recording.
+
+I am not choosing. Refusing to route provider traffic under unauthenticated policy is the right
+default and I have left it in place, but "the previous behaviour was more available" is not
+something I should silently trade away on a security seam.
+
+**Related, recorded not escalated.** The same review notes the fix relocates trust rather than
+eliminating it: `RECURSION_ROOT` is caller-selectable, so a party who controls the root controls
+the commit and the registry together. Under the documented threat model — root-owned checkout,
+`/etc/recursion/provider-egress.env`, unprivileged workers — that party is already privileged, so
+the original live-registry drift is closed. Independently authenticating the root choice is a
+larger change than this phase, and it is called out here so it is a known limit rather than an
+assumption.
