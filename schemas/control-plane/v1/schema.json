@@ -201,7 +201,7 @@
         "host": {"type": "string", "minLength": 1},
         "model": {"type": ["string", "null"], "minLength": 1},
         "sandbox_profile": {"type": "string", "minLength": 1},
-        "network_profile": {"enum": ["provider-only", "none"]},
+        "network_profile": {"enum": ["anthropic", "cursor", "gemini", "openrouter", "sentry-local"]},
         "source_repository": {"type": "string", "minLength": 1},
         "source_branch": {"type": "string", "minLength": 1},
         "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40,64}$(?![\\s\\S])"},
@@ -220,7 +220,7 @@
       },
       "allOf": [{
         "if": {"required": ["assignment_digest"]},
-        "then": {"required": ["project_id", "engine", "provider", "capacity_pool", "billing_basis", "metered_approved", "host", "model", "sandbox_profile", "network_profile", "source_repository", "source_branch", "source_sha", "source_evidence", "allowed_paths", "publication_policy", "default_branch", "integration_branch", "assignment"]}
+        "then": {"required": ["project_id", "engine", "provider", "capacity_pool", "billing_basis", "metered_approved", "host", "model", "sandbox_profile", "network_policy", "network_profile", "source_repository", "source_branch", "source_sha", "source_evidence", "allowed_paths", "publication_policy", "default_branch", "integration_branch", "assignment"]}
       }],
       "additionalProperties": true
     },

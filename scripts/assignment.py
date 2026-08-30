@@ -67,7 +67,21 @@ SLUG_RE = re.compile(r"[a-z][a-z0-9-]{1,63}")
 MODEL_PARAM_KEY_RE = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
 ROLES = frozenset({"implementer", "verifier"})
-NETWORK_PROFILES = frozenset({"provider-only", "none"})
+NETWORK_POLICIES = frozenset({"provider-only", "none"})
+NETWORK_PROFILES = frozenset({"anthropic", "cursor", "gemini", "openrouter", "sentry-local"})
+# Phase 3's resolver historically accepted the task's network policy through
+# --network-profile. Keep that call shape working, but normalize the legacy
+# policy argument into the provider profile vocabulary before persisting it.
+PROVIDER_PROFILE_BY_PROVIDER = {
+    "anthropic": "anthropic",
+    "anthropic-claude-code": "anthropic",
+    "cursor": "cursor",
+    "google-gemini": "gemini",
+    "openrouter": "openrouter",
+    "openrouter-via-opencode": "openrouter",
+    "sentry-local": "sentry-local",
+    "none": "sentry-local",
+}
 # docs/plans/recursion-v2-execution-fabric.md "Sandbox profile" — the initial profile set.
 SANDBOX_PROFILES = frozenset({
     "strict-linux", "workspace-linux", "vendor-cloud", "remote-linux",
@@ -93,7 +107,7 @@ ASSIGNMENT_FIELDS = frozenset({
     "schema_version", "task_id", "project_id", "role", "source_repository", "source_branch",
     "source_sha", "source_evidence", "seed_manifest_digest", "engine", "provider",
     "capacity_pool", "billing_basis", "metered_approved", "model", "model_parameters", "host",
-    "sandbox_profile", "network_profile", "allowed_paths", "gate_digest", "publication_policy",
+    "sandbox_profile", "network_policy", "network_profile", "allowed_paths", "gate_digest", "publication_policy",
     "default_branch", "integration_branch", "created_at", "assignment_digest",
 })
 # This is the exact projection embedded in run evidence.  Keep it derived from the
@@ -408,6 +422,31 @@ def canonical_digest(value: dict) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _normalize_network_binding(network_profile: str, network_policy: str | None,
+                               provider: str) -> tuple[str, str]:
+    """Return (policy, profile), accepting the pre-Phase-5 CLI spelling once.
+
+    The old resolver's required ``network_profile`` argument actually carried a policy. A
+    caller using that shape must identify a provider that has a declared profile; guessing a
+    profile for an unknown provider would create exactly the attribution loss this split fixes.
+    New callers must provide both values explicitly.
+    """
+    if network_policy is None:
+        if network_profile not in NETWORK_POLICIES:
+            raise AssignmentError(
+                "network_policy is required when network_profile is a provider profile"
+            )
+        profile = PROVIDER_PROFILE_BY_PROVIDER.get(provider)
+        if profile is None:
+            raise AssignmentError("legacy network policy cannot derive a provider profile")
+        return network_profile, profile
+    if not isinstance(network_policy, str) or network_policy not in NETWORK_POLICIES:
+        raise AssignmentError(f"network_policy must be one of {sorted(NETWORK_POLICIES)}")
+    if not isinstance(network_profile, str) or network_profile not in NETWORK_PROFILES:
+        raise AssignmentError(f"network_profile must be one of {sorted(NETWORK_PROFILES)}")
+    return network_policy, network_profile
+
+
 def resolve_assignment(
     *, task_id: str, project_id: str, role: str, source_repository: str, source_branch: str,
     source_sha: str, engine: str, provider: str, host: str, sandbox_profile: str,
@@ -418,7 +457,7 @@ def resolve_assignment(
     source_evidence: dict | None = None, billing_basis: str | None = None,
     metered_approved: bool = False, default_branch: str = "main",
     integration_branch: str = "recursion/integration",
-    created_at: str | None = None,
+    created_at: str | None = None, network_policy: str | None = None,
 ) -> dict:
     if not isinstance(task_id, str) or not IDENTIFIER_RE.fullmatch(task_id):
         raise AssignmentError(f"invalid task_id {task_id!r}")
@@ -458,8 +497,9 @@ def resolve_assignment(
         raise AssignmentError("host must be a nonempty string")
     if not isinstance(sandbox_profile, str) or sandbox_profile not in SANDBOX_PROFILES:
         raise AssignmentError(f"sandbox_profile must be one of {sorted(SANDBOX_PROFILES)}")
-    if not isinstance(network_profile, str) or network_profile not in NETWORK_PROFILES:
-        raise AssignmentError(f"network_profile must be one of {sorted(NETWORK_PROFILES)}")
+    network_policy, network_profile = _normalize_network_binding(
+        network_profile, network_policy, provider
+    )
     normalized_allowed_paths = _normalize_allowed_paths(allowed_paths)
     if gate_digest is not None and (
             not isinstance(gate_digest, str) or not DIGEST_RE.fullmatch(gate_digest)):
@@ -519,6 +559,7 @@ def resolve_assignment(
         "model_parameters": params,
         "host": host,
         "sandbox_profile": sandbox_profile,
+        "network_policy": network_policy,
         "network_profile": network_profile,
         "allowed_paths": normalized_allowed_paths,
         "gate_digest": gate_digest,
@@ -1530,7 +1571,7 @@ def validate_assignment(value: object, require_source_evidence: bool = False,
         raise AssignmentError("assignment is not an object")
     required = {"schema_version", "task_id", "project_id", "role", "source_repository", "source_branch",
                 "source_sha", "seed_manifest_digest", "engine", "provider", "capacity_pool", "model",
-                "model_parameters", "host", "sandbox_profile", "network_profile", "allowed_paths",
+                "model_parameters", "host", "sandbox_profile", "network_policy", "network_profile", "allowed_paths",
                 "gate_digest", "publication_policy", "created_at", "assignment_digest"}
     if require_source_evidence:
         required |= {"source_evidence", "billing_basis", "metered_approved",
@@ -1616,6 +1657,8 @@ def validate_assignment(value: object, require_source_evidence: bool = False,
         raise AssignmentError("assignment host must be a nonempty string")
     if not isinstance(value.get("sandbox_profile"), str) or value.get("sandbox_profile") not in SANDBOX_PROFILES:
         raise AssignmentError("assignment sandbox_profile is invalid")
+    if not isinstance(value.get("network_policy"), str) or value.get("network_policy") not in NETWORK_POLICIES:
+        raise AssignmentError("assignment network_policy is invalid")
     if not isinstance(value.get("network_profile"), str) or value.get("network_profile") not in NETWORK_PROFILES:
         raise AssignmentError("assignment network_profile is invalid")
     _normalize_allowed_paths(value.get("allowed_paths"))
@@ -1729,6 +1772,7 @@ def command_resolve(args: argparse.Namespace) -> int:
             engine=args.engine, provider=args.provider, capacity_pool=args.capacity_pool,
             model=args.model, model_parameters=params, host=args.host,
             sandbox_profile=args.sandbox_profile, network_profile=args.network_profile,
+            network_policy=args.network_policy,
             allowed_paths=_split_paths(args.allowed_paths), gate_digest=args.gate_digest,
             publication_policy=args.publication_policy, capacity_pool_dir=pool_dir,
             source_evidence=source_evidence,
@@ -1771,6 +1815,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                  "source-sha", "engine", "provider", "host", "sandbox-profile",
                  "network-profile", "allowed-paths", "publication-policy"):
         resolve.add_argument(f"--{name}", required=True)
+    resolve.add_argument("--network-policy", default=None)
     resolve.add_argument("--seed-manifest-digest", default=None)
     resolve.add_argument("--capacity-pool", default=None)
     resolve.add_argument("--model", default=None)

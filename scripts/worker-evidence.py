@@ -393,6 +393,7 @@ def assignment_attribution(assignment: dict, role: str, *, billing_basis: str = 
             "host": assignment["host"],
             "model": role_spec["model"],
             "sandbox_profile": assignment["sandbox_profile"],
+            "network_policy": role_spec["network_policy"],
             "network_profile": role_spec["network_profile"],
             "source_repository": assignment["source_repository"],
             "source_branch": assignment["source_branch"],
@@ -403,9 +404,6 @@ def assignment_attribution(assignment: dict, role: str, *, billing_basis: str = 
             "default_branch": assignment.get("default_branch", default_branch),
             "integration_branch": assignment.get("integration_branch", integration_branch),
             "assignment": assignment,
-            # The runtime schema does not require network_policy in the attribution conditional,
-            # but it is role-specific and must follow the same immutable source.
-            "network_policy": role_spec["network_policy"],
         }
     except (KeyError, TypeError, AttributeError) as exc:
         raise WorkerEvidenceError("strict assignment cannot provide complete attribution") from exc

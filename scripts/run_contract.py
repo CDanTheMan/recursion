@@ -18,7 +18,8 @@ SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 MODEL_ALIAS_RE = re.compile(r"^[a-z][a-z0-9-]{2,31}$")
 MODEL_ALIASES = frozenset({"sonnet-routine", "opus-complex", "opus-review"})
-NETWORK_PROFILES = frozenset({"provider-only", "none"})
+NETWORK_POLICIES = frozenset({"provider-only", "none"})
+NETWORK_PROFILES = frozenset({"anthropic", "cursor", "gemini", "openrouter", "sentry-local"})
 RUN_STATUSES = frozenset({
     "pending", "prepared", "running", "succeeded", "failed", "blocked", "cancelled", "stale",
 })
@@ -31,7 +32,7 @@ MAX_STRING_BYTES = 1 << 20
 # next to the conditional so producers cannot silently drift from the runtime contract.
 ASSIGNMENT_ATTRIBUTION_FIELDS = (
     "project_id", "engine", "provider", "capacity_pool", "billing_basis",
-    "metered_approved", "host", "model", "sandbox_profile", "network_profile",
+    "metered_approved", "host", "model", "sandbox_profile", "network_policy", "network_profile",
     "source_repository", "source_branch", "source_sha", "source_evidence",
     "allowed_paths", "publication_policy", "default_branch", "integration_branch",
     "assignment",
@@ -131,7 +132,7 @@ def validate_run(value: object) -> dict[str, Any]:
                                           and MODEL_ALIAS_RE.fullmatch(alias) is None):
             raise RunContractError("run evidence model_alias is invalid")
     if "network_policy" in value and (not isinstance(value["network_policy"], str)
-                                      or value["network_policy"] not in NETWORK_PROFILES):
+                                      or value["network_policy"] not in NETWORK_POLICIES):
         raise RunContractError("run evidence network_policy is invalid")
     if "assignment_digest" in value and (
             not isinstance(value["assignment_digest"], str)

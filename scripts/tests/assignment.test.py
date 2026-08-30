@@ -41,9 +41,49 @@ BASE_KWARGS = dict(
     task_id="task-001", project_id="proj-001", role="implementer",
     source_repository="/opt/golden-stallion", source_branch="loop/work/task-001",
     source_sha="a" * 40, engine="claude", provider="anthropic-claude-code",
-    host="gs-recursion", sandbox_profile="strict-linux", network_profile="provider-only",
+    host="gs-recursion", sandbox_profile="strict-linux", network_policy="provider-only",
+    network_profile="anthropic",
     allowed_paths=["apps/api"], publication_policy="verified-integration-only",
 )
+
+
+def test_network_policy_and_profile_are_separate() -> None:
+    value = amod.resolve_assignment(**BASE_KWARGS, created_at="2026-08-28T00:00:00Z")
+    check(value["network_policy"] == "provider-only",
+          "assignment stores the network policy in network_policy")
+    check(value["network_profile"] == "anthropic",
+          "assignment stores the declared provider profile in network_profile")
+
+    legacy = dict(BASE_KWARGS)
+    legacy.pop("network_policy")
+    legacy["network_profile"] = "provider-only"
+    migrated = amod.resolve_assignment(**legacy, created_at="2026-08-28T00:00:00Z")
+    check(migrated["network_policy"] == "provider-only" and migrated["network_profile"] == "anthropic",
+          "legacy policy-shaped network_profile input is normalized to both fields")
+
+    for field, bad in (("network_policy", "anthropic"), ("network_profile", "provider-only")):
+        candidate = dict(BASE_KWARGS)
+        candidate[field] = bad
+        try:
+            amod.resolve_assignment(**candidate)
+            check(False, f"network {field} vocabulary collision {bad!r} is refused")
+        except amod.AssignmentError:
+            check(True, f"network {field} vocabulary collision {bad!r} is refused")
+
+    missing_policy = dict(BASE_KWARGS)
+    missing_policy.pop("network_policy")
+    try:
+        amod.resolve_assignment(**missing_policy)
+        check(False, "a provider profile without its separate network policy is refused")
+    except amod.AssignmentError:
+        check(True, "a provider profile without its separate network policy is refused")
+
+    unknown_legacy = dict(legacy, engine="hermes", provider="unregistered-provider")
+    try:
+        amod.resolve_assignment(**unknown_legacy)
+        check(False, "a legacy policy without a declared provider profile is refused")
+    except amod.AssignmentError:
+        check(True, "a legacy policy without a declared provider profile is refused")
 
 
 def test_digest_stable_and_sensitive() -> None:
@@ -101,6 +141,7 @@ def test_fail_closed_invalid_inputs() -> None:
         ("provider", "Anthropic Claude Code"),  # spaces/caps not allowed
         ("host", ""),
         ("sandbox_profile", "made-up-profile"),
+        ("network_policy", "anthropic"),
         ("network_profile", "open"),
         ("publication_policy", "!!!"),
     ):
@@ -132,7 +173,7 @@ def test_validate_rejects_malformed_field_types() -> None:
         ("engine", []), ("provider", []), ("capacity_pool", []),
         ("billing_basis", []), ("metered_approved", []), ("model", 123),
         ("model_parameters", []), ("host", []), ("sandbox_profile", []),
-        ("network_profile", []), ("allowed_paths", {}), ("gate_digest", []),
+        ("network_policy", []), ("network_profile", []), ("allowed_paths", {}), ("gate_digest", []),
         ("publication_policy", []), ("default_branch", []),
         ("integration_branch", []), ("created_at", []),
     )
@@ -724,6 +765,7 @@ def test_cli_refuses_bad_role(tmp_path: Path) -> None:
 
 
 def main() -> int:
+    test_network_policy_and_profile_are_separate()
     test_digest_stable_and_sensitive()
     test_allowed_paths_normalized()
     test_allowed_paths_fail_closed()

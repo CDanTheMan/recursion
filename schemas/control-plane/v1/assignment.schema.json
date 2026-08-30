@@ -23,6 +23,7 @@
     "model_parameters",
     "host",
     "sandbox_profile",
+    "network_policy",
     "network_profile",
     "allowed_paths",
     "gate_digest",
@@ -70,7 +71,8 @@
         "windows-interactive", "trusted-interactive", "account-shared-supervisor"
       ]
     },
-    "network_profile": { "enum": ["provider-only", "none"] },
+    "network_policy": { "enum": ["provider-only", "none"] },
+    "network_profile": { "enum": ["anthropic", "cursor", "gemini", "openrouter", "sentry-local"] },
     "allowed_paths": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 },
