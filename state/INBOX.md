@@ -295,3 +295,57 @@ writer widened the grammar and bare `touch` became an admissible gate.
 
 **esc-0003 remains open** and does not block: whether a packaged non-Git controller is a supported
 deployment. Failing closed stays in place meanwhile.
+
+## esc-0004 â€” an active project with a paused pilot fails the Phase 4 audit (2026-08-30)
+
+**Status:** open, human decision required. Does not block the v2 integration.
+
+`scripts/audit/hermes-pilot-phase4-green.sh` exits 4 before its first assertion, on line 28:
+
+```
+RECURSION_ROOT="$SRC" python3 "$SRC/scripts/project-pilot.py" verify-registry
+project-pilot: project pilot golden-stallion-client is not active
+```
+
+The state it is reporting:
+
+- `state/project-config/golden-stallion-client.json` -> `"status": "active"`
+- `state/pilots/pilot-golden-stallion-client.json`   -> `"status": "paused"`, with
+
+```
+"pause_reason": "Phase 0: the source-bound GSC pilot is stale and must be explicitly
+                 rebound through a new immutable assignment before any resume."
+```
+
+`verify-registry` requires every tracked active project to have an active pilot, so it refuses. The
+audit is correct; the repository is internally inconsistent.
+
+I previously carried this as an inherited environment condition because it reproduces at `a84525d`.
+That was wrong: reproducing at the base only establishes that no phase introduced it, not that it is
+benign. The failure is a true statement about control state.
+
+**Two resolutions exist and both are control-plane decisions:**
+
+- **A.** Set `state/project-config/golden-stallion-client.json` to `paused` so the project matches
+  its pilot. Consistent, but it changes the recorded status of a live project.
+- **B.** Change `verify-registry` to accept a paused pilot for an active project, on the grounds
+  that pausing a pilot is a normal operational state rather than a registry defect.
+
+I am not choosing. A is a control-plane state edit; B changes what the registry invariant means.
+
+**Not in scope to fix here, and specifically must not be "fixed" by the merge.** Phase 5's branch
+predates the pause and still carries that pilot as active. I verified the merge outcome rather than
+assuming it:
+
+```
+merge-tree(tmp/integ-all, codex/v2-cursor-runtime):state/pilots/pilot-golden-stallion-client.json
+  -> 2a7268f828   (paused)
+```
+
+Phase 5's blob is identical to the phases' common ancestor `9c7a42c`, so the pause is a one-sided
+change and survives the merge without a conflict. Any future merge that resumes this pilot as a side
+effect is a defect, not a resolution of this escalation.
+
+Until this is answered, `hermes-pilot-phase4-green.sh` is expected to fail on this line and stays
+visible in every gate summary rather than being suppressed.
+
