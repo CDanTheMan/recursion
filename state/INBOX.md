@@ -349,3 +349,84 @@ effect is a defect, not a resolution of this escalation.
 Until this is answered, `hermes-pilot-phase4-green.sh` is expected to fail on this line and stays
 visible in every gate summary rather than being suppressed.
 
+
+## esc-0005 â€” the Phase 5 merge left two assignment systems wired into each other (2026-08-30)
+
+**Status:** not blocking; recorded because it is an architecture-level call made during integration,
+not an ordinary defect fix. Read this before merging the remediation.
+
+### What the merge produced
+
+`scripts/work.sh` line counts against the phases' common ancestor `9c7a42c`:
+
+| ref | lines | `make_phase5_assignment` | `resolve_run_assignment` |
+|---|---|---|---|
+| 9c7a42c | 1593 | 0 | 0 |
+| tmp/integ-all (P2+P3+P4) | 1980 | 0 | 2 |
+| codex/v2-cursor-runtime (P5) | 1958 | 2 | 0 |
+| the merge | 2341 | **2** | **2** |
+
+Phase 3 introduced `resolve_run_assignment`, which resolves engine, provider, model and capacity pool
+through `scripts/assignment.py` and persists to `state/assignments/<id>/<digest>.json`. Phase 5
+introduced `make_phase5_assignment`, which binds an immutable run contract through
+`scripts/assignment_contract.py` and writes `state/assignments/<id>-assignment-<stamp>-<pid>.json`.
+
+Neither branch has both. The merge has both, and they fight over the same two variables:
+
+```
+work.sh:1151   make_phase5_assignment   ASSIGNMENT_FILE=state/assignments/<id>-assignment-<stamp>-<pid>.json
+work.sh:1302   resolve_run_assignment   ASSIGNMENT_DIGEST=""; ASSIGNMENT_FILE=""
+work.sh:1444                            ASSIGNMENT_FILE=state/assignments/<id>/<digest>.json
+work.sh:1518                            ASSIGNMENT_FILE=state/assignments/<id>/<digest>.json
+```
+
+The Phase 5 contract is written and then discarded. `worker-evidence` is subsequently handed Phase
+3's record and validates it with `assignment_contract.load_assignment`, which requires
+`controller_repository`, `controller_sha`, `network_policy`, `argv`, `gate_contract` and
+`role_assignments` â€” fields the legacy record does not carry. It fails closed, so the symptom is 14
+controls reporting `status=escalated` with no reason printed anywhere. The actual exception only
+appears in work.sh's loop log:
+
+```
+CapacityPoolNotFound: capacity-pool manifest not found: .../scripts/capacity-pools/claude-max.json
+```
+
+Phase 3's resolver reads a **directory** of per-pool manifests that has never existed in this
+repository; Phase 5 ships a single `scripts/capacity-pools.json`. Before the merge nothing set a pool
+name, so Phase 3's capacity-pool path was never reached with a real pool. The merge is the first time
+it is.
+
+### Why this happened
+
+My own merge brief caused it. It said "the resolution is almost always both, not either", which is
+right for two independent features and wrong for two implementations of one responsibility. The same
+brief listed "two implementations of one policy" as a hazard for the reviewers to catch, and they
+did â€” reviewer D rejected the merge on exactly this point, and I confirmed it at the line level
+rather than on their word.
+
+### The resolution, and why I do not think it is a free choice
+
+Reading (a): Phase 5's contract is authoritative for strict runs, and Phase 3's resolver feeds it the
+engine/provider/model/pool decision.
+Reading (b): Phase 3's record stays authoritative and Phase 5's contract is derived and stored at
+Phase 3's path.
+
+The rest of the merge already settles this. `worker-evidence.py`, `project-reconcile.py` and the
+strict evidence path all consume `assignment_contract` in the merged tree, so under reading (b) every
+one of those consumers fails â€” which is precisely the failure being observed. Reading (a) is the only
+one that yields a working system without rewriting all of them.
+
+I am proceeding on (a) rather than stopping, because the choice is forced by the merge rather than
+open. **If that reasoning is wrong, this is the decision to reverse**, and the remediation is scoped
+to `work.sh`, the capacity-pool lookup, and the attribution consumers rather than spread across the
+tree.
+
+### Related findings from the same review round
+
+- `engine-scorecard.py` and `usage-reconcile.py` still use the legacy assignment lookup, so immutable
+  attribution silently falls back to the mutable `run.engine` field.
+- The engine-manifest filename-to-name identity binding present on the integration side is absent
+  from the merge: neither side's version of that check survived.
+- `resolve-engine.py` imports `provider_contract` before inserting its own script directory on
+  `sys.path`, so suites invoking it from `scripts/tests` can abort before their first assertion.
+
