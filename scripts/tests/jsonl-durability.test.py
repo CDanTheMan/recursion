@@ -87,8 +87,8 @@ sys.path.insert(0, str(SOURCE / "scripts"))
 
 import jsonl_durable  # noqa: E402
 from jsonl_durable import (  # noqa: E402
-    JsonlDurabilityError, acknowledge_jsonl, append_jsonl, read_jsonl_objects,
-    read_jsonl_since,
+    JsonlDurabilityError, acknowledge_jsonl, append_jsonl, find_jsonl_objects,
+    read_jsonl_objects, read_jsonl_since,
 )
 from transition_receipt import commit_event  # noqa: E402
 
@@ -135,6 +135,42 @@ def control_complete_malformed_fails_closed() -> tuple[bool, str]:
         except JsonlDurabilityError as exc:
             return path.read_bytes() == original, str(exc)
         return False, "malformed committed row was accepted"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_record_limits_are_checked_at_public_boundaries() -> tuple[bool, str]:
+    """A bool record bound must be refused before a public API delegates or mutates state."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-record-limit-"))
+    path = root / "events.jsonl"
+    batch = jsonl_durable.IndexedBatch(
+        (), 0, jsonl_durable.ZERO_CHAIN_SHA256, False
+    )
+    cases = (
+        ("read", lambda: read_jsonl_objects(path, True)),
+        ("find", lambda: find_jsonl_objects(path, "id", "value", True)),
+        ("since", lambda: read_jsonl_since(path, "fixture-consumer", True)),
+        ("acknowledge", lambda: acknowledge_jsonl(path, "fixture-consumer", batch, True)),
+        ("append", lambda: append_jsonl(path, {"id": "value"}, True)),
+    )
+    try:
+        for label, operation in cases:
+            with mock.patch.object(
+                    jsonl_durable, "_verified_descriptor",
+                    side_effect=AssertionError(f"{label} delegated before limit validation")), \
+                 mock.patch.object(
+                     jsonl_durable, "_append_jsonl_unpinned",
+                     side_effect=AssertionError("append delegated before limit validation")):
+                try:
+                    operation()
+                except JsonlDurabilityError as exc:
+                    if "invalid JSONL record-size bound" not in str(exc):
+                        return False, f"{label}: wrong refusal: {exc}"
+                except AssertionError as exc:
+                    return False, f"{label}: {exc}"
+                else:
+                    return False, f"{label}: bool record bound was accepted"
+        return True, "all five public boundaries refused bool before delegation"
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -907,6 +943,8 @@ def main() -> int:
     controls = (
         ("a torn prior tail is quarantined byte-exactly before a complete append", control_torn_tail),
         ("a complete malformed prior record fails closed without mutation", control_complete_malformed_fails_closed),
+        ("all public JSONL entry points reject bool record-size bounds before delegation",
+         control_record_limits_are_checked_at_public_boundaries),
         ("a hardlinked journal is refused without writing outside the state tree",
          control_hardlinked_journal_is_refused_without_escape),
         ("a linked journal ancestor is refused without writing outside the state tree",

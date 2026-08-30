@@ -2190,6 +2190,7 @@ def _verified_descriptor(path: Path, max_record_bytes: int) \
 
 def read_jsonl_objects(path: Path, max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES) -> list[dict]:
     """Read objects from an intact journal through its verified derived index."""
+    max_record_bytes = _validate_record_limit(max_record_bytes)
     path = _durable_path(path)
     try:
         descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
@@ -2253,6 +2254,7 @@ def read_jsonl_prefix(path: Path, count: int,
 def find_jsonl_objects(path: Path, field: str, value: object,
                        max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES) -> list[dict]:
     """Find exact top-level field matches without rescanning verified journal bytes."""
+    max_record_bytes = _validate_record_limit(max_record_bytes)
     path = _durable_path(path)
     if not isinstance(field, str) or not field:
         raise JsonlDurabilityError("JSONL search field must be a nonempty string")
@@ -2319,6 +2321,7 @@ def read_jsonl_since(path: Path, consumer: str,
     """
     if not isinstance(consumer, str) or not consumer or len(consumer) > 128:
         raise JsonlDurabilityError("invalid JSONL index consumer")
+    max_record_bytes = _validate_record_limit(max_record_bytes)
     path = _durable_path(path)
     try:
         descriptor, connection, rebuilt = _verified_descriptor(path, max_record_bytes)
@@ -2362,6 +2365,7 @@ def acknowledge_jsonl(path: Path, consumer: str, batch: IndexedBatch,
     """Durably advance a consumer after its selected projections are durable."""
     if not isinstance(consumer, str) or not consumer or len(consumer) > 128:
         raise JsonlDurabilityError("invalid JSONL index consumer")
+    max_record_bytes = _validate_record_limit(max_record_bytes)
     _validate_indexed_batch(batch)
     path = _durable_path(path)
     try:
@@ -2680,6 +2684,7 @@ def append_jsonl(path: Path, value: dict,
                  rebuild_in_place: bool = False,
                  hook: Callable[[str], None] | None = None) -> AppendOutcome:
     try:
+        max_record_bytes = _validate_record_limit(max_record_bytes)
         path = Path(path)
         path = _durable_path(path)
         with pinned_durable_parent(path.parent, create=True) as pins:
