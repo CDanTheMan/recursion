@@ -16,6 +16,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from windows_test_support import bash_executable, prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 CONTROLS = [
@@ -30,29 +32,20 @@ CONTROLS = [
 DIGEST = "a" * 64
 
 
-def _usable_executable(path: str | Path) -> str | None:
-    candidate = Path(path)
-    if candidate.is_file() and os.access(candidate, os.X_OK):
-        return str(candidate)
-    return None
-
-
 def discover_bash() -> str | None:
-    """Find bash on PATH, then under an environment-selected Windows install root."""
-    discovered = shutil.which("bash")
-    if discovered:
-        usable = _usable_executable(discovered)
-        if usable:
-            return usable
-    if os.name == "nt":
-        for variable in ("ProgramFiles", "ProgramW6432"):
-            program_files = os.environ.get(variable, "").strip()
-            if not program_files:
-                continue
-            usable = _usable_executable(Path(program_files) / "Git" / "bin" / "bash.exe")
-            if usable:
-                return usable
-    return None
+    """Report whether a usable bash exists, using the shared Phase 8 discovery.
+
+    The file-local search this replaced did not exclude Windows' WindowsApps execution alias,
+    which resolves `bash` to the WSL launcher and cannot provide the POSIX utilities these
+    fixtures need. windows_test_support.bash_executable does exclude it, and twelve Phase 8
+    suites already go through it -- so the skip decision and the interpreter the fixtures
+    actually run must come from the same place, or this suite can skip on a bash it would not
+    have used, or run one it should have skipped.
+    """
+    try:
+        return bash_executable()
+    except Exception:  # noqa: BLE001 - unavailability is the answer, not an error
+        return None
 
 
 BASH = discover_bash()
@@ -120,6 +113,7 @@ class RejectFixture:
         self.write_goal()
         self.write_task()
         self.env = os.environ.copy()
+        prepare_shell_env(self.env)
         self.env.update({
             "RECURSION_ROOT": str(self.root), "RECURSION_INTAKE_ALLOW": "8913126684",
             "RECURSION_NO_NOTIFY": "1",
@@ -172,9 +166,7 @@ class RejectFixture:
                         "rjct-task", category, DIGEST, env_extra=env_extra)
 
     def bash(self) -> str:
-        if BASH is None:
-            raise RuntimeError("bash interpreter is unavailable")
-        return BASH
+        return bash_executable()
 
     def task_status(self) -> str:
         return fields(self.root / "state/tasks/rjct-task.md").get("status", "")

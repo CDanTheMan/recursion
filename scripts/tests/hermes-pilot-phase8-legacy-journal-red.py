@@ -13,6 +13,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from windows_test_support import bash_command, install_single_process_flock_stub, prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 LEGACY_HASHES = (
@@ -31,6 +33,10 @@ CONTROLS = (
     "an unterminated torn tail is quarantined exactly while committed decisions still import",
     "the supervised actuator reports a journal-import failure while preserving pending state",
 )
+
+
+class PlatformSkip(Exception):
+    """A Linux process/signal proof that cannot be exercised faithfully on Windows."""
 
 
 def legacy_rows() -> list[dict]:
@@ -104,6 +110,7 @@ class Fixture:
     def __init__(self) -> None:
         self.temp = Path(tempfile.mkdtemp(prefix="phase8-legacy-journal-"))
         self.root = self.temp / "root"
+        self.fixture_bin = self.temp / "fixture-bin"
         for relative in (
             "scripts", "state/decision-queue/pending", "state/decision-queue/running",
             "state/decision-queue/succeeded", "state/decision-queue/failed", "state/actions",
@@ -130,9 +137,13 @@ class Fixture:
             (self.root / "scripts/fcntl.py").write_text(
                 "LOCK_EX=2\nLOCK_NB=4\ndef flock(_file, _flags):\n    return None\n", encoding="utf-8"
             )
+            install_single_process_flock_stub(self.fixture_bin)
         for path in (self.root / "scripts").iterdir():
             path.chmod(path.stat().st_mode | 0o111)
         self.env = os.environ.copy()
+        prepare_shell_env(self.env)
+        if os.name == "nt":
+            self.env["PATH"] = str(self.fixture_bin) + os.pathsep + self.env.get("PATH", "")
         self.env.update({"RECURSION_ROOT": str(self.root), "RECURSION_NO_NOTIFY": "1"})
 
     def close(self) -> None:
@@ -163,7 +174,7 @@ class Fixture:
 
     def run_conduct(self) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["bash", "scripts/conduct-hermes.sh", "--paused-safe"], cwd=self.root,
+            bash_command("scripts/conduct-hermes.sh", "--paused-safe"), cwd=self.root,
             env=self.env, text=True, capture_output=True, check=False,
         )
 
@@ -322,6 +333,10 @@ def test_torn_tail_quarantine() -> tuple[bool, str]:
 
 
 def test_actuator_diagnostic() -> tuple[bool, str]:
+    if os.name == "nt":
+        raise PlatformSkip(
+            "supervised actuator process-tree and signal handling require Linux; proof remains pending"
+        )
     fixture = Fixture()
     try:
         invalid = current_noop()
@@ -330,7 +345,7 @@ def test_actuator_diagnostic() -> tuple[bool, str]:
         (fixture.root / "state/PAUSE").write_text("fixture PAUSE\n", encoding="utf-8")
         env = dict(fixture.env, RECURSION_ACTUATOR_INTERVAL_S="0.05")
         process = subprocess.Popen(
-            ["bash", "scripts/hermes-actuator.sh"], cwd=fixture.root, env=env,
+            bash_command("scripts/hermes-actuator.sh"), cwd=fixture.root, env=env,
             text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         time.sleep(0.25)
@@ -356,9 +371,14 @@ def main() -> int:
         test_marker_tamper, test_torn_tail_quarantine, test_actuator_diagnostic,
     )
     failed = 0
+    skipped = 0
     for description, test in zip(CONTROLS, tests):
         try:
             passed, detail = test()
+        except PlatformSkip as reason:
+            skipped += 1
+            print(f"skip  {description}: {reason}")
+            continue
         except Exception as exc:  # noqa: BLE001 - the control must report every mismatch.
             passed, detail = False, repr(exc)
         if passed:
@@ -370,6 +390,9 @@ def main() -> int:
     if failed:
         print(f"hermes-pilot-phase8-legacy-journal-red: {failed} FAILED")
         return 1
+    if skipped:
+        print(f"hermes-pilot-phase8-legacy-journal-red: ALL PASS ({skipped} skipped)")
+        return 0
     print("hermes-pilot-phase8-legacy-journal-red: ALL PASS")
     return 0
 

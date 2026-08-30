@@ -13,6 +13,15 @@ import tempfile
 import time
 from pathlib import Path
 
+from windows_test_support import (
+    bash_command,
+    install_real_fcntl_shim,
+    install_nt_posix_shim,
+    install_python_lf_wrapper,
+    install_single_process_flock_stub,
+    prepare_shell_env,
+)
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 PROJECT = "golden-stallion-client"
@@ -141,9 +150,18 @@ class Fixture:
     def __init__(self) -> None:
         self.temp = Path(tempfile.mkdtemp(prefix="phase8-routing-recovery-"))
         self.root = self.temp / "root"
+        self.fixture_bin = self.temp / "fixture-bin"
         self.root.mkdir()
         shutil.copytree(SOURCE / "scripts", self.root / "scripts")
         shutil.copytree(SOURCE / "schemas", self.root / "schemas")
+        if os.name == "nt":
+            # The controller is deployed on Linux.  Keep Windows execution fixture-local:
+            # use the real msvcrt-backed lock shim for Python imports and a no-contention
+            # util-linux flock stand-in for this single-process fixture.
+            install_real_fcntl_shim(self.root / "scripts")
+            install_nt_posix_shim(self.root / "scripts")
+            install_single_process_flock_stub(self.fixture_bin)
+            install_python_lf_wrapper(self.fixture_bin)
         for relative in (
             "state/instructions", "state/actions", "state/project-config", "state/pilots",
             "state/decision-queue/pending", "state/decision-queue/running",
@@ -222,6 +240,12 @@ print(json.dumps({'ok':True,'accepted':True,'transport':'telegram',
         )
         transport.chmod(0o755)
         self.env = os.environ.copy()
+        prepare_shell_env(self.env)
+        # instruction_routing.py dynamically loads decision-queue.py.  Stage the fixture's
+        # fcntl shim on the child import path so that closure is complete on Windows too.
+        if os.name == "nt":
+            self.env["PYTHONPATH"] = str(self.root / "scripts") + os.pathsep + self.env.get("PYTHONPATH", "")
+            self.env["PATH"] = str(self.fixture_bin) + os.pathsep + self.env.get("PATH", "")
         self.env.update({
             "RECURSION_ROOT": str(self.root), "RECURSION_INTAKE_ALLOW": "8913126684",
             "RECURSION_DECIDE_QUIET": "1", "RECURSION_NO_NOTIFY": "0",
@@ -231,6 +255,9 @@ print(json.dumps({'ok':True,'accepted':True,'transport':'telegram',
             "RECURSION_CONTROL_LOCK_WAIT_S": "2",
             "PATH": str(self.root / "bin") + os.pathsep + self.env.get("PATH", ""),
         })
+        if os.name == "nt":
+            # Keep fixture helpers ahead of the fixture's own transport/model stubs.
+            self.env["PATH"] = str(self.fixture_bin) + os.pathsep + self.env["PATH"]
 
     def close(self) -> None:
         shutil.rmtree(self.temp, ignore_errors=True)
@@ -255,11 +282,11 @@ print(json.dumps({'ok':True,'accepted':True,'transport':'telegram',
         return subprocess.run(command, cwd=self.root, env=env, text=True, capture_output=True, check=False)
 
     def decide(self) -> subprocess.CompletedProcess[str]:
-        return self.run(["bash", "scripts/hermes-decide.sh"])
+        return self.run(bash_command("scripts/hermes-decide.sh"))
 
     def drain(self, *, failpoint: str | None = None) -> subprocess.CompletedProcess[str]:
         extra = {"RECURSION_ROUTING_FAILPOINT": failpoint} if failpoint else None
-        return self.run(["bash", "scripts/conduct-hermes.sh", "--paused-safe"], extra=extra)
+        return self.run(bash_command("scripts/conduct-hermes.sh", "--paused-safe"), extra=extra)
 
     def queue(self, state: str, verb: str | None = None) -> list[tuple[Path, dict]]:
         result = []
@@ -305,6 +332,15 @@ def admit_refusal_reason(fixture: "Fixture") -> str:
     except Exception as exc:  # noqa: BLE001 - any other type is itself the finding
         return f"<unexpected {type(exc).__name__}: {exc}>"
     return "<admitted: no refusal raised>"
+def terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    """Terminate the supervised fixture process tree on both authoring platforms."""
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+            capture_output=True, check=False,
+        )
+    else:
+        os.killpg(process.pid, signal.SIGKILL)
 
 
 def require_recovery_rejected(label: str, mutate, expected: str) -> None:
@@ -498,11 +534,11 @@ def main() -> int:
         crash_env = fixture.env.copy()
         crash_env.update({"RECURSION_QUEUE_ACTUATION": "1", "RECURSION_ROUTING_FAILPOINT": "perform-hang"})
         process = subprocess.Popen(
-            ["bash", "scripts/conduct-hermes.sh", "--file", running_path], cwd=fixture.root,
+            bash_command("scripts/conduct-hermes.sh", "--file", running_path), cwd=fixture.root,
             env=crash_env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             start_new_session=True,
         )
-        deadline = time.time() + 15
+        deadline = time.time() + (30 if os.name == "nt" else 15)
         while time.time() < deadline:
             action_rows = [json.loads(path.read_text(encoding="utf-8"))
                            for path in (fixture.root / "state/actions").glob("*.json")
@@ -512,10 +548,10 @@ def main() -> int:
                 break
             time.sleep(0.05)
         else:
-            os.killpg(process.pid, signal.SIGKILL)
+            terminate_process_tree(process)
             out, err = process.communicate()
             raise AssertionError(f"routing action never reached running/consumed: {out} {err}")
-        os.killpg(process.pid, signal.SIGKILL)
+        terminate_process_tree(process)
         process.communicate()
         require(fields(fixture.root / "state/instructions/00000707.md")["status"] == "consumed",
                 "hard crash did not preserve the consumed instruction")
@@ -533,7 +569,7 @@ def main() -> int:
                 "707 did not retain one replayed succeeded action")
         decision_707 = fixture.queue("succeeded", "routing-refuse")[0][0]
         action_replay = fixture.run(
-            ["bash", "scripts/conduct-hermes.sh", "--file", str(decision_707)],
+            bash_command("scripts/conduct-hermes.sh", "--file", str(decision_707)),
             extra={"RECURSION_QUEUE_ACTUATION": "1"},
         )
         require(action_replay.returncode == 0, f"succeeded action replay failed: {action_replay.stderr}")
@@ -599,7 +635,7 @@ def main() -> int:
         ])
         require(scheduled.returncode == 0 and scheduled.stdout.strip() == "2",
                 f"attention reconciliation was not scheduled exactly twice: {scheduled.stderr} {scheduled.stdout}")
-        notified = fixture.run(["bash", "scripts/conduct-hermes.sh"])
+        notified = fixture.run(bash_command("scripts/conduct-hermes.sh"))
         require(notified.returncode == 0, f"attention reconciliation failed: {notified.stderr}")
         attention = [json.loads(path.read_text(encoding="utf-8"))
                      for path in (fixture.root / "state/notification-events").glob("*.json")]
@@ -615,7 +651,7 @@ def main() -> int:
         ])
         require(delivery_schedule.returncode == 0 and delivery_schedule.stdout.strip() == "2",
                 "delivery actions were not scheduled exactly once")
-        delivered = fixture.run(["bash", "scripts/conduct-hermes.sh"])
+        delivered = fixture.run(bash_command("scripts/conduct-hermes.sh"))
         require(delivered.returncode == 0 and len(json_rows(fixture.visible)) == 2,
                 f"inert deliveries were not accepted exactly once: {delivered.stderr}")
         deliveries = [json.loads(path.read_text(encoding="utf-8"))
@@ -627,7 +663,7 @@ def main() -> int:
             + fixture.queue("succeeded", "notification-deliver")
         ):
             replay_notice = fixture.run(
-                ["bash", "scripts/conduct-hermes.sh", "--file", str(decision_path)],
+                bash_command("scripts/conduct-hermes.sh", "--file", str(decision_path)),
                 extra={"RECURSION_QUEUE_ACTUATION": "1"},
             )
             require(replay_notice.returncode == 0, "notification action replay failed")

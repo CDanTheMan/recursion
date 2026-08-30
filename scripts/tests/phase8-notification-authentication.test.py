@@ -27,6 +27,8 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
+from windows_test_support import prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 
@@ -143,6 +145,7 @@ class Fixture:
         if os.name == "nt":
             self.outbox.fsync_dir = lambda _path: None
         self.env = os.environ.copy()
+        prepare_shell_env(self.env)
         self.env.update({
             "RECURSION_ROOT": str(self.root),
             "RECURSION_QUEUE_ACTUATION": "1",
