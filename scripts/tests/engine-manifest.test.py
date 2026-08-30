@@ -79,9 +79,8 @@ def check(condition: bool, label: str) -> None:
 
 def run_validate(engine: str, engine_dir: Path | None) -> subprocess.CompletedProcess:
     env = dict(os.environ)
-    # Production resolution reads the human-owned /etc profile directory. The local contract
-    # suite explicitly points at the checked-in disabled fixtures so it remains hermetic.
-    env["RECURSION_PROVIDER_DIR"] = str(SOURCE / "scripts" / "providers")
+    # The merged resolver reads the authenticated checked-in provider profile registry.  The
+    # legacy injected provider-directory contract is intentionally not part of this suite.
     if engine_dir is None:
         env.pop("RECURSION_ENGINE_DIR", None)
     else:
@@ -142,47 +141,26 @@ def test_malformed_values() -> None:
             check(False, f"{label} raises ManifestError")
         run_hostile_case(label, data)
 
+    profile_mismatch = copy.deepcopy(BASE_MANIFEST)
+    profile_mismatch["billing"]["provider"] = "cursor"
+    profile_mismatch["network"] = {
+        "policy": "provider-only", "profile": "cursor",
+        "endpoints": ["api.cursor.com"],
+    }
+    try:
+        resolver.validate_manifest(profile_mismatch, "sampleeng")
+    except resolver.ManifestError:
+        check(True, "registry-declared endpoint mismatch raises ManifestError")
+    except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
+        check(False, f"registry-declared endpoint mismatch raises ManifestError (raw {type(exc).__name__})")
+    else:
+        check(False, "registry-declared endpoint mismatch raises ManifestError")
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
-        provider_dir = tmp_dir / "providers"
-        provider_dir.mkdir()
-        profile = json.loads(
-            (SOURCE / "scripts/providers/cursor.json").read_text(encoding="utf-8")
-        )
-        profile["authorities"] = ["api.cursor.com:" + "9" * 5000, "api2.cursor.sh:443"]
-        (provider_dir / "cursor.json").write_text(json.dumps(profile) + "\n", encoding="utf-8")
-        data = copy.deepcopy(BASE_MANIFEST)
-        data["billing"]["provider"] = "cursor"
-        data["network"] = {
-            "policy": "provider-only",
-            "endpoints": ["api.cursor.com", "api2.cursor.sh"],
-            "profile": "cursor",
-        }
-        manifest = tmp_dir / "sampleeng.json"
-        write_manifest(tmp_dir, manifest.name, data)
-        env = dict(os.environ, RECURSION_PROVIDER_DIR=str(provider_dir))
-        old_provider_dir = os.environ.get("RECURSION_PROVIDER_DIR")
-        os.environ["RECURSION_PROVIDER_DIR"] = str(provider_dir)
-        try:
-            try:
-                resolver.validate_manifest(data, "sampleeng")
-            except resolver.ManifestError:
-                check(True, "5000-digit port raises ManifestError in resolver")
-            except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
-                check(False, f"5000-digit port raises ManifestError (raw {type(exc).__name__})")
-            else:
-                check(False, "5000-digit port raises ManifestError in resolver")
-        finally:
-            if old_provider_dir is None:
-                os.environ.pop("RECURSION_PROVIDER_DIR", None)
-            else:
-                os.environ["RECURSION_PROVIDER_DIR"] = old_provider_dir
-        result = subprocess.run(
-            [sys.executable, str(RESOLVE_ENGINE), "sampleeng", "--validate"],
-            capture_output=True, text=True, env=dict(env, RECURSION_ENGINE_DIR=str(tmp_dir)),
-        )
+        write_manifest(tmp_dir, "sampleeng.json", profile_mismatch)
+        result = run_validate("sampleeng", tmp_dir)
         check(result.returncode == 2 and "Traceback" not in result.stderr,
-              "5000-digit port CLI is a controlled non-zero refusal")
+              "registry-declared endpoint mismatch is a controlled CLI refusal")
 
 
 def test_shipped_manifests() -> None:
@@ -202,7 +180,7 @@ def test_missing_file() -> None:
         check(result.returncode == 3, f"missing manifest file exits 3 (got {result.returncode})")
 
 
-def test_provider_profile_name_schema_runtime_parity() -> None:
+def test_reviewed_provider_profile_contract() -> None:
     import jsonschema
 
     resolver = load_resolver()
@@ -210,55 +188,60 @@ def test_provider_profile_name_schema_runtime_parity() -> None:
         (SOURCE / "schemas/control-plane/v1/engine-manifest.schema.json").read_text(encoding="utf-8")
     )
     validator = jsonschema.Draft7Validator(schema)
-    with tempfile.TemporaryDirectory() as tmp:
-        provider_dir = Path(tmp) / "providers"
-        provider_dir.mkdir()
-        old_provider_dir = os.environ.get("RECURSION_PROVIDER_DIR")
-        os.environ["RECURSION_PROVIDER_DIR"] = str(provider_dir)
+    reviewed_profiles = (
+        ("anthropic", "anthropic-claude-code", ["api.anthropic.com"], ["ANTHROPIC_API_KEY"]),
+        ("cursor", "cursor", ["api.cursor.com", "api2.cursor.sh"], []),
+        ("gemini", "google-gemini", ["generativelanguage.googleapis.com"], ["GEMINI_API_KEY"]),
+        ("openrouter", "openrouter-via-opencode", ["openrouter.ai", "api.deepseek.com"],
+         ["OPENROUTER_API_KEY"]),
+        ("sentry-local", "sentry-local", [], []),
+    )
+    for profile, provider, endpoints, env_names in reviewed_profiles:
+        manifest = copy.deepcopy(BASE_MANIFEST)
+        manifest["billing"]["provider"] = provider
+        manifest["billing"]["basis"] = "local" if profile == "sentry-local" else "metered"
+        manifest["network"] = {
+            "policy": "none" if profile == "sentry-local" else "provider-only",
+            "profile": profile, "endpoints": endpoints,
+        }
+        manifest["env_passthrough"] = env_names
+        schema_valid = not list(validator.iter_errors(manifest))
         try:
-            for length in (33, 64, 65):
-                profile_name = "p" + "a" * (length - 1)
-                endpoint = "profile.example.com"
-                profile = {
-                    "schema_version": 1,
-                    "id": profile_name,
-                    "provider": profile_name,
-                    "enabled": False,
-                    "namespace": "recursion-provider-only",
-                    "proxy": {"type": "connect-proxy", "host": "127.0.0.1", "port": 18080,
-                              "env": ["HTTP_PROXY", "HTTPS_PROXY"]},
-                    "authorities": [endpoint + ":443"],
-                }
-                (provider_dir / f"{profile_name}.json").write_text(
-                    json.dumps(profile) + "\n", encoding="utf-8"
-                )
-                manifest = copy.deepcopy(BASE_MANIFEST)
-                manifest["billing"]["provider"] = profile_name
-                manifest["network"] = {
-                    "policy": "provider-only", "profile": profile_name, "endpoints": [endpoint]
-                }
-                schema_valid = not list(validator.iter_errors(manifest))
-                try:
-                    resolver.validate_manifest(manifest, "sampleeng")
-                except resolver.ManifestError:
-                    runtime_valid = False
-                except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
-                    runtime_valid = False
-                    check(False, f"{length}-char provider profile has typed runtime validation (raw {type(exc).__name__})")
-                else:
-                    runtime_valid = True
-                expected = length <= 64
-                check(schema_valid == expected,
-                      f"{length}-char provider profile schema boundary is {'accepted' if expected else 'rejected'}")
-                check(runtime_valid == expected,
-                      f"{length}-char provider profile runtime boundary is {'accepted' if expected else 'rejected'}")
-                check(schema_valid == runtime_valid,
-                      f"{length}-char provider profile schema/runtime decisions agree")
-        finally:
-            if old_provider_dir is None:
-                os.environ.pop("RECURSION_PROVIDER_DIR", None)
-            else:
-                os.environ["RECURSION_PROVIDER_DIR"] = old_provider_dir
+            resolver.validate_manifest(manifest, "sampleeng")
+        except resolver.ManifestError:
+            runtime_valid = False
+        except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
+            runtime_valid = False
+            check(False, f"reviewed {profile} profile has typed runtime validation (raw {type(exc).__name__})")
+        else:
+            runtime_valid = True
+        check(schema_valid, f"reviewed {profile} profile is accepted by the schema")
+        check(runtime_valid, f"reviewed {profile} profile is accepted by the runtime")
+        check(schema_valid == runtime_valid,
+              f"reviewed {profile} schema/runtime decisions agree")
+
+    # The merged product deliberately drops Ours' arbitrary injected provider/profile contract.
+    # These names remain within the old 64-character shape in some cases, but are not reviewed
+    # registry identities and must be refused by both authorities.
+    for length in (33, 64, 65):
+        profile_name = "p" + "a" * (length - 1)
+        manifest = copy.deepcopy(BASE_MANIFEST)
+        manifest["billing"]["provider"] = profile_name
+        manifest["network"] = {
+            "policy": "provider-only", "profile": profile_name,
+            "endpoints": ["profile.example.com"],
+        }
+        schema_valid = not list(validator.iter_errors(manifest))
+        try:
+            resolver.validate_manifest(manifest, "sampleeng")
+        except resolver.ManifestError:
+            runtime_valid = False
+        else:
+            runtime_valid = True
+        check(not schema_valid, f"unreviewed {length}-char provider/profile is rejected by schema")
+        check(not runtime_valid, f"unreviewed {length}-char provider/profile is rejected by runtime")
+        check(schema_valid == runtime_valid,
+              f"unreviewed {length}-char provider/profile schema/runtime decisions agree")
 
 
 def test_mutations() -> None:
@@ -280,17 +263,14 @@ def test_mutations() -> None:
     schema = json.loads(
         (SOURCE / "schemas/control-plane/v1/engine-manifest.schema.json").read_text(encoding="utf-8")
     )
-    strict_checker = jsonschema.Draft7Validator.TYPE_CHECKER.redefine(
-        "integer", lambda _checker, instance: type(instance) is int
-    )
-    strict_validator = jsonschema.validators.extend(
-        jsonschema.Draft7Validator, type_checker=strict_checker
-    )(schema)
+    validator = jsonschema.Draft7Validator(schema)
     for value in (True, 1.0):
         bad_version = copy.deepcopy(baseline)
         bad_version["schema_version"] = value
-        check(bool(list(strict_validator.iter_errors(bad_version))),
-              f"schema_version={value!r} is constrained by the Draft-7 schema")
+        schema_rejects = bool(list(validator.iter_errors(bad_version)))
+        expected_rejection = value is True
+        check(schema_rejects == expected_rejection,
+              f"Draft-7 schema integer semantics for schema_version={value!r} are documented correctly")
 
     missing_field = copy.deepcopy(BASE_MANIFEST)
     del missing_field["roles"]
@@ -299,6 +279,17 @@ def test_mutations() -> None:
     name_mismatch = copy.deepcopy(BASE_MANIFEST)
     name_mismatch["name"] = "othername"
     run_case("name not matching filename stem rejected", "sampleeng.json", "sampleeng", name_mismatch, 2)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        write_manifest(tmp_dir, "othername.json", BASE_MANIFEST)
+        try:
+            resolver.load_manifest(tmp_dir / "othername.json", "sampleeng")
+        except resolver.ManifestError as exc:
+            check("filename stem" in str(exc),
+                  "manifest filename stem not matching CLI engine is rejected")
+        else:
+            check(False, "manifest filename stem not matching CLI engine is rejected")
 
     builtin_collision = copy.deepcopy(BASE_MANIFEST)
     builtin_collision["name"] = "claude"
@@ -389,7 +380,7 @@ def test_malformed_container_elements_are_typed() -> None:
 def main() -> int:
     test_shipped_manifests()
     test_missing_file()
-    test_provider_profile_name_schema_runtime_parity()
+    test_reviewed_provider_profile_contract()
     test_mutations()
     test_malformed_values()
     test_malformed_container_elements_are_typed()

@@ -1072,35 +1072,84 @@ class MutationSkipped(Exception):
 
 
 def _kill_mutation(rows: list[dict[str, str]], guard: str, mutated_file: str,
-                   failing_case: str, original_case, mutant_case) -> None:
+                   failing_case: str, original_case, mutant_case, *,
+                   expected_refusal: bytes | None = None) -> None:
     """Run one mutation as an individual test; a surviving mutant is a defect."""
-    try:
-        original_case()
-    except MutationSkipped as exc:
-        rows.append({
-            "guard": guard,
-            "mutated": mutated_file,
-            "case": failing_case,
-            "assertion": f"SKIP - {exc}",
-        })
-        print(f"ok - individual mutation skipped: {guard} ({exc})")
+    if expected_refusal is None:
+        try:
+            original_case()
+        except MutationSkipped as exc:
+            rows.append({
+                "guard": guard,
+                "mutated": mutated_file,
+                "case": failing_case,
+                "assertion": f"SKIP - {exc}",
+            })
+            print(f"ok - individual mutation skipped: {guard} ({exc})")
+            return
+        except AssertionError as exc:
+            raise AssertionError(f"mutation oracle failed for {guard}: {exc}") from exc
+        try:
+            mutant_case()
+        except AssertionError as exc:
+            rows.append({
+                "guard": guard,
+                "mutated": mutated_file,
+                "case": failing_case,
+                "assertion": str(exc),
+            })
+            print(f"ok - individual mutation killed: {guard}")
+        else:
+            raise AssertionError(
+                f"mutation survived for {guard}; zero failures for {mutated_file} "
+                f"on {failing_case}"
+            )
         return
-    except AssertionError as exc:
-        raise AssertionError(f"mutation oracle failed for {guard}: {exc}") from exc
+
+    original_result = original_case()
+    expected_diagnostic = b"resolve-engine: " + expected_refusal + b"\n"
+    if not isinstance(original_result, subprocess.CompletedProcess) \
+            or original_result.returncode != 2 \
+            or not isinstance(original_result.stderr, bytes) \
+            or expected_refusal not in original_result.stderr \
+            or failing_case.encode() in original_result.stderr:
+        raise AssertionError(
+            f"mutation oracle failed for {guard}: baseline did not produce the "
+            f"specific refusal {expected_refusal!r} without disclosing {failing_case!r}"
+        )
     try:
-        mutant_case()
+        mutant_result = mutant_case()
     except AssertionError as exc:
+        raise AssertionError(f"mutation execution failed for {guard}: {exc}") from exc
+    if not isinstance(mutant_result, subprocess.CompletedProcess) \
+            or mutant_result.returncode != 2 \
+            or not isinstance(mutant_result.stderr, bytes):
+        raise AssertionError(
+            f"mutation for {guard} failed outside the targeted refusal: "
+            f"expected exit 2, got {getattr(mutant_result, 'returncode', None)}"
+        )
+    if expected_refusal not in mutant_result.stderr:
+        raise AssertionError(
+            f"mutation for {guard} did not reach the targeted refusal "
+            f"{expected_refusal.decode()}"
+        )
+    reasons: list[str] = []
+    if mutant_result.stderr != expected_diagnostic:
+        reasons.append("target refusal text changed")
+    if failing_case.encode() in mutant_result.stderr:
+        reasons.append(f"disclosed {failing_case!r}")
+    if reasons:
         rows.append({
             "guard": guard,
             "mutated": mutated_file,
             "case": failing_case,
-            "assertion": str(exc),
+            "assertion": "; ".join(reasons),
         })
         print(f"ok - individual mutation killed: {guard}")
     else:
         raise AssertionError(
-            f"mutation survived for {guard}; zero failures for {mutated_file} "
-            f"on {failing_case}"
+            f"mutation survived for {guard}; it retained the specific refusal "
+            f"{expected_refusal.decode()} without disclosing {failing_case!r}"
         )
 
 
@@ -1112,7 +1161,13 @@ def _resolver_mutant(scratch: Path, label: str, old: str, new: str) -> Path:
     mutant_scripts.mkdir(parents=True, exist_ok=True)
     mutant_path = mutant_scripts / "resolve-engine.py"
     mutant_path.write_text(original.replace(old, new, 1), encoding="utf-8")
-    shutil.copy2(ROOT / "scripts" / "phase5_safety.py", mutant_scripts / "phase5_safety.py")
+    # resolve-engine.py imports this complete first-party closure from its own script directory.
+    for relative in ("phase5_safety.py", "provider_contract.py", "provider-egress-profiles.json"):
+        shutil.copy2(ROOT / "scripts" / relative, mutant_scripts / relative)
+    mutant_engines = mutant_scripts / "engines"
+    mutant_engines.mkdir()
+    for source in (ROOT / "scripts" / "engines").glob("*.json"):
+        shutil.copy2(source, mutant_engines / source.name)
     return mutant_path
 
 
@@ -1255,44 +1310,43 @@ def run_individual_guard_mutations(scratch: Path) -> None:
     )
     hostile_name = str(mutation_controller / "mutation-caller-controlled-name")
     invalid_old = "        diag(REFUSAL_INVALID_ENGINE_NAME)\n"
-    invalid_new = "        diag(f\"invalid engine name {engine!r}\")\n"
+    invalid_new = "        diag(f\"{REFUSAL_INVALID_ENGINE_NAME}: {engine!r}\")\n"
     invalid_mutant = _resolver_mutant(scratch, "invalid-name", invalid_old, invalid_new)
     invalid_line = containing_line(resolver_text, invalid_old.strip(), "scripts/resolve-engine.py")
 
-    def invalid_case(path: Path) -> None:
+    def invalid_case(path: Path) -> subprocess.CompletedProcess:
         result = subprocess.run(
             [PYTHON, path, hostile_name, "--validate"],
             cwd=ROOT, env=resolver_env, capture_output=True,
         )
-        if result.returncode != 2 or hostile_name.encode() in result.stderr \
-                or b"invalid engine name" in result.stderr:
-            raise AssertionError("invalid engine refusal disclosed caller-controlled path")
+        return result
 
     _kill_mutation(
         rows, "invalid-engine symbolic refusal", invalid_line,
         hostile_name, lambda: invalid_case(ROOT / "scripts" / "resolve-engine.py"),
         lambda: invalid_case(invalid_mutant),
+        expected_refusal=resolver.REFUSAL_INVALID_ENGINE_NAME.encode(),
     )
 
     publication_old = "        diag(REFUSAL_PLAN_PUBLICATION)\n"
-    publication_new = "        diag(f\"failed to write plan to {out_path}: publication error\")\n"
+    publication_new = "        diag(f\"{REFUSAL_PLAN_PUBLICATION}: {out_path}\")\n"
     publication_mutant = _resolver_mutant(scratch, "plan-publication", publication_old, publication_new)
     publication_line = containing_line(resolver_text, publication_old.strip(), "scripts/resolve-engine.py")
     publication_target = mutation_controller / "scripts"
 
-    def publication_case(path: Path) -> None:
+    def publication_case(path: Path) -> subprocess.CompletedProcess:
         result = subprocess.run(
             [PYTHON, path, "cursor", "--role", "implementer", "--emit-plan", publication_target,
              "--controller-root", mutation_controller, "--controller-commit", mutation_controller_sha],
             cwd=ROOT, env=resolver_env, capture_output=True,
         )
-        if result.returncode != 2 or str(publication_target).encode() in result.stderr:
-            raise AssertionError("plan publication refusal disclosed caller-controlled path")
+        return result
 
     _kill_mutation(
         rows, "plan-publication symbolic refusal", publication_line,
         str(publication_target), lambda: publication_case(ROOT / "scripts" / "resolve-engine.py"),
         lambda: publication_case(publication_mutant),
+        expected_refusal=resolver.REFUSAL_PLAN_PUBLICATION.encode(),
     )
 
     private_old = "os.mkdir(os.path.basename(str(destination)), 0o700, dir_fd=destination_parent_fd)"

@@ -19,10 +19,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from provider_contract import HOST_RE
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
+
+from provider_contract import HOST_RE
 
 class FirstPartyImportError(ImportError):
     """A required controller module is absent or malformed in the importing tree."""
@@ -30,7 +31,7 @@ class FirstPartyImportError(ImportError):
 
 try:
     from phase5_safety import (BoundaryError, atomic_write, decode_json,
-                               pinned_directory, read_bytes)
+                               pinned_directory, read_bounded_stream, read_bytes)
 except Exception as exc:
     module_name = getattr(exc, "name", None) or "phase5_safety"
     import_error = FirstPartyImportError(
@@ -212,7 +213,7 @@ def canonical_controller_root(value: str) -> Path:
         with pinned_directory(value) as (_, requested_value):
             requested = Path(requested_value)
         configured_value = os.environ.get("RECURSION_ROOT", "").strip()
-        with pinned_directory(configured_value or Path(__file__).parent.parent) as (_, configured_path):
+        with pinned_directory(configured_value or _SCRIPT_DIR.parent) as (_, configured_path):
             configured = Path(configured_path)
     except (BoundaryError, OSError, ValueError, TypeError) as exc:
         raise ManifestError("controller root is unavailable") from exc
@@ -221,7 +222,44 @@ def canonical_controller_root(value: str) -> Path:
     return requested
 
 
-def authenticated_file(root: Path, commit: str, relative: str) -> tuple[bytes, str]:
+def _git_show_bounded(root: Path, commit: str, relative: str,
+                      max_bytes: int) -> tuple[int, bytes]:
+    try:
+        process = subprocess.Popen(
+            ["git", "-C", str(root), "show", f"{commit}:{relative}"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise ManifestError(f"controller policy file is unreadable: {relative}") from exc
+    try:
+        if process.stdout is None:
+            raise OSError("git show did not provide a stdout pipe")
+        committed = read_bounded_stream(
+            process.stdout, label=f"controller policy file {relative}", max_bytes=max_bytes,
+        )
+        returncode = process.wait()
+    except BoundaryError as exc:
+        message = str(exc)
+        if "is too large" in message:
+            raise ManifestError(f"controller policy file is too large: {relative}") from exc
+        raise ManifestError(f"controller policy file is unreadable: {relative}") from exc
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError) as exc:
+        raise ManifestError(f"controller policy file is unreadable: {relative}") from exc
+    finally:
+        if process.poll() is None:
+            try:
+                process.kill()
+            except OSError:
+                pass
+        try:
+            process.wait()
+        except OSError:
+            pass
+    return returncode, committed
+
+
+def authenticated_file(root: Path, commit: str, relative: str, *,
+                       max_bytes: int = MAX_MANIFEST_BYTES) -> tuple[bytes, str]:
     if not isinstance(commit, str) or not COMMIT_RE.fullmatch(commit):
         raise ManifestError("controller policy commit is not a full hexadecimal object id")
     if not isinstance(relative, str) or not relative:
@@ -238,31 +276,34 @@ def authenticated_file(root: Path, commit: str, relative: str) -> tuple[bytes, s
         ["git", "-C", str(root), "ls-tree", "-z", commit, "--", relative],
         capture_output=True, check=False,
     )
-    committed = subprocess.run(
-        ["git", "-C", str(root), "show", f"{commit}:{relative}"],
-        capture_output=True, check=False,
+    committed_returncode, committed_stdout = _git_show_bounded(
+        root, commit, relative, max_bytes,
     )
     rows = [row for row in tree.stdout.split(b"\0") if row]
     mode = rows[0].split(b" ", 1)[0] if len(rows) == 1 else b""
     try:
-        live = read_bytes(path, label=f"controller policy file {relative}")
+        live = read_bytes(path, label=f"controller policy file {relative}", max_bytes=max_bytes)
     except BoundaryError as exc:
         raise ManifestError(f"controller policy file is unreadable: {relative}") from exc
-    if tracked.returncode or tree.returncode or committed.returncode or len(rows) != 1 \
-            or mode not in {b"100644", b"100755"} or live != committed.stdout:
+    if tracked.returncode or tree.returncode or committed_returncode or len(rows) != 1 \
+            or mode not in {b"100644", b"100755"} or live != committed_stdout:
         raise ManifestError(f"controller policy file differs from controller_sha: {relative}")
-    return committed.stdout, hashlib.sha256(committed.stdout).hexdigest()
+    return committed_stdout, hashlib.sha256(committed_stdout).hexdigest()
 
 
 def provider_profiles(controller_root: Path | None = None, controller_commit: str | None = None) -> dict:
     if (controller_root is None) != (controller_commit is None):
         raise ManifestError("controller policy provenance is incomplete")
     if controller_root is not None:
-        raw, _ = authenticated_file(controller_root, controller_commit, "scripts/provider-egress-profiles.json")
+        raw, _ = authenticated_file(
+            controller_root, controller_commit, "scripts/provider-egress-profiles.json",
+            max_bytes=MAX_MANIFEST_BYTES,
+        )
     else:
-        profile_path = Path(__file__).parent / "provider-egress-profiles.json"
+        profile_path = _SCRIPT_DIR / "provider-egress-profiles.json"
         try:
-            raw = read_bytes(profile_path, label="provider profile registry")
+            raw = read_bytes(profile_path, label="provider profile registry",
+                             max_bytes=MAX_MANIFEST_BYTES)
         except BoundaryError as exc:
             raise ManifestError("provider profile registry is unavailable") from exc
     try:
@@ -490,7 +531,7 @@ def manifest_dir() -> Path:
     override = os.environ.get("RECURSION_ENGINE_DIR", "").strip()
     if override:
         return Path(override)
-    return Path(__file__).parent / "engines"
+    return _SCRIPT_DIR / "engines"
 
 
 def manifest_path(engine: str) -> Path:
@@ -500,13 +541,18 @@ def manifest_path(engine: str) -> Path:
 def load_manifest(path: Path, engine: str, *, controller_root: Path | None = None,
                   controller_commit: str | None = None) -> tuple[dict, dict[str, str]]:
     provenance: dict[str, str] = {}
+    filename_stem = path.name[:-len(".json")] if path.name.endswith(".json") else ""
+    if not NAME_RE.fullmatch(filename_stem) or filename_stem != engine:
+        raise ManifestError("engine manifest filename stem is invalid")
     try:
         if controller_root is not None:
             relative = f"scripts/engines/{engine}.json"
             expected = Path(os.path.abspath(str(controller_root / relative)))
             if Path(os.path.abspath(str(path))) != expected:
                 raise ManifestError("manifest path is not under the canonical controller root")
-            raw_bytes, manifest_digest = authenticated_file(controller_root, controller_commit, relative)
+            raw_bytes, manifest_digest = authenticated_file(
+                controller_root, controller_commit, relative, max_bytes=MAX_MANIFEST_BYTES,
+            )
             provenance[relative] = manifest_digest
             if len(raw_bytes) > MAX_MANIFEST_BYTES:
                 raise ManifestError("engine manifest is too large")
@@ -534,10 +580,16 @@ def load_manifest(path: Path, engine: str, *, controller_root: Path | None = Non
             RecursionError, UnicodeDecodeError) as exc:
         raise ManifestError(f"manifest {engine} is not valid JSON") from exc
     if controller_root is not None:
-        _, profile_digest = authenticated_file(controller_root, controller_commit,
-                                               "scripts/provider-egress-profiles.json")
+        _, profile_digest = authenticated_file(
+            controller_root, controller_commit, "scripts/provider-egress-profiles.json",
+            max_bytes=MAX_MANIFEST_BYTES,
+        )
         provenance["scripts/provider-egress-profiles.json"] = profile_digest
-    return validate_manifest(data, engine, controller_root=controller_root, controller_commit=controller_commit), provenance
+    validated = validate_manifest(data, engine, controller_root=controller_root,
+                                   controller_commit=controller_commit)
+    if validated["name"] != filename_stem:
+        raise ManifestError("manifest name does not match its filename stem")
+    return validated, provenance
 
 
 def enabled_env_name(engine: str) -> str:

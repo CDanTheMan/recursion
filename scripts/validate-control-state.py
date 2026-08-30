@@ -31,7 +31,7 @@ try:
 except Exception as exc:
     module_name = getattr(exc, "name", None) or "phase5_safety/engine_contract"
     import_error = FirstPartyImportError(
-        f"first-party module '{module_name}' is unavailable or malformed; searched {_SCRIPT_DIR}"
+        f"first-party module '{module_name}' is unavailable or malformed"
     )
     if __name__ == "__main__":
         print(f"validate-control-state: first-party import failed: {import_error}", file=sys.stderr)
@@ -232,24 +232,34 @@ def _validate(kind: str, value: object) -> dict:
             contract = value["gate_contract"]
             hashes = contract.get("gate_files") if isinstance(contract, dict) else None
             controller_hashes = contract.get("controller_gate_files", {}) if isinstance(contract, dict) else None
+            contract_keys = set(contract) if isinstance(contract, dict) else set()
+            core_keys = {"acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"}
+            allowed_keys = core_keys | {"read_only_paths"}
+            read_only_paths = contract.get("read_only_paths", []) if isinstance(contract, dict) else None
             if not isinstance(contract, dict) \
-                    or set(contract) != {"acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"} \
+                    or not core_keys <= contract_keys or not contract_keys <= allowed_keys \
                     or not isinstance(contract.get("acceptance"), str) or not contract.get("acceptance") \
                     or not re.fullmatch(r"[0-9a-f]{64}", str(contract.get("acceptance_sha256") or "")) \
                     or not isinstance(hashes, dict) or set(hashes) != set(value["gate_files"]) \
                     or not isinstance(controller_hashes, dict) \
                     or set(controller_hashes) != set(value.get("controller_gate_files") or []) \
                     or (not hashes and not controller_hashes) \
+                    or ("read_only_paths" in contract and (
+                        not isinstance(read_only_paths, list)
+                        or len(read_only_paths) != len(set(read_only_paths))
+                    )) \
                     or any(not re.fullmatch(r"[0-9a-f]{64}", str(digest))
                            for digest in [*hashes.values(), *controller_hashes.values()]):
                 fail("gate_contract must contain acceptance and tracked-file hashes")
+            if "read_only_paths" in contract:
+                require_relative_paths(read_only_paths, "gate_contract read_only_paths", allow_dot=False)
         for field in ("deadline_seconds", "verifier_deadline_seconds"):
             if not is_plain_int(value[field]) or value[field] < 1:
                 fail(f"{field} must be a positive integer")
         if str(value.get("acceptance", "")).strip() in {"", "true", ":", "/bin/true", "exit 0"}:
             fail("acceptance gate is structurally vacuous")
     if kind == "run":
-        if "process_group" in value and (
+        if value.get("status") != "prepared" and "process_group" in value and (
                 not is_plain_int(value["process_group"]) or value["process_group"] < 1):
             fail("process_group must be a positive integer")
         for field in ("deadline_epoch_ns", "worker_finished_epoch_ns"):

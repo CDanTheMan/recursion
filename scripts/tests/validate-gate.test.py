@@ -216,7 +216,7 @@ class DirectGateAdmissionTest(unittest.TestCase):
 
     def test_launcher_guards_are_reachable_from_cli(self):
         cases = (
-            ("/usr/bin/python3 app/check.py", "ERR path-qualified acceptance launcher is not admitted: /usr/bin/python3"),
+            ("/usr/bin/python3 app/check.py", "ERR path-qualified acceptance launcher is not admitted"),
             ("command python3 app/check.py", "ERR shell reserved word or wrapper is not admitted: command"),
             ("env test -s app/a", "ERR indirect acceptance launcher is not admitted: env"),
             ("pytest app/check.py", "ERR bare acceptance launcher is not admitted: pytest"),
@@ -293,6 +293,17 @@ class DirectGateAdmissionTest(unittest.TestCase):
             0,
             "a read-only gate path was admitted without declaration",
         )
+
+    def test_gate_contract_has_optional_read_only_paths_only_when_declared(self):
+        core = {"acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"}
+        plain = json.loads(run_gate_result("test -s app/result.txt").stdout.decode("utf-8"))
+        seeded = json.loads(
+            run_gate_result("test -s fixtures/truth.json", read_only_paths="fixtures")
+            .stdout.decode("utf-8")
+        )
+        self.assertEqual(set(plain), core)
+        self.assertEqual(set(seeded), core | {"read_only_paths"})
+        self.assertEqual(seeded["read_only_paths"], ["fixtures"])
 
     def test_non_strict_git_cwd_redirection_guard_isolated_from_subcommand_checks(self):
         module = load_gate_module()
@@ -585,8 +596,9 @@ class AbsoluteControllerProgramTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(
             result.stderr.strip(),
-            f"ERR acceptance program is outside the controller root: {candidate}",
+            "ERR acceptance program is outside the controller root",
         )
+        self.assertNotIn(candidate, result.stderr)
 
     def test_absolute_program_under_controller_root_must_be_declared(self):
         result = self.run_controller_gate(self.controller_program, controller_gate_files="")
@@ -613,8 +625,19 @@ class AbsoluteControllerProgramTest(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(
                     result.stderr.strip(),
-                    f"ERR acceptance program uses an unsafe path: {candidate}",
+                    "ERR acceptance program uses an unsafe path",
                 )
+                self.assertNotIn(candidate, result.stderr)
+
+    def test_relative_declared_controller_program_is_admitted_outside_worker_scope(self):
+        result = run_gate_cli(
+            "python3 scripts/phase5_safety.py",
+            allowed_paths="src",
+            controller_root=self.controller_root,
+            controller_commit=self.controller_commit,
+            controller_gate_files=self.controller_gate_file,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 class WindowsPathToleranceTest(unittest.TestCase):

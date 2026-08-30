@@ -8,6 +8,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import io
 import pathlib
 import sys
 import unittest
@@ -17,6 +18,9 @@ from urllib.parse import quote, unquote, urlsplit
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PROXY = ROOT / "scripts" / "provider-connect-proxy.py"
+EGRESS = ROOT / "scripts" / "provider-egress.py"
+PROXY_SERVICE = ROOT / "scripts" / "provider-proxy-service.py"
+NETWORK = ROOT / "scripts" / "provider-network.sh"
 sys.path.insert(0, str(ROOT / "scripts"))
 from provider_contract import parse_authority  # noqa: E402
 
@@ -25,6 +29,16 @@ def load_proxy():
     spec = importlib.util.spec_from_file_location("provider_connect_proxy", PROXY)
     if spec is None or spec.loader is None:
         raise RuntimeError("cannot load provider proxy")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_egress():
+    spec = importlib.util.spec_from_file_location("provider_egress", EGRESS)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load provider egress resolver")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -410,6 +424,36 @@ class ClientHelloContractTest(unittest.TestCase):
 
 
 class DeploymentContractTest(unittest.TestCase):
+    def test_phase5_resolver_refuses_os_failures_without_path_or_raw_os_text(self):
+        resolver = load_egress()
+        stderr = io.StringIO()
+        with mock.patch.object(
+            resolver, "load",
+            side_effect=OSError(
+                "[Errno 2] No such file or directory: "
+                "C:\\private\\controller\\scripts\\provider-egress-profiles.json"
+            ),
+        ), mock.patch.object(sys, "stderr", stderr):
+            result = resolver.phase5_main([
+                "anthropic", "--provider", "anthropic-claude-code",
+                "--endpoint", "api.anthropic.com",
+            ])
+        self.assertEqual(result, 2)
+        self.assertEqual(stderr.getvalue(),
+                         "provider-egress: provider profile registry is unavailable\n")
+        self.assertNotIn("C:\\private", stderr.getvalue())
+        self.assertNotIn("Errno", stderr.getvalue())
+
+    def test_network_and_proxy_use_the_authenticated_phase5_profile_authority(self):
+        network = NETWORK.read_text()
+        proxy_service = PROXY_SERVICE.read_text()
+        self.assertNotIn("admit-engine", network)
+        self.assertIn('authority="$(profile_authority)"', network)
+        self.assertIn("authenticated provider profile has no probe authority", network)
+        self.assertIn('str(ROOT / "provider-egress.py"), profile,', proxy_service)
+        self.assertIn('allowed = [f"{endpoint}:443" for endpoint in item["endpoints"]]',
+                      proxy_service)
+
     def test_production_unit_uses_the_profile_bound_proxy_and_no_anthropic_hardcode(self):
         unit = (ROOT / "deploy/systemd/recursion-provider-proxy.service").read_text()
         self.assertIn("provider-proxy-service.py", unit)

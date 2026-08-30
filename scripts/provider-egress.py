@@ -36,7 +36,7 @@ try:
 except Exception as exc:
     module_name = getattr(exc, "name", None) or "phase5_safety"
     import_error = FirstPartyImportError(
-        f"first-party module '{module_name}' is unavailable or malformed; searched {_SCRIPT_DIR}"
+        f"first-party module '{module_name}' is unavailable or malformed"
     )
     if __name__ == "__main__":
         print(f"provider-egress: first-party import failed: {import_error}", file=sys.stderr)
@@ -121,6 +121,41 @@ def load(profile: str, controller_root: str | None = None, controller_commit: st
     return {"profile": profile, **item}
 
 
+def phase5_refusal(exc: BaseException) -> str:
+    """Map resolver failures to actionable, path-free caller diagnostics."""
+    if isinstance(exc, OSError):
+        return "provider profile registry is unavailable"
+    if isinstance(exc, (json.JSONDecodeError, UnicodeDecodeError)):
+        return "provider profile registry is invalid"
+    if isinstance(exc, KeyError):
+        return "provider profile is unavailable"
+    detail = str(exc)
+    known = (
+        "controller policy provenance is incomplete",
+        "controller root is unavailable",
+        "controller root is not the canonical controller root",
+        "provider policy provenance is unavailable",
+        "provider profile registry is not a regular non-reparse file",
+        "provider profile registry differs from controller commit",
+        "provider profile registry is unavailable",
+        "provider profile registry is invalid",
+        "invalid provider profile",
+        "provider profile is invalid",
+        "provider profile endpoints are invalid",
+        "provider profile namespace is invalid",
+        "provider profile proxy port is invalid",
+        "provider profile env allowlist is invalid",
+        "provider does not match egress profile",
+        "endpoints do not match egress profile",
+    )
+    for message in known:
+        if detail == message:
+            return message
+    if isinstance(exc, (ValueError, TypeError, OverflowError, RecursionError)):
+        return "provider profile registry is invalid"
+    return "provider egress request is invalid"
+
+
 def phase4_main(argv: list[str]) -> int:
     try:
         from provider_contract import (
@@ -203,7 +238,7 @@ def phase5_main(argv: list[str]) -> int:
         print(json.dumps(item, sort_keys=True, separators=(",", ":")))
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError,
             UnicodeDecodeError, OverflowError, RecursionError) as exc:
-        print(f"provider-egress: {exc}", file=sys.stderr)
+        print(f"provider-egress: {phase5_refusal(exc)}", file=sys.stderr)
         return 2
     return 0
 

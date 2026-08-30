@@ -395,7 +395,7 @@ def _read_open_file(fd: int, path: Path | str, max_bytes: int,
     if private and os.name != "nt" and stat.S_IMODE(before.st_mode) & 0o022:
         raise BoundaryError(f"{path} is writable by group or other")
     if before.st_size > max_bytes:
-        raise BoundaryError(f"file is too large: {path}")
+        raise BoundaryError("file is too large")
     pieces: list[bytes] = []
     remaining = int(before.st_size)
     while remaining:
@@ -405,10 +405,10 @@ def _read_open_file(fd: int, path: Path | str, max_bytes: int,
         pieces.append(chunk)
         remaining -= len(chunk)
     if remaining:
-        raise BoundaryError(f"file changed while being read: {path}")
+        raise BoundaryError("file changed while being read")
     after = _verify_regular(fd, str(path), before)
     if after.st_size != before.st_size:
-        raise BoundaryError(f"{path} changed size during use")
+        raise BoundaryError("file changed size during use")
     return b"".join(pieces)
 
 

@@ -32,6 +32,43 @@ load_profile(){
   PROXY_PORT="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["proxy_port"])' "$PROFILE_JSON")"
 }
 
+profile_authority(){
+  python3 - "$PROFILE_JSON" <<'PY'
+import json,sys
+try:
+    raw=sys.argv[1]
+    if len(raw.encode("utf-8")) > 2 * 1024 * 1024:
+        raise ValueError("provider profile is too large")
+    row=json.loads(raw, parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+    endpoints=row.get("endpoints") if isinstance(row, dict) else None
+    if not isinstance(endpoints, list) or not endpoints or not isinstance(endpoints[0], str):
+        raise ValueError("provider profile has no authority")
+    print(endpoints[0] + ":443")
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)
+PY
+}
+
+select_probe_authority(){
+  local usage="$1"
+  case "${2:-}" in
+    --engine)
+      [ -n "${3:-}" ] || { echo "provider-network: $usage" >&2; return 96; }
+      # The authenticated profile already binds this engine's provider and endpoints.
+      # The engine argument is retained for the worker contract; it must not select a
+      # second authority from the legacy Phase 4 registry.
+      ;;
+    "")
+      ;;
+    *)
+      echo "provider-network: $usage" >&2
+      return 96
+      ;;
+  esac
+  authority="$(profile_authority)" \
+    || { echo "provider-network: authenticated provider profile has no probe authority" >&2; return 96; }
+}
+
 [ "$(id -u)" = 0 ] || { echo "provider-network: root is required" >&2; exit 95; }
 command -v ip >/dev/null 2>&1 || { echo "provider-network: iproute2 is required" >&2; exit 95; }
 
@@ -84,33 +121,8 @@ case "${1:-}" in
     systemctl is-active --quiet recursion-provider-network.service \
       && systemctl is-active --quiet recursion-provider-proxy.service \
       || { echo "provider-network: provider services are not active" >&2; exit 96; }
-    if [ "${2:-}" = --engine ] && [ -n "${3:-}" ]; then
-      admission="$(python3 "$ROOT/scripts/provider-egress.py" admit-engine "$3")" \
-        || { echo "provider-network: engine/provider admission refused" >&2; exit 96; }
-      authority="$(python3 - "$admission" <<'PY'
-import json,sys
-try:
-    raw=sys.argv[1]
-    if len(raw.encode("utf-8")) > 2 * 1024 * 1024:
-        raise ValueError("provider admission is too large")
-    row=json.loads(raw, parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
-    values=row.get("authorities") or [] if isinstance(row,dict) else []
-    if not isinstance(row,dict) or not isinstance(values,list) or len(values) < 1 \
-            or not isinstance(values[0],str):
-        raise ValueError("provider admission has no authority")
-    print(values[0])
-except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
-    raise SystemExit(2)
-PY
-      )" || { echo "provider-network: provider admission had no authority" >&2; exit 96; }
-    elif [ -z "${2:-}" ]; then
-      # Preserve the no-argument compatibility path while deriving its authority from
-      # the authenticated profile rather than embedding a provider policy here.
-      authority="$(python3 -c 'import json,sys; e=json.loads(sys.argv[1])["endpoints"]; print(e[0]+":443" if e else "")' "$PROFILE_JSON")"
-      [ -n "$authority" ] || { echo "provider-network: provider profile has no authority" >&2; exit 96; }
-    else
-      echo "provider-network: check usage is check [--engine ENGINE]" >&2; exit 96
-    fi
+    select_probe_authority "check [--engine ENGINE]" "${2:-}" "${3:-}" \
+      || exit 96
     python3 "$ROOT/scripts/provider-connect-proxy.py" probe \
       --namespace "$NS_PATH" --listen-port "$PROXY_PORT" --allow "$authority"
     ;;
@@ -120,24 +132,8 @@ PY
     systemctl is-active --quiet recursion-provider-network.service \
       && systemctl is-active --quiet recursion-provider-proxy.service \
       || { echo "provider-network: provider services are not active" >&2; exit 96; }
-    if [ "${2:-}" = --engine ] && [ -n "${3:-}" ]; then
-      authority="$(python3 "$ROOT/scripts/provider-egress.py" admit-engine "$3" | python3 -c \
-        'import json,sys
-try:
-    raw=sys.stdin.buffer.read(2*1024*1024+1)
-    if len(raw)>2*1024*1024: raise ValueError("provider admission is too large")
-    row=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
-    values=row.get("authorities") or [] if isinstance(row,dict) else []
-    if not isinstance(row,dict) or not isinstance(values,list) or not values or not isinstance(values[0],str): raise ValueError("provider admission has no authority")
-    print(values[0])
-except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError): raise SystemExit(2)')" \
-        || { echo "provider-network: engine/provider admission refused" >&2; exit 96; }
-    elif [ -z "${2:-}" ]; then
-      authority="$(python3 -c 'import json,sys; e=json.loads(sys.argv[1])["endpoints"]; print(e[0]+":443" if e else "")' "$PROFILE_JSON")"
-      [ -n "$authority" ] || { echo "provider-network: provider profile has no authority" >&2; exit 96; }
-    else
-      echo "provider-network: probe usage is probe [--engine ENGINE]" >&2; exit 96
-    fi
+    select_probe_authority "probe [--engine ENGINE]" "${2:-}" "${3:-}" \
+      || exit 96
     [ -n "${RECURSION_PROVIDER_PROBE_TOKEN:-}" ] \
       && [ -n "${RECURSION_PROVIDER_PROBE_IDENTITY:-}" ] \
       || { echo "provider-network: live probe requires a short-lived assignment capability" >&2; exit 96; }

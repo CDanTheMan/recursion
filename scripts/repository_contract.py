@@ -1458,12 +1458,24 @@ def _observed_gate_contract(contract: dict[str, Any], worktree: Path,
     except _BOUNDARY_ERRORS as exc:
         raise ContractError("authoritative gate contract evidence is malformed",
                             "verification-unavailable") from exc
-    expected_keys = {"acceptance_sha256", "gate_files", "controller_gate_files"}
-    if not isinstance(evidence, dict) or set(evidence) != expected_keys \
+    expected_keys = {"acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"}
+    allowed_keys = expected_keys | {"read_only_paths"}
+    if not isinstance(evidence, dict) or not expected_keys <= set(evidence) \
+            or not set(evidence) <= allowed_keys \
+            or evidence["acceptance"] != profile["acceptance"] \
             or evidence["acceptance_sha256"] != hashlib.sha256(
                 profile["acceptance"].encode()).hexdigest():
         raise ContractError("authoritative gate contract evidence is incomplete",
                             "verification-unavailable")
+    if "read_only_paths" in evidence:
+        read_only_paths = evidence["read_only_paths"]
+        if not isinstance(read_only_paths, list) \
+                or any(not isinstance(path, str) or not path or "\\" in path
+                       or path.startswith("/") or ":" in path
+                       or any(part in {"", ".", ".."} for part in path.split("/"))
+                       for path in read_only_paths):
+            raise ContractError("authoritative gate contract evidence is incomplete",
+                                "verification-unavailable")
     for name, expected in (("gate_files", profile["gate_files"]),
                            ("controller_gate_files", profile["controller_gate_files"])):
         values = evidence.get(name)

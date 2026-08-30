@@ -1076,7 +1076,8 @@ def enforce_required_gate_profile(cfg: dict, label: str, gate: dict,
         fail(f"pilot plan {label} does not use the project's exact required gate profile")
 
 
-def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict) -> dict:
+def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict,
+                       read_only_paths: list[str] | None = None) -> dict:
     """Use the execution validator and bind its tracked-file hashes into the plan."""
     command = [
         sys.executable, str(base / "scripts/validate-gate.py"),
@@ -1088,6 +1089,8 @@ def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict) -> dict:
         "--controller-gate-files", ",".join(gate.get("controller_gate_files") or []),
         "--strict-direct",
     ]
+    if read_only_paths:
+        command += ["--read-only-paths", ",".join(read_only_paths)]
     proc = subprocess.run(command, text=True, capture_output=True, check=False)
     if proc.returncode:
         detail = (proc.stderr or proc.stdout or "gate validation failed").strip()
@@ -1098,16 +1101,26 @@ def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict) -> dict:
         fail(f"pilot plan {label} gate validator returned malformed evidence")
     hashes = contract.get("gate_files") if isinstance(contract, dict) else None
     controller_hashes = contract.get("controller_gate_files") if isinstance(contract, dict) else None
-    if set(contract) != {"acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"} \
+    core_keys = {"acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"}
+    contract_keys = set(contract) if isinstance(contract, dict) else set()
+    if not isinstance(contract, dict) or not core_keys <= contract_keys \
+            or not contract_keys <= core_keys | {"read_only_paths"} \
             or contract.get("acceptance") != gate["acceptance"] \
             or not re.fullmatch(r"[0-9a-f]{64}", str(contract.get("acceptance_sha256") or "")) \
             or not isinstance(hashes, dict) or set(hashes) != set(gate["gate_files"]) \
             or not isinstance(controller_hashes, dict) \
             or set(controller_hashes) != set(gate.get("controller_gate_files") or []) \
+            or (read_only_paths and contract.get("read_only_paths") != read_only_paths) \
             or (not hashes and not controller_hashes) \
             or any(not re.fullmatch(r"[0-9a-f]{64}", str(digest))
                    for digest in [*hashes.values(), *controller_hashes.values()]):
         fail(f"pilot plan {label} gate validator returned incomplete evidence")
+    if "read_only_paths" in contract:
+        observed_read_only_paths = contract["read_only_paths"]
+        if not isinstance(observed_read_only_paths, list) \
+                or any(not isinstance(path, str) for path in observed_read_only_paths) \
+                or len(observed_read_only_paths) != len(set(observed_read_only_paths)):
+            fail(f"pilot plan {label} gate validator returned incomplete evidence")
     return contract
 
 
@@ -1303,7 +1316,7 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
     if value.get("id") != plan_id or value.get("project_id") != project or not IDENT.fullmatch(plan_id):
         fail("pilot plan identity does not match its decision")
     validate_authority_binding(cfg, value, check_remote=check_remote)
-    validate_seed_binding(cfg, value)
+    seed_contract = validate_seed_binding(cfg, value)
     required_gate_profile = selected_required_gate_profile(base, cfg, value)
     goal = value.get("goal")
     tasks = value.get("tasks")
@@ -1330,7 +1343,10 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
     enforce_required_gate_profile(
         cfg, "goal", {**goal, "acceptance": goal_acceptance}, required_gate_profile,
     )
-    expected_goal_contract = repo_gate_contract(base, cfg, "goal", goal_gate)
+    read_only_paths = seed_contract["paths"] if seed_contract else None
+    expected_goal_contract = repo_gate_contract(
+        base, cfg, "goal", goal_gate, read_only_paths=read_only_paths,
+    )
     if requires_heavy_gate(value, goal_acceptance) and goal.get("gate_class") != "heavy":
         fail("pilot plan goal understates a controller-classified heavy gate")
     if bind_gate_contract:
@@ -1419,7 +1435,9 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
                 fail(f"pilot plan task {task_id} has invalid {name}")
             for item in items: bounded_line(item, f"task {task_id} {name}", 512)
         enforce_required_gate_profile(cfg, f"task {task_id}", task, required_gate_profile)
-        expected_contract = repo_gate_contract(base, cfg, f"task {task_id}", task)
+        expected_contract = repo_gate_contract(
+            base, cfg, f"task {task_id}", task, read_only_paths=read_only_paths,
+        )
         if requires_heavy_gate(value, str(task["acceptance"])) and task.get("gate_class") != "heavy":
             fail(f"pilot plan task {task_id} understates a controller-classified heavy gate")
         supplied_contract = task.get("gate_contract")

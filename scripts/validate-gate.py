@@ -465,8 +465,12 @@ def entrypoint(words: list[str], strict: bool, *, controller_declared: bool = Fa
     if strict and command != name and name in {
         "test", "[", "git", "bash", "sh", "python", "python3", "node",
     } and not controller_declared:
+        if _path_is_absolute(command):
+            fail("path-qualified acceptance launcher is not admitted")
         fail(f"path-qualified acceptance launcher is not admitted: {command}")
     if strict and name in RESERVED:
+        if _path_is_absolute(command):
+            fail("shell reserved word or wrapper is not admitted")
         fail(f"shell reserved word or wrapper is not admitted: {command}")
     if name in {"env", "npm", "npx", "yarn", "pnpm", "xargs", "find", "make"}:
         if strict:
@@ -516,17 +520,21 @@ def _path_has_dot_alias(value: str) -> bool:
 
 def _controller_declared(value: str, controller_root: str | None,
                          controller_gate_files: list[str]) -> bool:
+    relative = _controller_relative(value, controller_root)
+    return relative is not None and relative in controller_gate_files
+
+
+def _controller_relative(value: str, controller_root: str | None) -> str | None:
     if not controller_root or not _path_is_absolute(value):
-        return False
+        return None
     normalized = value.replace("\\", "/")
     logical_root = "/opt/recursion"
     if normalized == logical_root or normalized.startswith(logical_root + "/"):
-        relative = normalized[len(logical_root):].lstrip("/")
-        return relative in controller_gate_files
+        return normalized[len(logical_root):].lstrip("/")
     root = _lexical_absolute(controller_root).as_posix().replace("\\", "/").rstrip("/")
     if normalized == root or normalized.startswith(root + "/"):
-        return normalized[len(root):].lstrip("/") in controller_gate_files
-    return False
+        return normalized[len(root):].lstrip("/")
+    return None
 
 
 _GIT_CWD_OPTIONS = (
@@ -557,7 +565,7 @@ def _reject_git_cwd_options(words: list[str]) -> None:
 
 def _reject_shell_expansion(word: str) -> None:
     if any(char in word for char in "~%$`*?["):
-        fail(f"acceptance operand contains shell expansion or glob syntax: {word}")
+        fail("acceptance operand contains shell expansion or glob syntax")
     normalized = word.replace("\\", "/")
     if normalized.startswith("//") or word.startswith("\\\\") \
             or re.match(r"^[A-Za-z]:(?:$|[^/])", normalized):
@@ -619,7 +627,8 @@ def _path_operand_indexes(words: list[str]) -> set[int]:
 
 def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: list[str],
                          controller_root: str | None, controller_gate_files: list[str],
-                         read_only_paths: list[str] | None = None) -> str | None:
+                         read_only_paths: list[str] | None = None,
+                         repo: Path | None = None) -> str | None:
     """Validate one direct command identically in strict and legacy direct modes."""
     if not words:
         return None
@@ -644,6 +653,8 @@ def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: li
     # Absolute command ownership is enforced by the candidate guard below.  Keeping a second
     # command-position absolute refusal here only masks that guard's own CLI message.
     if _path_has_traversal(command) or _path_has_dot_alias(command):
+        if _path_is_absolute(command):
+            fail("acceptance executable path is unsafe")
         fail(f"acceptance executable path is unsafe: {command}")
 
     # Run launcher classification before candidate ownership so each launcher guard is visible
@@ -662,14 +673,29 @@ def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: li
                 if not word.startswith("-"):
                     candidate_index = index
                     break
-        if _path_is_absolute(normalized_candidate):
-            if not _controller_declared(normalized_candidate, controller_root, controller_gate_files):
-                fail(f"absolute acceptance program is not controller-declared: {candidate}")
-        elif _path_has_traversal(normalized_candidate) or _path_has_dot_alias(normalized_candidate):
+        candidate_path = PurePosixPath(candidate)
+        candidate_parts = candidate.split("/")
+        if candidate_path.is_absolute():
+            candidate_parts = candidate_parts[1:]
+        if any(part in {"", ".", ".."} for part in candidate_parts):
+            if _path_is_absolute(normalized_candidate):
+                fail("acceptance program uses an unsafe path")
+            if candidate_index is None:
+                fail(f"acceptance executable path is unsafe: {candidate}")
             fail(f"acceptance program path is unsafe: {candidate}")
+        if _path_is_absolute(normalized_candidate):
+            if controller_root is None:
+                fail("absolute acceptance program lacks a controller root")
+            relative = _controller_relative(normalized_candidate, controller_root)
+            if relative is None:
+                fail("acceptance program is outside the controller root")
+            if relative not in controller_gate_files:
+                fail(f"controller acceptance program must be declared: {relative}")
         elif under(normalized_candidate, allowed):
             if normalized_candidate not in gate_files:
                 fail(f"worker-modifiable gate program must be declared in gate_files: {normalized_candidate}")
+            if repo is not None and not resolved_under(repo, normalized_candidate, allowed):
+                fail("acceptance program resolves outside the allowed tree")
         elif normalized_candidate not in controller_gate_files:
             fail(f"gate program is outside allowed/controller-declared paths: {normalized_candidate}")
 
@@ -679,7 +705,11 @@ def validate_direct_argv(words: list[str], *, allowed: list[str], gate_files: li
         normalized = word.replace("\\", "/")
         if _path_has_traversal(normalized) or _path_has_dot_alias(normalized):
             if index == candidate_index:
+                if _path_is_absolute(normalized):
+                    fail("acceptance program path is unsafe")
                 fail(f"acceptance program path is unsafe: {word}")
+            if _path_is_absolute(normalized):
+                fail("acceptance path operand is unsafe")
             fail(f"acceptance path operand is unsafe: {word}")
         if index == candidate_index:
             continue
@@ -702,7 +732,7 @@ def _validate_legacy_conditional(parsed_segments: list[list[str]], operators: li
                                  allowed: list[str], gate_files: list[str],
                                  controller_root: str | None,
                                  controller_gate_files: list[str],
-                                 read_only_paths: list[str]) -> None:
+                                 read_only_paths: list[str], repo: Path | None = None) -> None:
     """Admit the narrow legacy `if file-test; then exit N; else exit N; fi` shape.
 
     Non-pilot work.sh tasks historically used this form to express a gate that returns a useful
@@ -726,7 +756,7 @@ def _validate_legacy_conditional(parsed_segments: list[list[str]], operators: li
     validate_direct_argv(
         condition, allowed=allowed, gate_files=gate_files,
         controller_root=controller_root, controller_gate_files=controller_gate_files,
-        read_only_paths=read_only_paths,
+        read_only_paths=read_only_paths, repo=repo,
     )
 
     for index, keyword in ((1, "then"), (2, "else")):
@@ -823,11 +853,17 @@ def validate_test_paths(words: list[str], allowed: list[str], read_only_paths: l
         candidate = test_words[index + 1].replace("\\", "/")
         if not candidate or PurePosixPath(candidate).is_absolute() \
                 or any(part in {"", ".", ".."} for part in candidate.split("/")):
+            if _path_is_absolute(candidate):
+                fail("acceptance file operand is outside the allowed tree")
             fail(f"acceptance file operand is outside the allowed tree: {candidate!r}")
         roots = [*allowed, *read_only_paths]
         if not under(candidate, roots):
+            if _path_is_absolute(candidate):
+                fail("acceptance file operand is outside the allowed tree")
             fail(f"acceptance file operand is outside the allowed tree: {candidate}")
         if repo is not None and not resolved_under(repo, candidate, roots):
+            if _path_is_absolute(candidate):
+                fail("acceptance file operand resolves outside the allowed tree")
             fail(f"acceptance file operand resolves outside the allowed tree: {candidate}")
 
 
@@ -946,41 +982,12 @@ def main() -> int:
             # its CLI refusal.  This is deliberately shared by strict and legacy direct modes;
             # only the typed semicolon conditional below remains a legacy-only surface.
             for words in parsed_segments:
-                # Preserve the lexical spelling for controller-owned program paths before the
-                # Phase 2 argv checks classify worker-owned commands.
-                candidate = entrypoint(words, args.strict_direct)
-                if candidate:
-                    candidate_path = PurePosixPath(candidate)
-                    candidate_parts = candidate.split("/")
-                    if candidate_path.is_absolute():
-                        candidate_parts = candidate_parts[1:]
-                    if any(part in {"", ".", ".."} for part in candidate_parts):
-                        fail(f"acceptance program uses an unsafe path: {candidate}")
-                    if candidate_path.is_absolute():
-                        if controller_root is None:
-                            fail("absolute acceptance program lacks a controller root")
-                        try:
-                            relative = Path(os.path.abspath(candidate)).relative_to(
-                                Path(os.path.abspath(str(controller_root)))
-                            ).as_posix()
-                        except ValueError:
-                            fail(f"acceptance program is outside the controller root: {candidate}")
-                        except OSError:
-                            fail(f"acceptance program is unavailable: {candidate}")
-                        if relative not in controller_gate_files:
-                            fail(f"controller acceptance program must be declared: {relative}")
-                    elif not under(candidate, allowed):
-                        fail(f"acceptance program is outside the allowed tree: {candidate}")
-                    elif args.repo and not resolved_under(
-                            Path(args.repo), candidate, allowed):
-                        fail(f"acceptance program resolves outside the allowed tree: {candidate}")
-                    elif candidate not in gate_files:
-                        fail(f"worker-modifiable gate program must be declared in gate_files: {candidate}")
                 validate_direct_argv(
                     words, allowed=allowed, gate_files=gate_files,
                     controller_root=str(controller_root) if controller_root else None,
                     controller_gate_files=controller_gate_files,
                     read_only_paths=read_only_paths,
+                    repo=Path(args.repo) if args.repo else None,
                 )
                 validate_test_paths(
                     words, allowed, read_only_paths, Path(args.repo) if args.repo else None,
@@ -995,6 +1002,7 @@ def main() -> int:
                 controller_root=str(controller_root) if controller_root else None,
                 controller_gate_files=controller_gate_files,
                 read_only_paths=read_only_paths,
+                repo=Path(args.repo) if args.repo else None,
             )
         hashes: dict[str, str] = {}
         if args.repo:
