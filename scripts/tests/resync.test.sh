@@ -447,7 +447,7 @@ id: $1
 workstream: resynctest
 goal: prove the freshness precondition
 engine: none
-acceptance: true
+acceptance: test -s f.txt
 repo: $2
 workdir: .
 autonomy: auto
