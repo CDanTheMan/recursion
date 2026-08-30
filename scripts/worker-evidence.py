@@ -24,12 +24,12 @@ class FirstPartyImportError(ImportError):
 try:
     from phase5_safety import (BoundaryError, atomic_write, decode_json,
                                read_bytes, ensure_directory, absolute_lexical, MAX_JSON_BYTES)
-    from assignment import (AssignmentError, canonical_bytes, load_assignment,
-                            validate_assignment as assignment_validate,
-                            validate_bound_gate_files,
-                            validate_execution_evidence as assignment_execution_evidence)
+    from assignment_contract import (AssignmentError, canonical_bytes, load_assignment,
+                                     validate_assignment as assignment_validate,
+                                     validate_bound_gate_files,
+                                     validate_execution_evidence as assignment_execution_evidence)
 except Exception as exc:
-    module_name = getattr(exc, "name", None) or "phase5_safety/assignment"
+    module_name = getattr(exc, "name", None) or "phase5_safety/assignment_contract"
     import_error = FirstPartyImportError(
         f"first-party module '{module_name}' is unavailable or malformed; searched {sys_path}"
     )

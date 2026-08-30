@@ -22,7 +22,7 @@ mkdir -p "$BIN" "$R/scripts/tests" "$R/state/tasks" "$R/state/runs" \
 for s in work.sh worker-sandbox.sh phase5_safety.py taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh \
          git-scope.py validate-gate.py validate-worker-result.py validate-verifier-result.py \
          resolve-model-alias.py worker-evidence.py seed_contract.py project-pilot.py engine_contract.py \
-         pilot_instruction.py project_authority.py assignment.py provider-egress.py provider-egress-profiles.json capacity-pools.json; do
+         pilot_instruction.py project_authority.py assignment_contract.py provider-egress.py provider-egress-profiles.json capacity-pools.json; do
   [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$R/scripts/"
 done
 chmod +x "$R/scripts/"* 2>/dev/null || true

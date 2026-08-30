@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-import assignment
+import assignment_contract
 try:
     import fcntl  # type: ignore  # noqa: F401
 except ImportError:
@@ -68,7 +68,7 @@ def valid_assignment(repo: Path, controller: Path) -> dict:
                      "acceptance_sha256": hashlib.sha256(b"bash scripts/gate.sh").hexdigest(),
                      "gate_files": {"scripts/gate.sh": hashlib.sha256(gate_bytes).hexdigest()},
                      "controller_gate_files": {}}
-    gate_digest = hashlib.sha256(assignment.canonical_bytes(gate_contract)).hexdigest()
+    gate_digest = hashlib.sha256(assignment_contract.canonical_bytes(gate_contract)).hexdigest()
     role = {"engine": "cursor", "provider": "cursor", "model": "cursor-primary",
             "network_policy": "provider-only", "network_profile": "cursor",
             "argv": ["{{EXE}}", "-p", "{{PROMPT}}", "--output-format", "text", "--force",
@@ -135,26 +135,26 @@ def main() -> int:
         executable = source / "cursor-agent"; executable.write_text("#!/bin/sh\n", encoding="utf-8")
         executable.chmod(0o755)
         value = valid_assignment(source, controller)
-        first = assignment.digest(value)
+        first = assignment_contract.digest(value)
         tampered = dict(value); tampered["host"] = "cursor-cloud"
-        check(assignment.digest(tampered) != first, "assignment digest changes when host is tampered")
+        check(assignment_contract.digest(tampered) != first, "assignment digest changes when host is tampered")
         bad_pool = dict(value); bad_pool["capacity_pool"] = "unassigned"
-        try: assignment.validate_assignment(bad_pool)
-        except assignment.AssignmentError: pass
+        try: assignment_contract.validate_assignment(bad_pool)
+        except assignment_contract.AssignmentError: pass
         else: raise AssertionError("arbitrary pool accepted")
         fake = dict(value)
         fake["gate_contract"] = {"acceptance": "true",
             "acceptance_sha256": hashlib.sha256(b"true").hexdigest(),
             "gate_files": {}, "controller_gate_files": {}}
-        fake["gate_digest"] = hashlib.sha256(assignment.canonical_bytes(fake["gate_contract"])).hexdigest()
-        try: assignment.validate_assignment(fake)
-        except assignment.AssignmentError: pass
+        fake["gate_digest"] = hashlib.sha256(assignment_contract.canonical_bytes(fake["gate_contract"])).hexdigest()
+        try: assignment_contract.validate_assignment(fake)
+        except assignment_contract.AssignmentError: pass
         else: raise AssertionError("fabricated true/empty gate contract accepted")
         bad_role = dict(value); bad_role["role_assignments"] = {"implementer": value["role_assignments"]["implementer"],
             "verifier": {"engine":"gemini", "provider":"google-gemini", "model":"review",
                          "network_profile":"gemini", "network_endpoints":["generativelanguage.googleapis.com"]}}
-        try: assignment.validate_assignment(bad_role)
-        except assignment.AssignmentError: pass
+        try: assignment_contract.validate_assignment(bad_role)
+        except assignment_contract.AssignmentError: pass
         else: raise AssertionError("role provider outside pool accepted")
         for label, mutation in (
             ("nonexistent source commit", {"source_sha": "f" * 40}),
@@ -163,20 +163,20 @@ def main() -> int:
             ("wrong gate digest", {"gate_digest": "0" * 64}),
         ):
             bad = dict(value); bad.update(mutation)
-            try: assignment.validate_assignment(bad)
-            except assignment.AssignmentError: pass
+            try: assignment_contract.validate_assignment(bad)
+            except assignment_contract.AssignmentError: pass
             else: raise AssertionError(f"{label} accepted")
 
         wrong_branch = dict(value); wrong_branch["source_branch"] = "develop"
-        try: assignment.validate_assignment(wrong_branch)
-        except assignment.AssignmentError: pass
+        try: assignment_contract.validate_assignment(wrong_branch)
+        except assignment_contract.AssignmentError: pass
         else: raise AssertionError("syntactically valid wrong source branch accepted")
 
         alternate = tmp / "alternate-controller"
         subprocess.run(["git", "clone", "-q", str(controller), str(alternate)], check=True)
         alternate_value = dict(value); alternate_value["controller_repository"] = str(alternate)
-        try: assignment.validate_assignment(alternate_value)
-        except assignment.AssignmentError: pass
+        try: assignment_contract.validate_assignment(alternate_value)
+        except assignment_contract.AssignmentError: pass
         else: raise AssertionError("alternate canonical controller root accepted")
         for relative, label in (
             ("scripts/provider-egress-profiles.json", "provider profile"),
@@ -187,8 +187,8 @@ def main() -> int:
             original_policy = tampered_policy.read_bytes()
             tampered_policy.write_bytes(original_policy + b"\n")
             try:
-                assignment.validate_assignment(value)
-            except assignment.AssignmentError: pass
+                assignment_contract.validate_assignment(value)
+            except assignment_contract.AssignmentError: pass
             else: raise AssertionError(f"tampered controller {label} accepted")
             tampered_policy.write_bytes(original_policy)
 
@@ -277,7 +277,7 @@ def main() -> int:
 
         assignment_path = tmp / "assignment.json"
         assignment_path.write_text(json.dumps(value), encoding="utf-8")
-        assigned, assigned_digest = assignment.load_assignment(assignment_path)
+        assigned, assigned_digest = assignment_contract.load_assignment(assignment_path)
         check(assigned_digest == first, "assignment file digest is stable after serialization")
         evidence = tmp / "evidence.json"
         cmd = [sys.executable, str(ROOT / "scripts/worker-evidence.py"), "start",
@@ -380,25 +380,25 @@ def main() -> int:
         claude["capacity_pool"] = "claude-max"
         claude["network_profile"] = "anthropic"
         claude["network_endpoints"] = ["api.anthropic.com"]
-        claude["argv"] = list(assignment.CLAUDE_ARGV) + ["--model", "{{MODEL}}"]
+        claude["argv"] = list(assignment_contract.CLAUDE_ARGV) + ["--model", "{{MODEL}}"]
         for role_spec in claude["role_assignments"].values():
             role_spec.update(engine="claude", provider="anthropic-claude-code",
                               network_policy="provider-only", network_profile="anthropic",
                               network_endpoints=["api.anthropic.com"],
                               argv=list(claude["argv"]), model="cursor-primary")
         controller_sha = subprocess.check_output(["git", "-C", str(controller), "rev-parse", "HEAD"], text=True).strip()
-        check(assignment._engine_binding("claude", str(controller), controller_sha)[4]
-              == assignment.CLAUDE_ARGV,
+        check(assignment_contract._engine_binding("claude", str(controller), controller_sha)[4]
+              == assignment_contract.CLAUDE_ARGV,
               "builtin Claude binding exposes its exact hardcoded argv")
         try:
-            assignment.validate_assignment(claude)
-        except assignment.AssignmentError as exc:
+            assignment_contract.validate_assignment(claude)
+        except assignment_contract.AssignmentError as exc:
             raise AssertionError(f"exact builtin Claude argv was rejected: {exc}")
         attacker_argv = copy.deepcopy(claude)
         attacker_argv["argv"] = ["ATTACKER"]
         try:
-            assignment.validate_assignment(attacker_argv)
-        except assignment.AssignmentError:
+            assignment_contract.validate_assignment(attacker_argv)
+        except assignment_contract.AssignmentError:
             pass
         else:
             raise AssertionError("builtin Claude accepted attacker-controlled argv")

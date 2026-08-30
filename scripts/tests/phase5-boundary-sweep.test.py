@@ -47,7 +47,7 @@ def discover_bash() -> str | None:
 BASH = discover_bash()
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import assignment
+import assignment_contract
 import phase5_safety
 
 
@@ -94,7 +94,7 @@ def run_command(command: list[str | Path], *, env: dict[str, str] | None = None,
 def expect_typed(call, label: str, marker: str) -> None:
     try:
         call()
-    except (assignment.AssignmentError, phase5_safety.BoundaryError,
+    except (assignment_contract.AssignmentError, phase5_safety.BoundaryError,
             resolver.ManifestError, runtime_layout.LayoutError, ValueError,
             LookupError, SystemExit) as exc:
         check(marker in str(exc), f"typed refusal identifies {label}")
@@ -227,7 +227,7 @@ def run_json_cli_sweep(scratch: Path) -> None:
               f"worker evidence typed refusal for {label}")
 
         try:
-            expect_typed(lambda: assignment.load_assignment(run_path), f"assignment loader {label}",
+            expect_typed(lambda: assignment_contract.load_assignment(run_path), f"assignment loader {label}",
                          "assignment")
         except AssertionError:
             raise
@@ -324,8 +324,9 @@ def _enumerated_shell_auth_paths(source: Path) -> set[str]:
 
 
 def _enumerated_controller_paths(extra_shell_sources: tuple[Path, ...] = ()) -> set[str]:
+    # This path is deliberate: it names Phase 5's contract module, not Phase 3's execution module.
     sources = (
-        ROOT / 'scripts' / 'assignment.py',
+        ROOT / 'scripts' / 'assignment_contract.py',
         ROOT / 'scripts' / 'resolve-engine.py',
         ROOT / 'scripts' / 'provider-egress.py',
     )
@@ -429,10 +430,10 @@ def run_path_sweep(scratch: Path) -> None:
                      f"manifest path {label}", "relative path")
         expect_typed(lambda value=value: validate_gate.paths(value), f"gate path {label}",
                      "unsafe gate file")
-        expect_typed(lambda value=value: assignment._validate_allowed_paths([value]),
+        expect_typed(lambda value=value: assignment_contract._validate_allowed_paths([value]),
                      f"assignment path {label}", "allowed_paths is")
 
-    check(assignment._validate_allowed_paths(["scripts"]) == ["scripts"],
+    check(assignment_contract._validate_allowed_paths(["scripts"]) == ["scripts"],
           "legitimate assignment allowed_paths validation succeeds")
 
     source = scratch / "layout-source"
@@ -653,7 +654,7 @@ def make_assignment_fixture(scratch: Path) -> tuple[Path, Path, dict, str]:
         "host": "gs-recursion", "sandbox_profile": "strict-linux", "network_policy": "provider-only",
         "network_profile": "cursor", "network_endpoints": list(role["network_endpoints"]),
         "argv": list(role["argv"]), "allowed_paths": ["scripts"],
-        "gate_digest": hashlib.sha256(assignment.canonical_bytes(gate_contract)).hexdigest(),
+        "gate_digest": hashlib.sha256(assignment_contract.canonical_bytes(gate_contract)).hexdigest(),
         "gate_contract": gate_contract,
         "role_assignments": {"implementer": role, "verifier": dict(role)},
         "publication_policy": "verified-integration-only",
@@ -706,7 +707,7 @@ def run_sidecar_battery(scratch: Path) -> None:
     os.environ.pop("RECURSION_EVIDENCE_KEY_FILE", None)
     assignment_path = scratch / "assignment.json"
     assignment_path.write_text(json.dumps(value), encoding="utf-8")
-    normalized, digest = assignment.load_assignment(assignment_path)
+    normalized, digest = assignment_contract.load_assignment(assignment_path)
     evidence = scratch / "evidence.json"
     start_command = [
         PYTHON, ROOT / "scripts" / "worker-evidence.py", "start", "--path", evidence,
@@ -758,7 +759,7 @@ def run_sidecar_battery(scratch: Path) -> None:
     other_value["task_id"] = "task-2"
     other_assignment = scratch / "assignment-other.json"
     other_assignment.write_text(json.dumps(other_value), encoding="utf-8")
-    _, other_digest = assignment.load_assignment(other_assignment)
+    _, other_digest = assignment_contract.load_assignment(other_assignment)
     other_evidence = scratch / "evidence-other.json"
     other_start = [item for item in start_command]
     other_start[other_start.index("--path") + 1] = other_evidence

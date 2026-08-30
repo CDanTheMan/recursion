@@ -39,10 +39,10 @@ from transition_receipt import (
 from seed_contract import SeedContractError, copy_seed_paths, validate_contract
 try:
     from phase5_safety import BoundaryError, atomic_write
-    from assignment import (AssignmentError, canonical_bytes, load_assignment,
-                             validate_execution_evidence)
+    from assignment_contract import (AssignmentError, canonical_bytes, load_assignment,
+                                     validate_execution_evidence)
 except Exception as exc:
-    module_name = getattr(exc, "name", None) or "phase5_safety/assignment"
+    module_name = getattr(exc, "name", None) or "phase5_safety/assignment_contract"
     if __name__ == "__main__":
         print(f"project-reconcile: first-party module '{module_name}' is unavailable or malformed",
               file=sys.stderr)

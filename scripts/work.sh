@@ -1016,7 +1016,7 @@ PY
      "$verifier_profile" "$verifier_endpoints" "$RESOLVED_VERIFIER_MODEL" \
      "$impl_policy" "$verifier_policy" "$impl_argv" "$verifier_argv" <<'PY'
 import hashlib, json, os, sys, tempfile
-from assignment import digest, validate_assignment
+from assignment_contract import digest, validate_assignment
 (path, task, project, repo, branch, sha, controller_repo, controller_sha, seed, engine, provider, pool, host, sandbox, profile,
  paths, endpoints, gate_contract, _, model, verifier_engine, verifier_provider, verifier_profile,
  verifier_endpoints, verifier_model, impl_policy, verifier_policy, impl_argv_json, verifier_argv_json) = sys.argv[1:]
@@ -1590,7 +1590,7 @@ phase5_gate_files_unchanged(){
   [ -n "$ASSIGNMENT_FILE" ] || return 1
   PYTHONPATH="$ROOT/scripts" python3 - "$ASSIGNMENT_FILE" "$1" <<'PY'
 import sys
-from assignment import AssignmentError, load_assignment, validate_bound_gate_files
+from assignment_contract import AssignmentError, load_assignment, validate_bound_gate_files
 
 try:
     assignment, _ = load_assignment(sys.argv[1])
