@@ -72,6 +72,9 @@ def authenticated_profile_bytes(root: Path, commit: str) -> bytes:
                                 capture_output=True, check=False)
     rows = [row for row in tree.stdout.split(b"\0") if row]
     mode = rows[0].split(b" ", 1)[0] if len(rows) == 1 else b""
+    # Defense in depth: an unexpected row count sets mode to b"", so the following
+    # mode not in {b"100644", b"100755"} guard rejects the same malformed tree.
+    # Keep this row-count refusal if that mode guard is narrowed.
     if head.returncode or head.stdout.strip() != commit or tree.returncode or committed.returncode or len(rows) != 1 \
             or mode not in {b"100644", b"100755"} or live != committed.stdout:
         raise ValueError("provider profile registry differs from controller commit")

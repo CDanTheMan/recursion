@@ -29,9 +29,15 @@ def controller_provenance() -> tuple[str, str]:
             )
         except (OSError, subprocess.SubprocessError) as exc:
             raise ValueError("controller policy provenance is unavailable") from exc
+        # Defense in depth: COMMIT_RE below also rejects the empty/non-hash stdout
+        # produced by a failed git rev-parse. Keep this status refusal explicit so
+        # a future change to that syntax guard cannot turn a failed lookup into a pin.
         if observed.returncode != 0:
             raise ValueError("controller policy provenance is unavailable")
         controller_commit = observed.stdout.strip()
+    # Defense in depth: provider-egress.py's authenticated_profile_bytes() has a
+    # downstream Git status/ref guard (including head.stdout.strip() != commit).
+    # Keep this input-boundary syntax refusal explicit if that guard is narrowed.
     if not COMMIT_RE.fullmatch(controller_commit):
         raise ValueError("controller policy provenance is invalid")
     return controller_root, controller_commit
@@ -49,9 +55,18 @@ def main() -> int:
         for endpoint in endpoints:
             resolver += ["--endpoint", endpoint]
         resolved = subprocess.run(resolver, capture_output=True, text=True, check=False)
+        # Defense in depth: the current provider-egress CLI emits no JSON stdout on
+        # a non-zero result, so json.loads(resolved.stdout) is the downstream guard
+        # for this same failed-resolution shape. Keep this status refusal if that
+        # parser guard is narrowed.
         if resolved.returncode != 0:
             raise ValueError("provider profile resolution failed")
         item = json.loads(resolved.stdout)
+        # NOT dead, despite being unreachable from the current child: this guard sits inside the
+        # try, so it converts a malformed resolver payload into the typed rc=96 refusal below.
+        # item["endpoints"], item["namespace"] and item["proxy_port"] are all read AFTER the
+        # handler ends, so without it a non-dict payload raises uncaught and leaks a traceback
+        # with absolute paths -- the exact input-boundary defect this phase already fixed once.
         if not isinstance(item, dict) or not isinstance(item.get("endpoints"), list):
             raise ValueError("provider profile is malformed")
     except (OSError, subprocess.SubprocessError, ValueError, TypeError,
