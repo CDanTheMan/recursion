@@ -413,12 +413,39 @@ result="$(done_result heavy '["app/heavy.txt"]')"
 RECURSION_HEAVY_WAIT_S=0 run_case heavy-contention \
   "printf ok > app/heavy.txt; printf '%s' '$result' > .recursion-result.json" "$verdict_script"
 heavy_rc=$?
-heavy_gate_evidence="$(grep -l '"machine_gate"' "$R/state/runs"/heavy-contention-impl-*.json 2>/dev/null || true)"
+heavy_gate_evidence="$(
+  python3 - "$R/state/runs" <<'PY'
+import glob
+import json
+import sys
+
+primary = None
+for path in sorted(glob.glob(sys.argv[1] + "/heavy-contention-impl-*.json")):
+    if path.endswith(("-result.json", "-scope.json")):
+        continue
+    try:
+        with open(path, encoding="utf-8") as stream:
+            record = json.load(stream)
+    except (OSError, json.JSONDecodeError):
+        continue
+    if isinstance(record, dict) and record.get("role") == "implementer":
+        primary = record
+        break
+if primary is None:
+    print("missing")
+elif "machine_gate" in primary:
+    print("recorded")
+else:
+    print("absent")
+PY
+)"
 if [ "$heavy_rc" = 75 ] && [ "$(status_of heavy-contention)" = running ] \
-   && [ -d "$R/.worktrees/heavy-contention" ] && [ -z "$heavy_gate_evidence" ]; then
+   && [ -d "$R/.worktrees/heavy-contention" ] && [ "$heavy_gate_evidence" = absent ]; then
   ok "contended heavy gate defers without executing unlocked"
+elif [ "$heavy_gate_evidence" = missing ]; then
+  no "contended heavy gate missing primary implementer run record (no controller evidence)"
 else
-  no "contended heavy gate did not fail closed (rc=$heavy_rc status=$(status_of heavy-contention) gate_evidence=$([ -n "$heavy_gate_evidence" ] && echo recorded || echo absent))"
+  no "contended heavy gate did not fail closed (rc=$heavy_rc status=$(status_of heavy-contention) gate_evidence=$heavy_gate_evidence)"
 fi
 mv "$R/scripts/capacity.real.sh" "$R/scripts/capacity.sh"
 mv "$R/scripts/notify.real.sh" "$R/scripts/notify.sh"
