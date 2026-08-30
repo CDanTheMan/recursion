@@ -35,6 +35,47 @@ def witness(lock: Path, pid: int) -> None:
     (lock / "start").write_text(f"{start}\n", encoding="ascii")
 
 
+def pinned_parent_must_match_its_path(parent: Path) -> str | None:
+    """A descriptor handed to the publisher is a name, and must be bound to an identity.
+
+    The pinned API accepts a caller-owned parent descriptor. Before it bound st_dev/st_ino,
+    the descriptor was validated once as "some directory" and then trusted for every relative
+    open, rename and cleanup -- so a descriptor for directory B, supplied with a path under
+    directory A, was accepted and operated on B. This supplies exactly that mismatch.
+    """
+    runtime = import_runtime()
+    a = parent / "pin-a" / ".locks"
+    b = parent / "pin-b" / ".locks"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+    wrong = os.open(str(b), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        runtime.acquire_witnessed_directory_lock(
+            a / "bound.lock", "bound", os.getpid(), pinned_parent_fd=wrong)
+    except RuntimeError as exc:
+        if "does not match its descriptor" not in str(exc):
+            return f"mismatched parent descriptor refused for the wrong reason: {exc}"
+        if (b / "bound.lock").exists():
+            return "refused, but the lock was still published under the descriptor's directory"
+        return None
+    except Exception as exc:  # noqa: BLE001 - any other type is itself the finding
+        return f"mismatched parent descriptor raised {type(exc).__name__}: {exc}"
+    else:
+        published = "b" if (b / "bound.lock").exists() else "a" if (a / "bound.lock").exists() else "nowhere"
+        return f"a descriptor for another directory was accepted; lock published in {published}"
+    finally:
+        os.close(wrong)
+
+
+def import_runtime():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "recursion_runtime_state", SOURCE / "scripts/runtime-state.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def contended_pause_defers_without_a_traceback(parent: Path) -> str | None:
     """A held remote-state lock must defer the PAUSE writer, not leak a RuntimeError.
 
@@ -76,6 +117,12 @@ def main() -> int:
             print(f"FAIL  {drift}")
             return 1
         print("ok    a contended remote-state lock defers the PAUSE writer with exit 75")
+
+        mismatch = pinned_parent_must_match_its_path(parent)
+        if mismatch is not None:
+            print(f"FAIL  {mismatch}")
+            return 1
+        print("ok    a pinned parent descriptor for another directory is refused")
 
         (root / "state/.locks").mkdir(parents=True)
         (root / "state/PAUSE").write_text("test pause\n", encoding="utf-8")
