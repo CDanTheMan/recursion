@@ -12,7 +12,7 @@ import json
 import re
 from pathlib import Path
 
-from jsonl_durable import read_durable_bytes
+from jsonl_durable import JsonlDurabilityError, read_durable_bytes
 
 BUILTIN_ENGINES = frozenset({"claude", "hermes", "gate", "none", "deepseek", "openrouter"})
 ENGINE_NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
@@ -59,8 +59,14 @@ def _load_registry(registry_path: Path | str) -> dict[str, frozenset[str]] | Non
             encoded.decode("utf-8"),
             parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
         )
-    except (OSError, ValueError, TypeError, OverflowError, RecursionError,
-            UnicodeDecodeError):
+    except (JsonlDurabilityError, OSError, ValueError, TypeError, OverflowError,
+            RecursionError, UnicodeDecodeError):
+        # read_durable_bytes raises JsonlDurabilityError (a RuntimeError subclass) when the
+        # registry path is a reparse point or carries traversal components.  Without it here,
+        # an unsafe registry path escapes as a raw traceback and absolute path, violating this
+        # function's documented swallow-to-None contract and leaking at the callers'
+        # (validate-control-state, project-pilot) boundaries.  RecursionError is a sibling of
+        # JsonlDurabilityError under RuntimeError and does not cover it.
         return None
     if not isinstance(raw, dict) or raw.get("schema_version") != 1:
         return None
