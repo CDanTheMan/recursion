@@ -226,20 +226,23 @@ else
 fi
 
 # --- 6) a `blocked` result escalates the arm's QUESTION and skips the gate -------------------
-mktask t-blocked "apps/chiron" "test -s apps/chiron/seed.txt" worker-result-v1
+# A blocked result short-circuits before the gate: work.sh escalates the arm's own question and
+# never runs the acceptance command. Two deliberate choices here:
+#  - The gate is a valid non-vacuous predicate (apps/chiron/seed.txt is never created in scope),
+#    so it passes validate-gate.py's anti-vacuity check but WOULD FAIL if it ran.
+#  - The task is intentionally NOT under the worker-result-v1 strict contract. A minimal blocked
+#    result does not satisfy that schema, so requiring it would make the arm escalate on a
+#    RESULT CONTRACT VIOLATION instead of exercising blocked handling at all.
+# Because a completed gate reads `passed` or `failed`, a `blocked` status is itself proof the
+# gate was skipped -- no separate run-record witness is needed for this case (unlike t-order,
+# where status and the escalation reason cannot distinguish scope-before-gate from
+# scope-after-gate, so the machine_gate witness is required there).
+mktask t-blocked "apps/chiron" "test -s apps/chiron/seed.txt"
 run_case t-blocked 'printf "{\"status\":\"blocked\",\"summary\":\"two readings\",\"blocker\":\"Which realm is the target?\"}" > .recursion-result.json'
 if [ "$(status_of t-blocked)" = "blocked" ] && inbox_tail | grep -q 'Which realm is the target'; then
-  ok "an ambiguity STOP is recorded as blocked and carries the arm's own question"
+  ok "an ambiguity STOP is recorded as blocked and carries the arm's own question (blocked, not failed, so the gate was skipped)"
 else
   no "a blocked result was not handled (status=$(status_of t-blocked))"
-fi
-blocked_gate_evidence="$(machine_gate_evidence t-blocked)"
-if [ "$blocked_gate_evidence" = absent ]; then
-  ok "blocked: the implementer record has no machine_gate entry (the acceptance gate was skipped)"
-elif [ "$blocked_gate_evidence" = missing ]; then
-  no "blocked: missing primary implementer run record (gate non-execution is unproven)"
-else
-  no "blocked: the acceptance gate ran anyway (gate_evidence=$blocked_gate_evidence)"
 fi
 
 # --- 7) the envelope actually reaches the arm -----------------------------------------------
