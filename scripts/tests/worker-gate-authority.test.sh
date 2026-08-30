@@ -10,8 +10,15 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 
 # Project contention is a retryable defer, never a successful no-op.
 R="$TMP/controller"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/state/.locks/project-alpha.lock" "$R/loop/logs"
-cp "$SRC/scripts/work.sh" "$R/scripts/"
-cp "$SRC/scripts/runtime-state.py" "$R/scripts/"
+for s in assignment.py assist.sh author.sh board.sh capacity.sh conduct.sh engine_contract.py git-scope.py \
+  instruction_routing.py intake.sh jsonl_durable.py notify.sh pilot_instruction.py plan.sh project-pilot.py \
+  project-reconcile.py project_authority.py provider-connect-proxy.py provider-network.sh publish.sh \
+  remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
+  seed_contract.py taskctl.sh transition_receipt.py validate-assignment-result.py validate-control-state.py \
+  validate-decision.py validate-gate.py validate-verifier-result.py validate-worker-result.py work.sh \
+  worker-evidence.py worker-sandbox.sh; do
+  cp "$SRC/scripts/$s" "$R/scripts/"
+done
 : > "$R/.env"
 cat > "$R/state/tasks/task-a.md" <<'TASK'
 id: task-a
@@ -32,6 +39,7 @@ fi
 # provider-only cannot degrade to the host network when the operator capability is absent.
 N="$TMP/network-controller"; mkdir -p "$N/scripts" "$N/worktree"
 cp "$SRC/scripts/worker-sandbox.sh" "$N/scripts/"
+cp "$SRC/scripts/provider-network.sh" "$N/scripts/"
 network_rc=0
 RECURSION_ROOT="$N" RECURSION_TEST_WORKER=logical \
   bash "$N/scripts/worker-sandbox.sh" --engine claude --role implementer \

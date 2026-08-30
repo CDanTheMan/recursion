@@ -168,7 +168,16 @@ fi
 # --- cycle.sh: one date, one owner, and no lock inherited by background continuations --------
 C="$TMP/cycle-root"
 mkdir -p "$C/scripts" "$C/loop/supervisor" "$C/loop/logs" "$C/state/tasks" "$C/state/.locks"
-cp "$SRC/scripts/cycle.sh" "$C/scripts/cycle.sh"
+for s in assignment.py assist.sh author.sh board.sh capacity.sh conduct.sh cycle.sh digest.sh engine_contract.py \
+  git-scope.py instruction_routing.py intake.sh jsonl_durable.py notify.sh pilot_instruction.py plan.sh \
+  board-summary.sh \
+  project-pilot.py project-reconcile.py project_authority.py provider-connect-proxy.py provider-network.sh \
+  publish.sh remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh reflect.sh resume.sh \
+  drain.sh run_contract.py runtime-state.py seed_contract.py taskctl.sh transition_receipt.py \
+  validate-assignment-result.py validate-control-state.py validate-decision.py validate-gate.py \
+  validate-verifier-result.py validate-worker-result.py work.sh worker-evidence.py worker-sandbox.sh; do
+  cp "$SRC/scripts/$s" "$C/scripts/"
+done
 cat > "$C/scripts/board.sh" <<'STUB'
 #!/usr/bin/env bash
 exit 0

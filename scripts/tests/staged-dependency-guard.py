@@ -136,6 +136,8 @@ def shell_dependencies(path: Path, names: dict[str, Path], source: Path) -> set[
             found.add("@path:" + relative)
 
     for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
         if not SHELL_INVOCATION_RE.search(line):
             continue
         for match in SHELL_PATH_RE.finditer(line):

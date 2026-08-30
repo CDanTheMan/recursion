@@ -31,6 +31,8 @@ R="$TMP/root"
 mkdir -p "$R/scripts" "$R/state/roadmaps" "$R/state/tasks" "$R/state/goals" "$R/state/.locks"
 cp "$SRC/scripts/plan.sh" "$R/scripts/"
 cp "$SRC/scripts/runtime-state.py" "$R/scripts/"
+cp "$SRC/scripts/transition_receipt.py" "$R/scripts/"
+cp "$SRC/scripts/jsonl_durable.py" "$R/scripts/"
 chmod +x "$R"/scripts/plan.sh "$R"/scripts/runtime-state.py 2>/dev/null
 
 # The planner lock witnesses the caller's process start time before it will hold a lock. Under

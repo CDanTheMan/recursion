@@ -47,18 +47,39 @@ R="$TMP/repo"; mkdir -p "$R/scripts/tests" "$R/apps/chiron" "$R/other" "$R/state
 cp "$SRC/scripts/work.sh" "$R/scripts/"
 cp "$SRC/scripts/worker-sandbox.sh" "$R/scripts/"
 chmod +x "$R/scripts/worker-sandbox.sh"
-cp "$SRC/scripts/board.sh" "$R/scripts/" 2>/dev/null || true
-cp "$SRC/scripts/notify.sh" "$R/scripts/" 2>/dev/null || true
-cp "$SRC/scripts/taskctl.sh" "$R/scripts/" 2>/dev/null || true
-cp "$SRC/scripts/jsonl_durable.py" "$R/scripts/" 2>/dev/null || true
-cp "$SRC/scripts/transition_receipt.py" "$R/scripts/" 2>/dev/null || true
-cp "$SRC/scripts/runtime-state.py" "$R/scripts/" 2>/dev/null || true
-cp "$SRC/scripts/resync.sh" "$R/scripts/" 2>/dev/null || true
+cp "$SRC/scripts/board.sh" "$R/scripts/"
+cp "$SRC/scripts/notify.sh" "$R/scripts/"
+cp "$SRC/scripts/taskctl.sh" "$R/scripts/"
+cp "$SRC/scripts/jsonl_durable.py" "$R/scripts/"
+cp "$SRC/scripts/transition_receipt.py" "$R/scripts/"
+cp "$SRC/scripts/runtime-state.py" "$R/scripts/"
+cp "$SRC/scripts/resync.sh" "$R/scripts/"
 # resync's freshness gate shells the typed source-pin controller; without it (and its full
 # import closure) every task blocks at CANNOT PROVE FRESH before the envelope is ever
 # exercised. Hard cp: a silent skip here would reproduce exactly the failure this stages
 # against.
+# Everything below is also required by the reachable work/worker-sandbox closure: remote_evidence
+# reaches assignment.py, the evidence validators reach run_contract.py, and provider-network.sh
+# reaches provider-connect-proxy.py. These are hard copies deliberately; none is optional.
 cp "$SRC/scripts/project-pilot.py" "$R/scripts/"
+cp "$SRC/scripts/remote_evidence.py" "$R/scripts/"
+cp "$SRC/scripts/assignment.py" "$R/scripts/"
+cp "$SRC/scripts/assist.sh" "$R/scripts/"
+cp "$SRC/scripts/capacity.sh" "$R/scripts/"
+cp "$SRC/scripts/git-scope.py" "$R/scripts/"
+cp "$SRC/scripts/plan.sh" "$R/scripts/"
+cp "$SRC/scripts/project-reconcile.py" "$R/scripts/"
+cp "$SRC/scripts/publish.sh" "$R/scripts/"
+cp "$SRC/scripts/resolve-engine.py" "$R/scripts/"
+cp "$SRC/scripts/resolve-model-alias.py" "$R/scripts/"
+cp "$SRC/scripts/validate-assignment-result.py" "$R/scripts/"
+cp "$SRC/scripts/validate-gate.py" "$R/scripts/"
+cp "$SRC/scripts/validate-verifier-result.py" "$R/scripts/"
+cp "$SRC/scripts/validate-worker-result.py" "$R/scripts/"
+cp "$SRC/scripts/worker-evidence.py" "$R/scripts/"
+cp "$SRC/scripts/provider-network.sh" "$R/scripts/"
+cp "$SRC/scripts/provider-connect-proxy.py" "$R/scripts/"
+cp "$SRC/scripts/run_contract.py" "$R/scripts/"
 cp "$SRC/scripts/engine_contract.py" "$R/scripts/"
 cp "$SRC/scripts/pilot_instruction.py" "$R/scripts/"
 cp "$SRC/scripts/seed_contract.py" "$R/scripts/"

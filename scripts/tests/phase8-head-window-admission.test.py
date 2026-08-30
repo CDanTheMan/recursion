@@ -41,9 +41,17 @@ class HeadWindowAdmissionTest(unittest.TestCase):
         (self.root / "state/project-config").mkdir(parents=True)
         (self.root / "scripts").mkdir(parents=True)
         for name in (
-            "decision-queue.py", "hermes-decide.sh", "instruction_routing.py",
-            "jsonl_durable.py", "pilot_instruction.py", "transition_receipt.py",
-            "validate-control-state.py", "engine_contract.py",
+            "assignment.py", "assist.sh", "author.sh", "board.sh", "branch-review.sh",
+            "capacity.sh", "conduct-hermes.sh", "conduct.sh", "decision-queue.py",
+            "engine_contract.py", "git-scope.py", "hermes-decide.sh", "instruction_routing.py",
+            "intake.sh", "jsonl_durable.py", "notification-outbox.py", "notify.sh",
+            "pilot_instruction.py", "plan.sh", "project-pilot.py", "project-reconcile.py",
+            "project_authority.py", "provider-connect-proxy.py", "provider-network.sh", "publish.sh",
+            "remote_evidence.py", "resolve-engine.py", "resolve-model-alias.py", "resync.sh",
+            "run_contract.py", "runtime-state.py", "seed_contract.py", "taskctl.sh",
+            "transition_receipt.py", "validate-assignment-result.py", "validate-control-state.py",
+            "validate-decision.py", "validate-gate.py", "validate-verifier-result.py",
+            "validate-worker-result.py", "work.sh", "worker-evidence.py", "worker-sandbox.sh",
         ):
             shutil.copy2(SOURCE / "scripts" / name, self.root / "scripts" / name)
         (self.root / "state/PAUSE").write_text("paused for deterministic admission control\n", encoding="utf-8")
