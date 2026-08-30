@@ -274,9 +274,22 @@ def test_marker_tamper() -> tuple[bool, str]:
             return False, f"initial migration rc={first.returncode} markers={len(markers)}"
         value = json.loads(markers[0].read_text(encoding="utf-8"))
         value["disposition"] = "tampered"
-        markers[0].write_text(json.dumps(value) + "\n", encoding="utf-8")
+        tampered_bytes = json.dumps(value) + "\n"
+        markers[0].write_text(tampered_bytes, encoding="utf-8")
         second = fixture.run_queue()
-        return second.returncode != 0 and "marker" in second.stderr.lower(), second.stderr[-160:]
+        # Assert the property, not the prose. The CLI now emits one controlled refusal
+        # ("decision-queue: operation refused") and deliberately keeps the specific
+        # marker-mismatch text off a public boundary, so grepping stderr for "marker" tested the
+        # wording rather than the behaviour. What this control actually claims is in its name:
+        # the run fails closed AND the tampered marker is not rewritten to re-bless itself as
+        # migration evidence. Both are checked directly, and the second was never checked before.
+        failed_closed = second.returncode != 0
+        still_tampered = markers[0].read_text(encoding="utf-8") == tampered_bytes
+        marker_count_unchanged = len(sorted(
+            (fixture.root / "state/decision-queue/legacy").glob("*.json"))) == 5
+        detail = (f"rc={second.returncode} still_tampered={still_tampered} "
+                  f"markers={marker_count_unchanged} stderr={second.stderr[-100:]}")
+        return failed_closed and still_tampered and marker_count_unchanged, detail
     finally:
         fixture.close()
 
