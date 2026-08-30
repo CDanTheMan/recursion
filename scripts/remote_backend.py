@@ -334,21 +334,12 @@ def _safe_directory(path: Path) -> Path:
         return _lexical_absolute(path)
 
 
-def _pinned_directory_child(parent: _PinnedDirectory, name: str) -> Path:
-    """Address a child through a retained POSIX directory descriptor."""
-    if (os.name != "nt" and parent._relative and parent.descriptor is not None
-            and Path("/proc/self/fd").is_dir()):
-        return Path("/proc/self/fd") / str(parent.descriptor) / name
-    return parent.path / name
-
-
 def _pinned_directory_fd_for_child(parent: _PinnedDirectory | None,
                                     child: Path) -> int | None:
-    """Return the retained descriptor only for children explicitly rooted through it."""
+    """Return the retained descriptor for a child of the retained real pathname."""
     if parent is None or parent.descriptor is None:
         return None
-    expected_parent = Path("/proc/self/fd") / str(parent.descriptor)
-    if child.parent == expected_parent:
+    if child.parent == parent.path:
         return parent.descriptor
     return None
 
@@ -1106,16 +1097,17 @@ class RemoteStateLock:
         else:
             lock_parent = _PinnedDirectory(self.base / "state" / ".locks", create=True)
             lock_parent.__enter__()
-            candidate = _pinned_directory_child(lock_parent, "remote-state.lock")
+            # The runtime publisher binds this real pathname's parent identity to its duplicate
+            # at entry.  Publication and cleanup still use only the retained descriptor.
+            candidate = lock_parent.path / "remote-state.lock"
         acquired = False
         # One admission/state lock covers every remote backend and PAUSE writer.  A
         # backend-specific lock would leave the PAUSE transition racing a sender from the
         # other adapter.
         try:
             _safe_existing_lock(candidate)
-            # On POSIX candidate is rooted at /proc/self/fd/<pinned-parent>, so the
-            # runtime lock publisher receives the same retained parent descriptor and never
-            # re-resolves the checked parent pathname.
+            # On POSIX the runtime publisher binds this real parent pathname to the same
+            # retained descriptor, then uses only its own duplicate for publication.
             pinned_parent_fd = _pinned_directory_fd_for_child(lock_parent, candidate)
             runtime.acquire_witnessed_directory_lock(
                 candidate, "remote-state", os.getpid(), pinned_parent_fd=pinned_parent_fd
@@ -1130,17 +1122,18 @@ class RemoteStateLock:
             lock_parent = None
             return self
         except BaseException:
-            if acquired:
-                with contextlib.suppress(RuntimeError, OSError):
+            try:
+                if acquired:
                     runtime.release_witnessed_directory_lock(
                         candidate, "remote-state", os.getpid(),
                         pinned_parent_fd=_pinned_directory_fd_for_child(lock_parent, candidate)
                     )
-            if lock_parent is not None:
-                lock_parent.close()
-            if self._native_lock_parent_pins:
-                _win_close_lock_parent_pins(self._native_lock_parent_pins)
-                self._native_lock_parent_pins = []
+            finally:
+                if lock_parent is not None:
+                    lock_parent.close()
+                if self._native_lock_parent_pins:
+                    _win_close_lock_parent_pins(self._native_lock_parent_pins)
+                    self._native_lock_parent_pins = []
             raise
 
     def __exit__(self, *_: object) -> None:
