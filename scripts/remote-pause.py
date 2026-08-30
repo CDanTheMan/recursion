@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""PAUSE/resume interlock for the remote-adapter admission lock.
+"""PAUSE/resume interlock for the shared external-admission lock.
 
 The ordinary pause/resume scripts use this small local helper so a PAUSE transition and a
-remote outbound critical section have one ordering.  It performs no network I/O.
+remote outbound or offsite-backup critical section have one ordering.  It performs no network
+I/O.
 """
 
 from __future__ import annotations

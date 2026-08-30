@@ -31,6 +31,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+import remote_backend as rb
+
 if os.name == "nt":
     import ctypes
     import msvcrt
@@ -515,11 +521,14 @@ def _validate_canonical_directory(path: Path, label: str) -> Path:
 
 @contextlib.contextmanager
 def pause_transfer(root: Path):
-    """Atomically admit one external transfer while pause.sh is unable to race it."""
-    runtime = runtime_module()
-    lock = runtime.DirectoryLock(root / "state/.locks/pause-transfer.lock", "pause-transfer")
+    """Admit one external transfer under the shared PAUSE admission lock.
+
+    ``remote_backend.remote_state_lock`` is also held by remote outbound admission and by
+    ``remote-pause.py``.  Keeping it across the PAUSE check and the external transfer gives
+    backup, resume, and the adapters one linearization point without a second lock/order.
+    """
     try:
-        with lock:
+        with rb.remote_state_lock(root, "pause-control"):
             pause = root / "state/PAUSE"
             try:
                 pause_info = pause.lstat()
@@ -528,7 +537,7 @@ def pause_transfer(root: Path):
             if _is_reparse(pause_info) or not stat.S_ISREG(pause_info.st_mode):
                 raise BackupPolicyError("PAUSE admission is absent; refusing external transfer")
             yield
-    except RuntimeError as exc:
+    except (RuntimeError, rb.RemoteError) as exc:
         raise BackupPolicyError("PAUSE transfer admission failed") from exc
 
 
