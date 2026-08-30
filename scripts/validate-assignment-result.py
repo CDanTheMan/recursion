@@ -202,13 +202,21 @@ def _check_locked(args: argparse.Namespace) -> dict:
     # verifier work. Validate that worker interval here; using now_epoch() would measure the
     # end-to-end controller pipeline and reject a worker that completed within its arm budget.
     if deadline_epoch_ns is not None:
-        if args.received_at:
+        if worker_finished_epoch_ns is not None:
+            # The worker's completion witness is authoritative.  An override is permitted
+            # only as an additional, stricter observation; it can never make a late worker
+            # appear on time.
+            received_epoch_ns = worker_finished_epoch_ns
+            if args.received_at:
+                received_epoch = _epoch_of(args.received_at)
+                if received_epoch is None:
+                    raise RefusalError(2, f"invalid --received-at {args.received_at!r}")
+                received_epoch_ns = max(received_epoch_ns, received_epoch * NANOSECONDS)
+        elif args.received_at:
             received_epoch = _epoch_of(args.received_at)
             if received_epoch is None:
                 raise RefusalError(2, f"invalid --received-at {args.received_at!r}")
             received_epoch_ns = received_epoch * NANOSECONDS
-        elif worker_finished_epoch_ns is not None:
-            received_epoch_ns = worker_finished_epoch_ns
         else:
             received_epoch_ns = now_epoch_ns()
 
@@ -219,12 +227,18 @@ def _check_locked(args: argparse.Namespace) -> dict:
                 f"worker finished at {received_epoch_ns} is past the run deadline {boundary_ns}",
             )
     elif isinstance(deadline_epoch, int) and not isinstance(deadline_epoch, bool):
-        if args.received_at:
+        if worker_finished_epoch_ns is not None:
+            # Apply the same monotonic-stricter rule to legacy whole-second deadlines.
+            received_epoch = worker_finished_epoch_ns // NANOSECONDS
+            if args.received_at:
+                override_epoch = _epoch_of(args.received_at)
+                if override_epoch is None:
+                    raise RefusalError(2, f"invalid --received-at {args.received_at!r}")
+                received_epoch = max(received_epoch, override_epoch)
+        elif args.received_at:
             received_epoch = _epoch_of(args.received_at)
             if received_epoch is None:
                 raise RefusalError(2, f"invalid --received-at {args.received_at!r}")
-        elif worker_finished_epoch_ns is not None:
-            received_epoch = worker_finished_epoch_ns // NANOSECONDS
         else:
             received_epoch = now_epoch()
         if received_epoch > deadline_epoch:

@@ -201,6 +201,13 @@ def validate(kind: str, value: object) -> dict:
     if kind == "run":
         if "process_group" in value and (not isinstance(value["process_group"], int) or value["process_group"] < 0):
             fail("process_group must be a non-negative integer")
+        for field in ("deadline_epoch_ns", "worker_finished_epoch_ns"):
+            if field in value and (
+                isinstance(value[field], bool)
+                or not isinstance(value[field], int)
+                or value[field] < 0
+            ):
+                fail(f"{field} must be a non-negative integer")
         if value.get("status") != "prepared" and (not isinstance(value.get("pid"), int) or value["pid"] < 1
                                                      or not isinstance(value.get("process_group"), int) or value["process_group"] < 1):
             fail("active run must have positive process identity")

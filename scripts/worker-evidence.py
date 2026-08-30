@@ -329,6 +329,10 @@ def _main() -> int:
 
     if args.command == "mark-finished":
         value = load(path)
+        # This command boundary deliberately keeps its own negative-value guard even though
+        # validate_run_evidence(value) below rejects the same field.  The specific downstream
+        # validator is validate_run_evidence; keeping this guard preserves mark-finished's
+        # invalid-argument exit 2 contract instead of exposing its generic evidence error exit 1.
         if args.finished_epoch_ns < 0 or value.get("status") != "running":
             raise SystemExit(2)
         value["worker_finished_epoch_ns"] = args.finished_epoch_ns

@@ -184,6 +184,8 @@
         "publication_policy": {"type": "string", "minLength": 1},
         "lease_expires": {"type": "string", "minLength": 1},
         "deadline": {"type": "string", "minLength": 1},
+        "deadline_epoch_ns": {"type": "integer", "minimum": 0},
+        "worker_finished_epoch_ns": {"type": "integer", "minimum": 0},
         "usage": {"type": "object"},
         "result": {"type": ["object", "string"]},
         "status": {"enum": ["pending", "prepared", "running", "succeeded", "failed", "blocked", "cancelled", "stale"]}
