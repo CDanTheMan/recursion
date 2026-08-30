@@ -325,6 +325,71 @@ def ensure_directory(path: Path) -> None:
         fsync_dir(created.parent)
 
 
+def _target_matches_bytes(path: Path, encoded: bytes, parent_descriptor: int | None) -> bool:
+    """Read an existing target without turning it into a replacement authority."""
+    if parent_descriptor is not None:
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            descriptor = os.open(path.name, flags, dir_fd=parent_descriptor)
+        except FileNotFoundError:
+            return False
+        try:
+            opened = os.fstat(descriptor)
+            if not stat.S_ISREG(opened.st_mode) or opened.st_size != len(encoded):
+                return False
+            identity = (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns)
+            observed = _read_pinned(descriptor, MAX_QUEUE_JSON_BYTES, "existing queue JSON target")
+            current = os.fstat(descriptor)
+            if (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns) != identity:
+                raise OSError("existing queue JSON target changed while comparing")
+            return observed == encoded
+        finally:
+            os.close(descriptor)
+
+    with _pinned_file(path, "existing queue JSON target") as (descriptor, info):
+        if info.st_size != len(encoded):
+            return False
+        identity = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+        observed = _read_pinned(descriptor, MAX_QUEUE_JSON_BYTES, "existing queue JSON target")
+        current = os.fstat(descriptor)
+        if (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns) != identity:
+            raise OSError("existing queue JSON target changed while comparing")
+        return observed == encoded
+
+
+def _cleanup_atomic_temporary(temporary: Path, temporary_name: str,
+                              parent_descriptor: int | None, *, published: bool) -> bool:
+    """Reclaim a temporary through two equivalent unlink paths and report a real leak."""
+    try:
+        if parent_descriptor is not None:
+            os.unlink(temporary_name, dir_fd=parent_descriptor)
+        else:
+            temporary.unlink()
+        return True
+    except FileNotFoundError:
+        return True
+    except OSError as first_error:
+        try:
+            # The fallback is useful on Windows when a Path.unlink wrapper or CRT call fails;
+            # on POSIX the /proc fd path remains bound to the pinned parent descriptor.
+            if parent_descriptor is not None:
+                temporary.unlink()
+            else:
+                os.unlink(temporary)
+            return True
+        except FileNotFoundError:
+            return True
+        except OSError as second_error:
+            state = "published queue JSON" if published else "queue JSON operation"
+            print(
+                f"decision-queue: {state} left a temporary file after cleanup failed; "
+                f"manual cleanup required for {temporary.name} "
+                f"({type(first_error).__name__}/{type(second_error).__name__})",
+                file=sys.stderr,
+            )
+            return False
+
+
 def atomic_json(path: Path, value: dict) -> None:
     try:
         encoded = (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n").encode("utf-8")
@@ -336,9 +401,11 @@ def atomic_json(path: Path, value: dict) -> None:
     ensure_directory(path.parent)
     _reject_reparse_components(path, "queue JSON target")
     descriptor = -1
-    temporary: Path
+    temporary: Path | None = None
     temporary_name: str | None = None
     parent_descriptor: int | None = None
+    cleanup_attempted = False
+    published = False
     try:
         with pinned_durable_parent(path.parent, create=True) as pins:
             parent_descriptor = pins[-1][1] if os.name != "nt" else None
@@ -363,35 +430,46 @@ def atomic_json(path: Path, value: dict) -> None:
                 # The target is published with an atomic no-clobber link, so a writer that
                 # appears after this check can only make the link fail; it can never be
                 # overwritten.
+                # Known limitation: os.link() takes the temporary by pathname, so a hostile
+                # peer can still add an alias after this check and before publication.  The
+                # same-handle check narrows that window but does not close it.
                 _revalidate_opened_leaf(temporary, descriptor, temporary_identity)
                 revalidate_durable_parent_pins(pins)
-                if parent_descriptor is not None:
-                    try:
-                        os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
-                    except FileNotFoundError:
-                        pass
+                try:
+                    if parent_descriptor is not None:
+                        try:
+                            os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+                        except FileNotFoundError:
+                            pass
+                        else:
+                            raise FileExistsError(path)
+                        os.link(
+                            temporary_name, path.name,
+                            src_dir_fd=parent_descriptor, dst_dir_fd=parent_descriptor,
+                            follow_symlinks=False,
+                        )
+                        os.fsync(parent_descriptor)
                     else:
-                        raise FileExistsError(path)
-                    os.link(
-                        temporary_name, path.name,
-                        src_dir_fd=parent_descriptor, dst_dir_fd=parent_descriptor,
-                        follow_symlinks=False,
-                    )
-                    os.fsync(parent_descriptor)
-                else:
-                    try:
-                        path.lstat()
-                    except FileNotFoundError:
-                        pass
-                    else:
-                        raise FileExistsError(path)
-                    os.link(temporary, path, follow_symlinks=False)
+                        try:
+                            path.lstat()
+                        except FileNotFoundError:
+                            pass
+                        else:
+                            raise FileExistsError(path)
+                        os.link(temporary, path, follow_symlinks=False)
+                except FileExistsError:
+                    # A crash can leave the successor and source temporary both present.  A
+                    # byte-identical target is the same publication and is safe to reuse; any
+                    # other target remains a no-clobber refusal.
+                    if not _target_matches_bytes(path, encoded, parent_descriptor):
+                        raise
+                published = True
                 os.close(descriptor)
                 descriptor = -1
-                if parent_descriptor is not None:
-                    os.unlink(temporary_name, dir_fd=parent_descriptor)
-                else:
-                    temporary.unlink()
+                cleanup_attempted = True
+                _cleanup_atomic_temporary(
+                    temporary, temporary_name, parent_descriptor, published=published
+                )
             except BaseException:
                 if descriptor >= 0:
                     try:
@@ -399,13 +477,11 @@ def atomic_json(path: Path, value: dict) -> None:
                     except OSError:
                         pass
                     descriptor = -1
-                try:
-                    if parent_descriptor is not None:
-                        os.unlink(temporary_name, dir_fd=parent_descriptor)
-                    else:
-                        temporary.unlink()
-                except (FileNotFoundError, OSError):
-                    pass
+                if temporary is not None and temporary_name is not None and not cleanup_attempted:
+                    cleanup_attempted = True
+                    _cleanup_atomic_temporary(
+                        temporary, temporary_name, parent_descriptor, published=published
+                    )
                 raise
     except BaseException:
         if descriptor >= 0:
@@ -413,14 +489,11 @@ def atomic_json(path: Path, value: dict) -> None:
                 os.close(descriptor)
             except OSError:
                 pass
-        try:
-            if temporary_name is not None:
-                if parent_descriptor is not None:
-                    os.unlink(temporary_name, dir_fd=parent_descriptor)
-                else:
-                    temporary.unlink()
-        except (FileNotFoundError, OSError, UnboundLocalError):
-            pass
+        if temporary is not None and temporary_name is not None and not cleanup_attempted:
+            cleanup_attempted = True
+            _cleanup_atomic_temporary(
+                temporary, temporary_name, parent_descriptor, published=published
+            )
         raise
 
 
@@ -548,6 +621,18 @@ def assert_same_decision(existing: dict, incoming: dict, where: str) -> None:
         raise ValueError(f"decision id collision with different authority/effect payload: {where}")
 
 
+def _raw_observation_is_trusted(raw: dict, record: dict) -> bool:
+    """Do not promote a source that normalize() had to repair into collision authority."""
+    if "id" not in raw:
+        return True
+    raw_id = raw.get("id")
+    return (
+        isinstance(raw_id, str)
+        and IDENTIFIER.fullmatch(raw_id) is not None
+        and raw_id == record.get("id")
+    )
+
+
 def normalize(raw: dict, stamp: str | None = None, provider: str | None = None,
               usage: dict | None = None) -> dict:
     if not isinstance(raw, dict):
@@ -618,6 +703,44 @@ def validate_record(base: Path, record: dict) -> None:
         raise ValueError("decision schema validation was unavailable") from exc
     if proc.returncode:
         raise ValueError("decision schema validation failed")
+
+
+def _discard_invalid_projection(base: Path, path: Path) -> bool:
+    """Remove only the same regular projection after proving it is still malformed."""
+    try:
+        named = path.lstat()
+    except FileNotFoundError:
+        return False
+    if _is_reparse_info(named) or not stat.S_ISREG(named.st_mode):
+        raise ValueError(f"queue projection has an unsafe type: {path}")
+    with _pinned_file(path, "invalid decision projection", delete_access=True) as (descriptor, info):
+        if info.st_size > MAX_QUEUE_JSON_BYTES:
+            raise ValueError(f"queue projection is too large: {path}")
+        raw = _read_pinned(descriptor, MAX_QUEUE_JSON_BYTES, "invalid decision projection")
+        malformed = False
+        try:
+            projected = _load_json_bytes(raw, "existing decision projection")
+            if not isinstance(projected, dict):
+                malformed = True
+            else:
+                try:
+                    validate_record(base, projected)
+                except ValueError:
+                    malformed = True
+        except ValueError:
+            malformed = True
+        if not malformed:
+            return False
+        current = os.fstat(descriptor)
+        observed = path.lstat()
+        if (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns) != (
+                named.st_dev, named.st_ino, named.st_size, named.st_mtime_ns) \
+                or (observed.st_dev, observed.st_ino, observed.st_size, observed.st_mtime_ns) != (
+                    named.st_dev, named.st_ino, named.st_size, named.st_mtime_ns):
+            raise ValueError("decision projection changed while removing malformed state")
+        _delete_pinned(descriptor, path)
+    fsync_dir(path.parent)
+    return True
 
 
 def existing_path(base: Path, decision_id: str) -> Path | None:
@@ -969,7 +1092,7 @@ def import_journal(base: Path) -> int:
             marker["source_sha256"]: marker for marker in expected_markers.values()
         }
         batch = read_jsonl_since(journal, "decision-queue-import")
-        prepared: list[tuple[str, dict]] = []
+        prepared: list[tuple[str, dict, bool]] = []
         for line in batch.lines:
             if line.value is None:
                 continue
@@ -981,25 +1104,26 @@ def import_journal(base: Path) -> int:
                 source_sha256 = hashlib.sha256(_line_text(line.raw).encode()).hexdigest()
                 marker = expected_by_digest.get(source_sha256)
                 if marker is not None and marker.get("source_line") == line.sequence:
-                    prepared.append(("legacy", marker))
+                    prepared.append(("legacy", marker, False))
                     continue
                 raise ValueError(f"invalid decision journal line {line.sequence}: {exc}") from exc
-            prepared.append(("decision", record))
+            prepared.append(("decision", record, _raw_observation_is_trusted(raw, record)))
 
         # Validate every newly observed repeated identity against all indexed occurrences before
         # projecting any of the batch. Old rows were already validated before their checkpoint.
         prepared_decisions: dict[str, dict] = {}
-        for kind, value in prepared:
+        for kind, value, trusted in prepared:
             if kind != "decision":
                 continue
             prior = prepared_decisions.get(value["id"])
             if prior is not None:
                 assert_same_decision(prior, value, f"journal decision {value['id']}")
-            else:
+            elif trusted:
                 prepared_decisions[value["id"]] = value
-            for raw_match in find_jsonl_objects(journal, "id", value["id"]):
-                assert_same_decision(normalize(raw_match), value,
-                                     f"journal decision {value['id']}")
+            if trusted:
+                for raw_match in find_jsonl_objects(journal, "id", value["id"]):
+                    assert_same_decision(normalize(raw_match), value,
+                                         f"journal decision {value['id']}")
 
         imported = 0
         # Keep every normalized observation so a raw noncanonical id cannot hide a collision.
@@ -1007,50 +1131,92 @@ def import_journal(base: Path) -> int:
         # untrusted and is promoted only if duplicate normalized-id evidence makes validation
         # necessary.  Thus an unvalidated projected row can be compared as evidence, but can
         # never become the authority that rejects a later legitimate row.
-        seen_decisions: dict[str, list[tuple[dict, bool | None]]] = {}
+        # Keep this guard even when the downstream find_jsonl_objects(..., "id", ...)/
+        # assert_same_decision cross-check masks a mutation: that guard indexes the raw id and
+        # cannot detect two different raw ids that normalize to this same decision id.
+        seen_decisions: dict[str, list[tuple[dict, bool | None, Path | None]]] = {}
+        invalid_projected_paths: dict[str, set[Path]] = {}
 
-        def remember_decision(record: dict, trusted: bool | None) -> None:
+        def remember_decision(record: dict, trusted: bool | None,
+                              projected_path: Path | None = None) -> None:
             observations = seen_decisions.get(record["id"])
             if observations:
                 # A row from the current validated batch may already have supplied the authority
                 # for this all-rows reconciliation pass.  Compare the checkpointed observation
                 # against it without revalidating it; this keeps the steady-state bound flat.
-                authorities = [candidate for candidate, candidate_trusted in observations
+                authorities = [candidate for candidate, candidate_trusted, _ in observations
                                if candidate_trusted]
                 if authorities:
-                    if trusted:
-                        for authority in authorities:
-                            assert_same_decision(
-                                authority, record, f"journal decision {record['id']}"
-                            )
+                    # An untrusted later observation is still evidence against an existing
+                    # authority; it simply cannot become the authority when it arrives first.
+                    for authority in authorities:
+                        assert_same_decision(
+                            authority, record, f"journal decision {record['id']}"
+                        )
                     return
             else:
                 observations = []
                 seen_decisions[record["id"]] = observations
-            observations.append((record, trusted))
+            observations.append((record, trusted, projected_path))
             if len(observations) < 2:
                 return
-            refreshed: list[tuple[dict, bool]] = []
-            for candidate, candidate_trusted in observations:
+            refreshed: list[tuple[dict, bool, Path | None]] = []
+            for candidate, candidate_trusted, candidate_path in observations:
+                projected: dict | None = None
+                projected_valid = True
+                if candidate_path is not None and candidate_trusted is False:
+                    try:
+                        candidate_projection = _load_json_path(
+                            candidate_path, "existing decision projection"
+                        )
+                        if not isinstance(candidate_projection, dict):
+                            raise ValueError("existing decision projection is not an object")
+                        validate_record(base, candidate_projection)
+                    except ValueError:
+                        invalid_projected_paths.setdefault(record["id"], set()).add(candidate_path)
+                    # This source was explicitly untrusted (for example, normalize() repaired
+                    # its noncanonical id), so a valid old projection is evidence only.
+                    continue
                 if candidate_trusted is None:
+                    if candidate_path is not None:
+                        try:
+                            projected_value = _load_json_path(
+                                candidate_path, "existing decision projection"
+                            )
+                            if not isinstance(projected_value, dict):
+                                raise ValueError("existing decision projection is not an object")
+                            projected = projected_value
+                            validate_record(base, projected)
+                        except ValueError:
+                            invalid_projected_paths.setdefault(record["id"], set()).add(candidate_path)
+                            projected_valid = False
                     try:
                         validate_record(base, candidate)
                     except ValueError:
                         candidate_trusted = False
                     else:
+                        if candidate_path is not None and projected_valid:
+                            assert_same_decision(
+                                projected, candidate, f"journal decision {record['id']}"
+                            )
                         candidate_trusted = True
-                refreshed.append((candidate, bool(candidate_trusted)))
+                refreshed.append((candidate, bool(candidate_trusted), candidate_path))
             seen_decisions[record["id"]] = refreshed
-            authorities = [candidate for candidate, candidate_trusted in refreshed
-                           if candidate_trusted]
-            if authorities:
-                authority = authorities[0]
-                for candidate in authorities[1:]:
+            authority_index = next(
+                (index for index, (_, candidate_trusted, _) in enumerate(refreshed)
+                 if candidate_trusted),
+                None,
+            )
+            if authority_index is not None:
+                authority = refreshed[authority_index][0]
+                # Preserve journal order: an invalid earlier row cannot block a later valid
+                # authority, while a later conflicting observation must still be refused.
+                for candidate, _, _ in refreshed[authority_index + 1:]:
                     assert_same_decision(
                         authority, candidate, f"journal decision {record['id']}"
                     )
 
-        for kind, value in prepared:
+        for kind, value, trusted in prepared:
             if kind == "legacy":
                 path = legacy_marker_path(base, value)
                 try:
@@ -1062,16 +1228,33 @@ def import_journal(base: Path) -> int:
                 if marker_info is None:
                     atomic_json(path, value)
                 continue
-            if value["id"] in seen_decisions:
-                continue
-            remember_decision(value, True)
             present = existing_path(base, value["id"])
             if present:
+                if not trusted:
+                    continue
                 try:
                     existing = _load_json_path(present, "existing decision projection")
                 except (OSError, ValueError, TypeError, UnicodeError, RecursionError) as exc:
-                    raise ValueError(f"existing decision projection is unreadable: {present}") from exc
-                assert_same_decision(existing, value, str(present))
+                    if not _discard_invalid_projection(base, present):
+                        raise ValueError(
+                            f"existing decision projection is unreadable: {present}"
+                        ) from exc
+                    present = None
+                else:
+                    try:
+                        if not isinstance(existing, dict):
+                            raise ValueError("existing decision projection is not an object")
+                        validate_record(base, existing)
+                    except ValueError as exc:
+                        if not _discard_invalid_projection(base, present):
+                            raise ValueError(
+                                f"existing decision projection is unreadable: {present}"
+                            ) from exc
+                        present = None
+                    else:
+                        assert_same_decision(existing, value, str(present))
+                        continue
+            if not trusted:
                 continue
             target = queue_root(base) / "pending" / f"{value['id']}.json"
             atomic_json(target, value)
@@ -1099,20 +1282,32 @@ def import_journal(base: Path) -> int:
         # a contiguous prefix.
         for raw in journal_records:
             record = normalize(raw)
+            raw_trusted = _raw_observation_is_trusted(raw, record)
             present = existing_path(base, record["id"])
             needs_projection = present is None
-            if needs_projection:
+            if needs_projection and raw_trusted:
                 try:
                     validate_record(base, record)
                 except ValueError:
                     continue
-            remember_decision(record, True if needs_projection else None)
-            for raw_match in find_jsonl_objects(journal, "id", record["id"]):
-                assert_same_decision(normalize(raw_match), record,
-                                     f"journal decision {record['id']}")
-            if needs_projection:
+            remember_decision(
+                record,
+                False if not raw_trusted else (True if needs_projection else None),
+                present,
+            )
+            if raw_trusted:
+                for raw_match in find_jsonl_objects(journal, "id", record["id"]):
+                    assert_same_decision(normalize(raw_match), record,
+                                         f"journal decision {record['id']}")
+            if raw_trusted and invalid_projected_paths.get(record["id"]):
+                for invalid_path in invalid_projected_paths.pop(record["id"]):
+                    _discard_invalid_projection(base, invalid_path)
+                present = existing_path(base, record["id"])
+            elif needs_projection:
                 present = existing_path(base, record["id"])
             if present:
+                continue
+            if not raw_trusted:
                 continue
             atomic_json(queue_root(base) / "pending" / f"{record['id']}.json", record)
             imported += 1
