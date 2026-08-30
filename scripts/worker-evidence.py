@@ -703,7 +703,12 @@ def _main() -> int:
         if isinstance(scope, dict):
             value["changed_files"] = scope.get("entries", [])
         usage = maybe_json(args.usage_file)
-        validate_usage(usage, value.get("assignment") if value.get("assignment_digest") else None)
+        # The strict Phase 5 assignment intentionally carries execution/source facts, while
+        # billing basis and metering approval are authenticated controller facts in the
+        # immutable start attribution.  Validate usage against that projected attribution;
+        # consulting the nested assignment here loses those facts and rejects the controller's
+        # own flat-subscription receipt as a false mismatch.
+        validate_usage(usage, value if value.get("assignment_digest") else None)
         if isinstance(usage, dict):
             value["usage"] = usage
         if not args.execution_evidence:

@@ -1798,10 +1798,21 @@ phase5_validate_result(){
   [ -f "$result" ] || { SCOPE_FAIL="required worker result is missing"; phase5_record_run failed missing-result 98 || true; return 1; }
   python3 "$ROOT/scripts/validate-worker-result.py" "$result" "$LAST_SCOPE_FILE" \
     --expected-change "$EXPECTED_CHANGE" >"$VALIDATED_RESULT_FILE" 2>"$VALIDATED_RESULT_FILE.err" \
-    || { SCOPE_FAIL="$(cat "$VALIDATED_RESULT_FILE.err")"; phase5_record_run failed invalid-result 98 || true; return 1; }
+    || {
+      SCOPE_FAIL="$(cat "$VALIDATED_RESULT_FILE.err")"
+      [ -n "$SCOPE_FAIL" ] || SCOPE_FAIL="worker result validation failed"
+      phase5_record_run failed invalid-result 98 || true
+      return 1
+    }
   rm -f "$VALIDATED_RESULT_FILE.err"
   read_result "$1" || { SCOPE_FAIL="validated result could not be projected"; return 1; }
-  phase5_record_run succeeded worker-complete 0 || return $?
+  if phase5_record_run succeeded worker-complete 0; then
+    :
+  else
+    local record_rc=$?
+    SCOPE_FAIL="worker run evidence could not be recorded atomically"
+    return "$record_rc"
+  fi
 }
 
 phase5_commit_candidate(){
