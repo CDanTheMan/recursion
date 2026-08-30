@@ -1163,7 +1163,11 @@ if [ "$ENGINE" = claude ]; then
     RUN+=(--setenv HTTPS_PROXY="http://127.0.0.1:$PROVIDER_PROXY_PORT"
           --setenv HTTP_PROXY="http://127.0.0.1:$PROVIDER_PROXY_PORT")
   fi
-  RUN+=(--setenv CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1)
+  # Provider-specific environment reaches the worker through the authenticated profile's
+  # env_allowlist, never through a hardcode here: anthropic's profile already declares its
+  # telemetry variable, so a deployment that wants it set provides it and the allowlist passes it
+  # through. test_all_provider_engines_use_the_profile_bound_local_proxy asserts the absence of any
+  # such name in this file, so do not name one even in a comment.
   RUN+=(--setenv RECURSION_PROVIDER_PROFILE="$PROVIDER_PROFILE"
         --setenv RECURSION_PROVIDER_ID="$PLAN_NETWORK_PROVIDER"
         --setenv RECURSION_PROVIDER_ENDPOINTS="${PLAN_NETWORK_ENDPOINTS[*]}")

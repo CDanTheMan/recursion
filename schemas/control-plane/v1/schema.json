@@ -161,7 +161,8 @@
             "acceptance": {"type": "string", "minLength": 1},
             "acceptance_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"},
             "gate_files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"}},
-            "controller_gate_files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"}}
+            "controller_gate_files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"}},
+            "read_only_paths": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
           },
           "anyOf": [
             {"properties": {"gate_files": {"minProperties": 1}}},
