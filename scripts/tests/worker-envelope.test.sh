@@ -9,8 +9,8 @@
 # OUTCOME, so a diff that quietly edits a fixture to reach that outcome still exits 0.
 #
 # ★ ORDER IS A PROPERTY UNDER TEST. The scope check must run BEFORE the acceptance gate. If it
-# ran after, a tampered pass would already have been declared. Test 5 pins that by making the
-# acceptance command leave a marker and asserting the marker is absent.
+# ran after, a tampered pass would already have been declared. Test 5 pins that by requiring the
+# implementer run record to have no machine_gate entry.
 #
 # ★ The CONTROL (test 1) proves the gate is not simply refusing everything.
 #
@@ -104,10 +104,26 @@ git -c init.defaultBranch=main init -q --bare "$ORIGIN"
 printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n' > "$R/state/portfolio.tsv"
 printf 'wtest\t%s\t%s\tmain\t-\t-\t-\tactive\n' "$R" "$ORIGIN" >> "$R/state/portfolio.tsv"
 
-MARKER="$TMP/acceptance-ran"
+export RECURSION_MODEL_ALIAS_SONNET_ROUTINE=stub-sonnet
+export RECURSION_MODEL_ALIAS_OPUS_REVIEW=stub-opus
 
-mktask(){ # id allowed_paths acceptance
+mktask(){ # id allowed_paths acceptance [evidence_contract]
+  local strict_fields=""
+  if [ "${4:-}" = worker-result-v1 ]; then
+    strict_fields='schema_version: 1
+project_id: wtest
+goal_id: wtest-goal
+worker_class: claude
+model_alias: sonnet-routine
+verifier_model_alias: opus-review
+deadline_seconds: 1
+verifier_deadline_seconds: 2
+verification: independent
+expected_change: optional
+evidence_contract: worker-result-v1'
+  fi
   cat > "$R/state/tasks/$1.md" <<T
+${strict_fields}
 id: $1
 workstream: wtest
 goal: a bounded change
@@ -125,13 +141,38 @@ T
 }
 
 run_case(){ # id script
-  rm -f "$MARKER"
   ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 \
       RECURSION_GIT_FETCH=0 RECURSION_TEST_WORKER=logical STUB_ARM_SCRIPT="$2" \
       bash scripts/work.sh "$1" ) >"$TMP/out-$1" 2>&1
 }
 status_of(){ sed -n 's/^status: *//p' "$R/state/tasks/$1.md" | head -1 | tr -d '\r'; }
 inbox_tail(){ tail -25 "$R/state/INBOX.md" 2>/dev/null; }
+machine_gate_evidence(){
+  python3 - "$R/state/runs" "$1" <<'PY'
+import glob
+import json
+import sys
+
+primary = None
+for path in sorted(glob.glob(sys.argv[1] + "/" + sys.argv[2] + "-impl-*.json")):
+    if path.endswith(("-result.json", "-scope.json")):
+        continue
+    try:
+        with open(path, encoding="utf-8") as stream:
+            record = json.load(stream)
+    except (OSError, json.JSONDecodeError):
+        continue
+    if isinstance(record, dict) and record.get("role") == "implementer":
+        primary = record
+        break
+if primary is None:
+    print("missing")
+elif "machine_gate" in primary:
+    print("recorded")
+else:
+    print("absent")
+PY
+}
 
 # --- 1) ★ CONTROL: an in-scope change with a green gate must PASS ---------------------------
 mktask t-ok "apps/chiron" "test -s apps/chiron/new.txt"
@@ -172,25 +213,34 @@ else
 fi
 
 # --- 5) ★ ORDER: the scope check runs BEFORE the acceptance gate ----------------------------
-# The acceptance command leaves a marker. On a scope violation it must never have run.
-mktask t-order "apps/chiron" "touch $MARKER"
+# The predicate is valid and side-effect-free. On a scope violation it must never be recorded.
+mktask t-order "apps/chiron" "test -s apps/chiron/d.txt" worker-result-v1
 run_case t-order 'mkdir -p apps/chiron && echo x > apps/chiron/d.txt && echo evil > scripts/pwn2.sh'
-if [ ! -f "$MARKER" ] && [ "$(status_of t-order)" != "passed" ]; then
-  ok "★ the scope check runs BEFORE the gate (acceptance never executed on a violating diff)"
+order_gate_evidence="$(machine_gate_evidence t-order)"
+if [ "$order_gate_evidence" = absent ] && [ "$(status_of t-order)" != "passed" ]; then
+  ok "★ the scope check runs BEFORE the gate (implementer record has no machine_gate entry)"
+elif [ "$order_gate_evidence" = missing ]; then
+  no "★ scope-order proof is missing the primary implementer run record (gate non-execution is unproven)"
 else
-  no "★ the acceptance gate RAN on a scope-violating diff — a tampered pass would be declared first"
+  no "★ the gate ran or scope refusal failed (status=$(status_of t-order) gate_evidence=$order_gate_evidence)"
 fi
 
 # --- 6) a `blocked` result escalates the arm's QUESTION and skips the gate -------------------
-mktask t-blocked "apps/chiron" "touch $MARKER"
+mktask t-blocked "apps/chiron" "test -s apps/chiron/seed.txt" worker-result-v1
 run_case t-blocked 'printf "{\"status\":\"blocked\",\"summary\":\"two readings\",\"blocker\":\"Which realm is the target?\"}" > .recursion-result.json'
 if [ "$(status_of t-blocked)" = "blocked" ] && inbox_tail | grep -q 'Which realm is the target'; then
   ok "an ambiguity STOP is recorded as blocked and carries the arm's own question"
 else
   no "a blocked result was not handled (status=$(status_of t-blocked))"
 fi
-[ ! -f "$MARKER" ] && ok "blocked: the acceptance gate was not run (it would certainly fail)" \
-                   || no "blocked: the gate ran anyway"
+blocked_gate_evidence="$(machine_gate_evidence t-blocked)"
+if [ "$blocked_gate_evidence" = absent ]; then
+  ok "blocked: the implementer record has no machine_gate entry (the acceptance gate was skipped)"
+elif [ "$blocked_gate_evidence" = missing ]; then
+  no "blocked: missing primary implementer run record (gate non-execution is unproven)"
+else
+  no "blocked: the acceptance gate ran anyway (gate_evidence=$blocked_gate_evidence)"
+fi
 
 # --- 7) the envelope actually reaches the arm -----------------------------------------------
 # Capture the prompt the arm receives and assert the boundary is stated in it. A gate that
