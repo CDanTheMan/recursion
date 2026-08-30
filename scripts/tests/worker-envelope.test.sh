@@ -164,10 +164,11 @@ fi
 # --- 4) wandering outside allowed_paths is refused ------------------------------------------
 mktask t-out "apps/chiron" "test -s apps/chiron/c.txt"
 run_case t-out 'mkdir -p apps/chiron other && echo x > apps/chiron/c.txt && echo y > other/stray.txt'
-if [ "$(status_of t-out)" != "passed" ] && inbox_tail | grep -qi 'outside allowed_paths'; then
+if [ "$(status_of t-out)" != "passed" ] && inbox_tail | grep -qF 'other/stray.txt'; then
   ok "a write outside allowed_paths is REFUSED and names the offending path"
 else
-  no "an out-of-scope write was accepted (status=$(status_of t-out))"
+  no "out-of-scope write refusal/path assertion failed (status=$(status_of t-out)); relevant INBOX tail follows"
+  inbox_tail | sed 's/^/        /'
 fi
 
 # --- 5) ★ ORDER: the scope check runs BEFORE the acceptance gate ----------------------------
