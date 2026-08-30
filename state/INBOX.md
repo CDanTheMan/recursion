@@ -240,3 +240,58 @@ the commit and the registry together. Under the documented threat model — root
 the original live-registry drift is closed. Independently authenticating the root choice is a
 larger change than this phase, and it is called out here so it is a known limit rather than an
 assumption.
+
+### esc-0002 RESOLVED 2026-08-29 by Lucas — option A, gates are pure predicates
+
+Decision received: **an acceptance gate evaluates, it does not mutate.** Phase 2's refusal stands.
+
+`state/DECISIONS.md` is a protected path and this executor does not write it. A formal D-entry
+recording the gate contract is a human action and is still outstanding; this note is the record of
+the decision as given, not a substitute for it.
+
+**What changes.** Phase 5's heavy-contention arm stops using its own acceptance gate as
+instrumentation:
+
+```
+before  mktask heavy-contention "test -s app/heavy.txt && touch $HEAVY_GATE_MARKER"
+after   mktask heavy-contention "test -s app/heavy.txt"
+```
+
+**The witness must move, not disappear.** Under a pure predicate nothing creates
+`$HEAVY_GATE_MARKER`, so `[ ! -e "$HEAVY_GATE_MARKER" ]` becomes trivially true and the
+non-execution check silently becomes a tautology — the fabricated-value vacuity form. Deleting the
+`touch` alone is NOT the fix.
+
+The replacement already exists in the same fixture, twice. `heavy-retry` and `pause-after-terminal`
+both witness execution from the **worker body**, which is not a gate and is not subject to the gate
+grammar:
+
+```
+RETRY_LAUNCHES="$TMP/heavy-retry-launches"
+run_case heavy-retry "n=$(wc -l < $RETRY_LAUNCHES 2>/dev/null || echo 0); n=$((n+1));
+                      echo \"launch $n\" >> $RETRY_LAUNCHES; ..."
+...
+heavy_retry_launches="$(wc -l < "$RETRY_LAUNCHES" 2>/dev/null || echo 0)"
+```
+
+So the heavy-contention witness becomes a launch count from the worker body rather than a marker
+written by the gate. That is arguably a stronger assertion: under contention the controller should
+defer *before* launching the worker at all, so `launches=0` states the intended invariant more
+directly than "the gate body did not run".
+
+**Where the change lands: Phase 2's branch, not Phase 5's.** Phase 2 integrates first, and its
+grammar change is what makes the current fixture unadmissible. If the fixture fix lived on Phase
+5's branch the cumulative gate would fail at integration steps 2, 3 and 4 and only recover at step
+5. The grammar change and the fixture that depends on it belong in the same commit.
+`hermes-pilot-phase5-red.test.sh` is on the P3/P5 merge surface, so both later merges must carry
+this forward — recorded as a post-merge assertion.
+
+**This reverses my earlier recommendation, on evidence.** I recommended option B twice, on the
+grounds that A required re-engineering the non-execution witness. That cost was real but I had not
+checked whether the mechanism already existed. It does, in the same file, in two places. With the
+cost gone, B's only advantage went with it — and B would have reopened the exact surface where I
+previously made a wrong unilateral call, requiring `touch C:/phase5-marker` to keep passing until a
+writer widened the grammar and bare `touch` became an admissible gate.
+
+**esc-0003 remains open** and does not block: whether a packaged non-Git controller is a supported
+deployment. Failing closed stays in place meanwhile.
