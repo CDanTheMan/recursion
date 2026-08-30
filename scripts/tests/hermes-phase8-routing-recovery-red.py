@@ -343,6 +343,15 @@ def require_decider_rejected(label: str, mutate) -> None:
         fixture.close()
 
 
+def require_preserved_routing_failure(label: str, result: subprocess.CompletedProcess[str],
+                                      failpoint: str) -> None:
+    # The phase-head drain preserves an already-inspected terminal action and continues draining;
+    # its aggregate failure status is 1. The nested routing child still returns/logs its own 74.
+    evidence = f"routing failpoint: {failpoint}"
+    require(result.returncode == 1 and evidence in result.stderr,
+            f"{label} was not preserved rc={result.returncode}: {result.stderr}")
+
+
 def negative_recovery_evidence() -> None:
     instruction = "state/instructions/00000707.md"
     third = "state/actions/action-cbba158e3295fb82bdf6e06c.json"
@@ -535,23 +544,27 @@ def main() -> int:
                 f"732 admission failed after 707: {second.stderr}")
 
         record_error = fixture.drain(failpoint="record-error")
-        require(record_error.returncode == 74,
-                f"permanent refusal-record error was not preserved: {record_error.stderr}")
+        require_preserved_routing_failure(
+            "permanent refusal-record error", record_error, "record-error"
+        )
         require(fields(fixture.root / "state/instructions/00000732.md")["status"] == "consumed"
                 and len([row for row in json_rows(fixture.root / "state/events.jsonl")
                          if row.get("event") == "instruction-routing-refused"]) == 1,
                 "record error acknowledged 732 or fabricated refusal evidence")
 
         before_event = fixture.drain(failpoint="before-event")
-        require(before_event.returncode == 74,
-                f"pre-event interruption was not preserved: {before_event.stderr}")
+        require_preserved_routing_failure(
+            "pre-event interruption", before_event, "before-event"
+        )
         require(fields(fixture.root / "state/instructions/00000732.md")["status"] == "consumed"
                 and len([row for row in json_rows(fixture.root / "state/events.jsonl")
                          if row.get("event") == "instruction-routing-refused"]) == 1,
                 "pre-event interruption terminalized 732 or committed an event")
 
         interrupted = fixture.drain(failpoint="after-event")
-        require(interrupted.returncode == 74, f"routing tail failure was not preserved: {interrupted.stderr}")
+        require_preserved_routing_failure(
+            "routing tail failure", interrupted, "after-event"
+        )
         require(fields(fixture.root / "state/instructions/00000732.md")["status"] == "consumed",
                 "post-event interruption acknowledged 732 before record returned success")
         require(len([row for row in json_rows(fixture.root / "state/events.jsonl")
