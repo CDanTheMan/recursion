@@ -182,13 +182,18 @@ def main(argv: list[str]) -> int:
             found.add((path.relative_to(staged).as_posix(), display_dependency))
             if not staged_module_path(staged, dependency).is_file():
                 missing.append((path.relative_to(staged).as_posix(), dependency))
+    # Diagnostics go to stderr; this guard's result is its exit code and nothing else. Callers
+    # stage a fixture inside a shell function whose stdout IS the fixture root -- `R="$(setup ...)"`
+    # in hermes-pilot-phase6-red.test.sh -- so an inventory printed to stdout is captured as part of
+    # that path. The failure surfaces far away, as `File name too long` on a filename consisting of
+    # this whole dependency list followed by the real root.
     print("dependency guard: first-party dependencies " + (
         ", ".join(f"{script}->{dependency}" for script, dependency in sorted(found))
         or "none"
-    ))
+    ), file=sys.stderr)
     if missing:
         for script, dependency in sorted(set(missing)):
-            print(f"dependency guard: missing {dependency} required by {script}")
+            print(f"dependency guard: missing {dependency} required by {script}", file=sys.stderr)
         return 1
     return 0
 
