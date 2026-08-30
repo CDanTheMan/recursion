@@ -50,8 +50,11 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from jsonl_durable import (
-    JsonlDurabilityError, acknowledge_jsonl, append_jsonl as durable_append_jsonl,
-    find_jsonl_objects, read_jsonl_objects, read_jsonl_prefix, read_jsonl_since,
+    JsonlDurabilityError, _capture_opened_leaf, _open_unique_at, _pinned_fd_path,
+    _revalidate_opened_leaf, _write_all, acknowledge_jsonl,
+    append_jsonl as durable_append_jsonl, find_jsonl_objects, pinned_durable_parent,
+    read_jsonl_objects, read_jsonl_prefix, read_jsonl_since,
+    revalidate_durable_parent_pins,
 )
 
 
@@ -323,29 +326,100 @@ def ensure_directory(path: Path) -> None:
 
 
 def atomic_json(path: Path, value: dict) -> None:
-    ensure_directory(path.parent)
-    _reject_reparse_components(path, "queue JSON target")
     try:
         encoded = (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n").encode("utf-8")
     except (TypeError, ValueError, OverflowError, RecursionError, UnicodeError) as exc:
         raise ValueError("queue record is not canonically JSON serializable") from exc
     if len(encoded) > MAX_QUEUE_JSON_BYTES:
         raise ValueError("queue record exceeds the bounded JSON input size")
-    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
-    tmp = Path(tmp_name)
+    path = Path(path)
+    ensure_directory(path.parent)
+    _reject_reparse_components(path, "queue JSON target")
+    descriptor = -1
+    temporary: Path
+    temporary_name: str | None = None
+    parent_descriptor: int | None = None
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
-            out.write(encoded.decode("utf-8"))
-            out.flush()
-            os.fsync(out.fileno())
-        _reject_reparse_components(path.parent, "queue JSON parent")
-        _reject_reparse_components(path, "queue JSON target")
-        os.replace(tmp, path)
-        fsync_dir(path.parent)
+        with pinned_durable_parent(path.parent, create=True) as pins:
+            parent_descriptor = pins[-1][1] if os.name != "nt" else None
+            if parent_descriptor is not None:
+                descriptor, temporary_name = _open_unique_at(
+                    parent_descriptor, f".{path.name}.tmp."
+                )
+                temporary = _pinned_fd_path(parent_descriptor, temporary_name)
+            else:
+                descriptor, temporary_name = tempfile.mkstemp(
+                    prefix=f".{path.name}.tmp.", dir=path.parent
+                )
+                temporary = Path(temporary_name)
+            try:
+                temporary_identity = _capture_opened_leaf(temporary, descriptor)
+                if hasattr(os, "fchmod"):
+                    os.fchmod(descriptor, 0o600)
+                _write_all(
+                    descriptor, encoded, leaf_path=temporary, leaf_identity=temporary_identity
+                )
+                os.fsync(descriptor)
+                # The target is published with an atomic no-clobber link, so a writer that
+                # appears after this check can only make the link fail; it can never be
+                # overwritten.
+                _revalidate_opened_leaf(temporary, descriptor, temporary_identity)
+                revalidate_durable_parent_pins(pins)
+                if parent_descriptor is not None:
+                    try:
+                        os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+                    except FileNotFoundError:
+                        pass
+                    else:
+                        raise FileExistsError(path)
+                    os.link(
+                        temporary_name, path.name,
+                        src_dir_fd=parent_descriptor, dst_dir_fd=parent_descriptor,
+                        follow_symlinks=False,
+                    )
+                    os.fsync(parent_descriptor)
+                else:
+                    try:
+                        path.lstat()
+                    except FileNotFoundError:
+                        pass
+                    else:
+                        raise FileExistsError(path)
+                    os.link(temporary, path, follow_symlinks=False)
+                os.close(descriptor)
+                descriptor = -1
+                if parent_descriptor is not None:
+                    os.unlink(temporary_name, dir_fd=parent_descriptor)
+                else:
+                    temporary.unlink()
+            except BaseException:
+                if descriptor >= 0:
+                    try:
+                        os.close(descriptor)
+                    except OSError:
+                        pass
+                    descriptor = -1
+                try:
+                    if parent_descriptor is not None:
+                        os.unlink(temporary_name, dir_fd=parent_descriptor)
+                    else:
+                        temporary.unlink()
+                except (FileNotFoundError, OSError):
+                    pass
+                raise
     except BaseException:
+        if descriptor >= 0:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
         try:
-            tmp.unlink()
-        except FileNotFoundError:
+            if temporary_name is not None:
+                if parent_descriptor is not None:
+                    os.unlink(temporary_name, dir_fd=parent_descriptor)
+                else:
+                    temporary.unlink()
+        except (FileNotFoundError, OSError, UnboundLocalError):
             pass
         raise
 
@@ -928,7 +1002,54 @@ def import_journal(base: Path) -> int:
                                      f"journal decision {value['id']}")
 
         imported = 0
-        seen_decisions: dict[str, dict] = {}
+        # Keep every normalized observation so a raw noncanonical id cannot hide a collision.
+        # Existing projections are not validation evidence: an old row enters this table as
+        # untrusted and is promoted only if duplicate normalized-id evidence makes validation
+        # necessary.  Thus an unvalidated projected row can be compared as evidence, but can
+        # never become the authority that rejects a later legitimate row.
+        seen_decisions: dict[str, list[tuple[dict, bool | None]]] = {}
+
+        def remember_decision(record: dict, trusted: bool | None) -> None:
+            observations = seen_decisions.get(record["id"])
+            if observations:
+                # A row from the current validated batch may already have supplied the authority
+                # for this all-rows reconciliation pass.  Compare the checkpointed observation
+                # against it without revalidating it; this keeps the steady-state bound flat.
+                authorities = [candidate for candidate, candidate_trusted in observations
+                               if candidate_trusted]
+                if authorities:
+                    if trusted:
+                        for authority in authorities:
+                            assert_same_decision(
+                                authority, record, f"journal decision {record['id']}"
+                            )
+                    return
+            else:
+                observations = []
+                seen_decisions[record["id"]] = observations
+            observations.append((record, trusted))
+            if len(observations) < 2:
+                return
+            refreshed: list[tuple[dict, bool]] = []
+            for candidate, candidate_trusted in observations:
+                if candidate_trusted is None:
+                    try:
+                        validate_record(base, candidate)
+                    except ValueError:
+                        candidate_trusted = False
+                    else:
+                        candidate_trusted = True
+                refreshed.append((candidate, bool(candidate_trusted)))
+            seen_decisions[record["id"]] = refreshed
+            authorities = [candidate for candidate, candidate_trusted in refreshed
+                           if candidate_trusted]
+            if authorities:
+                authority = authorities[0]
+                for candidate in authorities[1:]:
+                    assert_same_decision(
+                        authority, candidate, f"journal decision {record['id']}"
+                    )
+
         for kind, value in prepared:
             if kind == "legacy":
                 path = legacy_marker_path(base, value)
@@ -943,7 +1064,7 @@ def import_journal(base: Path) -> int:
                 continue
             if value["id"] in seen_decisions:
                 continue
-            seen_decisions[value["id"]] = value
+            remember_decision(value, True)
             present = existing_path(base, value["id"])
             if present:
                 try:
@@ -985,12 +1106,7 @@ def import_journal(base: Path) -> int:
                     validate_record(base, record)
                 except ValueError:
                     continue
-            if needs_projection:
-                prior = seen_decisions.get(record["id"])
-                if prior is not None:
-                    assert_same_decision(prior, record, f"journal decision {record['id']}")
-                else:
-                    seen_decisions[record["id"]] = record
+            remember_decision(record, True if needs_projection else None)
             for raw_match in find_jsonl_objects(journal, "id", record["id"]):
                 assert_same_decision(normalize(raw_match), record,
                                      f"journal decision {record['id']}")

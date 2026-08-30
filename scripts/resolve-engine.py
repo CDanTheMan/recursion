@@ -179,7 +179,7 @@ def validate_network(network: object) -> None:
         if not isinstance(item, str) or not ENDPOINT_RE.fullmatch(item):
             raise ManifestError("network.endpoints contains an invalid hostname")
     profile = obj.get("profile")
-    if profile is not None and (not isinstance(profile, str) or not PROFILE_NAME_RE.fullmatch(profile)):
+    if "profile" in obj and (not isinstance(profile, str) or not PROFILE_NAME_RE.fullmatch(profile)):
         raise ManifestError("network.profile must be a valid provider profile name")
 
 
