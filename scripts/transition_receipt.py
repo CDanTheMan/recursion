@@ -25,7 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from jsonl_durable import JsonlDurabilityError, append_jsonl
+from jsonl_durable import (JsonlDurabilityError, append_jsonl, atomic_bytes as durable_atomic_bytes,
+                           read_durable_bytes)
 
 
 ALLOWED_JOURNALS = frozenset({
@@ -66,35 +67,13 @@ def _fsync_dir(path: Path) -> None:
 
 
 def _atomic_bytes(path: Path, payload: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    fd, raw = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
-    temporary = Path(raw)
+    if not isinstance(payload, bytes):
+        raise TransitionReceiptError("transition receipt payload must be bytes")
     try:
-        if hasattr(os, "fchmod"):  # absent on Windows; NTFS mode bits are meaningless
-            os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "wb") as out:
-            view = memoryview(payload)
-            while view:
-                written = out.write(view)
-                if not written:
-                    raise OSError("transition receipt write made no progress")
-                view = view[written:]
-            out.flush()
-            os.fsync(out.fileno())
-        os.replace(temporary, path)
-        _fsync_dir(path.parent)
-    except BaseException:
-        # Cleanup must never replace the primary exception: close the descriptor first
-        # (Windows cannot unlink an open file) and swallow only the cleanup's own OSError.
-        try:
-            os.close(fd)
-        except OSError:
-            pass
-        try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise
+        durable_atomic_bytes(path, payload)
+    except (JsonlDurabilityError, OSError, TypeError, ValueError, OverflowError,
+            RecursionError, UnicodeEncodeError) as exc:
+        raise TransitionReceiptError("transition receipt durable write failed") from exc
 
 
 def _atomic_json(path: Path, value: dict) -> None:
@@ -120,9 +99,16 @@ def _relative_state_path(base: Path, path: Path) -> str:
 
 def _read_json(path: Path) -> dict:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise TransitionReceiptError(f"cannot read transition JSON {path}: {exc}") from exc
+        raw = read_durable_bytes(path, max_bytes=8 * 1024 * 1024)
+        if raw is None:
+            raise OSError("transition JSON is absent")
+        value = json.loads(
+            raw.decode("utf-8"),
+            parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+        )
+    except (OSError, JsonlDurabilityError, json.JSONDecodeError, TypeError, ValueError,
+            OverflowError, RecursionError, UnicodeDecodeError) as exc:
+        raise TransitionReceiptError("cannot read transition JSON") from exc
     if not isinstance(value, dict):
         raise TransitionReceiptError(f"transition JSON is not an object: {path}")
     return value
@@ -130,9 +116,12 @@ def _read_json(path: Path) -> dict:
 
 def _read_fields(path: Path) -> dict[str, str]:
     try:
-        lines = path.read_text(encoding="utf-8", errors="surrogateescape").splitlines()
-    except OSError as exc:
-        raise TransitionReceiptError(f"cannot read transition fields {path}: {exc}") from exc
+        raw = read_durable_bytes(path, max_bytes=8 * 1024 * 1024)
+        if raw is None:
+            raise OSError("transition fields are absent")
+        lines = raw.decode("utf-8", errors="surrogateescape").splitlines()
+    except (OSError, JsonlDurabilityError, UnicodeDecodeError) as exc:
+        raise TransitionReceiptError("cannot read transition fields") from exc
     result: dict[str, str] = {}
     for line in lines:
         if not line.strip():
@@ -144,7 +133,10 @@ def _read_fields(path: Path) -> dict[str, str]:
 
 
 def _atomic_fields(path: Path, changes: dict[str, str]) -> None:
-    lines = path.read_text(encoding="utf-8", errors="surrogateescape").splitlines()
+    raw = read_durable_bytes(path, max_bytes=8 * 1024 * 1024)
+    if raw is None:
+        raise TransitionReceiptError("transition fields are absent")
+    lines = raw.decode("utf-8", errors="surrogateescape").splitlines()
     header_end = next((i for i, line in enumerate(lines) if not line.strip()), len(lines))
     found: set[str] = set()
     output: list[str] = []
@@ -1035,8 +1027,8 @@ def main() -> int:
                 path = base / path
             print(commit_transition(base, [fields_mutation(path, changes)], event,
                                     taskctl_locked=held))
-    except (OSError, ValueError, json.JSONDecodeError, TransitionReceiptError) as exc:
-        print(f"transition-receipt: {exc}", file=os.sys.stderr)
+    except (OSError, ValueError, json.JSONDecodeError, TransitionReceiptError):
+        print("transition-receipt: invalid input or durable state", file=os.sys.stderr)
         return 74
     return 0
 

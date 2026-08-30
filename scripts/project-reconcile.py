@@ -37,6 +37,7 @@ from transition_receipt import (
     fields_mutation, json_mutation, resume_transition,
 )
 from seed_contract import SeedContractError, copy_seed_paths, validate_contract
+from remote_evidence import RemoteEvidenceError, read_events_for_run
 
 
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -1045,6 +1046,13 @@ def run_records(base: Path, task_ids: set[str]) -> list[dict]:
         if row.get("task_id") in task_ids:
             row = dict(row)
             row["_path"] = str(path)
+            # Phase 6/7 remote adapters share the append-only assignment-bound event API.
+            # Reconciliation consumes that stream as evidence; it never treats a vendor
+            # projection or transcript as a replacement for the canonical run record.
+            try:
+                row["remote_events"] = read_events_for_run(path)
+            except RemoteEvidenceError as exc:
+                raise ReconcileError(f"remote evidence is unusable for {path.name}: {exc}", 74) from exc
             result.append(row)
     return result
 

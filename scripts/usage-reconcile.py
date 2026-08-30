@@ -22,16 +22,18 @@ import argparse
 import calendar
 import datetime
 import json
+import math
 import os
 import re
 import sys
-import tempfile
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from jsonl_durable import JsonlDurabilityError, append_jsonl, read_jsonl_objects
+from jsonl_durable import (JsonlDurabilityError, append_jsonl, ensure_no_symlink,
+                           read_durable_bytes, read_jsonl_objects)
+import assignment as assignment_mod
 
 PROG = "usage-reconcile"
 LEDGER_SCHEMA_VERSION = 1
@@ -53,6 +55,12 @@ BILLING_BASES = {"flat-subscription", "metered", "local"}
 # this run has no separately-billed marginal cost", not "we measured zero".
 POLICY_RECORD_SOURCES = {"controller-engine-policy-v1", "engine-manifest-v1"}
 
+# Provider receipt names are an allowlist, not a heuristic.  A usage file can be edited by
+# the worker, so an arbitrary nonempty evidence_source is never enough to call its numbers
+# grounded provider spend.  ``receipt-v1`` is the controller's generic provider-receipt
+# profile; engine-specific sources are derived below from the trusted engine manifests.
+GENERIC_PROVIDER_RECEIPT_SOURCE = "receipt-v1"
+
 # The only provider->engine pair not derivable from a manifest (claude is a builtin).
 BUILTIN_PROVIDER_ENGINES = {"anthropic-claude-code": "claude"}
 
@@ -61,6 +69,7 @@ COST_BASES = ("receipt", "policy-record", "unreconciled")
 OPENROUTER_CREDITS_URL = "https://openrouter.ai/api/v1/credits"
 SNAPSHOT_TIMEOUT_S = 15
 SNAPSHOT_MAX_BYTES = 1 << 20
+MAX_INPUT_BYTES = 8 * 1024 * 1024
 
 # One page, hard cap (CLAUDE.md "Bounded output"). Rows beyond the budget are dropped
 # with an explicit count -- never appended.
@@ -88,7 +97,10 @@ def plain_number(value: object) -> float | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value)
+        try:
+            return float(value)
+        except (OSError, TypeError, OverflowError, ValueError):
+            return None
     return None
 
 
@@ -102,7 +114,7 @@ def epoch_of(value: object) -> int | None:
         return None
     try:
         return calendar.timegm(time.strptime(text, TS_FORMAT))
-    except ValueError:
+    except (OSError, TypeError, OverflowError, ValueError):
         return None
 
 
@@ -116,22 +128,44 @@ def iso_week_of(value: object) -> str | None:
     return None if epoch is None else iso_week(time.gmtime(epoch))
 
 
+# --- quota-period reconciliation (Phase 3, D-016) ---------------------------------------
+# A capacity pool's quota resets on its own declared cadence (daily/weekly/monthly), never
+# on the reporting ISO-week bucket above -- those are two independent concepts that happen
+# to share a "week" case.
+
+def period_key(period: str, struct: time.struct_time) -> str:
+    if not isinstance(period, str) or period not in {"daily", "weekly", "monthly"}:
+        raise UsageError("capacity-pool quota period is invalid")
+    if period == "daily":
+        return time.strftime("%Y-%m-%d", struct)
+    if period == "monthly":
+        return time.strftime("%Y-%m", struct)
+    return iso_week(struct)
+
+
+def period_key_of(period: str, value: object) -> str | None:
+    epoch = epoch_of(value)
+    return None if epoch is None else period_key(period, time.gmtime(epoch))
+
+
+def current_period_key(period: str) -> str:
+    return period_key(period, time.gmtime())
+
+
 def current_iso_week() -> str:
     return iso_week(time.gmtime())
 
 
 def atomic_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(name, str(path))
-    finally:
-        if os.path.exists(name):
-            os.unlink(name)
+        if not isinstance(text, str):
+            raise UsageError("report content must be text")
+        from jsonl_durable import atomic_bytes
+        atomic_bytes(Path(path), text.encode("utf-8"))
+    except JsonlDurabilityError:
+        raise
+    except (OSError, TypeError, ValueError, UnicodeEncodeError) as exc:
+        raise UsageError("cannot write report") from exc
 
 
 # --- engine derivation ------------------------------------------------------------------
@@ -154,8 +188,12 @@ def provider_engine_map() -> dict:
         return mapping
     for path in candidates:
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            raw = read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
+            if raw is None:
+                continue
+            data = json.loads(raw.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, JsonlDurabilityError,
+                TypeError, ValueError, OverflowError, RecursionError):
             continue
         if not isinstance(data, dict):
             continue
@@ -196,24 +234,59 @@ def looks_like_evidence(data: object) -> bool:
 def classify_cost(usage: dict) -> tuple[int | None, float | None, str]:
     evidence_source = nonempty_str(usage.get("evidence_source"))
     basis = usage.get("billing_basis")
-    if evidence_source is None or basis not in BILLING_BASES:
+    if evidence_source is None or not isinstance(basis, str) or basis not in BILLING_BASES:
         return None, None, "unreconciled"
     tokens = plain_int(usage.get("tokens"))
     cost = plain_number(usage.get("cost_usd"))
-    if tokens is None or cost is None:
+    if tokens is None or tokens < 0 or cost is None or not math.isfinite(cost) or cost < 0:
         return None, None, "unreconciled"
     if evidence_source in POLICY_RECORD_SOURCES:
         return tokens, cost, "policy-record"
-    # Anything else reached the usage file from a provider/sandbox, not from work.sh.
-    return tokens, cost, "receipt"
-
-
-def normalize(record: dict, mapping: dict) -> dict:
-    usage = record.get("usage") if isinstance(record.get("usage"), dict) else {}
     provider = nonempty_str(usage.get("provider"))
-    basis = usage.get("billing_basis")
+    trusted_engines = provider_engine_map()
+    trusted_engines.update(BUILTIN_PROVIDER_ENGINES)
+    engine = trusted_engines.get(provider)
+    allowed_sources = {GENERIC_PROVIDER_RECEIPT_SOURCE}
+    if engine is not None:
+        allowed_sources.add(f"{engine}-usage-v1")
+    if basis == "metered" and engine is not None and evidence_source in allowed_sources:
+        return tokens, cost, "receipt"
+    return None, None, "unreconciled"
+
+
+def normalize(record: dict, mapping: dict, assignment_root: Path | None = None) -> dict:
+    usage = record.get("usage") if isinstance(record.get("usage"), dict) else {}
+    assignment_record = None
+    assignment_digest = nonempty_str(record.get("assignment_digest"))
+    if assignment_digest:
+        if assignment_root is None:
+            raise UsageError("assignment-native run has no assignment root")
+        assignment_record = assignment_mod.load_assignment(
+            assignment_root, nonempty_str(record.get("task_id")) or "", assignment_digest)
+        if assignment_record is None:
+            raise UsageError(f"persisted assignment is absent for run {record.get('id')}")
+        try:
+            assignment_mod.validate_assignment(assignment_record, require_source_evidence=True)
+        except assignment_mod.AssignmentError as exc:
+            raise UsageError(f"persisted assignment is invalid for run {record.get('id')}: {exc}") from exc
+        provider = assignment_record["provider"]
+        basis = assignment_record.get("billing_basis")
+        if record.get("task_id") != assignment_record["task_id"]:
+            raise UsageError("run task_id does not match persisted assignment")
+        if record.get("role") != assignment_record["role"]:
+            raise UsageError("run role does not match persisted assignment")
+        if usage.get("provider") not in (None, provider) or usage.get("billing_basis") not in (None, basis):
+            raise UsageError("worker usage disagrees with persisted assignment")
+        if basis == "metered" and not assignment_record.get("metered_approved"):
+            raise UsageError("unapproved metered usage cannot be reconciled")
+    else:
+        # Versioned legacy compatibility: records written before Phase 3 retain their old
+        # provider/engine join and are explicitly distinguishable from assignment-native rows.
+        provider = nonempty_str(usage.get("provider"))
+        basis = usage.get("billing_basis")
     tokens, cost, cost_basis = classify_cost(usage)
-    role = record.get("role") if record.get("role") in ROLES else None
+    role_value = record.get("role")
+    role = role_value if isinstance(role_value, str) and role_value in ROLES else None
     started_at = nonempty_str(record.get("started_at"))
     finished_at = nonempty_str(record.get("finished_at"))
     start_epoch, finish_epoch = epoch_of(started_at), epoch_of(finished_at)
@@ -226,10 +299,18 @@ def normalize(record: dict, mapping: dict) -> dict:
         "run_id": record["id"],
         "task_id": nonempty_str(record.get("task_id")),
         "role": role,
-        "engine": derive_engine(record, usage, provider, mapping),
+        "engine": assignment_record["engine"] if assignment_record else derive_engine(record, usage, provider, mapping),
         "provider": provider,
+        "capacity_pool": assignment_record.get("capacity_pool") if assignment_record else None,
+        "host": assignment_record.get("host") if assignment_record else None,
+        "assignment_digest": assignment_digest,
         "model_alias": nonempty_str(record.get("model_alias")),
-        "model": nonempty_str(record.get("model")) or nonempty_str(record.get("resolved_model")),
+        "model": assignment_record.get("model") if assignment_record else (nonempty_str(record.get("model")) or nonempty_str(record.get("resolved_model"))),
+        "sandbox_profile": assignment_record.get("sandbox_profile") if assignment_record else None,
+        "network_profile": assignment_record.get("network_profile") if assignment_record else None,
+        "source_repository": assignment_record.get("source_repository") if assignment_record else None,
+        "source_branch": assignment_record.get("source_branch") if assignment_record else None,
+        "source_sha": assignment_record.get("source_sha") if assignment_record else None,
         "billing_basis": basis if basis in BILLING_BASES else None,
         "evidence_source": nonempty_str(usage.get("evidence_source")),
         "tokens": tokens,
@@ -247,43 +328,62 @@ def evidence_files(runs_dir: Path) -> list:
     """Top-level run records plus one level of per-run evidence subdirectories."""
     found: list[Path] = []
     try:
-        entries = sorted(runs_dir.iterdir())
-    except OSError as exc:
-        raise UsageError(f"cannot read runs directory {runs_dir}: {exc}") from exc
+        ensure_no_symlink(runs_dir)
+        with os.scandir(runs_dir) as iterator:
+            entries = sorted(iterator, key=lambda entry: entry.name)
+    except (OSError, JsonlDurabilityError) as exc:
+        raise UsageError("cannot read runs directory") from exc
     for entry in entries:
-        if entry.is_file() and entry.suffix == ".json":
-            found.append(entry)
-        elif entry.is_dir():
-            try:
-                found.extend(sorted(child for child in entry.iterdir()
-                                    if child.is_file() and child.suffix == ".json"))
-            except OSError:
-                continue
+        candidate = Path(entry.path)
+        try:
+            ensure_no_symlink(candidate)
+            if entry.is_file(follow_symlinks=False) and candidate.suffix == ".json":
+                found.append(candidate)
+            elif entry.is_dir(follow_symlinks=False):
+                with os.scandir(candidate) as children_iterator:
+                    children = sorted(children_iterator, key=lambda child: child.name)
+                for child in children:
+                    child_path = Path(child.path)
+                    try:
+                        ensure_no_symlink(child_path)
+                        if child.is_file(follow_symlinks=False) and child_path.suffix == ".json":
+                            found.append(child_path)
+                    except (OSError, JsonlDurabilityError):
+                        continue
+        except (OSError, JsonlDurabilityError):
+            continue
     return found
 
 
 def existing_run_ids(ledger: Path) -> set:
     try:
         rows = read_jsonl_objects(ledger)
-    except JsonlDurabilityError as exc:
-        raise UsageError(f"ledger is unusable: {exc}") from exc
+    except JsonlDurabilityError:
+        raise UsageError("ledger is unusable") from None
     return {row["run_id"] for row in rows
             if isinstance(row, dict) and isinstance(row.get("run_id"), str)}
 
 
 def command_ingest(args: argparse.Namespace) -> int:
     runs_dir, ledger = Path(args.runs_dir), Path(args.ledger)
-    if not runs_dir.is_dir():
-        diag(f"runs directory absent: {runs_dir}")
+    try:
+        paths = evidence_files(runs_dir)
+    except UsageError:
+        diag("cannot read evidence directory")
         return 2
     seen = existing_run_ids(ledger)
     mapping = provider_engine_map()
     counts = {"ingested": 0, "duplicate": 0, "incomplete": 0, "malformed": 0, "non-evidence": 0}
 
-    for path in evidence_files(runs_dir):
+    for path in paths:
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            raw = read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
+            if raw is None:
+                raise OSError(f"evidence file disappeared: {path}")
+            data = json.loads(raw.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, JsonlDurabilityError,
+                TypeError,
+                ValueError, OverflowError, RecursionError):
             counts["malformed"] += 1
             diag(f"skipped unreadable evidence file: {path.name}")
             continue
@@ -303,10 +403,11 @@ def command_ingest(args: argparse.Namespace) -> int:
             counts["duplicate"] += 1
             continue
         try:
-            outcome = append_jsonl(ledger, normalize(data, mapping),
+            assignment_root = runs_dir.parent / "assignments" if runs_dir.name != "runs" else runs_dir.parent / "assignments"
+            outcome = append_jsonl(ledger, normalize(data, mapping, assignment_root),
                                    dedupe_field="run_id", dedupe_value=run_id)
-        except JsonlDurabilityError as exc:
-            diag(f"ledger append failed: {exc}")
+        except JsonlDurabilityError:
+            diag("ledger append failed")
             return 1
         seen.add(run_id)
         counts["ingested" if outcome.appended else "duplicate"] += 1
@@ -342,7 +443,12 @@ def valid_amount(value: object, allow_float: bool) -> bool:
     if isinstance(value, bool):
         return False
     if allow_float:
-        return isinstance(value, (int, float)) and value >= 0
+        if not isinstance(value, (int, float)):
+            return False
+        try:
+            return math.isfinite(float(value)) and value >= 0
+        except (OverflowError, ValueError):
+            return False
     return isinstance(value, int) and value >= 0
 
 
@@ -530,8 +636,8 @@ def command_rollup(args: argparse.Namespace) -> int:
         return 2
     try:
         rows = read_jsonl_objects(ledger)
-    except JsonlDurabilityError as exc:
-        diag(f"ledger is unusable: {exc}")
+    except JsonlDurabilityError:
+        diag("ledger is unusable")
         return 2
     rollup = build_rollup(rows, week)
     report_path = out_dir / f"usage-{week}.md"
@@ -539,8 +645,9 @@ def command_rollup(args: argparse.Namespace) -> int:
     try:
         atomic_text(report_path, render_report(rollup, ledger))
         atomic_text(json_path, json.dumps(rollup, indent=2, sort_keys=True) + "\n")
-    except OSError as exc:
-        diag(f"cannot write report to {out_dir}: {exc}")
+    except (UsageError, JsonlDurabilityError, OSError, TypeError, ValueError,
+            OverflowError, RecursionError, UnicodeDecodeError):
+        diag("cannot write report")
         return 1
     print(f"{PROG}: wrote {report_path.as_posix()} ({rollup['totals']['runs']} runs)")
     return 0
@@ -588,8 +695,12 @@ def command_snapshot(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+        payload = json.loads(
+            raw.decode("utf-8"),
+            parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError,
+            OverflowError, RecursionError):
         diag("openrouter response is not valid JSON")
         return 1
     body = payload.get("data") if isinstance(payload, dict) else None
@@ -606,10 +717,113 @@ def command_snapshot(args: argparse.Namespace) -> int:
               "evidence_source": "openrouter-credits-v1"}
     try:
         append_jsonl(Path(args.ledger), record)
-    except JsonlDurabilityError as exc:
-        diag(f"ledger append failed: {exc}")
+    except JsonlDurabilityError:
+        diag("ledger append failed")
         return 1
     print(f"{PROG}: openrouter snapshot recorded")
+    return 0
+
+
+def command_quota(args: argparse.Namespace) -> int:
+    pool_dir = Path(args.capacity_pool_dir) if args.capacity_pool_dir else assignment_mod.capacity_pool_dir()
+    try:
+        pool = assignment_mod.load_capacity_pool(pool_dir, args.pool_id)
+    except assignment_mod.AssignmentError:
+        diag("capacity pool is invalid")
+        return 2
+    try:
+        rows = read_jsonl_objects(Path(args.ledger))
+    except JsonlDurabilityError:
+        diag("ledger is unusable")
+        return 2
+
+    period = pool["quota"]["period"]
+    key = current_period_key(period)
+    if args.period is not None and args.period != key:
+        diag("--period may only name the current capacity-pool period")
+        return 2
+    unit = pool["quota"].get("unit")
+    limit = pool["quota"].get("limit")
+
+    runs = tokens = 0
+    cost = 0.0
+    ledger_parent = Path(args.ledger).parent
+    assignment_root = ledger_parent.parent / "assignments" if ledger_parent.name == "usage" else ledger_parent / "assignments"
+    for row in rows:
+        if not isinstance(row, dict) or row.get("record") != "run":
+            continue
+        if ledger_row_is_corrupt(row):
+            diag(f"corrupt ledger row refused for quota: {row.get('run_id')!r}")
+            return 2
+        pool_id = row.get("capacity_pool")
+        if row.get("assignment_digest"):
+            persisted = assignment_mod.load_assignment(
+                assignment_root, str(row.get("task_id") or ""), row["assignment_digest"])
+            if persisted is None:
+                diag(f"assignment is absent for quota row {row.get('run_id')}")
+                return 2
+            try:
+                assignment_mod.validate_assignment(persisted, require_source_evidence=True)
+            except assignment_mod.AssignmentError as exc:
+                diag(f"assignment is invalid for quota row {row.get('run_id')}: {exc}")
+                return 2
+            if row.get("provider") != persisted["provider"] or row.get("capacity_pool") != persisted.get("capacity_pool"):
+                diag(f"quota row attribution disagrees with persisted assignment: {row.get('run_id')}")
+                return 2
+            if row.get("engine") != persisted.get("engine") \
+                    or row.get("billing_basis") != persisted.get("billing_basis"):
+                diag(f"quota row authority disagrees with persisted assignment: {row.get('run_id')}")
+                return 2
+            pool_id = persisted.get("capacity_pool")
+        if pool_id != args.pool_id:
+            continue
+        bucket = period_key_of(period, row.get("finished_at")) or period_key_of(period, row.get("started_at"))
+        if bucket != key:
+            continue
+        if pool.get("billing_basis") == "metered":
+            # ``cost_basis`` is a ledger projection, not an authority claim. Recompute the
+            # receipt classification from the allowlisted provider source and trusted engine
+            # mapping so a hand-edited row cannot turn policy/unreconciled numbers into quota
+            # consumption merely by writing cost_basis="receipt".
+            receipt_usage = {
+                "provider": row.get("provider"),
+                "billing_basis": row.get("billing_basis"),
+                "evidence_source": row.get("evidence_source"),
+                "tokens": row.get("tokens"),
+                "cost_usd": row.get("cost_usd"),
+            }
+            receipt_tokens, receipt_cost, receipt_basis = classify_cost(receipt_usage)
+            if receipt_basis != "receipt" or receipt_tokens is None or receipt_cost is None:
+                diag(f"metered quota row has no valid provider receipt: {row.get('run_id')!r}")
+                return 2
+            row_tokens, row_cost = receipt_tokens, receipt_cost
+        else:
+            row_tokens, row_cost = row.get("tokens") or 0, row.get("cost_usd") or 0.0
+        runs += 1
+        tokens += row_tokens
+        cost += row_cost
+
+    meters = {"usd": cost, "tokens": tokens, "requests": runs}
+    consumed = meters.get(unit) if unit else None
+    if limit is None:
+        status = "no-limit-declared"
+    elif unit is not None and unit not in meters:
+        status = "unmeasurable"  # a declared limit against a unit this tool cannot meter
+    elif consumed is not None and consumed >= limit:
+        status = "exceeded"
+    else:
+        status = "within-limit"
+    on_demand_required = status == "exceeded" and pool.get("on_demand") is False
+
+    report = {
+        "schema_version": LEDGER_SCHEMA_VERSION, "record": "quota-reconciliation",
+        "pool_id": args.pool_id, "period": period, "period_key": key,
+        "unit": unit, "limit": limit, "consumed": consumed,
+        "runs": runs, "tokens": tokens, "cost_usd": cost,
+        "status": status, "on_demand_required": on_demand_required,
+        "generated_at": now_iso(),
+    }
+    print(json.dumps(report, sort_keys=True))
     return 0
 
 
@@ -629,17 +843,26 @@ def parse_args(argv: list) -> argparse.Namespace:
     snapshot = sub.add_parser("openrouter-snapshot",
                               help="opt-in account-level OpenRouter reconciliation")
     snapshot.add_argument("--ledger", default=str(DEFAULT_LEDGER))
+
+    quota = sub.add_parser("quota", help="Phase 3: reconcile ledger usage against a capacity pool's quota period")
+    quota.add_argument("--pool-id", required=True)
+    quota.add_argument("--capacity-pool-dir", default=None)
+    quota.add_argument("--ledger", default=str(DEFAULT_LEDGER))
+    quota.add_argument("--period", default=None, metavar="PERIOD-KEY",
+                       help="optional assertion that the requested period is current")
     return parser.parse_args(argv)
 
 
 def main() -> int:
-    args = parse_args(sys.argv[1:])
-    handlers = {"ingest": command_ingest, "rollup": command_rollup,
-                "openrouter-snapshot": command_snapshot}
     try:
+        args = parse_args(sys.argv[1:])
+        handlers = {"ingest": command_ingest, "rollup": command_rollup,
+                    "openrouter-snapshot": command_snapshot, "quota": command_quota}
         return handlers[args.command](args)
-    except UsageError as exc:
-        diag(str(exc))
+    except (UsageError, JsonlDurabilityError, assignment_mod.AssignmentError,
+            OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, json.JSONDecodeError):
+        diag("invalid input or durable state")
         return 2
 
 

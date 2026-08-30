@@ -19,13 +19,17 @@ BIN="$TMP/bin"; R="$TMP/controller"; ORIGIN="$TMP/origin.git"
 mkdir -p "$BIN" "$R/scripts/tests" "$R/state/tasks" "$R/state/runs" \
   "$R/loop/logs" "$R/app" "$R/fixtures" "$R/other" \
   "$R/user-client/render/data/models"
-for s in work.sh worker-sandbox.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh \
-         git-scope.py validate-gate.py validate-worker-result.py validate-verifier-result.py \
-         resolve-model-alias.py worker-evidence.py seed_contract.py project-pilot.py engine_contract.py \
-         pilot_instruction.py project_authority.py; do
+for s in assignment.py assist.sh board.sh capacity.sh conduct.sh engine_contract.py git-scope.py \
+         jsonl_durable.py notify.sh pilot_instruction.py plan.sh project-pilot.py project-reconcile.py project_authority.py \
+         provider-connect-proxy.py provider-network.sh publish.sh remote_evidence.py resolve-engine.py \
+         resolve-model-alias.py resync.sh run_contract.py runtime-state.py seed_contract.py taskctl.sh \
+         transition_receipt.py validate-assignment-result.py validate-gate.py validate-verifier-result.py \
+         validate-worker-result.py work.sh worker-evidence.py worker-sandbox.sh; do
   [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$R/scripts/"
 done
 chmod +x "$R/scripts/"* 2>/dev/null || true
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$R/scripts" \
+  || { no "phase 5 fixture is missing a staged first-party dependency"; }
 printf 'protected\n' > "$R/scripts/protected.sh"
 printf 'test\n' > "$R/scripts/tests/existing.test.cjs"
 printf '{"truth":1}\n' > "$R/fixtures/truth.json"

@@ -18,7 +18,7 @@ samples={
 'pilot':{'schema_version':1,'id':'pilot','project_id':'p','charter':'c','model_policy':'human alias','status':'active'},
 'goal':{'schema_version':1,'id':'g','project_id':'p','outcome':'o','acceptance_suite':'true','falsifier':'false green','budget':{},'status':'active'},
 'task':{'schema_version':1,'id':'t','goal_id':'g','dependencies':[],'allowed_paths':['app'],'non_goals':['tests'],'worker_class':'claude','acceptance':'true','status':'ready'},
-'run':{'schema_version':1,'id':'r','task_id':'t','worker':'w','worktree':'/tmp/w','base_commit':'0'*40,'pid':1,'lease_expires':'later','deadline':'later','usage':{},'result':{},'status':'pending'},
+'run':{'schema_version':1,'id':'r','task_id':'t','worker':'w','worktree':'/tmp/w','base_commit':'0'*40,'pid':1,'process_group':1,'lease_expires':'later','deadline':'later','usage':{},'result':{},'status':'pending'},
 'decision':{'schema_version':1,'id':'d','actor':'head-hermes','verb':'work','arguments':['t'],'reason':'r','goal_id':'g','idempotency_key':'k','status':'accepted','decision_source':'hermes-model'},
 'escalation':{'schema_version':1,'id':'e','goal_id':'g','required_actor':'Lucas','question':'q','evidence':{},'status':'open'},
 'delivery':{'schema_version':1,'id':'delivery','event_id':'event','destination':'topic:1','attempt':0,'acknowledgement':None,'status':'pending'},
@@ -41,7 +41,8 @@ cp "$SRC/scripts/conduct-hermes.sh" "$SRC/scripts/taskctl.sh" "$SRC/scripts/inta
   "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
   "$SRC/scripts/decision-queue.py" "$SRC/scripts/validate-control-state.py" \
   "$SRC/scripts/engine_contract.py" \
-  "$SRC/scripts/validate-decision.py" "$SRC/scripts/runtime-state.py" "$R/scripts/"
+  "$SRC/scripts/validate-decision.py" "$SRC/scripts/assignment.py" \
+  "$SRC/scripts/runtime-state.py" "$R/scripts/"
 normalize_head_decision(){
   local file="$1" temporary="$1.normalized"
   python3 - "$file" <<'PY' | RECURSION_ROOT="$R" python3 "$R/scripts/decision-queue.py" normalize > "$temporary"

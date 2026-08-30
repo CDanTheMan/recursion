@@ -67,7 +67,7 @@ echo "ok    project-topic intake binds its pilot and forwards portfolio/cross-pr
 P="$TMP/pilot"; mkdir -p "$P/scripts" "$P/state/project-config" "$P/state/pilots" \
   "$P/state/goals" "$P/state/tasks" "$P/state/runs" "$P/state/instructions" "$P/state/actions" \
   "$P/state/.locks" "$P/loop/logs"
-for script in project-pilot.py project_authority.py conduct-hermes.sh validate-decision.py validate-control-state.py \
+for script in project-pilot.py remote_evidence.py project_authority.py conduct-hermes.sh validate-decision.py validate-control-state.py \
               engine_contract.py decision-queue.py taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
               instruction_routing.py pilot_instruction.py seed_contract.py runtime-state.py; do
   cp "$SRC/scripts/$script" "$P/scripts/"

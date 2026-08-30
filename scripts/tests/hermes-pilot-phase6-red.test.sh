@@ -25,11 +25,19 @@ copy_controller(){
     "$r/state/decision-queue/pending" "$r/state/decision-queue/running" \
     "$r/state/decision-queue/succeeded" "$r/state/decision-queue/failed" \
     "$r/state/.locks" "$r/state/evidence" "$r/loop/logs"
-  for s in conduct-hermes.sh decision-queue.py validate-decision.py validate-control-state.py \
-           project-pilot.py engine_contract.py project_authority.py pilot_instruction.py project-reconcile.py jsonl_durable.py transition_receipt.py runtime-state.py taskctl.sh worker-sandbox.sh validate-gate.py; do
+  for s in assignment.py assist.sh author.sh board.sh branch-review.sh capacity.sh conduct-hermes.sh conduct.sh \
+           decision-queue.py engine_contract.py git-scope.py hermes-decide.sh instruction_routing.py intake.sh \
+           jsonl_durable.py notification-outbox.py notify.sh pilot_instruction.py plan.sh project-pilot.py \
+           project-reconcile.py project_authority.py provider-connect-proxy.py provider-network.sh publish.sh \
+           remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
+           seed_contract.py taskctl.sh transition_receipt.py validate-assignment-result.py validate-control-state.py \
+           validate-decision.py validate-gate.py validate-verifier-result.py validate-worker-result.py work.sh \
+           worker-evidence.py worker-sandbox.sh; do
     [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$r/scripts/"
   done
   [ ! -f "$SRC/scripts/seed_contract.py" ] || cp "$SRC/scripts/seed_contract.py" "$r/scripts/"
+  python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$r/scripts" \
+    || { no "phase 6 controller fixture is missing a staged first-party dependency"; }
   chmod +x "$r/scripts/"* 2>/dev/null || true
   if ! python3 -c 'import fcntl' >/dev/null 2>&1; then
     cat > "$r/scripts/fcntl.py" <<'PY'

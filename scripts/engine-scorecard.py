@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import calendar
 import json
+import math
 import statistics
 import sys
 import time
@@ -47,9 +48,15 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+import assignment
+from jsonl_durable import JsonlDurabilityError, atomic_bytes, ensure_no_symlink, read_durable_bytes
+
 SCHEMA_VERSION = 1
 MAX_TABLE_ROWS = 25  # bounded-output rule: prioritize by activity, drop the rest, never append
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+MAX_INPUT_BYTES = 8 * 1024 * 1024
+MAX_INPUT_LINES = 20000
+MAX_FIELD_BYTES = 1 << 20
 
 # Canonical escalation-identity event kinds (taskctl.sh: "the ONE writer for ... escalation
 # identity"). Deliberately narrow: this is the identity-bearing pair, not every event that
@@ -77,13 +84,26 @@ class TaskInfo:
 def parse_task_header(text: str) -> dict[str, str]:
     """Header fields end at the first blank line; body lines never supply a field
     (work.sh reads verifier_engine the same way, precisely to prevent that)."""
+    if not isinstance(text, str):
+        return {}
+    try:
+        if len(text.encode("utf-8", "strict")) > MAX_INPUT_BYTES:
+            return {}
+    except UnicodeError:
+        return {}
     fields: dict[str, str] = {}
     for line in text.splitlines():
         if not line.strip():
             break
         if ":" in line and not line.startswith((" ", "\t")):
             key, _, value = line.partition(":")
-            fields.setdefault(key.strip(), value.strip())
+            clean_key, clean_value = key.strip(), value.strip()
+            try:
+                within_bound = len(clean_value.encode("utf-8", "strict")) <= MAX_FIELD_BYTES
+            except UnicodeError:
+                within_bound = False
+            if clean_key and within_bound:
+                fields.setdefault(clean_key, clean_value)
     return fields
 
 
@@ -94,12 +114,20 @@ def load_tasks(root: Path) -> tuple[dict[str, TaskInfo], int, int]:
     tasks: dict[str, TaskInfo] = {}
     parsed = 0
     skipped = 0
-    if not task_dir.is_dir():
+    try:
+        ensure_no_symlink(task_dir)
+        if not task_dir.is_dir():
+            return tasks, 0, 0
+        paths = sorted(task_dir.glob("*.md"))
+    except (OSError, ValueError, JsonlDurabilityError):
         return tasks, 0, 0
-    for path in sorted(task_dir.glob("*.md")):
+    for path in paths[:MAX_INPUT_LINES]:
         try:
-            text = path.read_text(encoding="utf-8", errors="surrogateescape")
-        except OSError:
+            raw = read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
+            if raw is None:
+                raise OSError
+            text = raw.decode("utf-8", "strict")
+        except (OSError, UnicodeDecodeError, JsonlDurabilityError, ValueError):
             skipped += 1
             continue
         fields = parse_task_header(text)
@@ -130,18 +158,25 @@ def load_events(root: Path) -> tuple[list[dict], int, int, str]:
     parsed = 0
     skipped = 0
     max_ts = ""
-    if not path.is_file():
-        return events, 0, 0, ""
     try:
-        raw = path.read_text(encoding="utf-8", errors="surrogateescape")
-    except OSError:
+        raw_bytes = read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
+        if raw_bytes is None:
+            return events, 0, 0, ""
+        raw = raw_bytes.decode("utf-8", "strict")
+    except (OSError, UnicodeDecodeError, JsonlDurabilityError, ValueError):
         return events, 0, 0, ""
-    for line in raw.splitlines():
+    lines = raw.splitlines()
+    skipped += max(0, len(lines) - MAX_INPUT_LINES)
+    for line in lines[:MAX_INPUT_LINES]:
         if not line.strip():
             continue
         try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
+            record = json.loads(
+                line,
+                parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+            )
+        except (json.JSONDecodeError, TypeError, ValueError, OverflowError, RecursionError,
+                UnicodeDecodeError):
             skipped += 1
             continue
         if not isinstance(record, dict) or not isinstance(record.get("event"), str):
@@ -161,10 +196,12 @@ def load_events(root: Path) -> tuple[list[dict], int, int, str]:
 
 class RunRecord:
     __slots__ = ("id", "task_id", "role", "alias", "status", "outcome",
-                 "started_epoch", "finished_epoch")
+                 "started_epoch", "finished_epoch", "engine", "assignment_digest", "attribution")
 
     def __init__(self, id_: str, task_id: str, role: str, alias: str, status: str,
-                 outcome: str, started_epoch: int | None, finished_epoch: int | None) -> None:
+                 outcome: str, started_epoch: int | None, finished_epoch: int | None,
+                 engine: str | None = None, assignment_digest: str | None = None,
+                 attribution: dict | None = None) -> None:
         self.id = id_
         self.task_id = task_id
         self.role = role
@@ -172,6 +209,11 @@ class RunRecord:
         self.status = status
         self.outcome = outcome
         self.started_epoch = started_epoch
+        # Phase 3 (D-016): when the run's own assignment bound its engine at launch time, use
+        # it directly instead of joining the task header (which can change after the run).
+        self.engine = engine
+        self.assignment_digest = assignment_digest
+        self.attribution = attribution or {}
         self.finished_epoch = finished_epoch
 
 
@@ -180,7 +222,7 @@ def _parse_ts(value: Any) -> int | None:
         return None
     try:
         return calendar.timegm(time.strptime(value, TS_FORMAT))
-    except ValueError:
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError, UnicodeError):
         return None
 
 
@@ -192,13 +234,24 @@ def load_runs(root: Path) -> tuple[list[RunRecord], int, int, bool]:
     runs: list[RunRecord] = []
     parsed = 0
     skipped = 0
-    if not runs_dir.is_dir():
+    try:
+        ensure_no_symlink(runs_dir)
+        if not runs_dir.is_dir():
+            return runs, 0, 0, True
+        paths = sorted(runs_dir.glob("*.json"))
+    except (OSError, ValueError, JsonlDurabilityError):
         return runs, 0, 0, True
-    for path in sorted(runs_dir.glob("*.json")):
+    for path in paths[:MAX_INPUT_LINES]:
         try:
-            text = path.read_text(encoding="utf-8", errors="surrogateescape")
-            record = json.loads(text)
-        except (OSError, json.JSONDecodeError):
+            raw = read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
+            if raw is None:
+                raise OSError
+            record = json.loads(
+                raw.decode("utf-8", "strict"),
+                parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+            )
+        except (OSError, UnicodeDecodeError, JsonlDurabilityError, json.JSONDecodeError,
+                TypeError, ValueError, OverflowError, RecursionError):
             skipped += 1
             continue
         if not isinstance(record, dict):
@@ -215,7 +268,29 @@ def load_runs(root: Path) -> tuple[list[RunRecord], int, int, bool]:
         outcome = record.get("outcome") if isinstance(record.get("outcome"), str) else ""
         started = _parse_ts(record.get("started_at"))
         finished = _parse_ts(record.get("finished_at"))
-        runs.append(RunRecord(run_id, task_id, role, alias, status, outcome, started, finished))
+        assignment_digest = record.get("assignment_digest") \
+            if isinstance(record.get("assignment_digest"), str) and record.get("assignment_digest") else None
+        attribution = {}
+        if assignment_digest:
+            # Assignment-native records are deliberately joined to the immutable persisted
+            # assignment.  Run JSON is an evidence projection and is not an authority for
+            # engine/provider/pool/host/model/source attribution.
+            persisted = assignment.load_assignment(
+                root / "state" / "assignments", task_id, assignment_digest,
+            )
+            try:
+                assignment.validate_assignment(persisted, require_source_evidence=True)
+            except assignment.AssignmentError:
+                skipped += 1
+                continue
+            engine = persisted["engine"]
+            attribution = {key: persisted.get(key) for key in (
+                "assignment_digest", "capacity_pool", "provider", "host", "model",
+                "sandbox_profile", "source_repository", "source_branch", "source_sha")}
+        else:
+            engine = None
+        runs.append(RunRecord(run_id, task_id, role, alias, status, outcome, started, finished,
+                              engine, assignment_digest, attribution))
         parsed += 1
     return runs, parsed, skipped, False
 
@@ -235,6 +310,7 @@ class Bucket:
         self.retries = 0
         self.durations: list[int] = []
         self.escalations: Counter[str] = Counter()
+        self.attributions: dict[str, dict] = {}
 
     def activity(self) -> int:
         return (sum(self.task_status.values()) + self.verifier_arms
@@ -276,17 +352,22 @@ def build_buckets(
         get(task.engine, task.model_alias).task_status[task.status] += 1
         get(task.verifier_engine, task.verifier_model_alias).verifier_arms += 1
 
-    # Run evidence: join engine via task_id + role. A run whose task_id is unknown still
-    # carries its own alias (that came straight from the run record) but not a real engine.
+    # Run evidence: an assignment-native run (Phase 3, D-016) carries its own resolved engine
+    # directly on the record -- use it. Only a run without one (pre-Phase-3 evidence) falls
+    # back to joining the task header via task_id + role, which can drift after the run
+    # finishes (docs/audits/recursion-v2-infrastructure-audit-2026-08-28.md).
     unknown_task_runs = 0
     by_bucket_task_role: dict[tuple[str, str], Counter[tuple[str, str]]] = {}
     for run in runs:
-        task = tasks.get(run.task_id)
-        if task is None:
-            engine = "(unknown-task)"
-            unknown_task_runs += 1
+        if run.engine is not None:
+            engine = run.engine
         else:
-            engine = task.verifier_engine if run.role == "verifier" else task.engine
+            task = tasks.get(run.task_id)
+            if task is None:
+                engine = "(unknown-task)"
+                unknown_task_runs += 1
+            else:
+                engine = task.verifier_engine if run.role == "verifier" else task.engine
         bucket = get(engine, run.alias)
         bucket.runs_by_role[run.role] += 1
         bucket.outcomes[_outcome_bucket(run.status, run.outcome)] += 1
@@ -295,6 +376,8 @@ def build_buckets(
             bucket.durations.append(run.finished_epoch - run.started_epoch)
         counter = by_bucket_task_role.setdefault(bucket.key(), Counter())
         counter[(run.task_id, run.role)] += 1
+        if run.attribution:
+            bucket.attributions[json.dumps(run.attribution, sort_keys=True, separators=(",", ":"))] = run.attribution
     for key, counter in by_bucket_task_role.items():
         buckets[key].retries += sum(max(0, n - 1) for n in counter.values())
 
@@ -321,6 +404,13 @@ def build_buckets(
 # --------------------------------------------------------------------------------------
 
 def _fmt_duration(seconds: int) -> str:
+    if isinstance(seconds, bool) or not isinstance(seconds, (int, float)):
+        return "n/a"
+    try:
+        if not math.isfinite(float(seconds)) or seconds < 0:
+            return "n/a"
+    except (TypeError, ValueError, OverflowError):
+        return "n/a"
     seconds = int(seconds)
     if seconds < 60:
         return f"{seconds}s"
@@ -334,7 +424,9 @@ def _fmt_duration(seconds: int) -> str:
 def _cell(value: object) -> str:
     """Neutralize header-sourced text for the markdown table: task headers are worker-adjacent
     input, and a raw ESC byte or '|' would corrupt (or ANSI-style) a report a human cats."""
-    text = str(value)
+    text = value if isinstance(value, str) else str(value)
+    if len(text.encode("utf-8", "replace")) > MAX_FIELD_BYTES:
+        text = text.encode("utf-8", "replace")[:MAX_FIELD_BYTES].decode("utf-8", "ignore")
     text = "".join("?" if (ord(ch) < 0x20 or ord(ch) == 0x7F) else ch for ch in text)
     return text.replace("|", "\\|")
 
@@ -343,6 +435,12 @@ def _fmt_counter(counter: Counter[str]) -> str:
     if not counter:
         return "-"
     return " ".join(f"{_cell(k)}:{v}" for k, v in sorted(counter.items()))
+
+
+def _attribution_text(value: dict) -> str:
+    keys = ("assignment_digest", "capacity_pool", "provider", "host", "model",
+            "sandbox_profile", "source_repository", "source_branch", "source_sha")
+    return ", ".join(f"{key}={value.get(key) if value.get(key) is not None else '-'}" for key in keys)
 
 
 def _fmt_outcomes(counter: Counter[str]) -> str:
@@ -384,6 +482,7 @@ def render_json(
                 "n": len(bucket.durations),
             },
             "escalations": dict(sorted(bucket.escalations.items())),
+            "attribution": [bucket.attributions[key] for key in sorted(bucket.attributions)],
         })
     return {
         "schema_version": SCHEMA_VERSION,
@@ -429,8 +528,8 @@ def render_markdown(data: dict) -> str:
     shown = rows[:MAX_TABLE_ROWS]
 
     if shown:
-        lines.append("| Engine | Alias | Tasks (status) | Verifier-arms | Runs (by role) | Outcomes | Retries | Wall-clock median/total | Escalations |")
-        lines.append("|---|---|---|---|---|---|---|---|---|")
+        lines.append("| Engine | Alias | Assignment attribution | Tasks (status) | Verifier-arms | Runs (by role) | Outcomes | Retries | Wall-clock median/total | Escalations |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|")
         for row in shown:
             task_status = Counter(row["task_status"])
             runs_by_role = Counter(row["runs_by_role"])
@@ -439,7 +538,7 @@ def render_markdown(data: dict) -> str:
             wc = row["wallclock_seconds"]
             wallclock = "n/a" if wc["n"] == 0 else f"{_fmt_duration(wc['median'])} / {_fmt_duration(wc['total'])}"
             lines.append(
-                f"| {_cell(row['engine'])} | {_cell(row['alias'])} | {_fmt_counter(task_status)} | "
+                f"| {_cell(row['engine'])} | {_cell(row['alias'])} | {_cell('; '.join(_attribution_text(item) for item in row.get('attribution', [])) or '-') } | {_fmt_counter(task_status)} | "
                 f"{row['verifier_arms'] or '-'} | {_fmt_counter(runs_by_role)} | "
                 f"{_fmt_outcomes(outcomes)} | {row['retries'] or '-'} | {wallclock} | "
                 f"{_fmt_counter(escalations)} |"
@@ -476,45 +575,44 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", default=None, help="also write machine-readable JSON here")
     args = parser.parse_args(argv)
 
-    root = Path(args.root) if args.root else Path(__file__).resolve().parent.parent
-    if not root.is_dir():
-        print(f"engine-scorecard: --root is not a directory: {root}", file=sys.stderr)
-        return 2
-
-    tasks, tasks_parsed, tasks_skipped = load_tasks(root)
-    events, events_parsed, events_skipped, events_max_ts = load_events(root)
-    events_absent = not (root / "state" / "events.jsonl").is_file()
-    runs, runs_parsed, runs_skipped, runs_absent = load_runs(root)
-
-    buckets, unknown_task_runs, unattributed_escalations = build_buckets(tasks, runs, events)
-
-    data = render_json(
-        root, tasks_parsed, tasks_skipped,
-        events_parsed, events_skipped, events_max_ts, events_absent,
-        runs_parsed, runs_skipped, runs_absent,
-        buckets, unknown_task_runs, unattributed_escalations,
-    )
-    report = render_markdown(data)
-
-    if args.out:
-        try:
-            Path(args.out).write_text(report, encoding="utf-8")
-        except OSError as exc:
-            print(f"engine-scorecard: cannot write --out {args.out}: {exc}", file=sys.stderr)
+    try:
+        root = Path(args.root) if args.root else Path(__file__).resolve().parent.parent
+        ensure_no_symlink(root)
+        if not root.is_dir():
+            print("engine-scorecard: --root is not a directory", file=sys.stderr)
             return 2
-    else:
-        sys.stdout.write(report)
 
-    if args.json:
-        try:
-            Path(args.json).write_text(
-                json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        tasks, tasks_parsed, tasks_skipped = load_tasks(root)
+        events, events_parsed, events_skipped, events_max_ts = load_events(root)
+        events_path = root / "state" / "events.jsonl"
+        events_absent = read_durable_bytes(events_path, max_bytes=MAX_INPUT_BYTES) is None
+        runs, runs_parsed, runs_skipped, runs_absent = load_runs(root)
+
+        buckets, unknown_task_runs, unattributed_escalations = build_buckets(tasks, runs, events)
+
+        data = render_json(
+            root, tasks_parsed, tasks_skipped,
+            events_parsed, events_skipped, events_max_ts, events_absent,
+            runs_parsed, runs_skipped, runs_absent,
+            buckets, unknown_task_runs, unattributed_escalations,
+        )
+        report = render_markdown(data)
+
+        if args.out:
+            atomic_bytes(Path(args.out), report.encode("utf-8"))
+        else:
+            sys.stdout.write(report)
+
+        if args.json:
+            atomic_bytes(
+                Path(args.json),
+                (json.dumps(data, indent=2, sort_keys=True) + "\n").encode("utf-8"),
             )
-        except OSError as exc:
-            print(f"engine-scorecard: cannot write --json {args.json}: {exc}", file=sys.stderr)
-            return 2
-
-    return 0
+        return 0
+    except (OSError, UnicodeDecodeError, UnicodeEncodeError, JsonlDurabilityError,
+            TypeError, ValueError, OverflowError, RecursionError, json.JSONDecodeError):
+        print("engine-scorecard: invalid input or durable state", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

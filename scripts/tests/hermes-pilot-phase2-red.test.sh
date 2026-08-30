@@ -7,6 +7,19 @@ SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0
 ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
+stage_controller_closure(){
+  local root="$1"
+  for helper in assignment.py assist.sh author.sh board.sh branch-review.sh capacity.sh conduct-hermes.sh conduct.sh \
+      decision-queue.py engine_contract.py git-scope.py hermes-decide.sh instruction_routing.py intake.sh \
+      jsonl_durable.py notification-outbox.py notify.sh pilot_instruction.py plan.sh project-pilot.py \
+      project-reconcile.py project_authority.py provider-connect-proxy.py provider-network.sh publish.sh \
+      remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
+      seed_contract.py taskctl.sh transition_receipt.py validate-assignment-result.py validate-control-state.py \
+      validate-decision.py validate-gate.py validate-verifier-result.py validate-worker-result.py work.sh \
+      worker-evidence.py worker-sandbox.sh; do
+    cp "$SRC/scripts/$helper" "$root/scripts/"
+  done
+}
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 # 1. Replaying the same durable decision ten times must execute one action, not ten.
@@ -16,7 +29,9 @@ cp "$SRC/scripts/taskctl.sh" "$R/scripts/"
 cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
   "$SRC/scripts/runtime-state.py" "$R/scripts/"
 cp "$SRC/scripts/decision-queue.py" "$SRC/scripts/validate-control-state.py" \
-  "$SRC/scripts/validate-decision.py" "$SRC/scripts/engine_contract.py" "$R/scripts/"
+  "$SRC/scripts/validate-decision.py" "$SRC/scripts/engine_contract.py" \
+  "$SRC/scripts/assignment.py" "$R/scripts/"
+stage_controller_closure "$R"
 normalize_head_decision(){
   local file="$1" temporary="$1.normalized"
   python3 - "$file" <<'PY' | RECURSION_ROOT="$R" python3 "$R/scripts/decision-queue.py" normalize > "$temporary"
@@ -35,6 +50,8 @@ cat > "$R/scripts/work.sh" <<'STUB'
 printf '%s\n' "$1" >> "$ACTION_LOG"
 STUB
 chmod +x "$R/scripts/"*.sh
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$R/scripts" \
+  || { no "replay fixture is missing a staged first-party dependency"; }
 cat > "$R/state/tasks/replay-task.md" <<'T'
 id: replay-task
 goal_id: goal-1
@@ -138,8 +155,11 @@ fi
 # 4. Task start must enforce an active parent goal and passed dependencies.
 TROOT="$TMP/taskctl"; mkdir -p "$TROOT/scripts" "$TROOT/state/tasks" "$TROOT/state/goals"
 cp "$SRC/scripts/taskctl.sh" "$TROOT/scripts/"
-cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
+cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" "$SRC/scripts/assignment.py" \
   "$SRC/scripts/runtime-state.py" "$TROOT/scripts/"
+stage_controller_closure "$TROOT"
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$TROOT/scripts" \
+  || { no "taskctl fixture is missing a staged first-party dependency"; }
 printf 'id: active\nstatus: active\n' > "$TROOT/state/goals/active.md"
 printf 'id: blocked\nstatus: blocked\n' > "$TROOT/state/goals/blocked.md"
 cat > "$TROOT/state/tasks/dep.md" <<'T'
@@ -173,8 +193,11 @@ done
 
 # 5. A contended state lock must fail closed, never time out and write unlocked.
 LROOT="$TMP/lock"; mkdir -p "$LROOT/scripts" "$LROOT/state/.locks"
-cp "$SRC/scripts/taskctl.sh" "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
+cp "$SRC/scripts/taskctl.sh" "$SRC/scripts/assignment.py" "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
   "$SRC/scripts/runtime-state.py" "$LROOT/scripts/"; mkdir "$LROOT/state/.locks/taskctl.lock"
+stage_controller_closure "$LROOT"
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$LROOT/scripts" \
+  || { no "lock fixture is missing a staged first-party dependency"; }
 set +e
 RECURSION_ROOT="$LROOT" timeout 20s bash "$LROOT/scripts/taskctl.sh" event probe '' locked \
   >"$TMP/lock.out" 2>&1; lock_rc=$?
@@ -189,8 +212,11 @@ fi
 # never a torn projection or a second state transition.
 AROOT="$TMP/atomic"; mkdir -p "$AROOT/scripts" "$AROOT/state/tasks" "$AROOT/state/goals"
 cp "$SRC/scripts/taskctl.sh" "$AROOT/scripts/"
-cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" \
+cp "$SRC/scripts/jsonl_durable.py" "$SRC/scripts/transition_receipt.py" "$SRC/scripts/assignment.py" \
   "$SRC/scripts/runtime-state.py" "$AROOT/scripts/"
+stage_controller_closure "$AROOT"
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$AROOT/scripts" \
+  || { no "atomic fixture is missing a staged first-party dependency"; }
 printf 'id: g\nstatus: active\n' > "$AROOT/state/goals/g.md"
 cat > "$AROOT/state/tasks/a.md" <<'T'
 id: a

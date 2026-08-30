@@ -19,6 +19,7 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from engine_contract import alias_role_ok, default_registry_path, pilot_engine_ok
+import assignment as assignment_mod
 
 
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -28,7 +29,7 @@ STATUSES = {
     "plan": {"proposed", "approved", "rejected"},
     "goal": {"draft", "approved", "active", "verifying", "achieved", "blocked", "abandoned", "budget-exhausted", "paused"},
     "task": {"proposed", "ready", "queued", "leased", "running", "verifying", "passed", "failed", "blocked", "stale", "cancelled", "moot", "resolved", "escalated"},
-    "run": {"pending", "running", "succeeded", "failed", "blocked", "cancelled", "stale"},
+    "run": {"pending", "prepared", "running", "succeeded", "failed", "blocked", "cancelled", "stale"},
     "decision": {"proposed", "accepted", "queued", "executed", "refused", "cancelled"},
     "escalation": {"open", "resolved", "cancelled"},
     "delivery": {"pending", "running", "succeeded", "failed", "cancelled", "dead-letter"},
@@ -198,10 +199,47 @@ def validate(kind: str, value: object) -> dict:
         if str(value.get("acceptance", "")).strip() in {"", "true", ":", "/bin/true", "exit 0"}:
             fail("acceptance gate is structurally vacuous")
     if kind == "run":
-        if "process_group" in value and (not isinstance(value["process_group"], int) or value["process_group"] < 1):
-            fail("process_group must be a positive integer")
+        if "process_group" in value and (not isinstance(value["process_group"], int) or value["process_group"] < 0):
+            fail("process_group must be a non-negative integer")
+        for field in ("deadline_epoch_ns", "worker_finished_epoch_ns"):
+            if field in value and (
+                isinstance(value[field], bool)
+                or not isinstance(value[field], int)
+                or value[field] < 0
+            ):
+                fail(f"{field} must be a non-negative integer")
+        if value.get("status") != "prepared" and (not isinstance(value.get("pid"), int) or value["pid"] < 1
+                                                     or not isinstance(value.get("process_group"), int) or value["process_group"] < 1):
+            fail("active run must have positive process identity")
         if "role" in value and value["role"] not in {"implementer", "verifier"}:
             fail("invalid worker role")
+        # Versioned compatibility: pre-Phase-3 run evidence has no assignment identity and
+        # remains readable. Any record that claims Phase 3 identity must carry the complete
+        # immutable attribution projection; consumers must never fill these from task headers.
+        if "assignment_digest" in value:
+            if not re.fullmatch(r"[0-9a-f]{64}", str(value.get("assignment_digest") or "")):
+                fail("run assignment_digest must be sha256")
+            required_assignment = (
+                "project_id", "engine", "provider", "capacity_pool", "host", "model",
+                "sandbox_profile", "network_profile", "source_repository", "source_branch",
+                "source_sha", "source_evidence", "allowed_paths", "publication_policy",
+                "billing_basis", "metered_approved", "default_branch", "integration_branch",
+                "assignment",
+            )
+            missing_assignment = [field for field in required_assignment if field not in value]
+            if missing_assignment:
+                fail("Phase 3 run is missing assignment attribution: " + ", ".join(missing_assignment))
+            if not isinstance(value.get("source_evidence"), dict) or value["source_evidence"].get("verified") is not True:
+                fail("Phase 3 run source evidence is absent or unverified")
+            try:
+                assignment_mod.validate_assignment(value.get("assignment"), require_source_evidence=True)
+            except assignment_mod.AssignmentError as exc:
+                fail(f"Phase 3 nested assignment is invalid: {exc}")
+            if value["assignment"].get("assignment_digest") != value["assignment_digest"]:
+                fail("Phase 3 run nested assignment digest does not match")
+            for field in assignment_mod.ASSIGNMENT_FIELDS - {"assignment_digest"}:
+                if value.get(field) != value["assignment"].get(field):
+                    fail(f"Phase 3 run attribution disagrees with nested assignment: {field}")
     if "idempotency_key" in value:
         key = value["idempotency_key"]
         if not isinstance(key, str) or not key or len(key) > 256:
@@ -249,8 +287,10 @@ def main() -> int:
         else:
             record = json.load(sys.stdin)
         validate(args.kind, record)
-    except (OSError, json.JSONDecodeError, ValueError) as exc:
-        print(f"ERR {exc}", file=sys.stderr)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError,
+            TypeError, OverflowError, RecursionError):
+        # Keep parser/OS details and absolute input paths out of this public boundary.
+        print("ERR invalid input", file=sys.stderr)
         return 2
     print("OK")
     return 0

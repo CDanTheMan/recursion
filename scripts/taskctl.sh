@@ -78,6 +78,30 @@ _unlock(){
   _LOCK_HELD=0
 }
 
+_persist_assignment_locked(){
+  local assignment_file="$1" expected_task="${2:-}" expected_digest="${3:-}"
+  python3 - "$ROOT" "$assignment_file" "$expected_task" "$expected_digest" <<'PY'
+import json,sys
+from pathlib import Path
+root=Path(sys.argv[1]); provided=Path(sys.argv[2]); expected_task=sys.argv[3]; expected_digest=sys.argv[4]
+if provided.is_symlink() or not provided.is_file():
+    raise SystemExit('taskctl: assignment candidate is absent or symlinked')
+sys.path.insert(0,str(root/'scripts'))
+import assignment
+try:
+    value=json.loads(provided.read_text(encoding='utf-8'))
+    assignment.validate_assignment(value, require_source_evidence=True)
+    if expected_task and (value.get('task_id') != expected_task or value.get('assignment_digest') != expected_digest):
+        raise assignment.AssignmentError('assignment candidate identity does not match the lease binding')
+    assignment.persist_assignment(root/'state/assignments', value)
+except (OSError, UnicodeDecodeError, json.JSONDecodeError, assignment.AssignmentError,
+        TypeError, ValueError, OverflowError, RecursionError):
+    # Exception text can contain absolute paths, parser offsets, or host OS details.
+    # The shell boundary has a stable public diagnostic and no data-bearing traceback.
+    raise SystemExit('taskctl: invalid assignment candidate')
+PY
+}
+
 _repair_transition_receipts(){
   RECURSION_ROOT="$ROOT" RECURSION_TASKCTL_LOCK_HELD=1 \
     RECURSION_TASKCTL_LOCK_OWNER_PID="$_TASKCTL_OWNER_PID" \
@@ -348,6 +372,59 @@ heartbeat)
   ID="${1:?usage: taskctl heartbeat <id>}"; F="$(_taskfile "$ID")"; [ -f "$F" ] || exit 2
   _lock || exit $?
   transition_fields "$F" heartbeat "$ID" "" lease_expires "$(( $(_epoch) + LEASE_TTL ))" \
+    || { rc=$?; _unlock; exit "$rc"; }
+  _unlock ;;
+
+# Phase 3 (D-016): validate and persist an immutable assignment candidate without changing
+# the live lease binding. `set-assignment` stamps the lease for the first implementer run;
+# verifier and retry runs reuse/persist their exact record without rebinding that lease.
+persist-assignment)
+  AFILE="${1:?usage: taskctl persist-assignment <assignment-file>}"
+  EXPECTED_TASK="${2:-}"; EXPECTED_DIGEST="${3:-}"
+  _lock || exit $?
+  _persist_assignment_locked "$AFILE" "$EXPECTED_TASK" "$EXPECTED_DIGEST" \
+    || { rc=$?; _unlock; exit "$rc"; }
+  _unlock ;;
+
+set-assignment)
+  ID="${1:?usage: taskctl set-assignment <id> <assignment-digest> <assignment-file> <owner> <attempt> <run-id>}"
+  DIGEST="${2:?usage: taskctl set-assignment <id> <assignment-digest> <assignment-file> <owner> <attempt> <run-id>}"
+  AFILE="${3:?assignment-file}"; OWNER="${4:?owner}"; ATTEMPT="${5:?attempt}"; RUN_ID="${6:?run-id}"
+  printf '%s' "$DIGEST" | grep -qE '^[0-9a-f]{64}$' \
+    || { echo "taskctl: invalid assignment digest" >&2; exit 2; }
+  F="$(_taskfile "$ID")"; [ -f "$F" ] || exit 2
+  _lock || exit $?
+  CUR="$(_field "$F" status)"; CURRENT_OWNER="$(_field "$F" lease_owner)"; CURRENT_ATTEMPT="$(_field "$F" attempts)"
+  [ "$CUR" = running ] || { _unlock; echo "taskctl: assignment requires running lease" >&2; exit 6; }
+  [ "$CURRENT_OWNER" = "$OWNER" ] || { _unlock; echo "taskctl: assignment owner does not hold lease" >&2; exit 6; }
+  [ "$CURRENT_ATTEMPT" = "$ATTEMPT" ] || { _unlock; echo "taskctl: assignment attempt mismatch" >&2; exit 6; }
+  [ -n "$RUN_ID" ] || { _unlock; echo "taskctl: assignment run id is empty" >&2; exit 2; }
+  EXISTING_DIGEST="$(_field "$F" assignment_digest)"
+  if [ -n "$EXISTING_DIGEST" ]; then
+    [ "$EXISTING_DIGEST" = "$DIGEST" ] \
+      || { _unlock; echo "taskctl: assignment is immutable for this attempt" >&2; exit 6; }
+    [ "$(_field "$F" assignment_run_id)" = "$RUN_ID" ] \
+      && [ "$(_field "$F" assignment_attempt)" = "$ATTEMPT" ] \
+      || { _unlock; echo "taskctl: assignment run binding is immutable for this attempt" >&2; exit 6; }
+  fi
+  _persist_assignment_locked "$AFILE" || { rc=$?; _unlock; exit "$rc"; }
+  python3 - "$ROOT" "$ID" "$DIGEST" <<'PY' || { rc=$?; _unlock; exit "$rc"; }
+import sys
+from pathlib import Path
+sys.path.insert(0,str(Path(sys.argv[1])/'scripts'))
+import assignment
+root=Path(sys.argv[1]); task,digest=sys.argv[2:]
+value=assignment.load_assignment(root/'state/assignments',task,digest)
+if value is None:
+    raise SystemExit('taskctl: persisted assignment is absent')
+try: assignment.validate_assignment(value, require_source_evidence=True)
+except assignment.AssignmentError as exc: raise SystemExit(f'taskctl: invalid persisted assignment: {exc}')
+if value.get('assignment_digest') != digest:
+    raise SystemExit('taskctl: persisted assignment digest mismatch')
+PY
+  transition_fields "$F" set-assignment "$ID" "assignment_digest=$DIGEST run_id=$RUN_ID attempt=$ATTEMPT" \
+    assignment_digest "$DIGEST" lease_assignment_digest "$DIGEST" assignment_run_id "$RUN_ID" \
+    assignment_attempt "$ATTEMPT" \
     || { rc=$?; _unlock; exit "$rc"; }
   _unlock ;;
 
