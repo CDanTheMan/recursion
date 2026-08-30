@@ -136,11 +136,12 @@ gitr(){ if [ -n "$GSSH" ]; then GIT_SSH_COMMAND="$GSSH" git -C "$REPO_DIR" "$@";
 BRANCH="loop/work/$ID"
 BASE_COMMIT=""; CANDIDATE_OID=""; LAST_SCOPE_FILE=""; LAST_RUN_ID=""; LAST_RUN_EVIDENCE=""
 ASSIGNMENT_FILE=""; ASSIGNMENT_DIGEST=""
+RESOLVER_ASSIGNMENT_FILE=""; RESOLVER_ASSIGNMENT_DIGEST=""
 IMPLEMENTER_RUN_ID=""; VERIFIER_RUN_ID=""; RESOLVED_MODEL="$MODEL"; RESOLVED_VERIFIER_MODEL=""
 LAST_USAGE_FILE=""; SEED_DIGEST_BEFORE=""
 # Phase 3 (D-016): the immutable assignment resolved for the arm most recently launched by
 # run_model_supervised. capacity_pool is an optional task-header field naming a
-# scripts/capacity-pools/<id>.json account/subscription identity; absent for every task that
+# scripts/capacity-pools.json account/subscription identity; absent for every task that
 # predates it (legacy behavior: capacity_pool stays null on the assignment).
 ASSIGNMENT_DIGEST=""; ASSIGNMENT_FILE=""
 CAPACITY_POOL="$(field capacity_pool)"
@@ -1040,11 +1041,31 @@ verify_seed_integrity(){
     || { SCOPE_FAIL="worker/gate mutated a declared read-only seed or oracle"; return 1; }
 }
 
+assignment_candidate_field(){
+  python3 - "$1" "$2" <<'PY'
+import json, sys
+try:
+    value = json.load(open(sys.argv[1], encoding="utf-8"))
+    item = value.get(sys.argv[2]) if isinstance(value, dict) else None
+    if item is None:
+        print("")
+    elif isinstance(item, str) and item:
+        print(item)
+    else:
+        raise ValueError("assignment candidate field is not a string")
+except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError,
+        OverflowError, RecursionError):
+    raise SystemExit(1)
+PY
+}
+
 make_phase5_assignment(){
   [ "$STRICT_PHASE5" = 1 ] || return 0
   [ -n "$CAPACITY_POOL" ] && [ "$CAPACITY_POOL" != unassigned ] || { log "strict Phase 5 requires a declared capacity pool"; return 1; }
   local impl_provider verifier_provider impl_profile verifier_profile impl_endpoints verifier_endpoints source_branch host
-  local impl_policy verifier_policy impl_argv verifier_argv
+  local impl_policy verifier_policy impl_argv verifier_argv impl_candidate verifier_candidate
+  local resolved_impl_engine resolved_impl_provider resolved_impl_pool resolved_impl_model
+  local resolved_verifier_engine resolved_verifier_provider resolved_verifier_pool resolved_verifier_model
   impl_provider="$(python3 - "$ENGINE" "${ENGINE_PLAN_IMPLEMENTER:-}" <<'PY'
 import json,sys
 engine, path = sys.argv[1:]
@@ -1145,6 +1166,29 @@ print(json.dumps(value,separators=(",",":")))
 PY
   )" || return 1
   [ -n "$GATE_CONTRACT" ] || { log "strict Phase 5 requires the validated gate contract"; return 1; }
+  # Phase 3 resolves the placement inputs, but its legacy record is not the strict
+  # authority. Bind the resolved engine/provider/model/pool values into the Phase 5
+  # contract, then discard only the private resolver candidates.
+  resolve_run_assignment implementer "$WT" "$ENGINE" "${ENGINE_PLAN_IMPLEMENTER:-}" \
+    "$RESOLVED_MODEL" "$impl_provider" "$BASE_COMMIT" || return 1
+  impl_candidate="$RESOLVER_ASSIGNMENT_FILE"
+  resolve_run_assignment verifier "$WT" "$VERIFIER_ENGINE" "${ENGINE_PLAN_VERIFIER:-}" \
+    "$RESOLVED_VERIFIER_MODEL" "$verifier_provider" "$BASE_COMMIT" || return 1
+  verifier_candidate="$RESOLVER_ASSIGNMENT_FILE"
+  resolved_impl_engine="$(assignment_candidate_field "$impl_candidate" engine)" || return 1
+  resolved_impl_provider="$(assignment_candidate_field "$impl_candidate" provider)" || return 1
+  resolved_impl_pool="$(assignment_candidate_field "$impl_candidate" capacity_pool)" || return 1
+  resolved_impl_model="$(assignment_candidate_field "$impl_candidate" model)" || return 1
+  resolved_verifier_engine="$(assignment_candidate_field "$verifier_candidate" engine)" || return 1
+  resolved_verifier_provider="$(assignment_candidate_field "$verifier_candidate" provider)" || return 1
+  resolved_verifier_pool="$(assignment_candidate_field "$verifier_candidate" capacity_pool)" || return 1
+  resolved_verifier_model="$(assignment_candidate_field "$verifier_candidate" model)" || return 1
+  [ "$resolved_impl_engine" = "$ENGINE" ] && [ "$resolved_verifier_engine" = "$VERIFIER_ENGINE" ] \
+    || { log "resolved assignment engine differs from the strict run contract"; return 1; }
+  [ "$resolved_impl_pool" = "$CAPACITY_POOL" ] && [ "$resolved_verifier_pool" = "$CAPACITY_POOL" ] \
+    || { log "resolved assignment capacity pool differs from the strict run contract"; return 1; }
+  impl_provider="$resolved_impl_provider"; verifier_provider="$resolved_verifier_provider"
+  RESOLVED_MODEL="$resolved_impl_model"; RESOLVED_VERIFIER_MODEL="$resolved_verifier_model"
   # Assignments are immutable provenance, not run records.  Keeping them outside state/runs
   # prevents reconciliation consumers from mistaking the assignment envelope for a worker
   # or verifier result when they enumerate run evidence.
@@ -1154,10 +1198,10 @@ PY
   [ -n "$CONTROLLER_SHA" ] || return 1
   ASSIGNMENT_DIGEST="$(PYTHONPATH="$ROOT/scripts" python3 - "$ASSIGNMENT_FILE" "$ID" "$PROJECT_ID" "$REPO_DIR" "$source_branch" "$BASE_COMMIT" \
     "$ROOT" "$CONTROLLER_SHA" \
-    "$SEED_MANIFEST_SHA256" "$ENGINE" "$impl_provider" "$CAPACITY_POOL" "$host" "strict-linux" "$impl_profile" \
+    "$SEED_MANIFEST_SHA256" "$resolved_impl_engine" "$impl_provider" "$resolved_impl_pool" "$host" "strict-linux" "$impl_profile" \
     "$ALLOWED_PATHS" \
-    "$impl_endpoints" "$GATE_CONTRACT" "$impl_provider" "$RESOLVED_MODEL" "$VERIFIER_ENGINE" "$verifier_provider" \
-     "$verifier_profile" "$verifier_endpoints" "$RESOLVED_VERIFIER_MODEL" \
+    "$impl_endpoints" "$GATE_CONTRACT" "$impl_provider" "$resolved_impl_model" "$resolved_verifier_engine" "$verifier_provider" \
+     "$verifier_profile" "$verifier_endpoints" "$resolved_verifier_model" \
      "$impl_policy" "$verifier_policy" "$impl_argv" "$verifier_argv" <<'PY'
 import hashlib, json, os, sys, tempfile
 from assignment_contract import digest, validate_assignment
@@ -1187,6 +1231,7 @@ with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
 print(digest(value))
 PY
   )" || return 1
+  rm -f -- "$impl_candidate" "$verifier_candidate" || return 1
   log "immutable Phase 5 assignment=$ASSIGNMENT_FILE digest=$ASSIGNMENT_DIGEST"
 }
 
@@ -1297,9 +1342,11 @@ ARM_USAGE="${ARMLOG%.out}.usage.json"
 # used immediately above for worker-sandbox.sh itself.
 resolve_run_assignment(){ # role wt active-engine engine-plan resolved-model provider commit-oid
   local role="$1" wt="$2" active_engine="$3" engine_plan="$4" resolved_model="$5"
-  local provider="$6" commit_oid="$7" seed_digest="" gate_digest="" src_branch="" out_file
+  local provider="$6" commit_oid="$7" seed_digest="" gate_digest="" src_branch="" out_file assignment_host
   local billing_basis="" metered_flag=()
-  ASSIGNMENT_DIGEST=""; ASSIGNMENT_FILE=""
+  RESOLVER_ASSIGNMENT_DIGEST=""; RESOLVER_ASSIGNMENT_FILE=""
+  if [ "$STRICT_PHASE5" = 1 ]; then assignment_host="${RECURSION_HOST_ID:-gs-recursion}";
+  else assignment_host="$(hostname)"; fi
   if [ -s "$SEED_EVIDENCE_FILE" ]; then
     seed_digest="$(python3 - "$SEED_EVIDENCE_FILE" <<'PY' 2>>"$LOG"
 import json, sys
@@ -1333,7 +1380,7 @@ PY
     --task-id "$ID" --project-id "${PROJECT_ID:-$ID}" --role "$role"
     --source-repository "$REPO_DIR" --source-branch "$src_branch"
     --source-sha "$BASE_COMMIT"
-    --engine "$active_engine" --provider "$provider" --host "$(hostname)"
+    --engine "$active_engine" --provider "$provider" --host "$assignment_host"
     --sandbox-profile "${RECURSION_SANDBOX_PROFILE:-strict-linux}" --network-profile "$NETWORK_POLICY"
     --allowed-paths "$ALLOWED_PATHS" --publication-policy verified-integration-only
     --out "$out_file" --root "$ROOT/state/assignments" --default-branch "$DEFAULT_BRANCH"
@@ -1347,17 +1394,24 @@ PY
     log "assignment resolution refused for role=$role engine=$active_engine (see log above)"
     return 95
   fi
-  ASSIGNMENT_DIGEST="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["assignment_digest"])' \
+  RESOLVER_ASSIGNMENT_DIGEST="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["assignment_digest"])' \
     "$out_file" 2>>"$LOG")" || return 95
-  ASSIGNMENT_FILE="$out_file"
-  [ -f "$ASSIGNMENT_FILE" ] || { log "assignment candidate is absent after resolution"; return 95; }
+  RESOLVER_ASSIGNMENT_FILE="$out_file"
+  [ -f "$RESOLVER_ASSIGNMENT_FILE" ] || { log "assignment candidate is absent after resolution"; return 95; }
+  # Strict Phase 5 binds its own immutable contract after both role candidates resolve.
+  # The legacy caller still receives the Phase 3 assignment globals when this helper is
+  # used outside that strict binding flow.
+  if [ "$STRICT_PHASE5" != 1 ]; then
+    ASSIGNMENT_DIGEST="$RESOLVER_ASSIGNMENT_DIGEST"
+    ASSIGNMENT_FILE="$RESOLVER_ASSIGNMENT_FILE"
+  fi
 }
 
 run_model_supervised(){ # role worktree prompt resolved-model alias usage deadline run-id [commit] [implementer-run] [evidence-dir] [readonly] [arm-attempt]
   local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
   local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
   local evidence_dir="${11:-}" readonly="${12:-0}" arm_attempt="${13:-}" engine_plan=""
-  local candidate_assignment="" provider="" plan_network_policy=""
+  local provider="" plan_network_policy=""
   local assignment_token="" assignment_identity="" cancel_signal=TERM cancel_grace=5
   # Cross-engine verification (D-015): each role runs on its own contract engine.
   local active_engine="$ENGINE"
@@ -1425,39 +1479,12 @@ PY
     ) || return 98
   fi
 
-  # Phase 3 (D-016): resolve+persist the immutable assignment for this exact arm before it
-  # launches. Only meaningful (and only attempted) under STRICT_PHASE5: that is the same gate
-  # worker-evidence.py start already runs behind below, so a legacy non-Phase-5 task neither
-  # gains a new failure mode here nor grows an assignment record nothing will ever read.
-  # arm_provider mirrors the usage-policy branching immediately above; hermes has no single
-  # provider known ahead of the call (it is dynamically metered per invocation), so it gets an
-  # explicit placeholder rather than a guess.
-  ASSIGNMENT_DIGEST=""; ASSIGNMENT_FILE=""
+  # Phase 5 binds one immutable contract before any role launches.  The Phase 3 resolver
+  # supplied the engine/provider/model/pool inputs while make_phase5_assignment created that
+  # contract; do not clear or replace its identity here.
   if [ "$STRICT_PHASE5" = 1 ]; then
-    local arm_provider=""
-    # The assignment is immutable for the task lease, not for each worker attempt.  A retry
-    # must reuse the exact digest that was bound before attempt one; re-resolving here would
-    # include a new created_at and then taskctl would correctly reject the new digest as a
-    # lease mutation before the retry worker could launch.
-    if [ "$role" = implementer ] && [ "${arm_attempt:-1}" != 1 ]; then
-      ASSIGNMENT_DIGEST="$(field assignment_digest)"
-      ASSIGNMENT_FILE="$ROOT/state/assignments/$ID/$ASSIGNMENT_DIGEST.json"
-      [ -n "$ASSIGNMENT_DIGEST" ] && [ -f "$ASSIGNMENT_FILE" ] || return 98
-    else
-      case "$active_engine" in
-        claude) arm_provider="anthropic-claude-code" ;;
-        hermes) arm_provider="hermes-tool-calls" ;;
-        *) arm_provider="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["billing"]["provider"])' \
-             "$engine_plan" 2>>"$LOG")" || return 95 ;;
-      esac
-      resolve_run_assignment "$role" "$wt" "$active_engine" "$engine_plan" "$resolved_model" \
-        "$arm_provider" "$commit_oid" || return 95
-      # Keep the controller-private candidate identity separate from ASSIGNMENT_FILE.  The
-      # latter is deliberately repointed at the durable digest record below and persists in
-      # the caller's shell; capturing it after that point would make a retry delete its own
-      # assignment.  This local is populated only by a fresh resolution, never by re-entry.
-      candidate_assignment="$ASSIGNMENT_FILE"
-    fi
+    [ -n "$ASSIGNMENT_DIGEST" ] && [ -f "$ASSIGNMENT_FILE" ] \
+      || { log "strict Phase 5 assignment is not bound before worker launch"; return 98; }
   fi
 
   if [ -n "$engine_plan" ]; then
@@ -1515,22 +1542,7 @@ PY
         bash "$TASKCTL" persist-assignment "$ASSIGNMENT_FILE" "$ID" "$ASSIGNMENT_DIGEST" \
           >>"$LOG" 2>&1 || return 98
     fi
-    ASSIGNMENT_FILE="$ROOT/state/assignments/$ID/$ASSIGNMENT_DIGEST.json"
     [ -f "$ASSIGNMENT_FILE" ] || { log "persisted assignment file is absent before worker evidence"; return 98; }
-    if [ -n "$candidate_assignment" ]; then
-      case "$candidate_assignment" in
-        "$ROOT/state/assignments/$ID"/.candidate-*.json)
-          rm -f -- "$candidate_assignment" || return 98
-          ;;
-        *)
-          # Cleanup is allowed to remove only the private resolver output.  A stale or
-          # accidentally repopulated value must fail closed rather than risk deleting the
-          # durable assignment that was just checked above.
-          log "assignment cleanup refused non-candidate path: $candidate_assignment"
-          return 98
-          ;;
-      esac
-    fi
     python3 "$ROOT/scripts/worker-evidence.py" provision-key --controller-root "$ROOT" \
       >>"$LOG" 2>&1 || { log "controller could not provision the fixed evidence key"; return 98; }
     evidence_meta=(--engine "$active_engine" --provider "$provider" --capacity-pool "$CAPACITY_POOL"

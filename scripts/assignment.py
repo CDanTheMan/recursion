@@ -16,14 +16,12 @@ twice returns the identical digest and is a no-op; resolving with ANY different 
 produces a different digest and a new, separate record. Nothing here ever rewrites a
 persisted assignment file.
 
-This module also loads capacity-pool manifests (scripts/capacity-pools/<id>.json,
-declarative JSON, same house style as scripts/engines/<name>.json /
-resolve-engine.py) — the minimal account/subscription/quota registry D-016 requires
-for pool attribution and quota-period reconciliation. It is deliberately narrow: the
-full config/ registry layer (engine, provider, model, host, sandbox-profile, routing-
-policy, project registries) described in docs/plans/recursion-v2-execution-fabric.md
-Phase 1 is NOT built here. Referencing capacity_pool remains optional; a legacy caller
-that never names one gets capacity_pool=null and is unaffected.
+This module also loads capacity-pool policy. The controller's authoritative policy is
+the bundle at scripts/capacity-pools.json. The older Phase 3 per-pool manifest shape is
+still accepted when a caller explicitly supplies a directory, so caller-owned legacy
+registries remain compatible; the default never falls back to that directory layout.
+Referencing capacity_pool remains optional; a legacy caller that never names one gets
+capacity_pool=null and is unaffected.
 
 Exit codes: 0 ok; 2 invalid arguments, malformed manifest, or content-address
 collision (an existing assignment file disagrees with the freshly computed content —
@@ -56,7 +54,9 @@ MAX_INPUT_BYTES = 8 * 1024 * 1024
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_STATE_ROOT = ROOT / "state" / "assignments"
-DEFAULT_CAPACITY_POOL_DIR = Path(__file__).resolve().parent / "capacity-pools"
+DEFAULT_CAPACITY_POOL_FILE = Path(__file__).resolve().parent / "capacity-pools.json"
+# Compatibility name retained for Phase 3 callers; the default is now the shipped bundle.
+DEFAULT_CAPACITY_POOL_DIR = DEFAULT_CAPACITY_POOL_FILE
 
 IDENTIFIER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 SHA_RE = re.compile(r"[0-9a-f]{40,64}")
@@ -85,6 +85,8 @@ QUOTA_KEYS = {"period", "source", "limit", "unit"}
 QUOTA_PERIODS = frozenset({"daily", "weekly", "monthly"})
 QUOTA_SOURCES = frozenset({"observed", "declared"})
 FALLBACK_POLICIES = frozenset({"defer", "refuse"})
+CAPACITY_POLICY_TOP_KEYS = {"schema_version", "pools"}
+CAPACITY_POLICY_POOL_KEYS = {"providers", "hosts", "sandbox_profiles"}
 BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,255}$")
 ASSIGNMENT_FIELDS = frozenset({
     "schema_version", "task_id", "project_id", "role", "source_repository", "source_branch",
@@ -232,17 +234,64 @@ def validate_capacity_pool(data: object, pool_id: str) -> dict:
     return obj
 
 
+def _validate_capacity_pool_policy(data: object, pool_id: str) -> dict:
+    """Validate and select one entry from the Phase 5 capacity-pool bundle.
+
+    This is an adapter boundary, not a weakening of validate_capacity_pool(): the
+    legacy per-pool manifest validator above continues to validate that shape in full,
+    while this validator checks every field available in the shipped bundle shape.
+    """
+    obj = _require_keys(data, CAPACITY_POLICY_TOP_KEYS, "capacity-pool policy")
+    if not all(isinstance(key, str) for key in obj) or obj.keys() - CAPACITY_POLICY_TOP_KEYS:
+        raise AssignmentError("capacity-pool policy has unknown key(s)")
+    if obj.get("schema_version") != 1 or isinstance(obj.get("schema_version"), bool):
+        raise AssignmentError("capacity-pool policy schema_version must be 1")
+    pools = obj.get("pools")
+    if not isinstance(pools, dict):
+        raise AssignmentError("capacity-pool policy pools must be an object")
+    policy = pools.get(pool_id)
+    if policy is None:
+        raise CapacityPoolNotFound(f"capacity-pool is not declared: {pool_id}")
+    if not isinstance(policy, dict) or policy.keys() != CAPACITY_POLICY_POOL_KEYS:
+        raise AssignmentError("capacity-pool policy entry is invalid")
+    normalized = {"schema_version": 1, "id": pool_id}
+    for field, pattern in (("providers", PROVIDER_RE), ("hosts", None), ("sandbox_profiles", None)):
+        values = policy.get(field)
+        if not isinstance(values, list) or not values:
+            raise AssignmentError(f"capacity-pool policy {field} must be a nonempty unique list")
+        if any(not isinstance(item, str) or not _nonempty(item) for item in values):
+            raise AssignmentError(f"capacity-pool policy {field} entries must be nonempty strings")
+        if len(set(values)) != len(values):
+            raise AssignmentError(f"capacity-pool policy {field} must be a nonempty unique list")
+        if pattern is not None and any(not pattern.fullmatch(item) for item in values):
+            raise AssignmentError("capacity-pool policy providers must be lowercase-kebab strings")
+        if field == "sandbox_profiles" and any(item not in SANDBOX_PROFILES for item in values):
+            raise AssignmentError("capacity-pool policy sandbox_profiles contains an unsupported profile")
+        normalized[field] = list(values)
+    if not IDENTIFIER_RE.fullmatch(pool_id):
+        raise AssignmentError(f"invalid capacity-pool id {pool_id!r}")
+    return normalized
+
+
 def load_capacity_pool(pool_dir: Path, pool_id: str) -> dict:
     if not isinstance(pool_id, str) or not IDENTIFIER_RE.fullmatch(pool_id):
         raise AssignmentError(f"invalid capacity-pool id {pool_id!r}")
     try:
-        path = Path(pool_dir) / f"{pool_id}.json"
+        authority = Path(pool_dir)
     except (TypeError, ValueError) as exc:
         raise AssignmentError("capacity-pool directory is not a path") from exc
+    # Explicit existing directories retain the Phase 3 caller-owned registry API.
+    # The default authority is a file, and an explicitly named .json path is treated
+    # as the Phase 5 bundle even when it has not yet been created.
+    legacy_manifest = authority.is_dir() or (
+        not authority.exists() and authority.suffix.lower() != ".json"
+    )
+    path = authority / f"{pool_id}.json" if legacy_manifest else authority
     try:
         raw_bytes = jsonl_durable.read_durable_bytes(path, max_bytes=MAX_INPUT_BYTES)
         if raw_bytes is None:
-            raise CapacityPoolNotFound(f"capacity-pool manifest not found: {path}")
+            label = "manifest" if legacy_manifest else "policy"
+            raise CapacityPoolNotFound(f"capacity-pool {label} not found: {path}")
         raw = raw_bytes.decode("utf-8")
     except CapacityPoolNotFound:
         raise
@@ -252,7 +301,32 @@ def load_capacity_pool(pool_dir: Path, pool_id: str) -> dict:
         data = json.loads(raw)
     except (json.JSONDecodeError, TypeError, ValueError, RecursionError, OverflowError) as exc:
         raise AssignmentError(f"capacity-pool manifest {path} is not valid JSON: {exc}") from exc
-    return validate_capacity_pool(data, pool_id)
+    if legacy_manifest:
+        return validate_capacity_pool(data, pool_id)
+    return _validate_capacity_pool_policy(data, pool_id)
+
+
+def _check_capacity_pool_binding(pool: dict, provider: str, role: str, host: str,
+                                 sandbox_profile: str, billing_basis: str | None) -> str | None:
+    """Apply either authority shape without changing either shape's validator."""
+    if "providers" in pool:
+        if provider not in pool["providers"]:
+            raise AssignmentError("capacity pool is not authorized for assignment provider")
+        if host not in pool["hosts"]:
+            raise AssignmentError("capacity pool is not authorized for assignment host")
+        if sandbox_profile not in pool["sandbox_profiles"]:
+            raise AssignmentError("capacity pool is not authorized for sandbox profile")
+        return billing_basis
+    if pool["provider"] != provider:
+        raise AssignmentError("capacity pool provider does not match assignment provider")
+    if pool.get("roles") is not None and role not in pool["roles"]:
+        raise AssignmentError("assignment role is not allowed by capacity pool")
+    if pool.get("host_id") is not None and pool["host_id"] != host:
+        raise AssignmentError("assignment host does not match capacity pool host")
+    pool_basis = pool["billing_basis"]
+    if billing_basis is not None and billing_basis != pool_basis:
+        raise AssignmentError("assignment billing_basis does not match capacity pool")
+    return pool_basis
 
 
 def engine_contract_attribution(engine: str) -> tuple[str | None, str | None]:
@@ -408,16 +482,9 @@ def resolve_assignment(
     if not isinstance(metered_approved, bool):
         raise AssignmentError("metered_approved must be boolean")
     if pool is not None:
-        if pool["provider"] != provider:
-            raise AssignmentError("capacity pool provider does not match assignment provider")
-        if pool.get("roles") is not None and role not in pool["roles"]:
-            raise AssignmentError("assignment role is not allowed by capacity pool")
-        if pool.get("host_id") is not None and pool["host_id"] != host:
-            raise AssignmentError("assignment host does not match capacity pool host")
-        pool_basis = pool["billing_basis"]
-        if billing_basis is not None and billing_basis != pool_basis:
-            raise AssignmentError("assignment billing_basis does not match capacity pool")
-        billing_basis = pool_basis
+        billing_basis = _check_capacity_pool_binding(
+            pool, provider, role, host, sandbox_profile, billing_basis
+        )
     if billing_basis == "metered" and not metered_approved:
         raise AssignmentError("metered assignment requires explicit approval")
 
@@ -1527,15 +1594,10 @@ def validate_assignment(value: object, require_source_evidence: bool = False,
             if capacity_pool_dir is not None:
                 raise
         else:
-            if pool["provider"] != provider:
-                raise AssignmentError("capacity pool provider does not match assignment provider")
-            roles = pool.get("roles")
-            if roles is not None and value.get("role") not in roles:
-                raise AssignmentError("assignment role is not allowed by capacity pool")
-            if pool.get("host_id") is not None and pool["host_id"] != value.get("host"):
-                raise AssignmentError("assignment host does not match capacity pool")
-            if billing_basis != pool["billing_basis"]:
-                raise AssignmentError("assignment billing_basis does not match capacity pool")
+            _check_capacity_pool_binding(
+                pool, provider, value.get("role"), value.get("host"),
+                value.get("sandbox_profile"), billing_basis
+            )
     model = value.get("model")
     if model is not None and not _nonempty(model):
         raise AssignmentError("assignment model must be null or a nonempty string")

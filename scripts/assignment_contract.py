@@ -390,13 +390,34 @@ def _authenticated_pool_policy(pool: str, controller_repo: str, controller_sha: 
     try:
         raw = _controller_file_bytes(controller_repo, controller_sha, "scripts/capacity-pools.json")
         value = decode_json(raw, "capacity pool policy")
+        if not isinstance(value, dict) or set(value) != {"schema_version", "pools"} \
+                or value.get("schema_version") != 1 or isinstance(value.get("schema_version"), bool):
+            raise ValueError
         pools = value["pools"]
+        if not isinstance(pools, dict) or any(
+                not isinstance(name, str) or not ID_RE.fullmatch(name) for name in pools):
+            raise ValueError
         policy = pools[pool]
     except (BoundaryError, OSError, UnicodeDecodeError, ValueError, KeyError,
             TypeError, OverflowError, RecursionError, json.JSONDecodeError):
         raise AssignmentError("capacity_pool is not a declared local pool")
     if not isinstance(policy, dict):
         raise AssignmentError("capacity_pool policy is invalid")
+    if set(policy) != {"providers", "hosts", "sandbox_profiles"}:
+        raise AssignmentError("capacity_pool policy is invalid")
+    for field in ("providers", "hosts", "sandbox_profiles"):
+        values = policy[field]
+        if not isinstance(values, list) or not values \
+                or any(not isinstance(item, str) or not item for item in values):
+            raise AssignmentError(f"capacity_pool policy {field} is invalid")
+        if len(set(values)) != len(values):
+            raise AssignmentError(f"capacity_pool policy {field} is invalid")
+    if any(not VALUE_RE.fullmatch(item) for item in policy["providers"]):
+        raise AssignmentError("capacity_pool policy providers are invalid")
+    if any(not ID_RE.fullmatch(item) for item in policy["hosts"]):
+        raise AssignmentError("capacity_pool policy hosts are invalid")
+    if any(item not in SANDBOXES for item in policy["sandbox_profiles"]):
+        raise AssignmentError("capacity_pool policy sandbox_profiles are invalid")
     return policy
 
 

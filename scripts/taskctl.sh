@@ -88,14 +88,24 @@ root=Path(sys.argv[1]); provided=Path(sys.argv[2]); expected_task=sys.argv[3]; e
 if provided.is_symlink() or not provided.is_file():
     raise SystemExit('taskctl: assignment candidate is absent or symlinked')
 sys.path.insert(0,str(root/'scripts'))
-import assignment
+import assignment as assignment_mod
+import assignment_contract as contract_mod
 try:
     value=json.loads(provided.read_text(encoding='utf-8'))
-    assignment.validate_assignment(value, require_source_evidence=True)
-    if expected_task and (value.get('task_id') != expected_task or value.get('assignment_digest') != expected_digest):
-        raise assignment.AssignmentError('assignment candidate identity does not match the lease binding')
-    assignment.persist_assignment(root/'state/assignments', value)
-except (OSError, UnicodeDecodeError, json.JSONDecodeError, assignment.AssignmentError,
+    assignment_digest = value.get('assignment_digest') if isinstance(value, dict) else None
+    if isinstance(value, dict) and "controller_repository" in value:
+        value, assignment_digest = contract_mod.load_assignment(provided)
+    else:
+        assignment_mod.validate_assignment(value, require_source_evidence=True)
+    if expected_task and (value.get('task_id') != expected_task or assignment_digest != expected_digest):
+        raise contract_mod.AssignmentError('assignment candidate identity does not match the lease binding')
+    if not (isinstance(value, dict) and "controller_repository" in value):
+        assignment_mod.persist_assignment(root/'state/assignments', value)
+    # A strict contract is already an immutable file in state/assignments.  Copying it into
+    # Phase 3's task-id/digest directory would change the authoritative path and invite
+    # consumers to load the wrong schema.
+except (OSError, UnicodeDecodeError, json.JSONDecodeError, assignment_mod.AssignmentError,
+        contract_mod.AssignmentError,
         TypeError, ValueError, OverflowError, RecursionError):
     # Exception text can contain absolute paths, parser offsets, or host OS details.
     # The shell boundary has a stable public diagnostic and no data-bearing traceback.
@@ -429,19 +439,30 @@ set-assignment)
       || { _unlock; echo "taskctl: assignment run binding is immutable for this attempt" >&2; exit 6; }
   fi
   _persist_assignment_locked "$AFILE" || { rc=$?; _unlock; exit "$rc"; }
-  python3 - "$ROOT" "$ID" "$DIGEST" <<'PY' || { rc=$?; _unlock; exit "$rc"; }
+python3 - "$ROOT" "$ID" "$DIGEST" "$AFILE" <<'PY' || { rc=$?; _unlock; exit "$rc"; }
+import json
 import sys
 from pathlib import Path
-sys.path.insert(0,str(Path(sys.argv[1])/'scripts'))
-import assignment
-root=Path(sys.argv[1]); task,digest=sys.argv[2:]
-value=assignment.load_assignment(root/'state/assignments',task,digest)
-if value is None:
-    raise SystemExit('taskctl: persisted assignment is absent')
-try: assignment.validate_assignment(value, require_source_evidence=True)
-except assignment.AssignmentError as exc: raise SystemExit(f'taskctl: invalid persisted assignment: {exc}')
-if value.get('assignment_digest') != digest:
-    raise SystemExit('taskctl: persisted assignment digest mismatch')
+root=Path(sys.argv[1]); task,digest,provided=sys.argv[2:]
+sys.path.insert(0,str(root/'scripts'))
+import assignment as assignment_mod
+import assignment_contract as contract_mod
+try:
+    raw=json.loads(Path(provided).read_text(encoding='utf-8'))
+    if isinstance(raw, dict) and "controller_repository" in raw:
+        value, computed=contract_mod.load_assignment(provided)
+    else:
+        value=assignment_mod.load_assignment(root/'state/assignments',task,digest)
+        computed=value.get('assignment_digest') if value is not None else None
+        if value is not None:
+            assignment_mod.validate_assignment(value, require_source_evidence=True)
+    if value is None:
+        raise ValueError('assignment is absent')
+    if value.get('task_id') != task or computed != digest:
+        raise ValueError('assignment identity mismatch')
+except (OSError, UnicodeDecodeError, json.JSONDecodeError, assignment_mod.AssignmentError,
+        contract_mod.AssignmentError, TypeError, ValueError, OverflowError, RecursionError):
+    raise SystemExit('taskctl: invalid persisted assignment')
 PY
   transition_fields "$F" set-assignment "$ID" "assignment_digest=$DIGEST run_id=$RUN_ID attempt=$ATTEMPT" \
     assignment_digest "$DIGEST" lease_assignment_digest "$DIGEST" assignment_run_id "$RUN_ID" \

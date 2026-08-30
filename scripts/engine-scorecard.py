@@ -48,7 +48,9 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-import assignment
+import assignment as assignment_mod
+import assignment_contract as assignment_contract_mod
+from assignment_contract import AssignmentError as ContractAssignmentError
 from jsonl_durable import JsonlDurabilityError, atomic_bytes, ensure_no_symlink, read_durable_bytes
 
 SCHEMA_VERSION = 1
@@ -274,28 +276,56 @@ def load_runs(root: Path) -> tuple[list[RunRecord], int, int, bool]:
             if isinstance(record.get("engine"), str) and record.get("engine") else None
         attribution = {}
         if assignment_digest:
-            # Assignment-native records are deliberately joined to the immutable persisted
-            # assignment.  Run JSON is an evidence projection and is not an authority for
-            # engine/provider/pool/host/model/source attribution.
-            persisted = assignment.load_assignment(
-                root / "state" / "assignments", task_id, assignment_digest,
-            )
-            if persisted is None:
-                if direct_engine is None:
+            # Strict Phase 5 records carry the exact standalone contract path.  Read it
+            # through assignment_contract; the run JSON is only an evidence projection.
+            assignment_file = record.get("assignment_file")
+            if isinstance(assignment_file, str) and assignment_file:
+                try:
+                    persisted, computed = assignment_contract_mod.load_assignment(assignment_file)
+                except (ContractAssignmentError, OSError, TypeError, ValueError,
+                        UnicodeDecodeError, OverflowError, RecursionError):
                     skipped += 1
                     continue
+                if computed != assignment_digest or persisted.get("task_id") != task_id:
+                    skipped += 1
+                    continue
+                role_assignment = persisted.get("role_assignments", {}).get(role)
+                if not isinstance(role_assignment, dict):
+                    skipped += 1
+                    continue
+                direct_engine = role_assignment["engine"]
+                attribution = {key: persisted.get(key) for key in (
+                    "assignment_digest", "capacity_pool", "provider", "host", "model",
+                    "sandbox_profile", "source_repository", "source_branch", "source_sha")}
+                attribution["provider"] = role_assignment["provider"]
+                attribution["model"] = role_assignment["model"]
+            elif isinstance(record.get("assignment"), dict) \
+                    and "controller_repository" in record["assignment"]:
+                # A strict embedded contract without its source file is not an authority.
+                skipped += 1
+                continue
             else:
-                try:
-                    assignment.validate_assignment(persisted, require_source_evidence=True)
-                except assignment.AssignmentError:
+                # Phase 3 compatibility: old assignment-native records used the
+                # task-id/digest directory and have no assignment_file field.
+                persisted = assignment_mod.load_assignment(
+                    root / "state" / "assignments", task_id, assignment_digest,
+                )
+                if persisted is None:
                     if direct_engine is None:
                         skipped += 1
                         continue
                 else:
-                    direct_engine = persisted["engine"]
-                    attribution = {key: persisted.get(key) for key in (
-                        "assignment_digest", "capacity_pool", "provider", "host", "model",
-                        "sandbox_profile", "source_repository", "source_branch", "source_sha")}
+                    try:
+                        assignment_mod.validate_assignment(persisted, require_source_evidence=True)
+                    except assignment_mod.AssignmentError:
+                        if direct_engine is None:
+                            skipped += 1
+                            continue
+                    else:
+                        direct_engine = persisted["engine"]
+                        attribution = {key: persisted.get(key) for key in (
+                            "assignment_digest", "capacity_pool", "provider", "host", "model",
+                            "sandbox_profile", "source_repository", "source_branch", "source_sha")}
         engine = direct_engine
         if assignment_digest and not attribution and direct_engine is not None:
             attribution = {key: record.get(key) for key in (
