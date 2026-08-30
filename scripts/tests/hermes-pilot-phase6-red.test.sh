@@ -28,10 +28,10 @@ copy_controller(){
   for s in assignment.py assist.sh author.sh board.sh branch-review.sh capacity.sh conduct-hermes.sh conduct.sh \
            decision-queue.py engine_contract.py git-scope.py hermes-decide.sh instruction_routing.py intake.sh \
            jsonl_durable.py notification-outbox.py notify.sh pilot_instruction.py plan.sh project-pilot.py \
-           project-reconcile.py project_authority.py provider-connect-proxy.py provider-network.sh publish.sh \
+           project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py publish.sh \
            remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
            seed_contract.py taskctl.sh transition_receipt.py validate-assignment-result.py validate-control-state.py \
-           validate-decision.py validate-gate.py validate-verifier-result.py validate-worker-result.py work.sh \
+           validate-decision.py validate-gate.py validate-verifier-result.py validate-worker-result.py work.sh assignment-token.py \
            worker-evidence.py worker-sandbox.sh; do
     [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$r/scripts/"
   done

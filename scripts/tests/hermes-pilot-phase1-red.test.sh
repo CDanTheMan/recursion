@@ -21,9 +21,9 @@ chmod +x "$BIN/claude"
 
 R="$TMP/controller"
 mkdir -p "$R/scripts" "$R/state/tasks" "$R/loop/logs" "$R/app"
-for s in work.sh worker-sandbox.sh taskctl.sh assignment.py jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh \
+for s in work.sh assignment-token.py worker-sandbox.sh taskctl.sh assignment.py jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh \
   assist.sh conduct.sh engine_contract.py git-scope.py pilot_instruction.py plan.sh project-pilot.py \
-  project-reconcile.py project_authority.py provider-connect-proxy.py provider-network.sh publish.sh \
+  project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py publish.sh \
   remote_evidence.py resolve-engine.py resolve-model-alias.py run_contract.py seed_contract.py \
   validate-assignment-result.py validate-gate.py validate-verifier-result.py validate-worker-result.py \
   worker-evidence.py; do

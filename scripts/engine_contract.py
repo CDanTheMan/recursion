@@ -57,7 +57,10 @@ def _load_registry(registry_path: Path | str) -> dict[str, frozenset[str]] | Non
     """Return alias -> roles from a valid registry, or None when the registry is
     absent, unparseable, schema-invalid, or redefines a legacy alias (poisoned)."""
     try:
-        encoded = read_durable_bytes(Path(registry_path), max_bytes=MAX_INPUT_BYTES)
+        # The registry is bounded by its own limit, not the general input limit: Phase 4
+        # introduced MAX_REGISTRY_BYTES for exactly this read, and resolving the merge to the
+        # bounded durable reader must not silently widen it from 1 MiB to 8 MiB.
+        encoded = read_durable_bytes(Path(registry_path), max_bytes=MAX_REGISTRY_BYTES)
         if encoded is None:
             return None
         raw = json.loads(

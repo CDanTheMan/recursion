@@ -214,7 +214,7 @@ def _relative_state_path(base: Path, path: Path) -> str:
 
 def _read_json(path: Path) -> dict:
     try:
-        raw = read_durable_bytes(path, max_bytes=8 * 1024 * 1024)
+        raw = read_durable_bytes(path, max_bytes=MAX_TRANSITION_JSON_BYTES)
         if raw is None:
             raise OSError("transition JSON is absent")
         value = json.loads(
@@ -231,7 +231,7 @@ def _read_json(path: Path) -> dict:
 
 def _read_fields(path: Path) -> dict[str, str]:
     try:
-        raw = read_durable_bytes(path, max_bytes=8 * 1024 * 1024)
+        raw = read_durable_bytes(path, max_bytes=MAX_TRANSITION_JSON_BYTES)
         if raw is None:
             raise OSError("transition fields are absent")
         lines = raw.decode("utf-8", errors="surrogateescape").splitlines()
@@ -249,7 +249,7 @@ def _read_fields(path: Path) -> dict[str, str]:
 
 def _atomic_fields(path: Path, changes: dict[str, str]) -> None:
     try:
-        raw = read_durable_bytes(path, max_bytes=8 * 1024 * 1024)
+        raw = read_durable_bytes(path, max_bytes=MAX_TRANSITION_JSON_BYTES)
         if raw is None:
             raise OSError("transition fields are absent")
         lines = raw.decode("utf-8", errors="surrogateescape").splitlines()
