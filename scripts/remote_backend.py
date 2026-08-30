@@ -342,6 +342,17 @@ def _pinned_directory_child(parent: _PinnedDirectory, name: str) -> Path:
     return parent.path / name
 
 
+def _pinned_directory_fd_for_child(parent: _PinnedDirectory | None,
+                                    child: Path) -> int | None:
+    """Return the retained descriptor only for children explicitly rooted through it."""
+    if parent is None or parent.descriptor is None:
+        return None
+    expected_parent = Path("/proc/self/fd") / str(parent.descriptor)
+    if child.parent == expected_parent:
+        return parent.descriptor
+    return None
+
+
 def _safe_file(path: Path, *, create_parent: bool = True) -> Path:
     path = Path(path)
     with _PinnedDirectory(path.parent, create=create_parent) as parent:
@@ -1103,8 +1114,12 @@ class RemoteStateLock:
         try:
             _safe_existing_lock(candidate)
             # On POSIX candidate is rooted at /proc/self/fd/<pinned-parent>, so the
-            # runtime lock publisher never re-resolves the checked parent pathname.
-            runtime.acquire_witnessed_directory_lock(candidate, "remote-state", os.getpid())
+            # runtime lock publisher receives the same retained parent descriptor and never
+            # re-resolves the checked parent pathname.
+            pinned_parent_fd = _pinned_directory_fd_for_child(lock_parent, candidate)
+            runtime.acquire_witnessed_directory_lock(
+                candidate, "remote-state", os.getpid(), pinned_parent_fd=pinned_parent_fd
+            )
             acquired = True
             if self._native_lock_parent_pins:
                 _win_validate_lock_parent_pins(self._native_lock_parent_pins)
@@ -1118,7 +1133,9 @@ class RemoteStateLock:
             if acquired:
                 with contextlib.suppress(RuntimeError, OSError):
                     runtime.release_witnessed_directory_lock(
-                        candidate, "remote-state", os.getpid())
+                        candidate, "remote-state", os.getpid(),
+                        pinned_parent_fd=_pinned_directory_fd_for_child(lock_parent, candidate)
+                    )
             if lock_parent is not None:
                 lock_parent.close()
             if self._native_lock_parent_pins:
@@ -1133,7 +1150,9 @@ class RemoteStateLock:
         parent = self._lock_parent
         try:
             runtime.release_witnessed_directory_lock(
-                self.path, "remote-state", os.getpid())
+                self.path, "remote-state", os.getpid(),
+                pinned_parent_fd=_pinned_directory_fd_for_child(parent, self.path)
+            )
         finally:
             if parent is not None:
                 parent.close()

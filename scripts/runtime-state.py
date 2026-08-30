@@ -351,6 +351,315 @@ def _rename_noreplace(source: Path, target: Path) -> None:
     raise OSError(error, os.strerror(error), str(target))
 
 
+def _rename_noreplace_at(source: str, target: str, source_dir_fd: int,
+                         target_dir_fd: int) -> None:
+    """Atomically rename two names relative to retained directory descriptors."""
+    if os.name == "nt":
+        raise RuntimeError("descriptor-relative lock publication is unavailable on Windows")
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise RuntimeError("renameat2(RENAME_NOREPLACE) is unavailable; refusing unsafe lock publish")
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p,
+                          ctypes.c_uint]
+    renameat2.restype = ctypes.c_int
+    result = renameat2(
+        source_dir_fd, os.fsencode(source), target_dir_fd, os.fsencode(target), 1
+    )
+    if result == 0:
+        return
+    error = ctypes.get_errno()
+    if error in {errno.EEXIST, errno.ENOTEMPTY}:
+        raise FileExistsError(error, os.strerror(error), target)
+    raise OSError(error, os.strerror(error), target)
+
+
+def _pinned_lock_parent(path: Path, label: str, parent_fd: int) -> str:
+    """Validate an explicit POSIX lock-parent descriptor without resolving its pathname."""
+    if os.name == "nt":
+        raise RuntimeError("descriptor-relative lock publication is unavailable on Windows")
+    if not is_plain_int(parent_fd) or parent_fd < 0:
+        raise RuntimeError(f"{label} lock parent descriptor is invalid")
+    if not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW"):
+        raise RuntimeError("descriptor-relative lock publication is unavailable")
+    if not isinstance(path, Path) or not path.is_absolute() \
+            or any(part in {".", ".."} for part in path.parts):
+        raise RuntimeError(f"{label} lock path must be an absolute path")
+    expected_parent = Path("/proc/self/fd") / str(parent_fd)
+    if path.parent != expected_parent:
+        raise RuntimeError(f"{label} lock path does not name the pinned parent")
+    try:
+        info = os.fstat(parent_fd)
+    except OSError as exc:
+        raise RuntimeError(f"{label} lock parent descriptor is unreadable") from exc
+    if _is_reparse(info) or not stat.S_ISDIR(info.st_mode):
+        raise RuntimeError(f"{label} lock parent descriptor is not a directory")
+    return path.name
+
+
+def _pinned_open_lock_directory(parent_fd: int, name: str, label: str) -> int:
+    """Open one lock directory relative to a retained parent, refusing link substitution."""
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        entry = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        if _is_reparse(entry) or not stat.S_ISDIR(entry.st_mode):
+            raise RuntimeError(f"{label} lock has an unsafe type")
+        descriptor = os.open(name, flags, dir_fd=parent_fd)
+    except FileNotFoundError:
+        raise
+    except RuntimeError:
+        raise
+    except OSError as exc:
+        raise RuntimeError(f"{label} lock is unreadable") from exc
+    try:
+        opened = os.fstat(descriptor)
+        if _is_reparse(opened) or not stat.S_ISDIR(opened.st_mode) \
+                or (opened.st_dev, opened.st_ino) != (entry.st_dev, entry.st_ino):
+            raise RuntimeError(f"{label} lock changed while opening")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _pinned_read_lock_evidence(lock_fd: int, name: str) -> str | None:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    descriptor = -1
+    try:
+        descriptor = os.open(name, flags, dir_fd=lock_fd)
+        info = os.fstat(descriptor)
+        if _is_reparse(info) or not stat.S_ISREG(info.st_mode):
+            return None
+        raw = os.read(descriptor, 1025)
+        if len(raw) > 1024:
+            return None
+        return raw.decode("utf-8", "strict").strip()
+    except (OSError, UnicodeError):
+        return None
+    finally:
+        if descriptor >= 0:
+            with contextlib.suppress(OSError):
+                os.close(descriptor)
+
+
+def _pinned_lock_owner_from_fd(lock_fd: int) -> tuple[int | None, str]:
+    for name in ("pid", "owner"):
+        raw = _pinned_read_lock_evidence(lock_fd, name)
+        if raw is None or not raw.isdigit() or len(raw) > 10:
+            continue
+        start = _pinned_read_lock_evidence(lock_fd, "start") or ""
+        try:
+            return int(raw, 10), start
+        except (TypeError, ValueError, OverflowError):
+            return None, ""
+    return None, ""
+
+
+def _pinned_lock_owner(parent_fd: int, name: str, label: str) -> tuple[int | None, str]:
+    try:
+        descriptor = _pinned_open_lock_directory(parent_fd, name, label)
+    except FileNotFoundError:
+        return None, ""
+    try:
+        return _pinned_lock_owner_from_fd(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _pinned_assert_runtime_lock_compatible(parent_fd: int, lock_name: str,
+                                           owner_pid: int, owner_start: str) -> None:
+    """Check the maintenance lock relative to the same retained parent descriptor."""
+    if lock_name == "runtime-state.lock":
+        return
+    runtime_name = "runtime-state.lock"
+    try:
+        runtime_info = os.stat(runtime_name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise RuntimeError("runtime-state lock is unreadable") from exc
+    if _is_reparse(runtime_info) or not stat.S_ISDIR(runtime_info.st_mode):
+        raise RuntimeError("runtime-state lock has an unsafe type")
+    runtime_pid, runtime_start = _pinned_lock_owner(parent_fd, runtime_name, "runtime-state")
+    if runtime_pid == owner_pid and runtime_start == owner_start:
+        return
+    raise RuntimeError("runtime-state maintenance is active; refusing a concurrent mutation")
+
+
+def _pinned_atomic_bytes(parent_fd: int, name: str, value: bytes, mode: int = 0o600) -> None:
+    """Publish one small evidence file using names relative to a retained directory."""
+    if not isinstance(value, bytes) or not is_plain_int(mode) or mode < 0:
+        raise RuntimeError("atomic file publication arguments are invalid")
+    descriptor = -1
+    temporary: str | None = None
+    try:
+        for _ in range(100):
+            candidate = f".{name}.tmp.{os.getpid()}.{secrets.token_hex(8)}"
+            try:
+                descriptor = os.open(
+                    candidate,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
+                    mode,
+                    dir_fd=parent_fd,
+                )
+                temporary = candidate
+                break
+            except FileExistsError:
+                continue
+        if descriptor < 0 or temporary is None:
+            raise RuntimeError("atomic file temporary namespace is exhausted")
+        offset = 0
+        while offset < len(value):
+            written = os.write(descriptor, value[offset:])
+            if written <= 0:
+                raise OSError("atomic file write made no progress")
+            offset += written
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = -1
+        os.replace(temporary, name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+        temporary = None
+        os.fsync(parent_fd)
+    finally:
+        if descriptor >= 0:
+            with contextlib.suppress(OSError):
+                os.close(descriptor)
+        if temporary is not None:
+            with contextlib.suppress(OSError):
+                os.unlink(temporary, dir_fd=parent_fd)
+
+
+def _pinned_new_lock_candidate(parent_fd: int, lock_name: str,
+                               creator_pid: int, creator_start: str) -> str:
+    prefix = f".{lock_name}.candidate.{creator_pid}.{creator_start}."
+    for _ in range(100):
+        name = prefix + secrets.token_hex(8)
+        try:
+            os.mkdir(name, mode=0o700, dir_fd=parent_fd)
+        except FileExistsError:
+            continue
+        return name
+    raise RuntimeError(f"{lock_name} lock candidate namespace is exhausted")
+
+
+def _pinned_remove_lock_tree(parent_fd: int, name: str, allowed: set[str], label: str) -> None:
+    """Remove a lock directory relative to its retained parent after validating its entries."""
+    descriptor = _pinned_open_lock_directory(parent_fd, name, label)
+    try:
+        entries = os.listdir(descriptor)
+        unexpected = [entry for entry in entries if entry not in allowed]
+        if unexpected:
+            raise RuntimeError(f"{label} lock contains unexpected evidence: {unexpected[0]}")
+        for entry in entries:
+            info = os.stat(entry, dir_fd=descriptor, follow_symlinks=False)
+            if stat.S_ISDIR(info.st_mode) or _is_reparse(info):
+                raise RuntimeError(f"{label} lock contains unsafe evidence")
+            os.unlink(entry, dir_fd=descriptor)
+    finally:
+        os.close(descriptor)
+    os.rmdir(name, dir_fd=parent_fd)
+
+
+def _pinned_cleanup_dead_lock_candidates(parent_fd: int, lock_name: str) -> None:
+    prefix = f".{lock_name}.candidate."
+    try:
+        entries = os.listdir(parent_fd)
+    except OSError as exc:
+        raise RuntimeError("runtime lock parent is unreadable") from exc
+    for candidate in entries:
+        if not candidate.startswith(prefix):
+            continue
+        identity = _candidate_identity(Path(candidate), lock_name)
+        if identity is None or not _owner_values_are_dead(*identity):
+            continue
+        tomb = f".{lock_name}.candidate-dead.{os.getpid()}.{time.time_ns()}"
+        try:
+            _rename_noreplace_at(candidate, tomb, parent_fd, parent_fd)
+        except (FileNotFoundError, FileExistsError):
+            continue
+        _pinned_remove_lock_tree(parent_fd, tomb, _allowed_lock_evidence(Path(lock_name)),
+                                 lock_name)
+        os.fsync(parent_fd)
+
+
+def _acquire_witnessed_directory_lock_pinned(path: Path, label: str, owner_pid: int,
+                                             parent_fd: int) -> None:
+    """Publish a lock entirely relative to an explicitly retained POSIX parent."""
+    lock_name = _pinned_lock_parent(path, label, parent_fd)
+    owner_pid, owner_start = _process_identity(owner_pid)
+    creator_pid, creator_start = _process_identity(os.getpid())
+    try:
+        attempts = int(os.environ.get("RECURSION_LOCK_ATTEMPTS", "100"), 10)
+        delay = float(os.environ.get("RECURSION_LOCK_DELAY_S", "0.1"))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise RuntimeError("runtime lock retry settings are invalid") from exc
+    if attempts < 1 or attempts > 10000 or not (0.0 <= delay <= 60.0):
+        raise RuntimeError("runtime lock retry settings are invalid")
+    for attempt in range(attempts):
+        _pinned_assert_runtime_lock_compatible(parent_fd, lock_name, owner_pid, owner_start)
+        _pinned_cleanup_dead_lock_candidates(parent_fd, lock_name)
+        candidate = _pinned_new_lock_candidate(parent_fd, lock_name, creator_pid, creator_start)
+        candidate_fd = -1
+        try:
+            candidate_fd = _pinned_open_lock_directory(parent_fd, candidate, label)
+            _lock_failpoint("after-candidate-mkdir")
+            _pinned_atomic_bytes(candidate_fd, "pid", f"{owner_pid}\n".encode("ascii"))
+            _lock_failpoint("after-candidate-pid")
+            _pinned_atomic_bytes(candidate_fd, "start", f"{owner_start}\n".encode("ascii"))
+            _lock_failpoint("after-candidate-start")
+            os.fsync(candidate_fd)
+            try:
+                _rename_noreplace_at(candidate, lock_name, parent_fd, parent_fd)
+            except FileExistsError:
+                os.close(candidate_fd)
+                candidate_fd = -1
+                _pinned_remove_lock_tree(
+                    parent_fd, candidate, _allowed_lock_evidence(Path(lock_name)), label
+                )
+                existing_pid, existing_start = _pinned_lock_owner(
+                    parent_fd, lock_name, label
+                )
+                if existing_pid is not None and _owner_values_are_dead(
+                        existing_pid, existing_start):
+                    tomb = f".{lock_name}.dead.{os.getpid()}.{attempt}"
+                    try:
+                        _rename_noreplace_at(lock_name, tomb, parent_fd, parent_fd)
+                    except (FileNotFoundError, FileExistsError, OSError):
+                        pass
+                    else:
+                        _pinned_remove_lock_tree(
+                            parent_fd, tomb, _allowed_lock_evidence(Path(lock_name)), label
+                        )
+                        os.fsync(parent_fd)
+                        continue
+                if attempt + 1 < attempts:
+                    time.sleep(delay)
+                continue
+            os.fsync(parent_fd)
+            os.close(candidate_fd)
+            candidate_fd = -1
+            try:
+                _pinned_assert_runtime_lock_compatible(
+                    parent_fd, lock_name, owner_pid, owner_start
+                )
+            except BaseException:
+                release_witnessed_directory_lock(
+                    path, label, owner_pid, pinned_parent_fd=parent_fd
+                )
+                raise
+            return
+        except BaseException:
+            if candidate_fd >= 0:
+                with contextlib.suppress(OSError):
+                    os.close(candidate_fd)
+            with contextlib.suppress(OSError, RuntimeError):
+                _pinned_remove_lock_tree(
+                    parent_fd, candidate, _allowed_lock_evidence(Path(lock_name)), label
+                )
+            raise
+    raise RuntimeError(f"{label} lock is contended; refusing an unlocked mutation")
+
+
 def _candidate_identity(path: Path, lock_name: str) -> tuple[int, str] | None:
     prefix = f".{lock_name}.candidate."
     if not path.name.startswith(prefix):
@@ -418,8 +727,12 @@ def _new_lock_candidate(path: Path, creator_pid: int, creator_start: str) -> Pat
     raise RuntimeError(f"{path.name} lock candidate namespace is exhausted")
 
 
-def acquire_witnessed_directory_lock(path: Path, label: str, owner_pid: int) -> None:
+def acquire_witnessed_directory_lock(path: Path, label: str, owner_pid: int, *,
+                                     pinned_parent_fd: int | None = None) -> None:
     """Publish a fully witnessed mkdir-compatible lock in one no-replace rename."""
+    if pinned_parent_fd is not None:
+        _acquire_witnessed_directory_lock_pinned(path, label, owner_pid, pinned_parent_fd)
+        return
     owner_pid, owner_start = _process_identity(owner_pid)
     creator_pid, creator_start = _process_identity(os.getpid())
     _reject_reparse_components(path.parent, f"{label} lock parent")
@@ -507,7 +820,25 @@ def _assert_runtime_lock_compatible(path: Path, owner_pid: int, owner_start: str
     raise RuntimeError("runtime-state maintenance is active; refusing a concurrent mutation")
 
 
-def release_witnessed_directory_lock(path: Path, label: str, owner_pid: int) -> None:
+def _release_witnessed_directory_lock_pinned(path: Path, label: str, owner_pid: int,
+                                             parent_fd: int) -> None:
+    lock_name = _pinned_lock_parent(path, label, parent_fd)
+    owner_pid, owner_start = _process_identity(owner_pid)
+    observed_pid, observed_start = _pinned_lock_owner(parent_fd, lock_name, label)
+    if observed_pid != owner_pid or observed_start != owner_start:
+        raise RuntimeError(f"refusing to release {label} lock owned by another process")
+    tomb = f".{lock_name}.released.{owner_pid}.{time.time_ns()}"
+    _rename_noreplace_at(lock_name, tomb, parent_fd, parent_fd)
+    os.fsync(parent_fd)
+    _pinned_remove_lock_tree(parent_fd, tomb, _allowed_lock_evidence(Path(lock_name)), label)
+    os.fsync(parent_fd)
+
+
+def release_witnessed_directory_lock(path: Path, label: str, owner_pid: int, *,
+                                     pinned_parent_fd: int | None = None) -> None:
+    if pinned_parent_fd is not None:
+        _release_witnessed_directory_lock_pinned(path, label, owner_pid, pinned_parent_fd)
+        return
     owner_pid, owner_start = _process_identity(owner_pid)
     observed_pid, observed_start = lock_owner(path)
     if observed_pid != owner_pid or observed_start != owner_start:
