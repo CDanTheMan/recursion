@@ -967,27 +967,35 @@ def import_journal(base: Path) -> int:
             journal_records = read_jsonl_objects(journal)
         except JsonlDurabilityError as exc:
             raise ValueError(str(exc)) from exc
-        # read_jsonl_objects preserves journal order and omits only blank lines.  A row that has
-        # no projection is validated at the point where it would be written; this preserves the
-        # old invalid-row filter without revalidating every already-projected row on every import.
-        # Reviewed legacy rows are therefore skipped at their own journal positions rather than
-        # being assumed to form a contiguous prefix.
+        # read_jsonl_objects preserves journal order and omits only blank lines.  Keep this
+        # all-rows walk even though the validation filter already catches legacy rows: by
+        # construction a valid row cannot appear inside the leading legacy prefix, so both
+        # mechanisms agree today; the walk prevents that prefix assumption from silently
+        # returning if the filter is ever narrowed.  A row that has no projection is validated
+        # at the point where it would be written; this preserves the old invalid-row filter
+        # without revalidating every already-projected row on every import.  Reviewed legacy rows
+        # are therefore skipped at their own journal positions rather than being assumed to form
+        # a contiguous prefix.
         for raw in journal_records:
             record = normalize(raw)
             present = existing_path(base, record["id"])
-            if present is None:
+            needs_projection = present is None
+            if needs_projection:
                 try:
                     validate_record(base, record)
                 except ValueError:
                     continue
-            prior = seen_decisions.get(record["id"])
-            if prior is not None:
-                assert_same_decision(prior, record, f"journal decision {record['id']}")
-            else:
-                seen_decisions[record["id"]] = record
+            if needs_projection:
+                prior = seen_decisions.get(record["id"])
+                if prior is not None:
+                    assert_same_decision(prior, record, f"journal decision {record['id']}")
+                else:
+                    seen_decisions[record["id"]] = record
             for raw_match in find_jsonl_objects(journal, "id", record["id"]):
                 assert_same_decision(normalize(raw_match), record,
                                      f"journal decision {record['id']}")
+            if needs_projection:
+                present = existing_path(base, record["id"])
             if present:
                 continue
             atomic_json(queue_root(base) / "pending" / f"{record['id']}.json", record)

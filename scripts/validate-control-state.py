@@ -111,7 +111,8 @@ def validate(kind: str, value: object) -> dict:
             fail(f"{field} must be a non-empty string")
 
     for field in ("project_id", "pilot_id", "goal_id", "task_id", "event_id", "verb"):
-        if field in value and value[field] is not None:
+        if field in value and (value[field] is not None
+                               or (field == "verb" and kind in {"decision", "action"})):
             require_identifier(value[field], field)
     for field in ("dependencies", "action_ids"):
         if field in value:
