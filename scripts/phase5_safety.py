@@ -410,7 +410,9 @@ def pinned_directory(path: Path | str, *, for_publication: bool = False) -> Iter
         except BoundaryError:
             raise
         except (OSError, ValueError, TypeError, OverflowError, RecursionError) as exc:
-            raise BoundaryError(f"directory is unavailable: {path}") from exc
+            raw_path = os.fspath(path)
+            detail = "" if os.path.isabs(raw_path) else f": {raw_path}"
+            raise BoundaryError(f"directory is unavailable{detail}") from exc
         yield descriptor, absolute
 
 

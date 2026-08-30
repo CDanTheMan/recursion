@@ -559,6 +559,68 @@ def run_path_sweep(scratch: Path) -> None:
           "missing runtime staging refuses without disclosing the absolute source path")
 
 
+def run_control_state_identity_sweep(scratch: Path) -> None:
+    """Check that prepared records are inert and active identities are plain integers."""
+    base = {
+        "schema_version": 1, "id": "run-1", "task_id": "task-1", "worker": "worker",
+        "worktree": "fixture", "base_commit": "a" * 40, "lease_expires": "0",
+        "deadline": "0", "usage": {}, "result": {},
+    }
+
+    def invoke(value: dict) -> subprocess.CompletedProcess:
+        return run_command([
+            PYTHON, ROOT / "scripts" / "validate-control-state.py", "run",
+        ], input_bytes=json.dumps(value).encode("utf-8"))
+
+    prepared = dict(base, pid=0, process_group=0, status="prepared")
+    check(invoke(prepared).returncode == 0,
+          "prepared run with zero process identity is accepted")
+    prepared_without_group = dict(prepared)
+    prepared_without_group.pop("process_group")
+    check(invoke(prepared_without_group).returncode == 0,
+          "prepared run without process_group is accepted")
+
+    forged_prepared = dict(prepared, pid=4242, process_group=4242)
+    forged_result = invoke(forged_prepared)
+    check(forged_result.returncode == 2
+          and b"prepared run must have zero or absent process identity" in forged_result.stderr,
+          "prepared run with live process identity is refused")
+
+    pid_true = dict(base, pid=True, process_group=1, status="running")
+    pid_result = invoke(pid_true)
+    check(pid_result.returncode == 2
+          and b"active run must have positive process identity" in pid_result.stderr,
+          "active run with boolean pid is refused")
+
+    deadline_true = dict(base, pid=1, process_group=1, status="running",
+                         deadline_epoch_ns=True)
+    deadline_result = invoke(deadline_true)
+    check(deadline_result.returncode == 2
+          and b"deadline_epoch_ns must be a non-negative integer" in deadline_result.stderr,
+          "active run with boolean deadline epoch is refused")
+
+    active = dict(base, pid=1, process_group=1, status="running")
+    check(invoke(active).returncode == 0,
+          "active run with positive plain process identities is accepted")
+
+    missing = scratch / "missing-control-state" / "record.json"
+    missing_result = run_command([
+        PYTHON, ROOT / "scripts" / "validate-control-state.py", "project", missing,
+    ])
+    check(missing_result.returncode == 2
+          and missing_result.stderr.strip() == b"ERR directory is unavailable"
+          and str(missing).encode() not in missing_result.stderr,
+          "absolute control-state input refusal is specific and path-free")
+
+    relative_missing = f"phase5-relative-missing-{secrets.token_hex(8)}"
+    try:
+        with phase5_safety.pinned_directory(relative_missing):
+            raise AssertionError("missing relative directory was accepted")
+    except phase5_safety.BoundaryError as exc:
+        check(str(exc) == f"directory is unavailable: {relative_missing}",
+              "relative directory refusal retains its specific relative diagnostic")
+
+
 def run_publication_race_probe(scratch: Path) -> None:
     """Make a concurrent creator appear at the final POSIX publication check."""
     target = scratch / "publication-race-target"
@@ -1194,6 +1256,8 @@ def run_individual_guard_mutations(scratch: Path) -> None:
     rows: list[dict[str, str]] = []
     boundary_source = Path(__file__).resolve().relative_to(ROOT).as_posix()
     boundary_text = Path(__file__).read_text(encoding="utf-8")
+    control_text = (ROOT / "scripts" / "validate-control-state.py").read_text(encoding="utf-8")
+    safety_text = (ROOT / "scripts" / "phase5_safety.py").read_text(encoding="utf-8")
     resolver_text = (ROOT / "scripts" / "resolve-engine.py").read_text(encoding="utf-8")
     runtime_text = (ROOT / "scripts" / "runtime-layout.py").read_text(encoding="utf-8")
 
@@ -1252,6 +1316,88 @@ def run_individual_guard_mutations(scratch: Path) -> None:
         rows, "stock differential new-mismatch guard", mismatch_line,
         "synthetic new schema/runtime mismatch", lambda: mismatch_case(sys.modules[__name__]),
         lambda: mismatch_case(mismatch_mutant),
+    )
+
+    control_run_base = {
+        "schema_version": 1, "id": "run-1", "task_id": "task-1", "worker": "worker",
+        "worktree": "fixture", "base_commit": "a" * 40, "pid": 4242,
+        "process_group": 4242, "lease_expires": "0", "deadline": "0", "usage": {},
+        "result": {}, "status": "prepared",
+    }
+
+    prepared_old = (
+        "        if value.get(\"status\") == \"prepared\":\n"
+        "            for field in (\"pid\", \"process_group\"):\n"
+        "                if field in value and (not is_plain_int(value[field]) or value[field] != 0):\n"
+        "                    fail(\"prepared run must have zero or absent process identity\")\n"
+    )
+    prepared_new = prepared_old.replace("if value.get(\"status\") == \"prepared\":",
+                                       "if False:")
+    prepared_mutant, _ = _module_mutant(
+        scratch, "prepared-process-identity", ROOT / "scripts" / "validate-control-state.py",
+        prepared_old, prepared_new,
+    )
+    prepared_line = containing_line(
+        control_text, "fail(\"prepared run must have zero or absent process identity\")",
+        "scripts/validate-control-state.py",
+    )
+
+    def prepared_identity_case(module) -> None:
+        try:
+            module.validate("run", dict(control_run_base))
+        except ValueError:
+            return
+        raise AssertionError("prepared run with live process identity was accepted")
+
+    _kill_mutation(
+        rows, "prepared run identity guard", prepared_line,
+        "prepared run with live process identity", lambda: prepared_identity_case(control_state),
+        lambda: prepared_identity_case(prepared_mutant),
+    )
+
+    pid_old = "not is_plain_int(value.get(\"pid\"))"
+    pid_new = "not isinstance(value.get(\"pid\"), int)"
+    pid_mutant, _ = _module_mutant(
+        scratch, "plain-pid", ROOT / "scripts" / "validate-control-state.py", pid_old, pid_new,
+    )
+    pid_line = containing_line(control_text, pid_old, "scripts/validate-control-state.py")
+    pid_case_value = dict(control_run_base, pid=True, process_group=1, status="running")
+
+    def pid_identity_case(module) -> None:
+        try:
+            module.validate("run", dict(pid_case_value))
+        except ValueError:
+            return
+        raise AssertionError("active run with boolean pid was accepted")
+
+    _kill_mutation(
+        rows, "active pid uses plain integer predicate", pid_line,
+        "active run with pid=true", lambda: pid_identity_case(control_state),
+        lambda: pid_identity_case(pid_mutant),
+    )
+
+    path_old = '            detail = "" if os.path.isabs(raw_path) else f": {raw_path}"\n'
+    path_new = '            detail = f": {raw_path}"\n'
+    path_mutant, _ = _module_mutant(
+        scratch, "absolute-directory-disclosure", ROOT / "scripts" / "phase5_safety.py",
+        path_old, path_new,
+    )
+    path_line = containing_line(safety_text, "detail = \"\" if os.path.isabs(raw_path)",
+                                "scripts/phase5_safety.py")
+    disclosure_path = str(scratch / "mutation-missing-control-state" / "record.json")
+
+    def path_disclosure_case(module) -> None:
+        try:
+            with module.pinned_directory(disclosure_path):
+                raise AssertionError("missing directory was accepted")
+        except module.BoundaryError as exc:
+            if disclosure_path in str(exc):
+                raise AssertionError("absolute caller path was disclosed")
+
+    _kill_mutation(
+        rows, "absolute directory refusal is path-free", path_line,
+        disclosure_path, lambda: path_disclosure_case(phase5_safety),
+        lambda: path_disclosure_case(path_mutant),
     )
 
     future_source = scratch / "mutation-future-authenticator.sh"
@@ -1458,8 +1604,8 @@ def run_individual_guard_mutations(scratch: Path) -> None:
         lambda: final_scan_case(final_mutant),
     )
 
-    if len(rows) != 9:
-        raise AssertionError(f"individual mutation table is incomplete: {len(rows)} rows, expected 9")
+    if len(rows) != 12:
+        raise AssertionError(f"individual mutation table is incomplete: {len(rows)} rows, expected 12")
     print("individual guard mutation table:")
     for row in rows:
         print("  " + " | ".join(f"{key}={value}" for key, value in row.items()))
@@ -1482,6 +1628,7 @@ def main() -> int:
         scratch.mkdir()
     try:
         run_json_cli_sweep(scratch)
+        run_control_state_identity_sweep(scratch)
         run_controller_authentication_pin_sweep(scratch)
         run_resolver_symbolic_refusal_sweep(scratch)
         run_path_sweep(scratch)

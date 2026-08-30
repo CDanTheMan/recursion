@@ -185,7 +185,7 @@ def _validate(kind: str, value: object) -> dict:
             if not is_plain_int(value["budget"][field]) or value["budget"][field] < 0:
                 fail(f"invalid Phase 6 goal budget field: {field}")
         cost = value["budget"]["max_cost_usd"]
-        if isinstance(cost, bool) or not isinstance(cost, (int, float)) \
+        if (not is_plain_int(cost) and not isinstance(cost, float)) \
                 or not math.isfinite(cost) or cost < 0:
             fail("invalid Phase 6 goal budget field: max_cost_usd")
         if not isinstance(value["budget"]["publication_required"], bool):
@@ -259,18 +259,23 @@ def _validate(kind: str, value: object) -> dict:
         if str(value.get("acceptance", "")).strip() in {"", "true", ":", "/bin/true", "exit 0"}:
             fail("acceptance gate is structurally vacuous")
     if kind == "run":
-        if value.get("status") != "prepared" and "process_group" in value and (
-                not is_plain_int(value["process_group"]) or value["process_group"] < 1):
-            fail("process_group must be a positive integer")
+        if value.get("status") == "prepared":
+            for field in ("pid", "process_group"):
+                if field in value and (not is_plain_int(value[field]) or value[field] != 0):
+                    fail("prepared run must have zero or absent process identity")
+        else:
+            if "process_group" in value and (
+                    not is_plain_int(value["process_group"]) or value["process_group"] < 1):
+                fail("process_group must be a positive integer")
         for field in ("deadline_epoch_ns", "worker_finished_epoch_ns"):
             if field in value and (
-                isinstance(value[field], bool)
-                or not isinstance(value[field], int)
+                not is_plain_int(value[field])
                 or value[field] < 0
             ):
                 fail(f"{field} must be a non-negative integer")
-        if value.get("status") != "prepared" and (not isinstance(value.get("pid"), int) or value["pid"] < 1
-                                                     or not isinstance(value.get("process_group"), int) or value["process_group"] < 1):
+        if value.get("status") != "prepared" and (
+                not is_plain_int(value.get("pid")) or value["pid"] < 1
+                or not is_plain_int(value.get("process_group")) or value["process_group"] < 1):
             fail("active run must have positive process identity")
         if "role" in value and value["role"] not in {"implementer", "verifier"}:
             fail("invalid worker role")
