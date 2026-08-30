@@ -173,6 +173,7 @@ for s in assignment.py assignment_contract.py phase5_safety.py assist.sh author.
   board-summary.sh \
   project-pilot.py project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py \
   publish.sh remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh reflect.sh resume.sh \
+  remote-pause.py remote_backend.py remote_assignment.py \
   drain.sh run_contract.py runtime-state.py seed_contract.py taskctl.sh transition_receipt.py \
   validate-assignment-result.py validate-control-state.py validate-decision.py validate-gate.py \
   validate-verifier-result.py validate-worker-result.py work.sh assignment-token.py worker-evidence.py worker-sandbox.sh; do
