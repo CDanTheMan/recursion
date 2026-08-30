@@ -1343,7 +1343,14 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
     enforce_required_gate_profile(
         cfg, "goal", {**goal, "acceptance": goal_acceptance}, required_gate_profile,
     )
-    read_only_paths = seed_contract["paths"] if seed_contract else None
+    # work.sh's effective read-only set is "$SEED $SEED_MANIFEST": it passes --read-only-paths twice
+    # and argparse keeps the last one, which appends the manifest. The approved contract has to carry
+    # the same set or every seeded pilot task is rejected pre-worker as gate-contract-drift, and
+    # including it is right on its own terms -- a worker must not rewrite the manifest that defines
+    # its own seed.
+    read_only_paths = None
+    if seed_contract:
+        read_only_paths = [*seed_contract["paths"], seed_contract["manifest_path"]]
     expected_goal_contract = repo_gate_contract(
         base, cfg, "goal", goal_gate, read_only_paths=read_only_paths,
     )
