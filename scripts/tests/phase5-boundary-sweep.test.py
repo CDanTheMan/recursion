@@ -1328,10 +1328,24 @@ def run_individual_guard_mutations(scratch: Path) -> None:
         expected_refusal=resolver.REFUSAL_INVALID_ENGINE_NAME.encode(),
     )
 
-    publication_old = "        diag(REFUSAL_PLAN_PUBLICATION)\n"
-    publication_new = "        diag(f\"{REFUSAL_PLAN_PUBLICATION}: {out_path}\")\n"
+    publication_old = (
+        "    except (BoundaryError, OSError, ValueError, TypeError, OverflowError, RecursionError):\n"
+        "        # The output path is caller-controlled.  Keep the refusal symbolic so a\n"
+        "        # failed publication cannot disclose an absolute path or OS diagnostic.\n"
+        "        diag(REFUSAL_PLAN_PUBLICATION)\n"
+    )
+    publication_new = (
+        "    except (BoundaryError, OSError, ValueError, TypeError, OverflowError, RecursionError):\n"
+        "        # The output path is caller-controlled.  Keep the refusal symbolic so a\n"
+        "        # failed publication cannot disclose an absolute path or OS diagnostic.\n"
+        "        diag(f\"{REFUSAL_PLAN_PUBLICATION}: {out_path}\")\n"
+    )
     publication_mutant = _resolver_mutant(scratch, "plan-publication", publication_old, publication_new)
-    publication_line = containing_line(resolver_text, publication_old.strip(), "scripts/resolve-engine.py")
+    publication_line = containing_line(
+        resolver_text,
+        "    except (BoundaryError, OSError, ValueError, TypeError, OverflowError, RecursionError):",
+        "scripts/resolve-engine.py",
+    )
     publication_target = mutation_controller / "scripts"
 
     def publication_case(path: Path) -> subprocess.CompletedProcess:

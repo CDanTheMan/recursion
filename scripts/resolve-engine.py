@@ -25,13 +25,14 @@ if str(_SCRIPT_DIR) not in sys.path:
 
 from provider_contract import HOST_RE
 
+
 class FirstPartyImportError(ImportError):
     """A required controller module is absent or malformed in the importing tree."""
 
 
 try:
-    from phase5_safety import (BoundaryError, atomic_write, decode_json,
-                               pinned_directory, read_bounded_stream, read_bytes)
+    from phase5_safety import (BoundaryError, MAX_MANIFEST_BYTES, _git_show_bounded,
+                               atomic_write, decode_json, pinned_directory, read_bytes)
 except Exception as exc:
     module_name = getattr(exc, "name", None) or "phase5_safety"
     import_error = FirstPartyImportError(
@@ -94,7 +95,6 @@ PROVIDER_CHOICES = frozenset({
     "openrouter-via-opencode", "sentry-local",
 })
 PROFILE_CHOICES = frozenset({"anthropic", "cursor", "gemini", "openrouter", "sentry-local"})
-MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 
 
 class ManifestError(Exception):
@@ -222,42 +222,6 @@ def canonical_controller_root(value: str) -> Path:
     return requested
 
 
-def _git_show_bounded(root: Path, commit: str, relative: str,
-                      max_bytes: int) -> tuple[int, bytes]:
-    try:
-        process = subprocess.Popen(
-            ["git", "-C", str(root), "show", f"{commit}:{relative}"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-        )
-    except (OSError, TypeError, ValueError) as exc:
-        raise ManifestError(f"controller policy file is unreadable: {relative}") from exc
-    try:
-        if process.stdout is None:
-            raise OSError("git show did not provide a stdout pipe")
-        committed = read_bounded_stream(
-            process.stdout, label=f"controller policy file {relative}", max_bytes=max_bytes,
-        )
-        returncode = process.wait()
-    except BoundaryError as exc:
-        message = str(exc)
-        if "is too large" in message:
-            raise ManifestError(f"controller policy file is too large: {relative}") from exc
-        raise ManifestError(f"controller policy file is unreadable: {relative}") from exc
-    except (OSError, TypeError, ValueError, OverflowError, RecursionError) as exc:
-        raise ManifestError(f"controller policy file is unreadable: {relative}") from exc
-    finally:
-        if process.poll() is None:
-            try:
-                process.kill()
-            except OSError:
-                pass
-        try:
-            process.wait()
-        except OSError:
-            pass
-    return returncode, committed
-
-
 def authenticated_file(root: Path, commit: str, relative: str, *,
                        max_bytes: int = MAX_MANIFEST_BYTES) -> tuple[bytes, str]:
     if not isinstance(commit, str) or not COMMIT_RE.fullmatch(commit):
@@ -276,9 +240,14 @@ def authenticated_file(root: Path, commit: str, relative: str, *,
         ["git", "-C", str(root), "ls-tree", "-z", commit, "--", relative],
         capture_output=True, check=False,
     )
-    committed_returncode, committed_stdout = _git_show_bounded(
-        root, commit, relative, max_bytes,
-    )
+    try:
+        committed_returncode, committed_stdout = _git_show_bounded(
+            root, commit, relative, max_bytes,
+        )
+    except BoundaryError as exc:
+        if "is too large" in str(exc):
+            raise ManifestError(f"controller policy file is too large: {relative}") from exc
+        raise ManifestError(f"controller policy file is unreadable: {relative}") from exc
     rows = [row for row in tree.stdout.split(b"\0") if row]
     mode = rows[0].split(b" ", 1)[0] if len(rows) == 1 else b""
     try:

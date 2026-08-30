@@ -32,7 +32,8 @@ class FirstPartyImportError(ImportError):
 
 
 try:
-    from phase5_safety import BoundaryError, pinned_directory, read_bytes
+    from phase5_safety import (BoundaryError, MAX_MANIFEST_BYTES, _git_show_bounded,
+                               pinned_directory, read_bytes)
 except Exception as exc:
     module_name = getattr(exc, "name", None) or "phase5_safety"
     import_error = FirstPartyImportError(
@@ -66,26 +67,35 @@ def authenticated_profile_bytes(root: Path, commit: str) -> bytes:
         # the leaf relative to that pinned handle, and verifies the opened handle
         # before returning.  Check and use are therefore one operation; no
         # resolve()/is_symlink() pathname decision can race the read.
-        live = read_bytes(path, label="provider profile registry", private=True)
+        live = read_bytes(path, label="provider profile registry",
+                          max_bytes=MAX_MANIFEST_BYTES, private=True)
         if live is None:
             raise BoundaryError("provider profile registry is unavailable")
     except (BoundaryError, OSError, ValueError, TypeError) as exc:
+        if "is too large" in str(exc):
+            raise ValueError("provider profile registry is too large") from exc
         raise ValueError("provider profile registry is not a regular non-reparse file") from exc
     head = subprocess.run(["git", "-C", str(root), "rev-parse", "--verify", "HEAD"],
                           capture_output=True, text=True, check=False)
     tree = subprocess.run(["git", "-C", str(root), "ls-tree", "-z", commit, "--", relative],
                           capture_output=True, check=False)
-    committed = subprocess.run(["git", "-C", str(root), "show", f"{commit}:{relative}"],
-                                capture_output=True, check=False)
+    try:
+        committed_returncode, committed_stdout = _git_show_bounded(
+            root, commit, relative, MAX_MANIFEST_BYTES, label="provider profile registry",
+        )
+    except BoundaryError as exc:
+        if "is too large" in str(exc):
+            raise ValueError("provider profile registry is too large") from exc
+        raise ValueError("provider profile registry is unavailable") from exc
     rows = [row for row in tree.stdout.split(b"\0") if row]
     mode = rows[0].split(b" ", 1)[0] if len(rows) == 1 else b""
     # Defense in depth: an unexpected row count sets mode to b"", so the following
     # mode not in {b"100644", b"100755"} guard rejects the same malformed tree.
     # Keep this row-count refusal if that mode guard is narrowed.
-    if head.returncode or head.stdout.strip() != commit or tree.returncode or committed.returncode or len(rows) != 1 \
-            or mode not in {b"100644", b"100755"} or live != committed.stdout:
+    if head.returncode or head.stdout.strip() != commit or tree.returncode or committed_returncode or len(rows) != 1 \
+            or mode not in {b"100644", b"100755"} or live != committed_stdout:
         raise ValueError("provider profile registry differs from controller commit")
-    return committed.stdout
+    return committed_stdout
 
 
 def load(profile: str, controller_root: str | None = None, controller_commit: str | None = None) -> dict:
@@ -136,6 +146,7 @@ def phase5_refusal(exc: BaseException) -> str:
         "controller root is not the canonical controller root",
         "provider policy provenance is unavailable",
         "provider profile registry is not a regular non-reparse file",
+        "provider profile registry is too large",
         "provider profile registry differs from controller commit",
         "provider profile registry is unavailable",
         "provider profile registry is invalid",

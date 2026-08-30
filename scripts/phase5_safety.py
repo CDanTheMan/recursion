@@ -13,6 +13,7 @@ import math
 import os
 import secrets
 import stat
+import subprocess
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -21,6 +22,7 @@ from typing import Iterator
 MAX_JSON_BYTES = 4 * 1024 * 1024
 MAX_JSON_DEPTH = 128
 MAX_JSON_INT_DIGITS = 1024
+MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 MAX_FILE_BYTES = 16 * 1024 * 1024
 REPARSE_POINT = 0x400
 
@@ -122,6 +124,41 @@ def read_bounded_stream(stream: object, *, label: str = "input",
     except (AttributeError, OSError, ValueError, TypeError, OverflowError, RecursionError,
             UnicodeDecodeError) as exc:
         raise BoundaryError(f"{label} is unreadable") from exc
+
+
+def _git_show_bounded(root: Path, commit: str, relative: str,
+                      max_bytes: int, *, label: str | None = None) -> tuple[int, bytes]:
+    """Read one Git blob through a bounded pipe and terminate an over-limit producer."""
+    stream_label = label or f"controller policy file {relative}"
+    try:
+        process = subprocess.Popen(
+            ["git", "-C", str(root), "show", f"{commit}:{relative}"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise BoundaryError(f"{stream_label} is unreadable") from exc
+    try:
+        if process.stdout is None:
+            raise OSError("git show did not provide a stdout pipe")
+        committed = read_bounded_stream(
+            process.stdout, label=stream_label, max_bytes=max_bytes,
+        )
+        returncode = process.wait()
+    except BoundaryError:
+        raise
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError) as exc:
+        raise BoundaryError(f"{stream_label} is unreadable") from exc
+    finally:
+        if process.poll() is None:
+            try:
+                process.kill()
+            except OSError:
+                pass
+        try:
+            process.wait()
+        except OSError:
+            pass
+    return returncode, committed
 
 
 def _reparse(info: os.stat_result) -> bool:
