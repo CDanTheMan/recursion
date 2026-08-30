@@ -21,9 +21,16 @@ chmod +x "$BIN/claude"
 
 R="$TMP/controller"
 mkdir -p "$R/scripts" "$R/state/tasks" "$R/loop/logs" "$R/app"
-for s in work.sh worker-sandbox.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh; do
+for s in work.sh assignment-token.py worker-sandbox.sh phase5_safety.py taskctl.sh assignment.py assignment_contract.py jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh \
+  assist.sh conduct.sh engine_contract.py git-scope.py pilot_instruction.py plan.sh project-pilot.py \
+  project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py publish.sh \
+  remote_evidence.py resolve-engine.py resolve-model-alias.py run_contract.py seed_contract.py \
+  validate-assignment-result.py validate-gate.py validate-verifier-result.py validate-worker-result.py \
+  worker-evidence.py; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$R/scripts" \
+  || { no "phase 1 fixture is missing a staged first-party dependency"; }
 chmod +x "$R/scripts/worker-sandbox.sh" 2>/dev/null || true
 : > "$R/.env"
 printf 'seed\n' > "$R/app/seed.txt"

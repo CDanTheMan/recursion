@@ -15,35 +15,162 @@
 #   conduct-hermes.sh                 drain every durable pending decision
 #   conduct-hermes.sh --file <path>   execute a specific decision file
 #   conduct-hermes.sh --dry-run       print what would run, execute nothing
+#   conduct-hermes.sh --non-work-only drain only state/approval decisions
+#   conduct-hermes.sh --work-only     drain only worker decisions
 set -uo pipefail
 export LC_ALL=C
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-cd "$ROOT"
+cd "$ROOT" 2>/dev/null || exit 2
 [ -f .env ] && set -a && . ./.env && set +a
 # .env pins RECURSION_ROOT for the deployed checkout. Sourcing it must never RETARGET a
 # caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
 # into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
 RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
+# Native Python witnesses Win32 PIDs. Git Bash's $$ is an MSYS PID, so use the mapped Win32
+# process identity when Git Bash exposes it; on Linux /proc/$$/winpid is absent and $$ is already
+# the native PID. The same owner value must be used for acquire and release.
+OWNER_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"
 
-FILE=""; DRY=0; PAUSED_SAFE=0; RECOVER_ONLY=0
+FILE=""; DRY=0; PAUSED_SAFE=0; RECOVER_ONLY=0; NON_WORK_ONLY=0; WORK_ONLY=0
+CLI_ERROR=0
+# A queue claim supplies these immutable bytes through the child environment. Direct --file
+# invocation captures them below. The child never re-reads a path as its decision authority.
+DECISION_SNAPSHOT_B64="${RECURSION_DECISION_SNAPSHOT_B64:-}"
+DECISION_FILE_DIGEST="${RECURSION_DECISION_FILE_DIGEST:-}"
+DECISION_SNAPSHOT_SUPPLIED=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --file) FILE="$2"; shift 2 ;;
+    --file)
+      if [ "$#" -lt 2 ]; then CLI_ERROR=1; shift; continue; fi
+      [ -z "$FILE" ] || CLI_ERROR=1
+      FILE="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     --paused-safe) PAUSED_SAFE=1; shift ;;
     --recover-only) RECOVER_ONLY=1; shift ;;
-    *) shift ;;
+    --non-work-only) NON_WORK_ONLY=1; shift ;;
+    --work-only) WORK_ONLY=1; shift ;;
+    *) CLI_ERROR=1; shift ;;
   esac
 done
+RECOVERY_SCOPE_ARGS=()
+[ "$NON_WORK_ONLY" = 1 ] && RECOVERY_SCOPE_ARGS+=(--non-work-only)
+[ "$WORK_ONLY" = 1 ] && RECOVERY_SCOPE_ARGS+=(--work-only)
+CHILD_SCOPE_ARGS=("${RECOVERY_SCOPE_ARGS[@]}")
+
+# Scope is an admission boundary, not merely a queue preference.  It must run before action
+# recovery because recovery can acknowledge or release the instruction coupled to an action.
+# A state-only actuator may therefore never touch a work decision (and vice versa), including a
+# directly supplied --file or a claim left in running/ after a crash.
+scope_allows_file(){
+  local path="$1" verb
+  if [ "$NON_WORK_ONLY" = 0 ] && [ "$WORK_ONLY" = 0 ]; then return 0; fi
+  verb="$(python3 - "$path" "${DECISION_SNAPSHOT_B64:-}" <<'PY' 2>/dev/null
+import base64,binascii,json,sys
+try:
+    if sys.argv[2]:
+        value=base64.b64decode(sys.argv[2], validate=True).decode("utf-8")
+    else:
+        with open(sys.argv[1], "rb") as source:
+            value=source.read(2 * 1024 * 1024 + 1).decode("utf-8", "strict")
+    if len(value) > 2 * 1024 * 1024: raise ValueError("decision is too large")
+    row=json.loads(value, parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+    value = row.get("verb", "") if isinstance(row, dict) else ""
+    sys.stdout.buffer.write(str(value or "").encode("utf-8"))
+except (OSError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError,
+        json.JSONDecodeError,binascii.Error):
+    raise SystemExit(2)
+PY
+)" || return 2
+  if [ "$WORK_ONLY" = 1 ]; then
+    [ "$verb" = work ]
+  else
+    [ "$verb" != work ]
+  fi
+}
+scope_guard(){
+  local scope_rc current_digest
+  [ -n "${DECISION_SNAPSHOT_B64:-}" ] || { log "REFUSED - immutable decision snapshot is absent"; return 74; }
+  current_digest="$(python3 - "${DECISION_SNAPSHOT_B64}" <<'PY'
+import base64,binascii,hashlib,sys
+try:
+    raw=base64.b64decode(sys.argv[1], validate=True)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
+except (ValueError,TypeError,binascii.Error):
+    print("boundary=immutable-snapshot-digest", file=sys.stderr)
+    raise SystemExit(2)
+sys.stdout.buffer.write(hashlib.sha256(raw).hexdigest().encode("ascii"))
+PY
+)" || { log "REFUSED - immutable decision snapshot digest could not be verified"; return 74; }
+  [ "$current_digest" = "$DECISION_FILE_DIGEST" ] || { log "REFUSED - immutable decision snapshot digest changed"; return 74; }
+  # A queue claim supplies an already-pinned projection and must recheck that projection before
+  # every child action.  A direct --file invocation instead captures its caller-controlled input
+  # once at entry; its immutable snapshot remains the authority even if a validator or another
+  # observer replaces that convenience path after validation.  In both cases the child consumes
+  # DECISION_JSON from the immutable stream, so a replacement cannot redirect the validated verb
+  # or arguments.  A supplied snapshot is the queue/recovery path and keeps the hostile-swap CAS.
+  if [ "$DECISION_SNAPSHOT_SUPPLIED" = 1 ]; then
+    local source_digest
+    source_digest="$(python3 - "$FILE" <<'PY'
+import hashlib,sys
+try:
+    with open(sys.argv[1], "rb") as source: raw=source.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
+except (OSError,ValueError):
+    print("boundary=decision-projection-digest", file=sys.stderr)
+    raise SystemExit(2)
+sys.stdout.buffer.write(hashlib.sha256(raw).hexdigest().encode("ascii"))
+PY
+    )" || { log "REFUSED - decision projection digest could not be verified"; return 74; }
+    [ "$source_digest" = "$DECISION_FILE_DIGEST" ] \
+      || { log "REFUSED - decision projection changed before child action"; return 74; }
+  fi
+  scope_allows_file "$FILE"; scope_rc=$?
+  [ "$scope_rc" -eq 0 ] && return 0
+  [ "$scope_rc" -eq 1 ] && log "REFUSED - decision scope changed before child action" \
+    || log "REFUSED - decision scope could not be authenticated before child action"
+  return 74
+}
 DATE="$(date +%F)"
 LOG="$ROOT/loop/logs/$DATE-conduct-hermes.log"; mkdir -p "$(dirname "$LOG")"
 log(){ echo "[$(date -Is)] conduct-hermes: $*" | tee -a "$LOG" >&2; }
+[ "$CLI_ERROR" = 0 ] || { log "REFUSED - invalid command-line parameters"; exit 2; }
+[ "$NON_WORK_ONLY" = 0 ] || [ "$WORK_ONLY" = 0 ] \
+  || { log "REFUSED - --non-work-only and --work-only are mutually exclusive"; exit 2; }
 ev(){ bash scripts/taskctl.sh event "$1" "" "$2" >/dev/null 2>&1 || true; }
 
+claim_from_queue(){
+  local output; local -a fields
+  CLAIMED_FILE=""; CLAIMED_DIGEST=""; CLAIMED_SNAPSHOT=""
+  output="$(python3 "$ROOT/scripts/decision-queue.py" claim-pending "$@" --with-snapshot)"
+  CLAIM_RC=$?
+  [ "$CLAIM_RC" -eq 0 ] || return "$CLAIM_RC"
+  mapfile -t fields <<< "$output"
+  [ "${#fields[@]}" -eq 3 ] && [ -n "${fields[0]}" ] \
+    && [[ "${fields[1]}" =~ ^[0-9a-f]{64}$ ]] && [ -n "${fields[2]}" ] \
+    || { log "REFUSED - queue claim returned an invalid immutable snapshot"; return 74; }
+  CLAIMED_FILE="${fields[0]}"; CLAIMED_DIGEST="${fields[1]}"; CLAIMED_SNAPSHOT="${fields[2]}"
+}
+
+snapshot_running(){
+  local output; local -a fields
+  output="$(python3 "$ROOT/scripts/decision-queue.py" snapshot "$1")" || return 74
+  mapfile -t fields <<< "$output"
+  [ "${#fields[@]}" -eq 2 ] && [[ "${fields[0]}" =~ ^[0-9a-f]{64}$ ]] && [ -n "${fields[1]}" ] \
+    || { log "REFUSED - running decision snapshot is invalid"; return 74; }
+  CLAIMED_DIGEST="${fields[0]}"; CLAIMED_SNAPSHOT="${fields[1]}"
+}
+
+run_claimed_child(){
+  local path="$1" digest="$2" snapshot="$3"; shift 3
+  RECURSION_DECISION_FILE_DIGEST="$digest" RECURSION_DECISION_SNAPSHOT_B64="$snapshot" \
+    RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
+    bash "$ROOT/scripts/conduct-hermes.sh" "$@" --file "$path" 8>&-
+}
+
 drain_queue(){
-  local queue_file claim_rc child_rc action_state aggregate=0 project global first i
+  local queue_file claim_rc child_rc finalize_rc action_state aggregate=0 project global first i claimed_digest
   local import_error import_rc
-  local -a pids=() files=() projects=() claim_args=()
+  local -a pids=() files=() projects=() digests=() snapshots=() claim_args=()
   [ "$DRY" = 0 ] || { log "--dry-run requires an explicit --file"; return 2; }
   [ -x "$ROOT/scripts/decision-queue.py" ] \
     || { log "durable decision queue helper is absent"; return 74; }
@@ -65,7 +192,15 @@ drain_queue(){
   fi
   for quarantine_record in "$ROOT/state/decision-queue/quarantine"/*.json; do
     [ -f "$quarantine_record" ] || continue
-    quarantine_sha="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("tail_sha256", ""))' \
+    quarantine_sha="$(python3 -c 'import json,sys
+try:
+    with open(sys.argv[1],"rb") as source: raw=source.read(65537)
+    if len(raw)>65536: raise ValueError("quarantine metadata is too large")
+    value=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    value = value.get("tail_sha256","") if isinstance(value,dict) else ""
+    sys.stdout.buffer.write(str(value or "").encode("utf-8"))
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)' \
       "$quarantine_record" 2>/dev/null || true)"
     [ -n "$quarantine_sha" ] || continue
     RECURSION_ROOT="$ROOT" bash "$ROOT/scripts/taskctl.sh" esc-record \
@@ -75,28 +210,32 @@ drain_queue(){
   done
 
   finalize_claim(){
-    local claimed="$1" result_rc="$2" state reconcile_rc=0
-    state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed")" || return $?
+    local claimed="$1" result_rc="$2" queue_sha="$3" queue_snapshot="$4" state reconcile_rc=0
+    local recovery_error=""
+    # queue_sha is captured immediately after claim and retained across child execution.  Never
+    # hash the post-action path here: that would let a swapped projection become the authority
+    # used by terminalization after the immutable child snapshot has completed.
+    [[ "$queue_sha" =~ ^[0-9a-f]{64}$ ]] || { log "original claimed decision digest is absent"; return 74; }
+    state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed" --expected-sha256 "$queue_sha")" || return $?
     case "$state" in
       succeeded|failed|cancelled|pending)
         # The child can die after writing its terminal/deferred action but before projecting the
         # coupled instruction. Reconcile that handshake idempotently before moving the decision;
         # otherwise the parent would hide the only projection capable of recovery.
-        RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-          bash "$ROOT/scripts/conduct-hermes.sh" --recover-only --file "$claimed" 8>&- \
-          >/dev/null 2>&1 || reconcile_rc=$?
+        recovery_error="$(run_claimed_child "$claimed" "$queue_sha" "$queue_snapshot" \
+          --recover-only "${CHILD_SCOPE_ARGS[@]}" 8>&- 2>&1 >/dev/null)" || reconcile_rc=$?
         case "$state:$reconcile_rc" in
           succeeded:0|failed:1|cancelled:1|pending:75) : ;;
-          *) log "instruction/action recovery failed state=$state rc=$reconcile_rc; preserving $claimed"; return 74 ;;
+          *) log "instruction/action recovery failed state=$state rc=$reconcile_rc; preserving $claimed${recovery_error:+: ${recovery_error:0:240}}"; return 74 ;;
         esac
-        state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed")" || return $?
+        state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed" --expected-sha256 "$queue_sha")" || return $?
         case "$state" in
-          succeeded) python3 "$ROOT/scripts/decision-queue.py" succeed "$claimed" "action succeeded" >/dev/null ;;
+          succeeded) python3 "$ROOT/scripts/decision-queue.py" succeed "$claimed" "action succeeded" --expected-sha256 "$queue_sha" >/dev/null ;;
           failed|cancelled)
-        python3 "$ROOT/scripts/decision-queue.py" fail "$claimed" "action $state rc=$result_rc" >/dev/null
+        python3 "$ROOT/scripts/decision-queue.py" fail "$claimed" "action $state rc=$result_rc" --expected-sha256 "$queue_sha" >/dev/null
             aggregate=1 ;;
           pending)
-            python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "action deferred rc=$result_rc" >/dev/null
+            python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "action deferred rc=$result_rc" --expected-sha256 "$queue_sha" >/dev/null
             return 75 ;;
           *) log "action changed unexpectedly during recovery: $state"; return 74 ;;
         esac
@@ -104,7 +243,7 @@ drain_queue(){
       running) log "decision remains coupled to a running action"; return 75 ;;
       absent)
         if [ "$result_rc" -eq 75 ]; then
-          python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "execution deferred" >/dev/null
+          python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "execution deferred" --expected-sha256 "$queue_sha" >/dev/null
           return 75
         fi
         if [ -f "$ROOT/state/PAUSE" ]; then
@@ -114,30 +253,57 @@ drain_queue(){
           # deferrals is how an undrainable record spins forever while the actuator reports
           # healthy -- observed 2026-08-12. Disposition is unchanged; visibility is not.
           log "REFUSED under PAUSE - child rc=$result_rc for ${claimed#$ROOT/}; pending preserved, NOT a deferral"
-          python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "refused under pause rc=$result_rc" >/dev/null
+          python3 "$ROOT/scripts/decision-queue.py" defer "$claimed" "refused under pause rc=$result_rc" --expected-sha256 "$queue_sha" >/dev/null
           return 76
         fi
-        python3 "$ROOT/scripts/decision-queue.py" fail "$claimed" "no action record rc=$result_rc" >/dev/null
+        python3 "$ROOT/scripts/decision-queue.py" fail "$claimed" "no action record rc=$result_rc" --expected-sha256 "$queue_sha" >/dev/null
         aggregate=1 ;;
       *) log "corrupt action state '$state'; preserving $claimed"; return 74 ;;
     esac
   }
 
+  # A claim that has already been dispatched (or recovery-inspected) is never returned by
+  # claim-pending again.  If its queue rename/finalization is temporarily incomplete, leave that
+  # projection for the next reconciliation pass instead of hiding independent pending work.  A
+  # missing/corrupt action remains a hard stop; a known running action is safe to leave because no
+  # path below relaunches that running claim, and its deterministic action id rejects a duplicate.
+  claim_is_not_relaunchable(){
+    local claimed="$1" queue_sha="$2" state
+    state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$claimed" \
+      --expected-sha256 "$queue_sha" 2>/dev/null)" || return 1
+    case "$state" in succeeded|failed|cancelled|running) return 0 ;; *) return 1 ;; esac
+  }
+
   # Reconcile projections left running by a prior actuator process before claiming anything
-  # new. A genuinely running action is never double-launched and blocks new admissions until
-  # its own durable action reaches terminal state.
+  # new. Recovery never dispatches the verb; a still-running action is left in place while this
+  # pass drains independent pending projections.
   for queue_file in "$ROOT/state/decision-queue/running"/*.json; do
     [ -f "$queue_file" ] || continue
-    action_state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$queue_file")" || return $?
+    snapshot_running "$queue_file" || return 74
+    DECISION_SNAPSHOT_B64="$CLAIMED_SNAPSHOT"; DECISION_FILE_DIGEST="$CLAIMED_DIGEST"
+    scope_allows_file "$queue_file"; scope_rc=$?
+    if [ "$scope_rc" -ne 0 ]; then
+      [ "$scope_rc" -eq 1 ] || { log "recovery scope could not inspect $queue_file; preserving it"; return 74; }
+      continue
+    fi
+    action_state="$(python3 "$ROOT/scripts/decision-queue.py" action-status "$queue_file" --expected-sha256 "$CLAIMED_DIGEST")" || return $?
     case "$action_state" in
-      absent) python3 "$ROOT/scripts/decision-queue.py" defer "$queue_file" "recovered claim had no action" >/dev/null || return $? ;;
+      absent) python3 "$ROOT/scripts/decision-queue.py" defer "$queue_file" "recovered claim had no action" \
+        --expected-sha256 "$CLAIMED_DIGEST" >/dev/null || return $? ;;
       succeeded|failed|cancelled|running|pending)
         # Re-enter only the recovery path so the coupled instruction is acknowledged/released
         # before the decision projection becomes terminal. No verb is dispatched here.
-        RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-          bash "$ROOT/scripts/conduct-hermes.sh" --recover-only --file "$queue_file" 8>&-
+        run_claimed_child "$queue_file" "$CLAIMED_DIGEST" "$CLAIMED_SNAPSHOT" \
+          --recover-only "${CHILD_SCOPE_ARGS[@]}"
         child_rc=$?
-        finalize_claim "$queue_file" "$child_rc" || return $?
+        finalize_claim "$queue_file" "$child_rc" "$CLAIMED_DIGEST" "$CLAIMED_SNAPSHOT"
+        finalize_rc=$?
+        if [ "$finalize_rc" -ne 0 ]; then
+          claim_is_not_relaunchable "$queue_file" "$CLAIMED_DIGEST" \
+            || return "$finalize_rc"
+          aggregate=1
+          log "recovered queue finalization deferred for an already inspected action; continuing the drain"
+        fi
         ;;
       *) log "corrupt recovered action state '$action_state'"; return 74 ;;
     esac
@@ -145,72 +311,84 @@ drain_queue(){
 
   # Deterministic state transitions run serially. They may enqueue more transitions, which this
   # same loop drains before any worker dispatch, preserving the goal/task CAS order.
-  while :; do
+  while [ "$WORK_ONLY" = 0 ]; do
     if [ "$PAUSED_SAFE" = 1 ]; then
-      queue_file="$(python3 "$ROOT/scripts/decision-queue.py" claim-pending --kind non-work \
+      claim_from_queue --kind non-work \
         --verb noop --verb pilot-plan-propose --verb pilot-plan-approve --verb pilot-window-open \
-        --verb pilot-window-close --verb assist-answer --verb routing-refuse)"
+        --verb pilot-window-close --verb assist-answer --verb routing-refuse
+      claim_rc=$?
     else
-      queue_file="$(python3 "$ROOT/scripts/decision-queue.py" claim-pending --kind non-work)"
+      claim_from_queue --kind non-work
+      claim_rc=$?
     fi
-    claim_rc=$?
     [ "$claim_rc" -ne 4 ] || break
     [ "$claim_rc" -eq 0 ] || return "$claim_rc"
-    RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-      bash "$ROOT/scripts/conduct-hermes.sh" --file "$queue_file" 8>&-
+    queue_file="$CLAIMED_FILE"; claimed_digest="$CLAIMED_DIGEST"; claimed_snapshot="$CLAIMED_SNAPSHOT"
+    run_claimed_child "$queue_file" "$claimed_digest" "$claimed_snapshot" "${CHILD_SCOPE_ARGS[@]}"
     child_rc=$?
-    finalize_claim "$queue_file" "$child_rc" || return $?
+    finalize_claim "$queue_file" "$child_rc" "$claimed_digest" "$claimed_snapshot"
+    finalize_rc=$?
+    if [ "$finalize_rc" -ne 0 ]; then
+      claim_is_not_relaunchable "$queue_file" "$claimed_digest" \
+        || return "$finalize_rc"
+      aggregate=1
+      log "queue finalization deferred for an already dispatched action; continuing the drain for independent work"
+    fi
   done
 
   [ "$PAUSED_SAFE" = 0 ] || return "$aggregate"
+  [ "$NON_WORK_ONLY" = 0 ] || return "$aggregate"
 
   # Work decisions remain ordinary actions through this same actuator. The only difference is
   # that independent projects may occupy separate bounded slots. One slot per project plus the
   # global ceiling proves isolation; project/goal/window admission is rechecked in --file.
   global="${RECURSION_PILOT_GLOBAL_CONCURRENCY:-1}"
   case "$global" in ''|*[!0-9]*) log "invalid global pilot concurrency '$global'"; return 4 ;; esac
+  [ "${#global}" -le 3 ] || { log "global pilot concurrency is too large"; return 4; }
+  global=$((10#$global))
   [ "$global" -ge 1 ] && [ "$global" -le 16 ] || { log "global pilot concurrency must be 1..16"; return 4; }
   while :; do
     while [ "${#pids[@]}" -lt "$global" ]; do
       claim_args=(claim-pending --kind work)
       for project in "${projects[@]}"; do claim_args+=(--exclude-project "$project"); done
-      queue_file="$(python3 "$ROOT/scripts/decision-queue.py" "${claim_args[@]}")"
+      claim_from_queue "${claim_args[@]:1}"
       claim_rc=$?
       [ "$claim_rc" -ne 4 ] || break
       [ "$claim_rc" -eq 0 ] || return "$claim_rc"
-      project="$(python3 - "$queue_file" "$ROOT" <<'PY'
-import json,sys
-from pathlib import Path
-decision=Path(sys.argv[1]); root=Path(sys.argv[2])
-row=json.loads(decision.read_text(encoding='utf-8'))
-args=row.get('arguments') or row.get('args') or []
-project=''
-if args:
-    task=root/'state/tasks'/f'{args[0]}.md'
-    try:
-        for line in task.read_text(encoding='utf-8').splitlines():
-            key,sep,value=line.partition(':')
-            if sep and key.strip() in {'project_id','project','workstream'} and value.strip():
-                project=value.strip(); break
-    except OSError:
-        pass
-print(project or row.get('project') or '')
+      queue_file="$CLAIMED_FILE"; claimed_digest="$CLAIMED_DIGEST"; claimed_snapshot="$CLAIMED_SNAPSHOT"
+      project="$(python3 - "$claimed_snapshot" <<'PY'
+import base64,binascii,json,sys
+try:
+    raw=base64.b64decode(sys.argv[1], validate=True)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
+    row=json.loads(raw.decode("utf-8"), parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+except (OSError,ValueError,TypeError,UnicodeError,binascii.Error,OverflowError,
+        RecursionError,json.JSONDecodeError):
+    raise SystemExit(2)
+value = row.get('project') if isinstance(row, dict) else ''
+sys.stdout.buffer.write(str(value or '').encode('utf-8'))
 PY
 )"
       [ -n "$project" ] || project="unknown-$(basename "$queue_file")"
-      RECURSION_QUEUE_ACTUATION=1 RECURSION_ROOT="$ROOT" \
-        bash "$ROOT/scripts/conduct-hermes.sh" --file "$queue_file" 8>&- &
-      pids+=("$!"); files+=("$queue_file"); projects+=("$project")
+      run_claimed_child "$queue_file" "$claimed_digest" "$claimed_snapshot" "${CHILD_SCOPE_ARGS[@]}" &
+      pids+=("$!"); files+=("$queue_file"); projects+=("$project"); digests+=("$claimed_digest"); snapshots+=("$claimed_snapshot")
     done
     [ "${#pids[@]}" -gt 0 ] || break
     first="${pids[0]}"; queue_file="${files[0]}"
     wait "$first"; child_rc=$?
-    finalize_claim "$queue_file" "$child_rc" || return $?
-    pids=("${pids[@]:1}"); files=("${files[@]:1}"); projects=("${projects[@]:1}")
+    finalize_claim "$queue_file" "$child_rc" "${digests[0]}" "${snapshots[0]}"
+    finalize_rc=$?
+    if [ "$finalize_rc" -ne 0 ]; then
+      claim_is_not_relaunchable "$queue_file" "${digests[0]}" \
+        || return "$finalize_rc"
+      aggregate=1
+      log "queue finalization deferred for an already dispatched action; continuing the drain for independent work"
+    fi
+    pids=("${pids[@]:1}"); files=("${files[@]:1}"); projects=("${projects[@]:1}"); digests=("${digests[@]:1}"); snapshots=("${snapshots[@]:1}")
     if [ -f "$ROOT/state/PAUSE" ]; then
       for ((i=0; i<${#pids[@]}; i++)); do
         wait "${pids[$i]}"; child_rc=$?
-        finalize_claim "${files[$i]}" "$child_rc" || true
+        finalize_claim "${files[$i]}" "$child_rc" "${digests[$i]}" "${snapshots[$i]}" || true
       done
       return 75
     fi
@@ -223,17 +401,321 @@ if [ -z "$FILE" ]; then
   exit $?
 fi
 
-[ -f "$FILE" ] || { log "no decision file at $FILE"; exit 2; }
+python3 - "$FILE" <<'PY' || { log "REFUSED - decision file path is unsafe or unavailable"; exit 2; }
+import os,re,stat,sys
+from pathlib import Path
+try:
+    raw=sys.argv[1]
+    if not isinstance(raw,str) or not raw:
+        raise ValueError("decision file path is invalid")
+    normalized=raw.replace("\\", "/")
+    if ("\x00" in raw or any(ord(char) < 32 for char in raw)
+            or raw.startswith(("\\\\", "//", "~")) or "%" in raw
+            or re.match(r"^[A-Za-z]:[^\\/].*", raw)
+            or any(part in {".", ".."} for part in normalized.split("/"))
+            or "//" in normalized[1:]):
+        raise ValueError("decision file path is not canonical")
+    path=Path(raw)
+    if not path.is_absolute() or any(part in {".", ".."} for part in path.parts):
+        raise ValueError("decision file must be a canonical absolute path")
+    current=Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        info=current.lstat()
+        if (stat.S_ISLNK(info.st_mode) or getattr(info,"st_reparse_tag",0)
+                or bool(getattr(info,"st_file_attributes",0) & 0x400)):
+            raise ValueError("reparse path")
+    flags=os.O_RDONLY|getattr(os,"O_BINARY",0)|getattr(os,"O_NOFOLLOW",0)
+    descriptor=os.open(path,flags)
+    try:
+        info=os.fstat(descriptor)
+        if (stat.S_ISLNK(info.st_mode) or getattr(info,"st_reparse_tag",0)
+                or bool(getattr(info,"st_file_attributes",0) & 0x400)
+                or not stat.S_ISREG(info.st_mode)):
+            raise ValueError("not regular")
+    finally:
+        os.close(descriptor)
+except OSError:
+    print("boundary=decision-path-unavailable", file=sys.stderr)
+    raise SystemExit(2)
+except (ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    print("boundary=decision-path-invalid", file=sys.stderr)
+    raise SystemExit(2)
+PY
+if [ -z "$DECISION_SNAPSHOT_B64" ] || [ -z "$DECISION_FILE_DIGEST" ]; then
+SNAPSHOT_BUNDLE="$(python3 - "$FILE" <<'PY'
+import base64,hashlib,sys
+try:
+    with open(sys.argv[1], "rb") as source: raw=source.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("decision is too large")
+except OSError:
+    print("boundary=decision-snapshot-unavailable", file=sys.stderr)
+    raise SystemExit(2)
+except (ValueError, TypeError):
+    print("boundary=decision-size", file=sys.stderr)
+    raise SystemExit(2)
+digest=hashlib.sha256(raw).hexdigest().encode("ascii")
+snapshot=base64.b64encode(raw)
+sys.stdout.buffer.write(digest + b"\t" + snapshot)
+PY
+)" || { log "REFUSED - decision snapshot could not be captured"; exit 74; }
+DECISION_FILE_DIGEST="${SNAPSHOT_BUNDLE%%$'\t'*}"
+DECISION_SNAPSHOT_B64="${SNAPSHOT_BUNDLE#*$'\t'}"
+unset SNAPSHOT_BUNDLE
+else
+  [[ "$DECISION_FILE_DIGEST" =~ ^[0-9a-f]{64}$ ]] && [ -n "$DECISION_SNAPSHOT_B64" ] \
+    || { log "REFUSED - supplied decision snapshot is malformed"; exit 74; }
+  DECISION_SNAPSHOT_SUPPLIED=1
+fi
+# Do this before validation, action identity, consume, acknowledge, or release.  An out-of-scope
+# file remains untouched so its owning actuator can recover it.
+scope_allows_file "$FILE"; scope_rc=$?
+[ "$scope_rc" -eq 0 ] || {
+  [ "$scope_rc" -eq 1 ] && { log "REFUSED - decision is outside actuator scope"; exit 74; }
+  log "REFUSED - decision scope could not be authenticated"; exit 74
+}
 
 VERBS="noop plan work conduct publish escalate resolve-esc reap roadmap-add roadmap-new portfolio-add project-topic-bind register note assist-answer pilot-plan-propose pilot-plan-approve pilot-window-open pilot-window-close pilot-task-create pilot-worker-request pilot-verifier-request pilot-block pilot-escalate pilot-goal-verify reconcile-goal task-transition goal-transition verify-goal publish-task notification-reconcile notification-deliver notification-portfolio notification-audit notification-recover routing-refuse"
-RAW_DECISION="$(cat "$FILE" 2>/dev/null || true)"
-VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$RAW_DECISION" 2>&1)"
+# CLASS B: the snapshot is caller-controlled bytes until this local boundary has proved that it
+# is bounded JSON with a typed object shape.  The external validator below checks decision
+# semantics; it is not the input boundary and must never be the first code to touch hostile JSON.
+class_b_decision_json(){
+  python3 - "$1" <<'PY'
+import base64,binascii,json,math,re,sys
+
+MAX_BYTES=2 * 1024 * 1024
+MAX_INTEGER=2**63 - 1
+MAX_STRING=4096
+MAX_ITEMS=256
+MAX_DEPTH=64
+INTEGER_FIELDS={
+    "schema_version", "max_concurrency", "max_tokens", "max_wall_clock_seconds",
+    "max_task_attempts", "max_failures", "max_review_queue", "max_publish_attempts",
+    "deadline_seconds", "verifier_deadline_seconds",
+}
+REAL_FIELDS={"cost_usd", "max_cost_usd", "estimated_cost_usd"}
+PATH_FIELDS={
+    "path", "file", "directory", "root", "runtime_root", "runtime_directory",
+    "snapshot_directory", "recipient_file", "signature_file",
+}
+
+def bounded_int(raw):
+    digits=raw[1:] if raw.startswith("-") else raw
+    if len(digits) > 19:
+        raise ValueError("decision integer is out of range")
+    value=int(raw)
+    if not -MAX_INTEGER - 1 <= value <= MAX_INTEGER:
+        raise ValueError("decision integer is out of range")
+    return value
+
+def bounded_float(raw):
+    value=float(raw)
+    if not math.isfinite(value) or abs(value) > 1e308:
+        raise ValueError("decision number is non-finite or out of range")
+    return value
+
+def check_path(value):
+    normalized=value.replace("\\", "/")
+    if (not value or value.startswith(("\\\\", "//", "~")) or "%" in value
+            or re.match(r"^[A-Za-z]:[^\\/].*", value)
+            or any(part in {".", ".."} for part in normalized.split("/"))
+            or "//" in normalized[1:]):
+        raise ValueError("decision path is unsafe")
+
+def check_depth_limit(depth):
+    if depth <= MAX_DEPTH:
+        return
+    raise ValueError("decision nesting is too deep")
+
+def check_json_depth(text):
+    # json.loads descends through nested arrays/objects in the platform parser.  Count value depth
+    # iteratively first so a hostile document reaches the typed depth boundary before that parser
+    # can exhaust its platform-dependent recursion/stack budget.  An opening container is itself
+    # at the current value depth; the decision root is structural depth -1 so its fields begin at
+    # depth 0.  This keeps the inclusive MAX_DEPTH comparison aligned with check_value for a
+    # maximum-depth value beneath the root.  Checking after incrementing would reject a valid
+    # empty container one level before check_value does.
+    nesting=-1
+    in_string=False
+    escaped=False
+    for char in text:
+        if in_string:
+            if escaped:
+                escaped=False
+            elif char == "\\":
+                escaped=True
+            elif char == '"':
+                in_string=False
+            continue
+        if char == '"':
+            check_depth_limit(nesting)
+            in_string=True
+        elif char in "[{":
+            check_depth_limit(nesting)
+            nesting += 1
+        elif char in "]}" and nesting:
+            nesting -= 1
+        elif not char.isspace() and char not in ",:":
+            # Numbers and the JSON literals are values at the active nesting depth.  The
+            # grammar/parser remains authoritative for whether the token sequence is valid.
+            check_depth_limit(nesting)
+
+def check_value(value, depth=-1, key=None):
+    check_depth_limit(depth)
+    if key in INTEGER_FIELDS and type(value) is not int:
+        raise TypeError("decision integer field has the wrong type")
+    if key in REAL_FIELDS and value is not None \
+            and (isinstance(value, bool) or not isinstance(value, (int, float))):
+        raise TypeError("decision numeric field has the wrong type")
+    if key in PATH_FIELDS:
+        if value is not None and not isinstance(value, str):
+            raise TypeError("decision path field has the wrong type")
+        if isinstance(value, str):
+            check_path(value)
+    if isinstance(value, str):
+        if len(value) > MAX_STRING or any(ord(char) < 32 for char in value):
+            raise ValueError("decision string is invalid")
+        return
+    if type(value) is int:
+        if not -MAX_INTEGER - 1 <= value <= MAX_INTEGER:
+            raise ValueError("decision integer is out of range")
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value) or abs(value) > 1e308:
+            raise ValueError("decision number is non-finite or out of range")
+        return
+    if value is None or isinstance(value, bool):
+        return
+    if isinstance(value, list):
+        if len(value) > MAX_ITEMS:
+            raise ValueError("decision array is too large")
+        for item in value:
+            check_value(item, depth + 1, key)
+        return
+    if isinstance(value, dict):
+        if len(value) > MAX_ITEMS:
+            raise ValueError("decision object is too large")
+        for key, item in value.items():
+            if (not isinstance(key, str) or len(key) > MAX_STRING
+                    or any(ord(char) < 32 for char in key)):
+                raise ValueError("decision object key is invalid")
+            check_value(item, depth + 1, key)
+        return
+    raise TypeError("decision contains an unsupported value")
+
+try:
+    encoded=sys.argv[1]
+    raw=base64.b64decode(encoded, validate=True)
+    if len(raw) > MAX_BYTES:
+        raise ValueError("decision exceeds the bounded input size")
+    text=raw.decode("utf-8", "strict")
+    check_json_depth(text)
+    value=json.loads(text, parse_int=bounded_int, parse_float=bounded_float)
+    check_value(value)
+    # Semantic validation owns the root shape.  Keeping this check beside the first dict-only
+    # consumer makes that ownership explicit without duplicating the parser guard.
+    if type(value) is not dict:
+        raise ValueError("decision semantic validation requires an object")
+    if "schema_version" in value and (type(value["schema_version"]) is not int
+                                       or value["schema_version"] != 1):
+        raise ValueError("decision schema_version must be the integer 1")
+    string_fields={
+        "actor", "confidence", "decision_source", "goal", "goal_id", "id",
+        "idempotency_key", "instruction_id", "project", "provider", "reason",
+        "routed_decider", "status", "text", "ts", "verb", "why", "wrong_if",
+        "decision_payload_sha256",
+    }
+    list_fields={"args", "arguments"}
+    for field, item in value.items():
+        if field in string_fields and item is not None and not isinstance(item,str):
+            raise TypeError("decision field has the wrong type")
+        if field in list_fields:
+            if not isinstance(item,list) or any(not isinstance(arg,str) for arg in item):
+                raise TypeError("decision arguments have the wrong type")
+        if field == "cost_usd":
+            if item is not None and (isinstance(item,bool) or not isinstance(item,(int,float))):
+                raise TypeError("decision cost has the wrong type")
+        if field in {"schema_version"} and isinstance(item,bool):
+            raise TypeError("decision integer field is boolean")
+    output=json.dumps(value, sort_keys=True, separators=(",",":"),
+                      ensure_ascii=False, allow_nan=False).encode("utf-8")
+    sys.stdout.buffer.write(output)
+except json.JSONDecodeError:
+    print("boundary=malformed-json", file=sys.stderr)
+    raise SystemExit(2)
+except UnicodeDecodeError:
+    print("boundary=utf8-strict", file=sys.stderr)
+    raise SystemExit(2)
+except binascii.Error:
+    print("boundary=controlled-input-failure", file=sys.stderr)
+    raise SystemExit(2)
+except TypeError as exc:
+    message=str(exc)
+    if "integer field" in message:
+        marker="integer-type"
+    elif "numeric field" in message:
+        marker="real-type"
+    elif "path field" in message:
+        marker="path-type"
+    elif "arguments" in message:
+        marker="arguments-type"
+    else:
+        marker="value-type"
+    print("boundary=" + marker, file=sys.stderr)
+    raise SystemExit(2)
+except ValueError as exc:
+    message=str(exc)
+    if "semantic validation" in message:
+        marker="semantic-validation"
+    elif "nesting" in message:
+        marker="depth"
+    elif "string" in message:
+        marker="string"
+    elif "path" in message:
+        marker="path-unsafe"
+    elif "non-finite" in message:
+        marker="non-finite-number"
+    elif "integer" in message:
+        marker="integer-range"
+    elif "exceeds" in message or "too large" in message:
+        marker="decision-size"
+    else:
+        marker="value-invalid"
+    print("boundary=" + marker, file=sys.stderr)
+    raise SystemExit(2)
+except RecursionError:
+    print("boundary=depth", file=sys.stderr)
+    raise SystemExit(2)
+except (OverflowError,UnicodeDecodeError,UnicodeError,OSError):
+    print("boundary=controlled-input-failure", file=sys.stderr)
+    raise SystemExit(2)
+PY
+}
+# PHASE4_CLASS_B_DECISION_BOUNDARY_CALL
+DECISION_JSON="$(class_b_decision_json "$DECISION_SNAPSHOT_B64")" \
+  || { log "REFUSED - decision input boundary rejected"; exit 5; }
+VALID="$(python3 "$ROOT/scripts/validate-decision.py" "$VERBS" "$DECISION_JSON" 2>&1)"
+VALID_RC=$?
+if [ "$VALID_RC" -ne 0 ]; then
+  case "$VALID" in
+    ERR\ *) log "REFUSED - decision validation rejected the input: boundary=semantic-validation" ;;
+    *) log "REFUSED - decision validator is unavailable" ;;
+  esac
+  exit 74
+fi
 case "$VALID" in
   OK\ *) DECISION_JSON="${VALID#OK }" ;;
-  *) log "REFUSED - ${VALID:-decision validation produced no output}"; exit 5 ;;
+  *) log "REFUSED - decision validation rejected the input: boundary=semantic-validation"; exit 5 ;;
 esac
 
-read_field(){ python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get(sys.argv[2],"") or "")' "$DECISION_JSON" "$1" 2>/dev/null; }
+read_field(){ python3 -c 'import json,sys
+try:
+    value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    value = value.get(sys.argv[2],"") or "" if isinstance(value,dict) else ""
+    sys.stdout.buffer.write(str(value).encode("utf-8"))
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,
+        RecursionError,OSError):
+    raise SystemExit(2)' "$DECISION_JSON" "$1" 2>/dev/null; }
 VERB="$(read_field verb)"; WHY="$(read_field why)"; GOAL="$(read_field goal)"
 ACTOR="$(read_field actor)"
 DECISION_PROJECT="$(read_field project)"
@@ -241,11 +723,24 @@ DECISION_SOURCE="$(read_field decision_source)"
 ROUTED_DECIDER="$(read_field routed_decider)"
 DECISION_ID="$(read_field id)"; IDEMPOTENCY_KEY="$(read_field idempotency_key)"
 INSTRUCTION_ID="$(read_field instruction_id)"
-ARGS_JSON="$(python3 -c 'import json,sys;print(json.dumps(json.loads(sys.argv[1]).get("args") or [],separators=(",",":")))' "$DECISION_JSON")" \
+ARGS_JSON="$(python3 -c 'import json,sys
+try:
+    value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    if not isinstance(value,dict): raise ValueError("decision is not an object")
+    sys.stdout.buffer.write(json.dumps(value.get("args") or [],separators=(",",":"),allow_nan=False).encode("utf-8"))
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,
+        RecursionError,OSError):
+    raise SystemExit(2)' "$DECISION_JSON")" \
   || { log "REFUSED - could not freeze decision arguments"; exit 5; }
 ACTION_PAYLOAD_SHA256="$(python3 - "$DECISION_JSON" <<'PY'
 import hashlib,json,sys
-row=json.loads(sys.argv[1])
+try:
+ row=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,
+        RecursionError,OSError):
+ raise SystemExit(2)
+if not isinstance(row,dict):
+ raise SystemExit(2)
 payload={
     'actor':row.get('actor') or '', 'verb':row.get('verb') or '',
     'args':row.get('args',row.get('arguments',[])) or [], 'text':row.get('text') or '',
@@ -254,15 +749,27 @@ payload={
     'decision_source':row.get('decision_source') or '',
     'routed_decider':row.get('routed_decider') or '',
 }
-raw=json.dumps(payload,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
-print(hashlib.sha256(raw).hexdigest())
+raw=json.dumps(payload,sort_keys=True,separators=(',',':'),ensure_ascii=False,allow_nan=False).encode()
+sys.stdout.buffer.write(hashlib.sha256(raw).hexdigest().encode("ascii"))
 PY
 )" || { log "REFUSED - could not freeze complete action payload"; exit 5; }
 DECISION_PAYLOAD_SHA256="$(read_field decision_payload_sha256)"
 [ -n "$DECISION_PAYLOAD_SHA256" ] && [ "$DECISION_PAYLOAD_SHA256" = "$ACTION_PAYLOAD_SHA256" ] \
   || { log "REFUSED - decision authority/effect digest is absent or inconsistent"; exit 5; }
-mapfile -t ARGS < <(python3 -c 'import json,sys
-for a in json.loads(sys.argv[1]): sys.stdout.buffer.write(a.encode()+b"\n")' "$ARGS_JSON" 2>/dev/null)
+ARGS_LINES="$(python3 -c 'import json,sys
+try:
+    value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    if not isinstance(value,list) or any(not isinstance(a,str) for a in value): raise ValueError("args are invalid")
+    for index,a in enumerate(value):
+        if index: sys.stdout.buffer.write(b"\n")
+        sys.stdout.buffer.write(a.encode())
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,
+        RecursionError,OSError):
+    raise SystemExit(2)' "$ARGS_JSON" 2>/dev/null)" \
+  || { log "REFUSED - could not materialize decision arguments"; exit 5; }
+ARGS=()
+[ -n "$ARGS_LINES" ] && mapfile -t ARGS <<< "$ARGS_LINES"
+unset ARGS_LINES
 
 [ -n "$VERB" ] || { log "decision has no verb"; exit 2; }
 
@@ -270,11 +777,11 @@ for a in json.loads(sys.argv[1]): sys.stdout.buffer.write(a.encode()+b"\n")' "$A
 # validating only at decide time trusts a file anything could have rewritten. -------------
 for a in ${ARGS+"${ARGS[@]}"}; do
   if ! printf '%s' "$a" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._/-]{0,80}$'; then
-    log "REFUSED — unsafe argument: $(printf '%s' "$a" | head -c 60)"
+    log "REFUSED - unsafe decision argument"
     ev decision-refused "unsafe arg for verb=$VERB"; exit 5
   fi
   case "$a" in
-    *..*) log "REFUSED — path traversal in argument: $a"; ev decision-refused "traversal"; exit 5 ;;
+    *..*) log "REFUSED - path traversal in decision argument"; ev decision-refused "traversal"; exit 5 ;;
   esac
 done
 
@@ -351,19 +858,21 @@ ACTION_LOCK=""; ACTION_LOCK_HELD=0; ACTION_FILE=""; ACTION_ID=""
 ACTION_CLAIMED=0; ACTION_TERMINAL=0; INSTRUCTION_CONSUMED=0
 action_unlock(){
   [ "$ACTION_LOCK_HELD" = 1 ] || return 0
-  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ACTION_LOCK" "$$" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ACTION_LOCK" "$OWNER_PID" \
     >/dev/null 2>&1 || return 74
   ACTION_LOCK_HELD=0
 }
 action_lock(){
+  scope_guard || return 74
   mkdir -p "$ROOT/state/actions" "$ROOT/state/.locks" || return 70
   ACTION_LOCK="$ROOT/state/.locks/action-$ACTION_ID.lock"
   [ -x "$ROOT/scripts/runtime-state.py" ] \
     || { log "witnessed action lock helper is absent"; return 73; }
-  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ACTION_LOCK" "$$" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ACTION_LOCK" "$OWNER_PID" \
     >/dev/null 2>&1 \
     || { log "action lock contended; refusing duplicate/unlocked dispatch"; return 73; }
   ACTION_LOCK_HELD=1
+  scope_guard || { action_unlock || true; return 74; }
   if ! RECURSION_ROOT="$ROOT" python3 "$ROOT/scripts/transition_receipt.py" \
        --root "$ROOT" recover >/dev/null; then
     action_unlock || true
@@ -373,15 +882,26 @@ action_lock(){
   return 0
 }
 action_field(){
-  python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2],"") or "")' \
-    "$ACTION_FILE" "$1" 2>/dev/null
+  python3 -c 'import json,sys
+try:
+    with open(sys.argv[1],"rb") as source: raw=source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError("action is too large")
+    value=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    value = value.get(sys.argv[2],"") or "" if isinstance(value,dict) else ""
+    sys.stdout.buffer.write(str(value).encode("utf-8"))
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)' "$ACTION_FILE" "$1" 2>/dev/null
 }
 action_owned_running(){
   ACTION_EXPECTED_OWNER="$$@$(hostname)" python3 - "$ACTION_FILE" <<'PY' 2>/dev/null
 import json,os,sys
 try:
-    row=json.load(open(sys.argv[1],encoding='utf-8'))
-except (OSError,json.JSONDecodeError):
+    with open(sys.argv[1],"rb") as source: raw=source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError("action is too large")
+    row=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(1)
+if not isinstance(row,dict):
     raise SystemExit(1)
 raise SystemExit(0 if row.get('status') == 'running' and
                  row.get('lease_owner') == os.environ['ACTION_EXPECTED_OWNER'] else 1)
@@ -395,8 +915,18 @@ action_identity_matches(){
     python3 - "$ACTION_FILE" <<'PY' 2>/dev/null
 import json,os,sys
 try:
-    row=json.load(open(sys.argv[1],encoding='utf-8'))
-except (OSError,json.JSONDecodeError):
+    with open(sys.argv[1],"rb") as source: raw=source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError("action is too large")
+    row=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(1)
+if not isinstance(row,dict):
+    raise SystemExit(1)
+try:
+    expected_args=json.loads(os.environ['ACTION_EXPECTED_ARGS'],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError,OSError):
+    raise SystemExit(1)
+if not isinstance(expected_args,list) or any(not isinstance(item,str) for item in expected_args):
     raise SystemExit(1)
 expected={
     'id':os.environ['ACTION_EXPECTED_ID'],
@@ -404,7 +934,7 @@ expected={
     'decision_id':os.environ.get('ACTION_EXPECTED_DECISION') or None,
     'instruction_id':os.environ.get('ACTION_EXPECTED_INSTRUCTION') or None,
     'verb':os.environ['ACTION_EXPECTED_VERB'],
-    'arguments':json.loads(os.environ['ACTION_EXPECTED_ARGS']),
+    'arguments':expected_args,
     'goal_id':os.environ.get('ACTION_EXPECTED_GOAL') or None,
     'action_payload_sha256':os.environ['ACTION_EXPECTED_PAYLOAD'],
 }
@@ -413,6 +943,7 @@ PY
 }
 action_transition(){ # status evidence
   local status="$1" evidence="${2:-}" rc
+  scope_guard || return 74
   ACTION_STATUS="$status" ACTION_EVIDENCE="$evidence" ACTION_ID="$ACTION_ID" \
   ACTION_KEY="$IDEMPOTENCY_KEY" ACTION_DECISION="$DECISION_ID" \
   ACTION_INSTRUCTION="$INSTRUCTION_ID" ACTION_VERB="$VERB" ACTION_GOAL="$GOAL" \
@@ -428,14 +959,22 @@ path,journal=sys.argv[1:3]
 now=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
 status=os.environ['ACTION_STATUS']
 try:
-    with open(path,encoding='utf-8') as src: record=json.load(src)
+    with open(path,'rb') as src:
+        raw=src.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError('action is too large')
+    record=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
 except FileNotFoundError:
+    try:
+      arguments=json.loads(os.environ['ACTION_ARGS'],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+      if not isinstance(arguments,list) or any(not isinstance(a,str) for a in arguments): raise ValueError('action arguments invalid')
+    except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError,OSError):
+      raise SystemExit(2)
     record={
       'schema_version':1,'id':os.environ['ACTION_ID'],
       'decision_id':os.environ.get('ACTION_DECISION') or None,
       'instruction_id':os.environ.get('ACTION_INSTRUCTION') or None,
       'idempotency_key':os.environ['ACTION_KEY'],'verb':os.environ['ACTION_VERB'],
-      'arguments':json.loads(os.environ['ACTION_ARGS']),
+      'arguments':arguments,
       'goal_id':os.environ.get('ACTION_GOAL') or None,'status':'pending',
       'actor':os.environ.get('ACTION_ACTOR') or None,
       'project':os.environ.get('ACTION_PROJECT') or None,
@@ -445,10 +984,22 @@ except FileNotFoundError:
       'lease_owner':None,'lease_expires':None,'attempts':0,'result_evidence':None,
       'created_at':now,'updated_at':now,
     }
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)
+if not isinstance(record,dict):
+    raise SystemExit(2)
+attempts=record.get('attempts')
+if type(attempts) is not int or attempts < 0:
+    raise SystemExit(2)
 if status=='running':
-    record['attempts']=int(record.get('attempts') or 0)+1
+    try:
+      lease=int(os.environ.get('RECURSION_ACTION_LEASE_S','3600'),10)
+    except (TypeError,ValueError,OverflowError):
+      raise SystemExit(2)
+    if not 1 <= lease <= 86400: raise SystemExit(2)
+    record['attempts']=attempts+1
     record['lease_owner']=os.environ['ACTION_OWNER']
-    record['lease_expires']=int(time.time())+int(os.environ.get('RECURSION_ACTION_LEASE_S','3600'))
+    record['lease_expires']=int(time.time())+lease
 elif status in ('pending','succeeded','failed','cancelled'):
     record['lease_owner']=None; record['lease_expires']=None
 record['status']=status
@@ -457,9 +1008,12 @@ record['updated_at']=now
 event={'schema_version':1,'ts':now,'action_id':record['id'],'status':status,
        'attempt':record['attempts'],'idempotency_key':record['idempotency_key'],
        'evidence':record['result_evidence']}
-commit_transition(__import__('pathlib').Path(sys.argv[3]).parent,
-                  [json_mutation(__import__('pathlib').Path(path),record)],event,
-                  journal='state/action-events.jsonl')
+try:
+    commit_transition(__import__('pathlib').Path(sys.argv[3]).parent,
+                      [json_mutation(__import__('pathlib').Path(path),record)],event,
+                      journal='state/action-events.jsonl')
+except (OSError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)
 PY
   rc=$?
   [ "$rc" -eq 0 ] || log "failed durable action transition status=$status rc=$rc"
@@ -467,6 +1021,7 @@ PY
 }
 release_consumed_instruction(){
   [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ] || return 0
+  scope_guard || return 74
   if ! RECURSION_ROOT="$ROOT" bash scripts/intake.sh release "$INSTRUCTION_ID" "$ACTION_ID"; then
     log "action $ACTION_ID could not reopen instruction $INSTRUCTION_ID"
     return 74
@@ -475,6 +1030,7 @@ release_consumed_instruction(){
 reconcile_terminal_instruction(){ # succeeded|failed
   local disposition="$1"
   [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ] || return 0
+  scope_guard || return 74
   case "$disposition" in
     succeeded)
       if [ "$VERB" = routing-refuse ]; then
@@ -619,6 +1175,8 @@ if [ "$DRY" = 0 ]; then
   trap 'exit 143' TERM
   trap 'exit 129' HUP
   if [ "${RECURSION_QUEUE_ACTUATION:-0}" = 1 ] && [ -n "$INSTRUCTION_ID" ]; then
+    scope_guard || { action_transition failed "decision scope changed before instruction consume" || true
+      action_unlock; trap - EXIT; exit 74; }
     if ! RECURSION_ROOT="$ROOT" bash scripts/intake.sh consume "$INSTRUCTION_ID" "$ACTION_ID"; then
       action_transition failed "instruction coupling failed before dispatch" || true
       action_unlock; trap - EXIT
@@ -660,8 +1218,12 @@ proven=[]
 for aid in sorted(annotated):
     action_path=root/'state/actions'/f'{aid}.json'
     try:
-        action=json.loads(action_path.read_text(encoding='utf-8'))
-    except (OSError,json.JSONDecodeError):
+        raw=action_path.read_bytes()
+        if len(raw)>2*1024*1024: raise ValueError('action is too large')
+        action=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+        continue
+    if not isinstance(action,dict):
         continue
     if (action.get('id') == aid and str(action.get('instruction_id') or '') == iid
             and action.get('status') == 'failed'
@@ -670,7 +1232,7 @@ for aid in sorted(annotated):
         proven.append(aid)
 if len(proven) < 2:
     raise SystemExit(1)
-print(','.join(proven))
+sys.stdout.buffer.write(','.join(proven).encode('utf-8'))
 PY
 }
 
@@ -739,7 +1301,14 @@ case "$VERB" in
     P0="${ARGS[0]:-}"; [ -n "$P0" ] || { log "$VERB needs a project"; exit 2; }
     EXPECTED_ACTOR="$(python3 - "$ROOT/state/project-config/$P0.json" <<'PY' 2>/dev/null
 import json,sys
-print(json.load(open(sys.argv[1],encoding='utf-8')).get('pilot_id',''))
+try:
+    with open(sys.argv[1],'rb') as source: raw=source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError('project config is too large')
+    value=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    value = value.get('pilot_id','') if isinstance(value,dict) else ''
+    sys.stdout.buffer.write(str(value or '').encode('utf-8'))
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)
 PY
 )"
     [ -n "$EXPECTED_ACTOR" ] && [ "$ACTOR" = "$EXPECTED_ACTOR" ] \
@@ -763,7 +1332,14 @@ PY
     [ -n "$P0" ] && [ -n "$A1" ] || { log "$VERB needs project and object identity"; exit 2; }
     EXPECTED_ACTOR="$(python3 - "$ROOT/state/project-config/$P0.json" <<'PY' 2>/dev/null
 import json,sys
-print(json.load(open(sys.argv[1],encoding='utf-8')).get('pilot_id',''))
+try:
+    with open(sys.argv[1],'rb') as source: raw=source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError('project config is too large')
+    value=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    value = value.get('pilot_id','') if isinstance(value,dict) else ''
+    sys.stdout.buffer.write(str(value or '').encode('utf-8'))
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)
 PY
 )"
     if [ "$VERB" = notification-portfolio ]; then

@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from windows_test_support import bash_executable, prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 CONTROLS = [
@@ -74,6 +76,7 @@ class Fixture:
             (self.root / relative).write_text("", encoding="utf-8")
         (self.root / ".env").write_text("", encoding="utf-8")
         self.env = os.environ.copy()
+        prepare_shell_env(self.env)
         self.env.update({
             "RECURSION_ROOT": str(self.root),
             "RECURSION_QUEUE_ACTUATION": "1",
@@ -402,9 +405,7 @@ def open_window(f: Fixture) -> bool:
 
 
 def test_window_admission(f: Fixture) -> bool:
-    bash = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe" \
-        if os.name == "nt" else Path("bash")
-    sink = f.run(str(bash), "scripts/work.sh", "chiron-phase8-smoke")
+    sink = f.run(bash_executable(), "scripts/work.sh", "chiron-phase8-smoke")
     if sink.returncode != 75:
         return False
     before = f.run("python3", "scripts/project-reconcile.py", "schedule")

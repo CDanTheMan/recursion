@@ -13,6 +13,15 @@ import tempfile
 import time
 from pathlib import Path
 
+from windows_test_support import (
+    bash_command,
+    install_real_fcntl_shim,
+    install_nt_posix_shim,
+    install_python_lf_wrapper,
+    install_single_process_flock_stub,
+    prepare_shell_env,
+)
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 PROJECT = "golden-stallion-client"
@@ -141,9 +150,18 @@ class Fixture:
     def __init__(self) -> None:
         self.temp = Path(tempfile.mkdtemp(prefix="phase8-routing-recovery-"))
         self.root = self.temp / "root"
+        self.fixture_bin = self.temp / "fixture-bin"
         self.root.mkdir()
         shutil.copytree(SOURCE / "scripts", self.root / "scripts")
         shutil.copytree(SOURCE / "schemas", self.root / "schemas")
+        if os.name == "nt":
+            # The controller is deployed on Linux.  Keep Windows execution fixture-local:
+            # use the real msvcrt-backed lock shim for Python imports and a no-contention
+            # util-linux flock stand-in for this single-process fixture.
+            install_real_fcntl_shim(self.root / "scripts")
+            install_nt_posix_shim(self.root / "scripts")
+            install_single_process_flock_stub(self.fixture_bin)
+            install_python_lf_wrapper(self.fixture_bin)
         for relative in (
             "state/instructions", "state/actions", "state/project-config", "state/pilots",
             "state/decision-queue/pending", "state/decision-queue/running",
@@ -222,6 +240,12 @@ print(json.dumps({'ok':True,'accepted':True,'transport':'telegram',
         )
         transport.chmod(0o755)
         self.env = os.environ.copy()
+        prepare_shell_env(self.env)
+        # instruction_routing.py dynamically loads decision-queue.py.  Stage the fixture's
+        # fcntl shim on the child import path so that closure is complete on Windows too.
+        if os.name == "nt":
+            self.env["PYTHONPATH"] = str(self.root / "scripts") + os.pathsep + self.env.get("PYTHONPATH", "")
+            self.env["PATH"] = str(self.fixture_bin) + os.pathsep + self.env.get("PATH", "")
         self.env.update({
             "RECURSION_ROOT": str(self.root), "RECURSION_INTAKE_ALLOW": "8913126684",
             "RECURSION_DECIDE_QUIET": "1", "RECURSION_NO_NOTIFY": "0",
@@ -231,6 +255,9 @@ print(json.dumps({'ok':True,'accepted':True,'transport':'telegram',
             "RECURSION_CONTROL_LOCK_WAIT_S": "2",
             "PATH": str(self.root / "bin") + os.pathsep + self.env.get("PATH", ""),
         })
+        if os.name == "nt":
+            # Keep fixture helpers ahead of the fixture's own transport/model stubs.
+            self.env["PATH"] = str(self.fixture_bin) + os.pathsep + self.env["PATH"]
 
     def close(self) -> None:
         shutil.rmtree(self.temp, ignore_errors=True)
@@ -255,11 +282,11 @@ print(json.dumps({'ok':True,'accepted':True,'transport':'telegram',
         return subprocess.run(command, cwd=self.root, env=env, text=True, capture_output=True, check=False)
 
     def decide(self) -> subprocess.CompletedProcess[str]:
-        return self.run(["bash", "scripts/hermes-decide.sh"])
+        return self.run(bash_command("scripts/hermes-decide.sh"))
 
     def drain(self, *, failpoint: str | None = None) -> subprocess.CompletedProcess[str]:
         extra = {"RECURSION_ROUTING_FAILPOINT": failpoint} if failpoint else None
-        return self.run(["bash", "scripts/conduct-hermes.sh", "--paused-safe"], extra=extra)
+        return self.run(bash_command("scripts/conduct-hermes.sh", "--paused-safe"), extra=extra)
 
     def queue(self, state: str, verb: str | None = None) -> list[tuple[Path, dict]]:
         result = []
@@ -275,6 +302,47 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def _routing_module():
+    """Import instruction_routing once so the typed refusal can be read directly."""
+    global _ROUTING
+    if _ROUTING is None:
+        import importlib.util
+        import sys
+        scripts = str(SOURCE / "scripts")
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        spec = importlib.util.spec_from_file_location(
+            "instruction_routing_probe", SOURCE / "scripts/instruction_routing.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _ROUTING = module
+    return _ROUTING
+
+
+_ROUTING = None
+
+
+def admit_refusal_reason(fixture: "Fixture") -> str:
+    """Return the typed RoutingError text for the same admission the CLI performs."""
+    routing = _routing_module()
+    try:
+        routing.admit(fixture.root, fixture.root / "state/instructions/00000707.md", enqueue=True)
+    except routing.RoutingError as exc:
+        return str(exc)
+    except Exception as exc:  # noqa: BLE001 - any other type is itself the finding
+        return f"<unexpected {type(exc).__name__}: {exc}>"
+    return "<admitted: no refusal raised>"
+def terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    """Terminate the supervised fixture process tree on both authoring platforms."""
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+            capture_output=True, check=False,
+        )
+    else:
+        os.killpg(process.pid, signal.SIGKILL)
+
+
 def require_recovery_rejected(label: str, mutate, expected: str) -> None:
     fixture = Fixture()
     try:
@@ -286,7 +354,14 @@ def require_recovery_rejected(label: str, mutate, expected: str) -> None:
         require(result.returncode == 4 and not fixture.queue("pending")
                 and not fixture.model_marker.exists(),
                 f"{label} did not fail closed rc={result.returncode}: {result.stderr}")
-        require(expected in result.stderr, f"{label} returned the wrong refusal: {result.stderr}")
+        # The CLI boundary deliberately emits one controlled refusal
+        # ("instruction-routing: operation refused") and keeps exception text off a public
+        # boundary, so stderr can no longer say WHICH validation rejected. Dropping that check
+        # would weaken this control to "rejected for any reason at all" -- it would pass even if
+        # the fixture were simply broken. Assert the specific reason against the typed exception
+        # from the same admit() the CLI calls, leaving the boundary correctly opaque.
+        reason = admit_refusal_reason(fixture)
+        require(expected in reason, f"{label} returned the wrong refusal: {reason}")
     finally:
         fixture.close()
 
@@ -302,6 +377,15 @@ def require_decider_rejected(label: str, mutate) -> None:
                 f"{result.stdout} {result.stderr}")
     finally:
         fixture.close()
+
+
+def require_preserved_routing_failure(label: str, result: subprocess.CompletedProcess[str],
+                                      failpoint: str) -> None:
+    # The phase-head drain preserves an already-inspected terminal action and continues draining;
+    # its aggregate failure status is 1. The nested routing child still returns/logs its own 74.
+    evidence = f"routing failpoint: {failpoint}"
+    require(result.returncode == 1 and evidence in result.stderr,
+            f"{label} was not preserved rc={result.returncode}: {result.stderr}")
 
 
 def negative_recovery_evidence() -> None:
@@ -450,11 +534,11 @@ def main() -> int:
         crash_env = fixture.env.copy()
         crash_env.update({"RECURSION_QUEUE_ACTUATION": "1", "RECURSION_ROUTING_FAILPOINT": "perform-hang"})
         process = subprocess.Popen(
-            ["bash", "scripts/conduct-hermes.sh", "--file", running_path], cwd=fixture.root,
+            bash_command("scripts/conduct-hermes.sh", "--file", running_path), cwd=fixture.root,
             env=crash_env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             start_new_session=True,
         )
-        deadline = time.time() + 15
+        deadline = time.time() + (30 if os.name == "nt" else 15)
         while time.time() < deadline:
             action_rows = [json.loads(path.read_text(encoding="utf-8"))
                            for path in (fixture.root / "state/actions").glob("*.json")
@@ -464,10 +548,10 @@ def main() -> int:
                 break
             time.sleep(0.05)
         else:
-            os.killpg(process.pid, signal.SIGKILL)
+            terminate_process_tree(process)
             out, err = process.communicate()
             raise AssertionError(f"routing action never reached running/consumed: {out} {err}")
-        os.killpg(process.pid, signal.SIGKILL)
+        terminate_process_tree(process)
         process.communicate()
         require(fields(fixture.root / "state/instructions/00000707.md")["status"] == "consumed",
                 "hard crash did not preserve the consumed instruction")
@@ -485,7 +569,7 @@ def main() -> int:
                 "707 did not retain one replayed succeeded action")
         decision_707 = fixture.queue("succeeded", "routing-refuse")[0][0]
         action_replay = fixture.run(
-            ["bash", "scripts/conduct-hermes.sh", "--file", str(decision_707)],
+            bash_command("scripts/conduct-hermes.sh", "--file", str(decision_707)),
             extra={"RECURSION_QUEUE_ACTUATION": "1"},
         )
         require(action_replay.returncode == 0, f"succeeded action replay failed: {action_replay.stderr}")
@@ -496,23 +580,27 @@ def main() -> int:
                 f"732 admission failed after 707: {second.stderr}")
 
         record_error = fixture.drain(failpoint="record-error")
-        require(record_error.returncode == 74,
-                f"permanent refusal-record error was not preserved: {record_error.stderr}")
+        require_preserved_routing_failure(
+            "permanent refusal-record error", record_error, "record-error"
+        )
         require(fields(fixture.root / "state/instructions/00000732.md")["status"] == "consumed"
                 and len([row for row in json_rows(fixture.root / "state/events.jsonl")
                          if row.get("event") == "instruction-routing-refused"]) == 1,
                 "record error acknowledged 732 or fabricated refusal evidence")
 
         before_event = fixture.drain(failpoint="before-event")
-        require(before_event.returncode == 74,
-                f"pre-event interruption was not preserved: {before_event.stderr}")
+        require_preserved_routing_failure(
+            "pre-event interruption", before_event, "before-event"
+        )
         require(fields(fixture.root / "state/instructions/00000732.md")["status"] == "consumed"
                 and len([row for row in json_rows(fixture.root / "state/events.jsonl")
                          if row.get("event") == "instruction-routing-refused"]) == 1,
                 "pre-event interruption terminalized 732 or committed an event")
 
         interrupted = fixture.drain(failpoint="after-event")
-        require(interrupted.returncode == 74, f"routing tail failure was not preserved: {interrupted.stderr}")
+        require_preserved_routing_failure(
+            "routing tail failure", interrupted, "after-event"
+        )
         require(fields(fixture.root / "state/instructions/00000732.md")["status"] == "consumed",
                 "post-event interruption acknowledged 732 before record returned success")
         require(len([row for row in json_rows(fixture.root / "state/events.jsonl")
@@ -547,7 +635,7 @@ def main() -> int:
         ])
         require(scheduled.returncode == 0 and scheduled.stdout.strip() == "2",
                 f"attention reconciliation was not scheduled exactly twice: {scheduled.stderr} {scheduled.stdout}")
-        notified = fixture.run(["bash", "scripts/conduct-hermes.sh"])
+        notified = fixture.run(bash_command("scripts/conduct-hermes.sh"))
         require(notified.returncode == 0, f"attention reconciliation failed: {notified.stderr}")
         attention = [json.loads(path.read_text(encoding="utf-8"))
                      for path in (fixture.root / "state/notification-events").glob("*.json")]
@@ -563,7 +651,7 @@ def main() -> int:
         ])
         require(delivery_schedule.returncode == 0 and delivery_schedule.stdout.strip() == "2",
                 "delivery actions were not scheduled exactly once")
-        delivered = fixture.run(["bash", "scripts/conduct-hermes.sh"])
+        delivered = fixture.run(bash_command("scripts/conduct-hermes.sh"))
         require(delivered.returncode == 0 and len(json_rows(fixture.visible)) == 2,
                 f"inert deliveries were not accepted exactly once: {delivered.stderr}")
         deliveries = [json.loads(path.read_text(encoding="utf-8"))
@@ -575,7 +663,7 @@ def main() -> int:
             + fixture.queue("succeeded", "notification-deliver")
         ):
             replay_notice = fixture.run(
-                ["bash", "scripts/conduct-hermes.sh", "--file", str(decision_path)],
+                bash_command("scripts/conduct-hermes.sh", "--file", str(decision_path)),
                 extra={"RECURSION_QUEUE_ACTUATION": "1"},
             )
             require(replay_notice.returncode == 0, "notification action replay failed")

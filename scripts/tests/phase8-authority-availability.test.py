@@ -17,6 +17,8 @@ import time
 import types
 from pathlib import Path
 
+from windows_test_support import bash_command
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 
@@ -158,7 +160,7 @@ def work_checkpoint_routing() -> bool:
             encoding="utf-8",
         )
         result = subprocess.run(
-            ["bash", str(runner)], env={
+            bash_command(str(runner)), env={
                 **os.environ, "CALLS": str(calls), "ADMIT_RC": "0", "CHECK_RC": "0",
             },
             text=True, capture_output=True, timeout=30, check=False,
@@ -176,22 +178,22 @@ def work_checkpoint_routing() -> bool:
             encoding="utf-8",
         )
         unavailable = subprocess.run(
-            ["bash", str(deferred)],
+            bash_command(str(deferred)),
             env={**os.environ, "CALLS": str(calls), "ADMIT_RC": "74"},
             text=True, capture_output=True, timeout=30, check=False,
         )
         revoked = subprocess.run(
-            ["bash", str(deferred)],
+            bash_command(str(deferred)),
             env={**os.environ, "CALLS": str(calls), "ADMIT_RC": "75"},
             text=True, capture_output=True, timeout=30, check=False,
         )
         invalid = subprocess.run(
-            ["bash", str(deferred)],
+            bash_command(str(deferred)),
             env={**os.environ, "CALLS": str(calls), "ADMIT_RC": "4"},
             text=True, capture_output=True, timeout=30, check=False,
         )
         crashed = subprocess.run(
-            ["bash", str(deferred)],
+            bash_command(str(deferred)),
             env={**os.environ, "CALLS": str(calls), "ADMIT_RC": "2"},
             text=True, capture_output=True, timeout=30, check=False,
         )
@@ -207,17 +209,17 @@ def work_checkpoint_routing() -> bool:
             encoding="utf-8",
         )
         local_unavailable = subprocess.run(
-            ["bash", str(local)],
+            bash_command(str(local)),
             env={**os.environ, "CALLS": str(calls), "CHECK_RC": "74"},
             text=True, capture_output=True, timeout=30, check=False,
         )
         local_invalid = subprocess.run(
-            ["bash", str(local)],
+            bash_command(str(local)),
             env={**os.environ, "CALLS": str(calls), "CHECK_RC": "4"},
             text=True, capture_output=True, timeout=30, check=False,
         )
         local_deferred = subprocess.run(
-            ["bash", str(local)],
+            bash_command(str(local)),
             env={**os.environ, "CALLS": str(calls), "CHECK_RC": "75"},
             text=True, capture_output=True, timeout=30, check=False,
         )
@@ -240,7 +242,7 @@ def work_checkpoint_routing() -> bool:
             encoding="utf-8",
         )
         role_unavailable = subprocess.run(
-            ["bash", str(role)], env={
+            bash_command(str(role)), env={
                 **os.environ, "CALLS": str(role_calls), "CHECK_RC": "74",
                 "CHECK_FAIL_AFTER": "2",
             },
@@ -377,7 +379,7 @@ def hard_refusal_survives_audit_failure() -> bool:
 
 def unreadable_authority_records_are_unavailable_not_invalid() -> bool:
     root = Path(tempfile.mkdtemp(prefix="phase8-authority-typed-read-"))
-    original_read_text = Path.read_text
+    original_open = Path.open
     try:
         (root / "state/project-config").mkdir(parents=True)
         (root / "state/pilots").mkdir(parents=True)
@@ -415,19 +417,29 @@ def unreadable_authority_records_are_unavailable_not_invalid() -> bool:
             else:
                 os.environ["RECURSION_PORTFOLIO"] = previous_registry
 
+        healthy = False
+        healthy_code = 0
+        try:
+            healthy = pilot_records(root, "chiron", active=True)[0].get("id") == "chiron"
+        except SystemExit as exc:
+            healthy_code = int(exc.code)
+
+        open_calls: list[Path] = []
+
         def denied(self, *args, **kwargs):
             if self == config_path:
+                open_calls.append(self)
                 raise PermissionError("simulated transient authority read failure")
-            return original_read_text(self, *args, **kwargs)
+            return original_open(self, *args, **kwargs)
 
-        Path.read_text = denied
+        Path.open = denied
         unavailable = 0
         try:
             pilot_records(root, "chiron", active=True, unavailable_code=74)
         except SystemExit as exc:
             unavailable = int(exc.code)
         finally:
-            Path.read_text = original_read_text
+            Path.open = original_open
         config_path.write_text("{malformed\n", encoding="utf-8")
         malformed = 0
         try:
@@ -440,9 +452,13 @@ def unreadable_authority_records_are_unavailable_not_invalid() -> bool:
             pilot_records(root, "chiron", active=True, unavailable_code=74)
         except SystemExit as exc:
             absent = int(exc.code)
-        return ambient_ignored and unavailable == 74 and malformed == 4 and absent == 4
+        return (
+            ambient_ignored and healthy and healthy_code != 74
+            and unavailable == 74 and open_calls == [config_path]
+            and malformed == 4 and absent == 4
+        )
     finally:
-        Path.read_text = original_read_text
+        Path.open = original_open
         shutil.rmtree(root, ignore_errors=True)
 
 

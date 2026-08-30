@@ -94,13 +94,18 @@ Field rules:
   allowlist. Enforcement stays in the root-owned provider netns/proxy on the box; a
   plugin engine enabled before its endpoints are provisioned simply has no egress and
   fails its run — fail closed, no new capability implied by the manifest.
+- `network.profile`: required reviewed provider-egress profile. Its provider and endpoint
+  set must match `billing.provider` and `network.endpoints`; a provider-only manifest
+  without a profile is invalid.
 - `availability_probe`: `null`, or
   `{ "type": "http", "url_env": "RECURSION_ENGINE_<NAME>_HEALTH_URL", "timeout_s": 5 }`.
   The URL itself lives in human-owned env, never in the manifest.
 - `concurrency_cap`: `null` or a positive integer — maximum simultaneous runs for this
   engine across the box (the Sentry arm ships with 1).
-- `env_passthrough`: array of env var *names* (`^[A-Z][A-Z0-9_]{2,63}$`) copied from the
-  controller environment into the unit when set. For API-key-style engines.
+- `env_passthrough`: array of env var *names* copied from the controller environment into
+  the unit when set. Names are accepted only when they appear in the exact reviewed
+  allowlist attached to `network.profile`; the worker re-checks this binding before it
+  consumes any name. Values never appear in manifests or command lines.
 
 Shipped manifests (all inert until enabled on the box):
 
@@ -214,9 +219,10 @@ checks):
   a model was passed). `env_passthrough` values ride a root-owned `0600`
   `EnvironmentFile` (removed on cleanup), never the systemd-run command line — argv is
   world-readable in `/proc` for the run's whole duration and these are API keys.
-- The claude-only CONNECT-proxy env stays claude-only. Plugin engines run inside the
-  same provider-only netns; their egress works only once the box's provider allowlist
-  includes their endpoints (deployment step below).
+- Provider egress is profile-bound and generic: the admitted plan supplies the provider,
+  endpoint set, namespace, and loopback proxy port. Every provider-only engine receives
+  only that profile's proxy environment; no Claude/Anthropic default or engine-specific
+  proxy injection is permitted.
 - Logical test mode (`RECURSION_TEST_WORKER=logical`, /tmp-only) gets the same generic
   branch so hermetic controls can exercise a stub executable on PATH.
 

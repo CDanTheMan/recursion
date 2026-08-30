@@ -28,6 +28,7 @@
 #   taskctl.sh cas <id> <from> <to> <reason>  Phase 6 compare-and-swap transition
 #   taskctl.sh get <id> [field]        canonical status, or one field
 #   taskctl.sh reap                    expire dead leases -> stale + event (safe, idempotent)
+#   taskctl.sh quarantine-release <id> observe an unconfirmed worker is terminal, then release
 #   taskctl.sh event <kind> <task> <detail...>
 #   taskctl.sh notify-event <portfolio-brief|project-digest> <project> <message>
 #   taskctl.sh esc-record <key> <title> [workstream] [pointer]
@@ -76,6 +77,40 @@ _unlock(){
   python3 "$ROOT/scripts/runtime-state.py" lock-release "$LOCKDIR/taskctl.lock" "$_TASKCTL_OWNER_PID" \
     >/dev/null || return 74
   _LOCK_HELD=0
+}
+
+_persist_assignment_locked(){
+  local assignment_file="$1" expected_task="${2:-}" expected_digest="${3:-}"
+  python3 - "$ROOT" "$assignment_file" "$expected_task" "$expected_digest" <<'PY'
+import json,sys
+from pathlib import Path
+root=Path(sys.argv[1]); provided=Path(sys.argv[2]); expected_task=sys.argv[3]; expected_digest=sys.argv[4]
+if provided.is_symlink() or not provided.is_file():
+    raise SystemExit('taskctl: assignment candidate is absent or symlinked')
+sys.path.insert(0,str(root/'scripts'))
+import assignment as assignment_mod
+import assignment_contract as contract_mod
+try:
+    value=json.loads(provided.read_text(encoding='utf-8'))
+    assignment_digest = value.get('assignment_digest') if isinstance(value, dict) else None
+    if isinstance(value, dict) and "controller_repository" in value:
+        value, assignment_digest = contract_mod.load_assignment(provided)
+    else:
+        assignment_mod.validate_assignment(value, require_source_evidence=True)
+    if expected_task and (value.get('task_id') != expected_task or assignment_digest != expected_digest):
+        raise contract_mod.AssignmentError('assignment candidate identity does not match the lease binding')
+    if not (isinstance(value, dict) and "controller_repository" in value):
+        assignment_mod.persist_assignment(root/'state/assignments', value)
+    # A strict contract is already an immutable file in state/assignments.  Copying it into
+    # Phase 3's task-id/digest directory would change the authoritative path and invite
+    # consumers to load the wrong schema.
+except (OSError, UnicodeDecodeError, json.JSONDecodeError, assignment_mod.AssignmentError,
+        contract_mod.AssignmentError,
+        TypeError, ValueError, OverflowError, RecursionError):
+    # Exception text can contain absolute paths, parser offsets, or host OS details.
+    # The shell boundary has a stable public diagnostic and no data-bearing traceback.
+    raise SystemExit('taskctl: invalid assignment candidate')
+PY
 }
 
 _repair_transition_receipts(){
@@ -193,7 +228,13 @@ elif mode=='bump':
     for i,line in enumerate(lines):
         cells=line.split('\t')
         if len(cells)>=9 and cells[0]==eid:
-            cells[4]=now; cells[5]=str(int(cells[5])+1); lines[i]='\t'.join(cells)
+            try:
+                count = int(cells[5], 10)
+            except (TypeError, ValueError, OverflowError):
+                raise SystemExit(2)
+            if count < 0:
+                raise SystemExit(2)
+            cells[4]=now; cells[5]=str(count+1); lines[i]='\t'.join(cells)
             result=cells[5]; hit=True; break
     if not hit: raise SystemExit(2)
 elif mode=='add':
@@ -239,7 +280,14 @@ sys.path.insert(0,sys.argv[2])
 from transition_receipt import commit_event
 path=sys.argv[1]
 root=__import__('pathlib').Path(sys.argv[2]).parent
-commit_event(root,json.loads(os.environ['EVENT_LINE']),taskctl_locked=True)
+try:
+    event=json.loads(os.environ['EVENT_LINE'], parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+except (KeyError, UnicodeError, json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError):
+    raise SystemExit(2)
+try:
+    commit_event(root,event,taskctl_locked=True)
+except (OSError, ValueError, TypeError, OverflowError, RecursionError, UnicodeError):
+    raise SystemExit(2)
 PY
 }
 
@@ -272,7 +320,10 @@ event={'schema_version':1,'event':os.environ['TRANSITION_KIND'],
        'task':os.environ['TRANSITION_TASK'],'project':project,
        'goal':fields.get('goal_id',''),'pid':os.getpid(),
        'detail':os.environ['TRANSITION_DETAIL']}
-print(commit_transition(root,[fields_mutation(path,changes)],event,taskctl_locked=True))
+try:
+    print(commit_transition(root,[fields_mutation(path,changes)],event,taskctl_locked=True))
+except (OSError, ValueError, TypeError, OverflowError, RecursionError, UnicodeError):
+    raise SystemExit(2)
 PY
 }
 
@@ -324,6 +375,10 @@ case "$cmd" in
 start)
   ID="${1:?usage: taskctl start <id> [owner]}"; OWNER="${2:-$$@$(hostname)}"
   F="$(_taskfile "$ID")"; [ -f "$F" ] || { echo "taskctl: no such task: $ID" >&2; exit 2; }
+  if [ -e "$ROOT/state/runs/$ID-termination-unconfirmed.json" ]; then
+    echo "taskctl: $ID is quarantined after unconfirmed worker termination; observe/recover it explicitly" >&2
+    exit 4
+  fi
   _validate_task_start "$F" || exit $?
   _lock || exit $?
   cur="$(_field "$F" status)"
@@ -348,6 +403,70 @@ heartbeat)
   ID="${1:?usage: taskctl heartbeat <id>}"; F="$(_taskfile "$ID")"; [ -f "$F" ] || exit 2
   _lock || exit $?
   transition_fields "$F" heartbeat "$ID" "" lease_expires "$(( $(_epoch) + LEASE_TTL ))" \
+    || { rc=$?; _unlock; exit "$rc"; }
+  _unlock ;;
+
+# Phase 3 (D-016): validate and persist an immutable assignment candidate without changing
+# the live lease binding. `set-assignment` stamps the lease for the first implementer run;
+# verifier and retry runs reuse/persist their exact record without rebinding that lease.
+persist-assignment)
+  AFILE="${1:?usage: taskctl persist-assignment <assignment-file>}"
+  EXPECTED_TASK="${2:-}"; EXPECTED_DIGEST="${3:-}"
+  _lock || exit $?
+  _persist_assignment_locked "$AFILE" "$EXPECTED_TASK" "$EXPECTED_DIGEST" \
+    || { rc=$?; _unlock; exit "$rc"; }
+  _unlock ;;
+
+set-assignment)
+  ID="${1:?usage: taskctl set-assignment <id> <assignment-digest> <assignment-file> <owner> <attempt> <run-id>}"
+  DIGEST="${2:?usage: taskctl set-assignment <id> <assignment-digest> <assignment-file> <owner> <attempt> <run-id>}"
+  AFILE="${3:?assignment-file}"; OWNER="${4:?owner}"; ATTEMPT="${5:?attempt}"; RUN_ID="${6:?run-id}"
+  printf '%s' "$DIGEST" | grep -qE '^[0-9a-f]{64}$' \
+    || { echo "taskctl: invalid assignment digest" >&2; exit 2; }
+  F="$(_taskfile "$ID")"; [ -f "$F" ] || exit 2
+  _lock || exit $?
+  CUR="$(_field "$F" status)"; CURRENT_OWNER="$(_field "$F" lease_owner)"; CURRENT_ATTEMPT="$(_field "$F" attempts)"
+  [ "$CUR" = running ] || { _unlock; echo "taskctl: assignment requires running lease" >&2; exit 6; }
+  [ "$CURRENT_OWNER" = "$OWNER" ] || { _unlock; echo "taskctl: assignment owner does not hold lease" >&2; exit 6; }
+  [ "$CURRENT_ATTEMPT" = "$ATTEMPT" ] || { _unlock; echo "taskctl: assignment attempt mismatch" >&2; exit 6; }
+  [ -n "$RUN_ID" ] || { _unlock; echo "taskctl: assignment run id is empty" >&2; exit 2; }
+  EXISTING_DIGEST="$(_field "$F" assignment_digest)"
+  if [ -n "$EXISTING_DIGEST" ]; then
+    [ "$EXISTING_DIGEST" = "$DIGEST" ] \
+      || { _unlock; echo "taskctl: assignment is immutable for this attempt" >&2; exit 6; }
+    [ "$(_field "$F" assignment_run_id)" = "$RUN_ID" ] \
+      && [ "$(_field "$F" assignment_attempt)" = "$ATTEMPT" ] \
+      || { _unlock; echo "taskctl: assignment run binding is immutable for this attempt" >&2; exit 6; }
+  fi
+  _persist_assignment_locked "$AFILE" || { rc=$?; _unlock; exit "$rc"; }
+python3 - "$ROOT" "$ID" "$DIGEST" "$AFILE" <<'PY' || { rc=$?; _unlock; exit "$rc"; }
+import json
+import sys
+from pathlib import Path
+root=Path(sys.argv[1]); task,digest,provided=sys.argv[2:]
+sys.path.insert(0,str(root/'scripts'))
+import assignment as assignment_mod
+import assignment_contract as contract_mod
+try:
+    raw=json.loads(Path(provided).read_text(encoding='utf-8'))
+    if isinstance(raw, dict) and "controller_repository" in raw:
+        value, computed=contract_mod.load_assignment(provided)
+    else:
+        value=assignment_mod.load_assignment(root/'state/assignments',task,digest)
+        computed=value.get('assignment_digest') if value is not None else None
+        if value is not None:
+            assignment_mod.validate_assignment(value, require_source_evidence=True)
+    if value is None:
+        raise ValueError('assignment is absent')
+    if value.get('task_id') != task or computed != digest:
+        raise ValueError('assignment identity mismatch')
+except (OSError, UnicodeDecodeError, json.JSONDecodeError, assignment_mod.AssignmentError,
+        contract_mod.AssignmentError, TypeError, ValueError, OverflowError, RecursionError):
+    raise SystemExit('taskctl: invalid persisted assignment')
+PY
+  transition_fields "$F" set-assignment "$ID" "assignment_digest=$DIGEST run_id=$RUN_ID attempt=$ATTEMPT" \
+    assignment_digest "$DIGEST" lease_assignment_digest "$DIGEST" assignment_run_id "$RUN_ID" \
+    assignment_attempt "$ATTEMPT" \
     || { rc=$?; _unlock; exit "$rc"; }
   _unlock ;;
 
@@ -398,6 +517,38 @@ get)
   ID="${1:?usage: taskctl get <id> [field]}"; FLD="${2:-status}"
   F="$(_taskfile "$ID")"; [ -f "$F" ] || exit 2
   _field "$F" "$FLD" ;;
+
+quarantine-release)
+  ID="${1:?usage: taskctl quarantine-release <id>}"
+  F="$(_taskfile "$ID")"; MARKER="$ROOT/state/runs/$ID-termination-unconfirmed.json"
+  [ -f "$F" ] || { echo "taskctl: no such task: $ID" >&2; exit 2; }
+  [ -f "$MARKER" ] || { echo "taskctl: no termination quarantine for $ID" >&2; exit 2; }
+  PGID="$(python3 - "$MARKER" "$ID" <<'PY'
+import json,sys
+try:
+    value=json.load(open(sys.argv[1], encoding="utf-8"))
+    if value.get("task_id") != sys.argv[2]: raise ValueError
+    pgid=value["process_group"]
+    if not isinstance(pgid, int) or pgid < 1: raise ValueError
+    print(pgid)
+except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+    raise SystemExit(2)
+PY
+  )" || { echo "taskctl: quarantine witness is malformed" >&2; exit 2; }
+  if kill -0 -- "-$PGID" 2>/dev/null; then
+    echo "taskctl: process group $PGID is still live; quarantine remains" >&2
+    exit 4
+  fi
+  _lock || exit $?
+  case "$(_field "$F" status)" in
+    running|stale) : ;;
+    *) _unlock; echo "taskctl: $ID is not a quarantined task" >&2; exit 4 ;;
+  esac
+  transition_fields "$F" quarantine-recovered "$ID" "observed terminal process group $PGID" \
+    status stale lease_expires 0 transition_reason "termination-quarantine-recovered" \
+    transition_at "$(_now)" || { rc=$?; _unlock; exit "$rc"; }
+  rm -f -- "$MARKER" || { _unlock; echo "taskctl: quarantine witness could not be removed" >&2; exit 71; }
+  _unlock; echo "recovered $ID from termination quarantine" ;;
 
 reap)
   # A task is STALE when it claims to be running, its lease has expired, and nothing is

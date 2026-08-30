@@ -5,6 +5,7 @@ Before=recursion-provider-proxy.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+EnvironmentFile=-/etc/recursion/provider-egress.env
 ExecStart=/opt/recursion/scripts/provider-network.sh create
 ExecStart=/opt/recursion/scripts/provider-network.sh namespace-check
 ExecStop=/opt/recursion/scripts/provider-network.sh delete

@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "id": "google-gemini",
+  "provider": "google-gemini",
+  "enabled": false,
+  "namespace": "recursion-provider-only",
+  "proxy": { "type": "connect-proxy", "host": "127.0.0.1", "port": 18080, "env": ["HTTP_PROXY", "HTTPS_PROXY"] },
+  "authorities": ["generativelanguage.googleapis.com:443"]
+}

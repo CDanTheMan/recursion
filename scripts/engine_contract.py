@@ -10,19 +10,42 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+
+class FirstPartyImportError(ImportError):
+    """A required controller module is absent from the importing script's tree."""
+
+
+try:
+    from phase5_safety import BoundaryError, decode_json, read_bytes, is_plain_int
+except ModuleNotFoundError as exc:
+    if exc.name != "phase5_safety":
+        raise
+    raise FirstPartyImportError(
+        f"first-party module 'phase5_safety' not found; searched {_SCRIPT_DIR}"
+    ) from None
+
+from jsonl_durable import JsonlDurabilityError, read_durable_bytes
 
 BUILTIN_ENGINES = frozenset({"claude", "hermes", "gate", "none", "deepseek", "openrouter"})
 ENGINE_NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
 ALIAS_NAME_RE = re.compile(r"[a-z][a-z0-9-]{2,31}")
 ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}")
 ROLES = frozenset({"implementer", "verifier"})
+MAX_REGISTRY_BYTES = 1024 * 1024
 
 LEGACY_ALIASES = {
     "sonnet-routine": frozenset({"implementer"}),
     "opus-complex": frozenset({"implementer", "verifier"}),
     "opus-review": frozenset({"verifier"}),
 }
+MAX_INPUT_BYTES = 8 * 1024 * 1024
 
 
 def plugin_engine_name_ok(name: object) -> bool:
@@ -45,14 +68,35 @@ def default_registry_path(script_dir: Path | str) -> Path:
     return Path(script_dir) / "engines" / "model-aliases.json"
 
 
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
+
 def _load_registry(registry_path: Path | str) -> dict[str, frozenset[str]] | None:
     """Return alias -> roles from a valid registry, or None when the registry is
     absent, unparseable, schema-invalid, or redefines a legacy alias (poisoned)."""
     try:
-        raw = json.loads(Path(registry_path).read_text(encoding="utf-8"))
-    except (OSError, ValueError, UnicodeDecodeError):
+        # The registry is bounded by its own limit, not the general input limit: Phase 4
+        # introduced MAX_REGISTRY_BYTES for exactly this read, and resolving the merge to the
+        # bounded durable reader must not silently widen it from 1 MiB to 8 MiB.
+        encoded = read_durable_bytes(Path(registry_path), max_bytes=MAX_REGISTRY_BYTES)
+        if encoded is None:
+            return None
+        raw = json.loads(
+            encoded.decode("utf-8"),
+            parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("non-finite JSON number")),
+        )
+    except (JsonlDurabilityError, OSError, ValueError, TypeError, OverflowError,
+            RecursionError, UnicodeDecodeError):
+        # read_durable_bytes raises JsonlDurabilityError (a RuntimeError subclass) when the
+        # registry path is a reparse point or carries traversal components.  Without it here,
+        # an unsafe registry path escapes as a raw traceback and absolute path, violating this
+        # function's documented swallow-to-None contract and leaking at the callers'
+        # (validate-control-state, project-pilot) boundaries.  RecursionError is a sibling of
+        # JsonlDurabilityError under RuntimeError and does not cover it.
         return None
-    if not isinstance(raw, dict) or raw.get("schema_version") != 1:
+    if not isinstance(raw, dict) or type(raw.get("schema_version")) is not int \
+            or raw["schema_version"] != 1:
         return None
     aliases = raw.get("aliases")
     if not isinstance(aliases, dict):
@@ -70,7 +114,8 @@ def _load_registry(registry_path: Path | str) -> dict[str, frozenset[str]] | Non
             return None
         # Mirror resolve-model-alias.py's rules exactly (it is the execution authority);
         # duplicated role entries are tolerated there, so they are tolerated here.
-        if not isinstance(roles, list) or not roles or not set(roles) <= ROLES:
+        if not isinstance(roles, list) or not roles or any(not isinstance(role, str) for role in roles) \
+                or not set(roles) <= ROLES:
             return None
         loaded[alias] = frozenset(roles)
     return loaded

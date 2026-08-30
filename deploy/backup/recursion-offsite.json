@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "recursion-runtime-offsite",
+  "enabled": false,
+  "source": {
+    "runtime_root": "/opt/recursion",
+    "snapshot_directory": "/var/lib/recursion-backup/snapshots",
+    "runtime_directory": "/run/recursion-backup"
+  },
+  "destination": {
+    "type": "sftp",
+    "user": "recursion-backup",
+    "host": "backup.example.invalid",
+    "port": 22,
+    "path": "/recursion/runtime",
+    "credential_ref": "secret:recursion-backup-sftp"
+  },
+  "encryption": {
+    "tool": "age",
+    "recipient_file": "/etc/recursion/backup-recipient.age",
+    "identity_ref": "secret:recursion-backup-age-identity"
+  },
+  "authentication": {
+    "type": "hmac-sha256",
+    "key_ref": "secret:recursion-backup-config-key",
+    "signature_file": "/etc/recursion/backup-policy.sig"
+  },
+  "retention": { "daily": 14, "weekly": 8, "monthly": 12 },
+  "log_rotation": {
+    "directory": "/var/log/recursion",
+    "max_size_mb": 50,
+    "keep": 14
+  },
+  "restore_drill": { "cadence_days": 30, "required": true },
+  "archive_limits": { "max_files": 10000, "max_bytes": 104857600 }
+}

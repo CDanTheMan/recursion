@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows uses the mkdir mutex below.
+    fcntl = None  # type: ignore[assignment]
 import hashlib
 import json
 import os
@@ -25,13 +28,22 @@ from transition_receipt import (
     TransitionReceiptError, authenticated_transition, commit_event, commit_transition,
     json_mutation, resume_transition, raw_text_mutation, text_mutation,
 )
-from engine_contract import alias_role_ok, default_registry_path, pilot_engine_ok
+try:
+    from engine_contract import alias_role_ok, default_registry_path, pilot_engine_ok
+except Exception as exc:
+    module_name = getattr(exc, "name", None) or "engine_contract"
+    if __name__ == "__main__":
+        print(f"project-pilot: first-party module '{module_name}' is unavailable or malformed",
+              file=sys.stderr)
+        raise SystemExit(95)
+    raise
 from pilot_instruction import require_affirmative_command
 from seed_contract import SeedContractError, inspect_repository, validate_contract
 from project_authority import (
     AUTHORITY_V2_RELATIONSHIPS, AUTHORITY_V2_SCHEMA, OID, AuthorityError,
     authenticated_remote_head, observe_clean_source, prove_current_remote_lineage,
 )
+from remote_evidence import RemoteEvidenceError, read_events_for_run
 
 
 IDENT = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
@@ -53,6 +65,25 @@ HEAD_ONLY = {
     "priority-set", "reprioritize", "portfolio-add", "register", "policy-set", "spending",
     "credentials", "deploy", "merge", "pause", "resume", "model-policy", "control-plane",
 }
+MAX_PILOT_JSON_BYTES = 256 * 1024
+
+
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
+
+def _parse_json_arg(raw: str) -> object:
+    if len(raw.encode("utf-8")) > MAX_PILOT_JSON_BYTES:
+        raise ValueError("pilot JSON argument exceeds the 256 KiB bound")
+    return json.loads(raw, parse_constant=_reject_json_constant)
+
+
+def _json_copy(value: object) -> object:
+    try:
+        return json.loads(json.dumps(value, allow_nan=False),
+                          parse_constant=_reject_json_constant)
+    except (TypeError, ValueError, OverflowError, RecursionError):
+        fail("input is not canonical JSON")
 
 
 def root() -> Path:
@@ -60,29 +91,38 @@ def root() -> Path:
 
 
 def fail(message: str, code: int = 4) -> None:
-    print(f"project-pilot: {message}", file=sys.stderr)
+    # Caller-facing diagnostics are deliberately path-free.  State paths are controller details,
+    # and raw OS exceptions can disclose both those paths and host-specific ACL information.
+    safe = re.sub(r"(?:[A-Za-z]:[\\/]|\\\\|(?<![A-Za-z0-9_])/)[^\s,;)]*", "<path>", str(message))
+    print(f"project-pilot: {safe}", file=sys.stderr)
     raise SystemExit(code)
 
 
 def compact(value: object) -> None:
-    print(json.dumps(value, sort_keys=True, separators=(",", ":")))
+    try:
+        print(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False))
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        fail("output is not canonical JSON")
 
 
 def read_json(path: Path, unavailable_code: int = 4,
               malformed_code: int | None = None) -> dict:
     invalid_code = unavailable_code if malformed_code is None else malformed_code
     try:
-        if path.stat().st_size > 262144:
-            fail(f"state record exceeds the 256 KiB read bound: {path}", invalid_code)
-        raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        fail(f"cannot read validated state {path}: {exc}", unavailable_code)
+        with path.open("rb") as source:
+            raw_bytes = source.read(MAX_PILOT_JSON_BYTES + 1)
+        if len(raw_bytes) > MAX_PILOT_JSON_BYTES:
+            fail("state record exceeds the 256 KiB read bound", invalid_code)
+        raw = raw_bytes.decode("utf-8")
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
+        fail("cannot read validated state", unavailable_code)
     try:
-        value = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        fail(f"cannot read validated state {path}: {exc}", invalid_code)
+        value = json.loads(raw, parse_constant=_reject_json_constant)
+    except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError) as exc:
+        fail("cannot read validated state", invalid_code)
     if not isinstance(value, dict):
-        fail(f"state record is not an object: {path}", invalid_code)
+        fail("state record is not an object", invalid_code)
     return value
 
 
@@ -92,55 +132,91 @@ def read_required_json(path: Path, absent: str, *, unavailable_code: int = 4) ->
         path.lstat()
     except FileNotFoundError:
         fail(absent)
-    except OSError as exc:
-        fail(f"cannot inspect validated state {path}: {exc}", unavailable_code)
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
+        fail("cannot inspect validated state", unavailable_code)
     return read_json(path, unavailable_code=unavailable_code, malformed_code=4)
+
+
+def _is_reparse_info(info: os.stat_result) -> bool:
+    """Detect POSIX links and Windows reparse points, including junctions."""
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+        or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def _reject_status_reparse_ancestors(directory: Path) -> None:
+    """Reject links/reparse points in the whole status path before any directory walk."""
+    current = Path(directory.anchor) if directory.anchor else Path()
+    components = directory.parts[1:] if directory.anchor else directory.parts
+    for index, component in enumerate(components):
+        current /= component
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            fail("cannot inspect status state", 74)
+        if _is_reparse_info(info):
+            fail("status state contains a symlink/reparse ancestor", 74)
+        if index < len(components) - 1 and not stat.S_ISDIR(info.st_mode):
+            fail("status state is not a directory", 74)
 
 
 def fields(path: Path, unavailable_code: int | None = None) -> dict[str, str]:
     result: dict[str, str] = {}
     try:
         if path.stat().st_size > 131072:
-            fail(f"state record exceeds the 128 KiB read bound: {path}", unavailable_code or 4)
+            fail("state record exceeds the 128 KiB read bound", unavailable_code or 4)
         for line in path.read_text(encoding="utf-8", errors="surrogateescape").splitlines():
             if ":" in line and not line.startswith((" ", "\t")):
                 key, value = line.split(":", 1)
                 result.setdefault(key.strip(), value.strip())
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
         if unavailable_code is not None:
-            fail(f"cannot read status state {path}: {exc}", unavailable_code)
+            fail("cannot read status state", unavailable_code)
     return result
 
 
 def status_files(directory: Path, suffix: str | None, limit: int | None,
                  newest: bool = False) -> list[Path]:
     """List one status source, distinguishing a lazy empty directory from unreadable state."""
+    _reject_status_reparse_ancestors(directory)
     try:
-        mode = os.lstat(directory).st_mode
+        directory_info = os.lstat(directory)
     except FileNotFoundError:
         return []
-    except OSError as exc:
-        fail(f"cannot inspect status state {directory}: {exc}", 74)
-    if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
-        fail(f"status state is not a real directory: {directory}", 74)
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
+        fail("cannot inspect status state", 74)
+    if _is_reparse_info(directory_info) or not stat.S_ISDIR(directory_info.st_mode):
+        fail("status state is not a real directory", 74)
     try:
         with os.scandir(directory) as entries:
             paths = []
             for entry in entries:
                 if suffix is not None and not entry.name.endswith(suffix):
                     continue
-                if entry.is_symlink():
-                    fail(f"status state record is a symlink: {directory / entry.name}", 74)
+                try:
+                    entry_info = entry.stat(follow_symlinks=False)
+                except AttributeError:
+                    entry_info = None
+                except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+                        RecursionError):
+                    fail("cannot inspect status state record", 74)
+                if entry.is_symlink() or (entry_info is not None and _is_reparse_info(entry_info)):
+                    fail("status state record is a symlink/reparse point", 74)
                 if entry.is_file(follow_symlinks=False):
                     paths.append(directory / entry.name)
                 elif not entry.is_dir(follow_symlinks=False):
-                    fail(f"status state record has an unsupported type: {directory / entry.name}", 74)
+                    fail("status state record has an unsupported type", 74)
     except FileNotFoundError:
         # Runtime directories are created lazily; disappearance before the scan proves no records
         # were readable at this instant and must not be conflated with a permission failure.
         return []
-    except OSError as exc:
-        fail(f"cannot enumerate status state {directory}: {exc}", 74)
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
+        fail("cannot enumerate status state", 74)
     ordered = sorted(paths)
     if limit is None:
         return ordered
@@ -153,8 +229,9 @@ def rows(base: Path, unavailable_code: int = 4) -> list[dict[str, str]]:
     registry = base / "state/portfolio.tsv"
     try:
         lines = registry.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
-        fail(f"portfolio unavailable: {exc}", unavailable_code)
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
+        fail("portfolio unavailable", unavailable_code)
     for line in lines:
         if not line or line.startswith("#"):
             continue
@@ -256,7 +333,12 @@ def scoped_state(base: Path, project: str) -> dict:
     for path in status_files(base / "state/runs", ".json", 500):
         value = read_json(path, unavailable_code=74)
         if value.get("project_id") == project or value.get("task_id") in task_ids:
-            value = dict(value); value["file"] = str(path.relative_to(base)); runs.append(value)
+            value = dict(value)
+            try:
+                value["remote_events"] = read_events_for_run(path)
+            except RemoteEvidenceError as exc:
+                fail("remote evidence is unusable", 74)
+            value["file"] = str(path.relative_to(base)); runs.append(value)
     evidence = []
     for path in status_files(base / "state/evidence", None, 100):
         value = (fields(path, unavailable_code=74) if path.suffix == ".md"
@@ -384,7 +466,7 @@ def validate_control_state(base: Path, kind: str, value: dict) -> None:
     proc = subprocess.run([sys.executable, str(base / "scripts/validate-control-state.py"), kind],
                           input=json.dumps(value), text=True, capture_output=True, check=False)
     if proc.returncode:
-        fail((proc.stderr or proc.stdout or f"{kind} schema validation failed").strip())
+        fail("control-state validation failed")
 
 
 def append_event(base: Path, event: str, project: str, goal: str = "", task: str = "",
@@ -395,8 +477,8 @@ def append_event(base: Path, event: str, project: str, goal: str = "", task: str
         value["id"] = event_id
     try:
         commit_event(base, value)
-    except (OSError, TransitionReceiptError) as exc:
-        fail(f"event journal append failed: {exc}", 74)
+    except (OSError, TransitionReceiptError):
+        fail("event journal append failed", 74)
 
 
 def transition_event(event: str, project: str, goal: str = "", task: str = "",
@@ -413,8 +495,8 @@ def commit_pilot_transition(base: Path, mutations: list, event: dict,
     try:
         commit_transition(base, mutations, event, authoritative_index=authoritative_index,
                           precondition=precondition)
-    except (OSError, TransitionReceiptError) as exc:
-        fail(f"crash-consistent pilot transition failed: {exc}", 74)
+    except (OSError, TransitionReceiptError):
+        fail("crash-consistent pilot transition failed", 74)
 
 
 @contextmanager
@@ -422,10 +504,20 @@ def event_serialization_lock(base: Path):
     """Share taskctl's mkdir mutex and never append through runtime-state rotation."""
     lock_dir = base / "state/.locks"; lock_dir.mkdir(parents=True, exist_ok=True)
     runtime_lock = lock_dir / "runtime-state.lock"; path = lock_dir / "taskctl.lock"
-    try: attempts = max(1, int(os.environ.get("RECURSION_LOCK_ATTEMPTS", "100")))
-    except ValueError: attempts = 100
-    try: delay = max(0.0, float(os.environ.get("RECURSION_LOCK_DELAY_S", "0.1")))
-    except ValueError: delay = 0.1
+    try:
+        raw_attempts = os.environ.get("RECURSION_LOCK_ATTEMPTS", "100")
+        if len(raw_attempts) > 6:
+            raise ValueError("lock attempt bound is too long")
+        attempts = max(1, int(raw_attempts))
+    except (TypeError, ValueError, OverflowError):
+        attempts = 100
+    try:
+        raw_delay = os.environ.get("RECURSION_LOCK_DELAY_S", "0.1")
+        if len(raw_delay) > 32:
+            raise ValueError("lock delay bound is too long")
+        delay = max(0.0, float(raw_delay))
+    except (TypeError, ValueError, OverflowError):
+        delay = 0.1
     held = False
     try:
         for _ in range(attempts):
@@ -453,8 +545,9 @@ def event_serialization_lock(base: Path):
 def registry_lock(base: Path):
     lock_dir = base / "state/.locks"; lock_dir.mkdir(parents=True, exist_ok=True)
     with (lock_dir / "project-registry.lock").open("a+", encoding="utf-8") as lock:
-        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError: fail("project registry lock is contended", 73)
+        if fcntl is not None:
+            try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError: fail("project registry lock is contended", 73)
         yield
 
 
@@ -463,8 +556,9 @@ def goal_state_lock(base: Path, goal_id: str):
     """Serialize Phase 4 task creation with Phase 6 goal verification/transitions."""
     lock_dir = base / "state/.locks"; lock_dir.mkdir(parents=True, exist_ok=True)
     with (lock_dir / f"reconcile-{goal_id}.lock").open("a+", encoding="utf-8") as lock:
-        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError: fail("goal state lock is contended", 73)
+        if fcntl is not None:
+            try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError: fail("goal state lock is contended", 73)
         yield
 
 
@@ -472,8 +566,9 @@ def goal_state_lock(base: Path, goal_id: str):
 def phase8_lock(base: Path, identity: str, *, contended_code: int = 73):
     lock_dir = base / "state/.locks"; lock_dir.mkdir(parents=True, exist_ok=True)
     with (lock_dir / f"phase8-{identity}.lock").open("a+", encoding="utf-8") as lock:
-        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError: fail("Phase 8 state lock is contended", contended_code)
+        if fcntl is not None:
+            try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError: fail("Phase 8 state lock is contended", contended_code)
         yield
 
 
@@ -510,8 +605,8 @@ def prepare(base: Path, project: str, remote: str, charter: str) -> None:
         try:
             if resume_transition(base, event):
                 return
-        except (OSError, TransitionReceiptError) as exc:
-            fail(f"pending registration recovery failed: {exc}", 74)
+        except (OSError, TransitionReceiptError):
+            fail("pending registration recovery failed", 74)
         if any(row["id"] == project for row in rows(base)): fail(f"project {project} already exists", 2)
         repo = f"/opt/{project}"; key = f"~/.ssh/{project}_deploy"; pilot_id = f"pilot-{project}"
         line = f"{project}\t{repo}\t{remote}\tmain\t{key}\t-\t-\tpending\n"
@@ -553,8 +648,8 @@ def bind_topic(base: Path, project: str, topic: str) -> None:
         try:
             if resume_transition(base, event):
                 return
-        except (OSError, TransitionReceiptError) as exc:
-            fail(f"project topic recovery failed: {exc}", 74)
+        except (OSError, TransitionReceiptError):
+            fail("project topic recovery failed", 74)
         cfg, pilot, row = records(base, project)
         if row["status"] != "pending": fail("topic binding is allowed only while pending", 2)
         if any(other["topic"] == topic and other["id"] != project for other in rows(base)):
@@ -594,8 +689,8 @@ def activate(base: Path, project: str) -> dict:
                 if not isinstance(proof, dict):
                     fail("recovered activation lacks its exact proof", 74)
                 return proof
-        except (OSError, TransitionReceiptError) as exc:
-            fail(f"project activation recovery failed: {exc}", 74)
+        except (OSError, TransitionReceiptError):
+            fail("project activation recovery failed", 74)
         cfg, pilot, row = records(base, project)
         if row["status"] != "pending": fail(f"project {project} is not pending", 2)
         if not str(cfg.get("charter", "")).strip(): fail("project charter is absent")
@@ -752,8 +847,8 @@ def controller_tracked_bytes(base: Path, relative: str, label: str) -> bytes:
     path = base.joinpath(*pure.parts)
     try:
         mode = os.lstat(path).st_mode
-    except OSError as exc:
-        fail(f"{label} is unavailable: {exc}")
+    except OSError:
+        fail(f"{label} is unavailable")
     if not stat.S_ISREG(mode) or stat.S_ISLNK(mode):
         fail(f"{label} is not a regular controller file")
     tracked = subprocess.run(
@@ -782,9 +877,10 @@ def load_gate_profile_promotion(base: Path, cfg: dict, promotion_id: str) -> dic
     if len(raw) > 65536:
         fail("gate-profile promotion binding exceeds the 64 KiB bound")
     try:
-        binding = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        fail(f"gate-profile promotion binding is malformed: {exc}")
+        binding = json.loads(raw.decode("utf-8"), parse_constant=_reject_json_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError):
+        fail("gate-profile promotion binding is malformed")
     expected_keys = {
         "schema", "promotion_id", "project_id", "source_head", "profile",
         "required_gate_profile",
@@ -812,9 +908,10 @@ def load_gate_profile_promotion(base: Path, cfg: dict, promotion_id: str) -> dic
     if hashlib.sha256(profile_raw).hexdigest() != profile_sha256:
         fail("promoted measured profile bytes differ from the immutable binding")
     try:
-        profile = json.loads(profile_raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        fail(f"promoted measured profile is malformed: {exc}")
+        profile = json.loads(profile_raw.decode("utf-8"), parse_constant=_reject_json_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError):
+        fail("promoted measured profile is malformed")
     worlds = profile.get("worlds") if isinstance(profile, dict) else None
     roles = [world.get("role") for world in worlds if isinstance(world, dict)] \
         if isinstance(worlds, list) else []
@@ -908,8 +1005,10 @@ def available_gate_profile_promotions(base: Path, cfg: dict) -> list[dict]:
         if committed.returncode or len(committed.stdout) > 65536:
             continue
         try:
-            candidate = json.loads(committed.stdout.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+            candidate = json.loads(committed.stdout.decode("utf-8"),
+                                  parse_constant=_reject_json_constant)
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError,
+                OverflowError, RecursionError):
             continue
         # Inventory discovery must not couple one project's status to another project's
         # malformed or dirty descriptor. Exact selection remains strict in
@@ -977,7 +1076,8 @@ def enforce_required_gate_profile(cfg: dict, label: str, gate: dict,
         fail(f"pilot plan {label} does not use the project's exact required gate profile")
 
 
-def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict) -> dict:
+def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict,
+                       read_only_paths: list[str] | None = None) -> dict:
     """Use the execution validator and bind its tracked-file hashes into the plan."""
     command = [
         sys.executable, str(base / "scripts/validate-gate.py"),
@@ -989,23 +1089,38 @@ def repo_gate_contract(base: Path, cfg: dict, label: str, gate: dict) -> dict:
         "--controller-gate-files", ",".join(gate.get("controller_gate_files") or []),
         "--strict-direct",
     ]
+    if read_only_paths:
+        command += ["--read-only-paths", ",".join(read_only_paths)]
     proc = subprocess.run(command, text=True, capture_output=True, check=False)
     if proc.returncode:
         detail = (proc.stderr or proc.stdout or "gate validation failed").strip()
         fail(f"pilot plan {label} has an invalid repository gate: {detail}")
     try:
-        contract = json.loads(proc.stdout)
-    except json.JSONDecodeError:
+        contract = json.loads(proc.stdout, parse_constant=_reject_json_constant)
+    except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError):
         fail(f"pilot plan {label} gate validator returned malformed evidence")
     hashes = contract.get("gate_files") if isinstance(contract, dict) else None
     controller_hashes = contract.get("controller_gate_files") if isinstance(contract, dict) else None
-    if not re.fullmatch(r"[0-9a-f]{64}", str(contract.get("acceptance_sha256") or "")) \
+    core_keys = {"acceptance", "acceptance_sha256", "gate_files", "controller_gate_files"}
+    contract_keys = set(contract) if isinstance(contract, dict) else set()
+    if not isinstance(contract, dict) or not core_keys <= contract_keys \
+            or not contract_keys <= core_keys | {"read_only_paths"} \
+            or contract.get("acceptance") != gate["acceptance"] \
+            or not re.fullmatch(r"[0-9a-f]{64}", str(contract.get("acceptance_sha256") or "")) \
             or not isinstance(hashes, dict) or set(hashes) != set(gate["gate_files"]) \
             or not isinstance(controller_hashes, dict) \
             or set(controller_hashes) != set(gate.get("controller_gate_files") or []) \
+            or (read_only_paths and contract.get("read_only_paths") != read_only_paths) \
+            or (not hashes and not controller_hashes) \
             or any(not re.fullmatch(r"[0-9a-f]{64}", str(digest))
                    for digest in [*hashes.values(), *controller_hashes.values()]):
         fail(f"pilot plan {label} gate validator returned incomplete evidence")
+    if "read_only_paths" in contract:
+        observed_read_only_paths = contract["read_only_paths"]
+        if not isinstance(observed_read_only_paths, list) \
+                or any(not isinstance(path, str) for path in observed_read_only_paths) \
+                or len(observed_read_only_paths) != len(set(observed_read_only_paths)):
+            fail(f"pilot plan {label} gate validator returned incomplete evidence")
     return contract
 
 
@@ -1067,7 +1182,7 @@ def live_promoted_authority_contract(cfg: dict) -> dict:
 def bind_authority_contract(cfg: dict, value: object) -> dict:
     if not isinstance(value, dict):
         fail("pilot plan must be an object")
-    plan = json.loads(json.dumps(value))
+    plan = _json_copy(value)
     selection = plan.get("gate_profile_selection")
     if selection is None:
         observed = live_authority_contract(cfg, check_remote=True)
@@ -1148,11 +1263,11 @@ def bind_seed_contract(cfg: dict, value: object) -> dict:
     """Add controller-observed seed identity before the plan receives its canonical digest."""
     if not isinstance(value, dict):
         fail("pilot plan must be an object")
-    plan = json.loads(json.dumps(value))
+    plan = _json_copy(value)
     try:
         observed = inspect_repository(Path(str(cfg["repo"])))
-    except (OSError, SeedContractError) as exc:
-        fail(f"project seed contract is invalid: {exc}")
+    except (OSError, SeedContractError):
+        fail("project seed contract is invalid")
     claimed = plan.get("seed_contract")
     if observed is None:
         if claimed not in (None, {}):
@@ -1170,8 +1285,8 @@ def validate_seed_binding(cfg: dict, value: dict) -> dict | None:
     if claimed is None:
         try:
             observed = inspect_repository(Path(str(cfg["repo"])))
-        except (OSError, SeedContractError) as exc:
-            fail(f"project seed contract is invalid: {exc}")
+        except (OSError, SeedContractError):
+            fail("project seed contract is invalid")
         if observed is not None:
             fail("pilot plan does not bind the tracked project seed manifest")
         return None
@@ -1179,22 +1294,29 @@ def validate_seed_binding(cfg: dict, value: dict) -> dict | None:
         fail("pilot plan seed contract is not an object")
     try:
         return validate_contract(Path(str(cfg["repo"])), claimed)
-    except (OSError, SeedContractError) as exc:
-        fail(f"pilot plan seed contract is stale or invalid: {exc}")
+    except (OSError, SeedContractError):
+        fail("pilot plan seed contract is stale or invalid")
 
 
 def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: object,
                   bind_gate_contract: bool = False, check_remote: bool = False) -> dict:
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
+    if not isinstance(value, dict) or not isinstance(value.get("schema_version"), int) \
+            or isinstance(value.get("schema_version"), bool) or value.get("schema_version") != 1:
         fail("pilot plan must be a schema_version 1 object")
-    if len(json.dumps(value, sort_keys=True, separators=(",", ":"))) > 65536:
-        fail("pilot plan exceeds the 64 KiB bound")
-    # Return a canonical value without mutating the model decision or stored record in memory.
-    value = json.loads(json.dumps(value))
+    try:
+        encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        if len(encoded) > 65536:
+            fail("pilot plan exceeds the 64 KiB bound")
+        # Return a canonical value without mutating the model decision or stored record in memory.
+        value = json.loads(encoded)
+    except SystemExit:
+        raise
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        fail(f"pilot plan contains malformed JSON values: {type(exc).__name__}")
     if value.get("id") != plan_id or value.get("project_id") != project or not IDENT.fullmatch(plan_id):
         fail("pilot plan identity does not match its decision")
     validate_authority_binding(cfg, value, check_remote=check_remote)
-    validate_seed_binding(cfg, value)
+    seed_contract = validate_seed_binding(cfg, value)
     required_gate_profile = selected_required_gate_profile(base, cfg, value)
     goal = value.get("goal")
     tasks = value.get("tasks")
@@ -1221,7 +1343,17 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
     enforce_required_gate_profile(
         cfg, "goal", {**goal, "acceptance": goal_acceptance}, required_gate_profile,
     )
-    expected_goal_contract = repo_gate_contract(base, cfg, "goal", goal_gate)
+    # work.sh's effective read-only set is "$SEED $SEED_MANIFEST": it passes --read-only-paths twice
+    # and argparse keeps the last one, which appends the manifest. The approved contract has to carry
+    # the same set or every seeded pilot task is rejected pre-worker as gate-contract-drift, and
+    # including it is right on its own terms -- a worker must not rewrite the manifest that defines
+    # its own seed.
+    read_only_paths = None
+    if seed_contract:
+        read_only_paths = [*seed_contract["paths"], seed_contract["manifest_path"]]
+    expected_goal_contract = repo_gate_contract(
+        base, cfg, "goal", goal_gate, read_only_paths=read_only_paths,
+    )
     if requires_heavy_gate(value, goal_acceptance) and goal.get("gate_class") != "heavy":
         fail("pilot plan goal understates a controller-classified heavy gate")
     if bind_gate_contract:
@@ -1248,6 +1380,11 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
     if isinstance(cost, bool) or not isinstance(cost, (int, float)) or cost < 0 \
             or not isinstance(budget.get("publication_required"), bool):
         fail("pilot plan has an invalid cost or publication budget")
+    if "max_retries" in budget and (
+            isinstance(budget["max_retries"], bool)
+            or not isinstance(budget["max_retries"], int)
+            or budget["max_retries"] < 0):
+        fail("pilot plan has an invalid integer budget")
     task_ids: list[str] = []
     for task in tasks:
         if not isinstance(task, dict): fail("pilot plan task is not an object")
@@ -1305,7 +1442,9 @@ def validate_plan(base: Path, cfg: dict, project: str, plan_id: str, value: obje
                 fail(f"pilot plan task {task_id} has invalid {name}")
             for item in items: bounded_line(item, f"task {task_id} {name}", 512)
         enforce_required_gate_profile(cfg, f"task {task_id}", task, required_gate_profile)
-        expected_contract = repo_gate_contract(base, cfg, f"task {task_id}", task)
+        expected_contract = repo_gate_contract(
+            base, cfg, f"task {task_id}", task, read_only_paths=read_only_paths,
+        )
         if requires_heavy_gate(value, str(task["acceptance"])) and task.get("gate_class") != "heavy":
             fail(f"pilot plan task {task_id} understates a controller-classified heavy gate")
         supplied_contract = task.get("gate_contract")
@@ -1379,8 +1518,8 @@ def require_lucas_instruction(path: Path, instruction: dict[str, str], verb: str
     # requires the affirmative verb and every authority-bound value contiguously and in order.
     try:
         require_affirmative_command(body, verb, [str(term) for term in terms])
-    except ValueError as exc:
-        fail(f"Lucas {exc}")
+    except ValueError:
+        fail("Lucas instruction is invalid")
 
 
 def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction_id: str) -> dict:
@@ -1389,7 +1528,7 @@ def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
     raw_plan = decision.get("plan")
     if not isinstance(raw_plan, dict):
         fail("pilot plan must be an object")
-    plan = json.loads(json.dumps(raw_plan))
+    plan = _json_copy(raw_plan)
     plan = bind_gate_profile_selection(base, cfg, plan)
     plan = bind_authority_contract(cfg, plan)
     plan = bind_seed_contract(cfg, plan)
@@ -1410,8 +1549,8 @@ def propose_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
                 fail("pilot plan id collides with different content or instruction")
             try:
                 resumed = resume_transition(base, event)
-            except (OSError, TransitionReceiptError) as exc:
-                fail(f"pilot plan proposal recovery failed: {exc}", 74)
+            except (OSError, TransitionReceiptError):
+                fail("pilot plan proposal recovery failed", 74)
             if not resumed:
                 append_event(base, event["event"], event["project"], event["goal"],
                              detail=event["detail"], event_id=event["id"])
@@ -1589,7 +1728,9 @@ def active_source_pin(base: Path, project: str) -> dict | None:
         value = read_json(path, unavailable_code=74, malformed_code=4)
         if value.get("project_id") != project or value.get("status") not in {"armed", "open"}:
             continue
-        if value.get("schema_version") != 1 \
+        if not isinstance(value.get("schema_version"), int) \
+                or isinstance(value.get("schema_version"), bool) \
+                or value.get("schema_version") != 1 \
                 or not IDENT.fullmatch(str(value.get("id") or "")) \
                 or path.stem != value.get("id") \
                 or not IDENT.fullmatch(str(value.get("goal_id") or "")) \
@@ -1648,10 +1789,10 @@ def active_source_pin(base: Path, project: str) -> dict | None:
             expected_event = "goal-transition"
         try:
             receipt = authenticated_transition(base, event_id)
-        except OSError as exc:
-            fail(f"terminal source-pin transition is unavailable: {exc}", 74)
-        except TransitionReceiptError as exc:
-            fail(f"terminal source-pin transition is not authenticated: {exc}")
+        except OSError:
+            fail("terminal source-pin transition is unavailable", 74)
+        except TransitionReceiptError:
+            fail("terminal source-pin transition is not authenticated")
         event = receipt.get("event") if isinstance(receipt, dict) else None
         if not isinstance(event, dict) or event.get("event") != expected_event \
                 or event.get("project") != project or event.get("goal") != goal_id:
@@ -1708,8 +1849,8 @@ def approve_plan(base: Path, cfg: dict, pilot: dict, decision: dict, instruction
         )
         try:
             resumed = resume_transition(base, event)
-        except (OSError, TransitionReceiptError) as exc:
-            fail(f"pilot plan approval recovery failed: {exc}", 74)
+        except (OSError, TransitionReceiptError):
+            fail("pilot plan approval recovery failed", 74)
         if resumed:
             proposal = read_json(path)
             if proposal.get("status") != "approved":
@@ -1866,8 +2007,8 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
                 if prior.get("instruction_id") == instruction_id and prior.get("goal_id") == goal_id \
                         and prior.get("duration_seconds") == int(raw_seconds):
                     try: resumed = resume_transition(base, event)
-                    except (OSError, TransitionReceiptError) as exc:
-                        fail(f"pilot window recovery failed: {exc}", 74)
+                    except (OSError, TransitionReceiptError):
+                        fail("pilot window recovery failed", 74)
                     if not resumed:
                         append_event(base, event["event"], event["project"], event["goal"],
                                      detail=event["detail"], event_id=event["id"])
@@ -1927,8 +2068,8 @@ def window_action(base: Path, cfg: dict, pilot: dict, decision: dict, instructio
         )
         try:
             resumed = resume_transition(base, event)
-        except (OSError, TransitionReceiptError) as exc:
-            fail(f"pilot window close recovery failed: {exc}", 74)
+        except (OSError, TransitionReceiptError):
+            fail("pilot window close recovery failed", 74)
         if resumed:
             return read_json(path)
         if record.get("status") == "closed":
@@ -2051,7 +2192,7 @@ def execute(base: Path, decision_path: Path) -> dict:
     return execute_value(base, read_json(decision_path))
 
 
-def main() -> int:
+def _run_main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("verify-registry")
@@ -2108,12 +2249,27 @@ def main() -> int:
                         "source_head": "-"})
     else:
         try:
-            decision = json.loads(args.decision)
-        except json.JSONDecodeError as exc:
-            fail(f"frozen decision JSON is invalid: {exc}")
+            decision = _parse_json_arg(args.decision)
+        except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError):
+            fail("frozen decision JSON is invalid")
         compact(execute_value(base, decision))
     return 0
 
 
+def main() -> int:
+    try:
+        return _run_main()
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError,
+            UnicodeError, json.JSONDecodeError, subprocess.TimeoutExpired,
+            subprocess.SubprocessError):
+        print("project-pilot: operation refused", file=sys.stderr)
+        return 4
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError,
+            AttributeError, OverflowError, RecursionError) as exc:
+        print("project-pilot: invalid input or state", file=sys.stderr)
+        raise SystemExit(4)

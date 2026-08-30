@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -86,8 +87,8 @@ sys.path.insert(0, str(SOURCE / "scripts"))
 
 import jsonl_durable  # noqa: E402
 from jsonl_durable import (  # noqa: E402
-    JsonlDurabilityError, acknowledge_jsonl, append_jsonl, read_jsonl_objects,
-    read_jsonl_since,
+    JsonlDurabilityError, acknowledge_jsonl, append_jsonl, find_jsonl_objects,
+    read_jsonl_objects, read_jsonl_since,
 )
 from transition_receipt import commit_event  # noqa: E402
 
@@ -138,6 +139,172 @@ def control_complete_malformed_fails_closed() -> tuple[bool, str]:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def control_record_limits_are_checked_at_public_boundaries() -> tuple[bool, str]:
+    """A bool record bound must be refused before a public API delegates or mutates state."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-record-limit-"))
+    path = root / "events.jsonl"
+    batch = jsonl_durable.IndexedBatch(
+        (), 0, jsonl_durable.ZERO_CHAIN_SHA256, False
+    )
+    cases = (
+        ("read", lambda: read_jsonl_objects(path, True)),
+        ("find", lambda: find_jsonl_objects(path, "id", "value", True)),
+        ("since", lambda: read_jsonl_since(path, "fixture-consumer", True)),
+        ("acknowledge", lambda: acknowledge_jsonl(path, "fixture-consumer", batch, True)),
+        ("append", lambda: append_jsonl(path, {"id": "value"}, True)),
+    )
+    # No journal is created, and that is the instrument. Without the guard each read entry point
+    # reaches _verified_descriptor, takes its FileNotFoundError arm and returns empty; append
+    # creates the journal. So an unguarded build is observable from outside the module -- an empty
+    # result, or a file on disk -- and nothing here has to patch the module under test.
+    try:
+        for label, operation in cases:
+            try:
+                result = operation()
+            except JsonlDurabilityError as exc:
+                if "invalid JSONL record-size bound" not in str(exc):
+                    return False, f"{label}: wrong refusal: {exc}"
+            else:
+                return False, f"{label}: bool record bound was accepted, returned {result!r}"
+            if path.exists():
+                return False, f"{label}: refused but the journal was created"
+        return True, "all five public boundaries refused bool without creating the journal"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_record_limit_positive_paths_still_work() -> tuple[bool, str]:
+    """The guard must refuse bad bounds without refusing good ones."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-record-limit-ok-"))
+    path = root / "events.jsonl"
+    try:
+        append_jsonl(path, {"id": "first"})
+        append_jsonl(path, {"id": "second"}, 65536)
+        read_all = read_jsonl_objects(path, 65536)
+        found = find_jsonl_objects(path, "id", "second", 65536)
+        since = read_jsonl_since(path, "fixture-consumer", 65536)
+        return (
+            [entry["id"] for entry in read_all] == ["first", "second"]
+            and [entry["id"] for entry in found] == ["second"]
+            and since is not None
+        ), f"read={len(read_all)} found={len(found)}"
+    except JsonlDurabilityError as exc:
+        return False, f"a valid bound was refused: {exc}"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_hardlinked_journal_is_refused_without_escape() -> tuple[bool, str]:
+    """A journal hardlink must not turn an append into a write outside state/."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-hardlink-"))
+    try:
+        state = root / "state"
+        state.mkdir()
+        outside = root / "outside-target.jsonl"
+        original = b'{"id":"outside-original"}\n'
+        outside.write_bytes(original)
+        journal = state / "events.jsonl"
+        os.link(outside, journal)
+        try:
+            append_jsonl(journal, {"id": "must-not-escape"})
+        except JsonlDurabilityError as exc:
+            refused = True
+            detail = str(exc)
+        except BaseException as exc:  # noqa: BLE001 - raw refusal is a control failure
+            refused = False
+            detail = f"raw {type(exc).__name__}: {exc}"
+        else:
+            refused = False
+            detail = "hardlinked journal append was accepted"
+        unchanged = outside.read_bytes() == original and journal.read_bytes() == original
+        return refused and unchanged, detail
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def _link_directory(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError:
+        if os.name != "nt":
+            raise
+        junction = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            capture_output=True, text=True, check=False,
+        )
+        if junction.returncode != 0:
+            raise AssertionError(f"directory link fixture could not be created: {junction.stderr}")
+
+
+def control_linked_ancestor_is_refused_without_escape() -> tuple[bool, str]:
+    """The journal leaf check must not be the only protection against a linked ancestor."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-ancestor-link-"))
+    try:
+        state = root / "state"
+        state.mkdir()
+        outside = root / "outside"
+        outside.mkdir()
+        linked = state / "linked"
+        _link_directory(linked, outside)
+        try:
+            append_jsonl(linked / "events.jsonl", {"id": "must-not-escape"})
+        except JsonlDurabilityError as exc:
+            detail = str(exc)
+            refused = True
+        except BaseException as exc:  # noqa: BLE001 - raw refusal is a control failure
+            detail = f"raw {type(exc).__name__}: {exc}"
+            refused = False
+        else:
+            detail = "linked ancestor append was accepted"
+            refused = False
+        return refused and not list(outside.iterdir()), detail
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_ancestor_swap_is_refused_at_leaf_window() -> tuple[bool, str]:
+    """A deterministic ancestor swap in the check/open window must be refused."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-ancestor-swap-"))
+    try:
+        state = root / "state"
+        state.mkdir()
+        linked = state / "linked"
+        linked.mkdir()
+        outside = root / "outside"
+        outside.mkdir()
+        old_linked = state / "linked-old"
+        swapped = False
+
+        def swap_ancestor(_path: Path) -> None:
+            nonlocal swapped
+            linked.rename(old_linked)
+            _link_directory(linked, outside)
+            swapped = True
+
+        try:
+            with mock.patch(
+                    "jsonl_durable._before_journal_leaf_open",
+                    side_effect=swap_ancestor) as seam, \
+                    mock.patch("jsonl_durable._open_durable_leaf",
+                               wraps=jsonl_durable._open_durable_leaf) as leaf_open:
+                append_jsonl(linked / "events.jsonl", {"id": "must-not-write"})
+        except JsonlDurabilityError as exc:
+            detail = str(exc)
+            refused = True
+        except BaseException as exc:  # noqa: BLE001 - raw refusal is a control failure
+            detail = f"raw {type(exc).__name__}: {exc}"
+            refused = False
+        else:
+            detail = "ancestor swap was accepted"
+            refused = False
+        return (
+            refused and swapped and seam.call_count == 1 and not leaf_open.called
+            and not list(outside.iterdir())
+        ), detail
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def control_quarantine_persists_before_truncate() -> tuple[bool, str]:
     root = Path(tempfile.mkdtemp(prefix="jsonl-order-"))
     try:
@@ -145,12 +312,27 @@ def control_quarantine_persists_before_truncate() -> tuple[bool, str]:
         path.parent.mkdir(parents=True)
         path.write_bytes(b'{"id":"committed"}\n{"id":"torn"')
         calls: list[str] = []
-        real_fsync_dir = jsonl_durable._fsync_dir
         real_truncate = os.ftruncate
 
-        def record_fsync(directory: Path) -> None:
-            calls.append("fsync:" + directory.relative_to(root).as_posix())
-            real_fsync_dir(directory)
+        if os.name == "nt":
+            real_fsync_dir = jsonl_durable._fsync_dir
+
+            def record_fsync(directory: Path, _descriptor: int | None = None) -> None:
+                calls.append("fsync:" + directory.relative_to(root).as_posix())
+                real_fsync_dir(directory)
+            fsync_patch = mock.patch("jsonl_durable._fsync_dir", side_effect=record_fsync)
+        else:
+            real_fsync = os.fsync
+
+            def record_fsync(descriptor: int) -> None:
+                target = Path(os.readlink(f"/proc/self/fd/{descriptor}"))
+                try:
+                    label = target.relative_to(root).as_posix()
+                except ValueError:
+                    label = "outside:" + target.as_posix()
+                calls.append("fsync:" + label)
+                real_fsync(descriptor)
+            fsync_patch = mock.patch("jsonl_durable.os.fsync", side_effect=record_fsync)
 
         def checked_truncate(descriptor: int, size: int) -> None:
             quarantine = root / "state/jsonl-quarantine"
@@ -159,7 +341,7 @@ def control_quarantine_persists_before_truncate() -> tuple[bool, str]:
             calls.append("truncate")
             real_truncate(descriptor, size)
 
-        with mock.patch("jsonl_durable._fsync_dir", side_effect=record_fsync), \
+        with fsync_patch, \
              mock.patch("jsonl_durable.os.ftruncate", side_effect=checked_truncate):
             append_jsonl(path, {"id": "new"})
         parent_sync = calls.index("fsync:state")
@@ -202,6 +384,98 @@ def control_dedupe_still_repairs_tail() -> tuple[bool, str]:
             not outcome.appended and path.read_bytes() == committed
             and len(payloads) == 1 and payloads[0].read_bytes() == torn
         ), repr(outcome)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_hardlinked_leaves_are_rejected() -> tuple[bool, str]:
+    root = Path(tempfile.mkdtemp(prefix="jsonl-hardlink-"))
+    try:
+        path = root / "inside" / "events.jsonl"
+        outside = root / "outside.jsonl"
+        path.parent.mkdir(parents=True)
+        original = b'{"id":"outside-sentinel"}\n'
+        outside.write_bytes(original)
+        try:
+            path.hardlink_to(outside)
+        except OSError as exc:
+            return False, f"hardlink fixture could not be created: {exc}"
+        try:
+            append_jsonl(path, {"id": "must-not-escape"})
+        except JsonlDurabilityError as exc:
+            return outside.read_bytes() == original and path.read_bytes() == original, str(exc)
+        return False, "a hardlinked journal leaf was accepted"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_refusal_text_has_no_path_or_os_details() -> tuple[bool, str]:
+    """Public append refusals expose a typed reason, never caller paths or host errno text."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-refusal-hygiene-"))
+    try:
+        blocker = root / "state"
+        blocker.write_text("not a directory", encoding="utf-8")
+        try:
+            append_jsonl(blocker / "journal.jsonl", {"id": "must-not-append"})
+        except JsonlDurabilityError as exc:
+            message = str(exc)
+            forbidden = (str(root), "[Errno", "[WinError", "Not a directory")
+            return not any(item in message for item in forbidden), message
+        return False, "a journal below a non-directory parent was accepted"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_hardlink_created_after_open_is_rejected() -> tuple[bool, str]:
+    """A hardlink added after the open-time check must not receive the new record."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-hardlink-race-"))
+    try:
+        path = root / "inside" / "events.jsonl"
+        outside = root / "outside-alias.jsonl"
+        path.parent.mkdir(parents=True)
+        original = b'{"id":"prior"}\n'
+        path.write_bytes(original)
+        armed = True
+
+        def hook(stage: str) -> None:
+            nonlocal armed
+            if armed and stage == "pre-journal-write":
+                armed = False
+                outside.hardlink_to(path)
+
+        try:
+            append_jsonl(path, {"id": "must-not-escape"}, hook=hook)
+        except JsonlDurabilityError as exc:
+            return (
+                not armed and path.read_bytes() == original and outside.read_bytes() == original
+                and b"must-not-escape" not in outside.read_bytes()
+            ), str(exc)
+        finally:
+            outside.unlink(missing_ok=True)
+        return False, "a hardlink created after validation was accepted"
+    except OSError as exc:
+        return False, f"hardlink race fixture could not be created: {exc}"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_hardlinked_index_is_rejected() -> tuple[bool, str]:
+    root = Path(tempfile.mkdtemp(prefix="jsonl-index-hardlink-"))
+    try:
+        path = root / "state/events.jsonl"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b'{"id":"one"}\n')
+        read_jsonl_objects(path)
+        index = next((root / "state/jsonl-index").glob("*.sqlite3"))
+        outside = root / "outside-index.sqlite3"
+        outside.write_bytes(index.read_bytes())
+        index.unlink()
+        index.hardlink_to(outside)
+        try:
+            read_jsonl_objects(path)
+        except JsonlDurabilityError as exc:
+            return outside.read_bytes() == index.read_bytes(), str(exc)
+        return False, "a hardlinked verification index was accepted"
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -249,6 +523,9 @@ def control_index_rebuilds_after_change_or_cache_loss() -> tuple[bool, str]:
         indexes[0].write_bytes(b"not-a-sqlite-database")
         if [row["id"] for row in read_jsonl_objects(path)] != ["one", "two"]:
             return False, "corrupt derived cache did not rebuild from the journal"
+        indexes[0].unlink()
+        if [row["id"] for row in read_jsonl_objects(path)] != ["one", "two"]:
+            return False, "missing derived cache did not rebuild from the journal"
         changed = b'{"id":"one"}\n{"id":xxxxx}\n'
         if len(changed) != len(original):
             return False, "fixture mutation is not size preserving"
@@ -256,7 +533,7 @@ def control_index_rebuilds_after_change_or_cache_loss() -> tuple[bool, str]:
         try:
             read_jsonl_objects(path)
         except JsonlDurabilityError as exc:
-            return "malformed complete JSONL record" in str(exc), str(exc)
+            return "malformed JSONL value" in str(exc), str(exc)
         return False, "same-size journal mutation reused stale verification state"
     finally:
         shutil.rmtree(root, ignore_errors=True)
@@ -281,6 +558,108 @@ def control_interrupted_index_advance_replays_exactly() -> tuple[bool, str]:
                                dedupe_value="event-once")
         rows = read_jsonl_objects(path)
         return not outcome.appended and rows == [{"id": "event-once"}], repr(rows)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_pinned_posix_append_and_finally_preserve_original() -> tuple[bool, str]:
+    """Exercise the descriptor-pinned append path, including its error cleanup."""
+    if os.name == "nt":
+        return True, "POSIX descriptor-pinned append is platform-scoped"
+    if not getattr(os, "supports_dir_fd", None) or not Path("/proc/self/fd").is_dir():
+        return False, "POSIX descriptor-pinned append prerequisites are unavailable"
+
+    root = Path(tempfile.mkdtemp(prefix="jsonl-pinned-posix-"))
+    descriptors: list[int] = []
+    try:
+        cache = root / "cache"
+        cache.mkdir()
+        root_descriptor = os.open(root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        cache_descriptor = os.open(cache, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        descriptors.extend((root_descriptor, cache_descriptor))
+        identity = "phase3/pinned/events.jsonl"
+        first = jsonl_durable.append_jsonl_at(
+            root_descriptor, "events.jsonl", {"id": "pinned"},
+            cache_descriptor, identity, dedupe_field="id", dedupe_value="pinned",
+        )
+        cache_name = jsonl_durable.index_cache_name(identity)
+        jsonl_durable.validate_durable_leaf_at(cache_descriptor, cache_name)
+        duplicate = jsonl_durable.append_jsonl_at(
+            root_descriptor, "events.jsonl", {"id": "pinned"},
+            cache_descriptor, identity, dedupe_field="id", dedupe_value="pinned",
+        )
+        if not first.appended or duplicate.appended \
+                or (root / "events.jsonl").read_bytes() != b'{"id":"pinned"}\n':
+            return False, f"first={first!r} duplicate={duplicate!r}"
+
+        failure_root = root / "failure"
+        failure_cache = failure_root / "cache"
+        failure_cache.mkdir(parents=True)
+        failure_root_descriptor = os.open(
+            failure_root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        )
+        failure_cache_descriptor = os.open(
+            failure_cache, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        )
+        descriptors.extend((failure_root_descriptor, failure_cache_descriptor))
+        original = RuntimeError("original pinned append body failure")
+        with mock.patch.object(jsonl_durable, "_update_index_after_append",
+                               side_effect=original):
+            try:
+                jsonl_durable.append_jsonl_at(
+                    failure_root_descriptor, "events.jsonl", {"id": "failure"},
+                    failure_cache_descriptor, "phase3/pinned/failure.jsonl",
+                )
+            except RuntimeError as exc:
+                if exc is not original:
+                    return False, f"finally replaced original exception with {exc!r}"
+            except BaseException as exc:  # noqa: BLE001 - cleanup masking is the control.
+                return False, f"finally replaced original exception with {type(exc).__name__}: {exc}"
+            else:
+                return False, "the injected append-body failure was swallowed"
+        return True, "pinned append success/dedupe and original body exception survived finally"
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, sqlite3.DatabaseError) as exc:
+        return False, f"pinned append leaked {type(exc).__name__}: {exc}"
+    finally:
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_rebuild_in_place_first_build_and_retention() -> tuple[bool, str]:
+    """Prove first-build, valid-retention, and corrupt-cache rebuild are distinct."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-rebuild-in-place-"))
+    try:
+        path = root / "events.jsonl"
+        first = append_jsonl(path, {"id": "first"}, rebuild_in_place=True)
+        indexes = list((root / "jsonl-index").glob("*.sqlite3"))
+        if not first.appended or len(indexes) != 1:
+            return False, f"first={first!r} index_count={len(indexes)}"
+        index = indexes[0]
+        retained_bytes = index.read_bytes()
+        with mock.patch.object(
+            jsonl_durable, "_rebuild_index_in_place",
+            side_effect=AssertionError("a valid retained cache was rebuilt"),
+        ):
+            duplicate = append_jsonl(
+                path, {"id": "first"}, dedupe_field="id", dedupe_value="first",
+                rebuild_in_place=True,
+            )
+        if duplicate.appended or index.read_bytes() != retained_bytes:
+            return False, f"valid cache was not retained: {duplicate!r}"
+        index.write_bytes(b"not-a-sqlite-cache")
+        rebuilt = append_jsonl(path, {"id": "second"}, rebuild_in_place=True)
+        return (
+            rebuilt.appended and read_jsonl_objects(path) == [{"id": "first"}, {"id": "second"}]
+        ), repr(rebuilt)
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError,
+            UnicodeDecodeError, UnicodeEncodeError, sqlite3.DatabaseError,
+            AssertionError) as exc:
+        return False, f"rebuild-in-place control leaked {type(exc).__name__}: {exc}"
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -351,7 +730,7 @@ def control_runtime_rotation_rejects_malformed() -> tuple[bool, str]:
         return (
             result.returncode != 0 and source.read_bytes() == original and not archives
             and "source event journal is corrupt" in detail
-            and "malformed complete JSONL record" in detail
+            and "malformed JSONL value" in detail
         ), detail
     finally:
         shutil.rmtree(root, ignore_errors=True)
@@ -583,15 +962,35 @@ def main() -> int:
     controls = (
         ("a torn prior tail is quarantined byte-exactly before a complete append", control_torn_tail),
         ("a complete malformed prior record fails closed without mutation", control_complete_malformed_fails_closed),
+        ("all public JSONL entry points reject bool record-size bounds before delegation",
+         control_record_limits_are_checked_at_public_boundaries),
+        ("valid record-size bounds still pass through every guarded entry point",
+         control_record_limit_positive_paths_still_work),
+        ("a hardlinked journal is refused without writing outside the state tree",
+         control_hardlinked_journal_is_refused_without_escape),
+        ("a linked journal ancestor is refused without writing outside the state tree",
+         control_linked_ancestor_is_refused_without_escape),
+        ("a deterministic ancestor swap at leaf open is refused",
+         control_ancestor_swap_is_refused_at_leaf_window),
         ("quarantine directory and evidence persist before journal truncation", control_quarantine_persists_before_truncate),
         ("short writes are retried until the complete record is durable", control_complete_write_loop),
         ("idempotent appends still repair and preserve a torn tail", control_dedupe_still_repairs_tail),
+        ("hardlinked journal leaves are rejected without an outside-root write", control_hardlinked_leaves_are_rejected),
+        ("append refusals do not disclose paths or raw OS errors",
+         control_refusal_text_has_no_path_or_os_details),
+        ("a post-validation hardlink race is refused before journal bytes escape",
+         control_hardlink_created_after_open_is_rejected),
+        ("hardlinked verification-index leaves are rejected", control_hardlinked_index_is_rejected),
         ("an exact verification index makes steady-state append and reads tail-only",
          control_verified_index_avoids_prefix_rescan),
         ("cache loss rebuilds and journal mutation cannot reuse stale verification",
          control_index_rebuilds_after_change_or_cache_loss),
         ("a crash between journal fsync and index advance replays exactly once",
          control_interrupted_index_advance_replays_exactly),
+        ("the POSIX descriptor-pinned append succeeds and preserves its original body exception",
+         control_pinned_posix_append_and_finally_preserve_original),
+        ("rebuild_in_place distinguishes first build, retained cache, and corrupt-cache rebuild",
+         control_rebuild_in_place_first_build_and_retention),
         ("both project event appenders stop on an open repaired-tail mismatch",
          control_project_appenders_fail_closed_on_quarantine),
         ("runtime rotation refuses malformed source events instead of archiving them", control_runtime_rotation_rejects_malformed),

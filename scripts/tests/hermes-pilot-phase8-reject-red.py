@@ -16,6 +16,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from windows_test_support import bash_executable, prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 CONTROLS = [
@@ -28,6 +30,25 @@ CONTROLS = [
 ]
 
 DIGEST = "a" * 64
+
+
+def discover_bash() -> str | None:
+    """Report whether a usable bash exists, using the shared Phase 8 discovery.
+
+    The file-local search this replaced did not exclude Windows' WindowsApps execution alias,
+    which resolves `bash` to the WSL launcher and cannot provide the POSIX utilities these
+    fixtures need. windows_test_support.bash_executable does exclude it, and twelve Phase 8
+    suites already go through it -- so the skip decision and the interpreter the fixtures
+    actually run must come from the same place, or this suite can skip on a bash it would not
+    have used, or run one it should have skipped.
+    """
+    try:
+        return bash_executable()
+    except Exception:  # noqa: BLE001 - unavailability is the answer, not an error
+        return None
+
+
+BASH = discover_bash()
 
 
 def fields(path: Path) -> dict[str, str]:
@@ -50,8 +71,17 @@ class RejectFixture:
         ):
             (self.root / relative).mkdir(parents=True, exist_ok=True)
         for name in (
-            "work.sh", "project-reconcile.py", "transition_receipt.py", "seed_contract.py",
-            "jsonl_durable.py", "runtime-state.py",
+            "assignment.py", "assignment_contract.py", "phase5_safety.py",
+            "assist.sh", "author.sh", "board.sh", "capacity.sh", "conduct.sh",
+            "engine_contract.py", "git-scope.py", "instruction_routing.py", "intake.sh",
+            "jsonl_durable.py", "notify.sh", "pilot_instruction.py", "plan.sh", "project-pilot.py",
+            "project-reconcile.py", "project_authority.py", "provider-connect-proxy.py", "provider_contract.py",
+            "provider-network.sh", "provider-egress.py", "publish.sh", "remote_evidence.py", "resolve-engine.py",
+            "resolve-model-alias.py", "resync.sh", "run_contract.py", "runtime-state.py",
+            "seed_contract.py", "taskctl.sh", "transition_receipt.py",
+            "validate-assignment-result.py", "validate-control-state.py", "validate-decision.py",
+            "validate-gate.py", "validate-verifier-result.py", "validate-worker-result.py",
+            "work.sh", "assignment-token.py", "worker-evidence.py", "worker-sandbox.sh",
         ):
             shutil.copy2(SOURCE / "scripts" / name, self.root / "scripts" / name)
         if os.name == "nt":
@@ -83,6 +113,7 @@ class RejectFixture:
         self.write_goal()
         self.write_task()
         self.env = os.environ.copy()
+        prepare_shell_env(self.env)
         self.env.update({
             "RECURSION_ROOT": str(self.root), "RECURSION_INTAKE_ALLOW": "8913126684",
             "RECURSION_NO_NOTIFY": "1",
@@ -135,9 +166,7 @@ class RejectFixture:
                         "rjct-task", category, DIGEST, env_extra=env_extra)
 
     def bash(self) -> str:
-        if os.name == "nt":
-            return str(Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe")
-        return "bash"
+        return bash_executable()
 
     def task_status(self) -> str:
         return fields(self.root / "state/tasks/rjct-task.md").get("status", "")
@@ -227,6 +256,9 @@ def test_projection_divergence_rejection() -> bool:
 
 
 def main() -> int:
+    if BASH is None:
+        print("SKIP - bash interpreter was not discoverable on PATH or via ProgramFiles/ProgramW6432 (exit 77)")
+        return 77
     tests = [
         test_work_rc_preserved, test_clean_rejection_control, test_pause_rejection,
         test_window_revocation_rejection, test_receipt_io_rejection,

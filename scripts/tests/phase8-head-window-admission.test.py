@@ -13,6 +13,8 @@ import types
 import unittest
 from pathlib import Path
 
+from windows_test_support import bash_command, prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SOURCE / "scripts"))
@@ -41,9 +43,18 @@ class HeadWindowAdmissionTest(unittest.TestCase):
         (self.root / "state/project-config").mkdir(parents=True)
         (self.root / "scripts").mkdir(parents=True)
         for name in (
-            "decision-queue.py", "hermes-decide.sh", "instruction_routing.py",
-            "jsonl_durable.py", "pilot_instruction.py", "transition_receipt.py",
-            "validate-control-state.py", "engine_contract.py",
+            "assignment.py", "assignment_contract.py", "phase5_safety.py",
+            "assist.sh", "author.sh", "board.sh", "branch-review.sh",
+            "capacity.sh", "conduct-hermes.sh", "conduct.sh", "decision-queue.py",
+            "engine_contract.py", "git-scope.py", "hermes-decide.sh", "instruction_routing.py",
+            "intake.sh", "jsonl_durable.py", "notification-outbox.py", "notify.sh",
+            "pilot_instruction.py", "plan.sh", "project-pilot.py", "project-reconcile.py",
+            "project_authority.py", "provider-connect-proxy.py", "provider_contract.py", "provider-network.sh", "provider-egress.py", "publish.sh",
+            "remote_evidence.py", "resolve-engine.py", "resolve-model-alias.py", "resync.sh",
+            "run_contract.py", "runtime-state.py", "seed_contract.py", "taskctl.sh",
+            "transition_receipt.py", "validate-assignment-result.py", "validate-control-state.py",
+            "validate-decision.py", "validate-gate.py", "validate-verifier-result.py",
+            "validate-worker-result.py", "work.sh", "assignment-token.py", "worker-evidence.py", "worker-sandbox.sh",
         ):
             shutil.copy2(SOURCE / "scripts" / name, self.root / "scripts" / name)
         (self.root / "state/PAUSE").write_text("paused for deterministic admission control\n", encoding="utf-8")
@@ -175,7 +186,7 @@ class HeadWindowAdmissionTest(unittest.TestCase):
             encoding="utf-8",
         )
         hermes.chmod(0o755)
-        env = os.environ.copy()
+        env = prepare_shell_env(os.environ.copy())
         env.update({
             "PATH": str(stub_dir) + os.pathsep + env.get("PATH", ""),
             "MODEL_MARKER": str(marker),
@@ -183,7 +194,7 @@ class HeadWindowAdmissionTest(unittest.TestCase):
             "RECURSION_INTAKE_ALLOW": "8913126684",
         })
         run = subprocess.run(
-            ["bash", "scripts/hermes-decide.sh", "--dry-run"],
+            bash_command("scripts/hermes-decide.sh", "--dry-run"),
             cwd=self.root,
             env=env,
             text=True,

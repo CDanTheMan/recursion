@@ -14,6 +14,8 @@ import os
 from pathlib import Path
 from unittest import mock
 
+from windows_test_support import bash_command
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 
@@ -184,19 +186,19 @@ def main() -> int:
             }
             lock = fallback.root / "state/.locks/taskctl.lock"
             lock.mkdir()
-            locked_watch = fallback.run(["bash", "scripts/fallback-watch.sh"], env=fallback_env)
+            locked_watch = fallback.run(bash_command("scripts/fallback-watch.sh"), env=fallback_env)
             locked_usage = json.loads(snapshot.read_text(encoding="utf-8"))["total_usage"]
             lock.rmdir()
             durable_guard = locked_watch.returncode == 73 and locked_usage == 10 and not hermes_log.exists()
 
             (fallback.root / "state/PAUSE").write_text("fallback fixture\n", encoding="utf-8")
-            paused_watch = fallback.run(["bash", "scripts/fallback-watch.sh"], env=fallback_env)
+            paused_watch = fallback.run(bash_command("scripts/fallback-watch.sh"), env=fallback_env)
             paused_usage = json.loads(snapshot.read_text(encoding="utf-8"))["total_usage"]
             escalations = fallback.root / "state/escalations.tsv"
             durable = escalations.is_file() and "fallback-spend:openrouter" in escalations.read_text(encoding="utf-8")
             no_paused_send = not hermes_log.exists()
             (fallback.root / "state/PAUSE").unlink()
-            resumed_watch = fallback.run(["bash", "scripts/fallback-watch.sh"], env=fallback_env)
+            resumed_watch = fallback.run(bash_command("scripts/fallback-watch.sh"), env=fallback_env)
             resumed_usage = json.loads(snapshot.read_text(encoding="utf-8"))["total_usage"]
             calls = hermes_log.read_text(encoding="utf-8").splitlines() if hermes_log.exists() else []
             check(durable_guard and paused_watch.returncode == resumed_watch.returncode == 0 and paused_usage == 10 and

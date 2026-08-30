@@ -343,6 +343,57 @@ def incremental_import_checkpoint_control() -> tuple[bool, str]:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def succeeded_transition_control() -> tuple[bool, str]:
+    root = Path(tempfile.mkdtemp(prefix="decision-succeeded-transition-"))
+    try:
+        queue.validate_record = lambda *_args: None
+        record = queue.normalize(raw(
+            id="decision-succeeded", idempotency_key="succeeded-key"
+        ))
+        running = root / "state/decision-queue/running"
+        actions = root / "state/actions"
+        running.mkdir(parents=True)
+        actions.mkdir(parents=True)
+        projection = running / f"{record['id']}.json"
+        encoded = (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        projection.write_bytes(encoded)
+        action_id = queue.action_id_for_decision(record)
+        action = {
+            "schema_version": 1, "id": action_id, "decision_id": record["id"],
+            "instruction_id": record.get("instruction_id"),
+            "idempotency_key": record["idempotency_key"], "verb": record["verb"],
+            "arguments": record["args"], "goal_id": record["goal_id"],
+            "actor": record["actor"], "project": record.get("project"),
+            "decision_source": record["decision_source"],
+            "routed_decider": record["routed_decider"],
+            "action_payload_sha256": record["decision_payload_sha256"],
+            "status": "succeeded", "attempts": 1,
+        }
+        (actions / f"{action_id}.json").write_text(json.dumps(action) + "\n", encoding="utf-8")
+        target = queue.transition(
+            root, projection, "succeeded", "action succeeded", hashlib.sha256(encoded).hexdigest()
+        )
+        if not target.is_file() or projection.exists():
+            return False, "matching succeeded action did not publish terminal projection"
+
+        denied = queue.normalize(raw(
+            id="decision-actionless", idempotency_key="actionless-key"
+        ))
+        denied_path = running / f"{denied['id']}.json"
+        denied_bytes = (json.dumps(denied, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        denied_path.write_bytes(denied_bytes)
+        try:
+            queue.transition(
+                root, denied_path, "succeeded", "should refuse", hashlib.sha256(denied_bytes).hexdigest()
+            )
+        except ValueError as exc:
+            return ("without its succeeded action" in str(exc) and denied_path.is_file(),
+                    str(exc))
+        return False, "actionless decision reached succeeded"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def main() -> int:
     failures = 0
     for description, control in (
@@ -361,6 +412,8 @@ def main() -> int:
          journal_directory_fsync_control),
         ("decision import validates only its bounded legacy prefix and uncheckpointed tail",
          incremental_import_checkpoint_control),
+        ("queue success requires the matching durable succeeded action",
+         succeeded_transition_control),
     ):
         try:
             passed, detail = control()

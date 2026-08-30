@@ -276,6 +276,18 @@ def case_engine_unknown(tmp: Path, engines: Path) -> None:
           and empty.get("cost_usd") is None, "absent usage record is unreconciled with null numbers")
 
 
+def case_forged_evidence_source(tmp: Path, engines: Path) -> None:
+    runs, ledger = tmp / "runs-forged", tmp / "usage-forged" / "ledger.jsonl"
+    forged = dict(RECEIPT_USAGE, evidence_source="forged-provider-telemetry")
+    write_json(runs / "r-forged.json", evidence("r-forged", "implementer", "opencode-flex", forged))
+    result = run_tool(["ingest", "--runs-dir", str(runs), "--ledger", str(ledger)], engines)
+    check(result.returncode == 0, f"forged-source ingest exits 0 (got {result.returncode})")
+    rows = ledger_rows(ledger)
+    check(len(rows) == 1 and rows[0].get("cost_basis") == "unreconciled"
+          and rows[0].get("tokens") is None and rows[0].get("cost_usd") is None,
+          "an unknown evidence_source is ungrounded rather than classified as a receipt")
+
+
 def case_shipped_manifests(tmp: Path) -> None:
     """The mapping must resolve against the manifests actually shipped in scripts/engines."""
     runs, ledger = tmp / "runs3", tmp / "usage3" / "ledger.jsonl"
@@ -517,6 +529,7 @@ def main() -> int:
 
         case_ingest(tmp, engines)
         case_engine_unknown(tmp, engines)
+        case_forged_evidence_source(tmp, engines)
         case_shipped_manifests(tmp)
         case_rollup(tmp, engines)
         case_rollup_empty(tmp, engines)
