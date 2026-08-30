@@ -153,24 +153,43 @@ def control_record_limits_are_checked_at_public_boundaries() -> tuple[bool, str]
         ("acknowledge", lambda: acknowledge_jsonl(path, "fixture-consumer", batch, True)),
         ("append", lambda: append_jsonl(path, {"id": "value"}, True)),
     )
+    # No journal is created, and that is the instrument. Without the guard each read entry point
+    # reaches _verified_descriptor, takes its FileNotFoundError arm and returns empty; append
+    # creates the journal. So an unguarded build is observable from outside the module -- an empty
+    # result, or a file on disk -- and nothing here has to patch the module under test.
     try:
         for label, operation in cases:
-            with mock.patch.object(
-                    jsonl_durable, "_verified_descriptor",
-                    side_effect=AssertionError(f"{label} delegated before limit validation")), \
-                 mock.patch.object(
-                     jsonl_durable, "_append_jsonl_unpinned",
-                     side_effect=AssertionError("append delegated before limit validation")):
-                try:
-                    operation()
-                except JsonlDurabilityError as exc:
-                    if "invalid JSONL record-size bound" not in str(exc):
-                        return False, f"{label}: wrong refusal: {exc}"
-                except AssertionError as exc:
-                    return False, f"{label}: {exc}"
-                else:
-                    return False, f"{label}: bool record bound was accepted"
-        return True, "all five public boundaries refused bool before delegation"
+            try:
+                result = operation()
+            except JsonlDurabilityError as exc:
+                if "invalid JSONL record-size bound" not in str(exc):
+                    return False, f"{label}: wrong refusal: {exc}"
+            else:
+                return False, f"{label}: bool record bound was accepted, returned {result!r}"
+            if path.exists():
+                return False, f"{label}: refused but the journal was created"
+        return True, "all five public boundaries refused bool without creating the journal"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def control_record_limit_positive_paths_still_work() -> tuple[bool, str]:
+    """The guard must refuse bad bounds without refusing good ones."""
+    root = Path(tempfile.mkdtemp(prefix="jsonl-record-limit-ok-"))
+    path = root / "events.jsonl"
+    try:
+        append_jsonl(path, {"id": "first"})
+        append_jsonl(path, {"id": "second"}, 65536)
+        read_all = read_jsonl_objects(path, 65536)
+        found = find_jsonl_objects(path, "id", "second", 65536)
+        since = read_jsonl_since(path, "fixture-consumer", 65536)
+        return (
+            [entry["id"] for entry in read_all] == ["first", "second"]
+            and [entry["id"] for entry in found] == ["second"]
+            and since is not None
+        ), f"read={len(read_all)} found={len(found)}"
+    except JsonlDurabilityError as exc:
+        return False, f"a valid bound was refused: {exc}"
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -945,6 +964,8 @@ def main() -> int:
         ("a complete malformed prior record fails closed without mutation", control_complete_malformed_fails_closed),
         ("all public JSONL entry points reject bool record-size bounds before delegation",
          control_record_limits_are_checked_at_public_boundaries),
+        ("valid record-size bounds still pass through every guarded entry point",
+         control_record_limit_positive_paths_still_work),
         ("a hardlinked journal is refused without writing outside the state tree",
          control_hardlinked_journal_is_refused_without_escape),
         ("a linked journal ancestor is refused without writing outside the state tree",
