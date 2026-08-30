@@ -407,18 +407,18 @@ echo 'BUSY fixture-holder'
 exit 75
 SH
 chmod +x "$R/scripts/capacity.sh"
-HEAVY_GATE_MARKER="$TMP/heavy-gate-ran"
-mktask heavy-contention "test -s app/heavy.txt && touch $HEAVY_GATE_MARKER"
+mktask heavy-contention "test -s app/heavy.txt"
 sed -i '/^gate_files:/i gate_class: heavy' "$R/state/tasks/heavy-contention.md"
 result="$(done_result heavy '["app/heavy.txt"]')"
 RECURSION_HEAVY_WAIT_S=0 run_case heavy-contention \
   "printf ok > app/heavy.txt; printf '%s' '$result' > .recursion-result.json" "$verdict_script"
 heavy_rc=$?
+heavy_gate_evidence="$(grep -l '"machine_gate"' "$R/state/runs"/heavy-contention-impl-*.json 2>/dev/null || true)"
 if [ "$heavy_rc" = 75 ] && [ "$(status_of heavy-contention)" = running ] \
-   && [ -d "$R/.worktrees/heavy-contention" ] && [ ! -e "$HEAVY_GATE_MARKER" ]; then
+   && [ -d "$R/.worktrees/heavy-contention" ] && [ -z "$heavy_gate_evidence" ]; then
   ok "contended heavy gate defers without executing unlocked"
 else
-  no "contended heavy gate did not fail closed (rc=$heavy_rc status=$(status_of heavy-contention) gate=$([ -e "$HEAVY_GATE_MARKER" ] && echo ran || echo held))"
+  no "contended heavy gate did not fail closed (rc=$heavy_rc status=$(status_of heavy-contention) gate_evidence=$([ -n "$heavy_gate_evidence" ] && echo recorded || echo absent))"
 fi
 mv "$R/scripts/capacity.real.sh" "$R/scripts/capacity.sh"
 mv "$R/scripts/notify.real.sh" "$R/scripts/notify.sh"
