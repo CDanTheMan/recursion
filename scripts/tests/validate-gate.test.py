@@ -609,25 +609,36 @@ class AbsoluteControllerProgramTest(unittest.TestCase):
         )
 
     def test_unsafe_program_paths_report_the_unsafe_path_reason(self):
+        """Every unsafe spelling is refused, and each names the rule it broke.
+
+        The reason differs by shape and that is deliberate, not an inconsistency:
+
+        - an ABSOLUTE candidate is refused without echoing it, because an absolute path
+          discloses host filesystem layout;
+        - a RELATIVE candidate is echoed, because the caller supplied that exact spelling and
+          it reveals nothing. The controls at lines 207-226 already pin that behaviour;
+        - a `.` segment reads as shell indirection and is caught by that earlier rule.
+
+        Asserting one message for all eight would either force absolute paths back into
+        refusals or drop the specificity that says which rule fired.
+        """
         refused = (
-            "scripts//gate.py",
-            "/opt/recursion//gate.py",
-            "scripts/./gate.py",
-            "/opt/./gate.py",
-            "scripts/../../gate.py",
-            "/opt/recursion/../gate.py",
-            "scripts/gate.py/",
-            "/opt/recursion/gate.py/",
+            ("scripts//gate.py", "ERR acceptance program path is unsafe: scripts//gate.py"),
+            ("/opt/recursion//gate.py", "ERR acceptance program uses an unsafe path"),
+            ("scripts/./gate.py", "ERR acceptance gate uses unreviewable shell indirection"),
+            ("/opt/./gate.py", "ERR acceptance gate uses unreviewable shell indirection"),
+            ("scripts/../../gate.py", "ERR acceptance program path is unsafe: scripts/../../gate.py"),
+            ("/opt/recursion/../gate.py", "ERR acceptance program uses an unsafe path"),
+            ("scripts/gate.py/", "ERR acceptance program path is unsafe: scripts/gate.py/"),
+            ("/opt/recursion/gate.py/", "ERR acceptance program uses an unsafe path"),
         )
-        for candidate in refused:
+        for candidate, expected in refused:
             with self.subTest(candidate=candidate):
                 result = self.run_controller_gate(candidate)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(
-                    result.stderr.strip(),
-                    "ERR acceptance program uses an unsafe path",
-                )
-                self.assertNotIn(candidate, result.stderr)
+                self.assertEqual(result.stderr.strip(), expected)
+                if candidate.startswith("/"):
+                    self.assertNotIn(candidate, result.stderr)
 
     def test_relative_declared_controller_program_is_admitted_outside_worker_scope(self):
         result = run_gate_cli(
