@@ -270,7 +270,11 @@ def control_quarantine_persists_before_truncate() -> tuple[bool, str]:
 
             def record_fsync(descriptor: int) -> None:
                 target = Path(os.readlink(f"/proc/self/fd/{descriptor}"))
-                calls.append("fsync:" + target.relative_to(root).as_posix())
+                try:
+                    label = target.relative_to(root).as_posix()
+                except ValueError:
+                    label = "outside:" + target.as_posix()
+                calls.append("fsync:" + label)
                 real_fsync(descriptor)
             fsync_patch = mock.patch("jsonl_durable.os.fsync", side_effect=record_fsync)
 

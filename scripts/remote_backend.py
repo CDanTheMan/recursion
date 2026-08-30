@@ -78,6 +78,15 @@ from remote_assignment import (  # noqa: F401  (re-exported for the adapters)
     validate_secret_ref,
 )
 
+
+class _NonStandardJsonConstant(ValueError):
+    """Internal parser failure for a JSON constant outside the standard grammar."""
+
+
+def reject_json_constant(_constant: str) -> object:
+    """Reject the JavaScript-style non-finite values that standard JSON forbids."""
+    raise _NonStandardJsonConstant("non-standard JSON constant")
+
 PROG = "remote-backend"
 SCHEMA_VERSION = 1
 
@@ -658,7 +667,7 @@ def load_manifest(path: Path, name: str) -> dict:
             RecursionError):
         raise _bad(f"could not read manifest {name}") from None
     try:
-        data = json.loads(raw)
+        data = json.loads(raw, parse_constant=reject_json_constant)
     except (json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError):
         raise _bad(f"manifest {name} is not valid JSON") from None
     return validate_manifest(data, name)
@@ -727,7 +736,8 @@ class TransportResponse:
 
     def json(self) -> dict:
         try:
-            value = json.loads(self.body.decode("utf-8"))
+            value = json.loads(self.body.decode("utf-8"),
+                               parse_constant=reject_json_constant)
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError,
                 OverflowError, RecursionError):
             raise RemoteError("malformed-response",
@@ -1549,13 +1559,14 @@ def _read_runtime_json(parent: _PinnedDirectory, path: Path, malformed_message: 
     try:
         descriptor, _info = _open_runtime_leaf(parent, path, flags, expected=expected)
         with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
-            value = json.load(handle)
+            value = json.load(handle, parse_constant=reject_json_constant)
             _verify_runtime_leaf(parent, path.name, handle.fileno())
         parent.verify()
         return value
     except RemoteError:
         raise
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError,
+            _NonStandardJsonConstant, RecursionError):
         raise RemoteError("malformed-response", malformed_message) from None
 
 

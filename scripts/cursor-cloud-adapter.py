@@ -82,6 +82,7 @@ from remote_backend import (
     outbound_admission,
     read_session,
     reconcile_attempt,
+    reject_json_constant,
     remote_state_lock,
     resolve_backend,
     resolve_secret,
@@ -128,6 +129,7 @@ VENDOR_STATE_MAP = {
     "ERROR": "failed", "FAILED": "failed", "EXPIRED": "failed",
 }
 ARTIFACT_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._~-]*\Z")
+RUN_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._~-]*\Z")
 
 
 def diag(message: str) -> None:
@@ -149,6 +151,13 @@ def validate_artifact_id(value: object, *, code: str) -> str:
     """Accept only one unreserved URL path segment from the provider."""
     if not isinstance(value, str) or not ARTIFACT_ID_RE.fullmatch(value):
         raise RemoteError(code, "artifact id must be a single safe URL path segment")
+    return value
+
+
+def validate_run_id(value: object, *, code: str) -> str:
+    """Accept only one provider-supplied, unreserved URL path segment."""
+    if not isinstance(value, str) or not RUN_ID_RE.fullmatch(value):
+        raise RemoteError(code, "provider run id must be a single safe URL path segment")
     return value
 
 
@@ -394,10 +403,7 @@ class CursorCloudAdapter:
                 # An ambiguous create intentionally remains OPEN.  Recovery/reconciliation
                 # must establish whether the provider accepted it before any retry.
                 raise
-            run_id = payload.get("id")
-            if not isinstance(run_id, str) or not run_id.strip():
-                error = RemoteError("malformed-response", "create response carries no run id")
-                raise error
+            run_id = validate_run_id(payload.get("id"), code="malformed-response")
             record = {
                 "schema_version": SCHEMA_VERSION,
                 "kind": "cursor-cloud-session",
@@ -480,7 +486,7 @@ class CursorCloudAdapter:
                 if text == "[DONE]":
                     return
                 try:
-                    event = json.loads(text)
+                    event = json.loads(text, parse_constant=reject_json_constant)
                 except (json.JSONDecodeError, ValueError, TypeError, RecursionError):
                     raise RemoteError("malformed-response",
                                       "stream carried a line that is not JSON") from None

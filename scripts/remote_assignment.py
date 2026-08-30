@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -122,7 +123,7 @@ def canonical_bytes(value: object) -> bytes:
     key order must still produce the same assignment_digest, or idempotency is a lie.
     """
     return json.dumps(value, sort_keys=True, separators=(",", ":"),
-                      ensure_ascii=False).encode("utf-8")
+                      ensure_ascii=False, allow_nan=False).encode("utf-8")
 
 
 def canonical_digest(value: object) -> str:
@@ -370,9 +371,13 @@ def validate_https_url(value: object, field: str, *, require_path: bool = False,
         raise RemoteError(code, f"{field} contains a control character")
     try:
         parts = urlsplit(value)
+        # Accessing .port is part of validation: urlsplit defers malformed port text and
+        # out-of-range values until this property is evaluated.
+        parts.port
     except ValueError:
         # urlsplit raises for malformed authority syntax (for example an unmatched
-        # IPv6 bracket).  Parser details are not part of the boundary contract.
+        # IPv6 bracket), while .port raises for malformed or out-of-range port text.
+        # Parser details are not part of the boundary contract.
         raise RemoteError(code, f"{field} is not a well-formed https URL") from None
     if parts.scheme != "https":
         raise RemoteError(code,
@@ -380,8 +385,18 @@ def validate_https_url(value: object, field: str, *, require_path: bool = False,
                           "ssh and scp-style remotes imply a key on the remote host")
     if "@" in parts.netloc:
         raise RemoteError(code, f"{field} carries userinfo in its authority; that is a credential")
+    if "[" in parts.netloc or "]" in parts.netloc:
+        bracketed = parts.netloc.startswith("[")
+        balanced = parts.netloc.count("[") == 1 and parts.netloc.count("]") == 1
+        closing = parts.netloc.find("]")
+        suffix = parts.netloc[closing + 1:] if closing >= 0 else ""
+        if not bracketed or not balanced or closing <= 1 \
+                or (suffix and not suffix.startswith(":")):
+            raise RemoteError(code, f"{field} is not a well-formed https URL")
     if not parts.hostname:
         raise RemoteError(code, f"{field} must name a host")
+    if parts.netloc.endswith(":"):
+        raise RemoteError(code, f"{field} is not a well-formed https URL")
     if parts.fragment or (parts.query and not allow_query):
         raise RemoteError(code, f"{field} must not carry a query string or fragment")
     if require_path and not parts.path.strip("/"):
@@ -483,6 +498,8 @@ def validate_assignment(value: object) -> dict:
                     raise _invalid(f"model_parameters.{key} must be a string, number or "
                                    "boolean; nested structures are not part of the digest "
                                    "contract")
+                if isinstance(item, float) and not math.isfinite(item):
+                    raise _invalid(f"model_parameters.{key} must be a finite number")
             normalised[field] = dict(raw)
         elif field == "network_profile":
             if not isinstance(raw, str) or (raw and not SLUG_RE.fullmatch(raw)):
