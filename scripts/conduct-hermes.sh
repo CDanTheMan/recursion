@@ -29,7 +29,7 @@ RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
 # Native Python witnesses Win32 PIDs. Git Bash's $$ is an MSYS PID, so use the mapped Win32
 # process identity when Git Bash exposes it; on Linux /proc/$$/winpid is absent and $$ is already
 # the native PID. The same owner value must be used for acquire and release.
-_CONDUCT_OWNER_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"
+OWNER_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"
 
 FILE=""; DRY=0; PAUSED_SAFE=0; RECOVER_ONLY=0; NON_WORK_ONLY=0; WORK_ONLY=0
 CLI_ERROR=0
@@ -858,7 +858,7 @@ ACTION_LOCK=""; ACTION_LOCK_HELD=0; ACTION_FILE=""; ACTION_ID=""
 ACTION_CLAIMED=0; ACTION_TERMINAL=0; INSTRUCTION_CONSUMED=0
 action_unlock(){
   [ "$ACTION_LOCK_HELD" = 1 ] || return 0
-  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ACTION_LOCK" "$_CONDUCT_OWNER_PID" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$ACTION_LOCK" "$OWNER_PID" \
     >/dev/null 2>&1 || return 74
   ACTION_LOCK_HELD=0
 }
@@ -868,7 +868,7 @@ action_lock(){
   ACTION_LOCK="$ROOT/state/.locks/action-$ACTION_ID.lock"
   [ -x "$ROOT/scripts/runtime-state.py" ] \
     || { log "witnessed action lock helper is absent"; return 73; }
-  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ACTION_LOCK" "$_CONDUCT_OWNER_PID" \
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$ACTION_LOCK" "$OWNER_PID" \
     >/dev/null 2>&1 \
     || { log "action lock contended; refusing duplicate/unlocked dispatch"; return 73; }
   ACTION_LOCK_HELD=1
