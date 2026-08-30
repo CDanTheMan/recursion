@@ -96,6 +96,7 @@ PROG = "cursor-cloud-adapter"
 SCHEMA_VERSION = 1
 BACKEND_KIND = "cursor-cloud"
 EVIDENCE_SOURCE = "cursor-cloud-api-v0"
+LOCK_CONTENTION = "remote-state lock is contended; refusing an unlocked mutation"
 
 # The only value this module will ever write into a verification_state field. There is no
 # branch, no flag and no vendor payload that produces "verified" here; that word belongs to
@@ -134,6 +135,12 @@ RUN_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._~-]*\Z")
 
 def diag(message: str) -> None:
     print(f"{PROG}: {message}", file=sys.stderr)
+
+
+def lock_contention_error(exc: RuntimeError) -> RemoteError:
+    if str(exc) != LOCK_CONTENTION:
+        raise exc
+    return RemoteError("lease-unavailable", str(exc))
 
 
 def map_vendor_state(raw: object) -> str:
@@ -991,6 +998,10 @@ def main() -> int:
     except RemoteError as exc:
         diag(str(exc))
         return exc.exit_code
+    except RuntimeError as exc:
+        error = lock_contention_error(exc)
+        diag(str(error))
+        return error.exit_code
     print(json.dumps(result, indent=2, sort_keys=True))
     return EXIT_OK
 

@@ -35,6 +35,34 @@ def witness(lock: Path, pid: int) -> None:
     (lock / "start").write_text(f"{start}\n", encoding="ascii")
 
 
+def contended_pause_defers_without_a_traceback(parent: Path) -> str | None:
+    """A held remote-state lock must defer the PAUSE writer, not leak a RuntimeError.
+
+    remote-pause.py identifies contention by an exact copy of a message runtime-state.py builds
+    from an f-string, and only then converts it to a typed lease-unavailable (DEFER, exit 75).
+    Reword the f-string, rename the label, or drop the handler, and it silently goes back to
+    exiting 1 with a stack trace. This runs the production CLI against a genuinely held lock, so
+    it fails on any of those three rather than on a source-text match.
+    """
+    root = parent / "contended"
+    (root / "state/.locks").mkdir(parents=True)
+    witness(root / "state/.locks/remote-state.lock", os.getpid())
+    result = subprocess.run(
+        [sys.executable, str(SOURCE / "scripts/remote-pause.py"), "set",
+         "--base", str(root), "--reason=contention control"],
+        env={**os.environ, "RECURSION_LOCK_ATTEMPTS": "1", "RECURSION_LOCK_DELAY_S": "0"},
+        text=True, capture_output=True, check=False,
+    )
+    combined = result.stdout + result.stderr
+    if "Traceback" in combined:
+        return f"contended PAUSE leaked a traceback (rc={result.returncode})"
+    if result.returncode != 75:
+        return f"contended PAUSE exited {result.returncode}, expected 75 (DEFER)"
+    if (root / "state/PAUSE").exists():
+        return "contended PAUSE wrote state/PAUSE anyway"
+    return None
+
+
 def main() -> int:
     if os.name == "nt" or fcntl is None:
         print("runtime-state-locks: SKIP (Linux production control)")
@@ -43,6 +71,12 @@ def main() -> int:
     root = parent / "runtime"
     snapshot = parent / "snapshot"
     try:
+        drift = contended_pause_defers_without_a_traceback(parent)
+        if drift is not None:
+            print(f"FAIL  {drift}")
+            return 1
+        print("ok    a contended remote-state lock defers the PAUSE writer with exit 75")
+
         (root / "state/.locks").mkdir(parents=True)
         (root / "state/PAUSE").write_text("test pause\n", encoding="utf-8")
         (root / "state/decisions.jsonl").write_text('{"id":"one"}\n', encoding="utf-8")

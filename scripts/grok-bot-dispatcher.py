@@ -82,6 +82,7 @@ SCHEMA_VERSION = 1
 BACKEND_KIND = "grok-routine"
 ENVELOPE_KIND = "recursion-grok-routine-assignment"
 SIGNATURE_VERSION = "v1"
+LOCK_CONTENTION = "remote-state lock is contended; refusing an unlocked mutation"
 
 # Supervisory roles only. Implementation on a shared computer stays exceptional and is not
 # expressible here: there is no "implementer" role in this list, deliberately.
@@ -136,6 +137,12 @@ def imperative_keys(value: object, path: str = "proposal") -> list[str]:
 
 def diag(message: str) -> None:
     print(f"{PROG}: {message}", file=sys.stderr)
+
+
+def lock_contention_error(exc: RuntimeError) -> RemoteError:
+    if str(exc) != LOCK_CONTENTION:
+        raise exc
+    return RemoteError("lease-unavailable", str(exc))
 
 
 def validate_role(role: object) -> str:
@@ -547,6 +554,10 @@ def main() -> int:
     except RemoteError as exc:
         diag(str(exc))
         return exc.exit_code
+    except RuntimeError as exc:
+        error = lock_contention_error(exc)
+        diag(str(error))
+        return error.exit_code
     print(json.dumps(result, indent=2, sort_keys=True))
     return EXIT_OK
 

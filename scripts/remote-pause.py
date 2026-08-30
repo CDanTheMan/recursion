@@ -14,6 +14,8 @@ from pathlib import Path
 
 import remote_backend as rb
 
+_LOCK_CONTENTION = "remote-state lock is contended; refusing an unlocked mutation"
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -40,3 +42,9 @@ if __name__ == "__main__":
     except rb.RemoteError as exc:
         print(str(exc), flush=True)
         raise SystemExit(exc.exit_code)
+    except RuntimeError as exc:
+        if str(exc) != _LOCK_CONTENTION:
+            raise
+        error = rb.RemoteError("lease-unavailable", str(exc))
+        print(str(error), flush=True)
+        raise SystemExit(error.exit_code) from exc

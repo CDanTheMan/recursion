@@ -527,18 +527,20 @@ def pause_transfer(root: Path):
     ``remote-pause.py``.  Keeping it across the PAUSE check and the external transfer gives
     backup, resume, and the adapters one linearization point without a second lock/order.
     """
-    try:
-        with rb.remote_state_lock(root, "pause-control"):
-            pause = root / "state/PAUSE"
-            try:
-                pause_info = pause.lstat()
-            except OSError as exc:
-                raise BackupPolicyError("PAUSE admission is unavailable") from exc
-            if _is_reparse(pause_info) or not stat.S_ISREG(pause_info.st_mode):
-                raise BackupPolicyError("PAUSE admission is absent; refusing external transfer")
-            yield
-    except (RuntimeError, rb.RemoteError) as exc:
-        raise BackupPolicyError("PAUSE transfer admission failed") from exc
+    with contextlib.ExitStack() as stack:
+        try:
+            stack.enter_context(rb.remote_state_lock(root, "pause-control"))
+        except (RuntimeError, rb.RemoteError) as exc:
+            raise BackupPolicyError("PAUSE transfer admission failed") from exc
+
+        pause = root / "state/PAUSE"
+        try:
+            pause_info = pause.lstat()
+        except OSError as exc:
+            raise BackupPolicyError("PAUSE admission is unavailable") from exc
+        if _is_reparse(pause_info) or not stat.S_ISREG(pause_info.st_mode):
+            raise BackupPolicyError("PAUSE admission is absent; refusing external transfer")
+        yield
 
 
 def _run(argv: list[str], *, input_bytes: bytes | None = None,
