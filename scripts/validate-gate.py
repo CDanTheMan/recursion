@@ -184,7 +184,7 @@ def entrypoint(words: list[str], strict: bool) -> str | None:
     if name not in {"bash", "sh", "python", "python3", "node"}:
         if strict and "/" not in command:
             fail(f"bare acceptance launcher is not admitted: {name}")
-        return PurePosixPath(command).as_posix() if "/" in command else None
+        return command if "/" in command else None
     for word in words[1:]:
         if word in {"-c", "-e", "--eval", "-m"}:
             if strict:
@@ -194,7 +194,10 @@ def entrypoint(words: list[str], strict: bool) -> str | None:
             if strict:
                 fail(f"option-bearing {name} acceptance programs are not admitted: {word}")
             continue
-        return PurePosixPath(word.replace("\\", "/")).as_posix()
+        # Keep the lexical spelling for the path safety check below.  PurePosixPath.as_posix()
+        # would erase the empty, dot, and parent segments that the check must reject.
+        candidate = word.replace("\\", "/")
+        return candidate or "."
     fail(f"{name} acceptance has no explicit grading program")
 
 
@@ -321,9 +324,12 @@ def main() -> int:
             candidate = entrypoint(words, args.strict_direct)
             if candidate:
                 candidate_path = PurePosixPath(candidate)
-                if any(part in {"", ".", ".."} for part in candidate.split("/")):
+                candidate_parts = candidate.split("/")
+                if candidate_path.is_absolute():
+                    candidate_parts = candidate_parts[1:]
+                if any(part in {"", ".", ".."} for part in candidate_parts):
                     fail(f"acceptance program uses an unsafe path: {candidate}")
-            if candidate and PurePosixPath(candidate).is_absolute():
+            if candidate and candidate_path.is_absolute():
                 if controller_root is None:
                     fail("absolute acceptance program lacks a controller root")
                 try:
