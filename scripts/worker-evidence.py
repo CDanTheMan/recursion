@@ -24,6 +24,7 @@ class WorkerEvidenceError(Exception):
 
 _atomic_publish_hook = None
 MAX_INPUT_BYTES = 8 * 1024 * 1024
+NANOSECONDS = 1_000_000_000
 
 RUN_STATUSES = frozenset({
     "pending", "prepared", "running", "succeeded", "failed", "blocked", "cancelled", "stale",
@@ -37,9 +38,21 @@ def now() -> str:
 def validate_run_evidence(value: object) -> dict:
     """Apply the control-plane run schema at every worker state boundary."""
     try:
-        return validate_run(value)
+        checked = validate_run(value)
     except RunContractError as exc:
         raise WorkerEvidenceError(str(exc)) from None
+    for key in ("deadline_epoch_ns", "worker_finished_epoch_ns"):
+        if key in checked:
+            item = checked[key]
+            if isinstance(item, bool) or not isinstance(item, int) or item < 0:
+                raise WorkerEvidenceError(f"run evidence {key} is not a nonnegative integer")
+    deadline_epoch = checked.get("deadline_epoch")
+    if "deadline_epoch_ns" in checked and "deadline_epoch" in checked:
+        if isinstance(deadline_epoch, bool) or not isinstance(deadline_epoch, int):
+            raise WorkerEvidenceError("run evidence deadline_epoch is not an integer")
+        if checked["deadline_epoch_ns"] // NANOSECONDS != deadline_epoch:
+            raise WorkerEvidenceError("run evidence precise deadline disagrees with deadline_epoch")
+    return checked
 
 
 def iso(epoch: int) -> str:
@@ -197,6 +210,7 @@ def _main() -> int:
     start.add_argument("--pid", required=True, type=int)
     start.add_argument("--process-group", required=True, type=int)
     start.add_argument("--deadline-epoch", required=True, type=int)
+    start.add_argument("--deadline-epoch-ns", type=int, default=None)
     start.add_argument("--implementer-run-id", default="")
     start.add_argument("--commit-oid", default="")
     start.add_argument("--seed-evidence", default="")
@@ -214,6 +228,7 @@ def _main() -> int:
                  "log", "network_policy"):
         prepare.add_argument(f"--{name.replace('_', '-')}", required=True)
     prepare.add_argument("--deadline-epoch", required=True, type=int)
+    prepare.add_argument("--deadline-epoch-ns", type=int, default=None)
     prepare.add_argument("--implementer-run-id", default="")
     prepare.add_argument("--commit-oid", default="")
     prepare.add_argument("--seed-evidence", default="")
@@ -222,6 +237,8 @@ def _main() -> int:
     prepare.add_argument("--attempt", type=int, default=None)
     activate = sub.add_parser("activate")
     activate.add_argument("path"); activate.add_argument("pid", type=int); activate.add_argument("process_group", type=int)
+    mark_finished = sub.add_parser("mark-finished")
+    mark_finished.add_argument("path"); mark_finished.add_argument("finished_epoch_ns", type=int)
     heartbeat = sub.add_parser("heartbeat"); heartbeat.add_argument("path"); heartbeat.add_argument("lease_epoch", type=int)
     finish = sub.add_parser("finish"); finish.add_argument("path"); finish.add_argument("status")
     finish.add_argument("outcome"); finish.add_argument("exit_code", type=int)
@@ -260,6 +277,8 @@ def _main() -> int:
                  "deadline_epoch": args.deadline_epoch, "network_policy": args.network_policy,
                  "heartbeat_at": now(), "log": args.log, "usage": {}, "result": {},
                  "changed_files": [], "status": "running", "started_at": now()}
+        if args.deadline_epoch_ns is not None:
+            value["deadline_epoch_ns"] = args.deadline_epoch_ns
         if args.implementer_run_id:
             value["implementer_run_id"] = args.implementer_run_id
         if args.commit_oid:
@@ -288,6 +307,8 @@ def _main() -> int:
                  "heartbeat_at": now(), "log": args.log, "usage": {}, "result": {},
                  "changed_files": [], "status": "prepared", "started_at": now(),
                  "assignment": copy_assignment(assignment)}
+        if args.deadline_epoch_ns is not None:
+            value["deadline_epoch_ns"] = args.deadline_epoch_ns
         value.update(copy_assignment(assignment))
         if args.attempt is not None:
             if args.attempt < 1: raise SystemExit(2)
@@ -304,6 +325,14 @@ def _main() -> int:
         value = load(path)
         if value.get("status") != "prepared": raise SystemExit(2)
         value.update(pid=args.pid, process_group=args.process_group, status="running", started_at=now())
+        atomic(path, value); return 0
+
+    if args.command == "mark-finished":
+        value = load(path)
+        if args.finished_epoch_ns < 0 or value.get("status") != "running":
+            raise SystemExit(2)
+        value["worker_finished_epoch_ns"] = args.finished_epoch_ns
+        validate_run_evidence(value)
         atomic(path, value); return 0
 
     if args.command == "remote-evidence":

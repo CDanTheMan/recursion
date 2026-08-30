@@ -12,7 +12,8 @@ gate ("fail closed on late, duplicate, mismatched, or unauthorized results"):
   0  accepted — the result is bound to its assignment, on time, once, and in scope
   2  mismatched — the assignment record is missing/unreadable, tampered (its own content no
      longer hashes to its filename), or the run evidence names a different assignment digest
-  3  late — received after the run's own recorded deadline
+  3  late — the supervised worker completed after its own recorded deadline; later controller
+     work (commit, verification, and final admission) is not part of that interval
   4  duplicate — this exact run_id was already accepted once (durably recorded)
   5  unauthorized — the returned repository/branch/paths are outside what was assigned, or the
      branch is a protected default-branch name (D-016 invariant #6: no worker writes default
@@ -37,6 +38,7 @@ from run_contract import RunContractError, validate_run  # noqa: E402
 
 PROG = "validate-assignment-result"
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+NANOSECONDS = 1_000_000_000
 PROTECTED_BRANCHES = frozenset({"main", "master", "recursion/integration"})
 SHA_RE = assignment_mod.SHA_RE
 MAX_INPUT_BYTES = 8 * 1024 * 1024
@@ -55,6 +57,10 @@ def diag(message: str) -> None:
 
 def now_epoch() -> int:
     return int(time.time())
+
+
+def now_epoch_ns() -> int:
+    return time.time_ns()
 
 
 def _epoch_of(text: object) -> int | None:
@@ -175,11 +181,52 @@ def _check_locked(args: argparse.Namespace) -> dict:
         if "deadline" in evidence and _epoch_of(evidence.get("deadline")) != deadline_epoch:
             raise RefusalError(2, "run evidence deadline and deadline_epoch disagree")
 
+    deadline_epoch_ns = evidence.get("deadline_epoch_ns")
+    if "deadline_epoch_ns" in evidence:
+        if isinstance(deadline_epoch_ns, bool) or not isinstance(deadline_epoch_ns, int) or deadline_epoch_ns < 0:
+            raise RefusalError(2, "run evidence deadline_epoch_ns is not a nonnegative integer")
+        if isinstance(evidence.get("deadline_epoch"), int) \
+                and not isinstance(evidence.get("deadline_epoch"), bool) \
+                and deadline_epoch_ns // NANOSECONDS != evidence["deadline_epoch"]:
+            raise RefusalError(2, "run evidence precise deadline disagrees with deadline_epoch")
+
+    worker_finished_epoch_ns = evidence.get("worker_finished_epoch_ns")
+    if "worker_finished_epoch_ns" in evidence:
+        if (isinstance(worker_finished_epoch_ns, bool)
+                or not isinstance(worker_finished_epoch_ns, int)
+                or worker_finished_epoch_ns < 0):
+            raise RefusalError(2, "run evidence worker_finished_epoch_ns is not a nonnegative integer")
+
     deadline_epoch = evidence.get("deadline_epoch")
-    if isinstance(deadline_epoch, int) and not isinstance(deadline_epoch, bool):
-        received_epoch = _epoch_of(args.received_at) if args.received_at else now_epoch()
-        if received_epoch is None:
-            raise RefusalError(2, f"invalid --received-at {args.received_at!r}")
+    # A strict arm records its completion before the controller performs scope/gate/commit/
+    # verifier work. Validate that worker interval here; using now_epoch() would measure the
+    # end-to-end controller pipeline and reject a worker that completed within its arm budget.
+    if deadline_epoch_ns is not None:
+        if args.received_at:
+            received_epoch = _epoch_of(args.received_at)
+            if received_epoch is None:
+                raise RefusalError(2, f"invalid --received-at {args.received_at!r}")
+            received_epoch_ns = received_epoch * NANOSECONDS
+        elif worker_finished_epoch_ns is not None:
+            received_epoch_ns = worker_finished_epoch_ns
+        else:
+            received_epoch_ns = now_epoch_ns()
+
+        boundary_ns = deadline_epoch_ns
+        if received_epoch_ns > boundary_ns:
+            raise RefusalError(
+                3,
+                f"worker finished at {received_epoch_ns} is past the run deadline {boundary_ns}",
+            )
+    elif isinstance(deadline_epoch, int) and not isinstance(deadline_epoch, bool):
+        if args.received_at:
+            received_epoch = _epoch_of(args.received_at)
+            if received_epoch is None:
+                raise RefusalError(2, f"invalid --received-at {args.received_at!r}")
+        elif worker_finished_epoch_ns is not None:
+            received_epoch = worker_finished_epoch_ns // NANOSECONDS
+        else:
+            received_epoch = now_epoch()
         if received_epoch > deadline_epoch:
             raise RefusalError(3, f"result received at {received_epoch} is past the run deadline {deadline_epoch}")
 

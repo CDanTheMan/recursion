@@ -1092,9 +1092,13 @@ PY
   done
 
   pause_checkpoint "worker launch" || return 75
-  local worker_pgid rc now_epoch deadline_epoch heartbeat_epoch log_path
+  local worker_pgid rc now_epoch now_epoch_ns deadline_epoch deadline_epoch_ns heartbeat_epoch log_path
   log_path="$ARMLOG"; [ "$role" != verifier ] || log_path="$ROOT/loop/logs/$DATE-verifier-$ID-$STAMP.out"
-  deadline_epoch="$(( $(date +%s) + deadline_s ))"; heartbeat_epoch=0
+  # The deadline bounds this supervised worker arm, from launch admission through process
+  # completion. Keep the precise boundary in evidence; the whole-second field remains a
+  # compatibility projection for older readers.
+  deadline_epoch_ns="$(( $(date +%s%N) + deadline_s * 1000000000 ))"
+  deadline_epoch="$(( deadline_epoch_ns / 1000000000 ))"; heartbeat_epoch=0
   LAST_RUN_ID="$run_id"; LAST_RUN_EVIDENCE="$ROOT/state/runs/$run_id.json"
   if [ "$STRICT_PHASE5" = 1 ]; then
     mkdir -p "$ROOT/state/runs"
@@ -1139,7 +1143,8 @@ PY
     python3 "$ROOT/scripts/worker-evidence.py" prepare --path "$LAST_RUN_EVIDENCE" --run-id "$run_id" \
       --task-id "$ID" --role "$role" --model-alias "$alias" --worktree "$wt" \
       --base-commit "$BASE_COMMIT" \
-      --deadline-epoch "$deadline_epoch" --log "${log_path#$ROOT/}" --network-policy "$NETWORK_POLICY" \
+      --deadline-epoch "$deadline_epoch" --deadline-epoch-ns "$deadline_epoch_ns" \
+      --log "${log_path#$ROOT/}" --network-policy "$NETWORK_POLICY" \
       ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} \
       ${implementer_run:+--implementer-run-id "$implementer_run"} ${commit_oid:+--commit-oid "$commit_oid"} \
       --attempt "$LEASE_ATTEMPT" \
@@ -1166,8 +1171,9 @@ PY
       log "$role process group $worker_pgid terminated before gates/publication"
       return 75
     fi
-    now_epoch="$(date +%s)"
-    if [ "$STRICT_PHASE5" = 1 ] && [ "$now_epoch" -ge "$deadline_epoch" ]; then
+    now_epoch_ns="$(date +%s%N)"
+    now_epoch="$(( now_epoch_ns / 1000000000 ))"
+    if [ "$STRICT_PHASE5" = 1 ] && [ "$now_epoch_ns" -ge "$deadline_epoch_ns" ]; then
       local terminate_rc=0
       log "$role deadline expired; terminating process group $worker_pgid"
       terminate_worker_group "$worker_pgid" || terminate_rc=$?
@@ -1203,6 +1209,10 @@ PY
     sleep 0.1
   done
   if wait "$worker_pgid"; then rc=0; else rc=$?; fi
+  if [ "$STRICT_PHASE5" = 1 ] && [ -f "$LAST_RUN_EVIDENCE" ]; then
+    python3 "$ROOT/scripts/worker-evidence.py" mark-finished "$LAST_RUN_EVIDENCE" "$(date +%s%N)" \
+      >>"$LOG" 2>&1 || return 98
+  fi
   return "$rc"
 }
 
