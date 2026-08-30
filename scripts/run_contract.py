@@ -27,6 +27,16 @@ MAX_NESTING = 32
 MAX_CONTAINER_ITEMS = 10000
 MAX_STRING_BYTES = 1 << 20
 
+# Complete projection required whenever a run claims an immutable assignment. Keep this list
+# next to the conditional so producers cannot silently drift from the runtime contract.
+ASSIGNMENT_ATTRIBUTION_FIELDS = (
+    "project_id", "engine", "provider", "capacity_pool", "billing_basis",
+    "metered_approved", "host", "model", "sandbox_profile", "network_profile",
+    "source_repository", "source_branch", "source_sha", "source_evidence",
+    "allowed_paths", "publication_policy", "default_branch", "integration_branch",
+    "assignment",
+)
+
 
 class RunContractError(ValueError):
     """A run record is not accepted by the control-plane v1 runtime contract."""
@@ -179,14 +189,7 @@ def validate_run(value: object) -> dict[str, Any]:
             raise RunContractError("run evidence active process_group must be positive")
 
     if "assignment_digest" in value:
-        conditional = {
-            "project_id", "engine", "provider", "capacity_pool", "billing_basis",
-            "metered_approved", "host", "model", "sandbox_profile", "network_profile",
-            "source_repository", "source_branch", "source_sha", "source_evidence",
-            "allowed_paths", "publication_policy", "default_branch", "integration_branch",
-            "assignment",
-        }
-        if not conditional <= value.keys():
+        if not set(ASSIGNMENT_ATTRIBUTION_FIELDS) <= value.keys():
             raise RunContractError("assignment-bound run evidence is missing attribution fields")
     return value
 

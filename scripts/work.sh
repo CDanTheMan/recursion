@@ -1411,7 +1411,7 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
   local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
   local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
   local evidence_dir="${11:-}" readonly="${12:-0}" arm_attempt="${13:-}" engine_plan=""
-  local provider="" plan_network_policy=""
+  local provider="" billing_basis="" plan_network_policy="" metered_approved=0
   local assignment_token="" assignment_identity="" cancel_signal=TERM cancel_grace=5
   # Cross-engine verification (D-015): each role runs on its own contract engine.
   local active_engine="$ENGINE"
@@ -1435,8 +1435,8 @@ PY
     ) || return 95
   fi
   case "$active_engine" in
-    claude) provider="anthropic-claude-code" ;;
-    hermes) provider="hermes" ;;
+    claude) provider="anthropic-claude-code"; billing_basis="flat-subscription" ;;
+    hermes) provider="hermes"; billing_basis="metered" ;;
     *) provider="$(python3 - "$engine_plan" <<'PY'
 import json,sys
 try:
@@ -1444,8 +1444,17 @@ try:
 except Exception:
     raise SystemExit(1)
 PY
+  )" || return 95
+       billing_basis="$(python3 - "$engine_plan" <<'PY'
+import json,sys
+try:
+    print(json.load(open(sys.argv[1], encoding="utf-8"))["billing"]["basis"])
+except Exception:
+    raise SystemExit(1)
+PY
   )" || return 95 ;;
   esac
+  [ "$billing_basis" != metered ] || metered_approved=1
 
   issue_builtin_capability "$role" "$active_engine" || return $?
   [ "$active_engine" != hermes ] || [ "${RECURSION_ALLOW_METERED:-0}" = "1" ] || return 93
@@ -1545,10 +1554,15 @@ PY
     [ -f "$ASSIGNMENT_FILE" ] || { log "persisted assignment file is absent before worker evidence"; return 98; }
     python3 "$ROOT/scripts/worker-evidence.py" provision-key --controller-root "$ROOT" \
       >>"$LOG" 2>&1 || { log "controller could not provision the fixed evidence key"; return 98; }
+    # The strict assignment supplies the immutable role/shared projection.  The current Phase 5
+    # envelope does not carry billing_basis, metered_approved, or the two branch-policy fields;
+    # pass those already-validated controller facts at the same immutable start boundary.
     evidence_meta=(--engine "$active_engine" --provider "$provider" --capacity-pool "$CAPACITY_POOL"
       --model "$resolved_model" --host "${RECURSION_HOST_ID:-gs-recursion}"
-      --sandbox-profile strict-linux --assignment-digest "$ASSIGNMENT_DIGEST"
-      --assignment-file "$ASSIGNMENT_FILE")
+      --sandbox-profile strict-linux --billing-basis "$billing_basis"
+      --default-branch "$DEFAULT_BRANCH" --integration-branch "$INTEGRATION_BRANCH"
+      --assignment-digest "$ASSIGNMENT_DIGEST" --assignment-file "$ASSIGNMENT_FILE")
+    [ "$metered_approved" = 1 ] && evidence_meta+=(--metered-approved)
   fi
   if [ "$role" = verifier ]; then assignment_token="$ENGINE_TOKEN_VERIFIER"; assignment_identity="$ENGINE_ASSIGNMENT_VERIFIER";
   else assignment_token="$ENGINE_TOKEN_IMPLEMENTER"; assignment_identity="$ENGINE_ASSIGNMENT_IMPLEMENTER"; fi
@@ -1568,7 +1582,6 @@ PY
       ${SEED_EVIDENCE_FILE:+--seed-evidence "$SEED_EVIDENCE_FILE"} \
       ${implementer_run:+--implementer-run-id "$implementer_run"} ${commit_oid:+--commit-oid "$commit_oid"} \
       --attempt "$LEASE_ATTEMPT" \
-      --assignment-digest "$ASSIGNMENT_DIGEST" --assignment-file "$ASSIGNMENT_FILE" \
       >>"$LOG" 2>&1 || { terminate_worker_group "$worker_pgid" "$cancel_signal" "$cancel_grace" || return 96; wait "$worker_pgid" 2>/dev/null || true; return 98; }
   fi
   while kill -0 "$worker_pgid" 2>/dev/null; do

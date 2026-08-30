@@ -18,7 +18,7 @@ import assignment as assignment_mod
 from jsonl_durable import (
     JsonlDurabilityError, atomic_bytes, read_durable_bytes,
 )
-from run_contract import RunContractError, validate_run
+from run_contract import ASSIGNMENT_ATTRIBUTION_FIELDS, RunContractError, validate_run
 
 
 class WorkerEvidenceError(Exception):
@@ -63,7 +63,7 @@ except Exception as exc:
 START_EVIDENCE_KIND = "worker-evidence-start-v1"
 START_FIELDS = {
     "schema_version", "kind", "run_id", "task_id", "role", "evidence_path",
-    "assignment_file", "assignment_digest", "assignment", "worktree",
+    "assignment_file", "assignment_digest", "assignment", "attribution", "worktree",
 }
 
 
@@ -234,6 +234,18 @@ def load_start_evidence(path: Path) -> dict:
         assignment = validate_assignment_for_sidecar(embedded)
         if value["assignment_digest"] != hashlib.sha256(canonical_bytes(assignment)).hexdigest():
             raise ValueError("immutable start evidence assignment digest is invalid")
+        supplied_attribution = value["attribution"]
+        if not isinstance(supplied_attribution, dict):
+            raise ValueError("immutable start evidence attribution is invalid")
+        expected_attribution = assignment_attribution(
+            assignment, value["role"],
+            billing_basis=supplied_attribution.get("billing_basis", ""),
+            metered_approved=supplied_attribution.get("metered_approved"),
+            default_branch=supplied_attribution.get("default_branch", ""),
+            integration_branch=supplied_attribution.get("integration_branch", ""),
+        )
+        if not assignment_mod.type_aware_equal(supplied_attribution, expected_attribution):
+            raise ValueError("immutable start evidence attribution is inconsistent")
         key = load_evidence_key(assignment["controller_repository"])
         supplied = value.pop("binding_hmac_sha256")
         expected = _binding_mac(value, key)
@@ -342,6 +354,78 @@ def copy_assignment(value: dict) -> dict:
     return assignment_mod.assignment_projection(value)
 
 
+def assignment_attribution(assignment: dict, role: str, *, billing_basis: str = "",
+                           metered_approved: bool | None = None, default_branch: str = "",
+                           integration_branch: str = "") -> dict:
+    """Project one role's complete attribution from the immutable Phase 5 assignment.
+
+    Phase 5 stores role-dependent execution facts under ``role_assignments`` and shared source,
+    scope, and publication facts at the assignment top level. Five fields in the older run
+    evidence projection are not part of the current Phase 5 envelope, so the controller supplies
+    those already-resolved policy facts at the start boundary (billing_basis, metered_approved,
+    default_branch, and integration_branch); source_evidence is rebuilt from the contract's
+    validated source tuple. An absent fact is a refusal rather than a guessed value.
+    """
+    try:
+        roles = assignment.get("role_assignments")
+        role_spec = roles.get(role) if isinstance(roles, dict) else None
+        if not isinstance(role_spec, dict):
+            # Keep the Phase 3 assignment-native shape usable for its existing callers.
+            role_spec = assignment
+
+        source_evidence = assignment.get("source_evidence")
+        if source_evidence is None:
+            source_evidence = {
+                "repository": assignment["source_repository"],
+                "branch": assignment["source_branch"],
+                "sha": assignment["source_sha"],
+                "verified": True,
+            }
+        basis = assignment.get("billing_basis", billing_basis)
+        approved = assignment.get("metered_approved", metered_approved)
+        attribution = {
+            "project_id": assignment["project_id"],
+            "engine": role_spec["engine"],
+            "provider": role_spec["provider"],
+            "capacity_pool": assignment["capacity_pool"],
+            "billing_basis": basis,
+            "metered_approved": approved,
+            "host": assignment["host"],
+            "model": role_spec["model"],
+            "sandbox_profile": assignment["sandbox_profile"],
+            "network_profile": role_spec["network_profile"],
+            "source_repository": assignment["source_repository"],
+            "source_branch": assignment["source_branch"],
+            "source_sha": assignment["source_sha"],
+            "source_evidence": source_evidence,
+            "allowed_paths": assignment["allowed_paths"],
+            "publication_policy": assignment["publication_policy"],
+            "default_branch": assignment.get("default_branch", default_branch),
+            "integration_branch": assignment.get("integration_branch", integration_branch),
+            "assignment": assignment,
+            # The runtime schema does not require network_policy in the attribution conditional,
+            # but it is role-specific and must follow the same immutable source.
+            "network_policy": role_spec["network_policy"],
+        }
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise WorkerEvidenceError("strict assignment cannot provide complete attribution") from exc
+
+    missing = [field for field in ASSIGNMENT_ATTRIBUTION_FIELDS
+               if field not in attribution or (
+                   field not in {"capacity_pool", "model", "billing_basis"}
+                   and attribution[field] is None
+               )]
+    if missing:
+        raise WorkerEvidenceError(
+            "strict assignment cannot provide attribution: " + ", ".join(missing)
+        )
+    if not isinstance(attribution["metered_approved"], bool):
+        raise WorkerEvidenceError("strict assignment cannot provide metered approval status")
+    if attribution["billing_basis"] == "metered" and attribution["metered_approved"] is not True:
+        raise WorkerEvidenceError("strict assignment does not approve metered usage")
+    return attribution
+
+
 def validate_usage(usage: object, assignment: dict | None) -> None:
     if not isinstance(usage, dict):
         raise WorkerEvidenceError("usage evidence must be an object")
@@ -393,6 +477,10 @@ def _main() -> int:
     start.add_argument("--model", default="")
     start.add_argument("--host", default="")
     start.add_argument("--sandbox-profile", default="")
+    start.add_argument("--billing-basis", default="")
+    start.add_argument("--metered-approved", action="store_true", default=False)
+    start.add_argument("--default-branch", default="")
+    start.add_argument("--integration-branch", default="")
     # Phase 3 (D-016): bind this run to its immutable pre-launch assignment so engine/
     # provider/pool/host/model attribution is read directly off the run record instead of
     # being reconstructed later from a mutable task header (docs/audits/
@@ -489,7 +577,15 @@ def _main() -> int:
                 expected = role_spec.get(field, assignment.get(field, ""))
                 if supplied and expected and supplied != expected:
                     raise SystemExit(f"worker-evidence: assignment {field} mismatch")
-            value["assignment"] = assignment
+            if args.network_policy != role_spec.get("network_policy", assignment.get("network_policy")):
+                raise SystemExit("worker-evidence: assignment network policy mismatch")
+            attribution = assignment_attribution(
+                assignment, args.role, billing_basis=args.billing_basis,
+                metered_approved=args.metered_approved,
+                default_branch=args.default_branch,
+                integration_branch=args.integration_branch,
+            )
+            value.update(attribution)
             value["assignment_digest"] = computed
             value["assignment_file"] = str(assignment_path)
         binding = {
@@ -499,9 +595,8 @@ def _main() -> int:
             "worktree": value["worktree"],
             "assignment_file": value["assignment_file"],
             "assignment_digest": value["assignment_digest"], "assignment": value["assignment"],
+            "attribution": attribution,
         }
-        key = load_evidence_key(value["assignment"]["controller_repository"])
-        write_start_evidence(start_evidence_path(path), binding, key)
         seed = maybe_json(args.seed_evidence)
         if isinstance(seed, dict) and seed:
             value["seed_evidence"] = seed
@@ -509,6 +604,8 @@ def _main() -> int:
             if args.attempt < 1: raise SystemExit(2)
             value["attempt"] = args.attempt
         validate_run_evidence(value)
+        key = load_evidence_key(value["assignment"]["controller_repository"])
+        write_start_evidence(start_evidence_path(path), binding, key)
         atomic(path, value); return 0
 
     if args.command == "prepare":
@@ -592,6 +689,7 @@ def _main() -> int:
     value["assignment_file"] = start_binding["assignment_file"]
     value["assignment_digest"] = start_binding["assignment_digest"]
     value["assignment"] = assignment
+    value.update(start_binding["attribution"])
     if args.command == "heartbeat":
         if args.lease_epoch < 0:
             raise WorkerEvidenceError("invalid heartbeat lease epoch")
