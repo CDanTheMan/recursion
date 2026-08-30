@@ -78,6 +78,59 @@
           }
         }
       ]
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"profile": {"const": "anthropic"}}}}},
+      "then": {"properties": {
+        "billing": {"properties": {"provider": {"const": "anthropic-claude-code"}}},
+        "env_passthrough": {"items": {"enum": [
+          "ANTHROPIC_API_KEY", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
+        ]}}
+      }}
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"profile": {"const": "cursor"}}}}},
+      "then": {"properties": {
+        "billing": {"properties": {"provider": {"const": "cursor"}}},
+        "env_passthrough": {"maxItems": 0}
+      }}
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"profile": {"const": "gemini"}}}}},
+      "then": {"properties": {
+        "billing": {"properties": {"provider": {"const": "google-gemini"}}},
+        "env_passthrough": {"items": {"enum": ["GEMINI_API_KEY"]}
+      }}}
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"profile": {"const": "openrouter"}}}}},
+      "then": {"properties": {
+        "billing": {"properties": {"provider": {"const": "openrouter-via-opencode"}}},
+        "env_passthrough": {"items": {"enum": ["OPENROUTER_API_KEY"]}
+      }}}
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"profile": {"const": "sentry-local"}}}}},
+      "then": {"properties": {
+        "billing": {"properties": {"basis": {"const": "local"}, "provider": {"const": "sentry-local"}}},
+        "env_passthrough": {"maxItems": 0},
+        "network": {
+          "properties": {"policy": {"const": "none"}, "endpoints": {"maxItems": 0}}
+        }
+      }}
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"policy": {"const": "provider-only"}}}}},
+      "then": {"properties": {"network": {"properties": {"endpoints": {"minItems": 1}}}}}
+    },
+    {
+      "if": {"properties": {"network": {"properties": {"policy": {"const": "none"}}}}},
+      "then": {"properties": {
+        "billing": {"properties": {"basis": {"const": "local"}, "provider": {"const": "sentry-local"}}},
+        "network": {"properties": {
+          "profile": {"const": "sentry-local"}, "endpoints": {"maxItems": 0}
+        }}
+      }}
     }
   ],
   "properties": {
@@ -145,7 +198,6 @@
         },
         "argv_suffix": {
           "type": "array",
-          "uniqueItems": true,
           "items": {
             "anyOf": [
               {
@@ -651,60 +703,5 @@
         }
       ]
     }
-  },
-  "allOf": [
-    {
-      "if": {"properties": {"network": {"properties": {"profile": {"const": "anthropic"}}}}},
-      "then": {"properties": {
-        "billing": {"properties": {"provider": {"const": "anthropic-claude-code"}}},
-        "env_passthrough": {"items": {"enum": [
-          "ANTHROPIC_API_KEY", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
-        ]}}
-      }}
-    },
-    {
-      "if": {"properties": {"network": {"properties": {"profile": {"const": "cursor"}}}}},
-      "then": {"properties": {
-        "billing": {"properties": {"provider": {"const": "cursor"}}},
-        "env_passthrough": {"maxItems": 0}
-      }}
-    },
-    {
-      "if": {"properties": {"network": {"properties": {"profile": {"const": "gemini"}}}}},
-      "then": {"properties": {
-        "billing": {"properties": {"provider": {"const": "google-gemini"}}},
-        "env_passthrough": {"items": {"enum": ["GEMINI_API_KEY"]}
-      }}}
-    },
-    {
-      "if": {"properties": {"network": {"properties": {"profile": {"const": "openrouter"}}}}},
-      "then": {"properties": {
-        "billing": {"properties": {"provider": {"const": "openrouter-via-opencode"}}},
-        "env_passthrough": {"items": {"enum": ["OPENROUTER_API_KEY"]}
-      }}}
-    },
-    {
-      "if": {"properties": {"network": {"properties": {"profile": {"const": "sentry-local"}}}}},
-      "then": {"properties": {
-        "billing": {"properties": {"basis": {"const": "local"}, "provider": {"const": "sentry-local"}}},
-        "env_passthrough": {"maxItems": 0},
-        "network": {
-          "properties": {"policy": {"const": "none"}, "endpoints": {"maxItems": 0}}
-        }
-      }}
-    },
-    {
-      "if": {"properties": {"network": {"properties": {"policy": {"const": "provider-only"}}}}},
-      "then": {"properties": {"network": {"properties": {"endpoints": {"minItems": 1}}}}}
-    },
-    {
-      "if": {"properties": {"network": {"properties": {"policy": {"const": "none"}}}}},
-      "then": {"properties": {
-        "billing": {"properties": {"basis": {"const": "local"}, "provider": {"const": "sentry-local"}}},
-        "network": {"properties": {
-          "profile": {"const": "sentry-local"}, "endpoints": {"maxItems": 0}
-        }}
-      }}
-    }
-  ]
+  }
 }

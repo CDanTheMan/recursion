@@ -311,27 +311,18 @@ def load_runs(root: Path) -> tuple[list[RunRecord], int, int, bool]:
                     root / "state" / "assignments", task_id, assignment_digest,
                 )
                 if persisted is None:
-                    if direct_engine is None:
-                        skipped += 1
-                        continue
-                else:
-                    try:
-                        assignment_mod.validate_assignment(persisted, require_source_evidence=True)
-                    except assignment_mod.AssignmentError:
-                        if direct_engine is None:
-                            skipped += 1
-                            continue
-                    else:
-                        direct_engine = persisted["engine"]
-                        attribution = {key: persisted.get(key) for key in (
-                            "assignment_digest", "capacity_pool", "provider", "host", "model",
-                            "sandbox_profile", "source_repository", "source_branch", "source_sha")}
+                    skipped += 1
+                    continue
+                try:
+                    assignment_mod.validate_assignment(persisted, require_source_evidence=True)
+                except assignment_mod.AssignmentError:
+                    skipped += 1
+                    continue
+                direct_engine = persisted["engine"]
+                attribution = {key: persisted.get(key) for key in (
+                    "assignment_digest", "capacity_pool", "provider", "host", "model",
+                    "sandbox_profile", "source_repository", "source_branch", "source_sha")}
         engine = direct_engine
-        if assignment_digest and not attribution and direct_engine is not None:
-            attribution = {key: record.get(key) for key in (
-                "assignment_digest", "capacity_pool", "provider", "host", "model",
-                "sandbox_profile", "source_repository", "source_branch", "source_sha")
-                           if key in record}
         runs.append(RunRecord(run_id, task_id, role, alias, status, outcome, started, finished,
                               engine, assignment_digest, attribution))
         parsed += 1

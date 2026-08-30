@@ -44,6 +44,7 @@ import time
 from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import assignment_contract  # noqa: E402  (shared strict assignment identifier grammar)
 import engine_contract  # noqa: E402  (shared engine/alias contract helpers, D-015)
 import jsonl_durable  # noqa: E402  (pinned assignment index transaction)
 
@@ -255,7 +256,8 @@ def _validate_capacity_pool_policy(data: object, pool_id: str) -> dict:
     if not isinstance(policy, dict) or policy.keys() != CAPACITY_POLICY_POOL_KEYS:
         raise AssignmentError("capacity-pool policy entry is invalid")
     normalized = {"schema_version": 1, "id": pool_id}
-    for field, pattern in (("providers", PROVIDER_RE), ("hosts", None), ("sandbox_profiles", None)):
+    for field, pattern in (("providers", PROVIDER_RE), ("hosts", assignment_contract.ID_RE),
+                           ("sandbox_profiles", None)):
         values = policy.get(field)
         if not isinstance(values, list) or not values:
             raise AssignmentError(f"capacity-pool policy {field} must be a nonempty unique list")
@@ -263,8 +265,10 @@ def _validate_capacity_pool_policy(data: object, pool_id: str) -> dict:
             raise AssignmentError(f"capacity-pool policy {field} entries must be nonempty strings")
         if len(set(values)) != len(values):
             raise AssignmentError(f"capacity-pool policy {field} must be a nonempty unique list")
-        if pattern is not None and any(not pattern.fullmatch(item) for item in values):
+        if field == "providers" and any(not pattern.fullmatch(item) for item in values):
             raise AssignmentError("capacity-pool policy providers must be lowercase-kebab strings")
+        if field == "hosts" and any(not pattern.fullmatch(item) for item in values):
+            raise AssignmentError("capacity-pool policy hosts must use strict assignment identifiers")
         if field == "sandbox_profiles" and any(item not in SANDBOX_PROFILES for item in values):
             raise AssignmentError("capacity-pool policy sandbox_profiles contains an unsupported profile")
         normalized[field] = list(values)
