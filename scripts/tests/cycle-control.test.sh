@@ -168,7 +168,7 @@ fi
 # --- cycle.sh: one date, one owner, and no lock inherited by background continuations --------
 C="$TMP/cycle-root"
 mkdir -p "$C/scripts" "$C/loop/supervisor" "$C/loop/logs" "$C/state/tasks" "$C/state/.locks"
-for s in assignment.py assist.sh author.sh board.sh capacity.sh conduct.sh cycle.sh digest.sh engine_contract.py \
+for s in assignment.py assignment_contract.py phase5_safety.py assist.sh author.sh board.sh capacity.sh conduct.sh cycle.sh digest.sh engine_contract.py \
   git-scope.py instruction_routing.py intake.sh jsonl_durable.py notify.sh pilot_instruction.py plan.sh \
   board-summary.sh \
   project-pilot.py project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py \

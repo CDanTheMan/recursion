@@ -31,7 +31,7 @@ BIN="$TMP/bin"; mkdir -p "$BIN"
 R="$TMP/root"; mkdir -p "$R/scripts" "$R/state"
 cp "$SRC/scripts/notify.sh" "$R/scripts/"
 cp "$SRC/scripts/topics.sh" "$R/scripts/" 2>/dev/null || true
-for s in assignment.py assist.sh author.sh board.sh capacity.sh conduct.sh engine_contract.py git-scope.py \
+for s in assignment.py assignment_contract.py phase5_safety.py assist.sh author.sh board.sh capacity.sh conduct.sh engine_contract.py git-scope.py \
   instruction_routing.py intake.sh jsonl_durable.py pilot_instruction.py plan.sh project-pilot.py \
   project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py publish.sh \
   remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \

@@ -51,7 +51,7 @@ R="$TMP/root"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/state/assists" \
 # makes every routing call raise ModuleNotFoundError, intake ingests nothing, and the refusal
 # tests below all pass vacuously while the ★ CONTROL is the only thing that goes red. Anything
 # added to the staged modules' imports has to be added here too.
-for s in assignment.py assist.sh author.sh board.sh capacity.sh conduct.sh engine_contract.py git-scope.py \
+for s in assignment.py assignment_contract.py phase5_safety.py assist.sh author.sh board.sh capacity.sh conduct.sh engine_contract.py git-scope.py \
          instruction_routing.py intake.sh jsonl_durable.py notify.sh pilot_instruction.py plan.sh project-pilot.py \
          project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py publish.sh \
          remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
