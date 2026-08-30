@@ -9,9 +9,9 @@ ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 stage_controller_closure(){
   local root="$1"
-  for helper in assignment.py assist.sh author.sh board.sh branch-review.sh capacity.sh conduct-hermes.sh conduct.sh \
+  for helper in assignment.py assignment_contract.py assist.sh author.sh board.sh branch-review.sh capacity.sh conduct-hermes.sh conduct.sh \
       decision-queue.py engine_contract.py git-scope.py hermes-decide.sh instruction_routing.py intake.sh \
-      jsonl_durable.py notification-outbox.py notify.sh pilot_instruction.py plan.sh project-pilot.py \
+      jsonl_durable.py notification-outbox.py notify.sh phase5_safety.py pilot_instruction.py plan.sh project-pilot.py \
       project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py publish.sh \
       remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
       seed_contract.py taskctl.sh transition_receipt.py validate-assignment-result.py validate-control-state.py \
