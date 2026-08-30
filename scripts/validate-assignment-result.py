@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Bind a returned run result to its exact persisted assignment, fail closed (Phase 3).
+"""Bind a returned run result to its exact persisted assignment, fail closed (Phases 3 and 5).
+
+The optional ``--assignment-file`` selects the immutable Phase 5 contract.  Without it, the
+validator retains the legacy Phase 3 task-id/digest lookup.
 
 Generalizes the existing exact-commit binding already enforced elsewhere in the pipeline
 (validate-verifier-result.py's --commit/--implementer-run check; work.sh's
@@ -26,12 +29,14 @@ from __future__ import annotations
 import argparse
 import calendar
 import json
+import os
 import sys
 import time
 from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import assignment as assignment_mod  # noqa: E402
+import assignment_contract as contract_mod  # noqa: E402
 from jsonl_durable import (JsonlDurabilityError, append_jsonl, durable_lock,
                            find_jsonl_objects, read_durable_bytes)  # noqa: E402
 from run_contract import RunContractError, validate_run  # noqa: E402
@@ -116,8 +121,34 @@ def load_run_evidence(path: str) -> dict:
     return value
 
 
-def _check_locked(args: argparse.Namespace) -> dict:
-    root = Path(args.assignment_root) if args.assignment_root else assignment_mod.DEFAULT_STATE_ROOT
+def load_assignment_for_result(args: argparse.Namespace, root: Path) -> tuple[dict, bool]:
+    """Load exactly the authority selected by the caller.
+
+    Phase 5 passes its immutable contract explicitly because it is not persisted in the
+    legacy task-id/digest directory.  An explicit path is authoritative: absence or
+    corruption is a refusal and never triggers a lookup in the legacy layout.  Calls that
+    do not supply a path retain the Phase 3 assignment loader and schema.
+    """
+    if args.assignment_file:
+        try:
+            candidate = Path(args.assignment_file)
+            if not candidate.exists():
+                raise RefusalError(
+                    6,
+                    f"no authoritative assignment on record for task_id={args.task_id} digest={args.assignment_digest}",
+                )
+            value, computed = contract_mod.load_assignment(candidate)
+        except RefusalError:
+            raise
+        except (contract_mod.AssignmentError, OSError, TypeError, ValueError,
+                OverflowError, RecursionError, UnicodeDecodeError):
+            raise RefusalError(2, "authoritative assignment is invalid or unreadable") from None
+        if value.get("task_id") != args.task_id:
+            raise RefusalError(2, "authoritative assignment task_id does not match the requested task")
+        if computed != args.assignment_digest:
+            raise RefusalError(2, "authoritative assignment failed its digest check")
+        return value, True
+
     value = assignment_mod.load_assignment(root, args.task_id, args.assignment_digest)
     if value is None:
         raise RefusalError(6, f"no assignment on record for task_id={args.task_id} digest={args.assignment_digest}")
@@ -127,6 +158,96 @@ def _check_locked(args: argparse.Namespace) -> dict:
         raise RefusalError(2, f"persisted assignment is invalid or tampered: {exc}") from exc
     if value.get("assignment_digest") != args.assignment_digest:
         raise RefusalError(2, "persisted assignment failed its own digest check (tampered)")
+    return value, False
+
+
+def strict_assignment_projection(run: dict, assignment: dict, assignment_file: str) -> dict:
+    """Project strict run attribution from the immutable contract and role binding."""
+    role = run.get("role")
+    roles = assignment.get("role_assignments")
+    role_spec = roles.get(role) if isinstance(roles, dict) else None
+    if role not in {"implementer", "verifier"} or not isinstance(role_spec, dict):
+        raise RefusalError(2, "strict run evidence names an unassigned role")
+
+    # These facts are intentionally supplied by work.sh at the start boundary: they are
+    # absent from the Phase 5 contract, so result validation must require them rather than
+    # inventing legacy defaults.  The run contract already requires the fields for a strict
+    # assignment; these checks keep their meaning explicit at this terminal boundary.
+    for field in ("billing_basis", "metered_approved", "default_branch", "integration_branch"):
+        if field not in run or run[field] is None:
+            raise RefusalError(2, f"strict run evidence is missing controller-supplied {field}")
+    if not isinstance(run["billing_basis"], str) or not run["billing_basis"].strip():
+        raise RefusalError(2, "strict run evidence billing_basis is invalid")
+    if not isinstance(run["metered_approved"], bool):
+        raise RefusalError(2, "strict run evidence metered_approved is invalid")
+    try:
+        default_branch = assignment_mod.canonical_branch(run["default_branch"], "default_branch")
+        integration_branch = assignment_mod.canonical_branch(
+            run["integration_branch"], "integration_branch"
+        )
+    except assignment_mod.AssignmentError as exc:
+        raise RefusalError(2, f"strict run evidence branch policy is invalid: {exc}") from exc
+    if default_branch == integration_branch:
+        raise RefusalError(2, "strict run evidence default and integration branches must differ")
+    if run["billing_basis"] == "metered" and run["metered_approved"] is not True:
+        raise RefusalError(2, "strict run evidence does not approve metered usage")
+
+    try:
+        recorded_assignment_file = run.get("assignment_file")
+        expected_assignment_file = os.path.normcase(os.path.abspath(str(assignment_file)))
+        observed_assignment_file = os.path.normcase(os.path.abspath(recorded_assignment_file)) \
+            if isinstance(recorded_assignment_file, str) else ""
+    except (OSError, TypeError, ValueError):
+        observed_assignment_file = ""
+        expected_assignment_file = ""
+    if not observed_assignment_file or observed_assignment_file != expected_assignment_file:
+        raise RefusalError(2, "strict run evidence assignment_file disagrees with the authoritative contract")
+
+    nested = run.get("assignment")
+    try:
+        normalized_nested = contract_mod.validate_assignment(nested)
+        if contract_mod.canonical_bytes(normalized_nested) != contract_mod.canonical_bytes(assignment):
+            raise RefusalError(2, "strict run assignment projection disagrees with its source file")
+    except contract_mod.AssignmentError as exc:
+        raise RefusalError(2, f"strict run assignment projection is invalid: {exc}") from exc
+
+    source_evidence = {
+        "repository": assignment["source_repository"],
+        "branch": assignment["source_branch"],
+        "sha": assignment["source_sha"],
+        "verified": True,
+    }
+    expected = {
+        "project_id": assignment["project_id"],
+        "engine": role_spec["engine"],
+        "provider": role_spec["provider"],
+        "capacity_pool": assignment["capacity_pool"],
+        "billing_basis": run["billing_basis"],
+        "metered_approved": run["metered_approved"],
+        "host": assignment["host"],
+        "model": role_spec["model"],
+        "sandbox_profile": assignment["sandbox_profile"],
+        "network_policy": role_spec["network_policy"],
+        "network_profile": role_spec["network_profile"],
+        "source_repository": assignment["source_repository"],
+        "source_branch": assignment["source_branch"],
+        "source_sha": assignment["source_sha"],
+        "source_evidence": source_evidence,
+        "allowed_paths": assignment["allowed_paths"],
+        "publication_policy": assignment["publication_policy"],
+        "default_branch": default_branch,
+        "integration_branch": integration_branch,
+        "assignment": assignment,
+    }
+    for field, expected_value in expected.items():
+        if field not in run or not assignment_mod.type_aware_equal(run[field], expected_value):
+            raise RefusalError(2, f"strict run attribution field {field!r} disagrees with the assignment")
+    return expected
+
+
+def _check_locked(args: argparse.Namespace) -> dict:
+    root = Path(args.assignment_root) if args.assignment_root else assignment_mod.DEFAULT_STATE_ROOT
+    value, strict = load_assignment_for_result(args, root)
 
     evidence = load_run_evidence(args.run_evidence)
     try:
@@ -137,10 +258,13 @@ def _check_locked(args: argparse.Namespace) -> dict:
         raise RefusalError(2, "run evidence id does not match the requested run_id")
     if "run_id" in evidence and evidence.get("run_id") != args.run_id:
         raise RefusalError(2, "run evidence run_id does not match the requested run_id")
-    try:
-        assignment_mod.require_assignment_projection(evidence, value)
-    except assignment_mod.AssignmentError as exc:
-        raise RefusalError(2, f"run evidence attribution projection is invalid: {exc}") from exc
+    if strict:
+        attribution = strict_assignment_projection(evidence, value, args.assignment_file)
+    else:
+        try:
+            attribution = assignment_mod.require_assignment_projection(evidence, value)
+        except assignment_mod.AssignmentError as exc:
+            raise RefusalError(2, f"run evidence attribution projection is invalid: {exc}") from exc
     if evidence.get("assignment_digest") != args.assignment_digest:
         raise RefusalError(2, "run evidence is not bound to the given assignment digest")
     if evidence.get("task_id") != args.task_id:
@@ -148,7 +272,7 @@ def _check_locked(args: argparse.Namespace) -> dict:
     if evidence.get("base_commit") != value["source_sha"]:
         raise RefusalError(2, "run evidence base commit does not match assigned source SHA")
     source_evidence = evidence.get("source_evidence")
-    if not assignment_mod.type_aware_equal(source_evidence, value["source_evidence"]):
+    if not assignment_mod.type_aware_equal(source_evidence, attribution["source_evidence"]):
         raise RefusalError(2, "run evidence is missing or has mismatched source evidence")
 
     # These fields are optional for legacy evidence, but once a producer emits one of the
@@ -252,7 +376,7 @@ def _check_locked(args: argparse.Namespace) -> dict:
         except assignment_mod.AssignmentError as exc:
             raise RefusalError(5, str(exc)) from exc
         protected = set(PROTECTED_BRANCHES)
-        protected.update({value.get("default_branch"), value.get("integration_branch")})
+        protected.update({attribution.get("default_branch"), attribution.get("integration_branch")})
         if branch in protected:
             raise RefusalError(5, f"returned branch {args.result_branch!r} is a protected default branch")
         if not (branch == f"loop/work/{args.task_id}" or branch.startswith("cursor/")
@@ -280,10 +404,10 @@ def _check_locked(args: argparse.Namespace) -> dict:
         "schema_version": 1, "assignment_digest": args.assignment_digest, "task_id": args.task_id,
         "run_id": args.run_id, "result_repository": args.result_repository,
         "result_branch": args.result_branch, "result_commit": args.result_commit,
-        "source_sha": value["source_sha"], "source_evidence": value["source_evidence"],
-        "provider": value["provider"], "capacity_pool": value.get("capacity_pool"),
-        "host": value["host"], "model": value.get("model"),
-        "sandbox_profile": value["sandbox_profile"],
+        "source_sha": value["source_sha"], "source_evidence": attribution["source_evidence"],
+        "provider": attribution["provider"], "capacity_pool": attribution.get("capacity_pool"),
+        "host": attribution["host"], "model": attribution.get("model"),
+        "sandbox_profile": attribution["sandbox_profile"],
         "verified_at": assignment_mod.now_iso(), "status": "accepted",
     }
     ledger = results_ledger(root)
@@ -329,6 +453,7 @@ def check(args: argparse.Namespace) -> dict:
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog=PROG)
     parser.add_argument("--assignment-root", default=None)
+    parser.add_argument("--assignment-file", default=None)
     parser.add_argument("--task-id", required=True)
     parser.add_argument("--assignment-digest", required=True)
     parser.add_argument("--run-id", required=True)

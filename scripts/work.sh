@@ -1955,6 +1955,7 @@ phase5_validate_assignment_result(){
   [ -n "$ASSIGNMENT_DIGEST" ] && [ -f "$ASSIGNMENT_FILE" ] || { log "missing assignment before result validation"; return 98; }
   [ -n "$CANDIDATE_OID" ] || { log "missing candidate commit before result validation"; return 98; }
   local -a args=(--assignment-root "$ROOT/state/assignments" --task-id "$ID"
+    --assignment-file "$ASSIGNMENT_FILE"
     --assignment-digest "$ASSIGNMENT_DIGEST" --run-id "$IMPLEMENTER_RUN_ID"
     --run-evidence "$ROOT/state/runs/$IMPLEMENTER_RUN_ID.json" --result-repository "$REPO_DIR"
     --result-branch "$BRANCH" --result-commit "$CANDIDATE_OID" --attempt "$LEASE_ATTEMPT" --record)
