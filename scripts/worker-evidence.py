@@ -314,6 +314,26 @@ def refresh_assignment(value: dict, start: dict) -> dict:
     return assignment
 
 
+def immutable_start_projection(start: dict, assignment: dict) -> dict:
+    """Return the authenticated fields every post-start transition must preserve."""
+    projection = {
+        "assignment_file": start["assignment_file"],
+        "assignment_digest": start["assignment_digest"],
+        "assignment": assignment,
+    }
+    projection.update(start["attribution"])
+    return projection
+
+
+def matches_immutable_start_projection(value: dict, start: dict, assignment: dict) -> bool:
+    """Tell whether a record already contains the exact authenticated start projection."""
+    expected = immutable_start_projection(start, assignment)
+    return all(
+        field in value and assignment_mod.type_aware_equal(value[field], expected_value)
+        for field, expected_value in expected.items()
+    )
+
+
 def validate_execution_evidence(execution: object, run: dict, assignment: dict) -> dict:
     try:
         return assignment_execution_evidence(execution, run, assignment)
@@ -678,6 +698,15 @@ def _main() -> int:
     assignment = refresh_assignment(value, start_binding)
     terminal_statuses = {"succeeded", "failed", "blocked", "cancelled", "stale"}
     if value.get("status") in terminal_statuses:
+        # A defensive replay can reach a record after its terminal transition (notably the
+        # Phase 5 rejection cleanup can attempt to seal a run already sealed by independent
+        # verification).  Reapplying the authenticated projection is a no-op only when every
+        # field it would restore is already identical, including JSON types.  Do not publish a
+        # terminal record in that case; a missing or divergent field remains a real mutation and
+        # takes the immutable-record refusal below.
+        if args.command == "seal" and matches_immutable_start_projection(
+                value, start_binding, assignment):
+            return 0
         raise SystemExit("worker-evidence: terminal run metadata is immutable")
     # Every record produced by start is strict.  This decision comes from the
     # authenticated durable start binding, never from mutable run JSON fields.
