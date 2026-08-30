@@ -4,6 +4,7 @@
 set -euo pipefail
 
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+PYTHON_BIN="${RECURSION_PYTHON:-python3}"
 ENGINE=""; WT=""; PROMPT=""; MODEL=""; USAGE_FILE=""; ROLE="implementer"
 NETWORK_POLICY="provider-only"; READ_ONLY_WORKTREE=0; EVIDENCE_DIR=""
 GATE_COMMAND=""; WORKDIR_PATH="."; READ_ONLY_PATHS=(); ENGINE_PLAN=""
@@ -37,9 +38,13 @@ case "$ENGINE" in
       || { echo "worker-sandbox: invalid engine" >&2; exit 92; } ;;
 esac
 PLAN_EXE=""; PLAN_ARGV=(); PLAN_MODEL_SUFFIX=(); PLAN_ENV_PASS=(); PLAN_OK=0; PLAN_MREQ=0
-ENGINE_ENV_FILE=""
+PLAN_EGRESS=""; PLAN_ENDPOINTS=(); PLAN_TOKEN="${RECURSION_ASSIGNMENT_PROXY_TOKEN:-}"; PLAN_ASSIGNMENT="${RECURSION_ASSIGNMENT_IDENTITY:-}"; ENGINE_ENV_FILE=""
 if [ -n "$ENGINE_PLAN" ]; then
   [ -f "$ENGINE_PLAN" ] || { echo "worker-sandbox: engine plan is missing" >&2; exit 92; }
+  PLAN_DIGEST_BEFORE="$(sha256sum -- "$ENGINE_PLAN" 2>/dev/null | awk '{print $1}')" \
+    || { echo "worker-sandbox: engine plan could not be hashed" >&2; exit 95; }
+  [[ "$PLAN_DIGEST_BEFORE" =~ ^[0-9a-f]{64}$ ]] \
+    || { echo "worker-sandbox: engine plan digest is invalid" >&2; exit 95; }
   while IFS= read -r plan_line; do
     plan_line="${plan_line%$'\r'}"   # a Windows-native python3 emits CRLF; the box's does not
     case "$plan_line" in
@@ -47,17 +52,41 @@ if [ -n "$ENGINE_PLAN" ]; then
       ARG=*)  PLAN_ARGV+=("${plan_line#ARG=}") ;;
       MSFX=*) PLAN_MODEL_SUFFIX+=("${plan_line#MSFX=}") ;;
       ENVP=*) PLAN_ENV_PASS+=("${plan_line#ENVP=}") ;;
+      EGRESS=*) PLAN_EGRESS="${plan_line#EGRESS=}" ;;
+      ENDPOINT=*) PLAN_ENDPOINTS+=("${plan_line#ENDPOINT=}") ;;
+      TOKEN=*) PLAN_TOKEN="${plan_line#TOKEN=}" ;;
       MREQ=1) PLAN_MREQ=1 ;;
       OK=1)   PLAN_OK=1 ;;
     esac
-  done < <(python3 - "$ENGINE_PLAN" "$ENGINE" <<'PY' || true
-import json, re, sys
+  done < <("$PYTHON_BIN" - "$ENGINE_PLAN" "$ENGINE" <<'PY' || true
+import json, re, stat, sys
+from pathlib import Path
+
+MAX_PLAN_BYTES = 2 * 1024 * 1024
+HOST_RE = re.compile(r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
+ENV_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}\Z")
+
+def reject_constant(name):
+    raise ValueError("non-finite JSON number " + name)
+
 try:
-    plan = json.load(open(sys.argv[1]))
-except Exception:
+    path = Path(sys.argv[1])
+    info = path.lstat()
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+            or not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) & 0o022:
+        raise ValueError("engine plan file is unsafe")
+    with path.open("rb") as source:
+        raw = source.read(MAX_PLAN_BYTES + 1)
+    if len(raw) > MAX_PLAN_BYTES:
+        raise ValueError("engine plan is too large")
+    plan = json.loads(raw.decode("utf-8", "strict"), parse_constant=reject_constant)
+except (OSError, UnicodeError, ValueError, TypeError, OverflowError, RecursionError):
+    raise SystemExit(92)
+if not isinstance(plan, dict):
     raise SystemExit(92)
 engine = plan.get("engine")
-if plan.get("schema_version") != 1 or engine != sys.argv[2] \
+if not isinstance(plan.get("schema_version"), int) or isinstance(plan.get("schema_version"), bool) \
+        or plan.get("schema_version") != 1 or engine != sys.argv[2] \
         or not isinstance(engine, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", engine):
     raise SystemExit(92)
 exe = plan.get("executable"); argv = plan.get("argv")
@@ -79,6 +108,10 @@ for element in list(argv) + list(suffix):
 for element in suffix:
     if element in ("{{EXE}}", "{{PROMPT}}"):
         raise SystemExit(92)
+if not isinstance(plan.get("model_required"), bool):
+    raise SystemExit(92)
+if not isinstance(plan.get("env_passthrough"), list) or len(plan["env_passthrough"]) > 64:
+    raise SystemExit(92)
 if plan.get("model_required"):
     print("MREQ=1")
 print("EXE=" + exe)
@@ -86,14 +119,49 @@ for element in argv:
     print("ARG=" + element)
 for element in suffix:
     print("MSFX=" + element)
-for name in plan.get("env_passthrough") or []:
-    if not isinstance(name, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", name):
+for name in plan["env_passthrough"]:
+    if not isinstance(name, str) or not ENV_RE.fullmatch(name):
         raise SystemExit(92)
     print("ENVP=" + name)
+egress = plan.get("egress_profile")
+endpoints = plan.get("network_endpoints")
+token = plan.get("assignment_proxy_token")
+# Bearer capabilities must never be durable plan fields.  Reject old/forged plans that attempt
+# to smuggle one into state/runs; the controller injects the ephemeral token through the worker's
+# private environment instead.
+if token is not None:
+    raise SystemExit(92)
+if egress is not None:
+    if not isinstance(egress, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", egress):
+        raise SystemExit(92)
+    if not isinstance(endpoints, list) or not endpoints or not all(
+        isinstance(item, str) and HOST_RE.fullmatch(item)
+        for item in endpoints
+    ):
+        raise SystemExit(92)
+    print("EGRESS=" + egress)
+    for endpoint in endpoints:
+        print("ENDPOINT=" + endpoint)
 print("OK=1")
 PY
 )
   [ "$PLAN_OK" = 1 ] || { echo "worker-sandbox: engine plan is invalid" >&2; exit 92; }
+  PLAN_DIGEST_AFTER="$(sha256sum -- "$ENGINE_PLAN" 2>/dev/null | awk '{print $1}')" \
+    || { echo "worker-sandbox: engine plan could not be rehashed" >&2; exit 95; }
+  [ "$PLAN_DIGEST_BEFORE" = "$PLAN_DIGEST_AFTER" ] \
+    || { echo "worker-sandbox: engine plan changed during validation" >&2; exit 95; }
+  if [ -n "$PLAN_EGRESS" ]; then
+    [[ "$PLAN_TOKEN" =~ ^[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}$ ]] \
+      || { echo "worker-sandbox: assignment proxy capability is absent or malformed" >&2; exit 96; }
+    [[ "$PLAN_ASSIGNMENT" =~ ^[A-Za-z0-9._-]{1,255}$ ]] \
+      || { echo "worker-sandbox: active assignment identity is absent or malformed" >&2; exit 96; }
+  elif [ -n "$PLAN_TOKEN" ]; then
+    echo "worker-sandbox: assignment proxy capability supplied for a non-provider plan" >&2
+    exit 92
+  elif [ -n "$PLAN_ASSIGNMENT" ]; then
+    echo "worker-sandbox: assignment identity supplied for a non-provider plan" >&2
+    exit 92
+  fi
   # A group/other-writable plan can be rewritten between resolve and launch by any local
   # process; refuse it in every mode, logical included. Root ownership is asserted only on
   # the real-run path below — a /tmp logical controller cannot own files as uid 0.
@@ -104,6 +172,10 @@ PY
   # on its own configured default, off-alias and off-evidence.
   [ "$PLAN_MREQ" != 1 ] || [ -n "$MODEL" ] \
     || { echo "worker-sandbox: engine plan requires a model and none was given" >&2; exit 92; }
+fi
+if [ -n "$PLAN_EGRESS" ] && [ "$NETWORK_POLICY" != provider-only ]; then
+  echo "worker-sandbox: provider egress profile requires provider-only network policy" >&2
+  exit 96
 fi
 build_plan_argv(){ # resolved-exe -> PLAN_RUN: exact-element placeholder substitution only
   local exe="$1" element
@@ -171,6 +243,14 @@ case "${RECURSION_TEST_WORKER:-}" in
         ;;
       claude)
         command -v claude >/dev/null 2>&1 || exit 90
+        if [ "$NETWORK_POLICY" = provider-only ] && [ "${RECURSION_TEST_PROVIDER_NETWORK:-}" != logical ]; then
+          [[ "$PLAN_TOKEN" =~ ^[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}$ ]] \
+            || { echo "worker-sandbox: builtin provider capability is absent or malformed" >&2; exit 96; }
+          [[ "$PLAN_ASSIGNMENT" =~ ^[A-Za-z0-9._-]{1,255}$ ]] \
+            || { echo "worker-sandbox: builtin assignment identity is absent or malformed" >&2; exit 96; }
+          export HTTPS_PROXY="http://${PLAN_ASSIGNMENT}:${PLAN_TOKEN}@127.0.0.1:18080"
+          export HTTP_PROXY="$HTTPS_PROXY"
+        fi
         cd "$WT"; claude -p "$PROMPT" --permission-mode acceptEdits \
           --allowedTools 'Bash(node:*)' ${MODEL:+--model "$MODEL"}
         ;;
@@ -181,6 +261,23 @@ case "${RECURSION_TEST_WORKER:-}" in
         ;;
       *)
         command -v "$PLAN_EXE" >/dev/null 2>&1 || exit 90
+        if [ -n "$PLAN_EGRESS" ]; then
+          [ -x "$ROOT/scripts/provider-egress.py" ] || exit 96
+          egress_args=(inject "$PLAN_EGRESS")
+          for endpoint in "${PLAN_ENDPOINTS[@]}"; do egress_args+=(--endpoint "$endpoint"); done
+          egress_lines="$(RECURSION_ROOT="$ROOT" RECURSION_ASSIGNMENT_PROXY_TOKEN="$PLAN_TOKEN" RECURSION_ASSIGNMENT_IDENTITY="$PLAN_ASSIGNMENT" \
+            "$PYTHON_BIN" "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
+            || { echo "worker-sandbox: provider egress profile was refused" >&2; exit 96; }
+          while IFS= read -r egress_line; do
+            [ -z "$egress_line" ] && continue
+            if [[ "$egress_line" =~ ^(HTTP_PROXY|HTTPS_PROXY)=http://[A-Za-z0-9._-]+:[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}@127\.0\.0\.1:[0-9]{1,5}$ ]] \
+               || [[ "$egress_line" =~ ^(HTTP_PROXY|HTTPS_PROXY)=http://127\.0\.0\.1:[0-9]{1,5}$ ]]; then
+              export "$egress_line"
+            else
+              echo "worker-sandbox: provider helper returned an unsafe environment value" >&2; exit 96
+            fi
+          done <<< "$egress_lines"
+        fi
         # Declare the passthrough set so hermetic controls can verify the plan->env plumbing;
         # the real --setenv/EnvironmentFile wiring is exercised only on the box.
         for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
@@ -220,8 +317,15 @@ if [ -n "$ENGINE_PLAN" ]; then
     || { echo "worker-sandbox: engine plan must be root-owned and not group/other-writable" >&2; exit 95; }
 fi
 if [ "$NETWORK_POLICY" = provider-only ]; then
-  bash "$ROOT/scripts/provider-network.sh" check >/dev/null \
-    || { echo "worker-sandbox: provider-only capability probe failed" >&2; exit 96; }
+  if [ -n "$PLAN_EGRESS" ]; then
+    bash "$ROOT/scripts/provider-network.sh" check --engine "$ENGINE" >/dev/null \
+      || { echo "worker-sandbox: provider-only capability probe failed" >&2; exit 96; }
+  else
+    # v1 engines have no Phase 4 assignment/profile. Preserve their existing Anthropic proxy
+    # boundary until a Phase 4 engine plan explicitly opts into provider-specific admission.
+    bash "$ROOT/scripts/provider-network.sh" check >/dev/null \
+      || { echo "worker-sandbox: provider-only capability probe failed" >&2; exit 96; }
+  fi
 fi
 
 RUNNER_USER="${RECURSION_RUNNER_USER:-recursion-runner}"
@@ -341,9 +445,27 @@ fi
 if [ "$ENGINE" = claude ]; then
   # Claude's provider request is the only intentional egress.  The namespace has no route or
   # non-loopback interface, so clearing these variables cannot fall back to the host network.
-  RUN+=(--setenv HTTPS_PROXY=http://127.0.0.1:18080
-        --setenv HTTP_PROXY=http://127.0.0.1:18080
-        --setenv CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1)
+  if [ "$NETWORK_POLICY" = provider-only ] && [ "${RECURSION_TEST_PROVIDER_NETWORK:-}" != logical ]; then
+    [[ "$PLAN_TOKEN" =~ ^[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}$ ]] \
+      || { echo "worker-sandbox: builtin provider capability is absent or malformed" >&2; exit 96; }
+    [[ "$PLAN_ASSIGNMENT" =~ ^[A-Za-z0-9._-]{1,255}$ ]] \
+      || { echo "worker-sandbox: builtin assignment identity is absent or malformed" >&2; exit 96; }
+    SECRET_RUNTIME_DIR="${RECURSION_SECRET_RUNTIME_DIR:-/run/recursion-runner}"
+    "$PYTHON_BIN" "$ROOT/scripts/secret_runtime.py" scavenge --directory "$SECRET_RUNTIME_DIR" \
+      || { echo "worker-sandbox: secret runtime cleanup refused" >&2; exit 95; }
+    ENV_CONTENT="HTTP_PROXY=http://${PLAN_ASSIGNMENT}:${PLAN_TOKEN}@127.0.0.1:18080"$'\n'
+    ENV_CONTENT+="HTTPS_PROXY=http://${PLAN_ASSIGNMENT}:${PLAN_TOKEN}@127.0.0.1:18080"$'\n'
+    ENV_CONTENT+="RECURSION_ASSIGNMENT_PROXY_TOKEN=$PLAN_TOKEN"$'\n'
+    ENV_CONTENT+="RECURSION_ASSIGNMENT_IDENTITY=$PLAN_ASSIGNMENT"$'\n'
+    ENGINE_ENV_FILE="$(printf '%s' "$ENV_CONTENT" | "$PYTHON_BIN" "$ROOT/scripts/secret_runtime.py" \
+      write-env --directory "$SECRET_RUNTIME_DIR")" \
+      || { echo "worker-sandbox: builtin capability environment refused" >&2; exit 95; }
+    RUN+=(--property "EnvironmentFile=$ENGINE_ENV_FILE")
+  else
+    RUN+=(--setenv HTTPS_PROXY=http://127.0.0.1:18080
+          --setenv HTTP_PROXY=http://127.0.0.1:18080)
+  fi
+  RUN+=(--setenv CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1)
 fi
 for name in RECURSION_VERIFICATION_COMMIT RECURSION_IMPLEMENTER_RUN_ID; do
   value="${!name:-}"; [ -z "$value" ] || RUN+=(--setenv "$name=$value")
@@ -390,17 +512,48 @@ case "$ENGINE" in
     # Plugin engines (D-015): exec exactly the admitted plan argv; no shell, no interpolation.
     # Passthrough values ride a root-owned 0600 EnvironmentFile, never the systemd-run command
     # line, so credentials stay out of /proc/*/cmdline and `systemctl show`.
+    SECRET_RUNTIME_DIR="${RECURSION_SECRET_RUNTIME_DIR:-/run/recursion-runner}"
+    "$PYTHON_BIN" "$ROOT/scripts/secret_runtime.py" scavenge --directory "$SECRET_RUNTIME_DIR" \
+      || { echo "worker-sandbox: secret runtime cleanup refused" >&2; exit 95; }
+    ENV_CONTENT=""
+    if [ -n "$PLAN_EGRESS" ]; then
+      [ -x "$ROOT/scripts/provider-egress.py" ] \
+        || { echo "worker-sandbox: provider egress helper is absent" >&2; exit 96; }
+      egress_args=(inject "$PLAN_EGRESS")
+      for endpoint in "${PLAN_ENDPOINTS[@]}"; do egress_args+=(--endpoint "$endpoint"); done
+      egress_lines="$(RECURSION_ROOT="$ROOT" RECURSION_ASSIGNMENT_PROXY_TOKEN="$PLAN_TOKEN" RECURSION_ASSIGNMENT_IDENTITY="$PLAN_ASSIGNMENT" \
+        "$PYTHON_BIN" "$ROOT/scripts/provider-egress.py" "${egress_args[@]}")" \
+        || { echo "worker-sandbox: provider egress profile was refused" >&2; exit 96; }
+      while IFS= read -r egress_line; do
+        [ -z "$egress_line" ] && continue
+        if [[ "$egress_line" =~ ^(HTTP_PROXY|HTTPS_PROXY)=http://[A-Za-z0-9._-]+:[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}@127\.0\.0\.1:[0-9]{1,5}$ ]] \
+           || [[ "$egress_line" =~ ^(HTTP_PROXY|HTTPS_PROXY)=http://127\.0\.0\.1:[0-9]{1,5}$ ]]; then
+          ENV_CONTENT+="$egress_line"$'\n'
+        else
+          echo "worker-sandbox: provider helper returned an unsafe environment value" >&2; exit 96
+        fi
+      done <<< "$egress_lines"
+    fi
+    # The token is an ephemeral capability, never a plan field or systemd-run argument.  Carry it
+    # only through the root-owned 0600 runtime EnvironmentFile below, which is removed on exit.
+    [ -z "$PLAN_TOKEN" ] || ENV_CONTENT+="RECURSION_ASSIGNMENT_PROXY_TOKEN=$PLAN_TOKEN"$'\n'
+    [ -z "$PLAN_ASSIGNMENT" ] || ENV_CONTENT+="RECURSION_ASSIGNMENT_IDENTITY=$PLAN_ASSIGNMENT"$'\n'
     if [ "${#PLAN_ENV_PASS[@]}" -gt 0 ]; then
-      ENGINE_ENV_FILE="$(mktemp /tmp/recursion-engine-env.XXXXXX)" || exit 95
-      chmod 0600 "$ENGINE_ENV_FILE"
       for plan_env_name in "${PLAN_ENV_PASS[@]}"; do
         plan_env_value="${!plan_env_name:-}"
         [ -n "$plan_env_value" ] || continue
         case "$plan_env_value" in
           *$'\n'*|*$'\r'*) echo "worker-sandbox: engine env value contains a newline" >&2; exit 92 ;;
         esac
-        printf '%s=%s\n' "$plan_env_name" "$plan_env_value" >> "$ENGINE_ENV_FILE"
+        ENV_CONTENT+="$plan_env_name=$plan_env_value"$'\n'
       done
+    fi
+    # Proxy coordinates and the assignment-scoped Basic capability are required even
+    # for engines such as Cursor that deliberately admit no controller env passthrough.
+    # Materialize every accumulated secret/environment value, not only passthrough values.
+    if [ -n "$ENV_CONTENT" ]; then
+      ENGINE_ENV_FILE="$(printf '%s' "$ENV_CONTENT" | "$PYTHON_BIN" "$ROOT/scripts/secret_runtime.py" \
+        write-env --directory "$SECRET_RUNTIME_DIR")" || exit 95
       RUN+=(--property "EnvironmentFile=$ENGINE_ENV_FILE")
     fi
     build_plan_argv "$INNER_EXE"

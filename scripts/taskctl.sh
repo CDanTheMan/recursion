@@ -217,7 +217,13 @@ elif mode=='bump':
     for i,line in enumerate(lines):
         cells=line.split('\t')
         if len(cells)>=9 and cells[0]==eid:
-            cells[4]=now; cells[5]=str(int(cells[5])+1); lines[i]='\t'.join(cells)
+            try:
+                count = int(cells[5], 10)
+            except (TypeError, ValueError, OverflowError):
+                raise SystemExit(2)
+            if count < 0:
+                raise SystemExit(2)
+            cells[4]=now; cells[5]=str(count+1); lines[i]='\t'.join(cells)
             result=cells[5]; hit=True; break
     if not hit: raise SystemExit(2)
 elif mode=='add':
@@ -263,7 +269,14 @@ sys.path.insert(0,sys.argv[2])
 from transition_receipt import commit_event
 path=sys.argv[1]
 root=__import__('pathlib').Path(sys.argv[2]).parent
-commit_event(root,json.loads(os.environ['EVENT_LINE']),taskctl_locked=True)
+try:
+    event=json.loads(os.environ['EVENT_LINE'], parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+except (KeyError, UnicodeError, json.JSONDecodeError, ValueError, TypeError, OverflowError, RecursionError):
+    raise SystemExit(2)
+try:
+    commit_event(root,event,taskctl_locked=True)
+except (OSError, ValueError, TypeError, OverflowError, RecursionError, UnicodeError):
+    raise SystemExit(2)
 PY
 }
 
@@ -296,7 +309,10 @@ event={'schema_version':1,'event':os.environ['TRANSITION_KIND'],
        'task':os.environ['TRANSITION_TASK'],'project':project,
        'goal':fields.get('goal_id',''),'pid':os.getpid(),
        'detail':os.environ['TRANSITION_DETAIL']}
-print(commit_transition(root,[fields_mutation(path,changes)],event,taskctl_locked=True))
+try:
+    print(commit_transition(root,[fields_mutation(path,changes)],event,taskctl_locked=True))
+except (OSError, ValueError, TypeError, OverflowError, RecursionError, UnicodeError):
+    raise SystemExit(2)
 PY
 }
 

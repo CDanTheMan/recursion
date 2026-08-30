@@ -1,0 +1,314 @@
+"""Fail-closed provider egress profile contract (Phase 4).
+
+Profiles describe a provider capability; they never contain credentials.  The shipped
+profiles are deliberately disabled.  This module is shared by the offline resolver and
+the proxy/sandbox boundary so an endpoint cannot be admitted by one layer and rejected
+or broadened by another.
+"""
+
+from __future__ import annotations
+
+import json
+import ipaddress
+import os
+import re
+import base64
+import binascii
+import socket
+import stat
+from urllib.parse import quote
+from pathlib import Path
+from typing import Iterable
+
+
+NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,63}\Z")
+HOST_RE = re.compile(r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
+ENV_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}\Z")
+ASSIGNMENT_RE = re.compile(r"[A-Za-z0-9._-]{1,255}\Z")
+NAMESPACE_RE = re.compile(r"recursion-provider-[a-z0-9-]{1,40}\Z")
+MAX_PROFILE_BYTES = 1024 * 1024
+PROXY_ENV = frozenset({"HTTP_PROXY", "HTTPS_PROXY"})
+PROFILE_KEYS = {"schema_version", "id", "provider", "enabled", "namespace", "proxy", "authorities"}
+PROXY_KEYS = {"type", "host", "port", "env"}
+DEPLOYED_PROFILE_DIR = Path("/etc/recursion/providers")
+ENGINE_PROFILE_MAP = {
+    "claude": "anthropic",
+    "hermes": "anthropic",
+    "cursor": "cursor",
+    "gemini": "google-gemini",
+    "opencode": "openrouter-via-opencode",
+}
+
+
+class ProviderProfileError(ValueError):
+    """A provider profile is absent, malformed, disabled, or mismatched."""
+
+
+def _reject_json_constant(name: str) -> object:
+    raise ValueError(f"non-finite JSON number {name} is forbidden")
+
+
+def _is_ip_literal(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        # inet_aton also recognizes legacy octal, hexadecimal, and shortened IPv4 spellings.
+        try:
+            socket.inet_aton(host)
+        except OSError:
+            return False
+        return True
+    return True
+
+
+def parse_authority(value: object) -> tuple[str, int]:
+    if not isinstance(value, str) or value.count(":") != 1:
+        raise ProviderProfileError("authority must be a DNS name and explicit port")
+    host, port_text = value.rsplit(":", 1)
+    if not HOST_RE.fullmatch(host.lower()) or not port_text.isascii() or not port_text.isdecimal():
+        raise ProviderProfileError("authority must be a canonical DNS name and explicit port")
+    if _is_ip_literal(host.lower()):
+        raise ProviderProfileError("IP-literal authorities are forbidden")
+    # A canonical TCP port is at most five decimal digits.  Check the bound before int():
+    # Python deliberately raises ValueError for much larger decimal strings, which must not
+    # escape the provider-profile error boundary.
+    if len(port_text) > 5:
+        raise ProviderProfileError("authority port is out of range")
+    try:
+        port = int(port_text, 10)
+    except ValueError:
+        raise ProviderProfileError("authority port is not canonical") from None
+    if port_text != str(port):
+        raise ProviderProfileError("authority port is not canonical")
+    if not 1 <= port <= 65535:
+        raise ProviderProfileError("authority port is out of range")
+    return host.lower(), port
+
+
+def _require_dict(value: object, keys: set[str], where: str) -> dict:
+    if not isinstance(value, dict):
+        raise ProviderProfileError(f"{where} must be an object")
+    missing = keys - value.keys()
+    extra = value.keys() - keys
+    if missing:
+        raise ProviderProfileError(f"{where} missing key(s): {', '.join(sorted(missing))}")
+    if extra:
+        raise ProviderProfileError(f"{where} has unknown key(s): {', '.join(sorted(extra))}")
+    return value
+
+
+def _reject_reparse_components(path: Path, label: str) -> None:
+    if not isinstance(path, Path) or not path.is_absolute() \
+            or any(part in {".", ".."} for part in path.parts):
+        raise ProviderProfileError(f"{label} must be a canonical absolute path")
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise ProviderProfileError(f"{label} is unreadable") from exc
+        if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+                or bool(getattr(info, "st_file_attributes", 0) & 0x400):
+            raise ProviderProfileError(f"{label} contains a symlink/reparse component")
+
+
+def _read_profile(path: Path) -> bytes:
+    _reject_reparse_components(path, "provider profile")
+    try:
+        expected = path.lstat()
+    except OSError as exc:
+        raise ProviderProfileError("provider profile is unavailable") from exc
+    if stat.S_ISLNK(expected.st_mode) or bool(getattr(expected, "st_reparse_tag", 0)) \
+            or bool(getattr(expected, "st_file_attributes", 0) & 0x400) \
+            or not stat.S_ISREG(expected.st_mode):
+        raise ProviderProfileError("provider profile is unavailable")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except (OSError, ValueError, TypeError) as exc:
+        raise ProviderProfileError("provider profile is unreadable") from exc
+    try:
+        info = os.fstat(descriptor)
+        if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+                or bool(getattr(info, "st_file_attributes", 0) & 0x400) \
+                or not stat.S_ISREG(info.st_mode) \
+                or (info.st_dev, info.st_ino) != (expected.st_dev, expected.st_ino) \
+                or info.st_size != expected.st_size or info.st_size > MAX_PROFILE_BYTES:
+            raise ProviderProfileError("provider profile is unavailable")
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = -1
+            raw = source.read(MAX_PROFILE_BYTES + 1)
+        if len(raw) > MAX_PROFILE_BYTES:
+            raise ProviderProfileError("provider profile is too large")
+        return raw
+    except (OSError, ValueError, TypeError, OverflowError) as exc:
+        raise ProviderProfileError("provider profile is unreadable") from exc
+    finally:
+        if descriptor != -1:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
+def validate_profile(value: object, expected_id: str | None = None) -> dict:
+    profile = _require_dict(value, PROFILE_KEYS, "provider profile")
+    if not isinstance(profile["schema_version"], int) or isinstance(profile["schema_version"], bool) \
+            or profile["schema_version"] != 1:
+        raise ProviderProfileError("schema_version must be 1")
+    profile_id = profile["id"]
+    provider = profile["provider"]
+    if not isinstance(profile_id, str) or not NAME_RE.fullmatch(profile_id):
+        raise ProviderProfileError("id is not a valid profile name")
+    if expected_id is not None and profile_id != expected_id:
+        raise ProviderProfileError("profile id does not match requested provider")
+    if not isinstance(provider, str) or not NAME_RE.fullmatch(provider):
+        raise ProviderProfileError("provider is not a valid provider name")
+    if not isinstance(profile["enabled"], bool):
+        raise ProviderProfileError("enabled must be a boolean")
+    namespace = profile["namespace"]
+    if not isinstance(namespace, str) or not NAMESPACE_RE.fullmatch(namespace):
+        raise ProviderProfileError("namespace must be a fixed recursion-provider namespace name")
+    proxy = _require_dict(profile["proxy"], PROXY_KEYS, "proxy")
+    if proxy["type"] != "connect-proxy":
+        raise ProviderProfileError('proxy.type must be "connect-proxy"')
+    if proxy["host"] != "127.0.0.1":
+        raise ProviderProfileError("proxy.host must be the loopback proxy boundary")
+    if not isinstance(proxy["port"], int) or isinstance(proxy["port"], bool) \
+            or not 1 <= proxy["port"] <= 65535:
+        raise ProviderProfileError("proxy.port must be an integer in 1..65535")
+    env = proxy["env"]
+    if not isinstance(env, list) \
+            or not all(isinstance(name, str) and ENV_RE.fullmatch(name) for name in env):
+        raise ProviderProfileError("proxy.env must contain unique environment variable names")
+    if len(set(env)) != len(env):
+        raise ProviderProfileError("proxy.env must contain unique environment variable names")
+    if set(env) != PROXY_ENV:
+        raise ProviderProfileError("proxy.env must inject exactly HTTP_PROXY and HTTPS_PROXY")
+    authorities = profile["authorities"]
+    if not isinstance(authorities, list) or not all(isinstance(item, str) for item in authorities):
+        raise ProviderProfileError("authorities must be a unique list")
+    parsed = [parse_authority(item) for item in authorities]
+    if len(set(authorities)) != len(authorities):
+        raise ProviderProfileError("authorities must be a unique list")
+    if not parsed:
+        raise ProviderProfileError("at least one provider authority is required")
+    return profile
+
+
+def load_profile(path: Path, expected_id: str | None = None) -> dict:
+    try:
+        raw = json.loads(_read_profile(path).decode("utf-8", "strict"),
+                         parse_constant=_reject_json_constant)
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError, json.JSONDecodeError, ProviderProfileError) as exc:
+        raise ProviderProfileError("provider profile is unreadable") from exc
+    return validate_profile(raw, expected_id)
+
+
+def profile_directory(script_dir: Path | str) -> Path:
+    override = os.environ.get("RECURSION_PROVIDER_DIR", "").strip()
+    # The checked-in profiles are review fixtures, not an implicit production source.  The
+    # deployed proxy and every resolver must read the same human-owned /etc directory.
+    directory = Path(override) if override else DEPLOYED_PROFILE_DIR
+    # The deployed profile root is a POSIX pathname by contract.  Keep the pure validation
+    # command importable on the Windows review host, where pathlib quite correctly regards
+    # ``/etc/recursion/providers`` as a drive-less path; deployed Linux still performs the
+    # complete component/reparse audit below.
+    if not override and os.name == "nt":
+        return directory
+    _reject_reparse_components(directory, "provider profile directory")
+    return directory
+
+
+def profile_for_provider(provider: str, directory: Path) -> dict:
+    if not isinstance(provider, str) or not NAME_RE.fullmatch(provider):
+        raise ProviderProfileError("provider name is invalid")
+    return load_profile(directory / f"{provider}.json", provider)
+
+
+def assert_endpoints_match(profile: dict, endpoints: Iterable[str]) -> None:
+    # Engine manifests intentionally declare provider hosts, not arbitrary ports.  Provider
+    # authority ports are therefore exact and must be the reviewed TLS port (443).
+    try:
+        endpoint_values = list(endpoints)
+    except TypeError as exc:
+        raise ProviderProfileError("engine endpoints must be a list of DNS names") from exc
+    if any(not isinstance(item, str) for item in endpoint_values):
+        raise ProviderProfileError("engine endpoints must be a list of DNS names")
+    try:
+        expected = {parse_authority(f"{item}:443") for item in endpoint_values}
+    except (TypeError, ValueError) as exc:
+        raise ProviderProfileError("engine endpoints must be canonical DNS names") from exc
+    actual = {parse_authority(item) for item in profile["authorities"]}
+    if expected != actual:
+        raise ProviderProfileError("profile authorities do not exactly match engine endpoints")
+
+
+def proxy_environment(profile: dict, endpoints: Iterable[str], token: str | None = None,
+                      assignment_identity: str | None = None) -> dict[str, str]:
+    validate_profile(profile)
+    assert_endpoints_match(profile, endpoints)
+    if not profile["enabled"]:
+        raise ProviderProfileError("provider egress profile is disabled")
+    if token is not None:
+        if not isinstance(token, str) \
+                or not re.fullmatch(r"[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}", token):
+            raise ProviderProfileError("assignment proxy token is malformed")
+        # Keep the signed assignment identity in the HTTP Basic username.  The canonical alphabet
+        # excludes ':' and all percent-decoding delimiters, so standard proxy clients preserve the
+        # exact username/password split.  The proxy compares both values, binding A's capability
+        # to A rather than allowing a replay with another active-assignment identity.
+        if not isinstance(assignment_identity, str) or not ASSIGNMENT_RE.fullmatch(assignment_identity):
+            raise ProviderProfileError("active assignment identity is required")
+        value = f"http://{quote(assignment_identity, safe='._-')}:{quote(token, safe='._-')}@{profile['proxy']['host']}:{profile['proxy']['port']}"
+    elif os.environ.get("RECURSION_PROVIDER_PROXY_REQUIRED") == "1":
+        raise ProviderProfileError("assignment proxy authorization is required")
+    else:
+        value = f"http://{profile['proxy']['host']}:{profile['proxy']['port']}"
+    return {name: value for name in profile["proxy"]["env"]}
+
+
+def enabled_allowlist(directory: Path, profiles: Iterable[str] | None = None) -> set[tuple[str, int]]:
+    names = list(profiles) if profiles is not None else enabled_profile_names(directory)
+    if not names:
+        raise ProviderProfileError("no provider profiles were selected")
+    allowed: set[tuple[str, int]] = set()
+    for name in names:
+        profile = profile_for_provider(name, directory)
+        if not profile["enabled"]:
+            raise ProviderProfileError(f"provider egress profile is disabled: {name}")
+        allowed.update(parse_authority(item) for item in profile["authorities"])
+    return allowed
+
+
+def enabled_profile_names(directory: Path) -> list[str]:
+    """Return only profiles whose human-owned record explicitly says enabled=true."""
+    names: list[str] = []
+    for path in sorted(directory.glob("*.json")):
+        profile = load_profile(path, path.stem)
+        if profile["enabled"]:
+            names.append(profile["id"])
+    if not names:
+        raise ProviderProfileError("all provider profiles are disabled; refusing provider egress")
+    return names
+
+
+def engine_profile(engine: str, directory: Path, endpoints: Iterable[str] | None = None) -> dict:
+    """Authenticate one engine assignment to exactly one enabled provider profile."""
+    if not isinstance(engine, str) or not NAME_RE.fullmatch(engine):
+        raise ProviderProfileError("engine name is invalid")
+    profile_name = ENGINE_PROFILE_MAP.get(engine)
+    if profile_name is None:
+        raise ProviderProfileError(f"no provider profile is bound to engine: {engine}")
+    profile = profile_for_provider(profile_name, directory)
+    if endpoints is not None:
+        assert_endpoints_match(profile, endpoints)
+    if not profile["enabled"]:
+        raise ProviderProfileError(f"provider egress profile is disabled: {profile_name}")
+    return profile

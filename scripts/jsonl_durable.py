@@ -353,6 +353,33 @@ def _reject_reparse_components(path: Path) -> Path:
     return candidate
 
 
+def _reject_json_constant(value: str) -> object:
+    raise ValueError("non-finite JSON constant is forbidden")
+
+
+def _parse_json(raw: str | bytes) -> object:
+    try:
+        return json.loads(raw, parse_constant=_reject_json_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError,
+            OverflowError, RecursionError) as exc:
+        raise JsonlDurabilityError("malformed JSONL index value") from exc
+
+
+def _validate_record_limit(value: object) -> int:
+    if type(value) is not int or not 1 <= value <= DEFAULT_MAX_RECORD_BYTES:
+        raise JsonlDurabilityError("invalid JSONL record-size bound")
+    return value
+
+
+def _chain_bytes(value: object, label: str) -> bytes:
+    if not isinstance(value, str) or len(value) != 64:
+        raise JsonlDurabilityError("invalid JSONL chain digest")
+    try:
+        return bytes.fromhex(value)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise JsonlDurabilityError("invalid JSONL chain digest") from exc
+
+
 def _durable_path(path: Path) -> Path:
     return _reject_reparse_components(path)
 
@@ -1321,13 +1348,13 @@ def _quarantine_tail_unpinned(path: Path, descriptor: int, offset: int, size: in
             "quarantined_at": _now_iso(),
             "requires_human_review": True,
         }
-        encoded = (json.dumps(evidence, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        encoded = (json.dumps(evidence, sort_keys=True, separators=(",", ":"), allow_nan=False)
+                   + "\n").encode()
         prior_bytes = read_durable_bytes(metadata)
         if prior_bytes is not None:
             try:
-                prior = json.loads(prior_bytes.decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError, TypeError,
-                    ValueError, OverflowError, RecursionError) as exc:
+                prior = _parse_json(prior_bytes)
+            except JsonlDurabilityError as exc:
                 raise JsonlDurabilityError(
                     f"JSONL quarantine metadata is not valid JSON: {metadata}"
                 ) from exc
@@ -1384,9 +1411,8 @@ def _iter_complete_lines(descriptor: int, limit: int, path: Path,
                 pass
             else:
                 try:
-                    value = json.loads(raw.decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError,
-                        OverflowError, RecursionError) as exc:
+                    value = _parse_json(raw)
+                except JsonlDurabilityError as exc:
                     raise JsonlDurabilityError(
                         f"malformed complete JSONL record {line_number}: {path}: {exc}"
                     ) from exc
@@ -1395,7 +1421,7 @@ def _iter_complete_lines(descriptor: int, limit: int, path: Path,
                         f"JSON object required at JSONL record {line_number}: {path}"
                     )
             raw_sha256 = hashlib.sha256(line).digest()
-            chain = hashlib.sha256(bytes.fromhex(chain) + raw_sha256).hexdigest()
+            chain = hashlib.sha256(_chain_bytes(chain, str(path)) + raw_sha256).hexdigest()
             yield VerifiedLine(
                 sequence=line_number, start=start, end=offset, raw=line, value=value,
                 chain_sha256=chain
@@ -1522,10 +1548,10 @@ def _insert_line(connection: sqlite3.Connection, sequence: int, line: VerifiedLi
     value_json = None
     object_id_json = None
     if line.value is not None:
-        value_json = json.dumps(line.value, sort_keys=True, separators=(",", ":"))
+        value_json = json.dumps(line.value, sort_keys=True, separators=(",", ":"), allow_nan=False)
         if "id" in line.value:
             object_id_json = json.dumps(
-                line.value.get("id"), sort_keys=True, separators=(",", ":")
+                line.value.get("id"), sort_keys=True, separators=(",", ":"), allow_nan=False
             )
     _maybe_revalidate_index_connection(connection)
     connection.execute(
@@ -1674,8 +1700,8 @@ def _rows_to_lines(rows: Iterator[tuple]) -> tuple[VerifiedLine, ...]:
     for sequence, start, end, raw, value_json, chain in rows:
         if value_json is not None:
             try:
-                value = json.loads(value_json)
-            except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+                value = _parse_json(value_json)
+            except JsonlDurabilityError as exc:
                 raise JsonlDurabilityError("JSONL verification index contains invalid JSON") from exc
         else:
             value = None
@@ -1684,22 +1710,17 @@ def _rows_to_lines(rows: Iterator[tuple]) -> tuple[VerifiedLine, ...]:
         if not all(type(item) is int for item in (sequence, start, end)) \
                 or not isinstance(raw, (bytes, bytearray)):
             raise JsonlDurabilityError("JSONL verification index contains invalid row types")
-        try:
-            result.append(VerifiedLine(
-                sequence=sequence, start=start, end=end, raw=bytes(raw), value=value,
-                chain_sha256=str(chain),
-            ))
-        except (TypeError, ValueError, OverflowError) as exc:
-            raise JsonlDurabilityError("JSONL verification index contains invalid row types") from exc
+        result.append(VerifiedLine(
+            sequence=sequence, start=start, end=end, raw=bytes(raw), value=value,
+            chain_sha256=str(chain),
+        ))
     return tuple(result)
 
 
 def _verified_descriptor(path: Path, max_record_bytes: int) \
         -> tuple[int, sqlite3.Connection, bool]:
     path = _durable_path(path)
-    if not isinstance(max_record_bytes, int) or isinstance(max_record_bytes, bool) \
-            or max_record_bytes < 0:
-        raise JsonlDurabilityError("JSONL max_record_bytes must be a non-negative integer")
+    max_record_bytes = _validate_record_limit(max_record_bytes)
     pins = (_win_pin_durable_parent(path.parent, create=False)
             if os.name == "nt" else _posix_pin_durable_parent(path.parent, create=False))
     journal_pins = pins
@@ -1732,6 +1753,7 @@ def _verified_descriptor(path: Path, max_record_bytes: int) \
 
 def read_jsonl_objects(path: Path, max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES) -> list[dict]:
     """Read objects from an intact journal through its verified derived index."""
+    max_record_bytes = _validate_record_limit(max_record_bytes)
     path = _durable_path(path)
     try:
         descriptor, connection, _rebuilt = _verified_descriptor(path, max_record_bytes)
@@ -1748,8 +1770,8 @@ def read_jsonl_objects(path: Path, max_record_bytes: int = DEFAULT_MAX_RECORD_BY
         result = []
         for row in rows:
             try:
-                value = json.loads(row[0])
-            except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+                value = _parse_json(row[0])
+            except JsonlDurabilityError as exc:
                 raise JsonlDurabilityError(f"JSONL verification index contains invalid JSON: {path}") from exc
             if not isinstance(value, dict):
                 raise JsonlDurabilityError(f"JSONL verification index contains a non-object value: {path}")
@@ -1765,6 +1787,7 @@ def read_jsonl_objects(path: Path, max_record_bytes: int = DEFAULT_MAX_RECORD_BY
 def read_jsonl_prefix(path: Path, count: int,
                       max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES) -> tuple[VerifiedLine, ...]:
     """Return at most *count* verified physical lines from the journal prefix."""
+    max_record_bytes = _validate_record_limit(max_record_bytes)
     path = _durable_path(path)
     if not isinstance(count, int) or isinstance(count, bool) or count < 0:
         raise JsonlDurabilityError("JSONL prefix count cannot be negative")
@@ -1794,6 +1817,7 @@ def read_jsonl_prefix(path: Path, count: int,
 def find_jsonl_objects(path: Path, field: str, value: object,
                        max_record_bytes: int = DEFAULT_MAX_RECORD_BYTES) -> list[dict]:
     """Find exact top-level field matches without rescanning verified journal bytes."""
+    max_record_bytes = _validate_record_limit(max_record_bytes)
     path = _durable_path(path)
     if not isinstance(field, str) or not field:
         raise JsonlDurabilityError("JSONL search field must be a nonempty string")
@@ -1808,7 +1832,7 @@ def find_jsonl_objects(path: Path, field: str, value: object,
         _maybe_revalidate_index_connection(connection)
         if field == "id":
             try:
-                encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+                encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
             except (TypeError, ValueError, OverflowError, RecursionError) as exc:
                 raise JsonlDurabilityError("JSONL search value is not serializable") from exc
             rows = connection.execute(
@@ -1818,16 +1842,16 @@ def find_jsonl_objects(path: Path, field: str, value: object,
             result = []
             for row in rows:
                 try:
-                    result.append(json.loads(row[0]))
-                except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+                    result.append(_parse_json(row[0]))
+                except JsonlDurabilityError as exc:
                     raise JsonlDurabilityError(f"JSONL verification index contains invalid JSON: {path}") from exc
             return result
         result = []
         for row in connection.execute(
                 "SELECT value_json FROM records WHERE value_json IS NOT NULL ORDER BY sequence"):
             try:
-                candidate = json.loads(row[0])
-            except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+                candidate = _parse_json(row[0])
+            except JsonlDurabilityError as exc:
                 raise JsonlDurabilityError(f"JSONL verification index contains invalid JSON: {path}") from exc
             if not isinstance(candidate, dict):
                 raise JsonlDurabilityError(f"JSONL verification index contains a non-object value: {path}")
@@ -1860,6 +1884,7 @@ def read_jsonl_since(path: Path, consumer: str,
     """
     if not isinstance(consumer, str) or not consumer or len(consumer) > 128:
         raise JsonlDurabilityError("invalid JSONL index consumer")
+    max_record_bytes = _validate_record_limit(max_record_bytes)
     path = _durable_path(path)
     try:
         descriptor, connection, rebuilt = _verified_descriptor(path, max_record_bytes)
@@ -1903,6 +1928,7 @@ def acknowledge_jsonl(path: Path, consumer: str, batch: IndexedBatch,
     """Durably advance a consumer after its selected projections are durable."""
     if not isinstance(consumer, str) or not consumer or len(consumer) > 128:
         raise JsonlDurabilityError("invalid JSONL index consumer")
+    max_record_bytes = _validate_record_limit(max_record_bytes)
     _validate_indexed_batch(batch)
     path = _durable_path(path)
     try:
@@ -1966,7 +1992,7 @@ def _duplicate_in_index(connection: sqlite3.Connection, field: str | None,
     _maybe_revalidate_index_connection(connection)
     if field == "id":
         try:
-            encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+            encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
         except (TypeError, ValueError, OverflowError, RecursionError) as exc:
             raise JsonlDurabilityError("JSONL dedupe value is not serializable") from exc
         return connection.execute(
@@ -1975,8 +2001,8 @@ def _duplicate_in_index(connection: sqlite3.Connection, field: str | None,
     for row in connection.execute(
             "SELECT value_json FROM records WHERE value_json IS NOT NULL ORDER BY sequence"):
         try:
-            candidate = json.loads(row[0])
-        except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+            candidate = _parse_json(row[0])
+        except JsonlDurabilityError as exc:
             raise JsonlDurabilityError("JSONL verification index contains invalid JSON") from exc
         if not isinstance(candidate, dict):
             raise JsonlDurabilityError("JSONL verification index contains a non-object value")
@@ -1997,14 +2023,13 @@ def _update_index_after_append(connection: sqlite3.Connection, descriptor: int, 
     if stat.st_size != old_size + len(encoded):
         raise JsonlDurabilityError(f"JSONL size changed during indexed append: {path}")
     try:
-        value = json.loads(encoded[:-1].decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError,
-            OverflowError, RecursionError) as exc:  # defensive; caller encoded it.
+        value = _parse_json(encoded[:-1])
+    except JsonlDurabilityError as exc:  # defensive; caller encoded it.
         raise JsonlDurabilityError(f"new JSONL record cannot be indexed: {path}") from exc
     raw_digest = hashlib.sha256(encoded).digest()
     try:
-        chain = hashlib.sha256(bytes.fromhex(prior_chain) + raw_digest).hexdigest()
-    except (TypeError, ValueError) as exc:
+        chain = hashlib.sha256(_chain_bytes(prior_chain, str(path)) + raw_digest).hexdigest()
+    except JsonlDurabilityError as exc:
         raise JsonlDurabilityError(f"JSONL verification metadata has an invalid chain: {path}") from exc
     line = VerifiedLine(line_count + 1, old_size, stat.st_size, encoded, value, chain)
     try:
@@ -2093,13 +2118,12 @@ def _append_jsonl_unpinned(path: Path, value: dict,
     """
     if not isinstance(value, dict):
         raise JsonlDurabilityError("JSONL append requires an object")
-    if not isinstance(max_record_bytes, int) or isinstance(max_record_bytes, bool) \
-            or max_record_bytes < 0:
-        raise JsonlDurabilityError("JSONL max_record_bytes must be a non-negative integer")
+    max_record_bytes = _validate_record_limit(max_record_bytes)
     try:
-        encoded = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeDecodeError) as exc:
-        raise JsonlDurabilityError(f"JSONL append value is not serializable: {path}") from exc
+        encoded = (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+                   + "\n").encode("utf-8")
+    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeError) as exc:
+        raise JsonlDurabilityError("JSONL append value is not canonical JSON") from exc
     if len(encoded) - 1 > max_record_bytes:
         raise JsonlDurabilityError(f"new JSONL record exceeds {max_record_bytes} bytes: {path}")
     if parent_directory is None:
@@ -2170,6 +2194,7 @@ def append_jsonl(path: Path, value: dict,
                  rebuild_in_place: bool = False,
                  hook: Callable[[str], None] | None = None) -> AppendOutcome:
     try:
+        max_record_bytes = _validate_record_limit(max_record_bytes)
         path = Path(path)
         with pinned_durable_parent(path.parent, create=True) as pins:
             revalidate_durable_parent_pins(pins)
@@ -2260,13 +2285,12 @@ def _append_jsonl_at(root_descriptor: int, journal_name: str, value: dict,
         raise JsonlDurabilityError("pinned JSONL persistence is unavailable on this platform")
     if not isinstance(value, dict):
         raise JsonlDurabilityError("JSONL append requires an object")
-    if not isinstance(max_record_bytes, int) or isinstance(max_record_bytes, bool) \
-            or max_record_bytes < 0:
-        raise JsonlDurabilityError("JSONL max_record_bytes must be a non-negative integer")
+    max_record_bytes = _validate_record_limit(max_record_bytes)
     try:
-        encoded = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeDecodeError) as exc:
-        raise JsonlDurabilityError("JSONL append value is not serializable") from exc
+        encoded = (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+                   + "\n").encode("utf-8")
+    except (TypeError, ValueError, OverflowError, RecursionError, UnicodeError) as exc:
+        raise JsonlDurabilityError("JSONL append value is not canonical JSON") from exc
     if len(encoded) - 1 > max_record_bytes:
         raise JsonlDurabilityError(f"new JSONL record exceeds {max_record_bytes} bytes")
     cache_name = index_cache_name(identity)

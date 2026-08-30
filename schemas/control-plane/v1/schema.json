@@ -202,12 +202,12 @@
       "properties": {
         "schema_version": {"const": 1},
         "id": {"$ref": "#/$defs/identifier"},
-        "actor": {"type": "string", "minLength": 1},
+        "actor": {"type": "string", "minLength": 1, "pattern": "[^\\s]"},
         "verb": {"$ref": "#/$defs/identifier"},
         "arguments": {"type": "array"},
-        "reason": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1, "pattern": "[^\\s]"},
         "goal_id": {"$ref": "#/$defs/identifier"},
-        "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 256},
+        "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "[^\\s]"},
         "status": {"enum": ["proposed", "accepted", "queued", "executed", "refused", "cancelled"]},
         "decision_source": {"enum": ["hermes-model", "project-reconciler", "notification-reconciler", "routing-reconciler", "instruction-reconciler"]}
       },

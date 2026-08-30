@@ -1,0 +1,10 @@
+[Unit]
+Description=Recursion encrypted off-site backup schedule (inert review template)
+
+[Timer]
+OnCalendar=*-*-* 03:17:00 UTC
+Persistent=false
+Unit=recursion-backup.service
+
+# No [Install] section: this template cannot be enabled implicitly. A human must review the
+# authenticated policy and explicitly install/enable the schedule after live evidence exists.

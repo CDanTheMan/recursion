@@ -11,17 +11,29 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
+import binascii
 import ctypes
+import hashlib
+import hmac
 import ipaddress
 import json
 import os
 import pathlib
 import re
+import secrets
 import socket
 import ssl
 import stat
 import sys
+import time
 from collections.abc import Iterable
+
+try:
+    from provider_contract import enabled_allowlist, enabled_profile_names, load_profile, parse_authority
+except ModuleNotFoundError:  # importlib-based hermetic tests load this file by path.
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    from provider_contract import enabled_allowlist, enabled_profile_names, load_profile, parse_authority
 
 try:
     import pwd
@@ -36,12 +48,22 @@ HEADER_TIMEOUT = 5.0
 CONNECT_TIMEOUT = 15.0
 CLIENT_HELLO_TIMEOUT = 15.0
 IDLE_TIMEOUT = 300.0
+CAPABILITY_TTL_SECONDS = 900
+CAPABILITY_CLOCK_SKEW_SECONDS = 30
 MAX_CLIENT_HELLO = 65536
+MAX_CAPABILITY_TOKEN = 8192
+MAX_CAPABILITY_PAYLOAD = 4096
+MAX_CAPABILITY_SIGNATURE = 64
+MAX_REVOCATION_BYTES = 1024 * 1024
 TLS_HANDSHAKE = 0x16
 TLS_CLIENT_HELLO = 0x01
 SERVER_NAME_EXTENSION = 0x0000
-HOST_RE = re.compile(r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 HEADER_RE = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+\Z")
+CAPABILITY_B64_RE = re.compile(r"[A-Za-z0-9_-]+\Z")
+# Control-plane identifiers are 128 characters; the separator and 64-character contract digest
+# make the generated assignment identity at most 193 characters.  Keep a round 255-character
+# ceiling while remaining entirely safe as a Basic userinfo username.
+ASSIGNMENT_RE = re.compile(r"[A-Za-z0-9._-]{1,255}\Z")
 
 
 class MalformedConnect(ValueError):
@@ -60,33 +82,219 @@ class ClientHelloMismatch(ValueError):
     """The ClientHello SNI does not match the CONNECT authority."""
 
 
-def parse_authority(value: str) -> tuple[str, int]:
-    if value.count(":") != 1 or any(ch.isspace() for ch in value):
-        raise ValueError("authority must be a DNS name and explicit port")
-    host, port_text = value.rsplit(":", 1)
-    host = host.lower()
-    if not HOST_RE.fullmatch(host) or not port_text.isascii() or not port_text.isdecimal():
-        raise ValueError("authority must be a canonical DNS name and explicit port")
+def _plain_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _reject_json_constant(name: str) -> object:
+    raise ValueError(f"non-finite JSON number {name} is forbidden")
+
+
+def _json_no_constants(value: str) -> object:
+    return json.loads(value, parse_constant=_reject_json_constant)
+
+
+def issue_capability(profile: str, assignment: str, secret: bytes, *,
+                     now: int | None = None, ttl: int = CAPABILITY_TTL_SECONDS,
+                     jti: str | None = None) -> str:
+    """Create an opaque, signed transport capability for exactly one assignment/profile."""
+    if not isinstance(secret, bytes) or len(secret) < 32:
+        raise ValueError("capability key is too short")
+    if not isinstance(profile, str) or not isinstance(assignment, str) \
+            or not re.fullmatch(r"[a-z][a-z0-9-]{1,63}", profile) \
+            or not ASSIGNMENT_RE.fullmatch(assignment):
+        raise ValueError("capability identity is invalid")
+    if now is not None and not _plain_int(now):
+        raise ValueError("capability timestamp is invalid")
+    if not _plain_int(ttl) or not 1 <= ttl <= 86400:
+        raise ValueError("capability lifetime is invalid")
+    issued = int(time.time()) if now is None else now
+    nonce = secrets.token_urlsafe(24) if jti is None else jti
+    if not isinstance(nonce, str) or not re.fullmatch(r"[A-Za-z0-9_-]{22,128}", nonce):
+        raise ValueError("capability nonce is invalid")
+    payload = json.dumps({"assignment": assignment, "profile": profile,
+                          "iat": issued, "nbf": issued,
+                          "exp": issued + ttl, "jti": nonce},
+                         sort_keys=True, separators=(",", ":")).encode("ascii")
+    encoded = base64.urlsafe_b64encode(payload).rstrip(b"=")
+    signature = hmac.new(secret, encoded, hashlib.sha256).digest()
+    return encoded.decode("ascii") + "." + base64.urlsafe_b64encode(signature).rstrip(b"=").decode("ascii")
+
+
+def verify_capability(token: str, secret: bytes, *, now: int | None = None,
+                      revoked_jtis: set[str] | None = None) -> dict[str, str]:
     try:
-        ipaddress.ip_address(host)
-    except ValueError:
-        pass
-    else:
-        raise ValueError("IP-literal authorities are forbidden")
-    port = int(port_text, 10)
-    if not 1 <= port <= 65535:
-        raise ValueError("authority port is out of range")
-    return host, port
+        if not isinstance(token, str) or not isinstance(secret, bytes) or len(secret) < 32 or len(token) > MAX_CAPABILITY_TOKEN:
+            raise ValueError
+        encoded, signed = token.split(".", 1)
+        observed = _decode_capability_segment(signed, MAX_CAPABILITY_SIGNATURE)
+        expected = hmac.new(secret, encoded.encode("ascii"), hashlib.sha256).digest()
+        if not hmac.compare_digest(observed, expected):
+            raise ValueError
+        payload = _json_no_constants(
+            _decode_capability_segment(encoded, MAX_CAPABILITY_PAYLOAD).decode("utf-8", "strict")
+        )
+    except (ValueError, UnicodeError, json.JSONDecodeError, TypeError, OverflowError,
+            binascii.Error, RecursionError):
+        raise ConnectDenied("transport capability is invalid") from None
+    if not isinstance(payload, dict):
+        raise ConnectDenied("transport capability is invalid")
+    profile = payload.get("profile")
+    assignment = payload.get("assignment")
+    jti = payload.get("jti")
+    if not isinstance(profile, str) or not isinstance(assignment, str) or not isinstance(jti, str):
+        raise ConnectDenied("transport capability is invalid")
+    try:
+        identities_valid = bool(re.fullmatch(r"[a-z][a-z0-9-]{1,63}", profile)) \
+            and bool(ASSIGNMENT_RE.fullmatch(assignment)) \
+            and bool(re.fullmatch(r"[A-Za-z0-9_-]{22,128}", jti))
+    except (TypeError, RecursionError):
+        identities_valid = False
+    if not identities_valid:
+        raise ConnectDenied("transport capability is invalid")
+    issued = payload.get("iat")
+    not_before = payload.get("nbf")
+    expires = payload.get("exp")
+    if not all(_plain_int(value) for value in (issued, not_before, expires)):
+        raise ConnectDenied("transport capability is invalid")
+    if now is not None and not _plain_int(now):
+        raise ConnectDenied("transport capability is invalid")
+    current = int(time.time()) if now is None else now
+    if issued != not_before or expires <= issued or expires - issued > 86400 \
+            or not_before > current + CAPABILITY_CLOCK_SKEW_SECONDS \
+            or expires < current - CAPABILITY_CLOCK_SKEW_SECONDS:
+        raise ConnectDenied("transport capability is expired or not yet valid")
+    jti = payload["jti"]
+    if revoked_jtis is not None and jti in revoked_jtis:
+        raise ConnectDenied("transport capability has been revoked")
+    return {"profile": profile, "assignment": assignment, "jti": jti}
+
+
+def _decode_capability_segment(value: str, maximum: int) -> bytes:
+    if not isinstance(value, str) or not value or len(value) > maximum \
+            or not CAPABILITY_B64_RE.fullmatch(value) or len(value) % 4 == 1:
+        raise ValueError("capability encoding is invalid")
+    padded = value.encode("ascii") + b"=" * (-len(value) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(padded)
+    except (binascii.Error, ValueError, TypeError) as exc:
+        raise ValueError("capability encoding is invalid") from exc
+    if len(decoded) > maximum:
+        raise ValueError("capability encoding is too large")
+    canonical = base64.urlsafe_b64encode(decoded).rstrip(b"=").decode("ascii")
+    if canonical != value:
+        raise ValueError("capability encoding is not canonical")
+    return decoded
+
+
+def _reject_reparse_components(path: pathlib.Path, label: str) -> None:
+    if not isinstance(path, pathlib.Path) or not path.is_absolute() \
+            or any(part in {".", ".."} for part in path.parts):
+        raise ValueError(f"{label} must be a canonical absolute path")
+    current = pathlib.Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise ValueError(f"{label} is unavailable") from exc
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+                or (getattr(info, "st_file_attributes", 0) & 0x400):
+            raise ValueError(f"{label} contains a symlink/reparse component")
+
+
+def _read_regular_file(path: pathlib.Path, label: str, maximum: int) -> bytes:
+    _reject_reparse_components(path, label)
+    try:
+        expected = path.lstat()
+    except OSError as exc:
+        raise ValueError(f"{label} is unavailable") from exc
+    if stat.S_ISLNK(expected.st_mode) or getattr(expected, "st_reparse_tag", 0) \
+            or (getattr(expected, "st_file_attributes", 0) & 0x400) \
+            or not stat.S_ISREG(expected.st_mode):
+        raise ValueError(f"{label} is unavailable")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except (OSError, ValueError, TypeError) as exc:
+        raise ValueError(f"{label} is unavailable") from exc
+    try:
+        info = os.fstat(descriptor)
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+                or (getattr(info, "st_file_attributes", 0) & 0x400) \
+                or not stat.S_ISREG(info.st_mode) \
+                or (info.st_dev, info.st_ino) != (expected.st_dev, expected.st_ino) \
+                or info.st_size != expected.st_size or info.st_size < 0 or info.st_size > maximum:
+            raise ValueError(f"{label} is unavailable")
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = -1
+            value = source.read(maximum + 1)
+        if len(value) > maximum:
+            raise ValueError(f"{label} exceeds its size bound")
+        return value
+    except (OSError, ValueError, TypeError, OverflowError) as exc:
+        raise ValueError(f"{label} is unreadable") from exc
+    finally:
+        if descriptor != -1:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
+def load_revoked_jtis(path: pathlib.Path | None) -> set[str]:
+    """Load only a root-owned, mode-0600 revocation set from ephemeral runtime state."""
+    if path is None:
+        return set()
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise ConnectDenied("capability revocation state is unavailable") from exc
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+            or (getattr(info, "st_file_attributes", 0) & 0x400) \
+            or not stat.S_ISREG(info.st_mode):
+        raise ConnectDenied("capability revocation state is unavailable")
+    if stat.S_IMODE(info.st_mode) != 0o600 or (hasattr(os, "geteuid") and os.geteuid() == 0 and info.st_uid != 0):
+        raise ConnectDenied("capability revocation state ownership/mode is unsafe")
+    try:
+        value = json.loads(_read_regular_file(path, "capability revocation state", MAX_REVOCATION_BYTES)
+                           .decode("utf-8", "strict"), parse_constant=_reject_json_constant)
+    except (OSError, UnicodeError, ValueError, TypeError, OverflowError, RecursionError,
+            json.JSONDecodeError):
+        raise ConnectDenied("capability revocation state is invalid") from None
+    revoked = value.get("revoked_jtis", []) if isinstance(value, dict) else None
+    if not isinstance(revoked, list) or any(not isinstance(item, str) or
+                                             not re.fullmatch(r"[A-Za-z0-9_-]{22,128}", item)
+                                             for item in revoked):
+        raise ConnectDenied("capability revocation state is invalid")
+    return set(revoked)
 
 
 def parse_allowlist(values: Iterable[str]) -> set[tuple[str, int]]:
-    allowed = {parse_authority(value) for value in values}
+    try:
+        allowed = {parse_authority(value) for value in values}
+    except (TypeError, ValueError) as exc:
+        raise ValueError("provider authority allowlist is invalid") from exc
     if not allowed:
         raise ValueError("at least one provider authority is required")
     return allowed
 
 
-def parse_connect_request(request: bytes, allowed: set[tuple[str, int]]) -> tuple[str, int]:
+def parse_connect_request(
+    request: bytes,
+    allowed: set[tuple[str, int]] | None = None,
+    *,
+    capability_key: bytes | None = None,
+    profile_authorities: dict[str, set[tuple[str, int]]] | None = None,
+    active_assignment: str | None = None,
+    revoked_jtis: set[str] | None = None,
+) -> tuple[str, int]:
+    if not isinstance(request, bytes):
+        raise MalformedConnect("request must be bytes")
     if len(request) > MAX_REQUEST or not request.endswith(b"\r\n\r\n"):
         raise MalformedConnect("request framing is invalid")
     if request[:-4].find(b"\r\n\r\n") >= 0 or b"\x00" in request:
@@ -110,6 +318,8 @@ def parse_connect_request(request: bytes, allowed: set[tuple[str, int]]) -> tupl
         authority = parse_authority(authority_text)
     except ValueError as exc:
         raise MalformedConnect("CONNECT authority is invalid") from exc
+    proxy_authorization: str | None = None
+    active_identity: str | None = None
     for line in lines[1:]:
         if not line or line[:1] in " \t" or ":" not in line:
             raise MalformedConnect("header syntax is invalid")
@@ -118,7 +328,32 @@ def parse_connect_request(request: bytes, allowed: set[tuple[str, int]]) -> tupl
             raise MalformedConnect("header name is invalid")
         if name.lower() in {"content-length", "transfer-encoding"}:
             raise MalformedConnect("CONNECT bodies are forbidden")
-    if authority not in allowed:
+        if name.lower() == "proxy-authorization":
+            if proxy_authorization is not None:
+                raise MalformedConnect("duplicate proxy authorization")
+            proxy_authorization = line.split(":", 1)[1].strip()
+    if capability_key is not None:
+        if profile_authorities is None or not proxy_authorization:
+            raise ConnectDenied("transport authorization is required")
+        if proxy_authorization.startswith("Basic "):
+            try:
+                basic = base64.b64decode(proxy_authorization[6:], validate=True).decode("ascii")
+                active_identity, token = basic.split(":", 1)
+            except (ValueError, TypeError, UnicodeError, binascii.Error, OverflowError):
+                raise ConnectDenied("transport authorization is invalid") from None
+        else:
+            raise ConnectDenied("Basic assignment identity is required")
+        if not active_identity or active_identity == "assignment":
+            raise ConnectDenied("active assignment identity is required")
+        capability = verify_capability(token, capability_key, revoked_jtis=revoked_jtis)
+        if active_identity != capability["assignment"]:
+            raise ConnectDenied("transport capability identity does not match its assignment")
+        if active_assignment is not None and capability["assignment"] != active_assignment:
+            raise ConnectDenied("transport capability is not bound to the active assignment")
+        allowed = profile_authorities.get(capability["profile"])
+        if allowed is None:
+            raise ConnectDenied("transport profile is not admitted")
+    if allowed is None or authority not in allowed:
         raise ConnectDenied("authority is not allowed")
     return authority
 
@@ -354,16 +589,88 @@ async def _pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> N
             pass
 
 
+def forbidden_destination(address: str) -> bool:
+    """Reject every non-public destination class before a socket is created."""
+    try:
+        value = ipaddress.ip_address(address)
+    except ValueError:
+        return True
+    return not value.is_global or value.is_private or value.is_loopback or value.is_link_local \
+        or value.is_reserved or value.is_multicast or value.is_unspecified
+
+
+def resolve_approved_addresses(
+    host: str, port: int, overrides: dict[str, str] | None = None,
+) -> list[tuple[int, int, int, tuple[object, ...], str]]:
+    """Resolve once, reject unsafe answers, and return the exact peer set for dialing."""
+    override = (overrides or {}).get(host)
+    allow_test_private = bool(override) and os.environ.get("RECURSION_PROVIDER_PROXY_TEST") == "1"
+    if override:
+        infos = [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (override, port))]
+    else:
+        try:
+            infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        except OSError as exc:
+            raise ConnectDenied("destination resolution failed") from exc
+    approved: list[tuple[int, int, int, tuple[object, ...], str]] = []
+    seen: set[tuple[int, str]] = set()
+    for family, socktype, proto, _, sockaddr in infos:
+        address = str(sockaddr[0])
+        if (family, address) in seen:
+            continue
+        if forbidden_destination(address) and not allow_test_private:
+            raise ConnectDenied("destination resolves to a forbidden address")
+        seen.add((family, address))
+        approved.append((family, socktype, proto, tuple(sockaddr), address))
+    if not approved:
+        raise ConnectDenied("destination has no approved addresses")
+    return approved
+
+
+async def open_approved_connection(
+    destinations: list[tuple[int, int, int, tuple[object, ...], str]], port: int,
+) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    del port  # The port is already part of each approved sockaddr.
+    loop = asyncio.get_running_loop()
+    last_error: OSError | None = None
+    for family, socktype, proto, sockaddr, approved_ip in destinations:
+        sock = socket.socket(family, socktype, proto)
+        sock.setblocking(False)
+        try:
+            await asyncio.wait_for(loop.sock_connect(sock, sockaddr), CONNECT_TIMEOUT)
+            peer = sock.getpeername()
+            connected_ip = str(peer[0])
+            if connected_ip != approved_ip or forbidden_destination(connected_ip) and \
+                    os.environ.get("RECURSION_PROVIDER_PROXY_TEST") != "1":
+                raise ConnectDenied("connected peer is outside the approved DNS answer")
+            return await asyncio.open_connection(sock=sock)
+        except ConnectDenied:
+            sock.close()
+            raise
+        except (asyncio.TimeoutError, OSError) as exc:
+            last_error = exc
+            sock.close()
+    raise OSError("all approved upstream addresses refused the connection") from last_error
+
+
 class ConnectProxy:
     def __init__(
         self,
         allowed: set[tuple[str, int]],
         resolutions: dict[str, str],
         concurrency: int,
+        capability_key: bytes | None = None,
+        profile_authorities: dict[str, set[tuple[str, int]]] | None = None,
+        active_assignment: str | None = None,
+        revoked_jtis: set[str] | None = None,
     ) -> None:
         self.allowed = allowed
         self.resolutions = resolutions
         self.concurrency = concurrency
+        self.capability_key = capability_key
+        self.profile_authorities = profile_authorities
+        self.active_assignment = active_assignment
+        self.revoked_jtis = revoked_jtis or set()
         self.active = 0
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -378,7 +685,12 @@ class ConnectProxy:
         try:
             try:
                 request = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), HEADER_TIMEOUT)
-                host, port = parse_connect_request(request, self.allowed)
+                host, port = parse_connect_request(
+                    request, self.allowed, capability_key=self.capability_key,
+                    profile_authorities=self.profile_authorities,
+                    active_assignment=self.active_assignment,
+                    revoked_jtis=self.revoked_jtis,
+                )
             except ConnectDenied:
                 writer.write(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n")
                 await writer.drain()
@@ -387,10 +699,10 @@ class ConnectProxy:
                 writer.write(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n")
                 await writer.drain()
                 return
-            destination = self.resolutions.get(host, host)
+            destinations = resolve_approved_addresses(host, port, self.resolutions)
             try:
-                upstream_reader, upstream_writer = await asyncio.wait_for(
-                    asyncio.open_connection(destination, port), CONNECT_TIMEOUT
+                upstream_reader, upstream_writer = await open_approved_connection(
+                    destinations, port
                 )
             except (asyncio.TimeoutError, OSError):
                 writer.write(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n")
@@ -446,6 +758,8 @@ def parse_resolutions(values: Iterable[str], namespace: pathlib.Path) -> dict[st
         host, address = value.split("=", 1)
         canonical, _ = parse_authority(f"{host}:1")
         socket.inet_pton(socket.AF_INET, address)
+        if forbidden_destination(address) and os.environ.get("RECURSION_PROVIDER_PROXY_TEST") != "1":
+            raise ValueError("resolver override is a forbidden destination")
         result[canonical] = address
     return result
 
@@ -454,14 +768,36 @@ def namespace_inventory() -> dict[str, object]:
     interfaces = sorted(name for _, name in socket.if_nameindex())
     routes = []
     route_file = pathlib.Path("/proc/net/route")
-    if route_file.exists():
-        routes = [line for line in route_file.read_text().splitlines()[1:] if line.strip()]
+    try:
+        with route_file.open("rb") as source:
+            raw = source.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            raise ValueError("route table is too large")
+        routes = [line for line in raw.decode("ascii", "strict").splitlines()[1:] if line.strip()]
+    except (OSError, UnicodeError, ValueError, TypeError, OverflowError):
+        raise RuntimeError("provider namespace route table is unreadable") from None
     return {"interfaces": interfaces, "ipv4_routes": len(routes)}
 
 
-def proxy_response(port: int, authority: str) -> bytes:
+def _proxy_authorization(capability_token: str | None, capability_identity: str | None) -> str:
+    if capability_token is None and capability_identity is None:
+        return ""
+    if capability_token is None or capability_identity is None \
+            or not isinstance(capability_token, str) or not isinstance(capability_identity, str) \
+            or not re.fullmatch(r"[A-Za-z0-9_-]{40,512}\.[A-Za-z0-9_-]{40,512}", capability_token) \
+            or not ASSIGNMENT_RE.fullmatch(capability_identity):
+        raise ValueError("probe capability requires an exact assignment identity and token")
+    basic = base64.b64encode(f"{capability_identity}:{capability_token}".encode("ascii")).decode("ascii")
+    return f"Proxy-Authorization: Basic {basic}\r\n"
+
+
+def proxy_response(port: int, authority: str, capability_token: str | None = None,
+                   capability_identity: str | None = None) -> bytes:
     with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
-        client.sendall(f"CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n\r\n".encode("ascii"))
+        authorization = _proxy_authorization(capability_token, capability_identity)
+        client.sendall(
+            f"CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n{authorization}\r\n".encode("ascii")
+        )
         response = b""
         while b"\r\n\r\n" not in response and len(response) <= 4096:
             block = client.recv(4096)
@@ -471,7 +807,9 @@ def proxy_response(port: int, authority: str) -> bytes:
         return response
 
 
-def probe_namespace(namespace: pathlib.Path, port: int, authority: tuple[str, int], live: bool) -> dict[str, object]:
+def probe_namespace(namespace: pathlib.Path, port: int, authority: tuple[str, int], live: bool,
+                    capability_token: str | None = None,
+                    capability_identity: str | None = None) -> dict[str, object]:
     validate_namespace_file(namespace)
     host_fd = os.open("/proc/self/ns/net", os.O_RDONLY | os.O_CLOEXEC)
     provider_fd = os.open(namespace, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
@@ -481,7 +819,7 @@ def probe_namespace(namespace: pathlib.Path, port: int, authority: tuple[str, in
         inventory = namespace_inventory()
         if inventory != {"interfaces": ["lo"], "ipv4_routes": 0}:
             raise RuntimeError("provider namespace is not loopback-only")
-        denied = proxy_response(port, "example.com:443")
+        denied = proxy_response(port, "example.com:443", capability_token, capability_identity)
         if not denied.startswith(b"HTTP/1.1 403"):
             raise RuntimeError("provider proxy did not deny an unlisted authority")
         try:
@@ -494,10 +832,14 @@ def probe_namespace(namespace: pathlib.Path, port: int, authority: tuple[str, in
         result["denied_authority"] = True
         result["direct_egress"] = False
         if live:
+            if capability_token is None or capability_identity is None:
+                raise RuntimeError("live probe requires an explicit short-lived assignment capability")
             authority_text = f"{authority[0]}:{authority[1]}"
             with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
+                authorization = _proxy_authorization(capability_token, capability_identity)
                 client.sendall(
-                    f"CONNECT {authority_text} HTTP/1.1\r\nHost: {authority_text}\r\n\r\n".encode("ascii")
+                    f"CONNECT {authority_text} HTTP/1.1\r\nHost: {authority_text}\r\n"
+                    f"{authorization}\r\n".encode("ascii")
                 )
                 response = b""
                 while b"\r\n\r\n" not in response and len(response) <= 4096:
@@ -521,7 +863,14 @@ def make_parser() -> argparse.ArgumentParser:
     serve = commands.add_parser("serve")
     serve.add_argument("--namespace", type=pathlib.Path, required=True)
     serve.add_argument("--listen-port", type=int, default=18080)
-    serve.add_argument("--allow", action="append", required=True)
+    serve.add_argument("--allow", action="append", default=[])
+    serve.add_argument("--profile-dir", type=pathlib.Path)
+    serve.add_argument("--profile", action="append", default=[])
+    serve.add_argument("--enabled-profiles", action="store_true",
+                       help="select only profiles explicitly marked enabled")
+    serve.add_argument("--capability-key-file", type=pathlib.Path)
+    serve.add_argument("--active-assignment")
+    serve.add_argument("--capability-revocation-file", type=pathlib.Path)
     serve.add_argument("--resolve", action="append", default=[])
     serve.add_argument("--drop-user", required=True)
     serve.add_argument("--concurrency", type=int, default=16)
@@ -539,18 +888,70 @@ def main() -> int:
         if args.command == "serve":
             if not 1 <= args.listen_port <= 65535 or not 1 <= args.concurrency <= 128:
                 raise ValueError("listener or concurrency is out of range")
-            allowed = parse_allowlist(args.allow)
+            if args.profile_dir is not None:
+                if args.allow:
+                    raise ValueError("--allow cannot be combined with --profile-dir")
+                if args.profile and args.enabled_profiles:
+                    raise ValueError("--profile and --enabled-profiles are mutually exclusive")
+                if args.enabled_profiles:
+                    selected = enabled_profile_names(args.profile_dir)
+                else:
+                    selected = args.profile
+                if not selected:
+                    raise ValueError("at least one provider profile is required")
+                profiles = [load_profile(args.profile_dir / f"{name}.json", name) for name in selected]
+                if any(profile["namespace"] != args.namespace.name for profile in profiles):
+                    raise ValueError("provider profile namespace does not match --namespace")
+                if any(not profile["enabled"] for profile in profiles):
+                    raise ValueError("provider egress profile is disabled")
+                if args.capability_key_file is None:
+                    raise ValueError("shared provider proxy requires an assignment capability key")
+                key_path = args.capability_key_file
+                _reject_reparse_components(key_path, "provider capability key")
+                key_info = key_path.lstat()
+                if not stat.S_ISREG(key_info.st_mode):
+                    raise ValueError("provider capability key is unavailable")
+                if key_info.st_mode & 0o077 or (
+                        hasattr(os, "geteuid") and os.geteuid() == 0 and key_info.st_uid != 0):
+                    raise ValueError("provider capability key ownership/mode is unsafe")
+                capability_key = _read_regular_file(key_path, "provider capability key", 1024 * 1024)
+                if len(capability_key) < 32:
+                    raise ValueError("provider capability key is too short")
+                profile_authorities = {
+                    profile["id"]: {parse_authority(item) for item in profile["authorities"]}
+                    for profile in profiles
+                }
+            else:
+                if args.capability_key_file is not None:
+                    raise ValueError("capability keys require --profile-dir")
+                allowed = parse_allowlist(args.allow)
+            if not _plain_int(args.listen_port) or not _plain_int(args.concurrency):
+                raise ValueError("listener or concurrency must be integer values")
             resolutions = parse_resolutions(args.resolve, args.namespace)
             listener = open_listener_in_namespace(args.namespace, args.listen_port)
             drop_privileges(args.drop_user)
-            asyncio.run(run_server(listener, ConnectProxy(allowed, resolutions, args.concurrency)))
+            asyncio.run(run_server(listener, ConnectProxy(
+                allowed if args.profile_dir is None else set(), resolutions, args.concurrency,
+                capability_key if args.profile_dir is not None else None,
+                profile_authorities if args.profile_dir is not None else None,
+                args.active_assignment,
+                load_revoked_jtis(args.capability_revocation_file),
+            )))
             return 0
         authority = parse_authority(args.allow)
-        result = probe_namespace(args.namespace, args.listen_port, authority, args.live)
+        result = probe_namespace(
+            args.namespace, args.listen_port, authority, args.live,
+            os.environ.get("RECURSION_PROVIDER_PROBE_TOKEN"),
+            os.environ.get("RECURSION_PROVIDER_PROBE_IDENTITY"),
+        )
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
-    except (OSError, RuntimeError, ValueError, KeyError) as exc:
-        print(f"provider-connect-proxy: {exc}", file=sys.stderr)
+    except ConnectDenied:
+        print("provider-connect-proxy: connection refused", file=sys.stderr)
+        return 96
+    except (OSError, RuntimeError, ValueError, TypeError, UnicodeError, OverflowError,
+            KeyError, RecursionError):
+        print("provider-connect-proxy: operation refused", file=sys.stderr)
         return 96
 
 

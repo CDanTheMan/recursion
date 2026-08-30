@@ -13,15 +13,19 @@ import argparse
 import json
 import os
 import re
+import stat
 import sys
 import tempfile
 from pathlib import Path
 
+from provider_contract import HOST_RE, ProviderProfileError, assert_endpoints_match, profile_directory, profile_for_provider
+
 PROG = "resolve-engine"
 
 NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
+PROFILE_NAME_RE = re.compile(r"[a-z][a-z0-9-]{1,63}")
 ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}")
-ENDPOINT_RE = re.compile(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?")
+ENDPOINT_RE = HOST_RE
 
 BUILTIN_ENGINES = {"claude", "hermes", "gate", "none", "deepseek", "openrouter"}
 ROLE_CHOICES = ("implementer", "verifier")
@@ -45,15 +49,42 @@ MODEL_KEYS = {"required", "argv_suffix"}
 BILLING_KEYS = {"basis", "provider"}
 BILLING_BASES = {"flat-subscription", "metered", "local"}
 NETWORK_KEYS = {"policy", "endpoints"}
+NETWORK_OPTIONAL_KEYS = {"profile"}
 PROBE_KEYS = {"type", "url_env", "timeout_s"}
+MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 
 
 class ManifestError(Exception):
     """A manifest file exists but violates the contract (exit code 2)."""
 
 
+def reject_reparse_components(path: Path, where: str) -> None:
+    if not isinstance(path, Path) or not path.is_absolute() \
+            or any(part in {".", ".."} for part in path.parts):
+        raise ManifestError(f"{where} must be a canonical absolute path")
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise ManifestError(f"{where} is unreadable") from exc
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) \
+                or (getattr(info, "st_file_attributes", 0) & 0x400):
+            raise ManifestError(f"{where} contains a symlink/reparse component")
+
+
+def reject_json_constant(name: str) -> object:
+    raise ValueError(f"non-finite JSON number {name} is forbidden")
+
+
 def diag(message: str) -> None:
-    print(f"{PROG}: {message}", file=sys.stderr)
+    # Diagnostics are a caller boundary: neither user-controlled paths nor host OS wording may
+    # escape. Validation details stay deliberately structural and path-free.
+    safe = re.sub(r"(?:[A-Za-z]:[\\/]|\\\\|(?<![A-Za-z0-9_])/)[^\s,;)]*", "<path>", str(message))
+    print(f"{PROG}: {safe}", file=sys.stderr)
 
 
 def is_plain_bool(value: object) -> bool:
@@ -72,7 +103,7 @@ def require_object_keys(obj: object, keys: set, where: str) -> dict:
         raise ManifestError(f"{where} missing required key(s): {', '.join(sorted(missing))}")
     extra = obj.keys() - keys
     if extra:
-        raise ManifestError(f"{where} has unknown key(s): {', '.join(sorted(extra))}")
+        raise ManifestError(f"{where} has unknown key(s)")
     return obj
 
 
@@ -81,6 +112,8 @@ def validate_argv(argv: object) -> None:
         raise ManifestError("argv must be a nonempty list of strings")
     if not all(isinstance(item, str) and item for item in argv):
         raise ManifestError("argv elements must be nonempty strings")
+    if len(set(argv)) != len(argv):
+        raise ManifestError("argv elements must be unique")
     if argv[0] != "{{EXE}}":
         raise ManifestError("argv[0] must be the literal placeholder {{EXE}}")
     if argv.count("{{EXE}}") != 1:
@@ -91,7 +124,7 @@ def validate_argv(argv: object) -> None:
         raise ManifestError("{{MODEL}} may appear at most once in argv")
     for item in argv:
         if item.startswith("{{") and item.endswith("}}") and item not in KNOWN_PLACEHOLDERS:
-            raise ManifestError(f"argv contains an unknown placeholder {item!r}")
+            raise ManifestError("argv contains an unknown placeholder")
 
 
 def validate_model(model: object) -> None:
@@ -101,32 +134,42 @@ def validate_model(model: object) -> None:
     suffix = obj["argv_suffix"]
     if not isinstance(suffix, list) or not all(isinstance(item, str) and item for item in suffix):
         raise ManifestError("model.argv_suffix must be a list of nonempty strings")
+    if len(set(suffix)) != len(suffix):
+        raise ManifestError("model.argv_suffix elements must be unique")
     for item in suffix:
         if item.startswith("{{") and item.endswith("}}") and item != "{{MODEL}}":
-            raise ManifestError(f"model.argv_suffix contains an unknown placeholder {item!r}")
+            raise ManifestError("model.argv_suffix contains an unknown placeholder")
     if suffix.count("{{MODEL}}") > 1:
         raise ManifestError("{{MODEL}} may appear at most once in model.argv_suffix")
 
 
 def validate_roles(roles: object) -> None:
-    if not isinstance(roles, list) or not roles:
-        raise ManifestError("roles must be a nonempty list")
+    if not isinstance(roles, list) or not roles or len(roles) > 2:
+        raise ManifestError("roles must contain one or two unique roles")
+    if not all(isinstance(role, str) and role in ROLE_CHOICES for role in roles):
+        raise ManifestError("roles contains an unsupported role")
     if len(set(roles)) != len(roles):
         raise ManifestError("roles must not contain duplicates")
-    if not all(role in ROLE_CHOICES for role in roles):
-        raise ManifestError(f"roles must be a subset of {ROLE_CHOICES}")
 
 
 def validate_billing(billing: object) -> None:
     obj = require_object_keys(billing, BILLING_KEYS, "billing")
-    if obj["basis"] not in BILLING_BASES:
-        raise ManifestError(f"billing.basis must be one of {sorted(BILLING_BASES)}")
+    if not isinstance(obj["basis"], str) or obj["basis"] not in BILLING_BASES:
+        raise ManifestError("billing.basis is unsupported")
     if not isinstance(obj["provider"], str) or not obj["provider"]:
         raise ManifestError("billing.provider must be a nonempty string")
 
 
 def validate_network(network: object) -> None:
-    obj = require_object_keys(network, NETWORK_KEYS, "network")
+    if not isinstance(network, dict):
+        raise ManifestError("network must be a JSON object")
+    missing = NETWORK_KEYS - network.keys()
+    extra = network.keys() - NETWORK_KEYS - NETWORK_OPTIONAL_KEYS
+    if missing:
+        raise ManifestError(f"network missing required key(s): {', '.join(sorted(missing))}")
+    if extra:
+        raise ManifestError(f"network has unknown key(s): {', '.join(sorted(extra))}")
+    obj = network
     if obj["policy"] != "provider-only":
         raise ManifestError('network.policy must be "provider-only"')
     endpoints = obj["endpoints"]
@@ -134,7 +177,10 @@ def validate_network(network: object) -> None:
         raise ManifestError("network.endpoints must be a list of strings")
     for item in endpoints:
         if not isinstance(item, str) or not ENDPOINT_RE.fullmatch(item):
-            raise ManifestError(f"network.endpoints contains an invalid hostname {item!r}")
+            raise ManifestError("network.endpoints contains an invalid hostname")
+    profile = obj.get("profile")
+    if "profile" in obj and (not isinstance(profile, str) or not PROFILE_NAME_RE.fullmatch(profile)):
+        raise ManifestError("network.profile must be a valid provider profile name")
 
 
 def validate_probe(probe: object) -> None:
@@ -153,22 +199,26 @@ def validate_probe(probe: object) -> None:
 def validate_env_passthrough(names: object) -> None:
     if not isinstance(names, list):
         raise ManifestError("env_passthrough must be a list of strings")
-    if len(set(names)) != len(names):
-        raise ManifestError("env_passthrough must not contain duplicates")
     for item in names:
         if not isinstance(item, str) or not ENV_NAME_RE.fullmatch(item):
             raise ManifestError(f"env_passthrough contains an invalid env var name {item!r}")
+    if len(set(names)) != len(names):
+        raise ManifestError("env_passthrough must not contain duplicates")
 
 
-def validate_manifest(data: object, engine: str) -> dict:
+def validate_manifest(data: object, engine: str | None = None) -> dict:
+    """Validate manifest content; filename binding is checked by ``load_manifest``.
+
+    JSON Schema validates a manifest object without knowing which filename will carry it.  Keep
+    this function at that same content-validation boundary so schema/runtime differential checks
+    compare like with like; the file/engine binding is enforced immediately before use below.
+    """
     obj = require_object_keys(data, TOP_LEVEL_KEYS, "manifest")
     if not is_plain_int(obj["schema_version"]) or obj["schema_version"] != 1:
         raise ManifestError("schema_version must be 1")
     name = obj["name"]
     if not isinstance(name, str) or not NAME_RE.fullmatch(name):
         raise ManifestError("name must match ^[a-z][a-z0-9-]{1,31}$")
-    if name != engine:
-        raise ManifestError(f"name {name!r} does not match manifest filename stem {engine!r}")
     if name in BUILTIN_ENGINES:
         raise ManifestError(f"name {name!r} collides with a builtin engine")
     if not isinstance(obj["description"], str) or not obj["description"]:
@@ -181,6 +231,15 @@ def validate_manifest(data: object, engine: str) -> dict:
     validate_roles(obj["roles"])
     validate_billing(obj["billing"])
     validate_network(obj["network"])
+    profile_name = obj["network"].get("profile")
+    if profile_name is not None:
+        try:
+            profile = profile_for_provider(profile_name, profile_directory(Path(__file__).resolve().parent))
+            if profile["provider"] != obj["billing"]["provider"]:
+                raise ProviderProfileError("profile provider does not match billing.provider")
+            assert_endpoints_match(profile, obj["network"]["endpoints"])
+        except ProviderProfileError as exc:
+            raise ManifestError("network.profile is invalid") from exc
     validate_probe(obj["availability_probe"])
     cap = obj["concurrency_cap"]
     if cap is not None and not (is_plain_int(cap) and cap >= 1):
@@ -201,15 +260,49 @@ def manifest_path(engine: str) -> Path:
 
 
 def load_manifest(path: Path, engine: str) -> dict:
+    reject_reparse_components(path, "engine manifest")
     try:
-        raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise ManifestError(f"could not read manifest {path}: {exc}") from exc
+        info = path.lstat()
+        if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+                or bool(getattr(info, "st_file_attributes", 0) & 0x400) \
+                or not stat.S_ISREG(info.st_mode) or info.st_size > MAX_MANIFEST_BYTES:
+            raise ManifestError("engine manifest is unavailable or too large")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(path, flags)
+        try:
+            opened_info = os.fstat(descriptor)
+            if stat.S_ISLNK(opened_info.st_mode) or bool(getattr(opened_info, "st_reparse_tag", 0)) \
+                    or bool(getattr(opened_info, "st_file_attributes", 0) & 0x400) \
+                    or not stat.S_ISREG(opened_info.st_mode) \
+                    or (opened_info.st_dev, opened_info.st_ino) != (info.st_dev, info.st_ino) \
+                    or opened_info.st_size != info.st_size:
+                raise ManifestError("engine manifest changed while reading")
+            with os.fdopen(descriptor, "rb") as source:
+                descriptor = -1
+                raw_bytes = source.read(MAX_MANIFEST_BYTES + 1)
+        finally:
+            if descriptor != -1:
+                os.close(descriptor)
+        if len(raw_bytes) > MAX_MANIFEST_BYTES:
+            raise ManifestError("engine manifest is too large")
+        raw = raw_bytes.decode("utf-8", "strict")
+    except ManifestError:
+        raise
+    except (OSError, UnicodeError, ValueError, TypeError, OverflowError) as exc:
+        raise ManifestError("could not read engine manifest") from exc
     try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ManifestError(f"manifest {path} is not valid JSON: {exc}") from exc
-    return validate_manifest(data, engine)
+        data = json.loads(raw, parse_constant=reject_json_constant)
+    except (ValueError, TypeError, UnicodeError, OverflowError, RecursionError) as exc:
+        raise ManifestError("engine manifest is not valid JSON") from exc
+    filename_stem = path.name[:-len(".json")] if path.name.endswith(".json") else ""
+    if not NAME_RE.fullmatch(filename_stem) or filename_stem != engine:
+        raise ManifestError("engine manifest filename stem is invalid")
+    validated = validate_manifest(data, engine)
+    if validated["name"] != filename_stem:
+        raise ManifestError("manifest name does not match its filename stem")
+    return validated
 
 
 def enabled_env_name(engine: str) -> str:
@@ -217,7 +310,7 @@ def enabled_env_name(engine: str) -> str:
 
 
 def build_plan(data: dict) -> dict:
-    return {
+    plan = {
         "schema_version": 1,
         "engine": data["name"],
         "executable": data["executable"],
@@ -232,15 +325,26 @@ def build_plan(data: dict) -> dict:
         "concurrency_cap": data["concurrency_cap"],
         "env_passthrough": list(data["env_passthrough"]),
     }
+    # Optional metadata keeps the v1 plan byte-for-byte compatible for manifests that do not
+    # declare a Phase 4 profile. New manifests carry the provider boundary explicitly.
+    profile = data["network"].get("profile")
+    if profile is not None:
+        plan["egress_profile"] = profile
+        plan["network_endpoints"] = list(data["network"]["endpoints"])
+    return plan
 
 
 def write_plan_atomically(plan: dict, out_path: Path) -> None:
     directory = out_path.parent if str(out_path.parent) else Path(".")
+    reject_reparse_components(directory, "engine plan output directory")
+    reject_reparse_components(out_path, "engine plan output")
     fd, tmp_name = tempfile.mkstemp(prefix=".engine-plan-", suffix=".tmp", dir=str(directory))
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            json.dump(plan, handle, indent=2, sort_keys=False)
+            json.dump(plan, handle, indent=2, sort_keys=False, allow_nan=False)
             handle.write("\n")
+        reject_reparse_components(directory, "engine plan output directory")
+        reject_reparse_components(out_path, "engine plan output")
         os.replace(tmp_name, str(out_path))
     except BaseException:
         try:
@@ -256,6 +360,10 @@ def parse_args(argv: list) -> argparse.Namespace:
     parser.add_argument("--validate", action="store_true")
     parser.add_argument("--role", choices=ROLE_CHOICES)
     parser.add_argument("--emit-plan", metavar="PATH")
+    # Assignment authorization is deliberately not accepted here.  A resolved plan is a
+    # durable/public controller artifact; bearer capabilities are minted by work.sh at launch
+    # and carried out-of-band to the worker.  Keeping the resolver pure prevents a token from
+    # being written into state/runs or appearing in a plan digest.
     return parser.parse_args(argv)
 
 
@@ -272,15 +380,22 @@ def main() -> int:
 
     engine = args.engine
     if not NAME_RE.fullmatch(engine):
-        diag(f"invalid engine name {engine!r}: must match ^[a-z][a-z0-9-]{{1,31}}$")
+        diag("invalid engine name")
         return 2
     if engine in BUILTIN_ENGINES:
         diag(f"{engine!r} is a builtin engine, not a plugin")
         return 2
 
     path = manifest_path(engine)
-    if not path.is_file():
-        diag(f"manifest not found: {path}")
+    try:
+        path_info = path.lstat()
+    except OSError:
+        path_info = None
+    if path_info is None or stat.S_ISLNK(path_info.st_mode) \
+            or bool(getattr(path_info, "st_reparse_tag", 0)) \
+            or bool(getattr(path_info, "st_file_attributes", 0) & 0x400) \
+            or not stat.S_ISREG(path_info.st_mode):
+        diag("engine manifest is unavailable")
         return 3
 
     try:
@@ -307,9 +422,14 @@ def main() -> int:
     plan = build_plan(data)
     out_path = Path(args.emit_plan)
     try:
+        reject_reparse_components(out_path.parent, "engine plan output directory")
+    except ManifestError as exc:
+        diag(str(exc))
+        return 2
+    try:
         write_plan_atomically(plan, out_path)
-    except OSError as exc:
-        diag(f"failed to write plan to {out_path}: {exc}")
+    except (OSError, TypeError, ValueError, UnicodeError, OverflowError, RecursionError) as exc:
+        diag("failed to write engine plan")
         return 2
 
     return 0

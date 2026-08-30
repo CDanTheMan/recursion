@@ -457,12 +457,22 @@ fi
 # an independently malformed deadline/model/network field can be hidden behind a secondary
 # missing/stale gate contract and terminalized under the wrong controller category.
 validate_worker_metadata(){
+  local max_timeout deadline verifier_deadline
+  max_timeout="${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}"
+  case "$max_timeout" in ''|*[!0-9]*) log "worker maximum timeout must be a decimal integer"; exit 95 ;; esac
+  [ "${#max_timeout}" -le 10 ] || { log "worker maximum timeout is too large"; exit 95; }
+  max_timeout=$((10#$max_timeout))
+  [ "$max_timeout" -ge 1 ] && [ "$max_timeout" -le 86400 ] \
+    || { log "worker maximum timeout must be 1..86400"; exit 95; }
   case "$DEADLINE_SECONDS:$VERIFIER_DEADLINE_SECONDS" in
     *[!0-9:]*|:*|*:) reject_preworker_contract deadline-invalid 2; exit $? ;;
   esac
-  [ "$DEADLINE_SECONDS" -ge 1 ] && [ "$DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
+  [ "${#DEADLINE_SECONDS}" -le 10 ] && [ "${#VERIFIER_DEADLINE_SECONDS}" -le 10 ] \
     || { reject_preworker_contract deadline-invalid 2; exit $?; }
-  [ "$VERIFIER_DEADLINE_SECONDS" -ge 1 ] && [ "$VERIFIER_DEADLINE_SECONDS" -le "${RECURSION_WORKER_MAX_TIMEOUT_S:-86400}" ] \
+  deadline=$((10#$DEADLINE_SECONDS)); verifier_deadline=$((10#$VERIFIER_DEADLINE_SECONDS))
+  [ "$deadline" -ge 1 ] && [ "$deadline" -le "$max_timeout" ] \
+    || { reject_preworker_contract deadline-invalid 2; exit $?; }
+  [ "$verifier_deadline" -ge 1 ] && [ "$verifier_deadline" -le "$max_timeout" ] \
     || { reject_preworker_contract deadline-invalid 2; exit $?; }
   case "$NETWORK_POLICY" in provider-only|none) ;; *) reject_preworker_contract network-policy-invalid 2; exit $? ;; esac
   [ "$VERIFICATION_POLICY" = independent ] \
@@ -524,6 +534,8 @@ fi
 # NON-pilot task that has BOTH a dead engine and an invalid gate now escalates on the engine
 # first — a deliberate narrowing of the historical invalid-gate precedence below.
 ENGINE_PLAN_IMPLEMENTER=""; ENGINE_PLAN_VERIFIER=""; ENGINE_SLOT_LOCKS=()
+ENGINE_TOKEN_IMPLEMENTER=""; ENGINE_TOKEN_VERIFIER=""
+ENGINE_ASSIGNMENT_IMPLEMENTER=""; ENGINE_ASSIGNMENT_VERIFIER=""
 engine_is_builtin(){ case "$1" in none|claude|hermes|gate|deepseek|openrouter) return 0 ;; *) return 1 ;; esac; }
 plugin_probe_ok(){ # plan-file: absent probe passes; a declared probe needs a 2xx from its URL.
   # Probe from inside the provider-only namespace when it exists, so "reachable" is measured
@@ -535,7 +547,16 @@ plugin_probe_ok(){ # plan-file: absent probe passes; a declared probe needs a 2x
   fi
   "${runner[@]}" - "$plan" <<'PY'
 import json, os, sys, urllib.request
-plan = json.load(open(sys.argv[1]))
+try:
+    with open(sys.argv[1], "rb") as source:
+        raw = source.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024:
+        raise ValueError("engine plan is too large")
+    plan = json.loads(raw.decode("utf-8", "strict"), parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+except (OSError, UnicodeError, ValueError, TypeError, OverflowError, RecursionError):
+    raise SystemExit(1)
+if not isinstance(plan, dict):
+    raise SystemExit(1)
 probe = plan.get("availability_probe")
 if not probe:
     raise SystemExit(0)
@@ -543,7 +564,10 @@ url = os.environ.get(probe.get("url_env", ""), "").strip()
 if not url:
     raise SystemExit(1)
 try:
-    with urllib.request.urlopen(url, timeout=int(probe.get("timeout_s", 5))) as response:
+    timeout = probe.get("timeout_s", 5)
+    if type(timeout) is not int or not 0 < timeout <= 60:
+        raise SystemExit(1)
+    with urllib.request.urlopen(url, timeout=timeout) as response:
         raise SystemExit(0 if 200 <= response.status < 300 else 1)
 except Exception:
     raise SystemExit(1)
@@ -570,8 +594,8 @@ plugin_slot_acquire(){ # engine cap: a witnessed per-slot lock, held for the run
   done
   return 1
 }
-plugin_resolve_plan(){ # role engine plan-path: emit the plan or log the refusal (rc 92)
-  local role="$1" engine="$2" plan_path="$3" rc
+plugin_resolve_plan(){ # role engine plan-path: emit a token-free plan and mint ephemeral capability
+  local role="$1" engine="$2" plan_path="$3" rc profile assignment key_file token
   if python3 "$ROOT/scripts/resolve-engine.py" "$engine" --role "$role" \
       --emit-plan "$plan_path" 2>>"$LOG"; then
     rc=0
@@ -580,17 +604,83 @@ plugin_resolve_plan(){ # role engine plan-path: emit the plan or log the refusal
     log "engine=$engine refused by the plugin resolver for the $role role rc=$rc (2=invalid manifest/role, 3=disabled or absent)"
     return 92
   fi
+profile="$(python3 - "$plan_path" <<'PY'
+import json,sys
+try:
+    with open(sys.argv[1], "rb") as source:
+        raw=source.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("engine plan is too large")
+    plan=json.loads(raw.decode("utf-8", "strict"), parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+except (OSError,UnicodeError,ValueError,TypeError,OverflowError,RecursionError):
+    raise SystemExit(1)
+if not isinstance(plan,dict): raise SystemExit(1)
+value=plan.get("egress_profile")
+if value is not None: print(value)
+PY
+  )" || { log "engine=$engine provider profile could not be read"; return 95; }
+  if [ -n "$profile" ]; then
+    key_file="${RECURSION_PROVIDER_CAPABILITY_KEY_FILE:-/etc/recursion/provider-capability.key}"
+    # Basic userinfo uses ':' as its sole delimiter; keep the canonical assignment identity
+    # entirely in the unescaped userinfo-safe alphabet so standard clients cannot reinterpret it.
+    assignment="$ID.$CONTRACT_DIGEST"
+    token="$(python3 "$ROOT/scripts/assignment-token.py" "$profile" "$assignment" \
+      --key-file "$key_file" 2>>"$LOG")" \
+      || { log "engine=$engine provider assignment capability could not be issued"; return 96; }
+    case "$role" in
+      implementer) ENGINE_TOKEN_IMPLEMENTER="$token"; ENGINE_ASSIGNMENT_IMPLEMENTER="$assignment" ;;
+      verifier) ENGINE_TOKEN_VERIFIER="$token"; ENGINE_ASSIGNMENT_VERIFIER="$assignment" ;;
+      *) log "unknown plugin role '$role'"; return 92 ;;
+    esac
+  fi
+}
+issue_builtin_capability(){ # role engine: mint the same ephemeral proxy capability for builtin Claude
+  local role="$1" engine="$2" key_file assignment token
+  [ "$engine" = claude ] || return 0
+  [ "$NETWORK_POLICY" = provider-only ] || return 0
+  # The logical provider-network marker is an explicit hermetic test bypass.  It has no
+  # production network namespace or proxy, so requiring a deployment key there would only
+  # obscure the envelope tests; every real provider-only launch takes this branch.
+  [ "${RECURSION_TEST_PROVIDER_NETWORK:-}" = logical ] && return 0
+  key_file="${RECURSION_PROVIDER_CAPABILITY_KEY_FILE:-/etc/recursion/provider-capability.key}"
+  assignment="$ID.$CONTRACT_DIGEST"
+  token="$(python3 "$ROOT/scripts/assignment-token.py" anthropic "$assignment" \
+    --key-file "$key_file" 2>>"$LOG")" \
+    || { log "engine=$engine provider assignment capability could not be issued for builtin $role"; return 96; }
+  case "$role" in
+    implementer) ENGINE_TOKEN_IMPLEMENTER="$token"; ENGINE_ASSIGNMENT_IMPLEMENTER="$assignment" ;;
+    verifier) ENGINE_TOKEN_VERIFIER="$token"; ENGINE_ASSIGNMENT_VERIFIER="$assignment" ;;
+    *) log "unknown builtin role '$role'"; return 92 ;;
+  esac
 }
 plugin_plan_checks(){ # plan resolved-model engine role: billing admission + model requirement
   local plan="$1" resolved_model="$2" engine="$3" role="$4" basis mreq
-  basis="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["billing"]["basis"])' \
-    "$plan" 2>>"$LOG")" || { log "engine plan billing could not be read"; return 95; }
+  basis="$(python3 - "$plan" <<'PY'
+import json,sys
+try:
+    with open(sys.argv[1], "rb") as source: raw=source.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("engine plan is too large")
+    plan=json.loads(raw.decode("utf-8", "strict"), parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+    print(plan["billing"]["basis"] if isinstance(plan,dict) else "")
+except (OSError,UnicodeError,ValueError,TypeError,OverflowError,RecursionError,KeyError):
+    raise SystemExit(1)
+PY
+  )" || { log "engine plan billing could not be read"; return 95; }
   if [ "$basis" = metered ] && [ "${RECURSION_ALLOW_METERED:-0}" != 1 ]; then
     log "engine=$engine ($role) bills as metered and RECURSION_ALLOW_METERED is unset"
     return 93
   fi
-  mreq="$(python3 -c 'import json,sys; print(1 if json.load(open(sys.argv[1]))["model_required"] else 0)' \
-    "$plan" 2>>"$LOG")" || { log "engine plan model requirement could not be read"; return 95; }
+  mreq="$(python3 - "$plan" <<'PY'
+import json,sys
+try:
+    with open(sys.argv[1], "rb") as source: raw=source.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("engine plan is too large")
+    plan=json.loads(raw.decode("utf-8", "strict"), parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+    if not isinstance(plan,dict) or type(plan.get("model_required")) is not bool: raise ValueError("model requirement is invalid")
+    print(1 if plan["model_required"] else 0)
+except (OSError,UnicodeError,ValueError,TypeError,OverflowError,RecursionError,KeyError):
+    raise SystemExit(1)
+PY
+  )" || { log "engine plan model requirement could not be read"; return 95; }
   if [ "$mreq" = 1 ] && [ -z "$resolved_model" ]; then
     log "engine=$engine requires a model and the $role has none resolved"
     return 92
@@ -598,8 +688,21 @@ plugin_plan_checks(){ # plan resolved-model engine role: billing admission + mod
 }
 plugin_engine_gate(){ # engine plan: availability probe + witnessed capacity slot
   local engine="$1" plan="$2" cap rc
-  cap="$(python3 -c 'import json,sys; v=json.load(open(sys.argv[1]))["concurrency_cap"]; print("" if v is None else v)' \
-    "$plan" 2>>"$LOG")" || { log "engine plan capacity could not be read"; return 95; }
+  cap="$(python3 - "$plan" <<'PY'
+import json,sys
+try:
+    with open(sys.argv[1], "rb") as source: raw=source.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024: raise ValueError("engine plan is too large")
+    value=json.loads(raw.decode("utf-8", "strict"), parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+    if not isinstance(value,dict): raise ValueError("engine plan is invalid")
+    cap=value["concurrency_cap"]
+    if cap is None: print("")
+    elif type(cap) is int and cap >= 1: print(cap)
+    else: raise ValueError("engine concurrency cap is invalid")
+except (OSError,UnicodeError,ValueError,TypeError,OverflowError,RecursionError,KeyError):
+    raise SystemExit(1)
+PY
+  )" || { log "engine plan capacity could not be read"; return 95; }
   plugin_probe_ok "$plan" || { log "engine=$engine availability probe failed"; return 89; }
   if plugin_slot_acquire "$engine" "$cap"; then :; else
     rc=$?
@@ -701,8 +804,10 @@ if [ -x "$ROOT/scripts/validate-gate.py" ]; then
     python3 - "$APPROVED_GATE_CONTRACT" "$GATE_CONTRACT" <<'PY' || {
 import json,sys
 try:
-    approved=json.loads(sys.argv[1]); observed=json.loads(sys.argv[2])
-except json.JSONDecodeError:
+    if any(len(value.encode())>2*1024*1024 for value in sys.argv[1:]): raise ValueError('gate contract is too large')
+    reject=lambda n: (_ for _ in ()).throw(ValueError(n))
+    approved=json.loads(sys.argv[1],parse_constant=reject); observed=json.loads(sys.argv[2],parse_constant=reject)
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
     raise SystemExit(1)
 raise SystemExit(0 if approved == observed else 1)
 PY
@@ -782,7 +887,13 @@ seed_digest(){
   local p result
   for p in $SEED; do args+=(--path "$p"); done
   result="$(python3 "$ROOT/scripts/seed_contract.py" "${args[@]}" 2>>"$LOG")" || return 1
-  python3 -c 'import json,sys; print(json.loads(sys.argv[1])["content_sha256"])' "$result"
+  python3 -c 'import json,sys
+try:
+    if len(sys.argv[1].encode())>2*1024*1024: raise ValueError("seed result is too large")
+    value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    print(value["content_sha256"] if isinstance(value,dict) else "")
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError,KeyError):
+    raise SystemExit(1)' "$result"
 }
 
 validate_seed_source(){
@@ -802,7 +913,13 @@ validate_seed_source(){
     python3 - "$observed" "$SEED_MANIFEST" "$SEED_MANIFEST_SHA256" \
       "$SEED_DIGEST_EXPECTED" "${SEED// /,}" "$SEED_EVIDENCE_FILE" <<'PY'
 import json, os, sys, tempfile
-row=json.loads(sys.argv[1]); expected_paths=[p for p in sys.argv[5].split(',') if p]
+try:
+    if len(sys.argv[1].encode())>2*1024*1024: raise ValueError('seed result is too large')
+    row=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(1)
+if not isinstance(row,dict): raise SystemExit(1)
+expected_paths=[p for p in sys.argv[5].split(',') if p]
 valid=(row.get('manifest_path')==sys.argv[2]
        and row.get('manifest_sha256')==sys.argv[3]
        and row.get('content_sha256')==sys.argv[4]
@@ -829,7 +946,13 @@ copy_seed_into_worktree(){
   local -a args=(copy --source "$REPO_DIR" --target "$wt" --expected-digest "$expected")
   for p in $SEED; do args+=(--path "$p"); done
   result="$(python3 "$ROOT/scripts/seed_contract.py" "${args[@]}" 2>>"$LOG")" || return 1
-  log "seed contract copied and verified ($(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("file_count",0))' "$result") files)"
+  log "seed contract copied and verified ($(python3 -c 'import json,sys
+try:
+    if len(sys.argv[1].encode())>2*1024*1024: raise ValueError("seed result is too large")
+    value=json.loads(sys.argv[1],parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    print(value.get("file_count",0) if isinstance(value,dict) else 0)
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(1)' "$result") files)"
 }
 
 verify_seed_integrity(){
@@ -864,8 +987,8 @@ GOAL_ID="$(field goal_id)"
 
 BUILD_PROMPT="You are a BUILD ARM for the Recursion system — a bounded executor.
 ${HUMAN_GUIDANCE:+
-=========================== $HUMAN_GUIDANCE
-===========================
+--------------------------- $HUMAN_GUIDANCE
+---------------------------
 }
 AUTHORITY
 Hermes owns planning, priority, and product direction. You do not. You implement ONE task
@@ -1007,6 +1130,7 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
   local role="$1" wt="$2" prompt="$3" resolved_model="$4" alias="$5" usage="$6"
   local deadline_s="$7" run_id="$8" commit_oid="${9:-}" implementer_run="${10:-}"
   local evidence_dir="${11:-}" readonly="${12:-0}" arm_attempt="${13:-}" engine_plan="" candidate_assignment=""
+  local assignment_token="" assignment_identity=""
   # Cross-engine verification (D-015): each role runs on its own contract engine.
   local active_engine="$ENGINE"
   [ "$role" != verifier ] || active_engine="$VERIFIER_ENGINE"
@@ -1021,6 +1145,7 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
       [ -n "$engine_plan" ] && [ -f "$engine_plan" ] || return 92 ;;
   esac
 
+  issue_builtin_capability "$role" "$active_engine" || return $?
   [ "$active_engine" != hermes ] || [ "${RECURSION_ALLOW_METERED:-0}" = "1" ] || return 93
   [ -x "$ROOT/scripts/worker-sandbox.sh" ] || return 95
   LAST_USAGE_FILE="$usage"
@@ -1036,10 +1161,17 @@ run_model_supervised(){ # role worktree prompt resolved-model alias usage deadli
     mkdir -p "$(dirname "$usage")"
     ( umask 077; python3 - "$engine_plan" > "$usage" <<'PY'
 import json, sys
-plan = json.load(open(sys.argv[1]))
-print(json.dumps({"schema_version": 1, "provider": plan["billing"]["provider"],
-                  "billing_basis": plan["billing"]["basis"], "tokens": 0, "cost_usd": 0,
-                  "evidence_source": "engine-manifest-v1"}))
+try:
+    with open(sys.argv[1], "rb") as source: raw=source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError("engine plan is too large")
+    plan=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    if not isinstance(plan,dict): raise ValueError("engine plan is invalid")
+    value={"schema_version": 1, "provider": plan["billing"]["provider"],
+           "billing_basis": plan["billing"]["basis"], "tokens": 0, "cost_usd": 0,
+           "evidence_source": "engine-manifest-v1"}
+    print(json.dumps(value,allow_nan=False))
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError,KeyError):
+    raise SystemExit(1)
 PY
     ) || return 98
   fi
@@ -1153,7 +1285,10 @@ PY
       ${ASSIGNMENT_DIGEST:+--assignment-digest "$ASSIGNMENT_DIGEST" --assignment-file "$ASSIGNMENT_FILE"} \
       >>"$LOG" 2>&1 || return 98
   fi
+  if [ "$role" = verifier ]; then assignment_token="$ENGINE_TOKEN_VERIFIER"; assignment_identity="$ENGINE_ASSIGNMENT_VERIFIER";
+  else assignment_token="$ENGINE_TOKEN_IMPLEMENTER"; assignment_identity="$ENGINE_ASSIGNMENT_IMPLEMENTER"; fi
   RECURSION_VERIFICATION_COMMIT="$commit_oid" RECURSION_IMPLEMENTER_RUN_ID="$implementer_run" \
+    RECURSION_ASSIGNMENT_PROXY_TOKEN="$assignment_token" RECURSION_ASSIGNMENT_IDENTITY="$assignment_identity" \
     setsid --wait "${cmd[@]}" >"$log_path" 2>&1 &
   worker_pgid=$!
   log "$role process group=$worker_pgid engine=$active_engine alias=${alias:-legacy} deadline=${deadline_s}s"
@@ -1292,8 +1427,11 @@ read_result(){
   [ -f "$f" ] || return 1
   eval "$(python3 - "$f" <<'PY' 2>/dev/null || true
 import json,sys,shlex
-try: d=json.load(open(sys.argv[1],encoding='utf-8'))
-except Exception: sys.exit(0)
+try:
+    with open(sys.argv[1],'rb') as source: raw=source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError('worker result is too large')
+    d=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError): sys.exit(0)
 if not isinstance(d,dict): sys.exit(0)
 st=str(d.get('status','') or '')
 if st not in ('done','blocked','no-op'): st=''
@@ -1540,7 +1678,17 @@ Explicit non-goals: ${NON_GOALS:-none}."
     "$impl_run" "$verdict" >>"$LOG" 2>&1 || return 98
   python3 "$ROOT/scripts/worker-evidence.py" link-verifier "$impl_evidence" "$VERIFIER_RUN_ID" \
     "$CANDIDATE_OID" "$verdict" >>"$LOG" 2>&1 || return 98
-  local verdict_value; verdict_value="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["verdict"])' "$verdict")"
+  local verdict_value; verdict_value="$(python3 - "$verdict" <<'PY'
+import json,sys
+try:
+    with open(sys.argv[1],'rb') as source: raw=source.read(65537)
+    if len(raw)>65536: raise ValueError('verdict is too large')
+    value=json.loads(raw.decode('utf-8','strict'),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    print(value['verdict'] if isinstance(value,dict) else '')
+except (OSError,json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError,KeyError):
+    raise SystemExit(1)
+PY
+)" || return 98
   git -C "$REPO_DIR" worktree remove --force "$verify_wt" >/dev/null 2>&1 || true
   LAST_RUN_EVIDENCE="$impl_evidence"; LAST_RUN_ID="$impl_run"; IMPLEMENTER_RUN_ID="$impl_run"
   [ "$verdict_value" = pass ]

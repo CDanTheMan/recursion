@@ -10,6 +10,7 @@ Component 1 (manifests) and Component 2 (resolver --validate mode) land.
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import os
 import subprocess
@@ -20,6 +21,7 @@ from pathlib import Path
 SOURCE = Path(__file__).resolve().parents[2]
 RESOLVE_ENGINE = SOURCE / "scripts" / "resolve-engine.py"
 ENGINES_DIR = SOURCE / "scripts" / "engines"
+sys.path.insert(0, str(SOURCE / "scripts"))
 
 SHIPPED_MANIFESTS = ["gemini.json", "cursor.json", "opencode.json", "opencode-local.json"]
 
@@ -51,6 +53,9 @@ def check(condition: bool, label: str) -> None:
 
 def run_validate(engine: str, engine_dir: Path | None) -> subprocess.CompletedProcess:
     env = dict(os.environ)
+    # Production resolution reads the human-owned /etc profile directory. The local contract
+    # suite explicitly points at the checked-in disabled fixtures so it remains hermetic.
+    env["RECURSION_PROVIDER_DIR"] = str(SOURCE / "scripts" / "providers")
     if engine_dir is None:
         env.pop("RECURSION_ENGINE_DIR", None)
     else:
@@ -74,6 +79,87 @@ def run_case(label: str, filename: str, engine_arg: str, data: dict, expected: i
         )
 
 
+def load_resolver():
+    spec = importlib.util.spec_from_file_location("resolve_engine_test_module", RESOLVE_ENGINE)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load resolve-engine")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run_hostile_case(label: str, data: dict) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        write_manifest(tmp_dir, "sampleeng.json", data)
+        result = run_validate("sampleeng", tmp_dir)
+        check(result.returncode == 2, f"{label} exits 2 (got {result.returncode})")
+        check("Traceback" not in result.stderr, f"{label} has no raw traceback")
+
+
+def test_malformed_values() -> None:
+    resolver = load_resolver()
+    cases = (
+        ("roles=[[]]", lambda data: data.update(roles=[[]])),
+        ("env_passthrough=[[]]", lambda data: data.update(env_passthrough=[[]])),
+        ("billing.basis=[]", lambda data: data["billing"].update(basis=[])),
+    )
+    for label, mutate in cases:
+        data = copy.deepcopy(BASE_MANIFEST)
+        mutate(data)
+        try:
+            resolver.validate_manifest(data, "sampleeng")
+        except resolver.ManifestError:
+            check(True, f"{label} raises ManifestError")
+        except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
+            check(False, f"{label} raises ManifestError (raw {type(exc).__name__})")
+        else:
+            check(False, f"{label} raises ManifestError")
+        run_hostile_case(label, data)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        provider_dir = tmp_dir / "providers"
+        provider_dir.mkdir()
+        profile = json.loads(
+            (SOURCE / "scripts/providers/cursor.json").read_text(encoding="utf-8")
+        )
+        profile["authorities"] = ["api.cursor.com:" + "9" * 5000, "api2.cursor.sh:443"]
+        (provider_dir / "cursor.json").write_text(json.dumps(profile) + "\n", encoding="utf-8")
+        data = copy.deepcopy(BASE_MANIFEST)
+        data["billing"]["provider"] = "cursor"
+        data["network"] = {
+            "policy": "provider-only",
+            "endpoints": ["api.cursor.com", "api2.cursor.sh"],
+            "profile": "cursor",
+        }
+        manifest = tmp_dir / "sampleeng.json"
+        write_manifest(tmp_dir, manifest.name, data)
+        env = dict(os.environ, RECURSION_PROVIDER_DIR=str(provider_dir))
+        old_provider_dir = os.environ.get("RECURSION_PROVIDER_DIR")
+        os.environ["RECURSION_PROVIDER_DIR"] = str(provider_dir)
+        try:
+            try:
+                resolver.validate_manifest(data, "sampleeng")
+            except resolver.ManifestError:
+                check(True, "5000-digit port raises ManifestError in resolver")
+            except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
+                check(False, f"5000-digit port raises ManifestError (raw {type(exc).__name__})")
+            else:
+                check(False, "5000-digit port raises ManifestError in resolver")
+        finally:
+            if old_provider_dir is None:
+                os.environ.pop("RECURSION_PROVIDER_DIR", None)
+            else:
+                os.environ["RECURSION_PROVIDER_DIR"] = old_provider_dir
+        result = subprocess.run(
+            [sys.executable, str(RESOLVE_ENGINE), "sampleeng", "--validate"],
+            capture_output=True, text=True, env=dict(env, RECURSION_ENGINE_DIR=str(tmp_dir)),
+        )
+        check(result.returncode == 2 and "Traceback" not in result.stderr,
+              "5000-digit port CLI is a controlled non-zero refusal")
+
+
 def test_shipped_manifests() -> None:
     for filename in SHIPPED_MANIFESTS:
         engine = filename[: -len(".json")]
@@ -91,9 +177,95 @@ def test_missing_file() -> None:
         check(result.returncode == 3, f"missing manifest file exits 3 (got {result.returncode})")
 
 
+def test_provider_profile_name_schema_runtime_parity() -> None:
+    import jsonschema
+
+    resolver = load_resolver()
+    schema = json.loads(
+        (SOURCE / "schemas/control-plane/v1/engine-manifest.schema.json").read_text(encoding="utf-8")
+    )
+    validator = jsonschema.Draft7Validator(schema)
+    with tempfile.TemporaryDirectory() as tmp:
+        provider_dir = Path(tmp) / "providers"
+        provider_dir.mkdir()
+        old_provider_dir = os.environ.get("RECURSION_PROVIDER_DIR")
+        os.environ["RECURSION_PROVIDER_DIR"] = str(provider_dir)
+        try:
+            for length in (33, 64, 65):
+                profile_name = "p" + "a" * (length - 1)
+                endpoint = "profile.example.com"
+                profile = {
+                    "schema_version": 1,
+                    "id": profile_name,
+                    "provider": profile_name,
+                    "enabled": False,
+                    "namespace": "recursion-provider-only",
+                    "proxy": {"type": "connect-proxy", "host": "127.0.0.1", "port": 18080,
+                              "env": ["HTTP_PROXY", "HTTPS_PROXY"]},
+                    "authorities": [endpoint + ":443"],
+                }
+                (provider_dir / f"{profile_name}.json").write_text(
+                    json.dumps(profile) + "\n", encoding="utf-8"
+                )
+                manifest = copy.deepcopy(BASE_MANIFEST)
+                manifest["billing"]["provider"] = profile_name
+                manifest["network"] = {
+                    "policy": "provider-only", "profile": profile_name, "endpoints": [endpoint]
+                }
+                schema_valid = not list(validator.iter_errors(manifest))
+                try:
+                    resolver.validate_manifest(manifest, "sampleeng")
+                except resolver.ManifestError:
+                    runtime_valid = False
+                except Exception as exc:  # pragma: no cover - diagnostic guard for the regression
+                    runtime_valid = False
+                    check(False, f"{length}-char provider profile has typed runtime validation (raw {type(exc).__name__})")
+                else:
+                    runtime_valid = True
+                expected = length <= 64
+                check(schema_valid == expected,
+                      f"{length}-char provider profile schema boundary is {'accepted' if expected else 'rejected'}")
+                check(runtime_valid == expected,
+                      f"{length}-char provider profile runtime boundary is {'accepted' if expected else 'rejected'}")
+                check(schema_valid == runtime_valid,
+                      f"{length}-char provider profile schema/runtime decisions agree")
+        finally:
+            if old_provider_dir is None:
+                os.environ.pop("RECURSION_PROVIDER_DIR", None)
+            else:
+                os.environ["RECURSION_PROVIDER_DIR"] = old_provider_dir
+
+
 def test_mutations() -> None:
     baseline = copy.deepcopy(BASE_MANIFEST)
     run_case("valid manifest in temp dir validates", "sampleeng.json", "sampleeng", baseline, 0)
+
+    resolver = load_resolver()
+    for value in (True, 1.0):
+        bad_version = copy.deepcopy(baseline)
+        bad_version["schema_version"] = value
+        try:
+            resolver.validate_manifest(bad_version, "sampleeng")
+        except resolver.ManifestError:
+            check(True, f"schema_version={value!r} is rejected by the runtime validator")
+        else:
+            check(False, f"schema_version={value!r} is rejected by the runtime validator")
+
+    import jsonschema
+    schema = json.loads(
+        (SOURCE / "schemas/control-plane/v1/engine-manifest.schema.json").read_text(encoding="utf-8")
+    )
+    strict_checker = jsonschema.Draft7Validator.TYPE_CHECKER.redefine(
+        "integer", lambda _checker, instance: type(instance) is int
+    )
+    strict_validator = jsonschema.validators.extend(
+        jsonschema.Draft7Validator, type_checker=strict_checker
+    )(schema)
+    for value in (True, 1.0):
+        bad_version = copy.deepcopy(baseline)
+        bad_version["schema_version"] = value
+        check(bool(list(strict_validator.iter_errors(bad_version))),
+              f"schema_version={value!r} is constrained by the Draft-7 schema")
 
     missing_field = copy.deepcopy(BASE_MANIFEST)
     del missing_field["roles"]
@@ -148,7 +320,9 @@ def test_mutations() -> None:
 def main() -> int:
     test_shipped_manifests()
     test_missing_file()
+    test_provider_profile_name_schema_runtime_parity()
     test_mutations()
+    test_malformed_values()
 
     if failures:
         print(f"engine-manifest.test: {len(failures)} FAILED")

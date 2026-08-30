@@ -55,19 +55,65 @@ case "${1:-}" in
     systemctl is-active --quiet recursion-provider-network.service \
       && systemctl is-active --quiet recursion-provider-proxy.service \
       || { echo "provider-network: provider services are not active" >&2; exit 96; }
+    if [ "${2:-}" = --engine ] && [ -n "${3:-}" ]; then
+      admission="$(python3 "$ROOT/scripts/provider-egress.py" admit-engine "$3")" \
+        || { echo "provider-network: engine/provider admission refused" >&2; exit 96; }
+      authority="$(python3 - "$admission" <<'PY'
+import json,sys
+try:
+    raw=sys.argv[1]
+    if len(raw.encode("utf-8")) > 2 * 1024 * 1024:
+        raise ValueError("provider admission is too large")
+    row=json.loads(raw, parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+    values=row.get("authorities") or [] if isinstance(row,dict) else []
+    if not isinstance(row,dict) or not isinstance(values,list) or len(values) < 1 \
+            or not isinstance(values[0],str):
+        raise ValueError("provider admission has no authority")
+    print(values[0])
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError):
+    raise SystemExit(2)
+PY
+      )" || { echo "provider-network: provider admission had no authority" >&2; exit 96; }
+    elif [ -z "${2:-}" ]; then
+      # Explicit v1 compatibility path: only callers without a Phase 4 assignment may use the
+      # historical Anthropic capability. Phase 4 workers must always supply --engine.
+      authority="$PROVIDER_AUTHORITY"
+    else
+      echo "provider-network: check usage is check [--engine ENGINE]" >&2; exit 96
+    fi
     python3 "$ROOT/scripts/provider-connect-proxy.py" probe \
-      --namespace "$NS_PATH" --listen-port "$PROXY_PORT" --allow "$PROVIDER_AUTHORITY"
+      --namespace "$NS_PATH" --listen-port "$PROXY_PORT" --allow "$authority"
     ;;
   probe)
     namespace_check
     systemctl is-active --quiet recursion-provider-network.service \
       && systemctl is-active --quiet recursion-provider-proxy.service \
       || { echo "provider-network: provider services are not active" >&2; exit 96; }
+    if [ "${2:-}" = --engine ] && [ -n "${3:-}" ]; then
+      authority="$(python3 "$ROOT/scripts/provider-egress.py" admit-engine "$3" | python3 -c \
+        'import json,sys
+try:
+    raw=sys.stdin.buffer.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024: raise ValueError("provider admission is too large")
+    row=json.loads(raw.decode("utf-8","strict"),parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
+    values=row.get("authorities") or [] if isinstance(row,dict) else []
+    if not isinstance(row,dict) or not isinstance(values,list) or not values or not isinstance(values[0],str): raise ValueError("provider admission has no authority")
+    print(values[0])
+except (json.JSONDecodeError,ValueError,TypeError,UnicodeError,OverflowError,RecursionError): raise SystemExit(2)')" \
+        || { echo "provider-network: engine/provider admission refused" >&2; exit 96; }
+    elif [ -z "${2:-}" ]; then
+      authority="$PROVIDER_AUTHORITY"
+    else
+      echo "provider-network: probe usage is probe [--engine ENGINE]" >&2; exit 96
+    fi
+    [ -n "${RECURSION_PROVIDER_PROBE_TOKEN:-}" ] \
+      && [ -n "${RECURSION_PROVIDER_PROBE_IDENTITY:-}" ] \
+      || { echo "provider-network: live probe requires a short-lived assignment capability" >&2; exit 96; }
     python3 "$ROOT/scripts/provider-connect-proxy.py" probe --live \
-      --namespace "$NS_PATH" --listen-port "$PROXY_PORT" --allow "$PROVIDER_AUTHORITY"
+      --namespace "$NS_PATH" --listen-port "$PROXY_PORT" --allow "$authority"
     ;;
   *)
-    echo "usage: provider-network.sh {create|delete|namespace-check|check|probe}" >&2
+    echo "usage: provider-network.sh {create|delete|namespace-check|check|probe} [--engine ENGINE]" >&2
     exit 2
     ;;
 esac

@@ -17,6 +17,7 @@ import json
 import os
 import re
 import subprocess
+import stat
 import sys
 import tempfile
 import time
@@ -38,14 +39,121 @@ ALLOWED_JOURNALS = frozenset({
     "state/notification-recovery-events.jsonl",
 })
 TRANSITION_ID = re.compile(r"transition-[0-9a-f]{32}")
+MAX_TRANSITION_JSON_BYTES = 4 * 1024 * 1024
 
 
 class TransitionReceiptError(RuntimeError):
     pass
 
 
+def _is_reparse(info: os.stat_result) -> bool:
+    return stat.S_ISLNK(info.st_mode) or bool(
+        getattr(info, "st_reparse_tag", 0)
+        or (getattr(info, "st_file_attributes", 0) & 0x400)
+    )
+
+
+def _lexical_path(path: Path) -> Path:
+    candidate = Path(path)
+    if any(part in {".", ".."} for part in candidate.parts):
+        raise TransitionReceiptError(f"transition path contains traversal components: {path}")
+    return candidate if candidate.is_absolute() else Path(os.path.abspath(candidate))
+
+
+def _audit_path(path: Path) -> Path:
+    candidate = _lexical_path(path)
+    current = Path(candidate.anchor or os.sep)
+    for part in candidate.parts[1:] if candidate.anchor else candidate.parts:
+        current /= part
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            break
+        except OSError as exc:
+            raise TransitionReceiptError(f"cannot inspect transition path: {current}") from exc
+        if _is_reparse(info):
+            raise TransitionReceiptError(f"transition path is a reparse point: {current}")
+    return candidate
+
+
+def _existing_regular(path: Path, label: str) -> os.stat_result | None:
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise TransitionReceiptError(f"cannot inspect {label}: {path}") from exc
+    if _is_reparse(info) or not stat.S_ISREG(info.st_mode):
+        raise TransitionReceiptError(f"{label} is not a regular non-reparse file: {path}")
+    return info
+
+
+def _same_identity(left: os.stat_result, right: os.stat_result) -> bool:
+    return (left.st_dev, left.st_ino, left.st_size) == (right.st_dev, right.st_ino, right.st_size)
+
+
+def _safe_exists(path: Path, label: str) -> bool:
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise TransitionReceiptError(f"cannot inspect {label}: {path}") from exc
+    if _is_reparse(info):
+        raise TransitionReceiptError(f"{label} is a symlink/reparse path: {path}")
+    return True
+
+
+def _safe_dir_exists(path: Path, label: str) -> bool:
+    if not _safe_exists(path, label):
+        return False
+    try:
+        info = os.lstat(path)
+    except OSError as exc:
+        raise TransitionReceiptError(f"cannot inspect {label}: {path}") from exc
+    if not stat.S_ISDIR(info.st_mode):
+        raise TransitionReceiptError(f"{label} is not a directory: {path}")
+    return True
+
+
+def _safe_file_exists(path: Path, label: str) -> bool:
+    if not _safe_exists(path, label):
+        return False
+    try:
+        info = os.lstat(path)
+    except OSError as exc:
+        raise TransitionReceiptError(f"cannot inspect {label}: {path}") from exc
+    if not stat.S_ISREG(info.st_mode):
+        raise TransitionReceiptError(f"{label} is not a regular file: {path}")
+    return True
+
+
+def _event_sequence(record: dict, *, fields: bool, label: str) -> int:
+    raw = record.get("event_seq")
+    if raw is None or raw == "":
+        return 0
+    if fields:
+        if not isinstance(raw, str) or not re.fullmatch(r"[0-9]{1,10}", raw):
+            raise TransitionReceiptError(f"{label} event_seq is invalid")
+        return int(raw, 10)
+    if type(raw) is not int or raw < 0:
+        raise TransitionReceiptError(f"{label} event_seq is invalid")
+    return raw
+
+
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
+
 def _compact(value: object) -> bytes:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    try:
+        encoded = json.dumps(value, sort_keys=True, separators=(",", ":"),
+                             ensure_ascii=False, allow_nan=False).encode("utf-8")
+    except (TypeError, ValueError, OverflowError, UnicodeError, RecursionError) as exc:
+        raise TransitionReceiptError(f"transition JSON is not canonical: {exc}") from exc
+    if len(encoded) > MAX_TRANSITION_JSON_BYTES:
+        raise TransitionReceiptError("transition JSON exceeds the 4 MiB bound")
+    return encoded
 
 
 def _digest(value: object) -> str:
@@ -85,9 +193,16 @@ def _failpoint(name: str) -> None:
         raise TransitionReceiptError(f"transition failpoint: {name}")
 
 
+def _run_subprocess(*args: object, **kwargs: object) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(*args, **kwargs)  # type: ignore[arg-type]
+    except (OSError, subprocess.TimeoutExpired, subprocess.SubprocessError) as exc:
+        raise TransitionReceiptError("transition subprocess was unavailable") from exc
+
+
 def _relative_state_path(base: Path, path: Path) -> str:
-    base = base.resolve()
-    path = path.resolve(strict=False)
+    base = _audit_path(base)
+    path = _audit_path(path)
     try:
         relative = path.relative_to(base)
     except ValueError as exc:
@@ -133,10 +248,13 @@ def _read_fields(path: Path) -> dict[str, str]:
 
 
 def _atomic_fields(path: Path, changes: dict[str, str]) -> None:
-    raw = read_durable_bytes(path, max_bytes=8 * 1024 * 1024)
-    if raw is None:
-        raise TransitionReceiptError("transition fields are absent")
-    lines = raw.decode("utf-8", errors="surrogateescape").splitlines()
+    try:
+        raw = read_durable_bytes(path, max_bytes=8 * 1024 * 1024)
+        if raw is None:
+            raise OSError("transition fields are absent")
+        lines = raw.decode("utf-8", errors="surrogateescape").splitlines()
+    except (OSError, JsonlDurabilityError, UnicodeDecodeError) as exc:
+        raise TransitionReceiptError("cannot read transition fields") from exc
     header_end = next((i for i, line in enumerate(lines) if not line.strip()), len(lines))
     found: set[str] = set()
     output: list[str] = []
@@ -247,7 +365,8 @@ def _ensure_receipt_root(base: Path) -> Path:
     current = base / "state"
     for name in ("recovery", "transitions"):
         child = current / name
-        if not child.exists():
+        _audit_path(child)
+        if not _safe_exists(child, "transition receipt directory"):
             child.mkdir(mode=0o700)
             _fsync_dir(current)
         current = child
@@ -258,11 +377,12 @@ def _ensure_recovery_directory(base: Path, name: str) -> Path:
     current = base / "state"
     for component in ("recovery", name):
         child = current / component
-        if not child.exists():
+        _audit_path(child)
+        if not _safe_exists(child, "transition recovery directory"):
             child.mkdir(mode=0o700)
             _fsync_dir(current)
-        elif child.is_symlink() or not child.is_dir():
-            raise TransitionReceiptError(f"transition recovery path has unsafe type: {child}")
+        else:
+            _safe_dir_exists(child, "transition recovery path")
         current = child
     return current
 
@@ -274,11 +394,12 @@ def _archive_directory(base: Path, transition_id: str, *, create: bool = False) 
     if create:
         root = _ensure_recovery_directory(base, "transition-archive")
         shard = root / transition_id[len("transition-"):len("transition-") + 2]
-        if not shard.exists():
+        _audit_path(shard)
+        if not _safe_exists(shard, "transition archive shard"):
             shard.mkdir(mode=0o700)
             _fsync_dir(root)
-        elif shard.is_symlink() or not shard.is_dir():
-            raise TransitionReceiptError(f"transition archive shard has unsafe type: {shard}")
+        else:
+            _safe_dir_exists(shard, "transition archive shard")
     else:
         shard = root / transition_id[len("transition-"):len("transition-") + 2]
     return shard / transition_id
@@ -287,8 +408,8 @@ def _archive_directory(base: Path, transition_id: str, *, create: bool = False) 
 def _receipt_directory(base: Path, transition_id: str) -> Path:
     active = _receipt_root(base) / transition_id
     archived = _archive_directory(base, transition_id)
-    active_exists = active.is_dir() and not active.is_symlink()
-    archived_exists = archived.is_dir() and not archived.is_symlink()
+    active_exists = _safe_dir_exists(active, "active transition receipt")
+    archived_exists = _safe_dir_exists(archived, "archived transition receipt")
     if active_exists and archived_exists:
         raise TransitionReceiptError(f"transition receipt exists in active and archive stores: {transition_id}")
     if active_exists:
@@ -304,11 +425,12 @@ def _event_index_path(base: Path, event_id: str, *, create: bool = False) -> Pat
     if create:
         root = _ensure_recovery_directory(base, "transition-event-index")
         shard = root / digest[:2]
-        if not shard.exists():
+        _audit_path(shard)
+        if not _safe_exists(shard, "transition event index shard"):
             shard.mkdir(mode=0o700)
             _fsync_dir(root)
-        elif shard.is_symlink() or not shard.is_dir():
-            raise TransitionReceiptError(f"transition event index shard has unsafe type: {shard}")
+        else:
+            _safe_dir_exists(shard, "transition event index shard")
     else:
         shard = root / digest[:2]
     return shard / f"{digest}.json"
@@ -344,7 +466,8 @@ def _indexed_prepared(base: Path, event_id: str) -> dict | None:
     record = _read_json(path)
     if set(record) != {
         "schema_version", "kind", "event_id", "transition_id", "prepared_sha256"
-    } or record.get("schema_version") != 1 or record.get("kind") != "transition-event-index" \
+    } or type(record.get("schema_version")) is not int or record["schema_version"] != 1 \
+            or record.get("kind") != "transition-event-index" \
             or record.get("event_id") != event_id:
         raise TransitionReceiptError(f"invalid transition event index: {path}")
     transition_id = str(record.get("transition_id") or "")
@@ -373,7 +496,8 @@ def _authenticated_prepared(base: Path, event_id: str,
     directory = _receipt_directory(base, str(prepared["id"]))
     marker = _read_json(directory / "projected.json")
     if set(marker) != {"schema_version", "status", "at", "event_id"} \
-            or marker.get("schema_version") != 1 or marker.get("status") != "projected" \
+            or type(marker.get("schema_version")) is not int or marker["schema_version"] != 1 \
+            or marker.get("status") != "projected" \
             or marker.get("event_id") != event_id:
         raise TransitionReceiptError(f"transition projected marker is invalid: {event_id}")
     source = base / str(prepared.get("journal") or "state/events.jsonl")
@@ -403,12 +527,9 @@ def _require_archived_witness(base: Path, mutation: dict, event_seq: int,
     else:
         # Fields, text, and raw-text witnesses carry their sequence markers in frontmatter.
         current = _read_fields(path)
-    try:
-        observed_seq = int(current.get("event_seq") or 0)
-    except (TypeError, ValueError) as exc:
-        raise TransitionReceiptError(
-            f"archived transition witness event_seq is invalid: {mutation['path']}"
-        ) from exc
+    observed_seq = _event_sequence(
+        current, fields=mutation["kind"] != "json", label=mutation["path"]
+    )
     if observed_seq <= event_seq:
         raise TransitionReceiptError(
             f"transition canonical witnesses disagree (archived): {mutation['path']}"
@@ -475,7 +596,9 @@ def _authenticated_chain_transition(base: Path, event_id: str, *, journal: str |
         raise TransitionReceiptError("transition successor chain exceeds its bounded depth")
     visited.add(event_id)
     prepared = _authenticated_prepared(base, event_id, journal=journal)
-    event_seq = int(prepared.get("event_seq") or 0)
+    if type(prepared.get("event_seq")) is not int or prepared["event_seq"] < 0:
+        raise TransitionReceiptError(f"transition event_seq is invalid: {event_id}")
+    event_seq = prepared["event_seq"]
     prepared_journal = str(prepared.get("journal") or "state/events.jsonl")
     for mutation in prepared.get("mutations", []):
         state = _witness_state(base, mutation)
@@ -491,16 +614,16 @@ def _archive_receipt(base: Path, prepared: dict) -> None:
     _index_event(base, prepared)
     active = _receipt_root(base) / transition_id
     archived = _archive_directory(base, transition_id)
-    if archived.is_dir() and not archived.is_symlink():
-        if active.exists() or active.is_symlink():
+    if _safe_dir_exists(archived, "archived transition receipt"):
+        if _safe_exists(active, "active transition receipt"):
             raise TransitionReceiptError(
                 f"transition receipt exists in active and archive stores: {transition_id}"
             )
         return
-    if active.is_symlink() or not active.is_dir():
+    if not _safe_dir_exists(active, "active transition receipt"):
         raise TransitionReceiptError(f"active transition receipt has unsafe type: {active}")
     archived = _archive_directory(base, transition_id, create=True)
-    if archived.exists() or archived.is_symlink():
+    if _safe_exists(archived, "transition archive target"):
         raise TransitionReceiptError(f"transition archive target already exists: {archived}")
     os.rename(active, archived)
     _fsync_dir(active.parent)
@@ -515,9 +638,9 @@ def _taskctl_guard(base: Path, already_held: bool = False):
     path = lock_root / "taskctl.lock"
     runtime = lock_root / "runtime-state.lock"
     if already_held:
-        if not path.is_dir():
+        if not _safe_dir_exists(path, "claimed taskctl lock"):
             raise TransitionReceiptError("claimed taskctl lock is absent")
-        if runtime.is_dir():
+        if _safe_dir_exists(runtime, "runtime-state lock"):
             try:
                 runtime_holder = int((runtime / "pid").read_text(encoding="ascii").strip())
                 expected_runtime = int(os.environ["RECURSION_RUNTIME_LOCK_OWNER_PID"])
@@ -545,10 +668,11 @@ def _taskctl_guard(base: Path, already_held: bool = False):
     try:
         if not helper.is_file():
             raise TransitionReceiptError("witnessed taskctl lock helper is absent")
-        acquired = subprocess.run(
+        acquired = _run_subprocess(
             [sys.executable, str(helper), "lock-acquire", str(path), str(os.getpid())],
             env={**os.environ, "RECURSION_ROOT": str(base)},
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, check=False,
+            timeout=30,
         )
         if acquired.returncode:
             raise TransitionReceiptError(
@@ -558,10 +682,11 @@ def _taskctl_guard(base: Path, already_held: bool = False):
         yield
     finally:
         if held:
-            released = subprocess.run(
+            released = _run_subprocess(
                 [sys.executable, str(helper), "lock-release", str(path), str(os.getpid())],
                 env={**os.environ, "RECURSION_ROOT": str(base)},
                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, check=False,
+                timeout=30,
             )
             if released.returncode:
                 raise TransitionReceiptError(
@@ -588,9 +713,21 @@ def _open_quarantines(base: Path, journal: str) -> list[Path]:
 
 def _load_prepared(path: Path) -> dict:
     value = _read_json(path)
-    if value.get("schema_version") != 1 or value.get("kind") != "transition-receipt":
+    if type(value.get("schema_version")) is not int or value["schema_version"] != 1 \
+            or type(value.get("event_seq")) is not int or value["event_seq"] < 0 \
+            or value.get("kind") != "transition-receipt":
         raise TransitionReceiptError(f"invalid transition receipt: {path}")
     return value
+
+
+def _event_with_defaults(event: object) -> dict:
+    if not isinstance(event, dict):
+        raise TransitionReceiptError("transition event must be a JSON object")
+    result = dict(event)
+    if "schema_version" in result and type(result["schema_version"]) is not int:
+        raise TransitionReceiptError("transition event schema_version must be an integer")
+    result.setdefault("schema_version", 1)
+    return result
 
 
 def _marker(directory: Path, name: str, detail: dict | None = None) -> None:
@@ -602,7 +739,7 @@ def _marker(directory: Path, name: str, detail: dict | None = None) -> None:
 
 def _witness_state(base: Path, mutation: dict) -> str:
     path = base / mutation["path"]
-    if not path.is_file():
+    if not _safe_file_exists(path, "transition witness"):
         return "before" if mutation["kind"] in {"json", "text", "raw-text"} \
             and mutation.get("before_sha256") == _digest(None) else "other"
     if mutation["kind"] == "fields":
@@ -627,7 +764,7 @@ def _witness_state(base: Path, mutation: dict) -> str:
 
 def project_receipt(base: Path, prepared: dict, *, replay: bool = False) -> bool:
     directory = _receipt_directory(base, str(prepared["id"]))
-    if (directory / "projected.json").is_file():
+    if _safe_file_exists(directory / "projected.json", "projected transition marker"):
         _archive_receipt(base, prepared)
         return True
     if replay:
@@ -637,7 +774,7 @@ def project_receipt(base: Path, prepared: dict, *, replay: bool = False) -> bool
         _failpoint("jsonl-append")
         event = prepared["event"]
         journal = str(prepared.get("journal") or "state/events.jsonl")
-        journal_path = (base / journal).resolve(strict=False)
+        journal_path = base / journal
         if _relative_state_path(base, journal_path) not in ALLOWED_JOURNALS:
             raise TransitionReceiptError(f"transition receipt has invalid journal: {journal}")
         open_quarantines = _open_quarantines(base, journal)
@@ -669,8 +806,8 @@ def project_receipt(base: Path, prepared: dict, *, replay: bool = False) -> bool
 
 
 def _recover_transitions_locked(base: Path, limit: int = 1000) -> dict[str, int]:
-    if limit < 1:
-        raise TransitionReceiptError("transition recovery limit must be positive")
+    if type(limit) is not int or not 1 <= limit <= 10000:
+        raise TransitionReceiptError("transition recovery limit must be a bounded positive integer")
     counts = {"projected": 0, "uncommitted": 0, "already": 0,
               "archived": 0, "backlog": 0}
     root = _receipt_root(base)
@@ -684,12 +821,13 @@ def _recover_transitions_locked(base: Path, limit: int = 1000) -> dict[str, int]
                 break
             processed += 1
             directory = Path(entry.path)
-            if entry.is_symlink() or not entry.is_dir(follow_symlinks=False):
+            entry_info = entry.stat(follow_symlinks=False)
+            if _is_reparse(entry_info) or not stat.S_ISDIR(entry_info.st_mode):
                 raise TransitionReceiptError(f"invalid active transition receipt path: {directory}")
             prepared = _load_prepared(directory / "prepared.json")
             _index_event(base, prepared)
-            terminal = (directory / "projected.json").is_file() \
-                or (directory / "uncommitted.json").is_file()
+            terminal = _safe_file_exists(directory / "projected.json", "projected transition marker") \
+                or _safe_file_exists(directory / "uncommitted.json", "uncommitted transition marker")
             if terminal:
                 counts["already"] += 1
                 _archive_receipt(base, prepared)
@@ -782,8 +920,7 @@ def commit_event(base: Path, event: dict, *, journal: str = "state/events.jsonl"
             raise TransitionReceiptError(
                 f"open JSONL quarantine blocks transition projection: {open_quarantines[0]}"
             )
-        event = dict(event)
-        event.setdefault("schema_version", 1)
+        event = _event_with_defaults(event)
         event.setdefault("ts", _now())
         event.setdefault("id", "source-event-" + hashlib.sha256(_compact(event)).hexdigest()[:32])
         prepared = _indexed_prepared(base, str(event["id"]))
@@ -904,8 +1041,7 @@ def _commit_transition_locked(base: Path, mutations: list[Mutation], event: dict
         raise TransitionReceiptError(
             f"open JSONL quarantine blocks transition projection: {open_quarantines[0]}"
         )
-    event = dict(event)
-    event.setdefault("schema_version", 1)
+    event = _event_with_defaults(event)
     event.setdefault("ts", _now())
     identity_seed = {"event": event, "paths": [_relative_state_path(base, item.path) for item in mutations]}
     requested_id = str(event.get("id") or "")
@@ -939,16 +1075,16 @@ def _commit_transition_locked(base: Path, mutations: list[Mutation], event: dict
     primary = mutations[authoritative_index]
     if primary.kind == "fields":
         current = _read_fields(primary.path)
-        next_seq = int(current.get("event_seq") or 0) + 1
+        next_seq = _event_sequence(current, fields=True, label=str(primary.path)) + 1
     elif primary.kind == "text":
         # A text mutation may author a brand-new canonical record (for example a
         # project pilot creating its first task).  Absence is the sequence-zero
         # witness already frozen by _plan_mutation, not an unreadable-state error.
         current = _read_fields(primary.path) if primary.path.exists() else {}
-        next_seq = int(current.get("event_seq") or 0) + 1
+        next_seq = _event_sequence(current, fields=True, label=str(primary.path)) + 1
     elif primary.kind == "json":
         current = _read_json(primary.path) if primary.path.exists() else {}
-        next_seq = int(current.get("event_seq") or 0) + 1
+        next_seq = _event_sequence(current, fields=False, label=str(primary.path)) + 1
     else:
         raise TransitionReceiptError("raw/text projection cannot be the authoritative sequence witness")
     seed = {**identity_seed, "event_seq": next_seq}
@@ -1018,8 +1154,11 @@ def main() -> int:
             print(json.dumps(recover_transitions(base, args.limit, taskctl_locked=held),
                              sort_keys=True, separators=(",", ":")))
         else:
-            changes = json.loads(args.changes_json)
-            event = json.loads(args.event_json)
+            if len(args.changes_json.encode("utf-8")) > MAX_TRANSITION_JSON_BYTES \
+                    or len(args.event_json.encode("utf-8")) > MAX_TRANSITION_JSON_BYTES:
+                raise TransitionReceiptError("transition CLI JSON exceeds the 4 MiB bound")
+            changes = json.loads(args.changes_json, parse_constant=_reject_json_constant)
+            event = json.loads(args.event_json, parse_constant=_reject_json_constant)
             if not isinstance(changes, dict) or not isinstance(event, dict):
                 raise TransitionReceiptError("apply-fields arguments must be JSON objects")
             path = Path(args.path)
@@ -1027,8 +1166,9 @@ def main() -> int:
                 path = base / path
             print(commit_transition(base, [fields_mutation(path, changes)], event,
                                     taskctl_locked=held))
-    except (OSError, ValueError, json.JSONDecodeError, TransitionReceiptError):
-        print("transition-receipt: invalid input or durable state", file=os.sys.stderr)
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError, UnicodeError,
+            json.JSONDecodeError, subprocess.TimeoutExpired, TransitionReceiptError):
+        print("transition-receipt: operation refused", file=os.sys.stderr)
         return 74
     return 0
 

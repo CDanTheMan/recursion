@@ -7,7 +7,7 @@
   "model": { "required": false, "argv_suffix": ["--model", "{{MODEL}}"] },
   "roles": ["implementer", "verifier"],
   "billing": { "basis": "metered", "provider": "cursor" },
-  "network": { "policy": "provider-only", "endpoints": ["api.cursor.com", "api2.cursor.sh"] },
+  "network": { "policy": "provider-only", "profile": "cursor", "endpoints": ["api.cursor.com", "api2.cursor.sh"] },
   "availability_probe": null,
   "concurrency_cap": null,
   "env_passthrough": []

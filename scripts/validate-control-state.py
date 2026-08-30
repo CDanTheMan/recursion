@@ -22,6 +22,23 @@ from engine_contract import alias_role_ok, default_registry_path, pilot_engine_o
 import assignment as assignment_mod
 
 
+MAX_CONTROL_STATE_BYTES = 2 * 1024 * 1024
+
+
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
+
+def _load_json_bytes(raw: bytes) -> object:
+    if len(raw) > MAX_CONTROL_STATE_BYTES:
+        raise ValueError("control-state JSON exceeds the 2 MiB bound")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("control-state JSON is not UTF-8") from exc
+    return json.loads(text, parse_constant=_reject_json_constant)
+
+
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 STATUSES = {
     "project": {"pending", "active", "paused", "retired"},
@@ -74,7 +91,7 @@ def validate(kind: str, value: object) -> dict:
     missing = [field for field in REQUIRED[kind] if field not in value]
     if missing:
         fail("missing required field(s): " + ", ".join(missing))
-    if value.get("schema_version") != 1:
+    if type(value.get("schema_version")) is not int or value["schema_version"] != 1:
         fail("schema_version must be 1")
     require_identifier(value.get("id"), "id")
     if value.get("status") not in STATUSES[kind]:
@@ -95,7 +112,8 @@ def validate(kind: str, value: object) -> dict:
             fail(f"{field} must be a non-empty string")
 
     for field in ("project_id", "pilot_id", "goal_id", "task_id", "event_id", "verb"):
-        if field in value and value[field] is not None:
+        if field in value and (value[field] is not None
+                               or (field == "verb" and kind in {"decision", "action"})):
             require_identifier(value[field], field)
     for field in ("dependencies", "action_ids"):
         if field in value:
@@ -108,7 +126,7 @@ def validate(kind: str, value: object) -> dict:
         if field in value and not isinstance(value[field], list):
             fail(f"{field} must be an array")
     if "concurrency_limit" in value and (
-        not isinstance(value["concurrency_limit"], int) or value["concurrency_limit"] < 0
+        type(value["concurrency_limit"]) is not int or value["concurrency_limit"] < 0
     ):
         fail("concurrency_limit must be a non-negative integer")
     if kind == "plan":
@@ -194,13 +212,13 @@ def validate(kind: str, value: object) -> dict:
                            for digest in [*hashes.values(), *controller_hashes.values()]):
                 fail("gate_contract must contain acceptance and tracked-file hashes")
         for field in ("deadline_seconds", "verifier_deadline_seconds"):
-            if not isinstance(value[field], int) or value[field] < 1:
+            if type(value[field]) is not int or value[field] < 1:
                 fail(f"{field} must be a positive integer")
         if str(value.get("acceptance", "")).strip() in {"", "true", ":", "/bin/true", "exit 0"}:
             fail("acceptance gate is structurally vacuous")
     if kind == "run":
-        if "process_group" in value and (not isinstance(value["process_group"], int) or value["process_group"] < 0):
-            fail("process_group must be a non-negative integer")
+        if "process_group" in value and (type(value["process_group"]) is not int or value["process_group"] < 1):
+            fail("process_group must be a positive integer")
         for field in ("deadline_epoch_ns", "worker_finished_epoch_ns"):
             if field in value and (
                 isinstance(value[field], bool)
@@ -254,10 +272,10 @@ def validate(kind: str, value: object) -> dict:
         fail("action_payload_sha256 must be sha256")
     if kind in {"action", "delivery"}:
         numeric = "attempts" if kind == "action" else "attempt"
-        if not isinstance(value[numeric], int) or value[numeric] < 0:
+        if type(value[numeric]) is not int or value[numeric] < 0:
             fail(f"{numeric} must be a non-negative integer")
     if kind == "delivery":
-        if "max_attempts" in value and (not isinstance(value["max_attempts"], int) or value["max_attempts"] < 1):
+        if "max_attempts" in value and (type(value["max_attempts"]) is not int or value["max_attempts"] < 1):
             fail("max_attempts must be a positive integer")
         if "message_digest" in value and not re.fullmatch(r"[0-9a-f]{64}", str(value["message_digest"])):
             fail("delivery message_digest must be sha256")
@@ -283,14 +301,14 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.path:
-            record = json.loads(Path(args.path).read_text(encoding="utf-8"))
+            raw = Path(args.path).read_bytes()
         else:
-            record = json.load(sys.stdin)
+            raw = sys.stdin.buffer.read(MAX_CONTROL_STATE_BYTES + 1)
+        record = _load_json_bytes(raw)
         validate(args.kind, record)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError,
-            TypeError, OverflowError, RecursionError):
-        # Keep parser/OS details and absolute input paths out of this public boundary.
-        print("ERR invalid input", file=sys.stderr)
+    except (OSError, json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError, UnicodeError):
+        print("ERR controlled validator failure", file=sys.stderr)
         return 2
     print("OK")
     return 0
