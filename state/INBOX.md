@@ -448,7 +448,16 @@ tree.
 will block the moment that repair lands.
 
 **Workstream:** recursion-v2 execution fabric, Phase 6/7 integration
-**Blocked on:** a deployment fact — which OS user each of these processes runs as on the box.
+**Blocked on:** whether to introduce a shared group (or relax an ownership check) so two processes
+that the deployment already runs as *different* users can share one lock.
+
+> **Correction, same day.** This escalation first said the repository does not state which user each
+> process runs as. That was wrong, and a reviewer found the evidence I had missed. `deploy/systemd/`
+> states it plainly: `recursion-backup.service.example` is `User=root Group=root` running
+> `backup-offsite.py`, and `hermes-actuator-state.service.example` is `User=recursion-actuator
+> Group=recursion-actuator`. The documented deployment is therefore exactly the root-first case that
+> fails. The question is narrower than I first wrote it, and sharper: the users are known, and
+> nothing declares how they share `state/.locks`.
 
 ### What changed
 
@@ -478,23 +487,33 @@ first, every non-root participant is locked out permanently — not degraded, re
 process creates it first, root can still acquire, because root ignores the mode bits.
 
 `backup-offsite.py` carries explicit root-ownership policy (`os.geteuid() == 0` implies directories
-must be root-owned), which is what suggests it is expected to run as root somewhere. Whether it
-actually does on this box, and whether the supervisor and adapters run as the same user, is not
-something the repository states.
+must be root-owned), and the deployment confirms it: the backup unit runs as root, the state
+actuator as `recursion-actuator`. So the root-first row above is not a hypothetical ordering — it is
+the documented one.
+
+What the deployment does *not* provide is a way for them to share a directory. `deploy/sysusers.d/
+recursion.conf` declares four users, each with only its own like-named group; no group spans the
+backup and the actuator. `deploy/tmpfiles.d/recursion.conf` declares four directories, every one
+`0700` owned by a single user, and `state/.locks` is not among them at all — so its ownership and
+mode are whatever the first process to create it happens to produce.
 
 ### Why this is not mine to decide
 
 Three in-tree fixes are available and each encodes a different deployment assumption:
 
-1. Create `.locks` group-writable (0770) with a shared group — requires choosing the group, which is
-   a provisioning decision.
+1. Add a shared group and declare `state/.locks` `2770` on it, in `sysusers.d` and `tmpfiles.d` —
+   the shape the rest of the deployment already uses, but it means creating a group that spans a
+   root service and a non-root one, which widens what the actuator can reach.
 2. Accept a differently-owned-but-safe `.locks` — loosens a check that exists to refuse exactly this
    shape, and needs the argument for why that is safe here.
-3. Require all three to run as one user — a deployment constraint, and it may already be false.
+3. Run the offsite backup as `recursion-actuator` rather than root — but the unit is root today and
+   the script's own policy requires root-owned directories when it *is* root, so this is a real
+   change to the backup's trust model, not a config tweak.
 
-Picking one silently would write a deployment assumption into a security check. The reviewer who
-raised this reported it as POSIX reasoning and said it had not been executed; it has now been
-executed and it reproduces, so the mechanism is not in doubt — only the deployment is.
+Picking one silently would write a provisioning decision into a security check. Two reviewers
+reached this independently; the first reported it as POSIX reasoning and said plainly that it had
+not been executed, the second found the systemd units. It has now been executed and it reproduces,
+so nothing here rests on inference.
 
 ### Attribution
 
