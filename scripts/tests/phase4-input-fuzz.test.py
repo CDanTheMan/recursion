@@ -29,17 +29,17 @@ PYTHON = sys.executable
 
 
 def find_bash() -> Path | None:
-    discovered = shutil.which("bash")
-    if discovered:
-        candidate = Path(discovered)
-        if candidate.is_file():
-            return candidate
     if os.name == "nt":
         program_files = os.environ.get("ProgramFiles") or os.environ.get("ProgramW6432")
         if program_files:
             candidate = Path(program_files) / "Git/bin/bash.exe"
         else:
             candidate = Path(Path(sys.executable).anchor) / "Program Files/Git/bin/bash.exe"
+        if candidate.is_file():
+            return candidate
+    discovered = shutil.which("bash")
+    if discovered:
+        candidate = Path(discovered)
         if candidate.is_file():
             return candidate
     return None
@@ -492,6 +492,10 @@ def main() -> int:
     worker_scripts = worker_root / "scripts"
     worker_scripts.mkdir(parents=True)
     shutil.copy2(ROOT / "scripts/worker-sandbox.sh", worker_scripts / "worker-sandbox.sh")
+    # The embedded hostile-plan parser imports this first-party dependency from its copied
+    # SCRIPT_DIR. Stage the exact dependency so malformed plans reach validation rather than
+    # failing closed at parser startup with rc 95.
+    shutil.copy2(ROOT / "scripts/phase5_safety.py", worker_scripts / "phase5_safety.py")
     worker_tree = worker_root / "worktree"
     worker_tree.mkdir()
     worker_python = str(Path(PYTHON)).replace("\\", "/")

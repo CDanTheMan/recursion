@@ -16,9 +16,15 @@ SANDBOX = ROOT / "scripts" / "worker-sandbox.sh"
 
 def loader_source() -> str:
     source = SANDBOX.read_text(encoding="utf-8")
-    start_marker = "<<'PY' || true\n"
-    end_marker = "\nPY\n)"
+    start_marker = 'if plan_parser_output="$("$PYTHON" - "$ENGINE_PLAN" "$ENGINE" <<\'PY\' 2>&1\n'
+    # Keep extraction tied to the one embedded plan parser. Ambiguous markers must fail the
+    # fixture loudly rather than accidentally testing a different heredoc.
+    if source.count(start_marker) != 1:
+        raise AssertionError("worker-sandbox embedded plan parser start is not unique")
+    end_marker = '\nPY\n)"; then\n'
     start = source.index(start_marker) + len(start_marker)
+    if source.count(end_marker, start) != 1:
+        raise AssertionError("worker-sandbox embedded plan parser terminator is not unique")
     end = source.index(end_marker, start)
     return source[start:end]
 
@@ -30,6 +36,7 @@ def run_loader(value: object, label: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, "-", str(plan), "stubeng"],
             input=loader_source(), capture_output=True, text=True,
+            env=dict(os.environ, RECURSION_SCRIPTS_DIR=str(SANDBOX.parent)),
         )
     finally:
         plan.unlink(missing_ok=True)
