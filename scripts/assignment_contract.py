@@ -364,6 +364,12 @@ def _validate_gate_contract(value: Any, expected_digest: str, *, source_repo: st
         "--controller-commit", controller_sha,
         "--controller-gate-files", ",".join(value["controller_gate_files"]),
     ]
+    # Non-pilot work.sh admits the narrowly typed legacy conditional grammar (the initial
+    # admission passes --legacy-compound).  Re-run that same policy here when independently
+    # authenticating the persisted contract; otherwise a valid conditional gate is rejected
+    # only after worker launch during strict assignment binding.
+    if ";" in value["acceptance"]:
+        command.append("--legacy-compound")
     if read_only_paths:
         command.extend(["--read-only-paths", ",".join(read_only_paths)])
     try:

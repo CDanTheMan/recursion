@@ -1521,11 +1521,11 @@ PY
   local worker_pgid rc now_epoch now_epoch_ns deadline_epoch deadline_epoch_ns heartbeat_epoch log_path
   local -a evidence_meta=()
   log_path="$ARMLOG"; [ "$role" != verifier ] || log_path="$ROOT/loop/logs/$DATE-verifier-$ID-$STAMP.out"
-  # The deadline bounds this supervised worker arm, from launch admission through process
-  # completion. Keep the precise boundary in evidence; the whole-second field remains a
-  # compatibility projection for older readers.
-  deadline_epoch_ns="$(( $(date +%s%N) + deadline_s * 1000000000 ))"
-  deadline_epoch="$(( deadline_epoch_ns / 1000000000 ))"; heartbeat_epoch=0
+  # The deadline bounds the supervised worker process itself.  Controller preparation (the
+  # assignment/evidence writes below) can be relatively expensive on a cold filesystem and is
+  # not worker execution.  Anchor the precise deadline immediately before launch, while still
+  # recording it in the immutable start evidence before any watchdog decision.
+  deadline_epoch_ns=""; deadline_epoch=""; heartbeat_epoch=0
   LAST_RUN_ID="$run_id"; LAST_RUN_EVIDENCE="$ROOT/state/runs/$run_id.json"
   if [ "$STRICT_PHASE5" = 1 ]; then
     mkdir -p "$ROOT/state/runs"
@@ -1566,6 +1566,8 @@ PY
   fi
   if [ "$role" = verifier ]; then assignment_token="$ENGINE_TOKEN_VERIFIER"; assignment_identity="$ENGINE_ASSIGNMENT_VERIFIER";
   else assignment_token="$ENGINE_TOKEN_IMPLEMENTER"; assignment_identity="$ENGINE_ASSIGNMENT_IMPLEMENTER"; fi
+  deadline_epoch_ns="$(( $(date +%s%N) + deadline_s * 1000000000 ))"
+  deadline_epoch="$(( deadline_epoch_ns / 1000000000 ))"
   RECURSION_VERIFICATION_COMMIT="$commit_oid" RECURSION_IMPLEMENTER_RUN_ID="$implementer_run" \
     RECURSION_ASSIGNMENT_PROXY_TOKEN="$assignment_token" RECURSION_ASSIGNMENT_IDENTITY="$assignment_identity" \
     setsid --wait "${cmd[@]}" >"$log_path" 2>&1 &
