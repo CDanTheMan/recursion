@@ -429,7 +429,7 @@ def run_path_sweep(scratch: Path) -> None:
         expect_typed(lambda value=value: resolver.validate_relative_path(value, "path"),
                      f"manifest path {label}", "relative path")
         expect_typed(lambda value=value: validate_gate.paths(value), f"gate path {label}",
-                     "unsafe gate file")
+                     "gate-file-path-invalid")
         expect_typed(lambda value=value: assignment_contract._validate_allowed_paths([value]),
                      f"assignment path {label}", "allowed_paths is")
 
@@ -779,6 +779,8 @@ def run_sidecar_battery(scratch: Path) -> None:
         "--log", "run.log", "--network-policy", "provider-only", "--engine", "cursor",
         "--provider", "cursor", "--capacity-pool", "cursor-ultra-grok-bot",
         "--model", "cursor-primary", "--host", "gs-recursion", "--sandbox-profile", "strict-linux",
+        "--billing-basis", "flat-subscription", "--default-branch", "main",
+        "--integration-branch", "recursion/integration",
         "--assignment-digest", digest, "--assignment-file", assignment_path,
     ]
     started = run_command(start_command, env=dict(os.environ))

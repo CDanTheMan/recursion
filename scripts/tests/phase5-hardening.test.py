@@ -287,6 +287,8 @@ def main() -> int:
                "--deadline-epoch", "2000000000", "--log", "run.log", "--network-policy", "provider-only",
                "--engine", "cursor", "--provider", "cursor", "--capacity-pool", "cursor-ultra-grok-bot",
                "--model", "cursor-primary", "--host", "gs-recursion", "--sandbox-profile", "strict-linux",
+               "--billing-basis", "flat-subscription", "--default-branch", "main",
+               "--integration-branch", "recursion/integration",
                "--assignment-digest", first, "--assignment-file", str(assignment_path)]
         result = subprocess.run(cmd, capture_output=True, text=True)
         check(result.returncode == 0, "evidence start accepts independently recomputed assignment")

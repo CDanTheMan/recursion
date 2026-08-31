@@ -599,7 +599,9 @@ def _main() -> int:
             assignment, computed = load_assignment(assignment_path)
             assignment_path = Path(absolute_lexical(assignment_path))
             if args.assignment_digest and args.assignment_digest != computed:
-                raise SystemExit("worker-evidence: assignment digest mismatch")
+                raise SystemExit(2)
+            if assignment.get("task_id") != args.task_id:
+                raise SystemExit(2)
             role_spec = assignment.get("role_assignments", {}).get(args.role, assignment)
             for field in ("engine", "provider", "capacity_pool", "model", "host", "sandbox_profile"):
                 supplied = getattr(args, field)
@@ -690,8 +692,8 @@ def _main() -> int:
         value = load(path)
         digest = value.get("assignment_digest")
         if digest:
-            try: assignment_mod.validate_assignment(value.get("assignment"), require_source_evidence=True)
-            except assignment_mod.AssignmentError as exc:
+            try: assignment_validate(value.get("assignment"))
+            except ContractAssignmentError as exc:
                 raise WorkerEvidenceError("assignment is invalid") from exc
         try:
             event = append_remote_event(

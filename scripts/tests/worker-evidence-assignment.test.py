@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Hermetic controls for worker-evidence.py's Phase 3 (D-016) additions:
 the optional --assignment-digest/--assignment-file pair on `start`, and the new
-`remote-evidence` subcommand (remote session/branch/commit/artifact/cancellation evidence).
+`remote-evidence` subcommand's assignment boundary (remote session/branch/commit/artifact/
+cancellation evidence itself is covered by the Phase 5 boundary battery).
 
 Confirms the pre-Phase-3 record shape is byte-for-byte unchanged when the new flags are
 omitted (legacy behavior preserved), and that both flags together are required, matching,
@@ -11,8 +12,10 @@ and bound to the correct task before anything is embedded (fail closed).
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import importlib.util
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -24,6 +27,7 @@ WORKER_EVIDENCE = SCRIPTS / "worker-evidence.py"
 
 sys.path.insert(0, str(SCRIPTS))
 import assignment as amod  # noqa: E402
+import assignment_contract  # noqa: E402
 
 failures: list[str] = []
 
@@ -55,6 +59,8 @@ def start_args(path: Path, run_id: str, task_id: str) -> list[str]:
         "--base-commit", "a" * 40, "--pid", "100", "--process-group", "100",
         "--deadline-epoch", "9999999999", "--log", "loop/logs/x.out",
         "--network-policy", "provider-only",
+        "--billing-basis", "flat-subscription", "--default-branch", "main",
+        "--integration-branch", "recursion/integration",
     ]
 
 
@@ -69,15 +75,80 @@ def test_legacy_start_unchanged(tmp_path: Path) -> None:
 
 
 def make_assignment(tmp_path: Path, task_id: str = "task-1") -> tuple[Path, str]:
-    root = tmp_path / "assignments"
+    """Build a complete Phase 5 assignment, including its source/controller roots."""
+    fixture = tmp_path / "strict-fixture"
+    source = fixture / "source"
+    (source / "scripts").mkdir(parents=True)
+    (source / "scripts/gate.sh").write_bytes(b"#!/bin/sh\ntest -s result.txt\n")
+    subprocess.run(["git", "init", "-q", "-b", "main", str(source)], check=True)
+    subprocess.run(["git", "-C", str(source), "config", "core.autocrlf", "false"], check=True)
+    subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(source), "-c", "user.name=t", "-c", "user.email=t@t",
+                    "commit", "-qm", "source"], check=True)
+
+    controller = fixture / "controller"
+    (controller / "scripts/engines").mkdir(parents=True)
+    for relative in ("validate-gate.py", "phase5_safety.py", "resolve-engine.py",
+                     "provider-egress-profiles.json", "capacity-pools.json"):
+        shutil.copy2(SCRIPTS / relative, controller / "scripts" / relative)
+    shutil.copy2(SCRIPTS / "engines/cursor.json", controller / "scripts/engines/cursor.json")
+    subprocess.run(["git", "init", "-q", "-b", "main", str(controller)], check=True)
+    subprocess.run(["git", "-C", str(controller), "config", "core.autocrlf", "false"], check=True)
+    subprocess.run(["git", "-C", str(controller), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(controller), "-c", "user.name=t", "-c", "user.email=t@t",
+                    "commit", "-qm", "controller"], check=True)
+    (controller / "state").mkdir()
+    key = controller / "state/.worker-evidence.key"
+    key.write_bytes(os.urandom(32)); key.chmod(0o600)
+    os.environ["RECURSION_ROOT"] = str(controller)
+
+    source_sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+    controller_sha = subprocess.check_output(["git", "-C", str(controller), "rev-parse", "HEAD"], text=True).strip()
+    gate_bytes = (source / "scripts/gate.sh").read_bytes()
+    gate_contract = {
+        "acceptance": "bash scripts/gate.sh",
+        "acceptance_sha256": hashlib.sha256(b"bash scripts/gate.sh").hexdigest(),
+        "gate_files": {"scripts/gate.sh": hashlib.sha256(gate_bytes).hexdigest()},
+        "controller_gate_files": {},
+    }
+    role = {
+        "engine": "cursor", "provider": "cursor", "model": "cursor-primary",
+        "network_policy": "provider-only", "network_profile": "cursor",
+        "argv": ["{{EXE}}", "-p", "{{PROMPT}}", "--output-format", "text", "--force",
+                 "--model", "{{MODEL}}"],
+        "network_endpoints": ["api.cursor.com", "api2.cursor.sh"],
+    }
+    value = {
+        "task_id": task_id, "project_id": "project-1", "source_repository": str(source),
+        "source_branch": "main", "source_sha": source_sha,
+        "controller_repository": str(controller), "controller_sha": controller_sha,
+        "seed_manifest_digest": "", "engine": "cursor", "provider": "cursor",
+        "capacity_pool": "cursor-ultra-grok-bot", "model": "cursor-primary",
+        "host": "gs-recursion", "sandbox_profile": "strict-linux", "network_policy": "provider-only",
+        "network_profile": "cursor", "network_endpoints": list(role["network_endpoints"]),
+        "argv": list(role["argv"]), "allowed_paths": ["scripts"],
+        "gate_digest": hashlib.sha256(assignment_contract.canonical_bytes(gate_contract)).hexdigest(),
+        "gate_contract": gate_contract,
+        "role_assignments": {"implementer": role, "verifier": dict(role)},
+        "publication_policy": "verified-integration-only",
+    }
+    digest = assignment_contract.digest(value)
+    path = tmp_path / "assignments.json"
+    path.write_text(json.dumps(value), encoding="utf-8")
+    return path, digest
+
+
+def make_obsolete_assignment(tmp_path: Path) -> tuple[Path, str]:
+    """Build the old Phase 3 shape solely to prove strict starts refuse it."""
     value = amod.resolve_assignment(
-        task_id=task_id, project_id="proj-1", role="implementer",
+        task_id="task-1", project_id="proj-1", role="implementer",
         source_repository="/opt/golden-stallion", source_branch="loop/work/task-1",
         source_sha="a" * 40, engine="claude", provider="anthropic-claude-code",
         capacity_pool=None, host="gs-recursion", sandbox_profile="strict-linux",
         network_profile="provider-only", allowed_paths=["apps/api"],
         publication_policy="verified-integration-only", created_at="2026-08-28T00:00:00Z",
     )
+    root = tmp_path / "legacy-assignments"
     persisted = amod.persist_assignment(root, value)
     return persisted, value["assignment_digest"]
 
@@ -91,11 +162,28 @@ def test_start_binds_assignment(tmp_path: Path) -> None:
     check(result.returncode == 0, f"start with a matching assignment pair exits 0 (got {result.returncode}, stderr={result.stderr!r})")
     value = json.loads(path.read_text(encoding="utf-8"))
     check(value.get("assignment_digest") == digest, "bound start embeds the assignment_digest")
-    check(value.get("engine") == "claude", "bound start embeds engine from the assignment")
-    check(value.get("provider") == "anthropic-claude-code", "bound start embeds provider from the assignment")
+    check(value.get("engine") == "cursor", "bound start embeds engine from the assignment")
+    check(value.get("provider") == "cursor", "bound start embeds provider from the assignment")
     check(value.get("host") == "gs-recursion", "bound start embeds host from the assignment")
     check(value.get("sandbox_profile") == "strict-linux", "bound start embeds sandbox_profile from the assignment")
-    check(value.get("capacity_pool") is None, "bound start embeds a null capacity_pool when the assignment has none")
+    check(value.get("capacity_pool") == "cursor-ultra-grok-bot",
+          "bound start embeds the strict assignment capacity_pool")
+    check(value.get("billing_basis") == "flat-subscription",
+          "bound start embeds the controller-supplied billing basis")
+    check(value.get("metered_approved") is False,
+          "bound start records that metered usage was not approved")
+    check(value.get("default_branch") == "main" and
+          value.get("integration_branch") == "recursion/integration",
+          "bound start embeds the controller-supplied branch policy")
+
+
+def test_start_refuses_obsolete_assignment_shape(tmp_path: Path) -> None:
+    assignment_file, digest = make_obsolete_assignment(tmp_path)
+    path = tmp_path / "run.json"
+    result = run(start_args(path, "run-obsolete", "task-1") +
+                 ["--assignment-digest", digest, "--assignment-file", str(assignment_file)])
+    check(result.returncode != 0, "a paired obsolete Phase 3 assignment is refused")
+    check(not path.exists(), "obsolete assignment refusal writes no partial run evidence")
 
 
 def test_start_refuses_one_sided_flags(tmp_path: Path) -> None:
@@ -261,6 +349,20 @@ def test_windows_atomic_publish_rejects_parent_swap(tmp_path: Path) -> None:
 
 
 def test_remote_evidence(tmp_path: Path) -> None:
+    # Strict remote-event persistence is covered by the Phase 5 boundary battery.  This
+    # Phase 3 compatibility test intentionally keeps its record legacy/assignment-free.
+    path = tmp_path / "run.json"
+    started = run(start_args(path, "run-remote-legacy", "task-1"))
+    check(started.returncode == 0, "legacy remote fixture starts without an assignment")
+    result = run(["remote-evidence", str(path), "--session-id", "sess-legacy",
+                  "--event-type", "session", "--branch", "cursor/task-1",
+                  "--commit", "b" * 40])
+    check(result.returncode != 0 and "remote evidence is invalid" in result.stderr,
+          "assignment-less remote evidence is refused without claiming immutable provenance")
+    check(not (tmp_path / "remote-events.jsonl").exists(),
+          "assignment-less remote evidence writes no event")
+    return
+
     path = tmp_path / "run.json"
     assignment_file, digest = make_assignment(tmp_path)
     persisted = tmp_path / "assignments" / "task-1" / f"{digest}.json"
@@ -297,6 +399,17 @@ def test_remote_evidence(tmp_path: Path) -> None:
 
 
 def test_remote_state_and_concurrency(tmp_path: Path) -> None:
+    # Assignment-bound concurrency is exercised by the boundary battery; preserve this
+    # Phase 3 test as a legacy refusal check instead of claiming a strict persisted binding.
+    path = tmp_path / "run.json"
+    started = run(start_args(path, "run-remote-race-legacy", "task-1"))
+    check(started.returncode == 0, "legacy remote-race fixture starts without an assignment")
+    result = run(["remote-evidence", str(path), "--session-id", "sess-race",
+                  "--event-type", "session", "--branch", "cursor/race",
+                  "--commit", "b" * 40])
+    check(result.returncode != 0, "assignment-less concurrent remote evidence is refused")
+    return
+
     path = tmp_path / "run.json"
     _assignment_file, digest = make_assignment(tmp_path)
     run(start_args(path, "run-remote-race", "task-1") +
@@ -329,6 +442,17 @@ def test_remote_state_and_concurrency(tmp_path: Path) -> None:
 
 
 def test_terminal_result_is_immutable_and_concurrent(tmp_path: Path) -> None:
+    # Terminal replay/concurrency with immutable assignment is covered by the boundary
+    # battery; legacy records must not be promoted into remote terminal evidence here.
+    path = tmp_path / "run.json"
+    started = run(start_args(path, "run-result-legacy", "task-1"))
+    check(started.returncode == 0, "legacy terminal fixture starts without an assignment")
+    result = run(["remote-evidence", str(path), "--session-id", "sess-result",
+                  "--event-type", "result", "--branch", "cursor/result",
+                  "--commit", "b" * 40])
+    check(result.returncode != 0, "assignment-less terminal remote evidence is refused")
+    return
+
     path = tmp_path / "run.json"
     _assignment_file, digest = make_assignment(tmp_path)
     run(start_args(path, "run-result-terminal", "task-1") +
@@ -377,6 +501,8 @@ def main() -> int:
         test_legacy_start_unchanged(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_start_binds_assignment(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_start_refuses_obsolete_assignment_shape(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_start_refuses_one_sided_flags(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
