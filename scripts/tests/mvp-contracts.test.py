@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import sys
 import unittest
@@ -20,6 +21,18 @@ def signed(record):
         record["kind"], record["kind"] + "_digest")
     record[field] = canonical_digest(record)
     return record
+
+
+def unchecked_digest(record):
+    """Reproduce canonical hashing without invoking the validator's scalar scan."""
+    body = dict(record)
+    field = {"capability_grant": "grant_digest"}.get(
+        record["kind"], record["kind"] + "_digest")
+    body.pop(field, None)
+    encoded = json.dumps(
+        body, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        allow_nan=False).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def records():
@@ -142,9 +155,14 @@ class MvpContractsTest(unittest.TestCase):
         task = copy.deepcopy(records()["task"])
         task["acceptance"] = None
         with self.assertRaises(ContractError): validate(task)
-        task = copy.deepcopy(records()["task"])
-        task["acceptance"] = "chain_of_thought: hidden"
-        with self.assertRaises(ContractError): validate(task)
+        for marker in ("chain_of_thought", "private_reasoning",
+                       "hidden-reasoning", "internal CoT"):
+            task = copy.deepcopy(records()["task"])
+            task["acceptance"] = f"worker output includes {marker}: hidden"
+            task["task_digest"] = unchecked_digest(task)
+            self.assertEqual(task["task_digest"], unchecked_digest(task))
+            with self.assertRaisesRegex(ContractError, "private-reasoning"):
+                validate(task)
 
     def test_child_task_grant_and_budget_cannot_escalate(self):
         parent = records()["task"]

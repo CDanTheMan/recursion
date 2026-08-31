@@ -32,6 +32,10 @@ FIELDS = {
 }
 REQUIRED = {kind: set(fields) for kind, fields in FIELDS.items()}
 _SECRET = re.compile(r"(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_-]{12,}|github_pat_[A-Za-z0-9_]{12,}|xox[baprs]-[A-Za-z0-9-]{12,}|AKIA[0-9A-Z]{16}|npm_[A-Za-z0-9]{12,}|AIza[0-9A-Za-z_-]{20,}|bearer[ \t]+[^ \t]+|(?:api[_-]?key|password|secret|token)[ \t]*[:=]|-----BEGIN [A-Z ]+ KEY-----)", re.I)
+_PRIVATE_REASONING = re.compile(
+    r"\b(?:chain[\s_-]*of[\s_-]*thought|(?:private|hidden|internal)[\s_-]*(?:reasoning|scratchpad|cot)|cot)\b",
+    re.I,
+)
 _SECRET_KEYS = {"password", "credential", "credentials", "api_key", "apikey", "secret", "token", "private_key", "private_reasoning", "chain_of_thought", "hidden_reasoning", "cot"}
 
 
@@ -52,8 +56,8 @@ def _walk(value: Any) -> None:
         if isinstance(current, str):
             if len(current) > MAX_STRING:
                 raise ContractError("JSON string limit exceeded")
-            if _SECRET.search(current):
-                raise ContractError("secret material")
+            if _SECRET.search(current) or _PRIVATE_REASONING.search(current):
+                raise ContractError("secret or private-reasoning material")
         elif isinstance(current, dict):
             if len(current) > MAX_LIST:
                 raise ContractError("JSON object limit exceeded")
@@ -103,7 +107,7 @@ canonicalize = canonical_json
 
 
 def _str(value: Any, name: str) -> str:
-    if not isinstance(value, str) or not value or len(value) > MAX_STRING or _SECRET.search(value):
+    if not isinstance(value, str) or not value or len(value) > MAX_STRING or _SECRET.search(value) or _PRIVATE_REASONING.search(value):
         raise ContractError(f"{name} must be a safe non-empty string")
     return value
 
