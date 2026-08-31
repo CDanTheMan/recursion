@@ -11,7 +11,7 @@ import hashlib
 import math
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 import mvp_contracts as contracts
@@ -20,6 +20,7 @@ MAX_BYTES = contracts.MAX_BYTES
 MAX_ITEMS = 256
 MAX_EVIDENCE = 128
 MAX_DEPTH = 2
+_FACTORY_PROVENANCE = object()
 
 
 class KernelError(ValueError):
@@ -168,6 +169,7 @@ def _freeze(value: Any) -> Any:
 class TaskPacket:
     value: Mapping[str, Any]
     packet_digest: str
+    _provenance: object | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "value", _freeze(_plain(self.value)))
@@ -246,6 +248,72 @@ def _parent_reference(parent: TaskPacket) -> dict[str, Any]:
     }
 
 
+def _packet_body_digest(packet: TaskPacket) -> str:
+    """Recompute a packet's outer digest without trusting its stored value."""
+    body = packet.to_dict()
+    supplied = body.pop("packet_digest", None)
+    actual = hashlib.sha256(_canonical(body)).hexdigest()
+    if supplied != packet.packet_digest or supplied != actual:
+        raise KernelError("packet digest mismatch")
+    return actual
+
+
+def _anchor_reference(anchor: Any, *, expected_digest: str | None = None) -> dict[str, Any]:
+    """Resolve an explicit trusted parent anchor to its compact authority view.
+
+    A digest is deliberately never accepted by itself.  A ``TaskPacket`` (or a
+    complete persisted packet mapping) supplies the omitted authority records;
+    a compact authority mapping is accepted only alongside an independently
+    supplied digest.
+    """
+    if isinstance(anchor, TaskPacket):
+        digest = _packet_body_digest(anchor)
+        if expected_digest is not None and expected_digest != digest:
+            raise KernelError("parent packet digest anchor mismatch")
+        return _parent_reference(anchor)
+    if not isinstance(anchor, Mapping):
+        raise KernelError("trusted parent anchor is required")
+    value = _plain(anchor)
+    if set(value) == _PARENT_REF_FIELDS:
+        digest = value["packet_digest"]
+        if expected_digest is None:
+            raise KernelError("compact parent anchor requires an independent digest")
+        if digest != expected_digest:
+            raise KernelError("parent packet digest anchor mismatch")
+        return value
+    if "packet_digest" not in value or set(value) != _PACKET_FIELDS | {"packet_digest"}:
+        raise KernelError("trusted parent anchor is not a complete packet")
+    digest = value["packet_digest"]
+    body = dict(value)
+    body.pop("packet_digest")
+    actual = hashlib.sha256(_canonical(body)).hexdigest()
+    if digest != actual:
+        raise KernelError("trusted parent packet digest mismatch")
+    if expected_digest is not None and expected_digest != digest:
+        raise KernelError("parent packet digest anchor mismatch")
+    return _parent_reference(TaskPacket(value, digest))
+
+
+def _lineage_digests(values: Sequence[Any], immediate_digest: str) -> list[str]:
+    """Resolve trusted ancestor anchors, accepting either full or tail form."""
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        raise KernelError("trusted parent lineage is invalid")
+    anchors = list(values)
+    if anchors:
+        first = anchors[0]
+        first_digest = (first.packet_digest if isinstance(first, TaskPacket)
+                        else first.get("packet_digest") if isinstance(first, Mapping) else first)
+        if first_digest == immediate_digest:
+            anchors = anchors[1:]
+    result: list[str] = []
+    for item in anchors:
+        if isinstance(item, str):
+            # Bare ancestor digests cannot authenticate omitted authority records.
+            raise KernelError("trusted ancestor authority is required")
+        result.append(_anchor_reference(item)["packet_digest"])
+    return result
+
+
 def _authority_packet(reference: Mapping[str, Any]) -> dict[str, Any]:
     """Make a narrow packet-shaped view for shared child checks."""
     return {
@@ -259,11 +327,34 @@ def _authority_packet(reference: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _authority_chain(anchor: Any) -> list[dict[str, Any]]:
+    """Return packet authority projections from an anchor through its parents."""
+    if isinstance(anchor, TaskPacket):
+        current: Mapping[str, Any] | None = anchor.to_dict()
+    elif isinstance(anchor, Mapping):
+        current = _plain(anchor)
+        if set(current) == _PARENT_REF_FIELDS:
+            current = _authority_packet(current)
+    else:
+        raise KernelError("trusted parent anchor is required")
+    result: list[dict[str, Any]] = []
+    while isinstance(current, Mapping):
+        if not all(name in current for name in ("task", "budget")):
+            break
+        result.append({"task": _plain(current["task"]),
+                       "budget": _plain(current["budget"])})
+        prior = current.get("parent")
+        if not isinstance(prior, Mapping):
+            break
+        current = _authority_packet(prior)
+    return result
+
+
 def _validate_parent_reference(reference: Any, child: Mapping[str, Any],
                                limits: KernelLimits, *,
+                               expected_parent: Any | None = None,
                                expected_parent_digest: str | None = None,
-                               expected_lineage: Sequence[Any] | None = None,
-                               require_trusted_anchor: bool = True) -> dict[str, Any]:
+                               expected_lineage: Sequence[Any] | None = None) -> dict[str, Any]:
     if not isinstance(reference, Mapping):
         raise KernelError("parent authority reference is invalid")
     value = _plain(reference)
@@ -272,39 +363,23 @@ def _validate_parent_reference(reference: Any, child: Mapping[str, Any],
     digest = value["packet_digest"]
     if not isinstance(digest, str) or not contracts.DIGEST_RE.fullmatch(digest):
         raise KernelError("parent packet digest anchor is invalid")
-    if require_trusted_anchor and expected_parent_digest is None:
-        raise KernelError("trusted parent packet digest is required")
-    if expected_parent_digest is not None and expected_parent_digest != digest:
-        raise KernelError("parent packet digest anchor mismatch")
+    if expected_parent is None:
+        raise KernelError("trusted parent authority is required")
+    expected_reference = _anchor_reference(expected_parent,
+                                           expected_digest=expected_parent_digest)
+    if value != expected_reference:
+        raise KernelError("parent authority reference mismatch")
     refs = value["lineage_refs"]
     if (not isinstance(refs, list) or not refs or len(refs) > MAX_DEPTH
             or any(not isinstance(item, str) or not contracts.DIGEST_RE.fullmatch(item) for item in refs)
             or refs[0] != digest or len(set(refs)) != len(refs)):
         raise KernelError("parent packet lineage is invalid")
-    if require_trusted_anchor and len(refs) > 1 and expected_lineage is None:
-        raise KernelError("trusted ancestor packet lineage is required")
     if expected_lineage is not None:
-        expected = []
-        for item in expected_lineage:
-            if isinstance(item, str):
-                expected.append(item)
-            elif isinstance(item, Mapping):
-                anchor = _plain(item)
-                anchor_digest = anchor.get("packet_digest")
-                if anchor_digest is None:
-                    raise KernelError("expected parent lineage anchor is invalid")
-                expected.append(anchor_digest)
-                # A caller-supplied authority record is the authentication seam
-                # for the compact reference (the digest alone cannot prove the
-                # omitted parent context or records).
-                for name in ("task", "assignment", "budget", "grant", "supervisor_digest",
-                             "pause_epoch", "limits"):
-                    if name in anchor and anchor[name] != value[name]:
-                        raise KernelError("parent authority anchor mismatch")
-            else:
-                raise KernelError("expected parent lineage anchor is invalid")
+        expected = [digest, *_lineage_digests(expected_lineage, digest)]
         if expected != refs:
             raise KernelError("parent packet lineage anchor mismatch")
+    elif len(refs) > 1 and expected_parent is None:
+        raise KernelError("trusted ancestor packet lineage is required")
     if value["limits"] != limits.to_dict():
         raise KernelError("parent kernel limits changed")
     for name in ("task", "assignment", "budget", "grant"):
@@ -438,21 +513,32 @@ def _records(*, supervisor: Mapping[str, Any], task: Mapping[str, Any],
              parent_task: Mapping[str, Any] | None = None,
              parent_budget: Mapping[str, Any] | None = None,
              parent_lineage: Sequence[Mapping[str, Any]] = ()) -> None:
-    values = [_plain(item) for item in (supervisor, task, assignment, budget, grant)]
+    values: list[dict[str, Any]] = []
+
+    def add(item: Mapping[str, Any]) -> None:
+        value = _plain(item)
+        if value not in values:
+            values.append(value)
+
+    for item in (supervisor, task, assignment, budget, grant):
+        add(item)
     if parent_task is not None:
-        values.append(_plain(parent_task))
+        add(parent_task)
     if parent_budget is not None:
-        values.append(_plain(parent_budget))
+        add(parent_budget)
     for item in parent_lineage:
-        values.extend((_plain(item["task"]), _plain(item["budget"])))
-    values.extend(_plain(item) for item in checkpoint_chain)
+        add(item["task"])
+        add(item["budget"])
+    for item in checkpoint_chain:
+        add(item)
     if checkpoint is not None:
-        values.append(_plain(checkpoint))
+        add(checkpoint)
     if receipt is not None:
-        values.append(_plain(receipt))
+        add(receipt)
     if candidate is not None:
-        values.append(_plain(candidate))
-    values.extend(_plain(item) for item in evidence)
+        add(candidate)
+    for item in evidence:
+        add(item)
     try:
         contracts.validate_cross_records(values)
     except contracts.ContractError as exc:
@@ -517,9 +603,11 @@ def _validate_child_semantics(parent: TaskPacket | Mapping[str, Any], body: Mapp
 
 def _validate_semantics(body: Mapping[str, Any], limits: KernelLimits,
                         *, parent: TaskPacket | None = None,
+                        expected_parent: Any | None = None,
                         expected_parent_digest: str | None = None,
-                        expected_lineage: Sequence[Any] | None = None,
-                        _allow_untrusted_parent: bool = False) -> None:
+                        expected_lineage: Sequence[Any] | None = None) -> None:
+    if expected_parent_digest is not None and expected_parent is None:
+        raise KernelError("digest-only parent anchors are not trusted")
     if set(body) != _PACKET_FIELDS:
         raise KernelError("packet fields are not strict")
     for name in ("supervisor", "task", "assignment", "budget", "grant"):
@@ -574,6 +662,10 @@ def _validate_semantics(body: Mapping[str, Any], limits: KernelLimits,
         if not isinstance(checkpoint, Mapping):
             raise KernelError("checkpoint must be a record")
         cp = _plain(checkpoint)
+        required_checkpoint_fields = ("task_id", "task_digest", "packet_digest",
+                                      "context_digest", "sequence", "checkpoint_digest")
+        if any(name not in cp for name in required_checkpoint_fields):
+            raise KernelError("checkpoint record is incomplete")
         if cp["task_id"] != body["task"]["id"] or cp["task_digest"] != body["task"]["task_digest"]:
             raise KernelError("checkpoint task binding mismatch")
         if cp["context_digest"] != _sha(context):
@@ -581,7 +673,13 @@ def _validate_semantics(body: Mapping[str, Any], limits: KernelLimits,
         base = dict(body)
         base["checkpoint"] = None
         base["checkpoint_chain"] = []
-        if cp["packet_digest"] != _sha(base):
+        checkpoint_base = dict(base)
+        # Receipts may refer to a checkpoint, so including the receipt in the
+        # checkpoint's packet anchor would create an unresolvable digest cycle.
+        # Adjuncts remain in the anchor; only the checkpoint/receipt edge is
+        # removed, preserving the packet's selected context and evidence.
+        checkpoint_base["receipt"] = None
+        if cp["packet_digest"] not in {_sha(base), _sha(checkpoint_base)}:
             raise KernelError("checkpoint packet binding mismatch")
         try:
             contracts.validate_checkpoint_chain(chain + [cp])
@@ -594,10 +692,9 @@ def _validate_semantics(body: Mapping[str, Any], limits: KernelLimits,
     if body["parent"] is not None:
         parent_reference = _validate_parent_reference(
             body["parent"], body["task"], limits,
-            expected_parent_digest=(parent.packet_digest if parent is not None
-                                    else (None if _allow_untrusted_parent else expected_parent_digest)),
+            expected_parent=(parent if parent is not None else expected_parent),
+            expected_parent_digest=expected_parent_digest,
             expected_lineage=expected_lineage,
-            require_trusted_anchor=(parent is None and not _allow_untrusted_parent),
         )
         if parent is not None:
             expected_reference = _parent_reference(parent)
@@ -606,29 +703,34 @@ def _validate_semantics(body: Mapping[str, Any], limits: KernelLimits,
         parent_task = _plain(parent_reference["task"])
         parent_budget = _plain(parent_reference["budget"])
     else:
-        if expected_parent_digest is not None or expected_lineage is not None:
+        if expected_parent is not None or expected_parent_digest is not None or expected_lineage is not None:
             raise KernelError("unexpected parent packet anchor")
         parent_task = parent_budget = None
     if parent_task is None:
+        authority_lineage: list[dict[str, Any]] = []
+        if expected_parent is not None:
+            authority_lineage.extend(_authority_chain(expected_parent)[1:])
+        if expected_lineage is not None:
+            for anchor in expected_lineage:
+                if not isinstance(anchor, str):
+                    authority_lineage.extend(_authority_chain(anchor))
         _records(supervisor=body["supervisor"], task=body["task"], assignment=body["assignment"],
                  budget=body["budget"], grant=body["grant"], checkpoint=checkpoint,
                  checkpoint_chain=chain, receipt=body["receipt"], candidate=body["candidate"],
-                 evidence=evidence)
+                 evidence=evidence, parent_lineage=authority_lineage)
     else:
-        # The compact parent reference carries only the immediate authority
-        # records.  Running the aggregate cross-record index over that partial
-        # view would incorrectly demand the omitted grandparent task/budget.
-        _contract(body["supervisor"])
-        _contract(body["task"], parent_task=parent_task)
-        _contract(body["budget"], parent_budget=parent_budget)
-        _contract(body["grant"])
-        for item in evidence:
-            try:
-                contracts.validate_cross_records([_plain(item)])
-            except contracts.ContractError as exc:
-                raise KernelError(str(exc)) from exc
-            if item.get("task_id") != body["task"]["id"] or item.get("task_digest") != body["task"]["task_digest"]:
-                raise KernelError("evidence task binding mismatch")
+        # Use the same complete record collector for child packets.  The compact
+        # parent projection contributes immediate task/budget authority while
+        # every child adjunct is contract- and cross-record validated together.
+        _records(supervisor=body["supervisor"], task=body["task"],
+                 assignment=body["assignment"], budget=body["budget"],
+                 grant=body["grant"], checkpoint=checkpoint,
+                 checkpoint_chain=chain, receipt=body["receipt"],
+                 candidate=body["candidate"], evidence=evidence,
+                 parent_task=parent_task, parent_budget=parent_budget,
+                 parent_lineage=(_authority_chain(parent)[1:] if parent is not None
+                                 else _authority_chain(expected_parent)[1:] if expected_parent is not None
+                                 else ()))
     if body["task"]["parent_task_id"] is None and body["depth"] != 0:
         raise KernelError("root task depth mismatch")
     if parent_snapshot is not None:
@@ -707,17 +809,44 @@ def build_packet(*, task: Mapping[str, Any], assignment: Mapping[str, Any],
                       grant=grant, context=context, evidence_refs=evidence_refs, limits=lim,
                       checkpoint=checkpoint, checkpoint_chain=checkpoint_chain, receipt=receipt,
                       candidate=candidate, evidence=evidence, parent=_parent)
-    return TaskPacket(body, body["packet_digest"])
+    return TaskPacket(body, body["packet_digest"], _FACTORY_PROVENANCE)
 
 
 def spawn_child(parent: TaskPacket, *, task: Mapping[str, Any], assignment: Mapping[str, Any],
-                 budget: Mapping[str, Any], grant: Mapping[str, Any], **kwargs: Any) -> TaskPacket:
+                 budget: Mapping[str, Any], grant: Mapping[str, Any],
+                 expected_parent: Any | None = None,
+                 expected_parent_digest: str | None = None,
+                 expected_lineage: Sequence[Any] | None = None,
+                 **kwargs: Any) -> TaskPacket:
     if not isinstance(parent, TaskPacket):
         raise KernelError("parent must be immutable TaskPacket")
-    # A parent handed to spawn_child is the trusted in-memory admission result.
-    # Its own external anchor, when it has one, is checked structurally below;
-    # the new child is then bound to parent.packet_digest.
-    _validate_packet(parent, allow_untrusted_parent=True)
+    if expected_parent is None:
+        raise KernelError("spawn_child requires an explicit expected_parent anchor")
+    _packet_body_digest(parent)
+    expected_reference = _anchor_reference(expected_parent,
+                                           expected_digest=expected_parent_digest)
+    if expected_reference != _parent_reference(parent):
+        raise KernelError("parent authority anchor mismatch")
+    if parent["depth"] == 0:
+        if expected_lineage is not None:
+            # A caller may provide the full one-element lineage (the root
+            # itself); it contributes no ancestor beyond the immediate parent.
+            if _lineage_digests(expected_lineage, parent.packet_digest):
+                raise KernelError("root parent has no ancestor lineage")
+    else:
+        if expected_lineage is None:
+            raise KernelError("grandchild admission requires trusted ancestor lineage")
+        ancestors = list(expected_lineage)
+        first_digest = (ancestors[0].packet_digest if ancestors
+                        and isinstance(ancestors[0], TaskPacket) else
+                        ancestors[0].get("packet_digest") if ancestors
+                        and isinstance(ancestors[0], Mapping) else None)
+        if first_digest == parent.packet_digest:
+            ancestors = ancestors[1:]
+        if not ancestors:
+            raise KernelError("grandchild admission requires trusted ancestor lineage")
+        _validate_packet(parent, expected_parent=ancestors[0],
+                         expected_lineage=ancestors[1:] or None)
     if parent["depth"] >= MAX_DEPTH:
         raise KernelError("maximum depth blocks child admission")
     if kwargs.get("pause") or kwargs.get("pause_epoch", parent["pause_epoch"]) > parent["pause_epoch"]:
@@ -738,17 +867,22 @@ def spawn_child(parent: TaskPacket, *, task: Mapping[str, Any], assignment: Mapp
         raise KernelError("unknown child admission options")
     body = child.to_dict()
     body.pop("packet_digest", None)
-    _validate_semantics(body, limits, parent=parent)
+    _validate_semantics(body, limits, parent=parent,
+                        expected_parent=expected_parent,
+                        expected_parent_digest=expected_parent_digest,
+                        expected_lineage=expected_lineage)
     body["packet_digest"] = hashlib.sha256(_canonical(body, limits)).hexdigest()
-    return TaskPacket(body, body["packet_digest"])
+    return TaskPacket(body, body["packet_digest"], _FACTORY_PROVENANCE)
 
 
 def retain_context(packet: TaskPacket, items: Sequence[Mapping[str, Any]], *,
                    limits: KernelLimits | None = None, pause: bool | None = None,
                    pause_epoch: int | None = None,
+                   expected_parent: Any | None = None,
                    expected_parent_digest: str | None = None,
                    expected_lineage: Sequence[Any] | None = None) -> TaskPacket:
     validate_packet(packet, pause_observed=pause is True, pause_epoch=pause_epoch,
+                    expected_parent=expected_parent,
                     expected_parent_digest=expected_parent_digest,
                     expected_lineage=expected_lineage)
     stored = KernelLimits.from_value(packet["limits"])
@@ -783,20 +917,23 @@ def retain_context(packet: TaskPacket, items: Sequence[Mapping[str, Any]], *,
     body["context"] = chosen
     body.pop("packet_digest", None)
     _validate_semantics(body, lim,
+                        expected_parent=expected_parent,
                         expected_parent_digest=expected_parent_digest,
                         expected_lineage=expected_lineage)
     body["packet_digest"] = hashlib.sha256(_canonical(body, lim)).hexdigest()
-    return TaskPacket(body, body["packet_digest"])
+    return TaskPacket(body, body["packet_digest"], _FACTORY_PROVENANCE)
 
 
 def validate_packet(packet: TaskPacket | Mapping[str, Any], *,
                     pause_observed: bool | None = None,
                     pause_epoch: int | None = None,
                     checkpoint: Mapping[str, Any] | None = None,
+                    expected_parent: Any | None = None,
                     expected_parent_digest: str | None = None,
                     expected_lineage: Sequence[Any] | None = None) -> TaskPacket:
     return _validate_packet(packet, pause_observed=pause_observed,
                             pause_epoch=pause_epoch, checkpoint=checkpoint,
+                            expected_parent=expected_parent,
                             expected_parent_digest=expected_parent_digest,
                             expected_lineage=expected_lineage)
 
@@ -805,9 +942,9 @@ def _validate_packet(packet: TaskPacket | Mapping[str, Any], *,
                      pause_observed: bool | None = None,
                      pause_epoch: int | None = None,
                      checkpoint: Mapping[str, Any] | None = None,
+                     expected_parent: Any | None = None,
                      expected_parent_digest: str | None = None,
-                     expected_lineage: Sequence[Any] | None = None,
-                     allow_untrusted_parent: bool = False) -> TaskPacket:
+                     expected_lineage: Sequence[Any] | None = None) -> TaskPacket:
     if not isinstance(packet, TaskPacket):
         raise KernelError("packet must be immutable TaskPacket")
     try:
@@ -826,9 +963,9 @@ def _validate_packet(packet: TaskPacket | Mapping[str, Any], *,
     lim = KernelLimits.from_value(body.get("limits"))
     _validate_semantics(
         body, lim,
-        expected_parent_digest=(None if allow_untrusted_parent else expected_parent_digest),
+        expected_parent=expected_parent,
+        expected_parent_digest=expected_parent_digest,
         expected_lineage=expected_lineage,
-        _allow_untrusted_parent=allow_untrusted_parent,
     )
     if checkpoint is not None and body.get("checkpoint") != _plain(checkpoint):
         raise KernelError("checkpoint lineage mismatch")

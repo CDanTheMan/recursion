@@ -99,9 +99,13 @@ class KernelTest(unittest.TestCase):
             child_grant = copy.deepcopy(grant)
             child_grant.update(task_id=child_task["id"], task_digest=child_task["task_digest"], grant_digest="")
             child_grant = signed(child_grant)
-            parent = k.spawn_child(parent, task=child_task, assignment=child_assignment, budget=child_budget, grant=child_grant)
+            parent = k.spawn_child(parent, task=child_task, assignment=child_assignment, budget=child_budget, grant=child_grant,
+                                   expected_parent=parent,
+                                   expected_lineage=([root] if depth == 2 else None))
         with self.assertRaises(k.KernelError):
-            k.spawn_child(parent, task=task, assignment=assignment, budget=budget, grant=grant)
+            k.spawn_child(parent, task=task, assignment=assignment, budget=budget, grant=grant,
+                          expected_parent=parent,
+                          expected_lineage=[root])
 
     def test_rejects_semantic_digest_forgery_and_bindings(self):
         _, task, _, _, grant, _ = fixture()
@@ -277,7 +281,9 @@ class KernelTest(unittest.TestCase):
                                task_digest=child_task["task_digest"], grant_digest="")
             child_grant = resigned(child_grant)
             return k.spawn_child(parent, task=child_task, assignment=child_assignment,
-                                 budget=child_budget, grant=child_grant)
+                                 budget=child_budget, grant=child_grant,
+                                 expected_parent=parent,
+                                 expected_lineage=([root] if depth == 2 else None))
 
         one = child(root, 1, "child")
         two = child(one, 2, "grandchild")
@@ -285,29 +291,137 @@ class KernelTest(unittest.TestCase):
         self.assertNotIn("context", body["parent"])
         with self.assertRaises(k.KernelError):
             k.validate_packet(two)
-        self.assertTrue(k.validate_packet(
-            two, expected_parent_digest=one.packet_digest,
-            expected_lineage=[one.packet_digest, root.packet_digest]))
+        with self.assertRaises(k.KernelError):
+            k.validate_packet(two, expected_parent_digest=one.packet_digest,
+                              expected_lineage=[one.packet_digest, root.packet_digest])
+        self.assertTrue(k.validate_packet(two, expected_parent=one,
+                                          expected_lineage=[root]))
         body["parent"]["context"] = []
         body["packet_digest"] = hashlib.sha256(k._canonical({key: value for key, value in body.items() if key != "packet_digest"})).hexdigest()
         with self.assertRaises(k.KernelError):
             k.validate_packet(k.TaskPacket(body, body["packet_digest"]),
-                              expected_parent_digest=one.packet_digest,
-                              expected_lineage=[one.packet_digest, root.packet_digest])
+                              expected_parent=one,
+                              expected_lineage=[root])
         body = two.to_dict()
         body["parent"]["task"]["id"] = "task-forged"
         body["packet_digest"] = hashlib.sha256(k._canonical({key: value for key, value in body.items() if key != "packet_digest"})).hexdigest()
         with self.assertRaises(k.KernelError):
             k.validate_packet(k.TaskPacket(body, body["packet_digest"]),
-                              expected_parent_digest=one.packet_digest,
+                              expected_parent=one,
                               expected_lineage=[{
                                   **one.to_dict(), "packet_digest": one.packet_digest,
-                              }, root.packet_digest])
+                              }, root])
 
     def test_evidence_must_be_declared_and_bound(self):
         p = packet(); ev = signed({"kind": "evidence", "id": "evidence-one", "task_id": p["task"]["id"], "task_digest": p["task"]["task_digest"]}); ref = {"id": ev["id"], "sha256": ev["evidence_digest"]}
         self.assertTrue(k.build_packet(supervisor=p["supervisor"], task=p["task"], assignment=p["assignment"], budget=p["budget"], grant=p["grant"], evidence=[ev], evidence_refs=[ref]))
         with self.assertRaises(k.KernelError): packet(evidence_refs=[ref])
+
+    def test_child_candidate_receipt_and_evidence_are_cross_bound(self):
+        root = packet(); _, task, assignment, budget, grant, _ = fixture()
+        child_task = copy.deepcopy(task)
+        child_task.update(id="task-ac", depth=1,
+                          parent_task_id=task["id"], parent_task_digest=task["task_digest"],
+                          budget_id="budget-ac", task_digest="")
+        child_task = resigned(child_task)
+        child_budget = copy.deepcopy(budget)
+        child_budget.update(id="budget-ac", task_id=child_task["id"],
+                            task_digest=child_task["task_digest"], parent_budget_id=budget["id"],
+                            budget_digest="")
+        child_budget = resigned(child_budget)
+        child_assignment = copy.deepcopy(assignment)
+        child_assignment.update(task_id=child_task["id"], task_digest=child_task["task_digest"],
+                                assignment_digest="")
+        child_assignment = resigned(child_assignment)
+        child_grant = copy.deepcopy(grant)
+        child_grant.update(task_id=child_task["id"], task_digest=child_task["task_digest"],
+                           grant_digest="")
+        child_grant = resigned(child_grant)
+        candidate = resigned({
+            "kind": "candidate", "id": "candidate-child",
+            "task_digest": child_task["task_digest"], "candidate_id": "candidate-child",
+            "candidate_commit": "b" * 40, "result_digest": "1" * 64,
+            "candidate_digest": "",
+        })
+        evidence = resigned({
+            "kind": "evidence", "id": "evidence-child", "task_id": child_task["id"],
+            "task_digest": child_task["task_digest"], "evidence_digest": "",
+        })
+        staged = k.spawn_child(root, task=child_task, assignment=child_assignment,
+                               budget=child_budget, grant=child_grant,
+                               expected_parent=root, candidate=candidate, evidence=[evidence])
+        checkpoint = checkpoint_for(staged, "checkpoint-adjunct")
+        receipt = resigned({
+            "schema_version": 2, "kind": "receipt", "id": "receipt-child",
+            "task_id": child_task["id"], "task_digest": child_task["task_digest"],
+            "assignment_digest": child_assignment["assignment_digest"], "adapter": "local",
+            "candidate_id": candidate["candidate_id"], "candidate_commit": candidate["candidate_commit"],
+            "result_digest": candidate["result_digest"], "status": "succeeded",
+            "usage": {"tokens": 1, "input_tokens": 1, "output_tokens": 0,
+                       "wall_seconds": 1, "cost_cents": 0},
+            "checkpoint_digests": [checkpoint["checkpoint_digest"]],
+            "started_at": "2026-08-31T12:00:00Z", "finished_at": "2026-08-31T12:00:00Z",
+            "receipt_digest": "",
+        })
+        self.assertTrue(k.spawn_child(root, task=child_task, assignment=child_assignment,
+                                      budget=child_budget, grant=child_grant,
+                                      expected_parent=root, candidate=candidate,
+                                      evidence=[evidence], checkpoint=checkpoint,
+                                      receipt=receipt))
+        with self.assertRaises(k.KernelError):
+            k.spawn_child(root, task=child_task, assignment=child_assignment,
+                          budget=child_budget, grant=child_grant,
+                          expected_parent=root, candidate={}, evidence=[evidence])
+        with self.assertRaises(k.KernelError):
+            k.spawn_child(root, task=child_task, assignment=child_assignment,
+                          budget=child_budget, grant=child_grant,
+                          expected_parent=root, receipt={"kind": "receipt"})
+
+    def test_parent_anchor_is_authority_not_digest_only(self):
+        root = packet(); _, task, assignment, budget, grant, _ = fixture()
+        child_task = copy.deepcopy(task)
+        child_task.update(id="task-anchor", depth=1, parent_task_id=task["id"],
+                          parent_task_digest=task["task_digest"], budget_id="budget-anchor",
+                          task_digest="")
+        child_task = resigned(child_task)
+        child_budget = copy.deepcopy(budget)
+        child_budget.update(id="budget-anchor", task_id=child_task["id"],
+                            task_digest=child_task["task_digest"], parent_budget_id=budget["id"],
+                            budget_digest="")
+        child_budget = resigned(child_budget)
+        child_assignment = copy.deepcopy(assignment)
+        child_assignment.update(task_id=child_task["id"], task_digest=child_task["task_digest"],
+                                assignment_digest="")
+        child_assignment = resigned(child_assignment)
+        child_grant = copy.deepcopy(grant)
+        child_grant.update(task_id=child_task["id"], task_digest=child_task["task_digest"],
+                           grant_digest="")
+        child_grant = resigned(child_grant)
+        child = k.spawn_child(root, task=child_task, assignment=child_assignment,
+                              budget=child_budget, grant=child_grant,
+                              expected_parent=root)
+        self.assertTrue(k.validate_packet(child, expected_parent=k._parent_reference(root),
+                                          expected_parent_digest=root.packet_digest))
+        with self.assertRaises(k.KernelError):
+            k.validate_packet(child, expected_parent_digest=root.packet_digest)
+        with self.assertRaises(k.KernelError):
+            k.retain_context(child, [{"summary": "safe"}],
+                             expected_parent_digest=root.packet_digest)
+        forged_body = root.to_dict()
+        forged_body["task"]["id"] = "task-forged"
+        forged_body["task"]["task_digest"] = c.canonical_digest(forged_body["task"])
+        for name, digest_name in (("assignment", "assignment_digest"),
+                                  ("budget", "budget_digest"), ("grant", "grant_digest")):
+            forged_body[name]["task_id"] = "task-forged"
+            forged_body[name]["task_digest"] = forged_body["task"]["task_digest"]
+            forged_body[name][digest_name] = c.canonical_digest(forged_body[name])
+        forged_digest = hashlib.sha256(k._canonical({key: value for key, value in forged_body.items()
+                                                      if key != "packet_digest"})).hexdigest()
+        forged = k.TaskPacket(forged_body, forged_digest)
+        with self.assertRaises(k.KernelError):
+            k.spawn_child(forged, task=child_task, assignment=child_assignment,
+                          budget=child_budget, grant=child_grant,
+                          expected_parent=root)
 
     def test_receipt_and_verification_cross_bindings_fail_closed(self):
         original = _contracts_fixture()
