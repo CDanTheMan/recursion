@@ -4,6 +4,10 @@
   "title": "Recursion execution fabric contracts v2",
   "description": "Strict declarative records. Validators reject unknown fields and secret material.",
   "oneOf": [
+    { "$ref": "supervisor.schema.json" }, { "$ref": "task.schema.json" },
+    { "$ref": "capability_grant.schema.json" }, { "$ref": "budget.schema.json" },
+    { "$ref": "receipt.schema.json" }, { "$ref": "checkpoint.schema.json" },
+    { "$ref": "verification.schema.json" }, { "$ref": "recovery.schema.json" },
     { "$ref": "#/$defs/engine" }, { "$ref": "#/$defs/provider" },
     { "$ref": "#/$defs/capacity_pool" }, { "$ref": "#/$defs/model" },
     { "$ref": "#/$defs/host" }, { "$ref": "#/$defs/sandbox_profile" }, { "$ref": "#/$defs/execution_profile" },
