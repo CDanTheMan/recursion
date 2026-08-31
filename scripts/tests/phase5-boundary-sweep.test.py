@@ -29,10 +29,7 @@ PYTHON = Path(sys.executable)
 
 
 def discover_bash() -> str | None:
-    """Find bash from PATH, then from the Windows installation directories."""
-    discovered = shutil.which("bash")
-    if discovered:
-        return discovered
+    """Find a usable Bash, preferring Git Bash over WindowsApps' WSL alias."""
     if os.name == "nt":
         for variable in ("ProgramFiles", "ProgramW6432"):
             program_files = os.environ.get(variable, "").strip()
@@ -41,6 +38,9 @@ def discover_bash() -> str | None:
             candidate = Path(program_files) / "Git" / "bin" / "bash.exe"
             if candidate.is_file():
                 return str(candidate)
+    discovered = shutil.which("bash")
+    if discovered and Path(discovered).is_file():
+        return discovered
     return None
 
 
@@ -81,9 +81,9 @@ def check(condition: bool, message: str) -> None:
 
 
 def run_command(command: list[str | Path], *, env: dict[str, str] | None = None,
-                input_bytes: bytes | None = None) -> subprocess.CompletedProcess:
+                input_bytes: bytes | None = None, cwd: Path | None = None) -> subprocess.CompletedProcess:
     result = subprocess.run(
-        [str(item) for item in command], cwd=ROOT, env=env, input=input_bytes,
+        [str(item) for item in command], cwd=cwd or ROOT, env=env, input=input_bytes,
         capture_output=True,
     )
     combined = result.stdout + result.stderr
@@ -902,15 +902,20 @@ def run_worker_plan_sweep(scratch: Path) -> None:
     }
     worktree = worker_root / "worktree"
     worktree.mkdir()
+    def posix_path(path: Path) -> str:
+        # Git Bash does not treat native ``C:\\...`` argv values as filesystem paths.
+        # Match the accepted Phase 4 harness and normalize fixture paths at this boundary.
+        return str(path).replace("\\", "/")
+
     for label, raw in HOSTILE_JSON:
         plan = scratch / f"plan-{label}.json"
         write(plan, raw)
         result = run_command([
-            BASH, worker_root / "scripts" / "worker-sandbox.sh", "--engine", "sampleeng",
-            "--engine-plan", plan, "--worktree", worktree, "--prompt", "prompt",
+            BASH, posix_path(worker_root / "scripts" / "worker-sandbox.sh"), "--engine", "sampleeng",
+            "--engine-plan", posix_path(plan), "--worktree", posix_path(worktree), "--prompt", "prompt",
             "--model", "model", "--network-policy", "none",
-        ], env=dict(os.environ, RECURSION_ROOT=str(worker_root), RECURSION_PYTHON=str(PYTHON),
-                    RECURSION_TEST_WORKER="logical"))
+        ], env=dict(os.environ, RECURSION_ROOT=posix_path(worker_root), RECURSION_PYTHON=posix_path(PYTHON),
+                    RECURSION_TEST_WORKER="logical"), cwd=worktree)
         if b"CreateFileMapping" in result.stderr and b"Win32 error 5" in result.stderr:
             print("ok - worker plan battery skipped because Git Bash hit the documented CreateFileMapping ACL artifact")
             return
@@ -928,12 +933,20 @@ def run_worker_plan_sweep(scratch: Path) -> None:
     }
     positive_path = scratch / "plan-positive.json"
     write(positive_path, json.dumps(positive_plan).encode("utf-8"))
+    # The parser enforces immutable, non-group-writable plans.  Hostile fixtures intentionally
+    # retain the default mode to exercise that refusal; the positive fixture must model the
+    # controller's authenticated read-only publication path.  Windows Python reports NTFS
+    # ACL-backed files as 0666 even after chmod, so use the read-only attribute there.
+    if os.name == "nt":
+        subprocess.run(["attrib", "+R", str(positive_path)], check=True, capture_output=True)
+    else:
+        positive_path.chmod(0o600)
     positive = run_command([
-        BASH, worker_root / "scripts" / "worker-sandbox.sh", "--engine", "sampleeng",
-        "--engine-plan", positive_path, "--worktree", worktree, "--prompt", "prompt",
+        BASH, posix_path(worker_root / "scripts" / "worker-sandbox.sh"), "--engine", "sampleeng",
+        "--engine-plan", posix_path(positive_path), "--worktree", posix_path(worktree), "--prompt", "prompt",
         "--model", "model", "--network-policy", "none",
-    ], env=dict(os.environ, RECURSION_ROOT=str(worker_root), RECURSION_PYTHON=str(PYTHON),
-                RECURSION_TEST_WORKER="logical"))
+    ], env=dict(os.environ, RECURSION_ROOT=posix_path(worker_root), RECURSION_PYTHON=posix_path(PYTHON),
+                RECURSION_TEST_WORKER="logical"), cwd=worktree)
     check(positive.returncode == 0 and b"refusal=invalid-engine-plan" not in positive.stderr,
           "well-formed worker engine plan succeeds in the same fixture")
 
