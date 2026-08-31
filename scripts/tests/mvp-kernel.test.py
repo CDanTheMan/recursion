@@ -33,6 +33,11 @@ def signed(record):
 def fixture():
     values = _contracts_fixture()
     task, budget, grant, assignment = (values[x] for x in ("task", "budget", "capability_grant", "assignment"))
+    assignment = copy.deepcopy(assignment)
+    assignment.update(source_repository=task["source_repository"],
+                      source_branch=task["source_branch"],
+                      source_sha=task["source_sha"], assignment_digest="")
+    assignment = signed(assignment)
     supervisor = signed({
         "schema_version": 2, "kind": "supervisor", "id": "supervisor-one",
         "parent_goal": task["parent_goal"], "final_authority": "lucas",
@@ -145,6 +150,22 @@ class KernelTest(unittest.TestCase):
             with self.assertRaises(k.KernelError):
                 packet(context=[{"id": ident, "summary": "safe summary"}])
 
+    def test_context_raw_classifier_scans_bounded_summary_and_unicode_labels(self):
+        labels = ("raw prompt", "raw message", "transcript", "prompt", "message", "conversation")
+        for label in labels:
+            with self.assertRaises(k.KernelError):
+                packet(context=[{"summary": label}])
+        for summary in (
+            "safe prefix; prompt: payload",
+            "safe prefix; context prompt: payload",
+            ("safe " * 130) + "prompt: payload",
+            "CONTEXT\u200bPROMPT\uff1a payload",
+            "raw\u2010message\uFF1A payload",
+        ):
+            with self.assertRaises(k.KernelError):
+                packet(context=[{"summary": summary}])
+        self.assertTrue(packet(context=[{"summary": "A public conversation summary."}]))
+
     def test_optional_oversized_context_is_skipped_mandatory_fails(self):
         limits = k.KernelLimits(max_bytes=5000, max_tokens=10000)
         p = packet(limits=limits)
@@ -166,6 +187,24 @@ class KernelTest(unittest.TestCase):
             body["packet_digest"] = digest
             with self.assertRaises(k.KernelError):
                 k.validate_packet(k.TaskPacket(body, digest))
+
+    def test_empty_context_is_within_one_token_and_selected_context_is_not_packet(self):
+        tiny = k.KernelLimits(max_tokens=1)
+        self.assertTrue(packet(limits=tiny))
+        self.assertEqual(list(k.retain_context(packet(limits=tiny), [{"summary": "x"}])["context"]), [])
+        with self.assertRaises(k.KernelError):
+            k.retain_context(packet(limits=tiny), [{"summary": "x", "mandatory": True}])
+
+    def test_cyclic_inputs_raise_kernel_error(self):
+        supervisor, task, assignment, budget, grant, _ = fixture()
+        cyclic = {}
+        cyclic["self"] = cyclic
+        with self.assertRaises(k.KernelError):
+            packet(context=[{"summary": "safe", "evidence_refs": cyclic}])
+        with self.assertRaises(k.KernelError):
+            k.TaskPacket(cyclic, "0" * 64)
+        with self.assertRaises(k.KernelError):
+            k.validate_packet(cyclic)
 
     def test_pause_epoch_is_strict_current_integer(self):
         self.assertTrue(packet(pause_epoch=0))
@@ -213,7 +252,7 @@ class KernelTest(unittest.TestCase):
         with self.assertRaises(k.KernelError):
             k.validate_packet(k.TaskPacket(body, body["packet_digest"]))
 
-    def test_parent_snapshot_packet_digest_and_nested_lineage_are_authenticated(self):
+    def test_parent_authority_projection_requires_external_lineage_anchor(self):
         root = packet()
         _, task, assignment, budget, grant, _ = fixture()
 
@@ -243,15 +282,27 @@ class KernelTest(unittest.TestCase):
         one = child(root, 1, "child")
         two = child(one, 2, "grandchild")
         body = two.to_dict()
-        body["parent"]["packet_digest"] = "0" * 64
+        self.assertNotIn("context", body["parent"])
+        with self.assertRaises(k.KernelError):
+            k.validate_packet(two)
+        self.assertTrue(k.validate_packet(
+            two, expected_parent_digest=one.packet_digest,
+            expected_lineage=[one.packet_digest, root.packet_digest]))
+        body["parent"]["context"] = []
         body["packet_digest"] = hashlib.sha256(k._canonical({key: value for key, value in body.items() if key != "packet_digest"})).hexdigest()
         with self.assertRaises(k.KernelError):
-            k.validate_packet(k.TaskPacket(body, body["packet_digest"]))
+            k.validate_packet(k.TaskPacket(body, body["packet_digest"]),
+                              expected_parent_digest=one.packet_digest,
+                              expected_lineage=[one.packet_digest, root.packet_digest])
         body = two.to_dict()
-        body["parent"]["parent"]["packet_digest"] = "0" * 64
+        body["parent"]["task"]["id"] = "task-forged"
         body["packet_digest"] = hashlib.sha256(k._canonical({key: value for key, value in body.items() if key != "packet_digest"})).hexdigest()
         with self.assertRaises(k.KernelError):
-            k.validate_packet(k.TaskPacket(body, body["packet_digest"]))
+            k.validate_packet(k.TaskPacket(body, body["packet_digest"]),
+                              expected_parent_digest=one.packet_digest,
+                              expected_lineage=[{
+                                  **one.to_dict(), "packet_digest": one.packet_digest,
+                              }, root.packet_digest])
 
     def test_evidence_must_be_declared_and_bound(self):
         p = packet(); ev = signed({"kind": "evidence", "id": "evidence-one", "task_id": p["task"]["id"], "task_digest": p["task"]["task_digest"]}); ref = {"id": ev["id"], "sha256": ev["evidence_digest"]}
