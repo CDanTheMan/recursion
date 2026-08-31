@@ -1134,6 +1134,13 @@ def main() -> int:
                 f"failed={len(failures)} skipped={cases_skipped}"
             )
             return 1
+        if cases_skipped:
+            print(
+                f"phase4-input-fuzz.test: SUMMARY ran={cases_run} passed={cases_passed} "
+                f"failed=0 skipped={cases_skipped}"
+            )
+            print("phase4-input-fuzz.test: SKIPPED / NOT PROVEN (required cases did not run)")
+            return 77
         print(
             f"phase4-input-fuzz.test: SUMMARY ran={cases_run} passed={cases_passed} "
             f"failed=0 skipped={cases_skipped}"

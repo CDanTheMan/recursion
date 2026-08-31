@@ -153,9 +153,12 @@ if [ "$(id -u 2>/dev/null || echo 1)" = 0 ] && command -v systemd-run >/dev/null
     no "gate write boundary did not separate build output from git authority"
   fi
 else
-  ok "gate git-write runtime control skipped (transient systemd unavailable)"
+  skip="gate git-write runtime control skipped (transient systemd unavailable)"
+  printf 'skip  %s\n' "$skip"
+  runtime_skipped=1
 fi
 
 echo
+[ "${runtime_skipped:-0}" = 1 ] && [ "$fails" -eq 0 ] && { echo "worker-gate-authority: SKIPPED (transient systemd control did not run)"; exit 77; }
 [ "$fails" -eq 0 ] && { echo "worker-gate-authority: ALL PASS"; exit 0; }
 echo "worker-gate-authority: $fails FAILED"; exit 1

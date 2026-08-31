@@ -2018,8 +2018,8 @@ def main() -> int:
         print(f"gsc-profile-promotion: {failures} FAILED")
         return 1
     if skipped:
-        print(f"gsc-profile-promotion: ALL PASS ({skipped} skipped)")
-        return 0
+        print(f"gsc-profile-promotion: SKIPPED ({skipped} did not run)")
+        return 77
     print("gsc-profile-promotion: ALL PASS")
     return 0
 

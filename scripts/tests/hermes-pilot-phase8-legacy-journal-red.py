@@ -391,8 +391,8 @@ def main() -> int:
         print(f"hermes-pilot-phase8-legacy-journal-red: {failed} FAILED")
         return 1
     if skipped:
-        print(f"hermes-pilot-phase8-legacy-journal-red: ALL PASS ({skipped} skipped)")
-        return 0
+        print(f"hermes-pilot-phase8-legacy-journal-red: SKIPPED ({skipped} of {len(CONTROLS)} did not run)")
+        return 77
     print("hermes-pilot-phase8-legacy-journal-red: ALL PASS")
     return 0
 

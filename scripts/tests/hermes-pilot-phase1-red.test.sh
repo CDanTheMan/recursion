@@ -5,8 +5,10 @@ set -uo pipefail
 export LC_ALL=C
 SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0
+skips=0
 ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
+skip(){ printf 'skip  %s\n' "$1"; skips=$((skips+1)); }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 BIN="$TMP/bin"; mkdir -p "$BIN"
@@ -70,7 +72,9 @@ wpid=$!
 for _ in $(seq 1 50); do [ -f "$STARTED" ] && break; sleep 0.1; done
 printf 'PAUSED test\nreason: Phase 0 mid-run control\n' > "$R/state/PAUSE"
 wait "$wpid" 2>/dev/null || true
-if [ ! -f "$GATE" ] && [ "$(status_of pause-midrun)" != "passed" ]; then
+if [ ! -f "$STARTED" ]; then
+  skip "PAUSE mid-run control NOT PROVEN: worker never emitted its started witness"
+elif [ ! -f "$GATE" ] && [ "$(status_of pause-midrun)" != "passed" ]; then
   ok "PAUSE terminated the in-flight worker before its gate"
 else
   no "PAUSE was noticed only at startup; the in-flight worker reached status=$(status_of pause-midrun) and gate=$([ -f "$GATE" ] && echo ran || echo blocked)"
@@ -94,7 +98,9 @@ STUB_PUBLISHER="$TMP/publisher" STUB_PUBLOG="$PUBLOG" PATH="$BIN:$PATH" RECURSIO
 RECURSION_NO_NOTIFY=1 RECURSION_REQUIRE_FRESH_BASE=0 RECURSION_TEST_WORKER=sandbox \
 bash "$R/scripts/work.sh" worker-sandbox \
   >"$TMP/sandbox.out" 2>&1 || true
-if [ ! -e "$LEAK" ] && [ ! -e "$OUTSIDE" ] && [ ! -e "$PUBLOG" ] \
+if grep -q 'worker sandbox unavailable or dedicated runner not provisioned' "$TMP/sandbox.out" 2>/dev/null; then
+  skip "worker OS boundary NOT PROVEN: sandbox unavailable or dedicated runner not provisioned"
+elif [ ! -e "$LEAK" ] && [ ! -e "$OUTSIDE" ] && [ ! -e "$PUBLOG" ] \
    && { [ ! -e "$UIDLOG" ] || [ "$(cat "$UIDLOG")" != "$(id -u)" ]; } \
    && [ "$(status_of worker-sandbox)" != "passed" ]; then
   ok "worker OS boundary denied controller data, outside writes, publisher access, and shared identity"
@@ -154,5 +160,9 @@ probe_ref symbolic-ref main alias
 probe_ref revision-expression main 'main^0'
 
 echo
+if [ "$fails" -eq 0 ] && [ "$skips" -gt 0 ]; then
+  echo "hermes-pilot-phase1-red: SKIPPED ($skips control(s) could not run here); NOT PRODUCTION-PROVEN"
+  exit 77
+fi
 [ "$fails" -eq 0 ] && { echo "hermes-pilot-phase1-red: ALL PASS"; exit 0; }
 echo "hermes-pilot-phase1-red: $fails FAILED (expected on the Phase 0 pre-fix commit)"; exit 1
