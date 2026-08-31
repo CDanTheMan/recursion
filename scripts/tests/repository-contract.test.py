@@ -8,7 +8,6 @@ import hashlib
 import hmac
 import inspect
 import os
-import shutil
 import subprocess
 import tempfile
 import unittest
@@ -40,7 +39,7 @@ class ExplicitScratch:
     def cleanup(self) -> None:
         # Cleanup is limited to this test-owned scratch directory.  Surface cleanup failures so a
         # reparse point cannot silently leak outside the fixture's ownership boundary.
-        shutil.rmtree(self.path)
+        rc._remove_tree_without_following(self.path)
 
 
 def remove_reparse_point(path: Path) -> None:
