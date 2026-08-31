@@ -1197,6 +1197,9 @@ if [ "${RECURSION_TEST_WORKER:-}" = sandbox ]; then
   done
   if [ -n "${STUB_STARTED:-}" ]; then
     : > "$STUB_STARTED"
+    chmod 600 "$STUB_STARTED"
+    chown "$RUNNER_UID:$RUNNER_GID" "$STUB_STARTED"
+    RUN+=(--property "BindPaths=$STUB_STARTED:/tmp/worker-started")
     RUN+=(--setenv STUB_STARTED=/tmp/worker-started)
   fi
 fi

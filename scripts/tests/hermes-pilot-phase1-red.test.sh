@@ -64,15 +64,15 @@ status_of(){ sed -n 's/^status: *//p' "$R/state/tasks/$1.md" | head -1; }
 # 1. PAUSE must interrupt an already-running worker and prevent every later gate/publication step.
 STARTED="$TMP/arm-started"; GATE="$TMP/gate-ran"
 mktask pause-midrun "touch '$GATE'"
-STUB_ARM_SCRIPT='touch "$STUB_STARTED"; sleep 3; mkdir -p app; echo done > app/result.txt' \
+STUB_ARM_SCRIPT='printf started > "$STUB_STARTED"; sleep 3; mkdir -p app; echo done > app/result.txt' \
 STUB_STARTED="$STARTED" PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 \
 RECURSION_REQUIRE_FRESH_BASE=0 RECURSION_TEST_WORKER=sandbox \
 bash "$R/scripts/work.sh" pause-midrun >"$TMP/pause.out" 2>&1 &
 wpid=$!
-for _ in $(seq 1 50); do [ -f "$STARTED" ] && break; sleep 0.1; done
+for _ in $(seq 1 50); do [ -s "$STARTED" ] && break; sleep 0.1; done
 printf 'PAUSED test\nreason: Phase 0 mid-run control\n' > "$R/state/PAUSE"
 wait "$wpid" 2>/dev/null || true
-if [ ! -f "$STARTED" ]; then
+if [ ! -s "$STARTED" ]; then
   skip "PAUSE mid-run control NOT PROVEN: worker never emitted its started witness"
 elif [ ! -f "$GATE" ] && [ "$(status_of pause-midrun)" != "passed" ]; then
   ok "PAUSE terminated the in-flight worker before its gate"
@@ -84,7 +84,7 @@ rm -f "$R/state/PAUSE"
 # 2. A worker must not share the controller identity, read controller-only data, write outside
 # its worktree, or invoke the publisher. The current prompt/scope gate cannot enforce OS boundaries.
 SECRET="$TMP/controller-secret"; LEAK="$TMP/leaked-secret"; OUTSIDE="$TMP/outside-write"
-PUBLOG="$TMP/publisher-called"; UIDLOG="$TMP/worker-uid"
+PUBLOG="$TMP/publisher-called"; UIDLOG="$TMP/worker-uid"; SANDBOX_STARTED="$TMP/sandbox-started"
 printf 'sentinel-secret\n' > "$SECRET"; chmod 600 "$SECRET"
 cat > "$TMP/publisher" <<'STUB'
 #!/usr/bin/env bash
@@ -92,14 +92,15 @@ printf 'called\n' > "$STUB_PUBLOG"
 STUB
 chmod 700 "$TMP/publisher"
 mktask worker-sandbox "test -f app/ok.txt"
-STUB_ARM_SCRIPT='set -e; cat "$STUB_SECRET" > "$STUB_LEAK"; echo outside > "$STUB_OUTSIDE"; id -u > "$STUB_UIDLOG"; "$STUB_PUBLISHER"; mkdir -p app; echo ok > app/ok.txt' \
+STUB_ARM_SCRIPT='printf started > "$STUB_STARTED"; set -e; cat "$STUB_SECRET" > "$STUB_LEAK"; echo outside > "$STUB_OUTSIDE"; id -u > "$STUB_UIDLOG"; "$STUB_PUBLISHER"; mkdir -p app; echo ok > app/ok.txt' \
 STUB_SECRET="$SECRET" STUB_LEAK="$LEAK" STUB_OUTSIDE="$OUTSIDE" STUB_UIDLOG="$UIDLOG" \
+STUB_STARTED="$SANDBOX_STARTED" \
 STUB_PUBLISHER="$TMP/publisher" STUB_PUBLOG="$PUBLOG" PATH="$BIN:$PATH" RECURSION_ROOT="$R" \
 RECURSION_NO_NOTIFY=1 RECURSION_REQUIRE_FRESH_BASE=0 RECURSION_TEST_WORKER=sandbox \
 bash "$R/scripts/work.sh" worker-sandbox \
   >"$TMP/sandbox.out" 2>&1 || true
-if grep -q 'worker sandbox unavailable or dedicated runner not provisioned' "$TMP/sandbox.out" 2>/dev/null; then
-  skip "worker OS boundary NOT PROVEN: sandbox unavailable or dedicated runner not provisioned"
+if [ ! -s "$SANDBOX_STARTED" ]; then
+  skip "worker OS boundary NOT PROVEN: worker-originated started witness is absent (sandbox unavailable or worker did not launch)"
 elif [ ! -e "$LEAK" ] && [ ! -e "$OUTSIDE" ] && [ ! -e "$PUBLOG" ] \
    && { [ ! -e "$UIDLOG" ] || [ "$(cat "$UIDLOG")" != "$(id -u)" ]; } \
    && [ "$(status_of worker-sandbox)" != "passed" ]; then
