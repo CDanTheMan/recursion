@@ -164,6 +164,43 @@ class MvpContractsTest(unittest.TestCase):
             with self.assertRaisesRegex(ContractError, "private-reasoning"):
                 validate(task)
 
+    def test_private_reasoning_unicode_separators_fail_closed(self):
+        for marker in (
+                "chain\u2010of\u2010thought",
+                "chain\u2013of\u2013thought",
+                "chain\u200bof\u200bthought",
+                "private\u2010reasoning",
+                "hidden\u2013scratchpad"):
+            with self.subTest(marker=marker.encode("unicode_escape").decode("ascii")):
+                task = copy.deepcopy(records()["task"])
+                task["acceptance"] = f"worker output includes {marker}: hidden"
+                task["task_digest"] = unchecked_digest(task)
+                self.assertEqual(task["task_digest"], unchecked_digest(task))
+                with self.assertRaisesRegex(ContractError, "private-reasoning"):
+                    validate(task)
+
+    def test_private_reasoning_boundaries_and_nested_scalars(self):
+        for marker in ("chainOfThought", "chain of thought", "chain_of_thought",
+                       "chain-of-thought"):
+            with self.subTest(marker=marker):
+                task = copy.deepcopy(records()["task"])
+                task["acceptance"] = f"worker output includes {marker}: hidden"
+                task["task_digest"] = unchecked_digest(task)
+                with self.assertRaisesRegex(ContractError, "private-reasoning"):
+                    validate(task)
+        with self.assertRaisesRegex(ContractError, "private-reasoning"):
+            canonical_json({"outer": [{"summary": "hiddenScratchpad"}]})
+
+    def test_private_reasoning_false_positive_controls(self):
+        for text in ("cotangent identity", "public reasoning summary",
+                     "coordinate rotation"):
+            with self.subTest(text=text):
+                task = copy.deepcopy(records()["task"])
+                task["acceptance"] = text
+                task["task_digest"] = unchecked_digest(task)
+                self.assertEqual(task["task_digest"], unchecked_digest(task))
+                validate(task)
+
     def test_child_task_grant_and_budget_cannot_escalate(self):
         parent = records()["task"]
         child = copy.deepcopy(parent)
