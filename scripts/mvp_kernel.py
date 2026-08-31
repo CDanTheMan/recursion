@@ -9,6 +9,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import math
+import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -147,6 +149,25 @@ _PACKET_FIELDS = {
 _CONTEXT_FIELDS = {"id", "summary", "priority", "mandatory", "sequence", "digest",
                    "evidence_refs"}
 _REF_FIELDS = {"id", "sha256"}
+_ASSIGNMENT_FIELDS = {"kind", "id", "task_id", "task_digest", "assignment_digest",
+                      "source_repository", "source_branch", "source_sha"}
+_RAW_CONTEXT_LABEL = re.compile(
+    r"^(?:(?:raw|original)\s+)?(?:prompt|message|messages|transcript|conversation)\s*[:=]"
+    r"|^private\s+output\s*[:=]"
+)
+
+
+def _has_raw_context_content(value: str) -> bool:
+    """Reject bounded, explicitly labelled raw/private context payloads only."""
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    folded = "".join(
+        " " if char.isspace() or unicodedata.category(char) in {"Cf", "Pc", "Pd"}
+        else char
+        for char in normalized
+    )
+    # Keep this classifier narrow: ordinary prose such as "conversation summary"
+    # remains admissible; only reserved labels that introduce a payload are banned.
+    return _RAW_CONTEXT_LABEL.search(folded[:512]) is not None
 
 
 def _ref(value: Any, limits: KernelLimits) -> dict[str, str]:
@@ -180,7 +201,10 @@ def _context_item(item: Any, limits: KernelLimits, sequence: int | None = None) 
         raise KernelError("context permits summaries and evidence only")
     if "summary" not in row or not isinstance(row["summary"], str) or not row["summary"].strip():
         raise KernelError("context summary required")
-    if "id" in row and (not isinstance(row["id"], str) or not row["id"]):
+    if _has_raw_context_content(row["summary"]):
+        raise KernelError("context summary contains raw or private content")
+    if "id" in row and (not isinstance(row["id"], str)
+                         or not contracts.ID_RE.fullmatch(row["id"])):
         raise KernelError("context id is not canonical")
     for name in ("priority", "sequence"):
         if name in row and (type(row[name]) is not int or row[name] < 0):
@@ -199,8 +223,35 @@ def _context_item(item: Any, limits: KernelLimits, sequence: int | None = None) 
     if supplied is not None and (not isinstance(supplied, str) or supplied != actual):
         raise KernelError("context digest mismatch")
     row["digest"] = actual
-    _canonical(row, limits)
+    # Structural/safety validation is independent of the packet's persisted
+    # aggregate limit.  Retention decides whether optional rows fit as a group.
+    _canonical(row)
     return row
+
+
+def _validate_assignment(assignment: Mapping[str, Any], task: Mapping[str, Any]) -> None:
+    """Validate the optional, strict assignment source projection."""
+    value = _plain(assignment)
+    if set(value) - _ASSIGNMENT_FIELDS:
+        raise KernelError("assignment has unknown fields")
+    source_fields = {"source_repository", "source_branch", "source_sha"}
+    present = source_fields & set(value)
+    if present and present != source_fields:
+        raise KernelError("assignment source projection is incomplete")
+    if present and any(value[name] != task[name] for name in source_fields):
+        raise KernelError("assignment source binding mismatch")
+
+
+def _validate_aggregate(body: Mapping[str, Any], limits: KernelLimits) -> None:
+    """Apply persisted aggregate byte/token bounds to the exact packet body."""
+    try:
+        encoded = _canonical(body)
+    except KernelError:
+        raise
+    if len(encoded) > limits.max_bytes:
+        raise KernelError("packet JSON byte limit exceeded")
+    if math.ceil(len(encoded) / 4) > limits.max_tokens:
+        raise KernelError("packet token limit exceeded")
 
 
 def _records(*, supervisor: Mapping[str, Any], task: Mapping[str, Any],
@@ -254,6 +305,9 @@ def _validate_child_semantics(parent: TaskPacket, body: Mapping[str, Any]) -> No
     pa, a = p["assignment"], body["assignment"]
     if a["id"] != pa["id"]:
         raise KernelError("child assignment identity changed")
+    if (set(a) - {"task_id", "task_digest", "assignment_digest"}
+            != set(pa) - {"task_id", "task_digest", "assignment_digest"}):
+        raise KernelError("child assignment identity changed")
     for key in set(pa) - {"task_id", "task_digest", "assignment_digest"}:
         if a.get(key) != pa.get(key):
             raise KernelError("child assignment identity changed")
@@ -288,7 +342,8 @@ def _validate_child_semantics(parent: TaskPacket, body: Mapping[str, Any]) -> No
 
 
 def _validate_semantics(body: Mapping[str, Any], limits: KernelLimits,
-                        *, parent: TaskPacket | None = None) -> None:
+                        *, parent: TaskPacket | None = None,
+                        _snapshot_depth: int = 0) -> None:
     if set(body) != _PACKET_FIELDS:
         raise KernelError("packet fields are not strict")
     for name in ("supervisor", "task", "assignment", "budget", "grant"):
@@ -302,6 +357,7 @@ def _validate_semantics(body: Mapping[str, Any], limits: KernelLimits,
         raise KernelError("packet depth is out of range")
     if body["supervisor_digest"] != body["supervisor"]["supervisor_digest"]:
         raise KernelError("supervisor digest binding mismatch")
+    _validate_assignment(body["assignment"], body["task"])
     if body["task"]["parent_goal"] != body["supervisor"]["parent_goal"]:
         raise KernelError("supervisor task goal binding mismatch")
     if body["pause"] is not False:
@@ -359,7 +415,19 @@ def _validate_semantics(body: Mapping[str, Any], limits: KernelLimits,
     if parent_snapshot is None and body["parent"] is not None:
         if not isinstance(body["parent"], Mapping):
             raise KernelError("parent packet snapshot is invalid")
-        parent_snapshot = TaskPacket(body["parent"], body["parent"].get("packet_digest", ""))
+        if _snapshot_depth >= MAX_DEPTH:
+            raise KernelError("parent packet snapshot depth exceeded")
+        parent_value = _plain(body["parent"])
+        if set(parent_value) != _PACKET_FIELDS | {"packet_digest"}:
+            raise KernelError("parent packet snapshot is incomplete")
+        parent_digest = parent_value.pop("packet_digest", None)
+        if (not isinstance(parent_digest, str)
+                or parent_digest != hashlib.sha256(_canonical(parent_value)).hexdigest()):
+            raise KernelError("parent packet snapshot digest mismatch")
+        parent_limits = KernelLimits.from_value(parent_value.get("limits"))
+        _validate_semantics(parent_value, parent_limits,
+                            _snapshot_depth=_snapshot_depth + 1)
+        parent_snapshot = TaskPacket(parent_value, parent_digest)
     parent_task = parent_snapshot.to_dict()["task"] if parent_snapshot is not None else None
     parent_budget = parent_snapshot.to_dict()["budget"] if parent_snapshot is not None else None
     lineage: list[dict[str, Any]] = []
@@ -378,6 +446,7 @@ def _validate_semantics(body: Mapping[str, Any], limits: KernelLimits,
         raise KernelError("root task depth mismatch")
     if parent_snapshot is not None:
         _validate_child_semantics(parent_snapshot, body)
+    _validate_aggregate(body, limits)
 
 
 def _make_body(*, supervisor: Mapping[str, Any], task: Mapping[str, Any],
@@ -400,8 +469,9 @@ def _make_body(*, supervisor: Mapping[str, Any], task: Mapping[str, Any],
     parent_v = None
     if parent is not None:
         previous = parent.to_dict()
-        parent_v = {key: previous[key] for key in ("packet_digest", "supervisor_digest", "task", "assignment", "budget", "grant", "limits", "pause_epoch")}
-        parent_v["parent"] = previous.get("parent")
+        # Preserve the exact parent body so its packet digest authenticates every
+        # field, including context, checkpoints, and the nested lineage.
+        parent_v = previous
     body = {
         "schema_version": 1, "supervisor": sup,
         "supervisor_digest": sup["supervisor_digest"], "task": task_v,
@@ -442,8 +512,11 @@ def build_packet(*, task: Mapping[str, Any], assignment: Mapping[str, Any],
     sup = _plain(supervisor)
     if supervisor_digest is not None and supervisor_digest != sup.get("supervisor_digest"):
         raise KernelError("supervisor digest mismatch")
-    if pause_epoch is not None and pause_epoch > sup.get("pause_epoch", -1):
-        raise KernelError("late PAUSE blocks packet admission")
+    if pause_epoch is not None:
+        if type(pause_epoch) is not int or pause_epoch < 0:
+            raise KernelError("pause epoch is invalid")
+        if pause_epoch != sup.get("pause_epoch"):
+            raise KernelError("stale or future PAUSE blocks packet admission")
     body = _make_body(supervisor=sup, task=task, assignment=assignment, budget=budget,
                       grant=grant, context=context, evidence_refs=evidence_refs, limits=lim,
                       checkpoint=checkpoint, checkpoint_chain=checkpoint_chain, receipt=receipt,
@@ -498,7 +571,13 @@ def retain_context(packet: TaskPacket, items: Sequence[Mapping[str, Any]], *,
     chosen: list[dict[str, Any]] = []
     for item in ordered:
         trial = chosen + [item]
-        encoded = _canonical(trial, lim)
+        # Compute selection cost from the exact canonical UTF-8 bytes without
+        # raising on the custom limit; optional rows can then be skipped.  Use
+        # the whole packet, since its fixed records also consume the budget.
+        prospective = packet.to_dict()
+        prospective["context"] = trial
+        prospective.pop("packet_digest", None)
+        encoded = _canonical(prospective)
         estimate = math.ceil(len(encoded) / 4)
         if len(encoded) > lim.max_bytes or estimate > lim.max_tokens or len(trial) > lim.max_items:
             if item["mandatory"]:
