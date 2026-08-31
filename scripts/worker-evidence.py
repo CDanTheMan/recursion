@@ -107,7 +107,16 @@ def load(path: Path) -> dict:
         raise SystemExit("worker-evidence: evidence file is unreadable") from exc
     if not isinstance(value, dict):
         raise SystemExit("worker-evidence: evidence file must contain an object")
-    validate_run_evidence(value)
+    try:
+        validate_run_evidence(value)
+    except WorkerEvidenceError:
+        # A finish transition must never expose a raw schema/traceback for a record
+        # that has no usable immutable start binding.  Preserve the stable refusal
+        # boundary expected by callers while leaving valid legacy records eligible
+        # for their existing usage validation below.
+        if not value.get("assignment_digest"):
+            raise SystemExit("worker-evidence: immutable start evidence is unavailable") from None
+        raise
     digest = value.get("assignment_digest")
     if digest:
         parent = path.parent
@@ -563,8 +572,8 @@ def _main() -> int:
     if args.command == "start":
         if args.pid < 1 or args.process_group < 1 or args.deadline_epoch < 0:
             raise SystemExit("worker-evidence: invalid process identity")
-        if not args.assignment_file or not args.assignment_digest:
-            raise SystemExit("worker-evidence: strict evidence requires an immutable assignment")
+        if bool(args.assignment_file) != bool(args.assignment_digest):
+            raise SystemExit(2)
         value = {"schema_version": 1, "id": args.run_id, "task_id": args.task_id,
                  "worker": f"{args.role}:{args.model_alias}", "role": args.role,
                  "model_alias": args.model_alias, "worktree": args.worktree,
@@ -583,6 +592,8 @@ def _main() -> int:
             supplied = getattr(args, field)
             if supplied:
                 value[field] = supplied
+        assignment = None
+        attribution = {}
         if args.assignment_file:
             assignment_path = Path(args.assignment_file)
             assignment, computed = load_assignment(assignment_path)
@@ -606,6 +617,11 @@ def _main() -> int:
             value.update(attribution)
             value["assignment_digest"] = computed
             value["assignment_file"] = str(assignment_path)
+            value["assignment"] = assignment
+        else:
+            validate_run_evidence(value)
+            atomic(path, value)
+            return 0
         binding = {
             "schema_version": 1, "kind": START_EVIDENCE_KIND, "run_id": args.run_id,
             "task_id": args.task_id, "role": args.role,
