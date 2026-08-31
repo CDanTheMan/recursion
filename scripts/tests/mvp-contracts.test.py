@@ -3,6 +3,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from jsonschema import Draft202012Validator, FormatChecker, RefResolver
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 from mvp_contracts import (ContractError, MAX_DEPTH, canonical_digest,
@@ -64,7 +65,7 @@ def records():
                         "candidate_id": "candidate-one", "candidate_commit": C,
                         "result_digest": D})
     evidence = signed({"kind": "evidence", "id": "evidence-one",
-                       "task_digest": task["task_digest"]})
+                       "task_id": task["id"], "task_digest": task["task_digest"]})
     receipt = signed({
         "schema_version": 2, "kind": "receipt", "id": "receipt-one",
         "task_id": task["id"], "task_digest": task["task_digest"],
@@ -79,6 +80,16 @@ def records():
     verifier.update(id="task-verifier", parent_task_id=None,
                     parent_task_digest=None, task_digest="")
     verifier = signed(verifier)
+    verifier_budget = copy.deepcopy(budget)
+    verifier_budget.update(id="budget-verifier", task_id=verifier["id"],
+                           task_digest=verifier["task_digest"], budget_digest="")
+    verifier_budget = signed(verifier_budget)
+    verifier["budget_id"] = verifier_budget["id"]
+    verifier["task_digest"] = ""
+    verifier = signed(verifier)
+    verifier_budget["task_digest"] = verifier["task_digest"]
+    verifier_budget["budget_digest"] = ""
+    verifier_budget = signed(verifier_budget)
     verification = signed({
         "schema_version": 2, "kind": "verification", "id": "verification-one",
         "task_id": task["id"], "task_digest": task["task_digest"],
@@ -109,7 +120,7 @@ def records():
             "capability_grant": grant, "checkpoint": checkpoint,
             "receipt": receipt, "verification": verification,
             "recovery": recovery, "verifier": verifier, "assignment": assignment,
-            "candidate": candidate, "evidence": evidence}
+            "verifier_budget": verifier_budget, "candidate": candidate, "evidence": evidence}
 
 
 class MvpContractsTest(unittest.TestCase):
@@ -199,6 +210,103 @@ class MvpContractsTest(unittest.TestCase):
         for _ in range(MAX_DEPTH + 2): value = [value]
         with self.assertRaises(ContractError): canonical_json(value)
         with self.assertRaises(ContractError): canonical_json("x" * 300_000)
+
+    def test_cross_index_rejects_duplicate_and_namespace_collisions(self):
+        r = records()
+        with self.assertRaisesRegex(ContractError, "duplicate"):
+            validate_cross_records([r["task"], copy.deepcopy(r["task"])])
+        conflicting = copy.deepcopy(r["task"])
+        conflicting["acceptance"] = "different"
+        conflicting["task_digest"] = canonical_digest(conflicting)
+        with self.assertRaisesRegex(ContractError, "duplicate"):
+            validate_cross_records([r["task"], conflicting])
+        assignment = copy.deepcopy(r["assignment"])
+        assignment["id"] = r["task"]["task_digest"]
+        assignment["assignment_digest"] = canonical_digest(assignment)
+        with self.assertRaisesRegex(ContractError, "collision"):
+            validate_cross_records([r["task"], r["budget"], assignment])
+
+    def test_exact_budget_lineage_grant_window_and_reference_time(self):
+        r = records()
+        bad_budget = copy.deepcopy(r["budget"])
+        bad_budget["task_digest"] = "1" * 64
+        bad_budget["budget_digest"] = canonical_digest(bad_budget)
+        with self.assertRaisesRegex(ContractError, "budget binding"):
+            validate_cross_records([r["task"], bad_budget])
+        bad_grant = copy.deepcopy(r["capability_grant"])
+        bad_grant["issued_at"] = "2026-08-30T00:00:00Z"
+        bad_grant["grant_digest"] = canonical_digest(bad_grant)
+        with self.assertRaisesRegex(ContractError, "validity"):
+            validate_cross_records([r["task"], r["budget"], bad_grant])
+        with self.assertRaisesRegex(ContractError, "outside validity"):
+            validate(r["capability_grant"], observed_at="2026-08-31T11:00:00Z")
+        with self.assertRaises(ContractError):
+            validate(r["task"], observed_at="2026-08-31T11:00:00Z")
+        for key in ("checkpoint", "receipt", "verification", "recovery"):
+            with self.assertRaises(ContractError):
+                validate(r[key], observed_at="2026-08-31T11:00:00Z")
+
+    def test_metered_budget_approval_cost_and_child_inheritance(self):
+        r = records()
+        bad = copy.deepcopy(r["budget"])
+        bad["cost_limit_cents"] = 1
+        bad["budget_digest"] = canonical_digest(bad)
+        with self.assertRaisesRegex(ContractError, "cost limit"):
+            validate(bad)
+        metered = copy.deepcopy(r["budget"])
+        metered.update(metered_spend_allowed=True, approval_digest=D,
+                       cost_limit_cents=100, calendar_month_ceiling_cents=100,
+                       remaining_cost_cents=100, budget_digest="")
+        metered["budget_digest"] = canonical_digest(metered)
+        validate(metered)
+        child = copy.deepcopy(metered)
+        child.update(id="budget-child", task_id="task-child", parent_budget_id=metered["id"], approval_digest="1" * 64, budget_digest="")
+        child["budget_digest"] = canonical_digest(child)
+        with self.assertRaisesRegex(ContractError, "approval"):
+            validate(child, parent_budget=metered)
+
+    def test_assignment_usage_and_terminal_verification_bindings(self):
+        r = records()
+        wrong_assignment = copy.deepcopy(r["assignment"])
+        wrong_assignment["task_id"] = "task-other"
+        wrong_assignment["assignment_digest"] = canonical_digest(wrong_assignment)
+        with self.assertRaisesRegex(ContractError, "assignment"):
+            validate_cross_records([r["task"], r["budget"], wrong_assignment])
+        bad_usage = copy.deepcopy(r["receipt"])
+        bad_usage["usage"]["tokens"] = 2
+        bad_usage["receipt_digest"] = canonical_digest(bad_usage)
+        with self.assertRaisesRegex(ContractError, "arithmetic"):
+            validate(bad_usage)
+        bad_limit = copy.deepcopy(r["receipt"])
+        bad_limit["usage"] = {"tokens": 101, "input_tokens": 101, "output_tokens": 0, "wall_seconds": 1, "cost_cents": 0}
+        bad_limit["receipt_digest"] = canonical_digest(bad_limit)
+        with self.assertRaisesRegex(ContractError, "budget"):
+            validate_cross_records([r["task"], r["budget"], r["checkpoint"], r["assignment"], r["candidate"], bad_limit])
+        bad_receipt = copy.deepcopy(r["receipt"])
+        bad_receipt["status"] = "failed"
+        bad_receipt["receipt_digest"] = canonical_digest(bad_receipt)
+        bad_verification = copy.deepcopy(r["verification"])
+        bad_verification["receipt_digest"] = bad_receipt["receipt_digest"]
+        bad_verification["verification_digest"] = canonical_digest(bad_verification)
+        with self.assertRaisesRegex(ContractError, "succeeded"):
+            validate_cross_records([r["task"], r["budget"], r["verifier"], r["verifier_budget"], r["assignment"], r["candidate"], r["evidence"], r["checkpoint"], bad_receipt, bad_verification])
+
+    def test_gate_and_authority_are_canonical(self):
+        r = records()
+        for field, value in (("final_authority", "Lucas"), ("executive_identity", "Hermes"), ("final_authority", "lucas-final-authority")):
+            bad = copy.deepcopy(r["supervisor"]); bad[field] = value; bad["supervisor_digest"] = canonical_digest(bad)
+            with self.assertRaises(ContractError): validate(bad)
+        bad = copy.deepcopy(r["verification"]); bad["gate_digest"] = "1" * 64; bad["verification_digest"] = canonical_digest(bad)
+        with self.assertRaisesRegex(ContractError, "gate"):
+            validate_cross_records([r["task"], r["budget"], r["verifier"], r["verifier_budget"], r["assignment"], r["candidate"], r["evidence"], r["checkpoint"], r["receipt"], bad])
+
+    def test_schema_format_checker_rejects_impossible_dates(self):
+        schema = json.loads(Path(__file__).parents[2].joinpath("schemas/control-plane/v2/mvp-contracts.schema.json").read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema, format_checker=FormatChecker())
+        bad = copy.deepcopy(records()["supervisor"]); bad["valid_from"] = "2026-99-99T00:00:00Z"
+        self.assertFalse(validator.is_valid(bad))
+        direct = json.loads(Path(__file__).parents[2].joinpath("schemas/control-plane/v2/supervisor.schema.json").read_text(encoding="utf-8"))
+        self.assertFalse(Draft202012Validator(direct, format_checker=FormatChecker()).is_valid(bad))
 
 
 if __name__ == "__main__":
