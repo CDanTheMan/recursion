@@ -49,9 +49,9 @@ def iso_week_of(date: datetime.date) -> str:
     return f"{year:04d}-W{week:02d}"
 
 
-FIXED_DATE = datetime.date(2026, 8, 28)
-FIXED_TS = f"{FIXED_DATE.isoformat()}T12:00:00Z"
-FIXED_WEEK = iso_week_of(FIXED_DATE)
+CURRENT_DATE = datetime.datetime.now(datetime.timezone.utc).date()
+CURRENT_TS = f"{CURRENT_DATE.isoformat()}T12:00:00Z"
+CURRENT_WEEK = iso_week_of(CURRENT_DATE)
 
 
 def evidence(run_id: str, task_id: str, *, engine=None, provider=None, capacity_pool=None,
@@ -60,7 +60,7 @@ def evidence(run_id: str, task_id: str, *, engine=None, provider=None, capacity_
     value = {
         "schema_version": 1, "id": run_id, "task_id": task_id, "role": "implementer",
         "model_alias": "sonnet-routine", "status": "succeeded", "outcome": "worker-complete",
-        "started_at": FIXED_TS, "finished_at": FIXED_TS,
+        "started_at": CURRENT_TS, "finished_at": CURRENT_TS,
         "usage": {"provider": usage_provider, "billing_basis": billing_basis,
                   "tokens": tokens, "cost_usd": cost_usd, "evidence_source": evidence_source},
     }
@@ -145,7 +145,7 @@ def test_quota_within_and_exceeded(tmp_path: Path) -> None:
 
     write_pool(pool_dir, "pool-b", limit=10.0, unit="usd")
     within = run(["quota", "--pool-id", "pool-b", "--capacity-pool-dir", str(pool_dir),
-                 "--ledger", str(ledger), "--period", FIXED_WEEK])
+                 "--ledger", str(ledger), "--period", CURRENT_WEEK])
     check(within.returncode == 0, f"quota exits 0 for a valid pool (got {within.returncode}, stderr={within.stderr!r})")
     report = json.loads(within.stdout)
     check(report.get("status") == "within-limit", f"3.0 usd consumed against a 10.0 usd limit is within-limit (got {report.get('status')})")
@@ -153,7 +153,7 @@ def test_quota_within_and_exceeded(tmp_path: Path) -> None:
 
     write_pool(pool_dir, "pool-b", limit=2.0, unit="usd")
     exceeded = run(["quota", "--pool-id", "pool-b", "--capacity-pool-dir", str(pool_dir),
-                   "--ledger", str(ledger), "--period", FIXED_WEEK])
+                   "--ledger", str(ledger), "--period", CURRENT_WEEK])
     exceeded_report = json.loads(exceeded.stdout)
     check(exceeded_report.get("status") == "exceeded", f"3.0 usd consumed against a 2.0 usd limit is exceeded (got {exceeded_report.get('status')})")
     check(exceeded_report.get("on_demand_required") is True,
@@ -174,13 +174,13 @@ def test_quota_no_limit_and_unmeasurable(tmp_path: Path) -> None:
 
     write_pool(pool_dir, "pool-c", limit=None, unit=None)
     no_limit = run(["quota", "--pool-id", "pool-c", "--capacity-pool-dir", str(pool_dir),
-                   "--ledger", str(ledger), "--period", FIXED_WEEK])
+                   "--ledger", str(ledger), "--period", CURRENT_WEEK])
     check(json.loads(no_limit.stdout).get("status") == "no-limit-declared",
           "a pool with no declared limit is informational only")
 
     write_pool(pool_dir, "pool-c", limit=5.0, unit="widgets")
     unmeasurable = run(["quota", "--pool-id", "pool-c", "--capacity-pool-dir", str(pool_dir),
-                       "--ledger", str(ledger), "--period", FIXED_WEEK])
+                       "--ledger", str(ledger), "--period", CURRENT_WEEK])
     check(json.loads(unmeasurable.stdout).get("status") == "unmeasurable",
           "a declared limit against a unit this tool cannot meter is never silently 'within-limit'")
 
@@ -202,10 +202,10 @@ def test_quota_corrupt_token_row_is_typed_refusal(tmp_path: Path) -> None:
         "task_id": "task-corrupt", "capacity_pool": "pool-corrupt",
         "billing_basis": "metered", "cost_basis": "receipt",
         "tokens": "not-an-integer", "cost_usd": 0.0,
-        "started_at": FIXED_TS, "finished_at": FIXED_TS,
+        "started_at": CURRENT_TS, "finished_at": CURRENT_TS,
     }) + "\n", encoding="utf-8")
     result = run(["quota", "--pool-id", "pool-corrupt", "--capacity-pool-dir", str(pool_dir),
-                  "--ledger", str(ledger), "--period", FIXED_WEEK])
+                  "--ledger", str(ledger), "--period", CURRENT_WEEK])
     check(result.returncode == 2,
           f"a corrupt-token quota row is refused with typed exit 2 (got {result.returncode})")
     check("corrupt ledger row" in result.stderr and "TypeError" not in result.stderr,
@@ -240,7 +240,7 @@ def test_invalid_receipts_cannot_evade_quota(tmp_path: Path) -> None:
               and rows[0].get("tokens") is None and rows[0].get("cost_usd") is None,
               f"invalid {field}={bad!r} is excluded from receipt measurement")
         quota = run(["quota", "--pool-id", "pool-receipt", "--capacity-pool-dir", str(pool_dir),
-                     "--ledger", str(ledger), "--period", FIXED_WEEK])
+                     "--ledger", str(ledger), "--period", CURRENT_WEEK])
         check(quota.returncode == 2 and "TypeError" not in quota.stderr,
               f"invalid {field}={bad!r} cannot evade metered quota")
 

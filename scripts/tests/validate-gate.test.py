@@ -94,8 +94,7 @@ def run_gate(acceptance: str, strict: bool = True, gate_files: str = "") -> int:
 def posix_absolute(path: Path) -> str:
     """Spell a path as a POSIX absolute path on both the Linux product host and this host."""
     resolved = path.resolve()
-    volume_root = Path(resolved.anchor)
-    return "/" + resolved.relative_to(volume_root).as_posix()
+    return resolved.as_posix()
 
 
 def git_head(repository: Path) -> str:
