@@ -9,7 +9,7 @@ Status: source gate passed; review publication pending
 - Accepted orchestration/provenance candidate: `4d9cc06c3265b401184cc54cd3580501d6926077`
 - Integrated orchestration commit: `2a9e12dc6a8ef677314a047cbedb8b153ddc5790`
 - Python 3.11 fabric compatibility: `8d124c71faf55eb49641a423bfa426416f234024`
-- Independently reviewed adapter/kernel compatibility: `d78a967daef886089b38b8edf25fa33e19af83a4`
+- Independently reviewed adapter/kernel compatibility: `d78a9676b41b968f0fc1e5df3bedfedb71d50c24`
 - Temporary diagnostic `2175561a2fc3c17e88193aab8d6004fa47e42f73` is not in the branch history.
 
 ## Acceptance evidence

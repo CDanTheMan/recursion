@@ -72,7 +72,7 @@ class MVPCompletionTests(unittest.TestCase):
         self.assertTrue(COMPLETION_AUDIT.is_file(), "MVP completion audit is absent")
         completion = COMPLETION_AUDIT.read_text(encoding="utf-8")
         self.assertIn(SOURCE_BASELINE, completion)
-        self.assertIn("d78a967daef886089b38b8edf25fa33e19af83a4", completion)
+        self.assertIn("d78a9676b41b968f0fc1e5df3bedfedb71d50c24", completion)
 
     def test_codex_and_cursor_share_the_exact_evidence_contract(self) -> None:
         fixture = _load("mvp_adapter_completion_fixture", TESTS / "mvp-adapters.test.py")
