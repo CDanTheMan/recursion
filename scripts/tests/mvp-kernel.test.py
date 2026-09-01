@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 import hashlib
 import importlib.util
 import sys
@@ -457,6 +458,103 @@ class KernelTest(unittest.TestCase):
 
     def test_import_is_inert(self):
         self.assertTrue(hasattr(k, "build_packet"))
+
+    def test_factory_issuance_rejects_rebuilds_and_altered_acceptance(self):
+        original = packet()
+        for rebuilt in (replace(original), copy.copy(original), copy.deepcopy(original)):
+            with self.assertRaises(k.KernelError):
+                k.validate_packet(rebuilt)
+        object.__setattr__(original, "packet_digest", "f" * 64)
+        with self.assertRaises(k.KernelError):
+            k.validate_packet(original)
+        altered = original.to_dict()
+        altered["task"]["acceptance"] = "caller-altered acceptance"
+        altered["task"]["task_digest"] = c.canonical_digest(altered["task"])
+        altered["assignment"]["task_digest"] = altered["task"]["task_digest"]
+        altered["assignment"]["assignment_digest"] = c.canonical_digest(altered["assignment"])
+        altered["budget"]["task_digest"] = altered["task"]["task_digest"]
+        altered["budget"]["budget_digest"] = c.canonical_digest(altered["budget"])
+        altered["grant"]["task_digest"] = altered["task"]["task_digest"]
+        altered["grant"]["grant_digest"] = c.canonical_digest(altered["grant"])
+        altered.pop("packet_digest")
+        altered_digest = hashlib.sha256(k._canonical(altered)).hexdigest()
+        altered["packet_digest"] = altered_digest
+        with self.assertRaises(k.KernelError):
+            k.validate_packet(k.TaskPacket(altered, altered_digest))
+
+    def test_root_and_child_factory_lifecycle_requires_exact_parent(self):
+        root = packet()
+        self.assertIs(k.validate_packet(root), root)
+        _, task, assignment, budget, grant, _ = fixture()
+        child_task = copy.deepcopy(task)
+        child_task.update(id="task-kid-child", depth=1,
+                          parent_task_id=root["task"]["id"],
+                          parent_task_digest=root["task"]["task_digest"],
+                          budget_id="budget-kid-child", task_digest="")
+        child_task = resigned(child_task)
+        child_budget = copy.deepcopy(budget)
+        child_budget.update(id="budget-kid-child", task_id=child_task["id"],
+                            task_digest=child_task["task_digest"],
+                            parent_budget_id=root["budget"]["id"], budget_digest="")
+        child_budget = resigned(child_budget)
+        child_assignment = copy.deepcopy(assignment)
+        child_assignment.update(task_id=child_task["id"],
+                                task_digest=child_task["task_digest"], assignment_digest="")
+        child_assignment = resigned(child_assignment)
+        child_grant = copy.deepcopy(grant)
+        child_grant.update(task_id=child_task["id"],
+                           task_digest=child_task["task_digest"], grant_digest="")
+        child_grant = resigned(child_grant)
+        child = k.spawn_child(root, task=child_task, assignment=child_assignment,
+                              budget=child_budget, grant=child_grant,
+                              expected_parent=root)
+        self.assertIs(k.validate_packet(child, expected_parent=root), child)
+        with self.assertRaises(k.KernelError):
+            k.spawn_child(copy.copy(root), task=child_task, assignment=child_assignment,
+                          budget=child_budget, grant=child_grant,
+                          expected_parent=root)
+
+    def test_public_factories_ignore_replaced_impls_and_nested_validators(self):
+        root = packet()
+        _, task, assignment, budget, grant, _ = fixture()
+        child_task = copy.deepcopy(task)
+        child_task.update(id="task-test-child", depth=1,
+                          parent_task_id=task["id"], parent_task_digest=task["task_digest"],
+                          budget_id="budget-test-child", task_digest="")
+        child_task = resigned(child_task)
+        child_budget = copy.deepcopy(budget)
+        child_budget.update(id="budget-test-child", task_id=child_task["id"],
+                            task_digest=child_task["task_digest"], parent_budget_id=budget["id"],
+                            budget_digest="")
+        child_budget = resigned(child_budget)
+        child_assignment = copy.deepcopy(assignment)
+        child_assignment.update(task_id=child_task["id"], task_digest=child_task["task_digest"],
+                                assignment_digest="")
+        child_assignment = resigned(child_assignment)
+        child_grant = copy.deepcopy(grant)
+        child_grant.update(task_id=child_task["id"], task_digest=child_task["task_digest"],
+                           grant_digest="")
+        child_grant = resigned(child_grant)
+        originals = {name: getattr(k, name) for name in
+                     ("_build_packet_impl", "_spawn_child_impl", "_retain_context_impl",
+                      "_make_body", "_validate_semantics")}
+        try:
+            k._build_packet_impl = lambda *args, **kwargs: root
+            k._spawn_child_impl = lambda *args, **kwargs: root
+            k._retain_context_impl = lambda *args, **kwargs: root
+            k._make_body = lambda *args, **kwargs: {"forged": True}
+            k._validate_semantics = lambda *args, **kwargs: None
+            fresh = packet()
+            self.assertIsNot(fresh, root)
+            child = k.spawn_child(root, task=child_task, assignment=child_assignment,
+                                  budget=child_budget, grant=child_grant,
+                                  expected_parent=root)
+            self.assertEqual(child["depth"], 1)
+            self.assertEqual(k.retain_context(fresh, [{"summary": "retained"}])["context"][0]["summary"],
+                             "retained")
+        finally:
+            for name, value in originals.items():
+                setattr(k, name, value)
 
 
 if __name__ == "__main__":

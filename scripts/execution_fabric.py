@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
-from types import MappingProxyType
+from types import FunctionType, MappingProxyType, ModuleType
 
 
 SCHEMA_VERSION = 1
@@ -1284,6 +1284,10 @@ class PlacementRequirements:
     allowed_paths: tuple[str, ...] = ()
     gate_digest: str = ZERO_DIGEST
     publication_policy: str = "verified-integration-only"
+    # Compatibility projection emitted by older orchestrator callers.  MVP
+    # admission now derives authority from an exact external TaskPacket; this
+    # field is checked against that packet when present, never trusted alone.
+    mvp_authority: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         _nonnegative_number(self.max_cost_usd, "max_cost_usd")
@@ -1291,6 +1295,11 @@ class PlacementRequirements:
             raise SchemaError("INVALID_FIELD", "model_parameters must be an object")
         parameters = _json_value(self.model_parameters, "model_parameters")
         object.__setattr__(self, "model_parameters", MappingProxyType(parameters))
+        if self.mvp_authority is not None:
+            if not isinstance(self.mvp_authority, Mapping):
+                raise SchemaError("INVALID_FIELD", "mvp_authority must be an object")
+            authority = _json_value(self.mvp_authority, "mvp_authority")
+            object.__setattr__(self, "mvp_authority", MappingProxyType(authority))
 
     def to_dict(self) -> dict[str, Any]:
         return {"schema_version": SCHEMA_VERSION, "kind": "placement_requirements", "task_id": self.task_id,
@@ -1303,7 +1312,8 @@ class PlacementRequirements:
                 "source_repository": self.source_repository, "source_branch": self.source_branch,
                 "seed_manifest_digest": self.seed_manifest_digest, "model_parameters": dict(self.model_parameters),
                 "allowed_paths": list(self.allowed_paths), "gate_digest": self.gate_digest,
-                "publication_policy": self.publication_policy}
+                "publication_policy": self.publication_policy,
+                **({"mvp_authority": dict(self.mvp_authority)} if self.mvp_authority is not None else {})}
 
     @classmethod
     @_typed_boundary("placement requirements")
@@ -1311,7 +1321,7 @@ class PlacementRequirements:
         required = {"schema_version", "kind", "task_id", "project_id", "role", "capabilities",
                     "operating_system", "sandbox_profile", "network_profile", "billing_basis", "max_cost_usd",
                     "model", "preferred_hosts", "preferred_pools", "source_sha"}
-        _check_keys(raw, required, {"policy", "manual_candidate_id", "source_repository", "source_branch", "seed_manifest_digest", "model_parameters", "allowed_paths", "gate_digest", "publication_policy"}, "placement_requirements")
+        _check_keys(raw, required, {"policy", "manual_candidate_id", "source_repository", "source_branch", "seed_manifest_digest", "model_parameters", "allowed_paths", "gate_digest", "publication_policy", "mvp_authority"}, "placement_requirements")
         _schema_version(raw["schema_version"], "placement requirements")
         if raw["kind"] != "placement_requirements":
             raise SchemaError("SCHEMA_VERSION", "unsupported placement requirements schema")
@@ -1338,7 +1348,8 @@ class PlacementRequirements:
                    _string_list(raw["billing_basis"], "billing_basis"), _nonnegative_number(raw["max_cost_usd"], "max_cost_usd"),
                    optional_text["model"], _string_list(raw["preferred_hosts"], "preferred_hosts"),
                    _string_list(raw["preferred_pools"], "preferred_pools"), _commit(raw["source_sha"], "source_sha"), policy, manual,
-                   source_repository, source_branch, seed_manifest_digest, params, allowed_paths, gate_digest, publication_policy)
+                   source_repository, source_branch, seed_manifest_digest, params, allowed_paths, gate_digest, publication_policy,
+                   raw.get("mvp_authority"))
 
 
 @dataclass(frozen=True)
@@ -1506,6 +1517,160 @@ def assignment_digest(assignment: Assignment) -> str:
 def _revalidate_assignment(value: Assignment | Mapping[str, Any]) -> Assignment:
     """Re-enter the strict wire parser at every caller-controlled Assignment boundary."""
     return Assignment.from_dict(value.to_dict() if isinstance(value, Assignment) else value)
+
+
+def _capture_kernel_graph():
+    """Attest the current kernel factory graph without trusting module lookup."""
+    import mvp_kernel as trusted_kernel
+    try:
+        module_dict = ModuleType.__getattribute__(trusted_kernel, "__dict__")
+        if (type(trusted_kernel) is not ModuleType or type(module_dict) is not dict or
+                module_dict.get("__name__") != "mvp_kernel"):
+            return None
+
+        def closure(function: Any, name: str) -> Any:
+            if not isinstance(function, FunctionType) or function.__module__ != "mvp_kernel":
+                raise TypeError("kernel graph node is not genuine")
+            names = function.__code__.co_freevars
+            cells = function.__closure__ or ()
+            if name not in names or len(names) != len(cells):
+                raise TypeError("kernel graph closure mismatch")
+            return cells[names.index(name)].cell_contents
+
+        public = {name: module_dict.get(name) for name in
+                  ("TaskPacket", "KernelError", "build_packet", "spawn_child",
+                   "retain_context", "validate_packet")}
+        build = public["build_packet"]
+        spawn = public["spawn_child"]
+        retain = public["retain_context"]
+        validate_public = public["validate_packet"]
+        build_impl = closure(build, "build_impl")
+        enroll = closure(build, "enroll")
+        issue = closure(enroll, "issue")
+        require_issued = closure(enroll, "require_issued")
+        enroll_validate = closure(enroll, "validate")
+        validator_code = closure(validate_public, "validator_code")
+        spawn_impl = closure(spawn, "spawn_impl")
+        retain_impl = closure(retain, "retain_impl")
+        validator = closure(validate_public, "validate")
+        if (build.__code__.co_name != "build_packet" or
+                spawn.__code__.co_name != "spawn_child" or
+                retain.__code__.co_name != "retain_context" or
+                validate_public.__code__.co_name != "validate_packet_public" or
+                build_impl.__code__.co_name != "_build_packet_impl" or
+                spawn_impl.__code__.co_name != "_spawn_child_impl" or
+                retain_impl.__code__.co_name != "_retain_context_impl" or
+                validator.__code__.co_name != "_validate_packet" or
+                validator.__code__ is not validator_code or
+                enroll.__code__.co_name != "enroll"):
+            return None
+        trusted_globals = build_impl.__globals__
+        if type(trusted_globals) is not dict or trusted_globals is module_dict:
+            return None
+        graph = {name: trusted_globals.get(name) for name in
+                 ("TaskPacket", "KernelError", "_build_packet_impl", "_spawn_child_impl",
+                  "_retain_context_impl", "_validate_packet", "_make_body",
+                  "_validate_semantics", "_packet_issue", "_require_issued_packet")}
+        if graph["TaskPacket"] is not public["TaskPacket"] or graph["KernelError"] is not public["KernelError"]:
+            return None
+        # ``build_impl.__globals__`` is reachable through the public factory.
+        # The enroll closure is the independent issuance authority.  A
+        # trusted-global replacement must therefore invalidate this consumer
+        # before it can admit a forged exact-copy packet.
+        if (graph["_packet_issue"] is not issue or
+                graph["_require_issued_packet"] is not require_issued or
+                graph["_validate_packet"] is not enroll_validate):
+            return None
+        if (not isinstance(issue, FunctionType) or issue.__module__ != "mvp_kernel" or
+                issue.__code__.co_name != "issue" or
+                not isinstance(require_issued, FunctionType) or
+                require_issued.__module__ != "mvp_kernel" or
+                require_issued.__code__.co_name != "require"):
+            return None
+        packet_type = graph["TaskPacket"]
+        kernel_error = graph["KernelError"]
+        fields = getattr(packet_type, "__dataclass_fields__", None)
+        params = getattr(packet_type, "__dataclass_params__", None)
+        if (not isinstance(packet_type, type) or packet_type.__module__ != "mvp_kernel" or
+                not isinstance(fields, dict) or tuple(fields) != ("value", "packet_digest") or
+                params is None or not params.frozen or not isinstance(kernel_error, type) or
+                not issubclass(kernel_error, ValueError) or kernel_error.__module__ != "mvp_kernel"):
+            return None
+        # Exercise the issuance authority independently of packet semantics.
+        # A same-identity replacement of the enroll closure and trusted global
+        # must fail here even if a malformed validator challenge would fail for
+        # an unrelated digest/schema reason.
+        issuance_challenge = packet_type({"packet_digest": "0" * 64}, "0" * 64)
+        try:
+            require_issued(issuance_challenge)
+        except kernel_error:
+            pass
+        except Exception:
+            return None
+        else:
+            return None
+        for name in ("_build_packet_impl", "_spawn_child_impl", "_retain_context_impl",
+                     "_validate_packet", "_make_body", "_validate_semantics"):
+            function = graph[name]
+            if (not isinstance(function, FunctionType) or function.__globals__ is not trusted_globals or
+                    function.__module__ != "mvp_kernel" or function.__code__.co_name != name):
+                return None
+        if (build.__globals__ is not module_dict or spawn.__globals__ is not module_dict or
+                retain.__globals__ is not module_dict or validate_public.__globals__ is not module_dict or
+                validator.__globals__ is not trusted_globals or
+                closure(spawn, "enroll") is not enroll or closure(retain, "enroll") is not enroll or
+                enroll_validate is not validator):
+            return None
+        challenge = packet_type({"packet_digest": "0" * 64}, "0" * 64)
+        try:
+            validator(challenge)
+        except kernel_error:
+            pass
+        except Exception:
+            return None
+        else:
+            return None
+        return packet_type, validator, kernel_error
+    except Exception:
+        return None
+
+
+def _bind_mvp_packet_boundary():
+    """Install the exact kernel boundary used by every MVP fabric admission."""
+    binding = _capture_kernel_graph()
+    if binding is None:
+        def reject(*args: Any, **kwargs: Any) -> Any:
+            raise AdmissionError("MVP_KERNEL_UNTRUSTED", "kernel authority graph failed import attestation")
+        return reject
+    packet_type, packet_validator, _kernel_error = binding
+
+    def validate(packet: Any, *, parent: Any = None,
+                 lineage: Sequence[Any] | None = None) -> Any:
+        try:
+            if not isinstance(packet, packet_type):
+                raise AdmissionError("MVP_AUTHORITY_REQUIRED", "MVP reservation requires a factory TaskPacket")
+            if packet["depth"] == 0:
+                if parent is not None or lineage is not None:
+                    raise AdmissionError("PARENT_MISMATCH", "root MVP packet cannot carry a parent anchor")
+                packet_validator(packet)
+            else:
+                if not isinstance(parent, packet_type):
+                    raise AdmissionError("PARENT_REQUIRED", "child MVP reservation requires its exact parent packet")
+                packet_validator(packet, expected_parent=parent,
+                                 expected_parent_digest=parent.packet_digest,
+                                 expected_lineage=lineage)
+            return packet
+        except AdmissionError:
+            raise
+        except Exception as exc:
+            raise AdmissionError("MVP_AUTHORITY_REJECTED", "MVP packet authority is invalid") from exc
+
+    return validate
+
+
+_MVP_PACKET_BOUNDARY = _bind_mvp_packet_boundary()
+_validate_mvp_packet_boundary = _MVP_PACKET_BOUNDARY
+del _bind_mvp_packet_boundary
 
 
 def _candidate_sort_key(candidate: PlacementCandidate, requirements: PlacementRequirements) -> tuple[Any, ...]:
@@ -1933,7 +2098,9 @@ class DurableFabricStore:
         with _journal_lock(self.lock_path):
             self._reload_locked()
 
-    def _reload_locked(self) -> None:
+    def _reload_locked(self, *, _reservation_validator: Any = None,
+                       _event_validator: Any = None,
+                       _apply_helper: Any = None) -> None:
         self.leases.clear(); self.attempts.clear(); self.results.clear(); self._tail_digest = ZERO_DIGEST
         stored = _read_store_bytes(self.path, expected_identity=self._path_identity)
         if stored is None:
@@ -1949,8 +2116,14 @@ class DurableFabricStore:
                 event = _json_load(line)
                 if not isinstance(event, dict):
                     raise ValueError("event is not an object")
-                self._validate_event(event)
-                self._apply(event)
+                if _event_validator is None:
+                    self._validate_event(event, _reservation_validator=_reservation_validator)
+                else:
+                    _event_validator(self, event, _reservation_validator=_reservation_validator)
+                if _apply_helper is None:
+                    self._apply(event)
+                else:
+                    _apply_helper(self, event)
                 self._tail_digest = event["event_digest"]
             except _JsonInputError as exc:
                 raise ReconciliationError("CORRUPT_JOURNAL", f"invalid fabric journal event at line {number}") from exc
@@ -1959,7 +2132,7 @@ class DurableFabricStore:
             except (ValueError, TypeError, KeyError, UnicodeError) as exc:
                 raise ReconciliationError("CORRUPT_JOURNAL", f"invalid fabric journal event at line {number}") from exc
 
-    def _validate_event(self, event: Mapping[str, Any]) -> None:
+    def _validate_event(self, event: Mapping[str, Any], *, _reservation_validator: Any = None) -> None:
         kind = event.get("event")
         common = {"event", "schema_version", "event_digest", "prev_event_digest"}
         if type(event.get("schema_version")) is not int or event.get("schema_version") != SCHEMA_VERSION:
@@ -1989,11 +2162,15 @@ class DurableFabricStore:
             if event["status"] != "active" or event["recovery_state"] != "none":
                 raise ReconciliationError("INVALID_TRANSITION", "new leases must be active with no recovery state")
             reservation = event["reservation"]
-            if not isinstance(reservation, Mapping) or set(reservation) != {"host", "pool", "role"}:
+            if not isinstance(reservation, Mapping) or not ({"host", "pool", "role"} <= set(reservation)):
                 raise ReconciliationError("INVALID_EVENT", "lease reservation is malformed")
             _id(reservation["host"], "reservation.host"); _id(reservation["pool"], "reservation.pool"); _string(reservation["role"], "reservation.role")
             if reservation["host"] != assignment.host or reservation["pool"] != assignment.capacity_pool or reservation["role"] != assignment.role:
                 raise ReconciliationError("ASSIGNMENT_MISMATCH", "lease reservation is not bound to the assignment")
+            if set(reservation) != {"host", "pool", "role"}:
+                validator = (_reservation_validator if _reservation_validator is not None
+                             else self._validate_mvp_reservation)
+                validator(reservation, assignment)
         elif kind == "lease_status":
             expected = common | {"lease_id", "status", "updated_at", "observed_at", "recovery_state"}
             _check_keys(event, expected, set(), "lease_status_event")
@@ -2013,25 +2190,154 @@ class DurableFabricStore:
         else:
             raise ReconciliationError("UNKNOWN_EVENT", f"unknown fabric event: {kind}")
 
+    @staticmethod
+    def _validate_mvp_reservation(reservation: Mapping[str, Any], assignment: Assignment,
+                                   requirements: PlacementRequirements | None = None,
+                                   *, mvp_packet: Any = None, mvp_parent: Any = None,
+                                   mvp_lineage: Sequence[Any] | None = None,
+                                   _packet_boundary: Any = _MVP_PACKET_BOUNDARY) -> None:
+        """Validate the optional MVP reservation and packet authority bridge.
+
+        Legacy callers retain the three-field host/pool/role reservation.  MVP
+        callers add two immutable, content-addressed projections: budget and
+        authority.  Admission additionally requires the exact external kernel
+        packet; the projections live in the existing lease journal, so placement
+        and sibling admission share the journal lock and replay path.
+        """
+        if set(reservation) != {"host", "pool", "role", "budget", "authority"}:
+            raise ReconciliationError("INVALID_EVENT", "MVP lease reservation keys are not strict")
+        budget = reservation["budget"]; authority = reservation["authority"]
+        if not isinstance(budget, Mapping) or not isinstance(authority, Mapping):
+            raise ReconciliationError("INVALID_EVENT", "MVP lease reservation projections are malformed")
+        budget_fields = {"scope_id", "scope_task_id", "scope_task_digest", "budget_digest",
+                         "token_limit", "wall_limit_seconds", "concurrency_limit", "cost_limit_cents",
+                         "remaining_tokens", "remaining_wall_seconds", "remaining_cost_cents",
+                         "token_units", "wall_seconds", "cost_cents", "reservation_digest"}
+        authority_fields = {"mvp_assignment_digest", "packet_digest", "task_id", "task_digest",
+                            "source_repository", "source_branch", "source_sha", "capabilities_digest",
+                            "allowed_paths_digest", "gate_digest", "role", "authority_digest"}
+        if set(budget) != budget_fields or set(authority) != authority_fields:
+            raise ReconciliationError("INVALID_EVENT", "MVP reservation projection fields are not strict")
+        for field in ("scope_id", "scope_task_id"):
+            _id(budget[field], f"reservation.budget.{field}")
+        for field in ("scope_task_digest", "budget_digest", "reservation_digest"):
+            _digest(budget[field], f"reservation.budget.{field}")
+        for field in ("token_limit", "wall_limit_seconds", "concurrency_limit", "cost_limit_cents",
+                      "token_units", "wall_seconds", "cost_cents"):
+            _strict_int(budget[field], f"reservation.budget.{field}", minimum=0)
+        if budget["concurrency_limit"] < 1 or budget["token_limit"] < budget["token_units"] \
+                or budget["wall_limit_seconds"] < budget["wall_seconds"] \
+                or budget["cost_limit_cents"] < budget["cost_cents"] \
+                or budget["remaining_tokens"] > budget["token_limit"] \
+                or budget["remaining_wall_seconds"] > budget["wall_limit_seconds"] \
+                or budget["remaining_cost_cents"] > budget["cost_limit_cents"] \
+                or budget["remaining_tokens"] < budget["token_units"] \
+                or budget["remaining_wall_seconds"] < budget["wall_seconds"] \
+                or budget["remaining_cost_cents"] < budget["cost_cents"]:
+            raise ReconciliationError("BUDGET_EXHAUSTED", "MVP reservation exceeds its immutable budget")
+        budget_body = {key: budget[key] for key in budget_fields if key != "reservation_digest"}
+        if hashlib.sha256(_canonical(budget_body)).hexdigest() != budget["reservation_digest"]:
+            raise ReconciliationError("DIGEST_MISMATCH", "MVP budget reservation digest is invalid")
+        _digest(authority["mvp_assignment_digest"], "reservation.authority.mvp_assignment_digest")
+        _digest(authority["packet_digest"], "reservation.authority.packet_digest")
+        _id(authority["task_id"], "reservation.authority.task_id"); _digest(authority["task_digest"], "reservation.authority.task_digest")
+        _string(authority["source_repository"], "reservation.authority.source_repository")
+        _branch(authority["source_branch"], "reservation.authority.source_branch")
+        _commit(authority["source_sha"], "reservation.authority.source_sha")
+        _digest(authority["capabilities_digest"], "reservation.authority.capabilities_digest")
+        _digest(authority["allowed_paths_digest"], "reservation.authority.allowed_paths_digest")
+        _digest(authority["gate_digest"], "reservation.authority.gate_digest")
+        _string(authority["role"], "reservation.authority.role")
+        _digest(authority["authority_digest"], "reservation.authority.authority_digest")
+        authority_body = {key: authority[key] for key in authority_fields if key != "authority_digest"}
+        if hashlib.sha256(_canonical(authority_body)).hexdigest() != authority["authority_digest"]:
+            raise ReconciliationError("DIGEST_MISMATCH", "MVP authority reservation digest is invalid")
+        if (authority["task_id"] != assignment.task_id or authority["source_sha"] != assignment.source_sha
+                or authority["role"] != assignment.role
+                or authority["source_repository"] != assignment.source_repository
+                or authority["source_branch"] != assignment.source_branch
+                or authority["gate_digest"] != assignment.gate_digest
+                ):
+            raise ReconciliationError("ASSIGNMENT_MISMATCH", "MVP authority is not bound to fabric assignment")
+        if mvp_packet is not None:
+            packet = _packet_boundary(mvp_packet, parent=mvp_parent, lineage=mvp_lineage)
+            if requirements is None:
+                raise ReconciliationError("MVP_AUTHORITY_REQUIRED", "MVP reservation requires placement requirements")
+            task = packet["task"]; packet_assignment = packet["assignment"]
+            budget_record = packet["budget"]
+            scope = mvp_parent["budget"] if mvp_parent is not None else budget_record
+            # Derive every persisted authority field from the exact kernel
+            # packet.  PlacementRequirements.mvp_authority is only an optional
+            # compatibility projection; it is never itself an authority source.
+            expected_authority = {
+                "mvp_assignment_digest": packet_assignment["assignment_digest"],
+                "packet_digest": packet.packet_digest, "task_id": task["id"],
+                "task_digest": task["task_digest"],
+                "source_repository": task["source_repository"],
+                "source_branch": task["source_branch"], "source_sha": task["source_sha"],
+                "capabilities_digest": hashlib.sha256(json.dumps(list(requirements.capabilities), sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest() if requirements is not None else authority["capabilities_digest"],
+                "allowed_paths_digest": hashlib.sha256(json.dumps(list(task["allowed_paths"]), sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest(),
+                "gate_digest": task["gate_digest"], "role": assignment.role,
+            }
+            expected_authority["authority_digest"] = hashlib.sha256(_canonical(expected_authority)).hexdigest()
+            if requirements is not None:
+                if (requirements.task_id != task["id"] or requirements.project_id != task["project_id"]
+                        or requirements.source_repository != task["source_repository"]
+                        or requirements.source_branch != task["source_branch"]
+                        or requirements.source_sha != task["source_sha"]
+                        or tuple(requirements.allowed_paths) != tuple(task["allowed_paths"])
+                        or tuple(requirements.capabilities) != tuple(task["requested_capabilities"])
+                        or requirements.gate_digest != task["gate_digest"]
+                        or requirements.role != assignment.role):
+                    raise ReconciliationError("MVP_AUTHORITY_MISMATCH", "MVP reservation is not bound to the trusted packet")
+            if dict(authority) != expected_authority:
+                raise ReconciliationError("MVP_AUTHORITY_MISMATCH", "MVP reservation authority differs from trusted packet")
+            expected_budget = {
+                "scope_id": scope["id"], "scope_task_id": scope["task_id"],
+                "scope_task_digest": scope["task_digest"], "budget_digest": scope["budget_digest"],
+                "token_limit": scope["token_limit"], "wall_limit_seconds": scope["wall_seconds"],
+                "concurrency_limit": scope["concurrency_limit"], "cost_limit_cents": scope["cost_limit_cents"],
+                "remaining_tokens": scope["remaining_tokens"], "remaining_wall_seconds": scope["remaining_wall_seconds"],
+                "remaining_cost_cents": scope["remaining_cost_cents"],
+                "token_units": budget_record["token_limit"], "wall_seconds": budget_record["wall_seconds"],
+                "cost_cents": budget_record["cost_limit_cents"],
+            }
+            expected_budget["reservation_digest"] = hashlib.sha256(_canonical(expected_budget)).hexdigest()
+            if dict(budget) != expected_budget:
+                raise ReconciliationError("MVP_AUTHORITY_MISMATCH", "MVP reservation budget differs from trusted packet")
+
     def _append(self, event: Mapping[str, Any]) -> None:
         data = _json_line(event, "fabric journal event")
         _ensure_store_directory(self.path.parent)
         self._path_identity = _append_bytes(self.path, data, expected_identity=self._path_identity)
 
-    def _record_locked(self, event: Mapping[str, Any]) -> dict[str, Any]:
+    def _record_locked(self, event: Mapping[str, Any], *, _event_validator: Any = None,
+                       _apply_helper: Any = None, _append_helper: Any = None) -> dict[str, Any]:
         body = dict(event)
         body["schema_version"] = SCHEMA_VERSION
         body["prev_event_digest"] = self._tail_digest
         body["event_digest"] = hashlib.sha256(_canonical(body)).hexdigest()
-        self._validate_event(body)
+        if _event_validator is None:
+            self._validate_event(body)
+        else:
+            _event_validator(self, body)
         leases, attempts, results = self.leases, self.attempts, self.results
         self.leases = copy.deepcopy(leases); self.attempts = copy.deepcopy(attempts); self.results = copy.deepcopy(results)
         try:
-            self._apply(body)
+            if _apply_helper is None:
+                self._apply(body)
+            else:
+                _apply_helper(self, body)
         finally:
             self.leases, self.attempts, self.results = leases, attempts, results
-        self._append(body)
-        self._apply(body)
+        if _append_helper is None:
+            self._append(body)
+        else:
+            _append_helper(self, body)
+        if _apply_helper is None:
+            self._apply(body)
+        else:
+            _apply_helper(self, body)
         self._tail_digest = body["event_digest"]
         return body
 
@@ -2100,7 +2406,14 @@ class DurableFabricStore:
             raise ReconciliationError("UNKNOWN_EVENT", f"unknown fabric event: {kind}")
 
     def _create_lease_locked(self, assignment: Assignment | Mapping[str, Any], *, lease_id: str, attempt_id: str,
-                             remote_session_id: str, now: str, expires_at: str, role: str = "unknown") -> dict[str, Any]:
+                              remote_session_id: str, now: str, expires_at: str, role: str = "unknown",
+                              mvp_reservation: Mapping[str, Any] | None = None,
+                              mvp_packet: Any = None, mvp_parent: Any = None,
+                              mvp_lineage: Sequence[Any] | None = None,
+                              mvp_requirements: PlacementRequirements | None = None,
+                              _packet_boundary: Any = _MVP_PACKET_BOUNDARY,
+                              _reservation_validator: Any = None,
+                              _record_writer: Any = None) -> dict[str, Any]:
         assignment = _revalidate_assignment(assignment)
         _id(lease_id, "lease_id"); _id(attempt_id, "attempt_id"); _id(remote_session_id, "remote_session_id")
         _timestamp(now, "now"); _timestamp(expires_at, "expires_at")
@@ -2120,13 +2433,28 @@ class DurableFabricStore:
         for item in self.leases.values():
             if item["status"] in {"active", "recovery_required"} and item["assignment"].get("task_id") == assignment.task_id:
                 raise AdmissionError("DUPLICATE_TASK_LEASE", "task already has an active lease")
+        reservation: dict[str, Any] = {"host": assignment.host, "pool": assignment.capacity_pool,
+                                       "role": role}
+        if mvp_reservation is not None:
+            if not isinstance(mvp_reservation, Mapping):
+                raise AdmissionError("INVALID_RESERVATION", "MVP reservation must be an object")
+            if mvp_packet is None:
+                raise AdmissionError("MVP_AUTHORITY_REQUIRED", "MVP reservation requires an exact trusted packet")
+            reservation.update(dict(mvp_reservation))
+            validator = (_reservation_validator if _reservation_validator is not None
+                         else self._validate_mvp_reservation)
+            validator(reservation, assignment, mvp_requirements,
+                      mvp_packet=mvp_packet, mvp_parent=mvp_parent,
+                      mvp_lineage=mvp_lineage,
+                      _packet_boundary=_packet_boundary)
         event = {"event": "lease", "lease_id": lease_id, "attempt_id": attempt_id,
                  "remote_session_id": remote_session_id, "assignment_digest": assignment.assignment_digest,
                  "assignment": assignment.to_dict(), "status": "active", "created_at": now,
                  "updated_at": now, "expires_at": expires_at,
-                "reservation": {"host": assignment.host, "pool": assignment.capacity_pool,
-                                  "role": role}, "recovery_state": "none"}
-        return self._record_locked(event)
+                "reservation": reservation, "recovery_state": "none"}
+        if _record_writer is None:
+            return self._record_locked(event)
+        return _record_writer(self, event)
 
     @_typed_boundary("lease input")
     def create_lease(self, assignment: Assignment | Mapping[str, Any], *, lease_id: str, attempt_id: str, remote_session_id: str,
@@ -2156,7 +2484,14 @@ class DurableFabricStore:
                         attempt_id: str, remote_session_id: str, now: str, expires_at: str,
                         heartbeat_ttl_s: float = 120.0, paused: bool = False,
                         pause_guard: PauseGuard | None = None,
-                        routing_policy: RoutingPolicy | Mapping[str, Any] | None = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
+                         routing_policy: RoutingPolicy | Mapping[str, Any] | None = None,
+                         mvp_reservation: Mapping[str, Any] | None = None,
+                         mvp_packet: Any = None, mvp_parent: Any = None,
+                         mvp_lineage: Sequence[Any] | None = None,
+                         _packet_boundary: Any = _MVP_PACKET_BOUNDARY,
+                         _reservation_validator: Any = None,
+                         _lease_creator: Any = None,
+                         _reload_helper: Any = None) -> tuple[Assignment | None, tuple[Rejection, ...]]:
         """Atomically resolve placement, reserve capacity, and create its durable lease."""
         _validate_pause_guard(pause_guard, "placement admission")
         if paused:
@@ -2168,13 +2503,51 @@ class DurableFabricStore:
                 raise AdmissionError("PAUSED", "PAUSE is asserted; lease admission is halted")
             if pause_guard is not None:
                 pause_guard.assert_open()
-            self._reload_locked()
+            reservation_validator = (_reservation_validator if _reservation_validator is not None
+                                     else self._validate_mvp_reservation)
+            lease_creator = _lease_creator
+            if _reload_helper is None:
+                self._reload_locked(_reservation_validator=reservation_validator)
+            else:
+                _reload_helper(self, _reservation_validator=reservation_validator)
             req = requirements if isinstance(requirements, PlacementRequirements) else PlacementRequirements.from_dict(requirements)
+            if mvp_reservation is not None:
+                if mvp_packet is None:
+                    raise AdmissionError("MVP_AUTHORITY_REQUIRED", "MVP reservation requires an exact trusted packet")
+                _packet_boundary(mvp_packet, parent=mvp_parent, lineage=mvp_lineage)
+            elif mvp_packet is not None or mvp_parent is not None or mvp_lineage is not None:
+                raise AdmissionError("MVP_AUTHORITY_REQUIRED", "packet anchors require an MVP reservation")
             for existing in self.leases.values():
                 if existing["status"] in {"active", "recovery_required"} and existing["assignment"].get("task_id") == req.task_id:
                     if existing["assignment"].get("source_sha") == req.source_sha:
                         if (existing["lease_id"], existing["attempt_id"], existing["remote_session_id"]) != (lease_id, attempt_id, remote_session_id):
                             raise AdmissionError("DUPLICATE_LEASE", "task/source identity is already bound to another lease session")
+                        # Replay is only idempotent for the exact same MVP
+                        # authority reservation.  Validate the incoming
+                        # nested projections before returning the persisted
+                        # assignment, so a changed budget/authority cannot be
+                        # smuggled through the replay fast path.
+                        existing_reservation = existing.get("reservation", {})
+                        incoming_has_mvp = mvp_reservation is not None
+                        existing_has_mvp = set(existing_reservation) != {"host", "pool", "role"}
+                        if incoming_has_mvp != existing_has_mvp:
+                            raise AdmissionError("CONFLICTING_REPLAY", "MVP reservation presence differs from durable lease")
+                        if incoming_has_mvp:
+                            if not isinstance(mvp_reservation, Mapping):
+                                raise AdmissionError("INVALID_RESERVATION", "MVP reservation must be an object")
+                            replay_assignment = Assignment.from_dict(existing["assignment"])
+                            proposed = {"host": replay_assignment.host, "pool": replay_assignment.capacity_pool,
+                                        "role": req.role, **dict(mvp_reservation)}
+                            reservation_validator(proposed, replay_assignment, req,
+                                                   mvp_packet=mvp_packet, mvp_parent=mvp_parent,
+                                                   mvp_lineage=mvp_lineage,
+                                                   _packet_boundary=_packet_boundary)
+                            if proposed != existing_reservation:
+                                raise AdmissionError("CONFLICTING_REPLAY", "MVP reservation conflicts with durable lease")
+                        elif existing_reservation != {"host": existing_reservation.get("host"),
+                                                       "pool": existing_reservation.get("pool"),
+                                                       "role": existing_reservation.get("role")}:
+                            raise AdmissionError("CONFLICTING_REPLAY", "lease reservation is malformed")
                         return Assignment.from_dict(existing["assignment"]), ()
                     raise AdmissionError("DUPLICATE_TASK_LEASE", "task already has an active lease")
             host_reserved: dict[str, int] = {}; pool_reserved: dict[str, int] = {}
@@ -2194,13 +2567,104 @@ class DurableFabricStore:
                                                   routing_policy=routing_policy, pause_guard=pause_guard)
             if assignment is None:
                 return None, trace
-            self._create_lease_locked(assignment, lease_id=lease_id, attempt_id=attempt_id,
-                                      remote_session_id=remote_session_id, now=now, expires_at=expires_at,
-                                      role=req.role)
+            if mvp_reservation is not None:
+                if not isinstance(mvp_reservation, Mapping):
+                    raise AdmissionError("INVALID_RESERVATION", "MVP reservation must be an object")
+                proposed = dict({"host": assignment.host, "pool": assignment.capacity_pool, "role": req.role})
+                proposed.update(dict(mvp_reservation))
+                reservation_validator(proposed, assignment, req,
+                                      mvp_packet=mvp_packet, mvp_parent=mvp_parent,
+                                      mvp_lineage=mvp_lineage,
+                                      _packet_boundary=_packet_boundary)
+                incoming = proposed["budget"]
+                scope = incoming["scope_id"]
+                used = {"token_units": 0, "wall_seconds": 0, "cost_cents": 0, "concurrency_units": 0}
+                for lease in self.leases.values():
+                    if lease["status"] not in {"active", "recovery_required"}:
+                        continue
+                    prior = lease["reservation"].get("budget")
+                    if not isinstance(prior, Mapping) or prior.get("scope_id") != scope:
+                        continue
+                    used["token_units"] += prior["token_units"]
+                    used["wall_seconds"] += prior["wall_seconds"]
+                    used["cost_cents"] += prior["cost_cents"]
+                    used["concurrency_units"] += 1
+                if (used["token_units"] + incoming["token_units"] > incoming["remaining_tokens"] or
+                        used["wall_seconds"] + incoming["wall_seconds"] > incoming["remaining_wall_seconds"] or
+                        used["cost_cents"] + incoming["cost_cents"] > incoming["remaining_cost_cents"] or
+                        used["concurrency_units"] + 1 > incoming["concurrency_limit"]):
+                    raise AdmissionError("BUDGET_EXHAUSTED", "sibling aggregate budget is exhausted")
+            if lease_creator is None:
+                created_lease = self._create_lease_locked(
+                    assignment, lease_id=lease_id, attempt_id=attempt_id,
+                    remote_session_id=remote_session_id, now=now, expires_at=expires_at,
+                    role=req.role, mvp_reservation=mvp_reservation,
+                    mvp_packet=mvp_packet, mvp_parent=mvp_parent,
+                    mvp_lineage=mvp_lineage, mvp_requirements=req,
+                    _packet_boundary=_packet_boundary,
+                    _reservation_validator=reservation_validator)
+            else:
+                created_lease = lease_creator(self, assignment, lease_id=lease_id, attempt_id=attempt_id,
+                              remote_session_id=remote_session_id, now=now, expires_at=expires_at,
+                              role=req.role, mvp_reservation=mvp_reservation,
+                              mvp_packet=mvp_packet, mvp_parent=mvp_parent,
+                              mvp_lineage=mvp_lineage, mvp_requirements=req,
+                              _packet_boundary=_packet_boundary,
+                              _reservation_validator=reservation_validator)
+            # Re-read the journal through the same closure-owned reload graph
+            # before reporting success.  In-memory mutation by a replaced
+            # record/append/apply helper can therefore never masquerade as a
+            # durable lease.
+            if _reload_helper is None:
+                self._reload_locked(_reservation_validator=reservation_validator)
+            else:
+                _reload_helper(self, _reservation_validator=reservation_validator)
+            persisted = self.leases.get(lease_id)
+            if (not isinstance(created_lease, Mapping) or not isinstance(persisted, Mapping)
+                    or persisted.get("lease_id") != lease_id
+                    or persisted.get("assignment_digest") != assignment.assignment_digest
+                    or created_lease.get("lease_id") != lease_id
+                    or created_lease.get("assignment_digest") != assignment.assignment_digest):
+                raise AdmissionError("LEASE_NOT_DURABLE", "placement did not produce its exact durable lease")
             return assignment, trace
 
+    def lease_for_assignment(self, assignment_digest_value: str) -> dict[str, Any] | None:
+        """Return a copy of the durable lease carrying an exact fabric digest."""
+        _digest(assignment_digest_value, "assignment_digest")
+        with _journal_lock(self.lock_path):
+            self._reload_locked()
+            for lease in self.leases.values():
+                if lease.get("assignment_digest") == assignment_digest_value:
+                    return copy.deepcopy(lease)
+        return None
+
+    def lease_for_mvp_assignment(self, mvp_assignment_digest: str, *, role: str | None = None) -> dict[str, Any] | None:
+        _digest(mvp_assignment_digest, "mvp_assignment_digest")
+        if role is not None:
+            _string(role, "role")
+        with _journal_lock(self.lock_path):
+            self._reload_locked()
+            for lease in self.leases.values():
+                reservation = lease.get("reservation", {})
+                authority = reservation.get("authority", {}) if isinstance(reservation, Mapping) else {}
+                if authority.get("mvp_assignment_digest") == mvp_assignment_digest and (role is None or reservation.get("role") == role):
+                    return copy.deepcopy(lease)
+        return None
+
+    @_typed_boundary("attempt result lookup")
+    def attempt_result(self, attempt_id: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """Return copy-safe durable attempt/result state for one attempt."""
+        _id(attempt_id, "attempt_id")
+        with _journal_lock(self.lock_path):
+            self._reload_locked()
+            attempt = self.attempts.get(attempt_id)
+            result = self.results.get(attempt_id)
+            return (copy.deepcopy(attempt) if attempt is not None else None,
+                    copy.deepcopy(result) if result is not None else None)
+
     def active_reservations(self) -> tuple[dict[str, Any], ...]:
-        return tuple(dict(lease["reservation"], lease_id=lease_id)
+        # A state view must never hand out a mutable nested journal object.
+        return tuple(copy.deepcopy(dict(lease["reservation"], lease_id=lease_id))
                      for lease_id, lease in sorted(self.leases.items())
                      if lease["status"] in {"active", "recovery_required"})
 
@@ -2221,7 +2685,7 @@ class DurableFabricStore:
                          "status": "recovery_required", "updated_at": now, "observed_at": now,
                          "recovery_state": "query_pending"}
                 self._record_locked(event)
-                recovered.append(dict(self.leases[lease_id]))
+                recovered.append(copy.deepcopy(self.leases[lease_id]))
             return tuple(recovered)
 
     @_typed_boundary("lease expiry")
@@ -3049,3 +3513,116 @@ class IntegrationCoordinator:
     @property
     def active(self) -> Mapping[str, str]:
         return MappingProxyType(dict(self._active))
+
+
+def _install_mvp_admission_bindings() -> None:
+    """Bind MVP packet authority into every public fabric admission seam.
+
+    The source methods retain their compatibility signatures, including the
+    private boundary keyword used for internal propagation.  These wrappers
+    close over the trusted boundary and reject caller-supplied replacements,
+    including direct calls to the otherwise-private replay/create helpers.
+    The admission body receives both the reservation validator and lease
+    creator as closure-owned capabilities; it never resolves those helpers
+    through the mutable class after installation.
+    """
+    boundary = _MVP_PACKET_BOUNDARY
+
+    raw_reservation = DurableFabricStore._validate_mvp_reservation
+
+    def reservation(*args: Any, **kwargs: Any) -> None:
+        supplied = kwargs.get("_packet_boundary", boundary)
+        if (supplied is not boundary or "_reservation_validator" in kwargs
+                or "_lease_creator" in kwargs):
+            raise AdmissionError("MVP_AUTHORITY_REJECTED", "MVP packet boundary is not trusted")
+        raw_reservation(*args, **kwargs)
+
+    raw_event = DurableFabricStore._validate_event
+
+    raw_apply = DurableFabricStore._apply
+    raw_append = DurableFabricStore._append
+    raw_record = DurableFabricStore._record_locked
+    raw_reload = DurableFabricStore._reload_locked
+    raw_create = DurableFabricStore._create_lease_locked
+
+    def event(instance: DurableFabricStore, *args: Any, **kwargs: Any) -> None:
+        supplied = kwargs.get("_reservation_validator")
+        if supplied is not None and supplied is not reservation:
+            raise AdmissionError("MVP_AUTHORITY_REJECTED", "MVP reservation validator is not trusted")
+        kwargs["_reservation_validator"] = reservation
+        return raw_event(instance, *args, **kwargs)
+
+    DurableFabricStore._validate_event = event
+
+    def trusted_event(instance: DurableFabricStore, *args: Any, **kwargs: Any) -> None:
+        kwargs["_reservation_validator"] = reservation
+        return raw_event(instance, *args, **kwargs)
+
+    def trusted_apply(instance: DurableFabricStore, *args: Any, **kwargs: Any) -> None:
+        return raw_apply(instance, *args, **kwargs)
+
+    def trusted_append(instance: DurableFabricStore, *args: Any, **kwargs: Any) -> None:
+        return raw_append(instance, *args, **kwargs)
+
+    def trusted_record(instance: DurableFabricStore, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        kwargs["_event_validator"] = trusted_event
+        kwargs["_apply_helper"] = trusted_apply
+        kwargs["_append_helper"] = trusted_append
+        return raw_record(instance, *args, **kwargs)
+
+    def reload(instance: DurableFabricStore, *args: Any, **kwargs: Any) -> None:
+        supplied = kwargs.get("_reservation_validator")
+        event_supplied = kwargs.get("_event_validator")
+        apply_supplied = kwargs.get("_apply_helper")
+        if ((supplied is not None and supplied is not reservation)
+                or (event_supplied is not None and event_supplied is not trusted_event)
+                or (apply_supplied is not None and apply_supplied is not trusted_apply)):
+            raise AdmissionError("MVP_AUTHORITY_REJECTED", "MVP reservation validator is not trusted")
+        kwargs["_reservation_validator"] = reservation
+        kwargs["_event_validator"] = trusted_event
+        kwargs["_apply_helper"] = trusted_apply
+        return raw_reload(instance, *args, **kwargs)
+
+    DurableFabricStore._reload_locked = reload
+
+    def trusted_reload(instance: DurableFabricStore, *args: Any, **kwargs: Any) -> None:
+        kwargs["_reservation_validator"] = reservation
+        kwargs["_event_validator"] = trusted_event
+        kwargs["_apply_helper"] = trusted_apply
+        return raw_reload(instance, *args, **kwargs)
+
+    def trusted_create(instance: DurableFabricStore, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Closure-owned lease creator for the admission transaction."""
+        kwargs["_packet_boundary"] = boundary
+        kwargs["_reservation_validator"] = reservation
+        kwargs["_record_writer"] = trusted_record
+        return raw_create(instance, *args, **kwargs)
+
+    def create(instance: DurableFabricStore, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        supplied = kwargs.get("_packet_boundary", boundary)
+        if (supplied is not boundary or "_reservation_validator" in kwargs
+                or "_record_writer" in kwargs or "_lease_creator" in kwargs):
+            raise AdmissionError("MVP_AUTHORITY_REJECTED", "MVP packet boundary is not trusted")
+        return trusted_create(instance, *args, **kwargs)
+
+    DurableFabricStore._create_lease_locked = create
+
+    DurableFabricStore._validate_mvp_reservation = staticmethod(reservation)
+
+    raw_admit = DurableFabricStore.admit_placement
+
+    @_typed_boundary("placement admission")
+    def admit(instance: DurableFabricStore, *args: Any, **kwargs: Any) -> tuple[Assignment | None, tuple[Rejection, ...]]:
+        if any(key in kwargs for key in ("_packet_boundary", "_reservation_validator", "_lease_creator", "_reload_helper")):
+            raise SchemaError("INVALID_INPUT", "MVP admission capabilities are controller-owned")
+        kwargs["_packet_boundary"] = boundary
+        kwargs["_reservation_validator"] = reservation
+        kwargs["_lease_creator"] = trusted_create
+        kwargs["_reload_helper"] = trusted_reload
+        return raw_admit(instance, *args, **kwargs)
+
+    DurableFabricStore.admit_placement = admit
+
+
+_install_mvp_admission_bindings()
+del _install_mvp_admission_bindings

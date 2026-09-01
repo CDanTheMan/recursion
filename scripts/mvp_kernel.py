@@ -11,7 +11,9 @@ import hashlib
 import math
 import re
 import unicodedata
-from dataclasses import dataclass, field
+import weakref
+from dataclasses import dataclass
+from types import FunctionType, MappingProxyType
 from typing import Any, Mapping, Sequence
 
 import mvp_contracts as contracts
@@ -20,7 +22,6 @@ MAX_BYTES = contracts.MAX_BYTES
 MAX_ITEMS = 256
 MAX_EVIDENCE = 128
 MAX_DEPTH = 2
-_FACTORY_PROVENANCE = object()
 
 
 class KernelError(ValueError):
@@ -145,7 +146,10 @@ class MappingProxy(Mapping[str, Any]):
     __slots__ = ("_data",)
 
     def __init__(self, data: Mapping[str, Any]):
-        self._data = dict(data)
+        # Keep the backing mapping immutable as well as the public dataclass.
+        # A mutable private dict would let a caller alter an issued packet and
+        # then attempt to re-sign it in place.
+        self._data = MappingProxyType(dict(data))
 
     def __getitem__(self, key: str) -> Any:
         return self._data[key]
@@ -155,6 +159,10 @@ class MappingProxy(Mapping[str, Any]):
 
     def __len__(self) -> int:
         return len(self._data)
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "MappingProxy":
+        copied = {key: copy.deepcopy(value, memo) for key, value in self._data.items()}
+        return MappingProxy(copied)
 
 
 def _freeze(value: Any) -> Any:
@@ -169,16 +177,58 @@ def _freeze(value: Any) -> Any:
 class TaskPacket:
     value: Mapping[str, Any]
     packet_digest: str
-    _provenance: object | None = field(default=None, repr=False, compare=False)
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "value", _freeze(_plain(self.value)))
+    def __post_init__(self, _freeze_fn=_freeze, _plain_fn=_plain) -> None:
+        object.__setattr__(self, "value", _freeze_fn(_plain_fn(self.value)))
 
-    def to_dict(self) -> dict[str, Any]:
-        return copy.deepcopy(_plain(self.value))
+    def to_dict(self, _plain_fn=_plain) -> dict[str, Any]:
+        return copy.deepcopy(_plain_fn(self.value))
 
     def __getitem__(self, key: str) -> Any:
         return self.value[key]
+
+
+def _new_packet_issuance():
+    """Return private exact-identity issuance and admission checks.
+
+    The ledger is deliberately held only by these closures.  It contains weak
+    references keyed by object identity, so it authenticates the object that a
+    factory returned without becoming durable state or retaining packets.
+    """
+    issued: dict[int, tuple[weakref.ReferenceType[TaskPacket], bytes]] = {}
+
+    def issue(body: Mapping[str, Any] | TaskPacket) -> TaskPacket:
+        packet = body if isinstance(body, TaskPacket) else TaskPacket(body, body["packet_digest"])
+        identity = id(packet)
+        snapshot = contracts.canonical_json(_plain(packet.to_dict()))
+
+        def released(reference: weakref.ReferenceType[TaskPacket]) -> None:
+            entry = issued.get(identity)
+            if entry is not None and entry[0] is reference:
+                issued.pop(identity, None)
+
+        issued[identity] = (weakref.ref(packet, released), snapshot)
+        return packet
+
+    def require(packet: Any) -> TaskPacket:
+        if not isinstance(packet, TaskPacket):
+            raise KernelError("packet must be immutable TaskPacket")
+        entry = issued.get(id(packet))
+        if entry is None or entry[0]() is not packet:
+            raise KernelError("packet was not issued by a kernel factory")
+        try:
+            current = contracts.canonical_json(_plain(packet.to_dict()))
+        except Exception as exc:
+            raise KernelError("issued packet was mutated") from exc
+        if current != entry[1]:
+            raise KernelError("issued packet was mutated")
+        return packet
+
+    return issue, require
+
+
+_packet_issue, _require_issued_packet = _new_packet_issuance()
+del _new_packet_issuance
 
 
 _PACKET_FIELDS = {
@@ -229,6 +279,7 @@ def _parent_reference(parent: TaskPacket) -> dict[str, Any]:
     anchor for the complete parent packet; the projection is not treated as a
     replacement for that anchor.
     """
+    _require_issued_packet(parent)
     p = parent.to_dict()
     prior = p.get("parent")
     prior_refs = prior.get("lineage_refs", ()) if isinstance(prior, Mapping) else ()
@@ -267,6 +318,7 @@ def _anchor_reference(anchor: Any, *, expected_digest: str | None = None) -> dic
     supplied digest.
     """
     if isinstance(anchor, TaskPacket):
+        _require_issued_packet(anchor)
         digest = _packet_body_digest(anchor)
         if expected_digest is not None and expected_digest != digest:
             raise KernelError("parent packet digest anchor mismatch")
@@ -778,7 +830,7 @@ def _make_body(*, supervisor: Mapping[str, Any], task: Mapping[str, Any],
     return body
 
 
-def build_packet(*, task: Mapping[str, Any], assignment: Mapping[str, Any],
+def _build_packet_impl(*, task: Mapping[str, Any], assignment: Mapping[str, Any],
                  budget: Mapping[str, Any], grant: Mapping[str, Any],
                  supervisor_digest: str | None = None,
                  supervisor: Mapping[str, Any] | None = None,
@@ -809,17 +861,16 @@ def build_packet(*, task: Mapping[str, Any], assignment: Mapping[str, Any],
                       grant=grant, context=context, evidence_refs=evidence_refs, limits=lim,
                       checkpoint=checkpoint, checkpoint_chain=checkpoint_chain, receipt=receipt,
                       candidate=candidate, evidence=evidence, parent=_parent)
-    return TaskPacket(body, body["packet_digest"], _FACTORY_PROVENANCE)
+    return TaskPacket(body, body["packet_digest"])
 
 
-def spawn_child(parent: TaskPacket, *, task: Mapping[str, Any], assignment: Mapping[str, Any],
+def _spawn_child_impl(parent: TaskPacket, *, task: Mapping[str, Any], assignment: Mapping[str, Any],
                  budget: Mapping[str, Any], grant: Mapping[str, Any],
                  expected_parent: Any | None = None,
                  expected_parent_digest: str | None = None,
                  expected_lineage: Sequence[Any] | None = None,
-                 **kwargs: Any) -> TaskPacket:
-    if not isinstance(parent, TaskPacket):
-        raise KernelError("parent must be immutable TaskPacket")
+    **kwargs: Any) -> TaskPacket:
+    _require_issued_packet(parent)
     if expected_parent is None:
         raise KernelError("spawn_child requires an explicit expected_parent anchor")
     _packet_body_digest(parent)
@@ -856,7 +907,7 @@ def spawn_child(parent: TaskPacket, *, task: Mapping[str, Any], assignment: Mapp
         limits = KernelLimits.from_value(parent["limits"])
     elif limits != KernelLimits.from_value(parent["limits"]):
         raise KernelError("child kernel limits changed")
-    child = build_packet(task=task, assignment=assignment, budget=budget, grant=grant,
+    child = _build_packet_impl(task=task, assignment=assignment, budget=budget, grant=grant,
                         supervisor=parent["supervisor"], supervisor_digest=parent["supervisor_digest"],
                         context=kwargs.pop("context", ()), evidence_refs=kwargs.pop("evidence_refs", ()),
                         evidence=kwargs.pop("evidence", ()), candidate=kwargs.pop("candidate", None),
@@ -872,10 +923,10 @@ def spawn_child(parent: TaskPacket, *, task: Mapping[str, Any], assignment: Mapp
                         expected_parent_digest=expected_parent_digest,
                         expected_lineage=expected_lineage)
     body["packet_digest"] = hashlib.sha256(_canonical(body, limits)).hexdigest()
-    return TaskPacket(body, body["packet_digest"], _FACTORY_PROVENANCE)
+    return TaskPacket(body, body["packet_digest"])
 
 
-def retain_context(packet: TaskPacket, items: Sequence[Mapping[str, Any]], *,
+def _retain_context_impl(packet: TaskPacket, items: Sequence[Mapping[str, Any]], *,
                    limits: KernelLimits | None = None, pause: bool | None = None,
                    pause_epoch: int | None = None,
                    expected_parent: Any | None = None,
@@ -921,7 +972,7 @@ def retain_context(packet: TaskPacket, items: Sequence[Mapping[str, Any]], *,
                         expected_parent_digest=expected_parent_digest,
                         expected_lineage=expected_lineage)
     body["packet_digest"] = hashlib.sha256(_canonical(body, lim)).hexdigest()
-    return TaskPacket(body, body["packet_digest"], _FACTORY_PROVENANCE)
+    return TaskPacket(body, body["packet_digest"])
 
 
 def validate_packet(packet: TaskPacket | Mapping[str, Any], *,
@@ -944,9 +995,10 @@ def _validate_packet(packet: TaskPacket | Mapping[str, Any], *,
                      checkpoint: Mapping[str, Any] | None = None,
                      expected_parent: Any | None = None,
                      expected_parent_digest: str | None = None,
-                     expected_lineage: Sequence[Any] | None = None) -> TaskPacket:
-    if not isinstance(packet, TaskPacket):
-        raise KernelError("packet must be immutable TaskPacket")
+                     expected_lineage: Sequence[Any] | None = None,
+                     _require_issued: bool = True) -> TaskPacket:
+    if _require_issued:
+        _require_issued_packet(packet)
     try:
         body = packet.to_dict()
         supplied = body.pop("packet_digest", None)
@@ -970,6 +1022,103 @@ def _validate_packet(packet: TaskPacket | Mapping[str, Any], *,
     if checkpoint is not None and body.get("checkpoint") != _plain(checkpoint):
         raise KernelError("checkpoint lineage mismatch")
     return packet
+
+
+def _bind_packet_factories():
+    """Install factory wrappers over an immutable callable graph.
+
+    Python module globals are mutable, including private names.  Capturing only
+    the three top-level implementations is therefore insufficient: a factory
+    can reach a replaced ``_make_body`` or validator through its function
+    globals.  The binding below gives every module-defined function a private
+    globals dictionary whose function entries point at the corresponding
+    snapshots.  The public wrappers then structurally validate and fingerprint
+    the exact result before the private weak issuance ledger enrolls it.
+    """
+    module_globals = globals()
+    trusted_globals = dict(module_globals)
+    functions = {
+        name: value for name, value in module_globals.items()
+        if isinstance(value, FunctionType) and value.__globals__ is module_globals
+    }
+    trusted = {}
+    for name, function in functions.items():
+        clone = FunctionType(function.__code__, trusted_globals, function.__name__,
+                             function.__defaults__, function.__closure__)
+        clone.__kwdefaults__ = (dict(function.__kwdefaults__)
+                                if function.__kwdefaults__ is not None else None)
+        clone.__annotations__ = dict(getattr(function, "__annotations__", {}))
+        trusted[name] = clone
+    trusted_globals.update(trusted)
+
+    issue = trusted["_packet_issue"]
+    require_issued = trusted["_require_issued_packet"]
+    validate = trusted["_validate_packet"]
+    # Keep the validator's exact code object in the sealed factory graph.  A
+    # caller can reach the private globals dictionary through ``build_impl``
+    # and can replace both the global validator and the ``enroll`` closure
+    # cell.  Function names/modules are forgeable metadata; this identity is
+    # the independent anchor consumers use to detect that paired mutation.
+    validator_code = validate.__code__
+
+    def enroll(result: Any, *, expected_parent: Any | None = None,
+               expected_parent_digest: str | None = None,
+               expected_lineage: Sequence[Any] | None = None) -> TaskPacket:
+        if validate.__code__ is not validator_code:
+            raise KernelError("kernel validator graph is not trusted")
+        # Validate the factory result before enrollment.  This is deliberately
+        # independent of the issuance ledger; the second check below proves
+        # that the exact object enrolled and the object validated are identical.
+        validate(result, expected_parent=expected_parent,
+                 expected_parent_digest=expected_parent_digest,
+                 expected_lineage=expected_lineage, _require_issued=False)
+        enrolled = issue(result)
+        require_issued(enrolled)
+        return enrolled
+
+    build_impl = trusted["_build_packet_impl"]
+    spawn_impl = trusted["_spawn_child_impl"]
+    retain_impl = trusted["_retain_context_impl"]
+
+    def build_packet(*args: Any, **kwargs: Any) -> TaskPacket:
+        return enroll(build_impl(*args, **kwargs),
+                      expected_parent=kwargs.get("expected_parent"),
+                      expected_parent_digest=kwargs.get("expected_parent_digest"),
+                      expected_lineage=kwargs.get("expected_lineage"))
+
+    def spawn_child(*args: Any, **kwargs: Any) -> TaskPacket:
+        parent = args[0] if args else kwargs.get("parent")
+        return enroll(spawn_impl(*args, **kwargs),
+                      expected_parent=kwargs.get("expected_parent", parent),
+                      expected_parent_digest=kwargs.get("expected_parent_digest"),
+                      expected_lineage=kwargs.get("expected_lineage"))
+
+    def retain_context(*args: Any, **kwargs: Any) -> TaskPacket:
+        packet = args[0] if args else kwargs.get("packet")
+        return enroll(retain_impl(*args, **kwargs),
+                      expected_parent=kwargs.get("expected_parent"),
+                      expected_parent_digest=kwargs.get("expected_parent_digest"),
+                      expected_lineage=kwargs.get("expected_lineage"))
+
+    def validate_packet_public(packet: TaskPacket | Mapping[str, Any], *,
+                               pause_observed: bool | None = None,
+                               pause_epoch: int | None = None,
+                               checkpoint: Mapping[str, Any] | None = None,
+                               expected_parent: Any | None = None,
+                               expected_parent_digest: str | None = None,
+                               expected_lineage: Sequence[Any] | None = None) -> TaskPacket:
+        if validate.__code__ is not validator_code:
+            raise KernelError("kernel validator graph is not trusted")
+        return validate(packet, pause_observed=pause_observed, pause_epoch=pause_epoch,
+                        checkpoint=checkpoint, expected_parent=expected_parent,
+                        expected_parent_digest=expected_parent_digest,
+                        expected_lineage=expected_lineage)
+
+    return build_packet, spawn_child, retain_context, validate_packet_public
+
+
+build_packet, spawn_child, retain_context, validate_packet = _bind_packet_factories()
+del _bind_packet_factories, _packet_issue
 
 
 __all__ = ["KernelError", "KernelLimits", "TaskPacket", "build_packet", "spawn_child",
