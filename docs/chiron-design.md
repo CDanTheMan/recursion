@@ -1,6 +1,8 @@
 # Chiron — the learning engine (design of record)
 
-Status: designed 2026-08-05, build not started. Boot doc for the Chiron workstream/session.
+Status: historical initial design. Chiron is now canonical in its own repository; the 2026-08-31
+source gate passes, while the v6 study pilot remains not ready pending H2, B0, and the B10
+prerequisite chain. See `docs/audits/recursion-v2-mvp-chiron-pilot-2026-08-31.md`.
 Read `ANCHOR.md` first. Named for the centaur who tutored the Greek heroes.
 
 ## Purpose

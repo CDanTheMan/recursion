@@ -1,10 +1,10 @@
 ---
 title: Recursion v2 execution fabric
 type: implementation-plan
-status: work-in-progress
+status: source-mvp-accepted
 authorized: 2026-08-28
-last-verified: 2026-08-28
-execution_state: not-started
+last-verified: 2026-08-31
+execution_state: source-only-mvp-complete-production-pending
 related:
   - CONTROL_PLANE.md
   - ANCHOR.md
@@ -23,6 +23,23 @@ This document is the autonomous execution handoff. It defines the intended archi
 implementation plan, phase gates, rollback boundaries, and completion criteria. It does not itself
 authorize production deployment, credential changes, spending, PAUSE removal, default-branch
 merges, or destructive cleanup. Those remain human seams under `CONTROL_PLANE.md`.
+
+## 2026-08-31 implementation checkpoint
+
+The source-only MVP is implemented and independently accepted. The completed slice includes strict
+v2 records, the task-packet/context kernel, five provider adapters, deterministic placement and
+durable recovery, depth-2 orchestration with immutable child budgets, independent verification and
+review admission, the Telegram command/watchdog source boundary, and a source-only Chiron pilot.
+The one-command gate is `python3 -u scripts/tests/recursion-v2-mvp.test.py`; exact SHAs and counts
+are recorded in `docs/audits/recursion-v2-mvp-completion-2026-08-31.md`.
+
+This checkpoint does not close the larger production plan below. Cursor Cloud is exercised through
+fake transport, Codex and Cursor complete hermetic evidence flows, and no production credential,
+provider call, Telegram delivery, second-box notification, deployment, restart, PAUSE change, or
+metered spend occurred. Grok Bot, registered-machine live execution, production process isolation,
+off-host restore, live outage/quota soak, Chiron migration cleanup, and Lucas's broader-autonomy
+decision remain open. The phase descriptions are preserved as the production roadmap; source-MVP
+completion must not be mistaken for their live completion.
 
 ## Objective
 

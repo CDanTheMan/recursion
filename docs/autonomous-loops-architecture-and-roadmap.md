@@ -1,10 +1,11 @@
 ---
 title: "Recursion — autonomous-loops architecture & roadmap (the anti-drift anchor)"
 type: spec
-status: current
-last-verified: 2026-08-07
+status: superseded-by-recursion-v2-source-mvp
+last-verified: 2026-08-31
 related:
   - "docs/architecture.md"
+  - "docs/recursion-v2-mvp-harness.md"
   - "CLAUDE.md"
   - "ANCHOR.md"
   - "state/DECISIONS.md"
@@ -15,6 +16,12 @@ related:
 ---
 
 # Autonomous loops — architecture & roadmap
+
+> **STATUS 2026-08-31.** This is the historical v1 build record and rationale. The current
+> source architecture and capability matrix are `docs/architecture.md` and
+> `docs/recursion-v2-mvp-harness.md`; the production roadmap is
+> `docs/plans/recursion-v2-execution-fabric.md`. Historical claims below are preserved rather
+> than rewritten to look current.
 
 **Why this file exists.** The architecture kept living only in chat, and chat drifts. This is the one
 reviewed place that states what the loop system IS, what is BUILT vs UNBUILT, where the human sits,
@@ -207,9 +214,9 @@ ban-safety + maintainability). "1:1 first, customize second" = reach native-diff
 3. **A live-access escalation protocol** — a structured "I need capture #2 (water realm)" / "I need
    a live read of seed provenance" that reaches the human.
 4. **Metrics feedback (Item 21).** The supervisor is blind to Golden Stallion fleet/app health.
-   Needs the **GS side to PUSH** a health snapshot (bots online, crawls/hr, op=54, last-seen); the
-   box has no fleet API and `state/projects/*` is read-only to it. Cross-repo contract: GS
-   publishes → recursion reads → ledger.
+   Historical v1 design required the **GS side to PUSH** a health snapshot. D-011 superseded that
+   copied-state model: current project status is derived from live registered git clones, and a
+   missing clone/ref/file is a blocker rather than a fabricated status line.
 
 ## 7. Roadmap sequence — decided 2026-08-05 (Lucas)
 

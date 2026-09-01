@@ -1,6 +1,6 @@
 # Recursion — architecture
 
-Last updated: 2026-08-06. Read `ANCHOR.md` first — that's WHY/WHAT; read `CONTROL_PLANE.md` for
+Last updated: 2026-08-31. Read `ANCHOR.md` first — that's WHY/WHAT; read `CONTROL_PLANE.md` for
 WHO decides; this is HOW.
 
 <!-- superseded-by: CONTROL_PLANE.md (2026-08-06, D-010) — authority claims only -->
@@ -15,15 +15,13 @@ WHO decides; this is HOW.
 > Everything else here — the tiering, the escalation scoring, the cost model, the where-it-runs
 > map, the context-management rules — is current and load-bearing.
 
-> **V2 EXECUTION-FABRIC WORK IN PROGRESS — 2026-08-28 (D-016 draft).** The provider and
-> subscription-specific engine roster below describes the deployed v1 lineage, not the intended
-> permanent binding. Lucas has approved a provider-neutral extension that separates engine,
-> provider, capacity pool, model, host, sandbox, routing, project, publication, and immutable run
-> assignment. Hetzner remains the authoritative coordinator; Cursor Cloud becomes an isolated
-> burst-worker pool; Grok Bot becomes a separate weekly-quota supervisory pool. See
-> `docs/plans/recursion-v2-execution-fabric.md` and the dated audit at
-> `docs/audits/recursion-v2-infrastructure-audit-2026-08-28.md`. Nothing in that WIP changes the
-> authority hierarchy, PAUSE, review-only publication, or human deployment boundary.
+> **V2 SOURCE-ONLY MVP ACCEPTED — 2026-08-31.** The provider-neutral contracts, packet kernel,
+> adapters, placement/durability fabric, bounded orchestrator, Telegram command semantics, and
+> watchdog source have passed the one-command MVP gate and independent review. The engine roster
+> below still describes the deployed v1 lineage until Lucas publishes, merges, provisions the
+> production seams, deploys, and completes a live soak. See `docs/recursion-v2-mvp-harness.md`,
+> `docs/plans/recursion-v2-execution-fabric.md`, and the completion audit. Source acceptance does
+> not change the authority hierarchy, PAUSE, review-only publication, or human deployment boundary.
 
 ## Purpose
 
@@ -48,11 +46,45 @@ interactive by nature. Because GSC + fleet are background and learning is foregr
 parallelize: Lucas lives in the tutoring while the renderer grinds and the fleet self-heals, all
 reporting into one ledger.
 
-## Engine: a thin escalation-tiered dispatcher (NOT a heavyweight harness)
+## Recursion v2 harness — accepted source architecture
+
+The v2 harness turns a human-authored goal into a bounded, independently verifiable review
+candidate without allowing a model or provider to acquire control-plane authority:
+
+```text
+Lucas instruction
+  → Hermes decision and bounded task contract
+  → immutable TaskPacket and child budget
+  → capability/health/quota negotiation
+  → deterministic host + pool + sandbox placement
+  → durable lease, attempt, result, and recovery journal
+  → distinct verifier task + authenticated verification receipt
+  → review intent + repository-approved publisher
+  → Lucas review, merge, deployment, and production credentials
+```
+
+The implementation is split into six source boundaries:
+
+| Boundary | Responsibility |
+|---|---|
+| `mvp_contracts.py` | strict versioned records, canonical digests, cross-record and child-budget validation |
+| `mvp_kernel.py` | immutable depth-2 packets, context retention, issuance and lineage authority |
+| `mvp_adapters.py` | capability negotiation, exact dispatch plans, result/evidence normalization and deduplication |
+| `execution_fabric.py` | host/pool placement, durable leases/results, restart recovery, receipts and integration serialization |
+| `mvp_orchestrator.py` | packet admission, aggregate budgets, implementer/verifier separation, review-intent admission |
+| `mvp_control_surface.py` | fresh snapshot queries, authenticated control intents, and signed controller-death detection |
+
+All six are inert libraries at the source boundary: they do not themselves contact providers,
+Telegram, mutate PAUSE, deploy, merge, or reveal credentials. External effects remain in existing
+authenticated transport/actuator/publisher layers. The exact feature matrix and limitations are
+in `docs/recursion-v2-mvp-harness.md`.
+
+## Engine: a bounded escalation-tiered execution harness
 
 The always-on component is deliberately light and event-driven — mostly idle, wakes on a trigger
-(cron, fleet alert, a message from Lucas). It does not run a big model non-stop; it ROUTES work to
-the right engine on demand. **This is what makes a 24/7 brain fit the quota.**
+(cron, fleet alert, a message from Lucas). It does not run a big model non-stop. Deterministic
+source code validates authority, budget, capacity, evidence, and publication; models are replaceable
+bounded workers behind that harness. **This is what makes a 24/7 brain fit the quota.**
 
 Tiers (names are a skin over the function — rename freely):
 
@@ -204,7 +236,8 @@ prioritized, drop rather than append.
 ## Observability — seeing the parallel work
 
 Push tells you what changed; you also need a pull view of what's running RIGHT NOW across the arms.
-One source of truth, three ways to read it (all built by the dispatcher session — they don't exist yet):
+One source of truth, three ways to read it. The v1 board/log surfaces already exist; the v2
+control-surface query semantics are source-accepted but not yet deployed to production Telegram:
 
 - **`state/BOARD.md` — the live registry.** The dispatcher rewrites it each tick: one row per
   in-flight arm — workstream, tier/model, state (queued/running/done/blocked), started, tokens,
