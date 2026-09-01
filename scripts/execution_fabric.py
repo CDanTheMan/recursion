@@ -25,7 +25,7 @@ import stat
 import threading
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
@@ -1041,7 +1041,9 @@ class HostRegistration:
     workload_concurrency: Mapping[str, int]
     registration_digest: str
     registered_at: str
-    network_endpoints: Mapping[str, tuple[str, ...]] = MappingProxyType({})
+    network_endpoints: Mapping[str, tuple[str, ...]] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
     def __post_init__(self) -> None:
         _nonnegative_int(self.max_concurrency, "max_concurrency")
@@ -1280,7 +1282,9 @@ class PlacementRequirements:
     source_repository: str = "unknown-repository"
     source_branch: str = "unknown-source"
     seed_manifest_digest: str = ZERO_DIGEST
-    model_parameters: Mapping[str, Any] = MappingProxyType({})
+    model_parameters: Mapping[str, Any] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
     allowed_paths: tuple[str, ...] = ()
     gate_digest: str = ZERO_DIGEST
     publication_policy: str = "verified-integration-only"
@@ -1446,7 +1450,9 @@ class Assignment:
     source_repository: str = "unknown-repository"
     source_branch: str = "unknown-source"
     seed_manifest_digest: str = ZERO_DIGEST
-    model_parameters: Mapping[str, Any] = MappingProxyType({})
+    model_parameters: Mapping[str, Any] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
     allowed_paths: tuple[str, ...] = ()
     gate_digest: str = ZERO_DIGEST
     publication_policy: str = "verified-integration-only"
