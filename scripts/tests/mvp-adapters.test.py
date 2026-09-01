@@ -18,7 +18,19 @@ def snapshots(**changes):
     return out
 def metered_budget(p):
     b=dict(p["budget"]);b.update(metered_spend_allowed=True,approval_digest="a"*64,cost_limit_cents=100,calendar_month_ceiling_cents=100,remaining_cost_cents=100,budget_digest="")
-    b["budget_digest"]=c.canonical_digest(b);body=p.to_dict();body["budget"]=b;body["packet_digest"]=hashlib.sha256(c.canonical_json({x:y for x,y in body.items() if x!="packet_digest"})).hexdigest();return b,k.TaskPacket(body,body["packet_digest"])
+    b["budget_digest"]=c.canonical_digest(b)
+    # Re-admit the changed budget through the kernel's one-shot issuance
+    # factory.  A direct TaskPacket(body, digest) is only structurally valid;
+    # it is intentionally not an authority-bearing packet.
+    issued=k.build_packet(
+        supervisor=p["supervisor"], task=p["task"], assignment=p["assignment"],
+        budget=b, grant=p["grant"], supervisor_digest=p["supervisor_digest"],
+        context=p["context"], evidence_refs=p["evidence_refs"], evidence=p["evidence"],
+        candidate=p["candidate"], receipt=p["receipt"], checkpoint=p["checkpoint"],
+        checkpoint_chain=p["checkpoint_chain"], pause=p["pause"],
+        pause_epoch=p["pause_epoch"], limits=k.KernelLimits.from_value(p["limits"]),
+    )
+    return b,issued
 def hermetic_plan(p, adapter):
     caps={"codex-cli":("workspace-edit","jsonl"),"cursor-cli":("workspace-edit","structured-output")} [adapter]
     changes={"cursor-cli":{"billing":"subscription","included_pool_proven":True}} if adapter=="cursor-cli" else {}
@@ -49,6 +61,18 @@ class AdapterTest(unittest.TestCase):
         for field in ("endpoint_ref","credential_ref"):
             with self.assertRaises(a.AdapterError):replace(plan,**{field:"other-ref"})
         with self.assertRaises(a.AdapterError):replace(plan,packet_authority={**a._plain(plan.packet_authority),"context_digest":"0"*64,"authority_digest":"0"*64})
+
+    def test_metered_budget_reissue_preserves_exact_kernel_authority(self):
+        original=packet();budget,issued=metered_budget(original)
+        forged=k.TaskPacket(issued.to_dict(),issued.packet_digest)
+        self.assertEqual(forged.to_dict(),issued.to_dict())
+        self.assertIsNot(forged,issued)
+        k.validate_packet(issued)
+        with self.assertRaises(k.KernelError):k.validate_packet(forged)
+        request=a.NegotiationRequest("implementer",("workspace-edit","api"),network="provider-only",model="hermes",metered_spend_cents=1,approval_digest="a"*64)
+        result=a.negotiate(request,snapshots(),reference_time=NOW,budget=budget)
+        a.build_dispatch_plan(issued,result,endpoint_ref="endpoint-evidence",credential_ref="credential-evidence")
+        with self.assertRaises(a.AdapterError):a.build_dispatch_plan(forged,result,endpoint_ref="endpoint-evidence",credential_ref="credential-evidence")
 
     def test_plan_seal_reconstruction_cannot_substitute_packet_or_negotiation(self):
         p=packet();r=a.negotiate(a.NegotiationRequest("implementer",("workspace-edit","jsonl")),snapshots(),reference_time=NOW);plan=a.build_dispatch_plan(p,r)
