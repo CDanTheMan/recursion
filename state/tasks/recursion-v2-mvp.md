@@ -12,7 +12,7 @@ workdir: .
 allowed_paths: config,schemas,scripts,state/tasks/recursion-v2-mvp.md,docs/architecture.md,docs/plans/recursion-v2-execution-fabric.md,docs/audits
 non_goals: production deployment or restart,PAUSE removal,credentials or auth,cron,routing policy,firewall,autonomy flags,on-demand billing,metered spend,protected or default branch merge,CONTROL_PLANE.md modification
 autonomy: human-authored
-status: running
+status: passed
 
 Lucas explicitly authorized this source-only control-plane authoring and MVP implementation
 session on 2026-08-31. The acceptance program is the one machine-checkable source gate for the
