@@ -521,3 +521,33 @@ This reproduces at `d1f0a06`, before the offsite backup joined the lock. It is i
 6/7's decision to route the PAUSE writers through `remote_backend`, not introduced by the
 integration. Unifying the backup onto the same lock adds a third participant to a coupling that was
 already there and already broken in one direction.
+
+## [esc-0014] 2026-08-31 — Publish the Recursion v2 MVP review branch
+
+**Status:** open, human operator action required.
+
+**Workstream:** Recursion v2 source-only MVP
+**Task:** `recursion-v2-mvp`
+**Review branch:** `loop/work/recursion-v2-mvp`
+**Accepted implementation/certification:** `2adaa6f08c994c56df93ed9dfbcfecc17809f4ce`
+**Docs-certified descendant:** `f4cb451f041cb0782658dd9f222f389687514fa9`
+
+Lucas explicitly requested publication after the documentation refresh. The complete clean-branch
+gate passed at the docs-certified descendant. The repository-approved publisher was then invoked;
+it refused before any push:
+
+```text
+publish: REFUSED — repository is not active in state/portfolio.tsv:
+/mnt/c/Users/Lucas/Documents/GitHub/recursion-sol-mvp
+```
+
+The local Windows worktree has no `.env`, and this machine has no `/opt/recursion` canonical
+checkout. No remote review ref exists, no raw `git push` was used, and no registry, key, PAUSE,
+credential, or autonomy setting was changed.
+
+**Required operator decision/action:** choose the canonical publishing checkout. Either register
+this exact Windows clone through the reviewed control-plane configuration, or place the exact
+review branch in the already-registered `/opt/recursion` clone on the deployment box. Then enable
+the existing publisher for that human-approved run, confirm its configured project key, invoke
+`scripts/publish.sh`, and open the PR. Do not solve this by bypassing the registry or using a raw
+push.
