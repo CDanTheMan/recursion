@@ -5,6 +5,7 @@
 set -euo pipefail
 ROOT="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 REASON="${*:-manual pause}"
-printf 'PAUSED %s\nreason: %s\n' "$(date -Is)" "$REASON" > "$ROOT/state/PAUSE"
+# The equals form keeps a caller-supplied reason beginning with '-' as data for argparse.
+python3 "$ROOT/scripts/remote-pause.py" set --base "$ROOT" --reason="$REASON"
 echo "paused: $ROOT/state/PAUSE"
 bash "$ROOT/scripts/notify.sh" "⏸ Recursion PAUSED ($REASON). Autonomous action halted. resume.sh to lift." || true

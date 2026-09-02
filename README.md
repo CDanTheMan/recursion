@@ -23,33 +23,53 @@ tracks decisions, and runs the learning loop.
 | Path | Churn | What it is |
 |---|---|---|
 | `ANCHOR.md` | Yearly | Success criteria, what's explicitly not happening, kill criteria |
-| `CLAUDE.md` | Rare | Operating rules for any agent session in this repo |
+| `CONTROL_PLANE.md` | Rare | Authority constitution: Lucas → Hermes → bounded workers and independent verifiers |
+| `AGENTS.md` / `CLAUDE.md` | Rare | Operating rules for agent sessions in this repository |
+| `config/v2/` | Reviewed | Versioned engines, providers, pools, hosts, sandboxes, projects, and routing policies |
+| `schemas/control-plane/v2/` | Reviewed | Strict wire contracts for control-plane records |
+| `scripts/mvp_*.py` | Reviewed | MVP contracts, packet kernel, adapters, orchestration, and control surface |
+| `scripts/execution_fabric.py` | Reviewed | Placement, leases, recovery, verification receipts, and review integration |
 | `research/` | Stable | Deep research reports + "what this changes" notes. Git history here is valuable |
-| `state/` | Nightly | Decision log, gap map, per-project status. Snapshotted once daily, not per-change |
+| `state/` | Runtime | Canonical goals, tasks, decisions, events, inbox, and generated views; project status comes from live git clones |
 | `curriculum/` | Weekly | Syllabus map, generated problem sets |
 | `loop/` | Rare | Supervisor scripts, prompts, routing config |
-| `scripts/` | Rare | Setup and maintenance |
+| `docs/` | Reviewed | Architecture, operator guides, plans, and exact-source audits |
 
-## The three modes
+## Recursion v2 source-only MVP
 
-1. **Build** — Claude Code in the product repos. Each writes its own `STATE.md`; a copy lands in `state/projects/`.
-2. **Decide** — `state/DECISIONS.md`. Every call gets a falsifier. Reviewed on a cadence.
-3. **Learn** — `curriculum/`. Ingest → solve → re-explain. The re-explain checkpoint is the gate.
+The custom harness is implemented and independently accepted on
+`loop/work/recursion-v2-mvp`. It provides:
 
-## Running the loop
+- deterministic, content-addressed task/budget/capability/evidence contracts;
+- immutable depth-2 task packets with bounded context and exact parent authority;
+- capability negotiation for Codex CLI, Cursor CLI, Hermes API, OpenCode/OpenRouter,
+  and local Qwen;
+- host/pool-aware placement, durable leases, replay-safe results, restart recovery,
+  authenticated verification receipts, and serialized same-project integration;
+- Telegram command semantics for `/today`, `/status`, `/why`, `/next`, `/chiron`,
+  `/budget`, `/pause`, `/resume`, and `/approve`;
+- a source-only second-box controller-death watchdog;
+- review-only publication through `scripts/publish.sh`.
+
+See `docs/recursion-v2-mvp-harness.md` for the complete capability and trust-boundary
+reference. This is source-ready, not production-deployed.
+
+## Acceptance and publication
 
 ```bash
-# one-time
-cp .env.example .env        # fill in, never commit
-bash scripts/install-cron.sh
+# Complete source-only acceptance gate
+python3 -u scripts/tests/recursion-v2-mvp.test.py
 
-# manual run
-bash loop/supervisor/run.sh morning
+# Review-branch publisher; requires human-owned enablement, registry, and key
+bash scripts/publish.sh --branch loop/work/recursion-v2-mvp --repo /opt/recursion
 ```
 
-The supervisor commits to `loop/auto`. You merge to `main`. A bad night is a branch
-you delete.
+The publisher cannot target the default branch and refuses under PAUSE. Lucas reviews and
+merges the resulting PR, then separately authorizes credentials, deployment, restart, and
+broader autonomy.
 
 ## Status
 
-Proof of concept, August 2026. Kill criteria in `ANCHOR.md`. Decision due start of September.
+Source-only MVP gate passed on 2026-08-31. Review-branch publication and all production
+seams remain human-controlled. Exact evidence is in
+`docs/audits/recursion-v2-mvp-completion-2026-08-31.md`.

@@ -1,0 +1,25 @@
+[Unit]
+Description=Recursion encrypted off-site backup (inert review template)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+RuntimeDirectory=recursion-backup
+RuntimeDirectoryMode=0700
+LoadCredential=recursion-backup-sftp:recursion-backup-sftp
+LoadCredential=recursion-backup-age-identity:recursion-backup-age-identity
+LoadCredential=recursion-backup-config-key:recursion-backup-config-key
+ExecStart=/opt/recursion/scripts/backup-offsite.py --config /etc/recursion/backup-policy.json backup --execute
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+
+# This file is deliberately an .example without an [Install] section. Installation,
+# enablement, policy authentication, and the off-host destination remain human actions.

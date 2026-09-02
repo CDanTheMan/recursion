@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "grok-bot",
+  "kind": "grok-routine",
+  "description": "Grok Bot supervisory arm reached through a human-created, narrowly scoped signed routine webhook. All Bots on the account share one cloud computer, so concurrency_lease is 1 and the host class is account-shared.",
+  "endpoint": null,
+  "endpoint_ref": "secret:GROK_ROUTINE_WEBHOOK_URL",
+  "credential_ref": "secret:GROK_ROUTINE_SENDER_ID",
+  "signing_key_ref": "secret:GROK_ROUTINE_SIGNING_SECRET",
+  "capacity_pool": "grok-bot-weekly",
+  "host_id": "grok-bot-account-cloud",
+  "billing_basis": "included",
+  "on_demand": false,
+  "timeout_seconds": 30,
+  "max_attempts": 3,
+  "concurrency_lease": 1,
+  "publication": {
+    "default_branch": "main",
+    "integration_branch": "recursion/integration",
+    "task_branch_pattern": "recursion/extern/grok/<task-id>",
+    "allowed_result_branch_patterns": [
+      "recursion/extern/grok/*"
+    ]
+  }
+}

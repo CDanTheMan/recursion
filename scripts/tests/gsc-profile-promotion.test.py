@@ -1203,21 +1203,28 @@ def test_source_pin_window_inventory_is_bounded_and_fail_closed() -> bool:
             "python3", "scripts/project-pilot.py", "active-source-pin", "chiron",
         )
         link.unlink()
-        original_read_text = Path.read_text
+        original_open = Path.open
+        open_calls: list[Path] = []
 
         def deny_window(self, *args, **kwargs):
             if self == window_path:
+                open_calls.append(self)
                 raise PermissionError("simulated transient window record read failure")
-            return original_read_text(self, *args, **kwargs)
+            return original_open(self, *args, **kwargs)
 
+        healthy_code = 0
+        try:
+            PILOT["active_source_pin"](fixture.root, "chiron")
+        except SystemExit as exc:
+            healthy_code = int(exc.code)
         transient_code = 0
-        Path.read_text = deny_window
+        Path.open = deny_window
         try:
             PILOT["active_source_pin"](fixture.root, "chiron")
         except SystemExit as exc:
             transient_code = int(exc.code)
         finally:
-            Path.read_text = original_read_text
+            Path.open = original_open
         malformed = fixture.root / "state/pilot-windows/unattributable.json"
         malformed.write_text("{malformed\n", encoding="utf-8")
         malformed_result = fixture.run(
@@ -1233,7 +1240,9 @@ def test_source_pin_window_inventory_is_bounded_and_fail_closed() -> bool:
         return (
             symlinked.returncode == 74
             and "symlink" in symlinked.stderr
+            and healthy_code == 0
             and transient_code == 74
+            and open_calls == [window_path]
             and malformed_result.returncode == 4
             and "cannot read validated state" in malformed_result.stderr
             and contradictory.returncode == 4
@@ -1531,6 +1540,7 @@ def test_malformed_or_mutated_promoted_authority_fails_closed() -> bool:
 
 def test_authority_record_io_is_typed_without_mutation() -> bool:
     fixture = Fixture()
+    original_open = Path.open
     original_read_text = Path.read_text
     try:
         configure_historical_profile(fixture)
@@ -1550,17 +1560,41 @@ def test_authority_record_io_is_typed_without_mutation() -> bool:
         )
         state_before = byte_tree_fingerprint(fixture.root / "state")
         observed: list[tuple[int, int, int, int]] = []
+        healthy_codes: list[int] = []
+        intercepted: list[list[Path]] = []
         verify = PILOT["verify_approved_goal"]
         for target in targets:
             exact = target.read_bytes()
             exact_mode = target.stat().st_mode & 0o777
+            json_target = target.suffix == ".json"
+            open_calls: list[Path] = []
+            read_text_calls: list[Path] = []
 
             def denied(self, *args, **kwargs):
                 if self == target:
+                    if json_target:
+                        open_calls.append(self)
+                    else:
+                        read_text_calls.append(self)
                     raise PermissionError("simulated transient authority read failure")
-                return original_read_text(self, *args, **kwargs)
+                reader = original_open if json_target else original_read_text
+                return reader(self, *args, **kwargs)
 
-            Path.read_text = denied
+            # project-pilot JSON records use read_json -> Path.open; goal/task Markdown records
+            # use fields -> Path.read_text. Keep the injection aligned per target.
+            healthy_code = 0
+            try:
+                verify(
+                    fixture.root, "chiron", str(promoted["goal"]["id"]),
+                    check_remote=True,
+                )
+            except SystemExit as exc:
+                healthy_code = int(exc.code)
+            healthy_codes.append(healthy_code)
+            if json_target:
+                Path.open = denied
+            else:
+                Path.read_text = denied
             unavailable = 0
             try:
                 verify(
@@ -1578,6 +1612,7 @@ def test_authority_record_io_is_typed_without_mutation() -> bool:
             except SystemExit as exc:
                 local_unavailable = int(exc.code)
             finally:
+                Path.open = original_open
                 Path.read_text = original_read_text
 
             target.write_text("[]\n", encoding="utf-8")
@@ -1601,16 +1636,31 @@ def test_authority_record_io_is_typed_without_mutation() -> bool:
             target.write_bytes(exact)
             target.chmod(exact_mode)
             observed.append((unavailable, local_unavailable, malformed, absent))
+            intercepted.append(open_calls if json_target else read_text_calls)
         state_after = byte_tree_fingerprint(fixture.root / "state")
-        if observed != [(74, 74, 4, 4)] * len(targets) or state_after != state_before:
+        # The injection stays installed across both the check_remote and local invocations, so
+        # each target is intercepted twice today. Pinning that count would bind this control to
+        # how many times verify_approved_goal happens to read a record, which is not what it is
+        # asserting. What it needs is that the patched reader fired at all, on the intended path,
+        # for every target -- otherwise a seam that moved again would look like a clean pass.
+        injection_fired = all(calls and set(calls) == {target}
+                              for calls, target in zip(intercepted, targets))
+        if observed != [(74, 74, 4, 4)] * len(targets) \
+                or healthy_codes != [0] * len(targets) \
+                or not injection_fired \
+                or state_after != state_before:
             changed = sorted(
                 path for path in set(state_before) | set(state_after)
                 if state_before.get(path) != state_after.get(path)
             )
-            print(f"typed-record-io diag observed={observed} changed={changed}")
+            print(
+                f"typed-record-io diag observed={observed} healthy={healthy_codes} "
+                f"intercepted={intercepted} changed={changed}"
+            )
             return False
         return True
     finally:
+        Path.open = original_open
         Path.read_text = original_read_text
         fixture.close()
 
@@ -1968,8 +2018,8 @@ def main() -> int:
         print(f"gsc-profile-promotion: {failures} FAILED")
         return 1
     if skipped:
-        print(f"gsc-profile-promotion: ALL PASS ({skipped} skipped)")
-        return 0
+        print(f"gsc-profile-promotion: SKIPPED ({skipped} did not run)")
+        return 77
     print("gsc-profile-promotion: ALL PASS")
     return 0
 

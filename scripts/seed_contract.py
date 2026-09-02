@@ -24,6 +24,42 @@ class SeedContractError(RuntimeError):
     pass
 
 
+def _is_reparse(info: os.stat_result) -> bool:
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+        or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def _audit_components(path: Path, label: str) -> Path:
+    candidate = Path(path)
+    if any(part in {".", ".."} for part in candidate.parts):
+        raise SeedContractError(f"{label} contains traversal components")
+    if not candidate.is_absolute():
+        candidate = Path(os.path.abspath(candidate))
+    current = Path(candidate.anchor or os.sep)
+    for part in candidate.parts[1:] if candidate.anchor else candidate.parts:
+        current /= part
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            break
+        except OSError as exc:
+            raise SeedContractError(f"{label} is unreadable") from exc
+        if _is_reparse(info):
+            raise SeedContractError(f"{label} contains a symlink/reparse component")
+    return candidate
+
+
+def _audit_directory(path: Path, label: str) -> Path:
+    candidate = _audit_components(path, label)
+    try:
+        info = os.lstat(candidate)
+    except OSError as exc:
+        raise SeedContractError(f"{label} is unavailable") from exc
+    if _is_reparse(info) or not stat.S_ISDIR(info.st_mode):
+        raise SeedContractError(f"{label} is not a regular directory")
+    return candidate
+
+
 def _git(repo: Path, *args: str, input_bytes: bytes | None = None) -> subprocess.CompletedProcess[bytes]:
     command = ["git", "-C", str(repo), *args]
     try:
@@ -79,7 +115,7 @@ def parse_manifest(raw: bytes) -> list[str]:
 
 
 def _seed_entries(root: Path, paths: Iterable[str]) -> tuple[list[tuple[Path, str]], int]:
-    root = root.resolve(strict=True)
+    root = _audit_directory(root, "seed repository")
     entries: list[tuple[Path, str]] = []
     files = 0
     for raw in sorted(paths):
@@ -87,30 +123,26 @@ def _seed_entries(root: Path, paths: Iterable[str]) -> tuple[list[tuple[Path, st
         if rel.is_absolute() or ".." in rel.parts or raw != rel.as_posix():
             raise SeedContractError("unsafe seed path")
         start = root.joinpath(*rel.parts)
-        cursor = root
-        for part in rel.parts:
-            cursor = cursor / part
-            if cursor.is_symlink():
-                raise SeedContractError(f"declared seed contains a symlink component: {raw}")
+        _audit_components(start, "declared seed")
         try:
-            resolved = start.resolve(strict=True)
+            start_info = start.lstat()
         except OSError as exc:
             raise SeedContractError(f"declared seed is absent: {raw}") from exc
-        if not _inside(root, resolved) or start.is_symlink():
+        if _is_reparse(start_info):
             raise SeedContractError(f"declared seed is symlinked or escapes the repository: {raw}")
         candidates = [start]
-        if start.is_dir():
+        if stat.S_ISDIR(start_info.st_mode):
             candidates.extend(sorted(start.rglob("*"), key=lambda path: path.as_posix()))
         for path in candidates:
             try:
                 info = path.lstat()
             except OSError as exc:
                 raise SeedContractError(f"declared seed became unreadable: {raw}") from exc
-            if stat.S_ISLNK(info.st_mode):
+            if _is_reparse(info):
                 raise SeedContractError(f"declared seed contains a symlink: {raw}")
             if not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
                 raise SeedContractError(f"declared seed contains a non-file entry: {raw}")
-            if not _inside(root, path.resolve(strict=True)):
+            if not _inside(root, path):
                 raise SeedContractError(f"declared seed escapes the repository: {raw}")
             relative = path.relative_to(root).as_posix()
             entries.append((path, relative))
@@ -135,14 +167,19 @@ def content_digest(root: Path, paths: Iterable[str]) -> tuple[str, int]:
 
 
 def inspect_repository(repo: Path, manifest_path: str = ".seedlist") -> dict | None:
-    repo = repo.resolve(strict=True)
+    repo = _audit_directory(repo, "seed repository")
     manifest_rel = PurePosixPath(manifest_path)
     if manifest_rel.is_absolute() or ".." in manifest_rel.parts or manifest_rel.as_posix() != manifest_path:
         raise SeedContractError("unsafe seed manifest path")
     manifest = repo.joinpath(*manifest_rel.parts)
-    if not manifest.exists():
+    try:
+        manifest_info = manifest.lstat()
+    except FileNotFoundError:
         return None
-    if manifest.is_symlink() or not manifest.is_file() or not _inside(repo, manifest.resolve(strict=True)):
+    except OSError as exc:
+        raise SeedContractError("seed manifest is unreadable") from exc
+    if _is_reparse(manifest_info) or not stat.S_ISREG(manifest_info.st_mode) \
+            or not _inside(repo, manifest):
         raise SeedContractError("seed manifest must be a root-contained regular file")
     tracked = _git(repo, "ls-files", "--error-unmatch", "--", manifest_path)
     if tracked.returncode:
@@ -183,18 +220,26 @@ def inspect_repository(repo: Path, manifest_path: str = ".seedlist") -> dict | N
 
 
 def validate_contract(repo: Path, expected: dict) -> dict:
+    if not isinstance(expected, dict) or type(expected.get("schema_version")) is not int \
+            or expected["schema_version"] != 1:
+        raise SeedContractError("approved seed contract has an invalid schema_version")
     observed = inspect_repository(repo, str(expected.get("manifest_path") or ".seedlist"))
     if observed is None:
         raise SeedContractError("approved seed manifest is absent")
     for key in ("schema_version", "manifest_path", "manifest_sha256", "content_sha256", "paths"):
-        if observed.get(key) != expected.get(key):
+        if key == "schema_version":
+            equal = type(observed.get(key)) is int and type(expected.get(key)) is int \
+                and observed[key] == expected[key]
+        else:
+            equal = observed.get(key) == expected.get(key)
+        if not equal:
             raise SeedContractError(f"approved seed contract disagrees at {key}")
     return observed
 
 
 def copy_seed_paths(source_root: Path, target_root: Path, paths: Iterable[str], expected_digest: str) -> dict:
-    source_root = source_root.resolve(strict=True)
-    target_root = target_root.resolve(strict=True)
+    source_root = _audit_directory(source_root, "seed source")
+    target_root = _audit_directory(target_root, "seed target")
     normalized = list(paths)
     observed, files = content_digest(source_root, normalized)
     if observed != expected_digest:
@@ -203,10 +248,23 @@ def copy_seed_paths(source_root: Path, target_root: Path, paths: Iterable[str], 
         rel = PurePosixPath(raw)
         source = source_root.joinpath(*rel.parts)
         target = target_root.joinpath(*rel.parts)
-        if not _inside(target_root, target.resolve(strict=False)) or target.exists() or target.is_symlink():
+        _audit_components(source, "seed source")
+        _audit_components(target, "seed target")
+        try:
+            target_info = target.lstat()
+        except FileNotFoundError:
+            target_info = None
+        except OSError as exc:
+            raise SeedContractError(f"seed target is unreadable: {raw}") from exc
+        if not _inside(target_root, target) or target_info is not None:
             raise SeedContractError(f"seed target is unsafe or already exists: {raw}")
+        _audit_components(target.parent, "seed target parent")
         target.parent.mkdir(parents=True, exist_ok=True)
-        if source.is_dir():
+        _audit_components(target.parent, "seed target parent")
+        source_info = source.lstat()
+        if _is_reparse(source_info):
+            raise SeedContractError(f"seed source became a symlink: {raw}")
+        if stat.S_ISDIR(source_info.st_mode):
             shutil.copytree(source, target, symlinks=False)
         else:
             shutil.copy2(source, target, follow_symlinks=False)
@@ -250,8 +308,10 @@ def main() -> int:
         else:
             value = copy_seed_paths(Path(args.source), Path(args.target), _paths(args), args.expected_digest)
             print(json.dumps(value, sort_keys=True, separators=(",", ":")))
-    except (OSError, SeedContractError) as exc:
-        print(f"seed-contract: {exc}", file=sys.stderr)
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError,
+            UnicodeError, json.JSONDecodeError, subprocess.TimeoutExpired,
+            subprocess.SubprocessError, SeedContractError):
+        print("seed-contract: operation refused", file=sys.stderr)
         return 4
     return 0
 

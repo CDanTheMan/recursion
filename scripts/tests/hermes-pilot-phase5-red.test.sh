@@ -19,13 +19,17 @@ BIN="$TMP/bin"; R="$TMP/controller"; ORIGIN="$TMP/origin.git"
 mkdir -p "$BIN" "$R/scripts/tests" "$R/state/tasks" "$R/state/runs" \
   "$R/loop/logs" "$R/app" "$R/fixtures" "$R/other" \
   "$R/user-client/render/data/models"
-for s in work.sh worker-sandbox.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh \
-         git-scope.py validate-gate.py validate-worker-result.py validate-verifier-result.py \
-         resolve-model-alias.py worker-evidence.py seed_contract.py project-pilot.py engine_contract.py \
-         pilot_instruction.py project_authority.py; do
+for s in assignment.py assignment_contract.py assist.sh board.sh capacity.sh capacity-pools.json conduct.sh engine_contract.py git-scope.py \
+         jsonl_durable.py notify.sh phase5_safety.py pilot_instruction.py plan.sh project-pilot.py project-reconcile.py project_authority.py \
+         provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py provider-egress-profiles.json publish.sh remote_evidence.py resolve-engine.py \
+         resolve-model-alias.py resync.sh run_contract.py runtime-state.py seed_contract.py taskctl.sh \
+         transition_receipt.py validate-assignment-result.py validate-gate.py validate-verifier-result.py \
+         validate-worker-result.py work.sh assignment-token.py worker-evidence.py worker-sandbox.sh; do
   [ ! -f "$SRC/scripts/$s" ] || cp "$SRC/scripts/$s" "$R/scripts/"
 done
 chmod +x "$R/scripts/"* 2>/dev/null || true
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$R/scripts" \
+  || { no "phase 5 fixture is missing a staged first-party dependency"; }
 printf 'protected\n' > "$R/scripts/protected.sh"
 printf 'test\n' > "$R/scripts/tests/existing.test.cjs"
 printf '{"truth":1}\n' > "$R/fixtures/truth.json"
@@ -75,6 +79,7 @@ verifier_model_alias: opus-review
 deadline_seconds: 1
 verifier_deadline_seconds: 2
 network_policy: provider-only
+capacity_pool: claude-max
 evidence_contract: worker-result-v1
 verification: independent
 expected_change: ${3:-required}
@@ -407,18 +412,45 @@ echo 'BUSY fixture-holder'
 exit 75
 SH
 chmod +x "$R/scripts/capacity.sh"
-HEAVY_GATE_MARKER="$TMP/heavy-gate-ran"
-mktask heavy-contention "test -s app/heavy.txt && touch $HEAVY_GATE_MARKER"
+mktask heavy-contention "test -s app/heavy.txt"
 sed -i '/^gate_files:/i gate_class: heavy' "$R/state/tasks/heavy-contention.md"
 result="$(done_result heavy '["app/heavy.txt"]')"
 RECURSION_HEAVY_WAIT_S=0 run_case heavy-contention \
   "printf ok > app/heavy.txt; printf '%s' '$result' > .recursion-result.json" "$verdict_script"
 heavy_rc=$?
+heavy_gate_evidence="$(
+  python3 - "$R/state/runs" <<'PY'
+import glob
+import json
+import sys
+
+primary = None
+for path in sorted(glob.glob(sys.argv[1] + "/heavy-contention-impl-*.json")):
+    if path.endswith(("-result.json", "-scope.json")):
+        continue
+    try:
+        with open(path, encoding="utf-8") as stream:
+            record = json.load(stream)
+    except (OSError, json.JSONDecodeError):
+        continue
+    if isinstance(record, dict) and record.get("role") == "implementer":
+        primary = record
+        break
+if primary is None:
+    print("missing")
+elif "machine_gate" in primary:
+    print("recorded")
+else:
+    print("absent")
+PY
+)"
 if [ "$heavy_rc" = 75 ] && [ "$(status_of heavy-contention)" = running ] \
-   && [ -d "$R/.worktrees/heavy-contention" ] && [ ! -e "$HEAVY_GATE_MARKER" ]; then
+   && [ -d "$R/.worktrees/heavy-contention" ] && [ "$heavy_gate_evidence" = absent ]; then
   ok "contended heavy gate defers without executing unlocked"
+elif [ "$heavy_gate_evidence" = missing ]; then
+  no "contended heavy gate missing primary implementer run record (no controller evidence)"
 else
-  no "contended heavy gate did not fail closed (rc=$heavy_rc status=$(status_of heavy-contention) gate=$([ -e "$HEAVY_GATE_MARKER" ] && echo ran || echo held))"
+  no "contended heavy gate did not fail closed (rc=$heavy_rc status=$(status_of heavy-contention) gate_evidence=$heavy_gate_evidence)"
 fi
 mv "$R/scripts/capacity.real.sh" "$R/scripts/capacity.sh"
 mv "$R/scripts/notify.real.sh" "$R/scripts/notify.sh"

@@ -9,8 +9,8 @@
 # OUTCOME, so a diff that quietly edits a fixture to reach that outcome still exits 0.
 #
 # ★ ORDER IS A PROPERTY UNDER TEST. The scope check must run BEFORE the acceptance gate. If it
-# ran after, a tampered pass would already have been declared. Test 5 pins that by making the
-# acceptance command leave a marker and asserting the marker is absent.
+# ran after, a tampered pass would already have been declared. Test 5 pins that by requiring the
+# implementer run record to have no machine_gate entry.
 #
 # ★ The CONTROL (test 1) proves the gate is not simply refusing everything.
 #
@@ -45,20 +45,46 @@ chmod +x "$BIN/claude"
 # disposable repo with a realistic shape (a protected tree and a product tree)
 R="$TMP/repo"; mkdir -p "$R/scripts/tests" "$R/apps/chiron" "$R/other" "$R/state/tasks" "$R/loop/logs"
 cp "$SRC/scripts/work.sh" "$R/scripts/"
+cp "$SRC/scripts/assignment-token.py" "$R/scripts/"
 cp "$SRC/scripts/worker-sandbox.sh" "$R/scripts/"
+cp "$SRC/scripts/phase5_safety.py" "$R/scripts/"
+cp "$SRC/scripts/assignment_contract.py" "$R/scripts/"
 chmod +x "$R/scripts/worker-sandbox.sh"
-cp "$SRC/scripts/board.sh" "$R/scripts/" 2>/dev/null || true
-cp "$SRC/scripts/notify.sh" "$R/scripts/" 2>/dev/null || true
-cp "$SRC/scripts/taskctl.sh" "$R/scripts/" 2>/dev/null || true
-cp "$SRC/scripts/jsonl_durable.py" "$R/scripts/" 2>/dev/null || true
-cp "$SRC/scripts/transition_receipt.py" "$R/scripts/" 2>/dev/null || true
-cp "$SRC/scripts/runtime-state.py" "$R/scripts/" 2>/dev/null || true
-cp "$SRC/scripts/resync.sh" "$R/scripts/" 2>/dev/null || true
+cp "$SRC/scripts/board.sh" "$R/scripts/"
+cp "$SRC/scripts/notify.sh" "$R/scripts/"
+cp "$SRC/scripts/taskctl.sh" "$R/scripts/"
+cp "$SRC/scripts/jsonl_durable.py" "$R/scripts/"
+cp "$SRC/scripts/transition_receipt.py" "$R/scripts/"
+cp "$SRC/scripts/runtime-state.py" "$R/scripts/"
+cp "$SRC/scripts/resync.sh" "$R/scripts/"
 # resync's freshness gate shells the typed source-pin controller; without it (and its full
 # import closure) every task blocks at CANNOT PROVE FRESH before the envelope is ever
 # exercised. Hard cp: a silent skip here would reproduce exactly the failure this stages
 # against.
+# Everything below is also required by the reachable work/worker-sandbox closure: remote_evidence
+# reaches assignment.py, the evidence validators reach run_contract.py, and provider-network.sh
+# reaches provider-connect-proxy.py. These are hard copies deliberately; none is optional.
 cp "$SRC/scripts/project-pilot.py" "$R/scripts/"
+cp "$SRC/scripts/remote_evidence.py" "$R/scripts/"
+cp "$SRC/scripts/assignment.py" "$R/scripts/"
+cp "$SRC/scripts/assist.sh" "$R/scripts/"
+cp "$SRC/scripts/capacity.sh" "$R/scripts/"
+cp "$SRC/scripts/git-scope.py" "$R/scripts/"
+cp "$SRC/scripts/plan.sh" "$R/scripts/"
+cp "$SRC/scripts/project-reconcile.py" "$R/scripts/"
+cp "$SRC/scripts/publish.sh" "$R/scripts/"
+cp "$SRC/scripts/resolve-engine.py" "$R/scripts/"
+cp "$SRC/scripts/resolve-model-alias.py" "$R/scripts/"
+cp "$SRC/scripts/validate-assignment-result.py" "$R/scripts/"
+cp "$SRC/scripts/validate-gate.py" "$R/scripts/"
+cp "$SRC/scripts/validate-verifier-result.py" "$R/scripts/"
+cp "$SRC/scripts/validate-worker-result.py" "$R/scripts/"
+cp "$SRC/scripts/worker-evidence.py" "$R/scripts/"
+cp "$SRC/scripts/provider-network.sh" "$R/scripts/"
+cp "$SRC/scripts/provider-egress.py" "$R/scripts/"
+cp "$SRC/scripts/provider-connect-proxy.py" "$R/scripts/"
+cp "$SRC/scripts/provider_contract.py" "$R/scripts/"
+cp "$SRC/scripts/run_contract.py" "$R/scripts/"
 cp "$SRC/scripts/engine_contract.py" "$R/scripts/"
 cp "$SRC/scripts/pilot_instruction.py" "$R/scripts/"
 cp "$SRC/scripts/seed_contract.py" "$R/scripts/"
@@ -83,10 +109,26 @@ git -c init.defaultBranch=main init -q --bare "$ORIGIN"
 printf '#project\tpath\tremote\tbranch\tsshkey\troadmap\ttopic\tstatus\n' > "$R/state/portfolio.tsv"
 printf 'wtest\t%s\t%s\tmain\t-\t-\t-\tactive\n' "$R" "$ORIGIN" >> "$R/state/portfolio.tsv"
 
-MARKER="$TMP/acceptance-ran"
+export RECURSION_MODEL_ALIAS_SONNET_ROUTINE=stub-sonnet
+export RECURSION_MODEL_ALIAS_OPUS_REVIEW=stub-opus
 
-mktask(){ # id allowed_paths acceptance
+mktask(){ # id allowed_paths acceptance [evidence_contract]
+  local strict_fields=""
+  if [ "${4:-}" = worker-result-v1 ]; then
+    strict_fields='schema_version: 1
+project_id: wtest
+goal_id: wtest-goal
+worker_class: claude
+model_alias: sonnet-routine
+verifier_model_alias: opus-review
+deadline_seconds: 1
+verifier_deadline_seconds: 2
+verification: independent
+expected_change: optional
+evidence_contract: worker-result-v1'
+  fi
   cat > "$R/state/tasks/$1.md" <<T
+${strict_fields}
 id: $1
 workstream: wtest
 goal: a bounded change
@@ -104,13 +146,38 @@ T
 }
 
 run_case(){ # id script
-  rm -f "$MARKER"
   ( cd "$R" && PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 \
       RECURSION_GIT_FETCH=0 RECURSION_TEST_WORKER=logical STUB_ARM_SCRIPT="$2" \
       bash scripts/work.sh "$1" ) >"$TMP/out-$1" 2>&1
 }
 status_of(){ sed -n 's/^status: *//p' "$R/state/tasks/$1.md" | head -1 | tr -d '\r'; }
 inbox_tail(){ tail -25 "$R/state/INBOX.md" 2>/dev/null; }
+machine_gate_evidence(){
+  python3 - "$R/state/runs" "$1" <<'PY'
+import glob
+import json
+import sys
+
+primary = None
+for path in sorted(glob.glob(sys.argv[1] + "/" + sys.argv[2] + "-impl-*.json")):
+    if path.endswith(("-result.json", "-scope.json")):
+        continue
+    try:
+        with open(path, encoding="utf-8") as stream:
+            record = json.load(stream)
+    except (OSError, json.JSONDecodeError):
+        continue
+    if isinstance(record, dict) and record.get("role") == "implementer":
+        primary = record
+        break
+if primary is None:
+    print("missing")
+elif "machine_gate" in primary:
+    print("recorded")
+else:
+    print("absent")
+PY
+}
 
 # --- 1) ★ CONTROL: an in-scope change with a green gate must PASS ---------------------------
 mktask t-ok "apps/chiron" "test -s apps/chiron/new.txt"
@@ -143,32 +210,45 @@ fi
 # --- 4) wandering outside allowed_paths is refused ------------------------------------------
 mktask t-out "apps/chiron" "test -s apps/chiron/c.txt"
 run_case t-out 'mkdir -p apps/chiron other && echo x > apps/chiron/c.txt && echo y > other/stray.txt'
-if [ "$(status_of t-out)" != "passed" ] && inbox_tail | grep -qi 'outside allowed_paths'; then
+if [ "$(status_of t-out)" != "passed" ] && inbox_tail | grep -qF 'other/stray.txt'; then
   ok "a write outside allowed_paths is REFUSED and names the offending path"
 else
-  no "an out-of-scope write was accepted (status=$(status_of t-out))"
+  no "out-of-scope write refusal/path assertion failed (status=$(status_of t-out)); relevant INBOX tail follows"
+  inbox_tail | sed 's/^/        /'
 fi
 
 # --- 5) ★ ORDER: the scope check runs BEFORE the acceptance gate ----------------------------
-# The acceptance command leaves a marker. On a scope violation it must never have run.
-mktask t-order "apps/chiron" "touch $MARKER"
+# The predicate is valid and side-effect-free. On a scope violation it must never be recorded.
+mktask t-order "apps/chiron" "test -s apps/chiron/d.txt" worker-result-v1
 run_case t-order 'mkdir -p apps/chiron && echo x > apps/chiron/d.txt && echo evil > scripts/pwn2.sh'
-if [ ! -f "$MARKER" ] && [ "$(status_of t-order)" != "passed" ]; then
-  ok "★ the scope check runs BEFORE the gate (acceptance never executed on a violating diff)"
+order_gate_evidence="$(machine_gate_evidence t-order)"
+if [ "$order_gate_evidence" = absent ] && [ "$(status_of t-order)" != "passed" ]; then
+  ok "★ the scope check runs BEFORE the gate (implementer record has no machine_gate entry)"
+elif [ "$order_gate_evidence" = missing ]; then
+  no "★ scope-order proof is missing the primary implementer run record (gate non-execution is unproven)"
 else
-  no "★ the acceptance gate RAN on a scope-violating diff — a tampered pass would be declared first"
+  no "★ the gate ran or scope refusal failed (status=$(status_of t-order) gate_evidence=$order_gate_evidence)"
 fi
 
 # --- 6) a `blocked` result escalates the arm's QUESTION and skips the gate -------------------
-mktask t-blocked "apps/chiron" "touch $MARKER"
+# A blocked result short-circuits before the gate: work.sh escalates the arm's own question and
+# never runs the acceptance command. Two deliberate choices here:
+#  - The gate is a valid non-vacuous predicate (apps/chiron/seed.txt is never created in scope),
+#    so it passes validate-gate.py's anti-vacuity check but WOULD FAIL if it ran.
+#  - The task is intentionally NOT under the worker-result-v1 strict contract. A minimal blocked
+#    result does not satisfy that schema, so requiring it would make the arm escalate on a
+#    RESULT CONTRACT VIOLATION instead of exercising blocked handling at all.
+# Because a completed gate reads `passed` or `failed`, a `blocked` status is itself proof the
+# gate was skipped -- no separate run-record witness is needed for this case (unlike t-order,
+# where status and the escalation reason cannot distinguish scope-before-gate from
+# scope-after-gate, so the machine_gate witness is required there).
+mktask t-blocked "apps/chiron" "test -s apps/chiron/seed.txt"
 run_case t-blocked 'printf "{\"status\":\"blocked\",\"summary\":\"two readings\",\"blocker\":\"Which realm is the target?\"}" > .recursion-result.json'
 if [ "$(status_of t-blocked)" = "blocked" ] && inbox_tail | grep -q 'Which realm is the target'; then
-  ok "an ambiguity STOP is recorded as blocked and carries the arm's own question"
+  ok "an ambiguity STOP is recorded as blocked and carries the arm's own question (blocked, not failed, so the gate was skipped)"
 else
   no "a blocked result was not handled (status=$(status_of t-blocked))"
 fi
-[ ! -f "$MARKER" ] && ok "blocked: the acceptance gate was not run (it would certainly fail)" \
-                   || no "blocked: the gate ran anyway"
 
 # --- 7) the envelope actually reaches the arm -----------------------------------------------
 # Capture the prompt the arm receives and assert the boundary is stated in it. A gate that

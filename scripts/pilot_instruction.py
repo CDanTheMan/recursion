@@ -39,6 +39,8 @@ def project_window_open_terms(body: str) -> list[str] | None:
     project from which a deterministic Head-Hermes decision can be shaped.  Returning ``None``
     leaves every near-miss on the existing model-plus-actuator path; it never grants authority.
     """
+    if not isinstance(body, str):
+        return None
     normalized_body = body.replace("\u2018", "'").replace("\u2019", "'")
     tokens = [match.group(0).rstrip(".") for match in TOKEN.finditer(normalized_body)]
     if len(tokens) != 11:
@@ -52,7 +54,13 @@ def project_window_open_terms(body: str) -> list[str] | None:
     window_id, project_id, goal_id, seconds = tokens[3], tokens[5], tokens[7], tokens[9]
     if not all(AUTHORITY_ID.fullmatch(value) for value in (project_id, goal_id, window_id)):
         return None
-    if not seconds.isdigit() or not 1 <= int(seconds) <= 86400:
+    if not seconds.isdigit() or len(seconds) > 5:
+        return None
+    try:
+        bounded_seconds = int(seconds)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not 1 <= bounded_seconds <= 86400:
         return None
     terms = [project_id, goal_id, window_id, seconds]
     try:
@@ -97,6 +105,9 @@ def _sequences(verb: str, terms: list[str]) -> list[list[str]]:
 
 def require_affirmative_command(body: str, verb: str, terms: list[str]) -> None:
     """Require one exact affirmative command and reject negated/opposite language."""
+    if not isinstance(body, str) or not isinstance(verb, str) \
+            or not isinstance(terms, list) or not all(isinstance(term, str) for term in terms):
+        raise ValueError("instruction arguments have invalid types")
     if verb not in OPPOSITE_PATTERN:
         raise ValueError("unsupported Phase 8 authority verb")
     # Telegram/user input commonly carries typographic apostrophes. Fold them before both the

@@ -13,6 +13,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from windows_test_support import bash_command, install_single_process_flock_stub, prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 LEGACY_HASHES = (
@@ -31,6 +33,10 @@ CONTROLS = (
     "an unterminated torn tail is quarantined exactly while committed decisions still import",
     "the supervised actuator reports a journal-import failure while preserving pending state",
 )
+
+
+class PlatformSkip(Exception):
+    """A Linux process/signal proof that cannot be exercised faithfully on Windows."""
 
 
 def legacy_rows() -> list[dict]:
@@ -104,6 +110,7 @@ class Fixture:
     def __init__(self) -> None:
         self.temp = Path(tempfile.mkdtemp(prefix="phase8-legacy-journal-"))
         self.root = self.temp / "root"
+        self.fixture_bin = self.temp / "fixture-bin"
         for relative in (
             "scripts", "state/decision-queue/pending", "state/decision-queue/running",
             "state/decision-queue/succeeded", "state/decision-queue/failed", "state/actions",
@@ -111,18 +118,32 @@ class Fixture:
         ):
             (self.root / relative).mkdir(parents=True, exist_ok=True)
         for name in (
-            "conduct-hermes.sh", "decision-queue.py", "hermes-actuator.sh", "taskctl.sh",
-            "jsonl_durable.py", "transition_receipt.py", "runtime-state.py", "validate-control-state.py", "validate-decision.py",
-            "engine_contract.py",
+            "assignment.py", "assignment_contract.py", "phase5_safety.py",
+            "assist.sh", "author.sh", "board.sh", "branch-review.sh",
+            "capacity.sh", "conduct-hermes.sh", "conduct.sh", "decision-queue.py",
+            "engine_contract.py", "git-scope.py", "hermes-actuator.sh", "hermes-decide.sh",
+            "instruction_routing.py", "intake.sh", "jsonl_durable.py", "notification-outbox.py",
+            "notify.sh", "pilot_instruction.py", "plan.sh", "project-pilot.py",
+            "project-reconcile.py", "project_authority.py", "provider-connect-proxy.py", "provider_contract.py",
+            "provider-network.sh", "provider-egress.py", "publish.sh", "remote_evidence.py", "resolve-engine.py",
+            "resolve-model-alias.py", "resync.sh", "run_contract.py", "runtime-state.py",
+            "seed_contract.py", "taskctl.sh", "transition_receipt.py",
+            "validate-assignment-result.py", "validate-control-state.py", "validate-decision.py",
+            "validate-gate.py", "validate-verifier-result.py", "validate-worker-result.py",
+            "work.sh", "assignment-token.py", "worker-evidence.py", "worker-sandbox.sh",
         ):
             shutil.copy2(SOURCE / "scripts" / name, self.root / "scripts" / name)
         if os.name == "nt":
             (self.root / "scripts/fcntl.py").write_text(
                 "LOCK_EX=2\nLOCK_NB=4\ndef flock(_file, _flags):\n    return None\n", encoding="utf-8"
             )
+            install_single_process_flock_stub(self.fixture_bin)
         for path in (self.root / "scripts").iterdir():
             path.chmod(path.stat().st_mode | 0o111)
         self.env = os.environ.copy()
+        prepare_shell_env(self.env)
+        if os.name == "nt":
+            self.env["PATH"] = str(self.fixture_bin) + os.pathsep + self.env.get("PATH", "")
         self.env.update({"RECURSION_ROOT": str(self.root), "RECURSION_NO_NOTIFY": "1"})
 
     def close(self) -> None:
@@ -153,7 +174,7 @@ class Fixture:
 
     def run_conduct(self) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["bash", "scripts/conduct-hermes.sh", "--paused-safe"], cwd=self.root,
+            bash_command("scripts/conduct-hermes.sh", "--paused-safe"), cwd=self.root,
             env=self.env, text=True, capture_output=True, check=False,
         )
 
@@ -265,9 +286,22 @@ def test_marker_tamper() -> tuple[bool, str]:
             return False, f"initial migration rc={first.returncode} markers={len(markers)}"
         value = json.loads(markers[0].read_text(encoding="utf-8"))
         value["disposition"] = "tampered"
-        markers[0].write_text(json.dumps(value) + "\n", encoding="utf-8")
+        tampered_bytes = json.dumps(value) + "\n"
+        markers[0].write_text(tampered_bytes, encoding="utf-8")
         second = fixture.run_queue()
-        return second.returncode != 0 and "marker" in second.stderr.lower(), second.stderr[-160:]
+        # Assert the property, not the prose. The CLI now emits one controlled refusal
+        # ("decision-queue: operation refused") and deliberately keeps the specific
+        # marker-mismatch text off a public boundary, so grepping stderr for "marker" tested the
+        # wording rather than the behaviour. What this control actually claims is in its name:
+        # the run fails closed AND the tampered marker is not rewritten to re-bless itself as
+        # migration evidence. Both are checked directly, and the second was never checked before.
+        failed_closed = second.returncode != 0
+        still_tampered = markers[0].read_text(encoding="utf-8") == tampered_bytes
+        marker_count_unchanged = len(sorted(
+            (fixture.root / "state/decision-queue/legacy").glob("*.json"))) == 5
+        detail = (f"rc={second.returncode} still_tampered={still_tampered} "
+                  f"markers={marker_count_unchanged} stderr={second.stderr[-100:]}")
+        return failed_closed and still_tampered and marker_count_unchanged, detail
     finally:
         fixture.close()
 
@@ -299,6 +333,10 @@ def test_torn_tail_quarantine() -> tuple[bool, str]:
 
 
 def test_actuator_diagnostic() -> tuple[bool, str]:
+    if os.name == "nt":
+        raise PlatformSkip(
+            "supervised actuator process-tree and signal handling require Linux; proof remains pending"
+        )
     fixture = Fixture()
     try:
         invalid = current_noop()
@@ -307,7 +345,7 @@ def test_actuator_diagnostic() -> tuple[bool, str]:
         (fixture.root / "state/PAUSE").write_text("fixture PAUSE\n", encoding="utf-8")
         env = dict(fixture.env, RECURSION_ACTUATOR_INTERVAL_S="0.05")
         process = subprocess.Popen(
-            ["bash", "scripts/hermes-actuator.sh"], cwd=fixture.root, env=env,
+            bash_command("scripts/hermes-actuator.sh"), cwd=fixture.root, env=env,
             text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         time.sleep(0.25)
@@ -333,9 +371,14 @@ def main() -> int:
         test_marker_tamper, test_torn_tail_quarantine, test_actuator_diagnostic,
     )
     failed = 0
+    skipped = 0
     for description, test in zip(CONTROLS, tests):
         try:
             passed, detail = test()
+        except PlatformSkip as reason:
+            skipped += 1
+            print(f"skip  {description}: {reason}")
+            continue
         except Exception as exc:  # noqa: BLE001 - the control must report every mismatch.
             passed, detail = False, repr(exc)
         if passed:
@@ -347,6 +390,9 @@ def main() -> int:
     if failed:
         print(f"hermes-pilot-phase8-legacy-journal-red: {failed} FAILED")
         return 1
+    if skipped:
+        print(f"hermes-pilot-phase8-legacy-journal-red: SKIPPED ({skipped} of {len(CONTROLS)} did not run)")
+        return 77
     print("hermes-pilot-phase8-legacy-journal-red: ALL PASS")
     return 0
 

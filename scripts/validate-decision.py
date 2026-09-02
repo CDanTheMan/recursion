@@ -20,6 +20,7 @@ The rules encode CONTROL_PLANE.md, not taste:
     that cannot say what would make it wrong is a guess with better formatting).
 """
 import json
+import math
 import re
 import sys
 
@@ -40,6 +41,19 @@ PHASE7_VERBS = {
 }
 PHASE8_HEAD_VERBS = {"pilot-plan-approve", "pilot-window-open", "pilot-window-close"}
 ROUTING_RECONCILER_VERBS = {"routing-refuse"}
+MAX_DECISION_BYTES = 2 * 1024 * 1024
+
+
+def safe_diagnostic(message):
+    """Keep validator diagnostics useful without reflecting an absolute caller path."""
+    return re.sub(r"(?:[A-Za-z]:[\\/]|\\\\|(?<![A-Za-z0-9_])/)[^\s,;)]*", "<path>", str(message))
+
+
+def parse_finite(value):
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError("non-finite JSON number is forbidden")
+    return parsed
 ARITY = {
     "noop": (0, 0),
     "conduct": (0, 0),
@@ -85,8 +99,11 @@ ARITY = {
 def validate(verbs, raw, expected_actor=None):
     """Return (ok: bool, message: str)."""
     try:
-        d = json.loads(raw)
-    except Exception as e:
+        if not isinstance(raw, str) or len(raw.encode("utf-8")) > MAX_DECISION_BYTES:
+            raise ValueError("decision exceeds the bounded input size")
+        d = json.loads(raw, parse_float=parse_finite,
+                       parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+    except (json.JSONDecodeError, ValueError, TypeError, UnicodeError, OverflowError, RecursionError) as e:
         return False, "malformed JSON: %s" % e
     if not isinstance(d, dict):
         return False, "decision is not an object"
@@ -199,14 +216,19 @@ def validate(verbs, raw, expected_actor=None):
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("ERR usage: validate-decision.py '<verbs>' '<json>' [routed-decider]")
-        return 1
-    verbs = set(sys.argv[1].split())
-    expected_actor = sys.argv[3] if len(sys.argv) > 3 else None
-    ok, msg = validate(verbs, sys.argv[2], expected_actor)
-    print(("OK " if ok else "ERR ") + msg)
-    return 0 if ok else 1
+    try:
+        if len(sys.argv) < 3:
+            print("ERR usage: validate-decision.py '<verbs>' '<json>' [routed-decider]")
+            return 1
+        verbs = set(sys.argv[1].split())
+        expected_actor = sys.argv[3] if len(sys.argv) > 3 else None
+        ok, msg = validate(verbs, sys.argv[2], expected_actor)
+        print(("OK " if ok else "ERR ") + (msg if ok else safe_diagnostic(msg)))
+        return 0 if ok else 1
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError,
+            UnicodeError, json.JSONDecodeError):
+        print("ERR controlled validator failure")
+        return 2
 
 
 if __name__ == "__main__":

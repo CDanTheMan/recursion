@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "cursor",
+  "provider": "cursor",
+  "enabled": false,
+  "namespace": "recursion-provider-only",
+  "proxy": { "type": "connect-proxy", "host": "127.0.0.1", "port": 18080, "env": ["HTTP_PROXY", "HTTPS_PROXY"] },
+  "authorities": [
+    "api.cursor.com:443",
+    "api2.cursor.sh:443",
+    "agentn.global.api5.cursor.sh:443",
+    "agentn.global.api5lat.cursor.sh:443",
+    "agentn.global.api5geo.cursor.sh:443"
+  ]
+}

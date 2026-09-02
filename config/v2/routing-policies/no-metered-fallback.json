@@ -1,0 +1,1 @@
+{"schema_version":2,"kind":"routing_policy","id":"no-metered-fallback","policy":"no-metered-fallback","role":"implementer","candidate_order":["billing_basis","pool_id","model_id","engine_id","host_id","sandbox_profile_id"],"allow_metered":false,"fallback_policy":"defer"}

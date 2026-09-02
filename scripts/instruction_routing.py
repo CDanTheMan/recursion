@@ -14,6 +14,8 @@ import importlib.util
 import json
 import os
 import re
+import stat
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -24,6 +26,7 @@ from transition_receipt import TransitionReceiptError, authenticated_transition,
 
 IDENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
+MAX_INSTRUCTION_BYTES = 512 * 1024
 STATIC_FIELDS = (
     "schema_version", "id", "received", "principal", "topic", "project_id", "pilot_id",
     "pilot_memory_key", "routing_target", "reply_correlation", "deduplication_key", "from",
@@ -116,8 +119,72 @@ class RoutingError(ValueError):
     pass
 
 
+def _reject_json_constant(value: str) -> object:
+    raise RoutingError(f"non-finite JSON constant is forbidden: {value}")
+
+
+def _parse_json_arg(raw: str) -> object:
+    if len(raw.encode("utf-8")) > MAX_INSTRUCTION_BYTES:
+        raise RoutingError("routing JSON argument exceeds the 512 KiB bound")
+    try:
+        return json.loads(raw, parse_constant=_reject_json_constant)
+    except (UnicodeError, json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
+        raise RoutingError(f"routing JSON argument is invalid: {exc}") from exc
+
+
+def _read_json_path(path: Path, label: str) -> object:
+    path = _audit_path(path, label)
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise RoutingError(f"{label} is unreadable") from exc
+    if len(raw) > MAX_INSTRUCTION_BYTES:
+        raise RoutingError(f"{label} exceeds the 512 KiB bound")
+    try:
+        return json.loads(raw.decode("utf-8", "strict"), parse_constant=_reject_json_constant)
+    except (UnicodeError, json.JSONDecodeError, ValueError, TypeError, OverflowError,
+            RecursionError) as exc:
+        raise RoutingError(f"{label} is invalid JSON") from exc
+
+
+def _is_reparse(info: os.stat_result) -> bool:
+    # S_IFLNK (0o120000) is a VALUE in the S_IFMT field, not an independent bit, so
+    # `st_mode & S_IFLNK` is not a symlink test: a regular file (0o100644) shares a bit with it
+    # and yields 0o100000, which is truthy. That misclassified every regular file as a symlink
+    # and made _audit_path refuse legitimate instruction files. Directories (0o040755) mask to 0
+    # and escaped, which is why only the final file component tripped it.
+    return stat.S_ISLNK(info.st_mode) or bool(
+        getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    )
+
+
+def _audit_path(path: Path, label: str) -> Path:
+    candidate = Path(path)
+    if any(part in {".", ".."} for part in candidate.parts):
+        raise RoutingError(f"{label} contains traversal components")
+    if not candidate.is_absolute():
+        candidate = Path(os.path.abspath(candidate))
+    current = Path(candidate.anchor or os.sep)
+    for part in candidate.parts[1:] if candidate.anchor else candidate.parts:
+        current /= part
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            break
+        except OSError as exc:
+            raise RoutingError(f"{label} is unreadable") from exc
+        if _is_reparse(info):
+            raise RoutingError(f"{label} contains a symlink/reparse component")
+    return candidate
+
+
 def compact(value: object) -> bytes:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    try:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"),
+                          ensure_ascii=False, allow_nan=False).encode()
+    except (TypeError, ValueError, OverflowError, UnicodeError, RecursionError) as exc:
+        raise RoutingError(f"routing JSON is not canonical: {exc}") from exc
 
 
 def stable_id(prefix: str, *parts: object) -> str:
@@ -129,10 +196,16 @@ def now_iso() -> str:
 
 
 def read_instruction(path: Path) -> dict:
+    path = _audit_path(path, "instruction")
     try:
+        info = path.lstat()
+        if _is_reparse(info) or not stat.S_ISREG(info.st_mode):
+            raise RoutingError(f"instruction is not a regular file: {path}")
         raw = path.read_bytes()
-    except OSError as exc:
+    except (OSError, RoutingError) as exc:
         raise RoutingError(f"instruction is unreadable: {path}") from exc
+    if len(raw) > MAX_INSTRUCTION_BYTES:
+        raise RoutingError(f"instruction exceeds the 512 KiB bound: {path}")
     document = raw.decode("utf-8", errors="surrogateescape")
     # Preserve the historical parser's universal-newline behavior for fields/body while
     # retaining the raw digest needed to bind reviewed recovery evidence byte-for-byte.
@@ -198,6 +271,9 @@ def cross_project(body: str, current: str, project_ids: list[str]) -> bool:
 
 
 def route_for(body: str, binding: dict, project_ids: list[str]) -> str:
+    if not isinstance(binding, dict) or not isinstance(project_ids, list) \
+            or any(not isinstance(project, str) for project in project_ids):
+        raise RoutingError("routing binding and project identifiers must be JSON arrays/objects")
     if not binding or not binding.get("pilot_id"):
         return "head-hermes"
     if head_intent(body) is not None:
@@ -254,7 +330,7 @@ def validate_instruction_identity(base: Path, record: dict) -> None:
     iid = record["fields"].get("id") or ""
     if not IDENT.fullmatch(iid) or (iid.isdigit() and iid != str(int(iid))):
         raise RoutingError("instruction id is not canonical")
-    if record["path"].resolve() != instruction_path(base, iid).resolve():
+    if Path(os.path.abspath(record["path"])) != Path(os.path.abspath(instruction_path(base, iid))):
         raise RoutingError("instruction filename and header id differ")
 
 
@@ -278,8 +354,10 @@ def validate_historical(base: Path, record: dict, *, require_dependency: bool) -
         observed_noops = set()
         for path in sorted((base / "state/actions").glob("*.json")):
             try:
-                action = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+                action = _read_json_path(path, "historical action")
+            except RoutingError:
+                continue
+            if not isinstance(action, dict):
                 continue
             if str(action.get("instruction_id") or "") == "707" \
                     and action.get("verb") == "noop":
@@ -328,8 +406,10 @@ def require_707_terminal(base: Path) -> None:
     matches = []
     for path in sorted((base / "state/actions").glob("*.json")):
         try:
-            action = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            action = _read_json_path(path, "historical action")
+        except RoutingError:
+            continue
+        if not isinstance(action, dict):
             continue
         if str(action.get("instruction_id") or "") == "707" and action.get("verb") == "routing-refuse" \
                 and action.get("decision_source") == "routing-reconciler" \
@@ -389,9 +469,11 @@ def exact_head_window_decision(base: Path, record: dict) -> dict | None:
     if config_path.is_symlink() or not config_path.is_file():
         raise RoutingError("exact Head window instruction project is not configured")
     try:
-        config = json.loads(config_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        config = _read_json_path(config_path, "project configuration")
+    except (OSError, RoutingError, json.JSONDecodeError) as exc:
         raise RoutingError("exact Head window instruction project configuration is unreadable") from exc
+    if not isinstance(config, dict):
+        raise RoutingError("exact Head window instruction project configuration is not an object")
     pilot_id = str(config.get("pilot_id") or "")
     if config.get("id") != project or config.get("status") != "active" \
             or not IDENT.fullmatch(pilot_id):
@@ -546,23 +628,25 @@ def main() -> int:
     record = sub.add_parser("record")
     record.add_argument("decision_json")
     args = parser.parse_args()
-    base = Path(args.root or Path(__file__).resolve().parents[1]).resolve()
+    base = _audit_path(Path(args.root or Path(__file__).resolve().parents[1]), "routing root")
     try:
         if args.command == "route":
-            print(route_for(args.body, json.loads(args.binding_json), json.loads(args.project_ids_json)))
+            print(route_for(args.body, _parse_json_arg(args.binding_json),
+                            _parse_json_arg(args.project_ids_json)))
             return 0
         if args.command == "admit":
-            rc, result = admit(base, Path(args.instruction).resolve(), enqueue=args.enqueue)
+            rc, result = admit(base, Path(args.instruction), enqueue=args.enqueue)
             if result is not None:
                 print(json.dumps(result, sort_keys=True, separators=(",", ":")))
             return rc
-        decision = json.loads(args.decision_json)
+        decision = _parse_json_arg(args.decision_json)
         rc, evidence = (perform if args.command == "perform" else record_refusal)(base, decision)
         stream = sys.stdout if rc == 0 else sys.stderr
         print(evidence, file=stream)
         return rc
-    except (RoutingError, OSError, ValueError, json.JSONDecodeError) as exc:
-        print(f"instruction-routing: {exc}", file=sys.stderr)
+    except (RoutingError, OSError, ValueError, TypeError, OverflowError, RecursionError,
+            UnicodeError, json.JSONDecodeError, subprocess.TimeoutExpired):
+        print("instruction-routing: operation refused", file=sys.stderr)
         return 4
 
 

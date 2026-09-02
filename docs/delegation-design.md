@@ -1,7 +1,8 @@
 # Delegation & the build loop — design of record
 
-Status: designed 2026-08-05, build not started. Boot doc for the build-loop workstream.
-Read `ANCHOR.md` and `architecture.md` first. This makes Plane 2 (the execution arms) real:
+Status: historical v1 design; superseded by the source-accepted Recursion v2 MVP on 2026-08-31.
+Read `ANCHOR.md`, `architecture.md`, and `recursion-v2-mvp-harness.md` first. This document records
+the original build-loop rationale; the current implementation makes Plane 2 (the execution arms) real:
 it specifies how the supervisor turns a project goal into work, hands it to the workhorse AIs,
 CHECKS the result, and integrates it — safely.
 
@@ -107,7 +108,8 @@ The oracle can't move to the headless VPS, so GSC uses a two-part executor:
 - Never main, never `git push --force`, never merge (CLAUDE.md rules 1-2). Loop output ->
   `loop/auto`; build output -> `loop/work/<id>`.
 - The loop never edits its own config/auth/routing/cron (rule 3) — findings go to INBOX.
-- No secrets in tracked files; `state/projects/*` are read-only pushed copies (rule 5).
+- No secrets in tracked files; project status is derived from live registered git clones and must
+  never be fabricated when a clone/ref/file is unavailable (D-011).
 - No acceptance test -> no autonomy. A stopped task with a clear question beats plausible wrong work.
 
 ## Built vs to-build
@@ -145,8 +147,8 @@ The build-arm cost model is NOT what the roster implied. Measured on gs-recursio
 
 1. **Task authoring** — human-written task files vs Sol-generated from a project goal (start human, add Sol later?).
 2. **Acceptance strictness** — one command exit-0, or a small suite? How to handle flaky checks.
-3. **Recursion-internal workstreams** (chiron, learning) report status differently from external
-   repos (golden-stallion). How does their `state/projects/*.md` get populated if not pushed from a repo?
+3. **Resolved by D-011.** Recursion reads project status from live registered clones; it does not
+   maintain hand-pushed `state/projects/*.md` mirrors.
 4. **Deepseek default model** + a monthly bulk budget ceiling before a dispatch escalates.
 5. **Concurrency** — how many arms in parallel per workstream (VPS is a CX23; thin clients, but cap it).
 6. **How much the daily brief reports** on build progress (passed/failed/escalated counts) without bloating the one-page cap.

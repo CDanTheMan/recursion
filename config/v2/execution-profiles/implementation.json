@@ -1,0 +1,1 @@
+{"schema_version":2,"kind":"execution_profile","id":"implementation","roles":["implementer"],"engine_ids":["claude"],"provider_ids":["anthropic"],"capacity_pool_ids":["claude-subscription"],"model_ids":["claude-sonnet"],"host_ids":["gs-recursion"],"sandbox_profile_ids":["strict-linux"],"network_profiles":["anthropic-provider-only"]}

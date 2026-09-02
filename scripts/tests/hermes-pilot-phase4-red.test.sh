@@ -13,10 +13,18 @@ R="$TMP/root"
 mkdir -p "$R/scripts" "$R/state/project-config" "$R/state/pilots" "$R/state/goals" \
   "$R/state/tasks" "$R/state/runs" "$R/state/instructions" "$R/state/.locks" \
   "$R/loop/logs" "$R/.worktrees"
-for s in project-pilot.py engine_contract.py project_authority.py pilot_instruction.py instruction_routing.py seed_contract.py intake.sh author.sh resync.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh validate-control-state.py; do
+for s in assignment.py assignment_contract.py assist.sh author.sh board.sh capacity.sh conduct.sh engine_contract.py git-scope.py \
+   instruction_routing.py intake.sh jsonl_durable.py notify.sh phase5_safety.py pilot_instruction.py plan.sh project-pilot.py \
+   project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py publish.sh \
+   remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
+   seed_contract.py taskctl.sh transition_receipt.py validate-assignment-result.py validate-control-state.py \
+   validate-gate.py validate-verifier-result.py validate-worker-result.py work.sh assignment-token.py worker-evidence.py \
+   worker-sandbox.sh; do
   [ -f "$SRC/scripts/$s" ] && cp "$SRC/scripts/$s" "$R/scripts/$s"
 done
 chmod +x "$R/scripts/"* 2>/dev/null || true
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$R/scripts" \
+  || { no "phase 4 fixture is missing a staged first-party dependency"; }
 : > "$R/.env"
 PILOT="$R/scripts/project-pilot.py"
 GIT="git -c user.name=t -c user.email=t@t -c init.defaultBranch=main"

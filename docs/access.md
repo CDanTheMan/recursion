@@ -15,6 +15,29 @@ Box: `ssh gs-recursion` · repo: `/opt/recursion` (`RECURSION_ROOT`) · times ar
 - **Answer an escalation** by replying in Telegram, or edit `state/INBOX.md` and record the
   call in `state/DECISIONS.md` — the loop reads both next run.
 
+### V2 command surface — source accepted, deployment pending
+
+The v2 control boundary validates a fresh content-addressed snapshot before answering. Read
+commands remain available under PAUSE; mutating commands never alter state directly.
+
+| Command | Source behavior |
+|---|---|
+| `/today` | bounded list of work expected to land today |
+| `/status` | PAUSE state and active work |
+| `/why` | recorded decision rationale |
+| `/next` | next eligible work |
+| `/chiron` | exact canonical ref, source SHA, readiness, and blockers |
+| `/budget` | quota, worker/review capacity, observed spend, and no-metered-spend posture |
+| `/pause` | authenticated Lucas-only intent for the canonical actuator |
+| `/resume` | authenticated, approval-required intent held locally while PAUSE remains present |
+| `/approve <id> <digest>` | exact, one-shot approval bound to the current source and snapshot |
+
+The source boundary does not contain Telegram credentials, send messages, remove PAUSE, or run an
+actuator. Production auth, transport, durable outbox wiring, and service deployment remain Lucas's
+seams. The second-box watchdog similarly verifies signed monotonic heartbeats and emits one
+deduplicated controller-death attention intent per episode; key provisioning and delivery remain
+external.
+
 ## 2. Sync — conductor session (drop in and steer)
 ```bash
 ssh gs-recursion
@@ -64,5 +87,20 @@ ssh gs-recursion "cd /opt/recursion && BRIEF_CRON='0 12 * * *' bash scripts/inst
 - **Notify** (act, then tell you): worth knowing, didn't need approval.
 - **Escalate** (block on you): irreversible / spends money or proxies / ambiguous /
   unverifiable / anything mining (DO-NOT-DEPLOY) / any decision not in `DECISIONS.md`.
-- Hard rules it never breaks: never `git push --force`; never commit to `main`; never edit
-  its own auth/model/cron; never modify `state/projects/*`. See `CLAUDE.md`.
+- Hard rules it never breaks: never `git push --force`; never merge to a protected/default
+  branch; never edit its own auth/model/cron/autonomy flags; never fabricate project status.
+  Project status comes from live git clones. See `AGENTS.md` and `CONTROL_PLANE.md`.
+
+## V2 review publication
+
+The sole source-authorized push path is the fail-closed review publisher:
+
+```bash
+cd /opt/recursion
+python3 -u scripts/tests/recursion-v2-mvp.test.py
+bash scripts/publish.sh --branch loop/work/recursion-v2-mvp --repo /opt/recursion
+```
+
+It refuses under PAUSE, when `RECURSION_ALLOW_PUSH` is not human-enabled, when the repository is
+not active in `state/portfolio.tsv`, when the task is not `passed`, when the review ref is invalid,
+or when the project publisher key is absent. It has no default-branch merge path.

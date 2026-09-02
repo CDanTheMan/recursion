@@ -24,6 +24,7 @@ python3 -m py_compile scripts/project-pilot.py scripts/project_authority.py scri
   scripts/tests/hermes-pilot-phase8-legacy-journal-red.py \
   scripts/tests/hermes-pilot-phase8-race-red.py \
   scripts/tests/hermes-pilot-phase8-reject-red.py \
+  scripts/tests/phase8-windows-harness.test.py \
   scripts/tests/hermes-pilot-phase8-notification-red.py scripts/tests/jsonl-durability.test.py \
   scripts/tests/decision-identity.test.py scripts/tests/runtime-state-locks.test.py \
   scripts/tests/runtime-state-recovery.test.py scripts/tests/reconcile-liveness.test.py \
@@ -44,6 +45,7 @@ import json
 json.load(open('schemas/control-plane/v1/schema.json',encoding='utf-8'))
 PY
 python3 scripts/tests/gsc-profile-immutability.test.py
+python3 scripts/tests/phase8-windows-harness.test.py
 python3 scripts/tests/gsc-profile-promotion.test.py
 python3 scripts/tests/phase8-authority-availability.test.py
 bash scripts/tests/resync.test.sh

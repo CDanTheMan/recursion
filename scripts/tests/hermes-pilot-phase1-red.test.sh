@@ -5,8 +5,10 @@ set -uo pipefail
 export LC_ALL=C
 SRC="${RECURSION_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 fails=0
+skips=0
 ok(){ printf 'ok    %s\n' "$1"; }
 no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
+skip(){ printf 'skip  %s\n' "$1"; skips=$((skips+1)); }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 BIN="$TMP/bin"; mkdir -p "$BIN"
@@ -21,9 +23,16 @@ chmod +x "$BIN/claude"
 
 R="$TMP/controller"
 mkdir -p "$R/scripts" "$R/state/tasks" "$R/loop/logs" "$R/app"
-for s in work.sh worker-sandbox.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh; do
+for s in work.sh assignment-token.py worker-sandbox.sh phase5_safety.py taskctl.sh assignment.py assignment_contract.py jsonl_durable.py transition_receipt.py runtime-state.py board.sh notify.sh resync.sh capacity.sh \
+  assist.sh conduct.sh engine_contract.py git-scope.py pilot_instruction.py plan.sh project-pilot.py \
+  project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py publish.sh \
+  remote_evidence.py resolve-engine.py resolve-model-alias.py run_contract.py seed_contract.py \
+  validate-assignment-result.py validate-gate.py validate-verifier-result.py validate-worker-result.py \
+  worker-evidence.py; do
   cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
 done
+python3 "$SRC/scripts/tests/staged-dependency-guard.py" "$SRC/scripts" "$R/scripts" \
+  || { no "phase 1 fixture is missing a staged first-party dependency"; }
 chmod +x "$R/scripts/worker-sandbox.sh" 2>/dev/null || true
 : > "$R/.env"
 printf 'seed\n' > "$R/app/seed.txt"
@@ -55,15 +64,17 @@ status_of(){ sed -n 's/^status: *//p' "$R/state/tasks/$1.md" | head -1; }
 # 1. PAUSE must interrupt an already-running worker and prevent every later gate/publication step.
 STARTED="$TMP/arm-started"; GATE="$TMP/gate-ran"
 mktask pause-midrun "touch '$GATE'"
-STUB_ARM_SCRIPT='touch "$STUB_STARTED"; sleep 3; mkdir -p app; echo done > app/result.txt' \
+STUB_ARM_SCRIPT='printf started > "$STUB_STARTED"; sleep 3; mkdir -p app; echo done > app/result.txt' \
 STUB_STARTED="$STARTED" PATH="$BIN:$PATH" RECURSION_ROOT="$R" RECURSION_NO_NOTIFY=1 \
 RECURSION_REQUIRE_FRESH_BASE=0 RECURSION_TEST_WORKER=sandbox \
 bash "$R/scripts/work.sh" pause-midrun >"$TMP/pause.out" 2>&1 &
 wpid=$!
-for _ in $(seq 1 50); do [ -f "$STARTED" ] && break; sleep 0.1; done
+for _ in $(seq 1 50); do [ -s "$STARTED" ] && break; sleep 0.1; done
 printf 'PAUSED test\nreason: Phase 0 mid-run control\n' > "$R/state/PAUSE"
 wait "$wpid" 2>/dev/null || true
-if [ ! -f "$GATE" ] && [ "$(status_of pause-midrun)" != "passed" ]; then
+if [ ! -s "$STARTED" ]; then
+  skip "PAUSE mid-run control NOT PROVEN: worker never emitted its started witness"
+elif [ ! -f "$GATE" ] && [ "$(status_of pause-midrun)" != "passed" ]; then
   ok "PAUSE terminated the in-flight worker before its gate"
 else
   no "PAUSE was noticed only at startup; the in-flight worker reached status=$(status_of pause-midrun) and gate=$([ -f "$GATE" ] && echo ran || echo blocked)"
@@ -73,7 +84,7 @@ rm -f "$R/state/PAUSE"
 # 2. A worker must not share the controller identity, read controller-only data, write outside
 # its worktree, or invoke the publisher. The current prompt/scope gate cannot enforce OS boundaries.
 SECRET="$TMP/controller-secret"; LEAK="$TMP/leaked-secret"; OUTSIDE="$TMP/outside-write"
-PUBLOG="$TMP/publisher-called"; UIDLOG="$TMP/worker-uid"
+PUBLOG="$TMP/publisher-called"; UIDLOG="$TMP/worker-uid"; SANDBOX_STARTED="$TMP/sandbox-started"
 printf 'sentinel-secret\n' > "$SECRET"; chmod 600 "$SECRET"
 cat > "$TMP/publisher" <<'STUB'
 #!/usr/bin/env bash
@@ -81,13 +92,16 @@ printf 'called\n' > "$STUB_PUBLOG"
 STUB
 chmod 700 "$TMP/publisher"
 mktask worker-sandbox "test -f app/ok.txt"
-STUB_ARM_SCRIPT='set -e; cat "$STUB_SECRET" > "$STUB_LEAK"; echo outside > "$STUB_OUTSIDE"; id -u > "$STUB_UIDLOG"; "$STUB_PUBLISHER"; mkdir -p app; echo ok > app/ok.txt' \
+STUB_ARM_SCRIPT='printf started > "$STUB_STARTED"; set -e; cat "$STUB_SECRET" > "$STUB_LEAK"; echo outside > "$STUB_OUTSIDE"; id -u > "$STUB_UIDLOG"; "$STUB_PUBLISHER"; mkdir -p app; echo ok > app/ok.txt' \
 STUB_SECRET="$SECRET" STUB_LEAK="$LEAK" STUB_OUTSIDE="$OUTSIDE" STUB_UIDLOG="$UIDLOG" \
+STUB_STARTED="$SANDBOX_STARTED" \
 STUB_PUBLISHER="$TMP/publisher" STUB_PUBLOG="$PUBLOG" PATH="$BIN:$PATH" RECURSION_ROOT="$R" \
 RECURSION_NO_NOTIFY=1 RECURSION_REQUIRE_FRESH_BASE=0 RECURSION_TEST_WORKER=sandbox \
 bash "$R/scripts/work.sh" worker-sandbox \
   >"$TMP/sandbox.out" 2>&1 || true
-if [ ! -e "$LEAK" ] && [ ! -e "$OUTSIDE" ] && [ ! -e "$PUBLOG" ] \
+if [ ! -s "$SANDBOX_STARTED" ]; then
+  skip "worker OS boundary NOT PROVEN: worker-originated started witness is absent (sandbox unavailable or worker did not launch)"
+elif [ ! -e "$LEAK" ] && [ ! -e "$OUTSIDE" ] && [ ! -e "$PUBLOG" ] \
    && { [ ! -e "$UIDLOG" ] || [ "$(cat "$UIDLOG")" != "$(id -u)" ]; } \
    && [ "$(status_of worker-sandbox)" != "passed" ]; then
   ok "worker OS boundary denied controller data, outside writes, publisher access, and shared identity"
@@ -147,5 +161,9 @@ probe_ref symbolic-ref main alias
 probe_ref revision-expression main 'main^0'
 
 echo
+if [ "$fails" -eq 0 ] && [ "$skips" -gt 0 ]; then
+  echo "hermes-pilot-phase1-red: SKIPPED ($skips control(s) could not run here); NOT PRODUCTION-PROVEN"
+  exit 77
+fi
 [ "$fails" -eq 0 ] && { echo "hermes-pilot-phase1-red: ALL PASS"; exit 0; }
 echo "hermes-pilot-phase1-red: $fails FAILED (expected on the Phase 0 pre-fix commit)"; exit 1

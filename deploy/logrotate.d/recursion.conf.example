@@ -1,0 +1,11 @@
+/var/log/recursion/*.log /opt/recursion/loop/logs/*.log {
+    daily
+    rotate 14
+    size 50M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su root root
+}

@@ -17,7 +17,9 @@ import importlib.util
 import json
 import os
 import re
+import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -69,6 +71,106 @@ RUNTIME_PATHS = RUNTIME_FILE_PATHS + RUNTIME_DIRECTORY_PATHS
 RESTORE_TRANSACTION = "runtime-restore.transaction"
 MANIFEST_SHA256 = re.compile(r"[0-9a-f]{64}")
 MANIFEST_MODE = re.compile(r"0o[0-7]{3}")
+MAX_MANIFEST_BYTES = 16 * 1024 * 1024
+MAX_MANIFEST_FILES = 100000
+_ABSOLUTE_ERROR_PATH = re.compile(
+    r"(?<![A-Za-z0-9_.-])(?:(?:[A-Za-z]:[\\/])|(?:\\\\)|/)[^\s,;)]*"
+)
+
+
+def _public_refusal_message(message: object) -> str:
+    """Preserve stable refusal reasons without echoing caller-controlled paths."""
+    text = str(message)
+    text = re.split(r": \[(?:Errno|WinError)\b", text, maxsplit=1)[0]
+    return _ABSOLUTE_ERROR_PATH.sub("<path>", text)
+
+
+def is_plain_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _reject_json_constant(name: str) -> object:
+    raise ValueError(f"non-finite JSON number {name} is forbidden")
+
+
+def _json_no_constants(raw: str) -> object:
+    return json.loads(raw, parse_constant=_reject_json_constant)
+
+
+def _is_reparse(info: os.stat_result) -> bool:
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0)) \
+        or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def _reject_reparse_components(path: Path, label: str) -> None:
+    if not isinstance(path, Path) or not path.is_absolute() \
+            or any(part in {".", ".."} for part in path.parts):
+        raise RuntimeError(f"{label} must be an absolute path")
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise RuntimeError(f"{label} is unreadable") from exc
+        if _is_reparse(info):
+            raise RuntimeError(f"{label} contains a symlink/reparse component")
+
+
+def _read_verified_file(path: Path, label: str, *, max_bytes: int | None = None,
+                        expected_size: int | None = None, expected_sha256: str | None = None) -> bytes:
+    """Read one pinned regular-file handle and verify its complete contents."""
+    _reject_reparse_components(path, label)
+    try:
+        expected = path.lstat()
+    except OSError as exc:
+        raise RuntimeError(f"{label} is unreadable") from exc
+    if _is_reparse(expected) or not stat.S_ISREG(expected.st_mode):
+        raise RuntimeError(f"{label} is not a regular file")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise RuntimeError(f"{label} is unreadable") from exc
+    try:
+        info = os.fstat(descriptor)
+        if _is_reparse(info) or not stat.S_ISREG(info.st_mode) \
+                or (info.st_dev, info.st_ino) != (expected.st_dev, expected.st_ino) \
+                or info.st_size != expected.st_size:
+            raise RuntimeError(f"{label} is not a regular file")
+        if expected_size is not None and info.st_size != expected_size:
+            raise RuntimeError(f"{label} size changed while reading")
+        if max_bytes is not None and info.st_size > max_bytes:
+            raise RuntimeError(f"{label} exceeds its size bound")
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = -1
+            value = source.read(max_bytes + 1 if max_bytes is not None else -1)
+        if max_bytes is not None and len(value) > max_bytes:
+            raise RuntimeError(f"{label} exceeds its size bound")
+        if expected_size is not None and len(value) != expected_size:
+            raise RuntimeError(f"{label} size changed while reading")
+        if expected_sha256 is not None and hashlib.sha256(value).hexdigest() != expected_sha256:
+            raise RuntimeError(f"{label} hash changed while reading")
+        return value
+    except BaseException:
+        if descriptor >= 0:
+            os.close(descriptor)
+        raise
+
+
+def _file_identity(path: Path, label: str) -> tuple[int, int, int, int]:
+    _reject_reparse_components(path, label)
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise RuntimeError(f"{label} is unavailable") from exc
+    if _is_reparse(info) or not stat.S_ISREG(info.st_mode):
+        raise RuntimeError(f"{label} is not a regular file")
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
 
 
 def reconcile_transition_receipts(root: Path) -> None:
@@ -100,10 +202,44 @@ def reconcile_transition_receipts(root: Path) -> None:
 
 
 def digest(path: Path) -> str:
+    _reject_reparse_components(path, "runtime digest path")
     value = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            value.update(chunk)
+    try:
+        expected = path.lstat()
+    except OSError as exc:
+        raise RuntimeError("runtime digest path is unreadable") from exc
+    if _is_reparse(expected) or not stat.S_ISREG(expected.st_mode):
+        raise RuntimeError("runtime digest path is not a regular file")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except (OSError, ValueError, TypeError) as exc:
+        raise RuntimeError("runtime digest path is unreadable") from exc
+    try:
+        info = os.fstat(descriptor)
+        if _is_reparse(info) or not stat.S_ISREG(info.st_mode) \
+                or (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns) != (
+                    expected.st_dev, expected.st_ino, expected.st_size, expected.st_mtime_ns
+                ):
+            raise RuntimeError("runtime digest path changed while opening")
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = -1
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                value.update(chunk)
+            final = os.fstat(source.fileno())
+            if (final.st_dev, final.st_ino, final.st_size, final.st_mtime_ns) != (
+                    info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns):
+                raise RuntimeError("runtime digest path changed while reading")
+    except (OSError, ValueError, TypeError) as exc:
+        raise RuntimeError("runtime digest path is unreadable") from exc
+    finally:
+        if descriptor >= 0:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
     return value.hexdigest()
 
 
@@ -118,7 +254,12 @@ def fsync_dir(path: Path) -> None:
 
 
 def atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
+    if not isinstance(value, bytes) or not is_plain_int(mode) or mode < 0:
+        raise RuntimeError("atomic file publication arguments are invalid")
+    _reject_reparse_components(path.parent, "atomic file parent")
+    _reject_reparse_components(path, "atomic file target")
     path.parent.mkdir(parents=True, exist_ok=True)
+    _reject_reparse_components(path.parent, "atomic file parent")
     descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.tmp.", dir=path.parent)
     temporary = Path(name)
     try:
@@ -128,6 +269,8 @@ def atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
             output.write(value)
             output.flush()
             os.fsync(output.fileno())
+        _reject_reparse_components(path.parent, "atomic file parent")
+        _reject_reparse_components(path, "atomic file target")
         os.replace(temporary, path)
         fsync_dir(path.parent)
     except BaseException:
@@ -146,19 +289,28 @@ def atomic_bytes(path: Path, value: bytes, mode: int = 0o600) -> None:
 
 def _safe_remove_tree(path: Path) -> None:
     """Remove only a real, unlinked tree; never traverse a symlink during cleanup."""
-    if not path.exists() and not path.is_symlink():
+    _reject_reparse_components(path, "runtime cleanup target")
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
         return
-    if path.is_symlink() or not path.is_dir():
+    except OSError as exc:
+        raise RuntimeError(f"cannot inspect runtime cleanup target: {path}") from exc
+    if _is_reparse(info) or not stat.S_ISDIR(info.st_mode):
         raise RuntimeError(f"refusing unsafe runtime cleanup target: {path}")
     for item in path.rglob("*"):
-        if item.is_symlink():
+        try:
+            item_info = item.lstat()
+        except OSError as exc:
+            raise RuntimeError(f"cannot inspect runtime cleanup tree: {item}") from exc
+        if _is_reparse(item_info):
             raise RuntimeError(f"refusing symlink in runtime cleanup tree: {item}")
     shutil.rmtree(path)
     fsync_dir(path.parent)
 
 
 def _process_identity(pid: int) -> tuple[int, str]:
-    if pid < 1:
+    if not is_plain_int(pid) or pid < 1:
         raise RuntimeError("lock owner PID must be positive")
     start = process_start(pid)
     if not start or not start.isdigit():
@@ -199,14 +351,418 @@ def _rename_noreplace(source: Path, target: Path) -> None:
     raise OSError(error, os.strerror(error), str(target))
 
 
+def _rename_noreplace_at(source: str, target: str, source_dir_fd: int,
+                         target_dir_fd: int) -> None:
+    """Atomically rename two names relative to retained directory descriptors."""
+    if os.name == "nt":
+        raise RuntimeError("descriptor-relative lock publication is unavailable on Windows")
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise RuntimeError("renameat2(RENAME_NOREPLACE) is unavailable; refusing unsafe lock publish")
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p,
+                          ctypes.c_uint]
+    renameat2.restype = ctypes.c_int
+    result = renameat2(
+        source_dir_fd, os.fsencode(source), target_dir_fd, os.fsencode(target), 1
+    )
+    if result == 0:
+        return
+    error = ctypes.get_errno()
+    if error in {errno.EEXIST, errno.ENOTEMPTY}:
+        raise FileExistsError(error, os.strerror(error), target)
+    raise OSError(error, os.strerror(error), target)
+
+
+class _PinnedLockParent:
+    """Own a duplicated lock-parent descriptor and its entry identity."""
+
+    def __init__(self, descriptor: int, identity: tuple[int, int], name: str, label: str) -> None:
+        self.fd = descriptor
+        self.identity = identity
+        self.name = name
+        self.label = label
+
+    def verify(self) -> None:
+        try:
+            info = os.fstat(self.fd)
+        except OSError as exc:
+            raise RuntimeError(
+                f"{self.label} lock parent descriptor became unreadable"
+            ) from exc
+        if _is_reparse(info) or not stat.S_ISDIR(info.st_mode) \
+                or (int(info.st_dev), int(info.st_ino)) != self.identity:
+            raise RuntimeError(f"{self.label} lock parent descriptor changed after opening")
+
+    def close(self) -> None:
+        if self.fd < 0:
+            return
+        descriptor = self.fd
+        self.fd = -1
+        try:
+            os.close(descriptor)
+        except OSError as exc:
+            raise RuntimeError(f"{self.label} lock parent cleanup failed") from exc
+
+
+def _pinned_lock_parent(path: Path, label: str, parent_fd: int) -> _PinnedLockParent:
+    """Duplicate and identity-bind an explicit POSIX lock-parent descriptor.
+
+    In pinned mode the real path parent is checked once, by device/inode identity, against
+    the supplied descriptor.  After that entry check ``path`` contributes only the final
+    lock-directory name: the duplicated descriptor is the authority for every later relative
+    operation, rather than a ``/proc/self/fd`` spelling.
+    """
+    if os.name == "nt":
+        raise RuntimeError("descriptor-relative lock publication is unavailable on Windows")
+    if not is_plain_int(parent_fd) or parent_fd < 0:
+        raise RuntimeError(f"{label} lock parent descriptor is invalid")
+    if not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW"):
+        raise RuntimeError("descriptor-relative lock publication is unavailable")
+    if not isinstance(path, Path) or not path.is_absolute() \
+            or any(part in {".", ".."} for part in path.parts) \
+            or not path.name or "\x00" in path.name:
+        raise RuntimeError(f"{label} lock path must be an absolute path")
+    _reject_reparse_components(path.parent, f"{label} lock parent")
+    try:
+        entry = os.fstat(parent_fd)
+    except OSError as exc:
+        raise RuntimeError(f"{label} lock parent descriptor is unreadable") from exc
+    if _is_reparse(entry) or not stat.S_ISDIR(entry.st_mode):
+        raise RuntimeError(f"{label} lock parent descriptor is not a directory")
+    try:
+        path_parent = path.parent.lstat()
+    except OSError as exc:
+        raise RuntimeError(f"{label} lock parent is unreadable") from exc
+    if _is_reparse(path_parent) or not stat.S_ISDIR(path_parent.st_mode) \
+            or (int(path_parent.st_dev), int(path_parent.st_ino)) \
+            != (int(entry.st_dev), int(entry.st_ino)):
+        raise RuntimeError(f"{label} lock path parent does not match its descriptor")
+    duplicate = -1
+    try:
+        duplicate = os.dup(parent_fd)
+        opened = os.fstat(duplicate)
+        identity = (int(entry.st_dev), int(entry.st_ino))
+        if _is_reparse(opened) or not stat.S_ISDIR(opened.st_mode) \
+                or (int(opened.st_dev), int(opened.st_ino)) != identity:
+            raise RuntimeError(f"{label} lock parent descriptor changed while duplicating")
+        return _PinnedLockParent(duplicate, identity, path.name, label)
+    except BaseException:
+        if duplicate >= 0:
+            os.close(duplicate)
+        raise
+
+
+def _pinned_open_lock_directory(parent: _PinnedLockParent, name: str, label: str) -> int:
+    """Open one lock directory relative to a retained parent, refusing link substitution."""
+    parent.verify()
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        entry = os.stat(name, dir_fd=parent.fd, follow_symlinks=False)
+        if _is_reparse(entry) or not stat.S_ISDIR(entry.st_mode):
+            raise RuntimeError(f"{label} lock has an unsafe type")
+        descriptor = os.open(name, flags, dir_fd=parent.fd)
+    except FileNotFoundError:
+        raise
+    except RuntimeError:
+        raise
+    except OSError as exc:
+        raise RuntimeError(f"{label} lock is unreadable") from exc
+    try:
+        opened = os.fstat(descriptor)
+        if _is_reparse(opened) or not stat.S_ISDIR(opened.st_mode) \
+                or (opened.st_dev, opened.st_ino) != (entry.st_dev, entry.st_ino):
+            raise RuntimeError(f"{label} lock changed while opening")
+        parent.verify()
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _pinned_read_lock_evidence(lock_fd: int, name: str) -> str | None:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    descriptor = -1
+    try:
+        descriptor = os.open(name, flags, dir_fd=lock_fd)
+        info = os.fstat(descriptor)
+        if _is_reparse(info) or not stat.S_ISREG(info.st_mode):
+            return None
+        raw = os.read(descriptor, 1025)
+        if len(raw) > 1024:
+            return None
+        return raw.decode("utf-8", "strict").strip()
+    except (OSError, UnicodeError):
+        return None
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _pinned_lock_owner_from_fd(lock_fd: int) -> tuple[int | None, str]:
+    for name in ("pid", "owner"):
+        raw = _pinned_read_lock_evidence(lock_fd, name)
+        if raw is None or not raw.isdigit() or len(raw) > 10:
+            continue
+        start = _pinned_read_lock_evidence(lock_fd, "start") or ""
+        try:
+            return int(raw, 10), start
+        except (TypeError, ValueError, OverflowError):
+            return None, ""
+    return None, ""
+
+
+def _pinned_lock_owner(parent: _PinnedLockParent, name: str, label: str) -> tuple[int | None, str]:
+    try:
+        descriptor = _pinned_open_lock_directory(parent, name, label)
+    except FileNotFoundError:
+        parent.verify()
+        return None, ""
+    try:
+        owner = _pinned_lock_owner_from_fd(descriptor)
+        parent.verify()
+        return owner
+    finally:
+        os.close(descriptor)
+
+
+def _pinned_assert_runtime_lock_compatible(parent: _PinnedLockParent, lock_name: str,
+                                           owner_pid: int, owner_start: str) -> None:
+    """Check the maintenance lock relative to the same retained parent descriptor."""
+    parent.verify()
+    if lock_name == "runtime-state.lock":
+        return
+    runtime_name = "runtime-state.lock"
+    try:
+        runtime_info = os.stat(runtime_name, dir_fd=parent.fd, follow_symlinks=False)
+    except FileNotFoundError:
+        parent.verify()
+        return
+    except OSError as exc:
+        raise RuntimeError("runtime-state lock is unreadable") from exc
+    if _is_reparse(runtime_info) or not stat.S_ISDIR(runtime_info.st_mode):
+        raise RuntimeError("runtime-state lock has an unsafe type")
+    runtime_pid, runtime_start = _pinned_lock_owner(parent, runtime_name, "runtime-state")
+    if runtime_pid == owner_pid and runtime_start == owner_start:
+        return
+    raise RuntimeError("runtime-state maintenance is active; refusing a concurrent mutation")
+
+
+def _pinned_atomic_bytes(parent: _PinnedLockParent, name: str, value: bytes,
+                         mode: int = 0o600) -> None:
+    """Publish one small evidence file using names relative to a retained directory."""
+    if not isinstance(value, bytes) or not is_plain_int(mode) or mode < 0:
+        raise RuntimeError("atomic file publication arguments are invalid")
+    descriptor = -1
+    temporary: str | None = None
+    try:
+        parent.verify()
+        for _ in range(100):
+            parent.verify()
+            candidate = f".{name}.tmp.{os.getpid()}.{secrets.token_hex(8)}"
+            try:
+                descriptor = os.open(
+                    candidate,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
+                    mode,
+                    dir_fd=parent.fd,
+                )
+                temporary = candidate
+                break
+            except FileExistsError:
+                continue
+        if descriptor < 0 or temporary is None:
+            raise RuntimeError("atomic file temporary namespace is exhausted")
+        offset = 0
+        while offset < len(value):
+            written = os.write(descriptor, value[offset:])
+            if written <= 0:
+                raise OSError("atomic file write made no progress")
+            offset += written
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = -1
+        parent.verify()
+        os.replace(temporary, name, src_dir_fd=parent.fd, dst_dir_fd=parent.fd)
+        temporary = None
+        parent.verify()
+        os.fsync(parent.fd)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        if temporary is not None:
+            parent.verify()
+            try:
+                os.unlink(temporary, dir_fd=parent.fd)
+            except FileNotFoundError:
+                pass
+
+
+def _pinned_new_lock_candidate(parent: _PinnedLockParent, lock_name: str,
+                               creator_pid: int, creator_start: str) -> str:
+    parent.verify()
+    prefix = f".{lock_name}.candidate.{creator_pid}.{creator_start}."
+    for _ in range(100):
+        parent.verify()
+        name = prefix + secrets.token_hex(8)
+        try:
+            os.mkdir(name, mode=0o700, dir_fd=parent.fd)
+        except FileExistsError:
+            continue
+        parent.verify()
+        return name
+    raise RuntimeError(f"{lock_name} lock candidate namespace is exhausted")
+
+
+def _pinned_remove_lock_tree(parent: _PinnedLockParent, name: str, allowed: set[str],
+                             label: str) -> None:
+    """Remove a lock directory relative to its retained parent after validating its entries."""
+    parent.verify()
+    descriptor = _pinned_open_lock_directory(parent, name, label)
+    try:
+        entries = os.listdir(descriptor)
+        unexpected = [entry for entry in entries if entry not in allowed]
+        if unexpected:
+            raise RuntimeError(f"{label} lock contains unexpected evidence: {unexpected[0]}")
+        for entry in entries:
+            info = os.stat(entry, dir_fd=descriptor, follow_symlinks=False)
+            if stat.S_ISDIR(info.st_mode) or _is_reparse(info):
+                raise RuntimeError(f"{label} lock contains unsafe evidence")
+            os.unlink(entry, dir_fd=descriptor)
+    finally:
+        os.close(descriptor)
+    parent.verify()
+    os.rmdir(name, dir_fd=parent.fd)
+
+
+def _pinned_cleanup_dead_lock_candidates(parent: _PinnedLockParent, lock_name: str) -> None:
+    prefix = f".{lock_name}.candidate."
+    parent.verify()
+    try:
+        entries = os.listdir(parent.fd)
+    except OSError as exc:
+        raise RuntimeError("runtime lock parent is unreadable") from exc
+    for candidate in entries:
+        if not candidate.startswith(prefix):
+            continue
+        identity = _candidate_identity(Path(candidate), lock_name)
+        if identity is None or not _owner_values_are_dead(*identity):
+            continue
+        parent.verify()
+        tomb = f".{lock_name}.candidate-dead.{os.getpid()}.{time.time_ns()}"
+        try:
+            _rename_noreplace_at(candidate, tomb, parent.fd, parent.fd)
+        except (FileNotFoundError, FileExistsError):
+            continue
+        _pinned_remove_lock_tree(parent, tomb, _allowed_lock_evidence(Path(lock_name)),
+                                 lock_name)
+        parent.verify()
+        os.fsync(parent.fd)
+
+
+def _acquire_witnessed_directory_lock_pinned(label: str, owner_pid: int,
+                                             parent: _PinnedLockParent) -> None:
+    """Publish a lock entirely relative to an explicitly retained POSIX parent."""
+    lock_name = parent.name
+    owner_pid, owner_start = _process_identity(owner_pid)
+    creator_pid, creator_start = _process_identity(os.getpid())
+    try:
+        attempts = int(os.environ.get("RECURSION_LOCK_ATTEMPTS", "100"), 10)
+        delay = float(os.environ.get("RECURSION_LOCK_DELAY_S", "0.1"))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise RuntimeError("runtime lock retry settings are invalid") from exc
+    if attempts < 1 or attempts > 10000 or not (0.0 <= delay <= 60.0):
+        raise RuntimeError("runtime lock retry settings are invalid")
+    for attempt in range(attempts):
+        parent.verify()
+        _pinned_assert_runtime_lock_compatible(parent, lock_name, owner_pid, owner_start)
+        _pinned_cleanup_dead_lock_candidates(parent, lock_name)
+        candidate = _pinned_new_lock_candidate(parent, lock_name, creator_pid, creator_start)
+        candidate_fd = -1
+        try:
+            candidate_fd = _pinned_open_lock_directory(parent, candidate, label)
+            _lock_failpoint("after-candidate-mkdir")
+            candidate_info = os.fstat(candidate_fd)
+            candidate_parent = _PinnedLockParent(
+                candidate_fd, (int(candidate_info.st_dev), int(candidate_info.st_ino)),
+                candidate, label
+            )
+            _pinned_atomic_bytes(candidate_parent, "pid", f"{owner_pid}\n".encode("ascii"))
+            _lock_failpoint("after-candidate-pid")
+            _pinned_atomic_bytes(candidate_parent, "start", f"{owner_start}\n".encode("ascii"))
+            _lock_failpoint("after-candidate-start")
+            candidate_parent.verify()
+            os.fsync(candidate_fd)
+            try:
+                parent.verify()
+                _rename_noreplace_at(candidate, lock_name, parent.fd, parent.fd)
+            except FileExistsError:
+                os.close(candidate_fd)
+                candidate_fd = -1
+                candidate_parent.fd = -1
+                _pinned_remove_lock_tree(
+                    parent, candidate, _allowed_lock_evidence(Path(lock_name)), label
+                )
+                existing_pid, existing_start = _pinned_lock_owner(
+                    parent, lock_name, label
+                )
+                if existing_pid is not None and _owner_values_are_dead(
+                        existing_pid, existing_start):
+                    tomb = f".{lock_name}.dead.{os.getpid()}.{attempt}"
+                    try:
+                        parent.verify()
+                        _rename_noreplace_at(lock_name, tomb, parent.fd, parent.fd)
+                    except (FileNotFoundError, FileExistsError):
+                        pass
+                    else:
+                        _pinned_remove_lock_tree(
+                            parent, tomb, _allowed_lock_evidence(Path(lock_name)), label
+                        )
+                        parent.verify()
+                        os.fsync(parent.fd)
+                        continue
+                if attempt + 1 < attempts:
+                    time.sleep(delay)
+                continue
+            parent.verify()
+            os.fsync(parent.fd)
+            os.close(candidate_fd)
+            candidate_fd = -1
+            candidate_parent.fd = -1
+            try:
+                _pinned_assert_runtime_lock_compatible(
+                    parent, lock_name, owner_pid, owner_start
+                )
+            except BaseException:
+                _release_witnessed_directory_lock_pinned(parent, label, owner_pid)
+                raise
+            return
+        except BaseException:
+            if candidate_fd >= 0:
+                os.close(candidate_fd)
+                candidate_fd = -1
+            parent.verify()
+            try:
+                _pinned_remove_lock_tree(
+                    parent, candidate, _allowed_lock_evidence(Path(lock_name)), label
+                )
+            except FileNotFoundError:
+                pass
+            raise
+    raise RuntimeError(f"{label} lock is contended; refusing an unlocked mutation")
+
+
 def _candidate_identity(path: Path, lock_name: str) -> tuple[int, str] | None:
     prefix = f".{lock_name}.candidate."
     if not path.name.startswith(prefix):
         return None
     fields = path.name[len(prefix):].split(".", 2)
-    if len(fields) != 3 or not fields[0].isdigit() or not fields[1].isdigit():
+    if len(fields) != 3 or not fields[0].isdigit() or len(fields[0]) > 10 or not fields[1].isdigit():
         return None
-    return int(fields[0]), fields[1]
+    try:
+        return int(fields[0], 10), fields[1]
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def _cleanup_dead_lock_candidates(path: Path) -> None:
@@ -234,19 +790,68 @@ def _lock_failpoint(name: str) -> None:
         os._exit(91)
 
 
-def acquire_witnessed_directory_lock(path: Path, label: str, owner_pid: int) -> None:
-    """Publish a fully witnessed mkdir-compatible lock in one no-replace rename."""
+def _new_lock_candidate(path: Path, creator_pid: int, creator_start: str) -> Path:
+    """Create a lock candidate with platform-safe permissions."""
+    if os.name != "nt":
+        return Path(tempfile.mkdtemp(
+            prefix=f".{path.name}.candidate.{creator_pid}.{creator_start}.", dir=path.parent
+        ))
+    # Python's Windows implementation gives mode=0700 temporary directories a restrictive ACL
+    # that the native helper cannot reopen on the review host.  The candidate contains only the
+    # owner witness and is published below the controller-owned lock directory; 0750 preserves
+    # the owner/system/admin boundary while keeping the controller process able to finish its
+    # atomic publication.
+    for _ in range(100):
+        candidate = path.parent / (
+            f".{path.name}.candidate.{creator_pid}.{creator_start}.{secrets.token_hex(8)}"
+        )
+        try:
+            candidate.mkdir(mode=0o750)
+        except FileExistsError:
+            continue
+        try:
+            _reject_reparse_components(candidate, f"{path.name} lock candidate")
+        except BaseException:
+            with contextlib.suppress(OSError, RuntimeError):
+                _safe_remove_tree(candidate)
+            raise
+        return candidate
+    raise RuntimeError(f"{path.name} lock candidate namespace is exhausted")
+
+
+def acquire_witnessed_directory_lock(path: Path, label: str, owner_pid: int, *,
+                                     pinned_parent_fd: int | None = None) -> None:
+    """Publish a fully witnessed mkdir-compatible lock in one no-replace rename.
+
+    With ``pinned_parent_fd``, ``path`` must be the real absolute lock path.  Its parent
+    identity is checked against the descriptor at entry; the descriptor is then duplicated,
+    identity-bound, and used for the rest of this call.  The caller may close or reuse its
+    original descriptor after entry without changing this operation, but must provide a live
+    descriptor for each later API call.
+    """
+    if pinned_parent_fd is not None:
+        parent = _pinned_lock_parent(path, label, pinned_parent_fd)
+        try:
+            _acquire_witnessed_directory_lock_pinned(label, owner_pid, parent)
+        finally:
+            parent.close()
+        return
     owner_pid, owner_start = _process_identity(owner_pid)
     creator_pid, creator_start = _process_identity(os.getpid())
+    _reject_reparse_components(path.parent, f"{label} lock parent")
     path.parent.mkdir(parents=True, exist_ok=True)
-    attempts = max(1, int(os.environ.get("RECURSION_LOCK_ATTEMPTS", "100")))
-    delay = max(0.0, float(os.environ.get("RECURSION_LOCK_DELAY_S", "0.1")))
+    _reject_reparse_components(path.parent, f"{label} lock parent")
+    try:
+        attempts = int(os.environ.get("RECURSION_LOCK_ATTEMPTS", "100"), 10)
+        delay = float(os.environ.get("RECURSION_LOCK_DELAY_S", "0.1"))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise RuntimeError("runtime lock retry settings are invalid") from exc
+    if attempts < 1 or attempts > 10000 or not (0.0 <= delay <= 60.0):
+        raise RuntimeError("runtime lock retry settings are invalid")
     for attempt in range(attempts):
         _assert_runtime_lock_compatible(path, owner_pid, owner_start)
         _cleanup_dead_lock_candidates(path)
-        candidate = Path(tempfile.mkdtemp(
-            prefix=f".{path.name}.candidate.{creator_pid}.{creator_start}.", dir=path.parent
-        ))
+        candidate = _new_lock_candidate(path, creator_pid, creator_start)
         try:
             _lock_failpoint("after-candidate-mkdir")
             atomic_bytes(candidate / "pid", f"{owner_pid}\n".encode("ascii"))
@@ -288,7 +893,11 @@ def acquire_witnessed_directory_lock(path: Path, label: str, owner_pid: int) -> 
                 raise
             return
         except BaseException:
-            if candidate.exists():
+            try:
+                candidate_info = candidate.lstat()
+            except (FileNotFoundError, OSError):
+                candidate_info = None
+            if candidate_info is not None:
                 with contextlib.suppress(OSError, RuntimeError):
                     _safe_remove_tree(candidate)
             raise
@@ -298,15 +907,50 @@ def acquire_witnessed_directory_lock(path: Path, label: str, owner_pid: int) -> 
 def _assert_runtime_lock_compatible(path: Path, owner_pid: int, owner_start: str) -> None:
     """Close the writer/maintenance race on both sides of atomic lock publication."""
     runtime = path.parent / "runtime-state.lock"
-    if path == runtime or not runtime.exists():
+    if path == runtime:
         return
+    try:
+        runtime_info = runtime.lstat()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise RuntimeError("runtime-state lock is unreadable") from exc
+    if _is_reparse(runtime_info) or not stat.S_ISDIR(runtime_info.st_mode):
+        raise RuntimeError("runtime-state lock has an unsafe type")
     runtime_pid, runtime_start = lock_owner(runtime)
     if runtime_pid == owner_pid and runtime_start == owner_start:
         return
     raise RuntimeError("runtime-state maintenance is active; refusing a concurrent mutation")
 
 
-def release_witnessed_directory_lock(path: Path, label: str, owner_pid: int) -> None:
+def _release_witnessed_directory_lock_pinned(label: str, owner_pid: int,
+                                             parent: _PinnedLockParent) -> None:
+    lock_name = parent.name
+    owner_pid, owner_start = _process_identity(owner_pid)
+    parent.verify()
+    observed_pid, observed_start = _pinned_lock_owner(parent, lock_name, label)
+    if observed_pid != owner_pid or observed_start != owner_start:
+        raise RuntimeError(f"refusing to release {label} lock owned by another process")
+    tomb = f".{lock_name}.released.{owner_pid}.{time.time_ns()}"
+    parent.verify()
+    _rename_noreplace_at(lock_name, tomb, parent.fd, parent.fd)
+    parent.verify()
+    os.fsync(parent.fd)
+    _pinned_remove_lock_tree(parent, tomb, _allowed_lock_evidence(Path(lock_name)), label)
+    parent.verify()
+    os.fsync(parent.fd)
+
+
+def release_witnessed_directory_lock(path: Path, label: str, owner_pid: int, *,
+                                     pinned_parent_fd: int | None = None) -> None:
+    """Release a witnessed lock, refusing if the pinned path and descriptor disagree."""
+    if pinned_parent_fd is not None:
+        parent = _pinned_lock_parent(path, label, pinned_parent_fd)
+        try:
+            _release_witnessed_directory_lock_pinned(label, owner_pid, parent)
+        finally:
+            parent.close()
+        return
     owner_pid, owner_start = _process_identity(owner_pid)
     observed_pid, observed_start = lock_owner(path)
     if observed_pid != owner_pid or observed_start != owner_start:
@@ -325,6 +969,8 @@ def release_witnessed_directory_lock(path: Path, label: str, owner_pid: int) -> 
 
 
 def process_start(pid: int) -> str:
+    if not is_plain_int(pid) or pid < 1:
+        return ""
     if os.name == "nt":
         class FileTime(ctypes.Structure):
             _fields_ = [("low", ctypes.c_uint32), ("high", ctypes.c_uint32)]
@@ -352,8 +998,10 @@ def process_start(pid: int) -> str:
         finally:
             kernel32.CloseHandle(handle)
     try:
-        return (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8").split()[21]
-    except (OSError, IndexError):
+        with (Path("/proc") / str(pid) / "stat").open("rb") as source:
+            raw = source.read(4097).decode("utf-8", "strict")
+        return raw.split()[21]
+    except (OSError, IndexError, UnicodeError):
         return ""
 
 
@@ -386,17 +1034,30 @@ def process_is_live(pid: int) -> bool | None:
 
 
 def lock_owner(path: Path) -> tuple[int | None, str]:
+    _reject_reparse_components(path, "runtime lock")
     for candidate in (path / "pid", path / "owner"):
         try:
-            raw = candidate.read_text(encoding="utf-8").strip()
-        except OSError:
+            _reject_reparse_components(candidate, "runtime lock evidence")
+            with candidate.open("rb") as source:
+                raw = source.read(1025).decode("utf-8", "strict").strip()
+            if len(raw) > 1024:
+                continue
+        except (OSError, UnicodeError):
             continue
-        if raw.isdigit():
+        if raw.isdigit() and len(raw) <= 10:
             try:
-                start = (path / "start").read_text(encoding="utf-8").strip()
-            except OSError:
+                start_path = path / "start"
+                _reject_reparse_components(start_path, "runtime lock start evidence")
+                with start_path.open("rb") as source:
+                    start = source.read(1025).decode("utf-8", "strict").strip()
+                if len(start) > 1024:
+                    start = ""
+            except (OSError, UnicodeError):
                 start = ""
-            return int(raw), start
+            try:
+                return int(raw, 10), start
+            except (TypeError, ValueError, OverflowError):
+                return None, ""
     return None, ""
 
 
@@ -447,12 +1108,50 @@ class DecisionQueueLock:
         self.handle: object | None = None
 
     def __enter__(self) -> "DecisionQueueLock":
+        _reject_reparse_components(self.path, "decision queue lock path")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.handle = self.path.open("a+", encoding="utf-8")
+        _reject_reparse_components(self.path, "decision queue lock path")
+        try:
+            expected = self.path.lstat()
+        except FileNotFoundError:
+            expected = None
+        except OSError as exc:
+            raise RuntimeError("decision queue lock is unreadable") from exc
+        if expected is not None and (_is_reparse(expected) or not stat.S_ISREG(expected.st_mode)):
+            raise RuntimeError("decision queue lock has an unsafe type")
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = -1
+        try:
+            descriptor = os.open(self.path, flags, 0o600)
+            opened = os.fstat(descriptor)
+            observed = self.path.lstat()
+            if _is_reparse(opened) or not stat.S_ISREG(opened.st_mode) \
+                    or _is_reparse(observed) \
+                    or (opened.st_dev, opened.st_ino) != (observed.st_dev, observed.st_ino) \
+                    or (expected is not None and
+                        (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino)):
+                raise RuntimeError("decision queue lock changed while opening")
+            self.handle = os.fdopen(descriptor, "a+", encoding="utf-8")
+        except (OSError, ValueError, TypeError) as exc:
+            if descriptor != -1:
+                with contextlib.suppress(OSError):
+                    os.close(descriptor)
+            raise RuntimeError("decision queue lock is unavailable") from exc
         if fcntl is None:
             return self
-        attempts = int(os.environ.get("RECURSION_LOCK_ATTEMPTS", "100"))
-        delay = float(os.environ.get("RECURSION_LOCK_DELAY_S", "0.1"))
+        try:
+            attempts = int(os.environ.get("RECURSION_LOCK_ATTEMPTS", "100"), 10)
+            delay = float(os.environ.get("RECURSION_LOCK_DELAY_S", "0.1"))
+        except (TypeError, ValueError, OverflowError) as exc:
+            self.handle.close()
+            self.handle = None
+            raise RuntimeError("runtime lock retry settings are invalid") from exc
+        if attempts < 1 or attempts > 10000 or not (0.0 <= delay <= 60.0):
+            self.handle.close()
+            self.handle = None
+            raise RuntimeError("runtime lock retry settings are invalid")
         for attempt in range(attempts):
             try:
                 fcntl.flock(self.handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -460,6 +1159,10 @@ class DecisionQueueLock:
             except BlockingIOError:
                 if attempt + 1 < attempts:
                     time.sleep(delay)
+            except OSError as exc:
+                self.handle.close()
+                self.handle = None
+                raise RuntimeError("decision queue lock is unavailable") from exc
         self.handle.close()
         self.handle = None
         raise RuntimeError("decision queue lock is contended; refusing an inconsistent snapshot")
@@ -486,7 +1189,12 @@ def assert_no_execution_locks(root: Path) -> None:
 
 def require_pause(root: Path) -> Path:
     pause = root / "state/PAUSE"
-    if not pause.is_file():
+    _reject_reparse_components(pause, "PAUSE path")
+    try:
+        info = pause.lstat()
+    except OSError as exc:
+        raise RuntimeError("state/PAUSE is absent; refusing runtime-state maintenance") from exc
+    if _is_reparse(info) or not stat.S_ISREG(info.st_mode):
         raise RuntimeError("state/PAUSE is absent; refusing runtime-state maintenance")
     return pause
 
@@ -496,8 +1204,11 @@ def require_open_notification_routing_escalation(root: Path, event_id: str) -> N
     path = root / "state/escalations.tsv"
     key = f"notification-routing:{event_id}"
     try:
-        raw = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
+        with path.open("rb") as source:
+            raw = source.read(16 * 1024 * 1024 + 1).decode("utf-8", "strict")
+        if len(raw.encode("utf-8")) > 16 * 1024 * 1024:
+            raise ValueError("escalation index is too large")
+    except (OSError, UnicodeError, ValueError, TypeError, OverflowError) as exc:
         raise RuntimeError(f"notification routing escalation index is absent or unreadable: {key}") from exc
     header = "#id\tkey\tstatus\tfirst_seen\tlast_seen\tcount\tworkstream\tpointer\ttitle"
     if not raw.endswith("\n"):
@@ -519,8 +1230,14 @@ def require_open_notification_routing_escalation(root: Path, event_id: str) -> N
             or not escalation_key
             or status not in {"open", "resolved"}
             or not count.isdigit()
-            or int(count) < 1
+            or len(count) > 10
         ):
+            raise RuntimeError(f"notification routing escalation row {number} is malformed")
+        try:
+            count_value = int(count, 10)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError(f"notification routing escalation row {number} is malformed") from exc
+        if count_value < 1:
             raise RuntimeError(f"notification routing escalation row {number} is malformed")
         try:
             time.strptime(first_seen, "%Y-%m-%dT%H:%M:%SZ")
@@ -549,9 +1266,17 @@ def require_open_notification_routing_escalation(root: Path, event_id: str) -> N
 def assert_notification_projection_complete(root: Path) -> None:
     """Refuse to archive source events without canonical, recoverable outbox projections."""
     source = root / "scripts/notification-outbox.py"
-    if not source.is_file():
+    try:
+        source_info = source.lstat()
+    except OSError:
+        source_info = None
+    if source_info is None or _is_reparse(source_info) or not stat.S_ISREG(source_info.st_mode):
         source = Path(__file__).resolve().parent / "notification-outbox.py"
-    if not source.is_file():
+    try:
+        source_info = source.lstat()
+    except OSError:
+        source_info = None
+    if source_info is None or _is_reparse(source_info) or not stat.S_ISREG(source_info.st_mode):
         raise RuntimeError("notification mapper is absent; refusing event rotation")
     spec = importlib.util.spec_from_file_location("recursion_notification_outbox", source)
     if spec is None or spec.loader is None:
@@ -570,7 +1295,12 @@ def assert_notification_projection_complete(root: Path) -> None:
         if not event_id:
             raise RuntimeError("mapped source event lacks a stable notification identity")
         path = projection_root / f"{event_id}.json"
-        if not path.is_file():
+        try:
+            projection_info = path.lstat()
+        except OSError:
+            projection_info = None
+        if projection_info is None or _is_reparse(projection_info) \
+                or not stat.S_ISREG(projection_info.st_mode):
             raise RuntimeError(f"mapped source event lacks notification projection: {event_id}")
         try:
             observed = module.read_json(path)
@@ -684,21 +1414,33 @@ def assert_notification_projection_complete(root: Path) -> None:
 
 
 def ensure_outside_root(root: Path, path: Path) -> None:
-    resolved_root = root.resolve()
-    resolved = path.resolve(strict=False)
-    if resolved == resolved_root or resolved_root in resolved.parents:
+    _reject_reparse_components(root, "runtime root")
+    _reject_reparse_components(path, "external runtime path")
+    root_parts = root.parts
+    path_parts = path.parts
+    if path_parts == root_parts or path_parts[:len(root_parts)] == root_parts:
         raise RuntimeError("snapshot paths must be outside the Recursion checkout")
 
 
 def rotate_events(root: Path, maximum: int) -> None:
+    if not is_plain_int(maximum) or maximum < 0:
+        raise RuntimeError("event rotation byte limit is invalid")
     require_pause(root)
     events = root / "state/events.jsonl"
     with RuntimeLock(root), EmptyLock(root / "state/.locks/taskctl.lock"), DecisionQueueLock(root):
         require_pause(root); assert_no_execution_locks(root)
         resolve_open_restore(root)
         reconcile_transition_receipts(root)
-        if not events.exists() or events.stat().st_size <= maximum:
-            size = events.stat().st_size if events.exists() else 0
+        try:
+            events_info = events.lstat()
+        except FileNotFoundError:
+            events_info = None
+        except OSError as exc:
+            raise RuntimeError("event journal is unreadable") from exc
+        if events_info is not None and (_is_reparse(events_info) or not stat.S_ISREG(events_info.st_mode)):
+            raise RuntimeError("event journal has an unsafe type")
+        if events_info is None or events_info.st_size <= maximum:
+            size = events_info.st_size if events_info is not None else 0
             print(f"rotation not needed ({size} <= {maximum})")
             return
         assert_notification_projection_complete(root)
@@ -706,8 +1448,18 @@ def rotate_events(root: Path, maximum: int) -> None:
         archive.mkdir(parents=True, exist_ok=True)
         stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
         target = archive / f"events-{stamp}-{digest(events)[:12]}.jsonl"
-        if target.exists():
+        _reject_reparse_components(archive, "event archive directory")
+        try:
+            target_info = target.lstat()
+        except FileNotFoundError:
+            target_info = None
+        except OSError as exc:
+            raise RuntimeError("event archive target is unreadable") from exc
+        if target_info is not None:
             raise RuntimeError(f"rotation target already exists: {target}")
+        if _file_identity(events, "event journal") != (
+                events_info.st_dev, events_info.st_ino, events_info.st_size, events_info.st_mtime_ns):
+            raise RuntimeError("event journal changed before rotation")
         os.replace(events, target)
         atomic_bytes(events, b"")
         fsync_dir(archive)
@@ -715,43 +1467,62 @@ def rotate_events(root: Path, maximum: int) -> None:
 
 
 def collect_files(root: Path) -> list[Path]:
+    _reject_reparse_components(root, "runtime root")
     files: list[Path] = []
     for relative in RUNTIME_FILE_PATHS:
         path = root / relative
-        if path.is_symlink():
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            info = None
+        except OSError as exc:
+            raise RuntimeError(f"cannot inspect managed runtime path: {relative}") from exc
+        if info is not None and _is_reparse(info):
             raise RuntimeError(f"managed runtime path is a symlink: {relative}")
-        if path.is_file():
+        if info is not None and stat.S_ISREG(info.st_mode):
             files.append(path)
-        elif path.exists():
+        elif info is not None:
             raise RuntimeError(f"managed runtime file has the wrong type: {relative}")
     for relative in RUNTIME_DIRECTORY_PATHS:
         path = root / relative
-        if path.is_symlink():
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            info = None
+        except OSError as exc:
+            raise RuntimeError(f"cannot inspect managed runtime path: {relative}") from exc
+        if info is not None and _is_reparse(info):
             raise RuntimeError(f"managed runtime path is a symlink: {relative}")
-        if path.is_file():
+        if info is not None and not stat.S_ISDIR(info.st_mode):
             raise RuntimeError(f"managed runtime directory has the wrong type: {relative}")
-        if not path.exists():
+        if info is None:
             continue
         for item in path.rglob("*"):
-            if item.is_symlink():
+            try:
+                item_info = item.lstat()
+            except OSError as exc:
+                raise RuntimeError(f"cannot inspect managed runtime path: {item}") from exc
+            if _is_reparse(item_info):
                 raise RuntimeError(f"managed runtime path contains a symlink: {item.relative_to(root)}")
-            if item.is_file():
+            if stat.S_ISREG(item_info.st_mode):
                 files.append(item)
+            elif not stat.S_ISDIR(item_info.st_mode):
+                raise RuntimeError(f"managed runtime path has an unsupported type: {item.relative_to(root)}")
     return sorted(set(files))
 
 
 def _managed_manifest_path(raw: object) -> str:
     if not isinstance(raw, str) or not raw or "\\" in raw or "\x00" in raw:
-        raise RuntimeError(f"unsafe manifest path: {raw!r}")
+        raise RuntimeError("unsafe manifest path")
     relative = PurePosixPath(raw)
     if relative.is_absolute() or relative.as_posix() != raw or ".." in relative.parts \
             or "." in relative.parts or not relative.parts or relative.parts[0] != "state":
-        raise RuntimeError(f"unsafe manifest path: {raw!r}")
+        raise RuntimeError("unsafe manifest path")
     if raw in RUNTIME_FILE_PATHS:
         return raw
     if any(raw.startswith(directory + "/") for directory in RUNTIME_DIRECTORY_PATHS):
         return raw
-    raise RuntimeError(f"manifest path is outside managed runtime state: {raw}")
+    raise RuntimeError("manifest path is outside managed runtime state")
 
 
 def _native_relative(relative: str) -> Path:
@@ -763,22 +1534,45 @@ def _reject_symlink_components(base: Path, relative: str, *, leaf_may_be_missing
     parts = PurePosixPath(relative).parts
     for index, part in enumerate(parts):
         current = current / part
-        if current.is_symlink():
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            info = None
+        except OSError as exc:
+            raise RuntimeError(f"cannot inspect runtime path component: {current}") from exc
+        if info is not None and _is_reparse(info):
             raise RuntimeError(f"symlink component is forbidden: {current}")
-        if not current.exists() and (leaf_may_be_missing or index + 1 < len(parts)):
+        if info is None and (leaf_may_be_missing or index + 1 < len(parts)):
             continue
     return current
 
 
 def load_manifest(snapshot: Path) -> dict:
-    if snapshot.is_symlink() or not snapshot.is_dir():
-        raise RuntimeError(f"snapshot is absent, not a directory, or a symlink: {snapshot}")
+    _reject_reparse_components(snapshot, "snapshot")
+    try:
+        snapshot_info = snapshot.lstat()
+    except OSError as exc:
+        raise RuntimeError("snapshot is absent, not a directory [snapshot]") from exc
+    if _is_reparse(snapshot_info) or not stat.S_ISDIR(snapshot_info.st_mode):
+        raise RuntimeError("snapshot is absent, not a directory, or a symlink [snapshot]")
     manifest_path = snapshot / "manifest.json"
-    if manifest_path.is_symlink() or not manifest_path.is_file():
-        raise RuntimeError("backup manifest is absent or a symlink")
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1 \
-            or not isinstance(manifest.get("files"), list):
+    raw_manifest = _read_verified_file(manifest_path, "backup manifest", max_bytes=MAX_MANIFEST_BYTES)
+    try:
+        manifest = _json_no_constants(raw_manifest.decode("utf-8", "strict"))
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError, RecursionError) as exc:
+        raise RuntimeError("backup manifest is unreadable or invalid JSON") from exc
+    if not isinstance(manifest, dict):
+        raise RuntimeError("unsupported or malformed backup manifest")
+    files_root = snapshot / "files"
+    _reject_reparse_components(files_root, "backup files directory")
+    try:
+        files_info = files_root.lstat()
+    except OSError as exc:
+        raise RuntimeError("backup files directory is absent") from exc
+    if _is_reparse(files_info) or not stat.S_ISDIR(files_info.st_mode):
+        raise RuntimeError("backup files directory is absent or a symlink")
+    if not is_plain_int(manifest.get("schema_version")) or manifest.get("schema_version") != 1 \
+            or not isinstance(manifest.get("files"), list) or len(manifest["files"]) > MAX_MANIFEST_FILES:
         raise RuntimeError("unsupported or malformed backup manifest")
     pause_sha = manifest.get("pause_sha256")
     if not isinstance(pause_sha, str) or not MANIFEST_SHA256.fullmatch(pause_sha):
@@ -786,9 +1580,6 @@ def load_manifest(snapshot: Path) -> dict:
     expected_keys = {"path", "sha256", "size", "mode", "uid", "gid"}
     seen: set[str] = set()
     normalized: list[dict] = []
-    files_root = snapshot / "files"
-    if files_root.is_symlink() or not files_root.is_dir():
-        raise RuntimeError("backup files directory is absent or a symlink")
     for record in manifest["files"]:
         if not isinstance(record, dict) or set(record) != expected_keys:
             raise RuntimeError("backup manifest file record has an invalid shape")
@@ -808,8 +1599,8 @@ def load_manifest(snapshot: Path) -> dict:
                 or isinstance(gid, bool) or not isinstance(gid, int) or gid < 0:
             raise RuntimeError(f"backup manifest record has invalid types: {relative}")
         source = _reject_symlink_components(files_root, relative, leaf_may_be_missing=False)
-        if not source.is_file() or source.stat().st_size != size or digest(source) != sha256:
-            raise RuntimeError(f"backup hash or size mismatch: {relative}")
+        _read_verified_file(source, f"backup file {relative}",
+                            expected_size=size, expected_sha256=sha256)
         normalized.append(dict(record))
     pause = next((item for item in normalized if item["path"] == "state/PAUSE"), None)
     if pause is None or pause["sha256"] != pause_sha:
@@ -824,25 +1615,50 @@ def _git_commit(root: Path) -> str:
         return subprocess.check_output(
             ["git", "-C", str(root), "rev-parse", "HEAD"], text=True,
             stderr=subprocess.DEVNULL,
+            timeout=5,
         ).strip()
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired,
+            subprocess.SubprocessError, UnicodeError):
         return "unavailable"
 
 
 def _write_snapshot_tree(root: Path, staging: Path) -> dict:
     pause = require_pause(root)
-    if staging.exists():
-        if staging.is_symlink() or not staging.is_dir() or any(staging.iterdir()):
+    try:
+        staging_info = staging.lstat()
+    except FileNotFoundError:
+        staging_info = None
+    except OSError as exc:
+        raise RuntimeError("snapshot staging is unreadable") from exc
+    if staging_info is not None:
+        try:
+            entries = list(staging.iterdir())
+        except OSError as exc:
+            raise RuntimeError("snapshot staging is unreadable") from exc
+        if _is_reparse(staging_info) or not stat.S_ISDIR(staging_info.st_mode) or entries:
             raise RuntimeError(f"snapshot staging is not a private empty directory: {staging}")
         staging.chmod(0o700)
     else:
+        _reject_reparse_components(staging.parent, "snapshot staging parent")
         staging.mkdir(mode=0o700)
     records: list[dict] = []
     for source in collect_files(root):
         relative = source.relative_to(root)
         target = staging / "files" / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
+        try:
+            source_info = source.lstat()
+        except OSError as exc:
+            raise RuntimeError(f"runtime file disappeared: {relative}") from exc
+        if _is_reparse(source_info) or not stat.S_ISREG(source_info.st_mode):
+            raise RuntimeError(f"runtime file is not a regular file: {relative}")
+        payload = _read_verified_file(source, f"runtime file {relative}",
+                                      expected_size=source_info.st_size)
+        atomic_bytes(target, payload, stat.S_IMODE(source_info.st_mode))
+        try:
+            os.utime(target, ns=(source_info.st_atime_ns, source_info.st_mtime_ns))
+        except OSError as exc:
+            raise RuntimeError(f"could not preserve runtime file time: {relative}") from exc
         records.append({
             "path": relative.as_posix(), "sha256": digest(target),
             "size": target.stat().st_size, "mode": oct(target.stat().st_mode & 0o777),
@@ -868,7 +1684,10 @@ def _copy_snapshot(snapshot: Path, manifest: dict, target: Path) -> None:
         source = _reject_symlink_components(snapshot / "files", relative,
                                              leaf_may_be_missing=False)
         destination = target / "files" / _native_relative(relative)
-        atomic_bytes(destination, source.read_bytes(), int(record["mode"], 8))
+        payload = _read_verified_file(source, f"snapshot file {relative}",
+                                      expected_size=record["size"],
+                                      expected_sha256=record["sha256"])
+        atomic_bytes(destination, payload, int(record["mode"], 8))
     atomic_bytes(target / "manifest.json",
                  (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode())
     fsync_dir(target)
@@ -879,9 +1698,12 @@ def _staging_identity(path: Path, prefix: str) -> tuple[int, str] | None:
     if not path.name.startswith(prefix):
         return None
     fields = path.name[len(prefix):].split(".", 2)
-    if len(fields) != 3 or not fields[0].isdigit() or not fields[1].isdigit():
+    if len(fields) != 3 or not fields[0].isdigit() or len(fields[0]) > 10 or not fields[1].isdigit():
         return None
-    return int(fields[0]), fields[1]
+    try:
+        return int(fields[0], 10), fields[1]
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def _cleanup_backup_orphans(destination: Path) -> None:
@@ -900,6 +1722,7 @@ def _cleanup_backup_orphans(destination: Path) -> None:
 
 def _witnessed_staging(parent: Path, prefix: str) -> Path:
     pid, start = _process_identity(os.getpid())
+    _reject_reparse_components(parent, "staging parent")
     return Path(tempfile.mkdtemp(prefix=f"{prefix}{pid}.{start}.", dir=parent))
 
 
@@ -921,23 +1744,34 @@ def _cleanup_completed_transactions(root: Path) -> None:
             with contextlib.suppress(OSError, RuntimeError):
                 _safe_remove_tree(tomb)
     for path in lock_root.glob(f".{RESTORE_TRANSACTION}.complete.*"):
-        if path.is_dir() and not path.is_symlink():
+        try:
+            info = path.lstat()
+        except OSError:
+            continue
+        if stat.S_ISDIR(info.st_mode) and not _is_reparse(info):
             with contextlib.suppress(OSError, RuntimeError):
                 _safe_remove_tree(path)
 
 
 def _validate_restore_targets(root: Path, manifest: dict) -> None:
+    _reject_reparse_components(root, "restore root")
     collect_files(root)
     for record in manifest["files"]:
         target = _reject_symlink_components(root, str(record["path"]))
-        resolved_parent = target.parent.resolve(strict=False)
-        if root.resolve() not in (resolved_parent, *resolved_parent.parents):
+        if target.parts[:len(root.parts)] != root.parts:
             raise RuntimeError(f"restore target escapes checkout: {record['path']}")
 
 
 def _create_restore_transaction(root: Path, snapshot: Path, manifest: dict) -> Path:
     transaction = _transaction_path(root)
-    if transaction.exists() or transaction.is_symlink():
+    _reject_reparse_components(transaction, "restore transaction path")
+    try:
+        transaction_info = transaction.lstat()
+    except FileNotFoundError:
+        transaction_info = None
+    except OSError as exc:
+        raise RuntimeError("restore transaction path is unreadable") from exc
+    if transaction_info is not None:
         raise RuntimeError("an unresolved runtime restore transaction already exists")
     lock_root = transaction.parent
     candidate = _witnessed_staging(
@@ -951,7 +1785,7 @@ def _create_restore_transaction(root: Path, snapshot: Path, manifest: dict) -> P
         metadata = {
             "schema_version": 1, "kind": "runtime-restore", "status": "prepared",
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "source": str(snapshot.resolve()),
+            "source": str(snapshot),
             "desired_manifest_sha256": digest(desired / "manifest.json"),
             "preimage_manifest_sha256": digest(preimage / "manifest.json"),
             "desired_files": len(manifest["files"]),
@@ -964,7 +1798,13 @@ def _create_restore_transaction(root: Path, snapshot: Path, manifest: dict) -> P
         fsync_dir(lock_root)
         return transaction
     except BaseException:
-        if candidate.exists():
+        try:
+            candidate_info = candidate.lstat()
+        except FileNotFoundError:
+            candidate_info = None
+        except OSError:
+            candidate_info = None
+        if candidate_info is not None:
             with contextlib.suppress(OSError, RuntimeError):
                 _safe_remove_tree(candidate)
         raise
@@ -972,8 +1812,13 @@ def _create_restore_transaction(root: Path, snapshot: Path, manifest: dict) -> P
 
 def _restore_crash_boundary(boundary: int) -> None:
     raw = os.environ.get("RECURSION_RESTORE_CRASH_AFTER")
-    if raw is not None and int(raw) == boundary:
-        os._exit(92)
+    if raw is not None:
+        try:
+            selected = int(raw, 10)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError("restore crash boundary is invalid") from exc
+        if selected == boundary:
+            os._exit(92)
 
 
 def _verify_exact_inventory(root: Path, manifest: dict) -> None:
@@ -1006,7 +1851,10 @@ def _apply_exact_snapshot(root: Path, snapshot: Path, manifest: dict) -> None:
         source = _reject_symlink_components(snapshot / "files", relative,
                                              leaf_may_be_missing=False)
         target = _reject_symlink_components(root, relative)
-        atomic_bytes(target, source.read_bytes(), int(record["mode"], 8))
+        payload = _read_verified_file(source, f"snapshot file {relative}",
+                                      expected_size=record["size"],
+                                      expected_sha256=record["sha256"])
+        atomic_bytes(target, payload, int(record["mode"], 8))
         if hasattr(os, "geteuid") and os.geteuid() == 0:
             os.chown(target, int(record["uid"]), int(record["gid"]))
         boundary += 1
@@ -1038,16 +1886,23 @@ def _finish_restore_transaction(root: Path, transaction: Path) -> None:
 def resolve_open_restore(root: Path) -> str | None:
     transaction = _transaction_path(root)
     _cleanup_completed_transactions(root)
-    if not transaction.exists() and not transaction.is_symlink():
+    try:
+        transaction_info = transaction.lstat()
+    except FileNotFoundError:
         return None
-    if transaction.is_symlink() or not transaction.is_dir():
+    except OSError as exc:
+        raise RuntimeError("runtime restore transaction marker is unreadable") from exc
+    if _is_reparse(transaction_info) or not stat.S_ISDIR(transaction_info.st_mode):
         raise RuntimeError("runtime restore transaction marker has an unsafe type")
     metadata_path = transaction / "transaction.json"
     try:
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        metadata = _json_no_constants(_read_verified_file(
+            metadata_path, "runtime restore transaction metadata", max_bytes=MAX_MANIFEST_BYTES
+        ).decode("utf-8", "strict"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError, RecursionError) as exc:
         raise RuntimeError("runtime restore transaction metadata is unreadable") from exc
-    if not isinstance(metadata, dict) or metadata.get("schema_version") != 1 \
+    if not isinstance(metadata, dict) or not is_plain_int(metadata.get("schema_version")) \
+            or metadata.get("schema_version") != 1 \
             or metadata.get("kind") != "runtime-restore" or metadata.get("status") != "prepared":
         raise RuntimeError("runtime restore transaction metadata is malformed")
     desired = transaction / "desired"
@@ -1077,9 +1932,18 @@ def resolve_open_restore(root: Path) -> str | None:
 def backup(root: Path, destination: Path) -> None:
     require_pause(root)
     ensure_outside_root(root, destination)
+    _reject_reparse_components(destination.parent, "backup destination parent")
     destination.parent.mkdir(parents=True, exist_ok=True)
+    _reject_reparse_components(destination.parent, "backup destination parent")
     _cleanup_backup_orphans(destination)
-    if destination.exists() or destination.is_symlink():
+    _reject_reparse_components(destination, "backup destination")
+    try:
+        destination_info = destination.lstat()
+    except FileNotFoundError:
+        destination_info = None
+    except OSError as exc:
+        raise RuntimeError("backup destination is unreadable") from exc
+    if destination_info is not None:
         raise RuntimeError(f"backup destination already exists: {destination}")
     staging: Path | None = None
     manifest: dict | None = None
@@ -1090,14 +1954,16 @@ def backup(root: Path, destination: Path) -> None:
         staging = _witnessed_staging(destination.parent, f".{destination.name}.tmp.")
         try:
             manifest = _write_snapshot_tree(root, staging)
+            _reject_reparse_components(destination.parent, "backup destination parent")
+            _reject_reparse_components(destination, "backup destination")
             _rename_noreplace(staging, destination)
             staging = None
             fsync_dir(destination.parent)
         finally:
-            if staging is not None and staging.exists():
+            if staging is not None:
                 _safe_remove_tree(staging)
     assert manifest is not None
-    print(f"backup {destination} files={len(manifest['files'])} "
+    print(f"backup destination={destination.name} files={len(manifest['files'])} "
           f"pause_sha256={manifest['pause_sha256']}")
 
 
@@ -1113,20 +1979,21 @@ def restore(root: Path, snapshot: Path) -> None:
         _create_restore_transaction(root, snapshot, manifest)
         resolve_open_restore(root)
         require_pause(root)
-    print(f"restore {snapshot} files={len(manifest['files'])} "
+    print(f"restore snapshot={snapshot.name} files={len(manifest['files'])} "
           f"pause_sha256={manifest['pause_sha256']}")
 
 
 def _operator_lock_path(root: Path, raw: Path) -> Path:
     path = raw if raw.is_absolute() else root / raw
-    lock_root = (root / "state/.locks").resolve()
+    _reject_reparse_components(path, "operator lock path")
+    lock_root = root / "state/.locks"
     supported = re.fullmatch(
         r"(?:taskctl|ledger|heavy-gate)\.lock|(?:project|planner|action)-[A-Za-z0-9._-]+\.lock|"
         r"wt-[0-9a-f]{12}\.lock",
         path.name,
     )
-    if path.parent.resolve() != lock_root or supported is None:
-        raise RuntimeError(f"operator lock path is outside the supported lock namespace: {raw}")
+    if path.parent != lock_root or supported is None:
+        raise RuntimeError("operator lock path is outside the supported lock namespace")
     return path
 
 
@@ -1146,8 +2013,10 @@ def main() -> int:
     lock_release.add_argument("path", type=Path)
     lock_release.add_argument("owner_pid", type=int)
     args = parser.parse_args()
-    root = Path(os.environ.get("RECURSION_ROOT", Path(__file__).resolve().parents[1])).resolve()
     try:
+        configured_root = os.environ.get("RECURSION_ROOT")
+        root = Path(configured_root) if configured_root else Path(__file__).resolve().parents[1]
+        _reject_reparse_components(root, "runtime root")
         if args.command == "rotate-events":
             rotate_events(root, args.max_bytes)
         elif args.command == "backup":
@@ -1160,8 +2029,10 @@ def main() -> int:
         else:
             path = _operator_lock_path(root, args.path)
             release_witnessed_directory_lock(path, path.name, args.owner_pid)
-    except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
-        print(f"runtime-state: {exc}", file=sys.stderr)
+    except (OSError, ValueError, TypeError, UnicodeError, OverflowError, RecursionError,
+            RuntimeError, json.JSONDecodeError, subprocess.TimeoutExpired,
+            subprocess.SubprocessError) as exc:
+        print(f"runtime-state: operation refused: {_public_refusal_message(exc)}", file=sys.stderr)
         return 2
     return 0
 

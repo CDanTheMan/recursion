@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "kind": "sealed-transition-receipt-snapshot",
+  "captured_at": "2026-08-28T21:54:00Z",
+  "source": "state/recovery/transition-archive",
+  "receipts": [
+    {"id":"transition-04d2903b15ded8dc6425b83b1c813ab3","prepared_sha256":"2143e992c9db8190a243415069134fb8f5f1f3b7d8c0fd8ea6acbb8be46a68dd","projected_sha256":"078f0b17ed5ce386b9a0ca86907a908b78abc05018f68544fae696f90b7aa074"},
+    {"id":"transition-e5b33cc2c55238e4cb584007428a112a","prepared_sha256":"79966a2528a91327b93693988782941a14d2df0508949bdb7fcb82d4c1211dc6","projected_sha256":"d2200a45d1afcd33c1934435b9a1cc3d44623c74f7160f2b75f21c0f6c15d524"},
+    {"id":"transition-d1dc111f4f46c4c7594ffbbe38f4936e","prepared_sha256":"a4ad2185403ccd807e70d2834631a9045162381e4db9a436ebc284fb5dc54337","projected_sha256":"30bb2625e62a6a122bf7ad2e78ea1ac0a0ad0fd5771b95ca4504a3da07af002f"},
+    {"id":"transition-7ef2808676e3bdf2c1b242cdc9efe7f8","prepared_sha256":"72c10b48c6cbda48e12d9c14946078a0a7c2aaa6d220794b984fe00bec3659a7","projected_sha256":"4d5d0e916b330e7f36915a832c5950a998be3b9b7370c77452485f3bec42d2f5"},
+    {"id":"transition-9ce1f6b9f77f5764097d06ea09317158","prepared_sha256":"52cc8d292c8dc449f80e355f89cd09aac57eeccf113acabe7f3b6ae9539d644e","projected_sha256":"a1613dd591f102277ec27f2bf44ff0c31633b99c1da7bd21104adf8921861072"},
+    {"id":"transition-9cb080320dbcd7f6624956ddc0a5015f","prepared_sha256":"482fce2f173e36c1ca23a880b2a050829ec29ca63f4b097325abbe19b7947a16","projected_sha256":"a2e19b5d01f5a90b9db50e13251e93854a19414849a8e8e28654e8e3d51f776e"}
+  ]
+}

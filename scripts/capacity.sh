@@ -41,6 +41,11 @@ cd "$ROOT" 2>/dev/null || { echo "CANNOT TELL: RECURSION_ROOT '$ROOT' is not a d
 # caller who passed a different root: that silently made a "sandbox" enqueue ten decisions
 # into production on 2026-08-12. ROOT and RECURSION_ROOT agree from here on.
 RECURSION_ROOT="$ROOT"; export RECURSION_ROOT
+# Git Bash's $$ / $PPID are MSYS identities, while the bundled Windows Python runtime
+# witnesses Win32 identities.  The parent owns a lock beyond this helper's short lifetime;
+# retain the explicit override for callers that already have a translated owner.
+PROBE_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"
+OWNER_PID="${RECURSION_HEAVY_PID:-$(cat /proc/$PPID/winpid 2>/dev/null || echo $PPID)}"
 LOCKDIR="$ROOT/state/.locks"; mkdir -p "$LOCKDIR" 2>/dev/null || true
 HEAVY="$LOCKDIR/heavy-gate.lock"
 CMD="${1:-report}"; shift 2>/dev/null || true
@@ -85,9 +90,9 @@ decide(){ # decide <class> <mem_mb> <load1> <disk_mb> <swap_mb> -> 0 admit / 4 d
 heavy_held(){ [ -d "$HEAVY" ]; }
 heavy_available(){
   [ -x "$ROOT/scripts/runtime-state.py" ] || return 1
-  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$HEAVY" "$$" >/dev/null 2>&1 \
+  python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$HEAVY" "$PROBE_PID" >/dev/null 2>&1 \
     || return 1
-  python3 "$ROOT/scripts/runtime-state.py" lock-release "$HEAVY" "$$" >/dev/null 2>&1
+  python3 "$ROOT/scripts/runtime-state.py" lock-release "$HEAVY" "$PROBE_PID" >/dev/null 2>&1
 }
 
 case "$CMD" in
@@ -113,7 +118,6 @@ heavy)
   SUB="${1:-status}"; TAG="${2:-${RECURSION_HEAVY_TAG:-unnamed}}"
   case "$SUB" in
     acquire)
-      OWNER_PID="${RECURSION_HEAVY_PID:-$PPID}"
       if python3 "$ROOT/scripts/runtime-state.py" lock-acquire "$HEAVY" "$OWNER_PID" \
            >/dev/null 2>&1; then
         if ! printf '%s (pid %s, since %s)\n' "$TAG" "$OWNER_PID" "$(date -u +%FT%TZ)" \
@@ -126,7 +130,6 @@ heavy)
       fi
       echo "BUSY $(cat "$HEAVY/holder" 2>/dev/null || echo '?')"; exit 4 ;;
     release)
-      OWNER_PID="${RECURSION_HEAVY_PID:-$PPID}"
       python3 "$ROOT/scripts/runtime-state.py" lock-release "$HEAVY" "$OWNER_PID" \
         >/dev/null 2>&1 || { echo "capacity: heavy lock release failed" >&2; exit 3; }
       echo "RELEASED" ;;

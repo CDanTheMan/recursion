@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "cursor",
-  "description": "Cursor CLI (cursor-agent), headless print mode. Argv is provisional pending on-box flag verification (docs/plans/engine-plugin-architecture.md, deployment step 2) -- measure, don't assume.",
+  "description": "Cursor CLI (cursor-agent), headless print mode. Real Cursor execution remains unproven until the required runner-home auth marker is present and a human-owned on-box probe verifies the declared flags.",
   "executable": "cursor-agent",
   "argv": [
     "{{EXE}}",
@@ -29,6 +29,7 @@
   },
   "network": {
     "policy": "provider-only",
+    "profile": "cursor",
     "endpoints": [
       "api.cursor.com",
       "api2.cursor.sh",
@@ -39,5 +40,23 @@
   },
   "availability_probe": null,
   "concurrency_cap": null,
-  "env_passthrough": []
+  "env_passthrough": [],
+  "runtime_layout": {
+    "mode": "sibling-tree",
+    "source": "executable-directory",
+    "target": ".recursion-runtime",
+    "entrypoint": "cursor-agent"
+  },
+  "execution": {
+    "structured_output": false,
+    "output_format": "text",
+    "cancellation": { "signal": "TERM", "grace_s": 5 },
+    "exit_codes": {
+      "success": [0],
+      "auth": [1, 2],
+      "runtime": [126, 127],
+      "egress": [60, 65]
+    }
+  },
+  "auth": { "mode": "runner-home-marker", "required": true, "marker": ".cursor" }
 }

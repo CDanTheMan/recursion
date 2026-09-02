@@ -37,9 +37,14 @@ command -v git >/dev/null 2>&1 || { echo "resync.test: git is required"; exit 3;
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 R="$TMP/root"; mkdir -p "$R/scripts/tests" "$R/state/tasks" "$R/state/roadmaps" \
   "$R/state/pilot-windows" "$R/loop/logs" "$TMP/origins"
-for s in resync.sh digest.sh taskctl.sh jsonl_durable.py transition_receipt.py runtime-state.py notify.sh work.sh \
-         worker-sandbox.sh board.sh publish.sh; do
-  cp "$SRC/scripts/$s" "$R/scripts/" 2>/dev/null || true
+for s in assignment.py assignment_contract.py assist.sh author.sh board.sh capacity.sh conduct.sh digest.sh engine_contract.py git-scope.py \
+         instruction_routing.py intake.sh jsonl_durable.py notify.sh phase5_safety.py pilot_instruction.py plan.sh project-pilot.py \
+         project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh provider-egress.py publish.sh \
+         remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
+         seed_contract.py taskctl.sh transition_receipt.py validate-assignment-result.py validate-control-state.py \
+         validate-decision.py validate-gate.py validate-verifier-result.py validate-worker-result.py work.sh assignment-token.py \
+         worker-evidence.py worker-sandbox.sh; do
+  cp "$SRC/scripts/$s" "$R/scripts/"
 done
 chmod +x "$R"/scripts/*.sh 2>/dev/null
 : > "$R/.env"; : > "$R/state/INBOX.md"; echo "anchor" > "$R/ANCHOR.md"
@@ -442,7 +447,7 @@ id: $1
 workstream: resynctest
 goal: prove the freshness precondition
 engine: none
-acceptance: true
+acceptance: test -s f.txt
 repo: $2
 workdir: .
 autonomy: auto

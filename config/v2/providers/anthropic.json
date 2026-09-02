@@ -1,0 +1,1 @@
+{"schema_version":2,"kind":"provider","id":"anthropic","endpoints":["api.anthropic.com"],"egress_profile":"anthropic-provider-only","receipt_semantics":"usage-receipt-v1","error_classes":["auth","quota","unavailable","invalid-request"],"data_classification":"approved-project-data"}

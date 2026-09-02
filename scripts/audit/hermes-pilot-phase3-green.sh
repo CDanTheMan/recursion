@@ -49,9 +49,10 @@ echo "ok    one authenticated message became one inert, fully correlated durable
 P="$TMP/planner"; BIN="$TMP/bin"
 mkdir -p "$P/scripts" "$P/state/tasks" "$P/state/roadmaps" "$P/state/.locks" "$P/loop/logs" "$BIN"
 for s in hermes-decide.sh validate-decision.py validate-control-state.py decision-queue.py \
-         engine_contract.py jsonl_durable.py; do
+         engine_contract.py phase5_safety.py jsonl_durable.py; do
   cp "$SRC/scripts/$s" "$P/scripts/"
 done
+cp "$SRC/scripts/assignment.py" "$P/scripts/"
 for s in intake taskctl assist branch-review resync capacity notify; do
   cat > "$P/scripts/$s.sh" <<'STUB'
 #!/usr/bin/env bash
@@ -108,10 +109,11 @@ echo "ok    planner projection preserved complete authority, scope, and decision
 A="$TMP/actuator"
 mkdir -p "$A/scripts" "$A/state/tasks" "$A/state/instructions" "$A/loop/logs"
 for s in conduct-hermes.sh decision-queue.py validate-control-state.py validate-decision.py \
-         engine_contract.py hermes-actuator.sh taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
+         engine_contract.py phase5_safety.py hermes-actuator.sh taskctl.sh jsonl_durable.py transition_receipt.py intake.sh \
          instruction_routing.py pilot_instruction.py runtime-state.py; do
   cp "$SRC/scripts/$s" "$A/scripts/"
 done
+cp "$SRC/scripts/assignment.py" "$A/scripts/"
 cat > "$A/scripts/work.sh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$1" >> "$ACTION_LOG"
@@ -180,4 +182,5 @@ grep -q '^Restart=always$' "$UNIT"
 grep -q 'hermes-control.lock' "$SRC/scripts/install-cron.sh"
 echo "ok    one supervised actuator artifact exists and no colliding actuator cron path exists"
 
+python3 "$SRC/scripts/tests/staged-fixture-closures.test.py"
 echo "hermes-pilot-phase3-green: ALL PASS"

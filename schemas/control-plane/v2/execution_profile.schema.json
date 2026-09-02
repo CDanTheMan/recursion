@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://recursion.local/schemas/control-plane/v2/execution_profile.schema.json","allOf":[{"$ref":"schema.json#/$defs/execution_profile"},{"$ref":"schema.json#/$defs/secret_free"},{"$ref":"schema.json#/$defs/secret_reference_policy"}]}

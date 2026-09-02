@@ -16,6 +16,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from windows_test_support import prepare_shell_env
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 CONTROLS = [
@@ -85,6 +87,7 @@ class Fixture:
             (self.root / relative).write_text("", encoding="utf-8")
         (self.root / ".env").write_text("", encoding="utf-8")
         self.env = os.environ.copy()
+        prepare_shell_env(self.env)
         self.env.update({
             "RECURSION_ROOT": str(self.root),
             "RECURSION_QUEUE_ACTUATION": "1",

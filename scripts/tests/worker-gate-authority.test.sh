@@ -10,8 +10,15 @@ no(){ printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 
 # Project contention is a retryable defer, never a successful no-op.
 R="$TMP/controller"; mkdir -p "$R/scripts" "$R/state/tasks" "$R/state/.locks/project-alpha.lock" "$R/loop/logs"
-cp "$SRC/scripts/work.sh" "$R/scripts/"
-cp "$SRC/scripts/runtime-state.py" "$R/scripts/"
+for s in assignment.py assignment_contract.py assist.sh author.sh board.sh capacity.sh conduct.sh engine_contract.py git-scope.py \
+  instruction_routing.py intake.sh jsonl_durable.py notify.sh pilot_instruction.py plan.sh project-pilot.py \
+  project-reconcile.py project_authority.py provider-connect-proxy.py provider_contract.py provider-network.sh publish.sh \
+  remote_evidence.py resolve-engine.py resolve-model-alias.py resync.sh run_contract.py runtime-state.py \
+  seed_contract.py taskctl.sh transition_receipt.py validate-assignment-result.py validate-control-state.py \
+  validate-decision.py validate-gate.py validate-verifier-result.py validate-worker-result.py work.sh assignment-token.py \
+  worker-evidence.py worker-sandbox.sh phase5_safety.py; do
+  cp "$SRC/scripts/$s" "$R/scripts/"
+done
 : > "$R/.env"
 cat > "$R/state/tasks/task-a.md" <<'TASK'
 id: task-a
@@ -32,6 +39,9 @@ fi
 # provider-only cannot degrade to the host network when the operator capability is absent.
 N="$TMP/network-controller"; mkdir -p "$N/scripts" "$N/worktree"
 cp "$SRC/scripts/worker-sandbox.sh" "$N/scripts/"
+cp "$SRC/scripts/provider-network.sh" "$N/scripts/"
+cp "$SRC/scripts/provider-egress.py" "$N/scripts/"
+cp "$SRC/scripts/phase5_safety.py" "$N/scripts/"
 network_rc=0
 RECURSION_ROOT="$N" RECURSION_TEST_WORKER=logical \
   bash "$N/scripts/worker-sandbox.sh" --engine claude --role implementer \
@@ -41,6 +51,19 @@ if [ "$network_rc" = 96 ] && grep -q 'NetworkNamespacePath=' "$SRC/scripts/worke
   ok "provider-only refuses execution without a controller-owned network capability"
 else
   no "provider-only silently retained host egress or lacks a namespace boundary"
+fi
+
+# The logical test bypass is permitted only for a disposable platform-temp controller.  The
+# checked-out repository is a deliberately non-temp controller on this host and must be refused.
+non_temp_rc=0
+RECURSION_ROOT="$SRC" RECURSION_TEST_WORKER=logical \
+  bash "$N/scripts/worker-sandbox.sh" --engine claude --role implementer \
+  --worktree "$N/worktree" --network-policy provider-only --prompt fixture \
+  >/dev/null 2>&1 || non_temp_rc=$?
+if [ "$non_temp_rc" = 95 ]; then
+  ok "logical test bypass refuses a non-temp controller root"
+else
+  no "logical test bypass accepted a non-temp controller root (rc=$non_temp_rc)"
 fi
 
 if grep -q 'commit_event(base, value)' "$SRC/scripts/project-reconcile.py" \
@@ -130,9 +153,12 @@ if [ "$(id -u 2>/dev/null || echo 1)" = 0 ] && command -v systemd-run >/dev/null
     no "gate write boundary did not separate build output from git authority"
   fi
 else
-  ok "gate git-write runtime control skipped (transient systemd unavailable)"
+  skip="gate git-write runtime control skipped (transient systemd unavailable)"
+  printf 'skip  %s\n' "$skip"
+  runtime_skipped=1
 fi
 
 echo
+[ "${runtime_skipped:-0}" = 1 ] && [ "$fails" -eq 0 ] && { echo "worker-gate-authority: SKIPPED (transient systemd control did not run)"; exit 77; }
 [ "$fails" -eq 0 ] && { echo "worker-gate-authority: ALL PASS"; exit 0; }
 echo "worker-gate-authority: $fails FAILED"; exit 1
