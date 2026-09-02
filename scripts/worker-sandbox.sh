@@ -1087,11 +1087,17 @@ cancel_worker(){
 trap cancel_worker TERM INT
 trap 'cleanup || true' EXIT
 
+# ProtectHome=yes makes /home inaccessible and prevents BindPaths under it (systemd.exec).
+# When we bind RUNNER_HOME -> /home/runner, use tmpfs so the bind is visible.
+PROTECT_HOME=yes
+if [ "$ENGINE" != gate ] && [ -n "$RUNNER_HOME" ] && [ -d "$RUNNER_HOME" ]; then
+  PROTECT_HOME=tmpfs
+fi
 RUN=(systemd-run --quiet --wait --collect --pipe --service-type=exec --unit "$UNIT"
   --uid "$RUNNER_USER" --gid "$RUNNER_GID" --working-directory "$SANDBOX_CWD"
   --property NoNewPrivileges=yes --property CapabilityBoundingSet=
   --property AmbientCapabilities= --property PrivateTmp=yes --property PrivateDevices=yes
-  --property ProtectSystem=strict --property ProtectHome=yes
+  --property ProtectSystem=strict --property "ProtectHome=$PROTECT_HOME"
   --property ProtectKernelTunables=yes --property ProtectKernelModules=yes
   --property ProtectKernelLogs=yes --property ProtectControlGroups=yes
   --property RestrictSUIDSGID=yes --property LockPersonality=yes
@@ -1108,13 +1114,19 @@ RUN=(systemd-run --quiet --wait --collect --pipe --service-type=exec --unit "$UN
 # /run and /var/run carry host Unix sockets (systemd's private bus, Docker, journald) and other
 # confused deputies. Masking them per-arm here (and in the shared base above) keeps every arm from
 # reaching host sockets; provider egress is always the profile-bound TCP loopback CONNECT proxy.
-if [ "$ENGINE" != gate ]; then
-  RUN+=(--property "InaccessiblePaths=/opt /srv -/workspace/.git /run /var/run")
-else
+if [ "$ENGINE" = gate ]; then
   # Git must remain readable to acceptance suites, but the suite is worker-authored code.
   # Protect the worktree pointer itself; ProtectSystem=strict separately keeps its controller
   # gitdir/refs read-only when that pointer resolves outside /workspace.
   RUN+=(--property "ReadOnlyPaths=-/workspace/.git")
+elif [ "$ROLE" = verifier ]; then
+  # Phase-5 independent verifier must inspect base..candidate via git, but must not reach /opt
+  # controller gates (machine-gate evidence is already recorded). Keep .git read-only.
+  RUN+=(--property "InaccessiblePaths=/opt /srv /run /var/run")
+  RUN+=(--property "ReadOnlyPaths=-/workspace/.git")
+else
+  # Implementer and other model workers: no git, no /opt.
+  RUN+=(--property "InaccessiblePaths=/opt /srv -/workspace/.git /run /var/run")
 fi
 
 if [ "$READ_ONLY_WORKTREE" = 1 ]; then
@@ -1187,6 +1199,20 @@ done
 
 if [ "$ENGINE" != gate ] && [ -n "$RUNNER_HOME" ] && [ -d "$RUNNER_HOME" ]; then
   RUN+=(--property "BindReadOnlyPaths=$RUNNER_HOME:/home/runner")
+  # Cursor needs writable ~/.cursor (projects/cache). Keep auth via RO home (.config),
+  # then override ~/.cursor with a WT-owned writable dir (later BindPaths wins).
+  if [ "$ENGINE" = cursor ]; then
+    # Keep Cursor CLI state OUT of the worktree so path-scope checks do not see it as
+    # an out-of-boundary modify. Host path under recursion-runner-writable; bind over ~/.cursor.
+    CURSOR_STATE="/var/lib/recursion-runner-writable/cursor-home"
+    install -d -o "$RUNNER_UID" -g "$RUNNER_GID" -m 700 "$CURSOR_STATE"
+    install -d -o "$RUNNER_UID" -g "$RUNNER_GID" -m 700 "$CURSOR_STATE/projects"
+    install -d -o "$RUNNER_UID" -g "$RUNNER_GID" -m 700 "$CURSOR_STATE/projects/workspace"
+    if [ -f "$RUNNER_HOME/.cursor/cli-config.json" ] && [ ! -f "$CURSOR_STATE/cli-config.json" ]; then
+      install -o "$RUNNER_UID" -g "$RUNNER_GID" -m 600 "$RUNNER_HOME/.cursor/cli-config.json" "$CURSOR_STATE/cli-config.json"
+    fi
+    RUN+=(--property "BindPaths=$CURSOR_STATE:/home/runner/.cursor")
+  fi
 fi
 if [ "${RECURSION_TEST_WORKER:-}" = sandbox ]; then
   is_disposable_temp_root "$ROOT" \

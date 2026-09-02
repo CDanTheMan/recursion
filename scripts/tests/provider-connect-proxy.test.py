@@ -520,13 +520,17 @@ class DeploymentContractTest(unittest.TestCase):
     def test_worker_sandbox_masks_host_run_sockets_for_gate_and_model_arms(self):
         worker = (ROOT / "scripts/worker-sandbox.sh").read_text()
         inaccessible_lines = [line for line in worker.splitlines() if "InaccessiblePaths=" in line]
-        self.assertEqual(len(inaccessible_lines), 2)
+        self.assertGreaterEqual(len(inaccessible_lines), 3)
         for line in inaccessible_lines:
             self.assertIn("/run", line)
             self.assertIn("/var/run", line)
-        # The shared base line covers the gate arm; the model-arm branch repeats the mask.
-        self.assertIn("InaccessiblePaths=", inaccessible_lines[0])
-        self.assertIn("/opt", inaccessible_lines[1])
+        # The shared base covers every role; verifier and implementer branches both repeat
+        # the socket mask while enforcing their distinct read-only/no-git boundaries.
+        self.assertIn('if [ "$ENGINE" = gate ]', worker)
+        self.assertIn('elif [ "$ROLE" = verifier ]', worker)
+        self.assertTrue(any("/opt /srv /run /var/run" in line for line in inaccessible_lines))
+        self.assertTrue(any("/opt /srv -/workspace/.git /run /var/run" in line
+                            for line in inaccessible_lines))
         # The provider egress is the loopback CONNECT proxy over TCP, not a host socket.
         self.assertIn("HTTPS_PROXY=", worker)
 

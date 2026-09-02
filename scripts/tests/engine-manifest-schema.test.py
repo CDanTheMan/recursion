@@ -124,7 +124,9 @@ def main() -> int:
         ("anthropic-claude-code", "anthropic", ["api.anthropic.com"], "GEMINI_API_KEY"),
         ("google-gemini", "gemini", ["generativelanguage.googleapis.com"], "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"),
         ("openrouter-via-opencode", "openrouter", ["openrouter.ai", "api.deepseek.com"], "GEMINI_API_KEY"),
-        ("cursor", "cursor", ["api.cursor.com", "api2.cursor.sh"], "OPENROUTER_API_KEY"),
+        ("cursor", "cursor", ["api.cursor.com", "api2.cursor.sh",
+                              "agentn.global.api5.cursor.sh", "agentn.global.api5lat.cursor.sh",
+                              "agentn.global.api5geo.cursor.sh"], "OPENROUTER_API_KEY"),
     ):
         target = copy.deepcopy(cursor)
         target["billing"]["provider"] = provider

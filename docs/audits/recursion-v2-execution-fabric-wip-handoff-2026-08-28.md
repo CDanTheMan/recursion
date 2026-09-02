@@ -1,7 +1,7 @@
 # Recursion v2 execution fabric — WIP implementation handoff
 
-Date: 2026-08-28 (America/Los_Angeles)  
-Authority: `docs/plans/recursion-v2-execution-fabric.md`, `CONTROL_PLANE.md`, `ANCHOR.md`, D-015, D-016  
+Date: 2026-08-28 (America/Los_Angeles)
+Authority: `docs/plans/recursion-v2-execution-fabric.md`, `CONTROL_PLANE.md`, `ANCHOR.md`, D-015, D-016
 WIP branch: `loop/work/recursion-v2-execution-fabric-wip`
 
 ## Autonomous executor contract

@@ -114,9 +114,11 @@ def make_assignment(tmp_path: Path, task_id: str = "task-1") -> tuple[Path, str]
     role = {
         "engine": "cursor", "provider": "cursor", "model": "cursor-primary",
         "network_policy": "provider-only", "network_profile": "cursor",
-        "argv": ["{{EXE}}", "-p", "{{PROMPT}}", "--output-format", "text", "--force",
+        "argv": ["{{EXE}}", "-p", "--trust", "{{PROMPT}}", "--output-format", "text", "--force",
                  "--model", "{{MODEL}}"],
-        "network_endpoints": ["api.cursor.com", "api2.cursor.sh"],
+        "network_endpoints": ["api.cursor.com", "api2.cursor.sh",
+                              "agentn.global.api5.cursor.sh", "agentn.global.api5lat.cursor.sh",
+                              "agentn.global.api5geo.cursor.sh"],
     }
     value = {
         "task_id": task_id, "project_id": "project-1", "source_repository": str(source),

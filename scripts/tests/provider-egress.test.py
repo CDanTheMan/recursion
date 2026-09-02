@@ -16,6 +16,15 @@ from provider_contract import (DEPLOYED_PROFILE_DIR, ProviderProfileError, asser
                                engine_profile, load_profile, profile_directory,
                                proxy_environment, validate_profile)  # noqa: E402
 
+CURSOR_ENDPOINTS = [
+    "api.cursor.com",
+    "api2.cursor.sh",
+    "agentn.global.api5.cursor.sh",
+    "agentn.global.api5lat.cursor.sh",
+    "agentn.global.api5geo.cursor.sh",
+]
+CURSOR_ENDPOINT_ARGS = [part for endpoint in CURSOR_ENDPOINTS for part in ("--endpoint", endpoint)]
+
 
 def check(condition: bool, label: str, failures: list[str]) -> None:
     print(("ok - " if condition else "FAIL - ") + label)
@@ -71,7 +80,7 @@ def main() -> int:
         profile = load_profile(path, path.stem)
         check(profile["enabled"] is False, f"shipped profile is disabled: {path.stem}", failures)
     cursor = load_profile(ROOT / "scripts/providers/cursor.json", "cursor")
-    assert_endpoints_match(cursor, ["api.cursor.com", "api2.cursor.sh"])
+    assert_endpoints_match(cursor, CURSOR_ENDPOINTS)
     check(all(part.endswith(":443") for part in cursor["authorities"]),
           "shipped provider authorities are explicit TLS port 443", failures)
     try:
@@ -82,7 +91,7 @@ def main() -> int:
     else:
         check(False, "non-TLS provider port cannot hide behind a host-only engine endpoint", failures)
     try:
-        proxy_environment(cursor, ["api.cursor.com", "api2.cursor.sh"])
+        proxy_environment(cursor, CURSOR_ENDPOINTS)
     except ProviderProfileError as exc:
         check("disabled" in str(exc), "disabled profile refuses proxy injection", failures)
     else:
@@ -97,7 +106,7 @@ def main() -> int:
         env = dict(os.environ, RECURSION_PROVIDER_DIR=str(directory))
         result = subprocess.run(
             [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
-             "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh"],
+             *CURSOR_ENDPOINT_ARGS],
             capture_output=True, text=True, env=env,
         )
         check(result.returncode == 0, "enabled profile emits proxy environment", failures)
@@ -107,7 +116,7 @@ def main() -> int:
         token = "A" * 64 + "." + "B" * 64
         authorized = subprocess.run(
             [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
-             "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh"],
+             *CURSOR_ENDPOINT_ARGS],
             capture_output=True, text=True,
             env=dict(env, RECURSION_ASSIGNMENT_PROXY_TOKEN=token,
                      RECURSION_ASSIGNMENT_IDENTITY="assignment-a"),
@@ -118,14 +127,14 @@ def main() -> int:
         for option in ("--assignment-token", "--assignment-identity"):
             argv_secret = subprocess.run(
                 [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
-                 "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh", option,
+                 *CURSOR_ENDPOINT_ARGS, option,
                  "argv-secret"], capture_output=True, text=True, env=env,
             )
             check(argv_secret.returncode == 2 and "HTTP_PROXY=" not in argv_secret.stdout,
                   f"{option} is not an accepted secret interface", failures)
         delimiter_identity = subprocess.run(
             [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
-             "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh"],
+             *CURSOR_ENDPOINT_ARGS],
             capture_output=True, text=True,
             env=dict(env, RECURSION_ASSIGNMENT_PROXY_TOKEN=token,
                      RECURSION_ASSIGNMENT_IDENTITY="assignment:a"),
@@ -144,7 +153,7 @@ def main() -> int:
         required_env = dict(env, RECURSION_PROVIDER_PROXY_REQUIRED="1")
         missing_token = subprocess.run(
             [sys.executable, str(ROOT / "scripts/provider-egress.py"), "inject", "cursor",
-             "--endpoint", "api.cursor.com", "--endpoint", "api2.cursor.sh"],
+             *CURSOR_ENDPOINT_ARGS],
             capture_output=True, text=True, env=required_env,
         )
         check(missing_token.returncode == 96 and "authorization is required" in missing_token.stderr,
@@ -157,7 +166,7 @@ def main() -> int:
         check(mismatch.returncode == 96, "endpoint outside the profile is typed refusal", failures)
 
         engine_endpoints = {
-            "cursor": ["api.cursor.com", "api2.cursor.sh"],
+            "cursor": CURSOR_ENDPOINTS,
             "gemini": ["generativelanguage.googleapis.com"],
             "opencode": ["openrouter.ai", "api.deepseek.com"],
             "claude": ["api.anthropic.com"],

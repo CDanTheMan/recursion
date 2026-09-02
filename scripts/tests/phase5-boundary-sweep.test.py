@@ -703,9 +703,11 @@ def make_assignment_fixture(scratch: Path) -> tuple[Path, Path, dict, str]:
     role = {
         "engine": "cursor", "provider": "cursor", "model": "cursor-primary",
         "network_policy": "provider-only", "network_profile": "cursor",
-        "argv": ["{{EXE}}", "-p", "{{PROMPT}}", "--output-format", "text", "--force",
+        "argv": ["{{EXE}}", "-p", "--trust", "{{PROMPT}}", "--output-format", "text", "--force",
                  "--model", "{{MODEL}}"],
-        "network_endpoints": ["api.cursor.com", "api2.cursor.sh"],
+        "network_endpoints": ["api.cursor.com", "api2.cursor.sh",
+                              "agentn.global.api5.cursor.sh", "agentn.global.api5lat.cursor.sh",
+                              "agentn.global.api5geo.cursor.sh"],
     }
     value = {
         "task_id": "task-1", "project_id": "project-1", "source_repository": str(source),
@@ -848,12 +850,17 @@ def run_sidecar_battery(scratch: Path) -> None:
 
     execution = {
         "engine": "cursor", "provider": "cursor", "profile": "cursor",
-        "endpoints": ["api.cursor.com", "api2.cursor.sh"], "model": "cursor-primary",
+        "endpoints": ["api.cursor.com", "api2.cursor.sh", "agentn.global.api5.cursor.sh",
+                      "agentn.global.api5lat.cursor.sh", "agentn.global.api5geo.cursor.sh"],
+        "model": "cursor-primary",
         "argv": normalized["role_assignments"]["implementer"]["argv"],
         "assignment_digest": digest, "assignment_identity": digest,
         "status": "finished", "exit_code": 0,
         "network": {"policy": "provider-only", "profile": "cursor", "provider": "cursor",
-                    "endpoints": ["api.cursor.com", "api2.cursor.sh"]},
+                    "endpoints": ["api.cursor.com", "api2.cursor.sh",
+                                  "agentn.global.api5.cursor.sh",
+                                  "agentn.global.api5lat.cursor.sh",
+                                  "agentn.global.api5geo.cursor.sh"]},
     }
     execution_path = scratch / "execution.json"
     execution_path.write_text(json.dumps(execution), encoding="utf-8")
@@ -1070,7 +1077,9 @@ def run_differential() -> None:
     provider_variants = (
         ("anthropic", "anthropic-claude-code", ["api.anthropic.com"],
          ["ANTHROPIC_API_KEY"], "provider-only", "flat-subscription"),
-        ("cursor", "cursor", ["api.cursor.com", "api2.cursor.sh"],
+        ("cursor", "cursor", ["api.cursor.com", "api2.cursor.sh",
+                              "agentn.global.api5.cursor.sh", "agentn.global.api5lat.cursor.sh",
+                              "agentn.global.api5geo.cursor.sh"],
          [], "provider-only", "metered"),
         ("gemini", "google-gemini", ["generativelanguage.googleapis.com"],
          ["GEMINI_API_KEY"], "provider-only", "metered"),

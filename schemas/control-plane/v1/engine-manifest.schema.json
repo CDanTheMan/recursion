@@ -39,7 +39,7 @@
             "network": { "properties": {
               "policy": { "const": "provider-only" },
               "profile": { "const": "cursor" },
-              "endpoints": { "minItems": 2, "maxItems": 2, "contains": { "const": "api.cursor.com" }, "items": { "enum": ["api.cursor.com", "api2.cursor.sh"] } }
+              "endpoints": { "const": ["api.cursor.com", "api2.cursor.sh", "agentn.global.api5.cursor.sh", "agentn.global.api5lat.cursor.sh", "agentn.global.api5geo.cursor.sh"] }
             } },
             "env_passthrough": { "const": [] }
           }

@@ -244,7 +244,10 @@ def main() -> int:
         "roles": ["implementer"],
         "billing": {"basis": "flat-subscription", "provider": "cursor"},
         "network": {"policy": "provider-only", "profile": "cursor",
-                    "endpoints": ["api.cursor.com", "api2.cursor.sh"]},
+                    "endpoints": ["api.cursor.com", "api2.cursor.sh",
+                                  "agentn.global.api5.cursor.sh",
+                                  "agentn.global.api5lat.cursor.sh",
+                                  "agentn.global.api5geo.cursor.sh"]},
         "availability_probe": None, "concurrency_cap": None, "env_passthrough": [],
     }
     check(resolver.validate_manifest(base_manifest, "sampleeng")["name"] == "sampleeng",
@@ -1060,7 +1063,8 @@ def main() -> int:
             ("network", "profile"): (1, "P", "profile\n", "cursor"),
             ("network", "endpoints"): (
                 "not-a-list", [1], [[]], ["bad"], ["sample.example.com\n"], [],
-                ["api.cursor.com", "api2.cursor.sh"],
+                ["api.cursor.com", "api2.cursor.sh", "agentn.global.api5.cursor.sh",
+                 "agentn.global.api5lat.cursor.sh", "agentn.global.api5geo.cursor.sh"],
             ),
             ("availability_probe",): (
                 [],

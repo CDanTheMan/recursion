@@ -71,9 +71,11 @@ def valid_assignment(repo: Path, controller: Path) -> dict:
     gate_digest = hashlib.sha256(assignment_contract.canonical_bytes(gate_contract)).hexdigest()
     role = {"engine": "cursor", "provider": "cursor", "model": "cursor-primary",
             "network_policy": "provider-only", "network_profile": "cursor",
-            "argv": ["{{EXE}}", "-p", "{{PROMPT}}", "--output-format", "text", "--force",
+            "argv": ["{{EXE}}", "-p", "--trust", "{{PROMPT}}", "--output-format", "text", "--force",
                      "--model", "{{MODEL}}"],
-            "network_endpoints": ["api.cursor.com", "api2.cursor.sh"]}
+            "network_endpoints": ["api.cursor.com", "api2.cursor.sh",
+                                  "agentn.global.api5.cursor.sh", "agentn.global.api5lat.cursor.sh",
+                                  "agentn.global.api5geo.cursor.sh"]}
     controller_sha = subprocess.check_output(["git", "-C", str(controller), "rev-parse", "HEAD"], text=True).strip()
     return {"task_id": "task-1", "project_id": "project-1", "source_repository": str(repo),
             "source_branch": "main", "source_sha": source_sha,
@@ -81,7 +83,9 @@ def valid_assignment(repo: Path, controller: Path) -> dict:
             "seed_manifest_digest": "", "engine": "cursor", "provider": "cursor",
             "capacity_pool": "cursor-ultra-grok-bot", "model": "cursor-primary",
             "host": "gs-recursion", "sandbox_profile": "strict-linux", "network_policy": "provider-only",
-            "network_profile": "cursor", "network_endpoints": ["api.cursor.com", "api2.cursor.sh"],
+            "network_profile": "cursor", "network_endpoints": [
+                "api.cursor.com", "api2.cursor.sh", "agentn.global.api5.cursor.sh",
+                "agentn.global.api5lat.cursor.sh", "agentn.global.api5geo.cursor.sh"],
             "argv": list(role["argv"]),
             "allowed_paths": ["scripts"], "gate_digest": gate_digest, "gate_contract": gate_contract,
             "role_assignments": {"implementer": role, "verifier": dict(role)},
@@ -341,12 +345,17 @@ def main() -> int:
         execution_path = tmp / "execution.json"
         execution = {
             "engine": "cursor", "provider": "cursor", "profile": "cursor",
-            "endpoints": ["api.cursor.com", "api2.cursor.sh"], "model": "cursor-primary",
+            "endpoints": ["api.cursor.com", "api2.cursor.sh", "agentn.global.api5.cursor.sh",
+                          "agentn.global.api5lat.cursor.sh", "agentn.global.api5geo.cursor.sh"],
+            "model": "cursor-primary",
             "argv": value["role_assignments"]["implementer"]["argv"],
             "assignment_digest": first, "assignment_identity": first,
             "status": "finished", "exit_code": 0,
             "network": {"policy": "provider-only", "profile": "cursor", "provider": "cursor",
-                         "endpoints": ["api.cursor.com", "api2.cursor.sh"]},
+                         "endpoints": ["api.cursor.com", "api2.cursor.sh",
+                                       "agentn.global.api5.cursor.sh",
+                                       "agentn.global.api5lat.cursor.sh",
+                                       "agentn.global.api5geo.cursor.sh"]},
         }
         execution_path.write_text(json.dumps(execution), encoding="utf-8")
         missing_execution = subprocess.run([

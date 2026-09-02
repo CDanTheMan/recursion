@@ -3,11 +3,41 @@
   "name": "cursor",
   "description": "Cursor CLI (cursor-agent), headless print mode. Real Cursor execution remains unproven until the required runner-home auth marker is present and a human-owned on-box probe verifies the declared flags.",
   "executable": "cursor-agent",
-  "argv": ["{{EXE}}", "-p", "{{PROMPT}}", "--output-format", "text", "--force"],
-  "model": { "required": false, "argv_suffix": ["--model", "{{MODEL}}"] },
-  "roles": ["implementer", "verifier"],
-  "billing": { "basis": "metered", "provider": "cursor" },
-  "network": { "policy": "provider-only", "profile": "cursor", "endpoints": ["api.cursor.com", "api2.cursor.sh"] },
+  "argv": [
+    "{{EXE}}",
+    "-p",
+    "--trust",
+    "{{PROMPT}}",
+    "--output-format",
+    "text",
+    "--force"
+  ],
+  "model": {
+    "required": true,
+    "argv_suffix": [
+      "--model",
+      "{{MODEL}}"
+    ]
+  },
+  "roles": [
+    "implementer",
+    "verifier"
+  ],
+  "billing": {
+    "basis": "flat-subscription",
+    "provider": "cursor"
+  },
+  "network": {
+    "policy": "provider-only",
+    "profile": "cursor",
+    "endpoints": [
+      "api.cursor.com",
+      "api2.cursor.sh",
+      "agentn.global.api5.cursor.sh",
+      "agentn.global.api5lat.cursor.sh",
+      "agentn.global.api5geo.cursor.sh"
+    ]
+  },
   "availability_probe": null,
   "concurrency_cap": null,
   "env_passthrough": [],

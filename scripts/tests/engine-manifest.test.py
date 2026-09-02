@@ -173,6 +173,10 @@ def test_shipped_manifests() -> None:
         result = run_validate(engine, None)
         check(result.returncode == 0, f"shipped manifest validates: {filename} (exit {result.returncode})")
 
+    cursor_path = ENGINES_DIR / "cursor.json"
+    cursor = json.loads(cursor_path.read_text(encoding="utf-8"))
+    check(cursor.get("model", {}).get("required") is True, "cursor.json model.required is true (no Auto fallback)")
+
 
 def test_missing_file() -> None:
     with test_directory("missing-manifest") as tmp_dir:
@@ -190,7 +194,9 @@ def test_reviewed_provider_profile_contract() -> None:
     validator = jsonschema.Draft7Validator(schema)
     reviewed_profiles = (
         ("anthropic", "anthropic-claude-code", ["api.anthropic.com"], ["ANTHROPIC_API_KEY"]),
-        ("cursor", "cursor", ["api.cursor.com", "api2.cursor.sh"], []),
+        ("cursor", "cursor", ["api.cursor.com", "api2.cursor.sh",
+                              "agentn.global.api5.cursor.sh", "agentn.global.api5lat.cursor.sh",
+                              "agentn.global.api5geo.cursor.sh"], []),
         ("gemini", "google-gemini", ["generativelanguage.googleapis.com"], ["GEMINI_API_KEY"]),
         ("openrouter", "openrouter-via-opencode", ["openrouter.ai", "api.deepseek.com"],
          ["OPENROUTER_API_KEY"]),
@@ -335,7 +341,10 @@ def test_mutations() -> None:
          "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"),
         ("opencode-test", "openrouter-via-opencode", "openrouter", ["openrouter.ai", "api.deepseek.com"],
          "GEMINI_API_KEY"),
-        ("cursor-test", "cursor", "cursor", ["api.cursor.com", "api2.cursor.sh"],
+        ("cursor-test", "cursor", "cursor", ["api.cursor.com", "api2.cursor.sh",
+                                                "agentn.global.api5.cursor.sh",
+                                                "agentn.global.api5lat.cursor.sh",
+                                                "agentn.global.api5geo.cursor.sh"],
          "OPENROUTER_API_KEY"),
     ):
         cross = copy.deepcopy(BASE_MANIFEST)

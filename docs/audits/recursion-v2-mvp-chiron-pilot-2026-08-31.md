@@ -1,6 +1,6 @@
 # Recursion v2 MVP — Chiron source-only pilot
 
-Date: 2026-08-31  
+Date: 2026-08-31
 Status: source gate passed; v6 study pilot not ready
 
 ## Bound task
