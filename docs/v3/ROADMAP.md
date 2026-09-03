@@ -59,6 +59,11 @@ Deliver the SQLite/WAL event writer, projections, migrations, artifact metadata,
 
 Gate: crash, duplicate, stale lease, disk pressure, migration, backup, restore, and projection rebuild fixtures pass without two writable truths.
 
+First rehearsal: the synthetic local execution-attempt/lease aggregate only, with no external
+effects, exact replay parity, complete legacy-writer enumeration, fencing, crash recovery and
+proven rollback. Its deterministic gate consumes zero model quota; optional analysis remains
+configurable.
+
 ## Milestone 3 — plugin kernel and route fabric
 
 Deliver compiled capability graph, plugin lifecycle, typed event bus, v2 adapter compatibility, route resolver, model-aware pools, billing boundary, credential references, and deterministic explanations.
@@ -103,7 +108,7 @@ Gate: shadow-mode and controlled experiments show improvement for at least one d
 
 ## Milestone 9 — integration, editions, and private soak
 
-Deliver release manifests, dependency locks/SBOMs, official plugin combinations, migrations from v2, construction runbook, synthetic public conformance fixtures, private canary, long-session soak, and rollback.
+Deliver release manifests, dependency locks/SBOMs, official plugin combinations, migrations from v2, construction runbook, synthetic public conformance fixtures, private canary, long-session soak, and rollback. `CANARY-01` begins with test-only characterization of one stable deterministic non-safety-critical rule, tests/fixtures only, private-approved routes, an independent clean rerun and one local candidate commit.
 
 Gate: [ACCEPTANCE.md](ACCEPTANCE.md) passes on the exact candidate; private evidence remains private; Lucas owns merge and production deployment.
 
@@ -126,9 +131,10 @@ The temporary tools used to build v3—an overnight Codex lead, Cursor implement
 
 ## Remaining blockers before construction or release
 
-1. Lucas has selected the broad planning, ARM, PAUSE, Full Access, verifier, plugin, branch and
-   canary directions. Milestone 0B must now produce exact constitutional and contract choices
-   for the unresolved mechanics in [DECISION-REGISTER.md](DECISION-REGISTER.md).
+1. Lucas has selected the planning, ARM/coordination, PAUSE default, self-administering maximum
+   Full Access, verifier fallback, plugin, branch, retention, edition, terminal, first-migration
+   and canary directions. Milestone 0B must now produce exact constitutional and contract text
+   for the narrower unresolved mechanics in [DECISION-REGISTER.md](DECISION-REGISTER.md).
 2. Milestone 1 must prove a canonical event/schema mapping across overlapping v1/v2/Project
    Pilot contracts; the mapping proposed in [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md)
    is not implementation evidence.
@@ -136,8 +142,8 @@ The temporary tools used to build v3—an overnight Codex lead, Cursor implement
    descriptor may infer entitlement from a model listing or successful prompt.
 4. Numeric coordinator/workstation budgets require the preregistered experiments in
    [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md).
-5. Privileged-plugin integrity/isolation policy, verifier tiers, interactive terminal/process
-   ownership, multi-ARM messaging and private-artifact deletion semantics require focused
-   research, fault tests and final owner rulings.
+5. Plugin quota/consent composition, exact verifier tiers/exception receipts, interactive
+   terminal/process ownership and supported-app matrix, multi-ARM message semantics, sovereign
+   audit-retention authority and deletion proof require focused research and fault tests.
 6. A native inner-loop expansion remains an optional spike until it falsifies the recommended
    adapter architecture on a declared metric.

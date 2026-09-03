@@ -73,9 +73,9 @@ Storage classes:
 
 When free-space floors are crossed, v3 removes expired temporary and rebuildable data first, then freezes new admissions before threatening canonical state or acceptance evidence.
 
-## Retention recommendation pending owner decision
+## Ratified retention direction with open proof mechanics
 
-The session direction proposes:
+The retained defaults, still subject to per-project configuration and legal policy, are:
 
 - successful raw sessions: 30 days;
 - failed or disputed raw sessions: 90 days;
@@ -83,7 +83,7 @@ The session direction proposes:
 - explicit pinning for important sessions;
 - project-specific shorter or longer policies within legal and storage constraints.
 
-The recommended design separates raw content from durable proof:
+The ratified design direction separates raw content from durable proof:
 
 1. Encrypt raw private artifacts with project- or retention-class-scoped data-encryption keys.
 2. On expiry, delete the artifact and its scoped key, then propagate physical deletion through
@@ -98,8 +98,10 @@ The recommended design separates raw content from durable proof:
 
 Cryptographic erasure is defense in depth, not proof that every copy disappeared. Content
 addressing, deduplication and shared keys can defeat deletion isolation if scoped incorrectly.
-The next research campaign must compare key granularity, backup expiry, tombstone disclosure and
-legal requirements before Lucas selects the normative policy.
+Recursion must not report deletion complete until every recoverable copy is verified deleted or
+has reached a recorded backup-expiry boundary. The next research campaign must specify proof
+states for key granularity, backup expiry, tombstone disclosure, disconnected nodes and legal
+holds; it may refine mechanics but must not reopen the owner-selected direction as model opinion.
 
 ## Performance posture
 

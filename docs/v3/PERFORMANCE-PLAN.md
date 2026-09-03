@@ -34,6 +34,7 @@ CPU, memory, disk, I/O and latency. Deployment state was not inspected.
 | PERF-008 | External engines belong off coordinator when workload is heavy | Same bounded task on coordinator and worker; wall time, coordinator RSS/CPU/I/O, transfer volume, failure recovery | Placement rule is based on measured total resource and recovery cost, not wall time alone | Remote transfer/reconciliation costs exceed saved coordinator headroom |
 | PERF-009 | Branch/worktree admission can adapt to machine and human review capacity better than a universal count | Vary active worktrees, branch age, changed bytes, Git/index operations, integration conflicts and owner review service rate; measure disk/inodes, status latency, queue age and review debt | Policy uses measured signals plus hysteresis and an owner hard ceiling, protects review/integration capacity, and outperforms a fixed limit on declared profiles | Oscillation, hidden review backlog, excessive scanning, or a larger machine generates unreviewable output faster |
 | PERF-010 | Several detachable terminal views can remain responsive without multiplying worker/model cost | Attach general, ARM, worker, event and system clients during idle and high-output runs; measure input/frame latency, CPU, RSS, wakeups, buffer growth, coalesced/dropped presentation events and daemon backpressure | Closing/reopening views preserves cursors and actors; added views stay within a preregistered UI budget, no view launches model/index work, and slow clients cannot block canonical state | Flicker/input corruption, unbounded buffers, canonical-writer delay, orphaned processes, or cost grows with each passive view |
+| PERF-011 | A Sol director with up to eight bounded Luna researchers and two targeted Terra adjudicators improves verified research evidence per quota unit over Sol-heavy or uncontrolled parallelism | Freeze one public research corpus and compare bounded profiles such as Sol-only, Sol+4 Luna and the selected Sol+8 Luna+2 Terra ceiling; record exact model/effort, source validity, contradictory evidence, duplicate work, input/cache/output usage where exposed, account-window change, wall time and human review | The selected profile preserves preregistered quality/source floors, improves verified non-duplicate findings per observed quota unit, and leaves a declared synthesis/verification reserve | Coordination/context duplication erases savings, same-family agreement hides errors, quota exhausts before adjudication, or review debt grows faster than accepted evidence |
 
 ## Required fault matrix
 
@@ -53,6 +54,9 @@ Performance success never overrides a failed safety result.
 - Contributor/training-eligible routes receive only public fixtures.
 - Every result records engine, provider, model, account reference, pool, host, sandbox, source
   revision and descriptor revision so a route change cannot masquerade as an optimization.
+- The Sol+8 Luna+2 Terra research profile is a concurrency ceiling and experiment treatment,
+  not a promise that all workers launch simultaneously or that Terra supplies cross-family
+  independence. Run bounded waves when machine, provider, quota or review headroom is lower.
 
 ## Workstation campaign observation
 

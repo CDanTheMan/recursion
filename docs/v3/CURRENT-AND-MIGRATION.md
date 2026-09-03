@@ -102,6 +102,21 @@ these stores.
 
 ## Single-writer strangler sequence
 
+### Owner-selected first rehearsal
+
+The first cutover rehearsal targets the **local execution-attempt/lease aggregate** only. It
+uses synthetic work and no network, provider, publication, credential or deployment effect.
+Before the rehearsal, enumerate and freeze every applicable legacy writer across `work.sh`,
+assignment/run evidence and the MVP fabric lease/result stores. If ownership cannot be made
+exact, stop rather than selecting a convenient subset.
+
+The gate requires exact canonical replay parity, one enforced fencing epoch, duplicate/stale
+lease refusal, crash recovery at every transition, backup/restore and a proven return to the
+frozen legacy writer without repeating work. Concurrency, retry count, fixture volume, resource
+limits, verifier tier and optional model assistance are schema-configurable. The default gate is
+deterministic and zero-model; model calls may analyze evidence but cannot be required to prove
+replay or spend subscription quota merely to rerun the rehearsal.
+
 1. Freeze representative v2 fixtures and their source commit. The first v3 code reads only
    synthetic or copied fixtures; it does not touch operational state.
 2. Define v3 object/event schemas and a pure compatibility reader. Reject unknown or
@@ -128,8 +143,8 @@ commit and, under separate authority, any live deployment. `Unknown` blocks a cu
 |---|---|---|---|
 | Head decision lifecycle | `decision-queue.py::enqueue/claim/transition`; decision journal plus pending/running/terminal projections; `conduct-hermes.sh` actuates | Stop legacy admission, reconcile every claimed decision, bind the last journal identity, then make compatibility views read-only | Kernel event writer owns decision state; fixed actuator remains post-commit. Before an external effect restore checkpoint; after an ambiguous effect reconcile forward |
 | Project goal/plan/window | `project-pilot.py::execute_value` and `project-reconcile.py::commit_reconcile_transition`; project/pilot/goal/task/event files | Quiesce both writers for the selected project aggregate, import exact digests, prove projection parity, then reject legacy mutation | Kernel owns `GoalSpec`/`ArmRun` events only after Lucas ratifies ARM semantics; legacy files become read-only projections |
-| Worker assignment/run/evidence | `work.sh` plus `assignment.py::persist_assignment`, `worker-evidence.py`, run/task/evidence files | Admit no new legacy run for the selected task class; terminalize or quarantine every existing run and bind worktree/source state | Kernel owns task/lease/result state; engine adapter owns no canonical writes. A started process/effect follows its crash matrix, not blind rollback |
-| MVP fabric lease/result/verification | `execution_fabric.py::DurableFabricStore` and `VerificationReceiptStore`; fabric JSONL/receipt stores | Prove no non-test runtime caller or, if later found, stop it and reconcile all leases before import | Treat baseline records as fixtures, not live truth. V3 writer starts only after replay equivalence; no dual journal |
+| Worker assignment/run/evidence | `work.sh` plus `assignment.py::persist_assignment`, `worker-evidence.py`, run/task/evidence files | First-rehearsal target together with the local MVP fabric row: admit no new legacy run for the synthetic task class; enumerate/fence every applicable writer, terminalize or quarantine every existing run and bind worktree/source state | Kernel owns the synthetic local attempt/lease/result state only after exact replay/crash/rollback proof; engine adapter owns no canonical writes. No external effect is permitted |
+| MVP fabric lease/result/verification | `execution_fabric.py::DurableFabricStore` and `VerificationReceiptStore`; fabric JSONL/receipt stores | First-rehearsal target together with local worker assignment: prove no non-test runtime caller or, if later found, stop it and reconcile all leases before import | Treat baseline records as synthetic fixture shapes, not live truth. V3 writer starts only after replay equivalence, fencing and rollback proof; no dual journal |
 | Remote attempt/session/usage | `remote_backend.py::begin_attempt/reconcile_attempt/write_session/write_usage`; per-backend journals/projections | Verify deployment/manifest state; disable new remote mutation, reconcile every open/ambiguous attempt, advance the fencing epoch | Kernel owns attempt state; transport returns observations. Any possibly accepted remote request is reconciliation-only |
 | Publication and Git ref effect | `project-reconcile.py::publish_task` creates intent; `publish.sh::publish_one` is the sole review-ref writer | Drain or reject legacy publication intents, bind exact candidate/source/ref, keep PAUSE and protected-ref guards active | Kernel owns publication intent/receipt state; one publisher actuator owns the Git effect. A pushed review ref is never "rolled back" by state restoration |
 | Cross-aggregate transition | Current reconciler/conductor coordinates file and Git mutations across the rows above | Name the source and destination aggregates, persist a bridge/saga id, and allow only one side to advance each step | Kernel saga/outbox owns coordination; each aggregate retains one writer. Ambiguity blocks the dependent effect until reconciled |

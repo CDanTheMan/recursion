@@ -64,10 +64,11 @@ dedicated topic may address an ARM directly. These are views over canonical acto
 not additional supervisors or task registries. See
 [TERMINAL-RUNTIME.md](TERMINAL-RUNTIME.md).
 
-Shared multi-ARM conversations are desired but remain a research item. The initial
-recommendation is a Head-routed room or an event-mediated workflow with one named coordinator
-per step. A `supervisor` is a role held by Head or an ARM inside a GoalSpec, never an additional
-AI ARM Manager. See [INTERACTION-SURFACES.md](INTERACTION-SURFACES.md).
+Shared multi-ARM conversations use a Head-routed room or an event-mediated workflow. A named ARM
+may hold one bounded workflow-step coordination lease; Head retains overall goal, membership,
+authority, conflicts, lifecycle and strategic escalation. A `supervisor` is a temporary role
+held by Head or that named ARM inside a GoalSpec, never an additional AI ARM Manager. Exact
+message and failure semantics remain research. See [INTERACTION-SURFACES.md](INTERACTION-SURFACES.md).
 
 ## Core object model
 
@@ -77,10 +78,13 @@ AI ARM Manager. See [INTERACTION-SURFACES.md](INTERACTION-SURFACES.md).
 | `GoalSpec` | Versioned execution contract: outcome, scope, non-goals, budget, privacy, routes, gates, falsifier |
 | `ExecutiveProfile` | Reusable defaults for a Head or ARM without carrying active-goal state |
 | `ArmRun` | Durable goal-scoped executive instance with lease, plan, policy, checkpoints, and status |
+| `CoordinationLease` | Bounded Head-issued authority for one named ARM to coordinate one shared-room workflow step |
 | `TaskNode` | Bounded unit in an ARM-owned DAG |
 | `WorkPacket` | Immutable executable grant for a delegated worker or verifier |
 | `Route` | Engine + provider + model + capacity pool + credential reference + host + sandbox |
 | `CapacityPool` | Subscription, metered API, or local compute entitlement and observed availability |
+| `PausePolicy` | Versioned `checkpoint`, `interrupt`, `drain` or emergency behavior by effect class |
+| `PermissionProfile` / `CapabilityGrant` | Configurable authority, including explicit maximum `sovereign` and optional `grant-admin` |
 | `ContextCapsule` | Model-independent, content-addressed handoff manifest |
 | `EvidenceBundle` | Exact source, diff, gates, observed behavior, and verifier receipt |
 | `PublicationIntent` | Passed candidate proposed to the only approved publishing path |
@@ -158,7 +162,8 @@ The destination may be a re-foundation; construction should still use a strangle
 2. Introduce the canonical event/state boundary alongside read-only projections of v2 state.
 3. After Lucas ratifies ARM identity and Project Pilot compatibility semantics, represent the
    approved subset as first-class ARM runs without changing publication authority.
-4. Route one low-risk flow through the v3 kernel.
+4. Rehearse the synthetic local execution-attempt/lease aggregate with no external effects,
+   exact replay, complete writer fencing, crash recovery and rollback.
 5. Compare results and rollback behavior against v2.
 6. Move additional transitions only when their equivalence or improvement is proven.
 7. Delete duplicated paths only after replay and migration gates pass.
@@ -191,7 +196,8 @@ before private deployment configuration changes. The stable principle is that He
 the accountable logical actor, models are authorized replaceable compute, deterministic code
 actuates, and Lucas retains authority.
 
-Configurable PAUSE completion and a Full Access profile capable of receiving control-plane,
-credential, spending, publication or deployment grants also differ from current constitutional
-defaults. V3 research must produce exact amendment choices; these docs do not authorize a live
+The ratified `checkpoint` PAUSE default and a maximum `sovereign` profile capable of receiving
+control-plane, credential, spending, publication, deployment and `grant-admin` authority
+also differ from current constitutional defaults. V3 research must produce exact amendment
+choices and preserve explicit receipts/audit boundaries; these docs do not authorize a live
 policy or configuration change. See [DECISION-REGISTER.md](DECISION-REGISTER.md).

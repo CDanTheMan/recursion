@@ -40,7 +40,7 @@ of live state, native agent loop or UI.
 | Task | Output | Gate | Stop condition |
 |---|---|---|---|
 | C1 vocabulary freeze | Schema names and object/event ownership ADR under `docs/v3/**` | Every name maps to [GLOSSARY.md](GLOSSARY.md); no second executive layer | Material term has two authority meanings |
-| C2 strict schemas | Schemas for `OwnerIntent`, `GoalSpec`, `ArmRun`, `TaskNode`, `WorkPacket`, `Route`, `RouteLease`, `ContextCapsule`, `EvidenceBundle`, publication objects | Unknown fields, malformed identities, raw secrets, unbounded values and invalid versions fail closed | Required current invariant cannot be represented |
+| C2 strict schemas | Schemas for `OwnerIntent`, `GoalSpec`, `ArmRun`, `CoordinationLease`, `TaskNode`, `WorkPacket`, `Route`, `RouteLease`, `PausePolicy`, `PermissionProfile`, `CapabilityGrant`, `VerifierPolicy`, `PluginManifest`, `ContextCapsule`, `EvidenceBundle`, publication objects | Unknown fields, malformed identities, raw secrets, unbounded values and invalid versions fail closed | Required current invariant cannot be represented |
 | C3 cross-record validator | Pure offline validator for parent/child authority, budget, source, route, verifier and publication bindings | Mutation/property fixtures prove child subset, distinct verifier and no implicit billing/egress widening | Validator needs operational state or network access |
 | C4 compatibility fixtures | Sanitized synthetic fixtures shaped from v2 contracts plus explicit incompatibility results | Each fixture round-trips to a canonical digest or fails with one typed reason; no best-effort loss | Translation requires project/provider special cases in kernel |
 | C5 replay model | In-memory command/event projector and deterministic replay test only | Duplicate command is idempotent; ordering/rebuild digest is stable; no external effect occurs | Replay depends on wall clock, process state or network |
@@ -62,21 +62,29 @@ A future implementation passes only when all of the following are machine checke
 4. Engine, provider, model, account reference, capacity pool, host and sandbox remain separate
    required route fields; subscription-to-metered fallback is impossible without a new owner
    grant.
-5. Raw credential material and contributor-ineligible privacy combinations are rejected.
-6. Implementer and verifier identities are distinct and both bind the exact task, source,
+5. `checkpoint` is the encoded ordinary PAUSE default; `interrupt`, `drain` and emergency stop
+   are distinct values whose effect boundary and precedence cannot be conflated.
+6. Maximum `sovereign` authority can administer its own grants only when `grant-admin` is
+   explicit; the mutation binds before/after digests and cannot silently alter audit history.
+7. A plugin's code trust, digest, functional capabilities, subscription quota, metered spend,
+   route/account use, update and revocation authorities are represented separately.
+8. Raw credential material and contributor-ineligible privacy combinations are rejected.
+9. Implementer and verifier identities are distinct and both bind the exact task, source,
    candidate, gate and evidence digests.
-7. Publication intent/receipt cannot mean merge or deploy and can be emitted only through the
+10. Routine verifier downgrade and high-risk owner exception are explicit typed evidence;
+    missing verification cannot produce a pass.
+11. Publication intent/receipt cannot mean merge or deploy and can be emitted only through the
    publisher role.
-8. Duplicate commands replay one result; shuffled or corrupted events, stale leases and
+12. Duplicate commands replay one result; shuffled or corrupted events, stale leases and
    mismatched sequence/digest fail closed.
-9. Every compatibility fixture either replays to the expected canonical digest or returns one
+13. Every compatibility fixture either replays to the expected canonical digest or returns one
    stable typed incompatibility; no fixture mutates existing v1/v2 state.
-10. The test suite performs no network call, provider invocation, Git push, runtime-state write
+14. The test suite performs no network call, provider invocation, Git push, runtime-state write
     or configuration change and leaves the repository clean except for intended allowed-path
     changes.
-11. An independent verifier executes the exact gate on the exact candidate commit and records
+15. An independent verifier executes the exact gate on the exact candidate commit and records
     dissent plus any unproved property.
-12. `git diff --check` and the repository's relevant tests pass; all changes stay inside the
+16. `git diff --check` and the repository's relevant tests pass; all changes stay inside the
     approved task paths.
 
 ## Handoff and rollback
@@ -90,6 +98,8 @@ stop and return the smallest conflicting fixture and owner question.
 ## Later construction boundary
 
 Only after this milestone passes may an owner-approved goal propose a SQLite/WAL writer,
-shadow reader or one-aggregate cutover. A native inner agent loop remains a separate measured
+shadow reader or the ratified synthetic local execution-attempt/lease rehearsal. That rehearsal
+has no external effects and must prove exact replay, full writer enumeration, fencing, crash
+recovery and rollback with a deterministic zero-model gate. A native inner agent loop remains a separate measured
 spike. See [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md) and
 [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md).

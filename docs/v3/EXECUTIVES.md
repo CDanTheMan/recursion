@@ -29,15 +29,23 @@ An ARM is a durable executive bounded to one versioned GoalSpec. It:
 - chooses among only the routes and resources permitted by its inherited policy;
 - responds tactically to evidence and failures;
 - checkpoints its state and reports progress or blockers upward;
-- cannot create unrelated goals or expand its own authority; merge, deployment and other
-  high-impact capabilities exist only when the exact owner grant/GoalSpec and operative
-  constitution allow them.
+- cannot create unrelated goals or implicitly expand authority through planning or delegation;
+  merge, deployment and other high-impact capabilities exist only when the exact grant/GoalSpec
+  and operative constitution allow them. A separately explicit maximum `sovereign`
+  `grant-admin` capability may authorize a receipt-backed grant mutation; it is not inherited by
+  ordinary ARMs or children.
 
 An ARM normally exposes an addressable conversation so the owner can speak with it directly.
 One ARM per repository is a likely configuration default, not an identity rule: ARM identity is
 bound to a GoalSpec, and a goal may be narrower than or span more than one repository. Direct
 conversation does not bypass Head monitoring or turn chat history into canonical state. See
 [INTERACTION-SURFACES.md](INTERACTION-SURFACES.md).
+
+In a shared multi-ARM workflow, Head owns the overall goal, membership, authority envelope,
+conflict resolution, ARM lifecycle and strategic model escalation. Head may issue a bounded,
+expiring coordination lease to one named ARM for one workflow step. That lease permits routing
+messages and proposing transitions inside the step; it does not create another executive tier,
+admit new members, widen authority or settle cross-goal conflicts.
 
 ### Delegated agent
 
@@ -106,7 +114,7 @@ Ordinary model/config changes apply at the next checkpoint. A forced swap reques
 The product direction is configurable pause aggressiveness rather than one universal behavior.
 The kernel, not the model, selects an owner-approved policy and records its version:
 
-- `checkpoint` — recommended normal default: admit no new operation, let the current bounded
+- `checkpoint` — ratified ordinary default: admit no new operation, let the current bounded
   operation reach its next mechanically safe checkpoint, then pause;
 - `interrupt` — request immediate cancellation of interruptible work, preserve atomic state and
   quarantine ambiguous effects;
@@ -133,10 +141,11 @@ Verification is risk scaled. The proposed starting tiers are:
    independent gate execution/environment, and owner approval for irreversible authority,
    credentials, spend, publication or deployment effects.
 
-Unavailable diversity is disclosed. Routine work may fall back to deterministic or human
-verification according to policy; release evidence blocks rather than silently lowering its
-declared tier. Research must measure which separation dimensions find materially different
-defects before these tiers become normative.
+Unavailable diversity is disclosed. Routine work may use a documented downgrade when its
+risk policy permits it. Releases, security-sensitive work, control-plane changes and
+irreversible external effects block unless Lucas explicitly approves a recorded exception.
+Missing or weaker verification never becomes a pass. Research must measure which separation
+dimensions find materially different defects and define the exact exception receipt.
 
 ## Capacity exhaustion
 

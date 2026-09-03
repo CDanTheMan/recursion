@@ -84,10 +84,12 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 
 ## Immediate next step
 
-Lucas has answered the initial owner queue. The remaining architecture questions and proposed
-answers are recorded in [DECISION-REGISTER.md](DECISION-REGISTER.md); the next evidence-producing
-step is the focused [RESEARCH-AGENDA.md](RESEARCH-AGENDA.md) campaign. Only after that research
-reconciles the terminal, interaction, PAUSE, Full Access, verifier, plugin, migration, capacity
-and retention contracts should the pure schema/replay milestone in
+Lucas has answered both initial owner queues, including the PAUSE default, sovereign self-grant,
+verifier fallback, bounded ARM coordination, edition defaults, first migration rehearsal,
+retention, terminal platforms and private-canary task. The remaining evidence questions are
+recorded in [DECISION-REGISTER.md](DECISION-REGISTER.md); the next step is the focused
+[RESEARCH-AGENDA.md](RESEARCH-AGENDA.md) campaign using the owner-selected Sol director, eight
+bounded Luna researchers and two targeted Terra adjudicators as a preflighted ceiling. Only
+after that research reconciles the remaining mechanics should the pure schema/replay milestone in
 [CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md) be authorized. No runtime implementation is
 authorized by this suite.

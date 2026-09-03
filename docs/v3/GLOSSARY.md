@@ -21,6 +21,9 @@ schema milestone may refine field names, but it should not create a second synon
 | `Kernel` | Deterministic authority, event and action enforcement substrate | a semantic manager or planning agent |
 | `Principal` | Identity whose signed grant is being exercised | whichever process happens to hold a session |
 | `CapabilityGrant` | Versioned subset of parent authority | a tool merely being installed or discoverable |
+| `grant-admin` | Explicit maximum-authority capability permitting receipt-backed mutation of the holder's grants within installation bounds | implicit self-escalation or permission to rewrite historical audit evidence |
+| `PermissionProfile` | Named schema-validated bundle of capability defaults; `sovereign` is the explicit maximum profile | an edition manifest or automatic consequence of installing `full` |
+| `VerifierPolicy` | Risk-class mapping to required deterministic, session, model/family/provider/host and owner-exception evidence | a missing verifier being treated as passed |
 | `ActorEndpoint` | Addressable CLI/Telegram view of Head or an ARM | actor identity, authority, lease or canonical state |
 | `TerminalView` | Detachable interactive client over actor/event/process state | the process owner or a durable executive |
 | `ProcessBroker` | Platform adapter that owns and reconciles PTY/process groups for bounded work | the model, terminal window or canonical state writer |
@@ -37,6 +40,7 @@ workers. The kernel owns neither portfolio priorities nor ARM plans.
 | `GoalSpec` | Owner then Head | Immutable versioned goal, scope, non-goals, budget, privacy, gates and stop rules |
 | `ExecutiveProfile` | reviewed configuration | Reusable defaults; never active state or authority by itself |
 | `ArmRun` | Head creates; ARM advances | One leased execution of a `GoalSpec`, retaining identity across model/session swaps |
+| `CoordinationLease` | Head issues; named ARM may hold | Bounded, expiring authority to coordinate one shared-room workflow step without owning the overall goal, membership, conflicts or ARM lifecycle |
 | `TaskNode` | ARM | DAG node describing bounded work and dependencies |
 | `WorkPacket` | kernel issues from approved task | Immutable executable authority for a worker or verifier |
 | `Route` | deterministic resolver | Complete engine/provider/model/account/pool/host/sandbox selection plus explanation |

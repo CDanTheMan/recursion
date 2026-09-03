@@ -157,6 +157,17 @@ logical identity and GoalSpec; it does not merge their private contexts.
 
 ## Research requirements
 
+The v3.0 portability gate covers native Windows and Linux terminal stacks. The exact initial
+application matrix must be chosen from measured behavior, but it must include the Windows
+ConPTY/Job Object path and the Linux PTY/session/process-group path with at least one maintained
+native terminal on each OS. Compatibility breadth beyond that behavioral floor may ship later.
+
+Git Bash is a distinct Windows/MSYS2 shell-and-PTY translation case, and Neovim is an embedded
+terminal/editor client rather than an operating-system terminal. Both are high-priority research
+targets, along with other popular terminals, but must pass attach/detach, input, resize, process
+ownership and plain-text tests before being listed as supported. Popularity does not justify a
+compatibility claim that leaves work orphaned or input corrupted.
+
 Before freezing the contract, compare primary specifications and implementations for:
 
 - Windows ConPTY, Job Objects, process groups and Windows Terminal control/integration;
@@ -165,7 +176,9 @@ Before freezing the contract, compare primary specifications and implementations
 - mature terminal UI diff renderers, event loops, accessibility and resize behavior;
 - agent CLIs' transcript, streaming, subprocess, resume and multi-session failure modes;
 - IPC authentication, stream cursors, flow control and bounded buffering;
-- terminal layout portability without making an OS terminal application mandatory.
+- terminal layout portability without making an OS terminal application mandatory;
+- Git Bash/MSYS2 translation and Neovim embedded-terminal behavior, plus a documented path for
+  adding later compatibility profiles without changing canonical actor/process semantics.
 
 Required experiments include attach/detach storms, terminal crashes, daemon restart, orphan and
 grandchild processes, high-output workers, resize/Unicode tests, slow clients, simultaneous

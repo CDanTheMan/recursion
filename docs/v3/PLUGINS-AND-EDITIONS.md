@@ -115,6 +115,12 @@ One source tree produces versioned release manifests:
 
 Edition manifests lock exact plugin versions and defaults. Installation should not download or start disabled heavy plugins. A user can add/remove plugins later without migrating to a different product.
 
+Every edition shares the common defaults: `checkpoint` PAUSE, trusted bounded autonomy,
+digest-aware plugin grants and detachable multi-terminal operation. `standard` adds richer local
+orchestration. `full` adds advanced and distributed first-party capabilities. Installing `full`
+does not enable maximum `sovereign` authority; that separately named capability preset requires
+an explicit owner action and displays its full blast radius.
+
 ## Distribution and updates
 
 - Built-in registry plus filesystem/Git/package sources, each pinned to an immutable digest before activation.
@@ -125,9 +131,10 @@ Edition manifests lock exact plugin versions and defaults. Installation should n
   capability is safe for every project.
 - Unsigned local plugins remain installable and may implement the complete plugin API. The CLI
   warns that they are not maintainer approved, pins the exact digest and displays all requested
-  authority. The recommended default requires developer mode and explicit per-plugin grants
-  before sensitive capability is admitted; whether one warning may approve every requested
-  capability remains an owner-visible research dispute.
+  authority. A configured local policy may let that acknowledgement mint the requested
+  digest-aware grants. Plugin model launches, subscription quota, metered spending,
+  provider/account use, updates and revocation remain separately visible and configurable;
+  their one-step versus staged consent mechanics remain an owner-visible research question.
 - Update proposal, staging, verification, and rollback separate from agent authority.
 - No mandatory centralized marketplace or remote kill switch.
 

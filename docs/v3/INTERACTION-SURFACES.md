@@ -70,9 +70,11 @@ mechanisms have not yet been identified and must not be inferred from the name a
 Three topologies should be compared:
 
 1. **Head-routed room:** Head owns the shared conversation lease, solicits named ARM input and
-   commits one reconciled transition. This is the safest initial recommendation.
+   commits one reconciled transition. This remains the simplest default.
 2. **Event-mediated peers:** ARMs exchange typed requests and evidence through the kernel while
-   one named coordinator owns each cross-ARM workflow step.
+   one named ARM may hold a bounded, expiring coordination lease for each cross-ARM workflow
+   step. The owner has accepted this topology when the lease cannot change room membership,
+   overall goal, authority envelope, conflict policy or ARM lifecycle.
 3. **Direct peer delegation:** an ARM delegates to or directs another ARM. This is rejected by
    default unless authority, budget accounting, deadlock handling and one-writer ownership can
    be proved without creating a hidden executive tier.
@@ -80,6 +82,11 @@ Three topologies should be compared:
 A workflow `supervisor` may be a temporary coordinator role held by Head or a named ARM inside
 one GoalSpec. It is not a new constitutional AI ARM Manager and may not acquire portfolio
 authority merely because several actors share a room.
+
+Head retains ownership of the overall goal, room membership, authority envelope, conflict
+resolution, ARM lifecycle and a substantial part of strategic model escalation even while a
+named ARM holds the step lease. Lease expiry, revocation, PAUSE or conflict returns coordination
+to Head without changing actor identity or treating transcript order as a handoff.
 
 ## Required interaction semantics
 

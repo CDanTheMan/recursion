@@ -30,16 +30,34 @@ Do not reopen these as model-opinion questions:
   close detaches; it does not end the actor or process.
 - An ARM is a goal-scoped executive that delegates a configurable fleet. One ARM per
   repository is a common default, not a protocol invariant.
-- Direct owner-to-ARM conversation is a product requirement.
-- PAUSE behavior and Full Access aggressiveness are configurable by explicit owner policy.
-- Verifier independence is risk scaled.
+- Direct owner-to-ARM conversation is a product requirement. A named ARM may hold a bounded
+  workflow-step coordination lease; Head retains overall goal, room, authority, conflict,
+  lifecycle and strategic-escalation ownership.
+- `checkpoint` is the ordinary PAUSE default; `interrupt`, `drain` and emergency stop are
+  explicit alternatives.
+- Full Access is capability-configurable. Explicit maximum `sovereign` authority may include
+  `grant-admin` and modify its own grants through attributable actions.
+- Verifier independence is risk scaled. Routine work may use a documented downgrade; releases,
+  security-sensitive work, control-plane changes and irreversible effects block unless Lucas
+  explicitly approves an exception. Missing verification is never a pass.
 - First-party/maintainer-approved plugins are signed by the installation trust root.
+- Unsigned plugins retain full functionality after digest-aware warning/acknowledgement, while
+  their quota, spending, route, update and revocation effects remain separately configurable.
 - Branch/worktree backlog limits are measured and configurable, not a universal constant.
+- Common defaults are `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants
+  and detachable terminals. `full` installation never implies maximum `sovereign` authority.
+- The first single-writer rehearsal is the synthetic local execution-attempt/lease aggregate,
+  with zero external effects and deterministic replay/fencing/crash/rollback proof.
 - Recursion includes a research ARM capability that can discover papers, reconcile claims and
   design reproducible experiments under the same privacy/evidence contracts.
-- The first private canary is `CANARY-01`, an owner-selected construction-domain project. Its
-  real name, repository, source, prompts, branches and telemetry stay outside tracked/public
-  research artifacts.
+- Raw private artifacts use scoped encryption, verified deletion/key destruction, cache/backup
+  propagation and a minimal signed non-sensitive tombstone; deletion remains incomplete while
+  a recoverable copy lacks a recorded expiry boundary.
+- The first private canary is `CANARY-01`. It first characterizes one stable deterministic
+  non-safety-critical business rule through test/fixture-only writes, private-approved routes,
+  an independent clean rerun and a local candidate commit. Its identity and content remain private.
+- Native Windows and Linux terminal stacks must pass v3.0; Git Bash, Neovim terminal use and
+  other popular environments are high-priority compatibility research.
 
 Current `CONTROL_PLANE.md` remains operative until separately amended. Research must state
 where the desired v3 product policy differs from current private deployment authority.
@@ -104,8 +122,8 @@ engines, job schedulers and agent harnesses. Model at least `checkpoint`, `inter
 `drain` policies plus an independent emergency stop. Define behavior for a model turn, local
 transaction, subprocess, remote/disconnected action, read-only gate, publication and an
 ambiguous external effect. Produce a transition/crash matrix and constitutional amendment
-options. The current recommendation is `checkpoint` as the normal default, while emergency
-stop blocks new effects immediately and quarantines uncertain output.
+options. `checkpoint` is the ratified ordinary default, while emergency stop blocks new effects
+immediately and quarantines uncertain output. Research chooses mechanics, not a different default.
 
 ### R4 — calibrated Full Access
 
@@ -116,9 +134,11 @@ Research capability systems, privilege separation, just-in-time elevation, break
 administration and dangerous-mode UX. Compare a single boolean with a capability vector for
 control-plane writes, credential administration, new billing authority, publication, merge,
 deployment, service control and audit-policy changes. Specify acknowledgement, authentication,
-time bounds, scope, inheritance, revocation and recovery. Test the recommendation that a
-`sovereign` preset may explicitly grant every supported capability while no running actor may
-mint or conceal its own grant.
+time bounds, scope, inheritance, revocation and recovery. The ratified maximum `sovereign`
+preset may explicitly include `grant-admin` and modify its own grants. Test how to make those
+mutations explicit, attributable and recoverable without allowing model prose to create
+authority or historical audit records to be silently concealed. Audit-retention authority is
+a separate unresolved capability.
 
 ### R5 — risk-scaled independent verification
 
@@ -134,17 +154,24 @@ session for routine changes; different capable model/family for material changes
 provider/family plus owner approval and independent execution environment for constitutional,
 credential, spending, publication, deployment and release boundaries.
 
+Routine work may use a policy-defined documented downgrade. Releases, security-sensitive work,
+control-plane changes and irreversible external effects block when the required verifier is
+unavailable unless Lucas explicitly approves an exception tied to the exact candidate, gate and
+missing independence dimension. Missing evidence never becomes green.
+
 ### R6 — plugin signing and unsigned local power
 
 **Question:** What does maintainer approval prove, and how can unsigned local plugins retain
 full feature expressiveness without warning-only supply-chain failure?
 
 Research package signing, transparency, lockfiles, SBOMs, reproducible bundles, sandboxing and
-capability consent. Separate functional API access from ambient privilege. Test the proposed
-compromise: signed plugins can carry a reviewed publisher policy; unsigned plugins may use the
-complete plugin API, but sensitive capabilities require a digest-pinned, per-plugin owner
-grant and developer-mode step-up rather than one generic warning. Preserve the owner's ability
-to override locally without granting a remote maintainer veto.
+capability consent. Separate functional API access from ambient privilege. Test the design
+space: signed plugins can carry a reviewed publisher policy; unsigned plugins may use the
+complete plugin API after a digest-specific warning/acknowledgement. Compare whether that one
+acknowledgement can create requested grants safely or staged consent is needed. Model launches,
+subscription quota, metered spending, provider/account selection, updates and revocation must
+be separately attributable and configurable. Preserve the owner's simple local override path
+without granting a remote maintainer veto.
 
 ### R7 — single-writer migration and effect rollback
 
@@ -153,12 +180,13 @@ aggregate to v3?
 
 Research event-sourced stranglers, expand/contract database migrations, sagas/outboxes,
 fencing, shadow reads and external-effect reconciliation. Apply them to the verified writer
-inventory in [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md). Produce per-aggregate entry,
-cutover, rollback and point-of-no-return gates. The starting recommendation requires no active
-lease/open attempt/publication intent, exact import/projection digest parity, tested backup and
-reverse reader, a new fencing epoch and one owner-approved low-risk canary aggregate. Provider
-submissions, pushed refs, sent messages, credential changes and deployments reconcile forward
-once externally accepted.
+inventory in [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md). First apply it to the ratified
+synthetic local execution-attempt/lease aggregate with no external effects. Require complete
+legacy-writer enumeration, no active lease, exact import/projection digest parity, tested
+backup/reverse reader, a new fencing epoch, crash recovery and proven rollback. Make concurrency,
+resource limits, retry and optional model use configurable; deterministic reruns must consume
+zero model quota. Only then propose later aggregates. Provider submissions, pushed refs, sent
+messages, credential changes and deployments reconcile forward once externally accepted.
 
 ### R8 — adaptive branch and review-backlog capacity
 
@@ -176,10 +204,10 @@ than evidence can be reviewed merely because branch creation is cheap.
 **Question:** How should raw private artifacts expire while durable lineage remains auditable?
 
 Research cryptographic erasure, physical deletion, tombstones, backup expiry, legal hold,
-content-address leakage and per-project keys. Test the recommendation to encrypt raw artifacts
-with scoped data-encryption keys, delete expired blobs and keys, and retain a minimal signed
-tombstone containing policy/version, class, time and outcome but no recoverable content.
-Specify propagation across caches, backups and disconnected nodes, plus owner purge and pin.
+content-address leakage and per-project keys. The direction is ratified: encrypt raw artifacts
+with scoped keys, verify blob and key deletion, retain a minimal signed non-sensitive tombstone,
+and propagate deletion through caches and backups. Specify proof states for disconnected nodes
+and backup-expiry boundaries; never claim completion while an unexpired recoverable copy exists.
 
 ### R10 — private canary methodology
 
@@ -187,9 +215,11 @@ Specify propagation across caches, backups and disconnected nodes, plus owner pu
 run to substitute for fault coverage?
 
 Use only local/private eligible routes for real project inspection. Public research receives
-synthetic construction-domain fixtures. Define bounded canary tasks, failure injection,
-baseline comparison, owner review measures, disclosure boundaries and stop conditions. The
-canary does not begin during the research campaign.
+synthetic construction-domain fixtures. Preserve the first task: test-only characterization of
+one stable deterministic non-safety-critical business rule, writes only to tests/fixtures,
+private-approved processing, independent clean rerun and one local candidate commit. Define
+failure injection, baseline comparison, disclosure and stop conditions. The canary does not
+begin during the research campaign.
 
 ### R11 — interactive terminal runtime and communication visualization
 
@@ -200,6 +230,9 @@ overhead?
 Compare Windows ConPTY/Job Objects/Windows Terminal integration; POSIX PTYs, sessions, process
 groups and signals; detachable multiplexers; service supervision; mature TUI diff renderers;
 IPC authentication; stream cursors; flow control; and agent-CLI multi-session failure modes.
+Native Windows and Linux terminal stacks are mandatory for v3.0. Treat Git Bash/MSYS2 and
+Neovim's embedded terminal as distinct high-priority compatibility cases, not synonyms for the
+native OS stacks, and define evidence-based later graduation for additional terminals.
 Specify daemon/process-broker/view ownership, attach/detach/reconnect, saved layouts,
 configuration transactions, graph-and-stream communication views, non-flicker rendering,
 plain-text/accessibility fallback, graceful/forced/emergency termination and orphan detection.
@@ -231,7 +264,10 @@ quality floors and blind review. Compare one strong ARM, bounded specialist dele
 multi-ARM collaboration and uncontrolled swarms; task-specific suites versus a universal
 ladder; same-route continuity versus checkpoint switching; and strong versus cheap planning.
 Measure variance, repair work, false-green gates, owner review and provider/version drift. Do
-not publish a universal model ranking from incomparable prompts or one run.
+not publish a universal model ranking from incomparable prompts or one run. Measure the selected
+Sol-director/eight-Luna/two-Terra ceiling under PERF-011/H-038, including duplicated context,
+same-family blind spots, source validity and remaining quota for synthesis. Do not spend quota
+rerunning a full alternative after a smaller preregistered sample is decisive.
 
 ### R14 — context, compaction and cache manipulation
 
@@ -296,6 +332,23 @@ or synthetic briefs and verifies consequential sources directly.
 Local-only work may inspect the Recursion source, tests and sanitized synthetic fixtures. Live
 deployment inspection, provider-auth changes, paid routes, private-canary execution and runtime
 implementation require separate authorization.
+
+## Selected Codex research profile
+
+For the next explicitly invoked local campaign, Lucas selected one Sol research director, up to
+eight bounded Luna researchers and two targeted Terra adjudicators. This is a ceiling, not an
+instruction to keep every slot busy. Stage workers in source-domain waves, reserve capacity for
+synthesis and verification, and reduce concurrency when machine, provider, quota or human-review
+headroom degrades. Terra supplies a separate adjudication context and capability/cost tier; it
+does not count as a different model family from Sol/Luna.
+
+The intended local Codex setting is ten concurrently open spawned-agent threads excluding the
+primary director. The campaign may use it only if Lucas has already applied and validated that
+configuration; it must not edit provider, model, authentication, spending or user-level Codex
+configuration itself. If the available cap is lower, run the same eight Luna and two Terra roles
+in bounded waves without substituting models. Record exact effort, route and observed usage, and
+evaluate PERF-011/H-038 without duplicating an entire expensive campaign after the result is
+already decisive.
 
 ## Required outputs
 

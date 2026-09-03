@@ -50,17 +50,22 @@ At minimum, end-to-end fixtures cover:
 - private project egress denied to an ineligible route;
 - plugin crash/quarantine while unrelated work continues;
 - privileged plugin digest/signature mismatch, dependency substitution, and rollback;
-- unsigned local plugin installation, warning/acknowledgement, digest rotation, developer-mode
-  step-up and sensitive-capability refusal without its explicit grant;
+- unsigned local plugin installation, warning/acknowledgement, digest rotation, configured
+  one-step or staged consent, and sensitive-capability refusal outside its digest-aware grant;
+- plugin quota/route/spend declaration, attribution, configured ceilings and refusal of any
+  unacknowledged metered transition;
 - planning mode `off` rejecting an incomplete or unauthenticated GoalSpec and preserving provenance for a complete one;
 - maximum Full Access selected by the owner with each control-plane, credential, billing,
-  privacy, publication, merge, deployment and service capability exactly granted, bounded and
-  attributed; a worker cannot self-widen the grant;
+  privacy, publication, merge, deployment, service and grant-administration capability exactly
+  granted, bounded and attributed; self-grant is possible only when `grant-admin` was explicit,
+  and every mutation produces a durable before/after receipt;
 - contributor-route admission capturing the exact outbound byte set and rejecting private identifiers even when prompt scanning misses them;
 - verifier collision where implementer and verifier share a family, provider, host, session, or evidence channel;
 - review branch publication with no protected-branch merge or deployment;
 - direct ARM and shared multi-ARM conversation with duplicate, out-of-order, edited and deleted
-  transport messages without authority or actor identity changing.
+  transport messages without authority or actor identity changing; a named ARM's bounded step
+  lease cannot change the overall goal, room membership, authority envelope, conflict policy,
+  ARM lifecycle or Head-owned strategic escalation.
 
 ## Context and compaction gate
 
@@ -148,12 +153,26 @@ V3 does not need to dominate every dimension. Each shipped profile must improve 
 - Interactive rendering passes non-flicker, preserved-input, resize, Unicode, reconnect,
   high-output, slow-client, plain-text/accessibility and bounded-resource tests on supported
   Windows and Linux terminals.
-- Dangerous/full-access profiles remain available with exact, reviewable effects.
-- The configured verifier-independence policy is displayed and enforced; the minimum acceptable separation is blocked on Lucas's decision rather than inferred.
+- The v3.0 matrix proves native Windows ConPTY/process ownership and native Linux
+  PTY/process-group behavior. Git Bash, Neovim terminals and later compatibility targets are
+  labeled tested, experimental or unsupported from evidence rather than aspiration.
+- Common defaults are `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants
+  and detachable multi-terminal operation. `full` installation does not imply `sovereign`.
+- Dangerous/full-access profiles remain available with exact, reviewable effects. If explicit
+  `grant-admin` is enabled, self-grant mutations are schema checked and receipt backed; they do
+  not silently rewrite history.
+- The configured verifier-independence policy is displayed and enforced. Routine downgrades are
+  explicit; release, security-sensitive, control-plane and irreversible-effect work blocks on a
+  missing verifier unless Lucas supplies an exception receipt. Missing verification never passes.
 
 ## Private canary and publication
 
 The first canary may use a private repository, but public release evidence must use synthetic or scrubbed fixtures. Private source, branch names, hashes, logs, prompts, and telemetry are not published.
+
+`CANARY-01` first performs test-only characterization of one stable, deterministic,
+non-safety-critical business rule. Writes are limited to its tests and fixtures, every route is
+private-approved, an independent verifier performs a clean rerun, and the only deliverable is a
+local candidate commit. It does not publish, merge, deploy or touch an external effect.
 
 The private canary demonstrates recovery and operational usability; it does not prove universal correctness. Publication provenance is mandatory in v3: every review branch traces to GoalSpec, source, routes, checkpoints, gates, verifier evidence, and publisher receipt.
 

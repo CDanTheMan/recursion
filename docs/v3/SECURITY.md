@@ -44,19 +44,29 @@ credential administration, provider enrollment, metered spending, publication, m
 deployment and service control when the owner grants those capabilities explicitly. The
 product must not advertise Full Access while silently withholding a documented capability.
 
-The recommended implementation is a capability vector rather than a single ambient boolean.
+The implementation direction is a capability vector rather than a single ambient boolean.
 Each high-impact capability names its project/host/account scope, limit, acknowledgement,
 authentication strength, start/expiry and revocation behavior. A preset may select every
-supported capability, but a running actor cannot mint, widen, conceal or erase its own grant or
-audit history. Full Access changes what the owner authorizes; it does not make attribution,
-fencing, receipts or evidence optional.
+supported capability. When the owner explicitly includes `grant-admin`, a maximum `sovereign`
+actor may create, widen, narrow or revoke its own grants within the installation's maximum
+authority. Every mutation is a schema-checked kernel action with before/after scope, reason,
+authentication, expiry and durable receipt; model text alone cannot change authority.
+
+Grant administration does not automatically include audit-retention or audit-erasure authority.
+Historical receipts cannot be silently rewritten or concealed. Any permitted deletion follows
+the scoped deletion, backup-expiry and signed-tombstone policy. Full Access changes what the
+owner authorizes; it does not make attribution, fencing, receipts or evidence optional.
 
 This product direction conflicts with the current private constitution's stronger human seams
 and self-modification prohibitions. It requires explicit reviewed reconciliation before it is
 operative; it is not present authority for an agent to change control-plane, auth, routing,
 spending, publication or deployment state.
 
-Lower scopes may narrow permissions freely. Widening network, credential, spending, deployment, or control-plane access requires an explicit owner action at the affected scope. Ordinary model, cache, quality, and concurrency preferences may override normally within inherited bounds.
+Lower scopes may narrow permissions freely. Widening network, credential, spending, deployment,
+or control-plane access requires an explicit owner action at the affected scope unless an
+already explicit `grant-admin` capability authorizes the sovereign actor to perform that exact
+mutation. Ordinary model, cache, quality, and concurrency preferences may override normally
+within inherited bounds.
 
 ## Local versus remote boundary
 
@@ -74,7 +84,9 @@ The full conformance suite is mandatory for official v3 release evidence and opt
 - Parent-goal envelopes and work packets are signed, scoped, expiring, and replay protected.
 - Risk-based step-up confirmation applies to authority expansion, high-impact commands, new egress, credentials, updates, and destructive actions.
 - Revocation prevents new admission immediately and causes in-flight work to checkpoint or terminate according to the versioned revocation policy.
-- PAUSE and emergency kill outrank ordinary checkpoint completion. Their exact treatment of an already-started external effect is an unresolved owner decision; until resolved, recovered output is quarantined and cannot authorize a new effect.
+- PAUSE defaults to `checkpoint`; emergency kill is a separate immediate boundary. Exact
+  treatment of each already-started external-effect class remains a research/constitutional
+  mechanic; until proved, ambiguous recovered output is quarantined and cannot authorize a new effect.
 - A disconnected node may finish only the local bounded operation explicitly permitted by its last valid grant and spool signed evidence. After reconnection, the controller revalidates the GoalSpec version, fencing token, lease, and PAUSE/revocation state before admitting that evidence or any derived action. It cannot widen scope or publish while disconnected.
 
 An owner authenticated on both devices may execute commands remotely when both devices, the goal, and the requested capability are authorized.
@@ -128,13 +140,13 @@ installation trust root. Unsigned local plugins remain supported and may impleme
 plugin API. On installation, the CLI must state that the plugin is not approved by the
 Recursion maintainer team, pin its exact digest and show its requested capabilities.
 
-Warning-only activation of ambient sensitive authority is disputed. The recommended refinement
-preserves full functionality while requiring developer mode plus an explicit per-plugin grant
-for kernel-adjacent storage, credentials, arbitrary egress, control-plane mutation, spending,
-publication or deployment. This protects local owner sovereignty without treating a generic
-warning click as a durable supply-chain policy. The next research campaign must compare this
-against the owner's warning-only preference before the contract is frozen. Update signing,
-provenance, and rollback remain separate from agent execution authority.
+The owner permits an unsigned-plugin warning/acknowledgement to authorize requested functionality
+under a configured local policy. The acknowledgement is digest-specific and must display the
+requested authority. Subscription quota consumption, metered spending, provider/account routes,
+updates and revocation are distinct effects: installing code must not silently imply unlimited
+quota, an unbounded model fleet or metered fallback. Research must compare one-step and staged
+consent while preserving a simple novice path. Update signing, provenance and rollback remain
+separate from agent execution authority.
 
 ## Threats the design must test
 

@@ -138,16 +138,18 @@ These are proposed rulings, not decisions. `CONTROL_PLANE.md` remains authoritat
 3. **State authority.** Ratify the future transfer from file/Git operational records to one
    kernel event writer, with human-readable Git projections remaining review artifacts rather
    than concurrent authority.
-4. **PAUSE versus checkpoint completion.** Lucas selected configurable pause aggressiveness and
-   wants normal policies to allow an already-started bounded operation to finish. Research must
-   specify `checkpoint`, `interrupt`, `drain` and emergency behavior per effect class before an
-   amendment replaces the current immediate halt.
+4. **PAUSE versus checkpoint completion.** Lucas ratified `checkpoint` as the ordinary default,
+   with `interrupt`, `drain` and emergency stop explicit. Research must specify their behavior
+   per effect class before an amendment replaces the current immediate halt.
 5. **Full access.** Lucas selected a genuinely expansive configurable Full Access that may
    include control-plane, credential, spend, publication, merge and deployment capability.
-   Research must define explicit grants, step-up, expiry and the non-self-escalation/audit seam
+   Maximum `sovereign` may explicitly include `grant-admin` and modify its own grants. Research
+   must define receipt-backed mutation, step-up, expiry and the separate audit-retention seam
    before constitutional amendment.
 6. **Native inner loop.** Ratify Option 2 as the construction path and require a measured spike
    before promoting a Recursion-owned inner agent loop from optional capability to core.
 
-Publication, owner merge/deploy authority, no secret values in durable state, child-authority
-subset, and independent verification need no weakening. Any amendment should preserve them.
+Publication provenance, no secret values in durable state, non-widening child inheritance and
+truthful verification status need no weakening. Merge/deploy/grant administration may move only
+through an explicit maximum `sovereign` capability and operative amendment; missing verification
+still cannot become a pass. Any amendment should preserve these boundaries.

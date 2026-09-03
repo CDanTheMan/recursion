@@ -44,15 +44,35 @@ floors.
 - The CLI is interactive and supports several detachable terminal windows or panes for Head,
   ARMs, executors and system views; closing a terminal does not terminate work.
 - ARMs are goal-scoped delegating executives; owners can converse with them directly.
-- Multi-ARM shared conversations/workflows are desired but their safe topology is open.
-- PAUSE and Full Access aggressiveness are configurable through explicit owner policy.
-- Verification is risk scaled.
+- A named ARM may hold a bounded workflow-step coordination lease. Head retains the overall
+  goal, room membership, authority envelope, conflict resolution, ARM lifecycle and strategic
+  model escalation.
+- `checkpoint` is the ordinary PAUSE default. `interrupt`, `drain` and emergency stop are
+  explicit alternatives whose per-effect mechanics remain research.
+- Maximum `sovereign` Full Access may include explicit `grant-admin` and modify its own grants
+  through attributable actions. Audit retention/erasure remains a separate policy boundary.
+- Verification is risk scaled. Routine work may use a documented downgrade; release,
+  security-sensitive, control-plane and irreversible-effect work blocks unless Lucas explicitly
+  approves an exception. Missing verification is never a pass.
 - Maintainer-approved plugins are trust-root signed; unsigned local plugins retain feature
-  expressiveness, with the safe privilege/consent mechanism still under research.
+  expressiveness after digest-aware warning/acknowledgement. Quota, spending, route, update and
+  revocation effects remain separately configurable research questions.
 - Branch/backlog limits are measured and configurable.
+- `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants and detachable
+  terminals are common defaults. `full` adds advanced/distributed capabilities but never implies
+  maximum `sovereign` authority.
+- The first single-writer rehearsal is the synthetic local execution-attempt/lease aggregate,
+  with no external effects and exact replay/fencing/crash/rollback proof.
 - Recursion supports scientific-research ARMs and scholarly evidence workflows as a first-class
   capability, not a separate executive tier.
-- The private canary is known only as `CANARY-01` in tracked/public research.
+- Scoped encryption, verified physical/key deletion, cache/backup propagation and a minimal
+  signed non-sensitive tombstone are the private-artifact retention direction.
+- The private canary is known only as `CANARY-01` in tracked/public research. Its first task is
+  test-only characterization of one stable deterministic non-safety-critical business rule,
+  limited to tests/fixtures, private-approved routes, an independent clean rerun and one local
+  candidate commit.
+- Native Windows and Linux terminal stacks must pass v3.0. Git Bash, Neovim terminal use and
+  other popular environments are high-priority compatibility research.
 
 These product rulings do not silently amend the current constitution. Produce exact proposed
 reconciliation text where required, but do not edit `CONTROL_PLANE.md` or `state/DECISIONS.md`.
@@ -68,6 +88,32 @@ Research R1–R17 from `RESEARCH-AGENDA.md`. Cover the complete optimization env
 optimizing a single score. Parallelize only independent source lanes. The lead
 must inspect every consequential source used in synthesis and owns the final adjudication.
 Model consensus is not evidence.
+
+### Codex campaign profile selected by Lucas
+
+- one `gpt-5.6-sol` director owns decomposition, source audit, conflict resolution and final
+  synthesis;
+- eight bounded `gpt-5.6-luna` research roles own independent discovery, source extraction,
+  repository archaeology and focused falsification lanes;
+- two targeted `gpt-5.6-terra` adjudicator roles receive exact disputes and compare evidence;
+- the desired local cap is ten spawned-agent threads excluding the primary director, using
+  `agents.max_concurrent_threads_per_session = 10` only if Lucas has already applied it;
+- revalidate the setting against current [Codex subagent documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+  and the effective session preflight; a configured ceiling does not override a lower app,
+  service, provider, quota or machine limit;
+- this prompt does not authorize editing Codex/provider/model/auth configuration. If the cap is
+  lower, preserve the roles in waves. Never substitute a model silently;
+- use normal/default service tier unless Lucas explicitly changes it. Record reasoning effort,
+  exact model, route and observed usage; tune effort to lane difficulty rather than maximizing
+  every worker automatically;
+- retain quota and machine headroom for synthesis, source verification and independent review.
+  Stop launching workers whose expected marginal evidence is below their quota/review cost.
+
+Sol, Luna and Terra are different capability/cost tiers in the GPT-5.6 family, not cross-family
+independence. Do not describe the Terra adjudicators as satisfying a different-family gate. Use
+an eligible approved external family only when the session's authority/privacy boundary permits
+it; otherwise disclose reduced diversity and rely on direct sources, deterministic tests and
+Lucas's exception policy for blocked high-risk conclusions.
 
 Use scholarly discovery and paper retrieval for architecture, configuration, human-computer
 interaction, software assurance, distributed systems, caching/context, scheduling and

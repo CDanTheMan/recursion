@@ -24,17 +24,19 @@ to change the current deployment.
 |---|---|---|
 | OR-001 | Head and ARM planning may use any route in an explicit owner-approved model/provider/account/capacity-pool envelope. | Accepted product direction. Hermes remains the accountable actor; no implicit billing, privacy or authority transition. Requires constitutional reconciliation of the current Codex-OAuth clause. |
 | OR-002 | ARMs are goal-scoped delegated executives that plan and delegate a configurable fleet; depth and typical fleet size are configurable. | Accepted. One ARM per repository and delegation depth 1–2 are expected profiles, not protocol invariants. Project Pilot import semantics still require migration proof. |
-| OR-003 | `#general` is the Head conversation; each ARM may have a direct Telegram topic so the owner can talk to it without relaying through Head. Investigate GrokBot-inspired macro bots, shared multi-ARM conversations, supervisors and configurable workflows. | Direct ARM conversation is accepted. Head remains aware through canonical events, and chat/topic state is not task authority. Shared-room topology is research, not an accepted design; the exact GrokBot reference must first be identified, and a workflow supervisor may not become an AI ARM Manager. |
-| OR-004 | PAUSE aggressiveness is configurable, and normal policy should be able to let an already-started bounded operation finish. | Accepted product direction. `checkpoint`, `interrupt`, `drain` and separate emergency-stop semantics are proposed. Exact effect boundaries require research and a constitutional amendment. |
-| OR-005 | Full Access is configurable and may genuinely include control-plane, credential, spending, publication and deployment capability. | Accepted product direction. Recommend an explicit capability vector and maximum `sovereign` preset; no actor may silently self-grant or erase audit. Requires constitutional reconciliation. |
-| OR-006 | Verifier independence is a risk-scaled combination. | Accepted. Exact tiers and unavailable-route fallback remain research; current recommendation ranges from deterministic gates to independent family/provider/environment plus owner approval. |
-| OR-007 | Maintainer-approved plugins are signed by the trust root. Unsigned local plugins retain full functionality and warn on installation. | Accepted intent. "Full functionality" should mean complete plugin API, while sensitive authority may still require an explicit digest-pinned grant. Warning-only sensitive authority remains disputed pending research. |
+| OR-003 | `#general` is the Head conversation; each ARM may have a direct Telegram topic. A named ARM may hold a bounded workflow-step coordination lease in a shared room. | Accepted. Head retains the overall goal, room membership, authority envelope, conflict resolution, ARM lifecycle and a substantial part of the model-escalation chain. Chat order is not authority; the exact GrokBot reference and message protocol remain research. |
+| OR-004 | `checkpoint` is the ordinary PAUSE default; `interrupt`, `drain` and emergency stop remain explicit alternatives. | Ratified product direction. No new operation admits after the PAUSE epoch; the current bounded operation may reach its mechanically safe checkpoint. Exact per-effect finish, cancellation and quarantine rules require research and constitutional reconciliation. |
+| OR-005 | Full Access is configurable and may genuinely include control-plane, credential, spending, publication and deployment capability. Maximum `sovereign` authority may modify its own grants when that grant-administration capability was explicitly enabled. | Ratified product direction. Self-grant must be an attributable schema-checked action, never an implicit model assertion. Audit-retention/erasure authority is not inferred from grant administration and remains a separate policy question. Requires constitutional reconciliation. |
+| OR-006 | Verifier independence is risk scaled. Routine work may use a documented downgrade; releases, security-sensitive work, control-plane changes and irreversible external effects block unless Lucas explicitly approves an exception. | Ratified. Missing or weaker verification is recorded and can never become a pass. Research must define exact risk classes and evidence required for an exception. |
+| OR-007 | Maintainer-approved plugins are signed by the trust root. Unsigned local plugins retain full functionality after an explicit warning, but plugin effects on subscription quota, spending and routes are distinct configurable concerns. | Ratified direction with open mechanics. Installation pins the digest and requested capabilities. Research must decide how one acknowledgement relates to per-plugin authority, quota budgets, spending, updates and revocation; installing code must not silently imply unlimited quota or metered authority. |
 | OR-008 | Branch/worktree backlog limits are measured and configurable rather than fixed universally at 75. | Accepted; supersedes 75 as a universal v3 limit. Preserve an owner hard ceiling and human-review-capacity signals. |
-| OR-009 | Raw-artifact deletion, cryptographic erasure, tombstone and backup mechanics remain open. | The owner requested a recommendation. Scoped encryption, physical deletion and a minimal signed tombstone are the current proposal; research must reconcile audit continuity with private deletion. |
-| OR-010 | The first private canary is an owner-selected construction-domain project. | Accepted as `CANARY-01` in tracked/public docs. Its real identity and content remain private and the canary is not authorized to run by this ruling. |
+| OR-009 | Raw private artifacts use scoped encryption, verified physical deletion, key destruction, cache/backup propagation and a minimal signed non-sensitive tombstone. | Ratified direction. Deletion cannot be claimed until every recoverable copy is deleted or reaches a recorded backup-expiry boundary. Exact storage-provider and disconnected-node proof remains research. |
+| OR-010 | `CANARY-01` begins with test-only characterization of one stable, deterministic, non-safety-critical business rule. | Ratified boundary. Writes are limited to tests and fixtures, processing uses private-approved routes, an independent clean rerun is mandatory, and the only output is a local candidate commit. The canary is not authorized to run by this ruling. |
 | OR-011 | V3 is its own optimized harness, initially headless, with CLI rather than a graphical frontend. | Clarified: Recursion owns the orchestration harness even when external optimized inner loops execute turns. Telegram is an optional interactive surface; a complete native inner loop remains a measured expansion. |
-| OR-012 | The CLI is interactive and supports several terminal windows/panes for Head, ARMs and executors; closing a terminal must not end the process. | Accepted. The daemon/process broker owns lifetime; terminal clients attach/detach. Communication visualization, configuration UX, cross-platform persistence, non-flicker rendering and reliable termination require focused research. |
+| OR-012 | The CLI is interactive and supports several terminal windows/panes for Head, ARMs and executors; closing a terminal must not end the process. Native Windows and Linux terminal stacks must pass v3.0 acceptance. | Ratified. The daemon/process broker owns lifetime; terminal clients attach/detach. Git Bash, Neovim terminal use and other popular environments receive focused compatibility research and may graduate after v3.0 when their behavior cannot meet the initial contract. |
 | OR-013 | Recursion must conduct its own scientific research, find papers and use evidence to improve architecture and configurability. | Accepted. A research ARM uses ordinary GoalSpec/evidence contracts and scholarly capability plugins. Papers support mechanisms; local source and experiments prove Recursion fit. |
+| OR-014 | `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants and detachable multi-terminal operation are common defaults. `standard` adds richer orchestration; `full` adds advanced and distributed capabilities. | Ratified. Maximum `sovereign` authority is separately and explicitly enabled; installing the `full` edition never implies it. Exact manifest contents remain evidence-gated. |
+| OR-015 | The first single-writer rehearsal targets the local execution-attempt/lease aggregate using synthetic work and no external effects. | Ratified. Require exact replay parity, complete legacy-writer enumeration, fencing, crash recovery and proven rollback before ARM, remote-provider or publication aggregates. Resource, concurrency and model use remain configurable and quota-aware. |
 
 ## Accepted directions
 
@@ -45,11 +47,11 @@ to change the current deployment.
 | 4 | Begin with a small number of private, meaningful canary tasks and evidence-based consolidation; successful runs are confidence evidence, not proof of no failures. | accepted-direction |
 | 5 | The initial CLI serves Lucas's coordinator deployment and makes files/settings accessible without requiring an agent. OR-012 further requires interactive, detachable multi-window operation. | accepted-direction, extended by OR-012 |
 | 6–7 | Model/config changes apply at the next mechanically safe checkpoint; owner-forced swap is available. Atomic operations may reach their bounded boundary; emergency kill is separate. | accepted-direction |
-| 8 | Automatic route reordering is allowed only inside an owner-approved envelope; authority, providers, budgets, and permissions cannot widen themselves. | accepted-direction |
+| 8 | Automatic route reordering is allowed only inside an owner-approved envelope. Ordinary actors cannot widen authority, providers, budgets or permissions; OR-005 adds the explicit maximum `sovereign` `grant-admin` exception as an attributable authority mutation rather than implicit inheritance. | accepted-direction, extended by OR-005 |
 | 9 | New routes/models graduate through capability/authentication, synthetic checkpoint/failure fixtures, and a low-risk independently verified canary. | accepted-direction |
 | 10 corrected | Routes bind explicit engine/transport, provider, model, and capacity pool. Subscription/OAuth and metered API billing never switch implicitly. Bring-your-own accounts is the public starting posture. | accepted-direction |
-| 11–12 | Configuration is hierarchical. Lower scopes may narrow freely; widening spend, credentials, network, permissions, or deployment requires explicit acknowledged authority. | accepted-direction |
-| 13 | Full-access and provider-native dangerous permission modes remain configurable. Ordinary trusted autonomy excludes unrelated credentials, control-plane authority, and deployment unless a stronger explicit profile grants them. | accepted-direction |
+| 11–12 | Configuration is hierarchical. Lower scopes may narrow freely; widening spend, credentials, network, permissions, or deployment requires explicit acknowledged authority. Maximum `sovereign` may exercise that authority itself only when `grant-admin` was explicitly enabled. | accepted-direction, extended by OR-005 |
+| 13 | Full-access and provider-native dangerous permission modes remain configurable. Ordinary trusted autonomy excludes unrelated credentials, control-plane authority, deployment and grant administration unless a stronger explicit profile grants them. | accepted-direction, extended by OR-005 |
 | 14–16 | Human-readable versioned config is canonical for configuration; CLI is a safe editor/validator. Machine-private config is separated from public source. Project config can propose capabilities but cannot widen the current run. | accepted-direction |
 | 17–18 | Raw session retention defaults to 30 days success and 90 days failure, with compact lineage/evidence retained and explicit pinning. Storage classes protect active state and evidence before rebuildable caches. | accepted-direction; legal/deletion mechanics open |
 | 19–20 | Worker admission is adaptive to measured resources. Scheduling is goal-aware and fair, allows borrowing, protects interactive use, and supports explicit exclusive goals. | accepted-direction |
@@ -124,13 +126,13 @@ Head owns strategic goals and ARM lifecycle. ARM owns the implementation plan, d
 2. Exact amendment text generalizing the planning-model clause to the owner-approved route envelope while preserving Hermes identity and deterministic actuation.
 3. Stable public names and schemas for executives, runs, task nodes, capsules, route leases, and events.
 4. Numeric resource/performance budgets for each edition and node class.
-5. Exact `CANARY-01` tasks and what can be summarized publicly without recording its private identity.
+5. Exact public disclosure boundary for `CANARY-01`; its first task and local-only evidence boundary are fixed by OR-010.
 6. Supported provider/model/CLI matrix at v3 cut; all current availability and subscription claims require primary-source revalidation.
 7. Which plugins are mandatory in `core` versus included only in other manifests.
 8. License and attribution implications of retaining/forking Hermes and adapting patterns from every reference.
-9. Migration and rollback point at which legacy writable stores can be retired.
+9. Migration and rollback point at which each later legacy writable store can be retired after the OR-015 rehearsal.
 10. Public Execution Lineage Contract contents after the private canary.
-11. Retention/deletion design for append-only evidence and encrypted raw artifacts.
+11. Platform-specific proof that the OR-009 deletion contract reached every cache, backup and disconnected node.
 12. Whether Head and ARM use the same native loop implementation or specialized loops behind a shared executive protocol.
 
 ## Candidate next foundational research decision
@@ -170,35 +172,35 @@ Lucas to ratify them:
 1. Exact amendment text for provider-neutral Head/ARM planning while preserving Hermes identity,
    deterministic actuation and explicit billing/privacy envelopes.
 2. Whether Project Pilot imports as an `ArmRun` predecessor or only migration evidence.
-3. Default PAUSE profile and the exact finish/interrupt/quarantine rule for each effect class.
-4. Full Access grant schema, step-up/expiry rules and whether any audit/grant-control capability
-   can safely be delegated.
-5. Verifier risk tiers and which unavailable-independence conditions block a release.
-6. Whether unsigned-plugin installation warning alone can authorize sensitive capabilities or
-   a separate digest-pinned developer-mode grant is mandatory.
-7. The per-aggregate legacy-writer cutover point and reconciliation-only external effects.
-8. Raw-artifact cryptographic erasure, physical deletion, tombstone and backup policy.
-9. Safe multi-ARM shared-room topology and whether coordination belongs to Head or a named ARM.
-10. Persistent terminal/process architecture and the v3-supported terminal/OS matrix.
-11. The exact bounded `CANARY-01` tasks, evidence, disclosure and stop rules.
+3. Exact finish/interrupt/quarantine rules for every effect class under the ratified PAUSE modes.
+4. Full Access grant schema, step-up/expiry rules and the separate audit-retention/erasure
+   authority boundary when `sovereign` may administer its own grants.
+5. Verifier risk tiers, documented routine downgrade evidence and the exact owner-exception
+   receipt for release-blocking classes.
+6. How unsigned-plugin acknowledgement, digest-aware grants, subscription quota, metered
+   spending, updates and revocation compose without hidden authority.
+7. Later per-aggregate cutover points and reconciliation-only external effects after the local
+   execution-attempt/lease rehearsal.
+8. Proof protocols for physical deletion, key destruction, caches, backups and disconnected
+   nodes under the ratified retention direction.
+9. Shared-room message authority and conflict semantics around a named ARM's bounded
+   coordination lease.
+10. Persistent terminal/process architecture and the exact Windows/Linux v3.0 matrix, with
+    Git Bash and Neovim compatibility evidence separated from aspiration.
+11. `CANARY-01` disclosure, independent-rerun evidence and stop rules within the fixed first task.
 
 ## Next Grill Me queue after research
 
-1. Do you ratify `checkpoint` as the ordinary PAUSE default, `interrupt` and `drain` as explicit
-   alternatives, and emergency stop as a separate immediate boundary?
-2. May a maximum Full Access actor ever modify its own grant/audit controls, or may it exercise
-   every operational capability while grant issuance and audit deletion remain owner-held?
-3. For unsigned local plugins, is the installation warning itself sufficient for requested
-   sensitive authority, or should sensitive grants require a second digest-pinned step-up?
-4. Which proposed verifier tier should be the minimum for releases when an independent family,
-   provider or host is unavailable?
-5. In a shared multi-ARM room, should Head always own the coordination lease, or may a named ARM
-   own one workflow step under a cross-ARM GoalSpec?
-6. Which PAUSE, Full Access, plugin and terminal defaults should ship in `core`, `standard` and
-   `full` manifests?
-7. Which exact v2 aggregate should undergo the first single-writer cutover rehearsal?
-8. Do you accept scoped encryption plus physical deletion and a minimal signed tombstone as the
-   default retention design?
-9. Which supported Windows/Linux terminals must pass v3.0 interactive acceptance, and should
-   OS-native window/pane launching be core or an optional adapter?
-10. Which bounded `CANARY-01` task should run first after contract/replay acceptance?
+The preceding ten questions were answered by Lucas and are now represented by OR-003–OR-015.
+After the architecture-proof research, ask only the smallest still-decisive questions:
+
+1. May `sovereign` alter audit-retention policy or delete historical audit material only through
+   the ratified deletion/tombstone protocol?
+2. Which unsigned-plugin capabilities may one digest-pinned installation acknowledgement grant,
+   and which quota or metered-spend transitions require a separate acknowledgement?
+3. What numeric default and ceiling should each edition use for local workers, spawned agents,
+   repository writers and passive terminal clients on each measured machine profile?
+4. Which exact terminal applications comprise the Windows/Linux v3.0 conformance matrix after
+   R11 reports behavior, rather than popularity alone?
+5. Does Project Pilot import as an `ArmRun` predecessor after the compatibility fixture, or only
+   remain migration evidence?

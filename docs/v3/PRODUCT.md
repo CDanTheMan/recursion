@@ -32,7 +32,9 @@ Public usability remains an explicit design requirement. Users should be able to
 
 ## Product promises
 
-1. **Owner sovereignty.** Local operation, self-hosting, provider choice, portable configuration, custom builds, and full-access modes remain available to the owner.
+1. **Owner sovereignty.** Local operation, self-hosting, provider choice, portable configuration,
+   custom builds and full-access modes remain available. Explicit maximum `sovereign` authority
+   may include receipt-backed administration of its own grants.
 2. **Provider neutrality.** A model, delivery route, billing pool, harness, and host are separate objects. Users can combine Codex, Cursor, Claude Code, Gemini CLI, OpenCode, Hermes, local models, APIs, and future adapters without rewriting goals.
 3. **Durable autonomy.** Parent goals, ARM state, exact directives, checkpoints, evidence, and budgets survive process death and provider changes.
 4. **Quality before activity.** Machine gates and independent verification determine progress. Branch count, agent count, and token consumption do not.
@@ -54,8 +56,9 @@ Public usability remains an explicit design requirement. Users should be able to
 - Let Head Hermes start and monitor one or more bounded ARM executives.
 - Talk directly to an ARM through its addressable topic without relaying every exchange through
   Head; Head remains aware through canonical state.
-- Optionally place multiple named ARMs in a shared conversation or workflow once its authority,
-  coordination and failure semantics pass research and contract gates.
+- Optionally place multiple named ARMs in a shared conversation or workflow. Head retains the
+  overall goal, membership, authority, conflicts and lifecycle while one named ARM may hold a
+  bounded workflow-step coordination lease.
 - Allow each ARM to delegate research, implementation, testing, review, and integration within inherited authority.
 - Move execution between approved models and pools at safe checkpoints while retaining logical identity and evidence.
 - Observe progress, queue causes, budget state, route decisions, context health, and blockers from stable read-only interfaces.
@@ -93,7 +96,7 @@ No single scalar hides these dimensions. Named profiles select a Pareto point, a
 
 ## Release philosophy
 
-V3 is one monumental product release built as independently testable internal milestones. A public `v3.0.0` tag should wait until the mandatory end-to-end contract passes, while minimal, standard, and full release manifests control installed surface area. This is an atomic product promise with incremental construction, not a big-bang implementation.
+V3 is one monumental product release built as independently testable internal milestones. A public `v3.0.0` tag should wait until the mandatory end-to-end contract passes, while core, standard, remote, full and custom release manifests control installed surface area. Common defaults include `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants and detachable terminals. Installing `full` never implies maximum `sovereign` authority. This is an atomic product promise with incremental construction, not a big-bang implementation.
 
 ## What must be proven
 

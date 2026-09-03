@@ -132,17 +132,19 @@ vector including filesystem/process/network, control-plane authoring, credential
 provider enrollment, spending limits, publication, merge, deployment, service control and any
 permission to alter ordinary PAUSE defaults.
 
-A maximum preset may select every supported capability. Each sensitive grant still has an
-attributable scope, acknowledgement, authentication requirement and expiry/revocation path;
-the executing actor cannot silently widen or erase its own grant. Commands show the exact
-before/after blast radius and offer a reversible downgrade where the external effect permits
-one. This product behavior requires constitutional reconciliation before use in the current
-private deployment.
+A maximum `sovereign` preset may select every supported capability, including `grant-admin`.
+When that capability is explicitly enabled, the actor may mutate its own grants through a
+schema-checked CLI/kernel action. Each mutation shows the exact before/after blast radius,
+requires the configured authentication and acknowledgement, emits a durable receipt, and offers
+a reversible downgrade where the external effect permits one. Audit retention/deletion remains
+a separate displayed capability. This product behavior requires constitutional reconciliation
+before use in the current private deployment.
 
 ## PAUSE and capacity UX
 
-`recursion pause` should accept a schema-defined policy such as `checkpoint`, `interrupt` or
-`drain`, explain which current operations may finish, and separately expose emergency stop.
+`recursion pause` defaults to the ratified `checkpoint` policy and accepts explicit `interrupt`
+or `drain` alternatives, explains which current operations may finish, and separately exposes
+emergency stop.
 `recursion status` must show the applied policy, PAUSE epoch, in-flight operations and any
 quarantined ambiguous effects.
 
