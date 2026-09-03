@@ -1,7 +1,7 @@
 ---
-title: Recursion v3 session decision register
-status: consolidation-draft
-last-updated: 2026-09-02
+title: Recursion v3 decision register and owner queue
+status: evidence-reconciled-draft
+last-updated: 2026-09-03
 source: archive/session-transcript-2026-09-02.md
 ---
 
@@ -114,4 +114,75 @@ Head owns strategic goals and ARM lifecycle. ARM owns the implementation plan, d
 
 Should Recursion v3 own a provider-neutral native agent loop while treating Codex, Cursor, Claude Code, Gemini CLI, OpenCode, Hermes, and similar harnesses as optional peer execution plugins behind the same ARM, context, evidence, and telemetry contracts?
 
-The session strongly accepted an independent custom-harness destination, but this exact inner-loop boundary should remain `hypothesis` until the overnight research maps duplication, performance, maintainability, and upstream-fork costs.
+The session strongly accepted an independent custom-harness destination. The research campaign
+recommends a native deterministic kernel with compatibility adapters, while keeping a complete
+native inner loop as a separately measured capability. This is `proposal`, not a new accepted
+decision. See [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md).
+
+## Research adjudication, 2026-09-03
+
+- V2's packet, placement, recovery and evidence invariants are strong source/test substrate.
+  The MVP composition is source-only in the inspected tree; it is not a verified deployed v3
+  runtime.
+- The operational-path source still spans Head decision/actuator, Project Pilot/reconciler,
+  worker, evidence and publisher paths. A new SQLite writer must not coexist as a second writer
+  for the same aggregate.
+- Public references support concrete event, plugin, compaction, provider-loop and observer
+  patterns, but no reference supplies Recursion's authority/evidence/publication lineage.
+- Provider/model preflights establish only local route behavior. They do not establish future
+  availability, entitlement, privacy, cache portability or free metered usage.
+- Grok 4.5 through the requested Codex custom-provider route was unavailable and was omitted,
+  reducing cross-family diversity to Luna plus public-only Muse.
+
+These are evidence classifications recorded in [CLAIM-LEDGER.md](CLAIM-LEDGER.md), not owner
+decisions.
+
+## Prioritized owner decisions
+
+1. Amend or retain the constitution's ChatGPT-via-Codex-OAuth planning-model clause. If
+   amended, keep Hermes as the accountable logical actor and allow only explicit owner-approved
+   model/provider/account/pool routes.
+2. Ratify whether `ArmRun` is a first-class logical executive and whether Project Pilot is its
+   compatibility predecessor or merely migration input.
+3. Define PAUSE precisely across pre-dispatch, in-flight model turn, local mutation,
+   disconnected node, gate and publication; distinguish emergency stop from an ordinary
+   checkpoint-applied model/config change.
+4. Approve or reject the Option 2 construction path and the single-writer-per-aggregate
+   migration rule, including the rollback boundary after external effects.
+5. Define the minimum verifier independence for routine work and release evidence: distinct
+   task is proven today; model family, provider, session and host separation remain policy.
+6. Define non-overridable limits of `absolute-full-access`, especially control-plane changes,
+   credentials, spending, protected branches, publication and deployment.
+7. Decide whether privileged/federated plugins require signature plus digest/SBOM, and whether
+   unsigned plugins may provide only unprivileged local capabilities.
+8. Choose retention/deletion/tombstone semantics for raw private artifacts while preserving
+   auditable lineage.
+9. Treat the 75-unique-branch ceiling as an owner policy or require a measured provisional
+   default before it appears as a resource limit.
+
+## Next Grill Me queue
+
+Ask these in order; later questions depend on earlier authority choices.
+
+1. Should Head Hermes and ARM executives be allowed to use any route inside an explicit
+   owner-approved model/provider/account/pool envelope, or must Head planning remain ChatGPT via
+   Codex OAuth?
+2. Is an ARM a constitutionally named logical actor with its own lease and event stream, and
+   should existing Project Pilots import as that actor or only as historical compatibility data?
+3. When PAUSE arrives during a model turn, tool process, disconnected-node action, gate or
+   publication, which exact bounded operations may finish and which must be killed or
+   quarantined?
+4. May an `absolute-full-access` worker ever touch control-plane configuration, credentials,
+   spending, publication or deployment, or are those separate grants in every profile?
+5. What independence is mandatory for a verifier on ordinary tasks versus a release candidate:
+   distinct task, session, model, provider, family, host, or some risk-scaled combination?
+6. Should privileged plugins be signed by an owner trust root, and what limited capability may
+   an unsigned local plugin provide?
+7. At what exact migration checkpoint may the legacy writer for an aggregate be fenced, and
+   after which external effects is rollback reconciliation-only rather than reversible?
+8. Should the 75-branch ceiling remain a hard owner policy independent of performance, or
+   become a measured/configurable backlog limit?
+9. What deletion/tombstone behavior should apply to successful and failed raw private
+   artifacts after their retention window?
+10. Which private low-risk fixture should be the first post-contract canary after the pure
+    schema/replay milestone passes?

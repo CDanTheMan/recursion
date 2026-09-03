@@ -1,7 +1,7 @@
 ---
 title: Recursion v3 execution fabric hypothesis
 status: hypothesis
-last-updated: 2026-09-02
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 execution fabric hypothesis
@@ -74,6 +74,8 @@ The router does not simply choose the cheapest or strongest model. It predicts t
 
 Every route choice produces a deterministic explanation and a recorded feature snapshot. Online learning may reorder already approved routes but cannot add providers, widen authority, enable training use, or increase budgets.
 
+Provider or plugin heuristics propose scores only over the kernel-produced eligible set. The deterministic admission layer validates the selected route again immediately before launch; a heuristic output is never an authorization.
+
 ## Checkpoint-driven adaptation
 
 Routes remain stable between meaningful checkpoints. Re-resolution occurs after:
@@ -101,7 +103,7 @@ Admission is hierarchical and adaptive across node, pool, route, model, reposito
 - uses event-driven wakeups rather than polling;
 - permits an audited owner override without concealing risk.
 
-The private deployment caps unique unreviewed branches at 75. Automatic pruning is limited to branches proven merged, superseded, or content-identical. If unique unreviewed work fills the allowance, new branch-producing work stops.
+The private deployment currently carries an owner policy ceiling of 75 unique unreviewed branches. This is not a measured optimum or a machine-capacity fact. Automatic pruning is limited to branches proven merged, superseded, or content-identical. If unique unreviewed work fills the allowance, new branch-producing work stops; changing the ceiling is an explicit policy decision informed by review throughput and measured repository cost.
 
 ## Scheduling
 

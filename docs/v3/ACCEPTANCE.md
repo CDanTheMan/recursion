@@ -1,7 +1,7 @@
 ---
 title: Recursion v3 acceptance hypothesis
 status: hypothesis
-last-updated: 2026-09-02
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 acceptance hypothesis
@@ -26,6 +26,8 @@ This document defines categories and provisional gates. Numeric performance budg
 - Logical actor identity is independent from model, provider session, and route.
 - GoalSpec amendment, safe checkpoint, compaction epoch, executive replacement, and publication intent are content-addressed and replay-safe.
 - The plugin capability graph resolves deterministically and fails with complete explanations.
+- Event admission rejects unauthenticated principals, stale fencing tokens, duplicate command ids, non-monotonic sequences, and authority/GoalSpec mismatches.
+- Each aggregate has one canonical writer; migration fixtures fail if legacy and v3 paths can both mutate the same transition or external effect.
 - Version migrations are deterministic, reversible where promised, and tested against archived fixtures.
 
 ## Execution scenarios
@@ -45,7 +47,11 @@ At minimum, end-to-end fixtures cover:
 - disk full, torn write, stale lease, duplicate result, node loss, and controller recovery;
 - private project egress denied to an ineligible route;
 - plugin crash/quarantine while unrelated work continues;
-- full-access profile selected by the owner without leaking unrelated credentials;
+- privileged plugin digest/signature mismatch, dependency substitution, and rollback;
+- planning mode `off` rejecting an incomplete or unauthenticated GoalSpec and preserving provenance for a complete one;
+- full-access profile selected by the owner without leaking unrelated credentials or crossing control-plane, billing, privacy, publication, merge, or deployment seams not separately granted;
+- contributor-route admission capturing the exact outbound byte set and rejecting private identifiers even when prompt scanning misses them;
+- verifier collision where implementer and verifier share a family, provider, host, session, or evidence channel;
 - review branch publication with no protected-branch merge or deployment.
 
 ## Context and compaction gate
@@ -64,6 +70,7 @@ At minimum, end-to-end fixtures cover:
 - Controller, executor, observer, and verifier roles are independently grantable and revocable.
 - Project data classification and deny-by-default egress are enforced before provider transmission.
 - Plugin permission expansion and update trust changes require explicit owner action.
+- Public observer/event output resists content, membership, size, and timing disclosure tests for private projects.
 - The lightweight enrollment preflight completes within the measured startup budget and consumes zero model tokens.
 - The full conformance suite is reproducible for official releases but is not an ordinary local startup gate.
 
@@ -108,6 +115,7 @@ V3 does not need to dominate every dimension. Each shipped profile must improve 
 - Common local use works without remote enrollment or a full conformance run.
 - Route, queue, capacity, resource, config, context, and capability explanations require no model call.
 - Dangerous/full-access profiles remain available with exact, reviewable effects.
+- The configured verifier-independence policy is displayed and enforced; the minimum acceptable separation is blocked on Lucas's decision rather than inferred.
 
 ## Private canary and publication
 

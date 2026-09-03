@@ -1,7 +1,7 @@
 ---
-title: Recursion v3 research and construction roadmap hypothesis
-status: hypothesis
-last-updated: 2026-09-02
+title: Recursion v3 research and construction roadmap
+status: evidence-reconciled-proposal
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 research and construction roadmap hypothesis
@@ -26,11 +26,18 @@ Deliver:
 
 Gate: another agent can explain the product and create bounded implementation tasks without reading the archived chat or inventing an actor.
 
+Research status 2026-09-03: complete for the current baseline, subject to the unresolved owner
+decisions and expiring route/reference evidence in [CLAIM-LEDGER.md](CLAIM-LEDGER.md). No live
+deployment baseline or v3 performance measurement was claimed.
+
 ## Milestone 1 — v3 contract skeleton
 
 Deliver versioned schemas and fixtures for OwnerIntent, GoalSpec, ExecutiveProfile, ArmRun, TaskNode/WorkPacket, Route, CapacityPool, ContextCapsule, EvidenceBundle, plugin manifest, and publication lineage.
 
 Gate: cross-record, authority-subset, privacy, budget, source, lineage, and replay invariants fail closed; schema names and compatibility policy are frozen for initial implementation.
+
+The proposed bounded task graph, allowed paths, non-goals and exact acceptance gate are in
+[CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md). This roadmap still does not authorize it.
 
 ## Milestone 2 — canonical state and compatibility projection
 
@@ -96,12 +103,18 @@ After a contract milestone freezes its interfaces, bounded agents may work concu
 
 The temporary tools used to build v3—an overnight Codex lead, Cursor implementation swarms, a Grok-powered watcher, or particular subscription arrangements—belong in a construction runbook. The product exposes generic engines, nodes, and observers; it does not hard-code the construction campaign into the release.
 
-## First research blockers
+## Remaining blockers before construction or release
 
-1. Native Recursion agent-loop scope versus the retained Hermes base and external harness plugins.
-2. Required constitutional amendment for provider-neutral Head/ARM model selection.
-3. Canonical event/schema mapping from overlapping v1/v2/project-pilot stores.
-4. Real subscription and cache observability for each intended CLI route.
-5. Numeric coordinator performance budgets and representative task corpus.
-6. Plugin isolation boundary on Linux and Windows without unacceptable overhead.
-7. Public interoperability surface versus private implementation details.
+1. Lucas must decide the constitutional and authority questions prioritized in
+   [DECISION-REGISTER.md](DECISION-REGISTER.md).
+2. Milestone 1 must prove a canonical event/schema mapping across overlapping v1/v2/Project
+   Pilot contracts; the mapping proposed in [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md)
+   is not implementation evidence.
+3. Real subscription, privacy and cache observability remains route-specific and expiring; no
+   descriptor may infer entitlement from a model listing or successful prompt.
+4. Numeric coordinator/workstation budgets require the preregistered experiments in
+   [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md).
+5. Privileged-plugin integrity/isolation policy, verifier independence and private-artifact
+   deletion semantics require owner rulings and fault tests.
+6. A native inner-loop expansion remains an optional spike until it falsifies the recommended
+   adapter architecture on a declared metric.

@@ -1,7 +1,7 @@
 ---
 title: Recursion v3 security and sovereignty hypothesis
 status: hypothesis
-last-updated: 2026-09-02
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 security and sovereignty hypothesis
@@ -38,6 +38,8 @@ Candidate profiles include:
 
 Adapters may map these to provider-native options, including dangerous skip-permission flags when the owner explicitly selects them. V3 must display the effective capabilities and blast radius, record the acknowledgement, and avoid implying that a provider-native flag overrides Recursion's budget, privacy, identity, or publication contracts.
 
+`absolute-full-access` widens the selected actor's tool, process, filesystem, and network surface only to the extent named by its grant. It does not implicitly confer control-plane authoring, credential enumeration, new provider enrollment, metered spending, protected-branch merge, publication, deployment, or the right to weaken PAUSE, privacy, identity, and audit invariants. Those are separate attributable grants or human seams. The name and exact composition remain subject to Lucas's decision because a misleading "absolute" label is itself a safety defect.
+
 Lower scopes may narrow permissions freely. Widening network, credential, spending, deployment, or control-plane access requires an explicit owner action at the affected scope. Ordinary model, cache, quality, and concurrency preferences may override normally within inherited bounds.
 
 ## Local versus remote boundary
@@ -55,8 +57,9 @@ The full conformance suite is mandatory for official v3 release evidence and opt
 - Controller, executor, observer, and verifier privileges are granted separately.
 - Parent-goal envelopes and work packets are signed, scoped, expiring, and replay protected.
 - Risk-based step-up confirmation applies to authority expansion, high-impact commands, new egress, credentials, updates, and destructive actions.
-- Revocation prevents new work immediately and causes in-flight work to checkpoint or terminate according to policy.
-- Disconnected nodes may finish an already authorized bounded operation and spool signed evidence, but cannot widen scope or publish.
+- Revocation prevents new admission immediately and causes in-flight work to checkpoint or terminate according to the versioned revocation policy.
+- PAUSE and emergency kill outrank ordinary checkpoint completion. Their exact treatment of an already-started external effect is an unresolved owner decision; until resolved, recovered output is quarantined and cannot authorize a new effect.
+- A disconnected node may finish only the local bounded operation explicitly permitted by its last valid grant and spool signed evidence. After reconnection, the controller revalidates the GoalSpec version, fencing token, lease, and PAUSE/revocation state before admitting that evidence or any derived action. It cannot widen scope or publish while disconnected.
 
 An owner authenticated on both devices may execute commands remotely when both devices, the goal, and the requested capability are authorized.
 
@@ -86,7 +89,7 @@ A local egress broker validates:
 - artifact classification;
 - owner authorization for provider training or contributor-tier routes.
 
-Cheap or contributor routes default to prohibited for private projects unless the owner explicitly enables their data terms. Private cache and evidence artifacts remain project scoped; content addressing never implies public or cross-project sharing.
+Cheap or contributor routes default to prohibited for private projects unless the owner explicitly enables their data terms. Enabling a contributor route requires a route-specific acknowledgement and an egress broker that captures and classifies the exact outbound bytes before launch; prompt scanning alone is defense in depth, not the boundary. Project configuration and prompt content cannot widen contributor eligibility. Private cache and evidence artifacts remain project scoped; content addressing never implies public or cross-project sharing.
 
 ## Provider refusals and safety policy
 
@@ -102,7 +105,7 @@ Plugins declare capabilities, dependencies, event permissions, filesystem/networ
 - `trusted`;
 - owner-authorized `full-access`.
 
-Untrusted plugins never modify the authority kernel, read canonical storage directly, or call another plugin through hidden global state. Update signing, provenance, and rollback are separate from agent execution authority.
+Untrusted plugins never modify the authority kernel, read canonical storage directly, or call another plugin through hidden global state. A `full-access` plugin still cannot replace kernel authority checks. Privileged plugin installation and update require a pinned digest, attributable provenance, staged verification, and the owner-selected signature policy; whether unsigned local code may ever receive privileged capability remains an explicit owner decision. Update signing, provenance, and rollback are separate from agent execution authority.
 
 ## Threats the design must test
 
@@ -115,4 +118,5 @@ Untrusted plugins never modify the authority kernel, read canonical storage dire
 - provider response forging evidence or completion;
 - split-brain executive leases;
 - disconnected node publishing stale work;
+- public event sizes, timing, identifiers, or raw content revealing private project membership;
 - owner-hostile defaults that make local recovery impossible.

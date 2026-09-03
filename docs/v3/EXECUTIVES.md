@@ -1,7 +1,7 @@
 ---
 title: Recursion v3 executive model hypothesis
 status: hypothesis
-last-updated: 2026-09-02
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 executive model hypothesis
@@ -70,6 +70,8 @@ Routing is quality-first adaptive by default for the private deployment:
 
 Users may choose `quality-wait`, `adaptive`, `throughput`, `cost-first`, `maximum`, or custom policies.
 
+Route abstraction does not amend the current constitution. Until Lucas records a replacement decision, planning and executive decisions in the private control plane remain on the approved OpenAI model family; non-OpenAI routes may be used only for the bounded roles the governing decision permits. Provider-neutral planning is a proposed future capability, not current authority.
+
 ## Safe checkpoints
 
 A checkpoint is machine-determined, not merely asserted by the model. It requires:
@@ -80,7 +82,8 @@ A checkpoint is machine-determined, not merely asserted by the model. It require
 - child leases and process state known;
 - consumed usage and remaining authority reconciled;
 - context capsule validated and rehydratable;
-- any atomic command allowed to reach its bounded transaction boundary unless an emergency kill is issued.
+- ordinary replacement or configuration changes allow an atomic command to reach its bounded transaction boundary;
+- PAUSE, revocation, and emergency kill follow their higher-priority policy, and any outcome whose commit status is ambiguous is quarantined until reconciliation.
 
 Ordinary model/config changes apply at the next checkpoint. A forced swap requests the earliest valid checkpoint. Emergency kill is separate and may sacrifice the in-flight operation to contain a compromised run.
 
@@ -119,3 +122,4 @@ Exactly one actor may hold the decision lease for a given Head or ArmRun at a ti
 - Which events are stable enough to become the v3 public executive protocol?
 - When is a long-lived provider session more valuable than a fresh session with a compact capsule?
 - How should planning models be authorized under a future provider-neutral amendment to the current constitution?
+- On PAUSE or revocation, which classes of already-started operation may finish, which must be killed, and which outputs must be quarantined?

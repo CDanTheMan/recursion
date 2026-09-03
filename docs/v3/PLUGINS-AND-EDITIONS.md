@@ -1,7 +1,7 @@
 ---
 title: Recursion v3 plugins and editions hypothesis
 status: hypothesis
-last-updated: 2026-09-02
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 plugins and editions hypothesis
@@ -40,7 +40,7 @@ Plugins may provide:
 - notifications, observers, UIs, and editors;
 - artifact stores and optional telemetry exporters.
 
-The overnight research must challenge this boundary. Anything moved into the kernel pays a permanent complexity and security cost; anything moved out must not be able to weaken invariants.
+The research campaign challenged this boundary. Anything moved into the kernel pays a permanent complexity and security cost; anything moved out must not be able to weaken invariants. Routing plugins may score or reorder only routes the kernel has already found eligible; the kernel revalidates every proposed route and rejects any authority, privacy, billing, or capability expansion.
 
 ## Capability graph
 
@@ -68,6 +68,7 @@ Inter-plugin coordination uses typed kernel events, not direct plugin-to-plugin 
 - Durable lineage events are ordered, authenticated, replayable, and schema migrated.
 - Ephemeral operational events are bounded, backpressured, sampled where appropriate, and disposable.
 - Plugins receive only event types and fields permitted by their manifest and project classification.
+- Field values, identifiers, payload sizes, timing, and subscription patterns are part of the disclosure analysis; redacting obvious text is not sufficient for a public observer.
 - One faulty plugin cannot block the durable writer indefinitely.
 
 ## Failure containment
@@ -114,10 +115,10 @@ Edition manifests lock exact plugin versions and defaults. Installation should n
 
 ## Distribution and updates
 
-- Built-in registry plus arbitrary filesystem/Git/package sources.
+- Built-in registry plus filesystem/Git/package sources, each pinned to an immutable digest before activation.
 - Lockfile with digest and transitive dependency resolution.
 - Reproducible offline installation from a bundle.
-- Signed releases and optional publisher trust policies.
+- Signed first-party releases. Third-party publisher trust policy is owner-selected, but unsigned or unverifiable code defaults to unprivileged isolation and cannot receive kernel-adjacent capability without a separate explicit owner decision.
 - Update proposal, staging, verification, and rollback separate from agent authority.
 - No mandatory centralized marketplace or remote kill switch.
 

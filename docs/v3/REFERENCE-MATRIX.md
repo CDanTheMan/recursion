@@ -1,30 +1,33 @@
 ---
-title: Recursion v3 reference-repository matrix
-status: preliminary-research
-last-updated: 2026-09-02
+title: Recursion v3 evidence-pinned reference and license matrix
+status: evidence-grounded
+last-updated: 2026-09-03
 ---
 
-# Recursion v3 reference-repository matrix
+# Recursion v3 evidence-pinned reference and license matrix
 
 ## Method
 
-References supply evidence and design alternatives, not authority. The overnight research should pin current revisions, inspect implementation rather than README claims alone, record licenses, and distinguish reusable code from behavioral inspiration. Closed-source systems are behavioral references only unless a clearly compatible licensed artifact exists.
-
-All findings below are preliminary observations from the archived session and must be revalidated before they become normative.
+References supply evidence and design alternatives, not authority. The lead resolved each
+upstream `HEAD`, opened the cited source or maintainer documentation, and opened its license on
+2026-09-03. A branch commit is a dated research pin, not a promise of API stability. Mechanism
+descriptions below are scoped to the exact revision.
 
 ## Matrix
 
-| Reference | Behavior to study | Candidate adoption | Recursion-specific extension | Do not copy blindly |
-|---|---|---|---|---|
-| [T3 Code](https://github.com/pingdotgg/t3code) | Server-owned workspaces/sessions, typed command/event flow, transactional projections, provider drivers, bounded resource telemetry | One coordinator boundary, deterministic commands/events, lazy provider helpers, stable observer protocol | Add owner authority, goal-scoped ARMs, multi-pool budgets, cross-provider lineage, independent publication evidence | Full UI/server stack or resident monitoring before the personal CLI proves it needs them |
-| [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | Typed services/events, plugin profiles/tree, lifecycle disposal, replaceable agent/compaction capabilities | Capability manifests, deterministic plugin composition, explicit lifecycle, durable versus ephemeral events | Keep authority/PAUSE/budget/publication in a privileged kernel and add resource-discipline contracts | Treating the integrity constitution or canonical writer as an ordinary replaceable plugin |
-| [Hermes Agent](https://github.com/NousResearch/hermes-agent) | Agent loop, provider routing, delegation, session storage, compression/caching, skills/tools | Retained upstream base, isolated delegated contexts, provider integrations, proven loop behavior | Durable Head/ARM outer lifecycle, authority inheritance, model-aware pools, evidence/publication, cross-harness continuation | Assuming child sessions or provider fallbacks are durable/authorized merely because the inner loop supports them |
-| [Pi](https://github.com/earendil-works/pi) | Minimal core, extensible providers/tools, sessions/branching, compaction extensions, subscription integrations | Minimal runtime instincts, explicit extension seams, provider compatibility data | Add strong permission, budget, node, evidence, and publication enforcement around the minimal loop | Adopting a deliberately light permission model for remote or unattended execution |
-| [Claude Code](https://github.com/anthropics/claude-code) | Subagents, hooks, worktrees, permissions, monitoring, compact/summary behavior, plugin packaging | Lifecycle hooks, clean verifier context, risk-scaled permission UX, observable compaction boundaries | Non-lossy Owner Intent, proof-carrying verification, portable capsules, route/budget correlation | Treating generated compaction summaries as lossless or making Claude-specific semantics canonical |
-| [OpenCode](https://github.com/anomalyco/opencode) | Primary/subagent roles, client/server API, provider registry, session events, snapshots, output bounding, compaction | Stable server/observer interfaces, hidden maintenance agents, provider-neutral session abstractions | Authority-aware ARM hierarchy, external-effect ledger, subscription capacity pools, review-only publication | Assuming Git snapshots reverse processes, services, databases, or network effects |
-| [Cursor](https://cursor.com/blog/self-summarization) | Composer self-summarization, native CLI sessions/subagents, hooks, model pool behavior | Use Cursor as an optional high-throughput engine and respect its active compaction ownership | Context Capability Descriptors, portable sidecar state, cache-domain-aware route stability | Assuming every third-party model routed through Cursor is trained for Cursor's compaction or uses a particular subscription entitlement |
-| [OpenAI compaction](https://developers.openai.com/api/docs/guides/compaction) | Opaque/native compaction, server-side thresholds, usage accounting, prompt caching | Preserve route-native state and stable prefixes where officially supported | Deterministic fidelity validation, cross-provider capsule, exact local rehydration | Claiming opaque native state is portable or that OAuth CLIs expose every API cache control |
-| [ccusage](https://github.com/ccusage/ccusage) | Local read-only parsing of completed agent usage records | Optional reconciliation/calibration evidence provider | Correlate imported usage to Goal/ARM/task/route/evidence with confidence labels | Treating reconstructed history or API-equivalent cost as live subscription capacity truth |
+| Reference and inspected revision | License at revision | Observed mechanism | Adopt/adapt/reject |
+|---|---|---|---|
+| [T3 Code `5b8445b`](https://github.com/pingdotgg/t3code/tree/5b8445b7a777ab1070aa97b062b1618971073a96) | [MIT](https://github.com/pingdotgg/t3code/blob/5b8445b7a777ab1070aa97b062b1618971073a96/LICENSE) | The [architecture](https://github.com/pingdotgg/t3code/blob/5b8445b7a777ab1070aa97b062b1618971073a96/docs/internals/overview.md) documents one-at-a-time command-queue processing, persisted orchestration command receipts, a pure decider, and event append plus projection in one SQL transaction. It separately names provider and settlement workers, so this is not a single-worker-runtime claim. [Remote identity](https://github.com/pingdotgg/t3code/blob/5b8445b7a777ab1070aa97b062b1618971073a96/docs/internals/remote.md) is server-owned and stable; [resource telemetry](https://github.com/pingdotgg/t3code/blob/5b8445b7a777ab1070aa97b062b1618971073a96/docs/internals/resource-telemetry.md) uses a bounded isolated sidecar. | Adopt command/event/idempotency shape; adapt bounded observers and remote identity. Reject its full UI/runtime stack as v3 core without a measured need. |
+| [DeepSeek Harness `76fda72`](https://github.com/deepseek-ai/deepseek-harness/tree/76fda729799fe9b3848dbe2c211d4b231032b81e) | [MIT](https://github.com/deepseek-ai/deepseek-harness/blob/76fda729799fe9b3848dbe2c211d4b231032b81e/LICENSE) | [Architecture](https://github.com/deepseek-ai/deepseek-harness/blob/76fda729799fe9b3848dbe2c211d4b231032b81e/docs/architecture.md) composes typed reversible Cordis capabilities. The [session log](https://github.com/deepseek-ai/deepseek-harness/blob/76fda729799fe9b3848dbe2c211d4b231032b81e/docs/subsystems/session.md) is logically append-only and replay-derived; [persistence](https://github.com/deepseek-ai/deepseek-harness/blob/76fda729799fe9b3848dbe2c211d4b231032b81e/docs/subsystems/persistence.md) may be write-behind, with resolved `flush` as the crash-survival barrier. [Compaction](https://github.com/deepseek-ai/deepseek-harness/blob/76fda729799fe9b3848dbe2c211d4b231032b81e/docs/subsystems/compaction.md) records start/summary/end and makes interrupted work detectable. | Adopt durable-versus-live event distinction and compaction transaction markers. Adapt plugin composition behind a non-replaceable authority kernel and define Recursion's own durability barrier. |
+| [Hermes Agent `bd6cc48`](https://github.com/NousResearch/hermes-agent/tree/bd6cc48b94f752d0e0977bf4050fa678e18b714e) | [MIT](https://github.com/NousResearch/hermes-agent/blob/bd6cc48b94f752d0e0977bf4050fa678e18b714e/LICENSE) | The [README](https://github.com/NousResearch/hermes-agent/blob/bd6cc48b94f752d0e0977bf4050fa678e18b714e/README.md) documents multi-provider models, gateway channels, delegation, terminal backends, skills, cron and compression. Source-level state claims were not completed in this campaign. | Retain/audit the existing downstream seam and reuse proven integrations. Treat README behavior as documented interface, not proof of durable Head/ARM semantics. |
+| [Pi `4e69b0c`](https://github.com/earendil-works/pi/tree/4e69b0c28060f0f02fbe38bfa7c21a2e2eb25057) | [MIT](https://github.com/earendil-works/pi/blob/4e69b0c28060f0f02fbe38bfa7c21a2e2eb25057/LICENSE) | [Agent core](https://github.com/earendil-works/pi/blob/4e69b0c28060f0f02fbe38bfa7c21a2e2eb25057/packages/agent/README.md) separates model conversion, turn/tool events and execution modes and exposes an awaited `beforeToolCall` veto in its higher-level API; [AI core](https://github.com/earendil-works/pi/blob/4e69b0c28060f0f02fbe38bfa7c21a2e2eb25057/packages/ai/README.md) owns provider/model streaming; [SQLite sessions](https://github.com/earendil-works/pi/blob/4e69b0c28060f0f02fbe38bfa7c21a2e2eb25057/packages/session-backends/sqlite-node/README.md) are optional, not forced into core. | Adopt the provider/loop split and optional backend discipline. Adapt its policy hooks inside Recursion's authoritative budget, sandbox and publication boundary; the hooks alone are insufficient for unattended authority. |
+| [Claude Code `f173a69`](https://github.com/anthropics/claude-code/tree/f173a697aa6486945f1b9c4aa9ce5383d2c87db6) | [Proprietary Commercial Terms](https://github.com/anthropics/claude-code/blob/f173a697aa6486945f1b9c4aa9ce5383d2c87db6/LICENSE.md) | The public repository exposes [plugin examples and structure](https://github.com/anthropics/claude-code/blob/f173a697aa6486945f1b9c4aa9ce5383d2c87db6/plugins/README.md), not the complete CLI implementation. | Behavioral/interface reference only. Do not infer CLI internals or copy proprietary implementation. |
+| [OpenCode `b578b72`](https://github.com/anomalyco/opencode/tree/b578b7261fc9ec4917fe272df5cc4bd8a056cd5d) | [MIT](https://github.com/anomalyco/opencode/blob/b578b7261fc9ec4917fe272df5cc4bd8a056cd5d/LICENSE) | The pinned plugin [index](https://github.com/anomalyco/opencode/blob/b578b7261fc9ec4917fe272df5cc4bd8a056cd5d/packages/opencode/src/plugin/index.ts) applies resolved plugins and generic hooks sequentially, resolves configured external origins in parallel, and fires event hooks without awaiting them. Pure mode suppresses configured external origins but retains internal plugins. The GitHub API reports `anomalyco/opencode` is not a fork; `sst/opencode` and `anomalyco/opencode` resolved to the same HEAD on 2026-09-03. | Adapt hook vocabulary and only the ordering semantics proven for each hook path, behind stronger integrity and isolation. Do not treat pure mode or in-process plugins as a sandbox. |
+| [Gemini CLI `55b495d`](https://github.com/google-gemini/gemini-cli/tree/55b495d6db1794bf5b7f37a9bc03ebcab5103673) | [Apache-2.0](https://github.com/google-gemini/gemini-cli/blob/55b495d6db1794bf5b7f37a9bc03ebcab5103673/LICENSE) | The pinned [tool reference](https://github.com/google-gemini/gemini-cli/blob/55b495d6db1794bf5b7f37a9bc03ebcab5103673/docs/reference/tools.md) documents policy checks, confirmation, trusted folders, sandboxing, tool discovery and a plan mode. | Optional engine reference. Recursion still supplies non-interactive authority, budget, evidence and publication gates around it. |
+| [Cursor CLI docs, opened 2026-09-03](https://cursor.com/docs) | Proprietary documentation/interface | Official docs describe interactive and headless CLI sessions, rules, tools and resumable chats. This campaign did not inspect a full open-source CLI implementation or prove any account/model entitlement. | Optional engine/interface reference only; retain fake-transport and exact-assignment verification in Recursion. |
+| [Codex subagents, opened 2026-09-03](https://learn.chatgpt.com/docs/agent-configuration/subagents) | Documentation terms | Official docs describe explicit per-subagent model/reasoning overrides and a configured concurrency ceiling. | Construction route evidence only; do not hard-code this app's swarm mechanics into v3. |
+| [OpenAI compaction, opened 2026-09-03](https://developers.openai.com/api/docs/guides/compaction) | Documentation terms | Native compaction may return an opaque encrypted item carrying prior state; it is not a human-inspectable portable Recursion record. | Preserve provider affinity where useful; require local intent/evidence fidelity and portable capsules independently. |
+| [OpenCode Go, opened 2026-09-03](https://dev.opencode.ai/docs/go/) | Documentation terms | Official docs list the exact Contributor model, usage limits and training/retention caveat; model list and limits are explicitly changeable. | Route capability evidence only. Contributor traffic stays public/synthetic and never becomes entitlement or billing proof. |
 
 ## Cross-reference questions
 
@@ -64,9 +67,9 @@ All findings below are preliminary observations from the archived session and mu
 - How do products warn about dangerous modes without blocking owner choice?
 - What is genuinely required at startup versus relegated to explicit conformance/doctor commands?
 
-## Preliminary differentiation hypothesis
+## Differentiation hypothesis
 
-No single reference appears, from the public material reviewed in-session, to connect this complete lineage:
+No inspected reference directly demonstrated this complete lineage:
 
 ```text
 owner intent -> versioned goal -> Head -> ARM -> delegated segment
@@ -74,17 +77,20 @@ owner intent -> versioned goal -> Head -> ARM -> delegated segment
 -> independent evidence -> review publication -> quality/quota/cache outcome
 ```
 
-The combination could make Recursion distinctive. It becomes meaningful only if identifiers drive admission, recovery, budget enforcement, context selection, verification, and route learning—not if they are decorative log fields.
+This is a comparative inference, not proof of uniqueness. It becomes meaningful only if
+identifiers drive admission, recovery, budget enforcement, context selection, verification
+and route learning—not if they are decorative log fields. Revalidate on reference revision
+changes and before any public differentiation claim.
 
-## Required overnight deliverable
+## Source-quality limits
 
-For each reference, record:
-
-- pinned revision/date and license;
-- exact source/docs links;
-- verified architecture claims;
-- reusable interface or pattern;
-- difference from Recursion's requirements;
-- adoption, adaptation, or rejection recommendation;
-- experiment or spike needed;
-- resource and maintenance implications.
+- Repository documentation and source prove only the pinned revision, not deployment or future
+  behavior.
+- Marketing/README claims are labeled documented behavior unless implementation was opened.
+- MIT compatibility permits reuse subject to notice requirements; it does not make a design a
+  good fit. The Claude Code material is not a reusable source base under this review.
+- The `anomalyco/opencode` repository is not marked as a GitHub fork; the legacy `sst/opencode` URL resolved to the same HEAD on 2026-09-03. Revalidate repository identity on future revision changes rather than assuming either divergence or parity.
+- Stars, forks and estimated request counts were rejected as architecture or maintenance
+  evidence.
+- Provider pricing, limits, privacy and model availability expire on documentation or local
+  route change; see [ROUTE-CAPABILITIES.md](ROUTE-CAPABILITIES.md).

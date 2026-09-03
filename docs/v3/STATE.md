@@ -1,7 +1,7 @@
 ---
 title: Recursion v3 state and persistence hypothesis
 status: hypothesis
-last-updated: 2026-09-02
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 state and persistence hypothesis
@@ -25,7 +25,7 @@ input
   -> commit
 ```
 
-Only deterministic controller code writes canonical state. Models propose typed decisions. Remote nodes submit signed results that the controller validates and records.
+Only deterministic controller code writes canonical state. For each aggregate, exactly one fenced writer admits an event at a monotonically increasing sequence; cross-aggregate operations use an explicit saga/outbox boundary rather than a second writer. Every accepted event records the authenticated principal or component, authority/GoalSpec version, command id, fencing token where applicable, causation, correlation, schema version, sequence, and integrity/authenticity material. Hash chaining alone is not authentication. Models propose typed decisions. Remote nodes submit signed results that the controller validates and records.
 
 ## Event and projection split
 
@@ -57,9 +57,11 @@ Distributed side effects cannot be assumed exactly once. V3 instead requires:
 - replay-safe actuators;
 - ambiguity recovery that inspects external state before repeating an effect.
 
+Each actuator must publish and test a crash matrix for failure before prepare, after prepare, during the external call, after the external effect but before receipt, and after receipt but before projection. "Exactly once" is not an acceptance claim; the required property is that duplicate, omitted, and ambiguous outcomes are detected, bounded, and reconciled without unauthorized repetition.
+
 ## Artifact store
 
-Large prompts, transcripts, repository maps, patches, logs, gate output, and context capsules live outside hot relational rows. The database stores digest, type, size, classification, owner project, encryption status, dependencies, lifecycle state, and locator.
+Large prompts, transcripts, repository maps, patches, logs, gate output, and context capsules live outside hot relational rows. The database stores project-scoped identity, digest, type, size, classification, owner project, encryption status, dependencies, lifecycle state, and locator. Raw digests and exact sizes are not exposed across project or public observer boundaries.
 
 Storage classes:
 
@@ -107,6 +109,8 @@ V2 Markdown, JSON, and JSONL state should be imported through versioned adapters
 - refusal to fabricate missing or malformed state.
 
 For a period, v3 may render legacy-compatible read-only views. Dual writable sources of truth are forbidden.
+
+The evidence-backed v2 source map and single-writer strangler sequence are recorded in [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md). Migration must prove at each stage that exactly one path owns assignment, state transition, publication, and each external effect.
 
 ## Backup and recovery
 

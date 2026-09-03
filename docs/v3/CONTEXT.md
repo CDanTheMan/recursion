@@ -1,7 +1,7 @@
 ---
 title: Recursion v3 context, cache, and compaction hypothesis
 status: hypothesis
-last-updated: 2026-09-02
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 context, cache, and compaction hypothesis
@@ -28,7 +28,7 @@ Candidate artifact types:
 - `OpenBlockers`;
 - `CapabilitySnapshot`.
 
-Each artifact has a schema version, project/privacy classification, source identifiers, content digest, dependencies, creation method, validity boundary, and rehydration locator. A context package references artifacts by digest rather than copying them repeatedly.
+Each artifact has a schema version, project/privacy classification, source identifiers, project-scoped content identity, dependencies, creation method, validity boundary, and rehydration locator. A context package references artifacts by an authorized opaque identifier rather than copying them repeatedly. Raw digests remain inside the project's trust domain; cross-domain handles are randomized or keyed so they do not expose equality or become membership oracles.
 
 ## Execution Context Capsule
 
@@ -115,7 +115,7 @@ Every engine/provider adapter publishes a maintained, versioned descriptor cover
 - token-accounting fidelity;
 - discovery method and evidence timestamp.
 
-Maintainers own signed descriptor updates. Local overrides are allowed and visible. Runtime discovery that conflicts with a descriptor degrades to the conservative bound, alerts the executive, and remains owner-overridable. Descriptor resolution must be zero-token.
+Maintainers own signed descriptor updates. Local overrides are allowed and visible. Runtime discovery that conflicts with a descriptor degrades to the conservative bound and alerts the executive. An owner may override a performance or compatibility bound, but no descriptor override can widen GoalSpec authority, privacy, egress, credential visibility, billing, publication, or another constitutional boundary. Descriptor resolution must be zero-token.
 
 ## Cache-aware compilation
 
@@ -133,7 +133,7 @@ Exact strategies must be provider-specific and continuously revalidated against 
 
 ## Privacy
 
-Context artifacts inherit the strictest classification of their inputs. Cross-project deduplication is forbidden for private content even when digests match. Artifact identifiers exposed outside the trust domain must not become content or membership oracles. Raw prompts and tool outputs are locally encrypted when retained, never automatically exported, and excluded from public telemetry.
+Context artifacts inherit the strictest classification of their inputs. Cross-project deduplication is forbidden for private content even when underlying bytes match. Public or cross-project interfaces expose neither raw content digests nor stable size/timing patterns that make equality or membership practical to test. Raw prompts and tool outputs are locally encrypted when retained, never automatically exported, and excluded from public telemetry.
 
 ## Required experiments
 

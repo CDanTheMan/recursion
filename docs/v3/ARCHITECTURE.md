@@ -1,11 +1,11 @@
 ---
-title: Recursion v3 architecture hypothesis
-status: hypothesis
-last-updated: 2026-09-02
+title: Recursion v3 architecture recommendation
+status: proposal-pending-owner-ratification
+last-updated: 2026-09-03
 baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 ---
 
-# Recursion v3 architecture hypothesis
+# Recursion v3 architecture recommendation
 
 ## Correct hierarchy
 
@@ -69,7 +69,9 @@ Contains append-only events, receipts, exact source and candidate identifiers, g
 | `EvidenceBundle` | Exact source, diff, gates, observed behavior, and verifier receipt |
 | `PublicationIntent` | Passed candidate proposed to the only approved publishing path |
 
-Names are provisional until the overnight research reconciles them with v2 schemas.
+The normalized definitions and owners are in [GLOSSARY.md](GLOSSARY.md). Schema field names
+remain provisional until the first contract milestone, but new documents should not create
+competing actor/object synonyms.
 
 ## One transition path
 
@@ -89,9 +91,16 @@ The system should not maintain independent operational truths in Markdown, SQLit
 
 ## Native harness and external integrations
 
-The destination is a Recursion-owned, provider-neutral native agent loop with typed sessions, tools, subagents, context, and checkpoint events. Codex, Cursor, Claude Code, Gemini CLI, OpenCode, Hermes, and future harnesses remain optional peer execution plugins behind the same contracts.
+The recommended construction architecture is a Recursion-owned deterministic contract/event
+kernel with compatibility adapters around existing loops. Codex, Cursor, Claude Code, Gemini
+CLI, OpenCode, Hermes, and future harnesses remain optional peer engines behind the same
+contracts. A Recursion-owned native agent turn loop is a separately measured capability, not a
+prerequisite for the first kernel.
 
-This is an accepted direction in spirit, but the precise native-runtime boundary remains a research hypothesis. The overnight work must determine which inner-loop responsibilities Recursion should own and which should stay delegated to mature external harnesses. Duplicating optimized provider loops without measured benefit is a failure mode.
+The product direction still permits a larger native harness later. It earns that scope only by
+demonstrating a required quality, continuity, security or resource improvement that external
+engines plus adapters cannot supply. See the compared options and falsifiers in
+[ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md).
 
 ## V2 inheritance
 
@@ -108,7 +117,12 @@ At `98113d6`, v2 already provides valuable substrate:
 - provider egress and remote-execution contracts;
 - PAUSE and protected publication boundaries.
 
-V3 must preserve those invariants or deliberately supersede them with stronger tested equivalents. V2 is source-ready, not yet the unified operational product: its MVP orchestrator is primarily exercised through source tests, its supervisor schema fixes the executive identity to Hermes, and it does not model an ARM as a first-class goal-scoped executive.
+V3 must preserve those invariants or deliberately supersede them with stronger tested equivalents.
+The source trace verified that the MVP orchestrator has no non-test runtime caller in the
+baseline tree, its supervisor schema fixes the executive identity to Hermes, and it does not
+model an ARM as a first-class goal-scoped executive. Deployment state remains unknown. The
+full trace and migration matrix are in
+[CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md).
 
 ## Migration posture
 
@@ -124,7 +138,8 @@ The destination may be a re-foundation; construction should still use a strangle
 
 ## Coordinator fit
 
-The current target coordinator has limited CPU and memory. V3 fits if it uses:
+The historical target is a 2-vCPU/4-GB-class coordinator; its current deployment was not
+measured in this campaign. V3 is expected to fit only if it uses:
 
 - one daemon per authority domain/OS account;
 - event-driven scheduling instead of busy polling;
@@ -135,8 +150,17 @@ The current target coordinator has limited CPU and memory. V3 fits if it uses:
 - remote placement for heavy builds and model work;
 - summaries and manifests rather than copying full transcripts between actors.
 
-It does not fit if the coordinator becomes a universal build host, runs many resident CLI trees, eagerly indexes every repository, or loads every plugin into one process.
+It does not fit if the coordinator becomes a universal build host, runs many resident CLI
+trees, eagerly indexes every repository, or loads every plugin into one process. These are
+hypotheses with workloads and failure rules in [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md),
+not measured conclusions.
 
 ## Constitutional reconciliation required
 
-The current constitution names ChatGPT via Codex OAuth as the planning model. V3's provider-neutral executive model policy may require an explicit reviewed amendment to `CONTROL_PLANE.md`; a v3 document cannot make that change implicitly. The stable principle should be that Hermes is the accountable logical actor, models are authorized replaceable compute, deterministic code actuates, and Lucas retains authority.
+The current constitution names ChatGPT via Codex OAuth as the planning model. V3's
+provider-neutral executive model policy requires an explicit reviewed amendment before it can
+become operative; a v3 document cannot make that change implicitly. The stable proposed
+principle is that Hermes is the accountable logical actor, models are authorized replaceable
+compute, deterministic code actuates, and Lucas retains authority. The exact proposed rulings
+are in [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md) and the prioritized owner queue is
+in [DECISION-REGISTER.md](DECISION-REGISTER.md).

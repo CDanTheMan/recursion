@@ -1,7 +1,7 @@
 ---
 title: Recursion v3 planning and Grill Me hypothesis
 status: hypothesis
-last-updated: 2026-09-02
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 planning and Grill Me hypothesis
@@ -11,6 +11,8 @@ last-updated: 2026-09-02
 Planning is a first-class, configurable phase of autonomous development. Its job is not to create an impressive document; it is to reduce semantic uncertainty, establish measurable success, expose trade-offs before implementation, and give ARM executives a stable contract they can execute without hallucinating product direction.
 
 Planning may be disabled for already-bounded work. When enabled, it can range from seconds to hours.
+
+`off` removes the interactive planning phase; it does not remove provenance or admission. Execution still requires an authenticated, complete GoalSpec with parent goal, authority, exact source, allowed paths, non-goals, budget, privacy/egress policy, and machine-checkable gates. If any field is absent or ambiguous, admission stops.
 
 ## Grill Me protocol
 

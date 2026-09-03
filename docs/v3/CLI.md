@@ -1,7 +1,7 @@
 ---
 title: Recursion v3 CLI hypothesis
 status: hypothesis
-last-updated: 2026-09-02
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 CLI hypothesis
@@ -101,7 +101,7 @@ Successful checks are cached against all relevant hashes and invalidated precise
 
 ## Full-access UX
 
-The CLI must expose owner-authorized full-access and provider-native dangerous permission modes. It should use explicit names, display affected projects/nodes/credentials, record acknowledgement, and provide a reversible downgrade command. Warnings inform owner choice; they are not a remote approval service.
+The CLI must expose owner-authorized full-access and provider-native dangerous permission modes. It should use explicit names, display affected projects, nodes, credential references, and separately granted human seams, record acknowledgement, and provide a reversible downgrade command. Full access never silently includes control-plane authoring, credential enumeration, new billing authority, publication, protected merge, deployment, or the power to disable PAUSE/privacy/identity invariants. Warnings inform owner choice; they are not a remote approval service.
 
 ## Stable observer interface
 
