@@ -1,28 +1,32 @@
 ---
-title: Recursion v3 product hypothesis
-status: hypothesis
-last-updated: 2026-09-02
+title: Recursion v3 product specification direction
+status: accepted-direction-with-open-research
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 product hypothesis
 
 ## Thesis
 
-Recursion is a self-hosted control plane for sustained, high-quality autonomous software development across models, subscriptions, APIs, CLIs, harnesses, repositories, and machines. It turns an owner's intent into reviewable development while preserving authority, privacy, quota, machine responsiveness, and evidence.
+Recursion is a self-hosted, headless harness for sustained, high-quality autonomous software development across models, subscriptions, APIs, CLIs, repositories, and machines. It turns an owner's intent into reviewable development while preserving authority, privacy, quota, machine responsiveness, and evidence.
 
-Its distinguishing value is not another chat UI or another provider router. It is the durable outer loop around multiple agent runtimes:
+Its distinguishing value is not another graphical chat UI or provider router. V3 owns the
+durable orchestration harness: actor identity, goals, delegation, routing, state, context,
+tools, evidence, policy and observation. It may delegate an individual turn to an optimized
+external agent loop without becoming a thin wrapper around that loop:
 
 - the owner retains sovereignty and final authority;
 - one main assistant maintains strategic continuity;
 - goal-scoped ARM executives plan and delegate implementation;
-- external and native agent loops remain replaceable execution engines;
+- external and native agent loops remain replaceable execution engines behind Recursion's
+  contracts;
 - deterministic infrastructure enforces authority, budget, state, and publication;
 - context and evidence survive model, provider, session, and machine changes;
 - results are measured by verified code quality, not output volume.
 
 ## Initial user and deployment
 
-The first user is Lucas. The first deployment is a lightweight coordinator on the existing Hetzner VPS, with heavier work placed on subscriptions, cloud execution, or authenticated registered nodes. The first CLI prioritizes direct human configuration and operation; an agent is never required to edit settings.
+The first user is Lucas. The first deployment is a lightweight coordinator on the existing Hetzner VPS, with heavier work placed on subscriptions, cloud execution, or authenticated registered nodes. The interactive CLI is the canonical local configuration and operation surface; an agent is never required to edit settings. Multiple detachable terminal windows can observe and converse with Head, ARMs and executors without owning their processes. Telegram is an optional interactive surface for Head and ARM conversations. No web, desktop or mobile graphical client is required for v3.
 
 Public usability remains an explicit design requirement. Users should be able to install a useful minimal edition, bring their own official subscriptions or API credentials, select more capable bundles, and retain complete access to human-readable configuration.
 
@@ -36,16 +40,30 @@ Public usability remains an explicit design requirement. Users should be able to
 6. **Explainability.** Routing, admission, compaction, escalation, and publication decisions are inspectable without spending model tokens.
 7. **Privacy by construction.** Project data classification, egress policy, credential isolation, and local-only telemetry are explicit.
 8. **Graceful scarcity.** Subscription exhaustion, provider refusal, node loss, and budget depletion checkpoint work instead of encouraging uncontrolled fallback.
+9. **Evidence-grounded research.** Research ARMs can find papers, standards, datasets,
+   documentation and source; reconcile contradiction; propose experiments; and preserve
+   citations without treating model consensus as proof.
+10. **Lean optionality.** Advanced capabilities remain physically optional and idle when
+    disabled; capability growth must not make the privileged core opaque or the coordinator
+    permanently heavy.
 
 ## Primary workflows
 
 - Configure providers, authenticated CLIs, API routes, capacity pools, models, nodes, and policies through files or the CLI.
 - Use Grill Me to convert vague intent into a versioned, accepted GoalSpec.
 - Let Head Hermes start and monitor one or more bounded ARM executives.
+- Talk directly to an ARM through its addressable topic without relaying every exchange through
+  Head; Head remains aware through canonical state.
+- Optionally place multiple named ARMs in a shared conversation or workflow once its authority,
+  coordination and failure semantics pass research and contract gates.
 - Allow each ARM to delegate research, implementation, testing, review, and integration within inherited authority.
 - Move execution between approved models and pools at safe checkpoints while retaining logical identity and evidence.
 - Observe progress, queue causes, budget state, route decisions, context health, and blockers from stable read-only interfaces.
+- Open, close and rearrange terminal views without changing actor or process lifetime; terminate
+  work only through explicit policy-aware commands.
 - Produce a verified review branch for the owner; never merge or deploy autonomously by default.
+- Run a research GoalSpec that discovers scholarly/technical evidence, builds a claim ledger,
+  seeks disconfirmation and produces a reproducible cited decision packet.
 
 ## Optimization target
 
@@ -63,10 +81,13 @@ No single scalar hides these dimensions. Named profiles select a Pareto point, a
 
 - Reselling inference or becoming a mandatory hosted gateway.
 - Providing a mandatory central plugin marketplace or vendor-controlled authorization service.
+- Shipping a graphical frontend as part of the initial v3 contract.
 - Guaranteeing that unrelated providers share server-side prompt/KV caches.
 - Persisting hidden chain of thought or treating it as required recovery state.
 - Replacing Git, provider-native authentication, or every provider's optimized inner agent loop.
-- Autonomous protected-branch merge, production deployment, credential provisioning, or authority expansion.
+- Making protected-branch merge, production deployment, credential administration or authority
+  expansion implicit/default consequences of ordinary autonomy. A future explicit Full Access
+  grant may include supported high-impact capabilities only after constitutional reconciliation.
 - Running every worker on the coordinator VPS.
 - Exporting private prompts, source, telemetry, or project evidence by default.
 
@@ -82,3 +103,7 @@ V3 is one monumental product release built as independently testable internal mi
 - Users can understand and change routing without reading source or invoking a model.
 - Provider and node failures cannot silently widen spend, privacy exposure, or permissions.
 - V3's additional machinery produces measurable benefit over the accepted v2 baseline.
+- Direct ARM topics and multi-ARM collaboration reduce owner coordination effort without
+  creating conflicting authority, instruction loss or an AI ARM Manager.
+- Scientific Research ARM output withstands false-citation, outdated-source, contradiction,
+  reproducibility, copyright, privacy and independent-source-verification gates.

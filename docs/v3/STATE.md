@@ -73,7 +73,7 @@ Storage classes:
 
 When free-space floors are crossed, v3 removes expired temporary and rebuildable data first, then freezes new admissions before threatening canonical state or acceptance evidence.
 
-## Retention hypothesis
+## Retention recommendation pending owner decision
 
 The session direction proposes:
 
@@ -83,7 +83,23 @@ The session direction proposes:
 - explicit pinning for important sessions;
 - project-specific shorter or longer policies within legal and storage constraints.
 
-Retention and privacy deletion need a dedicated review because append-only integrity and deletion obligations can conflict. Cryptographic erasure and tombstone events are candidate mechanisms, not yet accepted designs.
+The recommended design separates raw content from durable proof:
+
+1. Encrypt raw private artifacts with project- or retention-class-scoped data-encryption keys.
+2. On expiry, delete the artifact and its scoped key, then propagate physical deletion through
+   caches, replicas, backups and disconnected-node spools according to a bounded policy.
+3. Append a minimal signed tombstone recording artifact class, governing policy/version,
+   deletion request and completion time, responsible component and disposition. Do not retain
+   recoverable content or unnecessary equality-revealing digests merely to prove deletion.
+4. Retain the smallest lineage, decision, gate and publication receipts needed to explain what
+   happened, subject to project policy and legal obligations.
+5. Support explicit owner purge, pin/legal hold, deletion retry, incomplete-propagation status
+   and evidence that a disconnected copy has not yet acknowledged deletion.
+
+Cryptographic erasure is defense in depth, not proof that every copy disappeared. Content
+addressing, deduplication and shared keys can defeat deletion isolation if scoped incorrectly.
+The next research campaign must compare key granularity, backup expiry, tombstone disclosure and
+legal requirements before Lucas selects the normative policy.
 
 ## Performance posture
 

@@ -103,7 +103,13 @@ Admission is hierarchical and adaptive across node, pool, route, model, reposito
 - uses event-driven wakeups rather than polling;
 - permits an audited owner override without concealing risk.
 
-The private deployment currently carries an owner policy ceiling of 75 unique unreviewed branches. This is not a measured optimum or a machine-capacity fact. Automatic pruning is limited to branches proven merged, superseded, or content-identical. If unique unreviewed work fills the allowance, new branch-producing work stops; changing the ceiling is an explicit policy decision informed by review throughput and measured repository cost.
+The private deployment historically carried an owner policy ceiling of 75 unique unreviewed
+branches. Lucas has ruled that v3 uses measured, configurable branch/worktree admission instead
+of treating 75 as universal. Signals include disk/inodes, Git/index latency, active process and
+worktree cost, integration conflicts, stale age, unreviewed change volume and owner review
+service rate. Policy uses hysteresis plus an explicit owner hard ceiling. Automatic pruning
+remains limited to branches proven merged, superseded, or content-identical. More machine
+headroom never justifies producing evidence faster than it can be reviewed.
 
 ## Scheduling
 

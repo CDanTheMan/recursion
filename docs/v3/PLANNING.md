@@ -1,6 +1,6 @@
 ---
-title: Recursion v3 planning and Grill Me hypothesis
-status: hypothesis
+title: Recursion v3 planning and Grill Me direction
+status: accepted-direction-with-open-research
 last-updated: 2026-09-03
 ---
 
@@ -42,6 +42,11 @@ The protocol must not ask a hundred questions and leave the answers trapped in c
 | `exhaustive` | Hours-long collaborative design with scientific hypotheses and repeated hardening |
 
 Each mode has configurable time, subscription-capacity, token, and metered-cost sub-budgets. Planning remains inside the parent goal's aggregate authority. Default planning consumes included/subscription capacity only. Exhaustion returns a resumable draft; it does not silently lower quality or begin execution.
+
+Head and ARM planning compute may use any route inside the exact owner-approved
+model/provider/account/capacity-pool envelope. The logical actor, GoalSpec and evidence remain
+stable across routes. This owner direction requires reconciliation of the current
+provider-specific constitutional clause before deployment behavior changes.
 
 ## Owner Intent Ledger
 
@@ -128,6 +133,14 @@ A completed planning phase produces:
 6. a milestone DAG with machine-checkable gates;
 7. unresolved questions and required human seams;
 8. a construction prompt or task set that does not depend on the original chat.
+
+## Scientific research mode
+
+`deep` and `exhaustive` planning may create a bounded research ARM or research task graph. It
+starts with a claim/source gap matrix, searches approved scholarly and technical sources,
+records contradictions and applicability, and proposes a preregistered experiment where
+external evidence cannot decide local fit. Search snippets and model consensus do not satisfy a
+source gate. The product contract is in [SCIENTIFIC-RESEARCH.md](SCIENTIFIC-RESEARCH.md).
 
 ## Learning without rewriting intent
 

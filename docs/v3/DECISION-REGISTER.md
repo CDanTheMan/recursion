@@ -2,7 +2,7 @@
 title: Recursion v3 decision register and owner queue
 status: evidence-reconciled-draft
 last-updated: 2026-09-03
-source: archive/session-transcript-2026-09-02.md
+source: archive/session-transcript-2026-09-02.md plus owner direction 2026-09-03
 ---
 
 # Recursion v3 session decision register
@@ -13,14 +13,37 @@ This register consolidates the 2026-09-02 design conversation. It does not amend
 
 The sanitized transcript preserves exact wording. This register deliberately groups related questions so later agents do not mistake repeated phrasing for separate features.
 
+## Owner rulings and refinements — 2026-09-03
+
+These supersede the matching open questions below. They are v3 product direction. Where a
+ruling conflicts with the current `CONTROL_PLANE.md`, it is a proposed constitutional change
+until Lucas approves the separate amendment/review workflow; it is not authority for an agent
+to change the current deployment.
+
+| ID | Owner direction | Adjudication and remaining research |
+|---|---|---|
+| OR-001 | Head and ARM planning may use any route in an explicit owner-approved model/provider/account/capacity-pool envelope. | Accepted product direction. Hermes remains the accountable actor; no implicit billing, privacy or authority transition. Requires constitutional reconciliation of the current Codex-OAuth clause. |
+| OR-002 | ARMs are goal-scoped delegated executives that plan and delegate a configurable fleet; depth and typical fleet size are configurable. | Accepted. One ARM per repository and delegation depth 1–2 are expected profiles, not protocol invariants. Project Pilot import semantics still require migration proof. |
+| OR-003 | `#general` is the Head conversation; each ARM may have a direct Telegram topic so the owner can talk to it without relaying through Head. | Accepted. Head remains aware through canonical events. Chat/topic state is not task authority. |
+| OR-004 | Investigate GrokBot-inspired macro bots, shared multi-ARM conversations, supervisors and configurable workflows. | Accepted research direction, not an accepted topology. The exact GrokBot reference must first be identified. A workflow supervisor may not become an AI ARM Manager. |
+| OR-005 | PAUSE aggressiveness is configurable, and normal policy should be able to let an already-started bounded operation finish. | Accepted product direction. `checkpoint`, `interrupt`, `drain` and separate emergency-stop semantics are proposed. Exact effect boundaries require research and a constitutional amendment. |
+| OR-006 | Full Access is configurable and may genuinely include control-plane, credential, spending, publication and deployment capability. | Accepted product direction. Recommend an explicit capability vector and maximum `sovereign` preset; no actor may silently self-grant or erase audit. Requires constitutional reconciliation. |
+| OR-007 | Verifier independence is a risk-scaled combination. | Accepted. Exact tiers and unavailable-route fallback remain research; current recommendation ranges from deterministic gates to independent family/provider/environment plus owner approval. |
+| OR-008 | Maintainer-approved plugins are signed by the trust root. Unsigned local plugins retain full functionality and warn on installation. | Accepted intent. "Full functionality" should mean complete plugin API, while sensitive authority may still require an explicit digest-pinned grant. Warning-only sensitive authority remains disputed pending research. |
+| OR-009 | Branch/worktree backlog limits are measured and configurable rather than fixed universally at 75. | Accepted; supersedes 75 as a universal v3 limit. Preserve an owner hard ceiling and human-review-capacity signals. |
+| OR-010 | The first private canary is an owner-selected construction-domain project. | Accepted as `CANARY-01` in tracked/public docs. Its real identity and content remain private and the canary is not authorized to run by this ruling. |
+| OR-011 | V3 is its own optimized harness, initially headless, with CLI rather than a graphical frontend. | Clarified: Recursion owns the orchestration harness even when external optimized inner loops execute turns. Telegram is an optional interactive surface; a complete native inner loop remains a measured expansion. |
+| OR-012 | The CLI is interactive and supports several terminal windows/panes for Head, ARMs and executors; closing a terminal must not end the process. | Accepted. The daemon/process broker owns lifetime; terminal clients attach/detach. Communication visualization, configuration UX, cross-platform persistence, non-flicker rendering and reliable termination require focused research. |
+| OR-013 | Recursion must conduct its own scientific research, find papers and use evidence to improve architecture and configurability. | Accepted. A research ARM uses ordinary GoalSpec/evidence contracts and scholarly capability plugins. Papers support mechanisms; local source and experiments prove Recursion fit. |
+
 ## Accepted directions
 
 | Grill Me | Consolidated ruling | Status |
 |---|---|---|
-| 1 | Long autonomous runs prioritize workable code quality and subscription conservation; time is secondary. Concurrency follows measured system/provider capacity. Unique unreviewed branches cap at 75. Task gate failures escalate through the ARM instead of globally pausing; a Lucas-required escalation stops affected development. | accepted-direction |
+| 1 | Long autonomous runs prioritize workable code quality and subscription conservation; time is secondary. Concurrency follows measured system/provider capacity. The historical unique-unreviewed-branch cap was 75; OR-009 supersedes that number as a universal v3 limit. Task gate failures escalate through the ARM instead of globally pausing; a Lucas-required escalation stops affected development. | accepted-direction, partially superseded by OR-009 |
 | 2–3 | On subscription exhaustion, only an already-started bounded final turn may reach a checkpoint. Metered fallback requires prior authority. The proposed `$10` is one aggregate parent-goal budget, never a fresh subtask allowance. | accepted-direction; enforcement needs provider research |
 | 4 | Begin with a small number of private, meaningful canary tasks and evidence-based consolidation; successful runs are confidence evidence, not proof of no failures. | accepted-direction |
-| 5 | The initial CLI serves Lucas's coordinator deployment and makes files/settings accessible without requiring an agent. | accepted-direction |
+| 5 | The initial CLI serves Lucas's coordinator deployment and makes files/settings accessible without requiring an agent. OR-012 further requires interactive, detachable multi-window operation. | accepted-direction, extended by OR-012 |
 | 6–7 | Model/config changes apply at the next mechanically safe checkpoint; owner-forced swap is available. Atomic operations may reach their bounded boundary; emergency kill is separate. | accepted-direction |
 | 8 | Automatic route reordering is allowed only inside an owner-approved envelope; authority, providers, budgets, and permissions cannot widen themselves. | accepted-direction |
 | 9 | New routes/models graduate through capability/authentication, synthetic checkpoint/failure fixtures, and a low-risk independently verified canary. | accepted-direction |
@@ -98,10 +121,10 @@ Head owns strategic goals and ARM lifecycle. ARM owns the implementation plan, d
 ## Open decisions requiring research or Lucas review
 
 1. Exact native Recursion agent-loop boundary versus retained Hermes runtime and external CLI engines.
-2. Whether and how `CONTROL_PLANE.md` should generalize the planning-model clause while preserving Hermes identity and deterministic actuation.
+2. Exact amendment text generalizing the planning-model clause to the owner-approved route envelope while preserving Hermes identity and deterministic actuation.
 3. Stable public names and schemas for executives, runs, task nodes, capsules, route leases, and events.
 4. Numeric resource/performance budgets for each edition and node class.
-5. Exact first private canary tasks and what can be summarized publicly.
+5. Exact `CANARY-01` tasks and what can be summarized publicly without recording its private identity.
 6. Supported provider/model/CLI matrix at v3 cut; all current availability and subscription claims require primary-source revalidation.
 7. Which plugins are mandatory in `core` versus included only in other manifests.
 8. License and attribution implications of retaining/forking Hermes and adapting patterns from every reference.
@@ -110,14 +133,16 @@ Head owns strategic goals and ARM lifecycle. ARM owns the implementation plan, d
 11. Retention/deletion design for append-only evidence and encrypted raw artifacts.
 12. Whether Head and ARM use the same native loop implementation or specialized loops behind a shared executive protocol.
 
-## Candidate next foundational decision
+## Candidate next foundational research decision
 
-Should Recursion v3 own a provider-neutral native agent loop while treating Codex, Cursor, Claude Code, Gemini CLI, OpenCode, Hermes, and similar harnesses as optional peer execution plugins behind the same ARM, context, evidence, and telemetry contracts?
+Which parts of the inner agent turn loop should Recursion implement natively while treating
+Codex, Cursor, Claude Code, Gemini CLI, OpenCode, Hermes, and similar harnesses as optional peer
+execution engines behind the same ARM, context, evidence, terminal and telemetry contracts?
 
-The session strongly accepted an independent custom-harness destination. The research campaign
-recommends a native deterministic kernel with compatibility adapters, while keeping a complete
-native inner loop as a separately measured capability. This is `proposal`, not a new accepted
-decision. See [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md).
+OR-011 establishes that v3 is a Recursion-owned headless harness. It does not require v3 to
+reimplement every provider-optimized turn loop. The research campaign recommends a native
+deterministic kernel with compatibility adapters, while keeping a complete native inner loop as
+a separately measured capability. See [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md).
 
 ## Research adjudication, 2026-09-03
 
@@ -137,52 +162,43 @@ decision. See [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md).
 These are evidence classifications recorded in [CLAIM-LEDGER.md](CLAIM-LEDGER.md), not owner
 decisions.
 
-## Prioritized owner decisions
+## Remaining owner decisions after focused research
 
-1. Amend or retain the constitution's ChatGPT-via-Codex-OAuth planning-model clause. If
-   amended, keep Hermes as the accountable logical actor and allow only explicit owner-approved
-   model/provider/account/pool routes.
-2. Ratify whether `ArmRun` is a first-class logical executive and whether Project Pilot is its
-   compatibility predecessor or merely migration input.
-3. Define PAUSE precisely across pre-dispatch, in-flight model turn, local mutation,
-   disconnected node, gate and publication; distinguish emergency stop from an ordinary
-   checkpoint-applied model/config change.
-4. Approve or reject the Option 2 construction path and the single-writer-per-aggregate
-   migration rule, including the rollback boundary after external effects.
-5. Define the minimum verifier independence for routine work and release evidence: distinct
-   task is proven today; model family, provider, session and host separation remain policy.
-6. Define non-overridable limits of `absolute-full-access`, especially control-plane changes,
-   credentials, spending, protected branches, publication and deployment.
-7. Decide whether privileged/federated plugins require signature plus digest/SBOM, and whether
-   unsigned plugins may provide only unprivileged local capabilities.
-8. Choose retention/deletion/tombstone semantics for raw private artifacts while preserving
-   auditable lineage.
-9. Treat the 75-unique-branch ceiling as an owner policy or require a measured provisional
-   default before it appears as a resource limit.
+The broad direction is now answered. Research should narrow these mechanisms before asking
+Lucas to ratify them:
 
-## Next Grill Me queue
+1. Exact amendment text for provider-neutral Head/ARM planning while preserving Hermes identity,
+   deterministic actuation and explicit billing/privacy envelopes.
+2. Whether Project Pilot imports as an `ArmRun` predecessor or only migration evidence.
+3. Default PAUSE profile and the exact finish/interrupt/quarantine rule for each effect class.
+4. Full Access grant schema, step-up/expiry rules and whether any audit/grant-control capability
+   can safely be delegated.
+5. Verifier risk tiers and which unavailable-independence conditions block a release.
+6. Whether unsigned-plugin installation warning alone can authorize sensitive capabilities or
+   a separate digest-pinned developer-mode grant is mandatory.
+7. The per-aggregate legacy-writer cutover point and reconciliation-only external effects.
+8. Raw-artifact cryptographic erasure, physical deletion, tombstone and backup policy.
+9. Safe multi-ARM shared-room topology and whether coordination belongs to Head or a named ARM.
+10. Persistent terminal/process architecture and the v3-supported terminal/OS matrix.
+11. The exact bounded `CANARY-01` tasks, evidence, disclosure and stop rules.
 
-Ask these in order; later questions depend on earlier authority choices.
+## Next Grill Me queue after research
 
-1. Should Head Hermes and ARM executives be allowed to use any route inside an explicit
-   owner-approved model/provider/account/pool envelope, or must Head planning remain ChatGPT via
-   Codex OAuth?
-2. Is an ARM a constitutionally named logical actor with its own lease and event stream, and
-   should existing Project Pilots import as that actor or only as historical compatibility data?
-3. When PAUSE arrives during a model turn, tool process, disconnected-node action, gate or
-   publication, which exact bounded operations may finish and which must be killed or
-   quarantined?
-4. May an `absolute-full-access` worker ever touch control-plane configuration, credentials,
-   spending, publication or deployment, or are those separate grants in every profile?
-5. What independence is mandatory for a verifier on ordinary tasks versus a release candidate:
-   distinct task, session, model, provider, family, host, or some risk-scaled combination?
-6. Should privileged plugins be signed by an owner trust root, and what limited capability may
-   an unsigned local plugin provide?
-7. At what exact migration checkpoint may the legacy writer for an aggregate be fenced, and
-   after which external effects is rollback reconciliation-only rather than reversible?
-8. Should the 75-branch ceiling remain a hard owner policy independent of performance, or
-   become a measured/configurable backlog limit?
-9. What deletion/tombstone behavior should apply to successful and failed raw private
-   artifacts after their retention window?
-10. Which private low-risk fixture should be the first post-contract canary after the pure
-    schema/replay milestone passes?
+1. Do you ratify `checkpoint` as the ordinary PAUSE default, `interrupt` and `drain` as explicit
+   alternatives, and emergency stop as a separate immediate boundary?
+2. May a maximum Full Access actor ever modify its own grant/audit controls, or may it exercise
+   every operational capability while grant issuance and audit deletion remain owner-held?
+3. For unsigned local plugins, is the installation warning itself sufficient for requested
+   sensitive authority, or should sensitive grants require a second digest-pinned step-up?
+4. Which proposed verifier tier should be the minimum for releases when an independent family,
+   provider or host is unavailable?
+5. In a shared multi-ARM room, should Head always own the coordination lease, or may a named ARM
+   own one workflow step under a cross-ARM GoalSpec?
+6. Which PAUSE, Full Access, plugin and terminal defaults should ship in `core`, `standard` and
+   `full` manifests?
+7. Which exact v2 aggregate should undergo the first single-writer cutover rehearsal?
+8. Do you accept scoped encryption plus physical deletion and a minimal signed tombstone as the
+   default retention design?
+9. Which supported Windows/Linux terminals must pass v3.0 interactive acceptance, and should
+   OS-native window/pane launching be core or an optional adapter?
+10. Which bounded `CANARY-01` task should run first after contract/replay acceptance?

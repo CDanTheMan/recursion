@@ -21,6 +21,10 @@ schema milestone may refine field names, but it should not create a second synon
 | `Kernel` | Deterministic authority, event and action enforcement substrate | a semantic manager or planning agent |
 | `Principal` | Identity whose signed grant is being exercised | whichever process happens to hold a session |
 | `CapabilityGrant` | Versioned subset of parent authority | a tool merely being installed or discoverable |
+| `ActorEndpoint` | Addressable CLI/Telegram view of Head or an ARM | actor identity, authority, lease or canonical state |
+| `TerminalView` | Detachable interactive client over actor/event/process state | the process owner or a durable executive |
+| `ProcessBroker` | Platform adapter that owns and reconciles PTY/process groups for bounded work | the model, terminal window or canonical state writer |
+| `PausePolicy` | Versioned owner-selected finish/interrupt/drain behavior by operation class | a model choosing whether to honor PAUSE |
 
 Head Hermes directly owns ARM lifecycle. An ARM directly owns its task DAG and delegates
 workers. The kernel owns neither portfolio priorities nor ARM plans.
@@ -44,6 +48,8 @@ workers. The kernel owns neither portfolio priorities nor ARM plans.
 | `PublicationReceipt` | publisher actuator | Durable result of the reviewed publication path; never a merge/deploy receipt |
 | `Node` | installation trust domain | Registered execution host with identity, roles and capability evidence |
 | `PluginManifest` | reviewed configuration | Data declaration of capability, dependencies, privileges, lifecycle and version |
+| `ResearchClaim` | research/evidence plane | Exact falsifiable statement linked to sources, contradictions, experiments and confidence |
+| `SourceRecord` | research/evidence plane | Versioned paper, standard, dataset, documentation or source revision with provenance and access policy |
 
 ## Route vocabulary
 

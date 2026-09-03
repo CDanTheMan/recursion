@@ -1,6 +1,6 @@
 ---
-title: Recursion v3 CLI hypothesis
-status: hypothesis
+title: Recursion v3 CLI direction
+status: accepted-surface-with-open-command-research
 last-updated: 2026-09-03
 ---
 
@@ -8,9 +8,26 @@ last-updated: 2026-09-03
 
 ## Product requirement
 
-The first CLI is for direct operation of Lucas's deployment. It must let an owner configure and inspect Recursion without asking an agent to edit files or call commands. The same design should remain teachable enough for later public users.
+The first CLI is the canonical local operator surface for the headless v3 harness. It must let
+an owner configure and inspect Recursion without asking an agent to edit files or call commands.
+Telegram is an optional interactive transport, not a replacement configuration authority. No
+graphical frontend is required for the v3 release. The same design should remain teachable
+enough for later public users.
 
 The CLI is a schema-driven editor, validator, explainer, and control surface over human-readable configuration. It is not the only copy of settings and does not hide policy in an opaque database.
+
+## Interactive and detachable operation
+
+Running `recursion` without a one-shot subcommand opens the interactive general view. Additional
+terminals may attach to Head, a selected ARM, worker/session output, the communication graph,
+events or system state. Terminals are replaceable clients of the daemon: closing one detaches
+its stream and leaves the actor/process running. Explicit pause, stop, kill or daemon commands
+control lifetime.
+
+The interactive UI and one-shot commands compile to the same versioned command schema. A
+terminal widget, prompt buffer or operating-system window never becomes canonical state.
+Attaching a view must not launch an additional model process, plugin or repository indexer.
+See [TERMINAL-RUNTIME.md](TERMINAL-RUNTIME.md).
 
 ## Configuration hierarchy
 
@@ -42,6 +59,12 @@ Restrictions may tighten immediately. A command explains effective value, proven
 ## Candidate command surface
 
 ```text
+recursion
+recursion attach head|arm|task <id>
+recursion workspace open [layout]
+recursion view graph|events|system
+recursion detach
+recursion daemon status|start|stop|restart
 recursion init
 recursion configure [--profile ...]
 recursion config get|set|edit|validate|diff|apply|explain|migrate
@@ -53,9 +76,11 @@ recursion node enroll|list|show|revoke|doctor
 recursion project add|list|show|classify|doctor
 recursion goal grill|draft|accept|amend|status|stop
 recursion arm list|show|checkpoint|replace|pause|resume
+recursion arm stop|kill <id>
 recursion queue list|explain|prioritize
 recursion context inspect|compact|rehydrate|doctor
 recursion evidence show|verify|export
+recursion research start|status|claims|sources|gaps|verify|export
 recursion branch inventory|explain|prune-safe
 recursion doctor [--quick|--full|--component ...]
 recursion pause|resume
@@ -101,7 +126,30 @@ Successful checks are cached against all relevant hashes and invalidated precise
 
 ## Full-access UX
 
-The CLI must expose owner-authorized full-access and provider-native dangerous permission modes. It should use explicit names, display affected projects, nodes, credential references, and separately granted human seams, record acknowledgement, and provide a reversible downgrade command. Full access never silently includes control-plane authoring, credential enumeration, new billing authority, publication, protected merge, deployment, or the power to disable PAUSE/privacy/identity invariants. Warnings inform owner choice; they are not a remote approval service.
+The CLI must expose owner-authorized full-access and provider-native dangerous modes without
+pretending that a restricted preset is absolute. It should display and configure a capability
+vector including filesystem/process/network, control-plane authoring, credential administration,
+provider enrollment, spending limits, publication, merge, deployment, service control and any
+permission to alter ordinary PAUSE defaults.
+
+A maximum preset may select every supported capability. Each sensitive grant still has an
+attributable scope, acknowledgement, authentication requirement and expiry/revocation path;
+the executing actor cannot silently widen or erase its own grant. Commands show the exact
+before/after blast radius and offer a reversible downgrade where the external effect permits
+one. This product behavior requires constitutional reconciliation before use in the current
+private deployment.
+
+## PAUSE and capacity UX
+
+`recursion pause` should accept a schema-defined policy such as `checkpoint`, `interrupt` or
+`drain`, explain which current operations may finish, and separately expose emergency stop.
+`recursion status` must show the applied policy, PAUSE epoch, in-flight operations and any
+quarantined ambiguous effects.
+
+Branch and worktree admission is driven by measured machine and review-backlog capacity. The
+CLI shows the inferred limit, contributing signals, hysteresis, owner hard ceiling and why a new
+branch was admitted or refused. Seventy-five is historical policy input, not a universal v3
+constant.
 
 ## Stable observer interface
 

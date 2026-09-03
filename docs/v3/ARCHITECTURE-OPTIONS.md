@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 architecture options and recommendation
-status: recommendation-pending-owner-ratification
+status: recommendation-with-owner-directions-and-open-proof
 last-updated: 2026-09-03
 baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 ---
@@ -128,22 +128,24 @@ The concrete strangler and stop rules are in
 
 These are proposed rulings, not decisions. `CONTROL_PLANE.md` remains authoritative.
 
-1. **Planning compute.** Replace the constitution's provider-specific planning-model clause
-   only if Lucas wants provider-neutral Head/ARM compute. Proposed invariant: Hermes is the
-   accountable logical executive; only owner-approved model/provider/account/pool routes may
-   supply its turns; deterministic code alone actuates.
-2. **Executive hierarchy.** Ratify `Lucas -> Head Hermes -> goal-scoped ARM executives ->
-   delegated workers/gates`, and state explicitly that Project Pilot is the migration
-   predecessor of an ARM executive. There is no intervening AI ARM Manager.
+1. **Planning compute.** Lucas selected provider-neutral Head/ARM compute inside explicit
+   owner-approved model/provider/account/pool envelopes. Amend the provider-specific clause
+   while preserving Hermes as accountable logical executive and deterministic actuation.
+2. **Executive hierarchy.** Lucas defined ARM as a goal-scoped executive that delegates a
+   configurable fleet and may receive direct owner conversation. The Head-to-ARM hierarchy has
+   no intervening AI ARM Manager. Whether Project Pilot can import as an ARM predecessor still
+   requires compatibility proof.
 3. **State authority.** Ratify the future transfer from file/Git operational records to one
    kernel event writer, with human-readable Git projections remaining review artifacts rather
    than concurrent authority.
-4. **PAUSE versus checkpoint completion.** Decide whether emergency PAUSE blocks every new
-   effect immediately while ordinary route/model swaps wait for a safe checkpoint. Current
-   prose can otherwise be read as allowing a running operation to continue after PAUSE.
-5. **Full access.** Confirm that an owner-authorized full-access worker profile may widen tool
-   and filesystem permissions but cannot acquire control-plane self-modification, credential
-   expansion, spend, merge, deploy or publication authority unless each is separately granted.
+4. **PAUSE versus checkpoint completion.** Lucas selected configurable pause aggressiveness and
+   wants normal policies to allow an already-started bounded operation to finish. Research must
+   specify `checkpoint`, `interrupt`, `drain` and emergency behavior per effect class before an
+   amendment replaces the current immediate halt.
+5. **Full access.** Lucas selected a genuinely expansive configurable Full Access that may
+   include control-plane, credential, spend, publication, merge and deployment capability.
+   Research must define explicit grants, step-up, expiry and the non-self-escalation/audit seam
+   before constitutional amendment.
 6. **Native inner loop.** Ratify Option 2 as the construction path and require a measured spike
    before promoting a Recursion-owned inner agent loop from optional capability to core.
 

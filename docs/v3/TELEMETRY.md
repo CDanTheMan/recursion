@@ -64,7 +64,20 @@ Provider session IDs are disposable optimizations. Recursion lineage remains aut
 - scheduler/admission latency;
 - node transfer volume and hydration latency;
 - interactive foreground degradation;
+- terminal-view count, render/input latency, wakeups, bounded-buffer pressure, coalesced or
+  dropped presentation events and process-tree cleanup;
+- privileged/core code and dependency size, install/binary footprint, startup imports and
+  disabled-path work;
 - queue wait and end-to-end elapsed time.
+
+### Research quality
+
+- primary versus secondary source coverage;
+- persistent-identifier, version and retrieval completeness;
+- fabricated, corrected/retracted and inapplicable-source detection;
+- contradictory evidence preserved/resolved;
+- experiment reproducibility and negative-result retention;
+- human/source-verifier corrections per accepted research claim.
 
 ### Continuity and safety
 

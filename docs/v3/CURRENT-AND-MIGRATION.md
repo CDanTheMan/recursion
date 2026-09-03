@@ -147,6 +147,28 @@ commit and, under separate authority, any live deployment. `Unknown` blocks a cu
   plus a tested reverse compatibility reader. After an irreversible schema or effect, stop
   and require owner approval rather than promising rollback.
 
+## Recommended cutover decision rule
+
+Fence a legacy writer for one aggregate only at an explicit maintenance checkpoint where all
+of the following are proven against the exact deployment revision:
+
+1. Every legacy admission and mutation path for that aggregate is enumerated and can be
+   mechanically refused.
+2. No active lease, open or ambiguous external attempt, pending publication intent, partially
+   applied cross-aggregate saga or unspooled disconnected-node result remains.
+3. The frozen legacy source/state digest imports into v3 and rebuilds the expected projection
+   without lossy or best-effort fields.
+4. Backup/restore, reverse compatibility reader and rollback admission have passed against the
+   same fixture.
+5. A new fencing epoch makes stale legacy or remote writes fail closed.
+6. The selected canary aggregate is low risk, owner approved and independently monitored.
+
+Before the first externally accepted effect, rollback may restore the last verified checkpoint
+and legacy writer. Once a provider submission, pushed ref, sent message, credential operation,
+deployment or service change may have been accepted, state restoration cannot undo reality:
+retain the v3 record, block dependent effects and reconcile forward. The exact effect taxonomy
+and canary aggregate still require research and Lucas's final decision.
+
 ## Material uncertainties
 
 The live deployment revision and enabled feature set were not inspected. The current Project

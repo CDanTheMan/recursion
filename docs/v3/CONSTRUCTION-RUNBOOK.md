@@ -9,6 +9,12 @@ last-updated: 2026-09-03
 This is temporary construction procedure, separate from the product specification. It does
 not authorize implementation, provider changes, deployment or control-plane amendments.
 
+The 2026-09-03 owner rulings added material terminal, interaction, PAUSE, Full Access,
+verification and plugin-contract questions. Complete the focused
+[RESEARCH-AGENDA.md](RESEARCH-AGENDA.md) campaign and obtain its contract-readiness verdict before
+authorizing this milestone; this runbook remains the proposed first construction boundary, not
+the next research task.
+
 ## Recommended first autonomous milestone
 
 **Milestone:** v3 contract skeleton and replay/conformance harness.

@@ -1,6 +1,6 @@
 ---
-title: Recursion v3 security and sovereignty hypothesis
-status: hypothesis
+title: Recursion v3 security and sovereignty direction
+status: accepted-direction-with-open-threat-model
 last-updated: 2026-09-03
 ---
 
@@ -38,7 +38,23 @@ Candidate profiles include:
 
 Adapters may map these to provider-native options, including dangerous skip-permission flags when the owner explicitly selects them. V3 must display the effective capabilities and blast radius, record the acknowledgement, and avoid implying that a provider-native flag overrides Recursion's budget, privacy, identity, or publication contracts.
 
-`absolute-full-access` widens the selected actor's tool, process, filesystem, and network surface only to the extent named by its grant. It does not implicitly confer control-plane authoring, credential enumeration, new provider enrollment, metered spending, protected-branch merge, publication, deployment, or the right to weaken PAUSE, privacy, identity, and audit invariants. Those are separate attributable grants or human seams. The name and exact composition remain subject to Lucas's decision because a misleading "absolute" label is itself a safety defect.
+The product must allow an owner to configure genuinely expansive Full Access. A maximum
+`absolute-full-access` or `sovereign` preset may include control-plane authoring, selected
+credential administration, provider enrollment, metered spending, publication, merge,
+deployment and service control when the owner grants those capabilities explicitly. The
+product must not advertise Full Access while silently withholding a documented capability.
+
+The recommended implementation is a capability vector rather than a single ambient boolean.
+Each high-impact capability names its project/host/account scope, limit, acknowledgement,
+authentication strength, start/expiry and revocation behavior. A preset may select every
+supported capability, but a running actor cannot mint, widen, conceal or erase its own grant or
+audit history. Full Access changes what the owner authorizes; it does not make attribution,
+fencing, receipts or evidence optional.
+
+This product direction conflicts with the current private constitution's stronger human seams
+and self-modification prohibitions. It requires explicit reviewed reconciliation before it is
+operative; it is not present authority for an agent to change control-plane, auth, routing,
+spending, publication or deployment state.
 
 Lower scopes may narrow permissions freely. Widening network, credential, spending, deployment, or control-plane access requires an explicit owner action at the affected scope. Ordinary model, cache, quality, and concurrency preferences may override normally within inherited bounds.
 
@@ -105,7 +121,20 @@ Plugins declare capabilities, dependencies, event permissions, filesystem/networ
 - `trusted`;
 - owner-authorized `full-access`.
 
-Untrusted plugins never modify the authority kernel, read canonical storage directly, or call another plugin through hidden global state. A `full-access` plugin still cannot replace kernel authority checks. Privileged plugin installation and update require a pinned digest, attributable provenance, staged verification, and the owner-selected signature policy; whether unsigned local code may ever receive privileged capability remains an explicit owner decision. Update signing, provenance, and rollback are separate from agent execution authority.
+Untrusted plugins never modify the authority kernel, read canonical storage directly, or call
+another plugin through hidden global state. A `full-access` plugin still cannot replace kernel
+authority checks. Maintainer-approved first-party plugins and releases are signed by the
+installation trust root. Unsigned local plugins remain supported and may implement the full
+plugin API. On installation, the CLI must state that the plugin is not approved by the
+Recursion maintainer team, pin its exact digest and show its requested capabilities.
+
+Warning-only activation of ambient sensitive authority is disputed. The recommended refinement
+preserves full functionality while requiring developer mode plus an explicit per-plugin grant
+for kernel-adjacent storage, credentials, arbitrary egress, control-plane mutation, spending,
+publication or deployment. This protects local owner sovereignty without treating a generic
+warning click as a durable supply-chain policy. The next research campaign must compare this
+against the owner's warning-only preference before the contract is frozen. Update signing,
+provenance, and rollback remain separate from agent execution authority.
 
 ## Threats the design must test
 

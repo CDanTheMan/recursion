@@ -1,6 +1,6 @@
 ---
-title: Recursion v3 plugins and editions hypothesis
-status: hypothesis
+title: Recursion v3 plugins and editions direction
+status: accepted-direction-with-open-trust-research
 last-updated: 2026-09-03
 ---
 
@@ -38,6 +38,8 @@ Plugins may provide:
 - node transports;
 - sandboxes and permission mappings;
 - notifications, observers, UIs, and editors;
+- scholarly/source discovery, DOI/metadata resolution, licensed retrieval, citation/retraction
+  checks and reproducible experiment adapters;
 - artifact stores and optional telemetry exporters.
 
 The research campaign challenged this boundary. Anything moved into the kernel pays a permanent complexity and security cost; anything moved out must not be able to weaken invariants. Routing plugins may score or reorder only routes the kernel has already found eligible; the kernel revalidates every proposed route and rejects any authority, privacy, billing, or capability expansion.
@@ -118,7 +120,14 @@ Edition manifests lock exact plugin versions and defaults. Installation should n
 - Built-in registry plus filesystem/Git/package sources, each pinned to an immutable digest before activation.
 - Lockfile with digest and transitive dependency resolution.
 - Reproducible offline installation from a bundle.
-- Signed first-party releases. Third-party publisher trust policy is owner-selected, but unsigned or unverifiable code defaults to unprivileged isolation and cannot receive kernel-adjacent capability without a separate explicit owner decision.
+- Signed first-party releases and maintainer-approved plugins, rooted in the installation trust
+  root. A valid signature proves publisher/review-policy identity, not that every requested
+  capability is safe for every project.
+- Unsigned local plugins remain installable and may implement the complete plugin API. The CLI
+  warns that they are not maintainer approved, pins the exact digest and displays all requested
+  authority. The recommended default requires developer mode and explicit per-plugin grants
+  before sensitive capability is admitted; whether one warning may approve every requested
+  capability remains an owner-visible research dispute.
 - Update proposal, staging, verification, and rollback separate from agent authority.
 - No mandatory centralized marketplace or remote kill switch.
 

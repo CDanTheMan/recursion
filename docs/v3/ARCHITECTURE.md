@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 architecture recommendation
-status: proposal-pending-owner-ratification
+status: owner-direction-with-research-falsifiers
 last-updated: 2026-09-03
 baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 ---
@@ -53,6 +53,22 @@ Contains native or external harness sessions, delegated agents, worktrees, nodes
 
 Contains append-only events, receipts, exact source and candidate identifiers, gate results, independent verification, context artifact hashes, and publication provenance. Model narratives may explain evidence but cannot substitute for it.
 
+## Interaction surfaces
+
+The v3 product is a headless harness. The interactive CLI is its canonical local operator
+surface, and Telegram is an optional interactive transport. Several terminal clients may attach
+to Head, ARMs, workers, events or system state; closing a client does not own or end the
+underlying process. The persistent daemon, canonical state and managed process broker provide
+lifetime and recovery. The conceptual `#general` conversation belongs to Head Hermes; a
+dedicated topic may address an ARM directly. These are views over canonical actor/event state,
+not additional supervisors or task registries. See
+[TERMINAL-RUNTIME.md](TERMINAL-RUNTIME.md).
+
+Shared multi-ARM conversations are desired but remain a research item. The initial
+recommendation is a Head-routed room or an event-mediated workflow with one named coordinator
+per step. A `supervisor` is a role held by Head or an ARM inside a GoalSpec, never an additional
+AI ARM Manager. See [INTERACTION-SURFACES.md](INTERACTION-SURFACES.md).
+
 ## Core object model
 
 | Object | Purpose |
@@ -89,18 +105,28 @@ authenticated command or model proposal
 
 The system should not maintain independent operational truths in Markdown, SQLite, JSONL, process tables, and chat sessions. Human-readable views and configuration may remain files, but active state needs one canonical event/projection boundary.
 
-## Native harness and external integrations
+## Headless native harness and external integrations
 
-The recommended construction architecture is a Recursion-owned deterministic contract/event
-kernel with compatibility adapters around existing loops. Codex, Cursor, Claude Code, Gemini
-CLI, OpenCode, Hermes, and future harnesses remain optional peer engines behind the same
-contracts. A Recursion-owned native agent turn loop is a separately measured capability, not a
-prerequisite for the first kernel.
+Recursion v3 is its own harness at the orchestration and product-contract level. The
+recommended construction architecture is a Recursion-owned deterministic contract/event kernel
+with compatibility adapters around existing loops. Codex, Cursor, Claude Code, Gemini CLI,
+OpenCode, Hermes, and future harnesses remain optional peer engines behind the same contracts.
+A Recursion-owned native agent turn loop is a separately measured capability, not a prerequisite
+for calling v3 a native harness or for building the first kernel.
 
 The product direction still permits a larger native harness later. It earns that scope only by
 demonstrating a required quality, continuity, security or resource improvement that external
 engines plus adapters cannot supply. See the compared options and falsifiers in
 [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md).
+
+## Scientific research capability
+
+A research ARM is the same goal-scoped executive protocol applied to source discovery, claim
+reconciliation and experiment design. Scholarly search, standards/source retrieval, PDF parsing,
+citation checks and notebook execution are plugins; the kernel retains generic claim, source,
+artifact, provenance, privacy and verification contracts. Research conclusions distinguish
+external mechanism evidence, local structural applicability and empirical Recursion fit. See
+[SCIENTIFIC-RESEARCH.md](SCIENTIFIC-RESEARCH.md).
 
 ## V2 inheritance
 
@@ -158,10 +184,14 @@ not measured conclusions.
 
 ## Constitutional reconciliation required
 
-The current constitution names ChatGPT via Codex OAuth as the planning model. V3's
-provider-neutral executive model policy requires an explicit reviewed amendment before it can
-become operative; a v3 document cannot make that change implicitly. The stable proposed
-principle is that Hermes is the accountable logical actor, models are authorized replaceable
-compute, deterministic code actuates, and Lucas retains authority. The exact proposed rulings
-are in [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md) and the prioritized owner queue is
-in [DECISION-REGISTER.md](DECISION-REGISTER.md).
+Lucas selected provider-neutral planning inside an explicit approved
+model/provider/account/capacity-pool envelope. The current constitution still names ChatGPT via
+Codex OAuth, so the product ruling requires a separately reviewed constitutional amendment
+before private deployment configuration changes. The stable principle is that Hermes remains
+the accountable logical actor, models are authorized replaceable compute, deterministic code
+actuates, and Lucas retains authority.
+
+Configurable PAUSE completion and a Full Access profile capable of receiving control-plane,
+credential, spending, publication or deployment grants also differ from current constitutional
+defaults. V3 research must produce exact amendment choices; these docs do not authorize a live
+policy or configuration change. See [DECISION-REGISTER.md](DECISION-REGISTER.md).

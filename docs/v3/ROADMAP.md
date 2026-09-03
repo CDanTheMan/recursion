@@ -30,6 +30,20 @@ Research status 2026-09-03: complete for the current baseline, subject to the un
 decisions and expiring route/reference evidence in [CLAIM-LEDGER.md](CLAIM-LEDGER.md). No live
 deployment baseline or v3 performance measurement was claimed.
 
+## Milestone 0B — focused architecture proof
+
+Execute R1–R17 in [RESEARCH-AGENDA.md](RESEARCH-AGENDA.md): native/retained loop boundary,
+direct and collaborative ARM surfaces, PAUSE, Full Access, verifier independence, plugin trust,
+single-writer migration, adaptive branch capacity, retention/deletion, private-canary method and
+interactive persistent terminal runtime, plus whole-system performance/leanness, model and
+delegation quality, context/cache optimization, configuration architecture, scientific research
+and comparative v2 benefit.
+
+Gate: every consequential recommendation has primary evidence, contradiction and a decisive
+experiment; constitutional amendment choices and remaining owner questions are exact; terminal
+and multi-ARM protocols have fault/resource gates; no private canary or implementation has
+started; the contract-readiness verdict is explicit.
+
 ## Milestone 1 — v3 contract skeleton
 
 Deliver versioned schemas and fixtures for OwnerIntent, GoalSpec, ExecutiveProfile, ArmRun, TaskNode/WorkPacket, Route, CapacityPool, ContextCapsule, EvidenceBundle, plugin manifest, and publication lineage.
@@ -63,11 +77,17 @@ Deliver content-addressed repository evidence, context capsules, Owner Intent Le
 
 Gate: repeated compaction/handoff benchmarks retain mandatory state and reduce measured repeated context without private cross-project reuse.
 
-## Milestone 6 — planning and operator CLI
+## Milestone 6 — planning and interactive operator CLI
 
-Deliver Grill Me modes, GoalSpec compiler/amendments, schema-driven setup/configuration, tiered doctor, route/queue/resource/context explanations, Observer Interface, and safe branch inventory/pruning.
+Deliver Grill Me modes, GoalSpec compiler/amendments, schema-driven setup/configuration,
+detachable multi-window terminal views, persistent daemon/process-broker attachment, non-flicker
+TUI and plain-text modes, tiered doctor, route/queue/resource/context explanations, Observer
+Interface, and safe branch inventory/pruning.
 
-Gate: a fresh owner can configure the first deployment and run a bounded synthetic goal without agent-assisted config editing or a model-powered setup call.
+Gate: a fresh owner can configure the first deployment and run a bounded synthetic goal without
+agent-assisted config editing or a model-powered setup call; terminal close/reopen, daemon
+restart, process-tree termination, high-output rendering and simultaneous clients pass the
+fault/resource/accessibility suite.
 
 ## Milestone 7 — authenticated node fabric
 
@@ -95,7 +115,8 @@ After a contract milestone freezes its interfaces, bounded agents may work concu
 - One exclusive worktree per implementation task.
 - Machine-checkable gate and explicit allowed paths for every task.
 - Different model family for meaningful independent review when practical.
-- No more branch creation when the unique unreviewed limit is reached.
+- No more branch creation when measured machine/review admission or the owner hard ceiling is
+  reached; the policy and evidence are visible.
 - Failed work returns evidence; retry requires novelty.
 - Capacity is reserved for integration, verification, and recovery.
 
@@ -105,8 +126,9 @@ The temporary tools used to build v3—an overnight Codex lead, Cursor implement
 
 ## Remaining blockers before construction or release
 
-1. Lucas must decide the constitutional and authority questions prioritized in
-   [DECISION-REGISTER.md](DECISION-REGISTER.md).
+1. Lucas has selected the broad planning, ARM, PAUSE, Full Access, verifier, plugin, branch and
+   canary directions. Milestone 0B must now produce exact constitutional and contract choices
+   for the unresolved mechanics in [DECISION-REGISTER.md](DECISION-REGISTER.md).
 2. Milestone 1 must prove a canonical event/schema mapping across overlapping v1/v2/Project
    Pilot contracts; the mapping proposed in [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md)
    is not implementation evidence.
@@ -114,7 +136,8 @@ The temporary tools used to build v3—an overnight Codex lead, Cursor implement
    descriptor may infer entitlement from a model listing or successful prompt.
 4. Numeric coordinator/workstation budgets require the preregistered experiments in
    [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md).
-5. Privileged-plugin integrity/isolation policy, verifier independence and private-artifact
-   deletion semantics require owner rulings and fault tests.
+5. Privileged-plugin integrity/isolation policy, verifier tiers, interactive terminal/process
+   ownership, multi-ARM messaging and private-artifact deletion semantics require focused
+   research, fault tests and final owner rulings.
 6. A native inner-loop expansion remains an optional spike until it falsifies the recommended
    adapter architecture on a declared metric.

@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 evidence-grounded design workspace
-status: architecture-recommendation-pending-owner-ratification
+status: owner-direction-recorded-research-ready
 last-updated: 2026-09-03
 authority: non-normative until ratified
 ---
@@ -43,6 +43,8 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [SECURITY.md](SECURITY.md) | How are sovereignty, credentials, privacy, permissions, and nodes protected? |
 | [PLUGINS-AND-EDITIONS.md](PLUGINS-AND-EDITIONS.md) | What belongs in the kernel, plugins, and release bundles? |
 | [CLI.md](CLI.md) | How does an owner configure and operate Recursion without an agent? |
+| [TERMINAL-RUNTIME.md](TERMINAL-RUNTIME.md) | How do interactive detachable terminal views, persistent actors, process ownership, non-flicker rendering and termination work? |
+| [INTERACTION-SURFACES.md](INTERACTION-SURFACES.md) | How do `#general`, direct ARM topics and collaborative multi-ARM conversations map to authority? |
 | [TELEMETRY.md](TELEMETRY.md) | How are quality, quota, cost, context, and resource use measured? |
 | [ACCEPTANCE.md](ACCEPTANCE.md) | What evidence is required before v3 may ship? |
 | [ROADMAP.md](ROADMAP.md) | In what order should research and construction proceed? |
@@ -53,8 +55,11 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md) | Which resource claims remain hypotheses, and what workloads will decide them? |
 | [CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md) | What is the bounded first implementation milestone and exact gate, once authorized? |
 | [RESEARCH-HYPOTHESES.md](RESEARCH-HYPOTHESES.md) | Which claims need experiments rather than confidence? |
+| [RESEARCH-AGENDA.md](RESEARCH-AGENDA.md) | Which architecture-proof research lanes should the next deep campaign execute? |
+| [SCIENTIFIC-RESEARCH.md](SCIENTIFIC-RESEARCH.md) | How can a research ARM find papers, reconcile claims and produce reproducible evidence? |
 | [prompts/overnight-architecture-research.md](prompts/overnight-architecture-research.md) | What should the next autonomous Codex research session do? |
 | [prompts/overnight-adversarial-swarm-research.md](prompts/overnight-adversarial-swarm-research.md) | How should an eight-hour Luna, Muse, and conditional Grok research swarm ground and challenge the architecture? |
+| [prompts/architecture-proof-deep-research.md](prompts/architecture-proof-deep-research.md) | What should the next focused architecture-proof Deep Research session execute? |
 | [archive/session-transcript-2026-09-02.md](archive/session-transcript-2026-09-02.md) | What internal human-visible conversation produced this hypothesis? This file is excluded from public releases. |
 
 ## Status vocabulary
@@ -79,9 +84,10 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 
 ## Immediate next step
 
-Lucas reviews the prioritized questions in [DECISION-REGISTER.md](DECISION-REGISTER.md),
-especially provider-neutral planning authority, first-class ARM identity, PAUSE semantics and
-the Option 2 migration path. After those rulings, the proposed first autonomous construction
-milestone is the pure contract/schema and replay/conformance work in
-[CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md). No runtime implementation is authorized by
-this research suite.
+Lucas has answered the initial owner queue. The remaining architecture questions and proposed
+answers are recorded in [DECISION-REGISTER.md](DECISION-REGISTER.md); the next evidence-producing
+step is the focused [RESEARCH-AGENDA.md](RESEARCH-AGENDA.md) campaign. Only after that research
+reconciles the terminal, interaction, PAUSE, Full Access, verifier, plugin, migration, capacity
+and retention contracts should the pure schema/replay milestone in
+[CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md) be authorized. No runtime implementation is
+authorized by this suite.

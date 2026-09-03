@@ -42,17 +42,25 @@ At minimum, end-to-end fixtures cover:
 - same-route resume, cross-route handoff, executive replacement, and process restart;
 - gate failure with novel repair and repeated non-novel retry rejection;
 - verifier disagreement resolved through new evidence;
-- unreviewed branch ceiling and safe-prune refusal;
-- PAUSE/revocation races before dispatch, during work, before gates, and before publication;
+- measured/configurable branch admission, owner hard ceiling, review-backlog pressure and
+  safe-prune refusal;
+- every supported PAUSE policy and revocation race before dispatch, during work, on a
+  disconnected node, before gates, and before publication;
 - disk full, torn write, stale lease, duplicate result, node loss, and controller recovery;
 - private project egress denied to an ineligible route;
 - plugin crash/quarantine while unrelated work continues;
 - privileged plugin digest/signature mismatch, dependency substitution, and rollback;
+- unsigned local plugin installation, warning/acknowledgement, digest rotation, developer-mode
+  step-up and sensitive-capability refusal without its explicit grant;
 - planning mode `off` rejecting an incomplete or unauthenticated GoalSpec and preserving provenance for a complete one;
-- full-access profile selected by the owner without leaking unrelated credentials or crossing control-plane, billing, privacy, publication, merge, or deployment seams not separately granted;
+- maximum Full Access selected by the owner with each control-plane, credential, billing,
+  privacy, publication, merge, deployment and service capability exactly granted, bounded and
+  attributed; a worker cannot self-widen the grant;
 - contributor-route admission capturing the exact outbound byte set and rejecting private identifiers even when prompt scanning misses them;
 - verifier collision where implementer and verifier share a family, provider, host, session, or evidence channel;
-- review branch publication with no protected-branch merge or deployment.
+- review branch publication with no protected-branch merge or deployment;
+- direct ARM and shared multi-ARM conversation with duplicate, out-of-order, edited and deleted
+  transport messages without authority or actor identity changing.
 
 ## Context and compaction gate
 
@@ -107,6 +115,26 @@ Compare v3 against v2 on representative scrubbed tasks:
 
 V3 does not need to dominate every dimension. Each shipped profile must improve its declared objective without violating hard integrity and quality floors.
 
+## Scientific research gate
+
+- A research ARM creates a versioned question, decision target, gap matrix and falsifiable claim
+  ledger before synthesis.
+- Paper, standard, dataset, documentation and source records preserve title, author/publisher,
+  date/version, persistent identifier, retrieval date, provenance and access/license boundary.
+- Adversarial fixtures include fabricated citations, retracted/corrected papers, outdated
+  versions, inaccessible/paywalled sources, contradictory findings and sources whose population
+  or workload does not apply.
+- Consequential sources are opened and independently checked; search snippets and model
+  narratives are not evidence.
+- External mechanism evidence, local structural applicability and empirical Recursion fit are
+  classified separately.
+- Experiments preregister baseline, treatment, controls, routes, metrics, quality floors,
+  analysis and stop rules; raw observations and transformations are reproducible.
+- Research stops on diminishing returns and can conclude `unknown`; it does not consume quota
+  indefinitely to manufacture confidence.
+- Private inputs, institutional credentials and copyrighted full text obey project egress,
+  storage, quotation and export policy.
+
 ## Installation and CLI gate
 
 - Fresh `core`, `standard`, `remote`, `full`, and representative `custom` installs are reproducible from one tagged source revision.
@@ -114,6 +142,12 @@ V3 does not need to dominate every dimension. Each shipped profile must improve 
 - Schema-driven wizard, manual file editing, validation, migration, explanation, and rollback agree.
 - Common local use works without remote enrollment or a full conformance run.
 - Route, queue, capacity, resource, config, context, and capability explanations require no model call.
+- General, ARM, worker, graph, event and system terminal views can attach concurrently; closing
+  a view never ends work, and explicit stop/kill controls terminate the complete owned process
+  tree or report/quarantine what remains.
+- Interactive rendering passes non-flicker, preserved-input, resize, Unicode, reconnect,
+  high-output, slow-client, plain-text/accessibility and bounded-resource tests on supported
+  Windows and Linux terminals.
 - Dangerous/full-access profiles remain available with exact, reviewable effects.
 - The configured verifier-independence policy is displayed and enforced; the minimum acceptable separation is blocked on Lucas's decision rather than inferred.
 
@@ -133,4 +167,6 @@ One public v3 release is built incrementally and cut atomically only when:
 - performance budgets are met on the declared hardware classes;
 - migration/rollback and backup/restore are proven;
 - independent reviewers agree with evidence or disagreements are resolved empirically;
-- Lucas accepts the review branch and performs the protected merge/deployment seams.
+- for the initial private deployment, Lucas accepts the review branch and performs the protected
+  merge/deployment seams unless a later explicit Full Access grant and operative constitutional
+  amendment authorize a different reviewed profile.

@@ -1,6 +1,6 @@
 ---
-title: Recursion v3 executive model hypothesis
-status: hypothesis
+title: Recursion v3 executive model
+status: accepted-direction-with-open-research
 last-updated: 2026-09-03
 ---
 
@@ -29,7 +29,15 @@ An ARM is a durable executive bounded to one versioned GoalSpec. It:
 - chooses among only the routes and resources permitted by its inherited policy;
 - responds tactically to evidence and failures;
 - checkpoints its state and reports progress or blockers upward;
-- cannot create unrelated goals, expand authority, merge protected branches, or deploy.
+- cannot create unrelated goals or expand its own authority; merge, deployment and other
+  high-impact capabilities exist only when the exact owner grant/GoalSpec and operative
+  constitution allow them.
+
+An ARM normally exposes an addressable conversation so the owner can speak with it directly.
+One ARM per repository is a likely configuration default, not an identity rule: ARM identity is
+bound to a GoalSpec, and a goal may be narrower than or span more than one repository. Direct
+conversation does not bypass Head monitoring or turn chat history into canonical state. See
+[INTERACTION-SURFACES.md](INTERACTION-SURFACES.md).
 
 ### Delegated agent
 
@@ -70,7 +78,11 @@ Routing is quality-first adaptive by default for the private deployment:
 
 Users may choose `quality-wait`, `adaptive`, `throughput`, `cost-first`, `maximum`, or custom policies.
 
-Route abstraction does not amend the current constitution. Until Lucas records a replacement decision, planning and executive decisions in the private control plane remain on the approved OpenAI model family; non-OpenAI routes may be used only for the bounded roles the governing decision permits. Provider-neutral planning is a proposed future capability, not current authority.
+Lucas's 2026-09-03 product ruling permits Head and ARM planning to use any route inside an
+explicit owner-approved model/provider/account/capacity-pool envelope. Route selection never
+widens the GoalSpec, privacy, credentials, spending or tool grants. This product ruling requires
+a reviewed amendment to the current provider-specific constitutional clause before it changes
+the private deployment; it is not authority to edit provider or authentication configuration.
 
 ## Safe checkpoints
 
@@ -83,9 +95,48 @@ A checkpoint is machine-determined, not merely asserted by the model. It require
 - consumed usage and remaining authority reconciled;
 - context capsule validated and rehydratable;
 - ordinary replacement or configuration changes allow an atomic command to reach its bounded transaction boundary;
-- PAUSE, revocation, and emergency kill follow their higher-priority policy, and any outcome whose commit status is ambiguous is quarantined until reconciliation.
+- PAUSE follows the owner-selected versioned policy, while revocation and emergency stop retain
+  their independently defined priority; any outcome whose commit status is ambiguous is
+  quarantined until reconciliation.
 
 Ordinary model/config changes apply at the next checkpoint. A forced swap requests the earliest valid checkpoint. Emergency kill is separate and may sacrifice the in-flight operation to contain a compromised run.
+
+## PAUSE policy direction
+
+The product direction is configurable pause aggressiveness rather than one universal behavior.
+The kernel, not the model, selects an owner-approved policy and records its version:
+
+- `checkpoint` — recommended normal default: admit no new operation, let the current bounded
+  operation reach its next mechanically safe checkpoint, then pause;
+- `interrupt` — request immediate cancellation of interruptible work, preserve atomic state and
+  quarantine ambiguous effects;
+- `drain` — admit no new work but allow explicitly enumerated in-flight work classes to finish;
+  this is unsuitable as an implicit default for publication, deployment or new remote effects;
+- emergency stop — separate break-glass behavior that blocks new effects immediately and may
+  sacrifice in-flight work.
+
+Research must define the operation boundary for model turns, transactions, subprocesses,
+disconnected nodes, gates, publication and ambiguous external effects. Until a constitutional
+amendment is ratified, the current `CONTROL_PLANE.md` PAUSE behavior remains the implementation
+baseline.
+
+## Verifier independence recommendation
+
+Verification is risk scaled. The proposed starting tiers are:
+
+1. **Mechanical:** deterministic gate re-execution; a model adds no authority.
+2. **Routine:** clean separate verifier task/session with no implementer persuasion; the same
+   strong model or provider may be acceptable.
+3. **Material:** clean context plus a different capable model or family when eligible, exact
+   candidate binding and deterministic gates.
+4. **Constitutional/high-impact/release:** independent provider or family where eligible,
+   independent gate execution/environment, and owner approval for irreversible authority,
+   credentials, spend, publication or deployment effects.
+
+Unavailable diversity is disclosed. Routine work may fall back to deterministic or human
+verification according to policy; release evidence blocks rather than silently lowering its
+declared tier. Research must measure which separation dimensions find materially different
+defects before these tiers become normative.
 
 ## Capacity exhaustion
 
