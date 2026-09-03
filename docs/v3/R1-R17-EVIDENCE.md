@@ -146,7 +146,8 @@ does not establish model-family defect diversity. Sol, Luna and Terra are one GP
 agreement as cross-family independence. **Confidence:** high for evidence/repeatability, medium
 for tier thresholds. **Falsifier:** a blind matched defect matrix shows no material benefit from
 the proposed separation or produces review debt above the hard floor. **Disposition:**
-LUNA-R5-R8 supported; final Terra review pending.
+LUNA-R5-R8 supported; TERRA-FINAL supported the reconciled evidence/readiness candidate at
+`640a6d2`, with same-family limitation.
 
 ## R6 — plugin signing and unsigned local power
 
@@ -169,7 +170,8 @@ update and revocation grants is a **local inference**.
 spending authority. **Decision:** adopt pins/provenance/revocation metadata; adapt independent
 effect grants; reject signature-as-safety. **Confidence:** high. **Falsifier:** a validly signed
 adversarial fixture gains an unrelated effect or an unsigned acknowledged fixture silently gains
-route/spend/update authority. **Disposition:** LUNA-R5-R8 supported; final Terra review pending.
+route/spend/update authority. **Disposition:** LUNA-R5-R8 supported; TERRA-FINAL supported the
+reconciled candidate at `640a6d2`, with same-family limitation.
 
 ## R7 — single-writer migration and effect rollback
 
@@ -190,7 +192,8 @@ authority. **Decision:** adopt SQLite only as a bounded persistence/concurrency 
 the broad OR-015 rehearsal until all writers share a tested fence. **Confidence:** high.
 **Falsifier:** any enumerated stale writer succeeds, replay digests diverge, or recovery repeats a
 possibly accepted effect under crash/disk-full/torn-tail tests. **Disposition:** LUNA-R5-R8
-supported; final Terra review pending.
+supported; TERRA-FINAL supported the reconciled candidate at `640a6d2`, with same-family
+limitation.
 
 ## R8 — adaptive branch and review-backlog capacity
 
@@ -210,7 +213,8 @@ does not imply review capacity; the historical ceiling of 75 is not a validated 
 **Decision:** adapt measured admission; reject universal numeric capacity. **Confidence:** high
 for signal separation, low-medium for thresholds. **Falsifier:** trace replay shows more review
 debt/oscillation or no improvement over a conservative fixed policy. **Disposition:**
-LUNA-R5-R8 supported; final Terra review pending.
+LUNA-R5-R8 supported; TERRA-FINAL supported the reconciled candidate at `640a6d2`, with
+same-family limitation.
 
 ## R9 — privacy-preserving retention and deletion
 
@@ -229,7 +233,8 @@ deletion. Cryptographic erasure is not universal completion evidence. **Decision
 direction with per-copy proof states; reject provider-wide completion inference. **Confidence:**
 high for limits, medium for mechanics. **Falsifier:** a synthetic replica/version/backup/spool or
 escrow-key copy remains recoverable while the record says `verified-complete`. **Disposition:**
-LUNA-R9-R12 supported; final Terra review pending.
+LUNA-R9-R12 supported; TERRA-FINAL supported the reconciled candidate at `640a6d2`, with
+same-family limitation.
 
 ## R10 — private canary methodology
 
@@ -248,7 +253,8 @@ inference** and Owner-bounded candidate, not an executed canary.
 deployment safety or broad semantics. **Decision:** adapt the method; reject canary-as-runtime
 proof. **Confidence:** high for method limits, low for outcomes because the canary was not run.
 **Falsifier:** disclosure, scope, baseline, fault-injection or exact-candidate rerun gates fail.
-**Disposition:** LUNA-R9-R12 supported; final Terra review pending.
+**Disposition:** LUNA-R9-R12 supported; TERRA-FINAL supported the reconciled candidate at
+`640a6d2`, with same-family limitation.
 
 ## R11 — interactive terminal runtime and communication visualization
 
@@ -273,7 +279,8 @@ primitives behind a broker; reject terminal-close-kills-work and universal-conta
 **Confidence:** high for protocol shape, low for untested compatibility/performance.
 **Falsifier:** the Windows/Linux attach/crash/restart/orphan/high-output matrix loses/duplicates
 events, violates input leases, blocks canonical state or leaves unaccounted descendants.
-**Disposition:** LUNA-R9-R12 supported; final Terra review pending.
+**Disposition:** LUNA-R9-R12 supported; TERRA-FINAL supported the reconciled candidate at
+`640a6d2`, with same-family limitation.
 
 ## R12 — whole-system performance and lean codebase
 
@@ -290,7 +297,8 @@ makes an exact SQLite build part of any result. **Decision:** preregister matche
 full denominators; reject `optimized`, `lightweight` or `better than v2`. **Confidence:** high
 that no result exists, low for any expected improvement. **Falsifier:** measured startup,
 idle/resource, replay/recovery, dependency, privileged-code and review/maintenance vectors miss a
-floor or show no benefit. **Disposition:** LUNA-R9-R12 supported; final Terra review pending.
+floor or show no benefit. **Disposition:** LUNA-R9-R12 supported; TERRA-FINAL supported the
+reconciled candidate at `640a6d2`, with same-family limitation.
 
 ## R13 — model performance, routing and delegation science
 
@@ -309,7 +317,8 @@ Sol-only control, blind outcome set and complete quota/review denominator. **Dec
 their experiment structures; reject universal rankings and campaign-efficiency claims.
 **Confidence:** high for the limitation, low for local benefit. **Falsifier:** a preregistered
 matched evaluation misses quality/source floors or yields no accepted nonduplicate improvement
-per complete observed vector. **Disposition:** LUNA-R13-R17 supported; final Terra review pending.
+per complete observed vector. **Disposition:** LUNA-R13-R17 supported; TERRA-FINAL supported the
+reconciled candidate at `640a6d2`, with same-family limitation.
 
 ## R14 — context, compaction and cache manipulation
 
@@ -330,7 +339,8 @@ cross-provider reuse. **Decision:** adapt exact expiring `RouteCapabilityDescrip
 provider-neutral content-addressed evidence; reject inferred hits/savings/portability.
 **Confidence:** high. **Falsifier:** direct route counters and fidelity/privacy fixtures disagree
 with a descriptor or a semantic capsule fails invalidation, isolation or cold recovery.
-**Disposition:** LUNA-R13-R17 supported; final Terra review pending.
+**Disposition:** LUNA-R13-R17 supported; TERRA-FINAL supported the reconciled candidate at
+`640a6d2`, with same-family limitation.
 
 ## R15 — configuration architecture and operator control
 
@@ -349,7 +359,8 @@ precedence, amendment or permission safety; RFC 8785 is informational. **Decisio
 as bounded components; reject single-schema-determinism claims. **Confidence:** high.
 **Falsifier:** duplicate/unknown fields, stale concurrent edits, path normalization or scope
 fixtures yield nondeterminism, last-write-wins or unauthorized widening. **Disposition:**
-LUNA-R13-R17 supported; final Terra review pending.
+LUNA-R13-R17 supported; TERRA-FINAL supported the reconciled candidate at `640a6d2`, with
+same-family limitation.
 
 ## R16 — scientific research ARM and scholarly evidence
 
@@ -373,8 +384,8 @@ aggregated text is untrusted input. **Decision:** adopt generic records and expl
 contradiction/applicability/revalidation; keep adapters optional; reject metadata-as-veracity.
 **Confidence:** high for record shape, low for comparative benefit. **Falsifier:** adversarial
 false-ID, stale/retracted, near-match, paywall, hostile-text, duplicate-version or license
-fixtures admit a bad current source. **Disposition:** LUNA-R13-R17 supported; final Terra review
-pending.
+fixtures admit a bad current source. **Disposition:** LUNA-R13-R17 supported; TERRA-FINAL
+supported the reconciled candidate at `640a6d2`, with same-family limitation.
 
 ## R17 — comparative architecture benefit and complexity budget
 
@@ -392,7 +403,8 @@ M1A planning/replay contract; defer provider, process, plugin, database and scie
 reject any v3-superiority claim. **Confidence:** high for the narrowed scope, low for comparative
 benefit. **Falsifier:** matched v2/Option 1/Option 2/native scenarios and ablations show no
 user-visible/safety/measured-efficiency benefit or miss a hard floor. **Disposition:**
-LUNA-R13-R17 supported; lean adversary and final Terra review pending.
+LUNA-R13-R17 and LUNA-LEAN supported; TERRA-FINAL supported the reconciled candidate at
+`640a6d2`, with same-family limitation.
 
 ## Reconstructed packet and route disposition
 

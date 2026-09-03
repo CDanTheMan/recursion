@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 architecture-proof and planning-baseline result
-status: correction-candidate-after-independent-adjudication
+status: evidence-reconciled-construction-baseline
 last-updated: 2026-09-03
 source-checkpoint: 672081fc1874ab9b7a41a14ca61adc60ecd71c95
 source-baseline: 98113d6c6d3debe2a4d207c51bb1780f7356d714
@@ -48,7 +48,7 @@ reconstructed evidence for every R1-R17 lane is in
 | `WP-V3DF-203` | `gpt-5.6-luna`, `xhigh` | Primary-source audit | Source versions, licenses, contradictory SQLite evidence, and expiry triggers corrected. |
 | `WP-V3DF-204` | `gpt-5.6-luna`, `xhigh` | Lean adversarial review | The broad first milestone was rejected and narrowed to M1A. |
 | `WP-V3DF-301` | `gpt-5.6-terra`, `xhigh` | Authority adjudication | Conditional support; added complete prompt traceability, exact downgrade binding, and a sixth constitutional conflict. |
-| `WP-V3DF-302` | `gpt-5.6-terra`, `xhigh` | Final evidence/readiness adjudication | Returned `adapt` on `16e16cf`; its `bd98c41` recheck confirmed hygiene/provenance/oracle-count repairs but returned `reject/adapt` for three missing source records, underdetermined compatibility/novelty subgrammars and a verifier-downgrade enum conflict. PR-V3DF-20260903-05 supplies the next exact correction candidate. |
+| `WP-V3DF-302` | `gpt-5.6-terra`, `xhigh` | Final evidence/readiness adjudication | Preserved successive dissent on five candidates, then returned `PASS` on exact semantic candidate `640a6d2c17c6f3cd9b360a93452dca0b30be1785` after source, grammar, wire, policy and retry closure; high/0.94 confidence, same-family only, no runtime proof. |
 
 Sol, Luna, and Terra are GPT-5.6-family routes. Terra is an independent worker role here, not an
 external-family verifier. No current external-family packet was sent. An already configured,
@@ -224,9 +224,10 @@ or Git mutation outside its own separately authorized future implementation task
 broader route, plugin, terminal, and scientific contracts; M1C contains runtime integration and
 durability.
 
-M1A remains a candidate for a separate owner-authorized construction task after the
-PR-V3DF-20260903-05 candidate-range gates and Terra recheck pass. Its first construction node, not this campaign,
-creates executable fixture bundles. M1A has not been executed. The standalone prompt is
+M1A is documentation-ready for a separate owner-authorized construction task: the exact
+candidate-range gates and targeted Terra recheck passed. M1A-01 must materialize/review the
+strict schemas and M1A-02, not this campaign, creates executable fixture bundles before reducer
+code. M1A has not been executed. The standalone prompt is
 [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
 
 ## Source and decision discipline
@@ -238,7 +239,8 @@ and model agreement are not evidence. A source
 change, affected dependency upgrade, API capability change, correction/retraction event, failed
 fixture, or contradictory primary source invalidates the dependent conclusion until reverified.
 
-Recommendations remain falsifiable and subordinate to Lucas. The final independent adjudicator's
-blocking dissent is preserved in the campaign artifact. The PR-V3DF-20260903-05 correction must
-pass the exact procedure in [VALIDATION.md](VALIDATION.md) and receive the requested Terra recheck
-before this document can move to evidence-reconciled.
+Recommendations remain falsifiable and subordinate to Lucas. Every intermediate adjudicator
+dissent and failed gate is preserved in the campaign artifact. The exact semantic candidate
+passed [VALIDATION.md](VALIDATION.md) and its targeted Terra recheck; that makes this an
+evidence-reconciled documentation baseline, not a runtime, policy ratification or performance
+result.

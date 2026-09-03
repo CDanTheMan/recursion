@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 evidence-grounded design workspace
-status: architecture-proof-final-reconciliation
+status: evidence-reconciled-design-foundation
 last-updated: 2026-09-03
 authority: non-normative until ratified
 ---
@@ -99,8 +99,9 @@ The reconstructed [architecture proof](ARCHITECTURE-PROOF.md) and persistent
 [R1-R17 matrix](R1-R17-EVIDENCE.md) use eight Luna discovery packets and two targeted
 same-family Terra adjudications. No external-family packet was used or recovered. They give a
 conditional go only for the planning schema/validator/synthetic-fixture/in-memory replay
-[M1A](M1A-AUTONOMOUS-PLANNING.md), whose exact wire profile and fixture oracles must first pass
-the campaign's final same-family recheck and then receive a separate Owner-approved task.
+[M1A](M1A-AUTONOMOUS-PLANNING.md). Its exact wire/profile/oracle candidate passed the campaign's
+deterministic gates and targeted same-family Terra recheck; construction still requires a
+separate Owner-approved task.
 Current constitutional conflicts and remaining Lucas decisions are recorded in
 [DECISION-REGISTER.md](DECISION-REGISTER.md). No runtime implementation, migration, provider
 change, terminal process, private canary, publication or deployment is authorized by this suite.

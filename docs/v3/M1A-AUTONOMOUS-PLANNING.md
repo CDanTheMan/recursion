@@ -175,10 +175,10 @@ machinery from bloating M1A's privileged planning slice.
 
 ## Readiness verdict
 
-The documentation contract, closed wire profile and oracle blueprint are candidates for a
-separately authorized M1A build whose first node materializes strict schemas and whose second
-freezes executable red bundles, both before reducer code. Readiness remains subject to the
-campaign's corrected candidate-range gates and same-family Terra recheck. Numeric
+The documentation contract, closed wire profile and oracle blueprint are ready for a separately
+authorized M1A build whose first node materializes strict schemas and whose second freezes
+executable red bundles, both before reducer code. The campaign's corrected candidate-range gates
+and targeted same-family Terra recheck passed. Numeric
 production budgets, future PAUSE ratification, provider behavior and broader architecture
 superiority are not prerequisites because M1A encodes them only as strict inert references or
 explicit unknowns that block.
