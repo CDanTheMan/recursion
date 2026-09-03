@@ -201,3 +201,7 @@ Continue unrelated ready nodes. Stop and ask Lucas rather than choosing if resea
 
 Capacity, worker, source, adjudication, validation and final disposition receipts append here. An
 earlier failure is preserved when later evidence repairs it.
+
+| Receipt | Observation | Admission disposition |
+|---|---|---|
+| `CAP-FHAR-W1` | 2026-09-03T15:21:54-07:00; 32 logical CPUs; 31.39/63.12 GiB free memory; 647.14 GiB free system disk; 426 processes; read-only Codex surface reported 23% used in its 10,080-minute primary window, no credit balance and no spend-control trip. Account identity is deliberately not retained. | Admit four Luna/xhigh workers. Point observation only; not sustained capacity, billing or efficiency evidence. |
