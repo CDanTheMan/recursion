@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 architecture-proof research agenda
-status: ready-for-deep-research
+status: reconstructed-and-frontier-researched-experiments-pending
 last-updated: 2026-09-03
 ---
 
@@ -24,6 +24,9 @@ Do not reopen these as model-opinion questions:
 
 - Head and ARM planning may use any route inside an explicit owner-approved
   model/provider/account/capacity-pool envelope.
+- Recursion's versioned release owns the product Head, headless integrator and canonical
+  orchestration semantics. Hermes may remain a compatibility/engine adapter; current operative
+  constitutional wording changes only through a separate reviewed amendment.
 - Recursion v3 is its own headless harness; CLI is the canonical local surface, Telegram is an
   optional interactive surface, and no graphical frontend is required for v3.
 - The CLI is interactive and supports several detachable terminal windows or panes. Terminal
@@ -395,6 +398,16 @@ R1-R17 now have persistent reconstructed records. Their performance and whole-pr
 hypotheses remain unmeasured. The broad OR-015 rehearsal remains blocked, and M1A is the narrower
 planning-only contract/replay proposal in
 [M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md).
+
+### Frontier harness continuation result
+
+The follow-on [FHAR-20260903 campaign](FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md) added pinned
+code-path evidence for eight harnesses, durable orchestration, context/cache, terminal/TUI,
+plugin/frontend, systems-performance and autonomy/evaluation methods. Its persistent synthesis is
+[FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md). The strongest result is a narrower
+Option 2 kernel boundary plus twelve matched/fault experiments. It did not select a language,
+SQLite, binary IPC, plugin sandbox, terminal library or native model loop, and it produced no
+runtime/frontier/performance proof.
 
 ## Required outputs
 

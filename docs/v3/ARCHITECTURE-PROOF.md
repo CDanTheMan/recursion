@@ -1,9 +1,10 @@
 ---
 title: Recursion v3 architecture-proof and planning-baseline result
-status: evidence-reconciled-construction-baseline
+status: evidence-reconciled-construction-baseline-with-frontier-research
 last-updated: 2026-09-03
 source-checkpoint: 672081fc1874ab9b7a41a14ca61adc60ecd71c95
 source-baseline: 98113d6c6d3debe2a4d207c51bb1780f7356d714
+frontier-campaign-base: a97d5181ee413b87597ea58523708bb9a53f750b
 ---
 
 # Recursion v3 architecture-proof and planning-baseline result
@@ -19,6 +20,12 @@ worker packets, gates, and disposition are in
 planning semantics are in [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md). The independently
 reconstructed evidence for every R1-R17 lane is in
 [R1-R17-EVIDENCE.md](R1-R17-EVIDENCE.md).
+
+The 2026-09-03 frontier-harness continuation is independently inspectable in
+[FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md](FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md) and
+[FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md). It added exact code-path,
+terminal, plugin/frontend, systems-performance and evaluation-method evidence without changing
+the planning-only M1A scope or producing runtime proof.
 
 ## Orientation and preflight
 
@@ -47,7 +54,7 @@ reconstructed evidence for every R1-R17 lane is in
 | `WP-V3DF-202` | `gpt-5.6-luna`, `xhigh` | DAG and retry semantics | Deterministic readiness, conflict, retry, replan, and cancellation rules proposed. |
 | `WP-V3DF-203` | `gpt-5.6-luna`, `xhigh` | Primary-source audit | Source versions, licenses, contradictory SQLite evidence, and expiry triggers corrected. |
 | `WP-V3DF-204` | `gpt-5.6-luna`, `xhigh` | Lean adversarial review | The broad first milestone was rejected and narrowed to M1A. |
-| `WP-V3DF-301` | `gpt-5.6-terra`, `xhigh` | Authority adjudication | Conditional support; added complete prompt traceability, exact downgrade binding, and a sixth constitutional conflict. |
+| `WP-V3DF-301` | `gpt-5.6-terra`, `xhigh` | Authority adjudication | Conditional support; added complete prompt traceability, exact downgrade binding, and the then-sixth constitutional conflict. OR-016 later created a seventh product-identity conflict. |
 | `WP-V3DF-302` | `gpt-5.6-terra`, `xhigh` | Final evidence/readiness adjudication | Preserved successive dissent on five candidates, then returned `PASS` on exact semantic candidate `640a6d2c17c6f3cd9b360a93452dca0b30be1785` after source, grammar, wire, policy and retry closure; high/0.94 confidence, same-family only, no runtime proof. |
 
 Sol, Luna, and Terra are GPT-5.6-family routes. Terra is an independent worker role here, not an
@@ -161,6 +168,9 @@ external effects fail closed.
 | Provider-specific cache observations must remain route-specific and experimental. | high | Portable provider-neutral context remains the baseline. A pinned cross-route comparison with exposed denominators may justify a route-specific optimization. |
 | Same-family review is not cross-family verification; missing verification is not a pass. | high | A purpose-bounded approved external-family review may add independence. Until then, record the gap. |
 | The broad former Milestone 1 is not a lean first implementation slice. | high | M1A isolates planning schemas, validation, sanitized fixtures, and in-memory replay; any required provider/process/plugin/database effect falsifies its boundary. |
+| The privileged kernel should be smaller than the complete object catalog: deterministic admission/reduction, authority/budget/privacy/fence checks, packet derivation, effect classification, replay and publication gates only. | medium-high recommendation; unproved implementation | A fuller native loop may later win. Typed adapters fail this boundary if they cannot preserve identity/effect/evidence invariants across materially different engines. |
+| Harness effects require fixed-model component ablations and owner-review measurement. | high methodology; no local outcome | Leaderboards and agent count confound interface, planning, delegation, verification, retry, budget and contamination. The `EXP-FHAR-07/08` matched design decides local benefit. |
+| Disabled optional capabilities must execute no implementation path. | high contract; unmeasured | Manifest-only discovery may still have bounded metadata cost. `EXP-FHAR-09/12` use import/network/process/context/quota traps and fenced reload to decide conformance. |
 
 ## Strongest contradictory evidence and narrowed claims
 
@@ -179,6 +189,11 @@ external effects fail closed.
   v3 runtime or performance result.
 - No claim that v3 is optimized, lightweight in operation, quota-efficient, performance-ready,
   or superior to v2 survived as an observed result.
+- Rust, Go, CPython, SQLite, JSONL, binary IPC, terminal libraries and plugin isolation remain
+  candidates. Static mechanisms, line counts and dependency manifests do not select them.
+- Agentless and delegation-contract evidence contradict monotonic “more autonomy is better”
+  claims: simpler staging may compete, while better evidence can add tokens/time without a
+  correctness gain.
 - The prior Muse verdict is not recoverable evidence. Sol/Luna/Terra consensus is same-family.
 
 ## Constitutional conflicts and Lucas seams
@@ -186,14 +201,16 @@ external effects fail closed.
 `CONTROL_PLANE.md` remains operative. These proposed rules are non-operative until Lucas resolves
 them through the authoritative process:
 
-1. current immediate PAUSE versus proposed future checkpoint, interrupt, or drain modes;
-2. the current ChatGPT/Codex-OAuth planning clause versus a future provider-neutral route model;
-3. Lucas-reserved control-plane, credential, spending, publication, and deployment seams versus
+1. the current Hermes-specific Head identity versus the Recursion-owned `Head` selected in
+   OR-016;
+2. current immediate PAUSE versus proposed future checkpoint, interrupt, or drain modes;
+3. the current ChatGPT/Codex-OAuth planning clause versus a future provider-neutral route model;
+4. Lucas-reserved control-plane, credential, spending, publication, and deployment seams versus
    any future sovereign grant administration;
-4. live Git clones/project files as current project-state authority versus a future durable
+5. live Git clones/project files as current project-state authority versus a future durable
    runtime-event store with Git as source evidence/projection;
-5. preferred cross-family verification versus risk-approved same-family downgrade/exception; and
-6. proposed exclusive ARM authorship of implementation DAGs versus the current control-plane
+6. preferred cross-family verification versus risk-approved same-family downgrade/exception; and
+7. proposed exclusive ARM authorship of implementation DAGs versus the current control-plane
    statement that Hermes decomposes goals and orders dependencies.
 
 Lucas must decide whether to ratify Option 2; the exact GoalSpec acceptance/amendment and

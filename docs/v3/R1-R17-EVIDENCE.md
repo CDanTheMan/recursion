@@ -69,8 +69,10 @@ actors without introducing an AI ARM Manager?
 transition fields, but the docs do not confer Recursion authority. This is **reverified** from
 [Kubernetes Leases, retrieved 2026-09-03](https://kubernetes.io/docs/concepts/architecture/leases/).
 Stable logical ARM identity plus a scoped, expiring `CoordinationLease`, event-mediated messages
-and Head-controlled conflict settlement is a **local inference**. The Owner's actor boundary is
-Lucas → Head Hermes → ARM executive → delegates; no AI ARM Manager exists (**Owner decision**).
+and Head-controlled conflict settlement is a **local inference**. The Owner's updated product
+actor boundary is Lucas → Recursion Head → ARM executive → delegates; no AI ARM Manager exists
+(**Owner decision, OR-016**). The current Hermes-specific constitution remains operative until
+its separate amendment.
 
 **Contradiction/limit:** lease expiry is not an external-resource fence, and transcript arrival
 order is not authority. Public multi-bot/shared-account interfaces generally expose weaker

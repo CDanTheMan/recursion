@@ -81,7 +81,7 @@ amendment disposition and stale-work rules are canonical in
 The clean default boundary is:
 
 - Lucas defines intent, values, acceptance, risk, spending, and final decisions.
-- Head Hermes compiles the strategic GoalSpec, assigns the goal, and monitors outcomes.
+- The Recursion Head compiles the strategic GoalSpec, assigns the goal, and monitors outcomes.
 - The ARM executive creates and maintains the implementation DAG and tactical plan.
 - Workers execute one bounded node.
 - Independent verifiers judge evidence against the GoalSpec.
@@ -108,7 +108,7 @@ A task gate failure does not automatically PAUSE the entire system. It returns t
 exact evidence. The ARM may retry only with a valid closed-schema `NoveltyDelta` and a nonempty
 canonical diff addressing the failed condition; the kernel does not judge semantic wisdom.
 Repeated failure, semantic ambiguity, exhausted authorized recovery, or conflicting evidence
-escalates to Head Hermes. If Lucas is the required actor, development under that affected
+escalates to Head. If Lucas is the required actor, development under that affected
 authority stops until direction arrives.
 
 Global PAUSE remains a separate operator/control-plane mechanism.

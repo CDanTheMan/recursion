@@ -52,6 +52,13 @@ because a second view attaches.
    orphans work, duplicate views duplicate execution, and recovery becomes shell-specific.
    Reject as the canonical architecture.
 
+Pinned implementation review strengthens, but does not ratify, the first option: Zellij supplies
+the strongest inspected bounded multi-client/fair-writer pattern; tmux supplies live
+consumer-offset backpressure; Ratatui plus crossterm is the leading native Rust renderer/input
+candidate; and xterm.js is the leading browser renderer/accessibility candidate. Each remains a
+replaceable presentation or transport dependency. Exact revisions and gaps are registered in
+[SOURCE-REGISTER.md](SOURCE-REGISTER.md#frontier-harness-campaign-sources).
+
 ## Candidate interactive views
 
 - **General:** Head conversation, active goals, ARM summaries, escalations and owner digest.
@@ -134,6 +141,9 @@ drains PTY output even with no clients. Each client has bounded queues and expli
 Presentation frames may be coalesced, but command, lease, process-exit, termination and
 canonical state events may not be dropped. A slow client disconnects with its final cursor and
 later receives replay or `RESET + GAP`; reconnect never relaunches a process.
+The canonical event is appended before a presentation queue may coalesce or drop anything; a
+renderer queue is never the durable log. Queue exhaustion must leave owner control and recovery
+capacity available.
 
 ### Native process boundaries
 

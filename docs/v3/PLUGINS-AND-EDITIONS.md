@@ -51,6 +51,7 @@ Plugins compose through a deterministic, versioned capability graph rather than 
 Each manifest declares:
 
 - plugin and protocol version;
+- full artifact digest and transitive dependency-lock digest; shortened hashes are display only;
 - provided and required capabilities;
 - exclusive resources and conflicts;
 - configuration schema fragment;
@@ -62,6 +63,9 @@ Each manifest declares:
 - provenance, license, integrity digest, and update source.
 
 Resolution produces a cached graph and a complete rejection explanation. Cycles, incompatible ownership, ambiguous providers, and missing dependencies fail before autonomous work starts.
+Manifest resolution and policy checks occur before code import or installation. Discovery is lazy
+and bounded: task-specific tool schemas and context enter a WorkPacket only after admission and
+consume explicit context/resource budgets.
 
 ## Event bus
 
@@ -157,12 +161,25 @@ active -> revoked -> draining/terminated -> retained-evidence/uninstalled
 update-proposed -> staged -> verified -> acknowledged -> activated | rolled-back
 ```
 
+Reload is a fenced transition, not an in-place mutation: discover and verify the candidate, stage
+it, stop new admission to the old version, drain/cancel according to policy, unregister old
+capabilities, preserve evidence, advance the epoch, then activate. Old WorkPackets, leases and
+subscriptions fail stale. Ambiguous external effects enter reconciliation and never become success.
+
 Revocation blocks new admission immediately. Existing work follows its effect-specific PAUSE
 policy and may enter reconciliation; “revoked” does not assert that a remote effect stopped.
-A disabled plugin performs no code execution, import, network call, subprocess, background
-task, quota debit or spend. The release manifest retains only the minimal identity/capability
+A disabled plugin performs no code execution, import or installation; credential access; network
+call; subprocess, thread, timer or watcher; background callback; context/tool enumeration; model
+turn; quota reservation/debit; spend; or unbounded event subscription. The release manifest retains only the minimal identity/capability
 metadata needed to explain that absence; omitting installed payload weight does not omit the
 capability-resolution contract.
+
+Trusted built-ins may use an immutable typed in-process contributor registry. Third-party or
+changeable plugins default to a bounded isolated subprocess or remote protocol adapter with a
+capability token and immutable WorkPacket. Protocol negotiation, consent, a signature or a metadata
+HMAC never grants GoalSpec, plan, effect or publication authority. Future web/desktop clients use a
+redacted observer projection plus a separate authenticated idempotent command API; sandboxed rich
+views remain presentation.
 
 One-step novice acknowledgement may combine only digest pinning, requested functional verbs
 and the declared workspace sandbox when local policy permits it. Credentials, network egress,

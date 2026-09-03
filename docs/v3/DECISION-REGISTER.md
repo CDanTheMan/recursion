@@ -22,7 +22,7 @@ to change the current deployment.
 
 | ID | Owner direction | Adjudication and remaining research |
 |---|---|---|
-| OR-001 | Head and ARM planning may use any route in an explicit owner-approved model/provider/account/capacity-pool envelope. | Accepted product direction. Hermes remains the accountable actor; no implicit billing, privacy or authority transition. Requires constitutional reconciliation of the current Codex-OAuth clause. |
+| OR-001 | Head and ARM planning may use any route in an explicit owner-approved model/provider/account/capacity-pool envelope. | Accepted product direction. The Recursion-owned logical actor remains accountable across route changes; no implicit billing, privacy or authority transition. Requires constitutional reconciliation of the current Codex-OAuth clause. |
 | OR-002 | ARMs are goal-scoped delegated executives that plan and delegate a configurable fleet; depth and typical fleet size are configurable. | Accepted. One ARM per repository and delegation depth 1–2 are expected profiles, not protocol invariants. Project Pilot import semantics still require migration proof. |
 | OR-003 | `#general` is the Head conversation; each ARM may have a direct Telegram topic. A named ARM may hold a bounded workflow-step coordination lease in a shared room. | Accepted. Head retains the overall goal, room membership, authority envelope, conflict resolution, ARM lifecycle and a substantial part of the model-escalation chain. Chat order is not authority; the exact GrokBot reference and message protocol remain research. |
 | OR-004 | `checkpoint` is the selected future product PAUSE default; `interrupt`, `drain` and emergency stop remain explicit future alternatives. | Ratified product direction but non-operative. Current immediate halt remains authoritative. A bounded operation may reach a checkpoint only after an exact constitutional amendment defines per-effect finish, cancellation and quarantine. |
@@ -37,6 +37,8 @@ to change the current deployment.
 | OR-013 | Recursion must conduct its own scientific research, find papers and use evidence to improve architecture and configurability. | Accepted. A research ARM uses ordinary GoalSpec/evidence contracts and scholarly capability plugins. Papers support mechanisms; local source and experiments prove Recursion fit. |
 | OR-014 | `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants and detachable multi-terminal operation are common defaults. `standard` adds richer orchestration; `full` adds advanced and distributed capabilities. | Ratified. Maximum `sovereign` authority is separately and explicitly enabled; installing the `full` edition never implies it. Exact manifest contents remain evidence-gated. |
 | OR-015 | The first single-writer rehearsal targets the local execution-attempt/lease aggregate using synthetic work and no external effects. | Ratified. Require exact replay parity, complete legacy-writer enumeration, fencing, crash recovery and proven rollback before ARM, remote-provider or publication aggregates. Resource, concurrency and model use remain configurable and quota-aware. |
+| OR-016 | Recursion's versioned program owns the canonical Head, headless integrator, orchestration semantics and performance policy. Hermes is not a permanent product authority dependency. | Ratified product boundary. A Hermes-derived implementation may remain a migration or optional engine adapter, but external session state cannot own Recursion actor identity, GoalSpec, grants, budgets, PAUSE, effects, evidence or publication. The current Hermes-specific constitution remains operative until separately amended. |
+| OR-017 | Authority/safety/privacy floors are non-tradeable; among conforming candidates, all optimization dimensions are considered equally and compared without a hidden scalar weight. Recommended defaults may be proposed from evidence. | Ratified research/optimization rule. Use Pareto comparison, expose unavailable denominators and regressions, and escalate a material non-dominated choice rather than inventing weights. This does not preselect a language, dependency or numeric resource target. |
 
 ## Accepted directions
 
@@ -57,7 +59,7 @@ to change the current deployment.
 | 19–20 | Worker admission is adaptive to measured resources. Scheduling is goal-aware and fair, allows borrowing, protects interactive use, and supports explicit exclusive goals. | accepted-direction |
 | 21–23 | Verification and model suites are task/risk specific. Private deployment defaults to quality-first adaptive routing; all significant quality/cost/reasoning choices remain configurable. | accepted-direction |
 | 24–25 | Recursion owns canonical events/checkpoints; provider sessions are disposable affinity accelerators. Explainable local telemetry may reorder only approved routes. | accepted-direction |
-| 26–27 | Maintain an auditable downstream Hermes fork: exact upstream base, small compatibility/injection layer, independent Recursion modules, conformance tests, and recorded divergences. | accepted-direction |
+| 26–27 | Preserve any retained Hermes-derived implementation as an auditable, version-pinned compatibility/engine adapter with conformance tests and recorded divergences. Recursion owns the destination release and may remove the adapter after migration evidence. | accepted-direction, superseded in product ownership by OR-016 |
 | 28–29 | Every segment has an explainable route record. Support `reproduce` and `continue live` replay modes, with live re-admission as autonomous recovery default. | accepted-direction |
 | 30–31 | Canonical runtime state is SQLite/WAL plus content-addressed artifacts. Use one lightweight daemon per authority domain/OS account, not one daemon per repository. | accepted-direction |
 | 32–33 | Trusted workers default to native Git worktrees plus OS resource isolation; containers are configurable. The daemon brokers opaque references to provider-native credentials and exposes only the selected account. | accepted-direction |
@@ -101,8 +103,9 @@ to change the current deployment.
 | Grill Me 72 initially made full security conformance a prerequisite to remote use. | Remote execution crosses a serious trust boundary. | Lightweight zero-token enrollment preflight is required; full suite is mandatory for official releases and optional for owners. |
 | Grill Me 103 initially proposed staged public minor releases. | Smaller public releases reduce integration risk. | V3 is internally incremental but publicly atomic; release manifests control bloat. |
 | Grill Me 104 initially risked making a Grok monitor part of the product. | Unattended construction benefits from independent anomaly monitoring. | Product ships a generic Observer Interface; any Grok sentinel belongs to the temporary construction runbook. |
-| Grill Me 113 proposed an Executive Supervisor above an AI ARM Manager. | Deterministic admission and budgets need a clear enforcement layer. | Rejected architecture. Head Hermes directly manages ARM executives; the deterministic kernel enforces both and is not another AI manager. |
+| Grill Me 113 proposed an Executive Supervisor above an AI ARM Manager. | Deterministic admission and budgets need a clear enforcement layer. | Rejected architecture. The Recursion Head directly manages ARM executives; the deterministic kernel enforces both and is not another AI manager. |
 | Compatibility-bridge destination for v3. | Incremental migration protects proven v2 behavior. | Destination is a Recursion-owned harness/integration re-foundation; construction remains incremental and evidence gated. |
+| Hermes as the permanent named product Head and required upstream base. | It reflected the current constitution and an earlier controlled-fork direction. | OR-016: `Head` is a Recursion-owned logical actor and release contract. Hermes may be a migration/engine adapter; current live authority changes only through constitutional review. |
 
 ## Corrected executive boundary
 
@@ -110,7 +113,7 @@ The final session correction is authoritative for this design draft:
 
 ```text
 Lucas
-  -> Main Assistant / Head Hermes
+  -> Main Assistant / Recursion Head
        -> goal-scoped ARM Executive
             -> delegated agents / harness sessions
                  -> gates and independent verifier
@@ -122,14 +125,14 @@ Head owns strategic goals and ARM lifecycle. ARM owns the implementation plan, d
 
 ## Open decisions requiring research or Lucas review
 
-1. Exact native Recursion agent-loop boundary versus retained Hermes runtime and external CLI engines.
-2. Exact amendment text generalizing the planning-model clause to the owner-approved route envelope while preserving Hermes identity and deterministic actuation.
+1. Exact native Recursion agent-loop boundary versus typed external CLI/SDK engines, including an optional Hermes compatibility adapter.
+2. Exact amendment text replacing the Hermes-specific product identity with the Recursion-owned Head while preserving deterministic actuation and bounded migration compatibility.
 3. Stable public names and schemas for executives, runs, task nodes, capsules, route leases, and events.
 4. Numeric resource/performance budgets for each edition and node class.
 5. Exact public disclosure boundary for `CANARY-01`; its first task and local-only evidence boundary are fixed by OR-010.
 6. Supported provider/model/CLI matrix at v3 cut; all current availability and subscription claims require primary-source revalidation.
 7. Which plugins are mandatory in `core` versus included only in other manifests.
-8. License and attribution implications of retaining/forking Hermes and adapting patterns from every reference.
+8. License and attribution implications of retaining an optional Hermes adapter and adapting patterns from every reference.
 9. Migration and rollback point at which each later legacy writable store can be retired after the OR-015 rehearsal.
 10. Public Execution Lineage Contract contents after the private canary.
 11. Platform-specific proof that the OR-009 deletion contract reached every cache, backup and disconnected node.
@@ -183,8 +186,8 @@ Lucas to ratify them:
 
 1. Confirm Option 2 as the construction path: deterministic kernel plus typed lifecycle
    adapters, with a complete native inner loop only after a metric-bound spike wins.
-2. Approve amendment text for provider-neutral Head/ARM planning while preserving Hermes
-   identity, deterministic actuation and explicit billing/privacy envelopes.
+2. Approve amendment text for a provider-neutral Recursion Head/ARM design while preserving
+   deterministic actuation, current-authority migration and explicit billing/privacy envelopes.
 3. Approve the per-effect checkpoint/interrupt/drain/emergency matrix and current-to-future
    PAUSE transition; current immediate PAUSE remains operative until then.
 4. Decide whether `sovereign` may receive separate `audit-retention-admin` or `audit-erasure`,

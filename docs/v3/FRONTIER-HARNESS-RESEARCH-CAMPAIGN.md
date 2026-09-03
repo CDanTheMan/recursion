@@ -68,9 +68,11 @@ a reviewed future action. `OWN-FHAR-001` is the stable identifier for this owner
 - No conversion of a recommendation into owner authority.
 - No attempt to persist or reconstruct hidden chain of thought.
 
-## Optimization vector
+## Optimization vector projection
 
-`OPT-FHAR-001` keeps these dimensions separate:
+`OPT-FHAR-001` applies the canonical decision rule in
+[PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md#canonical-optimization-decision-rule) and keeps these
+dimensions separate for this campaign:
 
 1. authority, safety, privacy and effect correctness;
 2. verified task quality and escaped-defect rate;
@@ -210,3 +212,7 @@ earlier failure is preserved when later evidence repairs it.
 | `WP-FHAR-103-R` | `gpt-5.6-luna`/`xhigh`; provider caches, context compaction, event lineage, semantic reuse and token counters separated by mechanism and route. | Complete. Unknown CLI/OAuth/account behavior and unavailable counters remain unknown. |
 | `WP-FHAR-104-R` | `gpt-5.6-luna`/`xhigh`; broker lifetime, PTY transport, render diffing, slow-client flow control, multi-view input/resize ownership and accessibility traced. | Complete. Cross-platform behavior remains an experiment obligation. |
 | `CAP-FHAR-W2` | 2026-09-03T15:43:19-07:00; 32 logical CPUs; 30.85/63.12 GiB free memory; 644.57 GiB free system disk; 427 processes; read-only Codex surface reported 23% used in its 10,080-minute primary window, no credits or reset credits and no spend-control trip. Account identity is deliberately not retained. | Admit four additional Luna/xhigh workers. Point observation only; no credit is consumed or created and no metered fallback is permitted. |
+| `WP-FHAR-105-R` | `gpt-5.6-luna`/`xhigh`; plugin loading, capability negotiation, hot reload, isolation and headless/frontend seams traced in Codex, Gemini CLI, OpenCode, MCP and MCP Apps. | Complete. Protocol and isolation mechanisms transfer; metadata signatures, MCP and presentation do not grant Recursion authority. |
+| `WP-FHAR-106-R` | `gpt-5.6-luna`/`xhigh`; runtime/language, queue, IPC, store, process, profiling and packaging candidates mapped to matched experiments. | Complete. No language, store, encoding or performance default was selected without measurement. |
+| `WP-FHAR-107-R` | `gpt-5.6-luna`/`xhigh`; component-isolating benchmark, contamination, variance, judge-bias and owner-review-debt controls reconstructed from papers and pinned benchmark repositories. | Complete. Benchmark methods transfer; published task scores and preliminary 2026 scaffold results do not establish Recursion effects. |
+| `WP-FHAR-108-R` | `gpt-5.6-luna`/`xhigh`; adversarial attack narrowed the privileged kernel and defined a zero-cost-disabled-path contract plus failure injections. | Complete. Source observations are high confidence; performance, dependency cost and frontier superiority remain unmeasured. |

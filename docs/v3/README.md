@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 evidence-grounded design workspace
-status: evidence-reconciled-design-foundation
+status: evidence-reconciled-design-and-frontier-research-foundation
 last-updated: 2026-09-03
 authority: non-normative until ratified
 ---
@@ -15,7 +15,7 @@ This directory is a research baseline, not an implementation authorization. Wher
 
 ```text
 Lucas
-  -> Main Assistant / Head Hermes
+  -> Main Assistant / Recursion Head
        -> goal-scoped ARM executives
             -> delegated agents and external harness sessions
                  -> machine gates and independent verification
@@ -31,7 +31,7 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | Document | Question it answers |
 |---|---|
 | [PRODUCT.md](PRODUCT.md) | What is v3, who is it for, and what is outside it? |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | How do Head Hermes, ARMs, workers, and the kernel fit together? |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How do the Recursion Head, ARMs, workers, and the kernel fit together? |
 | [ARCHITECTURE-PROOF.md](ARCHITECTURE-PROOF.md) | Which R1–R17 claims survived the focused campaign, what remains unproved, and is the contract skeleton ready? |
 | [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md) | Which runtime foundations were compared, what is recommended, and what would falsify it? |
 | [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md) | What v2 actually contains, what is source-only, and how can state move without two writers? |
@@ -41,6 +41,8 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md) | What are the canonical planning objects, owners, transitions, amendment/fencing rules and replay semantics? |
 | [AUTONOMOUS-PLANNING-CAMPAIGN.md](AUTONOMOUS-PLANNING-CAMPAIGN.md) | How did this documentation campaign dogfood GoalSpec, PlanRevision, DAG, packets and gates? |
 | [R1-R17-EVIDENCE.md](R1-R17-EVIDENCE.md) | What persistent reconstructed evidence, contradictions, confidence and falsifiers support every R1-R17 lane? |
+| [FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md](FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md) | How did the follow-on source/code campaign dogfood a GoalSpec, two Luna waves, adjudication and gates? |
+| [FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md) | Which harness, durable-runtime, context/cache, terminal, plugin/frontend, systems and evaluation mechanisms survived, and which experiments decide adoption? |
 | [M1A-WIRE-PROFILE.md](M1A-WIRE-PROFILE.md) | What exact M1A JSON field, nesting, bound, nullability, command/receipt/event and digest profile must future schemas implement? |
 | [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md) | What closed command/event/error grammar and symbolic oracle must M1A freeze as literal red bundles after schemas and before reducer code? |
 | [SOURCE-REGISTER.md](SOURCE-REGISTER.md) | Which consequential primary-source versions, revisions, locators, limits and expiry triggers ground the synthesis? |
@@ -105,3 +107,9 @@ separate Owner-approved task.
 Current constitutional conflicts and remaining Lucas decisions are recorded in
 [DECISION-REGISTER.md](DECISION-REGISTER.md). No runtime implementation, migration, provider
 change, terminal process, private canary, publication or deployment is authorized by this suite.
+
+The follow-on [frontier harness evidence](FRONTIER-HARNESS-EVIDENCE.md) narrows Option 2's
+privileged kernel and freezes twelve comparison/fault experiments. It does not change M1A's
+planning-only boundary or prove a runtime. The next authorized construction step remains M1A-01
+strict schema materialization followed by M1A-02 literal red fixtures; language, store, binary IPC,
+plugin isolation, renderer and native-loop choices remain later evidence gates.

@@ -60,7 +60,7 @@ PERF-006, and H-015 to PERF-008. Neither list is runtime construction authorizat
 | H-037 | V3 improves declared user outcomes enough to justify its added code and operational complexity over v2 and simpler options. | Matched end-to-end v2/Option-1/Option-2/native-spike scenarios across the optimization envelope plus ablations. | No material accepted-quality, recovery, usability or efficiency gain survives hard floors and maintenance cost. |
 | H-038 | A Sol research director with up to eight Luna source workers and two targeted Terra adjudicators improves verified evidence per quota/review unit. | PERF-011 with fixed public corpus, bounded waves, exact route/effort attribution and quality/source floors; compare against smaller and Sol-heavy profiles without running wasteful duplicates after a decisive result. | Coordination duplication, same-family blind spots, quota loss, degraded source accuracy or review backlog offsets the cheaper worker mix. |
 
-## Architecture-proof disposition — 2026-09-03
+## Architecture-proof and frontier-source disposition — 2026-09-03
 
 The campaign narrowed mechanisms but did not execute the preregistered performance treatments.
 `supported contract` means primary mechanism evidence and local structural fit are sufficient to
@@ -69,16 +69,17 @@ write fail-closed schemas/fixtures; it is not an empirical product result.
 | Hypotheses | Current disposition | Evidence consequence |
 |---|---|---|
 | H-020, H-032, H-037 | conditional | Keep the deterministic kernel plus typed adapters as the current recommendation. “Optimized,” native-loop superiority and whole-v3 benefit remain unproved until matched Option 1/2/native spikes and privileged-closure budgets run. |
+| H-012 | comparison-ready; outcome unproved | SQLite's one-writer/WAL mechanisms are reverified, but JSONL plus the same content-addressed artifacts is the required competitor. Count all store bytes and checkpoint/recovery tails. SQLite remains outside M1A. |
+| H-013, H-026 | contract strengthened; outcome unproved | Manifest-first no-import admission, full artifact/dependency digests, isolated third-party execution, fenced reload and the zero-cost-disabled trap are specified. Exact isolation technology and usability/performance remain open. |
 | H-021, H-022 | contract partly supported; benefit unproved | Telegram/Grok Bot mechanics support normalized topics and named peers, not transcript authority. Freeze a bounded `CoordinationLease`; defer multi-ARM rooms from core construction. |
 | Status for H-023 | future contract supported; constitution unresolved | Admission epochs, effect classes, deadlines and ambiguity quarantine are schema/fixture-ready, but current immediate PAUSE remains operative until amended. |
 | Status for H-024 | contract conditional; owner policy unresolved | Capability vectors, attenuation, expiry, step-up and before/after receipts are schema-ready. Installation maximum, high-impact step-up and audit-erasure authority remain Lucas decisions. |
 | Status for H-025 | unproved | V2 enforces distinct verifier identity, while same-family review and this campaign's Terra adjudication are not cross-family independence. Run the blind reviewer matrix. |
-| Status for H-026 | contract conditional | Digest/signature trust and functional/network/quota/spend/update/revocation grants are separable. The novice one-step boundary remains an owner decision and needs attack fixtures. |
 | Status for H-027 | broad rehearsal falsified at current boundary | The writer inventory found separate task, assignment, run, result and fabric writers with no common fence epoch. A fabric-only no-effect fixture may prove vocabulary; it does not satisfy OR-015. |
 | Status for H-028 | unproved | Machine, pool, queue and review credits plus hysteresis are testable; no review-service-rate experiment ran. |
 | Status for H-029 | direction supported; completion unproved | Scoped keys, copy dispositions and tombstone states are definable. Backups, provider replicas and disconnected nodes still require deletion drills. |
 | H-030, H-031 | requirements contract supported; implementation unproved | Freeze daemon/view ownership, cursor/replay/credit/input-lease semantics and native OS boundary requirements. Compatibility, containment, scaling, non-flicker and accessibility remain PERF-010 results. |
-| Status for H-033 | unproved | No controlled task/model/delegation corpus or quota denominator was run. |
+| H-033 | component experiment ready; benefit unproved | Fixed-model matched-budget ablations now isolate ACI, planner, DAG delegation, verifier and bounded retry; deterministic state/effect oracles and owner-review minutes precede leaderboard interpretation. |
 | Status for H-034 | boundary supported; savings unproved | Local semantic evidence reuse is measurable. Provider cache claims stay route-local and unavailable counters remain unknown. |
 | Status for H-035 | requirements contract supported; complexity unproved | Versioned resolution, stale-edit refusal, lifecycle and invalid-combination fixtures are ready; complete configuration interaction coverage is not. |
 | Status for H-036 | generic contract supported; benefit unproved | Freeze `SourceRecord`, `ResearchClaim`, typed evidence edges and hard-floor adversarial corpus. Provider adapters and improvement over ordinary research narration remain experimental. |
@@ -98,11 +99,11 @@ write fail-closed schemas/fixtures; it is not an empirical product result.
 
 ## Next experiment priority
 
-The architecture-proof campaign narrowed H-020 through H-038 but did not execute their measured
-treatments. First run the zero-model fabric-only replay/fault fixture and reconcile the broad
-OR-015 writer boundary. Then prioritize H-023/H-024/H-026 fail-closed authority/plugin fixtures,
-H-012/PERF-001–004 coordinator primitives, H-030/PERF-010 terminal protocol behavior, and the
-H-036 public hard-floor source corpus. Run H-020/H-032/H-037 matched architecture/complexity and
-H-033/H-034/H-038 model/cache/swarm comparisons only after exact baselines and denominators are
-preregistered. The completed lane evidence and remaining falsifiers are in
-[ARCHITECTURE-PROOF.md](ARCHITECTURE-PROOF.md).
+The architecture-proof and frontier-source campaigns narrowed H-020 through H-038 but did not
+execute their measured treatments. First complete separately authorized M1A. Then run pure
+contract/fault preparations for H-023/H-024/H-026, followed by the fixed-model component ladder,
+zero-cost-disabled path and terminal protocol tests. Language/runtime, JSONL/SQLite, native-loop,
+cache and swarm comparisons occur only after exact workloads, hosts, versions, practical margins,
+review capacity and denominators are frozen. The completed evidence and remaining falsifiers are in
+[ARCHITECTURE-PROOF.md](ARCHITECTURE-PROOF.md) and
+[FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md).

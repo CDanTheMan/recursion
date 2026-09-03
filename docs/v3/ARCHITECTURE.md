@@ -13,7 +13,7 @@ baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 Lucas — principal and final authority
   |
   v
-Main Assistant / Head Hermes — portfolio executive
+Main Assistant / Recursion Head — portfolio executive
   |  model escalation, GoalSpecs, ARM lifecycle, monitoring, escalation
   |
   +--> ARM Executive — one approved parent goal
@@ -33,7 +33,7 @@ Deterministic Recursion kernel
 Review candidate — Lucas reviews, merges, provisions, and deploys
 ```
 
-Head Hermes directly manages ARMs. An ARM is itself a bounded executive that carries an approved goal by delegating work. A worker implements one bounded task. A verifier independently evaluates evidence. The deterministic kernel validates and executes declared transitions but does not make semantic product decisions.
+The Recursion Head directly manages ARMs. An ARM is itself a bounded executive that carries an approved goal by delegating work. A worker implements one bounded task. A verifier independently evaluates evidence. The deterministic kernel validates and executes declared transitions but does not make semantic product decisions.
 
 ## Four planes
 
@@ -43,7 +43,7 @@ Answers who may decide and how far authority extends. It contains owner identity
 
 ### Executive plane
 
-Contains the durable logical actors: Head Hermes and `ArmRun` instances. Models are replaceable compute assigned to an actor. The actor's identity, goal, authority, and event history do not change merely because its model or provider changes.
+Contains the durable logical actors: the Recursion-owned `Head` and `ArmRun` instances. Models are replaceable compute assigned to an actor. The actor's identity, goal, authority, and event history do not change merely because its model or provider changes.
 
 ### Execution plane
 
@@ -59,7 +59,7 @@ The v3 product is a headless harness. The interactive CLI is its canonical local
 surface, and Telegram is an optional interactive transport. Several terminal clients may attach
 to Head, ARMs, workers, events or system state; closing a client does not own or end the
 underlying process. The persistent daemon, canonical state and managed process broker provide
-lifetime and recovery. The conceptual `#general` conversation belongs to Head Hermes; a
+lifetime and recovery. The conceptual `#general` conversation belongs to the Recursion Head; a
 dedicated topic may address an ARM directly. These are views over canonical actor/event state,
 not additional supervisors or task registries. See
 [TERMINAL-RUNTIME.md](TERMINAL-RUNTIME.md).
@@ -133,6 +133,15 @@ sampling, provider-specific wire/tool syntax and native retry/stream parsing; th
 Recursion actor/goal/task identity, authority, budgets, PAUSE epochs, process lifetime, evidence,
 canonical events or publication.
 
+The privileged kernel is intentionally smaller than the complete object catalog. Its proposed
+implementation responsibilities are strict schema/canonicalization, authenticated command
+admission, a pure reducer and event sequence, authority/budget/privacy/fence checks, deterministic
+WorkPacket derivation, effect-intent/receipt classification, replay and publication gating.
+Provider selection/sampling, context construction, plugin dependency resolution, source retrieval,
+terminal rendering, telemetry and process implementation remain adapters that submit typed
+proposals. The exact code-informed evidence and falsifiers are in
+[FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md).
+
 The product direction still permits a larger native harness later. It earns that scope only by
 demonstrating a required quality, continuity, security or resource improvement that external
 engines plus adapters cannot supply. See the compared options and falsifiers in
@@ -202,7 +211,8 @@ measured in this campaign. V3 is expected to fit only if it uses:
 
 - one daemon per authority domain/OS account;
 - event-driven scheduling instead of busy polling;
-- SQLite WAL with bounded projections;
+- one serialized canonical admission path; SQLite WAL is only an optional bounded metadata/
+  projection candidate after a JSONL-plus-artifact comparison;
 - content-addressed artifacts outside hot database pages;
 - lazy plugin loading and isolated short-lived workers;
 - adaptive admission with reserved OS/control-plane headroom;
@@ -214,14 +224,21 @@ trees, eagerly indexes every repository, or loads every plugin into one process.
 hypotheses with workloads and failure rules in [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md),
 not measured conclusions.
 
+No language is selected. Rust is the leading post-M1A candidate, with Go and CPython mandatory
+comparators on the same reducer/replay/fault workload. JSON/JSONL is the inspectable initial local
+protocol encoding; binary framing, SQLite and a native model loop must each demonstrate a
+non-dominated improvement without a hard-floor regression before adoption.
+
 ## Constitutional reconciliation required
 
 Lucas selected provider-neutral planning inside an explicit approved
 model/provider/account/capacity-pool envelope. The current constitution still names ChatGPT via
 Codex OAuth, so the product ruling requires a separately reviewed constitutional amendment
-before private deployment configuration changes. The stable principle is that Hermes remains
-the accountable logical actor, models are authorized replaceable compute, deterministic code
-actuates, and Lucas retains authority.
+before private deployment configuration changes. OR-016 establishes the product principle that
+the Recursion-owned `Head` remains the accountable logical actor, models and external harnesses
+are authorized replaceable compute, deterministic code actuates, and Lucas retains authority.
+Current Hermes-specific operative wording remains in force until the separate constitutional
+migration is reviewed.
 
 The proposed future `checkpoint` PAUSE default and a maximum `sovereign` profile capable of receiving
 control-plane, credential, spending, publication, deployment and `grant-admin` authority

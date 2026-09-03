@@ -36,7 +36,7 @@ termination. The detailed proposal and research gate are in
 
 ### General surface
 
-The conceptual `#general` channel is the direct conversation with Head Hermes. It supports
+The conceptual `#general` channel is the direct conversation with the Recursion Head. It supports
 macro planning, Grill Me, goal scoping, ARM creation, portfolio monitoring and escalation.
 The name is a presentation default, not a hard-coded protocol identifier.
 

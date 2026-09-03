@@ -17,7 +17,7 @@ This roadmap is not implementation authorization. It orders the work that a late
 Deliver:
 
 - current source/runtime architecture map at the merged v2 baseline;
-- exact gap map between Project Pilot/Head Hermes and the v2 MVP fabric;
+- exact gap map between Project Pilot/the legacy Hermes Head and the v2 MVP fabric;
 - primary-source reference matrix with license/provenance review;
 - provider/CLI/context capability facts with verification dates;
 - benchmark and experiment plan;
@@ -54,6 +54,15 @@ scientific-research benefit or whole-v3 advantage was proved. The broad OR-015 r
 blocked by its current multi-writer boundary; a fabric-only fixture may test vocabulary without
 being described as that rehearsal.
 
+### Milestone 0C — frontier harness source and experiment closure
+
+Pinned code-path research now covers eight harnesses plus durable workflow, cache/context,
+terminal/TUI, plugin/frontend, systems and autonomy/evaluation sources. The resulting minimum
+kernel, adapter boundaries, contradictions and twelve preregistered comparisons are in
+[FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md). Status remains documentation-only:
+language, store, wire encoding, plugin isolation, terminal libraries, native loop, performance and
+frontier standing are not selected or proved. M1A stays the first construction slice.
+
 ## Milestone 1A — autonomous-planning contract and replay baseline
 
 Deliver only strict planning schemas, pure cross-record and DAG validation, deterministic
@@ -83,7 +92,10 @@ The exact M1A task graph, allowed paths and non-goals are projected in
 
 ## Milestone 2 — canonical state and compatibility projection
 
-Deliver the SQLite/WAL event writer, projections, migrations, artifact metadata, action/outbox path, backup/restore, and read-only imports/views for relevant v2 state.
+Deliver the selected canonical event writer, projections, migrations, artifact metadata,
+action/outbox path, backup/restore and read-only imports/views for relevant v2 state. SQLite/WAL
+is a candidate only after it beats the JSONL-plus-content-addressed-artifact baseline under the
+preregistered store/replay/fault comparison.
 
 Gate: crash, duplicate, stale lease, disk pressure, migration, backup, restore, and projection rebuild fixtures pass without two writable truths.
 
@@ -99,7 +111,10 @@ fabric-only state-contract requirement fixture in a later M1C is evidence prepar
 
 ## Milestone 3 — plugin kernel and route fabric
 
-Deliver compiled capability graph, plugin lifecycle, typed event bus, v2 adapter compatibility, route resolver, model-aware pools, billing boundary, credential references, and deterministic explanations.
+Deliver manifest-first capability graph, trusted built-in registry, bounded isolated third-party
+plugin lifecycle, typed event bus, v2 adapter compatibility, route resolver, model-aware pools,
+billing boundary, credential references and deterministic explanations. Full artifact/dependency
+digests and fenced reload precede activation; disabled paths load no implementation.
 
 Gate: supported routes negotiate from fixtures; disabled plugins are inert; failures quarantine only affected capabilities; no unauthorized billing/credential/egress transition is possible.
 

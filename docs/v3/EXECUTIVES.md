@@ -8,9 +8,9 @@ last-updated: 2026-09-03
 
 ## Actor definitions
 
-### Head Hermes
+### Recursion Head
 
-Head Hermes is the single accountable portfolio executive beneath Lucas. It:
+The Recursion-owned `Head` is the single accountable portfolio executive beneath Lucas. It:
 
 - preserves owner intent and portfolio context;
 - compiles GoalSpec drafts from accepted owner intent and strategic constraints;
@@ -173,7 +173,7 @@ Refusals produce:
 
 - a normal telemetry event when recovery succeeds;
 - an operator alert when work is blocked, policy may be incompatible, or repeated fallback consumes meaningful capacity;
-- escalation to Head Hermes when semantic reframing or authority review is needed.
+- escalation to Head when semantic reframing or authority review is needed.
 
 ## Executive lease and split brain
 
@@ -185,7 +185,7 @@ The authoritative lease, stale-transition and route-replacement rules are canoni
 ## Open questions
 
 - Should Head and ARM share one native loop implementation or use distinct optimized loops?
-- How should an ARM expose native nested delegation from Cursor, Codex, Hermes, or OpenCode without losing descendant lineage?
+- How should an ARM expose native nested delegation from Cursor, Codex, an optional Hermes adapter, or OpenCode without losing descendant lineage?
 - Which events are stable enough to become the v3 public executive protocol?
 - When is a long-lived provider session more valuable than a fresh session with a compact capsule?
 - How should planning models be authorized under a future provider-neutral amendment to the current constitution?

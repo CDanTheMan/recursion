@@ -17,7 +17,8 @@ semantics live in [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md).
 | Term | Definition | Not the same as |
 |---|---|---|
 | `Owner` | Lucas, the principal and final authority | a model, administrator role or route account |
-| `Head Hermes` | Durable portfolio executive directly accountable to the Owner; `Main Assistant` is its UI role name | one provider session or the deterministic kernel |
+| `Head` / `Recursion Head` | Recursion-owned durable portfolio executive directly accountable to the Owner; `Main Assistant` is its UI role name | Hermes or another engine, one provider session, or the deterministic kernel |
+| `Hermes adapter` | Optional version-pinned migration or execution-engine integration behind Recursion contracts | the canonical Head, Owner authority or permanent product base |
 | `ARM executive` | Durable goal-scoped executive that plans and delegates inside one approved `GoalSpec` | a worker, Project Pilot script or AI ARM Manager |
 | `Delegated worker` | Bounded executor of one `WorkPacket` | an executive with authority to redefine the goal |
 | `Verifier` | Separately assigned evaluator of exact candidate/gate evidence | the implementer, vendor self-report or publisher |
@@ -32,7 +33,7 @@ semantics live in [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md).
 | `ProcessBroker` | Platform adapter that owns and reconciles PTY/process groups for bounded work | the model, terminal window or canonical state writer |
 | `PausePolicy` | Versioned constitutional behavior; `current-immediate` is operative, while checkpoint/interrupt/drain/emergency profiles are future non-operative values until ratified | a model choosing whether to honor PAUSE, or schema presence selecting future behavior |
 
-Head Hermes directly owns ARM lifecycle. An ARM directly owns its task DAG and delegates
+The Recursion Head directly owns ARM lifecycle. An ARM directly owns its task DAG and delegates
 workers. The kernel owns neither portfolio priorities nor ARM plans.
 
 ## Durable product objects

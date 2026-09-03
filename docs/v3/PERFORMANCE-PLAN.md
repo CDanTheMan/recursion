@@ -9,6 +9,33 @@ last-updated: 2026-09-03
 No v3 performance improvement was measured in this campaign. This document defines workloads,
 metrics and decision rules so later implementation cannot convert expectations into facts.
 
+## Canonical optimization decision rule
+
+OR-017 requires every architecture and optimization comparison to preserve the full vector
+below. Authority, safety, privacy, effect correctness and declared quality floors are hard
+constraints. Among conforming candidates, no dimension receives a hidden priority or scalar
+weight: report the vector, prefer Pareto dominance, and escalate a material non-dominated choice
+to Lucas. A recommended default needs at least one measured improvement, no hard-floor failure,
+and an explicit disposition for every regression or unavailable denominator.
+
+| Dimension | Required observation |
+|---|---|
+| authority, safety, privacy, effects | violations, ambiguous outcomes, stale actions, isolation and policy-conformance results |
+| verified quality | accepted gate quality, escaped defects, verifier disagreement and falsifier outcomes |
+| recovery and replay | restart/reconciliation success, replay parity, bounded data loss and failure containment |
+| owner/operator cost | review minutes, intervention count, comprehension/error probes and backlog age |
+| quota, tokens and money | provider-reported counters where exposed, account-window change and metered receipts; unavailable is not zero |
+| context/cache efficiency | directly observed reads/writes, reusable bytes/tokens, fidelity misses and invalidations |
+| latency and throughput | p50/p95/p99 control, input, append, task and recovery latency plus accepted throughput |
+| host resources | CPU, RSS, disk, I/O, network, wakeups, processes and handles |
+| terminal interaction | frame/input latency, flicker/gap count, Unicode/input correctness and accessibility results |
+| portability/configurability | supported platform/route matrices, fail-closed unknowns and owner-change cost |
+| code and maintenance surface | privileged/total code, dependencies, binary/install size, upgrade work and defect density |
+| extensibility/idle cost | plugin/frontend compatibility and disabled-path imports, reads, work, processes and calls |
+
+This section is canonical for optimization comparisons. Product and campaign documents project
+it rather than defining competing weights.
+
 ## Target profiles
 
 | Profile | Evidence boundary | Intended role |
@@ -51,6 +78,27 @@ CPU, memory, disk, I/O and latency. Deployment state was not inspected.
 | Controls for PERF-009 | Supply a measured or controlled owner-review service-rate trace; machine-only capacity cannot prove review protection. |
 | Controls for PERF-010 | Fix OS, terminal, event rate and render workload and test 0/1/5/10/20 views, slow clients, restart and process escape. |
 | Controls for PERF-011 | Freeze the corpus, rubric, finding key, blind review, observed quota denominator and stopping margin. Without a Sol-only baseline this campaign is architectural evidence, not a performance result. |
+
+### Frontier harness comparison suite
+
+The code-informed campaign adds the following preregistered comparisons without expanding the
+M1A implementation scope. Their canonical detail is in
+[FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md#preregistered-experiment-queue).
+
+| Experiment | Required comparison and interpretation |
+|---|---|
+| `EXP-FHAR-01` | Minimal native loop versus typed adapters across two materially different engines; do not infer that owning the product contract requires rebuilding provider loops. |
+| `EXP-FHAR-03` | Raw rescan, deterministic capsule, native compaction and hybrid under cold/warm and same/fresh sessions; only exact route counters support provider-cache results. |
+| `EXP-FHAR-07` | Fixed-model component ladder for ACI, planner, DAG delegation, verifier and bounded novel retry; equal total budget and owner-review burden are mandatory. |
+| `EXP-FHAR-08` | Fresh/rotating held-outs, clean state, frozen evaluator/environment hashes, overlap audit and hierarchical task-family/task/attempt uncertainty. |
+| `EXP-FHAR-09` | 0/10/100 installed-but-disabled capabilities with import, credential, network, process/thread/watcher, context and quota traps. |
+| `EXP-FHAR-10` | CPython/Rust/Go implementations of the same deterministic reducer/replay/fault workload on frozen Windows/Linux hosts. Language documentation is not a result. |
+| `EXP-FHAR-11` | JSONL plus content-addressed artifacts versus single-writer SQLite WAL metadata plus the same artifacts, counting all bytes and recovery faults. |
+| `EXP-FHAR-12` | Trusted built-in, isolated third-party plugin and sandboxed view through disable, crash, reload, stale fence and protocol mismatch. |
+
+Every comparison reports the full canonical optimization vector, paired practical effect and
+uncertainty, all attempts and all hard-floor failures. A result that improves quality but increases
+review time, quota or resource use may be non-dominated; it is not silently declared optimal.
 
 Quota efficiency is a vector, not a fabricated currency. Report verified non-duplicate findings
 separately per directly observed input/output/reasoning token, account-window change when
@@ -99,9 +147,10 @@ Performance success never overrides a failed safety result.
   not a promise that all workers launch simultaneously or that Terra supplies cross-family
   independence. Run bounded waves when machine, provider, quota or review headroom is lower.
 
-## Workstation campaign observation
+## Workstation campaign observations
 
-Eight native Luna workers were admitted in two waves of four after bounded checks. Before wave 1,
+The earlier architecture-proof campaign admitted eight native Luna workers in two waves of four
+after bounded checks. Before wave 1,
 the point observation was 32 logical processors, 63.12 GiB memory with 33.17 GiB free and 650.72
 GiB free disk. Between waves the host answered the combined check in 2.6 seconds, with 32.84 GiB
 free memory and 650.63 GiB free disk; the localized CPU counter was unavailable and was not
@@ -110,6 +159,13 @@ checks. No Contributor route was used. These observations are not a sustained be
 provider-capacity, entitlement, billing, token-denominator, efficiency or v3 concurrency result.
 The exact receipts are in
 [AUTONOMOUS-PLANNING-CAMPAIGN.md](AUTONOMOUS-PLANNING-CAMPAIGN.md).
+
+The frontier-harness campaign repeated the two-wave limit. Its point receipts were 32 logical
+processors, 31.39/63.12 GiB free memory and 647.14 GiB free disk before wave one, then
+30.85/63.12 GiB and 644.57 GiB before wave two. The read-only usage surface showed 23% used in
+its visible 10,080-minute window; no credit or metered route was enabled. The observations do not
+establish sustained throughput, worker efficiency or account economics. Exact receipts are in
+[FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md](FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md).
 
 ## Reporting
 

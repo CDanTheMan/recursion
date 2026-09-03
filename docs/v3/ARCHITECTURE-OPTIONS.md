@@ -10,7 +10,7 @@ baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 The options below are intentionally distinct. Scores are qualitative hypotheses grounded in
 the current source trace and pinned public mechanisms; they are not benchmarks.
 
-## Option 1 — extract incrementally from the Hermes-derived runtime
+## Option 1 — extract incrementally from the current Hermes-derived runtime
 
 Keep current scripts and file/Git state authoritative. Generalize Project Pilot, adapters and
 schemas in place until the system resembles v3.
@@ -87,7 +87,7 @@ rewrite as a prerequisite.
 The smallest privileged kernel owns schema versions, authority/budget checks, command
 idempotency, event sequencing, action admission, PAUSE epoch, credential-reference policy,
 verification identity and publication provenance. It does not choose product goals, write an
-ARM plan, select architecture by model opinion or act as an AI ARM Manager. Head Hermes and
+ARM plan, select architecture by model opinion or act as an AI ARM Manager. The Recursion Head and
 ARM executives propose semantic transitions; the kernel accepts or rejects and actuates only
 fixed verbs.
 
@@ -130,7 +130,8 @@ These are proposed rulings, not decisions. `CONTROL_PLANE.md` remains authoritat
 
 1. **Planning compute.** Lucas selected provider-neutral Head/ARM compute inside explicit
    owner-approved model/provider/account/pool envelopes. Amend the provider-specific clause
-   while preserving Hermes as accountable logical executive and deterministic actuation.
+   while preserving the Recursion-owned `Head` as accountable logical executive and
+   deterministic actuation. A Hermes implementation may remain a migration/engine adapter.
 2. **Executive hierarchy.** Lucas defined ARM as a goal-scoped executive that delegates a
    configurable fleet and may receive direct owner conversation. The Head-to-ARM hierarchy has
    no intervening AI ARM Manager. Whether Project Pilot can import as an ARM predecessor still
@@ -146,7 +147,7 @@ These are proposed rulings, not decisions. `CONTROL_PLANE.md` remains authoritat
    Maximum `sovereign` may explicitly include `grant-admin` and modify its own grants. Research
    must define receipt-backed mutation, step-up, expiry and the separate audit-retention seam
    before constitutional amendment.
-6. **Native inner loop.** Ratify Option 2 as the construction path and require a measured spike
+6. **Native inner loop.** Ratify or amend Option 2 as the construction path and require a measured spike
    before promoting a Recursion-owned inner agent loop from optional capability to core.
 
 Publication provenance, no secret values in durable state, non-widening child inheritance and

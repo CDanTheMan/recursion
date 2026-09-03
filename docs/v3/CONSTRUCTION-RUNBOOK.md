@@ -66,10 +66,18 @@ route/budget/lease/PAUSE/effect references remain solely to test the mandatory f
 they do not implement those subsystems.
 
 - **M1B** may later add inert route, plugin and process requirement contracts, still without a
-  provider call, process launch or plugin execution.
+  provider call, process launch or plugin execution. Its red fixtures should cover manifest-first
+  no-import admission, full artifact/dependency digests, capability/policy intersection, stale
+  reload fencing, daemon cursors/credit/input leases and zero-cost-disabled behavior described in
+  [FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md).
 - **M1C** may later add inert source/effect/persistence requirement contracts. SQLite, scientific
   adapters, Git, publication, external effects and migration remain later separately authorized
   work.
+
+Post-M1A implementation choices remain experiments, not prerequisites: CPython/Rust/Go for the
+same pure reducer/replay workload; JSONL versus SQLite metadata with identical artifacts; and typed
+external-engine adapters versus a minimal native loop. Do not choose a production language, store,
+wire format, plugin sandbox or renderer inside M1A.
 
 The broad OR-015 migration rehearsal remains blocked by multiple writers without one proven
 fence. No M1A fixture may be called a migration rehearsal or runtime proof.

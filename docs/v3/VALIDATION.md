@@ -1,10 +1,10 @@
 ---
-title: Recursion v3 design-foundation deterministic validation procedure
+title: Recursion v3 documentation-campaign deterministic validation procedure
 status: active-campaign-gate-procedure
 last-updated: 2026-09-03
 ---
 
-# Recursion v3 design-foundation deterministic validation procedure
+# Recursion v3 documentation-campaign deterministic validation procedure
 
 This file owns the exact reproducible local procedure for the documentation campaign's
 machine-checkable gates. It changes no repository or external state. Run it from the target
@@ -18,12 +18,12 @@ silently treated as link-check success.
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$baseline = '672081fc1874ab9b7a41a14ca61adc60ecd71c95'
+$baseline = 'a97d5181ee413b87597ea58523708bb9a53f750b'
 $candidate = (git rev-parse HEAD).Trim()
 $root = (Resolve-Path 'docs/v3').Path
 
 if ($candidate -notmatch '^[0-9a-f]{40}$') { throw 'candidate is not a full commit' }
-if ((git branch --show-current).Trim() -ne 'codex/v3-design-foundation') {
+if ((git branch --show-current).Trim() -ne 'codex/v3-frontier-harness-research') {
   throw 'wrong branch'
 }
 git merge-base --is-ancestor 6543840cfd4dd1d7f49ce58b55e8357cdf3b37be $candidate
@@ -123,7 +123,8 @@ Test-Sequence 'docs/v3/M1A-AUTONOMOUS-PLANNING.md' '^\| (F-M1A-[0-9]{3}) \|' 'F-
 Test-Sequence 'docs/v3/M1A-AUTONOMOUS-PLANNING.md' '^\| (M1A-[0-9]{2}) [^|]*\|' 'M1A-' 1 7 2 'M1A_DAG'
 Test-Sequence 'docs/v3/M1A-FIXTURE-ORACLES.md' '^\| `(F-M1A-[0-9]{3})` \|' 'F-M1A-' 1 23 3 'M1A_ORACLES'
 Test-Sequence 'docs/v3/AUTONOMOUS-PLANNING-CAMPAIGN.md' '^\| (GATE-V3DF-[0-9]{2}) \|' 'GATE-V3DF-' 1 24 2 'CAMPAIGN_GATES'
-Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| `(SRC-V3-[0-9]{3})` \|' 'SRC-V3-' 1 51 3 'SOURCE_RECORDS'
+Test-Sequence 'docs/v3/FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md' '^\| `(GATE-FHAR-[0-9]{2})` \|' 'GATE-FHAR-' 1 24 2 'FRONTIER_CAMPAIGN_GATES'
+Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| `(SRC-V3-[0-9]{3})` \|' 'SRC-V3-' 1 86 3 'SOURCE_RECORDS'
 Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| (R[0-9]+) \| `SRC-V3-' 'R' 1 17 0 'SOURCE_LANE_COVERAGE'
 
 $sourceLines = Get-Content 'docs/v3/SOURCE-REGISTER.md'

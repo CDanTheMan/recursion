@@ -36,6 +36,9 @@ This document defines categories and provisional gates. Numeric performance budg
   is reconciliation-only; state restoration never reports the effect undone.
 - `PERF-001` through `PERF-011` have one immutable experiment-registry mapping, and a result
   cannot bind to another workload revision or unavailable denominator.
+- Frontier harness experiments bind model, harness release/config, task, environment, tools,
+  route, policy, seed and attempt. ACI, planner, delegation, verifier and retry effects are
+  isolated with fixed-model matched-budget treatments; successful-only averages are invalid.
 - A fabric-only state fixture is labeled as such and cannot pass the OR-015 broad rehearsal gate.
 
 ## M1A autonomous-planning gate
@@ -137,7 +140,8 @@ Measure at minimum on the target coordinator class and one interactive workstati
 - disabled optional component footprint;
 - idle daemon CPU/RSS/wakeups and disk writes;
 - CLI startup and common read-command latency;
-- SQLite transaction, projection, WAL, backup, and restore behavior;
+- JSONL-plus-artifact versus SQLite-WAL-plus-artifact transaction, projection, checkpoint,
+  backup, restore and total-byte behavior;
 - scheduler/admission latency under increasing queued work;
 - worker/process cleanup and descriptor/plugin lazy load;
 - adaptive concurrency response to CPU, RAM, disk I/O, and foreground pressure;
@@ -167,6 +171,8 @@ Compare v3 against v2 on representative scrubbed tasks:
 - machine load and elapsed time.
 
 V3 does not need to dominate every dimension. Each shipped profile must improve its declared objective without violating hard integrity and quality floors.
+Use paired hierarchical uncertainty and a preregistered practical margin. Retain the complete
+Pareto set; a material non-dominated choice is an Owner seam, not an invitation to invent weights.
 
 ## Scientific research gate
 
@@ -199,6 +205,12 @@ V3 does not need to dominate every dimension. Each shipped profile must improve 
 
 - Fresh `core`, `standard`, `remote`, `full`, and representative `custom` installs are reproducible from one tagged source revision.
 - Disabled components are physically absent or demonstrably idle.
+- Installed-but-disabled capabilities perform no implementation import/install, credential read,
+  network, process/thread/timer/watcher, context/tool enumeration, model call, quota reservation or
+  unbounded subscription; bounded manifest validation is the only permitted work.
+- Third-party plugin, reload and UI fixtures prove exact artifact/dependency digests, bounded
+  isolation, stale fencing, replay preservation and inability to mutate GoalSpec, PlanRevision,
+  effect or publication state directly.
 - Schema-driven wizard, manual file editing, validation, migration, explanation, and rollback agree.
 - Common local use works without remote enrollment or a full conformance run.
 - Route, queue, capacity, resource, config, context, and capability explanations require no model call.

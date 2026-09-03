@@ -53,7 +53,7 @@ Public usability remains an explicit design requirement. Users should be able to
 
 - Configure providers, authenticated CLIs, API routes, capacity pools, models, nodes, and policies through files or the CLI.
 - Use Grill Me to convert vague intent into a versioned, accepted GoalSpec.
-- Let Head Hermes start and monitor one or more bounded ARM executives.
+- Let the Recursion Head start and monitor one or more bounded ARM executives.
 - Talk directly to an ARM through its addressable topic without relaying every exchange through
   Head; Head remains aware through canonical state.
 - Optionally place multiple named ARMs in a shared conversation or workflow. Head retains the
@@ -70,15 +70,13 @@ Public usability remains an explicit design requirement. Users should be able to
 
 ## Optimization target
 
-V3 seeks the highest verified development quality per unit of:
-
-- subscription quota;
-- metered cost;
-- CPU, memory, disk I/O, and interactive-machine impact;
-- elapsed time;
-- owner review attention.
-
-No single scalar hides these dimensions. Named profiles select a Pareto point, and telemetry reports the underlying measurements.
+OR-017 requires v3 to consider the complete optimization vector equally behind non-tradeable
+authority, safety, privacy, effect-correctness and quality floors. It includes verified quality,
+recovery/replay, owner review, quota/tokens/money, context/cache efficiency, latency/throughput,
+host resources, terminal interaction, portability/configurability, code/maintenance surface and
+extensibility/idle cost. No scalar score hides a regression. Named profiles may select a Pareto
+point only through explicit owner-visible policy. The canonical measurements and decision rule
+are in [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md#canonical-optimization-decision-rule).
 
 ## Non-goals for the initial v3 release
 
