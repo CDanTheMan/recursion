@@ -28,6 +28,10 @@ provider, model, API, CLI, platform or release change. Pinned repository and sta
 the stated immutable revision. Source identity and provenance support inspection; they do not
 prove truth or applicability.
 
+The exact consequential-source versions, source commits, locators, applicability limits and
+revalidation triggers are canonical in [SOURCE-REGISTER.md](SOURCE-REGISTER.md). Lane prose below
+is a claim projection and must not broaden those source records.
+
 ## R1 — headless native harness boundary
 
 **Question:** Which semantics must Recursion implement natively, and which inner-loop features
@@ -42,6 +46,7 @@ authority boundary. These are **reverified** primitives from [T3 Code at
 [DeepSeek Harness session at `76fda72`](https://github.com/deepseek-ai/deepseek-harness/blob/76fda729799fe9b3848dbe2c211d4b231032b81e/docs/subsystems/session.md),
 [its persistence contract](https://github.com/deepseek-ai/deepseek-harness/blob/76fda729799fe9b3848dbe2c211d4b231032b81e/docs/subsystems/persistence.md),
 and [Pi agent lifecycle at `4e69b0c`](https://github.com/earendil-works/pi/blob/4e69b0c28060f0f02fbe38bfa7c21a2e2eb25057/packages/agent/README.md).
+Exact locators and limitations are `SRC-V3-039`–`SRC-V3-041` in the source register.
 The recommendation that Recursion's deterministic kernel own authority, budgets, PAUSE,
 fencing, events, effect admission and publication while external loops own sampling and wire
 protocol is a **local inference**, not a harness guarantee or Owner ratification.
@@ -84,9 +89,10 @@ a compromised or disconnected actor to create new effects?
 **Evidence and claims:** Python task cancellation is cooperative; Windows Job Objects and Linux
 cgroup v2 offer bounded process containment with documented breakaway, migration, privilege or
 platform limits. These are **reverified** from [Python 3.14 task
-documentation](https://docs.python.org/3/library/asyncio-task.html), [Windows Job
-Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects) and [Linux
-cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html). Admission epochs, typed effect
+documentation](https://docs.python.org/3.14/library/asyncio-task.html), [Windows Job Objects source
+revision `3aee48a`](https://github.com/MicrosoftDocs/win32/blob/3aee48ac3f48e187d17bdfd56951741737331749/desktop-src/ProcThread/job-objects.md) and [Linux cgroup v2
+source revision `c3b510d`](https://github.com/torvalds/linux/blob/c3b510de420d70def08190083d388e0873c1aa84/Documentation/admin-guide/cgroup-v2.rst).
+Exact headings and limitations are `SRC-V3-020`, `SRC-V3-022` and `SRC-V3-023`. Admission epochs, typed effect
 states and reconciliation are **local inferences**. The operative constitution's immediate
 PAUSE wins; checkpoint, interrupt, drain and emergency profiles are representable future
 proposals only (**Owner/constitutional authority**, [CONTROL_PLANE.md](../../CONTROL_PLANE.md)).
@@ -149,10 +155,11 @@ feature expressiveness without warning-only supply-chain failure?
 **Evidence and claims:** TUF 1.0.36 supplies expiring signed roles, thresholds, delegation and
 rollback/freeze protections while treating target content as opaque. SLSA 1.2 provenance and
 verification bind artifact/process identities within a stated threat model. These are
-**reverified** from [TUF 1.0.36, page revision
-`59e601e`, 2026-08-05](https://theupdateframework.github.io/specification/v1.0.36/)
+**reverified** from [TUF 1.0.36, source revision
+`59e601e`](https://github.com/theupdateframework/specification/blob/59e601ed29c0d2e497264ae8b31c11b8ef07df1e/tuf-spec.md)
 and [SLSA v1.2 artifact verification, source revision
-`ae7fc76`](https://slsa.dev/spec/v1.2/verifying-artifacts). Both specifications use the
+`ae7fc76`](https://github.com/slsa-framework/slsa/blob/ae7fc76215004e8fae250c877eff8919bf048e3b/spec/verifying-artifacts.md).
+Exact headings, licenses and limitations are `SRC-V3-004` and `SRC-V3-005`. Both specifications use the
 Community Specification License 1.0 at these revisions.
 Separating artifact trust, functional API, OS/network, route/account, quota, metered spend,
 update and revocation grants is a **local inference**.
@@ -251,11 +258,12 @@ overhead?
 terminal foreground process groups and group signals; SSH connection channels define windows,
 PTY requests, resize, signals and exit status. Windows Job Objects and Linux cgroup v2 provide
 qualified containment. These are **reverified** from [Microsoft Pseudoconsoles, source revision
-`c303556`](https://learn.microsoft.com/en-us/windows/console/pseudoconsoles), [POSIX.1-2024
+`c303556`](https://github.com/MicrosoftDocs/Console-Docs/blob/c3035561c145c6c6c6b0d7a4f49a6d706256451e/docs/pseudoconsoles.md), [POSIX.1-2024
 terminal interface](https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap11.html),
 [RFC 4254](https://www.rfc-editor.org/rfc/rfc4254.html), [Windows Job Objects, source revision
-`3aee48a`](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects) and [Linux
-cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html).
+`3aee48a`](https://github.com/MicrosoftDocs/win32/blob/3aee48ac3f48e187d17bdfd56951741737331749/desktop-src/ProcThread/job-objects.md) and [Linux
+cgroup v2, source revision `c3b510d`](https://github.com/torvalds/linux/blob/c3b510de420d70def08190083d388e0873c1aa84/Documentation/admin-guide/cgroup-v2.rst).
+Exact locator/limit records are `SRC-V3-021`–`SRC-V3-025`.
 
 **Contradiction/limit:** none defines Recursion actor identity, durable cursor replay, one input
 lease, passive-view behavior or universal descendant containment. **Decision:** adapt native
@@ -355,6 +363,7 @@ These are **reverified** from [W3C PROV-DM Recommendation 2013-04-30](https://ww
 2024-01-22](https://schema.datacite.org/meta/kernel-4.5/) and [arXiv API
 manual](https://info.arxiv.org/help/api/user-manual.html). Generic `SourceRecord`, claim and
 typed evidence-edge semantics are **local inferences**.
+Exact version/locator/expiry records are `SRC-V3-006` and `SRC-V3-030`–`SRC-V3-033`.
 
 **Contradiction/limit:** provenance, metadata, registration, citation count or consensus does not
 prove scientific truth. Crossref says Crossmark presence is not a guarantee of complete updates;

@@ -104,7 +104,12 @@ Paid CI is never assumed. Local gates, remote-node gates, hosted CI, model revie
 
 ## Failure behavior
 
-A task gate failure does not automatically PAUSE the entire system. It returns to its ARM with exact evidence. The ARM may retry only when it can name new information or a materially different action. Repeated failure, semantic ambiguity, exhausted authorized recovery, or conflicting evidence escalates to Head Hermes. If Lucas is the required actor, development under that affected authority stops until direction arrives.
+A task gate failure does not automatically PAUSE the entire system. It returns to its ARM with
+exact evidence. The ARM may retry only with a valid closed-schema `NoveltyDelta` and a nonempty
+canonical diff addressing the failed condition; the kernel does not judge semantic wisdom.
+Repeated failure, semantic ambiguity, exhausted authorized recovery, or conflicting evidence
+escalates to Head Hermes. If Lucas is the required actor, development under that affected
+authority stops until direction arrives.
 
 Global PAUSE remains a separate operator/control-plane mechanism.
 
@@ -116,17 +121,20 @@ in [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md#gates-retry-replan-and-escala
 This is the user-facing projection of the canonical retry contract; the typed decision and
 fail-before-model-turn rules live in [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md).
 
-Every retry must identify at least one of:
+Every retry uses exactly one canonical kind and its required digest/set fields:
 
-- new evidence;
-- corrected hypothesis;
-- changed implementation strategy;
-- changed eligible route justified by capability or continuity;
-- narrowed task;
-- repaired environment or dependency;
-- explicit owner amendment.
+- `evidence-added`;
+- `hypothesis-replaced`;
+- `strategy-changed`;
+- `route-capability-changed`;
+- `task-narrowed`;
+- `dependency-repaired`; or
+- `owner-amended`.
 
-Rephrasing the same attempt is not novelty. The scheduler should stop repetitive quota burn before another model turn is admitted.
+The exact finite field and admission grammar is canonical under
+[Gates, retry, replan and escalation](AUTONOMOUS-PLANNING.md#gates-retry-replan-and-escalation).
+Rephrasing with identical typed digests is not novelty. The scheduler stops repetitive quota burn
+before another model turn is admitted.
 
 ## Planning outputs
 

@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 evidence-grounded design workspace
-status: architecture-proof-complete-conditional-construction
+status: architecture-proof-final-reconciliation
 last-updated: 2026-09-03
 authority: non-normative until ratified
 ---
@@ -41,6 +41,9 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md) | What are the canonical planning objects, owners, transitions, amendment/fencing rules and replay semantics? |
 | [AUTONOMOUS-PLANNING-CAMPAIGN.md](AUTONOMOUS-PLANNING-CAMPAIGN.md) | How did this documentation campaign dogfood GoalSpec, PlanRevision, DAG, packets and gates? |
 | [R1-R17-EVIDENCE.md](R1-R17-EVIDENCE.md) | What persistent reconstructed evidence, contradictions, confidence and falsifiers support every R1-R17 lane? |
+| [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md) | What closed command/event/error grammar and symbolic oracle must M1A freeze as literal red bundles before reducer code? |
+| [SOURCE-REGISTER.md](SOURCE-REGISTER.md) | Which consequential primary-source versions, revisions, locators, limits and expiry triggers ground the synthesis? |
+| [VALIDATION.md](VALIDATION.md) | What exact candidate-bound command validates claim IDs, stable sequences, links, privacy, diff scope and v2 regression? |
 | [EXECUTION-FABRIC.md](EXECUTION-FABRIC.md) | How are models, CLIs, subscriptions, hosts, and tasks resolved? |
 | [CONTEXT.md](CONTEXT.md) | How does context reuse, caching, compaction, and rehydration work? |
 | [STATE.md](STATE.md) | What is canonical, durable, replayable, and recoverable? |

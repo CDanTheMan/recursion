@@ -17,7 +17,8 @@ only strict planning schemas, pure cross-record/DAG validation, deterministic Wo
 derivation, typed gate/retry/replan/escalation behavior and in-memory replay over sanitized
 fixtures.
 
-The canonical contract is [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md), and the standalone
+The canonical contract is [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md), the closed fixture
+grammar/oracle blueprint is [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md), and the standalone
 handoff is [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
 No part of M1A is executed in this research campaign.
 
@@ -41,7 +42,9 @@ canonicalization → M1A-03 cross-record/DAG validator → M1A-04 pure decider/r
 derivation → M1A-05 all conformance fixtures → M1A-06 exact-candidate independent rerun.
 
 The 23 mandatory fixtures and twelve machine-checkable gates in
-[M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md) are the acceptance oracle. In summary,
+[M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md), together with the closed command/event/
+error/digest oracles in [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md), are the acceptance
+blueprint. M1A-01 freezes their literal strict-JSON red bundles before reducer code. In summary,
 they fail closed on unauthenticated/incomplete/widened goals, bad DAGs, stale packets/leases,
 non-novel/exhausted retries, missing/downgraded verifiers, quota/provider blocks, route replacement,
 current/future PAUSE separation, ambiguous effects, duplicate commands, replay divergence,
@@ -70,8 +73,9 @@ fence. No M1A fixture may be called a migration rehearsal or runtime proof.
 
 ## Handoff, stop and rollback
 
-A future M1A task freezes red fixture inputs/expected receipts/events/state/digests before green
-behavior. Stop on an authority term with two owners, current/future PAUSE conflation, a child
+A future M1A task freezes literal red fixture inputs/expected receipts/events/errors/state/digests
+and obtains review of that exact red commit before green behavior. Stop on an authority term with
+two owners, current/future PAUSE conflation, a child
 widening, nondeterministic replay, semantic-model judgment in the reducer, required I/O/external
 subsystem, out-of-scope path or missing verifier. Return the smallest conflicting fixture to
 Lucas rather than encoding a policy choice.

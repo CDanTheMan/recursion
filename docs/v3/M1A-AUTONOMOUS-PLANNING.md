@@ -1,6 +1,6 @@
 ---
 title: M1A — Autonomous Planning Contract and Replay Baseline
-status: construction-ready-proposal-not-authorized
+status: construction-specification-candidate-not-authorized
 last-updated: 2026-09-03
 ---
 
@@ -14,6 +14,11 @@ prove a v3 runtime, plan quality, external-effect safety or performance.
 The standalone handoff prompt is
 [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
 Neither this document nor that prompt authorizes execution.
+
+The closed synthetic authority, logical-path/effect, command, event, error, digest and fixture
+oracle grammar is in [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md). Literal executable red
+bundles do not exist yet; freezing them is the first future construction node, before reducer
+code, and is part of M1A rather than evidence that M1A has run.
 
 ## Parent goal and exact scope
 
@@ -70,7 +75,7 @@ logical time and immutable capacity/route/policy observations as data.
 
 | Node | Depends on | Exclusive output | Machine-checkable gate | Stop condition |
 |---|---|---|---|---|
-| M1A-01 freeze fixture vocabulary | accepted M1A prompt | `docs/v3/**` mapping plus red fixture manifests | every field maps to canonical planning contract; no second owner | two meanings for an authority/state term |
+| M1A-01 freeze literal red fixture bundles | accepted M1A prompt plus oracle blueprint | `scripts/tests/v3/planning/**` strict input/expected bundles and manifest; documentation receives only the exact trace/receipt | all 23 bundles use the closed grammar, literal digests/error/event/state oracles and fail before reducer code exists; no second semantic owner | a symbolic oracle cannot become literal without a new policy choice |
 | M1A-02 strict schemas/canonicalization | M1A-01 | `schemas/control-plane/v3/planning/**` | meta-schema/load tests; unknown/unbounded/duplicate/non-I-JSON/version failures | current and future PAUSE cannot be separate values |
 | M1A-03 cross-record validator/DAG admission | M1A-02 | `scripts/v3/planning/validation/**` | authority/budget/privacy/source/policy/DAG conflict fixtures pass | validation needs network, operational state or model judgment |
 | M1A-04 pure decider/reducer/packet derivation | M1A-03 | `scripts/v3/planning/replay/**` | command idempotency, lease/fence, legal transition and replay digest fixtures pass | output depends on wall time, process, network or unordered iteration |
@@ -83,9 +88,12 @@ writes to a shared object family.
 
 ## Required fixtures, expected results and decisive falsifiers
 
-Each fixture is a sanitized, content-addressed input bundle with expected ordered events,
-receipts, final state/digest and error code. “No event” below permits only a typed refused command
-receipt; it forbids the requested authoritative transition.
+Each fixture is specified here by outcome/falsifier and in
+[M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md) by closed input sequence, command/event/error
+alphabet and exact symbolic oracle. M1A-01 must expand the blueprint into sanitized,
+content-addressed literal JSON with expected ordered events, receipts, final state/digest and
+error codes before reducer code. “No event” permits only a typed refused command receipt; it
+forbids the requested authoritative transition.
 
 | ID | Fixture | Expected result | Decisive falsifier |
 |---|---|---|---|
@@ -93,10 +101,10 @@ receipt; it forbids the requested authoritative transition.
 | F-M1A-002 | incomplete or unauthenticated GoalSpec | typed refusal before ArmRun/plan admission; no authoritative event | missing field/authentication receives accepted status or child work exists |
 | F-M1A-003 | child authority or budget widening | typed subset/budget refusal; parent projection unchanged | any wider path, capability, route, egress or limit appears in descendant state |
 | F-M1A-004 | cyclic or unsatisfied DAG variants | cycle and missing dependency each refuse the entire PlanRevision atomically | partial graph/node admits or topological result varies |
-| F-M1A-005 | amendment retains unaffected and invalidates stale work | new GoalSpec/PlanRevision; complete old-node disposition; compatible evidence retained; affected node invalidated; all old packets/leases stale | an affected packet survives, an unaffected result changes nondeterministically, or a node is omitted |
+| F-M1A-005 | amendment retains unaffected and invalidates stale work | the closed field/digest/set/integer compatibility grammar produces a new GoalSpec/PlanRevision and complete old-node disposition; exact compatible evidence retained, affected node invalidated, all old packets/leases stale | an affected packet survives, an unaffected result changes nondeterministically, natural-language similarity participates, or a node is omitted |
 | F-M1A-006 | stale packet after amendment or lease replacement | execute command refuses with stale goal/plan/lease epoch; no worker/effect transition | stale packet reaches `executing` or emits a success result |
-| F-M1A-007 | gate failure with genuine novelty | exact failure plus typed material diff admits exactly one bounded RetryDecision and new packet | identical packet is reissued or more than the authorized attempt is created |
-| F-M1A-008 | repetitive retry without novelty | refusal occurs before any sampler/model-turn request event; typed non-novel blocker | another attempt/model request is emitted or quota is debited |
+| F-M1A-007 | gate failure with genuine novelty | exact failure plus one valid closed-schema `NoveltyDelta` with a nonempty canonical diff admits exactly one bounded RetryDecision and new packet; the next gate, not the kernel, judges semantic effectiveness | an unknown/empty/repeated delta admits, identical packet is reissued or more than the authorized attempt is created |
+| F-M1A-008 | repetitive retry without novelty | rephrased prose with identical typed delta digests is refused before any sampler/model-turn request event; typed non-novel blocker | another attempt/model request is emitted or quota is debited |
 | F-M1A-009 | retry exhaustion | task becomes failed/blocked and escalation targets the correct Head/Owner seam | implicit retry, silent terminal success or missing failure history |
 | F-M1A-010 | missing required verifier | node/plan remains blocked; `missing` cannot satisfy a gate | `verified`, `complete` or terminal pass appears |
 | F-M1A-011 | risk-approved verifier downgrade | exact-candidate exception receipt binds authenticated Lucas authority, GoalSpec verifier-policy and operative constitution digests, reason, expiry and missing dimensions; result label remains downgraded | output reports full/cross-family independence, lacks an authority/policy digest, or applies to another candidate |
@@ -117,8 +125,9 @@ receipt; it forbids the requested authoritative transition.
 
 M1A is ready to call complete only if a future exact candidate satisfies all of these:
 
-1. a manifest enumerates every schema, command, event, state and fixture ID with no duplicates or
-   unknown entries;
+1. a red-bundle manifest frozen before reducer code enumerates every schema, command, event,
+   error, state and F-M1A-001–023 input/expected file with literal SHA-256, count and final digest,
+   with no placeholders, duplicates or unknown entries;
 2. strict schema/meta-schema tests reject unknown fields, duplicate keys, non-I-JSON, malformed
    IDs/digests, unknown versions and configured size/depth/count overflow;
 3. all F-M1A-001–023 expected receipt/event/state/digest fixtures pass twice;
@@ -156,8 +165,9 @@ machinery from bloating M1A's privileged planning slice.
 
 ## Readiness verdict
 
-The documentation contract and fixture oracle are ready for a separately authorized M1A build,
-subject to final same-family Terra adjudication and the campaign gates. Numeric production
-budgets, future PAUSE ratification, provider behavior and broader architecture superiority are
-not prerequisites because M1A encodes them only as strict inert references or explicit unknowns
-that block.
+The documentation contract and closed oracle blueprint are candidates for a separately
+authorized M1A build whose first node freezes executable red bundles. Readiness remains subject
+to the campaign's corrected candidate-range gates and same-family Terra recheck. Numeric
+production budgets, future PAUSE ratification, provider behavior and broader architecture
+superiority are not prerequisites because M1A encodes them only as strict inert references or
+explicit unknowns that block.

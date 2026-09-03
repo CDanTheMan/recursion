@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 research and construction roadmap
-status: evidence-reconciled-proposal
+status: final-reconciliation-proposal
 last-updated: 2026-09-03
 ---
 
@@ -26,9 +26,10 @@ Deliver:
 
 Gate: another agent can explain the product and create bounded implementation tasks without reading the archived chat or inventing an actor.
 
-Research status 2026-09-03: complete for the current baseline, subject to the unresolved owner
-decisions and expiring route/reference evidence in [CLAIM-LEDGER.md](CLAIM-LEDGER.md). No live
-deployment baseline or v3 performance measurement was claimed.
+Research status 2026-09-03: final reconciliation is in progress for the current baseline,
+subject to the campaign's corrected machine gates, unresolved owner decisions and expiring
+route/reference evidence in [CLAIM-LEDGER.md](CLAIM-LEDGER.md). No live deployment baseline or
+v3 performance measurement was claimed.
 
 ## Milestone 0B — focused architecture proof
 
@@ -44,9 +45,10 @@ experiment; constitutional amendment choices and remaining owner questions are e
 and multi-ARM protocols have fault/resource gates; no private canary or implementation has
 started; the contract-readiness verdict is explicit.
 
-Status 2026-09-03: research complete enough to narrow construction. The verdict is conditional:
-M1A may build only the planning schemas, validators, synthetic fixtures and in-memory replay
-model in [CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md). No performance
+Status 2026-09-03: research has narrowed the construction candidate; final corrected gate and
+adjudicator recheck are still required. If separately authorized after those pass, M1A may build
+only the planning schemas, validators, synthetic fixtures and in-memory replay model in
+[CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md). No performance
 improvement, provider capacity, cache behavior, runtime migration, terminal containment,
 scientific-research benefit or whole-v3 advantage was proved. The broad OR-015 rehearsal is
 blocked by its current multi-writer boundary; a fabric-only fixture may test vocabulary without

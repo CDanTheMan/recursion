@@ -13,6 +13,10 @@ upstream `HEAD`, opened the cited source or maintainer documentation, and opened
 2026-09-03. A branch commit is a dated research pin, not a promise of API stability. Mechanism
 descriptions below are scoped to the exact revision.
 
+Exact consequential source commits/content versions, headings, limits and expiry triggers are
+canonical in [SOURCE-REGISTER.md](SOURCE-REGISTER.md). This matrix specializes that register for
+harness comparison and license review; it does not broaden a source record.
+
 ## Matrix
 
 | Reference and inspected revision | License at revision | Observed mechanism | Adopt/adapt/reject |

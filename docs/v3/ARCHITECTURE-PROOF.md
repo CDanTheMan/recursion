@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 architecture-proof and planning-baseline result
-status: final-candidate-pending-independent-adjudication
+status: correction-candidate-after-independent-adjudication
 last-updated: 2026-09-03
 source-checkpoint: 672081fc1874ab9b7a41a14ca61adc60ecd71c95
 source-baseline: 98113d6c6d3debe2a4d207c51bb1780f7356d714
@@ -48,7 +48,7 @@ reconstructed evidence for every R1-R17 lane is in
 | `WP-V3DF-203` | `gpt-5.6-luna`, `xhigh` | Primary-source audit | Source versions, licenses, contradictory SQLite evidence, and expiry triggers corrected. |
 | `WP-V3DF-204` | `gpt-5.6-luna`, `xhigh` | Lean adversarial review | The broad first milestone was rejected and narrowed to M1A. |
 | `WP-V3DF-301` | `gpt-5.6-terra`, `xhigh` | Authority adjudication | Conditional support; added complete prompt traceability, exact downgrade binding, and a sixth constitutional conflict. |
-| `WP-V3DF-302` | `gpt-5.6-terra`, `xhigh` | Final evidence/readiness adjudication | Pending against this exact final candidate; absence is not a pass. |
+| `WP-V3DF-302` | `gpt-5.6-terra`, `xhigh` | Final evidence/readiness adjudication | Returned `adapt` on `16e16cf`: exposed objective diff/privacy failures, incomplete source precision, opaque compatibility/novelty predicates, prose-only oracles and misleading historical reviewer labels; PR-V3DF-20260903-03 repairs require recheck. |
 
 Sol, Luna, and Terra are GPT-5.6-family routes. Terra is an independent worker role here, not an
 external-family verifier. No current external-family packet was sent. An already configured,
@@ -116,6 +116,12 @@ authority/privacy/route/budget/source/policy bindings, lifecycle, valid transiti
 authority, stale/invalid behavior, replay/idempotency, retention/audit, and relationships. The
 `APQ-01` through `APQ-18` trace maps every required planning question to a normative rule, fixture,
 falsifier, and Lucas seam.
+
+Amendment compatibility is a total ordered predicate over exact digests, finite set/subset
+relations, integer limits and a versioned privacy-policy partial order; natural-language
+similarity is forbidden. Retry novelty uses one of seven closed `NoveltyDelta` variants with a
+nonempty canonical diff and named failed condition. The kernel admits structural novelty only;
+the next gate judges semantic effectiveness.
 
 The kernel, not a model, admits authoritative transitions. ARM proposals may narrow but cannot
 widen an accepted goal. DAG admission rejects cycles, absent dependencies, conflicting path
@@ -206,24 +212,30 @@ owner intent -> accepted GoalSpec -> PlanRevision -> admitted DAG/TaskNode
 ```
 
 Its six-node construction DAG, exact future allowed paths, non-goals, 23 required fixtures,
-expected results, falsifiers, and 12 machine-checkable gates are specified. It performs no
+expected results, falsifiers, and 12 machine-checkable gates are specified. The closed
+command/event/error/digest grammar and symbolic expected sequences are in
+[M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md); M1A-01 must freeze literal red bundles and obtain
+review before reducer code. It performs no
 provider call, terminal process, plugin execution, SQLite migration, publication, external effect,
 or Git mutation outside its own separately authorized future implementation task. M1B contains
 broader route, plugin, terminal, and scientific contracts; M1C contains runtime integration and
 durability.
 
-M1A is documentation-ready for a separate owner-authorized construction task after this
-campaign's final evidence/readiness adjudication passes. It has not been executed. The standalone
-prompt is [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
+M1A remains a candidate for a separate owner-authorized construction task after the corrected
+candidate-range gates and Terra recheck pass. Its first construction node, not this campaign,
+creates executable fixture bundles. M1A has not been executed. The standalone prompt is
+[prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
 
 ## Source and decision discipline
 
 The exact source revisions, licenses, locators, limitations, and revalidation triggers live in
-[REFERENCE-MATRIX.md](REFERENCE-MATRIX.md), [R1-R17-EVIDENCE.md](R1-R17-EVIDENCE.md), and
-[CLAIM-LEDGER.md](CLAIM-LEDGER.md). Search snippets and model agreement are not evidence. A source
+[SOURCE-REGISTER.md](SOURCE-REGISTER.md), [REFERENCE-MATRIX.md](REFERENCE-MATRIX.md),
+[R1-R17-EVIDENCE.md](R1-R17-EVIDENCE.md), and [CLAIM-LEDGER.md](CLAIM-LEDGER.md). Search snippets
+and model agreement are not evidence. A source
 change, affected dependency upgrade, API capability change, correction/retraction event, failed
 fixture, or contradictory primary source invalidates the dependent conclusion until reverified.
 
 Recommendations remain falsifiable and subordinate to Lucas. The final independent adjudicator's
-packet and the completed gate ledger must be recorded in the campaign artifact before this
-document can move from final candidate to evidence-reconciled.
+blocking dissent is preserved in the campaign artifact. The PR-V3DF-20260903-03 correction must
+pass the exact procedure in [VALIDATION.md](VALIDATION.md) and receive the requested Terra recheck
+before this document can move to evidence-reconciled.

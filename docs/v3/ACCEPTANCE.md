@@ -40,9 +40,11 @@ This document defines categories and provisional gates. Numeric performance budg
 
 ## M1A autonomous-planning gate
 
-M1A is accepted only against the 23 fixture oracles and twelve machine gates in
-[M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md). The canonical lifecycle and transition
-rules are [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md); this section does not redefine them.
+M1A is accepted only against the 23 fixture outcomes/falsifiers and twelve machine gates in
+[M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md), after M1A-01 freezes the literal red
+bundles required by the closed [M1A fixture-oracle blueprint](M1A-FIXTURE-ORACLES.md). The
+canonical lifecycle and transition rules are
+[AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md); this section does not redefine them.
 
 The required closure is: authenticated OwnerIntent → Owner-accepted GoalSpec → admitted immutable
 PlanRevision/DAG → ready TaskNode → deterministically derived bounded WorkPacket → exact

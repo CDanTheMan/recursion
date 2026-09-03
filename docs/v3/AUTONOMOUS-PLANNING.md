@@ -6,10 +6,10 @@ last-updated: 2026-09-03
 
 # Recursion v3 autonomous-planning contract
 
-This is the canonical specification for autonomous-planning objects, ownership, admission,
-transition and replay. Other v3 documents project this contract and link here; they must not
-redefine it. The contract is a construction-ready proposal, not an operative runtime, an Owner
-ratification of Option 2, or evidence that a model can plan correctly.
+This is the canonical specification candidate for autonomous-planning objects, ownership,
+admission, transition and replay. Other v3 documents project this contract and link here; they
+must not redefine it. The contract is not an operative runtime, an Owner ratification of Option
+2, or evidence that a model can plan correctly.
 
 Normative words (`MUST`, `MUST NOT`, `SHOULD`) describe the proposed v3 contract. Current
 constitutional authority continues to prevail over it. In particular, the current PAUSE halts
@@ -132,6 +132,41 @@ The new `PlanTransition` must list every prior node exactly once as retained, in
 quarantined, superseded, cancelled or already-terminal-compatible. An incomplete disposition map
 fails closed.
 
+### Closed amendment-compatibility grammar
+
+`compatible` is not a model judgment. The kernel receives a strict `CompatibilityInput` for each
+old node containing these canonical fields:
+
+`old_node_digest`, `new_node_digest`, `semantic_definition_digest`, sorted `input_digests`,
+`output_schema_digest`, sorted `source_digests`, sorted read/write `resource_paths`, sorted
+`effect_keys`, authority/capability sets, privacy/egress class, route-capability set, numeric
+budget/attempt limits, gate IDs plus gate-policy digests, verifier-policy digest, constitution
+policy digest, prior result/effect state and consumed budget.
+
+The only outputs are `retain-definition`, `retain-terminal`, `invalidate`, `quarantine`,
+`supersede` or `cancel`. Evaluation is ordered and total:
+
+1. unknown schema/policy, digest mismatch, missing field or prior ambiguous/unauthorized effect
+   yields `quarantine`;
+2. changed semantic definition, inputs, output schema, sources, resource paths or effect keys
+   yields `invalidate` or `supersede` when an explicit replacement ID exists;
+3. any node authority/route/path/effect set not a subset of the new GoalSpec, privacy/egress less
+   restrictive than the new goal, consumed-plus-remaining budget above the new limit, or an
+   attempt count above the new maximum yields `invalidate`;
+4. an active/nonterminal old node satisfying steps 1–3 yields `retain-definition`; its old packet
+   and leases are still stale and a new packet is mandatory;
+5. a terminal node additionally requires identical gate and verifier-policy digests, every new
+   required gate ID present with `pass` against the exact old candidate/evidence digests, and no
+   new or stronger gate; only then is `retain-terminal` permitted; otherwise retain its evidence
+   as historical input but `invalidate` completion; and
+6. a prepared-undispatched effect may be `cancel`; an observed immutable effect receipt is
+   retained as evidence but cannot by itself retain task authority.
+
+Set inclusion uses sorted exact identifiers; numeric comparison uses exact integers; privacy
+classes use the versioned policy's finite partial order. No natural-language similarity,
+embedding, model score, wall clock or provider observation participates. M1A uses only known
+fixture policy versions; an incomparable class fails closed.
+
 ## Plan and DAG admission
 
 An ARM may create/revise a DAG only while holding the current ArmRun executive lease and only
@@ -193,20 +228,29 @@ Failed gates return the exact GateResult and evidence digest to the ARM. Missing
 required gates block; a risk-approved verifier downgrade is a distinct exception receipt and
 must state the missing independence dimensions. It is never reported as full independence.
 
-A retry is admissible only when the ARM identifies one typed novelty with a content diff:
+A retry is admissible only with one strict `NoveltyDelta`. Its closed `kind` and required fields
+are:
 
-- new authoritative evidence;
-- a corrected causal hypothesis;
-- a materially changed execution strategy;
-- a route replacement with a newly relevant declared capability, not merely a different name;
-- a narrowed task;
-- a repaired dependency/environment with a validating receipt; or
-- an Owner amendment.
+| `kind` | Required canonical fields and mechanical admission rule |
+|---|---|
+| `evidence-added` | failed gate IDs; new source/evidence digests not present in any prior attempt; exact evidence type/locator; no replacement of existing history |
+| `hypothesis-replaced` | failed gate IDs; unequal old/new hypothesis digests; enumerated changed proposition IDs |
+| `strategy-changed` | failed gate IDs; unequal old/new bounded action-graph digests; sorted changed operation IDs; unchanged goal/resource/effect ceiling |
+| `route-capability-changed` | failed route/blocker IDs; old/new descriptor digests; sorted newly observed capability IDs required by the named failure; same allowed route/account/spend envelope |
+| `task-narrowed` | failed gate/blocker IDs; old/new task digests; machine-proved strict subset for capabilities, paths, effects, privacy/egress and budgets; no new required output |
+| `dependency-repaired` | blocker ID; new immutable repair receipt digest; the named deterministic dependency predicate now passes |
+| `owner-amended` | old/new GoalSpec version/digest, accepted Owner command receipt and amendment disposition digest; retry only if the new plan retains the node definition |
 
-The kernel refuses rephrasing, identical inputs/actions, unsupported route swaps or evidence
-already consumed as non-novel before another model turn. It also checks task/goal attempt limit,
-aggregate budget, remaining route authorization, PAUSE and no ambiguous effect. Exhaustion
-creates a Blocker and Escalation rather than an unbounded loop.
+The delta also contains `prior_attempt_digest`, `addresses_failure_ids`, `delta_digest` and
+`novelty_schema_version`. The kernel admits it only when the kind and fields are known, the
+canonical diff is nonempty, every addressed failure belongs to the prior attempt, the same delta
+digest was not consumed before, the structural rule above passes, and attempt/budget/route/PAUSE/
+effect conditions still pass. It does **not** decide that a new hypothesis is true or a strategy
+is wise; the next declared gate tests that semantic proposal. Rephrasing with identical typed
+digests, a route name change without a required capability delta, or previously consumed evidence
+is mechanically non-novel and is refused before another model turn.
+
+Exhaustion creates a Blocker and Escalation rather than an unbounded loop.
 
 The ARM MUST propose a new PlanRevision instead of retrying when the DAG/dependency/path/effect
 ownership changes, an amendment or stale source invalidates the plan, the planned verifier/route
