@@ -1,0 +1,121 @@
+---
+title: Recursion v3 executive model hypothesis
+status: hypothesis
+last-updated: 2026-09-02
+---
+
+# Recursion v3 executive model hypothesis
+
+## Actor definitions
+
+### Head Hermes
+
+Head Hermes is the single accountable portfolio executive beneath Lucas. It:
+
+- preserves owner intent and portfolio context;
+- compiles accepted goals and strategic constraints;
+- starts, monitors, pauses, resumes, replaces, and closes ARM runs;
+- allocates aggregate capacity and review attention across goals;
+- evaluates semantic escalations and proposes amendments;
+- never edits product code or bypasses the deterministic actuator.
+
+### ARM executive
+
+An ARM is a durable executive bounded to one versioned GoalSpec. It:
+
+- orients from exact repository and canonical state;
+- creates and maintains the implementation DAG;
+- delegates bounded research, implementation, testing, review, and integration work;
+- chooses among only the routes and resources permitted by its inherited policy;
+- responds tactically to evidence and failures;
+- checkpoints its state and reports progress or blockers upward;
+- cannot create unrelated goals, expand authority, merge protected branches, or deploy.
+
+### Delegated agent
+
+A delegated agent receives one immutable WorkPacket with a repository/worktree, allowed paths, non-goals, capabilities, resource envelope, budget source, output contract, and machine-checkable gate. It does not reinterpret the parent goal.
+
+## Logical identity is not a model
+
+These events must remain distinct:
+
+- **model escalation:** the same logical actor selects a different approved model;
+- **provider failover:** the same segment uses another authorized delivery route;
+- **delegation:** an actor creates a bounded child actor or harness session;
+- **authority escalation:** a question moves from worker to ARM to Head to Lucas;
+- **executive replacement:** a new lease holder resumes the same logical role from a validated checkpoint.
+
+Telemetry, budgets, context, and audit records must never collapse these into a generic "model changed" event.
+
+## Profiles and runs
+
+`ExecutiveProfile` is reusable configuration: task-domain strengths, allowed model suites, default planning depth, delegation limits, context strategy, review policy, and resource posture.
+
+`ArmRun` is ephemeral in scope but durable in state: one goal version, one active executive lease, exact authority, current plan, delegated descendants, capacity reservations, checkpoint lineage, open blockers, and terminal evidence.
+
+This separation preserves project personalization without creating an immortal project conversation whose stale assumptions and context grow indefinitely.
+
+## Model policy
+
+Both Head and ARM use configurable model suites rather than a universal ladder. Candidate suites may include architecture, security, backend, frontend, mechanical refactoring, documentation, compaction, integration, and verification.
+
+Routing is quality-first adaptive by default for the private deployment:
+
+1. Establish the task's quality floor, privacy class, tool needs, and continuity risks.
+2. Select the least scarce eligible route expected to meet that floor.
+3. Prefer an existing healthy session when its context affinity materially reduces work.
+4. Hold a route stable between safe checkpoints.
+5. Escalate after uncertainty, repeated failure with new evidence, verifier disagreement, or task-complexity growth.
+6. Do not change billing basis or consume an unapproved pool implicitly.
+
+Users may choose `quality-wait`, `adaptive`, `throughput`, `cost-first`, `maximum`, or custom policies.
+
+## Safe checkpoints
+
+A checkpoint is machine-determined, not merely asserted by the model. It requires:
+
+- no unbounded or partially applied external side effect;
+- repository and worktree state recorded exactly;
+- current task, last completed operation, and next intended operation recorded;
+- child leases and process state known;
+- consumed usage and remaining authority reconciled;
+- context capsule validated and rehydratable;
+- any atomic command allowed to reach its bounded transaction boundary unless an emergency kill is issued.
+
+Ordinary model/config changes apply at the next checkpoint. A forced swap requests the earliest valid checkpoint. Emergency kill is separate and may sacrifice the in-flight operation to contain a compromised run.
+
+## Capacity exhaustion
+
+When subscription capacity is exhausted mid-task:
+
+- admit no new model turn on that pool;
+- allow only the already-started final model turn to finish its immediate bounded thought/action;
+- record repository state and a resumable checkpoint;
+- do not infer permission to finish the entire plan;
+- use metered fallback only when the parent goal explicitly carries that authority;
+- treat the default approved metered amount as one aggregate parent-goal budget, not a per-task allowance;
+- if fallback spending was activated solely by subscription exhaustion, end that fallback authority with the originating task; otherwise it expires with the parent goal.
+
+The precise enforcement mechanism for "already-started final turn" must be researched per harness because many CLIs expose only process/session boundaries, not model-turn internals.
+
+## Refusal and continuity
+
+Provider refusal is a typed outcome, not automatically proof of malicious intent or model incapacity. Recursion may offer configurable cross-family retry for suspected false positives, but public installations default it off to avoid unexpected quota use. Retries remain inside the same GoalSpec, privacy, egress, permission, and budget boundaries. Recursion must not describe or implement model switching as a way to defeat a legitimate safety or legal boundary.
+
+Refusals produce:
+
+- a normal telemetry event when recovery succeeds;
+- an operator alert when work is blocked, policy may be incompatible, or repeated fallback consumes meaningful capacity;
+- escalation to Head Hermes when semantic reframing or authority review is needed.
+
+## Executive lease and split brain
+
+Exactly one actor may hold the decision lease for a given Head or ArmRun at a time. Advisory models may produce analyses, but only the lease holder may propose the next authoritative plan transition. Replacement requires a validated capsule, lease transfer event, and unchanged authority envelope.
+
+## Open questions
+
+- Should Head and ARM share one native loop implementation or use distinct optimized loops?
+- How should an ARM expose native nested delegation from Cursor, Codex, Hermes, or OpenCode without losing descendant lineage?
+- Which events are stable enough to become the v3 public executive protocol?
+- When is a long-lived provider session more valuable than a fresh session with a compact capsule?
+- How should planning models be authorized under a future provider-neutral amendment to the current constitution?
