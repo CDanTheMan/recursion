@@ -59,6 +59,26 @@ Distributed side effects cannot be assumed exactly once. V3 instead requires:
 
 Each actuator must publish and test a crash matrix for failure before prepare, after prepare, during the external call, after the external effect but before receipt, and after receipt but before projection. "Exactly once" is not an acceptance claim; the required property is that duplicate, omitted, and ambiguous outcomes are detected, bounded, and reconciled without unauthorized repetition.
 
+The event contract for the first rehearsal includes aggregate type/id, contiguous sequence,
+event and command ids, idempotency key, causation/correlation ids, writer id, monotonic fence
+epoch, logical/controller time, previous/current event digests, schema version and typed payload.
+The lease projection carries task/assignment/lease/attempt identities, status, recovery state,
+expiry, reservation, result digest, source digest and last event sequence/digest. Exact duplicate
+commands return the prior outcome; conflicting duplicates and stale epochs fail without a new
+event.
+
+The required import/replay progression is:
+
+```text
+UNIMPORTED -> SNAPSHOTTED -> VALIDATED -> LEGACY_WRITERS_QUIESCED
+ -> FENCE_ESTABLISHED -> IMPORTED -> REPLAYED -> SHADOW_READ_VERIFIED
+ -> V3_OWNER_ACTIVE -> CHECKPOINTED
+```
+
+Malformed, conflicting, torn, unauthenticated or stale input becomes `REFUSED` or
+`RECOVERY_REQUIRED`. Projection parity is not replay parity: equal rendered state does not prove
+equal event order, crash behavior or writer exclusion.
+
 ## Artifact store
 
 Large prompts, transcripts, repository maps, patches, logs, gate output, and context capsules live outside hot relational rows. The database stores project-scoped identity, digest, type, size, classification, owner project, encryption status, dependencies, lifecycle state, and locator. Raw digests and exact sizes are not exposed across project or public observer boundaries.
@@ -103,6 +123,21 @@ has reached a recorded backup-expiry boundary. The next research campaign must s
 states for key granularity, backup expiry, tombstone disclosure, disconnected nodes and legal
 holds; it may refine mechanics but must not reopen the owner-selected direction as model opinion.
 
+Deletion is a proof-state machine rather than a boolean:
+
+```text
+requested -> local-content-deleted -> key-destroyed -> propagation-pending
+ -> verified-complete | partial | blocked | legal-hold | expiry-bound
+```
+
+Completion requires either evidence from every recoverable copy or a recorded backup-expiry
+boundary. A tombstone records policy/version, artifact class, responsible component, request and
+disposition times and non-sensitive copy dispositions. It must not retain raw content or an
+unnecessarily equality-revealing global digest. Shared keys, deduplication, delete markers,
+soft-delete states, replicas, provider backups and disconnected spools are separate negative
+fixtures. NIST SP 800-88 cryptographic erase guidance informs media sanitization but does not
+prove that every logical/provider copy is gone.
+
 ## Performance posture
 
 - One bounded writer path; many read-only projections.
@@ -129,6 +164,15 @@ V2 Markdown, JSON, and JSONL state should be imported through versioned adapters
 For a period, v3 may render legacy-compatible read-only views. Dual writable sources of truth are forbidden.
 
 The evidence-backed v2 source map and single-writer strangler sequence are recorded in [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md). Migration must prove at each stage that exactly one path owns assignment, state transition, publication, and each external effect.
+
+Current source falsifies a broad “execution-attempt/lease is already one aggregate” claim.
+Task lifecycle, assignment persistence, run evidence, accepted-result ledger and fabric journal
+have separate writers, `work.sh` retains a direct task-state fallback, and no common monotonic
+fence epoch spans them. The safe first construction target is therefore a **fabric-only state
+contract** using `DurableFabricStore` with immutable assignment input and no task/run/result,
+remote or publication writes. It is not a local cutover. The full owner-selected rehearsal
+remains blocked until its aggregate boundary, complete writer allowlist and fencing protocol are
+machine-checkable.
 
 ## Backup and recovery
 

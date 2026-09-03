@@ -86,7 +86,11 @@ Compaction is adaptive. Signals may include:
 - expected route/provider switch;
 - memory or latency pressure.
 
-The controller chooses whether to reuse the native session, compact within it, start a fresh session with a capsule, or escalate to a specialist compactor. It must avoid needless churn that forfeits provider cache affinity.
+The deterministic context governor owns the one authoritative compaction transition for a route
+epoch. It chooses whether to reuse the native session, request a route-native transform, start a
+fresh session with a capsule, or call a specialist compactor. Native/session and plugin
+compactors return candidate artifacts only; they cannot advance the authoritative epoch. The
+governor must avoid needless churn that forfeits provider cache affinity.
 
 ## Compaction Fidelity Contract
 
@@ -101,7 +105,10 @@ No compacted epoch becomes authoritative unless deterministic validation confirm
 
 Independent model auditing is configurable for high-risk goals. Hidden chain of thought is neither required nor persisted; recoverable state consists of decisions, evidence, actions, uncertainties, and next steps.
 
-## Context Capability Descriptor
+## RouteCapabilityDescriptor
+
+`RouteCapabilityDescriptor` is the canonical schema name for the maintainer-owned context
+capability descriptor named in the owner ruling. Other prose labels are descriptive only.
 
 Every engine/provider adapter publishes a maintained, versioned descriptor covering:
 

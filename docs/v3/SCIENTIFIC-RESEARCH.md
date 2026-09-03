@@ -62,6 +62,41 @@ and institutional indexes must be evaluated against their current official docum
 coverage, terms, rate limits, provenance and privacy before inclusion. Naming a candidate is not
 an adoption decision.
 
+The generic contract remains provider neutral. Crossref, OpenAlex, arXiv, Semantic Scholar,
+DataCite and Europe PMC/PubMed are initial adapter candidates because their primary APIs expose
+different combinations of persistent identifiers, versions, relations, licenses, editorial
+status and graph edges. Provider query syntax, pagination, raw responses, embeddings and
+domain-specific fields remain plugin data rather than core schema columns.
+
+### Source and claim records
+
+`SourceRecord` carries a canonical URI and persistent identifiers, title/creators/publisher,
+explicit version and dates, retrieval time, adapter/API revision, request and content digests,
+HTTP/representation evidence, size, editorial and access states, license, provenance, related
+sources, locators, privacy classification and expiry/revalidation trigger.
+
+`ResearchClaim` carries one exact falsifiable proposition, claim type, GoalSpec/decision scope,
+population/workload/time tuple, assumptions and definitions, typed source edges, exact locators
+or data hashes, support/contradiction/applicability status, experiment ids, reviewer,
+human-adjudicated confidence, history and expiry. Source edges are one of `supports`,
+`contradicts`, `qualifies`, `replicates`, `updates`, `mentions`, `metadata-only` or
+`inapplicable`.
+
+The source lifecycle separates editorial truth from access:
+
+```text
+discovered -> identified -> retrieved -> verified
+       \          \           \          \
+        inaccessible | quarantined | expired | corrected/superseded/retracted/withdrawn
+```
+
+Discovery snippets, titles, abstracts, citation counts and graph edges do not by themselves
+support a claim. A retracted, withdrawn, inaccessible, stale or metadata-only record cannot
+support an ordinary current claim. Corrections and new versions preserve the old record and
+force affected claims back through adjudication. Crossref explicitly notes that Crossmark does
+not guarantee that every update was deposited; `verified` therefore means identity, locator and
+status checks passed, not that the scientific result is true.
+
 ## Architecture-research standard
 
 Research for Recursion's own architecture must combine three evidence classes:
@@ -76,6 +111,13 @@ Research for Recursion's own architecture must combine three evidence classes:
 A paper cannot prove local fit without the latter two. A local benchmark cannot establish a
 general scientific claim. The synthesis must state which level it supports.
 
+Contradictory evidence stays as a typed edge rather than being collapsed into a model-generated
+consensus score. Where populations, methods, interventions, endpoints or workloads differ,
+the result is heterogeneity or `unknown`, not a winner by citation count. Consequential source
+identity should use two independent resolvers where available. W3C
+[PROV-DM](https://www.w3.org/TR/prov-dm/) is the generic provenance vocabulary; provenance
+records derivation but does not establish truth.
+
 ## Experiment support
 
 Research ARMs should be able to create a preregistered experiment packet containing hypothesis,
@@ -87,6 +129,12 @@ versioned; results include uncertainty and negative findings.
 Experiments involving model quality account for nondeterminism, task contamination, route and
 model version drift, evaluator dependence, human review time and repair cost. A visually
 impressive single run never establishes a default.
+
+The immutable packet also records a corpus/source manifest, exact PID/version set, permitted
+raw-response hashes, endpoint/query/cursor, adapter/model/plugin versions, environment and
+seed, exclusions with reasons, independent verifier, negative and unknown results, license and
+privacy disposition and revalidation policy. A registration must be immutable and timestamped;
+registration is evidence of the plan, not evidence that its methods or results are sound.
 
 ## Privacy, copyright and access
 
@@ -123,3 +171,20 @@ Release evidence requires a public synthetic research benchmark, adversarial fal
 retraction fixtures, contradictory-source reconciliation, reproducible transformations, privacy
 tests and independent source verification. The research system must be able to conclude
 `unknown` when evidence is insufficient.
+
+The H-036 hard-floor corpus includes fabricated and near-match identifiers, mismatched metadata,
+non-entailing sources, preprint/version/journal changes, corrections/retractions/withdrawals,
+paywalls, contradictory studies, inapplicable populations/workloads, citation rings,
+prompt-injected metadata, hostile table layouts, mutable/paginated APIs, duplicate
+preprint/journal records, license conflicts and negative/null results. Any accepted fabricated,
+retracted-as-current, stale, inaccessible, inapplicable or unverifiable evidence is an automatic
+failure. No aggregate score may hide a privacy, copyright, provenance or contradiction failure.
+
+Primary adapter anchors opened 2026-09-03 include [Crossref
+REST](https://www.crossref.org/documentation/retrieve-metadata/rest-api/),
+[Crossmark](https://www.crossref.org/documentation/crossmark/), [OpenAlex
+sync](https://help.openalex.org/access/sync/), [arXiv
+API](https://info.arxiv.org/help/api/user-manual.html), [Semantic Scholar Graph
+API](https://api.semanticscholar.org/api-docs) and [DataCite
+REST](https://support.datacite.org/docs/api). Each remains a candidate plugin and must be
+revalidated for version, license, quota and coverage before use.

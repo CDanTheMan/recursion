@@ -67,8 +67,10 @@ not additional supervisors or task registries. See
 Shared multi-ARM conversations use a Head-routed room or an event-mediated workflow. A named ARM
 may hold one bounded workflow-step coordination lease; Head retains overall goal, membership,
 authority, conflicts, lifecycle and strategic escalation. A `supervisor` is a temporary role
-held by Head or that named ARM inside a GoalSpec, never an additional AI ARM Manager. Exact
-message and failure semantics remain research. See [INTERACTION-SURFACES.md](INTERACTION-SURFACES.md).
+held by Head or that named ARM inside a GoalSpec, never an additional AI ARM Manager. Transport
+normalization and the bounded step lease now have requirements contracts; usefulness, conflict
+resolution and delayed-message behavior remain experimental. See
+[INTERACTION-SURFACES.md](INTERACTION-SURFACES.md).
 
 ## Core object model
 
@@ -85,7 +87,11 @@ message and failure semantics remain research. See [INTERACTION-SURFACES.md](INT
 | `CapacityPool` | Subscription, metered API, or local compute entitlement and observed availability |
 | `PausePolicy` | Versioned `checkpoint`, `interrupt`, `drain` or emergency behavior by effect class |
 | `PermissionProfile` / `CapabilityGrant` | Configurable authority, including explicit maximum `sovereign` and optional `grant-admin` |
+| `ActionAdmission` / `EffectReceipt` | Fenced before/after boundary for a typed effect, including explicit ambiguity and reconciliation |
+| `GrantMutationReceipt` | Attributable before/after authority change with step-up and policy/epoch bindings |
 | `ContextCapsule` | Model-independent, content-addressed handoff manifest |
+| `SourceRecord` / `ResearchClaim` | Versioned source identity plus falsifiable claim, contradiction, applicability and revalidation edges |
+| `ExperimentRecord` | Immutable workload, baseline/treatment, hard floors, measurements and result binding |
 | `EvidenceBundle` | Exact source, diff, gates, observed behavior, and verifier receipt |
 | `PublicationIntent` | Passed candidate proposed to the only approved publishing path |
 
@@ -118,10 +124,23 @@ OpenCode, Hermes, and future harnesses remain optional peer engines behind the s
 A Recursion-owned native agent turn loop is a separately measured capability, not a prerequisite
 for calling v3 a native harness or for building the first kernel.
 
+Every engine adapter negotiates a versioned capability descriptor for thread/turn identities,
+stream ordering, tool-intent and settlement boundaries, approval bridging, interrupt semantics,
+process ownership, checkpoint/resume, native compaction, usage evidence and stale-notification
+filtering. Unsupported invariants fail closed for that route. External engines may own provider
+sampling, provider-specific wire/tool syntax and native retry/stream parsing; they do not own
+Recursion actor/goal/task identity, authority, budgets, PAUSE epochs, process lifetime, evidence,
+canonical events or publication.
+
 The product direction still permits a larger native harness later. It earns that scope only by
 demonstrating a required quality, continuity, security or resource improvement that external
 engines plus adapters cannot supply. See the compared options and falsifiers in
 [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md).
+
+“Optimized” remains an objective, not a measured property. Option 2 is conditional on the typed
+adapter contract and on a complete writer/migration boundary; a generic wrapper around arbitrary
+opaque CLIs would not satisfy it. A matched Option 1/Option 2/minimal-native-loop spike must show
+a declared quality, continuity, security or resource benefit before the native loop expands.
 
 ## Scientific research capability
 
@@ -167,6 +186,12 @@ The destination may be a re-foundation; construction should still use a strangle
 5. Compare results and rollback behavior against v2.
 6. Move additional transitions only when their equivalence or improvement is proven.
 7. Delete duplicated paths only after replay and migration gates pass.
+
+The 2026-09-03 writer audit blocks step 4 at the broad aggregate boundary: task lifecycle,
+assignment, run/evidence, accepted-result and fabric stores do not share a common fence epoch.
+Milestone 1 may use an isolated fabric-only synthetic fixture to prove contract vocabulary, but
+that fixture is neither a cutover nor completion of the owner-selected rehearsal. See
+[ARCHITECTURE-PROOF.md](ARCHITECTURE-PROOF.md).
 
 ## Coordinator fit
 

@@ -68,6 +68,26 @@ already explicit `grant-admin` capability authorizes the sovereign actor to perf
 mutation. Ordinary model, cache, quality, and concurrency preferences may override normally
 within inherited bounds.
 
+### Capability grant contract
+
+A grant binds issuer and subject, audience/installation, signing-key identity, parent digest,
+delegation depth, GoalSpec and policy versions, exact capability/effect verbs, project/source/
+path/branch/host/account/pool/endpoint/privacy scope, resource/spend/rate limits, not-before and
+expiry, revocation epoch, lease/fencing token, authentication/step-up receipt and opaque
+credential references. Child scope, limits, lifetime and delegation are subsets of the parent.
+`grant-admin` is explicit, never implied by an edition or inherited ambiently.
+
+Every grant mutation has one command id and a `GrantMutationReceipt` with exact before/after
+digests, authenticated mutator, authorization chain, step-up evidence, policy and admission
+epochs, fencing token, reason, result and canonical event sequence. The kernel rejects stale
+epochs, replayed nonces, expired/revoked parents, widening outside the installation maximum,
+missing before/after receipts and any attempt to bundle trust-root, constitution or
+audit-erasure authority into ordinary grant administration.
+
+This contract is schema-ready as a fail-closed requirements shape. Defaults for the installation
+maximum, step-up cadence and which audit-retention/erasure mutations sovereign may perform still
+require Lucas; no schema may choose those policy answers implicitly.
+
 ## Local versus remote boundary
 
 Remote execution requires non-disableable identity, integrity, replay protection, and authorization invariants. These protect connections between nodes; they do not gate local use of the open-source program.
@@ -90,6 +110,21 @@ The full conformance suite is mandatory for official v3 release evidence and opt
 - A disconnected node may finish only the local bounded operation explicitly permitted by its last valid grant and spool signed evidence. After reconnection, the controller revalidates the GoalSpec version, fencing token, lease, and PAUSE/revocation state before admitting that evidence or any derived action. It cannot widen scope or publish while disconnected.
 
 An owner authenticated on both devices may execute commands remotely when both devices, the goal, and the requested capability are authorized.
+
+The proposed future pause state uses a monotonically advancing admission epoch:
+
+```text
+RUNNING(E0) -> QUIESCING(mode,E1) -> PAUSED(mode,E1)
+PAUSED(E1)  -> RUNNING(E2) | EMERGENCY_HOLD
+```
+
+Every action binds command, principal, GoalSpec/grant/policy digests, admission epoch, fencing
+token, effect class, idempotency key and deadline. Precedence is emergency, revocation,
+interrupt, then checkpoint. An action admitted before an epoch change but not yet executed is
+stale and fails closed. An already accepted external effect becomes ambiguous and is reconciled
+by provider identity/status; it is never blindly retried or described as rolled back. These are
+future-contract mechanics only: current `CONTROL_PLANE.md` immediate PAUSE remains operative
+until a reviewed amendment says otherwise.
 
 ## Credentials
 

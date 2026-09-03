@@ -112,6 +112,47 @@ epoch, parent process group, cancellation capabilities and recovery policy.
 Persistence must remain lightweight. Detached output is bounded and stored by retention class;
 slow or absent terminals cannot backpressure the canonical writer or cause unlimited buffers.
 
+### Versioned client protocol
+
+The requirements contract is ready to freeze around a daemon epoch and monotonically
+increasing per-stream cursor. Wire encoding and numeric limits remain experimental.
+
+```text
+HELLO    protocol version, client/actor/stream, last epoch/cursor, dimensions, capabilities
+WELCOME  epoch, stream, replay floor, snapshot cursor, input lease, negotiated capabilities
+SNAPSHOT current terminal state and modes at one durable cursor
+EVENT    epoch, cursor, class, actor/task/process identity, payload
+ACK      last accepted cursor
+CREDIT   bounded byte and event allowance
+INPUT    idempotent command id, active input lease, raw bytes
+RESIZE   idempotent command id, active resize lease, columns and rows
+RESET    replay gap, current snapshot and new cursor
+```
+
+One active lease owns input and resize; other clients are passive readers. The process broker
+drains PTY output even with no clients. Each client has bounded queues and explicit credit.
+Presentation frames may be coalesced, but command, lease, process-exit, termination and
+canonical state events may not be dropped. A slow client disconnects with its final cursor and
+later receives replay or `RESET + GAP`; reconnect never relaunches a process.
+
+### Native process boundaries
+
+- Windows uses ConPTY as the UTF-8/VT byte transport and a restrictively secured local IPC
+  endpoint. A Job Object is the primary process-scope kill/accounting boundary, but breakaway
+  and alternate creation paths are explicit negative fixtures. Microsoft documents that the
+  pseudoconsole host is responsible for display and input; this does not make ConPTY the actor
+  or process owner.
+- Linux uses a PTY plus session/foreground process groups for terminal semantics, with a cgroup
+  v2 or systemd scope as the stronger descendant and resource boundary and pidfds where
+  available. `setsid()`, cgroup migration and privilege boundaries are negative fixtures.
+- SSH, tmux, Zellij, Git Bash/MSYS2 and Neovim are clients or adapters. None is canonical
+  process identity. Zellij resurrection may rerun commands, and Neovim session restoration may
+  restart terminal jobs; both behaviors must be distinguished from broker reconnection.
+
+The platform evidence supports these primitives, not the unqualified claim that every child
+can be contained. “Full-tree termination” is an acceptance result obtained from the supported
+OS matrix.
+
 ## Configuration in the terminal
 
 The TUI renders from the same versioned configuration schema as files and one-shot commands.
@@ -185,3 +226,18 @@ grandchild processes, high-output workers, resize/Unicode tests, slow clients, s
 configuration edits, PAUSE/kill races, Windows/Linux parity, resource soak and a screen-reader
 plain-text workflow. The acceptance decision must include failure evidence, not only a polished
 demo.
+
+The minimum `PERF-010` matrix uses 0, 1, 5, 10 and 20 passive views under idle and high-output
+loads. It records p50/p95/p99 input and frame latency, CPU, RSS, wakeups, IPC bytes, queue
+high-water marks, coalesced presentation frames, process/handle counts and canonical append
+delay. The contract fails if views multiply model/worker calls, block canonical writes, cause
+unbounded memory, corrupt input, lose durable events or turn detach/reconnect into relaunch.
+
+Primary platform anchors opened 2026-09-03 are Microsoft
+[pseudoconsole](https://learn.microsoft.com/en-us/windows/console/pseudoconsoles) and
+[Job Object](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)
+documentation, Linux kernel [cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html),
+POSIX [terminal](https://pubs.opengroup.org/onlinepubs/007904975/basedefs/xbd_chap11.html) and
+[`kill`](https://pubs.opengroup.org/onlinepubs/009604499/functions/kill.html) specifications,
+and [SSH connection protocol](https://www.rfc-editor.org/rfc/rfc4254.html). Their applicability
+is limited by the declared platform version and actual isolation available to the broker.

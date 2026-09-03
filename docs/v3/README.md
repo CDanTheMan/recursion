@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 evidence-grounded design workspace
-status: owner-direction-recorded-research-ready
+status: architecture-proof-complete-conditional-construction
 last-updated: 2026-09-03
 authority: non-normative until ratified
 ---
@@ -32,6 +32,7 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 |---|---|
 | [PRODUCT.md](PRODUCT.md) | What is v3, who is it for, and what is outside it? |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How do Head Hermes, ARMs, workers, and the kernel fit together? |
+| [ARCHITECTURE-PROOF.md](ARCHITECTURE-PROOF.md) | Which R1–R17 claims survived the focused campaign, what remains unproved, and is the contract skeleton ready? |
 | [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md) | Which runtime foundations were compared, what is recommended, and what would falsify it? |
 | [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md) | What v2 actually contains, what is source-only, and how can state move without two writers? |
 | [GLOSSARY.md](GLOSSARY.md) | What do the canonical actors, objects, routes and events mean, and who owns them? |
@@ -75,7 +76,8 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 1. The Owner Intent Ledger is non-lossy; summaries never replace exact directives.
 2. Chat transcripts are provenance, not canonical runtime state.
 3. Claims about provider behavior, model availability, pricing, cache semantics, or subscription access expire unless revalidated against primary sources.
-4. V2 is the measured baseline and a source of proven invariants, not a ceiling on v3.
+4. V2 is the pinned source/test comparison baseline and a source of tested invariants, not a
+   measured performance/deployment baseline or a ceiling on v3.
 5. V3 may be ambitious in destination while remaining incremental, reversible, and independently gated in construction.
 6. Configuration is a product feature, but integrity, attribution, privacy, budget authority, and publication provenance are not optional implementation details.
 7. The public repository must never contain credentials or private-project content. The
@@ -84,12 +86,10 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 
 ## Immediate next step
 
-Lucas has answered both initial owner queues, including the PAUSE default, sovereign self-grant,
-verifier fallback, bounded ARM coordination, edition defaults, first migration rehearsal,
-retention, terminal platforms and private-canary task. The remaining evidence questions are
-recorded in [DECISION-REGISTER.md](DECISION-REGISTER.md); the next step is the focused
-[RESEARCH-AGENDA.md](RESEARCH-AGENDA.md) campaign using the owner-selected Sol director, eight
-bounded Luna researchers and two targeted Terra adjudicators as a preflighted ceiling. Only
-after that research reconciles the remaining mechanics should the pure schema/replay milestone in
-[CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md) be authorized. No runtime implementation is
-authorized by this suite.
+The focused [architecture proof](ARCHITECTURE-PROOF.md) completed the eight Luna discovery lanes,
+two targeted Terra adjudications and one public-only Muse challenge. It gives a conditional go
+only for the pure schema/validator/synthetic-fixture/replay milestone in
+[CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md), after a separate owner-approved task is issued.
+Current constitutional conflicts and remaining Lucas decisions are recorded in
+[DECISION-REGISTER.md](DECISION-REGISTER.md). No runtime implementation, migration, provider
+change, terminal process, private canary, publication or deployment is authorized by this suite.

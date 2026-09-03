@@ -50,10 +50,14 @@ workers. The kernel owns neither portfolio priorities nor ARM plans.
 | `EvidenceBundle` | evidence plane | Candidate, source, gate, usage and independent-verifier bindings |
 | `PublicationIntent` | Head/ARM may propose | Request for the sole publisher to create a review artifact |
 | `PublicationReceipt` | publisher actuator | Durable result of the reviewed publication path; never a merge/deploy receipt |
+| `ActionAdmission` | kernel | Fenced pre-effect authorization binding command, GoalSpec/grant/route/policy digests, epochs, effect class and idempotency identity |
+| `EffectReceipt` | actuator/reconciler through kernel | Authenticated observed outcome or explicit ambiguity; never proof that an unseen remote effect did not occur |
+| `GrantMutationReceipt` | kernel | Exact before/after grant digests, mutator, authorization, step-up, reason, epochs and result for one grant change |
 | `Node` | installation trust domain | Registered execution host with identity, roles and capability evidence |
 | `PluginManifest` | reviewed configuration | Data declaration of capability, dependencies, privileges, lifecycle and version |
 | `ResearchClaim` | research/evidence plane | Exact falsifiable statement linked to sources, contradictions, experiments and confidence |
 | `SourceRecord` | research/evidence plane | Versioned paper, standard, dataset, documentation or source revision with provenance and access policy |
+| `ExperimentRecord` | evidence plane | Immutable experiment/workload identity, baseline/treatment, hard floors, measurements, exclusions, result and revalidation binding |
 
 ## Route vocabulary
 

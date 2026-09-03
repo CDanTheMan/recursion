@@ -16,12 +16,12 @@ safe for private data.
 | Requested route | Local result on 2026-09-03 | What was established | What remains unknown | Campaign use |
 |---|---|---|---|---|
 | Native Codex `gpt-5.6-luna`, `xhigh`, default tier | Eight explicit research workers were accepted in two four-worker waves by the native subagent interface | Exact model/effort dispatch is supported by the current app surface; `fast` was not requested | Contractual entitlement, future availability, server-cache controls and how dispatch maps to account-window use | Enabled for the eight bounded discovery lanes; acceptance is not completion or quality evidence |
-| Native Codex `gpt-5.6-terra`, `xhigh`, default tier | Current interface and official model documentation expose the exact model and effort; campaign adjudication is admitted only after Luna packets exist | The requested selector is available and official documentation includes `xhigh` | Contractual entitlement, future availability and service-side accounting | Reserved for two targeted same-family adjudication lanes |
-| OpenCode Go `opencode-go/muse-spark-1.3-contributor` | Catalog present; a public synthetic no-tool probe returned the requested sentinel with OpenCode 1.18.25 | Exact installed identifier can produce a response on the current route | Stable entitlement, reset capacity, contractual billing, future availability and provider-policy naming drift | Eligible only for public sources and purpose-written synthetic briefs |
+| Native Codex `gpt-5.6-terra`, `xhigh`, default tier | Two targeted adjudicators completed after all Luna evidence packets existed | Exact model/effort dispatch works on the current app surface | Contractual entitlement, future availability and service-side accounting | Used for authority/architecture and performance/evidence disputes; same-family, not cross-family proof |
+| OpenCode Go `opencode-go/muse-spark-1.3-contributor` | Catalog present; a public synthetic probe and later public-source challenge completed with OpenCode 1.18.25 | Exact installed identifier can produce responses and retrieve the supplied public sources | Stable entitlement, reset capacity, contractual billing, future availability and provider-policy naming drift | Used once after discovery for six generic public claims; no private design packet |
 | Codex CLI custom-provider `grok-4.5`, `xhigh`, default tier | Omitted after read-only inspection found no configured custom-provider/profile section | No already-configured Codex custom-provider route exists; official xAI API documentation describes metered API use and `low`/`medium`/`high`, not Codex `xhigh` semantics | Whether Lucas later configures an approved non-metered route | Omitted; no prompt, alias, provider, effort or billing substitution |
 | Codex spawned-agent concurrency | Effective config has `agents.enabled=true` and `agents.max_concurrent_threads_per_session=10`; ten no-op agents were accepted before the campaign, and eight Luna workers were later admitted | The setting caps concurrently open spawned-agent threads and excludes the primary; the current client accepted the configured ceiling | Simultaneous provider capacity, remaining quota and service throttling remain independent | Ten is the observed/configured ceiling; workers are staged in waves and machine/review headroom can lower admission |
 
-The OpenCode probe result is not proof of a charge, flat-subscription entitlement or free
+The OpenCode responses are not proof of a charge, flat-subscription entitlement or free
 metered usage. No paid fallback was enabled. The current English OpenCode Go page listed Muse
 Spark 1.2 Contributor while the installed catalog and other official OpenCode pages named 1.3;
 the exact installed 1.3 route responded, but the documentation mismatch remains visible and
@@ -37,6 +37,11 @@ unchanged. This is a one-time observation, not a benchmark or edition default. N
 when local responsiveness, memory/disk pressure, provider throttling, remaining synthesis quota
 or review debt becomes material.
 
+The available read-only account-limit surface reported 18% used at preflight and no reset
+credits. That point observation justified reserving synthesis/adjudication capacity; it does not
+attribute usage to a worker, establish contractual entitlement, expose a token denominator or
+authorize paid fallback.
+
 ## Primary capability sources
 
 | Route fact | Source opened 2026-09-03 | Adjudication |
@@ -50,6 +55,12 @@ or review debt becomes material.
 The Contributor lane received only purpose-written claims and public URLs. It did not receive
 the v3 drafts, archived transcript, private repositories, infrastructure details, owner
 identity, credentials, environment values, authentication output or local paths.
+
+The challenge returned `supported` for the narrowed SQLite/WAL caveats, terminal-containment
+limits, signature-versus-effect-authority split, route-local cache boundary and
+metadata/provenance limitation. It returned `unresolved` for the complete Recursion kernel/
+adapter ownership claim because the supplied public sources do not define Recursion's private
+authority model. That dissent is retained in the claim ledger.
 
 ## Eligibility states
 

@@ -138,6 +138,44 @@ an explicit owner action and displays its full blast radius.
 - Update proposal, staging, verification, and rollback separate from agent authority.
 - No mandatory centralized marketplace or remote kill switch.
 
+Signatures, transparency records, provenance and software bills of materials establish
+publisher/key role, artifact identity, traceability and freshness only within their threat
+models. They do not prove benign runtime behavior, fit for a project, quota entitlement or
+spending authority. TUF's target files are opaque to the framework, and SLSA provenance is a
+tamper/traceability control rather than a safety verdict. Admission therefore binds the exact
+artifact and dependency-lock digests to separate functional, OS, model-launch, route/account,
+quota, metered-spend, update and revocation grants.
+
+The lifecycle contract is:
+
+```text
+discovered -> inspected -> digest-pinned -> acknowledged -> admitted -> active
+                  |              |              |             |
+                  +---------- rejected/quarantined -----------+
+active -> suspended -> revalidated -> active
+active -> revoked -> draining/terminated -> retained-evidence/uninstalled
+update-proposed -> staged -> verified -> acknowledged -> activated | rolled-back
+```
+
+Revocation blocks new admission immediately. Existing work follows its effect-specific PAUSE
+policy and may enter reconciliation; “revoked” does not assert that a remote effect stopped.
+A disabled plugin performs no code execution, import, network call, subprocess, background
+task, quota debit or spend. The release manifest retains only the minimal identity/capability
+metadata needed to explain that absence; omitting installed payload weight does not omit the
+capability-resolution contract.
+
+One-step novice acknowledgement may combine only digest pinning, requested functional verbs
+and the declared workspace sandbox when local policy permits it. Credentials, network egress,
+model launch, quota reservations, route/account access, metered spending, automatic update,
+downgrade and grant administration remain individually visible grant dimensions. Lucas has
+not yet selected which of those dimensions may share an acknowledgement.
+
+Primary trust anchors opened 2026-09-03 are [The Update Framework
+specification](https://theupdateframework.github.io/specification/latest/), [SLSA
+v1.2](https://slsa.dev/spec/v1.2/) and [Sigstore signing](https://docs.sigstore.dev/cosign/signing/overview/).
+Their guarantees are applied narrowly; no one mechanism replaces Recursion's runtime authority
+or acceptance gates.
+
 ## Feature Admission Contract
 
 Before a feature or plugin enters the roadmap, record:

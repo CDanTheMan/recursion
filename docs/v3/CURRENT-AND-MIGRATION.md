@@ -110,6 +110,19 @@ Before the rehearsal, enumerate and freeze every applicable legacy writer across
 assignment/run evidence and the MVP fabric lease/result stores. If ownership cannot be made
 exact, stop rather than selecting a convenient subset.
 
+The 2026-09-03 source audit reached that stop condition for the broad aggregate. It found
+separate mutation paths for task lifecycle, assignment persistence, run/evidence, accepted
+results and fabric lease/result state; `work.sh::set_status` also retains a direct task-file
+fallback. No common monotonic writer epoch fences those paths, and the fabric store has no
+non-test production caller in the inspected baseline. The owner-selected rehearsal is therefore
+**not ready to execute** and is not silently redefined.
+
+Milestone 1 may nevertheless use a smaller **fabric-only state-contract fixture** around
+`DurableFabricStore`, with immutable assignment input and no task, run/evidence, result-ledger,
+remote, Git or publication writes. That fixture proves schema/replay/fault vocabulary only; it
+is not a cutover, does not satisfy OR-015 by itself and must not be reported as the local
+execution-attempt/lease rehearsal.
+
 The gate requires exact canonical replay parity, one enforced fencing epoch, duplicate/stale
 lease refusal, crash recovery at every transition, backup/restore and a proven return to the
 frozen legacy writer without repeating work. Concurrency, retry count, fixture volume, resource
@@ -149,6 +162,14 @@ commit and, under separate authority, any live deployment. `Unknown` blocks a cu
 | Publication and Git ref effect | `project-reconcile.py::publish_task` creates intent; `publish.sh::publish_one` is the sole review-ref writer | Drain or reject legacy publication intents, bind exact candidate/source/ref, keep PAUSE and protected-ref guards active | Kernel owns publication intent/receipt state; one publisher actuator owns the Git effect. A pushed review ref is never "rolled back" by state restoration |
 | Cross-aggregate transition | Current reconciler/conductor coordinates file and Git mutations across the rows above | Name the source and destination aggregates, persist a bridge/saga id, and allow only one side to advance each step | Kernel saga/outbox owns coordination; each aggregate retains one writer. Ambiguity blocks the dependent effect until reconciled |
 
+The exact writer audit must also include `taskctl.sh::_set_fields/transition_fields/emit_event`,
+Project Pilot and reconciler transition writers, `work.sh::set_status` fallback,
+`work.sh::make_phase5_assignment`, `assignment.py::persist_assignment`,
+`taskctl.sh::_persist_assignment_locked`, `worker-evidence.py`, the
+`validate-assignment-result.py --record` result ledger, `DurableFabricStore`,
+`VerificationReceiptStore`, remote attempt/session/usage journals and the publisher. The
+machine-readable allowlist must reject a new or renamed writer rather than rely on this prose.
+
 ## Failure and rollback rules
 
 - A projection mismatch is a blocker, not a best-effort conversion.
@@ -183,6 +204,13 @@ and legacy writer. Once a provider submission, pushed ref, sent message, credent
 deployment or service change may have been accepted, state restoration cannot undo reality:
 retain the v3 record, block dependent effects and reconcile forward. The exact effect taxonomy
 and canary aggregate still require research and Lucas's final decision.
+
+For the no-effect state contract, the canonical event envelope contains aggregate type/id,
+contiguous sequence, event/command/idempotency/causation identities, writer id, fence epoch,
+logical time, previous/current digests, schema version and typed payload. A full rehearsal
+cannot proceed until every included legacy writer can be mechanically refused and the same
+epoch is checked at admission and execution. Shadow projection equality alone does not satisfy
+that proof.
 
 ## Material uncertainties
 

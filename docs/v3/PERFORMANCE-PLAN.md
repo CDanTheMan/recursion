@@ -36,6 +36,40 @@ CPU, memory, disk, I/O and latency. Deployment state was not inspected.
 | PERF-010 | Several detachable terminal views can remain responsive without multiplying worker/model cost | Attach general, ARM, worker, event and system clients during idle and high-output runs; measure input/frame latency, CPU, RSS, wakeups, buffer growth, coalesced/dropped presentation events and daemon backpressure | Closing/reopening views preserves cursors and actors; added views stay within a preregistered UI budget, no view launches model/index work, and slow clients cannot block canonical state | Flicker/input corruption, unbounded buffers, canonical-writer delay, orphaned processes, or cost grows with each passive view |
 | PERF-011 | A Sol director with up to eight bounded Luna researchers and two targeted Terra adjudicators improves verified research evidence per quota unit over Sol-heavy or uncontrolled parallelism | Freeze one public research corpus and compare bounded profiles such as Sol-only, Sol+4 Luna and the selected Sol+8 Luna+2 Terra ceiling; record exact model/effort, source validity, contradictory evidence, duplicate work, input/cache/output usage where exposed, account-window change, wall time and human review | The selected profile preserves preregistered quality/source floors, improves verified non-duplicate findings per observed quota unit, and leaves a declared synthesis/verification reserve | Coordination/context duplication erases savings, same-family agreement hides errors, quota exhausts before adjudication, or review debt grows faster than accepted evidence |
 
+### Experiment controls identified by architecture proof
+
+| ID | Control that must be frozen before measurement |
+|---|---|
+| Controls for PERF-001 | Event-size/distribution, SQLite version, filesystem, `synchronous` mode, page/checkpoint settings and hardware. Long-lived readers must test WAL checkpoint starvation. |
+| Controls for PERF-002 | Count database and artifact-store bytes together; vary repeated/unique corpora and test reachability/GC. Moving bytes out of SQLite is not itself a storage win. |
+| Controls for PERF-003 | Randomize cold/warm trials and separate manifest discovery from import/execute/network/background work. Disabled code execution is a hard failure even when timing noise is small. |
+| Controls for PERF-004 | Define a matched polling baseline, poll interval, observer count and burst distribution. A historical implementation with no equivalent cannot be invented as the baseline. |
+| Controls for PERF-005 | Separate route stability from provider-cache savings. Only directly exposed usage/cache counters may enter the latter result. |
+| Controls for PERF-006 | Compare raw, native-only, deterministic-capsule and hybrid treatments over repeated compaction cycles; exact required-field recall is a hard floor. |
+| Controls for PERF-007 | Record pressure source, process/cgroup/Job accounting and every shedding stage. A durable-event loss or unavailable PAUSE is an automatic failure. |
+| Controls for PERF-008 | Use matched hardware/network or paired crossover and include transfer, hydration, recovery and total-system cost. |
+| Controls for PERF-009 | Supply a measured or controlled owner-review service-rate trace; machine-only capacity cannot prove review protection. |
+| Controls for PERF-010 | Fix OS, terminal, event rate and render workload and test 0/1/5/10/20 views, slow clients, restart and process escape. |
+| Controls for PERF-011 | Freeze the corpus, rubric, finding key, blind review, observed quota denominator and stopping margin. Without a Sol-only baseline this campaign is architectural evidence, not a performance result. |
+
+Quota efficiency is a vector, not a fabricated currency. Report verified non-duplicate findings
+separately per directly observed input/output/reasoning token, account-window change when
+available, human-review minute, adjudication turn and wall-clock/resource vector. Exact duplicates
+use a canonical claim/source/version/locator key; semantic near-duplicates require adjudication.
+An unavailable denominator is `null/unavailable`, never zero.
+
+Adaptive admission maintains independent machine, pool, queue and review credits:
+
+```text
+admission = min(machine_headroom, pool_headroom, goal_budget,
+                review_credit, owner_hard_ceiling)
+```
+
+Expansion requires a stable interval below measured low-water marks; contraction/refusal occurs
+at a high-water mark; emergency floors block admission immediately. Reserve synthesis,
+verification and recovery capacity before discovery. Thresholds, intervals and one-slot-at-a-time
+hysteresis are derived from baselines and owner expectations rather than invented here.
+
 ## Required fault matrix
 
 Every benchmark includes warm/cold start, clean/dirty shutdown, duplicate command, stale lease,
@@ -60,11 +94,13 @@ Performance success never overrides a failed safety result.
 
 ## Workstation campaign observation
 
-Three native Luna workers plus the lead and one bounded external Muse process were admitted
-conservatively. No sustained local pressure was observed during the research campaign, but
-that qualitative observation is not a benchmark and is not a v3 concurrency default. Future
-tests reduce concurrency on sustained interactive latency, memory pressure, thermal pressure,
-disk pressure or provider throttling.
+Eight native Luna workers were admitted in two waves of four after a health check; the public-only
+Muse review and two targeted Terra adjudicators ran after discovery. The initial workstation
+observation was 32 logical processors, 63.12 GiB memory with about 34 GiB free and about 653 GiB
+free disk. A later bounded check still showed about 33.6 GiB free memory and 652.7 GiB free disk.
+No sustained local pressure was observed, but these point observations are not a benchmark,
+provider-capacity proof or v3 concurrency default. Future tests reduce concurrency on sustained
+interactive latency, memory, thermal, disk, provider, quota or review pressure.
 
 ## Reporting
 

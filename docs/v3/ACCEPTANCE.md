@@ -29,6 +29,14 @@ This document defines categories and provisional gates. Numeric performance budg
 - Event admission rejects unauthenticated principals, stale fencing tokens, duplicate command ids, non-monotonic sequences, and authority/GoalSpec mismatches.
 - Each aggregate has one canonical writer; migration fixtures fail if legacy and v3 paths can both mutate the same transition or external effect.
 - Version migrations are deterministic, reversible where promised, and tested against archived fixtures.
+- Every command/action binds the operative constitution-policy reference, GoalSpec/grant/route
+  digests, idempotency identity, PAUSE/revocation epochs and aggregate fence. The actuator
+  revalidates immediately before an effect.
+- A possible external acceptance followed by crash is `ambiguous`, blocks dependent effects and
+  is reconciliation-only; state restoration never reports the effect undone.
+- `PERF-001` through `PERF-011` have one immutable experiment-registry mapping, and a result
+  cannot bind to another workload revision or unavailable denominator.
+- A fabric-only state fixture is labeled as such and cannot pass the OR-015 broad rehearsal gate.
 
 ## Execution scenarios
 
@@ -86,6 +94,13 @@ At minimum, end-to-end fixtures cover:
 - Public observer/event output resists content, membership, size, and timing disclosure tests for private projects.
 - The lightweight enrollment preflight completes within the measured startup budget and consumes zero model tokens.
 - The full conformance suite is reproducible for official releases but is not an ordinary local startup gate.
+- Capability descendants cannot widen parent scope, limit, lifetime or delegation. Grant
+  mutation requires explicit `grant-admin`, a current fence/epoch, single-use step-up where
+  configured and exact before/after receipts; trust-root, constitution, audit retention and
+  audit erasure remain distinct capabilities.
+- Retention tests distinguish local deletion, key destruction, cache/replica/backup/disconnected
+  propagation, legal hold and expiry-bound copies. No recoverable copy may coexist with a
+  `verified-complete` disposition.
 
 ## Performance and resource gate
 
@@ -103,6 +118,11 @@ Measure at minimum on the target coordinator class and one interactive workstati
 - 10–12 hour bounded autonomous-session stability.
 
 Thresholds are set from a measured v2/system baseline and documented owner expectations. Any optional subsystem failing its Resource Discipline Contract is disabled or excluded from the affected edition.
+
+Each performance result binds its exact workload, host/route/config/source revisions, unit of
+analysis, warm/cold policy, baseline/treatment, exclusion rule and hard quality/safety floor.
+Unavailable provider/cache/subscription counters are null, not zero. No aggregate performance
+score can hide failed authority, privacy, evidence, correctness, recovery or accessibility.
 
 ## Quality and efficiency gate
 
@@ -139,6 +159,13 @@ V3 does not need to dominate every dimension. Each shipped profile must improve 
   indefinitely to manufacture confidence.
 - Private inputs, institutional credentials and copyrighted full text obey project egress,
   storage, quotation and export policy.
+- `SourceRecord` separates discovery, identity, retrieval, verification, access and editorial
+  state. `ResearchClaim` uses typed support, contradiction, qualification, update,
+  metadata-only and inapplicability edges with exact locators and revalidation triggers.
+- Accepting a fabricated identifier, retracted-as-current or stale version, metadata-only or
+  inaccessible source, inapplicable transfer, unverifiable extraction, dropped contradiction or
+  privacy/copyright violation is an automatic failure; the correct unresolved result is
+  `unknown`.
 
 ## Installation and CLI gate
 
@@ -153,6 +180,9 @@ V3 does not need to dominate every dimension. Each shipped profile must improve 
 - Interactive rendering passes non-flicker, preserved-input, resize, Unicode, reconnect,
   high-output, slow-client, plain-text/accessibility and bounded-resource tests on supported
   Windows and Linux terminals.
+- Protocol fixtures prove daemon epoch and per-stream cursor replay/reset, one input/resize
+  lease, idempotent commands, bounded credit/queues and durable-event preservation before any
+  wire ABI or client is called supported.
 - The v3.0 matrix proves native Windows ConPTY/process ownership and native Linux
   PTY/process-group behavior. Git Bash, Neovim terminals and later compatibility targets are
   labeled tested, experimental or unsupported from evidence rather than aspiration.

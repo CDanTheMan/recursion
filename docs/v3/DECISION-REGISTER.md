@@ -160,6 +160,16 @@ a separately measured capability. See [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPT
   availability, entitlement, privacy, cache portability or free metered usage.
 - Grok 4.5 through the requested Codex custom-provider route was unavailable and was omitted,
   reducing cross-family diversity to Luna plus public-only Muse.
+- Eight Luna `xhigh` discovery lanes and two targeted Terra `xhigh` adjudications completed.
+  Terra is the same GPT-5.6 family as Sol/Luna. Public-only Muse challenged six sanitized
+  mechanism claims, supported five narrowed boundaries and found the full Recursion-specific
+  kernel ownership claim unsupported by its public source set.
+- The broad OR-015 execution-attempt/lease rehearsal is blocked at the current boundary:
+  task, assignment, run/evidence, accepted-result and fabric stores do not share one writer
+  fence. A fabric-only fixture may test state-contract vocabulary but is not OR-015.
+- The focused verdict is a conditional go for a pure schema/validator/synthetic-fixture/
+  in-memory-replay milestone only. No runtime, performance, provider, terminal, migration or
+  scientific-research benefit was proved.
 
 These are evidence classifications recorded in [CLAIM-LEDGER.md](CLAIM-LEDGER.md), not owner
 decisions.
@@ -169,38 +179,49 @@ decisions.
 The broad direction is now answered. Research should narrow these mechanisms before asking
 Lucas to ratify them:
 
-1. Exact amendment text for provider-neutral Head/ARM planning while preserving Hermes identity,
-   deterministic actuation and explicit billing/privacy envelopes.
-2. Whether Project Pilot imports as an `ArmRun` predecessor or only migration evidence.
-3. Exact finish/interrupt/quarantine rules for every effect class under the ratified PAUSE modes.
-4. Full Access grant schema, step-up/expiry rules and the separate audit-retention/erasure
-   authority boundary when `sovereign` may administer its own grants.
-5. Verifier risk tiers, documented routine downgrade evidence and the exact owner-exception
-   receipt for release-blocking classes.
-6. How unsigned-plugin acknowledgement, digest-aware grants, subscription quota, metered
-   spending, updates and revocation compose without hidden authority.
-7. Later per-aggregate cutover points and reconciliation-only external effects after the local
-   execution-attempt/lease rehearsal.
-8. Proof protocols for physical deletion, key destruction, caches, backups and disconnected
-   nodes under the ratified retention direction.
-9. Shared-room message authority and conflict semantics around a named ARM's bounded
-   coordination lease.
-10. Persistent terminal/process architecture and the exact Windows/Linux v3.0 matrix, with
-    Git Bash and Neovim compatibility evidence separated from aspiration.
-11. `CANARY-01` disclosure, independent-rerun evidence and stop rules within the fixed first task.
+1. Confirm Option 2 as the construction path: deterministic kernel plus typed lifecycle
+   adapters, with a complete native inner loop only after a metric-bound spike wins.
+2. Approve amendment text for provider-neutral Head/ARM planning while preserving Hermes
+   identity, deterministic actuation and explicit billing/privacy envelopes.
+3. Approve the per-effect checkpoint/interrupt/drain/emergency matrix and current-to-future
+   PAUSE transition; current immediate PAUSE remains operative until then.
+4. Decide whether `sovereign` may receive separate `audit-retention-admin` or `audit-erasure`,
+   whether authority receipts are ever erasable, and which high-impact mutations require a
+   single-use step-up.
+5. Select which unsigned-plugin dimensions may share one acknowledgement after artifact digest,
+   functionality, OS scope, egress, route/account, quota, spend, update and revocation remain
+   separately represented.
+6. Ratify verifier risk tiers, documented routine downgrade evidence and the exact Lucas
+   exception receipt for release-blocking classes.
+7. Ratify the configuration merge algebra: intersection for allowlists, minimum/earliest for
+   limits, field lifecycle, equal-precedence refusal and authenticated widening.
+8. Decide shared-room conflict/deadlock semantics after the synthetic `CoordinationLease`
+   fixtures; transcript arrival order is already rejected as authority.
+9. Decide whether Project Pilot imports as an `ArmRun` predecessor only after the lossless
+   compatibility fixture reports what can and cannot round-trip.
+10. Choose numeric edition/resource defaults and the supported terminal application matrix only
+    after PERF-001–010 produce measurements. No defaults are requested from model confidence.
+11. Decide `CANARY-01` disclosure and stop rules only when construction evidence exists; its
+    fixed first task and no-external-effect boundary are not reopened.
 
 ## Next Grill Me queue after research
 
 The preceding ten questions were answered by Lucas and are now represented by OR-003–OR-015.
 After the architecture-proof research, ask only the smallest still-decisive questions:
 
-1. May `sovereign` alter audit-retention policy or delete historical audit material only through
-   the ratified deletion/tombstone protocol?
-2. Which unsigned-plugin capabilities may one digest-pinned installation acknowledgement grant,
-   and which quota or metered-spend transitions require a separate acknowledgement?
-3. What numeric default and ceiling should each edition use for local workers, spawned agents,
-   repository writers and passive terminal clients on each measured machine profile?
-4. Which exact terminal applications comprise the Windows/Linux v3.0 conformance matrix after
-   R11 reports behavior, rather than popularity alone?
-5. Does Project Pilot import as an `ArmRun` predecessor after the compatibility fixture, or only
-   remain migration evidence?
+1. Confirm Option 2 as the provisional construction path: deterministic Recursion kernel plus
+   typed fail-closed engine adapters, with no native inner-loop expansion unless a matched spike
+   wins a preregistered quality, continuity, security or resource metric?
+2. For maximum `sovereign`, may `audit-retention-admin` and `audit-erasure` be granted separately;
+   may either remove historical authority/effect receipts, or only raw artifacts through the
+   ratified deletion/tombstone protocol?
+3. For an unsigned local plugin, may one digest-specific acknowledgement combine only requested
+   functional verbs and workspace OS scope, or may it also combine network, route/account or
+   subscription-quota grants? Metered spending and grant administration remain separate.
+4. Approve or amend the proposed per-effect PAUSE rule: no new admission after the epoch;
+   checkpoint may finish only the already-running declared atomic segment; interrupt adds a
+   deadline/force path; drain uses an explicit cohort; emergency blocks local launches and
+   quarantines ambiguous remote effects?
+5. Which verifier risk classes may use same-family/provider/host downgrade, and what exact
+   authenticated Lucas exception receipt permits a release-blocking class to proceed when the
+   required independent route is unavailable?

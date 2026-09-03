@@ -375,6 +375,26 @@ The exact Codex CLI Grok 4.5 lane remains conditional on a pre-existing approved
 custom-provider route and is omitted when that route is absent; neither route is silently
 substituted.
 
+### Execution result
+
+All eight Luna lanes ran at the requested explicit `xhigh` setting in two four-worker admission
+waves. After their packets existed, Terra-1 adjudicated authority, native-loop, writer, PAUSE,
+sovereign and plugin disputes; Terra-2 adjudicated performance, cache, terminal, configuration
+and scientific-evidence disputes. Both were explicit `gpt-5.6-terra` `xhigh`. Terra remained a
+same-GPT-5.6-family review.
+
+The public-only Muse 1.3 Contributor challenge received six generic claims and ten public URLs.
+It supported the narrowed WAL, process-containment, plugin-trust, cache and provenance claims,
+while marking the complete product-specific kernel ownership claim unsupported by that public
+source set. The Grok lane was omitted without substitution because its exact approved route was
+absent. No private source, private canary, implementation, live-host inspection or external
+effect entered the campaign.
+
+The result is consolidated in [ARCHITECTURE-PROOF.md](ARCHITECTURE-PROOF.md). R1–R17 are
+researched enough to narrow a pure contract milestone; their performance and whole-product
+benefit hypotheses remain unmeasured. The broad OR-015 rehearsal is blocked by the discovered
+multi-writer boundary, and a smaller fabric-only fixture must not be mislabeled as that rehearsal.
+
 ## Required outputs
 
 1. A source-pinned report for each R1–R17 lane with claim, contradiction, confidence and

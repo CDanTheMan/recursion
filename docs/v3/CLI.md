@@ -45,6 +45,34 @@ The most specific valid value wins. Child scopes may narrow hard bounds. Widenin
 
 Configuration contains credential references only. Machine-private configuration remains outside the public source checkout; projects may carry safe `.recursion.yaml` files whose requested capabilities are admitted by the owner/controller.
 
+### Resolution and mutation contract
+
+One versioned schema drives file, CLI and transport editors, but schema validation is not the
+authority decision. A deterministic semantic validator resolves scope in the order above,
+proves every lower-scope authority/limit is a subset unless an authenticated widening command is
+present, validates cross-record route/plugin/GoalSpec dependencies, and emits the effective
+value plus provenance for every field. Unknown fields and invalid combinations fail before a
+side effect.
+
+An edit carries schema version, configuration scope/id, expected current version/digest,
+canonical before/after representations, principal, authority receipt, application lifecycle and
+idempotent command id. Stale-version edits fail rather than using last-write-wins. Canonical
+serialization is required before digest/signature comparison; human-readable TOML/YAML spelling
+is never itself an authority token.
+
+Configuration complexity is reported as a vector: field count, scope levels, cross-field
+constraints, lifecycle transitions, authority/billing/privacy edges, plugin/provider/model/host
+conflicts, invalid-combination classes, explainable-rejection coverage, valid round-trip coverage
+and migration/rollback coverage. Pairwise and three-way covering fixtures test representative
+core, standard, remote, full and custom manifests. A weighted aggregate may summarize only after
+every security, privacy, billing and correctness floor passes.
+
+The schema may use [JSON Schema 2020-12](https://json-schema.org/specification) for structural
+validation and [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html) for a canonical JSON
+digest/signature representation. Neither replaces the semantic authority/subset validator.
+TOML 1.0 or YAML may remain the human file syntax only when round-trip, duplicate-key, type and
+normalization fixtures prove that the compiled canonical representation is deterministic.
+
 ## Setting lifecycle
 
 Schema metadata classifies every field as:
@@ -147,6 +175,11 @@ or `drain` alternatives, explains which current operations may finish, and separ
 emergency stop.
 `recursion status` must show the applied policy, PAUSE epoch, in-flight operations and any
 quarantined ambiguous effects.
+
+That is a future v3 surface, not current private behavior. Until constitutional amendment,
+compatibility mode exposes the current immediate halt and must not relabel it as checkpoint.
+Every displayed command binds the operative constitution-policy reference and shows whether the
+requested behavior is unavailable under it.
 
 Branch and worktree admission is driven by measured machine and review-backlog capacity. The
 CLI shows the inferred limit, contributing signals, hysteresis, owner hard ceiling and why a new
