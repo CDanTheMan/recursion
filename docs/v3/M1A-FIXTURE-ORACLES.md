@@ -21,20 +21,20 @@ alphabet and oracle projection.
 
 ## Canonical bundle and digest rules
 
-Every bundle is strict JSON with this closed top-level shape:
+Every bundle is strict JSON with this closed top-level shape and exact types:
 
 ```text
-fixture_schema_version = "m1a-fixture-1"
-fixture_id
-description
-authority_fixtures[]
-policy_fixtures[]
-initial_events[]
-commands[]
-expected_receipts[]
-expected_events[]
-expected_final_state
-expected_final_digest
+fixture_schema_version: "m1a-fixture-1"
+fixture_id: Id
+description: NonemptyText
+authority_fixtures: sorted FixtureAuthorityAttestation@1 by attestation_id
+policy_fixtures: sorted PolicyFixture@1 by (policy_id,policy_version)
+initial_events: PlanningEvent@1[] in ascending contiguous sequence
+commands: CommandEnvelope@1[] in declared execution order
+expected_receipts: CommandReceipt@1[] in command order
+expected_events: PlanningEvent@1[] in ascending contiguous sequence
+expected_final_state: ProjectionState@1
+expected_final_digest: Digest equal to expected_final_state.content_digest
 ```
 
 Unknown or duplicate fields fail. Strings, arrays, maps, integers and nesting use explicit schema
@@ -56,12 +56,12 @@ no event. Every refusal returns one deterministic receipt with `state_before_dig
 
 ## Synthetic authority and policy fixtures
 
-M1A does not implement or claim production authentication. Each bundle supplies an immutable
-`FixtureAuthorityAttestation` with `attestation_id`, `actor_id`, closed `actor_role`, sorted
-`allowed_command_types`, `candidate_digest`, `authority_policy_digest` and
-`constitution_policy_digest`. A command is fixture-authorized only when its exact `auth_ref`,
-actor, type, candidate and policy digests match that supplied table. Missing, unknown or
-mismatched references fail. No boolean such as `trusted=true` is permitted.
+M1A does not implement or claim production authentication. Each bundle supplies the exact
+`FixtureAuthorityAttestation@1` and `PolicyFixture@1` records defined by
+[M1A-WIRE-PROFILE.md](M1A-WIRE-PROFILE.md). A command is fixture-authorized only when its exact
+`auth_ref`, actor, type, logical time, candidate and authority/constitution policy references
+match that supplied table. Missing, expired, unknown or mismatched references fail. No boolean
+such as `trusted=true` is permitted.
 
 The allowed roles are `owner`, `head`, `arm`, `worker`, `verifier`, `kernel-fixture-gate`. Only
 `owner` may accept/amend GoalSpec or approve the fixture-only verifier exception; only `head` may
@@ -76,9 +76,13 @@ Read/read is compatible; unordered read/write or write/write overlap fails. M1A 
 commutativity registry: equal synthetic `effect_key` values conflict, unequal keys are disjoint,
 and a dependency may serialize but never merge ownership.
 
-Privacy classes and route capabilities are finite identifiers supplied by a known policy fixture.
-The fixture policy provides the partial order and allowed set. Unknown or incomparable values
-fail; the reducer performs set inclusion and exact integer comparison only.
+Privacy classes and route capabilities are finite identifiers supplied by an exact policy
+fixture. The fixture provides the partial order and allowed set. The GoalSpec binds exact novelty,
+retry, verifier, constitution and PAUSE policy refs; `NoveltyDelta@1` admission uses only the
+bound novelty fixture's accepted-evidence maps, failure-capability maps and route envelope.
+Verifier downgrade requires both bound verifier and constitution fixtures to permit the Owner
+exception plus a matching unexpired Owner attestation/exception record. Unknown, incomparable or
+ambient values fail; the reducer performs set inclusion and exact integer comparison only.
 
 ## Closed command and event alphabets
 

@@ -60,6 +60,50 @@ PolicyRef@1 = {
   content_digest: Digest
 }
 
+FixtureAuthorityAttestation@1 = {
+  attestation_schema_version: "m1a-fixture-authority-1",
+  attestation_id: Id,
+  actor_id: Id,
+  actor_role: owner or head or arm or worker or verifier or kernel-fixture-gate,
+  allowed_command_types: TokenSet,
+  candidate_digest: Digest,
+  authority_policy_ref: PolicyRef@1,
+  constitution_policy_ref: PolicyRef@1,
+  valid_from_logical_time: LogicalTime,
+  expires_logical_time: LogicalTime,
+  content_digest: Digest
+}
+
+PolicyFixture@1 = {
+  policy_schema_version: "m1a-policy-fixture-1",
+  policy_id: Id,
+  policy_version: PosInt,
+  policy_kind: authority or privacy-egress or route-envelope or novelty or verifier or
+               constitution or pause or retry,
+  allowed_roles: TokenSet,
+  allowed_command_types: TokenSet,
+  privacy_class_ids: IdSet,
+  privacy_at_most_edges: sorted array of {less_or_equal_id: Id, greater_or_equal_id: Id}
+                         by (less_or_equal_id,greater_or_equal_id),
+  egress_class_ids: IdSet,
+  egress_at_most_edges: sorted array of {less_or_equal_id: Id, greater_or_equal_id: Id}
+                        by (less_or_equal_id,greater_or_equal_id),
+  route_ids: IdSet,
+  account_class_ids: IdSet,
+  capacity_pool_ids: IdSet,
+  allowed_spend_classes: TokenSet restricted to none and included,
+  accepted_evidence_types: sorted array of {failure_id: Id, evidence_types: TokenSet}
+                           by failure_id,
+  failure_capability_requirements: sorted array of {failure_id: Id, capability_ids: IdSet}
+                                   by failure_id,
+  required_verifier_dimensions: TokenSet,
+  owner_verifier_exception_allowed: true or false,
+  operative_pause_mode: current-immediate,
+  representable_future_pause_modes: TokenSet restricted to checkpoint, interrupt and drain,
+  retry_maximum: UInt,
+  content_digest: Digest
+}
+
 LeaseRef@1 = {
   lease_id: Id,
   lease_epoch: UInt,
@@ -110,6 +154,15 @@ Disposition@1 = {
 enums and comparison rules in the correspondingly named closed-grammar sections of
 [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md). Those records are embedded as JSON objects, not
 as opaque digests, whenever named below; their separately named digest fields are recomputed.
+`PolicyRef@1` resolves only when every field matches one `PolicyFixture@1` in the same bundle;
+there is no ambient registry. Fields irrelevant to a policy kind remain required and take their
+empty-array/`false`/zero value. The reducer uses only the fields allowed for that kind and refuses
+a nonempty irrelevant field with `E-POLICY-UNKNOWN`. A novelty policy uses exactly
+`accepted_evidence_types`, `failure_capability_requirements`, `route_ids`, `account_class_ids`,
+`capacity_pool_ids` and `allowed_spend_classes`. A verifier policy uses
+`required_verifier_dimensions` and `owner_verifier_exception_allowed`. A constitution policy
+uses `owner_verifier_exception_allowed`; a downgrade requires that boolean to be true in both
+the exact GoalSpec-bound verifier and constitution fixtures.
 
 ## Domain-record envelope
 
@@ -139,7 +192,7 @@ mapping explicitly carries a proposed new record.
 | `object_type` / `schema_version` | Exact payload fields |
 |---|---|
 | `owner-intent` / `m1a-owner-intent-1` | `{intent_text: NonemptyText, source_kind: owner-prompt or owner-amendment, source_digest: Digest, privacy_policy_ref: PolicyRef@1, supersedes_ref: ObjectRef@1?}` |
-| `goal-spec` / `m1a-goal-spec-1` | `{owner_intent_ref: ObjectRef@1, outcome: NonemptyText, acceptance_gate_ids: IdSet, allowed_resource_paths: ResourcePathSet, non_goals: TextSet, authority_ids: IdSet, capability_ids: IdSet, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, allowed_route_ids: IdSet, budget_limits: BudgetVector@1, source_digests: DigestSet, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, pause_policy_ref: PolicyRef@1, allowed_effect_keys: IdSet, publication_allowed: false, terminal_owner_seam_ids: IdSet, fence_epoch: UInt, state: accepted}` |
+| `goal-spec` / `m1a-goal-spec-1` | `{owner_intent_ref: ObjectRef@1, outcome: NonemptyText, acceptance_gate_ids: IdSet, allowed_resource_paths: ResourcePathSet, non_goals: TextSet, authority_ids: IdSet, capability_ids: IdSet, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, allowed_route_ids: IdSet, budget_limits: BudgetVector@1, source_digests: DigestSet, novelty_policy_ref: PolicyRef@1, retry_policy_ref: PolicyRef@1, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, pause_policy_ref: PolicyRef@1, allowed_effect_keys: IdSet, publication_allowed: false, terminal_owner_seam_ids: IdSet, fence_epoch: UInt, state: accepted}` |
 | `goal-spec-amendment` / `m1a-goal-spec-amendment-1` | `{old_goal_ref: ObjectRef@1, new_goal_ref: ObjectRef@1, changed_field_paths: TextSet, rationale_digest: Digest, owner_authority_attestation_id: Id, effective_fence_epoch: UInt, checkpoint_rule: current-immediate or safe-checkpoint, compatibility_inputs: sorted CompatibilityInput@1 by old_node.node_id, dispositions: sorted Disposition@1, plan_transition_ref: ObjectRef@1}` |
 | `arm-run` / `m1a-arm-run-1` | `{goal_ref: ObjectRef@1, logical_actor_id: Id, eligible_route_ids: IdSet, budget_limits: BudgetVector@1, source_digests: DigestSet, executive_lease_ref: LeaseRef@1, verifier_policy_ref: PolicyRef@1}` |
 | `plan-revision` / `m1a-plan-revision-1` | `{goal_ref: ObjectRef@1, arm_run_ref: ObjectRef@1, prior_plan_ref: ObjectRef@1?, trigger: initial or retry or replan or amendment, task_node_refs: sorted ObjectRef@1 by id, dependency_edges: sorted array of `{from_node_id: Id, to_node_id: Id}` by `(from_node_id,to_node_id)`, graph_digest: Digest, acceptance_gate_ids: IdSet, budget_limits: BudgetVector@1, read_resource_paths: ResourcePathSet, write_resource_paths: ResourcePathSet, effect_keys: IdSet, source_digests: DigestSet, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, change_rationale_digest: Digest, dispositions: sorted Disposition@1}` |

@@ -317,7 +317,7 @@ old/new canonical GoalSpec payloads loaded by the refs. `old_descriptor_digest` 
 (`hypothesis_digest`, `strategy_digest`, `descriptor_digest` or `scope_digest`) is likewise `D`
 of that descriptor with its self-digest field omitted.
 
-The GoalSpec binds one `NoveltyPolicy@1` containing duplicate-free sorted arrays
+The GoalSpec's exact `novelty_policy_ref` resolves one `NoveltyPolicy@1` containing duplicate-free sorted arrays
 `accepted_evidence_types[{failure_id,evidence_types}]` and
 `failure_capability_requirements[{failure_id,capability_ids}]`, plus one route envelope
 `{route_ids,account_class_ids,capacity_pool_ids,allowed_spend_classes}`. Each referenced failure
