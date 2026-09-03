@@ -40,9 +40,10 @@ This document defines categories and provisional gates. Numeric performance budg
 
 ## M1A autonomous-planning gate
 
-M1A is accepted only against the 23 fixture outcomes/falsifiers and twelve machine gates in
-[M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md), after M1A-01 freezes the literal red
-bundles required by the closed [M1A fixture-oracle blueprint](M1A-FIXTURE-ORACLES.md). The
+M1A is accepted only against the 23 fixture outcomes/falsifiers and thirteen machine gates in
+[M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md), after M1A-01 materializes the exact
+[M1A wire profile](M1A-WIRE-PROFILE.md) and M1A-02 freezes the literal red bundles required by
+the closed [M1A fixture-oracle blueprint](M1A-FIXTURE-ORACLES.md). The
 canonical lifecycle and transition rules are
 [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md); this section does not redefine them.
 

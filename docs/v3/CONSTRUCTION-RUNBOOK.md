@@ -17,8 +17,9 @@ only strict planning schemas, pure cross-record/DAG validation, deterministic Wo
 derivation, typed gate/retry/replan/escalation behavior and in-memory replay over sanitized
 fixtures.
 
-The canonical contract is [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md), the closed fixture
-grammar/oracle blueprint is [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md), and the standalone
+The canonical contract is [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md), the exact wire
+encoding is [M1A-WIRE-PROFILE.md](M1A-WIRE-PROFILE.md), the closed fixture grammar/oracle
+blueprint is [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md), and the standalone
 handoff is [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
 No part of M1A is executed in this research campaign.
 
@@ -37,14 +38,16 @@ when separately authorized.
 
 ## Exact task graph and acceptance
 
-The canonical sequential DAG is M1A-01 vocabulary/fixture freeze → M1A-02 strict schemas and
-canonicalization → M1A-03 cross-record/DAG validator → M1A-04 pure decider/reducer/packet
-derivation → M1A-05 all conformance fixtures → M1A-06 exact-candidate independent rerun.
+The canonical sequential DAG is M1A-01 strict wire-schema materialization → M1A-02 literal red
+fixture freeze → M1A-03 canonicalization/cross-record validator → M1A-04 DAG admission → M1A-05
+pure decider/reducer/packet derivation → M1A-06 all conformance fixtures → M1A-07 exact-candidate
+independent rerun.
 
-The 23 mandatory fixtures and twelve machine-checkable gates in
+The 23 mandatory fixtures and thirteen machine-checkable gates in
 [M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md), together with the closed command/event/
 error/digest oracles in [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md), are the acceptance
-blueprint. M1A-01 freezes their literal strict-JSON red bundles before reducer code. In summary,
+blueprint. M1A-01 materializes/reviews the strict schemas from the wire profile; M1A-02 freezes
+their literal strict-JSON red bundles before reducer code. In summary,
 they fail closed on unauthenticated/incomplete/widened goals, bad DAGs, stale packets/leases,
 non-novel/exhausted retries, missing/downgraded verifiers, quota/provider blocks, route replacement,
 current/future PAUSE separation, ambiguous effects, duplicate commands, replay divergence,

@@ -15,10 +15,12 @@ The standalone handoff prompt is
 [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
 Neither this document nor that prompt authorizes execution.
 
-The closed synthetic authority, logical-path/effect, command, event, error, digest and fixture
-oracle grammar is in [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md). Literal executable red
-bundles do not exist yet; freezing them is the first future construction node, before reducer
-code, and is part of M1A rather than evidence that M1A has run.
+The exact field/nesting/bound/digest encoding is in
+[M1A-WIRE-PROFILE.md](M1A-WIRE-PROFILE.md). The closed synthetic authority,
+logical-path/effect, command, event, error, digest and fixture oracle is in
+[M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md). Executable schemas and literal red bundles do
+not exist yet; materializing then freezing them are the first two future construction nodes,
+before reducer code, and are part of M1A rather than evidence that M1A has run.
 
 ## Parent goal and exact scope
 
@@ -56,6 +58,10 @@ executive/work lease, policy/route/budget references, checkpoint and a synthetic
 record. The last four are inert records used to validate binding/fencing/ambiguity; they do not
 connect to providers, processes, stores or effectors.
 
+The wire profile owns only M1A's exact JSON encoding. The semantic owner remains
+[AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md); future schema code may translate the profile but
+may not select another field, nesting, bound, nullability, union arm or digest-omission rule.
+
 Included pure behavior:
 
 1. strict schema parse and RFC 8785 canonical digest;
@@ -75,12 +81,13 @@ logical time and immutable capacity/route/policy observations as data.
 
 | Node | Depends on | Exclusive output | Machine-checkable gate | Stop condition |
 |---|---|---|---|---|
-| M1A-01 freeze literal red fixture bundles | accepted M1A prompt plus oracle blueprint | `scripts/tests/v3/planning/**` strict input/expected bundles and manifest; documentation receives only the exact trace/receipt | all 23 bundles use the closed grammar, literal digests/error/event/state oracles and fail before reducer code exists; no second semantic owner | a symbolic oracle cannot become literal without a new policy choice |
-| M1A-02 strict schemas/canonicalization | M1A-01 | `schemas/control-plane/v3/planning/**` | meta-schema/load tests; unknown/unbounded/duplicate/non-I-JSON/version failures | current and future PAUSE cannot be separate values |
-| M1A-03 cross-record validator/DAG admission | M1A-02 | `scripts/v3/planning/validation/**` | authority/budget/privacy/source/policy/DAG conflict fixtures pass | validation needs network, operational state or model judgment |
-| M1A-04 pure decider/reducer/packet derivation | M1A-03 | `scripts/v3/planning/replay/**` | command idempotency, lease/fence, legal transition and replay digest fixtures pass | output depends on wall time, process, network or unordered iteration |
-| M1A-05 complete conformance fixtures | M1A-04 | `scripts/tests/v3/planning/**` | F-M1A-001–023 pass twice from clean in-memory state | a required failure can only be asserted by prose |
-| M1A-06 independent exact-candidate verification | M1A-05 | verifier receipt under `docs/v3/**` | fresh runner repeats exact commands/candidate digest and records dissent/limits | missing verifier, dirty/out-of-scope candidate or false independence claim |
+| M1A-01 materialize strict wire schemas | accepted M1A prompt plus closed wire profile | `schemas/control-plane/v3/planning/**` and schema-only tests | exact one-to-one translation of every registered record/union; meta-schema/load and unknown/unbounded/duplicate/non-I-JSON/version tests pass; reviewed exact commit | translation needs a field, union, bound or semantic choice not already recorded |
+| M1A-02 freeze literal red fixture bundles | M1A-01 plus oracle blueprint | `scripts/tests/v3/planning/**` strict input/expected bundles and manifest; documentation receives only the exact trace/receipt | all 23 bundles validate against accepted schemas, use literal digests/error/event/state oracles and fail before reducer code exists; no second semantic owner | a symbolic oracle cannot become literal without a new policy choice |
+| M1A-03 canonicalization and cross-record validator | M1A-02 | `scripts/v3/planning/validation/**` | RFC 8785 digest plus authority/budget/privacy/source/policy attenuation fixtures pass | validation needs network, operational state or model judgment |
+| M1A-04 DAG admission | M1A-03 | `scripts/v3/planning/validation/**` | complete-graph cycle, dependency and path/effect-conflict fixtures pass | insertion order or model judgment changes admission |
+| M1A-05 pure decider/reducer/packet derivation | M1A-04 | `scripts/v3/planning/replay/**` | command idempotency, lease/fence, legal transition and replay digest fixtures pass | output depends on wall time, process, network or unordered iteration |
+| M1A-06 complete conformance fixtures | M1A-05 | `scripts/tests/v3/planning/**` | F-M1A-001–023 pass twice from clean in-memory state | a required failure can only be asserted by prose |
+| M1A-07 independent exact-candidate verification | M1A-06 | verifier receipt under `docs/v3/**` | fresh runner repeats exact commands/candidate digest and records dissent/limits | missing verifier, dirty/out-of-scope candidate or false independence claim |
 
 The DAG is sequential because schema ownership and reducer semantics overlap. Parallel work is
 not an acceptance objective. A future implementer may split read-only review but not concurrent
@@ -90,10 +97,11 @@ writes to a shared object family.
 
 Each fixture is specified here by outcome/falsifier and in
 [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md) by closed input sequence, command/event/error
-alphabet and exact symbolic oracle. M1A-01 must expand the blueprint into sanitized,
-content-addressed literal JSON with expected ordered events, receipts, final state/digest and
-error codes before reducer code. “No event” permits only a typed refused command receipt; it
-forbids the requested authoritative transition.
+alphabet and exact symbolic oracle, while [M1A-WIRE-PROFILE.md](M1A-WIRE-PROFILE.md) owns the
+encoding. M1A-01 must first materialize the strict schemas without semantic changes. M1A-02 must
+then expand the blueprint into sanitized, content-addressed literal JSON with expected ordered
+events, receipts, final state/digest and error codes before reducer code. “No event” permits only
+a typed refused command receipt; it forbids the requested authoritative transition.
 
 | ID | Fixture | Expected result | Decisive falsifier |
 |---|---|---|---|
@@ -125,26 +133,28 @@ forbids the requested authoritative transition.
 
 M1A is ready to call complete only if a future exact candidate satisfies all of these:
 
-1. a red-bundle manifest frozen before reducer code enumerates every schema, command, event,
-   error, state and F-M1A-001–023 input/expected file with literal SHA-256, count and final digest,
-   with no placeholders, duplicates or unknown entries;
-2. strict schema/meta-schema tests reject unknown fields, duplicate keys, non-I-JSON, malformed
+1. an independently reviewed strict-schema commit mechanically implements every exact record,
+   union, bound and digest rule in `M1A-WIRE-PROFILE.md`, with no undocumented design choice;
+2. a red-bundle manifest frozen after that schema commit and before reducer code enumerates every
+   schema, command, event, error, state and F-M1A-001–023 input/expected file with literal
+   SHA-256, count and final digest, with no placeholders, duplicates or unknown entries;
+3. strict schema/meta-schema tests reject unknown fields, duplicate keys, non-I-JSON, malformed
    IDs/digests, unknown versions and configured size/depth/count overflow;
-3. all F-M1A-001–023 expected receipt/event/state/digest fixtures pass twice;
-4. property tests generate parent/child combinations and never admit authority, privacy, egress,
+4. all F-M1A-001–023 expected receipt/event/state/digest fixtures pass twice;
+5. property tests generate parent/child combinations and never admit authority, privacy, egress,
    path, route, budget or effect widening;
-5. graph property tests reject cycles, missing dependencies and unordered ownership conflicts;
-6. replay from genesis and each supplied checkpoint is byte/digest identical; corrupt, missing,
+6. graph property tests reject cycles, missing dependencies and unordered ownership conflicts;
+7. replay from genesis and each supplied checkpoint is byte/digest identical; corrupt, missing,
    duplicate-conflict and unknown-version events fail closed;
-7. a static import/call scan proves the M1A package and tests have no network, provider/model,
+8. a static import/call scan proves the M1A package and tests have no network, provider/model,
    subprocess/terminal, plugin, SQLite/database, Git or publication/effect adapter dependency;
-8. tests prove no wall-clock, random, environment or filesystem observation influences the
+9. tests prove no wall-clock, random, environment or filesystem observation influences the
    reducer; sanitized fixture loading is the only test I/O;
-9. legacy `scripts/tests/recursion-v2-mvp.test.py` passes unchanged; no v2 result is described as
-   a v3 runtime/performance result;
-10. `git diff --check`, relative-link, secret/private-data and changed-path checks pass;
-11. the exact candidate begins and ends its gate clean except for authorized M1A paths; and
-12. an assigned verifier independently reruns the exact candidate and records limitations; an
+10. legacy `scripts/tests/recursion-v2-mvp.test.py` passes unchanged; no v2 result is described as
+    a v3 runtime/performance result;
+11. `git diff --check`, relative-link, secret/private-data and changed-path checks pass;
+12. the exact candidate begins and ends its gate clean except for authorized M1A paths; and
+13. an assigned verifier independently reruns the exact candidate and records limitations; an
     unavailable verifier blocks instead of passing.
 
 Suggested future command names may be frozen in the construction task after repository tooling
@@ -165,9 +175,10 @@ machinery from bloating M1A's privileged planning slice.
 
 ## Readiness verdict
 
-The documentation contract and closed oracle blueprint are candidates for a separately
-authorized M1A build whose first node freezes executable red bundles. Readiness remains subject
-to the campaign's corrected candidate-range gates and same-family Terra recheck. Numeric
+The documentation contract, closed wire profile and oracle blueprint are candidates for a
+separately authorized M1A build whose first node materializes strict schemas and whose second
+freezes executable red bundles, both before reducer code. Readiness remains subject to the
+campaign's corrected candidate-range gates and same-family Terra recheck. Numeric
 production budgets, future PAUSE ratification, provider behavior and broader architecture
 superiority are not prerequisites because M1A encodes them only as strict inert references or
 explicit unknowns that block.

@@ -6,11 +6,13 @@ last-updated: 2026-09-03
 
 # M1A deterministic fixture-oracle blueprint
 
-This document closes the machine grammar and expected oracle for the future M1A build. It is a
-documentation specification, not an executable fixture set or runtime result. A separately
-authorized M1A task MUST freeze the literal sanitized JSON bundles and their expected digests as
-its first red-test commit before implementing a reducer. If a literal bundle cannot be derived
-without another semantic choice, construction stops for Lucas; code must not guess.
+This document closes the expected oracle for the future M1A build. It is a documentation
+specification, not an executable fixture set or runtime result. The exact field names, nesting,
+bounds, nullability and digest profile are owned by
+[M1A-WIRE-PROFILE.md](M1A-WIRE-PROFILE.md). A separately authorized M1A task MUST first translate
+that profile mechanically into strict schemas, then freeze literal sanitized JSON bundles and
+their expected digests in a red-test commit, all before implementing a reducer. If either step
+requires another semantic choice, construction stops for Lucas; code must not guess.
 
 The canonical planning meanings remain in
 [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md). The scope and construction DAG remain in
@@ -174,15 +176,16 @@ oracle.
 | `F-M1A-022` | graphs for logical ancestor write/write, read/write, equal effect key, disjoint ordered paths and read/read | first three whole plans `refused/E-DAG-CONFLICT`, `NOEVENT`; disjoint ordered and read/read variants emit one `+PlanRevisionAdmitted`; all insertion permutations have identical witness/digest |
 | `F-M1A-023` | Owner amendment omits one old node/effect/lease disposition | `refused/E-AMENDMENT-INCOMPLETE`; `NOEVENT`; old GoalSpec/plan/packets/leases remain current exactly; no partial fence increment |
 
-## Red-bundle freeze gate
+## Schema and red-bundle freeze gate
 
-Before M1A reducer/schema implementation begins, M1A-01 MUST produce one manifest enumerating
+Before reducer implementation begins, M1A-01 MUST materialize and review the strict schemas from
+the wire profile without changing its shape. M1A-02 MUST then produce one manifest enumerating
 exactly F-M1A-001–023, every literal input/expected file, its SHA-256, expected command/receipt/
-event/error counts and expected final state digest. An independent red-runner must parse all
-bundles, prove that every required object and error above appears, and show every positive fixture
-fails only because the reducer is not yet implemented. After that commit, any oracle change is a
-new reviewed PlanRevision with explicit invalidated tests; implementation may not silently edit
-an expected result to make code pass.
+event/error counts and expected final state digest. An independent red-runner must validate all
+bundles against the accepted schemas, prove that every required object and error above appears,
+and show every positive fixture fails only because the reducer is not yet implemented. After that
+commit, any schema/profile/oracle change is a new reviewed PlanRevision with explicit invalidated
+tests; implementation may not silently edit an expected result to make code pass.
 
 Passing these fixtures would prove conformance only to the pure M1A contract. It would not prove
 production authentication, durable replay, runtime planning quality, provider/process/plugin/

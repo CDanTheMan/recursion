@@ -120,7 +120,7 @@ function Test-Sequence($path, $pattern, $prefix, $start, $end, $width, $label) {
 Test-Sequence 'docs/v3/R1-R17-EVIDENCE.md' '^## (R[0-9]+) —' 'R' 1 17 0 'R_LANES'
 Test-Sequence 'docs/v3/AUTONOMOUS-PLANNING.md' '^\| (APQ-[0-9]{2}) \|' 'APQ-' 1 18 2 'APQ_TRACE'
 Test-Sequence 'docs/v3/M1A-AUTONOMOUS-PLANNING.md' '^\| (F-M1A-[0-9]{3}) \|' 'F-M1A-' 1 23 3 'M1A_FIXTURES'
-Test-Sequence 'docs/v3/M1A-AUTONOMOUS-PLANNING.md' '^\| (M1A-[0-9]{2}) [^|]*\|' 'M1A-' 1 6 2 'M1A_DAG'
+Test-Sequence 'docs/v3/M1A-AUTONOMOUS-PLANNING.md' '^\| (M1A-[0-9]{2}) [^|]*\|' 'M1A-' 1 7 2 'M1A_DAG'
 Test-Sequence 'docs/v3/M1A-FIXTURE-ORACLES.md' '^\| `(F-M1A-[0-9]{3})` \|' 'F-M1A-' 1 23 3 'M1A_ORACLES'
 Test-Sequence 'docs/v3/AUTONOMOUS-PLANNING-CAMPAIGN.md' '^\| (GATE-V3DF-[0-9]{2}) \|' 'GATE-V3DF-' 1 24 2 'CAMPAIGN_GATES'
 Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| `(SRC-V3-[0-9]{3})` \|' 'SRC-V3-' 1 51 3 'SOURCE_RECORDS'

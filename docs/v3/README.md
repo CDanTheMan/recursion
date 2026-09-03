@@ -41,7 +41,8 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md) | What are the canonical planning objects, owners, transitions, amendment/fencing rules and replay semantics? |
 | [AUTONOMOUS-PLANNING-CAMPAIGN.md](AUTONOMOUS-PLANNING-CAMPAIGN.md) | How did this documentation campaign dogfood GoalSpec, PlanRevision, DAG, packets and gates? |
 | [R1-R17-EVIDENCE.md](R1-R17-EVIDENCE.md) | What persistent reconstructed evidence, contradictions, confidence and falsifiers support every R1-R17 lane? |
-| [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md) | What closed command/event/error grammar and symbolic oracle must M1A freeze as literal red bundles before reducer code? |
+| [M1A-WIRE-PROFILE.md](M1A-WIRE-PROFILE.md) | What exact M1A JSON field, nesting, bound, nullability, command/receipt/event and digest profile must future schemas implement? |
+| [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md) | What closed command/event/error grammar and symbolic oracle must M1A freeze as literal red bundles after schemas and before reducer code? |
 | [SOURCE-REGISTER.md](SOURCE-REGISTER.md) | Which consequential primary-source versions, revisions, locators, limits and expiry triggers ground the synthesis? |
 | [VALIDATION.md](VALIDATION.md) | What exact candidate-bound command validates claim IDs, stable sequences, links, privacy, diff scope and v2 regression? |
 | [EXECUTION-FABRIC.md](EXECUTION-FABRIC.md) | How are models, CLIs, subscriptions, hosts, and tasks resolved? |
@@ -98,7 +99,8 @@ The reconstructed [architecture proof](ARCHITECTURE-PROOF.md) and persistent
 [R1-R17 matrix](R1-R17-EVIDENCE.md) use eight Luna discovery packets and two targeted
 same-family Terra adjudications. No external-family packet was used or recovered. They give a
 conditional go only for the planning schema/validator/synthetic-fixture/in-memory replay
-[M1A](M1A-AUTONOMOUS-PLANNING.md), after a separate Owner-approved task is issued.
+[M1A](M1A-AUTONOMOUS-PLANNING.md), whose exact wire profile and fixture oracles must first pass
+the campaign's final same-family recheck and then receive a separate Owner-approved task.
 Current constitutional conflicts and remaining Lucas decisions are recorded in
 [DECISION-REGISTER.md](DECISION-REGISTER.md). No runtime implementation, migration, provider
 change, terminal process, private canary, publication or deployment is authorized by this suite.

@@ -213,11 +213,12 @@ owner intent -> accepted GoalSpec -> PlanRevision -> admitted DAG/TaskNode
 -> verified terminal plan state
 ```
 
-Its six-node construction DAG, exact future allowed paths, non-goals, 23 required fixtures,
-expected results, falsifiers, and 12 machine-checkable gates are specified. The closed
+Its seven-node construction DAG, exact future allowed paths, non-goals, 23 required fixtures,
+expected results, falsifiers, and 13 machine-checkable gates are specified. The exact wire
+profile is [M1A-WIRE-PROFILE.md](M1A-WIRE-PROFILE.md); the closed
 command/event/error/digest grammar and symbolic expected sequences are in
-[M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md); M1A-01 must freeze literal red bundles and obtain
-review before reducer code. It performs no
+[M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md); M1A-01 must materialize reviewed schemas and
+M1A-02 must freeze literal red bundles and obtain review before reducer code. It performs no
 provider call, terminal process, plugin execution, SQLite migration, publication, external effect,
 or Git mutation outside its own separately authorized future implementation task. M1B contains
 broader route, plugin, terminal, and scientific contracts; M1C contains runtime integration and

@@ -94,10 +94,12 @@ counterevidence and applicability limits. If a required row expires, dependent c
 
 ## R1–R17 source-coverage index
 
-This index is the machine-checked join between each persistent lane and its consequential
-external records. `Local treatment` states which conclusions remain repository-local inference,
-Owner direction or unverified hypothesis rather than source fact. A row cannot broaden its
-sources' `Supports` columns.
+This index is the machine-checked coverage registry between each persistent lane and its
+consequential external records. The validation gate checks complete R1–R17 rows and rejects
+unknown source IDs; Sol's source audit checks each lane's prose/citations against the registered
+records. It does not falsely claim that a parser proves citation semantics. `Local treatment`
+states which conclusions remain repository-local inference, Owner direction or unverified
+hypothesis rather than source fact. A row cannot broaden its sources' `Supports` columns.
 
 | Lane | Consequential source records | Local treatment / limitation |
 |---|---|---|
