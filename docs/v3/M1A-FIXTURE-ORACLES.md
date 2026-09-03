@@ -59,7 +59,8 @@ no event. Every refusal returns one deterministic receipt with `state_before_dig
 M1A does not implement or claim production authentication. Each bundle supplies the exact
 `FixtureAuthorityAttestation@1` and `PolicyFixture@1` records defined by
 [M1A-WIRE-PROFILE.md](M1A-WIRE-PROFILE.md). A command is fixture-authorized only when its exact
-`auth_ref`, actor, type, logical time, candidate and authority/constitution policy references
+`auth_ref`, actor, type, logical time, `candidate_digest=payload_digest` and
+authority/constitution policy references
 match that supplied table. Missing, expired, unknown or mismatched references fail. No boolean
 such as `trusted=true` is permitted.
 
@@ -77,7 +78,8 @@ commutativity registry: equal synthetic `effect_key` values conflict, unequal ke
 and a dependency may serialize but never merge ownership.
 
 Privacy classes and route capabilities are finite identifiers supplied by an exact policy
-fixture. The fixture provides the partial order and allowed set. The GoalSpec binds exact novelty,
+fixture. The fixture provides the partial order and allowed set. Every policy reference obeys
+the exact kind/equality lookup table in the wire profile. The GoalSpec binds exact route, novelty,
 retry, verifier, constitution and PAUSE policy refs; `NoveltyDelta@1` admission uses only the
 bound novelty fixture's accepted-evidence maps, failure-capability maps and route envelope.
 Verifier downgrade requires both bound verifier and constitution fixtures to permit the Owner
@@ -162,7 +164,7 @@ oracle.
 | `F-M1A-004` | accepted goal; propose separately a two-node cycle and a node with absent dependency | `refused/E-DAG-CYCLE` then `refused/E-DAG-DEPENDENCY`; `NOEVENT` for each; no partial node/plan admission; stable sorted witness |
 | `F-M1A-005` | active two-node plan with one exact compatible complete node and one affected node; Owner tightens goal with complete disposition | accepted amendment emits `+GoalSpecAmended` then sorted disposition events; compatible definition/result `retain-terminal`; affected node `invalidate`; old plan superseded; every old packet/lease stale; repeated replay same `D(state)` |
 | `F-M1A-006` | state from 005 and a separate state after `replace-work-lease`; submit result under old packet | each `refused/E-STALE-GOAL` or `E-STALE-LEASE` by variant; `NOEVENT`; no executing/result/effect state |
-| `F-M1A-007` | exact failed GateResult; propose `evidence-added` delta with a new evidence digest addressing that gate and one remaining attempt | `accepted`; `+RetryAdmitted,+WorkPacketDerived`; exactly next attempt; delta digest recorded; old evidence/history unchanged |
+| `F-M1A-007` | exact failed GateResult at packet attempt 1; GoalSpec/TaskNode share retry policy with `retry_maximum=2` and both attempt budgets are 2; propose `evidence-added` delta with a new evidence digest allowed by the bound novelty map and addressing that gate | `accepted`; `+RetryAdmitted,+WorkPacketDerived`; next attempt exactly 2, decision ceiling 2 and remaining attempts 0; command candidate equals payload digest/attestation; delta digest recorded; old evidence/history unchanged |
 | `F-M1A-008` | failure history already contains same typed delta; propose reworded prose with identical canonical delta fields | `refused/E-RETRY-NONNOVEL`; `NOEVENT`; no new packet, model-request marker, attempt or debit |
 | `F-M1A-009` | failure at exact attempt maximum; propose structurally valid new delta | `refused/E-RETRY-EXHAUSTED`; then admitted `raise-blocker`/`raise-escalation` emits exactly `+BlockerRaised,+EscalationRaised`; plan not terminal-success |
 | `F-M1A-010` | all worker results/gates except required verifier assignment/result; attempt completion/verifier decision | `refused/E-VERIFIER-MISSING`; `NOEVENT`; node `gate-pending`/plan blocked, never verified/complete |

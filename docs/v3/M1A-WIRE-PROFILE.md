@@ -164,6 +164,24 @@ a nonempty irrelevant field with `E-POLICY-UNKNOWN`. A novelty policy uses exact
 uses `owner_verifier_exception_allowed`; a downgrade requires that boolean to be true in both
 the exact GoalSpec-bound verifier and constitution fixtures.
 
+An authority policy uses `allowed_roles` and `allowed_command_types`; a privacy-egress policy
+uses only the two class sets and their two edge sets; a route-envelope policy uses the
+route/account/pool/spend fields; a pause policy uses the operative/future pause fields; and a
+retry policy uses only `retry_maximum`. Each policy kind MUST have exactly its named fields
+nonempty/nonzero (booleans are excepted as stated); every other kind-specific array is empty and
+every other numeric field is zero. The fixed common identity/version/digest fields are always
+populated.
+
+Every `PolicyRef@1` field has an exact kind constraint: OwnerIntent/GoalSpec privacy and egress
+refs are `privacy-egress`; GoalSpec `route_policy_ref` is `route-envelope`,
+`novelty_policy_ref` is `novelty`, `retry_policy_ref` is `retry`, `verifier_policy_ref` is
+`verifier`, `constitution_policy_ref` is `constitution` and `pause_policy_ref` is `pause`.
+TaskNode policy refs MUST equal the corresponding GoalSpec refs. An authority attestation's
+authority ref is `authority` and its constitution ref MUST equal the GoalSpec-bound constitution
+ref for a goal-scoped command. A route assignment's route-policy ref MUST equal the
+GoalSpec-bound route-envelope ref. Any kind, equality or same-bundle lookup mismatch is
+`E-POLICY-UNKNOWN` before semantic execution.
+
 ## Domain-record envelope
 
 Every M1A domain record has exactly this shape:
@@ -192,7 +210,7 @@ mapping explicitly carries a proposed new record.
 | `object_type` / `schema_version` | Exact payload fields |
 |---|---|
 | `owner-intent` / `m1a-owner-intent-1` | `{intent_text: NonemptyText, source_kind: owner-prompt or owner-amendment, source_digest: Digest, privacy_policy_ref: PolicyRef@1, supersedes_ref: ObjectRef@1?}` |
-| `goal-spec` / `m1a-goal-spec-1` | `{owner_intent_ref: ObjectRef@1, outcome: NonemptyText, acceptance_gate_ids: IdSet, allowed_resource_paths: ResourcePathSet, non_goals: TextSet, authority_ids: IdSet, capability_ids: IdSet, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, allowed_route_ids: IdSet, budget_limits: BudgetVector@1, source_digests: DigestSet, novelty_policy_ref: PolicyRef@1, retry_policy_ref: PolicyRef@1, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, pause_policy_ref: PolicyRef@1, allowed_effect_keys: IdSet, publication_allowed: false, terminal_owner_seam_ids: IdSet, fence_epoch: UInt, state: accepted}` |
+| `goal-spec` / `m1a-goal-spec-1` | `{owner_intent_ref: ObjectRef@1, outcome: NonemptyText, acceptance_gate_ids: IdSet, allowed_resource_paths: ResourcePathSet, non_goals: TextSet, authority_ids: IdSet, capability_ids: IdSet, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, route_policy_ref: PolicyRef@1, allowed_route_ids: IdSet, budget_limits: BudgetVector@1, source_digests: DigestSet, novelty_policy_ref: PolicyRef@1, retry_policy_ref: PolicyRef@1, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, pause_policy_ref: PolicyRef@1, allowed_effect_keys: IdSet, publication_allowed: false, terminal_owner_seam_ids: IdSet, fence_epoch: UInt, state: accepted}` |
 | `goal-spec-amendment` / `m1a-goal-spec-amendment-1` | `{old_goal_ref: ObjectRef@1, new_goal_ref: ObjectRef@1, changed_field_paths: TextSet, rationale_digest: Digest, owner_authority_attestation_id: Id, effective_fence_epoch: UInt, checkpoint_rule: current-immediate or safe-checkpoint, compatibility_inputs: sorted CompatibilityInput@1 by old_node.node_id, dispositions: sorted Disposition@1, plan_transition_ref: ObjectRef@1}` |
 | `arm-run` / `m1a-arm-run-1` | `{goal_ref: ObjectRef@1, logical_actor_id: Id, eligible_route_ids: IdSet, budget_limits: BudgetVector@1, source_digests: DigestSet, executive_lease_ref: LeaseRef@1, verifier_policy_ref: PolicyRef@1}` |
 | `plan-revision` / `m1a-plan-revision-1` | `{goal_ref: ObjectRef@1, arm_run_ref: ObjectRef@1, prior_plan_ref: ObjectRef@1?, trigger: initial or retry or replan or amendment, task_node_refs: sorted ObjectRef@1 by id, dependency_edges: sorted array of `{from_node_id: Id, to_node_id: Id}` by `(from_node_id,to_node_id)`, graph_digest: Digest, acceptance_gate_ids: IdSet, budget_limits: BudgetVector@1, read_resource_paths: ResourcePathSet, write_resource_paths: ResourcePathSet, effect_keys: IdSet, source_digests: DigestSet, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, change_rationale_digest: Digest, dispositions: sorted Disposition@1}` |
@@ -209,7 +227,7 @@ mapping explicitly carries a proposed new record.
 | `owner-verifier-exception` / `m1a-owner-verifier-exception-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, candidate_digest: Digest, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, missing_dimensions: TokenSet, reason_digest: Digest, owner_authority_attestation_id: Id, issued_logical_time: LogicalTime, expires_logical_time: LogicalTime}` |
 | `executive-lease` / `m1a-executive-lease-1`; `work-lease` / `m1a-work-lease-1` | `{subject_actor_id: Id, goal_ref: ObjectRef@1, plan_ref: ObjectRef@1?, task_ref: ObjectRef@1?, lease_epoch: UInt, nonce_digest: Digest, issued_logical_time: LogicalTime, expires_logical_time: LogicalTime, allowed_command_types: TokenSet, state: active or expired or revoked or replaced}` |
 | `checkpoint` / `m1a-checkpoint-1` | `{state_version: UInt, state_digest: Digest, active_goal_ref: ObjectRef@1?, active_plan_ref: ObjectRef@1?, open_packet_refs: sorted ObjectRef@1 by id, ambiguous_effect_refs: sorted ObjectRef@1 by id, budget_snapshot_digest: Digest, route_snapshot_digest: Digest, pause_epoch: UInt, lease_epoch_digest: Digest}` |
-| `route-assignment` / `m1a-route-assignment-1` | `{logical_actor_id: Id, route_id: Id, route_capability_ids: IdSet, account_class_id: Id, privacy_policy_ref: PolicyRef@1, metered_spend_allowed: false, capacity_observation_digest: Digest, assigned_logical_time: LogicalTime, expires_logical_time: LogicalTime, state: assigned or deferred or released or expired}` |
+| `route-assignment` / `m1a-route-assignment-1` | `{logical_actor_id: Id, route_id: Id, route_capability_ids: IdSet, account_class_id: Id, privacy_policy_ref: PolicyRef@1, route_policy_ref: PolicyRef@1, metered_spend_allowed: false, capacity_observation_digest: Digest, assigned_logical_time: LogicalTime, expires_logical_time: LogicalTime, state: assigned or deferred or released or expired}` |
 | `effect-observation` / `m1a-effect-observation-1` | `{effect_id: Id, effect_key: Id, work_packet_ref: ObjectRef@1, idempotency_key_digest: Digest, dispatch_state: undispatched or dispatched, receipt_digest: Digest?, provider_operation_id_digest: Digest?, observation: observed-success or observed-failure or ambiguous, quarantine: true or false}` |
 | `disposition` / `m1a-disposition-1` | the exact `Disposition@1` record |
 
@@ -234,6 +252,7 @@ CommandEnvelope@1 = {
   plan_ref: ObjectRef@1?,
   payload: the exact payload selected below,
   payload_digest: Digest,
+  candidate_digest: Digest,
   content_digest: Digest
 }
 
@@ -310,6 +329,12 @@ Each command payload is exactly one proposed `DomainRecord@1` except these close
 | `propose-replan` | `{decision: DomainRecord@1<replan-decision>, new_plan_revision: DomainRecord@1<plan-revision>, transition: DomainRecord@1<plan-transition>, task_nodes: sorted DomainRecord@1<task-node> by id}` |
 | `apply-pause` | `{pause_policy_ref: PolicyRef@1, new_pause_epoch: UInt}` |
 
+For every M1A command, `payload_digest=D(payload)` and `candidate_digest=payload_digest` exactly.
+The matching `FixtureAuthorityAttestation@1.candidate_digest` MUST equal that command field. M1A
+defines no other command-candidate selector. A GateResult or PlanVerifierDecision's separate
+`candidate_digest` remains the task/output candidate it judges; it does not replace the command
+candidate binding.
+
 `amend-goal-spec` additionally requires that the referenced proposed `new_goal_ref` and
 `plan_transition_ref` resolve to proposed records carried in the fixture's `initial_events` or
 earlier accepted commands; forward references are forbidden. The Owner verifier-exception record
@@ -324,6 +349,24 @@ leading `GoalSpecAmended` or `ReplanAdmitted` event. An event's `primary_record.
 match its event: the natural created object for `*Recorded`, `*Started`, `*Admitted`, `*Derived`,
 `*Replaced` or `*Applied`, and `disposition` for the five disposition events. No event carries an
 unregistered union arm.
+
+### Exact retry-policy calculation
+
+For a retry command, the GoalSpec and TaskNode retry-policy refs MUST be byte-identical and
+resolve the same `PolicyFixture@1(kind=retry)`. Define the total-attempt ceiling as:
+
+`min(policy.retry_maximum, task.retry_maximum, goal.budget_limits.attempts,
+task.budget_limits.attempts)`.
+
+`next_attempt` MUST equal `prior_work_packet.payload.attempt + 1` and
+`RetryDecision.payload.retry_maximum` MUST equal that ceiling. Admission requires
+`next_attempt <= ceiling`; otherwise the primary error is `E-RETRY-EXHAUSTED`. The decision's
+`remaining_budget.attempts` MUST equal `ceiling - next_attempt`; every other remaining-budget
+field MUST equal the current replay projection after reserving the new packet and MUST be no
+greater than both GoalSpec and TaskNode limits. F-M1A-007's “one remaining attempt” therefore
+means prior attempt 1, ceiling 2, admitted next attempt 2 and remaining attempts 0. Novelty,
+PAUSE, effect ambiguity and budget checks still run in the closed error-precedence order; no
+policy maximum is inferred from prose or an ambient default.
 
 ## Construction ownership and falsifier
 
