@@ -124,7 +124,7 @@ Test-Sequence 'docs/v3/M1A-AUTONOMOUS-PLANNING.md' '^\| (M1A-[0-9]{2}) [^|]*\|' 
 Test-Sequence 'docs/v3/M1A-FIXTURE-ORACLES.md' '^\| `(F-M1A-[0-9]{3})` \|' 'F-M1A-' 1 23 3 'M1A_ORACLES'
 Test-Sequence 'docs/v3/AUTONOMOUS-PLANNING-CAMPAIGN.md' '^\| (GATE-V3DF-[0-9]{2}) \|' 'GATE-V3DF-' 1 24 2 'CAMPAIGN_GATES'
 Test-Sequence 'docs/v3/FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md' '^\| `(GATE-FHAR-[0-9]{2})` \|' 'GATE-FHAR-' 1 24 2 'FRONTIER_CAMPAIGN_GATES'
-Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| `(SRC-V3-[0-9]{3})` \|' 'SRC-V3-' 1 86 3 'SOURCE_RECORDS'
+Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| `(SRC-V3-[0-9]{3})` \|' 'SRC-V3-' 1 95 3 'SOURCE_RECORDS'
 Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| (R[0-9]+) \| `SRC-V3-' 'R' 1 17 0 'SOURCE_LANE_COVERAGE'
 
 $sourceLines = Get-Content 'docs/v3/SOURCE-REGISTER.md'
@@ -139,6 +139,39 @@ $sourceCoverageErrors = foreach ($line in $coverageLines) {
 }
 if ($sourceCoverageErrors) { $sourceCoverageErrors; throw 'source lane coverage failed' }
 "SOURCE_LANE_LINKS_PASS lanes=$($coverageLines.Count)"
+
+$frontierEvidenceText = Get-Content -Raw 'docs/v3/FRONTIER-HARNESS-EVIDENCE.md'
+$frontierSourceRefs = @([regex]::Matches($frontierEvidenceText, 'SRC-V3-[0-9]{3}') |
+  ForEach-Object Value | Sort-Object -Unique)
+$unknownFrontierSourceRefs = @($frontierSourceRefs | Where-Object { $_ -notin $sourceIds })
+if ($unknownFrontierSourceRefs) {
+  throw "frontier evidence has unregistered source references: $($unknownFrontierSourceRefs -join ', ')"
+}
+$frontierEvidenceLines = Get-Content 'docs/v3/FRONTIER-HARNESS-EVIDENCE.md'
+function Test-SourceEdgeTable($heading, $expectedRows, $label) {
+  $start = [Array]::IndexOf($frontierEvidenceLines, $heading)
+  if ($start -lt 0) { throw "missing frontier source-edge section $label" }
+  $rows = @()
+  for ($i = $start + 1; $i -lt $frontierEvidenceLines.Count; $i++) {
+    if ($frontierEvidenceLines[$i] -match '^## ') { break }
+    if ($frontierEvidenceLines[$i] -match '^\|' -and
+        $frontierEvidenceLines[$i] -notmatch '^\|---') {
+      $rows += $frontierEvidenceLines[$i]
+    }
+  }
+  $dataRows = @($rows | Select-Object -Skip 1)
+  if ($dataRows.Count -ne $expectedRows) { throw "$label source-edge row count failed" }
+  if (@($dataRows | Where-Object { $_ -notmatch 'SRC-V3-[0-9]{3}' }).Count) {
+    throw "$label has a consequential row without a source-record edge"
+  }
+  return $dataRows.Count
+}
+$edgeCount = 0
+$edgeCount += Test-SourceEdgeTable '## Harness corpus and code paths' 8 'harness'
+$edgeCount += Test-SourceEdgeTable '## Durable execution findings' 6 'durable'
+$edgeCount += Test-SourceEdgeTable '## Context, token and cache findings' 7 'context'
+$edgeCount += Test-SourceEdgeTable '## Terminal, TUI and multi-view findings' 6 'terminal'
+"FRONTIER_SOURCE_EDGES_PASS refs=$($frontierSourceRefs.Count) rows=$edgeCount"
 
 $oracleLines = Get-Content 'docs/v3/M1A-FIXTURE-ORACLES.md'
 $commandIds = @($oracleLines | ForEach-Object {

@@ -1,11 +1,16 @@
 ---
 title: Overnight Codex prompt — adversarial Recursion v3 architecture swarm
-status: ready-to-run
+status: superseded-do-not-run
 last-updated: 2026-09-02
 target-duration: 7–8 productive hours, hard stop at 8 hours
+superseded-by: ../FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md
 ---
 
 # Overnight Codex prompt — adversarial Recursion v3 architecture swarm
+
+> **Do not run this prompt.** It predates `OWN-FHAR-001`, the proposed Recursion Head identity,
+> the planning-contract baseline, and the completed frontier-harness campaign. It remains only as
+> provenance; use the active campaign artifacts and a newly authorized bounded prompt instead.
 
 Copy everything below the divider into a new Codex task opened on the existing local
 `codex/v3-design-foundation` worktree. This prompt assumes the branch descends from the

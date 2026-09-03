@@ -6,6 +6,11 @@ last-updated: 2026-09-03
 
 # Recursion v3 executive model hypothesis
 
+> **Proposed post-amendment model.** These role definitions are the product target recorded by
+> the Owner; they are not the operative repository constitution. Until Lucas ratifies and records
+> a constitutional amendment, Hermes retains the executive authority assigned by
+> `CONTROL_PLANE.md`, and proposed ARM-exclusive DAG authorship is inert design material.
+
 ## Actor definitions
 
 ### Recursion Head

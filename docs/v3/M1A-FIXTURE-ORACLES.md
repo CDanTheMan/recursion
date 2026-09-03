@@ -125,8 +125,8 @@ retry, stale packet or ambiguous effect. A valid `downgraded-pass` can produce o
 | `E-SCHEMA-BOUND` | configured size/count/depth/integer bound exceeded |
 | `E-DIGEST-MISMATCH` | canonical digest or event chain mismatch |
 | `E-AUTH-MISSING` | required synthetic authority reference absent/unknown |
-| `E-AUTH-ROLE` | actor/command/assignment tuple unauthorized |
-| `E-AUTH-PARENT-MUTATION` | worker/verifier attempts GoalSpec or PlanRevision mutation |
+| `E-AUTH-PARENT-MUTATION` | authenticated `worker` or `verifier` submits `accept-goal-spec`, `amend-goal-spec`, `propose-plan-revision` or `propose-replan`; this narrow classifier precedes generic role rejection |
+| `E-AUTH-ROLE` | actor/command/assignment tuple unauthorized after the parent-mutation classifier |
 | `E-SCOPE-WIDEN` | child capability/path/effect/privacy/egress/route set is not attenuated |
 | `E-BUDGET-WIDEN` | child limit or consumed-plus-remaining amount exceeds parent |
 | `E-DAG-CYCLE` | deterministic topological check leaves a cycle |
@@ -177,7 +177,7 @@ oracle.
 | `F-M1A-017` | accepted command; resend same ID/payload, then same ID/different payload | exact duplicate returns byte-identical original receipt/`NOEVENT`; conflicting payload `refused/E-IDEMPOTENCY-CONFLICT`/`NOEVENT`; event count unchanged after first command |
 | `F-M1A-018` | canonical event fixture; replay from genesis and supplied checkpoint twice; corrupt/gap/unknown variants | valid runs have byte-identical expected events/state/`D(state)`; corrupt digest `E-DIGEST-MISMATCH`, gap `E-DIGEST-MISMATCH`, unknown version `E-SCHEMA-UNKNOWN-VERSION`; no best-effort final state |
 | `F-M1A-019` | active ArmRun after executive lease replacement; old ARM proposes revision | `refused/E-STALE-LEASE`; `NOEVENT`; plan digest/active revision unchanged |
-| `F-M1A-020` | worker then verifier use parent-mutation command types | each `refused/E-AUTH-PARENT-MUTATION`; `NOEVENT`; GoalSpec/PlanRevision digests unchanged and verifier assignment unchanged |
+| `F-M1A-020` | authenticated assigned worker submits `amend-goal-spec`; authenticated assigned verifier submits `propose-plan-revision` | each `refused/E-AUTH-PARENT-MUTATION` under the closed precedence; `NOEVENT`; GoalSpec/PlanRevision digests unchanged and verifier assignment unchanged |
 | `F-M1A-021` | separate unknown-field and unknown-policy-version inputs | `refused/E-SCHEMA-UNKNOWN-FIELD` and `refused/E-SCHEMA-UNKNOWN-VERSION`/`E-POLICY-UNKNOWN` by layer; `NOEVENT`; no permissive default or replay continuation |
 | `F-M1A-022` | graphs for logical ancestor write/write, read/write, equal effect key, disjoint ordered paths and read/read | first three whole plans `refused/E-DAG-CONFLICT`, `NOEVENT`; disjoint ordered and read/read variants emit one `+PlanRevisionAdmitted`; all insertion permutations have identical witness/digest |
 | `F-M1A-023` | Owner amendment omits one old node/effect/lease disposition | `refused/E-AMENDMENT-INCOMPLETE`; `NOEVENT`; old GoalSpec/plan/packets/leases remain current exactly; no partial fence increment |

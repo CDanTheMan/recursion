@@ -68,8 +68,8 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [RESEARCH-HYPOTHESES.md](RESEARCH-HYPOTHESES.md) | Which claims need experiments rather than confidence? |
 | [RESEARCH-AGENDA.md](RESEARCH-AGENDA.md) | Which architecture-proof research lanes should the next deep campaign execute? |
 | [SCIENTIFIC-RESEARCH.md](SCIENTIFIC-RESEARCH.md) | How can a research ARM find papers, reconcile claims and produce reproducible evidence? |
-| [prompts/overnight-architecture-research.md](prompts/overnight-architecture-research.md) | What should the next autonomous Codex research session do? |
-| [prompts/overnight-adversarial-swarm-research.md](prompts/overnight-adversarial-swarm-research.md) | How should an eight-hour Luna, Muse, and conditional Grok research swarm ground and challenge the architecture? |
+| [prompts/overnight-architecture-research.md](prompts/overnight-architecture-research.md) | Which superseded research prompt is retained only as provenance? |
+| [prompts/overnight-adversarial-swarm-research.md](prompts/overnight-adversarial-swarm-research.md) | Which superseded swarm prompt is retained only as provenance? |
 | [prompts/architecture-proof-deep-research.md](prompts/architecture-proof-deep-research.md) | What should the next focused architecture-proof Deep Research session execute? |
 | [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md) | What standalone prompt may build M1A only after a separate Owner authorization? |
 | [archive/session-transcript-2026-09-02.md](archive/session-transcript-2026-09-02.md) | What internal human-visible conversation produced this hypothesis? This file is excluded from public releases. |

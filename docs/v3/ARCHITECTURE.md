@@ -7,6 +7,11 @@ baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 
 # Recursion v3 architecture recommendation
 
+> **Proposed target, not operative authority.** The hierarchy below describes the
+> owner-directed future Recursion product after an explicit constitutional amendment. The
+> current `CONTROL_PLANE.md` still names Hermes as the automation-chain executive and remains
+> controlling. Nothing in this document activates a replacement Head or transfers authority.
+
 ## Correct hierarchy
 
 ```text

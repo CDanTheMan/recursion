@@ -6,6 +6,10 @@ last-updated: 2026-09-03
 
 # Recursion v3 planning and Grill Me projection
 
+> **Proposed contract projection.** References below to the Recursion Head and ARM-owned DAGs
+> describe a future product boundary. The current Hermes-specific constitution remains operative
+> until Lucas approves a recorded amendment; this document cannot perform that amendment.
+
 ## Purpose
 
 Planning is a first-class, configurable phase of autonomous development. Its job is not to create an impressive document; it is to reduce semantic uncertainty, establish measurable success, expose trade-offs before implementation, and give ARM executives a stable contract they can execute without hallucinating product direction.
@@ -78,7 +82,7 @@ amendment disposition and stale-work rules are canonical in
 
 ## Planning ownership
 
-The clean default boundary is:
+The proposed post-amendment default boundary is:
 
 - Lucas defines intent, values, acceptance, risk, spending, and final decisions.
 - The Recursion Head compiles the strategic GoalSpec, assigns the goal, and monitors outcomes.

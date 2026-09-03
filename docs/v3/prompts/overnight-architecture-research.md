@@ -1,10 +1,15 @@
 ---
 title: Overnight Codex prompt — ground the Recursion v3 architecture
-status: ready-to-run
+status: superseded-do-not-run
 last-updated: 2026-09-02
+superseded-by: ../FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md
 ---
 
 # Overnight Codex prompt — ground the Recursion v3 architecture
+
+> **Do not run this prompt.** It predates `OWN-FHAR-001`, the proposed Recursion Head identity,
+> the planning-contract baseline, and the completed frontier-harness campaign. It remains only as
+> provenance; use the active campaign artifacts and a newly authorized bounded prompt instead.
 
 Copy everything below the divider into a new Codex task opened on the local `codex/v3-design-foundation` worktree.
 

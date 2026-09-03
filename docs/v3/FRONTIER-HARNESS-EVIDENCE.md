@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 frontier harness evidence and gap matrix
-status: active-research-synthesis
+status: adjudicated-research-synthesis-pending-final-validation
 last-updated: 2026-09-03
 campaign-id: FHAR-20260903
 ---
@@ -24,24 +24,24 @@ resource savings, frontier superiority or production fitness.
 | `unverified` | Plausible claim that needs a controlled local experiment or missing denominator. |
 | `rejected` | Evidence is insufficient, contradicted or outside its applicability boundary. |
 
-All eight Luna packets were produced with `gpt-5.6-luna` at `xhigh`. The two Terra reviews,
-when complete, use `gpt-5.6-terra` at `xhigh`. Sol, Luna and Terra are GPT-5.6-family routes;
+All eight Luna packets were produced with `gpt-5.6-luna` at `xhigh`. The two Terra reviews used
+`gpt-5.6-terra` at `xhigh`. Sol, Luna and Terra are GPT-5.6-family routes;
 their agreement is same-family adjudication, not cross-family independence. Workers were
 read-only and returned sources, conclusions, contradictions and concise rationale rather than
 private reasoning transcripts.
 
 The canonical versions, licenses, locators and expiry rules for this campaign are
-[SRC-V3-052–SRC-V3-086](SOURCE-REGISTER.md#frontier-harness-campaign-sources). The trace is:
+[SRC-V3-052–SRC-V3-095](SOURCE-REGISTER.md#frontier-harness-campaign-sources). The trace is:
 
 | Area | Consequential source records |
 |---|---|
 | harness code | `SRC-V3-052`–`SRC-V3-059` |
-| durable histories and recovery | `SRC-V3-013`, `SRC-V3-060`–`SRC-V3-062` |
-| cache/context | `SRC-V3-034`–`SRC-V3-036`, `SRC-V3-040`, `SRC-V3-052`–`SRC-V3-054`, `SRC-V3-059` |
-| terminal and multi-view | `SRC-V3-020`–`SRC-V3-025`, `SRC-V3-063`–`SRC-V3-068` |
+| durable histories and recovery | `SRC-V3-013`, `SRC-V3-060`–`SRC-V3-062`, `SRC-V3-092`–`SRC-V3-094` |
+| cache/context | `SRC-V3-034`–`SRC-V3-036`, `SRC-V3-040`, `SRC-V3-052`–`SRC-V3-054`, `SRC-V3-059`, `SRC-V3-087`, `SRC-V3-088` |
+| terminal and multi-view | `SRC-V3-020`–`SRC-V3-025`, `SRC-V3-063`–`SRC-V3-068`, `SRC-V3-089`–`SRC-V3-091` |
 | plugins and future clients | `SRC-V3-004`, `SRC-V3-005`, `SRC-V3-052`–`SRC-V3-054`, `SRC-V3-069`, `SRC-V3-070` |
 | autonomy and evaluation | `SRC-V3-056`, `SRC-V3-071`–`SRC-V3-081` |
-| systems performance | `SRC-V3-001`–`SRC-V3-003`, `SRC-V3-022`–`SRC-V3-024`, `SRC-V3-082`–`SRC-V3-086` |
+| systems performance and formal model | `SRC-V3-001`–`SRC-V3-003`, `SRC-V3-022`–`SRC-V3-024`, `SRC-V3-082`–`SRC-V3-086`, `SRC-V3-095` |
 
 ## Recursion baseline inspected
 
@@ -67,14 +67,14 @@ UI-heavy application repository because it exposes the actual conversation/serve
 
 | Harness and exact source | Entry to effects and recovery | What transfers / what does not |
 |---|---|---|
-| OpenAI Codex [`280ae8b`](https://github.com/openai/codex/tree/280ae8b9fcd35a54704dc2c78027b89bd51369fd), Apache-2.0 | `codex-rs/cli` → thread/session turn → model stream → tool futures → rollout/state and app-server events → compaction, resume, fork, interrupt and approval. `app-server/README.md` specifies bounded ingress queues, overload refusal, version-specific schemas and thread/turn/item lifecycle. | Adapt stream/tool/approval, reconstruction, typed protocol and bounded queue behavior. Its thread/session/account is not Recursion Owner, GoalSpec, budget or publication authority. |
-| Gemini CLI [`86b461e`](https://github.com/google-gemini/gemini-cli/tree/86b461ea2cdb1c847775433b820ce6b6ada0e63c), Apache-2.0 | CLI/noninteractive entry → `GeminiClient.processTurn`/`sendMessageStream` → `Turn.run` → scheduler/tool executor → chat history/recording → confirmation bus, compression, loop detection, cancellation and retry/fallback. | Adapt context estimation, loop recovery, tool scheduling and confirmation observations. Provider/project/session state is not durable cross-provider authority. |
-| OpenCode [`8a6cf2c`](https://github.com/anomalyco/opencode/tree/8a6cf2c9aa1aa407129efc4e875a6ce6ab32ef72), MIT | run command/server → session prompt/processor → AI SDK → tool registry → session/effect/storage/event APIs → permission reply, compaction, revert and fork. | Adapt client/server and event/session graph. Engine permissions and events are not Recursion grants, effect receipts or verification. |
-| OpenHands SDK [`07307cb`](https://github.com/OpenHands/software-agent-sdk/tree/07307cb8edfcd9b4675be2761df0646d075a9c36), MIT | conversation API → local conversation → agent step → tools → state/event store → server fanout/replay and conversation lease. | Adapt append log, sequence/replay, local/remote boundary and lease-guarded writes. Conversation-local state lacks Recursion's cross-run GoalSpec, grants, budget and publication chain. |
-| SWE-agent [`3ea751c`](https://github.com/SWE-agent/SWE-agent/tree/3ea751c087f32b16e039a2233dd6eefecef325d5), MIT | `run_single` → agent action loop → model → tools/environment → trajectory/patch/evaluator hooks → parser, retry, time/cost and environment failure paths. | Adapt bounded action/observation and benchmark adapter patterns. One-process trajectories do not provide durable approval, lease or sovereign evidence. |
-| Aider [`5dc9490`](https://github.com/Aider-AI/aider/tree/5dc9490bb35f9729ef2c95d00a19ccd30c26339c), Apache-2.0 | main → coder loop → model → apply updates/Git → history and commits → malformed-edit reflection, lint/test and undo/confirmation. | Adapt Git edit/undo, context and deterministic test hooks. Git/history alone is not owner authority or cross-engine orchestration evidence. |
-| Goose [`c59e45d`](https://github.com/aaif-goose/goose/tree/c59e45d0eefa68aac6f11bacc58123bfcfa3d000), Apache-2.0 | CLI session → `machine.rs` state machine → inference → tool/effect pipeline → SQLite session/usage state → confirmation, cancellation and yield. | Adapt explicit procedures and effect-before-publish shape. Its database, recipes and permission store are engine-local, not Recursion authority. |
-| pi-mono [`6aedd10`](https://github.com/badlogic/pi-mono/tree/6aedd1066e540642165aa30fa7b4a1b863778aa7), MIT | experimental session worker → harness `drive` state dispatch → generation/assistant → tools/effect gate → serialized JSONL session/mutation line → recovery, snapshots and watches. | Strongly adapt transaction sequence, lanes, effect-pending recovery and snapshot/event replication. The harness is experimental and has no Owner/GoalSpec/ARM/grant/publication contract; use as interface evidence, not a dependency decision. |
+| OpenAI Codex [`280ae8b`](https://github.com/openai/codex/tree/280ae8b9fcd35a54704dc2c78027b89bd51369fd), Apache-2.0 (`SRC-V3-052`) | `codex-rs/cli` → thread/session turn → model stream → tool futures → rollout/state and app-server events → compaction, resume, fork, interrupt and approval. `app-server/README.md` specifies bounded ingress queues, overload refusal, version-specific schemas and thread/turn/item lifecycle. | Adapt stream/tool/approval, reconstruction, typed protocol and bounded queue behavior. Its thread/session/account is not Recursion Owner, GoalSpec, budget or publication authority. |
+| Gemini CLI [`86b461e`](https://github.com/google-gemini/gemini-cli/tree/86b461ea2cdb1c847775433b820ce6b6ada0e63c), Apache-2.0 (`SRC-V3-053`) | CLI/noninteractive entry → `GeminiClient.processTurn`/`sendMessageStream` → `Turn.run` → scheduler/tool executor → chat history/recording → confirmation bus, compression, loop detection, cancellation and retry/fallback. | Adapt context estimation, loop recovery, tool scheduling and confirmation observations. Provider/project/session state is not durable cross-provider authority. |
+| OpenCode [`8a6cf2c`](https://github.com/anomalyco/opencode/tree/8a6cf2c9aa1aa407129efc4e875a6ce6ab32ef72), MIT (`SRC-V3-054`) | run command/server → session prompt/processor → AI SDK → tool registry → session/effect/storage/event APIs → permission reply, compaction, revert and fork. | Adapt client/server and event/session graph. Engine permissions and events are not Recursion grants, effect receipts or verification. |
+| OpenHands SDK [`07307cb`](https://github.com/OpenHands/software-agent-sdk/tree/07307cb8edfcd9b4675be2761df0646d075a9c36), MIT (`SRC-V3-055`) | conversation API → local conversation → agent step → tools → state/event store → server fanout/replay and conversation lease. Live token deltas are not persisted. | Adapt append log, sequence/replay, local/remote boundary and lease-guarded writes. Conversation-local state lacks Recursion's cross-run GoalSpec, grants, budget and publication chain. |
+| SWE-agent [`3ea751c`](https://github.com/SWE-agent/SWE-agent/tree/3ea751c087f32b16e039a2233dd6eefecef325d5), MIT (`SRC-V3-056`) | `run_single` → agent action loop → model → tools/environment → trajectory/patch/evaluator hooks → parser, retry, time/cost and environment failure paths. | Adapt bounded action/observation and benchmark adapter patterns. One-process trajectories do not provide durable approval, lease or sovereign evidence. |
+| Aider [`5dc9490`](https://github.com/Aider-AI/aider/tree/5dc9490bb35f9729ef2c95d00a19ccd30c26339c), Apache-2.0 (`SRC-V3-057`) | main → coder loop → model → apply updates/Git → history and commits → malformed-edit reflection, lint/test and undo/confirmation. | Adapt Git edit/undo, context and deterministic test hooks. Git/history alone is not owner authority or cross-engine orchestration evidence. |
+| Goose [`c59e45d`](https://github.com/aaif-goose/goose/tree/c59e45d0eefa68aac6f11bacc58123bfcfa3d000), Apache-2.0 (`SRC-V3-058`) | CLI session → `machine.rs` state machine → inference → tool/effect pipeline → SQLite session/usage state → confirmation, cancellation and yield. | Adapt explicit procedures and effect-before-publish shape. Its database, recipes and permission store are engine-local, not Recursion authority. |
+| pi-mono [`6aedd10`](https://github.com/badlogic/pi-mono/tree/6aedd1066e540642165aa30fa7b4a1b863778aa7), MIT (`SRC-V3-059`) | experimental session worker → harness `drive` state dispatch → generation/assistant → tools/effect gate → serialized JSONL session/mutation line → recovery, snapshots and watches. | Strongly adapt transaction sequence, lanes, effect-pending recovery and snapshot/event replication. The harness is experimental and has no Owner/GoalSpec/ARM/grant/publication contract; use as interface evidence, not a dependency decision. |
 
 The common successful unit is an engine-local loop: render context, sample/stream, parse tool
 calls, execute tools, update a transcript and recover/retry. No inspected member demonstrates
@@ -84,33 +84,33 @@ finding may be falsified by a complete code path outside the inspected revisions
 
 ## Durable execution findings
 
-| Finding | Evidence and limits | Recursion disposition | Competing option / failure mode / decisive test |
-|---|---|---|---|
-| Canonical commands and event replay must be pure. | Temporal/Durable Task replay histories, Restate log-first epochs, Akka event-handler separation and the existing M1A reducer support the mechanism. Workflow products do not supply Recursion authority. | `adaptation`: authenticated command with expected version/digests → one reducer → append → rebuildable projection. Replay never repeats an external effect. | Database CRUD/projection-first is simpler but permits divergent truths. Crash/tamper/gap/duplicate replay must reproduce one digest or fail closed. |
-| A lease is not a fence. | Kubernetes Lease expresses holder/renewal/TTL; Restate rejects stale attempts with epochs. Expiry does not prove an already-running process or effect stopped. | `adaptation`: bind monotonically increasing fence epoch to WorkPacket, effect intent, actuator and result; stale observations are quarantined. | TTL-only admission risks late writes. Force takeover and delayed result; any accepted stale epoch falsifies the design. |
-| Correctness-affecting timers/retries are history. | Workflow engines distinguish durable timers/reminders from activation-local or matching-only behavior. | `adaptation`: durable timer identity, schedule/fire events, attempt, failure fingerprint and retry novelty. | Scheduler-only retry is lighter but cannot replay why another effect occurred. Restart before/after fire; event and terminal digest must match. |
-| Cancellation is a state machine, not a kill signal. | Temporal cancellation/heartbeats, cooperative task cancellation and OS primitives show propagation and termination are distinct. | `adaptation`: `requested → propagating → acknowledged/compensating → terminal`, bound to identity and epoch. | Process-kill-as-success loses remote/partial effects. Crash and kill at every effect boundary; ambiguity must never become success. |
-| Exactly-once is not a safe external-effect claim. | Temporal, DBOS, Restate and actor systems bound their guarantees; external calls can remain ambiguous. | Preserve `PREPARED/EXECUTING/RECEIPT/AMBIGUOUS`, idempotency and reconciliation. | Vendor exactly-once label is shorter but overclaims. Inject crash after remote acceptance before receipt; the system must quarantine/reconcile rather than replay blindly. |
-| Backpressure needs typed refusal and protected recovery capacity. | Temporal worker capacity, Prefect/Dagster pools, bounded actor stashes and Codex bounded app-server queues demonstrate distinct policies. | Bounded queues with `capacity`, `budget`, `dependency`, `paused` and `recovery-required` deferrals; reserve admission for verification/recovery. | Unbounded buffering improves short bursts but can exhaust coordinator memory and hide review debt. Saturation test must bound memory and preserve control latency. |
+| Finding | Source records | Evidence and limits | Recursion disposition | Competing option / failure mode / decisive test |
+|---|---|---|---|---|
+| Canonical commands and event replay must be pure. | `SRC-V3-013`, `SRC-V3-060`, `SRC-V3-062`, `SRC-V3-092` | Temporal/Durable Task replay histories, Restate log-first epochs, Akka event-handler separation and the existing M1A reducer support the mechanism. Workflow products do not supply Recursion authority. | `adaptation`: authenticated command with expected version/digests → one reducer → append → rebuildable projection. Replay never repeats an external effect. | Database CRUD/projection-first is simpler but permits divergent truths. Crash/tamper/gap/duplicate replay must reproduce one digest or fail closed. |
+| A lease is not a fence. | `SRC-V3-013`, `SRC-V3-060` | Kubernetes Lease expresses holder/renewal/TTL; Restate rejects stale attempts with epochs. Expiry does not prove an already-running process or effect stopped. | `adaptation`: bind monotonically increasing fence epoch to WorkPacket, effect intent, actuator and result; stale observations are quarantined. | TTL-only admission risks late writes. Force takeover and delayed result; any accepted stale epoch falsifies the design. |
+| Correctness-affecting timers/retries are history. | `SRC-V3-013`, `SRC-V3-062`, `SRC-V3-093`, `SRC-V3-094` | Workflow engines distinguish durable timers/reminders from activation-local or matching-only behavior. | `adaptation`: durable timer identity, schedule/fire events, attempt, failure fingerprint and retry novelty. | Scheduler-only retry is lighter but cannot replay why another effect occurred. Restart before/after fire; event and terminal digest must match. |
+| Cancellation is a state machine, not a kill signal. | `SRC-V3-013`, `SRC-V3-020`–`SRC-V3-025` | Temporal cancellation/heartbeats, cooperative task cancellation and OS primitives show propagation and termination are distinct. | `adaptation`: `requested → propagating → acknowledged/compensating → terminal`, bound to identity and epoch. | Process-kill-as-success loses remote/partial effects. Crash and kill at every effect boundary; ambiguity must never become success. |
+| Exactly-once is not a safe external-effect claim. | `SRC-V3-013`, `SRC-V3-060`, `SRC-V3-061`, `SRC-V3-092`, `SRC-V3-093` | Temporal, DBOS, Restate and actor systems bound their guarantees; external calls can remain ambiguous. | Preserve `PREPARED/EXECUTING/RECEIPT/AMBIGUOUS`, idempotency and reconciliation. | Vendor exactly-once label is shorter but overclaims. Inject crash after remote acceptance before receipt; the system must quarantine/reconcile rather than replay blindly. |
+| Backpressure needs typed refusal and protected recovery capacity. | `SRC-V3-052`, `SRC-V3-092`, `SRC-V3-094` | Temporal worker capacity, Prefect timed slot leases, Akka's bounded-but-nondurable stash and Codex bounded app-server queues demonstrate distinct policies. | Bounded queues with `capacity`, `budget`, `dependency`, `paused` and `recovery-required` deferrals; reserve admission for verification/recovery. | Unbounded buffering improves short bursts but can exhaust coordinator memory and hide review debt. Saturation test must bound memory and preserve control latency. |
 
-Use Temporal, Restate, DBOS, Durable Task, Orleans, Akka, Prefect and Dagster as comparison
+Use Temporal, Restate, DBOS, Durable Task, Orleans, Akka and Prefect as comparison
 sources, not production dependencies. Their server/database/language/licensing costs and replay
 constraints are counterevidence against importing a workflow platform into the privileged v3
-kernel. A small TLA+/PlusCal model is appropriate for lease, duplicate-command, replay,
+kernel. A small TLA+/PlusCal model (`SRC-V3-095`) is appropriate for lease, duplicate-command, replay,
 cancellation and ambiguity invariants, but model checking cannot prove implementation
 refinement without explicit I/O assumptions and conformance tests.
 
 ## Context, token and cache findings
 
-| Mechanism | Classification and exact boundary | Disposition and falsifier |
-|---|---|---|
-| Recursion event/context lineage | `adaptation`: canonical session events and content-addressed `RepositoryMap`, `EvidenceBundle`, `DecisionSlice` and `CheckpointSummary` are provider-neutral; no runtime exists yet. | Adopt contract. Falsify if replay loses an active directive/digest or cross-route rehydration changes accepted state. |
-| Deterministic compaction transaction | DeepSeek Harness records start/summary/end, shadowed sequence IDs and validation; Codex/Gemini/pi expose engine-native compaction paths. | Adapt: old epoch stays authoritative until fidelity validation admits the replacement; keep rehydration locators. Compare deterministic capsule, native compaction and hybrid. |
-| OpenAI API prompt caching/compaction | Official API exposes route/model-specific caching controls/counters and opaque native compaction. It does not establish Codex OAuth CLI behavior, subscription debit or portable cache state. | Adapter-only. Opaque compact output may accelerate continuation but cannot be the only owner-intent copy. Any claim without exact endpoint/model/account/SDK and observed counters is rejected. |
-| Anthropic API prompt caching | Official API exposes hierarchy/breakpoints, TTL choices and read/write counters. No evidence establishes equivalent Claude CLI control. | Adapter-only; tool/system changes invalidate downstream cache. Falsify savings through direct counters on the exact admitted route. |
-| Gemini API context caching | Official API distinguishes implicit and explicit cached content and reports cached-token usage for supported routes. CLI behavior and savings remain unknown. | Adapter-only; pin endpoint/model and TTL. Missing counter is unknown, never zero. |
-| vLLM/SGLang prefix/session caches | Exact local-runtime source exposes hash/cache/session mechanics; cache identity is model/template/token/tool-schema/runtime/tenant scoped. | Optional local adapter. Provider KV portability is rejected. Test tenant salt, stale session, eviction and cold/warm behavior. |
-| Provider session affinity | Disposable routing hint or native continuation, not canonical actor state. | Prefer when measured, but a fresh route plus validated capsule must remain a recovery path. Falsify if churn loses authority/evidence or same-session benefit is not observed. |
+| Mechanism | Source records | Classification and exact boundary | Disposition and falsifier |
+|---|---|---|---|
+| Recursion event/context lineage | `SRC-V3-040` plus repository fact | `adaptation`: canonical session events and content-addressed `RepositoryMap`, `EvidenceBundle`, `DecisionSlice` and `CheckpointSummary` are provider-neutral; no runtime exists yet. | Adopt contract. Falsify if replay loses an active directive/digest or cross-route rehydration changes accepted state. |
+| Deterministic compaction transaction | `SRC-V3-040`, `SRC-V3-052`, `SRC-V3-053`, `SRC-V3-059` | DeepSeek Harness records start/summary/end, shadowed sequence IDs and validation; Codex/Gemini/pi expose engine-native compaction paths. | Adapt: old epoch stays authoritative until fidelity validation admits the replacement; keep rehydration locators. Compare deterministic capsule, native compaction and hybrid. |
+| OpenAI API prompt caching/compaction | `SRC-V3-034` | Official API exposes route/model-specific caching controls/counters and opaque native compaction. It does not establish Codex OAuth CLI behavior, subscription debit or portable cache state. | Adapter-only. Opaque compact output may accelerate continuation but cannot be the only owner-intent copy. Any claim without exact endpoint/model/account/SDK and observed counters is rejected. |
+| Anthropic API prompt caching | `SRC-V3-035` | Official API exposes hierarchy/breakpoints, TTL choices and read/write counters. No evidence establishes equivalent Claude CLI control. | Adapter-only; tool/system changes invalidate downstream cache. Falsify savings through direct counters on the exact admitted route. |
+| Gemini API context caching | `SRC-V3-036` | Official API distinguishes implicit and explicit cached content and reports cached-token usage for supported routes. CLI behavior and savings remain unknown. | Adapter-only; pin endpoint/model and TTL. Missing counter is unknown, never zero. |
+| vLLM/SGLang prefix/session caches | `SRC-V3-087`, `SRC-V3-088` | vLLM hashes full token blocks using parent hash, token IDs, optional extras and optional `cache_salt`; SGLang's `RadixKey` carries token IDs, `extra_key`, `cache_salt`, mode and limit, while `session_id` controls soft reference/eviction tracking. Both are local-runtime mechanisms. | Optional local adapter. Provider portability and quality/resource gains are unproven. Test salt isolation, stale session, eviction and cold/warm behavior. |
+| Provider session affinity | `SRC-V3-034`–`SRC-V3-036`, `SRC-V3-088` | Disposable routing hint or native continuation, not canonical actor state. | Prefer when measured, but a fresh route plus validated capsule must remain a recovery path. Falsify if churn loses authority/evidence or same-session benefit is not observed. |
 
 Stable prompt prefixes should place invariant instructions and schemas before volatile task data,
 but cache optimization must never freeze stale repository instructions or cross a privacy
@@ -121,14 +121,14 @@ be shared across trust domains.
 
 ## Terminal, TUI and multi-view findings
 
-| Concern | Direct-source evidence | Proposed contract / falsifier |
-|---|---|---|
-| Process lifetime and views | tmux and Zellij separate session processes from clients; Recursion's owner direction requires closing a terminal not to end work. | One durable broker owns PTY/process lifetime; views never create actor identity. Attach must not issue another model call or relaunch an ambiguous process. |
-| Render stability | Ratatui double-buffers and diffs cells, including wide-glyph cleanup; Textual uses dirty regions; Bubble Tea and Ink batch changed frames/lines; xterm.js schedules dirty-row rendering. | Renderer is replaceable presentation. Golden tests cover wide/combining glyphs, resize, alternate screen, cursor and malformed UTF-8; p99 frame/input targets are measured, not asserted. |
-| Slow-client control | tmux tracks consumer offsets and stops PTY reads; Zellij bounds native client queues/disconnects full clients; xterm.js documents its watermark is not backend flow control. OpenCode has bounded retained PTY text but an unbounded per-client path. | Protocol uses monotonically increasing byte/event cursors plus `ACK/CREDIT`; bounded per-view queues end in replay or explicit `RESET+GAP`. A stopped reader must not grow broker memory or block canonical append. |
-| Input/resize authority | Terminal libraries assume one input reader; multiple views create conflicts that cell renderers do not solve. | One fenced, expiring input lease and one resize policy; passive watchers cannot write. Simultaneous inputs under stale leases must be refused deterministically. |
-| OS portability | POSIX PTY/session/groups+cgroup v2 and Windows ConPTY+Job Objects provide different transport/containment primitives with documented escape/race cases. | Separate adapters behind one process contract. Child/grandchild, breakaway, host-death, resize/output-race and restart reconciliation fixtures are mandatory. |
-| Accessibility | xterm.js implements ARIA rows/live-region behavior; Ink has a screen-reader mode; terminal color/cursor support varies. | Provide semantic plain-text/event views, reduced motion and non-color authority cues. Test NVDA/Narrator/AT-SPI rather than claiming compliance from a library. |
+| Concern | Source records | Direct-source evidence | Proposed contract / falsifier |
+|---|---|---|---|
+| Process lifetime and views | `SRC-V3-065`, `SRC-V3-066` | tmux and Zellij separate session processes from clients; Recursion's owner direction requires closing a terminal not to end work. | One durable broker owns PTY/process lifetime; views never create actor identity. Attach must not issue another model call or relaunch an ambiguous process. |
+| Render stability | `SRC-V3-063`, `SRC-V3-067`, `SRC-V3-089`–`SRC-V3-091` | Ratatui double-buffers/diffs cells; the inspected Textual compositor computes partial updates from dirty regions; Bubble Tea skips unchanged views and flushes its terminal buffer as one operation; Ink can aggregate changed lines; xterm.js schedules dirty-row rendering. | Renderer is replaceable presentation. Golden tests cover wide/combining glyphs, resize, alternate screen, cursor and malformed UTF-8; p99 frame/input targets are measured, not asserted. |
+| Slow-client control | `SRC-V3-054`, `SRC-V3-065`–`SRC-V3-067`, `SRC-V3-089`, `SRC-V3-090` | tmux tracks consumer offsets; Zellij bounds native client queues; xterm.js says its watermark is not backend flow control; OpenCode has bounded retained PTY text but an unbounded client path. Textual's writer is bounded but blocks, while Bubble Tea's input send is unbuffered. | Protocol uses monotonically increasing byte/event cursors plus `ACK/CREDIT`; bounded per-view queues end in replay or explicit `RESET+GAP`. A stopped reader must not grow broker memory or block canonical append. |
+| Input/resize authority | `SRC-V3-064`, `SRC-V3-089`–`SRC-V3-091` | The inspected libraries are single-client presentation/input mechanisms; none supplies multi-view authority. | One fenced, expiring input lease and one resize policy; passive watchers cannot write. Simultaneous inputs under stale leases must be refused deterministically. |
+| OS portability | `SRC-V3-020`–`SRC-V3-025`, `SRC-V3-068`, `SRC-V3-089` | POSIX PTY/session/groups+cgroup v2 and Windows ConPTY+Job Objects provide different transport/containment primitives with documented escape/race cases. | Separate adapters behind one process contract. Child/grandchild, breakaway, host-death, resize/output-race and restart reconciliation fixtures are mandatory. |
+| Accessibility | `SRC-V3-067`, `SRC-V3-091` | xterm.js implements ARIA row/live-region machinery; Ink exposes an `isScreenReaderEnabled` render path. Neither establishes accessibility compliance. | Provide semantic plain-text/event views, reduced motion and non-color authority cues. Test NVDA/Narrator/AT-SPI rather than claiming compliance from a library. |
 
 Ratatui+crossterm is the leading native-renderer candidate and xterm.js the browser-terminal
 candidate; Zellij is the strongest inspected multi-client/flow-control pattern. These are
@@ -141,7 +141,8 @@ Static code review does not identify whether a result came from the model, actio
 interface, planner, delegation topology, verifier, retry policy or harness. SWE-agent supplies a
 useful fixed-model interface ablation; SWE-bench, tau-bench, METR's time-horizon method, the
 Agentic Benchmark Checklist, contamination research and variance research supply complementary
-controls. Their results are method precedents, not Recursion outcome evidence.
+controls (`SRC-V3-056`, `SRC-V3-071`–`SRC-V3-081`). Their results are method precedents, not
+Recursion outcome evidence.
 
 The required comparison is a matched, preregistered component ladder: minimal deterministic loop;
 action/observation interface; planner without delegation; bounded DAG delegation; verifier; then
@@ -181,19 +182,20 @@ unbounded stream or change startup resources beyond a preregistered metadata bud
 handle/thread/network observation and cold/warm trials at 0, 10 and 100 disabled capabilities are the
 decisive test.
 
-OpenCode's 99 declared direct package dependencies demonstrate feature breadth and maintenance
+OpenCode's 99 declared direct package dependencies (`SRC-V3-054`) demonstrate feature breadth and maintenance
 surface, not measured runtime bloat. Gemini CLI's large UI hook and static-message segmentation
-show a useful anti-flicker technique and the risk of UI-owned lifecycle logic. Codex's bounded
+(`SRC-V3-053`) show a useful anti-flicker technique and the risk of UI-owned lifecycle logic. Codex's bounded
 queues protect the coordinator but can disconnect a slow client, so canonical events must exist
-before any lossy presentation queue. Pi's interrupted-stream recovery correctly preserves
-`effect_pending` and reports an unknown result rather than inferring success.
+before any lossy presentation queue (`SRC-V3-052`). Pi's interrupted-stream recovery preserves
+`effect_pending` and reports an unknown result rather than inferring success (`SRC-V3-059`).
 
 ## Plugins, capabilities and future frontends
 
 Capability discovery is itself a resource and authority boundary. Codex's typed immutable
 contributor registry and capability-scoped plugin loading, Gemini CLI's extension lifecycle and
 most-restrictive MCP tool filters, OpenCode's server/client split, MCP capability negotiation and
-MCP Apps' sandboxed view bridge supply complementary mechanisms. None supplies Recursion's
+MCP Apps' sandboxed view bridge supply complementary mechanisms (`SRC-V3-052`–`SRC-V3-054`,
+`SRC-V3-069`, `SRC-V3-070`). None supplies Recursion's
 canonical GoalSpec, lease, effect or publication authority.
 
 The proposed plugin path is: inspect a bounded manifest without importing code; validate exact
@@ -225,7 +227,7 @@ It does not select an implementation language, store or binary encoding.
 
 Rust is the leading candidate for a privileged kernel because ownership and bounded async
 primitives match the failure model; Go is a credible simpler alternative, and Python remains useful
-for migration and low-rate adapters. This is an unverified comparison hypothesis. After M1A, the
+for migration and low-rate adapters (`SRC-V3-082`–`SRC-V3-085`). This is an unverified comparison hypothesis. After M1A, the
 same deterministic replay workload must compare CPython, Rust and Go under identical schema,
 fault, platform and measurement profiles. Compiler memory rules, the GIL, goroutines or ecosystem
 reputation are not end-to-end performance evidence.
@@ -234,7 +236,7 @@ SQLite WAL is an optional metadata/projection candidate, not canonical authority
 M1A. Compare it with the existing JSONL approach plus content-addressed blobs using synthetic replay,
 read contention, checkpoint pressure, restart, corruption and disk-full faults. JSON/JSONL is the
 inspectable first IPC encoding; binary framing must earn its complexity with measured benefits while
-preserving schema validation, fencing, portability and debuggability.
+preserving schema validation, fencing, portability and debuggability (`SRC-V3-001`–`SRC-V3-003`).
 
 The repository should remain one small monorepo with dependency direction from protocol/schema and
 kernel into adapters and surfaces, not premature microservices. Static v2 file sizes, repeated
@@ -296,6 +298,38 @@ preregistered quality/continuity/security/resource metric without a hard-floor r
 
 ## Preregistered experiment queue
 
+### PROTO-FHAR-01 — component-ladder repetition and stopping rule
+
+`EXP-FHAR-07` and `EXP-FHAR-08` use this frozen protocol unless a new PlanRevision explicitly
+supersedes it before any main-corpus outcome is inspected.
+
+- The minimum main matrix is two frozen model versions × two task families × 24 unique held-out
+  tasks per family × all six cumulative ladder treatments × three fixed attempt seeds. This is
+  1,728 attempts. Treatment order is randomized in task/model blocks; every attempt starts from a
+  clean snapshot and shares the exact per-task/model total token, tool, wall-time and spend ceiling.
+- A disjoint four-task-per-family calibration set estimates variance only. Before freezing the
+  main manifest, a simulation using that variance must show at least 80% power to detect the
+  declared practical margin. If it does not, the manifest increases the main corpus in fixed
+  eight-task-per-family blocks until it reaches 80% or records the study infeasible. Calibration
+  tasks never enter the reported effect estimate.
+- Before execution, the manifest freezes task/evaluator/environment hashes, model/route/tool
+  descriptors, seeds, treatment order, all twelve metric definitions and directionality, and a
+  practical margin per metric. Default margins are five percentage points for deterministic
+  hidden-oracle completion and ten percent relative improvement/degradation for review time,
+  tokens, latency and resource measures; a domain-specific replacement needs written rationale.
+  Authority, privacy, PAUSE, stale-fence, ambiguous-effect and unreported-attempt violations have
+  a zero-tolerance hard floor.
+- Analysis is paired within task/model and uses 10,000 hierarchical bootstrap resamples in
+  family → task → attempt order with two-sided 95% intervals. A component improvement is supported
+  only when the interval clears its declared improvement margin, no hard floor fails, and no other
+  metric's interval crosses its declared degradation margin. Otherwise the result is non-dominated,
+  equivalent or inconclusive; no aggregate score or hidden weight breaks the tie.
+- There is no interim efficacy stop and no outcome-selected rerun. The study stops after every
+  valid cell in the frozen matrix completes. It may terminate early only for a hard-floor failure,
+  invalid evaluator/environment, or capacity/spending boundary; those dispositions are `rejected`
+  or `incomplete`, never a win. An inconclusive fixed sample remains inconclusive. More attempts
+  require a new preregistration and PlanRevision rather than post-hoc extension.
+
 | ID | Frozen comparison | Measures and hard falsifier |
 |---|---|---|
 | `EXP-FHAR-01` | Minimal native loop vs typed adapters over two materially different engines on the same public tasks/source and policy | Accepted gate quality, escapes, continuity, owner review, tokens/quota, latency, CPU/RSS/I/O, code/dependency surface. Any authority/effect/evidence hard-floor failure rejects the candidate. |
@@ -311,4 +345,6 @@ preregistered quality/continuity/security/resource metric without a hard-floor r
 | `EXP-FHAR-11` | JSONL plus content-addressed blobs vs single-writer SQLite WAL metadata plus blobs under 1M synthetic events/four readers | Append/read/rebuild tails, CPU/RSS/I/O/wakeups, total bytes, checkpoint growth and recovery. Lost evidence, divergent authority or unbounded WAL rejects. |
 | `EXP-FHAR-12` | Trusted built-in, isolated third-party plugin and sandboxed view across disable, crash, reload and protocol mismatch | Zero disabled work, bounded failure, exact stale fence, preserved replay and unchanged authority digest. Any plugin/UI plan mutation or payload-integrity overclaim rejects. |
 
-All discovery recommendations remain provisional until Terra adjudication.
+All discovery recommendations received targeted same-family Terra adjudication. They remain
+provisional until their decisive experiments pass and any required Owner/constitutional decision
+is recorded.
