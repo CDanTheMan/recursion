@@ -297,15 +297,15 @@ immutable GoalSpec or claim that a v3 runtime exists. `TASK-V3DF-001` through `T
 are complete for documentation scope. The exact semantic candidate was
 `640a6d2c17c6f3cd9b360a93452dca0b30be1785`; the final descendant is receipt/status-only.
 
-| Gate set | Final state | Exact evidence/limitation |
+| Gate numbers | Final state | Exact evidence/limitation |
 |---|---|---|
-| GATE-V3DF-01–06 | pass | docs-only ancestry/scope, R1–R17/source closure and 85/85 registry on GR-V3DF-019 |
-| GATE-V3DF-07–13 | pass | canonical planning/wire/oracle contract plus TERRA-AUTH corrections and WP-V3DF-302 final PASS |
-| GATE-V3DF-14–18 | pass | no-runtime boundary, 41-file link check, candidate diff, stable IDs and 42-file privacy scan |
-| GATE-V3DF-19 | pass | full unchanged v2 umbrella on exact semantic candidate; one prior failed stress receipt retained |
-| GATE-V3DF-20 | pass-with-limitation | exact-candidate Terra review; same GPT-5.6 family, never cross-family independence |
-| GATE-V3DF-21 | pass after final receipt commit | final shell verifies clean worktree and exact docs-only changed-path boundary |
-| GATE-V3DF-22–24 | pass | unavailable facts remain typed, consequential pins are source-audited, and standalone M1A prompt exists but was not executed |
+| 01–06 | pass | docs-only ancestry/scope, R1–R17/source closure and 85/85 registry on GR-V3DF-019 |
+| 07–13 | pass | canonical planning/wire/oracle contract plus TERRA-AUTH corrections and WP-V3DF-302 final PASS |
+| 14–18 | pass | no-runtime boundary, 41-file link check, candidate diff, stable IDs and 42-file privacy scan |
+| 19 | pass | full unchanged v2 umbrella on exact semantic candidate; one prior failed stress receipt retained |
+| 20 | pass-with-limitation | exact-candidate Terra review; same GPT-5.6 family, never cross-family independence |
+| 21 | pass after final receipt commit | final shell verifies clean worktree and exact docs-only changed-path boundary |
+| 22–24 | pass | unavailable facts remain typed, consequential pins are source-audited, and standalone M1A prompt exists but was not executed |
 
 No external-family packet was admitted, no private/synthetic packet was sent externally, and no
 route/configuration/account/spending action was taken. Remaining items are Lucas policy decisions
