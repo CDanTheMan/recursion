@@ -47,6 +47,7 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [REFERENCE-MATRIX.md](REFERENCE-MATRIX.md) | What should be studied in the reference harnesses? |
 | [RESEARCH-HYPOTHESES.md](RESEARCH-HYPOTHESES.md) | Which claims need experiments rather than confidence? |
 | [prompts/overnight-architecture-research.md](prompts/overnight-architecture-research.md) | What should the next autonomous Codex research session do? |
+| [prompts/overnight-adversarial-swarm-research.md](prompts/overnight-adversarial-swarm-research.md) | How should an eight-hour Luna, Muse, and conditional Grok research swarm ground and challenge the architecture? |
 | [archive/session-transcript-2026-09-02.md](archive/session-transcript-2026-09-02.md) | What human-visible conversation produced this hypothesis? |
 
 ## Status vocabulary
@@ -69,4 +70,4 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 
 ## Immediate next step
 
-Run the overnight architecture-research prompt. Its output should replace weak assumptions with evidence, identify constitutional amendments that require Lucas's review, and refine these hypotheses without beginning implementation.
+Run the adversarial swarm research prompt when the requested model routes pass its fail-closed preflight. Use the single-lead overnight prompt when cross-family routes are unavailable. Either run should replace weak assumptions with evidence, identify constitutional amendments that require Lucas's review, and refine these hypotheses without beginning implementation.
