@@ -182,7 +182,7 @@ foreach ($file in ($activeFiles | Where-Object Extension -eq '.md')) {
   $text = Get-Content -Raw $file.FullName
   # Code examples can contain regex fragments that resemble Markdown links; only prose links
   # participate in the documentation-link gate.
-  $text = [regex]::Replace($text, '(?ms)^```.*?^```[ \t]*$', '')
+  $text = [regex]::Replace($text, '(?ms)^```.*?^```[ \t]*\r?$', '')
   foreach ($match in $linkRegex.Matches($text)) {
     $target = $match.Groups['target'].Value.Trim()
     if ($target.StartsWith('<') -and $target.EndsWith('>')) {
