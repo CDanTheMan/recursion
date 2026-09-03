@@ -48,7 +48,7 @@ reconstructed evidence for every R1-R17 lane is in
 | `WP-V3DF-203` | `gpt-5.6-luna`, `xhigh` | Primary-source audit | Source versions, licenses, contradictory SQLite evidence, and expiry triggers corrected. |
 | `WP-V3DF-204` | `gpt-5.6-luna`, `xhigh` | Lean adversarial review | The broad first milestone was rejected and narrowed to M1A. |
 | `WP-V3DF-301` | `gpt-5.6-terra`, `xhigh` | Authority adjudication | Conditional support; added complete prompt traceability, exact downgrade binding, and a sixth constitutional conflict. |
-| `WP-V3DF-302` | `gpt-5.6-terra`, `xhigh` | Final evidence/readiness adjudication | Returned `adapt` on `16e16cf`: exposed objective diff/privacy failures, incomplete source precision, opaque compatibility/novelty predicates, prose-only oracles and misleading historical reviewer labels; PR-V3DF-20260903-03 repairs require recheck. |
+| `WP-V3DF-302` | `gpt-5.6-terra`, `xhigh` | Final evidence/readiness adjudication | Returned `adapt` on `16e16cf`; its `bd98c41` recheck confirmed hygiene/provenance/oracle-count repairs but returned `reject/adapt` for three missing source records, underdetermined compatibility/novelty subgrammars and a verifier-downgrade enum conflict. PR-V3DF-20260903-05 supplies the next exact correction candidate. |
 
 Sol, Luna, and Terra are GPT-5.6-family routes. Terra is an independent worker role here, not an
 external-family verifier. No current external-family packet was sent. An already configured,
@@ -117,11 +117,13 @@ authority, stale/invalid behavior, replay/idempotency, retention/audit, and rela
 `APQ-01` through `APQ-18` trace maps every required planning question to a normative rule, fixture,
 falsifier, and Lucas seam.
 
-Amendment compatibility is a total ordered predicate over exact digests, finite set/subset
-relations, integer limits and a versioned privacy-policy partial order; natural-language
-similarity is forbidden. Retry novelty uses one of seven closed `NoveltyDelta` variants with a
-nonempty canonical diff and named failed condition. The kernel admits structural novelty only;
-the next gate judges semantic effectiveness.
+Amendment compatibility is a total ordered predicate over explicit old/new node tuples, exact
+digests, finite set/subset relations, integer limits, exact-equal gate requirements and a
+versioned privacy-policy partial order; natural-language similarity is forbidden. Retry novelty
+uses one of seven closed `NoveltyDelta` variants with exact descriptor subgrammars, a
+kernel-recomputed nonempty canonical diff and a named failed condition. The kernel admits
+structural novelty only; the next gate judges semantic effectiveness. Full verification and an
+Owner-authorized downgrade project distinct terminal states.
 
 The kernel, not a model, admits authoritative transitions. ARM proposals may narrow but cannot
 widen an accepted goal. DAG admission rejects cycles, absent dependencies, conflicting path
@@ -221,8 +223,8 @@ or Git mutation outside its own separately authorized future implementation task
 broader route, plugin, terminal, and scientific contracts; M1C contains runtime integration and
 durability.
 
-M1A remains a candidate for a separate owner-authorized construction task after the corrected
-candidate-range gates and Terra recheck pass. Its first construction node, not this campaign,
+M1A remains a candidate for a separate owner-authorized construction task after the
+PR-V3DF-20260903-05 candidate-range gates and Terra recheck pass. Its first construction node, not this campaign,
 creates executable fixture bundles. M1A has not been executed. The standalone prompt is
 [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
 
@@ -236,6 +238,6 @@ change, affected dependency upgrade, API capability change, correction/retractio
 fixture, or contradictory primary source invalidates the dependent conclusion until reverified.
 
 Recommendations remain falsifiable and subordinate to Lucas. The final independent adjudicator's
-blocking dissent is preserved in the campaign artifact. The PR-V3DF-20260903-03 correction must
+blocking dissent is preserved in the campaign artifact. The PR-V3DF-20260903-05 correction must
 pass the exact procedure in [VALIDATION.md](VALIDATION.md) and receive the requested Terra recheck
 before this document can move to evidence-reconciled.

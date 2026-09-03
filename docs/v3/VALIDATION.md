@@ -123,7 +123,21 @@ Test-Sequence 'docs/v3/M1A-AUTONOMOUS-PLANNING.md' '^\| (F-M1A-[0-9]{3}) \|' 'F-
 Test-Sequence 'docs/v3/M1A-AUTONOMOUS-PLANNING.md' '^\| (M1A-[0-9]{2}) [^|]*\|' 'M1A-' 1 6 2 'M1A_DAG'
 Test-Sequence 'docs/v3/M1A-FIXTURE-ORACLES.md' '^\| `(F-M1A-[0-9]{3})` \|' 'F-M1A-' 1 23 3 'M1A_ORACLES'
 Test-Sequence 'docs/v3/AUTONOMOUS-PLANNING-CAMPAIGN.md' '^\| (GATE-V3DF-[0-9]{2}) \|' 'GATE-V3DF-' 1 24 2 'CAMPAIGN_GATES'
-Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| `(SRC-V3-[0-9]{3})` \|' 'SRC-V3-' 1 48 3 'SOURCE_RECORDS'
+Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| `(SRC-V3-[0-9]{3})` \|' 'SRC-V3-' 1 51 3 'SOURCE_RECORDS'
+Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| (R[0-9]+) \| `SRC-V3-' 'R' 1 17 0 'SOURCE_LANE_COVERAGE'
+
+$sourceLines = Get-Content 'docs/v3/SOURCE-REGISTER.md'
+$sourceIds = @($sourceLines | ForEach-Object {
+  if ($_ -match '^\| `(SRC-V3-[0-9]{3})` \|') { $Matches[1] }
+})
+$coverageLines = @($sourceLines | Where-Object { $_ -match '^\| R(?:[1-9]|1[0-7]) \|' })
+$sourceCoverageErrors = foreach ($line in $coverageLines) {
+  foreach ($match in [regex]::Matches($line, 'SRC-V3-[0-9]{3}')) {
+    if ($match.Value -notin $sourceIds) { "unknown coverage source $($match.Value)" }
+  }
+}
+if ($sourceCoverageErrors) { $sourceCoverageErrors; throw 'source lane coverage failed' }
+"SOURCE_LANE_LINKS_PASS lanes=$($coverageLines.Count)"
 
 $oracleLines = Get-Content 'docs/v3/M1A-FIXTURE-ORACLES.md'
 $commandIds = @($oracleLines | ForEach-Object {

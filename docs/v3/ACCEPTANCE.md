@@ -55,6 +55,10 @@ quota/provider blocks, route replacement, PAUSE epochs, ambiguous effects, dupli
 replay corruption, unauthorized parent mutation and unknown fields/policies must all fail in the
 specified way.
 
+A policy-bound Owner verifier exception is never folded into that full state. It may produce only
+the explicitly distinct `terminal-verified-downgraded` projection with its missing independence
+dimensions retained; missing verification remains blocked.
+
 M1A performs no provider/model/network call, terminal/process launch, plugin execution, SQLite or
 Git operation, publication or external effect. Inert records used in failure fixtures do not
 prove those subsystems. The current immediate PAUSE is operative; future profiles must remain

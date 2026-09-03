@@ -88,6 +88,36 @@ counterevidence and applicability limits. If a required row expires, dependent c
 | `SRC-V3-046` | Cursor [CLI overview](https://prod.cursor.com/docs/cli/overview), retrieved 2026-09-03, interactive/non-interactive and resume sections | documented CLI/session interface | entitlement, implementation internals, Recursion authority or account behavior | mutable product docs; expire on CLI/docs update or 30 days |
 | `SRC-V3-047` | OpenAI [Codex subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents), retrieved 2026-09-03, model/reasoning override and concurrency sections | documentation plus this campaign's exact local dispatch observations | future availability, billing/entitlement or v3 product behavior | mutable product docs; expire on app/CLI/model/config docs change or 30 days |
 | `SRC-V3-048` | OpenCode Go [model/usage documentation](https://dev.opencode.ai/docs/go/), retrieved 2026-09-03, model list, usage-limit and data-use sections | public catalog/privacy inputs for deciding whether a public-only packet could be eligible | configured route, non-metered approval, exact effort mapping or historical packet recovery | mutable catalog; revalidate before any approved dispatch; no current route admitted |
+| `SRC-V3-049` | SLSA Source v1.2, source commit [`ae7fc76215004e8fae250c877eff8919bf048e3b`](https://github.com/slsa-framework/slsa/blob/ae7fc76215004e8fae250c877eff8919bf048e3b/spec/source-requirements.md), “Level 4: Two-party review” and `two-party-review`; [license](https://github.com/slsa-framework/slsa/blob/ae7fc76215004e8fae250c877eff8919bf048e3b/LICENSE.md) | final source revision/context and two trusted-person review requirements in the Source-track threat model | semantic correctness, model-family diversity, Recursion verifier independence or applicability outside a configured source-control system | immutable pin; review successor or disclosed correction before adoption |
+| `SRC-V3-050` | Git 2.54.0 annotated tag target commit [`94f057755b7941b321fd11fec1b2e3ca5313a4e0`](https://github.com/git/git/blob/94f057755b7941b321fd11fec1b2e3ca5313a4e0/Documentation/git-worktree.adoc), `list --porcelain`, `lock`, `prune` and `remove`; [GPLv2 license](https://github.com/git/git/blob/94f057755b7941b321fd11fec1b2e3ca5313a4e0/COPYING) | stable porcelain worktree inventory plus documented lifecycle/lock mechanics | review capacity, safe automatic pruning, conflict rate, Recursion authority or workload thresholds | immutable pin; actual runtime Git/filesystem behavior still requires a versioned fixture |
+| `SRC-V3-051` | Kubernetes website source commit [`1e6f856b11c1e1a4ba9ffed02f84f0cd2930d457`](https://github.com/kubernetes/website/blob/1e6f856b11c1e1a4ba9ffed02f84f0cd2930d457/content/en/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale.md), “Algorithm details,” “Scaling policies” and “Stabilization window”; [CC BY 4.0 documentation license](https://github.com/kubernetes/website/blob/1e6f856b11c1e1a4ba9ffed02f84f0cd2930d457/LICENSE) | distinct up/down policies and stabilization-window behavior for HPA | evidence that HPA policy fits branch/review admission, any universal threshold, or Recursion performance | immutable page pin; revalidate only if adopting a successor analogy or on disclosed correction |
+
+## R1–R17 source-coverage index
+
+This index is the machine-checked join between each persistent lane and its consequential
+external records. `Local treatment` states which conclusions remain repository-local inference,
+Owner direction or unverified hypothesis rather than source fact. A row cannot broaden its
+sources' `Supports` columns.
+
+| Lane | Consequential source records | Local treatment / limitation |
+|---|---|---|
+| R1 | `SRC-V3-039`, `SRC-V3-040`, `SRC-V3-041`, `SRC-V3-042`, `SRC-V3-043`, `SRC-V3-044`, `SRC-V3-045` | adapter/kernel split is a repository-local recommendation; harness sources do not grant Recursion authority or prove benefit |
+| R2 | `SRC-V3-009`, `SRC-V3-012`, `SRC-V3-013`, `SRC-V3-020`, `SRC-V3-022`, `SRC-V3-023` | lease/effect state contract is local inference; primitives do not roll back external effects |
+| R3 | `SRC-V3-020`, `SRC-V3-021`, `SRC-V3-022`, `SRC-V3-023`, `SRC-V3-024`, `SRC-V3-025` | operative immediate PAUSE is current authority; future modes are proposals and process stop is not effect rollback |
+| R4 | `SRC-V3-016`, `SRC-V3-017`, `SRC-V3-018` | capability lineage and self-administration design are local/Owner-policy work, not supplied by these analogies |
+| R5 | `SRC-V3-019`, `SRC-V3-049` | explicit independence vector is local inference; SLSA review and NASA independence categories do not establish model-family diversity |
+| R6 | `SRC-V3-004`, `SRC-V3-005` | separate plugin effect grants are local inference; integrity/provenance is not benign behavior or authority |
+| R7 | `SRC-V3-001`, `SRC-V3-002`, `SRC-V3-003` | SQLite is only a database concurrency primitive; Recursion writer identity/fencing/effect recovery remain local contracts |
+| R8 | `SRC-V3-050`, `SRC-V3-051` | adaptive review-capacity policy and thresholds are unverified hypotheses; HPA is analogy only |
+| R9 | `SRC-V3-026`, `SRC-V3-027` | deletion/tombstone protocol is local design and provider propagation remains unverified |
+| R10 | `SRC-V3-028`, `SRC-V3-029` | canary method is adapted; no private canary, deployment or runtime proof exists |
+| R11 | `SRC-V3-020`, `SRC-V3-021`, `SRC-V3-022`, `SRC-V3-023`, `SRC-V3-024`, `SRC-V3-025` | terminal broker/cursor/lease protocol is local and supported-platform behavior unproved |
+| R12 | `SRC-V3-001`, `SRC-V3-002`, `SRC-V3-003` | all v3 performance/leanness results remain unverified; v2 regression is not v3 evidence |
+| R13 | `SRC-V3-037`, `SRC-V3-038` | Recursion routing/delegation benefit and quota efficiency remain unverified hypotheses |
+| R14 | `SRC-V3-034`, `SRC-V3-035`, `SRC-V3-036` | cache behavior is provider/API-specific; Codex OAuth/subscription/cross-provider conclusions are rejected |
+| R15 | `SRC-V3-007`, `SRC-V3-008` | merge precedence, authority and safe configuration semantics are local contract proposals |
+| R16 | `SRC-V3-006`, `SRC-V3-030`, `SRC-V3-031`, `SRC-V3-032`, `SRC-V3-033` | provenance/metadata is not truth; adapter benefit remains unverified |
+| R17 | `SRC-V3-039`, `SRC-V3-040`, `SRC-V3-041`, `SRC-V3-042`, `SRC-V3-043`, `SRC-V3-044`, `SRC-V3-045`, `SRC-V3-046`, `SRC-V3-047`, `SRC-V3-048` | Option 2 and whole-v3 benefit remain an unratified recommendation/unverified hypothesis |
 
 ## Fail-closed use rule
 

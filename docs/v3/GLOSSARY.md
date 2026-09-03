@@ -54,7 +54,7 @@ workers. The kernel owns neither portfolio priorities nor ARM plans.
 | `ReplanDecision` | ARM proposes; Head handles cross-ARM/goal seams; kernel admits | Request for a new immutable PlanRevision and complete old-item disposition |
 | `Blocker` | discovering actor proposes; kernel binds | Typed unresolved condition with evidence, affected scope, required authority and allowed recovery |
 | `Escalation` | ARM to Head or Head to Owner | Exact blocker/decision packet that freezes affected scope and cannot grant authority itself |
-| `PlanVerifierDecision` | assigned plan verifier | Exact-plan pass/fail/blocked judgment with independence vector, dissent and limitations; cannot rewrite the plan |
+| `PlanVerifierDecision` | assigned plan verifier | Exact-plan `pass/downgraded-pass/fail/blocked` judgment with assurance grade, independence vector, dissent and limitations; a policy-bound Owner exception may yield only `terminal-verified-downgraded`, never full verification, and cannot rewrite the plan |
 | `CommandEnvelope` / `CommandReceipt` | authenticated caller / kernel | Compare-and-swap request and accepted/refused/duplicate/conflict result |
 | `PlanningEvent` | kernel | Append-only sequenced transition record used for canonical replay |
 | `ExecutiveLease` / `WorkLease` | kernel grants | Scoped epoch-bearing proposal/execution authority; replacement fences stale holders |

@@ -138,6 +138,7 @@ and two-party review properties. These are **reverified** from [NASA-STD-8739.8B
 2022-09-08, §§4.4.1–4.4.6](https://standards.nasa.gov/sites/default/files/standards/NASA/B/0/NASA-STD-87398RevB.pdf)
 and [SLSA Source v1.2](https://slsa.dev/spec/v1.2/source-requirements). Mapping independence to
 model, family, provider, account, host, session and evidence channel is a **local inference**.
+Exact source/locator/limit records are `SRC-V3-019` and `SRC-V3-049`.
 
 **Contradiction/limit:** SLSA lineage is not semantic correctness; organizational independence
 does not establish model-family defect diversity. Sol, Luna and Terra are one GPT-5.6 family.
@@ -202,6 +203,7 @@ These are **reverified** from [Git worktree 2.54.0](https://git-scm.com/docs/git
 and [Kubernetes HPA, retrieved 2026-09-03](https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/).
 Using host pressure, conflict/staleness, unreviewed volume and measured Owner review service rate
 with hysteresis is a **local inference**.
+Exact immutable source/locator/limit records are `SRC-V3-050` and `SRC-V3-051`.
 
 **Contradiction/limit:** HPA is an analogy, not branch-capacity evidence. Cheap branch creation
 does not imply review capacity; the historical ceiling of 75 is not a validated v3 constant.

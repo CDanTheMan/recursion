@@ -103,8 +103,9 @@ fail; the reducer performs set inclusion and exact integer comparison only.
 No plugin, adapter, provider or free-form command type exists. Refused commands do not append an
 authoritative planning event. The pure projection uses the exact object states enumerated in
 `AUTONOMOUS-PLANNING.md`; `terminal-verified` additionally requires every current node complete,
-all required gates passed, a passing plan-verifier decision and no open blocker, escalation,
-retry, stale packet or ambiguous effect.
+all required gates passed, a full `pass` PlanVerifierDecision and no open blocker, escalation,
+retry, stale packet or ambiguous effect. A valid `downgraded-pass` can produce only the distinct
+`terminal-verified-downgraded` projection and must preserve its missing independence dimensions.
 
 ## Closed error registry
 
@@ -159,7 +160,7 @@ oracle.
 | `F-M1A-008` | failure history already contains same typed delta; propose reworded prose with identical canonical delta fields | `refused/E-RETRY-NONNOVEL`; `NOEVENT`; no new packet, model-request marker, attempt or debit |
 | `F-M1A-009` | failure at exact attempt maximum; propose structurally valid new delta | `refused/E-RETRY-EXHAUSTED`; then admitted `raise-blocker`/`raise-escalation` emits exactly `+BlockerRaised,+EscalationRaised`; plan not terminal-success |
 | `F-M1A-010` | all worker results/gates except required verifier assignment/result; attempt completion/verifier decision | `refused/E-VERIFIER-MISSING`; `NOEVENT`; node `gate-pending`/plan blocked, never verified/complete |
-| `F-M1A-011` | exact candidate plus fixture Owner exception attestation bound to GoalSpec verifier-policy and operative constitution digests, reason, expiry logical time and missing dimensions | accepted `+PlanVerifierDecisionRecorded`; decision label `downgraded-pass`, independence vector preserves missing dimensions; any missing/mismatched binding gives `E-AUTH-MISSING`/`E-VERIFIER-MISSING` and `NOEVENT` |
+| `F-M1A-011` | exact candidate plus fixture Owner exception attestation bound to GoalSpec/PlanRevision/candidate/verifier-policy/operative-constitution digests, reason, expiry logical time and missing dimensions | accepted `+PlanVerifierDecisionRecorded`; disposition `downgraded-pass`, assurance `downgraded`, terminal projection if otherwise complete is `terminal-verified-downgraded`, and independence vector preserves missing dimensions; any missing/mismatched/expired binding gives `E-AUTH-MISSING`/`E-VERIFIER-MISSING` and `NOEVENT`; `terminal-verified` is forbidden |
 | `F-M1A-012` | active ready node plus observed included-capacity exhaustion; request metered/unauthorized replacement | blocker command records `+BlockerRaised` with `capacity/deferred`; replacement `refused/E-ROUTE-SPEND`, `NOEVENT`; no failure/success/debit |
 | `F-M1A-013` | checkpointed node and permitted nonmetered replacement descriptor within the same allowed set | `replace-route` accepted with `+RouteAssignmentReplaced,+WorkPacketDerived`; logical actor/goal/policy/privacy/budget digests equal, new packet route/epoch differs, old packet stale |
 | `F-M1A-014` | active state; Owner applies operative `current-immediate`; then plan/packet/result/effect commands | pause accepted `+PauseApplied`; each later command `refused/E-PAUSED`, `NOEVENT`; only status/receipt projection changes allowed |

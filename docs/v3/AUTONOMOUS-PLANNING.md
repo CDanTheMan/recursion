@@ -73,7 +73,7 @@ Lifecycle is an event projection; no accepted object is updated in place.
 | `GoalSpec` | Owner; stable goal id plus immutable version | outcome, acceptance, source, allowed paths/non-goals, authority, privacy/egress, routes/accounts/capacity, budgets, resources, verification, PAUSE/constitution refs, publication/effect bounds, terminal/Owner seams | `draft → pending-owner → accepted → superseded/closed/rejected`; Head compiles; only authenticated Owner acceptance/amendment makes it authoritative | all accepted versions and disposition events retained; parent of every ArmRun and PlanRevision |
 | `GoalSpecAmendment` | Owner; unique command plus old/new GoalSpec digests | exact changed fields, rationale, authorization, effective fence epoch, safe-checkpoint rule, required old-plan/node/effect disposition | `proposed → accepted/refused → applied`; only Owner proposes/accepts; kernel validates | never edits old GoalSpec; emits new version and invalidation/fence events |
 | `ArmRun` | Head; `AR-<goal>-<sequence>` | logical ARM id, GoalSpec binding, profile/route eligibility, budget, source, executive lease policy, verifier requirement | `proposed → admitted → planning/running/blocked → completed/failed/stopped/superseded`; Head controls lifecycle; kernel admits | route/model may change only through assignment events; logical ARM id and policy bindings persist |
-| `PlanRevision` | ARM; stable plan id plus monotonically increasing revision | GoalSpec digest, full DAG, acceptance closure, budgets/reservations, path/effect ownership, source, policy bindings, prior revision, change rationale and complete old-node disposition map | `proposed → admitted → active → blocked/superseded → terminal-verified/terminal-failed`; ARM proposes; verifier judges; kernel admits/transitions | immutable aggregate snapshot; exactly one active revision per ArmRun; event replay reproduces its digest |
+| `PlanRevision` | ARM; stable plan id plus monotonically increasing revision | GoalSpec digest, full DAG, acceptance closure, budgets/reservations, path/effect ownership, source, policy bindings, prior revision, change rationale and complete old-node disposition map | `proposed → admitted → active → blocked/superseded → terminal-verified/terminal-verified-downgraded/terminal-failed`; ARM proposes; verifier judges; kernel admits/transitions | immutable aggregate snapshot; exactly one active revision per ArmRun; event replay reproduces its digest |
 | `PlanTransition` | ARM proposal, kernel admission; unique command id | from/to plan digests, trigger evidence, retained/invalidated/quarantined/superseded/cancelled sets, lease and epoch, checkpoint | `proposed → admitted/refused → applied`; stale from-digest or lease refuses without mutation | atomic event group; supplies deterministic revision boundary and audit rationale |
 | `TaskNode` | ARM; plan-scoped stable semantic id and version | dependencies, source, inputs/outputs, read/write paths, effect domains, authority/budget/route subset, gate/verifier refs, retry maximum and terminal contribution | states defined below; ARM proposes only inside a PlanRevision; kernel admits; worker cannot edit | immutable inside a PlanRevision; new version/revision supersedes; evidence may be retained only by compatibility proof |
 | `WorkPacket` | deterministic kernel derivation; `WP-<task>-<attempt>-<digest>` | exact TaskNode plus attenuated goal/plan/policy/grant/privacy/route/budget/source/lease/gates, allowed actions, explicit prohibitions, output schema and deadline/checkpoint | `derived → admitted → leased → executing → result-submitted → gate-pending → consumed/stale/quarantined`; kernel alone derives/admits; worker executes | immutable/content-addressed; any binding or lease/epoch mismatch makes it stale; no packet survives GoalSpec amendment |
@@ -82,7 +82,7 @@ Lifecycle is an event projection; no accepted object is updated in place.
 | `ReplanDecision` | ARM proposal, Head involvement when conflict/goal seam requires, kernel admission | trigger, old/new revision, full disposition map, narrowed bounds, unresolved blocker/escalation | `proposed → admitted/refused → applied`; ARM may replan within goal; Head may request/accept lifecycle result, not author DAG | creates a new immutable PlanRevision; atomic replay boundary |
 | `Blocker` | discovering actor proposes; kernel classifies/binds | type, exact blocked object, evidence, owner needed, allowed recovery, retry-after capacity observation if applicable | `open → resolved/superseded/escalated`; only named authority supplies resolution | retained with failed/refused transitions; required blocker means node/plan cannot be complete |
 | `Escalation` | ARM to Head or Head to Owner; unique id | blocker/failure history, attempts/novelty, requested decision, available options, recommendation, scope frozen pending answer | `raised → acknowledged → resolved/declined/superseded`; target authority answers | never widens authority by itself; resolution references an authenticated decision/amendment |
-| `PlanVerifierDecision` | assigned plan verifier | exact GoalSpec/plan/event-log/gate/evidence digests, independence vector, `pass/fail/blocked`, dissent and limitations | `submitted → admitted/refused`; missing verifier or evidence produces `blocked`, never pass | required before terminal-verified; verifier cannot create a replacement plan |
+| `PlanVerifierDecision` | assigned plan verifier | exact GoalSpec/plan/event-log/gate/evidence digests, independence vector, `pass/downgraded-pass/fail/blocked`, assurance grade, optional Owner exception receipt, dissent and limitations | `submitted → admitted/refused`; missing verifier/evidence is `blocked`; `downgraded-pass` requires the exact policy-bound exception below | full `pass` is required for `terminal-verified`; a valid downgrade can produce only `terminal-verified-downgraded`; verifier cannot create a replacement plan |
 | `CommandEnvelope` / `CommandReceipt` | authenticated caller / kernel | command id/type/schema, actor/lease, expected aggregate version/digest, payload digest, bindings / accepted-refused-duplicate-conflict and emitted event span | validate → receive one receipt; stale/malformed/unauthorized commands refuse before semantic execution | same id+digest returns original receipt; same id+different digest is conflict |
 | `PlanningEvent` | kernel sequencer | stream id, sequence, previous/event digest, logical time, admitted command, type/version and payload | append-only after validation; no model writes event storage | replay source of truth; corrupt/gap/unknown event halts rebuild |
 | `ExecutiveLease` / `WorkLease` | kernel grants to logical actor | subject, goal/plan/task scope, epoch, nonce, issued/expiry logical time, allowed commands, revocation | `offered → active → expired/revoked/replaced`; only kernel grants/replaces after authority checks | replacement increments epoch; stale holder proposals refuse; lease alone is not external-effect fencing |
@@ -134,38 +134,76 @@ fails closed.
 
 ### Closed amendment-compatibility grammar
 
-`compatible` is not a model judgment. The kernel receives a strict `CompatibilityInput` for each
-old node containing these canonical fields:
+`compatible` is not a model judgment. `CompatibilityInput@1` is a closed record. It contains
+exactly:
 
-`old_node_digest`, `new_node_digest`, `semantic_definition_digest`, sorted `input_digests`,
-`output_schema_digest`, sorted `source_digests`, sorted read/write `resource_paths`, sorted
-`effect_keys`, authority/capability sets, privacy/egress class, route-capability set, numeric
-budget/attempt limits, gate IDs plus gate-policy digests, verifier-policy digest, constitution
-policy digest, prior result/effect state and consumed budget.
+- `compatibility_schema_version="compatibility-input-1"`;
+- `old_goal_ref` and `new_goal_ref`, each `{goal_id, version, content_digest, fence_epoch}`;
+- `old_node` and `new_node`, each the complete `NodeCompatibilityTuple@1` below;
+- `replacement_node_id` and `replacement_node_digest`, both `null` or both equal to the new
+  node and to the PlanTransition's explicit old-to-new replacement mapping;
+- `prior_result`, either `null` or `{state, candidate_digest, evidence_digests,
+  gate_result_digests, plan_verifier_decision_digest, assurance_grade}`;
+- `prior_effect`, always `{state, effect_id, intent_digest, receipt_digest}`; and
+- `consumed_budget`, the same closed non-negative-integer budget map used by the old node.
 
-The only outputs are `retain-definition`, `retain-terminal`, `invalidate`, `quarantine`,
-`supersede` or `cancel`. Evaluation is ordered and total:
+`prior_result.state` is one of `result-submitted`, `gate-pending`, `verified`, `complete` or
+`failed`, with assurance `full`, `downgraded` or `none`. `prior_effect.state` is one of
+`none`, `prepared-undispatched`, `observed-success`, `observed-failure`, `ambiguous` or
+`reconciled`; fields inapplicable to `none` are typed `null`, never omitted.
 
-1. unknown schema/policy, digest mismatch, missing field or prior ambiguous/unauthorized effect
-   yields `quarantine`;
-2. changed semantic definition, inputs, output schema, sources, resource paths or effect keys
-   yields `invalidate` or `supersede` when an explicit replacement ID exists;
-3. any node authority/route/path/effect set not a subset of the new GoalSpec, privacy/egress less
-   restrictive than the new goal, consumed-plus-remaining budget above the new limit, or an
-   attempt count above the new maximum yields `invalidate`;
-4. an active/nonterminal old node satisfying steps 1–3 yields `retain-definition`; its old packet
-   and leases are still stale and a new packet is mandatory;
-5. a terminal node additionally requires identical gate and verifier-policy digests, every new
-   required gate ID present with `pass` against the exact old candidate/evidence digests, and no
-   new or stronger gate; only then is `retain-terminal` permitted; otherwise retain its evidence
-   as historical input but `invalidate` completion; and
-6. a prepared-undispatched effect may be `cancel`; an observed immutable effect receipt is
-   retained as evidence but cannot by itself retain task authority.
+`NodeCompatibilityTuple@1` contains paired values rather than unnamed comparison inputs:
 
-Set inclusion uses sorted exact identifiers; numeric comparison uses exact integers; privacy
-classes use the versioned policy's finite partial order. No natural-language similarity,
-embedding, model score, wall clock or provider observation participates. M1A uses only known
-fixture policy versions; an incomparable class fails closed.
+| Exact field | Canonical type |
+|---|---|
+| `node_id`, `node_version`, `node_digest` | bounded identifier, positive integer, digest |
+| `semantic_definition_digest`, `output_schema_digest` | digest |
+| `dependency_node_ids`, `input_digests`, `source_digests`, `read_resource_paths`, `write_resource_paths`, `effect_keys` | duplicate-free sorted arrays of exact strings/digests |
+| `authority_ids`, `capability_ids`, `route_ids`, `route_capability_ids` | duplicate-free sorted identifier arrays |
+| `privacy_class_id`, `egress_class_id`, `privacy_policy_digest` | identifiers plus digest into the GoalSpec-bound finite policy order |
+| `budget_limits` | closed map `{model_turns, attempts, tokens, money_minor, cpu_ms, memory_bytes, output_bytes}`, each a non-negative integer |
+| `gate_requirements` | duplicate-free sorted `GateRequirement@1` array |
+| `retry_policy_digest`, `verifier_policy_digest`, `constitution_policy_digest`, `terminal_contribution_digest` | digest |
+
+`GateRequirement@1` is exactly `{gate_id, procedure_digest, evidence_schema_digest,
+candidate_binding_digest, verifier_policy_digest}` and is sorted by `gate_id`. M1A defines no
+implicit gate-strength order. Any added, removed or unequal gate requirement, procedure,
+evidence schema, candidate binding or verifier policy is a changed node contract and invalidates
+prior completion. A future non-conservative strength order requires a new policy version and
+Owner acceptance; it is not guessed by M1A.
+
+The compatibility command supplies only refs/digests. The reducer loads the referenced canonical
+GoalSpecs, nodes, gates, results and policy fixtures from the replay state, reconstructs both
+tuples, and rejects the entire amendment with the applicable schema/digest/policy error if a
+supplied value differs. The only node-disposition outputs are `retain-definition`,
+`retain-terminal`, `invalidate`, `quarantine` or `supersede`; `cancel` belongs to the separate
+effect disposition. Evaluation is ordered and total:
+
+1. malformed/missing input, unknown schema/policy/ref, digest mismatch or an incomplete
+   old-to-new mapping refuses the whole amendment without an event;
+2. an ambiguous, contradictory or unauthorized prior effect produces `quarantine` for the node
+   and effect; a merely prepared-undispatched effect receives the separate `cancel` effect
+   disposition;
+3. inequality in any old/new tuple field except `node_version` and `node_digest` produces
+   `supersede` only when the non-null replacement fields match the new tuple and transition
+   mapping; otherwise it produces `invalidate`;
+4. the new tuple must be attenuated by the new GoalSpec: every authority/capability/route/path/
+   effect set is a subset, privacy and egress are equal or more restrictive under the exact
+   finite policy relation, every budget limit is at most the goal limit, and consumed budget is
+   at most both the node and goal limit. Failure produces `invalidate`;
+5. a nonterminal old node satisfying 1–4 produces `retain-definition`; every old packet and
+   lease is nevertheless stale and compatible work requires a newly derived packet;
+6. a terminal old node additionally requires the prior candidate/evidence/result digests to
+   match the exact retained tuple, every required GateResult to be `pass`, and the exact same
+   PlanVerifierDecision digest and assurance grade. It then produces `retain-terminal`;
+   otherwise its evidence remains historical and the node produces `invalidate`; and
+7. an observed immutable effect receipt remains evidence under its separate disposition but
+   cannot retain task authority or convert ambiguity into success.
+
+Arrays compare byte-for-byte after duplicate rejection and required sorting; set inclusion is
+over exact identifiers; numeric comparison is exact integer comparison; privacy classes use the
+GoalSpec-bound finite partial order. No natural-language similarity, embedding, model score,
+wall clock or provider observation participates. Unknown/incomparable relations fail closed.
 
 ## Plan and DAG admission
 
@@ -228,27 +266,84 @@ Failed gates return the exact GateResult and evidence digest to the ARM. Missing
 required gates block; a risk-approved verifier downgrade is a distinct exception receipt and
 must state the missing independence dimensions. It is never reported as full independence.
 
-A retry is admissible only with one strict `NoveltyDelta`. Its closed `kind` and required fields
-are:
+`PlanVerifierDecision@1.disposition` is exactly `pass`, `downgraded-pass`, `fail` or `blocked`.
+`pass` requires every verifier-policy dimension and has `assurance_grade="full"` and
+`exception_receipt=null`. `downgraded-pass` has `assurance_grade="downgraded"` and is admitted
+only when an authenticated Owner exception receipt binds the exact GoalSpec, PlanRevision,
+candidate, verifier-policy and operative constitution digests, missing dimensions, reason and
+unexpired logical-time bound. `fail` and `blocked` have `assurance_grade="none"` and cannot close
+a plan. A full pass projects `terminal-verified`; a valid downgrade projects the distinct
+`terminal-verified-downgraded`. Policy, UI, receipts and reports MUST preserve that suffix and the
+missing dimensions. No downgrade is cross-family/full independence, and no absent or mismatched
+exception becomes a pass. This is a proposed representability rule; Lucas must ratify which
+real risk classes may issue such an exception before runtime use.
 
-| `kind` | Required canonical fields and mechanical admission rule |
+A retry is admissible only with one `NoveltyDelta@1`. It has exactly the common fields
+`novelty_schema_version="novelty-delta-1"`, `delta_id`, `kind`, `prior_attempt_digest`,
+duplicate-free sorted nonempty `addresses_failure_ids`, `old_descriptor_digest`,
+`new_descriptor_digest`, `canonical_diff`, `canonical_diff_digest` and `delta_digest`, plus
+exactly one kind payload below. Every addressed ID must resolve to a failed GateResult or open
+Blocker on the prior attempt. Unknown or extra fields fail schema admission.
+
+M1A logical identifiers use these ASCII grammars: `evidence-[a-z0-9][a-z0-9-]{0,62}`,
+`proposition-[a-z0-9][a-z0-9-]{0,62}`, `operation-[a-z0-9][a-z0-9-]{0,62}`,
+`capability-[a-z0-9][a-z0-9-]{0,62}` and
+`dependency-[a-z0-9][a-z0-9-]{0,62}`; `delta_id` uses
+`delta-[a-z0-9][a-z0-9-]{0,62}`. `EvidenceRef@1` is exactly
+`{evidence_id, evidence_type, locator, content_digest, schema_digest}`; `evidence_type` is one of
+`gate-output`, `fixture-observation`, `synthetic-source` or `repair-receipt`, and `locator` is
+exactly `fixture://evidence/<evidence_id>`. M1A never dereferences that locator or accepts a URL,
+path or free-form locator.
+
+`CanonicalDiff@1` is recomputed, never trusted from the proposer. Starting at the two referenced
+descriptor values, the kernel recursively compares objects. If both values are objects, it walks
+the union of property names in RFC 8785 UTF-16 code-unit order; a property absent on one side
+emits one entry and is not descended into. If types differ, or either value is a scalar or array,
+inequality emits one entry at the current path. An entry is exactly
+`{path_segments, old_value, new_value}`, where `path_segments` is the array of object keys from
+the root and each value is either `{state:"present", digest:D(value)}` or
+`{state:"absent", digest:null}`. Entries sort lexicographically by `path_segments` under the same
+ordering. `canonical_diff_digest=D(entries)`; `delta_digest=D(the complete delta without
+delta_digest)`. A supplied list/digest unequal to the recomputation fails with
+`E-DIGEST-MISMATCH`; an empty list is non-novel. Arrays in every descriptor have already passed
+their schema's duplicate/sort rules and compare atomically.
+
+For `evidence-added`, `hypothesis-replaced`, `strategy-changed`,
+`route-capability-changed`, `task-narrowed` and `dependency-repaired`, the diff operands are
+respectively the old/new evidence arrays, hypothesis descriptors, strategy descriptors, route
+descriptors, scope descriptors and dependency inputs. For `owner-amended`, they are the complete
+old/new canonical GoalSpec payloads loaded by the refs. `old_descriptor_digest` and
+`new_descriptor_digest` must equal `D` of those exact operands. Every descriptor self-digest
+(`hypothesis_digest`, `strategy_digest`, `descriptor_digest` or `scope_digest`) is likewise `D`
+of that descriptor with its self-digest field omitted.
+
+The GoalSpec binds one `NoveltyPolicy@1` containing duplicate-free sorted arrays
+`accepted_evidence_types[{failure_id,evidence_types}]` and
+`failure_capability_requirements[{failure_id,capability_ids}]`, plus one route envelope
+`{route_ids,account_class_ids,capacity_pool_ids,allowed_spend_classes}`. Each referenced failure
+must exist in replay state and in the applicable map. M1A permits route spend classes only
+`none` and `included`; `metered` is representable as a refused input, never in the allowed
+envelope. Unknown IDs, maps, relations or versions fail closed.
+
+The seven `kind` payloads and their complete mechanical rules are:
+
+| `kind` | Exact payload and admission rule |
 |---|---|
-| `evidence-added` | failed gate IDs; new source/evidence digests not present in any prior attempt; exact evidence type/locator; no replacement of existing history |
-| `hypothesis-replaced` | failed gate IDs; unequal old/new hypothesis digests; enumerated changed proposition IDs |
-| `strategy-changed` | failed gate IDs; unequal old/new bounded action-graph digests; sorted changed operation IDs; unchanged goal/resource/effect ceiling |
-| `route-capability-changed` | failed route/blocker IDs; old/new descriptor digests; sorted newly observed capability IDs required by the named failure; same allowed route/account/spend envelope |
-| `task-narrowed` | failed gate/blocker IDs; old/new task digests; machine-proved strict subset for capabilities, paths, effects, privacy/egress and budgets; no new required output |
-| `dependency-repaired` | blocker ID; new immutable repair receipt digest; the named deterministic dependency predicate now passes |
-| `owner-amended` | old/new GoalSpec version/digest, accepted Owner command receipt and amendment disposition digest; retry only if the new plan retains the node definition |
+| `evidence-added` | `old_evidence_refs`, `new_evidence_refs`, each sorted and unique by `EvidenceRef@1.evidence_id`. Every old record must occur byte-identically in new; new must add at least one ID and may not remove or replace one. Every addition's type must appear in the exact GoalSpec-bound `accepted_evidence_types[failure_id]`, and each addressed failure must receive at least one allowed addition. |
+| `hypothesis-replaced` | `old_hypothesis`, `new_hypothesis` and `changed_proposition_ids`; each descriptor is `{hypothesis_digest, propositions}` with a sorted nonempty array of `{proposition_id, proposition_digest}`. The kernel recomputes each hypothesis digest and the changed set as the sorted IDs added, removed or mapped to a different digest; that set must be nonempty and equal the supplied set. |
+| `strategy-changed` | `old_strategy`, `new_strategy` and `changed_operation_ids`; each descriptor is `{strategy_digest, operations, edges, goal_ceiling_digest, resource_ceiling_digest, effect_ceiling_digest}`. Operations are sorted `{operation_id, operation_digest}`; edges are sorted `{from_operation_id,to_operation_id}` over known operations. The kernel recomputes strategy digests and the changed set from added/removed/changed operations or incident edge changes. That set must be nonempty/equal the supplied set, while all three ceiling digests remain equal. |
+| `route-capability-changed` | `old_route_descriptor`, `new_route_descriptor` and `newly_observed_capability_ids`; each descriptor is `{descriptor_digest, route_id, account_class_id, capacity_pool_id, spend_class, capability_ids, observation_digest, allowed_envelope_digest}`. Descriptor digests are recomputed; the envelope digest and spend class are exactly equal, the spend class is `none` or `included`, both routes/accounts/pools are members of the bound envelope, and the supplied set must equal `new.capability_ids - old.capability_ids`. The finite failure-capability map must give every addressed failure a nonempty required set that was not satisfied by old capabilities and is satisfied by new capabilities; every added capability must occur in at least one addressed requirement. |
+| `task-narrowed` | `old_scope`, `new_scope`, each `{scope_digest, authority_ids, capability_ids, route_ids, route_capability_ids, read_resource_paths, write_resource_paths, effect_keys, privacy_class_id, egress_class_id, budget_limits, required_output_schema_digest, gate_requirements}`. Digests are recomputed. New sets must be subsets; privacy/egress must be equal or stricter under the bound finite order; each new integer limit must be `<=` old; output schema and `GateRequirement@1` arrays must be identical; and at least one set is proper, class is stricter or integer is lower. |
+| `dependency-repaired` | `{predicate_id, predicate_version, predicate_input_schema_digest, old_input, new_input, old_result_digest, repair_receipt_digest, new_result_digest}`. M1A's only registered predicate is `dependency-artifact-present` version 1 with input `{required_artifact_digest, observed_artifact_digests}`; it returns pass exactly when the required digest is in the duplicate-free sorted observed array. A result digest is `D({predicate_id,predicate_version,input_digest,verdict})`. The kernel recomputes the input/result digests and requires old=false, new=true, unequal inputs and the repair receipt digest to be one of the new observed digests. Unknown predicate/version/schema refuses. |
+| `owner-amended` | `{old_goal_ref, new_goal_ref, accepted_owner_command_receipt_digest, amendment_disposition_digest, retained_node_id, compatibility_input_digest}`. Replayed state must contain the exact accepted Owner receipt and amendment, the new goal must supersede the old, and the referenced `CompatibilityInput@1` must deterministically output `retain-definition` for that node. |
 
-The delta also contains `prior_attempt_digest`, `addresses_failure_ids`, `delta_digest` and
-`novelty_schema_version`. The kernel admits it only when the kind and fields are known, the
-canonical diff is nonempty, every addressed failure belongs to the prior attempt, the same delta
-digest was not consumed before, the structural rule above passes, and attempt/budget/route/PAUSE/
-effect conditions still pass. It does **not** decide that a new hypothesis is true or a strategy
-is wise; the next declared gate tests that semantic proposal. Rephrasing with identical typed
-digests, a route name change without a required capability delta, or previously consumed evidence
-is mechanically non-novel and is refused before another model turn.
+The kernel admits a delta only when its exact kind/schema, descriptors, recomputed diff/proofs and
+failure bindings pass; the same delta digest has not been consumed; and attempt, budget, route,
+PAUSE and effect conditions still pass. It does **not** decide that evidence is credible, a new
+hypothesis true or a strategy wise; the next declared gate tests that semantic proposal.
+Rephrasing without a typed descriptor change, a route label change without the required finite
+capability proof, or previously consumed evidence is non-novel and is refused before another
+model turn.
 
 Exhaustion creates a Blocker and Escalation rather than an unbounded loop.
 
