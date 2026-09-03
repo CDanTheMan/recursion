@@ -350,6 +350,31 @@ in bounded waves without substituting models. Record exact effort, route and obs
 evaluate PERF-011/H-038 without duplicating an entire expensive campaign after the result is
 already decisive.
 
+## 2026-09-03 campaign execution map
+
+The director admits the eight discovery lanes in two bounded waves, then gives concrete disputes
+to the two adjudication lanes. Native Codex workers may inspect this repository and public primary
+sources. The Contributor route receives only purpose-written public or synthetic packets. No
+worker writes the shared tree or launches nested agents.
+
+| Lane | Evidence question | Allowed sources | Intended model | Expected packet | Decisive falsifier | Integration destination |
+|---|---|---|---|---|---|---|
+| LUNA-1 | Which turn-loop, executive and deterministic-kernel responsibilities must Recursion own? | Local v2/v3 source and tests; official harness docs; pinned inspectable repositories | `gpt-5.6-luna`, `xhigh` | Responsibility matrix, lean alternatives and source-pinned boundary claims | A required invariant cannot wrap an external loop, or a native spike has a named decisive advantage | ARCHITECTURE, ARCHITECTURE-OPTIONS, CLAIM-LEDGER |
+| LUNA-2 | Can the execution-attempt/lease rehearsal prove one writer, exact replay, fencing and rollback? | Local writer/test inventory; database/workflow specifications and original papers | `gpt-5.6-luna`, `xhigh` | Aggregate ownership, crash and rollback matrix | An unenumerated writer or irreconcilable external effect defeats deterministic rollback | STATE, CURRENT-AND-MIGRATION, ACCEPTANCE |
+| LUNA-3 | What are enforceable PAUSE, cancellation and sovereign-authority boundaries per effect class? | Current constitution; local v3 direction; OS/workflow/capability primary sources | `gpt-5.6-luna`, `xhigh` | State/effect matrix and constitutional reconciliation options | Any mode admits an undeclared post-pause effect or model prose can widen authority | SECURITY, EXECUTIVES, CLI, DECISION-REGISTER |
+| LUNA-4 | Can plugin expressiveness, trust, quota and deletion remain separable and attributable? | Local contracts; signing, supply-chain, encryption and deletion standards/specifications | `gpt-5.6-luna`, `xhigh` | Grant/lifecycle and deletion-proof matrices | Install acknowledgement silently creates spend/route authority, or deletion is claimed while recoverable | PLUGINS-AND-EDITIONS, SECURITY, STATE |
+| LUNA-5 | Which daemon/client/process-broker contract makes detachable terminals portable and bounded? | Official Windows/POSIX/terminal/runtime docs and inspectable implementations | `gpt-5.6-luna`, `xhigh` | Process, IPC, flow-control and compatibility matrix | Client close loses work, slow clients block state, or descendants evade termination | TERMINAL-RUNTIME, CLI, INTERACTION-SURFACES, ACCEPTANCE |
+| LUNA-6 | Which performance, quota, context and delegation experiments can actually distinguish designs? | Local hypotheses; official provider observability docs; original evaluation/scheduling research | `gpt-5.6-luna`, `xhigh` | Preregistered baselines, treatments, metrics, floors and ablations | Counters are unobservable, treatments are incomparable, or review debt erases claimed efficiency | PERFORMANCE-PLAN, RESEARCH-HYPOTHESES, TELEMETRY |
+| LUNA-7 | Can a Scientific Research ARM resist false citations, version drift and inapplicable evidence? | Official scholarly APIs/standards; original research; local generic evidence contracts | `gpt-5.6-luna`, `xhigh` | SourceRecord/ResearchClaim protocol and adversarial fixture suite | Provenance, corrections, copyright or reproducibility cannot be enforced without a heavy core | SCIENTIFIC-RESEARCH, ACCEPTANCE, PLUGINS-AND-EDITIONS |
+| LUNA-8 | Does v3 justify its machinery over v2 and smaller options under hard floors? | Entire local specification and source/tests; only directly checked public evidence | `gpt-5.6-luna`, `xhigh` | Hostile contradiction/complexity ledger and simplifications | Hidden dual writers, authority leaks or mandatory mechanisms lack a measured user/safety benefit | all canonical v3 docs and CLAIM-LEDGER |
+| TERRA-1 | Which disputed authority, native-loop, state, PAUSE and plugin claims survive the evidence packets? | Exact Luna packets, local authority/source evidence and opened primary sources | `gpt-5.6-terra`, `xhigh` | Supported/rejected/conditional/unresolved verdicts with decisive checks | Evidence does not support the claim's exact scope or conflicts with higher authority | CLAIM-LEDGER, ARCHITECTURE, SECURITY, STATE |
+| TERRA-2 | Which terminal, performance, context, configuration and research experiments are falsifiable? | Exact Luna packets, experiment plans and opened primary sources | `gpt-5.6-terra`, `xhigh` | Experiment and evidence verdicts with missing controls | The design cannot observe its metric, preserve a hard floor or distinguish the baseline | PERFORMANCE-PLAN, ACCEPTANCE, TERMINAL-RUNTIME, SCIENTIFIC-RESEARCH |
+
+Public-only Muse review challenges sanitized mechanism claims and source quality after discovery.
+The exact Codex CLI Grok 4.5 lane remains conditional on a pre-existing approved non-metered
+custom-provider route and is omitted when that route is absent; neither route is silently
+substituted.
+
 ## Required outputs
 
 1. A source-pinned report for each R1–R17 lane with claim, contradiction, confidence and
