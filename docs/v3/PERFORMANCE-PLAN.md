@@ -45,8 +45,9 @@ Performance success never overrides a failed safety result.
 - Server-side prompt/cache controls are recorded only when the exact route exposes them. API
   controls are not assumed available through an OAuth CLI.
 - Provider-native session state is an affinity hint, not a portable capsule.
-- `ccusage` or reconstructed prices are reconciliation evidence, not live subscription
-  capacity or billing truth.
+- Any future `ccusage` adapter or reconstructed price is unverified reconciliation evidence,
+  not live subscription capacity or billing truth; `ccusage` itself was not source/license
+  reviewed in this campaign.
 - Contributor/training-eligible routes receive only public fixtures.
 - Every result records engine, provider, model, account reference, pool, host, sandbox, source
   revision and descriptor revision so a route change cannot masquerade as an optimization.

@@ -108,6 +108,22 @@ Reverse or narrow this recommendation if any of these is observed:
 6. The existing runtime proves one stable transition boundary with lower total change than the
    adapter/kernel split, making Option 1 sufficient.
 
+### Disabled-path cost commitments
+
+For Option 2 to remain preferable, an unselected engine, provider, node transport, observer,
+indexer, contributor route or native-loop spike must perform no model/network call, import no
+plugin implementation, hold no worker process, and create no periodic background work. Its
+unavoidable cost is limited to bounded manifest metadata used by zero-token capability
+resolution. Edition manifests may omit that metadata entirely. These are acceptance
+hypotheses, not measured facts; PERF-003 and the `core`-without-external-engines acceptance
+scenario decide them.
+
+Rollback is defined per aggregate, not by reinstalling old code: before the first external
+effect, restore the last verified source/state checkpoint and fenced writer; after an effect
+whose reversal is not proven, retain the new record and reconcile forward under owner policy.
+The concrete strangler and stop rules are in
+[CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md).
+
 ## Constitutional reconciliation requiring Lucas
 
 These are proposed rulings, not decisions. `CONTROL_PLANE.md` remains authoritative.

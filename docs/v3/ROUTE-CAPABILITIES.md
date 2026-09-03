@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 provider-route capability matrix
-status: research-in-progress
+status: evidence-reconciled
 last-updated: 2026-09-03
 ---
 

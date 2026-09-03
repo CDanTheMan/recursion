@@ -55,7 +55,7 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [RESEARCH-HYPOTHESES.md](RESEARCH-HYPOTHESES.md) | Which claims need experiments rather than confidence? |
 | [prompts/overnight-architecture-research.md](prompts/overnight-architecture-research.md) | What should the next autonomous Codex research session do? |
 | [prompts/overnight-adversarial-swarm-research.md](prompts/overnight-adversarial-swarm-research.md) | How should an eight-hour Luna, Muse, and conditional Grok research swarm ground and challenge the architecture? |
-| [archive/session-transcript-2026-09-02.md](archive/session-transcript-2026-09-02.md) | What human-visible conversation produced this hypothesis? |
+| [archive/session-transcript-2026-09-02.md](archive/session-transcript-2026-09-02.md) | What internal human-visible conversation produced this hypothesis? This file is excluded from public releases. |
 
 ## Status vocabulary
 
@@ -73,7 +73,9 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 4. V2 is the measured baseline and a source of proven invariants, not a ceiling on v3.
 5. V3 may be ambitious in destination while remaining incremental, reversible, and independently gated in construction.
 6. Configuration is a product feature, but integrity, attribution, privacy, budget authority, and publication provenance are not optional implementation details.
-7. The public repository must never contain credentials or private-project content. The transcript archive is sanitized and must receive another privacy review before publication.
+7. The public repository must never contain credentials or private-project content. The
+   transcript archive is internal-review provenance and is excluded from public release
+   artifacts; any public provenance is generated separately and reviewed after redaction.
 
 ## Immediate next step
 

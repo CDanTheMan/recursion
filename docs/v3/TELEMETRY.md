@@ -1,7 +1,7 @@
 ---
 title: Recursion v3 telemetry and optimization hypothesis
 status: hypothesis
-last-updated: 2026-09-02
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 telemetry and optimization hypothesis
@@ -79,13 +79,17 @@ Provider session IDs are disposable optimizations. Recursion lineage remains aut
 Usage data comes through a read-only telemetry evidence-provider interface. Candidate adapters include:
 
 - provider/CLI native usage events;
-- `ccusage` for supported Claude/Codex-compatible local histories where its evidence is applicable;
+- a future, separately source/license-qualified `ccusage` adapter where its evidence proves applicable;
 - official provider usage APIs;
 - Cursor/OpenCode/Gemini-specific collectors;
 - local resource monitors;
 - deterministic token estimators as explicitly labeled fallback.
 
-`ccusage` is useful as one optional evidence source, not a canonical billing abstraction. No collector may infer zero use merely because a CLI omits token counters.
+`ccusage` is preserved only as an owner-accepted name for a possible future adapter. This
+campaign did not pin its repository, version, license, data model, or supported histories, so
+it contributes no verified architecture claim and must be researched before admission. Any
+future usage reconciler is an optional evidence source, not a canonical billing abstraction.
+No collector may infer zero use merely because a CLI omits token counters.
 
 ## Route learning
 

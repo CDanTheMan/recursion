@@ -130,7 +130,8 @@ The destination may be a re-foundation; construction should still use a strangle
 
 1. Specify v3 contracts and prove adapters against fixtures.
 2. Introduce the canonical event/state boundary alongside read-only projections of v2 state.
-3. Represent Project Pilots as first-class ARM runs without changing publication authority.
+3. After Lucas ratifies ARM identity and Project Pilot compatibility semantics, represent the
+   approved subset as first-class ARM runs without changing publication authority.
 4. Route one low-risk flow through the v3 kernel.
 5. Compare results and rollback behavior against v2.
 6. Move additional transitions only when their equivalence or improvement is proven.

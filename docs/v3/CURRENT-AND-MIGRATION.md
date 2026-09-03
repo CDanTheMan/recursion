@@ -23,20 +23,43 @@ establish tested source behavior, not live enablement.
 |---|---|---|---|
 | Periodic supervisor | `loop/supervisor/run.sh` | operational-path source | Produces bounded briefs with Hermes; it is not the v2 MVP orchestrator |
 | Head decision | `scripts/hermes-decide.sh` -> `scripts/decision-queue.py` -> `scripts/conduct-hermes.sh` | operational-path source | Model emits a validated decision; deterministic code actuates a fixed verb |
-| Project executive | `scripts/project-pilot.py` plus pilot/goal/plan records | operational-path source | Current Project Pilot is the predecessor of a v3 ARM executive, not a first-class `ArmRun` |
+| Project executive | `scripts/project-pilot.py` plus pilot/goal/plan records | operational-path source | Current Project Pilot is a candidate compatibility predecessor, pending Lucas's ARM ruling; it is not a first-class `ArmRun` |
 | Reconciliation | `scripts/project-reconcile.py` | operational-path source | Reconciles goal/task/run evidence and schedules bounded work |
 | Worker and gate | `scripts/work.sh`, `worker-sandbox.sh`, assignment and evidence validators | operational-path source | Exclusive worktree, scope check, gate, distinct verifier, candidate binding |
 | Publication | `scripts/publish.sh` | operational-path source | Separate fail-closed publisher; review branch only |
 | V2 contracts/kernel | `mvp_contracts.py`, `mvp_kernel.py` | source-only, tested | Strict bounded packet graph and authority-subset checks; maximum task depth 2 |
 | V2 placement/integration | `execution_fabric.py` | source-only, tested | Deterministic placement, durable leases/recovery, verification receipts and integration intent |
-| V2 composition | `mvp_orchestrator.py` | source-only, tested | Composes authority, placement, verification and review intent; no non-test runtime caller found |
+| V2 composition | `mvp_orchestrator.py` | source-only and test-only | Composes authority, placement, verification and review intent; no non-test runtime caller found |
 | V2 adapters/control | `mvp_adapters.py`, `mvp_control_surface.py` | source-only, tested | Five adapter contracts; commands produce intents and do not mutate canonical state directly |
-| Remote adapters | `remote_assignment.py`, `remote_backend.py`, `cursor-cloud-adapter.py`, `grok-bot-dispatcher.py` | shipped inert | Loadable manifests and human enablement are absent; fake-transport controls are primary evidence |
+| Remote adapters | `remote_assignment.py`, `remote_backend.py`, `cursor-cloud-adapter.py`, `grok-bot-dispatcher.py` | source-only/test-only; live status unknown | Loadable manifests and human enablement are absent from the baseline; fake-transport controls are primary evidence |
 
 `operational-path source` means code participates in the repository's configured execution
 path. It does not mean deployed or currently enabled. `source-only, tested` means its
 contract is executable and the documented gate passed, but the normal execution path does
-not invoke it. Historical audit documents are provenance, not a live observation.
+not invoke it. `test-only` means the only caller or exercised transport found is a test.
+`proposed` is reserved for v3 design with no current implementation. `deployed` requires
+direct live-host evidence; no row in this campaign has that status, so deployment is
+explicitly `unknown`. Historical audit documents are provenance, not a live observation.
+
+## Exact source and test anchors
+
+These anchors make the source classification reproducible without treating prose as runtime
+evidence.
+
+| Concern | Source symbols or shell entry points | Test evidence |
+|---|---|---|
+| Head decision/actuation | `hermes-decide.sh::build_brief`; `decision-queue.py::enqueue`, `claim`, `transition`; `conduct-hermes.sh::drain_queue` | `scripts/tests/decision-identity.test.py`; `scripts/tests/hermes-conductor.test.sh` |
+| Project Pilot/reconciliation | `project-pilot.py::execute_value`; `project-reconcile.py::commit_reconcile_transition`, `admit_work`, `reconcile` | `scripts/tests/project-pilot-status-fail-closed.test.py`; `scripts/tests/hermes-pilot-phase8-red.py` |
+| Worker/gate/evidence | `work.sh::fresh_window_admission`, `make_phase5_assignment`, `scope_check`, `verify`, `run_independent_verifier`; `worker-evidence.py::validate_execution_evidence` | `scripts/tests/phase5-runtime-contract.test.py`; `scripts/tests/worker-evidence-assignment.test.py` |
+| V2 contract/kernel | `mvp_contracts.py::validate`, `validate_cross_records`; `mvp_kernel.py::TaskPacket`, `_build_packet_impl`, `_spawn_child_impl`, `validate_packet` | `scripts/tests/mvp-contracts.test.py::MvpContractsTest`; `scripts/tests/mvp-kernel.test.py::KernelTest` |
+| V2 fabric | `execution_fabric.py::resolve_placement`, `DurableFabricStore`, `PlacementGovernor`, `verify_candidate_result` | `scripts/tests/execution-fabric-phase8.test.py::FabricPlacementTests`, `DurableStateTests`, `IntegrationTests` |
+| V2 composition | `mvp_orchestrator.py::MVPOrchestrator.dispatch`, `verify`, `review_intent` | `scripts/tests/mvp-orchestrator.test.py::OrchestratorTest`; repository-wide import/caller search |
+| V2 adapters/control | `mvp_adapters.py::negotiate`, `_build_dispatch_plan_impl`, `record_result`; `mvp_control_surface.py::handle_command`, `evaluate_watchdog` | `scripts/tests/mvp-adapters.test.py::AdapterTest`; `scripts/tests/mvp-control-surface.test.py::ControlSurfaceTests` |
+| Remote attempts | `remote_assignment.py::validate_assignment`; `remote_backend.py::begin_attempt`, `reconcile_attempt`, `write_session`, `write_usage` | `scripts/tests/cursor-cloud-adapter.test.py` fake transport; `scripts/tests/remote-backend.test.py` |
+| Publication | `project-reconcile.py::publish_task`; `publish.sh::publish_one` | `scripts/tests/hermes-pilot-phase6-red.test.sh`; `scripts/tests/cursor-cloud-adapter.test.py` publication-ref refusals |
+
+The clean aggregate `scripts/tests/recursion-v2-mvp.test.py::MVPCompletionTests` passed on
+2026-09-03 and composes the focused suites. Its success is source evidence only.
 
 ## Current control flow
 
@@ -67,7 +90,7 @@ these stores.
 | Lucas is final authority; model proposes and code actuates | unchanged | Represent the boundary in every command/event envelope | Forbidden verb and authority-widening fixtures fail before append/effect |
 | Project Pilot plan, goal and window | goal-scoped `ArmRun` | Durable executive identity, lease, checkpoint, escalation and model replacement | Import fixture projects the same authority; restart does not change actor identity |
 | Immutable task plus assignment records | `TaskNode` and `WorkPacket` | One versioned cross-record graph and explicit parent goal/executive | V2 fixture round-trips or produces a typed incompatibility |
-| Child path/capability/budget subset | unchanged invariant | Generalize beyond the v2 depth-two MVP without unbounded recursion | Property tests prove every descendant is a strict subset and depth/branch limits are enforced |
+| Child path/capability/budget subset | unchanged invariant | Generalize beyond the v2 depth-two MVP without unbounded recursion | Property tests prove every descendant is a non-widening subset and depth/branch limits are enforced |
 | Engine/provider/model/pool/host/sandbox attribution | `Route` and `RouteLease` | Remove hard-coded executive identity and keep billing/account distinct | Every dispatch has one explicit route resolution and no implicit pool/provider fallback |
 | Durable lease, result and restart reconciliation | canonical event/action protocol | Unify overlapping attempt/lease implementations | Crash and duplicate delivery replay to one terminal outcome without a repeated external effect |
 | Independent verifier receipt | `EvidenceBundle` plus verifier assignment | Clean-room evidence and risk-scaled verifier policy | Implementer cannot mint verifier identity; exact candidate/source/gate bindings rederive |
@@ -95,6 +118,21 @@ these stores.
    it never merges two independent histories.
 8. Remove a compatibility path only after replay, backup/restore and rollback evidence has
    survived a private canary.
+
+## Proposed write-ownership inventory
+
+This is the minimum inventory a construction task must verify against its exact starting
+commit and, under separate authority, any live deployment. `Unknown` blocks a cutover.
+
+| Aggregate/effect | Baseline writer(s) and store | Fence condition before v3 admission | Proposed v3 ownership and rollback boundary |
+|---|---|---|---|
+| Head decision lifecycle | `decision-queue.py::enqueue/claim/transition`; decision journal plus pending/running/terminal projections; `conduct-hermes.sh` actuates | Stop legacy admission, reconcile every claimed decision, bind the last journal identity, then make compatibility views read-only | Kernel event writer owns decision state; fixed actuator remains post-commit. Before an external effect restore checkpoint; after an ambiguous effect reconcile forward |
+| Project goal/plan/window | `project-pilot.py::execute_value` and `project-reconcile.py::commit_reconcile_transition`; project/pilot/goal/task/event files | Quiesce both writers for the selected project aggregate, import exact digests, prove projection parity, then reject legacy mutation | Kernel owns `GoalSpec`/`ArmRun` events only after Lucas ratifies ARM semantics; legacy files become read-only projections |
+| Worker assignment/run/evidence | `work.sh` plus `assignment.py::persist_assignment`, `worker-evidence.py`, run/task/evidence files | Admit no new legacy run for the selected task class; terminalize or quarantine every existing run and bind worktree/source state | Kernel owns task/lease/result state; engine adapter owns no canonical writes. A started process/effect follows its crash matrix, not blind rollback |
+| MVP fabric lease/result/verification | `execution_fabric.py::DurableFabricStore` and `VerificationReceiptStore`; fabric JSONL/receipt stores | Prove no non-test runtime caller or, if later found, stop it and reconcile all leases before import | Treat baseline records as fixtures, not live truth. V3 writer starts only after replay equivalence; no dual journal |
+| Remote attempt/session/usage | `remote_backend.py::begin_attempt/reconcile_attempt/write_session/write_usage`; per-backend journals/projections | Verify deployment/manifest state; disable new remote mutation, reconcile every open/ambiguous attempt, advance the fencing epoch | Kernel owns attempt state; transport returns observations. Any possibly accepted remote request is reconciliation-only |
+| Publication and Git ref effect | `project-reconcile.py::publish_task` creates intent; `publish.sh::publish_one` is the sole review-ref writer | Drain or reject legacy publication intents, bind exact candidate/source/ref, keep PAUSE and protected-ref guards active | Kernel owns publication intent/receipt state; one publisher actuator owns the Git effect. A pushed review ref is never "rolled back" by state restoration |
+| Cross-aggregate transition | Current reconciler/conductor coordinates file and Git mutations across the rows above | Name the source and destination aggregates, persist a bridge/saga id, and allow only one side to advance each step | Kernel saga/outbox owns coordination; each aggregate retains one writer. Ambiguity blocks the dependent effect until reconciled |
 
 ## Failure and rollback rules
 

@@ -53,7 +53,7 @@ Gate: supported routes negotiate from fixtures; disabled plugins are inert; fail
 
 ## Milestone 4 — Head and ARM executive runtime
 
-Deliver first-class logical actors, executive leases, Project Pilot migration, model escalation, ARM-owned task DAGs, bounded delegation, checkpoint-driven route changes, quota-exhaustion behavior, and upward escalation.
+After Lucas ratifies ARM identity and Project Pilot compatibility semantics, deliver first-class logical actors, executive leases, the approved Project Pilot migration, model escalation, ARM-owned task DAGs, bounded delegation, checkpoint-driven route changes, quota-exhaustion behavior, and upward escalation.
 
 Gate: Head directly manages multiple independent ARM runs; each survives model replacement and restart; the kernel never becomes a semantic ARM Manager; workers cannot redefine goals.
 
@@ -77,7 +77,7 @@ Gate: cross-node fault/security scenarios pass; local operation remains availabl
 
 ## Milestone 8 — adaptive optimization
 
-Deliver explainable local routing calibration, quota shadow prices, reservations, adaptive concurrency, cache-domain affinity, resource shedding, telemetry evidence providers, and optional `ccusage` reconciliation.
+Deliver explainable local routing calibration, quota shadow prices, reservations, adaptive concurrency, cache-domain affinity, resource shedding, telemetry evidence providers, and an optional usage reconciler; `ccusage` remains one unverified candidate pending a separate source/license review.
 
 Gate: shadow-mode and controlled experiments show improvement for at least one declared profile without reducing quality floors or widening authority.
 

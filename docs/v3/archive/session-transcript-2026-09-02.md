@@ -4,11 +4,17 @@ date: 2026-09-02
 status: archival
 visibility: internal-review
 normative: false
+public-release: excluded
 ---
 
 # Recursion v3 design session transcript
 
 This is a sanitized archive of the human-visible conversation that produced the initial v3 hypothesis. It is provenance, not specification. Normative decisions live in `DECISION-REGISTER.md` only after review against `CONTROL_PLANE.md`.
+
+This file is explicitly excluded from every public release artifact. It contains internal
+owner and infrastructure context that is appropriate for local review but not publication.
+Publishing provenance requires a separately generated, reviewed, redacted artifact; changing
+this frontmatter flag is not sufficient.
 
 Excluded: hidden reasoning, system/developer instructions, tool calls and outputs, injected environment metadata, credentials, and the documentation-authoring turn that created this file. Private project names are redacted. Review this file before any public publication.
 

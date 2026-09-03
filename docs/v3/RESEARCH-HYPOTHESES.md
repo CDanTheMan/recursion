@@ -1,7 +1,7 @@
 ---
 title: Recursion v3 scientific research hypotheses
 status: hypothesis
-last-updated: 2026-09-02
+last-updated: 2026-09-03
 ---
 
 # Recursion v3 scientific research hypotheses
@@ -11,6 +11,11 @@ last-updated: 2026-09-02
 Maximize verified development quality subject to owner-selected limits on subscription quota, metered cost, machine load, elapsed time, privacy, and human review attention. Report dimensions separately before constructing profile-specific scores.
 
 Experiments use public, synthetic, or scrubbed repositories unless the owner explicitly authorizes a private canary. Private inputs and results remain local.
+
+This file is the future research portfolio. The campaign-specific, preregistered resource
+workloads and decision rules are in [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md): H-012 maps to
+PERF-001/002, H-013 to PERF-003, H-014 to PERF-004/007, H-003 to PERF-005, H-004/H-001 to
+PERF-006, and H-015 to PERF-008. Neither list is runtime construction authorization.
 
 ## Hypotheses
 
