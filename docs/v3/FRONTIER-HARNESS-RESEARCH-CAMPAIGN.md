@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 scientific foundations and frontier harness research campaign
-status: active-documentation-demonstration
+status: complete-documentation-demonstration
 last-updated: 2026-09-03
 campaign-id: FHAR-20260903
 parent-goal: Recursion v3 construction-ready architecture
@@ -197,7 +197,7 @@ Continue unrelated ready nodes. Stop and ask Lucas rather than choosing if resea
 
 | Revision | Trigger | Retained | Invalidated | Superseded | Disposition |
 |---|---|---|---|---|---|
-| `PR-FHAR-20260903-01` | Lucas's 2026-09-03 campaign authorization and completed preflight | all initial tasks and boundaries | none | none | active |
+| `PR-FHAR-20260903-01` | Lucas's 2026-09-03 campaign authorization and completed preflight | all initial tasks and boundaries | none | none | completed without revision; all admitted nodes reached their documented terminal disposition |
 
 ## Admission receipts and gate results
 
@@ -220,7 +220,17 @@ earlier failure is preserved when later evidence repairs it.
 | `WP-FHAR-301-R` | `gpt-5.6-terra`/`xhigh` reviewed candidate `df432b73f81faeecfb21bbf90f1fd183f9976e40`; it conditionally supported the minimal kernel/typed-adapter recommendation but found that Head/ARM prose could be mistaken for operative authority. | Same-family conditional review, not cross-family independence or authorization. Working reconciliation now labels the Recursion Head and ARM DAG boundary as proposed post-amendment design and leaves current Hermes authority operative. |
 | `WP-FHAR-302-R` | `gpt-5.6-terra`/`xhigh` reviewed candidate `df432b73f81faeecfb21bbf90f1fd183f9976e40`; it failed that candidate for missing source records/precise locators, an unfrozen evaluation repetition/stopping rule, the CRLF validator defect, an absent `Blocker.state=deferred` value and unreachable `E-AUTH-PARENT-MUTATION` oracle. | Same-family adversarial failure preserved. Sol reopened the consequential sources and repaired the working documentation; an exact later candidate still requires full validation and final Terra re-adjudication. |
 | `VAL-FHAR-002` | Exact candidate `9008a4d75274520e8a327d866f87e1c7c44e74b3`: changed-path/diff 30; claim rows 99; R lanes 17; planning questions 18; M1A fixtures/oracles 23/23 and DAG nodes 7; both campaign gate sets 24; source records 95 with 17-lane coverage and 46 direct source references across 27 rows; command/error alphabets 17/26; relative links 43 files; privacy/secret scan 44 files; full `recursion-v2-mvp.test.py` umbrella `ALL PASS`. | Passed on the exact clean commit. This is documentation/source/replay-contract validation and an unchanged-v2 regression result, not v3 runtime, performance or frontier proof. |
+| `VAL-FHAR-003` | Exact candidate `7eb97632ef9aeea19fb421fb4438a7239716eae2`: the same counts and checks as `VAL-FHAR-002` passed after adding exact Akka line locators and the preceding durable receipt; the full v2 umbrella again reported `ALL PASS`. | Passed on the exact clean semantic/source candidate. The final disposition commit is receipt/status-only under the exception in `VALIDATION.md`; it creates no v3 runtime or performance evidence. |
+| `WP-FHAR-301-FINAL` | `gpt-5.6-terra`/`xhigh` independently re-adjudicated exact candidate `7eb97632ef9aeea19fb421fb4438a7239716eae2` and returned `PASS`; no material semantic defect remained. | Same-family architecture/authority adjudication only. It preserved five constitutional seams and explicitly supplied no runtime, performance or cross-family proof. |
+| `WP-FHAR-302-FINAL` | `gpt-5.6-terra`/`xhigh` independently re-adjudicated exact candidate `7eb97632ef9aeea19fb421fb4438a7239716eae2` after its two conditional provenance corrections and returned `PASS` with high confidence for static/documentary coherence. | Same-family evidence/readiness adjudication only; the worker did not rerun tests and did not claim runtime or performance proof. |
+| `EXT-FHAR-001` | No already-configured, explicitly approved, non-metered external-family route was available through the permitted campaign surface; Sol did not inspect or change provider, authentication, plugin, account, billing or routing configuration to create one. | Omitted, not passed. No public/synthetic challenge packet left the approved GPT-5.6-family routes and no cross-family independence is claimed. |
+| `FINAL-FHAR-001` | 2026-09-03T16:43:42-07:00; all 24 campaign gates have inspectable dispositions, every worker packet and both final adjudications are recorded, M1A is documentation-ready, and all changed paths remain under `docs/v3/**`. | Documentation campaign complete. M1A construction, constitutional migration, runtime choice, prototype execution, benchmarks and any release remain separately authorized future work. |
 
 The two Terra findings did not require a new PlanRevision: `TASK-FHAR-400` and
 `TASK-FHAR-500` already require source reinspection, disputed-claim resolution and reconciliation.
 PR01 and all tasks remain retained; no task was invalidated or superseded.
+
+Completion took approximately 1 hour 22 minutes from the committed campaign plan to the final
+exact-candidate adjudications. Parallel source lanes satisfied every documentation gate before the
+authorized maximum duration; stopping early conserves quota and is not a claim about implementation
+velocity.

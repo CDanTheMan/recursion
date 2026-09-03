@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 frontier harness evidence and gap matrix
-status: adjudicated-research-synthesis-pending-final-validation
+status: adjudicated-documentation-evidence
 last-updated: 2026-09-03
 campaign-id: FHAR-20260903
 ---
