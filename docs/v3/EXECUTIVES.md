@@ -13,7 +13,7 @@ last-updated: 2026-09-03
 Head Hermes is the single accountable portfolio executive beneath Lucas. It:
 
 - preserves owner intent and portfolio context;
-- compiles accepted goals and strategic constraints;
+- compiles GoalSpec drafts from accepted owner intent and strategic constraints;
 - starts, monitors, pauses, resumes, replaces, and closes ARM runs;
 - allocates aggregate capacity and review attention across goals;
 - evaluates semantic escalations and proposes amendments;
@@ -34,6 +34,9 @@ An ARM is a durable executive bounded to one versioned GoalSpec. It:
   and operative constitution allow them. A separately explicit maximum `sovereign`
   `grant-admin` capability may authorize a receipt-backed grant mutation; it is not inherited by
   ordinary ARMs or children.
+
+The exact Head/ARM proposal, decision and transition boundary is canonical in
+[AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md#authority-and-responsibility).
 
 An ARM normally exposes an addressable conversation so the owner can speak with it directly.
 One ARM per repository is a likely configuration default, not an identity rule: ARM identity is
@@ -103,18 +106,17 @@ A checkpoint is machine-determined, not merely asserted by the model. It require
 - consumed usage and remaining authority reconciled;
 - context capsule validated and rehydratable;
 - ordinary replacement or configuration changes allow an atomic command to reach its bounded transaction boundary;
-- PAUSE follows the owner-selected versioned policy, while revocation and emergency stop retain
-  their independently defined priority; any outcome whose commit status is ambiguous is
-  quarantined until reconciliation.
+- PAUSE follows the operative constitution-policy version; representing a future policy does not
+  select it, and any outcome whose commit status is ambiguous is quarantined until reconciliation.
 
 Ordinary model/config changes apply at the next checkpoint. A forced swap requests the earliest valid checkpoint. Emergency kill is separate and may sacrifice the in-flight operation to contain a compromised run.
 
 ## PAUSE policy direction
 
-The product direction is configurable pause aggressiveness rather than one universal behavior.
-The kernel, not the model, selects an owner-approved policy and records its version:
+The product direction proposes configurable pause aggressiveness rather than one universal
+behavior. The kernel, not the model, would select an owner-approved policy and record its version:
 
-- `checkpoint` — ratified ordinary default: admit no new operation, let the current bounded
+- `checkpoint` — proposed future ordinary default: admit no new operation, let the current bounded
   operation reach its next mechanically safe checkpoint, then pause;
 - `interrupt` — request immediate cancellation of interruptible work, preserve atomic state and
   quarantine ambiguous effects;
@@ -123,10 +125,10 @@ The kernel, not the model, selects an owner-approved policy and records its vers
 - emergency stop — separate break-glass behavior that blocks new effects immediately and may
   sacrifice in-flight work.
 
-Research must define the operation boundary for model turns, transactions, subprocesses,
-disconnected nodes, gates, publication and ambiguous external effects. Until a constitutional
-amendment is ratified, the current `CONTROL_PLANE.md` PAUSE behavior remains the implementation
-baseline.
+The current `CONTROL_PLANE.md` immediate halt is the only operative profile. The future values
+remain separately representable but non-operative until a reviewed constitutional amendment.
+The canonical state/fence behavior is in
+[AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md#pause-and-ambiguous-effects).
 
 ## Verifier independence recommendation
 
@@ -149,10 +151,12 @@ dimensions find materially different defects and define the exact exception rece
 
 ## Capacity exhaustion
 
-When subscription capacity is exhausted mid-task:
+The following is proposed future capacity behavior and does not weaken current PAUSE or spending
+authority. When subscription capacity is exhausted mid-task:
 
 - admit no new model turn on that pool;
-- allow only the already-started final model turn to finish its immediate bounded thought/action;
+- request a checkpoint only where the operative policy explicitly allows it; under current PAUSE,
+  no exception for a final model turn is implied;
 - record repository state and a resumable checkpoint;
 - do not infer permission to finish the entire plan;
 - use metered fallback only when the parent goal explicitly carries that authority;
@@ -174,6 +178,9 @@ Refusals produce:
 ## Executive lease and split brain
 
 Exactly one actor may hold the decision lease for a given Head or ArmRun at a time. Advisory models may produce analyses, but only the lease holder may propose the next authoritative plan transition. Replacement requires a validated capsule, lease transfer event, and unchanged authority envelope.
+
+The authoritative lease, stale-transition and route-replacement rules are canonical in
+[AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md).
 
 ## Open questions
 

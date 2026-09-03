@@ -138,7 +138,7 @@ These are proposed rulings, not decisions. `CONTROL_PLANE.md` remains authoritat
 3. **State authority.** Ratify the future transfer from file/Git operational records to one
    kernel event writer, with human-readable Git projections remaining review artifacts rather
    than concurrent authority.
-4. **PAUSE versus checkpoint completion.** Lucas ratified `checkpoint` as the ordinary default,
+4. **PAUSE versus checkpoint completion.** Lucas selected `checkpoint` as the future product default,
    with `interrupt`, `drain` and emergency stop explicit. Research must specify their behavior
    per effect class before an amendment replaces the current immediate halt.
 5. **Full access.** Lucas selected a genuinely expansive configurable Full Access that may

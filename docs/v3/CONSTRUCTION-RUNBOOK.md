@@ -6,132 +6,76 @@ last-updated: 2026-09-03
 
 # Recursion v3 construction runbook
 
-This is temporary construction procedure, separate from the product specification. It does
-not authorize implementation, provider changes, deployment or control-plane amendments.
-
-The 2026-09-03 owner rulings added material terminal, interaction, PAUSE, Full Access,
-verification and plugin-contract questions. Complete the focused
-[RESEARCH-AGENDA.md](RESEARCH-AGENDA.md) campaign and obtain its contract-readiness verdict before
-authorizing this milestone; this runbook remains the proposed first construction boundary, not
-the next research task.
+This is temporary construction procedure, separate from the product specification. It does not
+authorize implementation, provider changes, deployment or control-plane amendments.
 
 ## Recommended first autonomous milestone
 
-**Milestone:** v3 pure contract skeleton and replay/conformance harness.
+The broad former “Milestone 1 contract skeleton” is split. The first candidate is
+[M1A — Autonomous Planning Contract and Replay Baseline](M1A-AUTONOMOUS-PLANNING.md). It contains
+only strict planning schemas, pure cross-record/DAG validation, deterministic WorkPacket
+derivation, typed gate/retry/replan/escalation behavior and in-memory replay over sanitized
+fixtures.
 
-**Parent goal:** prove that the proposed native kernel vocabulary can represent and reject
-the v2 authority/evidence boundary before any runtime state writer, database or engine is
-built.
+The canonical contract is [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md), and the standalone
+handoff is [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
+No part of M1A is executed in this research campaign.
 
-**Allowed paths for a future owner-approved task:**
+**Future allowed paths:**
 
-- `schemas/control-plane/v3/**`
-- `scripts/v3/**`
-- `scripts/tests/v3/**`
+- `schemas/control-plane/v3/planning/**`
+- `scripts/v3/planning/**`
+- `scripts/tests/v3/planning/**`
 - `docs/v3/**`
 
-**Explicit non-goals:** no edits to `CONTROL_PLANE.md`, `ANCHOR.md`, `state/DECISIONS.md`,
-existing v1/v2 scripts or schemas, `.env`, auth/model/provider configuration, deployment,
-services, cron, PAUSE, publication, VPS, live provider calls, SQLite runtime writer, migration
-of live state, native agent loop or UI.
+**Non-goals:** providers/models/network; terminals/subprocesses; plugins; SQLite/database/migration;
+Git calls or ref/worktree mutation by the code/tests; publication/merge/deploy/service effects;
+credentials/config/account changes; live PAUSE; external effects; UI; native loop; scientific
+adapters; performance/superiority claims. A future task may make its own bounded local commit only
+when separately authorized.
 
-## Bounded task graph
+## Exact task graph and acceptance
 
-| Task | Output | Gate | Stop condition |
-|---|---|---|---|
-| C1 vocabulary freeze | Schema names and object/event ownership ADR under `docs/v3/**` | Every name maps to [GLOSSARY.md](GLOSSARY.md); no second executive layer | Material term has two authority meanings |
-| C2 strict schemas | Schemas for `OwnerIntent`, `GoalSpec`, `ArmRun`, `CoordinationLease`, `TaskNode`, `WorkPacket`, `Route`, `RouteLease`, `RouteCapabilityDescriptor`, `CapacityPool`, `PausePolicy`, `PermissionProfile`, `CapabilityGrant`, `GrantMutationReceipt`, `VerifierPolicy`, `PluginManifest`, `ContextCapsule`, `SourceRecord`, `ResearchClaim`, `EvidenceBundle`, canonical command/event/effect and publication objects | Unknown fields, malformed identities, raw secrets, unbounded values and invalid versions fail closed | Required current invariant cannot be represented |
-| C3 cross-record validator | Pure offline validator for parent/child authority, budget, source, route, verifier and publication bindings | Mutation/property fixtures prove child subset, distinct verifier and no implicit billing/egress widening | Validator needs operational state or network access |
-| C4 compatibility fixtures | Sanitized synthetic fixtures shaped from v2 contracts plus explicit incompatibility results | Each fixture round-trips to a canonical digest or fails with one typed reason; no best-effort loss | Translation requires project/provider special cases in kernel |
-| C5 replay model | In-memory command/event projector and deterministic replay test only | Duplicate command is idempotent; ordering/rebuild digest is stable; no external effect occurs | Replay depends on wall clock, process state or network |
-| C6 independent verification | Separate reviewer re-runs gates and attacks authority, secret and dual-writer boundaries | Reviewer did not implement C2–C5; every objection is resolved or recorded | Same agent/model self-approves material claim without deterministic proof |
+The canonical sequential DAG is M1A-01 vocabulary/fixture freeze → M1A-02 strict schemas and
+canonicalization → M1A-03 cross-record/DAG validator → M1A-04 pure decider/reducer/packet
+derivation → M1A-05 all conformance fixtures → M1A-06 exact-candidate independent rerun.
 
-`CoordinationLease`, terminal client messages and the scientific records are requirements
-contracts only in this milestone. Their presence proves that the generic vocabulary can express
-and reject invalid states; it does not enable multi-ARM rooms, a terminal runtime or scholarly
-adapters. Numeric limits, provider fields and platform behavior remain provisional or explicitly
-`unknown` where evidence is unavailable.
+The 23 mandatory fixtures and twelve machine-checkable gates in
+[M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md) are the acceptance oracle. In summary,
+they fail closed on unauthenticated/incomplete/widened goals, bad DAGs, stale packets/leases,
+non-novel/exhausted retries, missing/downgraded verifiers, quota/provider blocks, route replacement,
+current/future PAUSE separation, ambiguous effects, duplicate commands, replay divergence,
+unauthorized parent mutation, unknown fields/policies, ownership conflicts and incomplete
+amendment disposition.
 
-Only one task edits a schema/object family at a time. The integrator may resolve naming and
-fixture conflicts but may not broaden the parent goal.
+Missing verification is never pass. Sol/Luna/Terra review is same-family. A future verifier binds
+the exact candidate, commands, fixtures and evidence and records any missing independence.
 
-## Exact milestone acceptance gate
+## Why the former broad milestone was split
 
-A future implementation passes only when all of the following are machine checked:
+The former schema list combined autonomous planning with routes, plugins, scientific records,
+terminal protocol, persistence and publication. That made the first construction step too large
+to falsify and obscured privileged-code ownership. M1A keeps only pure planning behavior. Inert
+route/budget/lease/PAUSE/effect references remain solely to test the mandatory failure states;
+they do not implement those subsystems.
 
-1. All v3 schemas reject unknown fields and bound string, collection, nesting and payload
-   sizes.
-2. The validator proves `Owner -> Head Hermes -> ARM executive -> worker/verifier` authority
-   inheritance; no record or code path creates an AI ARM Manager.
-3. Parent goal, source commit, allowed paths, non-goals, capabilities, privacy/egress, budget,
-   route and gate cannot widen in a descendant.
-4. Engine, provider, model, account reference, capacity pool, host and sandbox remain separate
-   required route fields; subscription-to-metered fallback is impossible without a new owner
-   grant.
-5. `checkpoint` is the encoded ordinary PAUSE default; `interrupt`, `drain` and emergency stop
-   are distinct values whose effect boundary and precedence cannot be conflated. A separate
-   `current-immediate` compatibility policy represents the operative constitution and remains
-   selected unless a later amendment receipt authorizes another policy.
-6. Maximum `sovereign` authority can administer its own grants only when `grant-admin` is
-   explicit; the mutation binds before/after digests and cannot silently alter audit history.
-7. A plugin's code trust, digest, functional capabilities, subscription quota, metered spend,
-   route/account use, update and revocation authorities are represented separately.
-8. Raw credential material and contributor-ineligible privacy combinations are rejected.
-9. Implementer and verifier identities are distinct and both bind the exact task, source,
-   candidate, gate and evidence digests.
-10. Routine verifier downgrade and high-risk owner exception are explicit typed evidence;
-    missing verification cannot produce a pass.
-11. Publication intent/receipt cannot mean merge or deploy and can be emitted only through the
-   publisher role.
-12. Duplicate commands replay one result; shuffled or corrupted events, stale leases and
-   mismatched sequence/digest fail closed.
-13. Every compatibility fixture either replays to the expected canonical digest or returns one
-   stable typed incompatibility; no fixture mutates existing v1/v2 state.
-14. The test suite performs no network call, provider invocation, Git push, runtime-state write
-    or configuration change and leaves the repository clean except for intended allowed-path
-    changes.
-15. An independent verifier executes the exact gate on the exact candidate commit and records
-    dissent plus any unproved property.
-16. `git diff --check` and the repository's relevant tests pass; all changes stay inside the
-    approved task paths.
-17. The canonical experiment registry has one immutable mapping for `PERF-001` through
-    `PERF-011`; an evidence result cannot bind to a mismatched experiment id or workload version.
-18. `SourceRecord` and `ResearchClaim` distinguish discovered/identified/retrieved/verified,
-    access/editorial status, source version, typed contradiction/applicability edges and
-    revalidation; metadata-only or retracted-as-current evidence cannot pass.
-19. Terminal protocol fixtures enforce epoch/cursor replay, one input/resize lease, bounded
-    credit and reset-on-gap without launching a process or asserting OS compatibility.
-20. The fabric-only state-contract fixture uses immutable assignment input and excludes every
-    task/run/result/remote/Git/publication writer. Its report cannot claim OR-015 completion.
+- **M1B** may later add inert route, plugin and process requirement contracts, still without a
+  provider call, process launch or plugin execution.
+- **M1C** may later add inert source/effect/persistence requirement contracts. SQLite, scientific
+  adapters, Git, publication, external effects and migration remain later separately authorized
+  work.
 
-## Architecture-proof readiness verdict
+The broad OR-015 migration rehearsal remains blocked by multiple writers without one proven
+fence. No M1A fixture may be called a migration rehearsal or runtime proof.
 
-The 2026-09-03 architecture proof gives a **conditional go** for this pure skeleton after the
-PERF identifier reconciliation now recorded in the specification. It is not a go for SQLite,
-runtime state, provider calls, terminal processes, plugin execution, migration or deployment.
-The milestone freezes field meanings, authority subsets, event/replay refusal behavior and
-synthetic fixtures; it preserves unresolved policy choices as explicit configuration/owner
-questions instead of selecting them in code.
+## Handoff, stop and rollback
 
-The fabric-only fixture is the smallest safe state proof inside C4/C5. The later owner-selected
-local execution-attempt/lease rehearsal still requires a complete legacy-writer allowlist,
-shared fence epoch, fault injection and rollback proof. If a future C1/C2 task cannot represent
-current constitutional behavior and the proposed future profile without conflating them, the
-conditional go is withdrawn and the conflicting fixture is returned to Lucas.
+A future M1A task freezes red fixture inputs/expected receipts/events/state/digests before green
+behavior. Stop on an authority term with two owners, current/future PAUSE conflation, a child
+widening, nondeterministic replay, semantic-model judgment in the reducer, required I/O/external
+subsystem, out-of-scope path or missing verifier. Return the smallest conflicting fixture to
+Lucas rather than encoding a policy choice.
 
-## Handoff and rollback
-
-Commit red tests before green implementation when the future task explicitly authorizes code.
-Use synthetic fixtures containing no private project material. The milestone has no runtime
-cutover, so rollback is removal of the unreferenced v3 skeleton branch; existing execution
-must remain byte-for-byte behaviorally unchanged. If a required invariant cannot be expressed,
-stop and return the smallest conflicting fixture and owner question.
-
-## Later construction boundary
-
-Only after this milestone passes may an owner-approved goal propose a SQLite/WAL writer,
-shadow reader or the ratified synthetic local execution-attempt/lease rehearsal. That rehearsal
-has no external effects and must prove exact replay, full writer enumeration, fencing, crash
-recovery and rollback with a deterministic zero-model gate. A native inner agent loop remains a separate measured
-spike. See [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md) and
-[CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md).
+M1A has no runtime cutover. If separately authorized construction fails, its unreferenced local
+candidate can be abandoned without changing v1/v2 behavior. Never rewrite history, push, publish,
+merge or deploy from this runbook.

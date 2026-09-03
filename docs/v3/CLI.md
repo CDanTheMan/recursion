@@ -170,9 +170,9 @@ before use in the current private deployment.
 
 ## PAUSE and capacity UX
 
-`recursion pause` defaults to the ratified `checkpoint` policy and accepts explicit `interrupt`
-or `drain` alternatives, explains which current operations may finish, and separately exposes
-emergency stop.
+Under the separately proposed future post-amendment profile, `recursion pause` defaults to the
+Owner-selected `checkpoint` policy and accepts explicit `interrupt` or `drain` alternatives,
+explains which current operations may finish, and separately exposes emergency stop.
 `recursion status` must show the applied policy, PAUSE epoch, in-flight operations and any
 quarantined ambiguous effects.
 

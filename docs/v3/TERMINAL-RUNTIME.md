@@ -237,7 +237,7 @@ Primary platform anchors opened 2026-09-03 are Microsoft
 [pseudoconsole](https://learn.microsoft.com/en-us/windows/console/pseudoconsoles) and
 [Job Object](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)
 documentation, Linux kernel [cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html),
-POSIX [terminal](https://pubs.opengroup.org/onlinepubs/007904975/basedefs/xbd_chap11.html) and
-[`kill`](https://pubs.opengroup.org/onlinepubs/009604499/functions/kill.html) specifications,
+POSIX.1-2024 Issue 8 [terminal](https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap11.html) and
+[`kill`](https://pubs.opengroup.org/onlinepubs/9799919799/functions/kill.html) specifications,
 and [SSH connection protocol](https://www.rfc-editor.org/rfc/rfc4254.html). Their applicability
 is limited by the declared platform version and actual isolation available to the broker.

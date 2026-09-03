@@ -1,16 +1,21 @@
 ---
-title: Recursion v3 planning and Grill Me direction
-status: accepted-direction-with-open-research
+title: Recursion v3 planning and Grill Me projection
+status: contract-projection-with-open-policy
 last-updated: 2026-09-03
 ---
 
-# Recursion v3 planning and Grill Me hypothesis
+# Recursion v3 planning and Grill Me projection
 
 ## Purpose
 
 Planning is a first-class, configurable phase of autonomous development. Its job is not to create an impressive document; it is to reduce semantic uncertainty, establish measurable success, expose trade-offs before implementation, and give ARM executives a stable contract they can execute without hallucinating product direction.
 
 Planning may be disabled for already-bounded work. When enabled, it can range from seconds to hours.
+
+[AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md) is the canonical owner of planning objects,
+authority, lifecycle, DAG admission, WorkPacket derivation, gates, amendment, retry, replan,
+escalation and replay. This document owns the human-facing planning and Grill Me product
+projection only.
 
 `off` removes the interactive planning phase; it does not remove provenance or admission. Execution still requires an authenticated, complete GoalSpec with parent goal, authority, exact source, allowed paths, non-goals, budget, privacy/egress policy, and machine-checkable gates. If any field is absent or ambiguous, admission stops.
 
@@ -61,23 +66,15 @@ Every owner directive is stored losslessly with:
 
 Summaries and compacted plans may reference this ledger but cannot replace it. When instructions conflict, the system surfaces the conflict and follows the established authority precedence; it never silently harmonizes them.
 
-## GoalSpec
+## GoalSpec projection
 
-An accepted GoalSpec is an immutable, versioned execution contract. At minimum it contains:
-
-- measurable outcome and acceptance suite;
-- repository and exact starting source;
-- scope, allowed paths, and explicit non-goals;
-- privacy classification and egress policy;
-- authority and permission profile;
-- eligible providers, routes, models, nodes, and fallback rules;
-- aggregate subscription and metered budget authority;
-- resource and concurrency policy;
-- required checkpoints and verification depth;
-- branch, publication, merge, and deployment boundaries;
-- falsifier, terminal conditions, and required human seams.
-
-Execution receives a content-addressed snapshot. Later changes create an amendment linked to the old version. Restrictions may tighten immediately; widened permissions, privacy exposure, or spending require explicit authority and apply at a safe checkpoint.
+Owner intent is retained exactly. Head may compile a complete draft, but only Lucas accepts or
+amends the exact GoalSpec digest. Accepted versions are immutable. Operative constitutional and
+Owner restrictions fence new admission immediately; descendant plans may narrow without changing
+the goal. Widening, relaxed privacy, new egress/account/spend/effect authority or weaker required
+verification needs a new Owner-accepted version and safe checkpoint. The required fields,
+amendment disposition and stale-work rules are canonical in
+[AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md#goal-compilation-and-amendment).
 
 ## Planning ownership
 
@@ -88,6 +85,10 @@ The clean default boundary is:
 - The ARM executive creates and maintains the implementation DAG and tactical plan.
 - Workers execute one bounded node.
 - Independent verifiers judge evidence against the GoalSpec.
+
+Models propose semantics. The deterministic kernel admits transitions and derives immutable
+WorkPackets. Head may request an ARM replan or change ARM lifecycle but does not write the ARM's
+DAG. Workers and verifiers have no parent-plan mutation authority.
 
 Head-authored detailed implementation plans remain a configurable mode, not the only architecture.
 
@@ -107,7 +108,13 @@ A task gate failure does not automatically PAUSE the entire system. It returns t
 
 Global PAUSE remains a separate operator/control-plane mechanism.
 
+The complete state transitions and typed capacity/provider/verifier/effect blockers are canonical
+in [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md#gates-retry-replan-and-escalation).
+
 ## Retry novelty contract
+
+This is the user-facing projection of the canonical retry contract; the typed decision and
+fail-before-model-turn rules live in [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md).
 
 Every retry must identify at least one of:
 

@@ -1,80 +1,71 @@
 ---
 title: Recursion v3 provider-route capability matrix
-status: evidence-reconciled
+status: reconstructed-current-observation
 last-updated: 2026-09-03
 ---
 
 # Recursion v3 provider-route capability matrix
 
-This matrix records route observations, not promises of entitlement, price, privacy, or
-future availability. `Model`, `provider`, `engine`, `account`, `capacity pool`, `credential
-reference`, and `host` remain separate objects. Unknown never means free, unlimited, or
-safe for private data.
+This matrix records campaign observations, not entitlement, price, privacy, cache, subscription
+debit or future availability. Model, provider, engine, account, capacity pool, credential
+reference and host remain separate. Unknown never means free, unlimited or private-data eligible.
 
-## Campaign preflight
+## Reconstruction campaign routes
 
-| Requested route | Local result on 2026-09-03 | What was established | What remains unknown | Campaign use |
-|---|---|---|---|---|
-| Native Codex `gpt-5.6-luna`, `xhigh`, default tier | Eight explicit research workers were accepted in two four-worker waves by the native subagent interface | Exact model/effort dispatch is supported by the current app surface; `fast` was not requested | Contractual entitlement, future availability, server-cache controls and how dispatch maps to account-window use | Enabled for the eight bounded discovery lanes; acceptance is not completion or quality evidence |
-| Native Codex `gpt-5.6-terra`, `xhigh`, default tier | Two targeted adjudicators completed after all Luna evidence packets existed | Exact model/effort dispatch works on the current app surface | Contractual entitlement, future availability and service-side accounting | Used for authority/architecture and performance/evidence disputes; same-family, not cross-family proof |
-| OpenCode Go `opencode-go/muse-spark-1.3-contributor` | Catalog present; a public synthetic probe and later public-source challenge completed with OpenCode 1.18.25 | Exact installed identifier can produce responses and retrieve the supplied public sources | Stable entitlement, reset capacity, contractual billing, future availability and provider-policy naming drift | Used once after discovery for six generic public claims; no private design packet |
-| Codex CLI custom-provider `grok-4.5`, `xhigh`, default tier | Omitted after read-only inspection found no configured custom-provider/profile section | No already-configured Codex custom-provider route exists; official xAI API documentation describes metered API use and `low`/`medium`/`high`, not Codex `xhigh` semantics | Whether Lucas later configures an approved non-metered route | Omitted; no prompt, alias, provider, effort or billing substitution |
-| Codex spawned-agent concurrency | Effective config has `agents.enabled=true` and `agents.max_concurrent_threads_per_session=10`; ten no-op agents were accepted before the campaign, and eight Luna workers were later admitted | The setting caps concurrently open spawned-agent threads and excludes the primary; the current client accepted the configured ceiling | Simultaneous provider capacity, remaining quota and service throttling remain independent | Ten is the observed/configured ceiling; workers are staged in waves and machine/review headroom can lower admission |
+| Requested route | Observation on 2026-09-03 | Campaign use | Unknown/limit |
+|---|---|---|---|
+| native Codex `gpt-5.6-luna`, `xhigh` | eight explicit workers accepted in two waves of four | R1-R17 reconstruction; planning lifecycle; DAG; source; lean adversary | dispatch is not completion, quality, contractual entitlement, cache or billing evidence |
+| native Codex `gpt-5.6-terra`, `xhigh` | two targeted workers admitted after discovery | authority/lifecycle and final exact-document adjudication | same GPT-5.6 family as Sol/Luna; not cross-family independence |
+| Contributor external family | not used | none; no packet or verdict | lead could not establish both an already approved current non-metered route and exact privacy/model mapping without forbidden account/configuration action |
+| Grok external family | not used | none; no packet or verdict | exact approved non-metered route and known effort mapping unavailable without forbidden changes; no alias/substitute guessed |
 
-The OpenCode responses are not proof of a charge, flat-subscription entitlement or free
-metered usage. No paid fallback was enabled. The current English OpenCode Go page listed Muse
-Spark 1.2 Contributor while the installed catalog and other official OpenCode pages named 1.3;
-the exact installed 1.3 route responded, but the documentation mismatch remains visible and
-blocks any stronger stability claim. No Grok prompt was sent because the required pre-existing
-custom-provider route was absent.
+The exact historical Muse packet/response described by older consolidated prose is not preserved
+in the active repository. Its verdict is therefore unrecovered and not used as evidence. No new
+external-family packet exists to reproduce. No paid fallback was enabled and no account/provider
+configuration was inspected or changed.
 
-## Current admission observation
+## Admission observations
 
-The campaign host exposed 32 logical processors, about 34 GiB free memory and about 653 GiB free
-disk before research admission. Four Luna workers were admitted, the machine was rechecked, and
-then four more were admitted because local memory, disk and process counts remained effectively
-unchanged. This is a one-time observation, not a benchmark or edition default. New workers stop
-when local responsiveness, memory/disk pressure, provider throttling, remaining synthesis quota
-or review debt becomes material.
+Before wave 1: 32 logical processors; 33.17 GiB free of 63.12 GiB memory; 650.72 GiB free disk;
+418 processes/two visible Codex processes; usage surface 20% used in the visible 10,080-minute
+window. Between waves: host response 2.6 seconds; 32.84 GiB free memory; 650.63 GiB free disk;
+427 processes/one visible Codex process; usage surface still 20%. The localized CPU counter was
+unavailable at the second check and was not guessed.
 
-The available read-only account-limit surface reported 18% used at preflight and no reset
-credits. That point observation justified reserving synthesis/adjudication capacity; it does not
-attribute usage to a worker, establish contractual entitlement, expose a token denominator or
-authorize paid fallback.
+These point samples justified four-at-a-time admission only. They are not sustained machine or
+provider capacity, model-token denominator, entitlement, billing, efficiency, concurrency default
+or performance evidence. No returned account identifier was retained. Exact receipts are in
+[AUTONOMOUS-PLANNING-CAMPAIGN.md](AUTONOMOUS-PLANNING-CAMPAIGN.md).
 
-## Primary capability sources
+## Cache and route-capability precision
 
-| Route fact | Source opened 2026-09-03 | Adjudication |
-|---|---|---|
-| Native subagents accept explicit model and reasoning overrides; concurrency is configured separately | [Codex subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents) and [configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference) | Supports the local preflight shape, not account entitlement or remaining quota |
-| `gpt-5.6-luna` and `gpt-5.6-terra` are named OpenAI models and `xhigh` is a documented capability | [Luna model page](https://developers.openai.com/api/docs/models/gpt-5.6-luna) and [Terra model page](https://developers.openai.com/api/docs/models/gpt-5.6-terra) | API documentation does not prove this app's subscription terms; local dispatch supplies the behavioral observation |
-| OpenCode Contributor routes permit provider training and are not ZDR | [OpenCode Go](https://dev.opencode.ai/docs/go/) and [OpenCode Zen](https://dev.opencode.ai/docs/zen) | Confirms the public/synthetic-only boundary; the pages disagreed on the current Muse minor version, so the installed exact identifier is recorded separately |
-| Grok 4.5 exists through a metered xAI API and documents `low`, `medium` and `high` reasoning controls | [Model page](https://docs.x.ai/developers/models/grok-4.5) | Existence does not supply a configured Codex custom-provider route, non-metered authority or meaningful Codex `xhigh` mapping |
-| Codex supports a per-session spawned-agent cap excluding the primary | [Codex subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents) and [configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference) | Supports the selected profile shape; it does not bypass lower service/client limits or establish quota entitlement |
+Official API documents opened 2026-09-03 establish only their own interfaces:
 
-The Contributor lane received only purpose-written claims and public URLs. It did not receive
-the v3 drafts, archived transcript, private repositories, infrastructure details, owner
-identity, credentials, environment values, authentication output or local paths.
+- [OpenAI API prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
+  exposes model-dependent automatic prefix caching, `prompt_cache_key`, retention controls and
+  cached-token counters.
+- [Anthropic API prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
+  exposes automatic/explicit breakpoints, five-minute/one-hour TTL choices and cache read/write
+  counters.
+- [Gemini API context caching](https://ai.google.dev/gemini-api/docs/caching) distinguishes
+  implicit and explicit cached content; its API usage metadata exposes cached-token counts.
 
-The challenge returned `supported` for the narrowed SQLite/WAL caveats, terminal-containment
-limits, signature-versus-effect-authority split, route-local cache boundary and
-metadata/provenance limitation. It returned `unresolved` for the complete Recursion kernel/
-adapter ownership claim because the supplied public sources do not define Recursion's private
-authority model. That dissent is retained in the claim ledger.
+These are not uniform or portable. They do not establish Codex OAuth CLI cache behavior,
+subscription debit, account-window attribution or cross-provider cache reuse. A future
+`RouteCapabilityDescriptor` records explicit supported/unsupported/unknown fields, exact endpoint,
+model/account class, source/retrieval date and expiry. Revalidate on provider, endpoint, model,
+SDK/CLI, account/policy or contradictory-observation change.
 
 ## Eligibility states
 
-| State | Meaning | Required runtime behavior |
+| State | Meaning | Required behavior |
 |---|---|---|
-| `verified-current` | Exact route behavior was directly observed and its policy source is fresh | May be eligible only inside the existing GoalSpec and privacy/budget envelope |
-| `documented` | Official source describes the capability, but this installation was not probed | Require local admission probe before first real work |
-| `observed-uncertain` | A response was observed but billing, privacy, cache, or control semantics remain unclear | Preserve unknown fields; fail closed across the uncertain boundary |
-| `stale` | Evidence is beyond its route-specific expiry or a relevant component changed | Revalidate before autonomous selection |
-| `unavailable` | Required model, provider, auth, control, or authorized pool is absent | Stop only that lane; never silently substitute |
+| `verified-current` | exact behavior observed and applicable policy source fresh | eligible only inside current GoalSpec/privacy/budget/policy |
+| `documented` | official source describes an interface but this exact route was not observed | require local admitted observation before work |
+| `observed-uncertain` | response observed while billing/privacy/cache/control remains unclear | keep unknown fields and fail closed |
+| `stale` | expiry or relevant component/policy changed | revalidate before autonomous selection |
+| `unavailable` | required route/auth/control/authorized pool absent | block/defer that lane; never silently substitute or enable spend |
 
-## Revalidation triggers
-
-Revalidate after a CLI/app/model/provider update, descriptor change, authentication-profile
-change, contradictory runtime observation, or the time limit recorded in the claim ledger.
-A model listing is route-name evidence only. A successful prompt is behavior evidence only.
-Neither proves subscription coverage, stable capacity, privacy terms, or cache portability.
+A model listing supplies name/capability documentation only. A successful dispatch supplies one
+behavior observation only. Neither supplies billing, privacy, entitlement, stable capacity or
+cache-portability authority.

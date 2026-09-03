@@ -85,7 +85,7 @@ resolution and delayed-message behavior remain experimental. See
 | `WorkPacket` | Immutable executable grant for a delegated worker or verifier |
 | `Route` | Engine + provider + model + capacity pool + credential reference + host + sandbox |
 | `CapacityPool` | Subscription, metered API, or local compute entitlement and observed availability |
-| `PausePolicy` | Versioned `checkpoint`, `interrupt`, `drain` or emergency behavior by effect class |
+| `PausePolicy` | Versioned `current-immediate` operative behavior plus separately labeled future/non-operative `checkpoint`, `interrupt`, `drain` or emergency behavior by effect class |
 | `PermissionProfile` / `CapabilityGrant` | Configurable authority, including explicit maximum `sovereign` and optional `grant-admin` |
 | `ActionAdmission` / `EffectReceipt` | Fenced before/after boundary for a typed effect, including explicit ambiguity and reconciliation |
 | `GrantMutationReceipt` | Attributable before/after authority change with step-up and policy/epoch bindings |
@@ -95,9 +95,10 @@ resolution and delayed-message behavior remain experimental. See
 | `EvidenceBundle` | Exact source, diff, gates, observed behavior, and verifier receipt |
 | `PublicationIntent` | Passed candidate proposed to the only approved publishing path |
 
-The normalized definitions and owners are in [GLOSSARY.md](GLOSSARY.md). Schema field names
-remain provisional until the first contract milestone, but new documents should not create
-competing actor/object synonyms.
+The glossary normalizes names. Planning-object owners, fields, lifecycle and transitions are
+canonical in [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md); this table is only an architecture
+projection. Schema field names remain provisional until M1A, and new documents must not create
+competing owners or synonyms.
 
 ## One transition path
 
@@ -189,8 +190,9 @@ The destination may be a re-foundation; construction should still use a strangle
 
 The 2026-09-03 writer audit blocks step 4 at the broad aggregate boundary: task lifecycle,
 assignment, run/evidence, accepted-result and fabric stores do not share a common fence epoch.
-Milestone 1 may use an isolated fabric-only synthetic fixture to prove contract vocabulary, but
-that fixture is neither a cutover nor completion of the owner-selected rehearsal. See
+M1A uses planning-only in-memory fixtures and no fabric store. A later M1C may use an isolated
+fabric-only synthetic requirement fixture, but that would be neither a cutover nor completion of
+the owner-selected rehearsal. See
 [ARCHITECTURE-PROOF.md](ARCHITECTURE-PROOF.md).
 
 ## Coordinator fit
@@ -221,8 +223,12 @@ before private deployment configuration changes. The stable principle is that He
 the accountable logical actor, models are authorized replaceable compute, deterministic code
 actuates, and Lucas retains authority.
 
-The ratified `checkpoint` PAUSE default and a maximum `sovereign` profile capable of receiving
+The proposed future `checkpoint` PAUSE default and a maximum `sovereign` profile capable of receiving
 control-plane, credential, spending, publication, deployment and `grant-admin` authority
 also differ from current constitutional defaults. V3 research must produce exact amendment
 choices and preserve explicit receipts/audit boundaries; these docs do not authorize a live
 policy or configuration change. See [DECISION-REGISTER.md](DECISION-REGISTER.md).
+
+The first construction candidate is now the narrower planning-only
+[M1A](M1A-AUTONOMOUS-PLANNING.md). It excludes SQLite, providers, terminals, plugins, Git,
+publication and effects; the broader object table above remains a later architecture projection.

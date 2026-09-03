@@ -115,7 +115,7 @@ One source tree produces versioned release manifests:
 
 Edition manifests lock exact plugin versions and defaults. Installation should not download or start disabled heavy plugins. A user can add/remove plugins later without migrating to a different product.
 
-Every edition shares the common defaults: `checkpoint` PAUSE, trusted bounded autonomy,
+Every edition is proposed to share future product defaults: `checkpoint` PAUSE, trusted bounded autonomy,
 digest-aware plugin grants and detachable multi-terminal operation. `standard` adds richer local
 orchestration. `full` adds advanced and distributed first-party capabilities. Installing `full`
 does not enable maximum `sovereign` authority; that separately named capability preset requires
@@ -171,7 +171,7 @@ downgrade and grant administration remain individually visible grant dimensions.
 not yet selected which of those dimensions may share an acknowledgement.
 
 Primary trust anchors opened 2026-09-03 are [The Update Framework
-specification](https://theupdateframework.github.io/specification/latest/), [SLSA
+specification 1.0.36](https://theupdateframework.github.io/specification/v1.0.36/), [SLSA
 v1.2](https://slsa.dev/spec/v1.2/) and [Sigstore signing](https://docs.sigstore.dev/cosign/signing/overview/).
 Their guarantees are applied narrowly; no one mechanism replaces Recursion's runtime authority
 or acceptance gates.

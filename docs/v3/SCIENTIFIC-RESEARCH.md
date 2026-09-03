@@ -115,7 +115,7 @@ Contradictory evidence stays as a typed edge rather than being collapsed into a 
 consensus score. Where populations, methods, interventions, endpoints or workloads differ,
 the result is heterogeneity or `unknown`, not a winner by citation count. Consequential source
 identity should use two independent resolvers where available. W3C
-[PROV-DM](https://www.w3.org/TR/prov-dm/) is the generic provenance vocabulary; provenance
+[PROV-DM Recommendation 2013-04-30](https://www.w3.org/TR/2013/REC-prov-dm-20130430/) is the generic provenance vocabulary; provenance
 records derivation but does not establish truth.
 
 ## Experiment support

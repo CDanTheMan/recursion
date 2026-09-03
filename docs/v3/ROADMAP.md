@@ -45,21 +45,39 @@ and multi-ARM protocols have fault/resource gates; no private canary or implemen
 started; the contract-readiness verdict is explicit.
 
 Status 2026-09-03: research complete enough to narrow construction. The verdict is conditional:
-Milestone 1 may build only the pure schemas, validators, synthetic compatibility fixtures and
-in-memory replay model in [CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md). No performance
+M1A may build only the planning schemas, validators, synthetic fixtures and in-memory replay
+model in [CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md). No performance
 improvement, provider capacity, cache behavior, runtime migration, terminal containment,
 scientific-research benefit or whole-v3 advantage was proved. The broad OR-015 rehearsal is
 blocked by its current multi-writer boundary; a fabric-only fixture may test vocabulary without
 being described as that rehearsal.
 
-## Milestone 1 — v3 contract skeleton
+## Milestone 1A — autonomous-planning contract and replay baseline
 
-Deliver versioned schemas and fixtures for OwnerIntent, GoalSpec, ExecutiveProfile, ArmRun, TaskNode/WorkPacket, Route, CapacityPool, ContextCapsule, EvidenceBundle, plugin manifest, and publication lineage.
+Deliver only strict planning schemas, pure cross-record and DAG validation, deterministic
+WorkPacket derivation, GateResult/retry/replan/escalation decisions and in-memory event replay over
+sanitized fixtures.
 
-Gate: cross-record, authority-subset, privacy, budget, source, lineage, and replay invariants fail closed; schema names and compatibility policy are frozen for initial implementation.
+Gate: every fixture and machine check in
+[M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md) passes without provider/model calls,
+processes, plugins, SQLite, Git, publication or effects. The contract is a fixture/replay result,
+not a runtime or performance claim. The standalone future prompt is
+[prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
 
-The proposed bounded task graph, allowed paths, non-goals and exact acceptance gate are in
-[CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md). This roadmap still does not authorize it.
+## Milestone 1B — route, plugin and process requirement contracts
+
+After M1A, a separate GoalSpec may add inert schemas/fixtures for route, plugin and process
+requirements. It still makes no provider call, launches no process and executes no plugin.
+
+## Milestone 1C — source, effect and persistence requirement contracts
+
+After M1A, a separate GoalSpec may add inert source/evidence, effect-reconciliation,
+publication and persistence/migration requirements. Live scholarly/provider adapters, SQLite,
+external effects, Git/publication and migration stay out of M1C implementation unless a later
+explicit milestone authorizes each one.
+
+The exact M1A task graph, allowed paths and non-goals are projected in
+[CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md). This roadmap does not authorize any milestone.
 
 ## Milestone 2 — canonical state and compatibility projection
 
@@ -75,7 +93,7 @@ configurable.
 The 2026-09-03 audit found that task, assignment, run/evidence, accepted-result and fabric stores
 do not yet form one fenced aggregate. Milestone 2 must not begin the named rehearsal until a
 machine-readable writer allowlist and common epoch cover the exact chosen boundary. A
-fabric-only state-contract fixture in Milestone 1 is evidence preparation, not this cutover.
+fabric-only state-contract requirement fixture in a later M1C is evidence preparation, not this cutover.
 
 ## Milestone 3 — plugin kernel and route fabric
 
@@ -149,9 +167,9 @@ The temporary tools used to build v3—an overnight Codex lead, Cursor implement
    and canary directions. Constitutional amendments and the narrower owner mechanics in
    [DECISION-REGISTER.md](DECISION-REGISTER.md) remain required before the conflicting behavior
    is operative.
-2. Milestone 1 must prove a canonical event/schema mapping across overlapping v1/v2/Project
-   Pilot contracts; the mapping proposed in [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md)
-   is not implementation evidence.
+2. M1A must prove the planning/replay contract first. A later separately authorized M1C must
+   prove any canonical event/schema mapping across overlapping v1/v2/Project Pilot contracts;
+   the map in [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md) is not implementation evidence.
 3. Real subscription, privacy and cache observability remains route-specific and expiring; no
    descriptor may infer entitlement from a model listing or successful prompt.
 4. Numeric coordinator/workstation budgets require the preregistered experiments in

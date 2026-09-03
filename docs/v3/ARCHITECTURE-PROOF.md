@@ -1,248 +1,229 @@
 ---
-title: Recursion v3 focused architecture-proof result
-status: evidence-reconciled-conditional-construction
+title: Recursion v3 architecture-proof and planning-baseline result
+status: final-candidate-pending-independent-adjudication
 last-updated: 2026-09-03
-source-checkpoint: 612eb2b04acd92e34f1fe5702ceba5474221c6bc
+source-checkpoint: 672081fc1874ab9b7a41a14ca61adc60ecd71c95
 source-baseline: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 ---
 
-# Recursion v3 focused architecture-proof result
+# Recursion v3 architecture-proof and planning-baseline result
 
-This is the durable synthesis of the 2026-09-03 R1–R17 campaign. It narrows the v3
-specification; it does not authorize implementation, constitutional change, provider/auth
-configuration, spending, publication, deployment, service changes or a private canary.
+This is the durable synthesis of the 2026-09-03 evidence-closure and autonomous-planning
+campaign. It is a documentation result. It does not prove that a v3 runtime exists, authorize
+implementation, ratify Option 2, change the constitution, configure a provider, permit spending,
+or authorize publication, deployment, service changes, or a private canary.
 
-The target worktree did not contain an `AGENTS.md` at the starting checkpoint. The effective
-repository instructions supplied to the session were read and applied before the on-disk
-`CONTROL_PLANE.md` and `ANCHOR.md`; the missing file is retained as an orientation finding, not
-silently treated as present.
+The exact campaign inputs, immutable demonstration `GoalSpec`, plan revisions, task DAG,
+worker packets, gates, and disposition are in
+[AUTONOMOUS-PLANNING-CAMPAIGN.md](AUTONOMOUS-PLANNING-CAMPAIGN.md). The canonical proposed
+planning semantics are in [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md). The independently
+reconstructed evidence for every R1-R17 lane is in
+[R1-R17-EVIDENCE.md](R1-R17-EVIDENCE.md).
 
-## Preflight snapshot
+## Orientation and preflight
 
-- Worktree: requested design-foundation checkout; branch `codex/v3-design-foundation`.
-- Starting HEAD: exact requested checkpoint `612eb2b04acd92e34f1fe5702ceba5474221c6bc`,
-  initially clean; original floor `6543840cfd4dd1d7f49ce58b55e8357cdf3b37be` is an ancestor.
-- Non-v3 source baseline remained `98113d6c6d3debe2a4d207c51bb1780f7356d714`.
-- Intended and actual writes were constrained to `docs/v3/**`; no unrelated/newer work was
+- The requested branch was `codex/v3-design-foundation` at the exact requested starting HEAD
+  `672081fc1874ab9b7a41a14ca61adc60ecd71c95`, and the worktree was clean.
+- `6543840cfd4dd1d7f49ce58b55e8357cdf3b37be` was and remains an ancestor. No newer work was
   discarded.
-- Read-only effective Codex settings showed multi-agent enabled and a spawned-thread cap of ten
-  excluding the primary. Ten no-op workers had already been accepted in the explicit capacity
-  check; the research used eight Luna workers, then two Terra adjudicators.
-- Host observation: 32 logical processors, 63.12 GiB memory with about 34 GiB free and about
-  653 GiB free disk before admission. A post-wave point check retained about 33.6 GiB free
-  memory and 652.7 GiB free disk. These are admission observations, not benchmarks.
-- Shell, Git, repository-reading, public-web and documentation-editing capabilities were
-  available. The available account-limit readout showed 18% used and no reset credits at
-  preflight; no entitlement, token or billing inference was made.
-- No Codex/provider/auth/plugin/environment/spending configuration was modified.
+- The target worktree had no `AGENTS.md`. The effective session-supplied repository instructions,
+  then complete `CONTROL_PLANE.md`, `ANCHOR.md`, active `docs/v3/**`, requested commits, and
+  `612eb2b04acd92e34f1fe5702ceba5474221c6bc..HEAD` diff were read before planning or delegation.
+- Writes were restricted to `docs/v3/**`. No Codex, provider, authentication, plugin,
+  environment, route, account, or spending setting was modified.
+- The eight Luna lanes ran in two waves of four. The inter-wave resource and account-limit
+  observations supported the second wave; they were admission observations, not benchmarks or
+  entitlement claims.
 
-## Campaign and review envelope
+## Research and review envelope
 
-- Eight explicit `gpt-5.6-luna` `xhigh` discovery lanes ran in two four-worker admission waves.
-- Two targeted `gpt-5.6-terra` `xhigh` adjudicators reviewed concrete authority/state and
-  performance/evidence disputes after discovery.
-- Sol, Luna and Terra are all GPT-5.6-family routes. Terra supplied targeted adjudication, not
-  independent cross-family verification.
-- OpenCode Go `muse-spark-1.3-contributor` received one purpose-written public/synthetic packet
-  containing public URLs and generic claims only. It saw no repository draft, path, private
-  source, canary identity, infrastructure, owner identity, credential or environment data.
-- Muse supported the narrowed WAL, process-containment, plugin-trust, cache-observability and
-  provenance boundaries. It marked the complete Recursion kernel/adapter ownership claim
-  unresolved because the public source set cannot establish a private product authority model.
-- The requested Codex custom-provider Grok 4.5 lane was omitted: no already-configured approved
-  non-metered route existed, official xAI documentation describes a metered API, and no `xhigh`
-  mapping was established. No substitute route or model was used.
-- No v3 performance treatment, private canary, runtime cutover or external effect ran.
-
-| Worker | Exact route | Lane outcome |
-|---|---|---|
-| LUNA-1 | native `gpt-5.6-luna`, `xhigh` | Typed kernel/adapter boundary supported conditionally; complete native loop deferred to a matched spike. |
-| LUNA-2 | native `gpt-5.6-luna`, `xhigh` | Writer audit falsified the broad aggregate's present single-writer/fencing readiness; fabric-only fixture proposed. |
-| LUNA-3 | native `gpt-5.6-luna`, `xhigh` | PAUSE/effect and grant-mutation contract shaped; five constitutional conflicts retained. |
-| LUNA-4 | native `gpt-5.6-luna`, `xhigh` | Artifact trust, functional authority, quota, spend, updates, revocation and deletion states separated. |
-| LUNA-5 | native `gpt-5.6-luna`, `xhigh` | Daemon/view/process-broker protocol shaped; OS containment and client compatibility remain tests. |
-| LUNA-6 | native `gpt-5.6-luna`, `xhigh` | PERF controls/denominators specified; PERF ID contradiction found; no optimization result claimed. |
-| LUNA-7 | native `gpt-5.6-luna`, `xhigh` | Generic source/claim lifecycle and false-citation hard-floor suite shaped; H-036 remains unproved. |
-| LUNA-8 | native `gpt-5.6-luna`, `xhigh` | Adversarial audit rejected broad readiness and identified smallest coherent privileged contract. |
-| TERRA-1 | native `gpt-5.6-terra`, `xhigh` | Option 2 conditional; OR-015 narrowing rejected; authority/constitution disputes adjudicated. |
-| TERRA-2 | native `gpt-5.6-terra`, `xhigh` | Conditional pure-skeleton go; runtime/performance/cache/terminal/research claims remain unproved. |
-| Muse challenge | OpenCode Go `muse-spark-1.3-contributor` | Different-family public-only source challenge; five narrowed boundaries supported, product-specific ownership unresolved. |
-
-## Adjudicated architecture result
-
-| Question | Verdict | Confidence | Consequence and falsifier |
+| Packet | Exact route | Assignment | Outcome |
 |---|---|---|---|
-| Native harness boundary | Option 2 is supported conditionally: a deterministic Recursion kernel plus typed fail-closed lifecycle adapters | high boundary, medium outcome | External engines may own sampling/wire syntax, not Recursion authority, identity, budgets, PAUSE, effects, evidence or publication. A lossy adapter, unfenceable writer or measured native-loop advantage falsifies the recommendation. |
-| Native inner loop | unresolved/deferred | high | Build no native model loop in Milestone 1. Run a matched Option 1/2/minimal-native spike only after contracts exist. |
-| State writer | proposed single writer is sound; current broad aggregate is not ready | high | SQLite WAL supplies a one-writer primitive, not an authority fence or workload result. |
-| OR-015 rehearsal | blocked at the current broad boundary | high | Task, assignment, run/evidence, accepted-result and fabric stores have separate writers and no common fence epoch. A fabric-only fixture is useful but is not OR-015. |
-| PAUSE | epoch/effect contract is schema-ready for a future profile; live change is constitutionally blocked | high | Current immediate PAUSE remains operative. Any post-epoch undeclared effect or blind retry fails the contract. |
-| Sovereign grants | structural separation is ready; complete policy is unresolved | high | Add issuer/subject/lineage, attenuation, step-up, epochs and before/after receipts. `grant-admin` never implies trust-root, constitution or audit-erasure authority. |
-| Plugin trust | digest/signature and effect grants must remain separate | high | Signature proves artifact/publisher properties within its model, not safety, quota or spend. |
-| Multi-ARM rooms | lease/transport requirements are definable; benefit and deadlock behavior unproved | medium-high | Head resolves accepted transitions; arrival order is never authority. Defer runtime support. |
-| Terminal runtime | semantic protocol ready; OS/runtime/compatibility claims unproved | high | Freeze epoch/cursor/replay/credit/input-lease requirements only. ConPTY, Job/cgroup containment, Git Bash, Neovim, accessibility and scaling require tests. |
-| Performance/resource claims | falsifiable after named controls; none validated | high | Do not encode defaults or “optimized” claims. Failed security/correctness/privacy floors override throughput. |
-| Context/cache | portable capsule/provenance contract supported; provider savings unproved | high | API cache counters never imply OAuth CLI or cross-provider cache behavior. |
-| Scientific research | generic source/claim/evidence contract ready; H-036 benefit unproved | high | Any accepted fabricated, stale, retracted-as-current, inaccessible, inapplicable or unverifiable source is a hard failure. |
-| Editions/configuration | direction supported; exact contents, budgets and interaction coverage unproved | medium-high | Freeze resolution/provenance/non-widening/lifecycle rules, not measured costs or governor weights. |
-| Whole-v3 benefit | unproved | high | A matched v2/Option 1/Option 2/native comparison must justify added privileged and operational complexity. |
+| `WP-V3DF-101` | `gpt-5.6-luna`, `xhigh` | Reconstruct R1-R4 | Conditional Option 2 support; current immediate PAUSE and process-containment limits retained. |
+| `WP-V3DF-102` | `gpt-5.6-luna`, `xhigh` | Reconstruct R5-R8 | Same-family limitation, SQLite primitive/authority separation, and preregistered admission control retained. |
+| `WP-V3DF-103` | `gpt-5.6-luna`, `xhigh` | Reconstruct R9-R12 | Deletion, canary, terminal/process, and performance claims narrowed to testable contracts. |
+| `WP-V3DF-104` | `gpt-5.6-luna`, `xhigh` | Reconstruct R13-R17 | Route, cache, canonicalization, scholarly, and whole-v3 claims retained as hypotheses or contracts, not results. |
+| `WP-V3DF-201` | `gpt-5.6-luna`, `xhigh` | Plan lifecycle | Amendment, fencing, stale-work, replay, and authority semantics proposed. |
+| `WP-V3DF-202` | `gpt-5.6-luna`, `xhigh` | DAG and retry semantics | Deterministic readiness, conflict, retry, replan, and cancellation rules proposed. |
+| `WP-V3DF-203` | `gpt-5.6-luna`, `xhigh` | Primary-source audit | Source versions, licenses, contradictory SQLite evidence, and expiry triggers corrected. |
+| `WP-V3DF-204` | `gpt-5.6-luna`, `xhigh` | Lean adversarial review | The broad first milestone was rejected and narrowed to M1A. |
+| `WP-V3DF-301` | `gpt-5.6-terra`, `xhigh` | Authority adjudication | Conditional support; added complete prompt traceability, exact downgrade binding, and a sixth constitutional conflict. |
+| `WP-V3DF-302` | `gpt-5.6-terra`, `xhigh` | Final evidence/readiness adjudication | Pending against this exact final candidate; absence is not a pass. |
 
-## Minimum coherent privileged contract
+Sol, Luna, and Terra are GPT-5.6-family routes. Terra is an independent worker role here, not an
+external-family verifier. No current external-family packet was sent. An already configured,
+explicitly approved, non-metered external-family route with known model/reasoning mapping could
+not be established within the allowed read-only route boundary. The prior session's claimed Muse
+input and output were not preserved and could not be recovered; they are labelled historical
+unrecovered assertions and carry no evidentiary weight. Grok was not used. No provider was added,
+enabled, guessed, substituted, or billed.
 
-The first skeleton keeps only mechanism needed to express and reject unsafe state:
+## Evidence closure
 
-1. immutable `OwnerIntent` and versioned `GoalSpec`;
-2. Head/ARM/task/work-packet identities with non-widening authority, privacy and budgets;
-3. explicit route vector: engine, provider, model, account reference, capacity pool, host,
-   sandbox and billing mode;
-4. canonical command/event/effect envelopes with one aggregate writer, contiguous sequence,
-   idempotency, causation, fence epoch and deterministic replay;
-5. PAUSE/revocation epoch admission and explicit ambiguity/reconciliation states;
-6. verifier independence vector and exact evidence/publication lineage;
-7. digest-pinned plugin artifact separate from functional/egress/route/quota/spend/update grants;
-8. provider-neutral `ContextCapsule` and fresh `RouteCapabilityDescriptor`;
-9. generic `SourceRecord`, `ResearchClaim` and typed evidence edges;
-10. read-only observer and terminal protocol semantics; and
-11. a machine-readable write-ownership inventory whose unknown entry blocks cutover.
+All R1-R17 lanes now have persistent records containing the exact question, claims, primary
+sources and revisions, contradictory evidence, applicability and limitations, confidence,
+adoption decision, decisive falsifier, and worker/adjudicator disposition. Evidence classes are
+explicit: directly reverified evidence, repository-local inference, owner decision,
+prior-session assertion not independently recovered, and unverified hypothesis.
 
-Provider catalogs, scholarly adapters, Telegram, terminal implementations, native compaction,
-indexers, adaptive learning, GUI, remote nodes and a complete native model loop remain plugins or
-later milestones.
+The claim registry now describes the rows that actually exist. Fabricated empty ranges were
+removed; `TAA-*`, `TPE-*`, `APC-*`, and `XFR-*` are registered. A machine-readable registry plus
+a deterministic validator rejects duplicate or malformed IDs, missing registered rows,
+unregistered claim rows, unreserved gaps, and references to nonexistent IDs. Claim rows were not
+invented to fill declared ranges.
 
-## State, effect and recovery contract
+Consequential external sources were personally opened by the Sol lead. Version-sensitive facts
+are revision-pinned where practical and otherwise carry an explicit revalidation trigger. In
+particular:
 
-```text
-RUNNING(E0) -> QUIESCING(mode,E1) -> PAUSED(mode,E1)
-PAUSED(E1)  -> RUNNING(E2) | EMERGENCY_HOLD
+- SQLite's official [isolation documentation](https://www.sqlite.org/isolation.html) establishes
+  serialized writes; [WAL](https://www.sqlite.org/wal.html) describes a concurrency mechanism.
+  Neither defines Recursion authority, lease fencing, PAUSE, or effect admission. The 2026 WAL
+  reset-corruption correction is retained as contradictory version-sensitive evidence.
+- TUF is pinned to specification 1.0.36/source revision, SLSA to v1.2/source revision, and W3C
+  PROV to dated Recommendations. They establish update/provenance structures, not safety or
+  truth.
+- Terminal and containment sources are pinned to Windows ConPTY/Job Object documentation, Linux
+  cgroup v2 documentation, POSIX.1-2024 Issue 8, and SSH RFC 4254. Each has explicit portability
+  and containment limits.
+- OpenAI, Anthropic, and Gemini caching controls are recorded separately. Provider caches are not
+  assumed uniformly controllable or portable. API cache documents do not establish Codex OAuth
+  CLI behavior, subscription debit, or cross-provider reuse.
+- Scholarly identifiers and metadata are separated from claim truth, applicability, correction,
+  retraction, access, and license state.
 
-NO_LEASE -> ACTIVE(epoch, lease, attempt)
-         -> RESULT_ACCEPTED | RECOVERY_REQUIRED | EXPIRED
-RECOVERY_REQUIRED -> QUERY_PENDING -> RUNNING | TERMINAL_WITH_RESULT | UNKNOWN
-```
+## Autonomous-planning baseline
 
-Every action binds command/idempotency identity, principal, GoalSpec/grant/route/policy digests,
-aggregate fence, PAUSE and revocation epochs, effect class and deadline. The kernel validates at
-admission; the actuator validates again immediately before an external call. Crash after a
-possible external acceptance creates `ambiguous/unknown`, never success. Reconciliation queries
-exact external identity and blocks dependent effects; it never blindly retries.
-
-The full OR-015 writer allowlist must cover taskctl, Project Pilot/reconciler, the `work.sh`
-status fallback and assignment writer, assignment persistence, worker evidence, accepted-result
-ledger, fabric/verification stores, remote journals and publisher. An isolated
-`DurableFabricStore` fixture may test replay, torn tail, ENOSPC, expiry and restart recovery with
-zero models/network, but cannot claim migration readiness.
-
-## Authority and plugin contract
-
-Capability grants bind issuer, subject, audience/installation, parent and installation maximum,
-GoalSpec/policy versions, effect verbs and resource/project/source/path/branch/host/account/pool/
-endpoint/privacy scopes, resource/spend/rate ceilings, validity, revocation, fence, step-up and
-opaque credential references. Descendants can only narrow.
-
-Grant mutation is one fenced command with exact before/after digests, mutator and authorization
-chain, single-use step-up, reason and receipt. `grant-admin`, trust-root administration,
-constitutional change, audit-retention administration and audit erasure are separate
-capabilities. Model prose is never an authenticated authority command.
-
-Plugin admission separates:
+The proposed deterministic flow is:
 
 ```text
-artifact identity/provenance
-functional verbs and OS scope
-network/egress and classified bytes
-provider/account/pool and model launch
-subscription quota reservation
-metered spending
-update/downgrade
-revocation and in-flight reconciliation
+OwnerIntent -> draft GoalSpec -> Owner-accepted GoalSpec
+             -> Head starts ArmRun -> ARM proposes PlanRevision DAG
+             -> kernel admission -> ready TaskNode -> immutable WorkPacket
+             -> worker evidence -> GateResult -> retry | replan | escalation
+             -> PlanVerifierDecision -> verified terminal plan state
 ```
 
-Disabled plugins execute/import/call/spawn/debit nothing. Lucas still must decide which
-high-impact dimensions, if any, may share the novice one-step acknowledgement.
+`AUTONOMOUS-PLANNING.md` is the single canonical owner for the planning object and transition
+semantics. Projections in other documents link back to it. It defines `OwnerIntent`, `GoalSpec`,
+`GoalSpecAmendment`, `ArmRun`, `PlanRevision`, `PlanTransition`, `TaskNode`, `WorkPacket`,
+`GateResult`, `RetryDecision`, `ReplanDecision`, `Blocker`, `Escalation`,
+`PlanVerifierDecision`, and the relevant command, event, lease, checkpoint, effect, route,
+budget, and receipt records.
 
-## Evidence and performance rules
+For each object it defines canonical owner, identity/version, immutable and mutable fields,
+authority/privacy/route/budget/source/policy bindings, lifecycle, valid transitions, transition
+authority, stale/invalid behavior, replay/idempotency, retention/audit, and relationships. The
+`APQ-01` through `APQ-18` trace maps every required planning question to a normative rule, fixture,
+falsifier, and Lucas seam.
 
-Every experiment result binds one immutable ID and workload revision, baseline/treatment,
-quality and safety floors, host/route/config/source revisions, measurement denominator,
-exclusions, stopping rule and raw evidence. `PERF-001` through `PERF-011` now have one canonical
-mapping in `PERFORMANCE-PLAN.md` and `CLAIM-LEDGER.md`.
+The kernel, not a model, admits authoritative transitions. ARM proposals may narrow but cannot
+widen an accepted goal. DAG admission rejects cycles, absent dependencies, conflicting path
+ownership, and overlapping effects. Readiness is a pure predicate over the accepted plan state.
+A WorkPacket is a deterministic immutable projection of one admitted TaskNode and current policy,
+authority, route, budget, source, parent-version, and fence bindings.
 
-Quota efficiency is reported as separate observed vectors: source-valid non-duplicate findings
-per visible input/output/reasoning unit, account-window change when exposed, human-review minute,
-adjudication turn and wall/resource use. `unavailable` is not zero. The completed swarm is not a
-PERF-011 result because no frozen corpus, Sol-only comparator, blind outcome series or complete
-denominator existed.
+GoalSpec amendments are Owner proposals until authenticated and accepted. Tightening authority,
+privacy, egress, budget, route, publication, verifier, source, or PAUSE constraints fences future
+admission immediately; in-flight external effects stop at the applicable current-policy boundary
+and unresolved effects become ambiguous, never successful. A deterministic impact computation
+retains unaffected work and invalidates, quarantines, cancels, or supersedes dependent revisions,
+nodes, packets, leases, effects, and evidence. A stale packet or executive lease has no transition
+authority.
 
-Scientific support requires a versioned source identity, direct claim entailment, applicability
-tuple, correction/retraction/access/license state, exact locator and contradiction retention.
-W3C provenance records derivation but does not establish truth. Generic records stay in core;
-resolver, discovery, PDF, graph and notebook behavior stays in lazy plugins.
+Gate failure returns typed evidence to the ARM. Retry requires a bounded new attempt plus a
+recorded novelty delta capable of changing the failed condition. Repetition without novelty is
+rejected before another model turn. Exhaustion or semantic uncertainty forces replan, narrowing,
+escalation, or stop according to recorded authority. Missing verifiers block. A risk-approved
+downgrade binds the exact Owner/GoalSpec verifier policy and constitution digests and is never
+reported as full independence. Quota exhaustion defers; it cannot enable metered spending.
 
-## Strongest contradictions and rejected claims
+Deterministic replay orders accepted events, verifies versions, digests, causation, idempotency,
+leases, and fence epochs, and reproduces the exact accepted plan digest. Unknown fields, unknown
+policy versions, duplicate conflicts, stale proposals, unauthenticated commands, and ambiguous
+external effects fail closed.
 
-- Reject: “the local execution-attempt/lease aggregate is already a single writer.”
-- Reject: “projection parity proves replay, fencing, liveness or rollback.”
-- Reject: “a signature, digest, SBOM or transparency entry proves plugin safety or spend
-  authority.”
-- Reject: “provider API cache fields establish Codex OAuth CLI or cross-provider cache reuse.”
-- Reject: “ten configured subagent threads establish ten simultaneous provider sessions or
-  quota entitlement.”
-- Reject: “Job Objects or POSIX process groups universally contain every descendant.”
-- Reject: “Sol/Luna/Terra agreement is cross-family independence.”
-- Reject: “v3 is already optimized, lightweight, performance-ready or proven better than v2.”
-- Reject: “a verified SourceRecord proves its scientific claim.”
-- Conditional only: Option 2, SQLite/WAL fit, disabled-plugin cost, terminal portability,
-  adaptive admission, edition contents, native-loop value and H-036 efficacy.
+## Strongest grounded findings
 
-## Constitutional conflicts
+| Finding | Confidence | Competing option, failure mode, and decisive test |
+|---|---|---|
+| Option 2—deterministic Recursion kernel plus typed fail-closed external-loop adapters—is the narrow recommendation, not owner authority. | high boundary; medium outcome | Option 1 or a later minimal native loop may win. Lossy lifecycle translation, unfenceable writers, or a preregistered matched comparison favoring another option falsifies it. |
+| SQLite supports serialized writes but does not supply Recursion's authority/fencing contract. | high | Another durable store may fit. Multi-writer discovery, corrupt-reset exposure, or failed replay/fence fixtures defeats SQLite admission. |
+| Deterministic planning needs immutable accepted inputs, explicit revision/fence lineage, and kernel admission. | high contract; unproved runtime | Informal model-managed plans are simpler but permit stale mutation and ambiguous replay. M1A fixtures decide whether the minimum contract is coherent. |
+| Provider-specific cache observations must remain route-specific and experimental. | high | Portable provider-neutral context remains the baseline. A pinned cross-route comparison with exposed denominators may justify a route-specific optimization. |
+| Same-family review is not cross-family verification; missing verification is not a pass. | high | A purpose-bounded approved external-family review may add independence. Until then, record the gap. |
+| The broad former Milestone 1 is not a lean first implementation slice. | high | M1A isolates planning schemas, validation, sanitized fixtures, and in-memory replay; any required provider/process/plugin/database effect falsifies its boundary. |
 
-Current authority remains `CONTROL_PLANE.md`. These proposed future directions require reviewed
-amendment before any operative behavior changes:
+## Strongest contradictory evidence and narrowed claims
 
-1. immediate PAUSE versus checkpoint/interrupt/drain modes;
-2. ChatGPT/Codex-OAuth planning clause versus owner-approved provider-neutral routes;
-3. Lucas-reserved control-plane/credential/spend/publication/deployment seams versus sovereign
-   grant administration;
-4. live Git clones/project files as current project-state authority versus future SQLite/WAL
-   runtime events with Git as source evidence/projection; and
-5. preferred cross-family verification versus risk-scaled routine downgrade and exceptions.
+- SQLite's WAL reset-corruption correction through affected release lines contradicts any claim
+  that “WAL is safe” without a version and recovery test.
+- POSIX process groups, Windows Job Objects, cgroups, ConPTY, and SSH channel primitives do not
+  guarantee universal descendant containment, rollback, terminal parity, or effect certainty.
+- TUF, SLSA, signatures, digests, SBOMs, and transparency records establish bounded integrity or
+  provenance properties, not plugin safety, semantic correctness, quota authority, or spend
+  authority.
+- W3C PROV, DOI metadata, Crossmark, DataCite, arXiv, and OpenAlex can establish identity,
+  derivation, or status signals; none establishes scientific truth.
+- Provider cache counters and controls do not establish Codex OAuth CLI behavior, subscription
+  debit, savings, or cross-provider cache reuse.
+- A documentation dogfood replay is not a runtime replay; v2 regression tests cannot establish a
+  v3 runtime or performance result.
+- No claim that v3 is optimized, lightweight in operation, quota-efficient, performance-ready,
+  or superior to v2 survived as an observed result.
+- The prior Muse verdict is not recoverable evidence. Sol/Luna/Terra consensus is same-family.
 
-Milestone 1 binds an explicit `constitution_policy_ref`, supports current-immediate behavior in
-compatibility fixtures and does not make a future policy operative.
+## Constitutional conflicts and Lucas seams
 
-## Owner decisions remaining after research
+`CONTROL_PLANE.md` remains operative. These proposed rules are non-operative until Lucas resolves
+them through the authoritative process:
 
-1. Confirm Option 2 as the construction path, with a native loop only after a metric-bound spike.
-2. Approve the exact per-effect PAUSE amendment and cancellation/reconciliation table.
-3. Decide whether sovereign may receive separate audit-retention administration or audit-erasure
-   capability and the step-up rule for high-impact self-grants.
-4. Select which unsigned-plugin high-impact grant dimensions may share one acknowledgement.
-5. Ratify verifier risk tiers and the exact Lucas exception receipt.
-6. Ratify the configuration merge algebra and equal-precedence conflict behavior.
-7. Decide Project Pilot compatibility only after the lossless `ArmRun` fixture.
-8. Approve a provider-neutral planning amendment and the Git/runtime-state wording.
+1. current immediate PAUSE versus proposed future checkpoint, interrupt, or drain modes;
+2. the current ChatGPT/Codex-OAuth planning clause versus a future provider-neutral route model;
+3. Lucas-reserved control-plane, credential, spending, publication, and deployment seams versus
+   any future sovereign grant administration;
+4. live Git clones/project files as current project-state authority versus a future durable
+   runtime-event store with Git as source evidence/projection;
+5. preferred cross-family verification versus risk-approved same-family downgrade/exception; and
+6. proposed exclusive ARM authorship of implementation DAGs versus the current control-plane
+   statement that Hermes decomposes goals and orders dependencies.
 
-## Construction verdict
+Lucas must decide whether to ratify Option 2; the exact GoalSpec acceptance/amendment and
+Head-versus-ARM DAG-authority split; any future PAUSE policy; verifier downgrade policy; sovereign
+grant boundaries; provider-neutral routing; configuration merge rules; and later runtime-state
+migration. M1A represents these seams as versioned bindings and fixtures and does not choose them.
 
-Milestone 1 is a **conditional go for the pure contract skeleton** described in
-[CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md). It is not runtime implementation authority.
-Schemas, offline validators, sanitized compatibility fixtures and in-memory deterministic replay
-may be proposed in a future owner-approved task. They must encode current authority separately
-from future profiles and stop if that cannot be done without choosing an unresolved policy.
+## M1A verdict
 
-The recommended first state fixture inside that milestone is fabric-only, synthetic,
-zero-model and no-effect. The later first autonomous migration rehearsal remains the exact
-owner-selected local execution-attempt/lease aggregate: it starts only after complete writer
-enumeration, common fencing, exact replay, crash recovery, backup/restore and rollback are proved.
+[M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md) defines the bounded first future
+construction milestone. It contains only pure schemas and validation, sanitized fixtures, and
+deterministic in-memory replay required to demonstrate:
 
-## Primary evidence anchors
+```text
+owner intent -> accepted GoalSpec -> PlanRevision -> admitted DAG/TaskNode
+-> immutable WorkPacket -> GateResult -> retry/replan/escalation
+-> verified terminal plan state
+```
 
-The most consequential external anchors opened 2026-09-03 were [SQLite
-WAL](https://www.sqlite.org/wal.html), Microsoft [ConPTY](https://learn.microsoft.com/en-us/windows/console/pseudoconsoles)
-and [Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects), Linux
-[cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html), [The Update Framework](https://theupdateframework.github.io/specification/latest/),
-[SLSA v1.2](https://slsa.dev/spec/v1.2/), [OpenAI prompt
-caching](https://developers.openai.com/api/docs/guides/prompt-caching), [Crossref
-Crossmark](https://www.crossref.org/documentation/crossmark/) and [W3C
-PROV-DM](https://www.w3.org/TR/prov-dm/). Repository-specific facts remain pinned to the local
-source baseline and test/symbol map in [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md).
+Its six-node construction DAG, exact future allowed paths, non-goals, 23 required fixtures,
+expected results, falsifiers, and 12 machine-checkable gates are specified. It performs no
+provider call, terminal process, plugin execution, SQLite migration, publication, external effect,
+or Git mutation outside its own separately authorized future implementation task. M1B contains
+broader route, plugin, terminal, and scientific contracts; M1C contains runtime integration and
+durability.
+
+M1A is documentation-ready for a separate owner-authorized construction task after this
+campaign's final evidence/readiness adjudication passes. It has not been executed. The standalone
+prompt is [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
+
+## Source and decision discipline
+
+The exact source revisions, licenses, locators, limitations, and revalidation triggers live in
+[REFERENCE-MATRIX.md](REFERENCE-MATRIX.md), [R1-R17-EVIDENCE.md](R1-R17-EVIDENCE.md), and
+[CLAIM-LEDGER.md](CLAIM-LEDGER.md). Search snippets and model agreement are not evidence. A source
+change, affected dependency upgrade, API capability change, correction/retraction event, failed
+fixture, or contradictory primary source invalidates the dependent conclusion until reverified.
+
+Recommendations remain falsifiable and subordinate to Lucas. The final independent adjudicator's
+packet and the completed gate ledger must be recorded in the campaign artifact before this
+document can move from final candidate to evidence-reconciled.

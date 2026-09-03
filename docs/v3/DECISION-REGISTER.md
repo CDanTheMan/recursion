@@ -25,7 +25,7 @@ to change the current deployment.
 | OR-001 | Head and ARM planning may use any route in an explicit owner-approved model/provider/account/capacity-pool envelope. | Accepted product direction. Hermes remains the accountable actor; no implicit billing, privacy or authority transition. Requires constitutional reconciliation of the current Codex-OAuth clause. |
 | OR-002 | ARMs are goal-scoped delegated executives that plan and delegate a configurable fleet; depth and typical fleet size are configurable. | Accepted. One ARM per repository and delegation depth 1–2 are expected profiles, not protocol invariants. Project Pilot import semantics still require migration proof. |
 | OR-003 | `#general` is the Head conversation; each ARM may have a direct Telegram topic. A named ARM may hold a bounded workflow-step coordination lease in a shared room. | Accepted. Head retains the overall goal, room membership, authority envelope, conflict resolution, ARM lifecycle and a substantial part of the model-escalation chain. Chat order is not authority; the exact GrokBot reference and message protocol remain research. |
-| OR-004 | `checkpoint` is the ordinary PAUSE default; `interrupt`, `drain` and emergency stop remain explicit alternatives. | Ratified product direction. No new operation admits after the PAUSE epoch; the current bounded operation may reach its mechanically safe checkpoint. Exact per-effect finish, cancellation and quarantine rules require research and constitutional reconciliation. |
+| OR-004 | `checkpoint` is the selected future product PAUSE default; `interrupt`, `drain` and emergency stop remain explicit future alternatives. | Ratified product direction but non-operative. Current immediate halt remains authoritative. A bounded operation may reach a checkpoint only after an exact constitutional amendment defines per-effect finish, cancellation and quarantine. |
 | OR-005 | Full Access is configurable and may genuinely include control-plane, credential, spending, publication and deployment capability. Maximum `sovereign` authority may modify its own grants when that grant-administration capability was explicitly enabled. | Ratified product direction. Self-grant must be an attributable schema-checked action, never an implicit model assertion. Audit-retention/erasure authority is not inferred from grant administration and remains a separate policy question. Requires constitutional reconciliation. |
 | OR-006 | Verifier independence is risk scaled. Routine work may use a documented downgrade; releases, security-sensitive work, control-plane changes and irreversible external effects block unless Lucas explicitly approves an exception. | Ratified. Missing or weaker verification is recorded and can never become a pass. Research must define exact risk classes and evidence required for an exception. |
 | OR-007 | Maintainer-approved plugins are signed by the trust root. Unsigned local plugins retain full functionality after an explicit warning, but plugin effects on subscription quota, spending and routes are distinct configurable concerns. | Ratified direction with open mechanics. Installation pins the digest and requested capabilities. Research must decide how one acknowledgement relates to per-plugin authority, quota budgets, spending, updates and revocation; installing code must not silently imply unlimited quota or metered authority. |
@@ -158,18 +158,20 @@ a separately measured capability. See [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPT
   patterns, but no reference supplies Recursion's authority/evidence/publication lineage.
 - Provider/model preflights establish only local route behavior. They do not establish future
   availability, entitlement, privacy, cache portability or free metered usage.
-- Grok 4.5 through the requested Codex custom-provider route was unavailable and was omitted,
-  reducing cross-family diversity to Luna plus public-only Muse.
-- Eight Luna `xhigh` discovery lanes and two targeted Terra `xhigh` adjudications completed.
-  Terra is the same GPT-5.6 family as Sol/Luna. Public-only Muse challenged six sanitized
-  mechanism claims, supported five narrowed boundaries and found the full Recursion-specific
-  kernel ownership claim unsupported by its public source set.
+- The evidence-reconstruction campaign used eight Luna `xhigh` packets in two waves and two
+  targeted Terra `xhigh` adjudications after discovery. Sol, Luna and Terra are the same GPT-5.6
+  family, so this is same-family adjudication rather than cross-family independence.
+- No Contributor or Grok route was used in the reconstruction: a currently approved non-metered
+  route and exact privacy/model mapping could not be established without forbidden account or
+  configuration action. The exact historical Muse packet/response is not preserved, so its
+  summarized verdict is not reused as evidence.
 - The broad OR-015 execution-attempt/lease rehearsal is blocked at the current boundary:
   task, assignment, run/evidence, accepted-result and fabric stores do not share one writer
   fence. A fabric-only fixture may test state-contract vocabulary but is not OR-015.
-- The focused verdict is a conditional go for a pure schema/validator/synthetic-fixture/
-  in-memory-replay milestone only. No runtime, performance, provider, terminal, migration or
-  scientific-research benefit was proved.
+- The focused verdict is a conditional go only for
+  [M1A](M1A-AUTONOMOUS-PLANNING.md): planning schemas, deterministic validation/WorkPacket
+  derivation and in-memory replay over sanitized fixtures. No runtime, performance, provider,
+  terminal, plugin, SQLite, Git, migration or scientific-research benefit was proved.
 
 These are evidence classifications recorded in [CLAIM-LEDGER.md](CLAIM-LEDGER.md), not owner
 decisions.
@@ -203,6 +205,9 @@ Lucas to ratify them:
     after PERF-001–010 produce measurements. No defaults are requested from model confidence.
 11. Decide `CANARY-01` disclosure and stop rules only when construction evidence exists; its
     fixed first task and no-external-effect boundary are not reopened.
+12. Ratify or amend the M1A proposal that only Lucas accepts/amends a GoalSpec digest, Head owns
+    ARM lifecycle/conflicts, and each ARM exclusively owns its plan/DAG proposals while the
+    deterministic kernel owns admission.
 
 ## Next Grill Me queue after research
 

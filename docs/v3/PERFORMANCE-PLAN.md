@@ -81,6 +81,13 @@ Performance success never overrides a failed safety result.
 
 - Server-side prompt/cache controls are recorded only when the exact route exposes them. API
   controls are not assumed available through an OAuth CLI.
+- As reverified 2026-09-03, OpenAI's API exposes model-dependent prefix caching,
+  `prompt_cache_key`, retention controls and cached-token counters; Anthropic exposes
+  automatic/explicit breakpoints, TTL choices and read/write counters; Gemini distinguishes
+  implicit and explicit cached content and exposes cached-token metadata. These controls are not
+  uniform or portable and expire on endpoint/model/account/SDK/CLI/provider-policy change.
+- No API document establishes Codex OAuth CLI cache behavior, subscription debit or
+  cross-provider cache reuse; those values remain `unknown` without exact route evidence.
 - Provider-native session state is an affinity hint, not a portable capsule.
 - Any future `ccusage` adapter or reconstructed price is unverified reconciliation evidence,
   not live subscription capacity or billing truth; `ccusage` itself was not source/license
@@ -94,13 +101,15 @@ Performance success never overrides a failed safety result.
 
 ## Workstation campaign observation
 
-Eight native Luna workers were admitted in two waves of four after a health check; the public-only
-Muse review and two targeted Terra adjudicators ran after discovery. The initial workstation
-observation was 32 logical processors, 63.12 GiB memory with about 34 GiB free and about 653 GiB
-free disk. A later bounded check still showed about 33.6 GiB free memory and 652.7 GiB free disk.
-No sustained local pressure was observed, but these point observations are not a benchmark,
-provider-capacity proof or v3 concurrency default. Future tests reduce concurrency on sustained
-interactive latency, memory, thermal, disk, provider, quota or review pressure.
+Eight native Luna workers were admitted in two waves of four after bounded checks. Before wave 1,
+the point observation was 32 logical processors, 63.12 GiB memory with 33.17 GiB free and 650.72
+GiB free disk. Between waves the host answered the combined check in 2.6 seconds, with 32.84 GiB
+free memory and 650.63 GiB free disk; the localized CPU counter was unavailable and was not
+guessed. The read-only usage surface showed 20% used in its visible 10,080-minute window at both
+checks. No Contributor route was used. These observations are not a sustained benchmark,
+provider-capacity, entitlement, billing, token-denominator, efficiency or v3 concurrency result.
+The exact receipts are in
+[AUTONOMOUS-PLANNING-CAMPAIGN.md](AUTONOMOUS-PLANNING-CAMPAIGN.md).
 
 ## Reporting
 

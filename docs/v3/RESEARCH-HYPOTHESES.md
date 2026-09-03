@@ -82,7 +82,7 @@ write fail-closed schemas/fixtures; it is not an empirical product result.
 | Status for H-034 | boundary supported; savings unproved | Local semantic evidence reuse is measurable. Provider cache claims stay route-local and unavailable counters remain unknown. |
 | Status for H-035 | requirements contract supported; complexity unproved | Versioned resolution, stale-edit refusal, lifecycle and invalid-combination fixtures are ready; complete configuration interaction coverage is not. |
 | Status for H-036 | generic contract supported; benefit unproved | Freeze `SourceRecord`, `ResearchClaim`, typed evidence edges and hard-floor adversarial corpus. Provider adapters and improvement over ordinary research narration remain experimental. |
-| Status for H-038 | campaign executed, comparative hypothesis unproved | Eight Luna lanes, two targeted Terra adjudications and one public-only Muse challenge produced evidence, but there was no Sol-only baseline, frozen corpus or observed token/review denominator. Do not claim efficiency improvement. |
+| Status for H-038 | reconstruction campaign executed, comparative hypothesis unproved | Eight Luna discovery packets and two targeted same-family Terra adjudications produced evidence, but there was no Sol-only baseline, frozen corpus, blind outcome set or complete token/review denominator. No Contributor packet was used or recovered. Do not claim efficiency improvement or cross-family independence. |
 
 ## Benchmark design rules
 

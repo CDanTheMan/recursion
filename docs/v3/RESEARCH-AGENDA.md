@@ -33,8 +33,8 @@ Do not reopen these as model-opinion questions:
 - Direct owner-to-ARM conversation is a product requirement. A named ARM may hold a bounded
   workflow-step coordination lease; Head retains overall goal, room, authority, conflict,
   lifecycle and strategic-escalation ownership.
-- `checkpoint` is the ordinary PAUSE default; `interrupt`, `drain` and emergency stop are
-  explicit alternatives.
+- `checkpoint` is the selected future product PAUSE default; `interrupt`, `drain` and emergency
+  stop are explicit future alternatives. Current immediate halt remains operative.
 - Full Access is capability-configurable. Explicit maximum `sovereign` authority may include
   `grant-admin` and modify its own grants through attributable actions.
 - Verifier independence is risk scaled. Routine work may use a documented downgrade; releases,
@@ -44,7 +44,7 @@ Do not reopen these as model-opinion questions:
 - Unsigned plugins retain full functionality after digest-aware warning/acknowledgement, while
   their quota, spending, route, update and revocation effects remain separately configurable.
 - Branch/worktree backlog limits are measured and configurable, not a universal constant.
-- Common defaults are `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants
+- Selected future product defaults are `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants
   and detachable terminals. `full` installation never implies maximum `sovereign` authority.
 - The first single-writer rehearsal is the synthetic local execution-attempt/lease aggregate,
   with zero external effects and deterministic replay/fencing/crash/rollback proof.
@@ -122,8 +122,10 @@ engines, job schedulers and agent harnesses. Model at least `checkpoint`, `inter
 `drain` policies plus an independent emergency stop. Define behavior for a model turn, local
 transaction, subprocess, remote/disconnected action, read-only gate, publication and an
 ambiguous external effect. Produce a transition/crash matrix and constitutional amendment
-options. `checkpoint` is the ratified ordinary default, while emergency stop blocks new effects
-immediately and quarantines uncertain output. Research chooses mechanics, not a different default.
+options. The operative current constitution is immediate halt. `checkpoint`, `interrupt`,
+`drain` and emergency behavior remain separately representable future proposals and are
+non-operative until Lucas ratifies an exact amendment. Research chooses mechanics, not
+operative authority.
 
 ### R4 — calibrated Full Access
 
@@ -350,7 +352,7 @@ in bounded waves without substituting models. Record exact effort, route and obs
 evaluate PERF-011/H-038 without duplicating an entire expensive campaign after the result is
 already decisive.
 
-## 2026-09-03 campaign execution map
+## 2026-09-03 prior campaign execution map
 
 The director admits the eight discovery lanes in two bounded waves, then gives concrete disputes
 to the two adjudication lanes. Native Codex workers may inspect this repository and public primary
@@ -370,30 +372,29 @@ worker writes the shared tree or launches nested agents.
 | TERRA-1 | Which disputed authority, native-loop, state, PAUSE and plugin claims survive the evidence packets? | Exact Luna packets, local authority/source evidence and opened primary sources | `gpt-5.6-terra`, `xhigh` | Supported/rejected/conditional/unresolved verdicts with decisive checks | Evidence does not support the claim's exact scope or conflicts with higher authority | CLAIM-LEDGER, ARCHITECTURE, SECURITY, STATE |
 | TERRA-2 | Which terminal, performance, context, configuration and research experiments are falsifiable? | Exact Luna packets, experiment plans and opened primary sources | `gpt-5.6-terra`, `xhigh` | Experiment and evidence verdicts with missing controls | The design cannot observe its metric, preserve a hard floor or distinguish the baseline | PERFORMANCE-PLAN, ACCEPTANCE, TERMINAL-RUNTIME, SCIENTIFIC-RESEARCH |
 
-Public-only Muse review challenges sanitized mechanism claims and source quality after discovery.
-The exact Codex CLI Grok 4.5 lane remains conditional on a pre-existing approved non-metered
-custom-provider route and is omitted when that route is absent; neither route is silently
-substituted.
+The exact reconstruction plan, packet IDs and gates are in
+[AUTONOMOUS-PLANNING-CAMPAIGN.md](AUTONOMOUS-PLANNING-CAMPAIGN.md). An external-family route is
+conditional on a pre-existing approved non-metered route and a public/synthetic-only packet; no
+route is silently substituted.
 
-### Execution result
+### Evidence-reconstruction result
 
-All eight Luna lanes ran at the requested explicit `xhigh` setting in two four-worker admission
-waves. After their packets existed, Terra-1 adjudicated authority, native-loop, writer, PAUSE,
-sovereign and plugin disputes; Terra-2 adjudicated performance, cache, terminal, configuration
-and scientific-evidence disputes. Both were explicit `gpt-5.6-terra` `xhigh`. Terra remained a
-same-GPT-5.6-family review.
+The missing historical R1-R17 packets were not fabricated. Eight new Luna `xhigh` read-only
+packets were admitted in two waves and reconstructed the lane evidence plus planning lifecycle,
+DAG, source and lean-boundary audits. Their persistent synthesis is
+[R1-R17-EVIDENCE.md](R1-R17-EVIDENCE.md). Two Terra `xhigh` adjudications occur only after
+discovery; all are GPT-5.6-family routes and therefore not cross-family independence.
 
-The public-only Muse 1.3 Contributor challenge received six generic claims and ten public URLs.
-It supported the narrowed WAL, process-containment, plugin-trust, cache and provenance claims,
-while marking the complete product-specific kernel ownership claim unsupported by that public
-source set. The Grok lane was omitted without substitution because its exact approved route was
-absent. No private source, private canary, implementation, live-host inspection or external
-effect entered the campaign.
+No Contributor or Grok route was used in the reconstruction because the lead could not establish
+an already approved current non-metered route and exact privacy/model mapping without forbidden
+configuration/account action. The exact historical Muse packet/response is not preserved, so its
+earlier summarized verdict is not evidence. No private source, canary, implementation, live-host
+inspection, paid fallback or external effect entered the campaign.
 
-The result is consolidated in [ARCHITECTURE-PROOF.md](ARCHITECTURE-PROOF.md). R1–R17 are
-researched enough to narrow a pure contract milestone; their performance and whole-product
-benefit hypotheses remain unmeasured. The broad OR-015 rehearsal is blocked by the discovered
-multi-writer boundary, and a smaller fabric-only fixture must not be mislabeled as that rehearsal.
+R1-R17 now have persistent reconstructed records. Their performance and whole-product benefit
+hypotheses remain unmeasured. The broad OR-015 rehearsal remains blocked, and M1A is the narrower
+planning-only contract/replay proposal in
+[M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md).
 
 ## Required outputs
 
@@ -434,6 +435,6 @@ multi-writer boundary, and a smaller fabric-only fixture must not be mislabeled 
 - All documentation changes stay in the separately authorized paths and pass link, secret and
   consistency checks.
 - The final report states which questions are empirically resolved, which still require Lucas,
-  and whether Milestone 1 is ready.
+  and whether M1A is ready.
 - Scientific literature is linked through inspectable source records, but no paper or model
   consensus is described as proof of complete local-system fitness without a local experiment.

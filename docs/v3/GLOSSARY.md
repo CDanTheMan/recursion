@@ -9,6 +9,9 @@ last-updated: 2026-09-03
 These names remove the main ambiguities discovered in the source and design transcript. A
 schema milestone may refine field names, but it should not create a second synonym set.
 
+For planning objects this is a naming index; canonical fields, lifecycle, authority and replay
+semantics live in [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md).
+
 ## Actors and authority
 
 | Term | Definition | Not the same as |
@@ -27,7 +30,7 @@ schema milestone may refine field names, but it should not create a second synon
 | `ActorEndpoint` | Addressable CLI/Telegram view of Head or an ARM | actor identity, authority, lease or canonical state |
 | `TerminalView` | Detachable interactive client over actor/event/process state | the process owner or a durable executive |
 | `ProcessBroker` | Platform adapter that owns and reconciles PTY/process groups for bounded work | the model, terminal window or canonical state writer |
-| `PausePolicy` | Versioned owner-selected finish/interrupt/drain behavior by operation class | a model choosing whether to honor PAUSE |
+| `PausePolicy` | Versioned constitutional behavior; `current-immediate` is operative, while checkpoint/interrupt/drain/emergency profiles are future non-operative values until ratified | a model choosing whether to honor PAUSE, or schema presence selecting future behavior |
 
 Head Hermes directly owns ARM lifecycle. An ARM directly owns its task DAG and delegates
 workers. The kernel owns neither portfolio priorities nor ARM plans.
@@ -37,12 +40,24 @@ workers. The kernel owns neither portfolio priorities nor ARM plans.
 | Object | Canonical owner | Meaning |
 |---|---|---|
 | `OwnerIntent` | Owner/authority plane | Exact non-lossy directive plus amendments and source |
-| `GoalSpec` | Owner then Head | Immutable versioned goal, scope, non-goals, budget, privacy, gates and stop rules |
+| `GoalSpec` | Owner; Head compiles drafts | Immutable versioned goal, scope, non-goals, budget, privacy, gates and stop rules; only Owner acceptance/amendment makes it authoritative |
+| `GoalSpecAmendment` | Owner proposes/accepts; kernel admits | New GoalSpec version plus exact old-state invalidation, retention, quarantine, supersession and fence map |
 | `ExecutiveProfile` | reviewed configuration | Reusable defaults; never active state or authority by itself |
 | `ArmRun` | Head creates; ARM advances | One leased execution of a `GoalSpec`, retaining identity across model/session swaps |
+| `PlanRevision` | ARM proposes; kernel admits | Immutable version of the ARM-owned task DAG, bounds, source, gates and complete predecessor disposition |
+| `PlanTransition` | ARM proposes; kernel admits | Atomic from/to revision command binding trigger evidence, current lease/fence and every affected item |
 | `CoordinationLease` | Head issues; named ARM may hold | Bounded, expiring authority to coordinate one shared-room workflow step without owning the overall goal, membership, conflicts or ARM lifecycle |
 | `TaskNode` | ARM | DAG node describing bounded work and dependencies |
 | `WorkPacket` | kernel issues from approved task | Immutable executable authority for a worker or verifier |
+| `GateResult` | assigned gate/verifier through kernel | Exact pass/fail/error/missing/ambiguous result bound to candidate, source, packet, procedure and evidence digests |
+| `RetryDecision` | ARM proposes; kernel admits | Bounded retry request with typed material novelty; non-novel repetition refuses before another model turn |
+| `ReplanDecision` | ARM proposes; Head handles cross-ARM/goal seams; kernel admits | Request for a new immutable PlanRevision and complete old-item disposition |
+| `Blocker` | discovering actor proposes; kernel binds | Typed unresolved condition with evidence, affected scope, required authority and allowed recovery |
+| `Escalation` | ARM to Head or Head to Owner | Exact blocker/decision packet that freezes affected scope and cannot grant authority itself |
+| `PlanVerifierDecision` | assigned plan verifier | Exact-plan pass/fail/blocked judgment with independence vector, dissent and limitations; cannot rewrite the plan |
+| `CommandEnvelope` / `CommandReceipt` | authenticated caller / kernel | Compare-and-swap request and accepted/refused/duplicate/conflict result |
+| `PlanningEvent` | kernel | Append-only sequenced transition record used for canonical replay |
+| `ExecutiveLease` / `WorkLease` | kernel grants | Scoped epoch-bearing proposal/execution authority; replacement fences stale holders |
 | `Route` | deterministic resolver | Complete engine/provider/model/account/pool/host/sandbox selection plus explanation |
 | `RouteLease` | kernel/capacity pool | Time- and quota-bounded reservation; not entitlement ownership |
 | `ContextCapsule` | context compiler | Content-addressed provider-neutral manifest; payload hydration remains policy-scoped |

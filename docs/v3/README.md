@@ -38,6 +38,9 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [GLOSSARY.md](GLOSSARY.md) | What do the canonical actors, objects, routes and events mean, and who owns them? |
 | [EXECUTIVES.md](EXECUTIVES.md) | How do executive identity, escalation, delegation, and checkpoints work? |
 | [PLANNING.md](PLANNING.md) | How does Grill Me turn intent into a durable GoalSpec and plan? |
+| [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md) | What are the canonical planning objects, owners, transitions, amendment/fencing rules and replay semantics? |
+| [AUTONOMOUS-PLANNING-CAMPAIGN.md](AUTONOMOUS-PLANNING-CAMPAIGN.md) | How did this documentation campaign dogfood GoalSpec, PlanRevision, DAG, packets and gates? |
+| [R1-R17-EVIDENCE.md](R1-R17-EVIDENCE.md) | What persistent reconstructed evidence, contradictions, confidence and falsifiers support every R1-R17 lane? |
 | [EXECUTION-FABRIC.md](EXECUTION-FABRIC.md) | How are models, CLIs, subscriptions, hosts, and tasks resolved? |
 | [CONTEXT.md](CONTEXT.md) | How does context reuse, caching, compaction, and rehydration work? |
 | [STATE.md](STATE.md) | What is canonical, durable, replayable, and recoverable? |
@@ -55,12 +58,14 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [ROUTE-CAPABILITIES.md](ROUTE-CAPABILITIES.md) | Which provider routes were actually observed and what remains unknown? |
 | [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md) | Which resource claims remain hypotheses, and what workloads will decide them? |
 | [CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md) | What is the bounded first implementation milestone and exact gate, once authorized? |
+| [M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md) | What exactly is the planning-only schema/validation/in-memory replay construction candidate? |
 | [RESEARCH-HYPOTHESES.md](RESEARCH-HYPOTHESES.md) | Which claims need experiments rather than confidence? |
 | [RESEARCH-AGENDA.md](RESEARCH-AGENDA.md) | Which architecture-proof research lanes should the next deep campaign execute? |
 | [SCIENTIFIC-RESEARCH.md](SCIENTIFIC-RESEARCH.md) | How can a research ARM find papers, reconcile claims and produce reproducible evidence? |
 | [prompts/overnight-architecture-research.md](prompts/overnight-architecture-research.md) | What should the next autonomous Codex research session do? |
 | [prompts/overnight-adversarial-swarm-research.md](prompts/overnight-adversarial-swarm-research.md) | How should an eight-hour Luna, Muse, and conditional Grok research swarm ground and challenge the architecture? |
 | [prompts/architecture-proof-deep-research.md](prompts/architecture-proof-deep-research.md) | What should the next focused architecture-proof Deep Research session execute? |
+| [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md) | What standalone prompt may build M1A only after a separate Owner authorization? |
 | [archive/session-transcript-2026-09-02.md](archive/session-transcript-2026-09-02.md) | What internal human-visible conversation produced this hypothesis? This file is excluded from public releases. |
 
 ## Status vocabulary
@@ -86,10 +91,11 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 
 ## Immediate next step
 
-The focused [architecture proof](ARCHITECTURE-PROOF.md) completed the eight Luna discovery lanes,
-two targeted Terra adjudications and one public-only Muse challenge. It gives a conditional go
-only for the pure schema/validator/synthetic-fixture/replay milestone in
-[CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md), after a separate owner-approved task is issued.
+The reconstructed [architecture proof](ARCHITECTURE-PROOF.md) and persistent
+[R1-R17 matrix](R1-R17-EVIDENCE.md) use eight Luna discovery packets and two targeted
+same-family Terra adjudications. No external-family packet was used or recovered. They give a
+conditional go only for the planning schema/validator/synthetic-fixture/in-memory replay
+[M1A](M1A-AUTONOMOUS-PLANNING.md), after a separate Owner-approved task is issued.
 Current constitutional conflicts and remaining Lucas decisions are recorded in
 [DECISION-REGISTER.md](DECISION-REGISTER.md). No runtime implementation, migration, provider
 change, terminal process, private canary, publication or deployment is authorized by this suite.

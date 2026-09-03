@@ -47,8 +47,9 @@ floors.
 - A named ARM may hold a bounded workflow-step coordination lease. Head retains the overall
   goal, room membership, authority envelope, conflict resolution, ARM lifecycle and strategic
   model escalation.
-- `checkpoint` is the ordinary PAUSE default. `interrupt`, `drain` and emergency stop are
-  explicit alternatives whose per-effect mechanics remain research.
+- `checkpoint` is the selected future product PAUSE default. `interrupt`, `drain` and emergency
+  stop are explicit future alternatives whose per-effect mechanics remain research. Current
+  immediate halt remains operative until an exact constitutional amendment.
 - Maximum `sovereign` Full Access may include explicit `grant-admin` and modify its own grants
   through attributable actions. Audit retention/erasure remains a separate policy boundary.
 - Verification is risk scaled. Routine work may use a documented downgrade; release,
@@ -58,7 +59,7 @@ floors.
   expressiveness after digest-aware warning/acknowledgement. Quota, spending, route, update and
   revocation effects remain separately configurable research questions.
 - Branch/backlog limits are measured and configurable.
-- `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants and detachable
+- Future product defaults under exact constitutional reconciliation include `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants and detachable
   terminals are common defaults. `full` adds advanced/distributed capabilities but never implies
   maximum `sovereign` authority.
 - The first single-writer rehearsal is the synthetic local execution-attempt/lease aggregate,

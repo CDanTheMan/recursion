@@ -10,6 +10,11 @@ last-updated: 2026-09-03
 
 V3 should use lightweight SQLite-first persistence in WAL mode for canonical control events and projections, with large immutable artifacts stored as content-addressed files. Human-readable YAML/JSON remains configuration and import/export; Markdown remains documentation and rendered status. They do not compete as live task truth.
 
+This remains a persistence hypothesis outside M1A. SQLite's official isolation contract permits
+only one writer per database at a time; that concurrency primitive does not identify an
+authorized Recursion writer, fence another store/process or reconcile an external effect. Those
+are application contracts. M1A uses in-memory replay and performs no SQLite migration or write.
+
 The design target is one daemon per authority domain/OS account, not one supervisor process per checked-out Recursion fork.
 
 ## Write path
@@ -26,6 +31,10 @@ input
 ```
 
 Only deterministic controller code writes canonical state. For each aggregate, exactly one fenced writer admits an event at a monotonically increasing sequence; cross-aggregate operations use an explicit saga/outbox boundary rather than a second writer. Every accepted event records the authenticated principal or component, authority/GoalSpec version, command id, fencing token where applicable, causation, correlation, schema version, sequence, and integrity/authenticity material. Hash chaining alone is not authentication. Models propose typed decisions. Remote nodes submit signed results that the controller validates and records.
+
+Planning command/event/lease/effect semantics have one canonical definition in
+[AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md); this document owns the later persistence
+projection only.
 
 ## Event and projection split
 
@@ -141,7 +150,10 @@ prove that every logical/provider copy is gone.
 ## Performance posture
 
 - One bounded writer path; many read-only projections.
-- WAL checkpointing based on measured write volume and disk behavior.
+- WAL checkpointing based on measured write volume and disk behavior. Every result pins the exact
+  SQLite build/version, compile options, VFS, filesystem, `synchronous` and checkpoint settings;
+  the upstream WAL-reset bug through 3.51.2 (fixed in 3.51.3 and named backports) is an explicit
+  revalidation/fault-test trigger, not an inferred deployment fact.
 - Prepared statements and batch event ingestion where ordering permits.
 - No eager ORM object graph or plugin-specific columns in core tables.
 - Bounded indexes justified by actual observer/routing queries.

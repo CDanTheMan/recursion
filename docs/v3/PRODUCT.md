@@ -96,7 +96,7 @@ No single scalar hides these dimensions. Named profiles select a Pareto point, a
 
 ## Release philosophy
 
-V3 is one monumental product release built as independently testable internal milestones. A public `v3.0.0` tag should wait until the mandatory end-to-end contract passes, while core, standard, remote, full and custom release manifests control installed surface area. Common defaults include `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants and detachable terminals. Installing `full` never implies maximum `sovereign` authority. This is an atomic product promise with incremental construction, not a big-bang implementation.
+V3 is one monumental product release built as independently testable internal milestones. A public `v3.0.0` tag should wait until the mandatory end-to-end contract passes, while core, standard, remote, full and custom release manifests control installed surface area. Future product defaults proposed after constitutional reconciliation include `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants and detachable terminals; current immediate PAUSE remains operative. Installing `full` never implies maximum `sovereign` authority. This is an atomic product promise with incremental construction, not a big-bang implementation.
 
 ## What must be proven
 

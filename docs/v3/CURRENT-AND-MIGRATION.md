@@ -117,7 +117,7 @@ fallback. No common monotonic writer epoch fences those paths, and the fabric st
 non-test production caller in the inspected baseline. The owner-selected rehearsal is therefore
 **not ready to execute** and is not silently redefined.
 
-Milestone 1 may nevertheless use a smaller **fabric-only state-contract fixture** around
+The later proposed M1C may use a smaller **fabric-only state-contract requirement fixture** around
 `DurableFabricStore`, with immutable assignment input and no task, run/evidence, result-ledger,
 remote, Git or publication writes. That fixture proves schema/replay/fault vocabulary only; it
 is not a cutover, does not satisfy OR-015 by itself and must not be reported as the local

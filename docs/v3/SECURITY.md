@@ -104,9 +104,10 @@ The full conformance suite is mandatory for official v3 release evidence and opt
 - Parent-goal envelopes and work packets are signed, scoped, expiring, and replay protected.
 - Risk-based step-up confirmation applies to authority expansion, high-impact commands, new egress, credentials, updates, and destructive actions.
 - Revocation prevents new admission immediately and causes in-flight work to checkpoint or terminate according to the versioned revocation policy.
-- PAUSE defaults to `checkpoint`; emergency kill is a separate immediate boundary. Exact
-  treatment of each already-started external-effect class remains a research/constitutional
-  mechanic; until proved, ambiguous recovered output is quarantined and cannot authorize a new effect.
+- The operative current PAUSE is immediate halt. `checkpoint`, `interrupt`, `drain` and emergency
+  behavior remain separately representable future policies and do not become operative merely
+  by appearing in a schema. Ambiguous recovered output is quarantined and cannot authorize a new
+  effect.
 - A disconnected node may finish only the local bounded operation explicitly permitted by its last valid grant and spool signed evidence. After reconnection, the controller revalidates the GoalSpec version, fencing token, lease, and PAUSE/revocation state before admitting that evidence or any derived action. It cannot widen scope or publish while disconnected.
 
 An owner authenticated on both devices may execute commands remotely when both devices, the goal, and the requested capability are authorized.

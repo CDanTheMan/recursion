@@ -38,6 +38,27 @@ This document defines categories and provisional gates. Numeric performance budg
   cannot bind to another workload revision or unavailable denominator.
 - A fabric-only state fixture is labeled as such and cannot pass the OR-015 broad rehearsal gate.
 
+## M1A autonomous-planning gate
+
+M1A is accepted only against the 23 fixture oracles and twelve machine gates in
+[M1A-AUTONOMOUS-PLANNING.md](M1A-AUTONOMOUS-PLANNING.md). The canonical lifecycle and transition
+rules are [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md); this section does not redefine them.
+
+The required closure is: authenticated OwnerIntent → Owner-accepted GoalSpec → admitted immutable
+PlanRevision/DAG → ready TaskNode → deterministically derived bounded WorkPacket → exact
+GateResult → bounded retry/replan/escalation → exact plan-verifier decision → terminal-verified
+plan. Incomplete/authentication failures, widening, cycles/missing dependencies, ownership
+conflicts, stale packets/leases, non-novel retries, exhaustion, missing/downgraded verification,
+quota/provider blocks, route replacement, PAUSE epochs, ambiguous effects, duplicate commands,
+replay corruption, unauthorized parent mutation and unknown fields/policies must all fail in the
+specified way.
+
+M1A performs no provider/model/network call, terminal/process launch, plugin execution, SQLite or
+Git operation, publication or external effect. Inert records used in failure fixtures do not
+prove those subsystems. The current immediate PAUSE is operative; future profiles must remain
+representable but non-operative. A same-family Terra review is valuable adjudication but not
+cross-family independence.
+
 ## Execution scenarios
 
 At minimum, end-to-end fixtures cover:
@@ -52,7 +73,7 @@ At minimum, end-to-end fixtures cover:
 - verifier disagreement resolved through new evidence;
 - measured/configurable branch admission, owner hard ceiling, review-backlog pressure and
   safe-prune refusal;
-- every supported PAUSE policy and revocation race before dispatch, during work, on a
+- every future-supported PAUSE policy and revocation race before dispatch, during work, on a
   disconnected node, before gates, and before publication;
 - disk full, torn write, stale lease, duplicate result, node loss, and controller recovery;
 - private project egress denied to an ineligible route;
@@ -186,7 +207,7 @@ V3 does not need to dominate every dimension. Each shipped profile must improve 
 - The v3.0 matrix proves native Windows ConPTY/process ownership and native Linux
   PTY/process-group behavior. Git Bash, Neovim terminals and later compatibility targets are
   labeled tested, experimental or unsupported from evidence rather than aspiration.
-- Common defaults are `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants
+- Future product defaults proposed for post-amendment conformance are `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants
   and detachable multi-terminal operation. `full` installation does not imply `sovereign`.
 - Dangerous/full-access profiles remain available with exact, reviewable effects. If explicit
   `grant-admin` is enabled, self-grant mutations are schema checked and receipt backed; they do

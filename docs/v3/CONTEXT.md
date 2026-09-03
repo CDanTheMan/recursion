@@ -18,7 +18,7 @@ Candidate artifact types:
 
 - `OwnerIntentSlice`;
 - `GoalBrief`;
-- `PlanSnapshot`;
+- `PlanRevisionProjection`;
 - `RepositoryMap`;
 - `DecisionSlice`;
 - `TaskBrief`;
@@ -29,6 +29,9 @@ Candidate artifact types:
 - `CapabilitySnapshot`.
 
 Each artifact has a schema version, project/privacy classification, source identifiers, project-scoped content identity, dependencies, creation method, validity boundary, and rehydration locator. A context package references artifacts by an authorized opaque identifier rather than copying them repeatedly. Raw digests remain inside the project's trust domain; cross-domain handles are randomized or keyed so they do not expose equality or become membership oracles.
+
+`PlanRevisionProjection` is a derived context view of the exact canonical `PlanRevision` digest in
+[AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md), not a second plan object or writable snapshot.
 
 ## Execution Context Capsule
 
