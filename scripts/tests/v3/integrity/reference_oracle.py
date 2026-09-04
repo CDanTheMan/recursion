@@ -704,4 +704,3 @@ def evaluate_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         "RetentionFixtureBundle@1": assess_retention,
     }
     return evaluators[bundle["type"]](bundle["input"])
-
