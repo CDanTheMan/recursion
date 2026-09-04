@@ -1380,6 +1380,8 @@ def build_schema() -> dict:
         {
             "replay_id": ref("id"),
             "checkpoint": nullable(ref("replay_checkpoint")),
+            "commands": array(ref("command_envelope"), maximum=2048, unique=False),
+            "receipts": array(ref("command_receipt"), maximum=2048, unique=False),
             "event_inputs": array(ref("json_input_text"), maximum=2048, unique=False),
             "expected_disposition": enum("accepted", "refused"),
             "primary_error": nullable(ref("error_code")),
@@ -1451,6 +1453,8 @@ def build_schema() -> dict:
             "policy_fixtures": array(
                 ref("policy_fixture"), maximum=2048, sorted_by=["policy_id", "policy_version"]
             ),
+            "initial_commands": array(ref("command_envelope"), maximum=2048, unique=False),
+            "initial_receipts": array(ref("command_receipt"), maximum=2048, unique=False),
             "initial_events": array(ref("planning_event"), maximum=2048, unique=False),
             "decode_inputs": array(ref("json_input_text"), maximum=2048, unique=False),
             "expected_decode_failures": array(ref("decode_failure"), maximum=2048, unique=False),

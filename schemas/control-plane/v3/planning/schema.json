@@ -10630,6 +10630,8 @@
       "required": [
         "replay_id",
         "checkpoint",
+        "commands",
+        "receipts",
         "event_inputs",
         "expected_disposition",
         "primary_error",
@@ -10648,6 +10650,22 @@
               "type": "null"
             }
           ]
+        },
+        "commands": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 2048,
+          "items": {
+            "$ref": "#/$defs/command_envelope"
+          }
+        },
+        "receipts": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 2048,
+          "items": {
+            "$ref": "#/$defs/command_receipt"
+          }
         },
         "event_inputs": {
           "type": "array",
@@ -10911,6 +10929,8 @@
         "genesis",
         "authority_fixtures",
         "policy_fixtures",
+        "initial_commands",
+        "initial_receipts",
         "initial_events",
         "decode_inputs",
         "expected_decode_failures",
@@ -10953,6 +10973,22 @@
             "policy_id",
             "policy_version"
           ]
+        },
+        "initial_commands": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 2048,
+          "items": {
+            "$ref": "#/$defs/command_envelope"
+          }
+        },
+        "initial_receipts": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 2048,
+          "items": {
+            "$ref": "#/$defs/command_receipt"
+          }
         },
         "initial_events": {
           "type": "array",
