@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the literal M1A red corpus, then fail until the reducer exists."""
+"""Validate the literal M1A corpus and execute it once a reducer exists."""
 
 from __future__ import annotations
 
@@ -794,8 +794,13 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    print("M1A_RED_INVALIDATED: reducer exists; M1A-05 must bind execution", file=sys.stderr)
-    return 1
+    conformance = load_module("m1a_conformance", TEST_DIR / "conformance.test.py")
+    cases, commands, events, decodes = conformance.run_conformance()
+    print(
+        f"M1A_RED_GREEN cases={cases} commands={commands} events={events} "
+        f"decode_failures={decodes} positive_bundles={positive_fixture_count}"
+    )
+    return 0
 
 
 if __name__ == "__main__":
