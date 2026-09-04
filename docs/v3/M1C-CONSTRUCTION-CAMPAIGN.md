@@ -140,6 +140,30 @@ candidate and its passing sweeps are diagnostic evidence, not terminal evidence.
 - Falsifier: an unverified possible effect disappears, a tombstone proves another artifact or a
   not-yet-reached expiry, or a settled/green status validates with a reason that contradicts it.
 
+## PlanRevision 4 — temporal authorization and contradictory-proof closure
+
+`PLAN-M1C-001@4` was triggered by continued independent SOL review of exact candidate
+`2d1c40c1513ffcbedc24f181ce22e218f82b15e8`. The reviewer confirmed every PlanRevision 3 repair,
+then produced three further schema-valid traces: a receipt-backed effect whose admission followed
+the attempt or whose deadline preceded admission; retention evidence explicitly marked `mismatch`
+but classified only incomplete; and publication preflight evidence observed after the remote
+receipt without a retained violation. The candidate and its passing compatibility sweeps are
+diagnostic evidence, not terminal evidence.
+
+- Retained: all prior authorization, scope boundaries, fixture IDs and literal expected outcomes,
+  Owner seams, PlanRevision 2 and PlanRevision 3 repairs.
+- Re-admitted: M1C-02, M1C-04, M1C-05 and M1C-06 for the temporal and contradictory-proof gaps;
+  fixture materialization is rechecked because the schema digest changes.
+- Change: admission must precede every effect observation and no attempt may start after the intent
+  deadline; an exact consequence receipt still owns historical outcome while temporal violations
+  remain explicit; `mismatch` copy evidence is a blocking contradiction distinct from unverified
+  evidence; and gate/verifier evidence cannot postdate a publication receipt without a retained
+  `preflight-after-receipt` violation.
+- Gate extension: reproduce post-attempt admission, expired authorization, mismatching copy
+  evidence and post-receipt preflight evidence through both schema and direct-oracle paths.
+- Falsifier: a temporally unauthorized action or publication is clean, or contradictory deletion
+  evidence is downgraded to an ordinary incomplete proof.
+
 ## Machine-checkable gates
 
 1. Schema and fixture materializers reproduce committed bytes exactly.

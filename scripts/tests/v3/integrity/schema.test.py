@@ -275,6 +275,31 @@ def _effect_bindings(validator: Any, enabled: bool, instance: Any, schema: dict[
     for observation in instance.get("observations", []):
         if any(observation.get(field) != intent.get(field) for field in identity):
             yield jsonschema.ValidationError("effect observation does not bind the intent")
+    admitted_at = admission.get("admitted_at")
+    deadline = intent.get("deadline")
+    observations = instance.get("observations", [])
+    if (
+        admission.get("decision") == "admitted"
+        and isinstance(admitted_at, str)
+        and isinstance(deadline, str)
+        and admitted_at > deadline
+    ):
+        yield jsonschema.ValidationError("effect admission is after the intent deadline")
+    if isinstance(admitted_at, str) and any(
+        isinstance(item, dict)
+        and isinstance(item.get("observed_at"), str)
+        and item["observed_at"] < admitted_at
+        for item in observations
+    ):
+        yield jsonschema.ValidationError("effect observation predates admission")
+    if isinstance(deadline, str) and any(
+        isinstance(item, dict)
+        and item.get("type") == "AttemptStarted@1"
+        and isinstance(item.get("observed_at"), str)
+        and item["observed_at"] > deadline
+        for item in observations
+    ):
+        yield jsonschema.ValidationError("effect attempt starts after the intent deadline")
     identity_fields = {
         "AttemptStarted@1": "attempt_id", "ExternalObserved@1": "observation_id",
         "ReceiptRecorded@1": "receipt_id", "ReconciliationObserved@1": "reconciliation_id",
@@ -345,6 +370,14 @@ def _publication_bindings(validator: Any, enabled: bool, instance: Any, schema: 
         fields = ["publication_id", "effect_id", "repository_ref", "review_ref", "candidate_sha"]
         if any(receipt.get(field) != intent.get(field) for field in fields):
             yield jsonschema.ValidationError("publication receipt binding mismatch")
+        receipt_time = receipt.get("observed_at")
+        if isinstance(receipt_time, str) and any(
+            isinstance(row, dict)
+            and isinstance(row.get("observed_at"), str)
+            and row["observed_at"] > receipt_time
+            for row in [*instance.get("gates", []), *instance.get("verifiers", [])]
+        ):
+            yield jsonschema.ValidationError("publication preflight evidence postdates receipt")
 
 
 def _publication_decision(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
@@ -440,7 +473,7 @@ def _retention_decision(validator: Any, enabled: bool, instance: Any, schema: di
         not reasons or (not unresolved and "local-content-present" not in reasons)
     ):
         yield jsonschema.ValidationError("incomplete retention decision needs an unresolved proof")
-    blocking_reasons = {"copy-inventory-mismatch", "key-not-destroyed", "key-not-isolated", "legal-hold", "owner-policy-denied", "owner-policy-required", "tombstone-mismatch", "tombstone-sensitive"}
+    blocking_reasons = {"copy-evidence-mismatch", "copy-inventory-mismatch", "key-not-destroyed", "key-not-isolated", "legal-hold", "owner-policy-denied", "owner-policy-required", "tombstone-mismatch", "tombstone-sensitive"}
     if status == "blocked" and not blocking_reasons.intersection(reasons):
         yield jsonschema.ValidationError("blocked retention decision needs a blocking reason")
     if status == "incomplete" and blocking_reasons.intersection(reasons):

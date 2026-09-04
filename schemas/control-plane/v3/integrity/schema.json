@@ -802,6 +802,8 @@
         "blind-retry-blocked",
         "compensation-not-separate",
         "dependency-unresolved",
+        "deadline-expired",
+        "effect-time-order-invalid",
         "future-pause-inoperative",
         "intent-binding-mismatch",
         "observation-binding-mismatch",
@@ -1875,6 +1877,7 @@
         "gate-missing",
         "license-prohibited",
         "protected-target",
+        "preflight-after-receipt",
         "publication-kind-prohibited",
         "receipt-binding-mismatch",
         "remote-state-unknown",
@@ -2458,6 +2461,7 @@
     },
     "RetentionReason": {
       "enum": [
+        "copy-evidence-mismatch",
         "copy-evidence-unverified",
         "copy-inventory-mismatch",
         "copy-unresolved",

@@ -281,6 +281,15 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
         or intent["fence_epoch"] != value["current_fence_epoch"]
     ):
         reasons.add("stale-fence")
+    if admission["decision"] == "admitted" and admission["admitted_at"] > intent["deadline"]:
+        reasons.add("deadline-expired")
+    if any(item["observed_at"] < admission["admitted_at"] for item in observations):
+        reasons.add("effect-time-order-invalid")
+    if any(
+        item["type"] == "AttemptStarted@1" and item["observed_at"] > intent["deadline"]
+        for item in observations
+    ):
+        reasons.add("deadline-expired")
 
     dependency_states = {
         item["effect_id"]: item["status"] for item in value["dependency_states"]
@@ -436,6 +445,8 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
         "authority-binding-mismatch",
         "compensation-not-separate",
         "dependency-unresolved",
+        "deadline-expired",
+        "effect-time-order-invalid",
         "future-pause-inoperative",
         "intent-binding-mismatch",
         "paused",
@@ -590,6 +601,11 @@ def assess_publication(value: dict[str, Any]) -> dict[str, Any]:
     reconcile = False
     observed_remote_state = None
     if receipt is not None:
+        if any(
+            item["observed_at"] > receipt["observed_at"]
+            for item in [*value["gates"], *value["verifiers"]]
+        ):
+            reasons.add("preflight-after-receipt")
         receipt_fields = ("publication_id", "effect_id", "repository_ref", "review_ref", "candidate_sha")
         if (
             not _valid_self_digest(receipt, "receipt_digest")
@@ -800,7 +816,9 @@ def assess_retention(value: dict[str, Any]) -> dict[str, Any]:
         else:
             unresolved.add(copy_id)
             reasons.add("copy-unresolved")
-            if not evidence_ok:
+            if item["evidence_state"] == "mismatch":
+                reasons.add("copy-evidence-mismatch")
+            elif not evidence_ok:
                 reasons.add("copy-evidence-unverified")
             if item["state"] == "expiry-bound" and (
                 not item["expiry_reached"]
@@ -840,6 +858,7 @@ def assess_retention(value: dict[str, Any]) -> dict[str, Any]:
             reasons.add("owner-policy-required")
 
     blocking = {
+        "copy-evidence-mismatch",
         "copy-inventory-mismatch",
         "key-not-destroyed",
         "key-not-isolated",

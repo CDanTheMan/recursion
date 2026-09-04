@@ -403,6 +403,28 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
         self.assertEqual(decision["reasons"], ["admission-refused", "paused"])
         schema_gate.validate(decision, "EffectDecision")
 
+        bundle = load_fixture(7)
+        bundle["input"]["admission"]["admitted_at"] = "2026-09-04T13:00:00Z"
+        with self.assertRaises(jsonschema.ValidationError):
+            schema_gate.validate(bundle["input"], "EffectTraceInput")
+        decision = oracle.classify_effect_trace(bundle["input"])
+        self.assertEqual(decision["status"], "succeeded")
+        self.assertIn("effect-time-order-invalid", decision["reasons"])
+        schema_gate.validate(decision, "EffectDecision")
+
+        bundle = load_fixture(7)
+        bundle["input"]["intent"]["deadline"] = "2026-09-04T11:00:00Z"
+        bundle["input"]["intent"] = schema_gate.seal(
+            bundle["input"]["intent"], "intent_digest"
+        )
+        bundle["input"]["admission"]["intent_digest"] = bundle["input"]["intent"]["intent_digest"]
+        with self.assertRaises(jsonschema.ValidationError):
+            schema_gate.validate(bundle["input"], "EffectTraceInput")
+        decision = oracle.classify_effect_trace(bundle["input"])
+        self.assertEqual(decision["status"], "succeeded")
+        self.assertIn("deadline-expired", decision["reasons"])
+        schema_gate.validate(decision, "EffectDecision")
+
     def test_publication_exact_receipt_and_rejection_are_settled(self) -> None:
         for remote_state, expected in (("observed", "published"), ("rejected", "rejected")):
             bundle = load_fixture(15)
@@ -416,6 +438,19 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
             with self.subTest(remote_state=remote_state):
                 self.assertEqual(decision["status"], expected)
                 self.assertFalse(decision["requires_reconciliation"])
+
+        bundle = load_fixture(15)
+        receipt = bundle["input"]["receipt"]
+        receipt["remote_state"] = "observed"
+        receipt["remote_commit_sha"] = bundle["input"]["intent"]["candidate_sha"]
+        bundle["input"]["receipt"] = schema_gate.seal(receipt, "receipt_digest")
+        bundle["input"]["gates"][0]["observed_at"] = "2026-09-04T12:02:00Z"
+        with self.assertRaises(jsonschema.ValidationError):
+            schema_gate.validate(bundle["input"], "PublicationAssessmentInput")
+        decision = oracle.assess_publication(bundle["input"])
+        self.assertEqual(decision["status"], "published")
+        self.assertIn("preflight-after-receipt", decision["reasons"])
+        schema_gate.validate(decision, "PublicationDecision")
 
     def test_publication_candidate_gate_verifier_and_receipt_bind_exactly(self) -> None:
         cases = {
@@ -590,6 +625,20 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
         self.assert_reason(
             oracle.assess_retention(bundle["input"]), "tombstone-mismatch", "blocked"
         )
+
+        bundle = load_fixture(21)
+        bundle["input"]["copies"][0]["evidence_state"] = "mismatch"
+        bundle["input"]["tombstone"]["copy_dispositions"] = copy.deepcopy(
+            bundle["input"]["copies"]
+        )
+        bundle["input"]["tombstone"]["disposed_at"] = None
+        bundle["input"]["tombstone"] = schema_gate.seal(
+            bundle["input"]["tombstone"], "tombstone_digest"
+        )
+        schema_gate.validate(bundle["input"], "RetentionAssessmentInput")
+        decision = oracle.assess_retention(bundle["input"])
+        self.assert_reason(decision, "copy-evidence-mismatch", "blocked")
+        schema_gate.validate(decision, "RetentionDecision")
 
     def test_owner_receipt_erasure_requires_explicit_policy(self) -> None:
         decision = oracle.assess_retention(load_fixture(24)["input"])

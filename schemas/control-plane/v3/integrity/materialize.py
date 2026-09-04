@@ -235,7 +235,8 @@ def build_schema() -> dict[str, Any]:
     defs["EffectReason"] = {"enum": [
         "admission-refused", "attempt-binding-mismatch", "authority-binding-mismatch",
         "blind-retry-blocked", "compensation-not-separate", "dependency-unresolved",
-        "future-pause-inoperative", "intent-binding-mismatch", "observation-binding-mismatch",
+        "deadline-expired", "effect-time-order-invalid", "future-pause-inoperative",
+        "intent-binding-mismatch", "observation-binding-mismatch",
         "observation-conflict", "observation-unverified", "paused", "receipt-binding-mismatch",
         "receipt-missing", "reconciliation-required", "reconciliation-unverified",
         "stale-admission", "stale-fence",
@@ -405,7 +406,7 @@ def build_schema() -> dict[str, Any]:
         "artifact-binding-mismatch", "artifact-export-prohibited", "artifact-missing",
         "authority-missing", "candidate-dirty", "candidate-state-unknown", "gate-binding-mismatch",
         "gate-failed", "gate-missing", "license-prohibited", "protected-target",
-        "publication-kind-prohibited", "receipt-binding-mismatch", "remote-state-unknown",
+        "preflight-after-receipt", "publication-kind-prohibited", "receipt-binding-mismatch", "remote-state-unknown",
         "secret-scan-failed", "source-ancestry-unknown", "source-not-ancestor",
         "verification-binding-mismatch", "verification-insufficient", "verification-missing",
     ]}
@@ -544,7 +545,7 @@ def build_schema() -> dict[str, Any]:
         **{"x-retentionBindings": True},
     )
     defs["RetentionReason"] = {"enum": [
-        "copy-evidence-unverified", "copy-inventory-mismatch", "copy-unresolved",
+        "copy-evidence-mismatch", "copy-evidence-unverified", "copy-inventory-mismatch", "copy-unresolved",
         "expiry-not-reached", "key-not-destroyed", "key-not-isolated", "legal-hold",
         "local-content-present", "owner-policy-denied", "owner-policy-required",
         "tombstone-mismatch", "tombstone-sensitive",

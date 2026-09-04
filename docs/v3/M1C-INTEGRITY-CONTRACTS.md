@@ -75,6 +75,9 @@ Authenticated rejection is `failed`. Possible or observed acceptance without an 
 authenticated receipt is `ambiguous`, including the crash interval after remote acceptance and
 before receipt persistence. A success receipt binds the effect, attempt, idempotency key, target,
 payload, observer, result and fence. Contradictory or inexact observations remain ambiguous.
+Admission time precedes every observation, and attempt start cannot exceed the intent deadline.
+An exact receipt continues to own the historical outcome if supplied records violate that order,
+but the temporal authorization violation remains explicit and never becomes a clean success.
 
 An ambiguous effect cannot be retried or used to admit a dependent effect until an authenticated
 reconciliation observation resolves the same external operation. Reconciliation may produce
@@ -138,8 +141,9 @@ outcomes, but no content, secret, raw locator or unnecessary equality-revealing 
 expiry used by a disposed tombstone must be no later than the recorded disposal time.
 
 Pending, disconnected, unknown, soft-deleted or delete-marker-only copies make deletion
-`incomplete`. Shared/active keys, contradictory evidence, sensitive tombstones or a legal hold
-make it `blocked`. Deleting authority, audit, gate, publication or effect receipts additionally
+`incomplete`. Mismatching copy evidence, shared/active keys, other contradictory evidence,
+sensitive tombstones or a legal hold make it `blocked`. Deleting authority, audit, gate,
+publication or effect receipts additionally
 requires an explicit supplied Owner erasure policy. M1C represents `unknown` policy and blocks;
 ordinary Full Access or `grant-admin` never implies erasure authority.
 

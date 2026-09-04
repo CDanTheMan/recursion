@@ -93,9 +93,10 @@ proof graph is complete, not that M1C inspected a provider, medium, backup or di
 Every fixture-union family receives at least: unknown field; combined discriminator/version;
 fixture ID; digest; exact integer; ordering; uniqueness; and collection-bound mutation. Lane
 specific adversarial probes cover identity cross-binding, contradiction retention, inapplicable
-support, stale source, effect receipt/attempt/idempotency mismatches, ambiguity retry,
-source/candidate/ref/verifier publication mismatches, writer/fence/event chain discontinuity,
-projection-only claims, incomplete copy inventories, shared keys and sensitive tombstones.
+support, stale source, effect receipt/attempt/idempotency and admission/deadline ordering,
+ambiguity retry, source/candidate/ref/verifier publication mismatches and receipt ordering,
+writer/fence/event chain discontinuity, projection-only claims, incomplete or contradictory copy
+evidence, shared keys and sensitive tombstones.
 
 The corpus is complete only when all 24 bundles validate, their manifest binds exact bytes, the
 independent oracle reproduces literal expected bytes twice, every negative mutation fails closed,

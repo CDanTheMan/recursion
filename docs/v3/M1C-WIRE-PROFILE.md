@@ -149,7 +149,8 @@ Every attempt uses `attempt_number` 1–64. IDs are unique and timestamps are no
 `future-pause-inoperative`, `dependency-unresolved`, `attempt-binding-mismatch`,
 `observation-binding-mismatch`, `observation-unverified`, `receipt-binding-mismatch`,
 `receipt-missing`, `observation-conflict`, `blind-retry-blocked`, `reconciliation-required`,
-`reconciliation-unverified`, `compensation-not-separate`.
+`reconciliation-unverified`, `compensation-not-separate`, `deadline-expired`,
+`effect-time-order-invalid`.
 
 `EffectDecision@1` has exactly `type`, status `refused`, `prepared`, `executing`, `succeeded`,
 `failed`, `ambiguous`, `reconciled-succeeded` or `reconciled-failed`, sorted reasons,
@@ -159,7 +160,9 @@ admission violation. An unresolved prior attempt or conflicting bound result rem
 a later attempt or receipt cannot erase it. An identity-bound but unverified external observation
 preserves possible-effect state until that same attempt receives exact settlement. A non-ambiguous
 status cannot carry `receipt-missing`, `blind-retry-blocked`, `observation-conflict` or
-`reconciliation-required`.
+`reconciliation-required`. Admission precedes every observation, and an attempt cannot start after
+the intent deadline. Exact settlement retains any temporal authorization violation without
+rewriting the observed consequence.
 
 ## Publication records
 
@@ -197,7 +200,8 @@ matches `refs/heads/[A-Za-z0-9][A-Za-z0-9._/-]{0,159}` without `..`, `//`, `@{` 
 `authority-missing`, `artifact-missing`, `artifact-binding-mismatch`,
 `artifact-export-prohibited`, `secret-scan-failed`, `license-prohibited`, `gate-missing`,
 `gate-failed`, `gate-binding-mismatch`, `verification-missing`, `verification-insufficient`,
-`verification-binding-mismatch`, `receipt-binding-mismatch`, `remote-state-unknown`.
+`verification-binding-mismatch`, `receipt-binding-mismatch`, `remote-state-unknown`,
+`preflight-after-receipt`.
 
 `PublicationDecision@1` has exactly `type`, status `eligible`, `blocked`, `published`, `rejected`
 or `ambiguous`, sorted reasons, `publication_id`, nullable `published_sha`,
@@ -206,7 +210,8 @@ The branch named by `review_ref`, not only `target_branch`, is checked against p
 eligible review ref is also distinct from its target branch. An
 exact `observed` or `rejected` receipt owns historical remote status; failed preflight reasons are
 retained but cannot relabel an observed remote publication as merely blocked. Only `ambiguous` may
-carry `remote-state-unknown`.
+carry `remote-state-unknown`. Preflight evidence may not postdate the receipt; direct historical
+assessment retains `preflight-after-receipt` without hiding an exactly observed remote result.
 
 ## Fabric-only state records
 
@@ -271,7 +276,8 @@ claimed reached expiry boundary cannot be later than `disposed_at`.
 `authority-receipt` or `audit-record`.
 
 `RetentionReason` is closed to: `legal-hold`, `local-content-present`, `key-not-destroyed`,
-`key-not-isolated`, `copy-unresolved`, `copy-evidence-unverified`, `expiry-not-reached`,
+`key-not-isolated`, `copy-unresolved`, `copy-evidence-unverified`, `copy-evidence-mismatch`,
+`expiry-not-reached`,
 `copy-inventory-mismatch`, `tombstone-mismatch`, `tombstone-sensitive`,
 `owner-policy-required`, `owner-policy-denied`.
 
@@ -281,7 +287,8 @@ reasons, `artifact_id`, `resolved_copy_ids`, `unresolved_copy_ids`,
 `incomplete` normally names unresolved copies, but `local-content-present` is independently
 sufficient even when every enumerated remote copy is resolved. The explicit Owner erasure seam
 applies to gate, publication, effect and authority receipts plus audit records; accepted evidence
-is not silently promoted into that reserved receipt-policy class.
+is not silently promoted into that reserved receipt-policy class. Explicit mismatching copy
+evidence is contradictory and therefore `blocked`, not merely incomplete.
 `disposed_at` is absent while proof is incomplete and is present no earlier than `requested_at`
 when all local and enumerated copy evidence is complete.
 
