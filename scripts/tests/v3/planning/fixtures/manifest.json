@@ -1,0 +1,685 @@
+{
+  "closed_command_types": [
+    "record-owner-intent",
+    "accept-goal-spec",
+    "amend-goal-spec",
+    "record-owner-verifier-exception",
+    "start-arm-run",
+    "propose-plan-revision",
+    "derive-work-packet",
+    "replace-work-lease",
+    "replace-executive-lease",
+    "replace-route",
+    "record-capacity-observation",
+    "record-checkpoint",
+    "reserve-budget",
+    "submit-worker-result",
+    "submit-gate-result",
+    "propose-retry",
+    "propose-replan",
+    "raise-blocker",
+    "raise-escalation",
+    "submit-plan-verifier-decision",
+    "apply-pause",
+    "record-effect-observation"
+  ],
+  "closed_error_codes": [
+    "E-SCHEMA-UNKNOWN-FIELD",
+    "E-SCHEMA-MISSING-FIELD",
+    "E-SCHEMA-UNKNOWN-VERSION",
+    "E-SCHEMA-DUPLICATE",
+    "E-SCHEMA-BOUND",
+    "E-DIGEST-MISMATCH",
+    "E-AUTH-MISSING",
+    "E-AUTH-PARENT-MUTATION",
+    "E-AUTH-ROLE",
+    "E-SCOPE-WIDEN",
+    "E-BUDGET-WIDEN",
+    "E-DAG-CYCLE",
+    "E-DAG-DEPENDENCY",
+    "E-DAG-CONFLICT",
+    "E-STALE-GOAL",
+    "E-STALE-PLAN",
+    "E-STALE-LEASE",
+    "E-GATE-MISSING",
+    "E-VERIFIER-MISSING",
+    "E-RETRY-NONNOVEL",
+    "E-RETRY-EXHAUSTED",
+    "E-ROUTE-SPEND",
+    "E-PAUSED",
+    "E-EFFECT-AMBIGUOUS",
+    "E-IDEMPOTENCY-CONFLICT",
+    "E-AMENDMENT-INCOMPLETE",
+    "E-POLICY-UNKNOWN"
+  ],
+  "closed_event_types": [
+    "OwnerIntentRecorded",
+    "GoalSpecAccepted",
+    "GoalSpecAmended",
+    "OwnerVerifierExceptionRecorded",
+    "ArmRunStarted",
+    "PlanRevisionAdmitted",
+    "WorkPacketDerived",
+    "WorkLeaseReplaced",
+    "ExecutiveLeaseReplaced",
+    "RouteAssignmentReplaced",
+    "CapacityObservationRecorded",
+    "CheckpointRecorded",
+    "BudgetReserved",
+    "WorkerResultRecorded",
+    "GateResultRecorded",
+    "RetryAdmitted",
+    "ReplanAdmitted",
+    "BlockerRaised",
+    "EscalationRaised",
+    "PlanVerifierDecisionRecorded",
+    "PauseApplied",
+    "EffectObservationRecorded",
+    "PlanItemDisposed",
+    "PacketFenced",
+    "LeaseFenced",
+    "EffectDisposed",
+    "EvidenceDisposed"
+  ],
+  "domain_record_types": [
+    "arm-run",
+    "blocker",
+    "budget-reservation",
+    "capacity-observation",
+    "checkpoint",
+    "disposition",
+    "effect-observation",
+    "escalation",
+    "executive-lease",
+    "gate-result",
+    "goal-spec",
+    "goal-spec-amendment",
+    "owner-intent",
+    "owner-verifier-exception",
+    "pause-directive",
+    "plan-revision",
+    "plan-transition",
+    "plan-verifier-decision",
+    "replan-decision",
+    "retry-decision",
+    "route-assignment",
+    "task-node",
+    "work-lease",
+    "work-packet",
+    "worker-result"
+  ],
+  "fixture_count": 23,
+  "fixtures": [
+    {
+      "bytes": 173707,
+      "case_count": 1,
+      "command_count": 10,
+      "decode_failure_count": 0,
+      "error_codes": [],
+      "event_count": 10,
+      "expected_final_digests": [
+        "03e635157fd7a9b8acf8222155b1c96256a51fa20c3fd97c2760eb18a80709ae"
+      ],
+      "fixture_id": "F-M1A-001",
+      "path": "F-M1A-001.json",
+      "receipt_count": 10,
+      "replay_case_count": 0,
+      "sha256": "aa09d448bef34047b300fe8b95ced55e21c54474eefe6b996be26dc6a62b90d6"
+    },
+    {
+      "bytes": 21199,
+      "case_count": 1,
+      "command_count": 2,
+      "decode_failure_count": 6,
+      "error_codes": [
+        "E-AUTH-MISSING",
+        "E-AUTH-ROLE",
+        "E-SCHEMA-BOUND",
+        "E-SCHEMA-DUPLICATE",
+        "E-SCHEMA-MISSING-FIELD"
+      ],
+      "event_count": 0,
+      "expected_final_digests": [
+        "f858baa16245c716e0d4caec0b7a6020d80c77a1b6173d749a25573f661f75de"
+      ],
+      "fixture_id": "F-M1A-002",
+      "path": "F-M1A-002.json",
+      "receipt_count": 2,
+      "replay_case_count": 0,
+      "sha256": "a751fb8d45f5da75c50adb3641c63548457e7b0ccd30beaf643e73d340984739"
+    },
+    {
+      "bytes": 520212,
+      "case_count": 5,
+      "command_count": 25,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-BUDGET-WIDEN",
+        "E-SCOPE-WIDEN"
+      ],
+      "event_count": 20,
+      "expected_final_digests": [
+        "41e3acdce127187a21e1d91ab376452fe45723657b386ed22d73e2b3156042b8",
+        "c00a2079a28fa2346af1514f21b3e6eb66b3d31655340a3f6ec5007bd44817aa",
+        "6c03b942ec166c9f510ea1810d05a4ab6f52ac059d5ac931399080ccad911169",
+        "8a2fd59bb4cd23ef2f80ca0bfe84f14a10eecd666002d2626aa19308f175b72d",
+        "6d631c6001db465c6817f0ad0502935d0a919470f1a6294e9bacde671be3a621"
+      ],
+      "fixture_id": "F-M1A-003",
+      "path": "F-M1A-003.json",
+      "receipt_count": 25,
+      "replay_case_count": 0,
+      "sha256": "8c2154d9806853db27c4876d278124d2db148c33830e577be37d06e9d0771049"
+    },
+    {
+      "bytes": 215349,
+      "case_count": 2,
+      "command_count": 10,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-DAG-CYCLE",
+        "E-DAG-DEPENDENCY"
+      ],
+      "event_count": 8,
+      "expected_final_digests": [
+        "1814d53e893a7ad18453f8a14aacb74d6e52db324f0cab53c378272ece2b1e17",
+        "cdd15c3ea330baa6a16d2b39024f6ba4aba7d848dffee19805fb453296a2e36a"
+      ],
+      "fixture_id": "F-M1A-004",
+      "path": "F-M1A-004.json",
+      "receipt_count": 10,
+      "replay_case_count": 0,
+      "sha256": "5301dc3c5b3469e5912ed274cd8eb3b1d951cf407cbcb17a2936eba51452b893"
+    },
+    {
+      "bytes": 376950,
+      "case_count": 1,
+      "command_count": 12,
+      "decode_failure_count": 0,
+      "error_codes": [],
+      "event_count": 21,
+      "expected_final_digests": [
+        "6d5e1293c930b0b3131a88a0621f34d56d5cc875e72af044d09b41ac7e9fb2ae"
+      ],
+      "fixture_id": "F-M1A-005",
+      "path": "F-M1A-005.json",
+      "receipt_count": 12,
+      "replay_case_count": 0,
+      "sha256": "63245ecdc9919022f966cbee571e456331be44b50ecd35f7b9fb6fd9ac2bf245"
+    },
+    {
+      "bytes": 438779,
+      "case_count": 3,
+      "command_count": 25,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-STALE-GOAL",
+        "E-STALE-LEASE",
+        "E-STALE-PLAN"
+      ],
+      "event_count": 22,
+      "expected_final_digests": [
+        "990f7499fcad20fac6df3667e3ce453b0925628a5af7c62f705362b0e24b4ef0",
+        "46989a4b4fc58374f21b8c4b66043e8347ffd1bbe7dd76315316094272945fe6",
+        "72a153ff0b6c07036649c8f618edcd437ca74a036f13d5c150f037fccd5989fe"
+      ],
+      "fixture_id": "F-M1A-006",
+      "path": "F-M1A-006.json",
+      "receipt_count": 25,
+      "replay_case_count": 0,
+      "sha256": "b3a9357d69baf8232c4827ee5dce2f145572c3c40785cf05009128566744d616"
+    },
+    {
+      "bytes": 191882,
+      "case_count": 1,
+      "command_count": 10,
+      "decode_failure_count": 0,
+      "error_codes": [],
+      "event_count": 11,
+      "expected_final_digests": [
+        "e7bd60931ea56896bf87d9a8982faa8ffc95b73d61aaca6fd16071561b6b7219"
+      ],
+      "fixture_id": "F-M1A-007",
+      "path": "F-M1A-007.json",
+      "receipt_count": 10,
+      "replay_case_count": 0,
+      "sha256": "cd5b1854e313f201590c42a9fc6bc79ff922cd0aacbe194cf513c3db63b6c44c"
+    },
+    {
+      "bytes": 200133,
+      "case_count": 1,
+      "command_count": 11,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-RETRY-NONNOVEL"
+      ],
+      "event_count": 11,
+      "expected_final_digests": [
+        "f44b4e6a1aa151756ea3e5b0ec682525d31c22790d808b7cb620c19ba4028ae9"
+      ],
+      "fixture_id": "F-M1A-008",
+      "path": "F-M1A-008.json",
+      "receipt_count": 11,
+      "replay_case_count": 0,
+      "sha256": "5bc6d624a3895c7e02475d8a341e4e21cfcadf732df9446970a8118b54f665d0"
+    },
+    {
+      "bytes": 188566,
+      "case_count": 1,
+      "command_count": 12,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-RETRY-EXHAUSTED"
+      ],
+      "event_count": 11,
+      "expected_final_digests": [
+        "de4a52afd8519c4a908ebaef3d3cede3a6032f9dbc17e35d916fb5f24728a86c"
+      ],
+      "fixture_id": "F-M1A-009",
+      "path": "F-M1A-009.json",
+      "receipt_count": 12,
+      "replay_case_count": 0,
+      "sha256": "91e0a093263136a707c5e8caec37b865bf3b0f24ac8daac7f2a0e7d7b7fd4fa4"
+    },
+    {
+      "bytes": 306747,
+      "case_count": 2,
+      "command_count": 18,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-GATE-MISSING",
+        "E-VERIFIER-MISSING"
+      ],
+      "event_count": 16,
+      "expected_final_digests": [
+        "5c5ee6e40149ba2842619406b1986acba3ba24b0076a37730d91a1e93f47735b",
+        "85ef58f580aef55d703b44a3400e2bf9e703b29974a7668a5c7543886119db7d"
+      ],
+      "fixture_id": "F-M1A-010",
+      "path": "F-M1A-010.json",
+      "receipt_count": 18,
+      "replay_case_count": 0,
+      "sha256": "91c4492825ed9884986dad28b26f625998cd323e2601d949302c2f1b7d439d08"
+    },
+    {
+      "bytes": 186231,
+      "case_count": 1,
+      "command_count": 11,
+      "decode_failure_count": 0,
+      "error_codes": [],
+      "event_count": 11,
+      "expected_final_digests": [
+        "1f28f95e84f3d649070e5d03a79fa4a9d36697cdf3254c5bb22c8ca57c0c7b50"
+      ],
+      "fixture_id": "F-M1A-011",
+      "path": "F-M1A-011.json",
+      "receipt_count": 11,
+      "replay_case_count": 0,
+      "sha256": "b2f198ff7792ee0665c24604fdb0d936769ec81ebf1c49bfcc4e353ac0872e32"
+    },
+    {
+      "bytes": 161465,
+      "case_count": 1,
+      "command_count": 10,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-ROUTE-SPEND"
+      ],
+      "event_count": 9,
+      "expected_final_digests": [
+        "72f8d667892c354c8670b9d8b043feb9edf2a576bb297082d464672d9f7b5506"
+      ],
+      "fixture_id": "F-M1A-012",
+      "path": "F-M1A-012.json",
+      "receipt_count": 10,
+      "replay_case_count": 0,
+      "sha256": "ca85374badcb3da76ea87eb05037865ab17f85053d4aec53266400ad9236f755"
+    },
+    {
+      "bytes": 240113,
+      "case_count": 1,
+      "command_count": 9,
+      "decode_failure_count": 0,
+      "error_codes": [],
+      "event_count": 10,
+      "expected_final_digests": [
+        "a3575e537e8b4781aadc442ed34cc284894ba494a9240f8a0a5a98c64464f70a"
+      ],
+      "fixture_id": "F-M1A-013",
+      "path": "F-M1A-013.json",
+      "receipt_count": 9,
+      "replay_case_count": 1,
+      "sha256": "08fe57d2cf88dddd10e6643adbd7ddf9b2410bbdbb835fa8659dd83e8d20633b"
+    },
+    {
+      "bytes": 159365,
+      "case_count": 1,
+      "command_count": 9,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-PAUSED"
+      ],
+      "event_count": 8,
+      "expected_final_digests": [
+        "1e019c38d5ba580d96e17502586ca7834c0d5bd9c5a57492c9b56200b0ac6c8e"
+      ],
+      "fixture_id": "F-M1A-014",
+      "path": "F-M1A-014.json",
+      "receipt_count": 9,
+      "replay_case_count": 0,
+      "sha256": "3ce062017f723bca04a2cecc77e22e3bca3fda04ac64244b3159d815ad3e8711"
+    },
+    {
+      "bytes": 42049,
+      "case_count": 1,
+      "command_count": 3,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-POLICY-UNKNOWN"
+      ],
+      "event_count": 2,
+      "expected_final_digests": [
+        "c05962b4642101d167c7b72ddad012938fe21a04445f82e8b26218af3906503c"
+      ],
+      "fixture_id": "F-M1A-015",
+      "path": "F-M1A-015.json",
+      "receipt_count": 3,
+      "replay_case_count": 0,
+      "sha256": "6fd97e095c2ae2cafd31bc9afd12743cae487f927c1bca61a60159f3699613de"
+    },
+    {
+      "bytes": 178117,
+      "case_count": 1,
+      "command_count": 11,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-EFFECT-AMBIGUOUS"
+      ],
+      "event_count": 10,
+      "expected_final_digests": [
+        "a707fcc3316ce87d641032211dd32f7e9f0ec9f39e150cd6d02885aaff40af5d"
+      ],
+      "fixture_id": "F-M1A-016",
+      "path": "F-M1A-016.json",
+      "receipt_count": 11,
+      "replay_case_count": 0,
+      "sha256": "15672539b7e30a551b18beed1ff0fb33924bd114ab4e08bf9b594c724ed0f3f1"
+    },
+    {
+      "bytes": 24818,
+      "case_count": 1,
+      "command_count": 3,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-IDEMPOTENCY-CONFLICT"
+      ],
+      "event_count": 1,
+      "expected_final_digests": [
+        "ae87890d7c1be13b29e09f488dc82040a510eab6fd5c640b739abba2e2659577"
+      ],
+      "fixture_id": "F-M1A-017",
+      "path": "F-M1A-017.json",
+      "receipt_count": 3,
+      "replay_case_count": 0,
+      "sha256": "d585b1f405e75b1bf614a9e48865d49c969c027a031d2dec44762ebaca65abe4"
+    },
+    {
+      "bytes": 516758,
+      "case_count": 1,
+      "command_count": 8,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-DIGEST-MISMATCH",
+        "E-SCHEMA-UNKNOWN-VERSION"
+      ],
+      "event_count": 8,
+      "expected_final_digests": [
+        "659c845ede7cf709cc7920ddb2a68f768265ba57ab0689233ab11ca9722fd79d"
+      ],
+      "fixture_id": "F-M1A-018",
+      "path": "F-M1A-018.json",
+      "receipt_count": 8,
+      "replay_case_count": 5,
+      "sha256": "4611f727afd619a68186ff24f4cc672c900169b821e124d02997770f63b43069"
+    },
+    {
+      "bytes": 113216,
+      "case_count": 1,
+      "command_count": 6,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-STALE-LEASE"
+      ],
+      "event_count": 5,
+      "expected_final_digests": [
+        "0aefff0b599377a650bb87bc6e46575b458b864b9a3dc2f8b4038951d054bac5"
+      ],
+      "fixture_id": "F-M1A-019",
+      "path": "F-M1A-019.json",
+      "receipt_count": 6,
+      "replay_case_count": 0,
+      "sha256": "b2ea18474f6aeb234983e66825533a9e95c61d7d65bde212cb198e5b49c922da"
+    },
+    {
+      "bytes": 111704,
+      "case_count": 1,
+      "command_count": 6,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-AUTH-PARENT-MUTATION"
+      ],
+      "event_count": 4,
+      "expected_final_digests": [
+        "ec248e23a2fe60c144c472812270d87e0463cbb0c19ab716f258a54b646ddd2b"
+      ],
+      "fixture_id": "F-M1A-020",
+      "path": "F-M1A-020.json",
+      "receipt_count": 6,
+      "replay_case_count": 0,
+      "sha256": "cecdb27271a094c927d5d9f24ec8d9956523d22b624b116af71072bb8d79bce1"
+    },
+    {
+      "bytes": 43011,
+      "case_count": 1,
+      "command_count": 3,
+      "decode_failure_count": 2,
+      "error_codes": [
+        "E-POLICY-UNKNOWN",
+        "E-SCHEMA-UNKNOWN-FIELD",
+        "E-SCHEMA-UNKNOWN-VERSION"
+      ],
+      "event_count": 2,
+      "expected_final_digests": [
+        "5fb425c74b0e5c0812080474ea9ef1b073caedc12cb80f758e06a84f1eb4eb87"
+      ],
+      "fixture_id": "F-M1A-021",
+      "path": "F-M1A-021.json",
+      "receipt_count": 3,
+      "replay_case_count": 0,
+      "sha256": "8ea9132ceda92ef486ebaa9a6735dea310fa44241ce5e1fed14ca4efde10b3a9"
+    },
+    {
+      "bytes": 468895,
+      "case_count": 4,
+      "command_count": 20,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-DAG-CONFLICT"
+      ],
+      "event_count": 18,
+      "expected_final_digests": [
+        "db4b15f6b13ae70384e57562916845eb5cc468b3a130622fa889a99d0f59ebab",
+        "7d438679c4524b913e56ad1c61ea8b685f981c4d988f00aba1f2b0ea0d0142bc",
+        "5027e67ba35eaab9a06d160e8642c4f70b96588c65d5785f04324eed6b41b75a",
+        "3bb2bc8df09d4ade5be6fd9518755eecdf35d59c44e7eb4662209daca587645e"
+      ],
+      "fixture_id": "F-M1A-022",
+      "path": "F-M1A-022.json",
+      "receipt_count": 20,
+      "replay_case_count": 0,
+      "sha256": "ab83b6ddbbce7dd3c1528803a86d966692453f1df7230add953b871c4d20f14d"
+    },
+    {
+      "bytes": 160685,
+      "case_count": 1,
+      "command_count": 8,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-AMENDMENT-INCOMPLETE"
+      ],
+      "event_count": 7,
+      "expected_final_digests": [
+        "8322d1a8cbfc9516009bba7d1438becf10accfaa0045fc1616a1e76b76cd8941"
+      ],
+      "fixture_id": "F-M1A-023",
+      "path": "F-M1A-023.json",
+      "receipt_count": 8,
+      "replay_case_count": 0,
+      "sha256": "643b7c1491ff60b3aa9baab28ff9a8a03acadb223f26f72b0398be130155cea9"
+    }
+  ],
+  "manifest_schema_version": "m1a-red-manifest-1",
+  "projection_terminal_states": [
+    "nonterminal",
+    "terminal-verified",
+    "terminal-verified-downgraded",
+    "terminal-failed"
+  ],
+  "schema_candidate": "ab9707480baf6ef7baff03b6bda444b890d78557",
+  "schema_definitions": [
+    "arm_run_record",
+    "authority_attestation",
+    "blocker_record",
+    "budget_reservation_record",
+    "budget_vector",
+    "canonical_diff",
+    "canonical_diff_entry",
+    "capacity_observation_record",
+    "checkpoint_record",
+    "command_accept_goal_spec",
+    "command_amend_goal_spec",
+    "command_apply_pause",
+    "command_derive_work_packet",
+    "command_envelope",
+    "command_id",
+    "command_propose_plan_revision",
+    "command_propose_replan",
+    "command_propose_retry",
+    "command_raise_blocker",
+    "command_raise_escalation",
+    "command_receipt",
+    "command_record_capacity_observation",
+    "command_record_checkpoint",
+    "command_record_effect_observation",
+    "command_record_owner_intent",
+    "command_record_owner_verifier_exception",
+    "command_replace_executive_lease",
+    "command_replace_route",
+    "command_replace_work_lease",
+    "command_reserve_budget",
+    "command_start_arm_run",
+    "command_submit_gate_result",
+    "command_submit_plan_verifier_decision",
+    "command_submit_worker_result",
+    "command_type",
+    "compatibility_input",
+    "decode_failure",
+    "digest",
+    "digest_set",
+    "disposition",
+    "disposition_record_record",
+    "disposition_set",
+    "domain_record",
+    "effect_observation_record",
+    "error_code",
+    "error_code_set",
+    "error_witness",
+    "escalation_record",
+    "event_ArmRunStarted",
+    "event_BlockerRaised",
+    "event_BudgetReserved",
+    "event_CapacityObservationRecorded",
+    "event_CheckpointRecorded",
+    "event_EffectDisposed",
+    "event_EffectObservationRecorded",
+    "event_EscalationRaised",
+    "event_EvidenceDisposed",
+    "event_ExecutiveLeaseReplaced",
+    "event_GateResultRecorded",
+    "event_GoalSpecAccepted",
+    "event_GoalSpecAmended",
+    "event_LeaseFenced",
+    "event_OwnerIntentRecorded",
+    "event_OwnerVerifierExceptionRecorded",
+    "event_PacketFenced",
+    "event_PauseApplied",
+    "event_PlanItemDisposed",
+    "event_PlanRevisionAdmitted",
+    "event_PlanVerifierDecisionRecorded",
+    "event_ReplanAdmitted",
+    "event_RetryAdmitted",
+    "event_RouteAssignmentReplaced",
+    "event_WorkLeaseReplaced",
+    "event_WorkPacketDerived",
+    "event_WorkerResultRecorded",
+    "event_type",
+    "evidence_ref",
+    "evidence_ref_set",
+    "executive_lease_record",
+    "fixture_bundle",
+    "fixture_case",
+    "gate_requirement",
+    "gate_requirement_set",
+    "gate_result_record",
+    "genesis_config",
+    "goal_spec_amendment_record",
+    "goal_spec_record",
+    "id",
+    "id_set",
+    "independence_projection",
+    "json_input_text",
+    "lease_ref",
+    "logical_time",
+    "node_compatibility_tuple",
+    "nonempty_text",
+    "novelty_delta",
+    "novelty_dependency_repaired",
+    "novelty_evidence_added",
+    "novelty_hypothesis_replaced",
+    "novelty_owner_amended",
+    "novelty_route_capability_changed",
+    "novelty_strategy_changed",
+    "novelty_task_narrowed",
+    "object_ref",
+    "owner_intent_record",
+    "owner_verifier_exception_record",
+    "pause_directive_record",
+    "plan_identity_ref",
+    "plan_revision_record",
+    "plan_transition_record",
+    "plan_verifier_decision_record",
+    "planning_event",
+    "policy_fixture",
+    "policy_ref",
+    "pos_int",
+    "projection_state",
+    "receipt_identity",
+    "replan_decision_record",
+    "replay_checkpoint",
+    "replay_expectation",
+    "resource_path",
+    "resource_path_set",
+    "retry_decision_record",
+    "route_assignment_record",
+    "task_node_record",
+    "text",
+    "text_set",
+    "token",
+    "token_set",
+    "uint",
+    "work_lease_record",
+    "work_packet_record",
+    "worker_result_record"
+  ],
+  "schema_sha256": "b9cf727d5bef625b93b26dcd2510fc0a48f5b1d4c1cdbb8117c7463c4531943a"
+}

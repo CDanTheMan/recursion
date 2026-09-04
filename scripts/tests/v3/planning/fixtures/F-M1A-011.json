@@ -1,0 +1,4311 @@
+{
+  "cases": [
+    {
+      "authority_fixtures": [
+        {
+          "actor_id": "OWNER-LUCAS",
+          "actor_role": "owner",
+          "allowed_command_types": [
+            "record-owner-intent"
+          ],
+          "attestation_id": "AUTH-F-M1A-011-downgrade-01",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "2b7bb3dd27f0cfcd467d4ae35eb5d2ac6d0c405ba0a63d4d84ea903e2e9085cc",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "a1df28aaf92e18315d87be471f63dffe5dd90521ec65541693a5c86030422ea2",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "OWNER-LUCAS",
+          "actor_role": "owner",
+          "allowed_command_types": [
+            "accept-goal-spec"
+          ],
+          "attestation_id": "AUTH-F-M1A-011-downgrade-02",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "5e9f381dfab60e1fe92c573ca44ff80e2e6712f9c8224cd7b47d2b11c85a416a",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "62fa9dc1c0a1e09dc787a812dbc59053042b97d1382c62ec008f9756b01c9007",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "HEAD-HERMES",
+          "actor_role": "head",
+          "allowed_command_types": [
+            "start-arm-run"
+          ],
+          "attestation_id": "AUTH-F-M1A-011-downgrade-03",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "14b40d22957fe6fbbc3c3cc6df3bba7f11e51dc24c78218d89a7affaba030f61",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "d242b8308bd0b90bb00ebd495d4048a1ce643c3794e1dd4dd22eb961626777f2",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "ARM-M1A",
+          "actor_role": "arm",
+          "allowed_command_types": [
+            "propose-plan-revision"
+          ],
+          "attestation_id": "AUTH-F-M1A-011-downgrade-04",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "50ba84842196cda66ca351e24a1d416e880321371b6853948efe277f723f8a17",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "de353be73467a99ef7ff44e8f918f62dcb2afc52c8d00f09614a574541a1da29",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "KERNEL-FIXTURE",
+          "actor_role": "kernel-fixture-gate",
+          "allowed_command_types": [
+            "record-capacity-observation"
+          ],
+          "attestation_id": "AUTH-F-M1A-011-downgrade-05",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "e75a2aeb38cd64dff5bfb341a29a7d19dbe62aa3318a342c7ebd3c17ebac54fc",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "bcd87f156f7fe2595a8febe694407a85f24260b445257ebddda508fb73cd85bd",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "ARM-M1A",
+          "actor_role": "arm",
+          "allowed_command_types": [
+            "reserve-budget"
+          ],
+          "attestation_id": "AUTH-F-M1A-011-downgrade-06",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "e5023ce0c1b74117c43ee8123fc347dfa7ecff80628f271dd94da02f07410ab9",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "202ee7fd948553eda6ba03f32cd6de3cab7e411c1a806519e439fd9cdbe12c08",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "ARM-M1A",
+          "actor_role": "arm",
+          "allowed_command_types": [
+            "derive-work-packet"
+          ],
+          "attestation_id": "AUTH-F-M1A-011-downgrade-07",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "e5ef1a3ca05783b8dc34e0f0e7fa881d391657f2bf9d2d65828abc9cf8b60315",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "d085bda0d8c80d0f1b4677c21a8b9635d757fd30f1ea68b81e5ef9f20a4df63c",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "WORKER-LUNA",
+          "actor_role": "worker",
+          "allowed_command_types": [
+            "submit-worker-result"
+          ],
+          "attestation_id": "AUTH-F-M1A-011-downgrade-08",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "d421664d24354330b60c946783f207f2df22640ddb63796beb1206ffdf5f66a6",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "0707bb321f1b909c61c4be054b7f7acc187d3033c596b6602d086d45771b5570",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "VERIFIER-TERRA",
+          "actor_role": "verifier",
+          "allowed_command_types": [
+            "submit-gate-result"
+          ],
+          "attestation_id": "AUTH-F-M1A-011-downgrade-09",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "13c35429aec4e65dad4c04228de2298f9b119780f71daf87815c733f7e99b3e3",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "4cb1cbda4443b2bece2106e65bc7b709007d9925d0b0689dd00c59ce58c84b89",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "OWNER-LUCAS",
+          "actor_role": "owner",
+          "allowed_command_types": [
+            "record-owner-verifier-exception"
+          ],
+          "attestation_id": "AUTH-F-M1A-011-downgrade-10",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "a2de209923c9f3778838ad8b45ebb7ba7ed28224eaee42d7f1378bd881cd5ce4",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "9b1a037252d5f0e428c44810e6e4193e944ed92d444f4893d55e9fddf177bdb2",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "VERIFIER-TERRA",
+          "actor_role": "verifier",
+          "allowed_command_types": [
+            "submit-plan-verifier-decision"
+          ],
+          "attestation_id": "AUTH-F-M1A-011-downgrade-11",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "f7d238d0f0b6317cb99328754963ef06d446c35331c80ce938a4e51138c4cef5",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "78cbaeeff70b70b5c53ed4f69d2e1b7b13ffd9ad1358be94cc589ac1f6153353",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        }
+      ],
+      "case_id": "downgrade",
+      "commands": [
+        {
+          "actor_id": "OWNER-LUCAS",
+          "auth_ref": "AUTH-F-M1A-011-downgrade-10",
+          "candidate_digest": "a2de209923c9f3778838ad8b45ebb7ba7ed28224eaee42d7f1378bd881cd5ce4",
+          "command_id": "CMD-F-M1A-011-downgrade-10",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "record-owner-verifier-exception",
+          "content_digest": "54cf5fd3ccb4f1fcd67cd0532d3f81c0a38e6fbad9ec70e3065538b078fca905",
+          "expected_state_digest": "49ca6cfddf871181ca83484c3666887951d3bb50c1c6e8759d70a6a5ff266823",
+          "expected_state_version": 9,
+          "goal_ref": {
+            "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": null,
+          "logical_time": 10,
+          "payload": {
+            "causation_id": "CMD-F-M1A-011-downgrade-10",
+            "content_digest": "df3887a599b6ecf085c9a117549a817fe32de34337863eb057e2a877737dd459",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "OWNER-LUCAS",
+            "created_logical_time": 10,
+            "created_under_lease": null,
+            "id": "OWNER-VERIFIER-EXCEPTION-1",
+            "object_type": "owner-verifier-exception",
+            "payload": {
+              "candidate_digest": "da43675a49dc673a306470116857d11f0e4c1d8392ea66d5f2dbf9b6204e50d5",
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "expires_logical_time": 1000,
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "issued_logical_time": 10,
+              "missing_dimensions": [
+                "account"
+              ],
+              "owner_authority_attestation_id": "AUTH-F-M1A-011-downgrade-10",
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "reason_digest": "f122425535aa51b1f679df0ff36a3433803a68849898c107408b6d55fbfcad7b",
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              }
+            },
+            "schema_version": "m1a-owner-verifier-exception-1",
+            "version": 1
+          },
+          "payload_digest": "a2de209923c9f3778838ad8b45ebb7ba7ed28224eaee42d7f1378bd881cd5ce4",
+          "plan_ref": {
+            "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        },
+        {
+          "actor_id": "VERIFIER-TERRA",
+          "auth_ref": "AUTH-F-M1A-011-downgrade-11",
+          "candidate_digest": "f7d238d0f0b6317cb99328754963ef06d446c35331c80ce938a4e51138c4cef5",
+          "command_id": "CMD-F-M1A-011-downgrade-11",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "submit-plan-verifier-decision",
+          "content_digest": "0c9045795dd2140a4f60979865accac91b358ba4056787f6d5c9f90cc988609d",
+          "expected_state_digest": "0044cd728309fad69a708e50bc7e21ec537b54c4fdcea18edeae1b640c13578c",
+          "expected_state_version": 10,
+          "goal_ref": {
+            "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": null,
+          "logical_time": 11,
+          "payload": {
+            "causation_id": "CMD-F-M1A-011-downgrade-11",
+            "content_digest": "a5bd5e17f58b06bd33f2e2f3cebb6962cf34d64bce8a3675a4d338c7337333f8",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "VERIFIER-TERRA",
+            "created_logical_time": 11,
+            "created_under_lease": null,
+            "id": "PLAN-VERIFIER-DECISION-EXPLICIT",
+            "object_type": "plan-verifier-decision",
+            "payload": {
+              "assurance_grade": "downgraded",
+              "candidate_digest": "da43675a49dc673a306470116857d11f0e4c1d8392ea66d5f2dbf9b6204e50d5",
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "disposition": "downgraded-pass",
+              "dissent_digest": null,
+              "event_log_digest": "3cb6b2e924b6cf3c5d5202e4b53a5c4b984009a4bcd97aeb08bd7a761341c206",
+              "evidence_digests": [
+                "1a51e28adffef1830ace3db8a23aed197b5a029c2bd05fa8a7a1e83eecf49e3c"
+              ],
+              "gate_result_digests": [
+                "dc92ceb8695c198c336fad9a3676f59207ec77d8f18a6c7545905af3e0603af7"
+              ],
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "independence": {
+                "evidence_store": "fixture",
+                "host": "local",
+                "implementation_actor_id": "ACTOR-IMPLEMENTER",
+                "missing_dimensions": [
+                  "account"
+                ],
+                "model_family": "gpt-family",
+                "provider": "openai",
+                "session": "fixture",
+                "verifier_actor_id": "VERIFIER-TERRA"
+              },
+              "limitation_digests": [
+                "a1a5dc68adc3d6ad143a3aaa7f42be9b476f1a02556e2a9033efb9e1a1a62a85"
+              ],
+              "owner_exception_ref": {
+                "content_digest": "df3887a599b6ecf085c9a117549a817fe32de34337863eb057e2a877737dd459",
+                "id": "OWNER-VERIFIER-EXCEPTION-1",
+                "object_type": "owner-verifier-exception",
+                "version": 1
+              },
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              }
+            },
+            "schema_version": "m1a-plan-verifier-decision-1",
+            "version": 1
+          },
+          "payload_digest": "f7d238d0f0b6317cb99328754963ef06d446c35331c80ce938a4e51138c4cef5",
+          "plan_ref": {
+            "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        }
+      ],
+      "decode_inputs": [],
+      "description": "Owner-bound verifier downgrade remains explicitly downgraded.",
+      "expected_decode_failures": [],
+      "expected_events": [
+        {
+          "command_digest": "54cf5fd3ccb4f1fcd67cd0532d3f81c0a38e6fbad9ec70e3065538b078fca905",
+          "command_id": "CMD-F-M1A-011-downgrade-10",
+          "content_digest": "2b7b8c264a6124587e5481975eb6f223020e357ab6d47bdceeb5b3c436b1dbcb",
+          "event_id": "EV-F-M1A-011-downgrade-10-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "OwnerVerifierExceptionRecorded",
+          "logical_time": 10,
+          "previous_event_digest": "2bf8955158acc56211c2ea4f3e983c6cafaa6113f8429a4c5767559c173b09c2",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-011-downgrade-10",
+            "content_digest": "df3887a599b6ecf085c9a117549a817fe32de34337863eb057e2a877737dd459",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "OWNER-LUCAS",
+            "created_logical_time": 10,
+            "created_under_lease": null,
+            "id": "OWNER-VERIFIER-EXCEPTION-1",
+            "object_type": "owner-verifier-exception",
+            "payload": {
+              "candidate_digest": "da43675a49dc673a306470116857d11f0e4c1d8392ea66d5f2dbf9b6204e50d5",
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "expires_logical_time": 1000,
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "issued_logical_time": 10,
+              "missing_dimensions": [
+                "account"
+              ],
+              "owner_authority_attestation_id": "AUTH-F-M1A-011-downgrade-10",
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "reason_digest": "f122425535aa51b1f679df0ff36a3433803a68849898c107408b6d55fbfcad7b",
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              }
+            },
+            "schema_version": "m1a-owner-verifier-exception-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 10,
+          "state_delta_digest": "47df22b5c196d42d5c2af8a9872851c291a782400b57f5e42014e26759355246",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "0c9045795dd2140a4f60979865accac91b358ba4056787f6d5c9f90cc988609d",
+          "command_id": "CMD-F-M1A-011-downgrade-11",
+          "content_digest": "4cf063b8f960da5bcfdf7956651d774c951516292416013f04dce3f0b5101b0a",
+          "event_id": "EV-F-M1A-011-downgrade-11-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "PlanVerifierDecisionRecorded",
+          "logical_time": 11,
+          "previous_event_digest": "2b7b8c264a6124587e5481975eb6f223020e357ab6d47bdceeb5b3c436b1dbcb",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-011-downgrade-11",
+            "content_digest": "a5bd5e17f58b06bd33f2e2f3cebb6962cf34d64bce8a3675a4d338c7337333f8",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "VERIFIER-TERRA",
+            "created_logical_time": 11,
+            "created_under_lease": null,
+            "id": "PLAN-VERIFIER-DECISION-EXPLICIT",
+            "object_type": "plan-verifier-decision",
+            "payload": {
+              "assurance_grade": "downgraded",
+              "candidate_digest": "da43675a49dc673a306470116857d11f0e4c1d8392ea66d5f2dbf9b6204e50d5",
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "disposition": "downgraded-pass",
+              "dissent_digest": null,
+              "event_log_digest": "3cb6b2e924b6cf3c5d5202e4b53a5c4b984009a4bcd97aeb08bd7a761341c206",
+              "evidence_digests": [
+                "1a51e28adffef1830ace3db8a23aed197b5a029c2bd05fa8a7a1e83eecf49e3c"
+              ],
+              "gate_result_digests": [
+                "dc92ceb8695c198c336fad9a3676f59207ec77d8f18a6c7545905af3e0603af7"
+              ],
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "independence": {
+                "evidence_store": "fixture",
+                "host": "local",
+                "implementation_actor_id": "ACTOR-IMPLEMENTER",
+                "missing_dimensions": [
+                  "account"
+                ],
+                "model_family": "gpt-family",
+                "provider": "openai",
+                "session": "fixture",
+                "verifier_actor_id": "VERIFIER-TERRA"
+              },
+              "limitation_digests": [
+                "a1a5dc68adc3d6ad143a3aaa7f42be9b476f1a02556e2a9033efb9e1a1a62a85"
+              ],
+              "owner_exception_ref": {
+                "content_digest": "df3887a599b6ecf085c9a117549a817fe32de34337863eb057e2a877737dd459",
+                "id": "OWNER-VERIFIER-EXCEPTION-1",
+                "object_type": "owner-verifier-exception",
+                "version": 1
+              },
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              }
+            },
+            "schema_version": "m1a-plan-verifier-decision-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 11,
+          "state_delta_digest": "67492e3ebe35efd04409e395224aee036de146fc4bea9c604280a58a274f20ee",
+          "stream_id": "STREAM-M1A"
+        }
+      ],
+      "expected_final_digest": "1f28f95e84f3d649070e5d03a79fa4a9d36697cdf3254c5bb22c8ca57c0c7b50",
+      "expected_final_state": {
+        "active_arm_run_ref": {
+          "content_digest": "c386c23e6623c5bbecb721b1bc9a603729bb772ba024047cd1d932791f1c55de",
+          "id": "ARM-RUN-M1A",
+          "object_type": "arm-run",
+          "version": 1
+        },
+        "active_plan_ref": {
+          "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+          "id": "PLAN-M1A",
+          "object_type": "plan-revision",
+          "version": 1
+        },
+        "ambiguous_effect_refs": [],
+        "consumed_novelty_delta_digests": [],
+        "content_digest": "1f28f95e84f3d649070e5d03a79fa4a9d36697cdf3254c5bb22c8ca57c0c7b50",
+        "current_pause_epoch": 0,
+        "current_pause_policy_ref": {
+          "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
+          "policy_id": "POLICY-PAUSE",
+          "policy_version": 1
+        },
+        "last_event_digest": "4cf063b8f960da5bcfdf7956651d774c951516292416013f04dce3f0b5101b0a",
+        "last_event_sequence": 11,
+        "object_states": [
+          {
+            "object_ref": {
+              "content_digest": "c386c23e6623c5bbecb721b1bc9a603729bb772ba024047cd1d932791f1c55de",
+              "id": "ARM-RUN-M1A",
+              "object_type": "arm-run",
+              "version": 1
+            },
+            "state": "active"
+          },
+          {
+            "object_ref": {
+              "content_digest": "260ffc1f59ce70c30c1399d90d927213c55f2aa8a2df3f046b946099ad104811",
+              "id": "BUDGET-RESERVATION-1",
+              "object_type": "budget-reservation",
+              "version": 1
+            },
+            "state": "reserved"
+          },
+          {
+            "object_ref": {
+              "content_digest": "09f7e56bb06dfc8ab9eda9d6cf84df4e7a1ae139a9abb2a2023281282e5d95cf",
+              "id": "CAPACITY-OBS-1",
+              "object_type": "capacity-observation",
+              "version": 1
+            },
+            "state": "recorded"
+          },
+          {
+            "object_ref": {
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "id": "LEASE-EXEC-1",
+              "object_type": "executive-lease",
+              "version": 1
+            },
+            "state": "active"
+          },
+          {
+            "object_ref": {
+              "content_digest": "dc92ceb8695c198c336fad9a3676f59207ec77d8f18a6c7545905af3e0603af7",
+              "id": "GATE-RESULT-M1A-1",
+              "object_type": "gate-result",
+              "version": 1
+            },
+            "state": "recorded"
+          },
+          {
+            "object_ref": {
+              "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+              "id": "GOAL-M1A",
+              "object_type": "goal-spec",
+              "version": 1
+            },
+            "state": "accepted"
+          },
+          {
+            "object_ref": {
+              "content_digest": "7759e6aa2ecb421c164488439f6efb23025aecea692d03bde190622da010bda6",
+              "id": "INTENT-M1A",
+              "object_type": "owner-intent",
+              "version": 1
+            },
+            "state": "recorded"
+          },
+          {
+            "object_ref": {
+              "content_digest": "df3887a599b6ecf085c9a117549a817fe32de34337863eb057e2a877737dd459",
+              "id": "OWNER-VERIFIER-EXCEPTION-1",
+              "object_type": "owner-verifier-exception",
+              "version": 1
+            },
+            "state": "active"
+          },
+          {
+            "object_ref": {
+              "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+              "id": "PLAN-M1A",
+              "object_type": "plan-revision",
+              "version": 1
+            },
+            "state": "terminal-verified-downgraded"
+          },
+          {
+            "object_ref": {
+              "content_digest": "c154ec6198da8f5ac99f5149c6e3135b4b633204cd55edb4c971b0aea397785b",
+              "id": "TRANSITION-M1A-1",
+              "object_type": "plan-transition",
+              "version": 1
+            },
+            "state": "applied"
+          },
+          {
+            "object_ref": {
+              "content_digest": "a5bd5e17f58b06bd33f2e2f3cebb6962cf34d64bce8a3675a4d338c7337333f8",
+              "id": "PLAN-VERIFIER-DECISION-EXPLICIT",
+              "object_type": "plan-verifier-decision",
+              "version": 1
+            },
+            "state": "downgraded-pass"
+          },
+          {
+            "object_ref": {
+              "content_digest": "8c2a3ed6d0eb58c45bc39183072946276d6f69d644800c260bcb9f1283d209ef",
+              "id": "ROUTE-ASSIGNMENT-1",
+              "object_type": "route-assignment",
+              "version": 1
+            },
+            "state": "assigned"
+          },
+          {
+            "object_ref": {
+              "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+              "id": "TASK-M1A-A",
+              "object_type": "task-node",
+              "version": 1
+            },
+            "state": "complete"
+          },
+          {
+            "object_ref": {
+              "content_digest": "c7821bd87f0d7b3f4ead7a3e374b8051564360547393b48275a2c0ff216942dd",
+              "id": "LEASE-WORK-1",
+              "object_type": "work-lease",
+              "version": 1
+            },
+            "state": "active"
+          },
+          {
+            "object_ref": {
+              "content_digest": "d120d1e76dcdbaf73bd476c7df67ac24233f466feeeb8e16bbbcb2f7406126e2",
+              "id": "PACKET-6bc7faf8c82e2a9cb1a1df7f67bd2ef6",
+              "object_type": "work-packet",
+              "version": 1
+            },
+            "state": "result-submitted"
+          },
+          {
+            "object_ref": {
+              "content_digest": "39fa698202e9013f9ff49502d8351f3e81f6a389d9761cdb27febd4ec50daa69",
+              "id": "RESULT-M1A-1",
+              "object_type": "worker-result",
+              "version": 1
+            },
+            "state": "submitted"
+          }
+        ],
+        "open_blocker_refs": [],
+        "open_escalation_refs": [],
+        "operative_goal_ref": {
+          "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+          "id": "GOAL-M1A",
+          "object_type": "goal-spec",
+          "version": 1
+        },
+        "processed_command_receipts": [
+          {
+            "command_digest": "10f406d088d6eb4b80c089f358e6fb7d015912d9bf4a873fed2ed907c1247e9a",
+            "command_id": "CMD-F-M1A-011-downgrade-01",
+            "receipt_id": "RCPT-F-M1A-011-downgrade-01"
+          },
+          {
+            "command_digest": "2e269b9c5e78f561c06fa9dfa424e995cec8a6cd6e93d0d0eeea072df58c1708",
+            "command_id": "CMD-F-M1A-011-downgrade-02",
+            "receipt_id": "RCPT-F-M1A-011-downgrade-02"
+          },
+          {
+            "command_digest": "3e8b228db86d56f56383acf18b84a2f47833224c8e7d4a1bdb83d5ec718fc42c",
+            "command_id": "CMD-F-M1A-011-downgrade-03",
+            "receipt_id": "RCPT-F-M1A-011-downgrade-03"
+          },
+          {
+            "command_digest": "e257c2c1ccf280f964b20508b5c82ec3f81a7b59ba54d9aae2a1d4a6582fc86f",
+            "command_id": "CMD-F-M1A-011-downgrade-04",
+            "receipt_id": "RCPT-F-M1A-011-downgrade-04"
+          },
+          {
+            "command_digest": "5a9399547209e5cb13e4f7ac401a7a9202ea3b14cdf100e015cffe2e09da435e",
+            "command_id": "CMD-F-M1A-011-downgrade-05",
+            "receipt_id": "RCPT-F-M1A-011-downgrade-05"
+          },
+          {
+            "command_digest": "db2820ae1bdd66b2aa181b243389e11e56c2a708d8c470dc9c9f7cd4a0ea71b4",
+            "command_id": "CMD-F-M1A-011-downgrade-06",
+            "receipt_id": "RCPT-F-M1A-011-downgrade-06"
+          },
+          {
+            "command_digest": "f5f5e2170fbdf76bb5a37360e75bd5a4ac824bfb996331f4b27fd88f397efdab",
+            "command_id": "CMD-F-M1A-011-downgrade-07",
+            "receipt_id": "RCPT-F-M1A-011-downgrade-07"
+          },
+          {
+            "command_digest": "7fb7a11e092661bf5417fd1b6182abb3c3cfc3d4be2851f296712d5a7018664a",
+            "command_id": "CMD-F-M1A-011-downgrade-08",
+            "receipt_id": "RCPT-F-M1A-011-downgrade-08"
+          },
+          {
+            "command_digest": "4c3e54c6436ce661a001681e15b632b3ccecbd1092aacca25e58274a098db3e5",
+            "command_id": "CMD-F-M1A-011-downgrade-09",
+            "receipt_id": "RCPT-F-M1A-011-downgrade-09"
+          },
+          {
+            "command_digest": "54cf5fd3ccb4f1fcd67cd0532d3f81c0a38e6fbad9ec70e3065538b078fca905",
+            "command_id": "CMD-F-M1A-011-downgrade-10",
+            "receipt_id": "RCPT-F-M1A-011-downgrade-10"
+          },
+          {
+            "command_digest": "0c9045795dd2140a4f60979865accac91b358ba4056787f6d5c9f90cc988609d",
+            "command_id": "CMD-F-M1A-011-downgrade-11",
+            "receipt_id": "RCPT-F-M1A-011-downgrade-11"
+          }
+        ],
+        "projection_schema_version": "m1a-projection-1",
+        "records": [
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-03",
+            "content_digest": "c386c23e6623c5bbecb721b1bc9a603729bb772ba024047cd1d932791f1c55de",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "HEAD-HERMES",
+            "created_logical_time": 3,
+            "created_under_lease": null,
+            "id": "ARM-RUN-M1A",
+            "object_type": "arm-run",
+            "payload": {
+              "budget_limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "eligible_account_class_ids": [
+                "ACCOUNT-INCLUDED"
+              ],
+              "eligible_capacity_pool_ids": [
+                "CAPACITY-INCLUDED"
+              ],
+              "eligible_route_ids": [
+                "ROUTE-INCLUDED",
+                "ROUTE-ZERO"
+              ],
+              "executive_lease_ref": {
+                "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-EXEC-1"
+              },
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "logical_actor_id": "ARM-M1A",
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              }
+            },
+            "schema_version": "m1a-arm-run-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-06",
+            "content_digest": "260ffc1f59ce70c30c1399d90d927213c55f2aa8a2df3f046b946099ad104811",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 6,
+            "created_under_lease": {
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "BUDGET-RESERVATION-1",
+            "object_type": "budget-reservation",
+            "payload": {
+              "consumed": {
+                "attempts": 0,
+                "cpu_ms": 0,
+                "memory_bytes": 0,
+                "model_turns": 0,
+                "money_minor": 0,
+                "output_bytes": 0,
+                "tokens": 0
+              },
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "remaining": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "state": "reserved",
+              "task_ref": {
+                "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-budget-reservation-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-05",
+            "content_digest": "09f7e56bb06dfc8ab9eda9d6cf84df4e7a1ae139a9abb2a2023281282e5d95cf",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "KERNEL-FIXTURE",
+            "created_logical_time": 5,
+            "created_under_lease": null,
+            "id": "CAPACITY-OBS-1",
+            "object_type": "capacity-observation",
+            "payload": {
+              "account_class_id": "ACCOUNT-INCLUDED",
+              "available": true,
+              "capacity_pool_id": "CAPACITY-INCLUDED",
+              "observation_digest": "f84f280e98f2e9ea85ac4576817b912a79ac6f4f0d9327190615e977f9f8f7e6",
+              "remaining_units": 100,
+              "route_id": "ROUTE-INCLUDED",
+              "spend_class": "included"
+            },
+            "schema_version": "m1a-capacity-observation-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-03",
+            "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "KERNEL-M1A",
+            "created_logical_time": 3,
+            "created_under_lease": null,
+            "id": "LEASE-EXEC-1",
+            "object_type": "executive-lease",
+            "payload": {
+              "allowed_command_types": [
+                "derive-work-packet",
+                "propose-plan-revision",
+                "propose-replan",
+                "propose-retry",
+                "reserve-budget"
+              ],
+              "expires_logical_time": 1000,
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "issued_logical_time": 3,
+              "lease_epoch": 1,
+              "nonce_digest": "2fba6d87abd2232fdb48dfd142112f77aba8d58e636562d5eab6a78e3f312ac7",
+              "plan_ref": null,
+              "state": "active",
+              "subject_actor_id": "ARM-M1A",
+              "supersedes_lease_ref": null,
+              "task_ref": null
+            },
+            "schema_version": "m1a-executive-lease-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-09",
+            "content_digest": "dc92ceb8695c198c336fad9a3676f59207ec77d8f18a6c7545905af3e0603af7",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "VERIFIER-TERRA",
+            "created_logical_time": 9,
+            "created_under_lease": null,
+            "id": "GATE-RESULT-M1A-1",
+            "object_type": "gate-result",
+            "payload": {
+              "actual_digest": "44611fa4e64fc2d16704405875b8ea1092ff4d8bc6b1e620973e07e3a8ada99e",
+              "candidate_digest": "da43675a49dc673a306470116857d11f0e4c1d8392ea66d5f2dbf9b6204e50d5",
+              "disposition": "pass",
+              "evidence_digests": [
+                "1a51e28adffef1830ace3db8a23aed197b5a029c2bd05fa8a7a1e83eecf49e3c"
+              ],
+              "expected_digest": "44611fa4e64fc2d16704405875b8ea1092ff4d8bc6b1e620973e07e3a8ada99e",
+              "gate_requirement": {
+                "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                "gate_id": "GATE-M1A",
+                "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+              },
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "independence": {
+                "evidence_store": "fixture",
+                "host": "local",
+                "implementation_actor_id": "ACTOR-IMPLEMENTER",
+                "missing_dimensions": [],
+                "model_family": "gpt-family",
+                "provider": "openai",
+                "session": "fixture",
+                "verifier_actor_id": "VERIFIER-TERRA"
+              },
+              "limitation_digests": [],
+              "observation_digest": "2b28482f574bd6ba1336d7ab15b3bef4b83b3c01c73606002b51bc51139de79e",
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "procedure_version": 1,
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "task_ref": {
+                "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "work_packet_ref": {
+                "content_digest": "d120d1e76dcdbaf73bd476c7df67ac24233f466feeeb8e16bbbcb2f7406126e2",
+                "id": "PACKET-6bc7faf8c82e2a9cb1a1df7f67bd2ef6",
+                "object_type": "work-packet",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-gate-result-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-02",
+            "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "OWNER-LUCAS",
+            "created_logical_time": 2,
+            "created_under_lease": null,
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "payload": {
+              "acceptance_gate_ids": [
+                "GATE-M1A"
+              ],
+              "allowed_account_class_ids": [
+                "ACCOUNT-INCLUDED"
+              ],
+              "allowed_action_ids": [
+                "ACTION-READ",
+                "ACTION-WRITE"
+              ],
+              "allowed_capacity_pool_ids": [
+                "CAPACITY-INCLUDED"
+              ],
+              "allowed_effect_keys": [
+                "EFFECT-SYNTHETIC"
+              ],
+              "allowed_resource_paths": [
+                "workspace/input",
+                "workspace/output"
+              ],
+              "allowed_route_ids": [
+                "ROUTE-INCLUDED",
+                "ROUTE-ZERO"
+              ],
+              "authority_ids": [
+                "AUTHORITY-M1A"
+              ],
+              "authority_policy_ref": {
+                "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+                "policy_id": "POLICY-AUTHORITY",
+                "policy_version": 1
+              },
+              "budget_limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "capability_ids": [
+                "CAPABILITY-BASE",
+                "CAPABILITY-REPAIR"
+              ],
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "egress_class_id": "EGRESS-NONE",
+              "egress_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "fence_epoch": 1,
+              "non_goals": [
+                "no external effects",
+                "no publication"
+              ],
+              "novelty_policy_ref": {
+                "content_digest": "4a037b3d831de1695d49e94bb6f135ff8fa5ccecbde7e611db19fdd6622bf61d",
+                "policy_id": "POLICY-NOVELTY",
+                "policy_version": 1
+              },
+              "outcome": "Reach the declared synthetic gate with deterministic replay.",
+              "owner_intent_ref": {
+                "content_digest": "7759e6aa2ecb421c164488439f6efb23025aecea692d03bde190622da010bda6",
+                "id": "INTENT-M1A",
+                "object_type": "owner-intent",
+                "version": 1
+              },
+              "pause_policy_ref": {
+                "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
+                "policy_id": "POLICY-PAUSE",
+                "policy_version": 1
+              },
+              "privacy_class_id": "PRIVACY-SYNTHETIC",
+              "privacy_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "prohibition_ids": [
+                "PROHIBIT-EGRESS"
+              ],
+              "publication_allowed": false,
+              "retry_policy_ref": {
+                "content_digest": "b395609880d404635c18a72b0c507218e2e3b611874e5c1257503ad8839f8bb4",
+                "policy_id": "POLICY-RETRY",
+                "policy_version": 1
+              },
+              "route_policy_ref": {
+                "content_digest": "90fb3a36b6529d0bb6e000e5fd3a1b7035bc7a41d626690c565976fcb716b898",
+                "policy_id": "POLICY-ROUTE",
+                "policy_version": 1
+              },
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "state": "accepted",
+              "terminal_owner_seam_ids": [
+                "SEAM-OWNER"
+              ],
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              }
+            },
+            "schema_version": "m1a-goal-spec-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-01",
+            "content_digest": "7759e6aa2ecb421c164488439f6efb23025aecea692d03bde190622da010bda6",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "OWNER-LUCAS",
+            "created_logical_time": 1,
+            "created_under_lease": null,
+            "id": "INTENT-M1A",
+            "object_type": "owner-intent",
+            "payload": {
+              "intent_text": "Complete the deterministic synthetic M1A contract.",
+              "privacy_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "source_digest": "f6abb8b64b9d1c555085b9c1b91a9175ee87092a7d1793d377389b2f37ea7c58",
+              "source_kind": "owner-prompt",
+              "supersedes_ref": null
+            },
+            "schema_version": "m1a-owner-intent-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-10",
+            "content_digest": "df3887a599b6ecf085c9a117549a817fe32de34337863eb057e2a877737dd459",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "OWNER-LUCAS",
+            "created_logical_time": 10,
+            "created_under_lease": null,
+            "id": "OWNER-VERIFIER-EXCEPTION-1",
+            "object_type": "owner-verifier-exception",
+            "payload": {
+              "candidate_digest": "da43675a49dc673a306470116857d11f0e4c1d8392ea66d5f2dbf9b6204e50d5",
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "expires_logical_time": 1000,
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "issued_logical_time": 10,
+              "missing_dimensions": [
+                "account"
+              ],
+              "owner_authority_attestation_id": "AUTH-F-M1A-011-downgrade-10",
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "reason_digest": "f122425535aa51b1f679df0ff36a3433803a68849898c107408b6d55fbfcad7b",
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              }
+            },
+            "schema_version": "m1a-owner-verifier-exception-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-04",
+            "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 4,
+            "created_under_lease": {
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "payload": {
+              "acceptance_gate_ids": [
+                "GATE-M1A"
+              ],
+              "arm_run_ref": {
+                "content_digest": "c386c23e6623c5bbecb721b1bc9a603729bb772ba024047cd1d932791f1c55de",
+                "id": "ARM-RUN-M1A",
+                "object_type": "arm-run",
+                "version": 1
+              },
+              "assigned_plan_verifier_actor_id": "VERIFIER-TERRA",
+              "budget_limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "change_rationale_digest": "43a252c76c13717a13e4f313fc628e544cc41499411693d75d4ba8f82bf73713",
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "dependency_edges": [],
+              "dispositions": [],
+              "effect_keys": [
+                "EFFECT-SYNTHETIC"
+              ],
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "graph_digest": "271c8ec9bb861662dc5fc4a5d832eda515f3b74a1f019a2176286833f935a130",
+              "prior_plan_ref": null,
+              "read_resource_paths": [
+                "workspace/input"
+              ],
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "task_node_refs": [
+                {
+                  "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                  "id": "TASK-M1A-A",
+                  "object_type": "task-node",
+                  "version": 1
+                }
+              ],
+              "trigger": "initial",
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              },
+              "write_resource_paths": [
+                "workspace/output"
+              ]
+            },
+            "schema_version": "m1a-plan-revision-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-04",
+            "content_digest": "c154ec6198da8f5ac99f5149c6e3135b4b633204cd55edb4c971b0aea397785b",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 4,
+            "created_under_lease": {
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "TRANSITION-M1A-1",
+            "object_type": "plan-transition",
+            "payload": {
+              "checkpoint_ref": null,
+              "dispositions": [],
+              "executive_lease_ref": {
+                "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-EXEC-1"
+              },
+              "expected_goal_fence_epoch": 1,
+              "from_plan_ref": null,
+              "to_plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "trigger_evidence_digests": [
+                "f6abb8b64b9d1c555085b9c1b91a9175ee87092a7d1793d377389b2f37ea7c58"
+              ]
+            },
+            "schema_version": "m1a-plan-transition-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-11",
+            "content_digest": "a5bd5e17f58b06bd33f2e2f3cebb6962cf34d64bce8a3675a4d338c7337333f8",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "VERIFIER-TERRA",
+            "created_logical_time": 11,
+            "created_under_lease": null,
+            "id": "PLAN-VERIFIER-DECISION-EXPLICIT",
+            "object_type": "plan-verifier-decision",
+            "payload": {
+              "assurance_grade": "downgraded",
+              "candidate_digest": "da43675a49dc673a306470116857d11f0e4c1d8392ea66d5f2dbf9b6204e50d5",
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "disposition": "downgraded-pass",
+              "dissent_digest": null,
+              "event_log_digest": "3cb6b2e924b6cf3c5d5202e4b53a5c4b984009a4bcd97aeb08bd7a761341c206",
+              "evidence_digests": [
+                "1a51e28adffef1830ace3db8a23aed197b5a029c2bd05fa8a7a1e83eecf49e3c"
+              ],
+              "gate_result_digests": [
+                "dc92ceb8695c198c336fad9a3676f59207ec77d8f18a6c7545905af3e0603af7"
+              ],
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "independence": {
+                "evidence_store": "fixture",
+                "host": "local",
+                "implementation_actor_id": "ACTOR-IMPLEMENTER",
+                "missing_dimensions": [
+                  "account"
+                ],
+                "model_family": "gpt-family",
+                "provider": "openai",
+                "session": "fixture",
+                "verifier_actor_id": "VERIFIER-TERRA"
+              },
+              "limitation_digests": [
+                "a1a5dc68adc3d6ad143a3aaa7f42be9b476f1a02556e2a9033efb9e1a1a62a85"
+              ],
+              "owner_exception_ref": {
+                "content_digest": "df3887a599b6ecf085c9a117549a817fe32de34337863eb057e2a877737dd459",
+                "id": "OWNER-VERIFIER-EXCEPTION-1",
+                "object_type": "owner-verifier-exception",
+                "version": 1
+              },
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              }
+            },
+            "schema_version": "m1a-plan-verifier-decision-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-07",
+            "content_digest": "8c2a3ed6d0eb58c45bc39183072946276d6f69d644800c260bcb9f1283d209ef",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "KERNEL-M1A",
+            "created_logical_time": 7,
+            "created_under_lease": {
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "ROUTE-ASSIGNMENT-1",
+            "object_type": "route-assignment",
+            "payload": {
+              "account_class_id": "ACCOUNT-INCLUDED",
+              "assigned_logical_time": 7,
+              "capacity_observation_ref": {
+                "content_digest": "09f7e56bb06dfc8ab9eda9d6cf84df4e7a1ae139a9abb2a2023281282e5d95cf",
+                "id": "CAPACITY-OBS-1",
+                "object_type": "capacity-observation",
+                "version": 1
+              },
+              "capacity_pool_id": "CAPACITY-INCLUDED",
+              "egress_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "expires_logical_time": 900,
+              "logical_actor_id": "WORKER-LUNA",
+              "metered_spend_allowed": false,
+              "privacy_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "route_capability_ids": [
+                "CAPABILITY-BASE"
+              ],
+              "route_id": "ROUTE-INCLUDED",
+              "route_policy_ref": {
+                "content_digest": "90fb3a36b6529d0bb6e000e5fd3a1b7035bc7a41d626690c565976fcb716b898",
+                "policy_id": "POLICY-ROUTE",
+                "policy_version": 1
+              },
+              "state": "assigned",
+              "supersedes_route_ref": null
+            },
+            "schema_version": "m1a-route-assignment-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-04",
+            "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 4,
+            "created_under_lease": {
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "TASK-M1A-A",
+            "object_type": "task-node",
+            "payload": {
+              "account_class_ids": [
+                "ACCOUNT-INCLUDED"
+              ],
+              "allowed_action_ids": [
+                "ACTION-READ",
+                "ACTION-WRITE"
+              ],
+              "authority_ids": [
+                "AUTHORITY-M1A"
+              ],
+              "authority_policy_ref": {
+                "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+                "policy_id": "POLICY-AUTHORITY",
+                "policy_version": 1
+              },
+              "budget_limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "capability_ids": [
+                "CAPABILITY-BASE"
+              ],
+              "capacity_pool_ids": [
+                "CAPACITY-INCLUDED"
+              ],
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "dependency_node_ids": [],
+              "effect_keys": [
+                "EFFECT-SYNTHETIC"
+              ],
+              "egress_class_id": "EGRESS-NONE",
+              "egress_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "gate_requirements": [
+                {
+                  "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                  "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                  "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                  "gate_id": "GATE-M1A",
+                  "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                  "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+                }
+              ],
+              "input_digests": [
+                "6352c6328ea376ae6e4568db2089e359581c55ea55c4c8306d0097ba1def2478"
+              ],
+              "output_schema_digest": "fbd88ffb1b3cae20a2a3d084d65019eea332521fcab888b63b9db0b46cd0da80",
+              "plan_ref": {
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "privacy_class_id": "PRIVACY-SYNTHETIC",
+              "privacy_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "prohibition_ids": [
+                "PROHIBIT-EGRESS"
+              ],
+              "read_resource_paths": [
+                "workspace/input"
+              ],
+              "retry_maximum": 2,
+              "retry_policy_ref": {
+                "content_digest": "b395609880d404635c18a72b0c507218e2e3b611874e5c1257503ad8839f8bb4",
+                "policy_id": "POLICY-RETRY",
+                "policy_version": 1
+              },
+              "route_capability_ids": [
+                "CAPABILITY-BASE"
+              ],
+              "route_ids": [
+                "ROUTE-INCLUDED",
+                "ROUTE-ZERO"
+              ],
+              "semantic_definition_digest": "a97aa1ae1a18d2e8f1509a6703d7ae63e0331ae5651df75109d40b7884d046f1",
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "terminal_contribution_digest": "e3684e9d47f8ee17078e1d7f17aaf4663a93272241ce62f1ecbf45537989d050",
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              },
+              "write_resource_paths": [
+                "workspace/output"
+              ]
+            },
+            "schema_version": "m1a-task-node-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-07",
+            "content_digest": "c7821bd87f0d7b3f4ead7a3e374b8051564360547393b48275a2c0ff216942dd",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "KERNEL-M1A",
+            "created_logical_time": 7,
+            "created_under_lease": {
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "LEASE-WORK-1",
+            "object_type": "work-lease",
+            "payload": {
+              "allowed_command_types": [
+                "submit-worker-result"
+              ],
+              "expires_logical_time": 900,
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "issued_logical_time": 7,
+              "lease_epoch": 1,
+              "nonce_digest": "f303e2bbfacbdf05603542a2cb29fdffa07bffda0bb2b0a67a8fb20bb969833b",
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "state": "active",
+              "subject_actor_id": "WORKER-LUNA",
+              "supersedes_lease_ref": null,
+              "task_ref": {
+                "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-work-lease-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-07",
+            "content_digest": "d120d1e76dcdbaf73bd476c7df67ac24233f466feeeb8e16bbbcb2f7406126e2",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "KERNEL-M1A",
+            "created_logical_time": 7,
+            "created_under_lease": {
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "PACKET-6bc7faf8c82e2a9cb1a1df7f67bd2ef6",
+            "object_type": "work-packet",
+            "payload": {
+              "allowed_action_ids": [
+                "ACTION-READ",
+                "ACTION-WRITE"
+              ],
+              "allowed_resource_paths": [
+                "workspace/input",
+                "workspace/output"
+              ],
+              "attempt": 1,
+              "authority_ids": [
+                "AUTHORITY-M1A"
+              ],
+              "authority_policy_ref": {
+                "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+                "policy_id": "POLICY-AUTHORITY",
+                "policy_version": 1
+              },
+              "budget_limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "budget_reservation_ref": {
+                "content_digest": "260ffc1f59ce70c30c1399d90d927213c55f2aa8a2df3f046b946099ad104811",
+                "id": "BUDGET-RESERVATION-1",
+                "object_type": "budget-reservation",
+                "version": 1
+              },
+              "capability_ids": [
+                "CAPABILITY-BASE"
+              ],
+              "checkpoint_ref": null,
+              "deadline_logical_time": 900,
+              "effect_keys": [
+                "EFFECT-SYNTHETIC"
+              ],
+              "egress_class_id": "EGRESS-NONE",
+              "egress_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "expected_goal_fence_epoch": 1,
+              "expected_pause_epoch": 0,
+              "gate_requirements": [
+                {
+                  "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                  "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                  "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                  "gate_id": "GATE-M1A",
+                  "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                  "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+                }
+              ],
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "inherited_non_goals": [
+                "no external effects",
+                "no publication"
+              ],
+              "logical_worker_actor_id": "WORKER-LUNA",
+              "output_schema_digest": "fbd88ffb1b3cae20a2a3d084d65019eea332521fcab888b63b9db0b46cd0da80",
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "privacy_class_id": "PRIVACY-SYNTHETIC",
+              "privacy_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "prohibition_ids": [
+                "PROHIBIT-EGRESS"
+              ],
+              "route_assignment_ref": {
+                "content_digest": "8c2a3ed6d0eb58c45bc39183072946276d6f69d644800c260bcb9f1283d209ef",
+                "id": "ROUTE-ASSIGNMENT-1",
+                "object_type": "route-assignment",
+                "version": 1
+              },
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "supersedes_packet_ref": null,
+              "task_ref": {
+                "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "work_lease_ref": {
+                "content_digest": "c7821bd87f0d7b3f4ead7a3e374b8051564360547393b48275a2c0ff216942dd",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-WORK-1"
+              }
+            },
+            "schema_version": "m1a-work-packet-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-011-downgrade-08",
+            "content_digest": "39fa698202e9013f9ff49502d8351f3e81f6a389d9761cdb27febd4ec50daa69",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "WORKER-LUNA",
+            "created_logical_time": 8,
+            "created_under_lease": {
+              "content_digest": "c7821bd87f0d7b3f4ead7a3e374b8051564360547393b48275a2c0ff216942dd",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-WORK-1"
+            },
+            "id": "RESULT-M1A-1",
+            "object_type": "worker-result",
+            "payload": {
+              "candidate_digest": "da43675a49dc673a306470116857d11f0e4c1d8392ea66d5f2dbf9b6204e50d5",
+              "disposition": "submitted",
+              "evidence_digests": [
+                "1a51e28adffef1830ace3db8a23aed197b5a029c2bd05fa8a7a1e83eecf49e3c"
+              ],
+              "observed_effect_ref": null,
+              "output_digest": "fda8c795d7b36bfacd0419444d7391de96b0533e78631119f5a7203b3b8d38a7",
+              "work_packet_ref": {
+                "content_digest": "d120d1e76dcdbaf73bd476c7df67ac24233f466feeeb8e16bbbcb2f7406126e2",
+                "id": "PACKET-6bc7faf8c82e2a9cb1a1df7f67bd2ef6",
+                "object_type": "work-packet",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-worker-result-1",
+            "version": 1
+          }
+        ],
+        "state_version": 11,
+        "stream_id": "STREAM-M1A",
+        "terminal_status": "terminal-verified-downgraded"
+      },
+      "expected_receipts": [
+        {
+          "command_digest": "54cf5fd3ccb4f1fcd67cd0532d3f81c0a38e6fbad9ec70e3065538b078fca905",
+          "command_id": "CMD-F-M1A-011-downgrade-10",
+          "content_digest": "2f45db4836cb13bffb06ab79b60c8b9a491c9ee70be12f686ff35ad5d8a14441",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-011-downgrade-10-0001"
+          ],
+          "first_event_sequence": 10,
+          "last_event_sequence": 10,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-011-downgrade-10",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "0044cd728309fad69a708e50bc7e21ec537b54c4fdcea18edeae1b640c13578c",
+          "state_before_digest": "49ca6cfddf871181ca83484c3666887951d3bb50c1c6e8759d70a6a5ff266823",
+          "witness": null
+        },
+        {
+          "command_digest": "0c9045795dd2140a4f60979865accac91b358ba4056787f6d5c9f90cc988609d",
+          "command_id": "CMD-F-M1A-011-downgrade-11",
+          "content_digest": "859e5160f0a34267a8b9a439a24bde5f1ee8fdac0ced0ebec510706af81f251d",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-011-downgrade-11-0001"
+          ],
+          "first_event_sequence": 11,
+          "last_event_sequence": 11,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-011-downgrade-11",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "1f28f95e84f3d649070e5d03a79fa4a9d36697cdf3254c5bb22c8ca57c0c7b50",
+          "state_before_digest": "0044cd728309fad69a708e50bc7e21ec537b54c4fdcea18edeae1b640c13578c",
+          "witness": null
+        }
+      ],
+      "genesis": {
+        "current_pause_epoch": 0,
+        "current_pause_policy_ref": {
+          "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
+          "policy_id": "POLICY-PAUSE",
+          "policy_version": 1
+        },
+        "genesis_schema_version": "m1a-genesis-1",
+        "stream_id": "STREAM-M1A"
+      },
+      "initial_commands": [
+        {
+          "actor_id": "OWNER-LUCAS",
+          "auth_ref": "AUTH-F-M1A-011-downgrade-01",
+          "candidate_digest": "2b7bb3dd27f0cfcd467d4ae35eb5d2ac6d0c405ba0a63d4d84ea903e2e9085cc",
+          "command_id": "CMD-F-M1A-011-downgrade-01",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "record-owner-intent",
+          "content_digest": "10f406d088d6eb4b80c089f358e6fb7d015912d9bf4a873fed2ed907c1247e9a",
+          "expected_state_digest": "f858baa16245c716e0d4caec0b7a6020d80c77a1b6173d749a25573f661f75de",
+          "expected_state_version": 0,
+          "goal_ref": null,
+          "lease_ref": null,
+          "logical_time": 1,
+          "payload": {
+            "causation_id": "CMD-F-M1A-011-downgrade-01",
+            "content_digest": "7759e6aa2ecb421c164488439f6efb23025aecea692d03bde190622da010bda6",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "OWNER-LUCAS",
+            "created_logical_time": 1,
+            "created_under_lease": null,
+            "id": "INTENT-M1A",
+            "object_type": "owner-intent",
+            "payload": {
+              "intent_text": "Complete the deterministic synthetic M1A contract.",
+              "privacy_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "source_digest": "f6abb8b64b9d1c555085b9c1b91a9175ee87092a7d1793d377389b2f37ea7c58",
+              "source_kind": "owner-prompt",
+              "supersedes_ref": null
+            },
+            "schema_version": "m1a-owner-intent-1",
+            "version": 1
+          },
+          "payload_digest": "2b7bb3dd27f0cfcd467d4ae35eb5d2ac6d0c405ba0a63d4d84ea903e2e9085cc",
+          "plan_ref": null
+        },
+        {
+          "actor_id": "OWNER-LUCAS",
+          "auth_ref": "AUTH-F-M1A-011-downgrade-02",
+          "candidate_digest": "5e9f381dfab60e1fe92c573ca44ff80e2e6712f9c8224cd7b47d2b11c85a416a",
+          "command_id": "CMD-F-M1A-011-downgrade-02",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "accept-goal-spec",
+          "content_digest": "2e269b9c5e78f561c06fa9dfa424e995cec8a6cd6e93d0d0eeea072df58c1708",
+          "expected_state_digest": "44262062e0de89659024276383fa054bea3c2f4894ab6cf4c770f87335591471",
+          "expected_state_version": 1,
+          "goal_ref": null,
+          "lease_ref": null,
+          "logical_time": 2,
+          "payload": {
+            "causation_id": "CMD-F-M1A-011-downgrade-02",
+            "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "OWNER-LUCAS",
+            "created_logical_time": 2,
+            "created_under_lease": null,
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "payload": {
+              "acceptance_gate_ids": [
+                "GATE-M1A"
+              ],
+              "allowed_account_class_ids": [
+                "ACCOUNT-INCLUDED"
+              ],
+              "allowed_action_ids": [
+                "ACTION-READ",
+                "ACTION-WRITE"
+              ],
+              "allowed_capacity_pool_ids": [
+                "CAPACITY-INCLUDED"
+              ],
+              "allowed_effect_keys": [
+                "EFFECT-SYNTHETIC"
+              ],
+              "allowed_resource_paths": [
+                "workspace/input",
+                "workspace/output"
+              ],
+              "allowed_route_ids": [
+                "ROUTE-INCLUDED",
+                "ROUTE-ZERO"
+              ],
+              "authority_ids": [
+                "AUTHORITY-M1A"
+              ],
+              "authority_policy_ref": {
+                "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+                "policy_id": "POLICY-AUTHORITY",
+                "policy_version": 1
+              },
+              "budget_limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "capability_ids": [
+                "CAPABILITY-BASE",
+                "CAPABILITY-REPAIR"
+              ],
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "egress_class_id": "EGRESS-NONE",
+              "egress_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "fence_epoch": 1,
+              "non_goals": [
+                "no external effects",
+                "no publication"
+              ],
+              "novelty_policy_ref": {
+                "content_digest": "4a037b3d831de1695d49e94bb6f135ff8fa5ccecbde7e611db19fdd6622bf61d",
+                "policy_id": "POLICY-NOVELTY",
+                "policy_version": 1
+              },
+              "outcome": "Reach the declared synthetic gate with deterministic replay.",
+              "owner_intent_ref": {
+                "content_digest": "7759e6aa2ecb421c164488439f6efb23025aecea692d03bde190622da010bda6",
+                "id": "INTENT-M1A",
+                "object_type": "owner-intent",
+                "version": 1
+              },
+              "pause_policy_ref": {
+                "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
+                "policy_id": "POLICY-PAUSE",
+                "policy_version": 1
+              },
+              "privacy_class_id": "PRIVACY-SYNTHETIC",
+              "privacy_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "prohibition_ids": [
+                "PROHIBIT-EGRESS"
+              ],
+              "publication_allowed": false,
+              "retry_policy_ref": {
+                "content_digest": "b395609880d404635c18a72b0c507218e2e3b611874e5c1257503ad8839f8bb4",
+                "policy_id": "POLICY-RETRY",
+                "policy_version": 1
+              },
+              "route_policy_ref": {
+                "content_digest": "90fb3a36b6529d0bb6e000e5fd3a1b7035bc7a41d626690c565976fcb716b898",
+                "policy_id": "POLICY-ROUTE",
+                "policy_version": 1
+              },
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "state": "accepted",
+              "terminal_owner_seam_ids": [
+                "SEAM-OWNER"
+              ],
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              }
+            },
+            "schema_version": "m1a-goal-spec-1",
+            "version": 1
+          },
+          "payload_digest": "5e9f381dfab60e1fe92c573ca44ff80e2e6712f9c8224cd7b47d2b11c85a416a",
+          "plan_ref": null
+        },
+        {
+          "actor_id": "HEAD-HERMES",
+          "auth_ref": "AUTH-F-M1A-011-downgrade-03",
+          "candidate_digest": "14b40d22957fe6fbbc3c3cc6df3bba7f11e51dc24c78218d89a7affaba030f61",
+          "command_id": "CMD-F-M1A-011-downgrade-03",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "start-arm-run",
+          "content_digest": "3e8b228db86d56f56383acf18b84a2f47833224c8e7d4a1bdb83d5ec718fc42c",
+          "expected_state_digest": "8324fcba46dfd64a993b3bb55bccb757315b7415702a9a04695d7a5b05d8e1ba",
+          "expected_state_version": 2,
+          "goal_ref": {
+            "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": null,
+          "logical_time": 3,
+          "payload": {
+            "arm_run": {
+              "causation_id": "CMD-F-M1A-011-downgrade-03",
+              "content_digest": "c386c23e6623c5bbecb721b1bc9a603729bb772ba024047cd1d932791f1c55de",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "HEAD-HERMES",
+              "created_logical_time": 3,
+              "created_under_lease": null,
+              "id": "ARM-RUN-M1A",
+              "object_type": "arm-run",
+              "payload": {
+                "budget_limits": {
+                  "attempts": 2,
+                  "cpu_ms": 10000,
+                  "memory_bytes": 1048576,
+                  "model_turns": 4,
+                  "money_minor": 0,
+                  "output_bytes": 65536,
+                  "tokens": 1000
+                },
+                "eligible_account_class_ids": [
+                  "ACCOUNT-INCLUDED"
+                ],
+                "eligible_capacity_pool_ids": [
+                  "CAPACITY-INCLUDED"
+                ],
+                "eligible_route_ids": [
+                  "ROUTE-INCLUDED",
+                  "ROUTE-ZERO"
+                ],
+                "executive_lease_ref": {
+                  "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                  "lease_epoch": 1,
+                  "lease_id": "LEASE-EXEC-1"
+                },
+                "goal_ref": {
+                  "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                  "id": "GOAL-M1A",
+                  "object_type": "goal-spec",
+                  "version": 1
+                },
+                "logical_actor_id": "ARM-M1A",
+                "source_digests": [
+                  "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+                ],
+                "verifier_policy_ref": {
+                  "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                  "policy_id": "POLICY-VERIFIER",
+                  "policy_version": 1
+                }
+              },
+              "schema_version": "m1a-arm-run-1",
+              "version": 1
+            },
+            "executive_lease": {
+              "causation_id": "CMD-F-M1A-011-downgrade-03",
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "KERNEL-M1A",
+              "created_logical_time": 3,
+              "created_under_lease": null,
+              "id": "LEASE-EXEC-1",
+              "object_type": "executive-lease",
+              "payload": {
+                "allowed_command_types": [
+                  "derive-work-packet",
+                  "propose-plan-revision",
+                  "propose-replan",
+                  "propose-retry",
+                  "reserve-budget"
+                ],
+                "expires_logical_time": 1000,
+                "goal_ref": {
+                  "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                  "id": "GOAL-M1A",
+                  "object_type": "goal-spec",
+                  "version": 1
+                },
+                "issued_logical_time": 3,
+                "lease_epoch": 1,
+                "nonce_digest": "2fba6d87abd2232fdb48dfd142112f77aba8d58e636562d5eab6a78e3f312ac7",
+                "plan_ref": null,
+                "state": "active",
+                "subject_actor_id": "ARM-M1A",
+                "supersedes_lease_ref": null,
+                "task_ref": null
+              },
+              "schema_version": "m1a-executive-lease-1",
+              "version": 1
+            }
+          },
+          "payload_digest": "14b40d22957fe6fbbc3c3cc6df3bba7f11e51dc24c78218d89a7affaba030f61",
+          "plan_ref": null
+        },
+        {
+          "actor_id": "ARM-M1A",
+          "auth_ref": "AUTH-F-M1A-011-downgrade-04",
+          "candidate_digest": "50ba84842196cda66ca351e24a1d416e880321371b6853948efe277f723f8a17",
+          "command_id": "CMD-F-M1A-011-downgrade-04",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "propose-plan-revision",
+          "content_digest": "e257c2c1ccf280f964b20508b5c82ec3f81a7b59ba54d9aae2a1d4a6582fc86f",
+          "expected_state_digest": "ec9873cb820447829ef4705ebb4ebe506264f16a2491ae073838c241750472ae",
+          "expected_state_version": 3,
+          "goal_ref": {
+            "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": {
+            "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+            "lease_epoch": 1,
+            "lease_id": "LEASE-EXEC-1"
+          },
+          "logical_time": 4,
+          "payload": {
+            "plan_revision": {
+              "causation_id": "CMD-F-M1A-011-downgrade-04",
+              "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "ARM-M1A",
+              "created_logical_time": 4,
+              "created_under_lease": {
+                "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-EXEC-1"
+              },
+              "id": "PLAN-M1A",
+              "object_type": "plan-revision",
+              "payload": {
+                "acceptance_gate_ids": [
+                  "GATE-M1A"
+                ],
+                "arm_run_ref": {
+                  "content_digest": "c386c23e6623c5bbecb721b1bc9a603729bb772ba024047cd1d932791f1c55de",
+                  "id": "ARM-RUN-M1A",
+                  "object_type": "arm-run",
+                  "version": 1
+                },
+                "assigned_plan_verifier_actor_id": "VERIFIER-TERRA",
+                "budget_limits": {
+                  "attempts": 2,
+                  "cpu_ms": 10000,
+                  "memory_bytes": 1048576,
+                  "model_turns": 4,
+                  "money_minor": 0,
+                  "output_bytes": 65536,
+                  "tokens": 1000
+                },
+                "change_rationale_digest": "43a252c76c13717a13e4f313fc628e544cc41499411693d75d4ba8f82bf73713",
+                "constitution_policy_ref": {
+                  "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                  "policy_id": "POLICY-CONSTITUTION",
+                  "policy_version": 1
+                },
+                "dependency_edges": [],
+                "dispositions": [],
+                "effect_keys": [
+                  "EFFECT-SYNTHETIC"
+                ],
+                "goal_ref": {
+                  "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                  "id": "GOAL-M1A",
+                  "object_type": "goal-spec",
+                  "version": 1
+                },
+                "graph_digest": "271c8ec9bb861662dc5fc4a5d832eda515f3b74a1f019a2176286833f935a130",
+                "prior_plan_ref": null,
+                "read_resource_paths": [
+                  "workspace/input"
+                ],
+                "source_digests": [
+                  "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+                ],
+                "task_node_refs": [
+                  {
+                    "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                    "id": "TASK-M1A-A",
+                    "object_type": "task-node",
+                    "version": 1
+                  }
+                ],
+                "trigger": "initial",
+                "verifier_policy_ref": {
+                  "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                  "policy_id": "POLICY-VERIFIER",
+                  "policy_version": 1
+                },
+                "write_resource_paths": [
+                  "workspace/output"
+                ]
+              },
+              "schema_version": "m1a-plan-revision-1",
+              "version": 1
+            },
+            "plan_transition": {
+              "causation_id": "CMD-F-M1A-011-downgrade-04",
+              "content_digest": "c154ec6198da8f5ac99f5149c6e3135b4b633204cd55edb4c971b0aea397785b",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "ARM-M1A",
+              "created_logical_time": 4,
+              "created_under_lease": {
+                "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-EXEC-1"
+              },
+              "id": "TRANSITION-M1A-1",
+              "object_type": "plan-transition",
+              "payload": {
+                "checkpoint_ref": null,
+                "dispositions": [],
+                "executive_lease_ref": {
+                  "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                  "lease_epoch": 1,
+                  "lease_id": "LEASE-EXEC-1"
+                },
+                "expected_goal_fence_epoch": 1,
+                "from_plan_ref": null,
+                "to_plan_ref": {
+                  "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                  "id": "PLAN-M1A",
+                  "object_type": "plan-revision",
+                  "version": 1
+                },
+                "trigger_evidence_digests": [
+                  "f6abb8b64b9d1c555085b9c1b91a9175ee87092a7d1793d377389b2f37ea7c58"
+                ]
+              },
+              "schema_version": "m1a-plan-transition-1",
+              "version": 1
+            },
+            "task_nodes": [
+              {
+                "causation_id": "CMD-F-M1A-011-downgrade-04",
+                "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                "correlation_id": "CORR-M1A",
+                "created_by_actor_id": "ARM-M1A",
+                "created_logical_time": 4,
+                "created_under_lease": {
+                  "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                  "lease_epoch": 1,
+                  "lease_id": "LEASE-EXEC-1"
+                },
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "payload": {
+                  "account_class_ids": [
+                    "ACCOUNT-INCLUDED"
+                  ],
+                  "allowed_action_ids": [
+                    "ACTION-READ",
+                    "ACTION-WRITE"
+                  ],
+                  "authority_ids": [
+                    "AUTHORITY-M1A"
+                  ],
+                  "authority_policy_ref": {
+                    "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+                    "policy_id": "POLICY-AUTHORITY",
+                    "policy_version": 1
+                  },
+                  "budget_limits": {
+                    "attempts": 2,
+                    "cpu_ms": 10000,
+                    "memory_bytes": 1048576,
+                    "model_turns": 4,
+                    "money_minor": 0,
+                    "output_bytes": 65536,
+                    "tokens": 1000
+                  },
+                  "capability_ids": [
+                    "CAPABILITY-BASE"
+                  ],
+                  "capacity_pool_ids": [
+                    "CAPACITY-INCLUDED"
+                  ],
+                  "constitution_policy_ref": {
+                    "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                    "policy_id": "POLICY-CONSTITUTION",
+                    "policy_version": 1
+                  },
+                  "dependency_node_ids": [],
+                  "effect_keys": [
+                    "EFFECT-SYNTHETIC"
+                  ],
+                  "egress_class_id": "EGRESS-NONE",
+                  "egress_policy_ref": {
+                    "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                    "policy_id": "POLICY-PRIVACY",
+                    "policy_version": 1
+                  },
+                  "gate_requirements": [
+                    {
+                      "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                      "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                      "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                      "gate_id": "GATE-M1A",
+                      "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                      "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+                    }
+                  ],
+                  "input_digests": [
+                    "6352c6328ea376ae6e4568db2089e359581c55ea55c4c8306d0097ba1def2478"
+                  ],
+                  "output_schema_digest": "fbd88ffb1b3cae20a2a3d084d65019eea332521fcab888b63b9db0b46cd0da80",
+                  "plan_ref": {
+                    "id": "PLAN-M1A",
+                    "object_type": "plan-revision",
+                    "version": 1
+                  },
+                  "privacy_class_id": "PRIVACY-SYNTHETIC",
+                  "privacy_policy_ref": {
+                    "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                    "policy_id": "POLICY-PRIVACY",
+                    "policy_version": 1
+                  },
+                  "prohibition_ids": [
+                    "PROHIBIT-EGRESS"
+                  ],
+                  "read_resource_paths": [
+                    "workspace/input"
+                  ],
+                  "retry_maximum": 2,
+                  "retry_policy_ref": {
+                    "content_digest": "b395609880d404635c18a72b0c507218e2e3b611874e5c1257503ad8839f8bb4",
+                    "policy_id": "POLICY-RETRY",
+                    "policy_version": 1
+                  },
+                  "route_capability_ids": [
+                    "CAPABILITY-BASE"
+                  ],
+                  "route_ids": [
+                    "ROUTE-INCLUDED",
+                    "ROUTE-ZERO"
+                  ],
+                  "semantic_definition_digest": "a97aa1ae1a18d2e8f1509a6703d7ae63e0331ae5651df75109d40b7884d046f1",
+                  "source_digests": [
+                    "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+                  ],
+                  "terminal_contribution_digest": "e3684e9d47f8ee17078e1d7f17aaf4663a93272241ce62f1ecbf45537989d050",
+                  "verifier_policy_ref": {
+                    "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                    "policy_id": "POLICY-VERIFIER",
+                    "policy_version": 1
+                  },
+                  "write_resource_paths": [
+                    "workspace/output"
+                  ]
+                },
+                "schema_version": "m1a-task-node-1",
+                "version": 1
+              }
+            ]
+          },
+          "payload_digest": "50ba84842196cda66ca351e24a1d416e880321371b6853948efe277f723f8a17",
+          "plan_ref": null
+        },
+        {
+          "actor_id": "KERNEL-FIXTURE",
+          "auth_ref": "AUTH-F-M1A-011-downgrade-05",
+          "candidate_digest": "e75a2aeb38cd64dff5bfb341a29a7d19dbe62aa3318a342c7ebd3c17ebac54fc",
+          "command_id": "CMD-F-M1A-011-downgrade-05",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "record-capacity-observation",
+          "content_digest": "5a9399547209e5cb13e4f7ac401a7a9202ea3b14cdf100e015cffe2e09da435e",
+          "expected_state_digest": "7b455a7c40bb00c63df9939bcb99ea745aa6f3395dbc5b75cb54613f47ffb4b4",
+          "expected_state_version": 4,
+          "goal_ref": {
+            "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": null,
+          "logical_time": 5,
+          "payload": {
+            "causation_id": "CMD-F-M1A-011-downgrade-05",
+            "content_digest": "09f7e56bb06dfc8ab9eda9d6cf84df4e7a1ae139a9abb2a2023281282e5d95cf",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "KERNEL-FIXTURE",
+            "created_logical_time": 5,
+            "created_under_lease": null,
+            "id": "CAPACITY-OBS-1",
+            "object_type": "capacity-observation",
+            "payload": {
+              "account_class_id": "ACCOUNT-INCLUDED",
+              "available": true,
+              "capacity_pool_id": "CAPACITY-INCLUDED",
+              "observation_digest": "f84f280e98f2e9ea85ac4576817b912a79ac6f4f0d9327190615e977f9f8f7e6",
+              "remaining_units": 100,
+              "route_id": "ROUTE-INCLUDED",
+              "spend_class": "included"
+            },
+            "schema_version": "m1a-capacity-observation-1",
+            "version": 1
+          },
+          "payload_digest": "e75a2aeb38cd64dff5bfb341a29a7d19dbe62aa3318a342c7ebd3c17ebac54fc",
+          "plan_ref": {
+            "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        },
+        {
+          "actor_id": "ARM-M1A",
+          "auth_ref": "AUTH-F-M1A-011-downgrade-06",
+          "candidate_digest": "e5023ce0c1b74117c43ee8123fc347dfa7ecff80628f271dd94da02f07410ab9",
+          "command_id": "CMD-F-M1A-011-downgrade-06",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "reserve-budget",
+          "content_digest": "db2820ae1bdd66b2aa181b243389e11e56c2a708d8c470dc9c9f7cd4a0ea71b4",
+          "expected_state_digest": "c141300d634afc8fce0e54b2e7dd7614e007924083d0a0fcfdee0a1bc29d4cf6",
+          "expected_state_version": 5,
+          "goal_ref": {
+            "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": {
+            "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+            "lease_epoch": 1,
+            "lease_id": "LEASE-EXEC-1"
+          },
+          "logical_time": 6,
+          "payload": {
+            "causation_id": "CMD-F-M1A-011-downgrade-06",
+            "content_digest": "260ffc1f59ce70c30c1399d90d927213c55f2aa8a2df3f046b946099ad104811",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 6,
+            "created_under_lease": {
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "BUDGET-RESERVATION-1",
+            "object_type": "budget-reservation",
+            "payload": {
+              "consumed": {
+                "attempts": 0,
+                "cpu_ms": 0,
+                "memory_bytes": 0,
+                "model_turns": 0,
+                "money_minor": 0,
+                "output_bytes": 0,
+                "tokens": 0
+              },
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "remaining": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "state": "reserved",
+              "task_ref": {
+                "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-budget-reservation-1",
+            "version": 1
+          },
+          "payload_digest": "e5023ce0c1b74117c43ee8123fc347dfa7ecff80628f271dd94da02f07410ab9",
+          "plan_ref": {
+            "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        },
+        {
+          "actor_id": "ARM-M1A",
+          "auth_ref": "AUTH-F-M1A-011-downgrade-07",
+          "candidate_digest": "e5ef1a3ca05783b8dc34e0f0e7fa881d391657f2bf9d2d65828abc9cf8b60315",
+          "command_id": "CMD-F-M1A-011-downgrade-07",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "derive-work-packet",
+          "content_digest": "f5f5e2170fbdf76bb5a37360e75bd5a4ac824bfb996331f4b27fd88f397efdab",
+          "expected_state_digest": "09c2c6e072a36cf9031e71af064e9d57904b0e49665181df15a6fd4d8976624c",
+          "expected_state_version": 6,
+          "goal_ref": {
+            "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": {
+            "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+            "lease_epoch": 1,
+            "lease_id": "LEASE-EXEC-1"
+          },
+          "logical_time": 7,
+          "payload": {
+            "attempt": 1,
+            "budget_reservation_ref": {
+              "content_digest": "260ffc1f59ce70c30c1399d90d927213c55f2aa8a2df3f046b946099ad104811",
+              "id": "BUDGET-RESERVATION-1",
+              "object_type": "budget-reservation",
+              "version": 1
+            },
+            "expected_work_packet_digest": "d120d1e76dcdbaf73bd476c7df67ac24233f466feeeb8e16bbbcb2f7406126e2",
+            "route_assignment": {
+              "causation_id": "CMD-F-M1A-011-downgrade-07",
+              "content_digest": "8c2a3ed6d0eb58c45bc39183072946276d6f69d644800c260bcb9f1283d209ef",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "KERNEL-M1A",
+              "created_logical_time": 7,
+              "created_under_lease": {
+                "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-EXEC-1"
+              },
+              "id": "ROUTE-ASSIGNMENT-1",
+              "object_type": "route-assignment",
+              "payload": {
+                "account_class_id": "ACCOUNT-INCLUDED",
+                "assigned_logical_time": 7,
+                "capacity_observation_ref": {
+                  "content_digest": "09f7e56bb06dfc8ab9eda9d6cf84df4e7a1ae139a9abb2a2023281282e5d95cf",
+                  "id": "CAPACITY-OBS-1",
+                  "object_type": "capacity-observation",
+                  "version": 1
+                },
+                "capacity_pool_id": "CAPACITY-INCLUDED",
+                "egress_policy_ref": {
+                  "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                  "policy_id": "POLICY-PRIVACY",
+                  "policy_version": 1
+                },
+                "expires_logical_time": 900,
+                "logical_actor_id": "WORKER-LUNA",
+                "metered_spend_allowed": false,
+                "privacy_policy_ref": {
+                  "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                  "policy_id": "POLICY-PRIVACY",
+                  "policy_version": 1
+                },
+                "route_capability_ids": [
+                  "CAPABILITY-BASE"
+                ],
+                "route_id": "ROUTE-INCLUDED",
+                "route_policy_ref": {
+                  "content_digest": "90fb3a36b6529d0bb6e000e5fd3a1b7035bc7a41d626690c565976fcb716b898",
+                  "policy_id": "POLICY-ROUTE",
+                  "policy_version": 1
+                },
+                "state": "assigned",
+                "supersedes_route_ref": null
+              },
+              "schema_version": "m1a-route-assignment-1",
+              "version": 1
+            },
+            "task_ref": {
+              "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+              "id": "TASK-M1A-A",
+              "object_type": "task-node",
+              "version": 1
+            },
+            "work_lease": {
+              "causation_id": "CMD-F-M1A-011-downgrade-07",
+              "content_digest": "c7821bd87f0d7b3f4ead7a3e374b8051564360547393b48275a2c0ff216942dd",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "KERNEL-M1A",
+              "created_logical_time": 7,
+              "created_under_lease": {
+                "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-EXEC-1"
+              },
+              "id": "LEASE-WORK-1",
+              "object_type": "work-lease",
+              "payload": {
+                "allowed_command_types": [
+                  "submit-worker-result"
+                ],
+                "expires_logical_time": 900,
+                "goal_ref": {
+                  "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                  "id": "GOAL-M1A",
+                  "object_type": "goal-spec",
+                  "version": 1
+                },
+                "issued_logical_time": 7,
+                "lease_epoch": 1,
+                "nonce_digest": "f303e2bbfacbdf05603542a2cb29fdffa07bffda0bb2b0a67a8fb20bb969833b",
+                "plan_ref": {
+                  "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                  "id": "PLAN-M1A",
+                  "object_type": "plan-revision",
+                  "version": 1
+                },
+                "state": "active",
+                "subject_actor_id": "WORKER-LUNA",
+                "supersedes_lease_ref": null,
+                "task_ref": {
+                  "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                  "id": "TASK-M1A-A",
+                  "object_type": "task-node",
+                  "version": 1
+                }
+              },
+              "schema_version": "m1a-work-lease-1",
+              "version": 1
+            }
+          },
+          "payload_digest": "e5ef1a3ca05783b8dc34e0f0e7fa881d391657f2bf9d2d65828abc9cf8b60315",
+          "plan_ref": {
+            "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        },
+        {
+          "actor_id": "WORKER-LUNA",
+          "auth_ref": "AUTH-F-M1A-011-downgrade-08",
+          "candidate_digest": "d421664d24354330b60c946783f207f2df22640ddb63796beb1206ffdf5f66a6",
+          "command_id": "CMD-F-M1A-011-downgrade-08",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "submit-worker-result",
+          "content_digest": "7fb7a11e092661bf5417fd1b6182abb3c3cfc3d4be2851f296712d5a7018664a",
+          "expected_state_digest": "4357680117e3eabc1ae0ef89318d03c30f7494b42672132c0e4bba9b1a8a0717",
+          "expected_state_version": 7,
+          "goal_ref": {
+            "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": {
+            "content_digest": "c7821bd87f0d7b3f4ead7a3e374b8051564360547393b48275a2c0ff216942dd",
+            "lease_epoch": 1,
+            "lease_id": "LEASE-WORK-1"
+          },
+          "logical_time": 8,
+          "payload": {
+            "causation_id": "CMD-F-M1A-011-downgrade-08",
+            "content_digest": "39fa698202e9013f9ff49502d8351f3e81f6a389d9761cdb27febd4ec50daa69",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "WORKER-LUNA",
+            "created_logical_time": 8,
+            "created_under_lease": {
+              "content_digest": "c7821bd87f0d7b3f4ead7a3e374b8051564360547393b48275a2c0ff216942dd",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-WORK-1"
+            },
+            "id": "RESULT-M1A-1",
+            "object_type": "worker-result",
+            "payload": {
+              "candidate_digest": "da43675a49dc673a306470116857d11f0e4c1d8392ea66d5f2dbf9b6204e50d5",
+              "disposition": "submitted",
+              "evidence_digests": [
+                "1a51e28adffef1830ace3db8a23aed197b5a029c2bd05fa8a7a1e83eecf49e3c"
+              ],
+              "observed_effect_ref": null,
+              "output_digest": "fda8c795d7b36bfacd0419444d7391de96b0533e78631119f5a7203b3b8d38a7",
+              "work_packet_ref": {
+                "content_digest": "d120d1e76dcdbaf73bd476c7df67ac24233f466feeeb8e16bbbcb2f7406126e2",
+                "id": "PACKET-6bc7faf8c82e2a9cb1a1df7f67bd2ef6",
+                "object_type": "work-packet",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-worker-result-1",
+            "version": 1
+          },
+          "payload_digest": "d421664d24354330b60c946783f207f2df22640ddb63796beb1206ffdf5f66a6",
+          "plan_ref": {
+            "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        },
+        {
+          "actor_id": "VERIFIER-TERRA",
+          "auth_ref": "AUTH-F-M1A-011-downgrade-09",
+          "candidate_digest": "13c35429aec4e65dad4c04228de2298f9b119780f71daf87815c733f7e99b3e3",
+          "command_id": "CMD-F-M1A-011-downgrade-09",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "submit-gate-result",
+          "content_digest": "4c3e54c6436ce661a001681e15b632b3ccecbd1092aacca25e58274a098db3e5",
+          "expected_state_digest": "83e3780a978cd40e509bb9d4a0d5b6b1aaacf725ba9b704d95dc0ad0c55c40d3",
+          "expected_state_version": 8,
+          "goal_ref": {
+            "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": null,
+          "logical_time": 9,
+          "payload": {
+            "causation_id": "CMD-F-M1A-011-downgrade-09",
+            "content_digest": "dc92ceb8695c198c336fad9a3676f59207ec77d8f18a6c7545905af3e0603af7",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "VERIFIER-TERRA",
+            "created_logical_time": 9,
+            "created_under_lease": null,
+            "id": "GATE-RESULT-M1A-1",
+            "object_type": "gate-result",
+            "payload": {
+              "actual_digest": "44611fa4e64fc2d16704405875b8ea1092ff4d8bc6b1e620973e07e3a8ada99e",
+              "candidate_digest": "da43675a49dc673a306470116857d11f0e4c1d8392ea66d5f2dbf9b6204e50d5",
+              "disposition": "pass",
+              "evidence_digests": [
+                "1a51e28adffef1830ace3db8a23aed197b5a029c2bd05fa8a7a1e83eecf49e3c"
+              ],
+              "expected_digest": "44611fa4e64fc2d16704405875b8ea1092ff4d8bc6b1e620973e07e3a8ada99e",
+              "gate_requirement": {
+                "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                "gate_id": "GATE-M1A",
+                "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+              },
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "independence": {
+                "evidence_store": "fixture",
+                "host": "local",
+                "implementation_actor_id": "ACTOR-IMPLEMENTER",
+                "missing_dimensions": [],
+                "model_family": "gpt-family",
+                "provider": "openai",
+                "session": "fixture",
+                "verifier_actor_id": "VERIFIER-TERRA"
+              },
+              "limitation_digests": [],
+              "observation_digest": "2b28482f574bd6ba1336d7ab15b3bef4b83b3c01c73606002b51bc51139de79e",
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "procedure_version": 1,
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "task_ref": {
+                "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "work_packet_ref": {
+                "content_digest": "d120d1e76dcdbaf73bd476c7df67ac24233f466feeeb8e16bbbcb2f7406126e2",
+                "id": "PACKET-6bc7faf8c82e2a9cb1a1df7f67bd2ef6",
+                "object_type": "work-packet",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-gate-result-1",
+            "version": 1
+          },
+          "payload_digest": "13c35429aec4e65dad4c04228de2298f9b119780f71daf87815c733f7e99b3e3",
+          "plan_ref": {
+            "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        }
+      ],
+      "initial_events": [
+        {
+          "command_digest": "10f406d088d6eb4b80c089f358e6fb7d015912d9bf4a873fed2ed907c1247e9a",
+          "command_id": "CMD-F-M1A-011-downgrade-01",
+          "content_digest": "12f0e2dd113f0cba60598dea7b816a59746ffd884eb3187cdb7b1ae12aba1007",
+          "event_id": "EV-F-M1A-011-downgrade-01-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "OwnerIntentRecorded",
+          "logical_time": 1,
+          "previous_event_digest": "fb1168e6e4d1267c41ea3d7798ebb88963e6de7c05cc1500ed059ba4b2f75801",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-011-downgrade-01",
+            "content_digest": "7759e6aa2ecb421c164488439f6efb23025aecea692d03bde190622da010bda6",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "OWNER-LUCAS",
+            "created_logical_time": 1,
+            "created_under_lease": null,
+            "id": "INTENT-M1A",
+            "object_type": "owner-intent",
+            "payload": {
+              "intent_text": "Complete the deterministic synthetic M1A contract.",
+              "privacy_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "source_digest": "f6abb8b64b9d1c555085b9c1b91a9175ee87092a7d1793d377389b2f37ea7c58",
+              "source_kind": "owner-prompt",
+              "supersedes_ref": null
+            },
+            "schema_version": "m1a-owner-intent-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 1,
+          "state_delta_digest": "a545d7a0790b6ee3c730d546caebcde3bc6618c34ad685f3ae5a5db653cbc4ad",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "2e269b9c5e78f561c06fa9dfa424e995cec8a6cd6e93d0d0eeea072df58c1708",
+          "command_id": "CMD-F-M1A-011-downgrade-02",
+          "content_digest": "a8a9499531a50dd25b59fec11aeca34f21f24306b7aeb4e91c3698467295b182",
+          "event_id": "EV-F-M1A-011-downgrade-02-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "GoalSpecAccepted",
+          "logical_time": 2,
+          "previous_event_digest": "12f0e2dd113f0cba60598dea7b816a59746ffd884eb3187cdb7b1ae12aba1007",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-011-downgrade-02",
+            "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "OWNER-LUCAS",
+            "created_logical_time": 2,
+            "created_under_lease": null,
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "payload": {
+              "acceptance_gate_ids": [
+                "GATE-M1A"
+              ],
+              "allowed_account_class_ids": [
+                "ACCOUNT-INCLUDED"
+              ],
+              "allowed_action_ids": [
+                "ACTION-READ",
+                "ACTION-WRITE"
+              ],
+              "allowed_capacity_pool_ids": [
+                "CAPACITY-INCLUDED"
+              ],
+              "allowed_effect_keys": [
+                "EFFECT-SYNTHETIC"
+              ],
+              "allowed_resource_paths": [
+                "workspace/input",
+                "workspace/output"
+              ],
+              "allowed_route_ids": [
+                "ROUTE-INCLUDED",
+                "ROUTE-ZERO"
+              ],
+              "authority_ids": [
+                "AUTHORITY-M1A"
+              ],
+              "authority_policy_ref": {
+                "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+                "policy_id": "POLICY-AUTHORITY",
+                "policy_version": 1
+              },
+              "budget_limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "capability_ids": [
+                "CAPABILITY-BASE",
+                "CAPABILITY-REPAIR"
+              ],
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "egress_class_id": "EGRESS-NONE",
+              "egress_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "fence_epoch": 1,
+              "non_goals": [
+                "no external effects",
+                "no publication"
+              ],
+              "novelty_policy_ref": {
+                "content_digest": "4a037b3d831de1695d49e94bb6f135ff8fa5ccecbde7e611db19fdd6622bf61d",
+                "policy_id": "POLICY-NOVELTY",
+                "policy_version": 1
+              },
+              "outcome": "Reach the declared synthetic gate with deterministic replay.",
+              "owner_intent_ref": {
+                "content_digest": "7759e6aa2ecb421c164488439f6efb23025aecea692d03bde190622da010bda6",
+                "id": "INTENT-M1A",
+                "object_type": "owner-intent",
+                "version": 1
+              },
+              "pause_policy_ref": {
+                "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
+                "policy_id": "POLICY-PAUSE",
+                "policy_version": 1
+              },
+              "privacy_class_id": "PRIVACY-SYNTHETIC",
+              "privacy_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "prohibition_ids": [
+                "PROHIBIT-EGRESS"
+              ],
+              "publication_allowed": false,
+              "retry_policy_ref": {
+                "content_digest": "b395609880d404635c18a72b0c507218e2e3b611874e5c1257503ad8839f8bb4",
+                "policy_id": "POLICY-RETRY",
+                "policy_version": 1
+              },
+              "route_policy_ref": {
+                "content_digest": "90fb3a36b6529d0bb6e000e5fd3a1b7035bc7a41d626690c565976fcb716b898",
+                "policy_id": "POLICY-ROUTE",
+                "policy_version": 1
+              },
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "state": "accepted",
+              "terminal_owner_seam_ids": [
+                "SEAM-OWNER"
+              ],
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              }
+            },
+            "schema_version": "m1a-goal-spec-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 2,
+          "state_delta_digest": "0533fe334291257dadaee60950340ec941b24f60e5b294c2106778b577cb3d4b",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "3e8b228db86d56f56383acf18b84a2f47833224c8e7d4a1bdb83d5ec718fc42c",
+          "command_id": "CMD-F-M1A-011-downgrade-03",
+          "content_digest": "cffc9838430c242556fc447d53bd0eeaed9092bf6be1b19fe3ae6bf62efe1daa",
+          "event_id": "EV-F-M1A-011-downgrade-03-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "ArmRunStarted",
+          "logical_time": 3,
+          "previous_event_digest": "a8a9499531a50dd25b59fec11aeca34f21f24306b7aeb4e91c3698467295b182",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-011-downgrade-03",
+            "content_digest": "c386c23e6623c5bbecb721b1bc9a603729bb772ba024047cd1d932791f1c55de",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "HEAD-HERMES",
+            "created_logical_time": 3,
+            "created_under_lease": null,
+            "id": "ARM-RUN-M1A",
+            "object_type": "arm-run",
+            "payload": {
+              "budget_limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "eligible_account_class_ids": [
+                "ACCOUNT-INCLUDED"
+              ],
+              "eligible_capacity_pool_ids": [
+                "CAPACITY-INCLUDED"
+              ],
+              "eligible_route_ids": [
+                "ROUTE-INCLUDED",
+                "ROUTE-ZERO"
+              ],
+              "executive_lease_ref": {
+                "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-EXEC-1"
+              },
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "logical_actor_id": "ARM-M1A",
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              }
+            },
+            "schema_version": "m1a-arm-run-1",
+            "version": 1
+          },
+          "related_records": [
+            {
+              "causation_id": "CMD-F-M1A-011-downgrade-03",
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "KERNEL-M1A",
+              "created_logical_time": 3,
+              "created_under_lease": null,
+              "id": "LEASE-EXEC-1",
+              "object_type": "executive-lease",
+              "payload": {
+                "allowed_command_types": [
+                  "derive-work-packet",
+                  "propose-plan-revision",
+                  "propose-replan",
+                  "propose-retry",
+                  "reserve-budget"
+                ],
+                "expires_logical_time": 1000,
+                "goal_ref": {
+                  "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                  "id": "GOAL-M1A",
+                  "object_type": "goal-spec",
+                  "version": 1
+                },
+                "issued_logical_time": 3,
+                "lease_epoch": 1,
+                "nonce_digest": "2fba6d87abd2232fdb48dfd142112f77aba8d58e636562d5eab6a78e3f312ac7",
+                "plan_ref": null,
+                "state": "active",
+                "subject_actor_id": "ARM-M1A",
+                "supersedes_lease_ref": null,
+                "task_ref": null
+              },
+              "schema_version": "m1a-executive-lease-1",
+              "version": 1
+            }
+          ],
+          "sequence": 3,
+          "state_delta_digest": "f540f7ab8ea53e76b96c4e0d7e9f0499cd1e5c967d3ba9e3a0006674bde04935",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "e257c2c1ccf280f964b20508b5c82ec3f81a7b59ba54d9aae2a1d4a6582fc86f",
+          "command_id": "CMD-F-M1A-011-downgrade-04",
+          "content_digest": "41a65e8790e3d363b974adf8448eddc7e7a9203bef8d3a9ba1ce24252cb43f13",
+          "event_id": "EV-F-M1A-011-downgrade-04-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "PlanRevisionAdmitted",
+          "logical_time": 4,
+          "previous_event_digest": "cffc9838430c242556fc447d53bd0eeaed9092bf6be1b19fe3ae6bf62efe1daa",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-011-downgrade-04",
+            "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 4,
+            "created_under_lease": {
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "payload": {
+              "acceptance_gate_ids": [
+                "GATE-M1A"
+              ],
+              "arm_run_ref": {
+                "content_digest": "c386c23e6623c5bbecb721b1bc9a603729bb772ba024047cd1d932791f1c55de",
+                "id": "ARM-RUN-M1A",
+                "object_type": "arm-run",
+                "version": 1
+              },
+              "assigned_plan_verifier_actor_id": "VERIFIER-TERRA",
+              "budget_limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "change_rationale_digest": "43a252c76c13717a13e4f313fc628e544cc41499411693d75d4ba8f82bf73713",
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "dependency_edges": [],
+              "dispositions": [],
+              "effect_keys": [
+                "EFFECT-SYNTHETIC"
+              ],
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "graph_digest": "271c8ec9bb861662dc5fc4a5d832eda515f3b74a1f019a2176286833f935a130",
+              "prior_plan_ref": null,
+              "read_resource_paths": [
+                "workspace/input"
+              ],
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "task_node_refs": [
+                {
+                  "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                  "id": "TASK-M1A-A",
+                  "object_type": "task-node",
+                  "version": 1
+                }
+              ],
+              "trigger": "initial",
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              },
+              "write_resource_paths": [
+                "workspace/output"
+              ]
+            },
+            "schema_version": "m1a-plan-revision-1",
+            "version": 1
+          },
+          "related_records": [
+            {
+              "causation_id": "CMD-F-M1A-011-downgrade-04",
+              "content_digest": "c154ec6198da8f5ac99f5149c6e3135b4b633204cd55edb4c971b0aea397785b",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "ARM-M1A",
+              "created_logical_time": 4,
+              "created_under_lease": {
+                "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-EXEC-1"
+              },
+              "id": "TRANSITION-M1A-1",
+              "object_type": "plan-transition",
+              "payload": {
+                "checkpoint_ref": null,
+                "dispositions": [],
+                "executive_lease_ref": {
+                  "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                  "lease_epoch": 1,
+                  "lease_id": "LEASE-EXEC-1"
+                },
+                "expected_goal_fence_epoch": 1,
+                "from_plan_ref": null,
+                "to_plan_ref": {
+                  "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                  "id": "PLAN-M1A",
+                  "object_type": "plan-revision",
+                  "version": 1
+                },
+                "trigger_evidence_digests": [
+                  "f6abb8b64b9d1c555085b9c1b91a9175ee87092a7d1793d377389b2f37ea7c58"
+                ]
+              },
+              "schema_version": "m1a-plan-transition-1",
+              "version": 1
+            },
+            {
+              "causation_id": "CMD-F-M1A-011-downgrade-04",
+              "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "ARM-M1A",
+              "created_logical_time": 4,
+              "created_under_lease": {
+                "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-EXEC-1"
+              },
+              "id": "TASK-M1A-A",
+              "object_type": "task-node",
+              "payload": {
+                "account_class_ids": [
+                  "ACCOUNT-INCLUDED"
+                ],
+                "allowed_action_ids": [
+                  "ACTION-READ",
+                  "ACTION-WRITE"
+                ],
+                "authority_ids": [
+                  "AUTHORITY-M1A"
+                ],
+                "authority_policy_ref": {
+                  "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+                  "policy_id": "POLICY-AUTHORITY",
+                  "policy_version": 1
+                },
+                "budget_limits": {
+                  "attempts": 2,
+                  "cpu_ms": 10000,
+                  "memory_bytes": 1048576,
+                  "model_turns": 4,
+                  "money_minor": 0,
+                  "output_bytes": 65536,
+                  "tokens": 1000
+                },
+                "capability_ids": [
+                  "CAPABILITY-BASE"
+                ],
+                "capacity_pool_ids": [
+                  "CAPACITY-INCLUDED"
+                ],
+                "constitution_policy_ref": {
+                  "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                  "policy_id": "POLICY-CONSTITUTION",
+                  "policy_version": 1
+                },
+                "dependency_node_ids": [],
+                "effect_keys": [
+                  "EFFECT-SYNTHETIC"
+                ],
+                "egress_class_id": "EGRESS-NONE",
+                "egress_policy_ref": {
+                  "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                  "policy_id": "POLICY-PRIVACY",
+                  "policy_version": 1
+                },
+                "gate_requirements": [
+                  {
+                    "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                    "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                    "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                    "gate_id": "GATE-M1A",
+                    "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                    "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+                  }
+                ],
+                "input_digests": [
+                  "6352c6328ea376ae6e4568db2089e359581c55ea55c4c8306d0097ba1def2478"
+                ],
+                "output_schema_digest": "fbd88ffb1b3cae20a2a3d084d65019eea332521fcab888b63b9db0b46cd0da80",
+                "plan_ref": {
+                  "id": "PLAN-M1A",
+                  "object_type": "plan-revision",
+                  "version": 1
+                },
+                "privacy_class_id": "PRIVACY-SYNTHETIC",
+                "privacy_policy_ref": {
+                  "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                  "policy_id": "POLICY-PRIVACY",
+                  "policy_version": 1
+                },
+                "prohibition_ids": [
+                  "PROHIBIT-EGRESS"
+                ],
+                "read_resource_paths": [
+                  "workspace/input"
+                ],
+                "retry_maximum": 2,
+                "retry_policy_ref": {
+                  "content_digest": "b395609880d404635c18a72b0c507218e2e3b611874e5c1257503ad8839f8bb4",
+                  "policy_id": "POLICY-RETRY",
+                  "policy_version": 1
+                },
+                "route_capability_ids": [
+                  "CAPABILITY-BASE"
+                ],
+                "route_ids": [
+                  "ROUTE-INCLUDED",
+                  "ROUTE-ZERO"
+                ],
+                "semantic_definition_digest": "a97aa1ae1a18d2e8f1509a6703d7ae63e0331ae5651df75109d40b7884d046f1",
+                "source_digests": [
+                  "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+                ],
+                "terminal_contribution_digest": "e3684e9d47f8ee17078e1d7f17aaf4663a93272241ce62f1ecbf45537989d050",
+                "verifier_policy_ref": {
+                  "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                  "policy_id": "POLICY-VERIFIER",
+                  "policy_version": 1
+                },
+                "write_resource_paths": [
+                  "workspace/output"
+                ]
+              },
+              "schema_version": "m1a-task-node-1",
+              "version": 1
+            }
+          ],
+          "sequence": 4,
+          "state_delta_digest": "8a149590092f8a7808f63af6d0fec703a3f3d7758dc3864e365f22aadfd405f4",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "5a9399547209e5cb13e4f7ac401a7a9202ea3b14cdf100e015cffe2e09da435e",
+          "command_id": "CMD-F-M1A-011-downgrade-05",
+          "content_digest": "69529e137f03ae4a84b6407cb5cd0ec6dcdff22e943f4fc5e4669cf9a2829cf5",
+          "event_id": "EV-F-M1A-011-downgrade-05-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "CapacityObservationRecorded",
+          "logical_time": 5,
+          "previous_event_digest": "41a65e8790e3d363b974adf8448eddc7e7a9203bef8d3a9ba1ce24252cb43f13",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-011-downgrade-05",
+            "content_digest": "09f7e56bb06dfc8ab9eda9d6cf84df4e7a1ae139a9abb2a2023281282e5d95cf",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "KERNEL-FIXTURE",
+            "created_logical_time": 5,
+            "created_under_lease": null,
+            "id": "CAPACITY-OBS-1",
+            "object_type": "capacity-observation",
+            "payload": {
+              "account_class_id": "ACCOUNT-INCLUDED",
+              "available": true,
+              "capacity_pool_id": "CAPACITY-INCLUDED",
+              "observation_digest": "f84f280e98f2e9ea85ac4576817b912a79ac6f4f0d9327190615e977f9f8f7e6",
+              "remaining_units": 100,
+              "route_id": "ROUTE-INCLUDED",
+              "spend_class": "included"
+            },
+            "schema_version": "m1a-capacity-observation-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 5,
+          "state_delta_digest": "917ee82a16175d832bc59cd095a6e5cb1b53e24014939bbd3fabb17895f5fd7d",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "db2820ae1bdd66b2aa181b243389e11e56c2a708d8c470dc9c9f7cd4a0ea71b4",
+          "command_id": "CMD-F-M1A-011-downgrade-06",
+          "content_digest": "d1c0441b51c8212364154c48125450cfcb9e6267320e1f8f878cc4ae974ddacc",
+          "event_id": "EV-F-M1A-011-downgrade-06-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "BudgetReserved",
+          "logical_time": 6,
+          "previous_event_digest": "69529e137f03ae4a84b6407cb5cd0ec6dcdff22e943f4fc5e4669cf9a2829cf5",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-011-downgrade-06",
+            "content_digest": "260ffc1f59ce70c30c1399d90d927213c55f2aa8a2df3f046b946099ad104811",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 6,
+            "created_under_lease": {
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "BUDGET-RESERVATION-1",
+            "object_type": "budget-reservation",
+            "payload": {
+              "consumed": {
+                "attempts": 0,
+                "cpu_ms": 0,
+                "memory_bytes": 0,
+                "model_turns": 0,
+                "money_minor": 0,
+                "output_bytes": 0,
+                "tokens": 0
+              },
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "remaining": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "state": "reserved",
+              "task_ref": {
+                "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-budget-reservation-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 6,
+          "state_delta_digest": "92107e8b7fc72d12a6fe7db9385d637cbfa15900b8905b92ae76d7d7a96ca047",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "f5f5e2170fbdf76bb5a37360e75bd5a4ac824bfb996331f4b27fd88f397efdab",
+          "command_id": "CMD-F-M1A-011-downgrade-07",
+          "content_digest": "19b2e1a54570673b731e3c9869fea370c9aa210fbe393ded79c17d7819e7f89f",
+          "event_id": "EV-F-M1A-011-downgrade-07-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "WorkPacketDerived",
+          "logical_time": 7,
+          "previous_event_digest": "d1c0441b51c8212364154c48125450cfcb9e6267320e1f8f878cc4ae974ddacc",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-011-downgrade-07",
+            "content_digest": "d120d1e76dcdbaf73bd476c7df67ac24233f466feeeb8e16bbbcb2f7406126e2",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "KERNEL-M1A",
+            "created_logical_time": 7,
+            "created_under_lease": {
+              "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "PACKET-6bc7faf8c82e2a9cb1a1df7f67bd2ef6",
+            "object_type": "work-packet",
+            "payload": {
+              "allowed_action_ids": [
+                "ACTION-READ",
+                "ACTION-WRITE"
+              ],
+              "allowed_resource_paths": [
+                "workspace/input",
+                "workspace/output"
+              ],
+              "attempt": 1,
+              "authority_ids": [
+                "AUTHORITY-M1A"
+              ],
+              "authority_policy_ref": {
+                "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+                "policy_id": "POLICY-AUTHORITY",
+                "policy_version": 1
+              },
+              "budget_limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "budget_reservation_ref": {
+                "content_digest": "260ffc1f59ce70c30c1399d90d927213c55f2aa8a2df3f046b946099ad104811",
+                "id": "BUDGET-RESERVATION-1",
+                "object_type": "budget-reservation",
+                "version": 1
+              },
+              "capability_ids": [
+                "CAPABILITY-BASE"
+              ],
+              "checkpoint_ref": null,
+              "deadline_logical_time": 900,
+              "effect_keys": [
+                "EFFECT-SYNTHETIC"
+              ],
+              "egress_class_id": "EGRESS-NONE",
+              "egress_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "expected_goal_fence_epoch": 1,
+              "expected_pause_epoch": 0,
+              "gate_requirements": [
+                {
+                  "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                  "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                  "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                  "gate_id": "GATE-M1A",
+                  "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                  "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+                }
+              ],
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "inherited_non_goals": [
+                "no external effects",
+                "no publication"
+              ],
+              "logical_worker_actor_id": "WORKER-LUNA",
+              "output_schema_digest": "fbd88ffb1b3cae20a2a3d084d65019eea332521fcab888b63b9db0b46cd0da80",
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "privacy_class_id": "PRIVACY-SYNTHETIC",
+              "privacy_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "prohibition_ids": [
+                "PROHIBIT-EGRESS"
+              ],
+              "route_assignment_ref": {
+                "content_digest": "8c2a3ed6d0eb58c45bc39183072946276d6f69d644800c260bcb9f1283d209ef",
+                "id": "ROUTE-ASSIGNMENT-1",
+                "object_type": "route-assignment",
+                "version": 1
+              },
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "supersedes_packet_ref": null,
+              "task_ref": {
+                "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "work_lease_ref": {
+                "content_digest": "c7821bd87f0d7b3f4ead7a3e374b8051564360547393b48275a2c0ff216942dd",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-WORK-1"
+              }
+            },
+            "schema_version": "m1a-work-packet-1",
+            "version": 1
+          },
+          "related_records": [
+            {
+              "causation_id": "CMD-F-M1A-011-downgrade-07",
+              "content_digest": "8c2a3ed6d0eb58c45bc39183072946276d6f69d644800c260bcb9f1283d209ef",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "KERNEL-M1A",
+              "created_logical_time": 7,
+              "created_under_lease": {
+                "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-EXEC-1"
+              },
+              "id": "ROUTE-ASSIGNMENT-1",
+              "object_type": "route-assignment",
+              "payload": {
+                "account_class_id": "ACCOUNT-INCLUDED",
+                "assigned_logical_time": 7,
+                "capacity_observation_ref": {
+                  "content_digest": "09f7e56bb06dfc8ab9eda9d6cf84df4e7a1ae139a9abb2a2023281282e5d95cf",
+                  "id": "CAPACITY-OBS-1",
+                  "object_type": "capacity-observation",
+                  "version": 1
+                },
+                "capacity_pool_id": "CAPACITY-INCLUDED",
+                "egress_policy_ref": {
+                  "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                  "policy_id": "POLICY-PRIVACY",
+                  "policy_version": 1
+                },
+                "expires_logical_time": 900,
+                "logical_actor_id": "WORKER-LUNA",
+                "metered_spend_allowed": false,
+                "privacy_policy_ref": {
+                  "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                  "policy_id": "POLICY-PRIVACY",
+                  "policy_version": 1
+                },
+                "route_capability_ids": [
+                  "CAPABILITY-BASE"
+                ],
+                "route_id": "ROUTE-INCLUDED",
+                "route_policy_ref": {
+                  "content_digest": "90fb3a36b6529d0bb6e000e5fd3a1b7035bc7a41d626690c565976fcb716b898",
+                  "policy_id": "POLICY-ROUTE",
+                  "policy_version": 1
+                },
+                "state": "assigned",
+                "supersedes_route_ref": null
+              },
+              "schema_version": "m1a-route-assignment-1",
+              "version": 1
+            },
+            {
+              "causation_id": "CMD-F-M1A-011-downgrade-07",
+              "content_digest": "c7821bd87f0d7b3f4ead7a3e374b8051564360547393b48275a2c0ff216942dd",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "KERNEL-M1A",
+              "created_logical_time": 7,
+              "created_under_lease": {
+                "content_digest": "19f6320d3c44afdf2190491e0fe1679e8414079758174cb603c618c98b6c655f",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-EXEC-1"
+              },
+              "id": "LEASE-WORK-1",
+              "object_type": "work-lease",
+              "payload": {
+                "allowed_command_types": [
+                  "submit-worker-result"
+                ],
+                "expires_logical_time": 900,
+                "goal_ref": {
+                  "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                  "id": "GOAL-M1A",
+                  "object_type": "goal-spec",
+                  "version": 1
+                },
+                "issued_logical_time": 7,
+                "lease_epoch": 1,
+                "nonce_digest": "f303e2bbfacbdf05603542a2cb29fdffa07bffda0bb2b0a67a8fb20bb969833b",
+                "plan_ref": {
+                  "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                  "id": "PLAN-M1A",
+                  "object_type": "plan-revision",
+                  "version": 1
+                },
+                "state": "active",
+                "subject_actor_id": "WORKER-LUNA",
+                "supersedes_lease_ref": null,
+                "task_ref": {
+                  "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                  "id": "TASK-M1A-A",
+                  "object_type": "task-node",
+                  "version": 1
+                }
+              },
+              "schema_version": "m1a-work-lease-1",
+              "version": 1
+            }
+          ],
+          "sequence": 7,
+          "state_delta_digest": "6732f0ea0d6ec382954beefc7c9cca58fb02ac371f8d5b8bbc99fff0fde694f4",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "7fb7a11e092661bf5417fd1b6182abb3c3cfc3d4be2851f296712d5a7018664a",
+          "command_id": "CMD-F-M1A-011-downgrade-08",
+          "content_digest": "395b8eb433fe16e0cbff69277ccb67d9a34dcfdda5439f838524cdd5f0deb5e9",
+          "event_id": "EV-F-M1A-011-downgrade-08-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "WorkerResultRecorded",
+          "logical_time": 8,
+          "previous_event_digest": "19b2e1a54570673b731e3c9869fea370c9aa210fbe393ded79c17d7819e7f89f",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-011-downgrade-08",
+            "content_digest": "39fa698202e9013f9ff49502d8351f3e81f6a389d9761cdb27febd4ec50daa69",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "WORKER-LUNA",
+            "created_logical_time": 8,
+            "created_under_lease": {
+              "content_digest": "c7821bd87f0d7b3f4ead7a3e374b8051564360547393b48275a2c0ff216942dd",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-WORK-1"
+            },
+            "id": "RESULT-M1A-1",
+            "object_type": "worker-result",
+            "payload": {
+              "candidate_digest": "da43675a49dc673a306470116857d11f0e4c1d8392ea66d5f2dbf9b6204e50d5",
+              "disposition": "submitted",
+              "evidence_digests": [
+                "1a51e28adffef1830ace3db8a23aed197b5a029c2bd05fa8a7a1e83eecf49e3c"
+              ],
+              "observed_effect_ref": null,
+              "output_digest": "fda8c795d7b36bfacd0419444d7391de96b0533e78631119f5a7203b3b8d38a7",
+              "work_packet_ref": {
+                "content_digest": "d120d1e76dcdbaf73bd476c7df67ac24233f466feeeb8e16bbbcb2f7406126e2",
+                "id": "PACKET-6bc7faf8c82e2a9cb1a1df7f67bd2ef6",
+                "object_type": "work-packet",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-worker-result-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 8,
+          "state_delta_digest": "dbe5937542fd8b12c754b5d3c701f4051cd36d4df4aa35e8555724fd24e65548",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "4c3e54c6436ce661a001681e15b632b3ccecbd1092aacca25e58274a098db3e5",
+          "command_id": "CMD-F-M1A-011-downgrade-09",
+          "content_digest": "2bf8955158acc56211c2ea4f3e983c6cafaa6113f8429a4c5767559c173b09c2",
+          "event_id": "EV-F-M1A-011-downgrade-09-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "GateResultRecorded",
+          "logical_time": 9,
+          "previous_event_digest": "395b8eb433fe16e0cbff69277ccb67d9a34dcfdda5439f838524cdd5f0deb5e9",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-011-downgrade-09",
+            "content_digest": "dc92ceb8695c198c336fad9a3676f59207ec77d8f18a6c7545905af3e0603af7",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "VERIFIER-TERRA",
+            "created_logical_time": 9,
+            "created_under_lease": null,
+            "id": "GATE-RESULT-M1A-1",
+            "object_type": "gate-result",
+            "payload": {
+              "actual_digest": "44611fa4e64fc2d16704405875b8ea1092ff4d8bc6b1e620973e07e3a8ada99e",
+              "candidate_digest": "da43675a49dc673a306470116857d11f0e4c1d8392ea66d5f2dbf9b6204e50d5",
+              "disposition": "pass",
+              "evidence_digests": [
+                "1a51e28adffef1830ace3db8a23aed197b5a029c2bd05fa8a7a1e83eecf49e3c"
+              ],
+              "expected_digest": "44611fa4e64fc2d16704405875b8ea1092ff4d8bc6b1e620973e07e3a8ada99e",
+              "gate_requirement": {
+                "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                "gate_id": "GATE-M1A",
+                "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+              },
+              "goal_ref": {
+                "content_digest": "620cc30704249bfa2edac9210bbc7771cc69d9d819698ebdf23a7dca51c22189",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "independence": {
+                "evidence_store": "fixture",
+                "host": "local",
+                "implementation_actor_id": "ACTOR-IMPLEMENTER",
+                "missing_dimensions": [],
+                "model_family": "gpt-family",
+                "provider": "openai",
+                "session": "fixture",
+                "verifier_actor_id": "VERIFIER-TERRA"
+              },
+              "limitation_digests": [],
+              "observation_digest": "2b28482f574bd6ba1336d7ab15b3bef4b83b3c01c73606002b51bc51139de79e",
+              "plan_ref": {
+                "content_digest": "838d00141cc65eba0ee28b0b62ac1f0910272f34abd5eeca7ca811bd3ee3897a",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "procedure_version": 1,
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "task_ref": {
+                "content_digest": "fe7c9c16298b00dc2ac69293f72ea327c751c15d5821f961f86688323bc97d74",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "work_packet_ref": {
+                "content_digest": "d120d1e76dcdbaf73bd476c7df67ac24233f466feeeb8e16bbbcb2f7406126e2",
+                "id": "PACKET-6bc7faf8c82e2a9cb1a1df7f67bd2ef6",
+                "object_type": "work-packet",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-gate-result-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 9,
+          "state_delta_digest": "e64a61f6c9e87323cf5ffc078aec5ceb09b021f28ed26035d378e3508d68dadd",
+          "stream_id": "STREAM-M1A"
+        }
+      ],
+      "initial_receipts": [
+        {
+          "command_digest": "10f406d088d6eb4b80c089f358e6fb7d015912d9bf4a873fed2ed907c1247e9a",
+          "command_id": "CMD-F-M1A-011-downgrade-01",
+          "content_digest": "d9c86cd9e2092d3f2e3bfec89f43a8e70cf6ee4380184f220335236fb2633ff2",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-011-downgrade-01-0001"
+          ],
+          "first_event_sequence": 1,
+          "last_event_sequence": 1,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-011-downgrade-01",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "44262062e0de89659024276383fa054bea3c2f4894ab6cf4c770f87335591471",
+          "state_before_digest": "f858baa16245c716e0d4caec0b7a6020d80c77a1b6173d749a25573f661f75de",
+          "witness": null
+        },
+        {
+          "command_digest": "2e269b9c5e78f561c06fa9dfa424e995cec8a6cd6e93d0d0eeea072df58c1708",
+          "command_id": "CMD-F-M1A-011-downgrade-02",
+          "content_digest": "3cf718ee23ae9534e56e37bf70494d3e21afc6ddcc9671c800540270c9dbd428",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-011-downgrade-02-0001"
+          ],
+          "first_event_sequence": 2,
+          "last_event_sequence": 2,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-011-downgrade-02",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "8324fcba46dfd64a993b3bb55bccb757315b7415702a9a04695d7a5b05d8e1ba",
+          "state_before_digest": "44262062e0de89659024276383fa054bea3c2f4894ab6cf4c770f87335591471",
+          "witness": null
+        },
+        {
+          "command_digest": "3e8b228db86d56f56383acf18b84a2f47833224c8e7d4a1bdb83d5ec718fc42c",
+          "command_id": "CMD-F-M1A-011-downgrade-03",
+          "content_digest": "35f93923cf1f72005b4e640f38fa6b795012546d60bde3c1c630333c63ddb88f",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-011-downgrade-03-0001"
+          ],
+          "first_event_sequence": 3,
+          "last_event_sequence": 3,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-011-downgrade-03",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "ec9873cb820447829ef4705ebb4ebe506264f16a2491ae073838c241750472ae",
+          "state_before_digest": "8324fcba46dfd64a993b3bb55bccb757315b7415702a9a04695d7a5b05d8e1ba",
+          "witness": null
+        },
+        {
+          "command_digest": "e257c2c1ccf280f964b20508b5c82ec3f81a7b59ba54d9aae2a1d4a6582fc86f",
+          "command_id": "CMD-F-M1A-011-downgrade-04",
+          "content_digest": "329dfba157d14e9930c1ac8087ed38e90fa1548c0b868856b55b7840ee67ae28",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-011-downgrade-04-0001"
+          ],
+          "first_event_sequence": 4,
+          "last_event_sequence": 4,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-011-downgrade-04",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "7b455a7c40bb00c63df9939bcb99ea745aa6f3395dbc5b75cb54613f47ffb4b4",
+          "state_before_digest": "ec9873cb820447829ef4705ebb4ebe506264f16a2491ae073838c241750472ae",
+          "witness": null
+        },
+        {
+          "command_digest": "5a9399547209e5cb13e4f7ac401a7a9202ea3b14cdf100e015cffe2e09da435e",
+          "command_id": "CMD-F-M1A-011-downgrade-05",
+          "content_digest": "1846be2a2dd74657bddd131a8e35ef00f25cecbcf7ae1fe96810a9df0d1d81ec",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-011-downgrade-05-0001"
+          ],
+          "first_event_sequence": 5,
+          "last_event_sequence": 5,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-011-downgrade-05",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "c141300d634afc8fce0e54b2e7dd7614e007924083d0a0fcfdee0a1bc29d4cf6",
+          "state_before_digest": "7b455a7c40bb00c63df9939bcb99ea745aa6f3395dbc5b75cb54613f47ffb4b4",
+          "witness": null
+        },
+        {
+          "command_digest": "db2820ae1bdd66b2aa181b243389e11e56c2a708d8c470dc9c9f7cd4a0ea71b4",
+          "command_id": "CMD-F-M1A-011-downgrade-06",
+          "content_digest": "e07e7f313159fa22e293a5221511287f1ed764e156817c98e3e2ee3c98e7f2ac",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-011-downgrade-06-0001"
+          ],
+          "first_event_sequence": 6,
+          "last_event_sequence": 6,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-011-downgrade-06",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "09c2c6e072a36cf9031e71af064e9d57904b0e49665181df15a6fd4d8976624c",
+          "state_before_digest": "c141300d634afc8fce0e54b2e7dd7614e007924083d0a0fcfdee0a1bc29d4cf6",
+          "witness": null
+        },
+        {
+          "command_digest": "f5f5e2170fbdf76bb5a37360e75bd5a4ac824bfb996331f4b27fd88f397efdab",
+          "command_id": "CMD-F-M1A-011-downgrade-07",
+          "content_digest": "d2c9049b519ade240dc3c31e12b7c5749c827816088abb01b7c240a1fb3ad409",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-011-downgrade-07-0001"
+          ],
+          "first_event_sequence": 7,
+          "last_event_sequence": 7,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-011-downgrade-07",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "4357680117e3eabc1ae0ef89318d03c30f7494b42672132c0e4bba9b1a8a0717",
+          "state_before_digest": "09c2c6e072a36cf9031e71af064e9d57904b0e49665181df15a6fd4d8976624c",
+          "witness": null
+        },
+        {
+          "command_digest": "7fb7a11e092661bf5417fd1b6182abb3c3cfc3d4be2851f296712d5a7018664a",
+          "command_id": "CMD-F-M1A-011-downgrade-08",
+          "content_digest": "7924da1058b3a165d58225f4225cecb56dc07dbeefebd18addaf64e8cbc49c1a",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-011-downgrade-08-0001"
+          ],
+          "first_event_sequence": 8,
+          "last_event_sequence": 8,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-011-downgrade-08",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "83e3780a978cd40e509bb9d4a0d5b6b1aaacf725ba9b704d95dc0ad0c55c40d3",
+          "state_before_digest": "4357680117e3eabc1ae0ef89318d03c30f7494b42672132c0e4bba9b1a8a0717",
+          "witness": null
+        },
+        {
+          "command_digest": "4c3e54c6436ce661a001681e15b632b3ccecbd1092aacca25e58274a098db3e5",
+          "command_id": "CMD-F-M1A-011-downgrade-09",
+          "content_digest": "ddafabb1390d175d424bd9d3051d609b87c6fd1b5cfa6611cc9ba94600bf21b6",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-011-downgrade-09-0001"
+          ],
+          "first_event_sequence": 9,
+          "last_event_sequence": 9,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-011-downgrade-09",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "49ca6cfddf871181ca83484c3666887951d3bb50c1c6e8759d70a6a5ff266823",
+          "state_before_digest": "83e3780a978cd40e509bb9d4a0d5b6b1aaacf725ba9b704d95dc0ad0c55c40d3",
+          "witness": null
+        }
+      ],
+      "policy_fixtures": [
+        {
+          "accepted_evidence_types": [],
+          "account_class_ids": [],
+          "allowed_command_types": [
+            "accept-goal-spec",
+            "amend-goal-spec",
+            "apply-pause",
+            "derive-work-packet",
+            "propose-plan-revision",
+            "propose-replan",
+            "propose-retry",
+            "raise-blocker",
+            "raise-escalation",
+            "record-capacity-observation",
+            "record-checkpoint",
+            "record-effect-observation",
+            "record-owner-intent",
+            "record-owner-verifier-exception",
+            "replace-executive-lease",
+            "replace-route",
+            "replace-work-lease",
+            "reserve-budget",
+            "start-arm-run",
+            "submit-gate-result",
+            "submit-plan-verifier-decision",
+            "submit-worker-result"
+          ],
+          "allowed_roles": [
+            "arm",
+            "head",
+            "kernel-fixture-gate",
+            "owner",
+            "verifier",
+            "worker"
+          ],
+          "allowed_spend_classes": [],
+          "capacity_pool_ids": [],
+          "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+          "egress_at_most_edges": [],
+          "egress_class_ids": [],
+          "failure_capability_requirements": [],
+          "operative_pause_mode": "current-immediate",
+          "owner_verifier_exception_allowed": false,
+          "policy_id": "POLICY-AUTHORITY",
+          "policy_kind": "authority",
+          "policy_schema_version": "m1a-policy-fixture-1",
+          "policy_version": 1,
+          "privacy_at_most_edges": [],
+          "privacy_class_ids": [],
+          "representable_future_pause_modes": [],
+          "required_verifier_dimensions": [],
+          "retry_maximum": 0,
+          "route_ids": []
+        },
+        {
+          "accepted_evidence_types": [],
+          "account_class_ids": [],
+          "allowed_command_types": [],
+          "allowed_roles": [],
+          "allowed_spend_classes": [],
+          "capacity_pool_ids": [],
+          "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+          "egress_at_most_edges": [],
+          "egress_class_ids": [],
+          "failure_capability_requirements": [],
+          "operative_pause_mode": "current-immediate",
+          "owner_verifier_exception_allowed": true,
+          "policy_id": "POLICY-CONSTITUTION",
+          "policy_kind": "constitution",
+          "policy_schema_version": "m1a-policy-fixture-1",
+          "policy_version": 1,
+          "privacy_at_most_edges": [],
+          "privacy_class_ids": [],
+          "representable_future_pause_modes": [],
+          "required_verifier_dimensions": [],
+          "retry_maximum": 0,
+          "route_ids": []
+        },
+        {
+          "accepted_evidence_types": [
+            {
+              "evidence_types": [
+                "fixture-observation",
+                "gate-output"
+              ],
+              "failure_id": "FAIL-GATE"
+            }
+          ],
+          "account_class_ids": [
+            "ACCOUNT-INCLUDED"
+          ],
+          "allowed_command_types": [],
+          "allowed_roles": [],
+          "allowed_spend_classes": [
+            "included",
+            "none"
+          ],
+          "capacity_pool_ids": [
+            "CAPACITY-INCLUDED"
+          ],
+          "content_digest": "4a037b3d831de1695d49e94bb6f135ff8fa5ccecbde7e611db19fdd6622bf61d",
+          "egress_at_most_edges": [],
+          "egress_class_ids": [],
+          "failure_capability_requirements": [
+            {
+              "capability_ids": [
+                "CAPABILITY-REPAIR"
+              ],
+              "failure_id": "FAIL-GATE"
+            }
+          ],
+          "operative_pause_mode": "current-immediate",
+          "owner_verifier_exception_allowed": false,
+          "policy_id": "POLICY-NOVELTY",
+          "policy_kind": "novelty",
+          "policy_schema_version": "m1a-policy-fixture-1",
+          "policy_version": 1,
+          "privacy_at_most_edges": [],
+          "privacy_class_ids": [],
+          "representable_future_pause_modes": [],
+          "required_verifier_dimensions": [],
+          "retry_maximum": 0,
+          "route_ids": [
+            "ROUTE-INCLUDED",
+            "ROUTE-ZERO"
+          ]
+        },
+        {
+          "accepted_evidence_types": [],
+          "account_class_ids": [],
+          "allowed_command_types": [],
+          "allowed_roles": [],
+          "allowed_spend_classes": [],
+          "capacity_pool_ids": [],
+          "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
+          "egress_at_most_edges": [],
+          "egress_class_ids": [],
+          "failure_capability_requirements": [],
+          "operative_pause_mode": "current-immediate",
+          "owner_verifier_exception_allowed": false,
+          "policy_id": "POLICY-PAUSE",
+          "policy_kind": "pause",
+          "policy_schema_version": "m1a-policy-fixture-1",
+          "policy_version": 1,
+          "privacy_at_most_edges": [],
+          "privacy_class_ids": [],
+          "representable_future_pause_modes": [
+            "checkpoint",
+            "drain",
+            "interrupt"
+          ],
+          "required_verifier_dimensions": [],
+          "retry_maximum": 0,
+          "route_ids": []
+        },
+        {
+          "accepted_evidence_types": [],
+          "account_class_ids": [],
+          "allowed_command_types": [],
+          "allowed_roles": [],
+          "allowed_spend_classes": [],
+          "capacity_pool_ids": [],
+          "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+          "egress_at_most_edges": [
+            {
+              "greater_or_equal_id": "EGRESS-SYNTHETIC",
+              "less_or_equal_id": "EGRESS-NONE"
+            }
+          ],
+          "egress_class_ids": [
+            "EGRESS-NONE",
+            "EGRESS-SYNTHETIC"
+          ],
+          "failure_capability_requirements": [],
+          "operative_pause_mode": "current-immediate",
+          "owner_verifier_exception_allowed": false,
+          "policy_id": "POLICY-PRIVACY",
+          "policy_kind": "privacy-egress",
+          "policy_schema_version": "m1a-policy-fixture-1",
+          "policy_version": 1,
+          "privacy_at_most_edges": [
+            {
+              "greater_or_equal_id": "PRIVACY-SYNTHETIC",
+              "less_or_equal_id": "PRIVACY-PUBLIC"
+            }
+          ],
+          "privacy_class_ids": [
+            "PRIVACY-PUBLIC",
+            "PRIVACY-SYNTHETIC"
+          ],
+          "representable_future_pause_modes": [],
+          "required_verifier_dimensions": [],
+          "retry_maximum": 0,
+          "route_ids": []
+        },
+        {
+          "accepted_evidence_types": [],
+          "account_class_ids": [],
+          "allowed_command_types": [],
+          "allowed_roles": [],
+          "allowed_spend_classes": [],
+          "capacity_pool_ids": [],
+          "content_digest": "b395609880d404635c18a72b0c507218e2e3b611874e5c1257503ad8839f8bb4",
+          "egress_at_most_edges": [],
+          "egress_class_ids": [],
+          "failure_capability_requirements": [],
+          "operative_pause_mode": "current-immediate",
+          "owner_verifier_exception_allowed": false,
+          "policy_id": "POLICY-RETRY",
+          "policy_kind": "retry",
+          "policy_schema_version": "m1a-policy-fixture-1",
+          "policy_version": 1,
+          "privacy_at_most_edges": [],
+          "privacy_class_ids": [],
+          "representable_future_pause_modes": [],
+          "required_verifier_dimensions": [],
+          "retry_maximum": 2,
+          "route_ids": []
+        },
+        {
+          "accepted_evidence_types": [],
+          "account_class_ids": [
+            "ACCOUNT-INCLUDED"
+          ],
+          "allowed_command_types": [],
+          "allowed_roles": [],
+          "allowed_spend_classes": [
+            "included",
+            "none"
+          ],
+          "capacity_pool_ids": [
+            "CAPACITY-INCLUDED"
+          ],
+          "content_digest": "90fb3a36b6529d0bb6e000e5fd3a1b7035bc7a41d626690c565976fcb716b898",
+          "egress_at_most_edges": [],
+          "egress_class_ids": [],
+          "failure_capability_requirements": [],
+          "operative_pause_mode": "current-immediate",
+          "owner_verifier_exception_allowed": false,
+          "policy_id": "POLICY-ROUTE",
+          "policy_kind": "route-envelope",
+          "policy_schema_version": "m1a-policy-fixture-1",
+          "policy_version": 1,
+          "privacy_at_most_edges": [],
+          "privacy_class_ids": [],
+          "representable_future_pause_modes": [],
+          "required_verifier_dimensions": [],
+          "retry_maximum": 0,
+          "route_ids": [
+            "ROUTE-INCLUDED",
+            "ROUTE-ZERO"
+          ]
+        },
+        {
+          "accepted_evidence_types": [],
+          "account_class_ids": [],
+          "allowed_command_types": [],
+          "allowed_roles": [],
+          "allowed_spend_classes": [],
+          "capacity_pool_ids": [],
+          "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+          "egress_at_most_edges": [],
+          "egress_class_ids": [],
+          "failure_capability_requirements": [],
+          "operative_pause_mode": "current-immediate",
+          "owner_verifier_exception_allowed": true,
+          "policy_id": "POLICY-VERIFIER",
+          "policy_kind": "verifier",
+          "policy_schema_version": "m1a-policy-fixture-1",
+          "policy_version": 1,
+          "privacy_at_most_edges": [],
+          "privacy_class_ids": [],
+          "representable_future_pause_modes": [],
+          "required_verifier_dimensions": [
+            "actor",
+            "evidence-store",
+            "host",
+            "model-family",
+            "provider"
+          ],
+          "retry_maximum": 0,
+          "route_ids": []
+        }
+      ],
+      "replay_cases": []
+    }
+  ],
+  "description": "Literal deterministic oracle bundle F-M1A-011.",
+  "fixture_id": "F-M1A-011",
+  "fixture_schema_version": "m1a-fixture-1"
+}
