@@ -402,3 +402,10 @@ observation. Error precedence performs digest/idempotency journal lookup before 
 authority checks so a reused ID with different bytes remains `E-IDEMPOTENCY-CONFLICT`.
 Falsifier: an untested transition admits under PAUSE, a future mode changes behavior, retry skips
 an attempt, or a replacement route uses capacity evidence for another route.
+
+Construction decision `CD-M1A-016`: an admitted `propose-replan` carries the replacement route
+assignments and task-bound budget reservations, and `ReplanAdmitted` inserts them atomically before
+the replacement `PlanRevisionAdmitted` event. This closes the already-specified
+`narrowed_binding_digest` operand without an ambient assignment lookup or a reference to a budget
+reservation bound to the retired task. Falsifier: the digest cannot be recomputed solely from the
+replacement task plus records in the same accepted event group.

@@ -472,7 +472,7 @@ Each command payload is exactly one proposed `DomainRecord@1` except these close
 | `replace-work-lease` | `{old_lease_ref: LeaseRef@1, new_lease: DomainRecord@1<work-lease>}` |
 | `replace-executive-lease` | `{old_lease_ref: LeaseRef@1, new_lease: DomainRecord@1<executive-lease>}` |
 | `replace-route` | `{old_route_ref: ObjectRef@1, new_route: DomainRecord@1<route-assignment>, checkpoint_ref: ObjectRef@1, expected_new_packet_digest: Digest}` |
-| `propose-replan` | `{decision: DomainRecord@1<replan-decision>, new_plan_revision: DomainRecord@1<plan-revision>, transition: DomainRecord@1<plan-transition>, task_nodes: sorted DomainRecord@1<task-node> by id}` |
+| `propose-replan` | `{decision: DomainRecord@1<replan-decision>, new_plan_revision: DomainRecord@1<plan-revision>, transition: DomainRecord@1<plan-transition>, task_nodes: sorted DomainRecord@1<task-node> by id, route_assignments: sorted DomainRecord@1<route-assignment> by id, budget_reservations: sorted DomainRecord@1<budget-reservation> by id}` |
 
 For every M1A command, `payload_digest=D(payload)` and `candidate_digest=payload_digest` exactly.
 The matching `FixtureAuthorityAttestation@1.candidate_digest` MUST equal that command field. M1A
@@ -518,7 +518,7 @@ Each event's exact primary type is:
 | `WorkerResultRecorded` | `worker-result` | none |
 | `GateResultRecorded` | `gate-result` | none |
 | `RetryAdmitted` | `retry-decision` | none; its immediately following `WorkPacketDerived` event carries the new packet records |
-| `ReplanAdmitted` | `replan-decision` | none; its immediately following `PlanRevisionAdmitted` event carries plan records |
+| `ReplanAdmitted` | `replan-decision` | the complete replacement task-bound `route-assignment` and `budget-reservation` sets; its immediately following `PlanRevisionAdmitted` event carries plan records |
 | `BlockerRaised` | `blocker` | none |
 | `EscalationRaised` | `escalation` | none |
 | `PlanVerifierDecisionRecorded` | `plan-verifier-decision` | none |
@@ -555,7 +555,7 @@ The remaining derived digests have exactly these operands:
   privacy_policy_ref,egress_policy_ref,route_assignment_ref,budget_reservation_ref,
   verifier_policy_ref,constitution_policy_ref})` loaded from the prior WorkPacket;
 - `narrowed_binding_digest` is `D` of those same named fields loaded from the replacement task and
-  its admitted assignments; and
+  the route assignment and budget reservation admitted in the same `ReplanAdmitted` event; and
 - `budget_snapshot_digest`, `route_snapshot_digest` and `lease_epoch_digest` are `D` of the sorted
   exact matching reservation refs, assignment refs and lease refs in the checkpoint projection.
 

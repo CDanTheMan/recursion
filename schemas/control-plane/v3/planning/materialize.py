@@ -1134,6 +1134,8 @@ def build_schema() -> dict:
         ref("domain_record"), maximum=2048, sorted_by=["object_type", "id", "version"]
     )
     task_record_array = array(ref("task_node_record"), sorted_by="id")
+    route_record_array = array(ref("route_assignment_record"), minimum=1, sorted_by="id")
+    budget_record_array = array(ref("budget_reservation_record"), minimum=1, sorted_by="id")
     command_payloads: dict[str, dict] = {
         "record-owner-intent": ref("owner_intent_record"),
         "accept-goal-spec": ref("goal_spec_record"),
@@ -1194,6 +1196,8 @@ def build_schema() -> dict:
                 "new_plan_revision": ref("plan_revision_record"),
                 "transition": ref("plan_transition_record"),
                 "task_nodes": task_record_array,
+                "route_assignments": route_record_array,
+                "budget_reservations": budget_record_array,
             }
         ),
         "raise-blocker": ref("blocker_record"),
@@ -1333,6 +1337,25 @@ def build_schema() -> dict:
         "items": False,
     }
     packet_related = {"oneOf": [no_related, initial_packet_related]}
+    replan_related = {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 512,
+        "uniqueItems": True,
+        "items": {
+            "oneOf": [ref("route_assignment_record"), ref("budget_reservation_record")]
+        },
+        "contains": ref("route_assignment_record"),
+        "minContains": 1,
+        "x-sortedBy": ["object_type", "id", "version"],
+        "x-uniqueBy": ["object_type", "id", "version"],
+        "allOf": [
+            {
+                "contains": ref("budget_reservation_record"),
+                "minContains": 1,
+            }
+        ],
+    }
     event_map = {
         "OwnerIntentRecorded": ("owner_intent_record", no_related),
         "GoalSpecAccepted": ("goal_spec_record", no_related),
@@ -1350,7 +1373,7 @@ def build_schema() -> dict:
         "WorkerResultRecorded": ("worker_result_record", no_related),
         "GateResultRecorded": ("gate_result_record", no_related),
         "RetryAdmitted": ("retry_decision_record", no_related),
-        "ReplanAdmitted": ("replan_decision_record", no_related),
+        "ReplanAdmitted": ("replan_decision_record", replan_related),
         "BlockerRaised": ("blocker_record", no_related),
         "EscalationRaised": ("escalation_record", no_related),
         "PlanVerifierDecisionRecorded": ("plan_verifier_decision_record", no_related),

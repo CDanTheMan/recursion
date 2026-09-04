@@ -8010,7 +8010,9 @@
             "decision",
             "new_plan_revision",
             "transition",
-            "task_nodes"
+            "task_nodes",
+            "route_assignments",
+            "budget_reservations"
           ],
           "properties": {
             "decision": {
@@ -8028,6 +8030,28 @@
               "maxItems": 256,
               "items": {
                 "$ref": "#/$defs/task_node_record"
+              },
+              "uniqueItems": true,
+              "x-sortedBy": "id",
+              "x-uniqueBy": "id"
+            },
+            "route_assignments": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 256,
+              "items": {
+                "$ref": "#/$defs/route_assignment_record"
+              },
+              "uniqueItems": true,
+              "x-sortedBy": "id",
+              "x-uniqueBy": "id"
+            },
+            "budget_reservations": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 256,
+              "items": {
+                "$ref": "#/$defs/budget_reservation_record"
               },
               "uniqueItems": true,
               "x-sortedBy": "id",
@@ -9929,12 +9953,41 @@
         },
         "related_records": {
           "type": "array",
-          "minItems": 0,
-          "maxItems": 0,
+          "minItems": 2,
+          "maxItems": 512,
+          "uniqueItems": true,
           "items": {
-            "$ref": "#/$defs/domain_record"
+            "oneOf": [
+              {
+                "$ref": "#/$defs/route_assignment_record"
+              },
+              {
+                "$ref": "#/$defs/budget_reservation_record"
+              }
+            ]
           },
-          "uniqueItems": true
+          "contains": {
+            "$ref": "#/$defs/route_assignment_record"
+          },
+          "minContains": 1,
+          "x-sortedBy": [
+            "object_type",
+            "id",
+            "version"
+          ],
+          "x-uniqueBy": [
+            "object_type",
+            "id",
+            "version"
+          ],
+          "allOf": [
+            {
+              "contains": {
+                "$ref": "#/$defs/budget_reservation_record"
+              },
+              "minContains": 1
+            }
+          ]
         },
         "state_delta_digest": {
           "$ref": "#/$defs/digest"

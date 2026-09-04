@@ -355,6 +355,14 @@ class SchemaContractTests(unittest.TestCase):
                     ],
                     key=lambda record: (record["object_type"], record["id"], record["version"]),
                 )
+            elif event["event_type"] == "ReplanAdmitted":
+                event["related_records"] = sorted(
+                    [
+                        self.factory.make({"$ref": "#/$defs/route_assignment_record"}),
+                        self.factory.make({"$ref": "#/$defs/budget_reservation_record"}),
+                    ],
+                    key=lambda record: (record["object_type"], record["id"], record["version"]),
+                )
             with self.subTest(name=name):
                 self.assert_valid(name, event)
 
