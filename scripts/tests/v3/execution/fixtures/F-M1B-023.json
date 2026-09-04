@@ -1,0 +1,47 @@
+{
+  "expected": {
+    "actor_create_count": 0,
+    "cursor_unit": "utf8-byte",
+    "effect_count": 0,
+    "final_cursor": 3,
+    "launch_count": 0,
+    "model_turn_count": 0,
+    "reasons": [],
+    "requires_reset": false,
+    "status": "accepted",
+    "type": "BrokerTraceDecision@1"
+  },
+  "fixture_id": "F-M1B-023",
+  "input": {
+    "actor_create_count": 0,
+    "current_input_lease": "lease:input:2",
+    "current_resize_lease": "lease:resize:2",
+    "effect_count": 0,
+    "initial_daemon_epoch": 2,
+    "initial_process_epoch": 2,
+    "launch_count": 0,
+    "messages": [
+      {
+        "cursor": 3,
+        "cursor_unit": "utf8-byte",
+        "daemon_epoch": 2,
+        "event_class": "output",
+        "payload_base64": "4piD",
+        "payload_untrusted": true,
+        "process_id": "process-a",
+        "protocol_version": "m1b-broker/1",
+        "stream_id": "stream-a",
+        "type": "EVENT"
+      }
+    ],
+    "model_turn_count": 0,
+    "queue_limit_bytes": 64,
+    "queue_limit_events": 4,
+    "type": "BrokerTraceInput@1"
+  },
+  "purpose": "Raw output cursor counts UTF-8 bytes rather than characters.",
+  "source_requirement_ids": [
+    "m1b-broker-cursor"
+  ],
+  "type": "BrokerFixtureBundle@1"
+}

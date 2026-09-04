@@ -1,0 +1,104 @@
+{
+  "expected": {
+    "reasons": [
+      "containment-unsupported"
+    ],
+    "status": "blocked",
+    "type": "ProcessAdmissionDecision@1"
+  },
+  "fixture_id": "F-M1B-019",
+  "input": {
+    "descriptor": {
+      "cancellation_capabilities": [
+        {
+          "name": "observe-exit",
+          "state": "supported",
+          "type": "ProcessCancellationCapabilityState@1"
+        },
+        {
+          "name": "tree-terminate",
+          "state": "supported",
+          "type": "ProcessCancellationCapabilityState@1"
+        }
+      ],
+      "containment_capabilities": [
+        {
+          "name": "breakaway-prevention",
+          "state": "supported",
+          "type": "ProcessContainmentCapabilityState@1"
+        },
+        {
+          "name": "cgroup-v2",
+          "state": "unsupported",
+          "type": "ProcessContainmentCapabilityState@1"
+        },
+        {
+          "name": "descendant-capture",
+          "state": "supported",
+          "type": "ProcessContainmentCapabilityState@1"
+        }
+      ],
+      "descriptor_digest": "sha256:7488abbe015e4681da284cb1e5e35f565db4435139d5ee499e450cfca1845d24",
+      "eligibility_state": "verified-current",
+      "evidence": {
+        "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "expires_at": null,
+        "observed_at": "2026-09-04T00:00:00Z",
+        "source_ids": [
+          "src-v3-023"
+        ],
+        "type": "EvidenceBinding@1"
+      },
+      "host_id": "host-linux",
+      "id": "process-profile-linux",
+      "platform": "linux",
+      "platform_version": "synthetic-1",
+      "transport_capabilities": [
+        {
+          "name": "pty",
+          "state": "supported",
+          "type": "ProcessTransportCapabilityState@1"
+        }
+      ],
+      "type": "ProcessCapabilityDescriptor@1"
+    },
+    "requirement": {
+      "actor_id": "actor-a",
+      "attach_allowed": true,
+      "host_id": "host-linux",
+      "id": "process-requirement-linux",
+      "max_buffer_bytes": 65536,
+      "operative_pause_policy": "current-immediate",
+      "platform": "linux",
+      "representable_future_pause_policies": [
+        "checkpoint",
+        "drain",
+        "emergency",
+        "interrupt"
+      ],
+      "required_cancellation": [
+        "observe-exit",
+        "tree-terminate"
+      ],
+      "required_containment": [
+        "cgroup-v2",
+        "descendant-capture"
+      ],
+      "required_transports": [
+        "pty"
+      ],
+      "route_descriptor_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "stdio_encoding": "utf-8",
+      "task_id": "task-a",
+      "type": "ProcessRequirement@1",
+      "work_packet_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "type": "ProcessAdmissionInput@1"
+  },
+  "purpose": "PTY evidence cannot substitute for required cgroup containment.",
+  "source_requirement_ids": [
+    "m1b-process-capability"
+  ],
+  "termination_observation": null,
+  "type": "ProcessFixtureBundle@1"
+}

@@ -1,0 +1,280 @@
+{
+  "expected": {
+    "candidate_evaluations": [
+      {
+        "eligible": false,
+        "reasons": [
+          "capability-unsupported"
+        ],
+        "route_id": "route-b",
+        "type": "RouteCandidateEvaluation@1"
+      }
+    ],
+    "selected_route_id": null,
+    "status": "blocked",
+    "type": "RouteResolutionDecision@1"
+  },
+  "fixture_id": "F-M1B-007",
+  "input": {
+    "catalog": {
+      "engines": [
+        {
+          "capabilities": [
+            "chat",
+            "tools"
+          ],
+          "id": "engine-a",
+          "protocol_versions": [
+            "v1"
+          ],
+          "type": "EngineDescriptor@1"
+        },
+        {
+          "capabilities": [
+            "chat"
+          ],
+          "id": "engine-b",
+          "protocol_versions": [
+            "v1"
+          ],
+          "type": "EngineDescriptor@1"
+        }
+      ],
+      "hosts": [
+        {
+          "capabilities": [
+            "local"
+          ],
+          "id": "host-a",
+          "platform": "windows",
+          "type": "HostDescriptor@1"
+        },
+        {
+          "capabilities": [
+            "remote"
+          ],
+          "id": "host-b",
+          "platform": "linux",
+          "type": "HostDescriptor@1"
+        }
+      ],
+      "models": [
+        {
+          "capabilities": [
+            "chat",
+            "tools"
+          ],
+          "id": "model-a",
+          "provider_id": "provider-a",
+          "reasoning_modes": [
+            "high"
+          ],
+          "type": "ModelDescriptor@1"
+        },
+        {
+          "capabilities": [
+            "chat"
+          ],
+          "id": "model-b",
+          "provider_id": "provider-b",
+          "reasoning_modes": [
+            "medium"
+          ],
+          "type": "ModelDescriptor@1"
+        }
+      ],
+      "pools": [
+        {
+          "account_ref": "account:a",
+          "billing_basis": "subscription",
+          "id": "pool-a",
+          "metered_limit_microunits": null,
+          "model_ids": [
+            "model-a"
+          ],
+          "remaining_units": 100,
+          "state": "available",
+          "type": "CapacityPoolDescriptor@1"
+        },
+        {
+          "account_ref": "account:b",
+          "billing_basis": "metered",
+          "id": "pool-b",
+          "metered_limit_microunits": 1000,
+          "model_ids": [
+            "model-b"
+          ],
+          "remaining_units": 100,
+          "state": "available",
+          "type": "CapacityPoolDescriptor@1"
+        }
+      ],
+      "providers": [
+        {
+          "endpoint_ids": [
+            "endpoint:a"
+          ],
+          "id": "provider-a",
+          "privacy_classes": [
+            "private",
+            "public"
+          ],
+          "type": "ProviderDescriptor@1"
+        },
+        {
+          "endpoint_ids": [
+            "endpoint:b"
+          ],
+          "id": "provider-b",
+          "privacy_classes": [
+            "public"
+          ],
+          "type": "ProviderDescriptor@1"
+        }
+      ],
+      "sandboxes": [
+        {
+          "allowed_destinations": [
+            "endpoint:a"
+          ],
+          "allowed_paths": [
+            "workspace:/repo"
+          ],
+          "capabilities": [
+            "network-allowlist",
+            "workspace-write"
+          ],
+          "filesystem_mode": "workspace-write",
+          "id": "sandbox-a",
+          "network_mode": "allowlist",
+          "process_mode": "isolated",
+          "type": "SandboxDescriptor@1"
+        },
+        {
+          "allowed_destinations": [
+            "endpoint:b"
+          ],
+          "allowed_paths": [
+            "workspace:/repo"
+          ],
+          "capabilities": [
+            "network-allowlist"
+          ],
+          "filesystem_mode": "read-only",
+          "id": "sandbox-b",
+          "network_mode": "allowlist",
+          "process_mode": "isolated",
+          "type": "SandboxDescriptor@1"
+        }
+      ],
+      "type": "RouteComponentCatalog@1"
+    },
+    "descriptors": [
+      {
+        "account_ref": "account:b",
+        "billing_control": "verified",
+        "capabilities": [
+          {
+            "name": "chat",
+            "state": "supported",
+            "type": "CapabilityState@1"
+          },
+          {
+            "name": "tools",
+            "state": "unsupported",
+            "type": "CapabilityState@1"
+          }
+        ],
+        "descriptor_digest": "sha256:8a766bbd3da70e4331a3d6ef2acd354d4c96e35027da08fc53fe8f1dd8b4eb09",
+        "egress_destinations": [
+          "endpoint:b"
+        ],
+        "eligibility_state": "verified-current",
+        "engine_id": "engine-b",
+        "evidence": {
+          "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "expires_at": null,
+          "observed_at": "2026-09-04T00:00:00Z",
+          "source_ids": [
+            "src-v3-001"
+          ],
+          "type": "EvidenceBinding@1"
+        },
+        "host_id": "host-b",
+        "id": "route-b",
+        "model_id": "model-b",
+        "pool_id": "pool-b",
+        "privacy_classes": [
+          "public"
+        ],
+        "provider_id": "provider-b",
+        "sandbox_id": "sandbox-b",
+        "type": "RouteCapabilityDescriptor@1"
+      }
+    ],
+    "policy": {
+      "authority_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "goal_spec_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "id": "route-policy",
+      "max_metered_microunits": 500,
+      "metered_authorized": true,
+      "pause_epoch": 0,
+      "permitted_account_refs": [
+        "account:a",
+        "account:b"
+      ],
+      "permitted_egress_destinations": [
+        "endpoint:a",
+        "endpoint:b"
+      ],
+      "permitted_host_ids": [
+        "host-a",
+        "host-b"
+      ],
+      "permitted_route_ids": [
+        "route-a",
+        "route-b"
+      ],
+      "policy_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "type": "RoutePolicyEnvelope@1"
+    },
+    "ranked_route_ids": [
+      "route-b"
+    ],
+    "requirement": {
+      "allowed_billing": [
+        "metered",
+        "subscription"
+      ],
+      "allowed_egress_destinations": [
+        "endpoint:a",
+        "endpoint:b"
+      ],
+      "allowed_host_ids": [
+        "host-a",
+        "host-b"
+      ],
+      "allowed_route_ids": [
+        "route-a",
+        "route-b"
+      ],
+      "id": "route-requirement",
+      "max_metered_microunits": 500,
+      "privacy_class": "public",
+      "required_capabilities": [
+        "chat",
+        "tools"
+      ],
+      "required_sandbox_capabilities": [
+        "network-allowlist"
+      ],
+      "type": "RouteRequirement@1"
+    },
+    "type": "RouteResolutionInput@1"
+  },
+  "purpose": "Unsupported required capability blocks with an exact reason.",
+  "source_requirement_ids": [
+    "m1b-route-capability"
+  ],
+  "type": "RouteFixtureBundle@1"
+}
