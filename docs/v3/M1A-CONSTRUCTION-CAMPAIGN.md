@@ -447,3 +447,15 @@ cases now carry exactly two plan-bound task records; the three refused graphs ar
 the two admitted graphs retain their distinct ordered-disjoint/read-read predicates. Schema,
 fixture-materialization and red-structure gates pass; the ordinary red gate still exits 1 only
 because M1A-03 is absent. M1A-03 remains blocked for same-adjudicator re-review.
+
+### PlanRevision 6 — exact F-M1A-022 task-reference fence
+
+TERRA-M1A-01's re-review of `1f794889db6451e6fbcf543df0db70cf420a7493` confirmed every
+graph predicate but returned `MATERIAL DISSENT` because the new topology assertion compared only
+task IDs. An in-memory stale `task_node_ref.content_digest` could therefore pass the structural
+gate. Construction decision `CD-M1A-018`: the F-M1A-022 gate compares the full set of
+`(object_type,id,version,content_digest)` tuples from submitted task records against the plan's
+ObjectRefs. The repair is frozen at `a5e281eb9dbadaaacc9396dac672162c17bc75b7` and changes no
+fixture bytes or canonical schema. Schema/materialization/red-structure gates pass, while the
+ordinary red gate retains its expected reducer-missing exit 1. M1A-03 remains blocked for
+same-adjudicator re-review.
