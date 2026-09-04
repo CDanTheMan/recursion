@@ -45,6 +45,10 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md) | Which harness, durable-runtime, context/cache, terminal, plugin/frontend, systems and evaluation mechanisms survived, and which experiments decide adoption? |
 | [M1A-WIRE-PROFILE.md](M1A-WIRE-PROFILE.md) | What exact M1A JSON field, nesting, bound, nullability, command/receipt/event and digest profile must future schemas implement? |
 | [M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md) | What closed command/event/error grammar and symbolic oracle must M1A freeze as literal red bundles after schemas and before reducer code? |
+| [M1B-EXECUTION-CONTRACTS.md](M1B-EXECUTION-CONTRACTS.md) | What inert route, plugin, process and broker semantics does M1B freeze without executing an adapter? |
+| [M1B-WIRE-PROFILE.md](M1B-WIRE-PROFILE.md) | What exact M1B JSON records, unions, bounds, nullability and reason alphabets must schemas implement? |
+| [M1B-FIXTURE-ORACLES.md](M1B-FIXTURE-ORACLES.md) | Which 24 sanitized route/plugin/process/broker outcomes form M1B's closed oracle? |
+| [M1B-CONSTRUCTION-CAMPAIGN.md](M1B-CONSTRUCTION-CAMPAIGN.md) | What Owner-authorized GoalSpec, DAG, boundaries, decisions and receipts govern M1B construction? |
 | [SOURCE-REGISTER.md](SOURCE-REGISTER.md) | Which consequential primary-source versions, revisions, locators, limits and expiry triggers ground the synthesis? |
 | [VALIDATION.md](VALIDATION.md) | What exact candidate-bound command validates claim IDs, stable sequences, links, privacy, diff scope and v2 regression? |
 | [EXECUTION-FABRIC.md](EXECUTION-FABRIC.md) | How are models, CLIs, subscriptions, hosts, and tasks resolved? |

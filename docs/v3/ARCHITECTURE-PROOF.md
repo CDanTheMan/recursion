@@ -252,13 +252,13 @@ command/event/error/digest grammar and symbolic expected sequences are in
 M1A-02 must freeze literal red bundles and obtain review before reducer code. It performs no
 provider call, terminal process, plugin execution, SQLite migration, publication, external effect,
 or Git mutation outside its own separately authorized future implementation task. M1B contains
-broader route, plugin, terminal, and scientific contracts; M1C contains runtime integration and
-durability.
+inert route, plugin, process and broker requirement contracts; M1C contains inert source/evidence,
+effect-reconciliation, publication and persistence/migration requirements. Runtime integration
+and durability begin only in later explicitly authorized milestones.
 
-M1A is documentation-ready for a separate owner-authorized construction task: the exact
-candidate-range gates and targeted Terra recheck passed. M1A-01 must materialize/review the
-strict schemas and M1A-02, not this campaign, creates executable fixture bundles before reducer
-code. M1A has not been executed. The standalone prompt is
+M1A completed its Owner-authorized local construction campaign and exact-candidate Terra
+adjudication before M1B began. Its terminal receipt is in
+[M1A-CONSTRUCTION-CAMPAIGN.md](M1A-CONSTRUCTION-CAMPAIGN.md). The standalone historical prompt is
 [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
 
 ## Source and decision discipline
