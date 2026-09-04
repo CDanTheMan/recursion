@@ -1,6 +1,6 @@
 ---
 title: M1A autonomous-planning construction campaign
-status: active-local-construction
+status: complete-local-construction
 last-updated: 2026-09-03
 ---
 
@@ -560,3 +560,71 @@ and equality, dependency-edge congruence with no self-edge, current PAUSE covera
 time/actor/command binding, retry attempt arithmetic, and identical complete amendment/replan
 disposition sets. Falsifier: any TERRA-M1A-02 probe mutates state, emits an event, trusts corrupt
 state or returns an untyped exception.
+
+### PlanRevision 9 — generalized wire-parity closure
+
+The bounded nine-falsifier repair was committed at
+`fff593bb05a4c7a8e4f19e5f55d4cf7be62969ba`. The same TERRA-M1A-02 verifier confirmed that all
+nine Revision 8 defects were closed, then returned a second `MATERIAL DISSENT`: re-sealed records
+with `id="x"` or an unknown Owner-intent `source_kind` passed the hand-written runtime validator;
+the broader scalar aliases, enums, bounds, nullable unions and sorted collections were not yet a
+generated-equivalent implementation of the frozen schema; and a reused command ID with a different
+valid payload returned `E-DIGEST-MISMATCH` rather than the prior-command identity conflict when it
+also carried its original expected state.
+
+Disposition:
+
+- Retained: the immutable GoalSpec, frozen schema and fixture corpus, all Revision 8 repairs and
+  every exact literal oracle outcome.
+- Invalidated: the completion candidacy of `fff593b...`; its nine-defect repair remains valid
+  implementation evidence.
+- Quarantined: permissive field-name-only validation and state-before-idempotency precedence.
+- Re-admitted: one bounded runtime-wire parity and precedence repair, its adversarial regressions,
+  both clean full-gate sweeps and exact-candidate TERRA re-adjudication.
+
+Construction decision `CD-M1A-024`: public kernel boundaries implement the frozen schema's scalar
+and composite constraints without reading the ambient schema at runtime. Validation covers exact
+ID/token/digest/resource grammars, integer and canonical-byte bounds, booleans and false-only
+fields, enums, nullable references/digests, sorted and keyed-unique collections, conditional
+record unions, event-related-record multiplicity, genesis, authority and policy fixtures, and all
+seven novelty variants across all 25 domain arms and 22 commands. The decision derives from the
+accepted wire profile, materialized schema and the verifier's re-sealed falsifiers; it adds only
+the standard-library regular-expression engine and preserves the static no-I/O boundary.
+Falsifier: a schema-invalid direct value reaches cross-record admission, emits an event, mutates
+state, escapes as a host exception, or a schema-valid arm is rejected by the runtime validator.
+
+Construction decision `CD-M1A-025`: after closed-structure and self-digest validation, admission
+resolves command identity before mutable expected-state, authority, lease or semantic checks.
+An exact `(command_id,command_digest)` returns its byte-identical supplied journal receipt; a reused
+ID with a different valid digest returns deterministic `E-IDEMPOTENCY-CONFLICT`; only a fresh ID
+continues to expected-state and policy validation. This ordering is the minimal rule that makes a
+historical identity stable as the projection advances without letting malformed commands claim an
+existing identity. Falsifier: changing current state or authority changes the result of an already
+seen valid command identity.
+
+### TERRA-M1A-02 final adjudication and terminal receipt
+
+The generalized repair is exact commit `fb0e04584a402b659560b64591706beb18082a72`.
+Before adjudication, the complete M1A gate set passed twice from clean state: schema and fixture
+materializers, 15 schema tests, 37 conformance paths with 267 commands and 253 events, 11 expected
+decode failures, 15 adversarial probes, 15 attenuation variants, 10 graph permutations, two pure
+repeats, 46 DAG candidates and static isolation over three production files and seven test files.
+The unchanged v2 contracts passed 16/16 and the complete v2 regression returned `ALL PASS`; one
+initial pre-adjudication concurrency-stress miss passed an isolated rerun and the subsequent full
+rerun and was not reproduced by TERRA. The frozen schema SHA-256 is
+`5a8fbacee5228b2617481a2f763fad30830a4fe6088def53c681211dd84d9fd7`; the frozen fixture-manifest
+SHA-256 remains `0f6f568a51238517fc4fd7863f25d0b1ebcd40c64b986044d4a30e2a76d59aba`.
+
+TERRA-M1A-02 (`gpt-5.6-terra`, `xhigh`) returned signed `PASS` with confidence 0.93 on that exact
+clean candidate. It began and ended at the named SHA with a clean worktree, performed read-only
+verification, ran both complete M1A sweeps and legacy compatibility gates, independently exercised
+25 domain, 22 command, 27 event and seven novelty arms, reconfirmed all nine Revision 8 defects,
+tested invalid IDs/enums/boolean aliases/UTF-8 and count bounds/sorted sets/conditional nullability,
+and confirmed conflict-before-stale-state precedence, receipt-journal recovery and checkpoint
+failure closure. It found no remaining decisive falsifier or contradictory evidence.
+
+M1A-07 and this local construction campaign are terminal for exact candidate `fb0e045...`. The
+result is same-family, synthetic and in-memory. It is not evidence of external-effect safety,
+production durability, cross-family independence, architecture superiority, migration readiness,
+deployment or an operative v3 constitution. Publication, push, merge and deployment remain outside
+this campaign.

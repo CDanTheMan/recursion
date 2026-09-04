@@ -101,9 +101,9 @@ The reconstructed [architecture proof](ARCHITECTURE-PROOF.md) and persistent
 [R1-R17 matrix](R1-R17-EVIDENCE.md) use eight Luna discovery packets and two targeted
 same-family Terra adjudications. No external-family packet was used or recovered. They give a
 conditional go only for the planning schema/validator/synthetic-fixture/in-memory replay
-[M1A](M1A-AUTONOMOUS-PLANNING.md). Its exact wire/profile/oracle candidate passed the campaign's
-deterministic gates and targeted same-family Terra recheck; construction still requires a
-separate Owner-approved task.
+[M1A](M1A-AUTONOMOUS-PLANNING.md). Its Owner-authorized local construction campaign implemented
+the pure schema/validator/synthetic-fixture/in-memory replay slice, passed the deterministic gates
+twice and received exact-candidate same-family Terra PASS.
 Current constitutional conflicts and remaining Lucas decisions are recorded in
 [DECISION-REGISTER.md](DECISION-REGISTER.md). No runtime implementation, migration, provider
 change, terminal process, private canary, publication or deployment is authorized by this suite.
@@ -116,5 +116,8 @@ Recursion's sole canonical harness/control-plane ownership in `OR-018` and `OR-0
 [constitutional amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md) close the next
 formal-model, language, storage/IPC, process, plugin/frontend, cache/context, evaluation and
 release questions. The amendment is not operative and no runtime is proved. The Owner-authorized
-M1A campaign is now executing M1A-01 strict schema materialization followed by M1A-02 literal red
-fixtures; later implementation choices remain evidence gates.
+M1A campaign is complete locally at exact candidate
+`fb0e04584a402b659560b64591706beb18082a72`; its signed receipt and limitations are recorded in
+[M1A-CONSTRUCTION-CAMPAIGN.md](M1A-CONSTRUCTION-CAMPAIGN.md). No production runtime, migration,
+provider change, terminal process, private canary, publication or deployment is authorized or
+proved by that result.
