@@ -294,6 +294,9 @@
             "audit-record"
           ]
         },
+        "artifact_id": {
+          "$ref": "#/$defs/EntityId"
+        },
         "contains_content": {
           "type": "boolean"
         },
@@ -345,6 +348,7 @@
       "required": [
         "type",
         "tombstone_id",
+        "artifact_id",
         "artifact_class",
         "policy_digest",
         "responsible_component",

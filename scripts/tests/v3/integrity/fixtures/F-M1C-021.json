@@ -47,6 +47,7 @@
     "privacy_class": "private",
     "tombstone": {
       "artifact_class": "raw-session",
+      "artifact_id": "artifact:one",
       "contains_content": false,
       "contains_global_content_digest": false,
       "contains_secret": false,
@@ -76,7 +77,7 @@
       "policy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "requested_at": "2026-09-04T12:00:00Z",
       "responsible_component": "component:retention",
-      "tombstone_digest": "sha256:05ac436832b90cc86dbbd50f82a3d62e68754841fceea8096d05d059d3a1186a",
+      "tombstone_digest": "sha256:6d84f8995a4222e386f369f7c0f7b5908e7979280de5adbecc781b1633032571",
       "tombstone_id": "tombstone:one",
       "type": "DeletionTombstone@1"
     },

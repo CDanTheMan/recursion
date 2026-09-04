@@ -253,6 +253,8 @@ def _evidence_decision(validator: Any, enabled: bool, instance: Any, schema: dic
     if status == "unknown" and (accepted or "support-insufficient" not in reasons):
         yield jsonschema.ValidationError("unknown decision needs explicit insufficient support")
     refusal_reasons = {"claim-binding-mismatch", "edge-binding-mismatch", "export-prohibited", "license-prohibited", "privacy-prohibited"}
+    if status != "refused" and refusal_reasons.intersection(reasons):
+        yield jsonschema.ValidationError("non-refused evidence decision retains a refusal reason")
     if status == "refused" and (accepted or not refusal_reasons.intersection(reasons)):
         yield jsonschema.ValidationError("refused decision needs a refusal reason and no accepted support")
     if status != "unknown" and "support-insufficient" in reasons:
@@ -312,6 +314,9 @@ def _effect_decision(validator: Any, enabled: bool, instance: Any, schema: dict[
         yield jsonschema.ValidationError("attempted effect decision needs a final attempt")
     if status != "ambiguous" and "reconciliation-required" in reasons:
         yield jsonschema.ValidationError("settled effect cannot require reconciliation")
+    unresolved_reasons = {"blind-retry-blocked", "observation-conflict", "receipt-missing"}
+    if status != "ambiguous" and unresolved_reasons.intersection(reasons):
+        yield jsonschema.ValidationError("settled effect retains an unresolved-effect reason")
 
 
 def _nondecreasing_times(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
@@ -362,6 +367,8 @@ def _publication_decision(validator: Any, enabled: bool, instance: Any, schema: 
         yield jsonschema.ValidationError("blocked publication needs a settled reason")
     if status == "rejected" and (published is not None or reconcile):
         yield jsonschema.ValidationError("rejected publication decision is contradictory")
+    if status != "ambiguous" and "remote-state-unknown" in reasons:
+        yield jsonschema.ValidationError("settled publication retains unknown remote state")
 
 
 def _state_invariant(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
@@ -398,13 +405,23 @@ def _retention_bindings(validator: Any, enabled: bool, instance: Any, schema: di
     if not enabled or not isinstance(instance, dict):
         return
     tombstone = instance.get("tombstone", {})
-    fields = ["artifact_class", "policy_digest"]
+    fields = ["artifact_id", "artifact_class", "policy_digest"]
     if any(tombstone.get(field) != instance.get(field) for field in fields):
         yield jsonschema.ValidationError("tombstone binding mismatch")
-    copies = [(row.get("copy_id"), row.get("state")) for row in instance.get("copies", []) if isinstance(row, dict)]
-    tombstone_copies = [(row.get("copy_id"), row.get("state")) for row in tombstone.get("copy_dispositions", []) if isinstance(row, dict)]
+    copies = instance.get("copies", [])
+    tombstone_copies = tombstone.get("copy_dispositions", [])
     if copies != tombstone_copies:
-        yield jsonschema.ValidationError("tombstone copy inventory mismatch")
+        yield jsonschema.ValidationError("tombstone copy dispositions mismatch")
+    disposed_at = tombstone.get("disposed_at")
+    if disposed_at is not None and any(
+        row.get("state") == "expiry-bound"
+        and row.get("expiry_reached") is True
+        and row.get("expiry_boundary") is not None
+        and row.get("expiry_boundary") > disposed_at
+        for row in instance.get("copies", [])
+        if isinstance(row, dict)
+    ):
+        yield jsonschema.ValidationError("tombstone disposal predates a claimed reached expiry")
 
 
 def _retention_decision(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
@@ -633,7 +650,8 @@ def copy_disposition(copy_id: str = "copy:local", state: str = "deleted") -> dic
 def retention_input() -> dict[str, Any]:
     copies = [copy_disposition()]
     tombstone = seal({
-        "type": "DeletionTombstone@1", "tombstone_id": "tombstone:one", "artifact_class": "raw-session",
+        "type": "DeletionTombstone@1", "tombstone_id": "tombstone:one", "artifact_id": "artifact:raw",
+        "artifact_class": "raw-session",
         "policy_digest": D1, "responsible_component": "component:retention", "requested_at": NOW,
         "disposed_at": "2026-09-04T12:01:00Z", "copy_dispositions": copy.deepcopy(copies),
         "contains_content": False, "contains_secret": False, "contains_global_content_digest": False,
@@ -772,6 +790,10 @@ class M1CSchemaTests(unittest.TestCase):
         bad["tombstone"] = seal(bad["tombstone"], "tombstone_digest")
         with self.assertRaises(jsonschema.ValidationError):
             validate(bad, "RetentionAssessmentInput")
+        bad = retention_input()
+        bad["artifact_id"] = "artifact:other"
+        with self.assertRaises(jsonschema.ValidationError):
+            validate(bad, "RetentionAssessmentInput")
         bad = copy_disposition(state="expiry-bound")
         with self.assertRaises(jsonschema.ValidationError):
             validate(bad, "CopyDisposition")
@@ -779,8 +801,11 @@ class M1CSchemaTests(unittest.TestCase):
     def test_decision_and_fixture_outputs_cannot_claim_false_green_status(self) -> None:
         invalid = [
             ("EvidenceDecision", {"type": "EvidenceDecision@1", "status": "unknown", "reasons": [], "accepted_edge_ids": [], "contradiction_edge_ids": [], "qualification_edge_ids": [], "rejected_source_ids": []}),
+            ("EvidenceDecision", {"type": "EvidenceDecision@1", "status": "supported", "reasons": ["license-prohibited"], "accepted_edge_ids": ["edge:one"], "contradiction_edge_ids": [], "qualification_edge_ids": [], "rejected_source_ids": ["source:one"]}),
             ("EffectDecision", {"type": "EffectDecision@1", "status": "prepared", "reasons": [], "final_attempt_number": 1, "requires_reconciliation": False, "effect_count": 0, "external_call_count": 0}),
+            ("EffectDecision", {"type": "EffectDecision@1", "status": "succeeded", "reasons": ["receipt-missing"], "final_attempt_number": 1, "requires_reconciliation": False, "effect_count": 0, "external_call_count": 0}),
             ("PublicationDecision", {"type": "PublicationDecision@1", "status": "eligible", "reasons": ["gate-failed"], "publication_id": "publication:one", "published_sha": None, "requires_reconciliation": False, "git_mutation_count": 0}),
+            ("PublicationDecision", {"type": "PublicationDecision@1", "status": "published", "reasons": ["remote-state-unknown"], "publication_id": "publication:one", "published_sha": SHA2, "requires_reconciliation": False, "git_mutation_count": 0}),
             ("StateDecision", {"type": "StateDecision@1", "status": "blocked", "reasons": ["replay-mismatch"], "aggregate_id": "aggregate:fabric", "final_sequence": 1, "current_fence_epoch": 1, "state_write_count": 0}),
             ("RetentionDecision", {"type": "RetentionDecision@1", "status": "incomplete", "reasons": ["key-not-destroyed"], "artifact_id": "artifact:one", "resolved_copy_ids": [], "unresolved_copy_ids": ["copy:one"], "deletion_operation_count": 0}),
         ]

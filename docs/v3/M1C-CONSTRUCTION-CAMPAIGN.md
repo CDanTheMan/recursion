@@ -115,6 +115,31 @@ sweeps are diagnostic evidence, not terminal evidence.
   observed durable consequence is relabeled as merely blocked, or any schema-valid input yields a
   decision that fails its own output schema.
 
+## PlanRevision 3 — independent-review residual binding closure
+
+`PLAN-M1C-001@3` was triggered by independent SOL review of exact candidate
+`7f4e2b73d5bbbce628177faf3fe5320d2f65b39f`. Four schema-valid counterexamples showed that the
+candidate could: discard a possibly accepted first attempt when its observation was unverified and
+a later attempt had an exact receipt; accept a reached expiry whose boundary was later than the
+tombstone disposal time; accept a sealed tombstone for a different outer artifact; and validate
+settled output statuses carrying reasons that require an unresolved or refused result. The
+candidate and its passing sweeps are diagnostic evidence, not terminal evidence.
+
+- Retained: Owner authorization, GoalSpec, path/effect/privacy boundaries, five lanes, all 24
+  fixture IDs and literal expected outcomes, storage neutrality, open Owner seams and every
+  PlanRevision 2 repair.
+- Re-admitted: M1C-02 through M1C-06 only for the four independently reproduced residuals.
+- Change: an identity-bound unverified external observation preserves possible-effect state until
+  that same attempt receives exact settlement; tombstones carry and bind `artifact_id`; reached
+  expiry evidence cannot support a disposal recorded before its boundary; and evidence, effect and
+  publication decision schemas reject status/reason contradictions.
+- Gate extension: reproduce the unverified-first-attempt/later-receipt trace, future-expiry versus
+  disposal contradiction, cross-artifact tombstone substitution and the exact incompatible output
+  pairs `supported`/`license-prohibited`, `succeeded`/`receipt-missing` and
+  `published`/`remote-state-unknown`.
+- Falsifier: an unverified possible effect disappears, a tombstone proves another artifact or a
+  not-yet-reached expiry, or a settled/green status validates with a reason that contradicts it.
+
 ## Machine-checkable gates
 
 1. Schema and fixture materializers reproduce committed bytes exactly.

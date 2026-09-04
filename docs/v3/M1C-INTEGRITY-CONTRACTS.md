@@ -133,8 +133,9 @@ not physical deletion evidence.
 Raw-artifact deletion is `complete` only when local content is gone, its non-shared scoped key is
 destroyed, and every recoverable cache, replica, backup and disconnected spool has authenticated
 deletion evidence or a reached policy-bound expiry. The tombstone retains policy, class,
-responsible component, request/disposition times and non-sensitive copy outcomes, but no content,
-secret, raw locator or unnecessary equality-revealing digest.
+artifact identity, responsible component, request/disposition times and non-sensitive copy
+outcomes, but no content, secret, raw locator or unnecessary equality-revealing digest. A reached
+expiry used by a disposed tombstone must be no later than the recorded disposal time.
 
 Pending, disconnected, unknown, soft-deleted or delete-marker-only copies make deletion
 `incomplete`. Shared/active keys, contradictory evidence, sensitive tombstones or a legal hold

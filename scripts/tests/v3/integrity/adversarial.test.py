@@ -361,6 +361,17 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
         self.assert_reason(decision, "blind-retry-blocked", "ambiguous")
         self.assertIn("receipt-missing", decision["reasons"])
 
+        bundle = load_fixture(9)
+        bundle["input"]["observations"][1]["authenticity"] = "unverified"
+        receipt = copy.deepcopy(load_fixture(7)["input"]["observations"][-1])
+        receipt.update({"attempt_id": "attempt:2", "attempt_number": 2})
+        bundle["input"]["observations"].append(receipt)
+        schema_gate.validate(bundle["input"], "EffectTraceInput")
+        decision = oracle.classify_effect_trace(bundle["input"])
+        self.assert_reason(decision, "blind-retry-blocked", "ambiguous")
+        self.assertIn("observation-unverified", decision["reasons"])
+        self.assertIn("receipt-missing", decision["reasons"])
+
         bundle = load_fixture(7)
         bundle["input"]["observations"][-1]["result_digest"] = "sha256:" + "4" * 64
         schema_gate.validate(bundle["input"], "EffectTraceInput")
@@ -615,6 +626,28 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
             bundle["input"]["tombstone"], "tombstone_digest"
         )
         schema_gate.validate(bundle["input"], "RetentionAssessmentInput")
+        self.assert_reason(
+            oracle.assess_retention(bundle["input"]), "tombstone-mismatch", "blocked"
+        )
+
+        bundle = load_fixture(21)
+        bundle["input"]["copies"][0]["expiry_boundary"] = "2026-09-05T00:00:00Z"
+        bundle["input"]["tombstone"]["copy_dispositions"] = copy.deepcopy(
+            bundle["input"]["copies"]
+        )
+        bundle["input"]["tombstone"] = schema_gate.seal(
+            bundle["input"]["tombstone"], "tombstone_digest"
+        )
+        with self.assertRaises(jsonschema.ValidationError):
+            schema_gate.validate(bundle["input"], "RetentionAssessmentInput")
+        decision = oracle.assess_retention(bundle["input"])
+        self.assert_reason(decision, "expiry-not-reached", "blocked")
+        self.assertIn("copy:backup", decision["unresolved_copy_ids"])
+
+        bundle = load_fixture(21)
+        bundle["input"]["artifact_id"] = "artifact:other"
+        with self.assertRaises(jsonschema.ValidationError):
+            schema_gate.validate(bundle["input"], "RetentionAssessmentInput")
         self.assert_reason(
             oracle.assess_retention(bundle["input"]), "tombstone-mismatch", "blocked"
         )

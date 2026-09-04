@@ -398,7 +398,7 @@ def retention_input(*, artifact_class: str = "raw-session", owner_policy: str = 
     copies = sorted(copies or [copy_disposition("copy:backup", "backup", "expiry-bound"), copy_disposition("copy:local", "local", "deleted")], key=lambda item: item["copy_id"])
     tombstone = seal({
         "type": "DeletionTombstone@1", "tombstone_id": "tombstone:one",
-        "artifact_class": artifact_class, "policy_digest": D1,
+        "artifact_id": "artifact:one", "artifact_class": artifact_class, "policy_digest": D1,
         "responsible_component": "component:retention", "requested_at": T0,
         "disposed_at": T1, "copy_dispositions": copy.deepcopy(copies),
         "contains_content": False, "contains_secret": False,

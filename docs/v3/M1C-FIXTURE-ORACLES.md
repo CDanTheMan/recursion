@@ -84,8 +84,9 @@ described as the OR-015 broad rehearsal, a cutover or live deployment evidence.
 | `F-M1C-024` | Erasing an authority/effect/audit receipt with unresolved Owner erasure policy is prohibited | `blocked` / `owner-policy-required` |
 
 No fixture deletes content or a key. Expiry is an explicit supplied reached boundary, never a wall
-clock comparison. `complete` means the supplied proof graph is complete, not that M1C inspected a
-provider, medium, backup or disconnected node.
+clock comparison; when a tombstone records disposal, that instant must not predate the boundary.
+The sealed tombstone binds the exact artifact ID, class and policy. `complete` means the supplied
+proof graph is complete, not that M1C inspected a provider, medium, backup or disconnected node.
 
 ## Mutation matrix and completion
 

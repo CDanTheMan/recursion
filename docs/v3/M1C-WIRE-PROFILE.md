@@ -98,6 +98,7 @@ a binding, privacy or export violation.
 The three edge sets are disjoint, contradiction/qualification reasons agree with their sets, and
 refusal clears accepted support without deleting otherwise admissible contradiction or
 qualification history.
+Supported and contested statuses cannot carry a refusal reason.
 
 ## Effect records
 
@@ -155,7 +156,10 @@ Every attempt uses `attempt_number` 1–64. IDs are unique and timestamps are no
 `final_attempt_number`, `requires_reconciliation`, `effect_count`, `external_call_count`.
 An exact receipt or reconciliation owns the historical settled status even when reasons retain an
 admission violation. An unresolved prior attempt or conflicting bound result remains `ambiguous`;
-a later attempt or receipt cannot erase it.
+a later attempt or receipt cannot erase it. An identity-bound but unverified external observation
+preserves possible-effect state until that same attempt receives exact settlement. A non-ambiguous
+status cannot carry `receipt-missing`, `blind-retry-blocked`, `observation-conflict` or
+`reconciliation-required`.
 
 ## Publication records
 
@@ -201,7 +205,8 @@ or `ambiguous`, sorted reasons, `publication_id`, nullable `published_sha`,
 The branch named by `review_ref`, not only `target_branch`, is checked against protected names. An
 eligible review ref is also distinct from its target branch. An
 exact `observed` or `rejected` receipt owns historical remote status; failed preflight reasons are
-retained but cannot relabel an observed remote publication as merely blocked.
+retained but cannot relabel an observed remote publication as merely blocked. Only `ambiguous` may
+carry `remote-state-unknown`.
 
 ## Fabric-only state records
 
@@ -250,10 +255,12 @@ reasons, `aggregate_id`, `final_sequence`, `current_fence_epoch`, `state_write_c
 `disconnected` or `unknown`, `evidence_state` (`verified`, `unverified`, `mismatch`), nullable
 `evidence_digest`, nullable `expiry_boundary`, and `expiry_reached`.
 
-`DeletionTombstone@1` has exactly `type`, `tombstone_id`, `artifact_class`, `policy_digest`,
-`responsible_component`, `requested_at`, nullable `disposed_at`, `copy_dispositions`,
+`DeletionTombstone@1` has exactly `type`, `tombstone_id`, `artifact_id`, `artifact_class`,
+`policy_digest`, `responsible_component`, `requested_at`, nullable `disposed_at`, `copy_dispositions`,
 `contains_content`, `contains_secret`, `contains_global_content_digest`, `tombstone_digest`.
-Copy dispositions are sorted by copy ID. Tombstone digest seals the record without itself.
+Copy dispositions are sorted by copy ID. Tombstone digest seals the record without itself. Its
+artifact ID, class and policy bind exactly to the assessed artifact. When disposal is recorded, a
+claimed reached expiry boundary cannot be later than `disposed_at`.
 
 `RetentionAssessmentInput@1` has exactly `type`, `artifact_id`, `artifact_class`, `privacy_class`,
 `policy_digest`, `owner_erasure_policy` (`granted`, `denied`, `unknown`, `not-required`),

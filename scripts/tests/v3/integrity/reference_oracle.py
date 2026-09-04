@@ -359,6 +359,8 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
                     else "observation-unverified"
                 )
             if kind == "ExternalObserved@1":
+                if binding_ok and authenticity != "verified" and number not in settled_attempts:
+                    pending_possible.add(number)
                 if binding_ok and authenticity == "verified":
                     valid_externals.append(observation)
                     if (
@@ -774,6 +776,7 @@ def assess_retention(value: dict[str, Any]) -> dict[str, Any]:
         reasons.add("copy-inventory-mismatch")
     if (
         not _valid_self_digest(tombstone, "tombstone_digest")
+        or tombstone["artifact_id"] != value["artifact_id"]
         or tombstone["artifact_class"] != value["artifact_class"]
         or tombstone["policy_digest"] != value["policy_digest"]
     ):
@@ -781,6 +784,7 @@ def assess_retention(value: dict[str, Any]) -> dict[str, Any]:
 
     resolved: set[str] = set()
     unresolved: set[str] = set()
+    disposed_at = tombstone["disposed_at"]
     for copy_id, item in copies.items():
         evidence_ok = item["evidence_state"] == "verified" and item["evidence_digest"] is not None
         deleted = item["state"] == "deleted" and evidence_ok
@@ -788,6 +792,7 @@ def assess_retention(value: dict[str, Any]) -> dict[str, Any]:
             item["state"] == "expiry-bound"
             and item["expiry_reached"]
             and item["expiry_boundary"] is not None
+            and (disposed_at is None or item["expiry_boundary"] <= disposed_at)
             and evidence_ok
         )
         if deleted or expired:
@@ -797,10 +802,16 @@ def assess_retention(value: dict[str, Any]) -> dict[str, Any]:
             reasons.add("copy-unresolved")
             if not evidence_ok:
                 reasons.add("copy-evidence-unverified")
-            if item["state"] == "expiry-bound" and not item["expiry_reached"]:
+            if item["state"] == "expiry-bound" and (
+                not item["expiry_reached"]
+                or (
+                    disposed_at is not None
+                    and item["expiry_boundary"] is not None
+                    and item["expiry_boundary"] > disposed_at
+                )
+            ):
                 reasons.add("expiry-not-reached")
 
-    disposed_at = tombstone["disposed_at"]
     if disposed_at is not None and disposed_at < tombstone["requested_at"]:
         reasons.add("tombstone-mismatch")
     if disposed_at is not None and (unresolved or not value["local_content_deleted"]):

@@ -519,7 +519,8 @@ def build_schema() -> dict[str, Any]:
     defs["DeletionTombstone"] = tagged(
         "DeletionTombstone@1",
         {
-            "tombstone_id": ref("EntityId"), "artifact_class": {"enum": artifact_classes},
+            "tombstone_id": ref("EntityId"), "artifact_id": ref("EntityId"),
+            "artifact_class": {"enum": artifact_classes},
             "policy_digest": ref("Digest"), "responsible_component": ref("EntityId"),
             "requested_at": ref("Timestamp"), "disposed_at": nullable(ref("Timestamp")),
             "copy_dispositions": tombstone_copies, "contains_content": {"type": "boolean"},
