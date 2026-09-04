@@ -193,4 +193,3 @@ This amendment does not choose a language, storage engine, renderer, plugin runt
 loop, numeric resource ceiling, audit-erasure power, unsigned-plugin grant bundle or public canary.
 Those remain separate owner or experiment decisions. Applying this proposal is also a separate
 Lucas decision because this campaign is docs-only.
-

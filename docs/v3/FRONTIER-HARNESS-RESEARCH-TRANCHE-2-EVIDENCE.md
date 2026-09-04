@@ -406,4 +406,3 @@ systems accumulate dependencies and lifecycle coupling. Therefore Recursion earn
 one measured capability at a time. Any native provider loop, database choice, plugin runtime,
 terminal renderer or cache strategy remains conditional until its preregistered comparison passes
 all hard floors and has a removal path.
-
