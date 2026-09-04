@@ -459,3 +459,67 @@ ObjectRefs. The repair is frozen at `a5e281eb9dbadaaacc9396dac672162c17bc75b7` a
 fixture bytes or canonical schema. Schema/materialization/red-structure gates pass, while the
 ordinary red gate retains its expected reducer-missing exit 1. M1A-03 remains blocked for
 same-adjudicator re-review.
+
+### TERRA-M1A-01 repair adjudication
+
+The same assigned Terra verifier reran exact clean candidate
+`1a7c09b032c876b02583df90bca6453bdf1619d4` and returned `PASS`. It bound the
+review to schema freeze `eebd2de93288183fa5f949e16f9aaf24274c6002`, repaired red base
+`0f4d21bce153ddae9ce14a1653e604a2a06bffd2`, F-M1A-022 topology repair
+`94342a14b6819c3f28835761005467b711dfb841`, and exact-reference fence
+`a5e281eb9dbadaaacc9396dac672162c17bc75b7`. It reran schema,
+fixture-materialization, red-structure, expected-red and v2 regression gates and found no remaining
+material dissent. Limitation: this is a same-provider synthetic-contract review, not evidence of
+runtime/provider performance, external effects, persistence or architecture superiority. This PASS
+unblocks M1A-03 without changing any frozen schema or fixture byte.
+
+### PlanRevision 7 — pure planning kernel
+
+Construction decision `CD-M1A-019`: M1A is implemented as three dependency-closed pure modules:
+strict decoding/canonicalization, cross-record admission validation, and event reduction/replay.
+All state-changing functions deep-copy their inputs and obtain policy, authority, lease, route,
+budget and checkpoint facts only from explicit arguments or the immutable projection. Production
+imports are limited to `copy`, `hashlib` and `json`; an AST gate rejects filesystem, environment,
+clock, randomness, process, network, database, provider, plugin, Git and publication/effect adapter
+dependencies. Falsifier: two calls with the same explicit values differ, an input mutates, or the
+static scan finds an ambient observation or external-effect path.
+
+Construction decision `CD-M1A-020`: command admission validates content/payload digests,
+idempotency, authority and role, exact goal/plan/lease fences, current PAUSE, attenuation, whole-DAG
+ownership, retry/replan conditions, route spend, verifier coverage and amendment completeness in a
+fixed fail-closed order. Events are derived from admitted immutable command records; WorkPackets
+are reconstructed only from exact task, goal, plan, lease, route, budget and checkpoint bindings.
+The reducer verifies the event hash chain and state-delta digest before applying one transition.
+Falsifier: a frozen refusal mutates state, a frozen acceptance differs by one receipt/event/state
+byte, or a corrupt/gapped/unknown replay produces a projection.
+
+Construction decision `CD-M1A-021`: the literal pre-implementation corpus is the executable
+oracle. `conformance.test.py` runs all initial and current histories from genesis, compares exact
+receipts/events/final projections, checks all strict-decode refusals, executes genesis/checkpoint
+replays, and repeats every case from clean state. The former expected-red runner now invokes the
+same conformance routine after independently rechecking schema, manifest, coverage, topology,
+digests and event chains. Property tests add generated attenuation combinations, graph-order
+permutations and repeat-purity checks without changing frozen fixture bytes. Falsifier: either run
+differs, a generated widening admits, graph outcome depends on input order, or the red runner and
+standalone conformance runner disagree.
+
+### M1A-03 through M1A-06 construction receipt
+
+- Canonicalization, cross-record validation and DAG admission commit:
+  `aa91a49e810207bf15afe18c02cfb71cb8f9dd09`.
+- Pure admission, WorkPacket, reducer and replay commit:
+  `85ad92b7d9f8a40fcba76185b2f9b08bc74811ee`.
+- Property and static-isolation gate commit:
+  `fc04e714d3a563a14ffb80cddfdf672344a01aac`.
+- `conformance.test.py`: 37 cases, 267 commands/receipts, 253 events and 11 decode failures pass;
+  all cases execute twice internally with exact equality.
+- `red_fixture.test.py`: all 15 positive bundles are green after complete structural revalidation.
+- `property.test.py`: 15 generated attenuation variants, 10 graph permutations and two pure repeats
+  pass.
+- `schema.test.py`: 15/15 pass; `validation.test.py`: 11 decode failures and 46 DAG candidates
+  pass; `static.test.py`: three production files and six test runners pass isolation.
+- The complete M1A runner set passes twice from clean state. Unchanged v2 contract tests pass 16/16,
+  and `recursion-v2-mvp.test.py` exits 0. These legacy results are compatibility evidence only.
+
+M1A-03 through M1A-06 are complete. M1A remains nonterminal until a fresh TERRA-M1A-02 verifies
+the exact clean candidate and its PASS, dissent or limitations are recorded.
