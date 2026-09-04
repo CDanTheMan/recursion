@@ -115,6 +115,6 @@ Recursion's sole canonical harness/control-plane ownership in `OR-018` and `OR-0
 [evidence packet](FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md), and the exact docs-only
 [constitutional amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md) close the next
 formal-model, language, storage/IPC, process, plugin/frontend, cache/context, evaluation and
-release questions. The amendment is not operative and no runtime is proved. The next construction
-step remains separately authorized M1A-01 strict schema materialization followed by M1A-02 literal
-red fixtures; later implementation choices remain evidence gates.
+release questions. The amendment is not operative and no runtime is proved. The Owner-authorized
+M1A campaign is now executing M1A-01 strict schema materialization followed by M1A-02 literal red
+fixtures; later implementation choices remain evidence gates.

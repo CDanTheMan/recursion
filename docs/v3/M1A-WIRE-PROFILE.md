@@ -1,6 +1,6 @@
 ---
 title: M1A closed JSON wire profile
-status: normative-blueprint-for-future-build-not-executed
+status: owner-approved-construction-profile
 last-updated: 2026-09-03
 ---
 
@@ -24,16 +24,21 @@ key and MUST contain no duplicate key. All other arrays preserve their stated se
 | Alias | Exact representation and bound |
 |---|---|
 | `Id` | ASCII string matching `^[A-Z][A-Z0-9]*(?:-[A-Za-z0-9][A-Za-z0-9._-]*)+$`, 3–128 bytes |
+| `CommandId` | the `Id` grammar, 3–120 ASCII bytes so every deterministic receipt/event ID remains within `Id` bounds |
 | `Token` | ASCII string matching `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`, 1–64 bytes |
+| `EventType` | one of the exact PascalCase event names in the closed event alphabet below |
+| `ErrorCode` | one of the exact uppercase `E-*` values in the closed error registry |
 | `Digest` | lowercase hexadecimal SHA-256, exactly 64 characters |
 | `Text` | UTF-8 string, 0–4,096 bytes; no NUL or unpaired surrogate |
 | `NonemptyText` | `Text` with at least one Unicode scalar value |
+| `JsonInputText` | UTF-8 string, 0–262,144 bytes; no NUL or unpaired surrogate; interpreted only by the strict decoder |
 | `UInt` | JSON integer from 0 through 9,007,199,254,740,991 |
 | `PosInt` | JSON integer from 1 through 2,147,483,647 |
 | `LogicalTime` | `UInt`, supplied by the fixture/event stream; never read from a clock |
 | `IdSet` | sorted array of `Id`, maximum 256 |
 | `DigestSet` | sorted array of `Digest`, maximum 256 |
 | `TokenSet` | sorted array of `Token`, maximum 256 |
+| `ErrorCodeSet` | sorted array of `ErrorCode`, maximum 64 |
 | `TextSet` | sorted array of `Text`, maximum 256 |
 | `ResourcePathSet` | sorted array of the `ResourcePath` grammar in the fixture blueprint, maximum 256 |
 
@@ -52,6 +57,18 @@ ObjectRef@1 = {
   id: Id,
   version: PosInt,
   content_digest: Digest
+}
+
+PlanIdentityRef@1 = {
+  object_type: "plan-revision",
+  id: Id,
+  version: PosInt
+}
+
+ReceiptIdentity@1 = {
+  receipt_id: Id,
+  command_id: CommandId,
+  command_digest: Digest
 }
 
 PolicyRef@1 = {
@@ -125,7 +142,8 @@ GateRequirement@1 = {
   procedure_digest: Digest,
   evidence_schema_digest: Digest,
   candidate_binding_digest: Digest,
-  verifier_policy_digest: Digest
+  verifier_policy_digest: Digest,
+  assigned_verifier_actor_id: Id
 }
 
 M1ASyntheticIndependenceProjection@1 = {
@@ -146,6 +164,22 @@ Disposition@1 = {
   replacement_ref: ObjectRef@1?,
   reason_digest: Digest
 }
+
+DecodeFailure@1 = {
+  decode_failure_schema_version: "m1a-decode-failure-1",
+  schema_epoch: "m1a-1",
+  raw_input_digest: Digest,
+  primary_error: ErrorCode,
+  related_errors: ErrorCodeSet,
+  content_digest: Digest
+}
+
+GenesisConfig@1 = {
+  genesis_schema_version: "m1a-genesis-1",
+  stream_id: Id,
+  current_pause_policy_ref: PolicyRef@1,
+  current_pause_epoch: UInt
+}
 ```
 
 `M1ASyntheticIndependenceProjection@1` is a deliberately reduced, synthetic-only projection for
@@ -159,7 +193,9 @@ a referenced policy requires them. It is not a complete V0–V3 vector or a
 future canonical type is owned only by
 [CONSTITUTIONAL-AMENDMENT-PROPOSAL.md](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md).
 
-`GateRequirement@1` arrays sort by `gate_id`; `Disposition@1` arrays sort by
+`GateRequirement@1` arrays sort by `gate_id`; its assigned actor is the only actor whose
+attestation may submit that gate. `ReceiptIdentity@1` arrays sort by `receipt_id` and are
+duplicate-free. `Disposition@1` arrays sort by
 `(object_ref.object_type, object_ref.id, object_ref.version)`. `CompatibilityInput@1`,
 `NodeCompatibilityTuple@1`, `NoveltyDelta@1` and its seven kind payloads have exactly the fields,
 enums and comparison rules in the correspondingly named closed-grammar sections of
@@ -185,6 +221,7 @@ populated.
 
 Every `PolicyRef@1` field has an exact kind constraint: OwnerIntent/GoalSpec privacy and egress
 refs are `privacy-egress`; GoalSpec `route_policy_ref` is `route-envelope`,
+`authority_policy_ref` is `authority`,
 `novelty_policy_ref` is `novelty`, `retry_policy_ref` is `retry`, `verifier_policy_ref` is
 `verifier`, `constitution_policy_ref` is `constitution` and `pause_policy_ref` is `pause`.
 TaskNode policy refs MUST equal the corresponding GoalSpec refs. An authority attestation's
@@ -221,13 +258,13 @@ mapping explicitly carries a proposed new record.
 | `object_type` / `schema_version` | Exact payload fields |
 |---|---|
 | `owner-intent` / `m1a-owner-intent-1` | `{intent_text: NonemptyText, source_kind: owner-prompt or owner-amendment, source_digest: Digest, privacy_policy_ref: PolicyRef@1, supersedes_ref: ObjectRef@1?}` |
-| `goal-spec` / `m1a-goal-spec-1` | `{owner_intent_ref: ObjectRef@1, outcome: NonemptyText, acceptance_gate_ids: IdSet, allowed_resource_paths: ResourcePathSet, non_goals: TextSet, authority_ids: IdSet, capability_ids: IdSet, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, route_policy_ref: PolicyRef@1, allowed_route_ids: IdSet, budget_limits: BudgetVector@1, source_digests: DigestSet, novelty_policy_ref: PolicyRef@1, retry_policy_ref: PolicyRef@1, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, pause_policy_ref: PolicyRef@1, allowed_effect_keys: IdSet, publication_allowed: false, terminal_owner_seam_ids: IdSet, fence_epoch: UInt, state: accepted}` |
+| `goal-spec` / `m1a-goal-spec-1` | `{owner_intent_ref: ObjectRef@1, outcome: NonemptyText, acceptance_gate_ids: IdSet, allowed_resource_paths: ResourcePathSet, non_goals: TextSet, authority_ids: IdSet, capability_ids: IdSet, allowed_action_ids: IdSet, prohibition_ids: IdSet, authority_policy_ref: PolicyRef@1, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, route_policy_ref: PolicyRef@1, allowed_route_ids: IdSet, allowed_account_class_ids: IdSet, allowed_capacity_pool_ids: IdSet, budget_limits: BudgetVector@1, source_digests: DigestSet, novelty_policy_ref: PolicyRef@1, retry_policy_ref: PolicyRef@1, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, pause_policy_ref: PolicyRef@1, allowed_effect_keys: IdSet, publication_allowed: false, terminal_owner_seam_ids: IdSet, fence_epoch: UInt, state: accepted}` |
 | `goal-spec-amendment` / `m1a-goal-spec-amendment-1` | `{old_goal_ref: ObjectRef@1, new_goal_ref: ObjectRef@1, changed_field_paths: TextSet, rationale_digest: Digest, owner_authority_attestation_id: Id, effective_fence_epoch: UInt, checkpoint_rule: current-immediate or safe-checkpoint, compatibility_inputs: sorted CompatibilityInput@1 by old_node.node_id, dispositions: sorted Disposition@1, plan_transition_ref: ObjectRef@1}` |
-| `arm-run` / `m1a-arm-run-1` | `{goal_ref: ObjectRef@1, logical_actor_id: Id, eligible_route_ids: IdSet, budget_limits: BudgetVector@1, source_digests: DigestSet, executive_lease_ref: LeaseRef@1, verifier_policy_ref: PolicyRef@1}` |
-| `plan-revision` / `m1a-plan-revision-1` | `{goal_ref: ObjectRef@1, arm_run_ref: ObjectRef@1, prior_plan_ref: ObjectRef@1?, trigger: initial or retry or replan or amendment, task_node_refs: sorted ObjectRef@1 by id, dependency_edges: sorted array of `{from_node_id: Id, to_node_id: Id}` by `(from_node_id,to_node_id)`, graph_digest: Digest, acceptance_gate_ids: IdSet, budget_limits: BudgetVector@1, read_resource_paths: ResourcePathSet, write_resource_paths: ResourcePathSet, effect_keys: IdSet, source_digests: DigestSet, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, change_rationale_digest: Digest, dispositions: sorted Disposition@1}` |
+| `arm-run` / `m1a-arm-run-1` | `{goal_ref: ObjectRef@1, logical_actor_id: Id, eligible_route_ids: IdSet, eligible_account_class_ids: IdSet, eligible_capacity_pool_ids: IdSet, budget_limits: BudgetVector@1, source_digests: DigestSet, executive_lease_ref: LeaseRef@1, verifier_policy_ref: PolicyRef@1}` |
+| `plan-revision` / `m1a-plan-revision-1` | `{goal_ref: ObjectRef@1, arm_run_ref: ObjectRef@1, prior_plan_ref: ObjectRef@1?, trigger: initial or retry or replan or amendment, task_node_refs: sorted ObjectRef@1 by id, dependency_edges: sorted array of `{from_node_id: Id, to_node_id: Id}` by `(from_node_id,to_node_id)`, graph_digest: Digest, acceptance_gate_ids: IdSet, budget_limits: BudgetVector@1, read_resource_paths: ResourcePathSet, write_resource_paths: ResourcePathSet, effect_keys: IdSet, source_digests: DigestSet, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, assigned_plan_verifier_actor_id: Id, change_rationale_digest: Digest, dispositions: sorted Disposition@1}` |
 | `plan-transition` / `m1a-plan-transition-1` | `{from_plan_ref: ObjectRef@1?, to_plan_ref: ObjectRef@1, trigger_evidence_digests: DigestSet, dispositions: sorted Disposition@1, executive_lease_ref: LeaseRef@1, expected_goal_fence_epoch: UInt, checkpoint_ref: ObjectRef@1?}` |
-| `task-node` / `m1a-task-node-1` | `{plan_ref: ObjectRef@1, semantic_definition_digest: Digest, output_schema_digest: Digest, dependency_node_ids: IdSet, input_digests: DigestSet, source_digests: DigestSet, read_resource_paths: ResourcePathSet, write_resource_paths: ResourcePathSet, effect_keys: IdSet, authority_ids: IdSet, capability_ids: IdSet, route_ids: IdSet, route_capability_ids: IdSet, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, budget_limits: BudgetVector@1, gate_requirements: sorted GateRequirement@1 by gate_id, retry_policy_ref: PolicyRef@1, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, terminal_contribution_digest: Digest, retry_maximum: UInt}` |
-| `work-packet` / `m1a-work-packet-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, logical_worker_actor_id: Id, attempt: PosInt, work_lease_ref: LeaseRef@1, expected_goal_fence_epoch: UInt, expected_pause_epoch: UInt, authority_ids: IdSet, capability_ids: IdSet, allowed_resource_paths: ResourcePathSet, effect_keys: IdSet, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, route_assignment_ref: ObjectRef@1, budget_limits: BudgetVector@1, source_digests: DigestSet, gate_requirements: sorted GateRequirement@1 by gate_id, allowed_action_ids: IdSet, prohibition_ids: IdSet, output_schema_digest: Digest, deadline_logical_time: LogicalTime, checkpoint_ref: ObjectRef@1?}` |
+| `task-node` / `m1a-task-node-1` | `{plan_ref: PlanIdentityRef@1, semantic_definition_digest: Digest, output_schema_digest: Digest, dependency_node_ids: IdSet, input_digests: DigestSet, source_digests: DigestSet, read_resource_paths: ResourcePathSet, write_resource_paths: ResourcePathSet, effect_keys: IdSet, authority_ids: IdSet, capability_ids: IdSet, allowed_action_ids: IdSet, prohibition_ids: IdSet, route_ids: IdSet, route_capability_ids: IdSet, account_class_ids: IdSet, capacity_pool_ids: IdSet, authority_policy_ref: PolicyRef@1, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, budget_limits: BudgetVector@1, gate_requirements: sorted GateRequirement@1 by gate_id, retry_policy_ref: PolicyRef@1, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, terminal_contribution_digest: Digest, retry_maximum: UInt}` |
+| `work-packet` / `m1a-work-packet-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, logical_worker_actor_id: Id, attempt: PosInt, work_lease_ref: LeaseRef@1, expected_goal_fence_epoch: UInt, expected_pause_epoch: UInt, authority_ids: IdSet, capability_ids: IdSet, allowed_resource_paths: ResourcePathSet, effect_keys: IdSet, privacy_class_id: Id, egress_class_id: Id, authority_policy_ref: PolicyRef@1, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, route_assignment_ref: ObjectRef@1, budget_reservation_ref: ObjectRef@1, budget_limits: BudgetVector@1, source_digests: DigestSet, gate_requirements: sorted GateRequirement@1 by gate_id, allowed_action_ids: IdSet, prohibition_ids: IdSet, inherited_non_goals: TextSet, output_schema_digest: Digest, deadline_logical_time: LogicalTime, checkpoint_ref: ObjectRef@1?}` |
 | `worker-result` / `m1a-worker-result-1` | `{work_packet_ref: ObjectRef@1, candidate_digest: Digest, evidence_digests: DigestSet, output_digest: Digest, observed_effect_ref: ObjectRef@1?, disposition: submitted or failed}` |
 | `gate-result` / `m1a-gate-result-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, work_packet_ref: ObjectRef@1, candidate_digest: Digest, source_digests: DigestSet, evidence_digests: DigestSet, gate_requirement: GateRequirement@1, procedure_version: PosInt, observation_digest: Digest, expected_digest: Digest, actual_digest: Digest, independence: M1ASyntheticIndependenceProjection@1, disposition: pass or fail or error or missing or ambiguous, limitation_digests: DigestSet}` |
 | `retry-decision` / `m1a-retry-decision-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, failed_gate_result_ref: ObjectRef@1, prior_work_packet_ref: ObjectRef@1, novelty_delta: NoveltyDelta@1, novelty_delta_digest: Digest, unchanged_binding_digest: Digest, next_attempt: PosInt, remaining_budget: BudgetVector@1, retry_maximum: UInt, disposition: admitted or refused or exhausted}` |
@@ -238,21 +275,36 @@ mapping explicitly carries a proposed new record.
 | `owner-verifier-exception` / `m1a-owner-verifier-exception-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, candidate_digest: Digest, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, missing_dimensions: TokenSet, reason_digest: Digest, owner_authority_attestation_id: Id, issued_logical_time: LogicalTime, expires_logical_time: LogicalTime}` |
 | `executive-lease` / `m1a-executive-lease-1`; `work-lease` / `m1a-work-lease-1` | `{subject_actor_id: Id, goal_ref: ObjectRef@1, plan_ref: ObjectRef@1?, task_ref: ObjectRef@1?, lease_epoch: UInt, nonce_digest: Digest, issued_logical_time: LogicalTime, expires_logical_time: LogicalTime, allowed_command_types: TokenSet, state: active or expired or revoked or replaced}` |
 | `checkpoint` / `m1a-checkpoint-1` | `{state_version: UInt, state_digest: Digest, active_goal_ref: ObjectRef@1?, active_plan_ref: ObjectRef@1?, open_packet_refs: sorted ObjectRef@1 by id, ambiguous_effect_refs: sorted ObjectRef@1 by id, budget_snapshot_digest: Digest, route_snapshot_digest: Digest, pause_epoch: UInt, lease_epoch_digest: Digest}` |
-| `route-assignment` / `m1a-route-assignment-1` | `{logical_actor_id: Id, route_id: Id, route_capability_ids: IdSet, account_class_id: Id, privacy_policy_ref: PolicyRef@1, route_policy_ref: PolicyRef@1, metered_spend_allowed: false, capacity_observation_digest: Digest, assigned_logical_time: LogicalTime, expires_logical_time: LogicalTime, state: assigned or deferred or released or expired}` |
+| `route-assignment` / `m1a-route-assignment-1` | `{logical_actor_id: Id, route_id: Id, route_capability_ids: IdSet, account_class_id: Id, capacity_pool_id: Id, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, route_policy_ref: PolicyRef@1, metered_spend_allowed: false, capacity_observation_ref: ObjectRef@1, assigned_logical_time: LogicalTime, expires_logical_time: LogicalTime, state: assigned or deferred or released or expired}` |
+| `capacity-observation` / `m1a-capacity-observation-1` | `{route_id: Id, account_class_id: Id, capacity_pool_id: Id, spend_class: none or included, available: true or false, remaining_units: UInt, observation_digest: Digest}` |
+| `budget-reservation` / `m1a-budget-reservation-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, limits: BudgetVector@1, consumed: BudgetVector@1, remaining: BudgetVector@1, state: reserved or released or consumed}` |
+| `pause-directive` / `m1a-pause-directive-1` | `{pause_policy_ref: PolicyRef@1, mode: current-immediate, new_pause_epoch: UInt, reason_digest: Digest}` |
 | `effect-observation` / `m1a-effect-observation-1` | `{effect_id: Id, effect_key: Id, work_packet_ref: ObjectRef@1, idempotency_key_digest: Digest, dispatch_state: undispatched or dispatched, receipt_digest: Digest?, provider_operation_id_digest: Digest?, observation: observed-success or observed-failure or ambiguous, quarantine: true or false}` |
 | `disposition` / `m1a-disposition-1` | the exact `Disposition@1` record |
 
 For `plan-verifier-decision`, `pass` requires `full` and a null exception; `downgraded-pass`
 requires `downgraded` and an exact `owner-verifier-exception` ref; `fail`/`blocked` require `none`.
 For `effect-observation`, `quarantine` is `true` exactly when observation is `ambiguous`.
+`observed-success` requires `dispatch_state=dispatched`, non-null `receipt_digest` and
+`provider_operation_id_digest`, and `quarantine=false`; `undispatched` can never be success.
+Every active lease has `issued_logical_time < expires_logical_time`; command validity is the
+half-open interval from issue through but excluding expiry. Replacement increments the epoch by
+exactly one, and admitted command logical times never decrease within a stream.
+For every budget reservation and every field in its three vectors,
+`consumed + remaining = limits` without integer overflow; `limits` is componentwise no greater
+than both the referenced GoalSpec and TaskNode limits. A reservation in `reserved` state has at
+least one positive remaining component. A route assignment's authority actor, route, account,
+capacity pool, privacy, egress and route-policy bindings MUST all be members of or equal to the
+corresponding admitted GoalSpec/TaskNode fields, and its capacity observation MUST name that same
+route/account/pool tuple.
 
 ## Command, receipt, event and projection shapes
 
 ```text
 CommandEnvelope@1 = {
   command_schema_version: "m1a-command-1",
-  command_id: Id,
-  command_type: one of the 17 registered command tokens,
+  command_id: CommandId,
+  command_type: one of the 21 registered command tokens,
   actor_id: Id,
   auth_ref: Id,
   lease_ref: LeaseRef@1?,
@@ -270,11 +322,11 @@ CommandEnvelope@1 = {
 CommandReceipt@1 = {
   receipt_schema_version: "m1a-receipt-1",
   receipt_id: Id,
-  command_id: Id,
+  command_id: CommandId,
   command_digest: Digest,
   disposition: accepted or refused or duplicate or conflict,
-  primary_error: one registered error token or null,
-  related_errors: TokenSet,
+  primary_error: ErrorCode?,
+  related_errors: ErrorCodeSet,
   state_before_digest: Digest,
   state_after_digest: Digest,
   event_ids: IdSet,
@@ -290,11 +342,11 @@ PlanningEvent@1 = {
   sequence: PosInt,
   previous_event_digest: Digest,
   logical_time: LogicalTime,
-  command_id: Id,
+  command_id: CommandId,
   command_digest: Digest,
-  event_type: registered event Token,
+  event_type: EventType,
   primary_record: DomainRecord@1,
-  related_record_refs: sorted ObjectRef@1 by (object_type,id,version),
+  related_records: sorted DomainRecord@1 by (object_type,id,version),
   state_delta_digest: Digest,
   content_digest: Digest
 }
@@ -311,7 +363,7 @@ ProjectionState@1 = {
   records: sorted DomainRecord@1 by (object_type,id,version),
   object_states: sorted array of {object_ref: ObjectRef@1, state: Token} by
                  (object_ref.object_type,object_ref.id,object_ref.version),
-  processed_command_receipt_refs: sorted ObjectRef@1 by id,
+  processed_command_receipts: sorted ReceiptIdentity@1 by receipt_id,
   consumed_novelty_delta_digests: DigestSet,
   open_blocker_refs: sorted ObjectRef@1 by id,
   open_escalation_refs: sorted ObjectRef@1 by id,
@@ -324,21 +376,35 @@ ProjectionState@1 = {
 }
 ```
 
-In a receipt, both event-sequence fields are null exactly when `event_ids` is empty. Receipt
-records are not domain records; `processed_command_receipt_refs` therefore uses
-`object_type="command-receipt"`, the receipt ID, version 1 and its content digest.
+In a receipt, both event-sequence fields are null exactly when `event_ids` is empty. Projection
+state records only accepted-command `ReceiptIdentity@1` values, never the receipt content digest.
+The kernel first projects the accepted event group and its receipt identity, computes
+`state_after_digest`, then computes the receipt content digest. This is the only receipt/state
+construction order. A command admission session separately receives and returns the ordered
+receipt journal; that journal includes refusals and conflicts and is required to reproduce their
+idempotency, while event replay reconstructs only the authoritative projection. Fixtures supply
+both events and receipts explicitly; M1A makes no durable-journal claim.
+
+Receipt and event IDs are derivable without ambient state. If a command ID begins `CMD-`, replace
+that prefix with `RCPT-`; otherwise prefix the complete ID with `RCPT-`. Event ID `n` replaces
+`CMD-` with `EV-` (or prefixes the complete ID with `EV-`) and appends `-<nnnn>`, where `nnnn` is
+the one-based, four-digit event position within that command. An accepted command's events are
+contiguous, share command ID/digest, and use those positions. The reconstructed original receipt
+uses that group and the supplied journal; no random identifier is permitted.
 
 Each command payload is exactly one proposed `DomainRecord@1` except these closed composites:
 
 | Command | Exact `payload` |
 |---|---|
-| `record-owner-intent`, `accept-goal-spec`, `amend-goal-spec`, `start-arm-run`, `submit-worker-result`, `submit-gate-result`, `propose-retry`, `raise-blocker`, `raise-escalation`, `submit-plan-verifier-decision`, `record-effect-observation` | the correspondingly typed proposed `DomainRecord@1` |
+| `record-owner-intent`, `accept-goal-spec`, `submit-worker-result`, `submit-gate-result`, `propose-retry`, `raise-blocker`, `raise-escalation`, `submit-plan-verifier-decision`, `record-owner-verifier-exception`, `record-capacity-observation`, `reserve-budget`, `record-effect-observation`, `apply-pause` | the correspondingly typed proposed `DomainRecord@1` |
+| `start-arm-run` | `{executive_lease: DomainRecord@1<executive-lease>, arm_run: DomainRecord@1<arm-run>}` |
+| `amend-goal-spec` | `{new_goal_spec: DomainRecord@1<goal-spec>, amendment: DomainRecord@1<goal-spec-amendment>, replacement_plan_revision: DomainRecord@1<plan-revision>, plan_transition: DomainRecord@1<plan-transition>, task_nodes: sorted DomainRecord@1<task-node> by id, arm_proposal_attestation_id: Id}` |
 | `propose-plan-revision` | `{plan_revision: DomainRecord@1<plan-revision>, plan_transition: DomainRecord@1<plan-transition>, task_nodes: sorted DomainRecord@1<task-node> by id}` |
-| `derive-work-packet` | `{task_ref: ObjectRef@1, attempt: PosInt, work_lease_ref: LeaseRef@1, route_assignment_ref: ObjectRef@1, budget_snapshot_digest: Digest, expected_work_packet_digest: Digest}` |
+| `derive-work-packet` | `{task_ref: ObjectRef@1, attempt: PosInt, work_lease: DomainRecord@1<work-lease>, route_assignment: DomainRecord@1<route-assignment>, budget_reservation_ref: ObjectRef@1, expected_work_packet_digest: Digest}` |
 | `replace-work-lease` | `{old_lease_ref: LeaseRef@1, new_lease: DomainRecord@1<work-lease>}` |
+| `replace-executive-lease` | `{old_lease_ref: LeaseRef@1, new_lease: DomainRecord@1<executive-lease>}` |
 | `replace-route` | `{old_route_ref: ObjectRef@1, new_route: DomainRecord@1<route-assignment>, checkpoint_ref: ObjectRef@1, expected_new_packet_digest: Digest}` |
 | `propose-replan` | `{decision: DomainRecord@1<replan-decision>, new_plan_revision: DomainRecord@1<plan-revision>, transition: DomainRecord@1<plan-transition>, task_nodes: sorted DomainRecord@1<task-node> by id}` |
-| `apply-pause` | `{pause_policy_ref: PolicyRef@1, new_pause_epoch: UInt}` |
 
 For every M1A command, `payload_digest=D(payload)` and `candidate_digest=payload_digest` exactly.
 The matching `FixtureAuthorityAttestation@1.candidate_digest` MUST equal that command field. M1A
@@ -346,20 +412,97 @@ defines no other command-candidate selector. A GateResult or PlanVerifierDecisio
 `candidate_digest` remains the task/output candidate it judges; it does not replace the command
 candidate binding.
 
-`amend-goal-spec` additionally requires that the referenced proposed `new_goal_ref` and
-`plan_transition_ref` resolve to proposed records carried in the fixture's `initial_events` or
-earlier accepted commands; forward references are forbidden. The Owner verifier-exception record
-for a downgraded decision likewise MUST already exist as an accepted initial or command-carried
-record and its exact ref is placed in the decision.
+For `amend-goal-spec`, the Owner attestation binds the complete command candidate. The separate
+`arm_proposal_attestation_id` resolves an ARM attestation whose candidate is exactly
+`D({replacement_plan_revision,plan_transition,task_nodes})`, whose lease is current for the old
+ArmRun, and whose records bind the new GoalSpec by identity. The command atomically validates all
+records and either admits the amendment, replacement plan and dispositions together or emits no
+event. This is the only amendment bootstrap. A downgraded decision may refer only to an
+`owner-verifier-exception` admitted by an earlier `record-owner-verifier-exception` command.
 
-The event alphabet is the 17 admitted event types in the fixture blueprint plus
+The event alphabet is the 21 admitted event types in the fixture blueprint plus
 `PlanItemDisposed`, `PacketFenced`, `LeaseFenced`, `EffectDisposed` and `EvidenceDisposed`.
 Disposition events sort by `(primary_record.payload.object_ref.object_type,
 primary_record.payload.object_ref.id, primary_record.payload.object_ref.version)` after the
-leading `GoalSpecAmended` or `ReplanAdmitted` event. An event's `primary_record.object_type` MUST
-match its event: the natural created object for `*Recorded`, `*Started`, `*Admitted`, `*Derived`,
-`*Replaced` or `*Applied`, and `disposition` for the five disposition events. No event carries an
-unregistered union arm.
+leading `GoalSpecAmended` or `ReplanAdmitted` event. No event carries an unregistered union arm.
+Each event's exact primary type is:
+
+| Event type | `primary_record.object_type` | Permitted `related_records` |
+|---|---|---|
+| `OwnerIntentRecorded` | `owner-intent` | none |
+| `GoalSpecAccepted` | `goal-spec` | none |
+| `GoalSpecAmended` | `goal-spec-amendment` | the new `goal-spec` |
+| `OwnerVerifierExceptionRecorded` | `owner-verifier-exception` | none |
+| `ArmRunStarted` | `arm-run` | its `executive-lease` |
+| `PlanRevisionAdmitted` | `plan-revision` | its `plan-transition` and complete `task-node` set |
+| `WorkPacketDerived` | `work-packet` | for initial `derive-work-packet`, its newly created `work-lease` and `route-assignment`; for retry or route replacement, none because the current lease/assignment is reused or was admitted by the preceding event |
+| `WorkLeaseReplaced` | `work-lease` | none |
+| `ExecutiveLeaseReplaced` | `executive-lease` | none |
+| `RouteAssignmentReplaced` | `route-assignment` | none |
+| `CapacityObservationRecorded` | `capacity-observation` | none |
+| `BudgetReserved` | `budget-reservation` | none |
+| `WorkerResultRecorded` | `worker-result` | none |
+| `GateResultRecorded` | `gate-result` | none |
+| `RetryAdmitted` | `retry-decision` | none; its immediately following `WorkPacketDerived` event carries the new packet records |
+| `ReplanAdmitted` | `replan-decision` | none; its immediately following `PlanRevisionAdmitted` event carries plan records |
+| `BlockerRaised` | `blocker` | none |
+| `EscalationRaised` | `escalation` | none |
+| `PlanVerifierDecisionRecorded` | `plan-verifier-decision` | none |
+| `PauseApplied` | `pause-directive` | none |
+| `EffectObservationRecorded` | `effect-observation` | none |
+| `PlanItemDisposed`, `PacketFenced`, `LeaseFenced`, `EffectDisposed`, `EvidenceDisposed` | `disposition` | none |
+
+Every related record is complete, digest-valid and also inserted into the projection. It is never
+reduced to an unresolved reference. A record may appear exactly once in one admitted event group.
+
+### Exact genesis and derived digests
+
+The sequence-one `previous_event_digest` is the fixed lowercase SHA-256
+`fb1168e6e4d1267c41ea3d7798ebb88963e6de7c05cc1500ed059ba4b2f75801`, equal to SHA-256 of the
+UTF-8 bytes `recursion-m1a-event-genesis-1`. A bundle's `GenesisConfig@1` produces the unique
+genesis projection with its stream and PAUSE fields, state/event sequence zero, the fixed digest
+as `last_event_digest`, null operative object refs, empty arrays, `terminal_status=nonterminal`,
+and `content_digest=D(projection)`.
+
+The remaining derived digests have exactly these operands:
+
+- `graph_digest=D({task_node_refs,dependency_edges})` after both arrays validate and sort;
+- `state_delta_digest=D({event_type,primary_record,related_records})`;
+- `event_log_digest=D([{sequence,event_id,content_digest},...])` in sequence order;
+- `unchanged_binding_digest=D({goal_ref,plan_ref,task_ref,authority_policy_ref,
+  privacy_policy_ref,egress_policy_ref,route_assignment_ref,budget_reservation_ref,
+  verifier_policy_ref,constitution_policy_ref})` loaded from the prior WorkPacket;
+- `narrowed_binding_digest` is `D` of those same named fields loaded from the replacement task and
+  its admitted assignments; and
+- `budget_snapshot_digest`, `route_snapshot_digest` and `lease_epoch_digest` are `D` of the sorted
+  exact matching reservation refs, assignment refs and lease refs in the checkpoint projection.
+
+TaskNode `plan_ref` is deliberately an identity-only reference. The containing PlanRevision
+binds every complete TaskNode digest, so the graph is content-addressed without a mutual hash.
+
+### Exact WorkPacket derivation
+
+For `derive-work-packet`, `propose-retry` and `replace-route`, the kernel constructs the
+`work-packet` record; the caller never supplies that record. Its payload copies the current exact
+GoalSpec/PlanRevision/TaskNode refs, the worker actor and deadline from the active work lease, the
+goal fence and current PAUSE epochs, the TaskNode authority/capability/effect/privacy/egress/policy/
+source/gate/action/prohibition/output fields, the sorted union of its read/write paths, and the
+GoalSpec non-goals. It binds the selected route assignment and budget reservation; its budget
+limits equal the reservation's remaining vector. Initial derivation uses the command-carried
+lease/route and a null or latest admitted checkpoint. Retry reuses the prior packet's current
+lease/route/reservation/checkpoint. Route replacement uses the newly admitted route and the
+command checkpoint while retaining the current lease/reservation.
+
+Define `packet_seed` as
+`{command_id,task_ref,attempt,work_lease_ref,route_assignment_ref,budget_reservation_ref,
+checkpoint_ref}` with those exact field names. The record ID is `PACKET-` followed by the first
+32 lowercase hexadecimal characters of `D(packet_seed)`; version is 1; creator is the fixed
+`KERNEL-M1A`; causation ID is the command ID; correlation ID is the GoalSpec ID; created logical
+time is the command logical time; and `created_under_lease` is the command's executive lease ref.
+Initial `attempt` is the command value, retry is the admitted decision's `next_attempt`, and route
+replacement preserves the prior attempt. The complete derived record digest MUST equal the
+command's expected digest where that field exists. An ID collision with unequal full content is
+`E-IDEMPOTENCY-CONFLICT`; no alternate ID or ambient lookup is allowed.
 
 ### Exact retry-policy calculation
 

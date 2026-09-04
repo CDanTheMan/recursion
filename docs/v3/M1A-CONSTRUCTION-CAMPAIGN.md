@@ -1,6 +1,6 @@
 ---
 title: M1A autonomous-planning construction campaign
-status: blocked-owner-decision
+status: active-local-construction
 last-updated: 2026-09-03
 ---
 
@@ -145,9 +145,12 @@ conflation, ambiguous-effect success, out-of-scope path, missing required verifi
 newer work, or a requirement for policy, spending, provider, credential or constitutional action.
 
 Lucas remains the only decision seam for GoalSpec/constitution changes, privacy or egress
-widening, spending, provider/configuration changes, publication, deployment, merge, exceptional
-verifier downgrade and any unresolved semantic choice. No such decision is delegated by this
-campaign.
+widening, spending, provider/configuration changes, publication, deployment, merge and an actual
+exceptional verifier downgrade. On 2026-09-03 Lucas delegated bounded construction judgment to
+Sol for later choices that improve performance, quality, design, configuration or efficiency,
+provided each consequential choice is routed through Sol, researched before final disposition and
+recorded here. That delegation does not override the allowed paths, non-goals, stop conditions or
+operative constitution.
 
 ## Later PlanRevisions
 
@@ -170,3 +173,77 @@ campaign.
   token contradictions and defines acyclic plan/node and receipt/state digest construction. The
   additional closed-wire gaps in the blocker receipt should be resolved in the same review before
   the campaign is resumed.
+
+### PlanRevision 3 — Owner-approved repair and resume
+
+`PLAN-M1A-001@3` is appended from two authenticated Owner messages on 2026-09-03. The first exact
+144-byte UTF-8 message has SHA-256
+`df3630779501b8c2fc29548fbdf77c2708e3ec62c19618ca2170de29b04ff462`:
+
+> Beautiful! Thank you for the recommendations. They align with my vision. I approve all
+> recommended decisions to unblock and resume the campaign.
+
+The second exact 289-byte UTF-8 message has SHA-256
+`0fdb666f73355b92d0447799459b74276b84f45a3e6cca0d941567c983969715` and delegates bounded
+construction judgment to Sol while requesting researched decisions and coherent commits.
+
+> If other recommended decisions arise. I approve you to make changes as long as it optimizes
+> performance, quality, design, configuration, and efficiency. Just make sure decisions go through
+> you so they can be researched towards the end of development. Be sure to commit as needed. Thank
+> you
+
+The approved canonical repair is exact:
+
+1. PascalCase event names use `EventType`; uppercase `E-*` errors use `ErrorCode`; lowercase
+   protocol values continue to use `Token`.
+2. `PlanRevision` binds full TaskNode digests while each TaskNode carries only its plan ID/version.
+   Projection state stores receipt identity and command digest; each receipt binds the complete
+   before/after state digests.
+3. Invalid JSON or schema-invalid input returns a typed `DecodeFailure` and creates no
+   `CommandReceipt`; structurally valid but refused commands receive a receipt.
+4. The closed wire adds the minimum carriers and bindings named in the Wave 1 receipt: pause
+   directives, Owner verifier exceptions, executive-lease replacement, atomic Owner amendment
+   plus separate ARM plan attestation, verifier assignment, authority/egress/account/capacity/budget
+   bindings, exact genesis and derived-digest operands, and isolated cases within each fixture
+   bundle.
+
+Disposition:
+
+- Retained: the immutable GoalSpec, all campaign boundaries and non-goals, both prior campaign
+  commits and all four Wave 1 receipts.
+- Invalidated: Revision 2's unresolved-owner-decision state.
+- Quarantined: none; no code, schema or fixture was created under the blocked revision.
+- Superseded: only Revision 2's blocked schedule.
+- Re-admitted: M1A-01 through M1A-07 in their original sequential dependency order. Wave 2 and
+  Terra remain gated on the exact schema/red-fixture commits.
+
+Consequential implementation decisions made under the second authorization will be appended to
+this revision with evidence, alternatives and falsifiers. They may refine implementation inside
+the approved contract but may not silently amend its semantics.
+
+Construction decision `CD-M1A-001`: composite commands place every newly admitted immutable
+record in the event group's `primary_record` or `related_records`, rather than carrying only
+unresolvable refs. Receipt/event IDs are deterministic functions of command IDs, accepted receipt
+identities alone enter the authoritative projection, and the command admission API carries a
+separate explicit receipt journal for refused-command idempotency. Evidence: otherwise event-only
+replay cannot reconstruct TaskNodes, transitions, new GoalSpecs, leases or routes, and refusal
+receipts would create unaudited state changes despite `NOEVENT`. Rejected alternatives were an
+ambient record store and events that point to command payloads. Falsifier: genesis plus the event
+and receipt lists cannot reproduce byte-identical projection and duplicate behavior without an
+ambient lookup.
+
+Construction decision `CD-M1A-002`: `start-arm-run` carries its initial executive lease, and
+`derive-work-packet` carries its initial work lease and route assignment while referring to a
+previously admitted budget reservation and capacity observation. Evidence: an empty-genesis happy
+path otherwise refers to records that no command can admit. This retains the 21-command alphabet
+and gives every authority/capacity/budget binding a replay-visible origin. Falsifier: a closed
+happy-path bundle still requires a fabricated or unresolved lease, route, capacity or budget ref.
+
+Construction decision `CD-M1A-003`: WorkPackets are kernel-derived from a closed exact operand
+set, use a deterministic seed-based ID, and copy TaskNode action/prohibition sets plus all bounded
+GoalSpec/TaskNode/lease/route/budget fields. Evidence: an expected packet digest alone cannot tell
+two implementers how to construct the same complete record, and the prior TaskNode shape had no
+source for required action/prohibition fields. A caller-supplied complete packet was rejected
+because it would make the caller, rather than the kernel, the packet authority. Falsifier: two
+implementations following the documented derivation produce different packet bytes or a packet
+widens any parent binding.

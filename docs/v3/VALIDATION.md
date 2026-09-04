@@ -194,10 +194,10 @@ $commandIds = @($oracleLines | ForEach-Object {
 $errorIds = @($oracleLines | ForEach-Object {
   if ($_ -match '^\| `(E-[A-Z0-9-]+)` \|') { $Matches[1] }
 })
-if ($commandIds.Count -ne 17 -or ($commandIds | Sort-Object -Unique).Count -ne 17) {
+if ($commandIds.Count -ne 21 -or ($commandIds | Sort-Object -Unique).Count -ne 21) {
   throw 'closed command alphabet failed'
 }
-if ($errorIds.Count -ne 26 -or ($errorIds | Sort-Object -Unique).Count -ne 26) {
+if ($errorIds.Count -ne 27 -or ($errorIds | Sort-Object -Unique).Count -ne 27) {
   throw 'closed error registry failed'
 }
 "M1A_CLOSED_ALPHABETS_PASS commands=$($commandIds.Count) errors=$($errorIds.Count)"

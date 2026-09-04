@@ -1,6 +1,6 @@
 ---
 title: M1A construction blocker and Wave 1 receipt
-status: blocked-owner-decision
+status: resolved-owner-approved
 last-updated: 2026-09-03
 ---
 
@@ -101,3 +101,12 @@ Lucas must approve an exact canonical revision covering at least:
 
 Until then, M1A is not ready for construction review. Nothing in this receipt claims a runtime,
 replay result, fixture pass, independent verification or production behavior.
+
+## Owner resolution
+
+Lucas approved all recommended decisions on 2026-09-03. The exact approval is recorded in
+[PlanRevision 3](M1A-CONSTRUCTION-CAMPAIGN.md#planrevision-3--owner-approved-repair-and-resume).
+The corrected canonical profile now supplies distinct event/error aliases, acyclic digest
+boundaries, typed decode failures, exact genesis and derived-digest operands, and every missing
+carrier/binding listed above. This receipt remains immutable evidence of why construction stopped;
+its status is resolved, and M1A-01 is re-admitted under PlanRevision 3.
