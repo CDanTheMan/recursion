@@ -83,8 +83,19 @@ def resolve_route(value: dict[str, Any]) -> dict[str, Any]:
                 and route["model_id"] in pool["model_ids"]
                 and route["account_ref"] == pool["account_ref"]
                 and set(route["egress_destinations"]).issubset(set(provider["endpoint_ids"]))
-                and set(route["egress_destinations"]).issubset(set(sandbox["allowed_destinations"]))
+                and (
+                    (sandbox["network_mode"] == "denied" and not route["egress_destinations"])
+                    or sandbox["network_mode"] == "full"
+                    or (
+                        sandbox["network_mode"] == "allowlist"
+                        and set(route["egress_destinations"]).issubset(set(sandbox["allowed_destinations"]))
+                    )
+                )
             )
+            if "network-allowlist" in sandbox["capabilities"] and sandbox["network_mode"] != "allowlist":
+                component_ok = False
+            if "workspace-write" in sandbox["capabilities"] and sandbox["filesystem_mode"] not in {"workspace-write", "full"}:
+                component_ok = False
         if not component_ok:
             reasons.add("component-mismatch")
 
@@ -100,7 +111,7 @@ def resolve_route(value: dict[str, Any]) -> dict[str, Any]:
 
         if pool is not None:
             pool_state = pool["state"]
-            if pool_state == "exhausted":
+            if pool_state == "exhausted" or (pool_state == "available" and pool["remaining_units"] == 0):
                 reasons.add("pool-exhausted")
             elif pool_state == "disabled":
                 reasons.add("pool-disabled")
@@ -108,6 +119,8 @@ def resolve_route(value: dict[str, Any]) -> dict[str, Any]:
                 reasons.add("pool-unknown")
             if pool["billing_basis"] not in requirement["allowed_billing"]:
                 reasons.add("billing-basis-denied")
+            if pool["billing_basis"] == "unknown":
+                reasons.add("billing-unknown")
             if pool["billing_basis"] == "metered":
                 if not policy["metered_authorized"]:
                     reasons.add("metered-not-authorized")
@@ -235,6 +248,19 @@ def topo_order(graph: dict[str, set[str]]) -> list[str]:
     return result
 
 
+def graph_reaches(graph: dict[str, set[str]], source: str, target: str) -> bool:
+    pending = list(graph.get(source, set()))
+    seen: set[str] = set()
+    while pending:
+        node = pending.pop()
+        if node == target:
+            return True
+        if node not in seen:
+            seen.add(node)
+            pending.extend(graph.get(node, set()))
+    return False
+
+
 def plugin_rejection(plugin_id: str, reasons: set[str]) -> dict[str, Any]:
     return {"type": "PluginRejection@1", "plugin_id": plugin_id, "reasons": sorted(reasons)}
 
@@ -268,6 +294,8 @@ def resolve_plugins(value: dict[str, Any]) -> dict[str, Any]:
             reasons[plugin_id].add("isolation-denied")
         if any(capability not in policy["allowed_capabilities"] for capability in manifest["provided_capabilities"]):
             reasons[plugin_id].add("capability-denied")
+        if not set(manifest["requested_grants"]["functional_capabilities"]).issubset(set(manifest["provided_capabilities"])):
+            reasons[plugin_id].add("capability-denied")
         grant = grants.get(plugin_id)
         if grant is None:
             reasons[plugin_id].add("sensitive-grant-missing")
@@ -288,6 +316,8 @@ def resolve_plugins(value: dict[str, Any]) -> dict[str, Any]:
             if lifecycle["state"] not in {"verified", "admitted", "staged", "active"}:
                 reasons[plugin_id].add("lifecycle-state-denied")
             if grant is not None and lifecycle["epoch"] != grant["grant_epoch"]:
+                reasons[plugin_id].add("stale-plugin-epoch")
+            if any(lifecycle[field] != lifecycle["epoch"] for field in ["packet_epoch", "lease_epoch", "subscription_epoch"]):
                 reasons[plugin_id].add("stale-plugin-epoch")
         for dependency in manifest["dependencies"]:
             dependency_id = dependency["plugin_id"]
@@ -312,7 +342,8 @@ def resolve_plugins(value: dict[str, Any]) -> dict[str, Any]:
                 reasons[plugin_id].add("conflict-declared")
                 reasons[conflict].add("conflict-declared")
 
-    for plugin_id in cycle_members(graph):
+    cyclic = cycle_members(graph)
+    for plugin_id in cyclic:
         reasons[plugin_id].add("dependency-cycle")
     resource_owners: dict[str, list[str]] = {}
     for plugin_id, manifest in manifests.items():
@@ -321,13 +352,19 @@ def resolve_plugins(value: dict[str, Any]) -> dict[str, Any]:
     for owners in resource_owners.values():
         if len(owners) > 1:
             for plugin_id in owners:
-                reasons[plugin_id].add("exclusive-resource-conflict")
+                if any(
+                    other_id != plugin_id
+                    and not graph_reaches(graph, plugin_id, other_id)
+                    and not graph_reaches(graph, other_id, plugin_id)
+                    for other_id in owners
+                ):
+                    reasons[plugin_id].add("exclusive-resource-conflict")
 
     changed = True
     while changed:
         changed = False
         for plugin_id, dependencies in graph.items():
-            if any(reasons.get(dependency_id, set()) - {"dependency-cycle", "dependency-ineligible"} for dependency_id in dependencies):
+            if plugin_id not in cyclic and any(reasons.get(dependency_id) for dependency_id in dependencies):
                 before = len(reasons[plugin_id])
                 reasons[plugin_id].add("dependency-ineligible")
                 changed = changed or len(reasons[plugin_id]) != before
@@ -384,6 +421,10 @@ def evaluate_reload(value: dict[str, Any]) -> dict[str, Any]:
         problems.add("isolation-denied")
     if any(capability not in policy["allowed_capabilities"] for capability in new["provided_capabilities"]):
         problems.add("capability-denied")
+    if not set(new["requested_grants"]["functional_capabilities"]).issubset(set(new["provided_capabilities"])):
+        problems.add("capability-denied")
+    if new["dependencies"]:
+        problems.add("dependency-missing")
     if new["required_capabilities"]:
         problems.add("required-capability-missing")
     problems.update(subset_dimensions(new["requested_grants"], grant["dimensions"], policy))
@@ -432,7 +473,9 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
     process_epoch = value["initial_process_epoch"]
     current_cursor = 0
     current_unit = "event"
+    unit_initialized = False
     acknowledged_cursor = 0
+    hello_cursor: int | None = None
     stream_id: str | None = None
     client_id: str | None = None
     reasons: set[str] = set()
@@ -441,10 +484,18 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
     credit_seen = False
     pending: list[tuple[int, int]] = []
     pending_bytes = 0
-    reset_after_exhaustion = False
-    exhaustion_seen = False
-    exhaustion_unrecovered = False
+    recovery_needed_seen = False
+    recovery_unrecovered = False
+    reset_recovery_seen = False
     commands: dict[str, bytes] = {}
+
+    def bind_unit(unit: str) -> None:
+        nonlocal current_unit, unit_initialized
+        if unit_initialized and unit != current_unit:
+            reasons.add("cursor-unit-mismatch")
+        elif not unit_initialized:
+            current_unit = unit
+            unit_initialized = True
 
     if any(value[field] for field in ["launch_count", "model_turn_count", "actor_create_count", "effect_count"]):
         reasons.add("attach-created-work")
@@ -488,37 +539,50 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
                 reasons.add("stale-lease")
             continue
         if kind == "RESET":
-            if exhaustion_unrecovered:
-                reset_after_exhaustion = True
-                exhaustion_unrecovered = False
-            current_cursor = message["snapshot_cursor"]
-            current_unit = message["cursor_unit"]
-            acknowledged_cursor = current_cursor
-            pending.clear()
-            pending_bytes = 0
-            credit_seen = False
-            credit_bytes = 0
-            credit_events = 0
+            bind_unit(message["cursor_unit"])
+            reset_cursor = message["snapshot_cursor"]
+            if not recovery_unrecovered:
+                reasons.add("unexpected-reset")
+            if reset_cursor < current_cursor:
+                reasons.add("cursor-nonmonotonic")
+            elif recovery_unrecovered:
+                current_cursor = reset_cursor
+                acknowledged_cursor = reset_cursor
+                pending.clear()
+                pending_bytes = 0
+                credit_seen = False
+                credit_bytes = 0
+                credit_events = 0
+                recovery_unrecovered = False
+                reset_recovery_seen = True
             continue
         if kind not in {"EVENT", "SNAPSHOT", "ACK", "HELLO", "WELCOME"}:
             continue
         if kind in {"HELLO", "WELCOME"}:
             unit = message["cursor_unit"]
             cursor = message["last_cursor"] if kind == "HELLO" else message["snapshot_cursor"]
-            if current_cursor and unit != current_unit:
-                reasons.add("cursor-unit-mismatch")
+            bind_unit(unit)
+            if cursor < current_cursor:
+                reasons.add("cursor-nonmonotonic")
+            if kind == "HELLO":
+                hello_cursor = cursor
             if kind == "WELCOME" and (
                 message["input_lease"] != value["current_input_lease"]
                 or message["resize_lease"] != value["current_resize_lease"]
             ):
                 reasons.add("welcome-lease-mismatch")
-            current_unit = unit
+            if kind == "WELCOME":
+                if message["replay_floor"] > message["snapshot_cursor"]:
+                    reasons.add("cursor-nonmonotonic")
+                if hello_cursor is not None and hello_cursor < message["replay_floor"]:
+                    reasons.add("replay-gap")
+                    recovery_needed_seen = True
+                    recovery_unrecovered = True
             current_cursor = max(current_cursor, cursor)
             continue
         unit = message["cursor_unit"]
         cursor = message["cursor"]
-        if current_cursor and unit != current_unit:
-            reasons.add("cursor-unit-mismatch")
+        bind_unit(unit)
         expected = current_cursor
         payload_length = 0
         if kind == "EVENT":
@@ -532,12 +596,12 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
             elif unit == "event" and cursor != expected:
                 reasons.add("cursor-nonmonotonic")
             if not credit_seen:
-                exhaustion_seen = True
-                exhaustion_unrecovered = True
+                recovery_needed_seen = True
+                recovery_unrecovered = True
                 reasons.add("credit-missing")
             elif payload_length > credit_bytes or credit_events < 1:
-                exhaustion_seen = True
-                exhaustion_unrecovered = True
+                recovery_needed_seen = True
+                recovery_unrecovered = True
                 reasons.add("credit-exhausted")
             else:
                 credit_bytes -= payload_length
@@ -545,8 +609,8 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
             pending.append((cursor, payload_length))
             pending_bytes += payload_length
             if pending_bytes > value["queue_limit_bytes"] or len(pending) > value["queue_limit_events"]:
-                exhaustion_seen = True
-                exhaustion_unrecovered = True
+                recovery_needed_seen = True
+                recovery_unrecovered = True
                 reasons.add("credit-exhausted")
             current_cursor = max(current_cursor, cursor)
         elif kind == "ACK":
@@ -567,12 +631,11 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
             reasons.add("cursor-nonmonotonic")
         else:
             current_cursor = cursor
-        current_unit = unit
 
-    refusal_reasons = reasons - {"credit-exhausted"}
-    if refusal_reasons or exhaustion_unrecovered:
+    refusal_reasons = reasons - {"credit-exhausted", "replay-gap"}
+    if refusal_reasons or recovery_unrecovered:
         status = "refused"
-    elif exhaustion_seen and reset_after_exhaustion:
+    elif recovery_needed_seen and reset_recovery_seen:
         status = "accepted-reset"
     else:
         status = "accepted"
@@ -581,7 +644,7 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
         "final_cursor": current_cursor, "cursor_unit": current_unit,
         "launch_count": value["launch_count"], "model_turn_count": value["model_turn_count"],
         "actor_create_count": value["actor_create_count"], "effect_count": value["effect_count"],
-        "requires_reset": exhaustion_seen,
+        "requires_reset": recovery_needed_seen,
     }
 
 
@@ -596,6 +659,9 @@ def decide(bundle: dict[str, Any]) -> dict[str, Any]:
     if tag == "PluginReloadFixtureBundle@1":
         return evaluate_reload(bundle["input"])
     if tag == "ProcessFixtureBundle@1":
+        observation = bundle["termination_observation"]
+        if observation is not None and observation["process_requirement_id"] != bundle["input"]["requirement"]["id"]:
+            raise OracleError("termination observation is bound to another process requirement")
         return evaluate_process(bundle["input"])
     if tag == "BrokerFixtureBundle@1":
         return replay_broker(bundle["input"])

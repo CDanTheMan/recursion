@@ -57,6 +57,8 @@ field authorizes consulting an ambient clock.
 For a pool, `remaining_units` is non-null only when state is `available` or `exhausted`;
 `metered_limit_microunits` is non-null only for `metered`; `account_ref` may be null only for
 `local` or `unknown`. These are structure rules, not live entitlement claims.
+An `unknown` billing basis always blocks even if listed in a requirement, and `available` with
+known zero remaining units is treated as exhausted.
 
 `CapabilityState@1` has `name` and `state`; arrays are ordered by `name`.
 
@@ -102,7 +104,9 @@ requires null and no eligible evaluation.
 
 A required route capability must be explicitly `supported` by the route descriptor and present
 in both its referenced engine and model descriptors. A route declaration cannot synthesize
-component support.
+component support. Sandbox `denied`, `allowlist` and `full` network modes respectively back zero,
+allowlisted and unrestricted route egress; named allowlist/workspace-write capabilities must agree
+with their corresponding modes.
 
 Closed route reasons:
 
@@ -166,7 +170,11 @@ Every enabled, grant and lifecycle plugin ID must name a manifest. Every manifes
 capability must have exactly one provider among its declared direct dependencies; zero or
 ambiguous providers block. A rejected dependency makes its dependents ineligible. Grant GoalSpec
 and policy digests must equal the active policy envelope. A lifecycle is required for admission
-and must bind the manifest artifact, the grant epoch and an admissible lifecycle state.
+and must bind the manifest artifact, the grant epoch, all packet/lease/subscription epochs and an
+admissible lifecycle state. Requested functional authority must be a subset of the manifest's
+provided capabilities. Cycle members are rejected as a cycle; noncycle dependents are rejected as
+dependency-ineligible. Shared exclusive-resource ownership is allowed only when dependency order
+makes every owner pair comparable.
 
 Closed plugin reasons:
 
@@ -192,6 +200,9 @@ Successful events are exactly `verified`, `staged`, `drain-and-fence`, `replaced
 Reload revalidates the new manifest and grant against the supplied policy, requires the old active
 lifecycle and replacement digest to identify the transition exactly, and requires all old binding
 epochs to equal the old lifecycle epoch before fencing them.
+The M1B reload input is self-contained rather than a full graph-resolution input, so a new
+manifest with dependencies blocks as unresolved and must first return through ordinary graph
+resolution.
 
 ## Process and broker records
 
@@ -221,6 +232,7 @@ Closed reasons are `cancellation-unknown`, `cancellation-unsupported`, `containm
 `tree_status` (`terminated`,`partial`,`unknown`), sorted `remaining_process_refs`,
 `exit_evidence_digest`, and `effect_conclusion` fixed `not-evaluated`.
 `terminated` requires an empty remaining set; `partial` requires a nonempty remaining set.
+When carried by a process fixture, `process_requirement_id` must equal that fixture's requirement.
 
 Every broker message has a `type` discriminator and `protocol_version` fixed `m1b-broker/1`.
 
@@ -248,14 +260,18 @@ is additive, and is consumed cumulatively by decoded bytes and event count. Pend
 and events accumulate until a non-forward ACK releases them. Exhaustion remains unrecovered until
 an explicit RESET clears the pending queue and credit. INPUT and RESIZE reuse of a command ID is a
 no-op only for the byte-identical command; conflicting reuse is refused.
+Cursor-unit binding applies at cursor zero. `replay_floor` cannot exceed `snapshot_cursor`; a
+client cursor below the replay floor creates a `replay-gap` that must be recovered by RESET.
+RESET cannot lower the current cursor, cannot appear without an unrecovered replay gap or flow
+exhaustion, and clears credit so subsequent EVENT delivery requires fresh CREDIT.
 
 `BrokerTraceDecision@1` has `type`, status `accepted`, `accepted-reset` or `refused`, sorted unique
 reasons, `final_cursor`, `cursor_unit`, the four final counters, and `requires_reset`.
 Closed reasons are `ack-ahead`, `attach-created-work`, `client-mismatch`, `credit-exhausted`,
 `credit-missing`, `cursor-nonmonotonic`, `cursor-unit-mismatch`,
 `duplicate-command-conflict`, `output-command-injection`, `passive-client-input`,
-`stale-daemon-epoch`, `stale-lease`, `stale-process-epoch`, `stream-mismatch`,
-`utf8-byte-cursor-mismatch`, `welcome-lease-mismatch`.
+`replay-gap`, `stale-daemon-epoch`, `stale-lease`, `stale-process-epoch`, `stream-mismatch`,
+`unexpected-reset`, `utf8-byte-cursor-mismatch`, `welcome-lease-mismatch`.
 
 ## Fixture unions and manifest
 

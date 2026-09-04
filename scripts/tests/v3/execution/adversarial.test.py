@@ -50,6 +50,49 @@ class M1BAdversarialTests(unittest.TestCase):
         for value in cases:
             self.assert_schema_rejects(value)
 
+    def test_every_fixture_union_family_gets_the_strict_mutation_matrix(self) -> None:
+        representatives = [1, 9, 15, 16, 17, 20]
+
+        def mutate_first(value: Any, predicate: Any, replacement: Any) -> bool:
+            if isinstance(value, dict):
+                for key in list(value):
+                    if predicate(value[key]):
+                        value[key] = replacement
+                        return True
+                    if mutate_first(value[key], predicate, replacement):
+                        return True
+            elif isinstance(value, list):
+                for index, item in enumerate(value):
+                    if predicate(item):
+                        value[index] = replacement
+                        return True
+                    if mutate_first(item, predicate, replacement):
+                        return True
+            return False
+
+        for number in representatives:
+            original = bundle(number)
+            mutations: list[tuple[str, dict[str, Any]]] = []
+            value = copy.deepcopy(original); value["unknown"] = True; mutations.append(("unknown-field", value))
+            value = copy.deepcopy(original); value["type"] = value["type"].replace("@1", "@2"); mutations.append(("version-discriminator", value))
+            value = copy.deepcopy(original); value["fixture_id"] = "INVALID"; mutations.append(("id", value))
+            value = copy.deepcopy(original)
+            if not mutate_first(value, lambda item: isinstance(item, str) and item.startswith("sha256:"), "sha256:bad"):
+                self.assertEqual(number, 20)
+                value["input"]["messages"].append({
+                    "type": "SNAPSHOT", "protocol_version": "m1b-broker/1",
+                    "stream_id": "stream-a", "daemon_epoch": 2, "cursor": 0,
+                    "cursor_unit": "event", "snapshot_digest": "sha256:bad",
+                })
+            mutations.append(("digest", value))
+            value = copy.deepcopy(original); self.assertTrue(mutate_first(value, lambda item: isinstance(item, int) and not isinstance(item, bool), 9007199254740992)); mutations.append(("integer", value))
+            value = copy.deepcopy(original); value["source_requirement_ids"] = ["z", "a"]; mutations.append(("ordering", value))
+            value = copy.deepcopy(original); value["source_requirement_ids"] = ["a", "a"]; mutations.append(("uniqueness", value))
+            value = copy.deepcopy(original); value["source_requirement_ids"] = []; mutations.append(("collection-bound", value))
+            for label, value in mutations:
+                with self.subTest(fixture=number, mutation=label):
+                    self.assert_schema_rejects(value)
+
     def test_strict_decoder_rejects_duplicate_float_constant_and_utf8(self) -> None:
         raws = [b'{"a":1,"a":2}', b'{"a":1.25}', b'{"a":-0}', b'{"a":Infinity}', b'"\xff"']
         for raw in raws:
@@ -115,6 +158,23 @@ class M1BAdversarialTests(unittest.TestCase):
         value["catalog"]["engines"][0]["capabilities"] = ["tools"]
         first = oracle.resolve_route(value)["candidate_evaluations"][0]
         self.assertFalse(first["eligible"])
+        self.assertIn("component-mismatch", first["reasons"])
+
+    def test_unknown_zero_capacity_and_contradictory_sandbox_block(self) -> None:
+        value = bundle(1)["input"]
+        value["catalog"]["pools"][0]["billing_basis"] = "unknown"
+        value["requirement"]["allowed_billing"] = ["metered", "subscription", "unknown"]
+        first = oracle.resolve_route(value)["candidate_evaluations"][0]
+        self.assertIn("billing-unknown", first["reasons"])
+
+        value = bundle(1)["input"]
+        value["catalog"]["pools"][0]["remaining_units"] = 0
+        first = oracle.resolve_route(value)["candidate_evaluations"][0]
+        self.assertIn("pool-exhausted", first["reasons"])
+
+        value = bundle(1)["input"]
+        value["catalog"]["sandboxes"][0]["network_mode"] = "denied"
+        first = oracle.resolve_route(value)["candidate_evaluations"][0]
         self.assertIn("component-mismatch", first["reasons"])
 
     def test_all_noncurrent_descriptor_states_block(self) -> None:
@@ -194,6 +254,58 @@ class M1BAdversarialTests(unittest.TestCase):
         matching = next(row for row in decision["rejections"] if row["plugin_id"] == "plugin-z")
         self.assertIn("manifest-missing", matching["reasons"])
 
+    def test_effective_functional_authority_cannot_exceed_manifest(self) -> None:
+        value = bundle(9)["input"]
+        manifest = next(item for item in value["manifests"] if item["plugin_id"] == "plugin-core")
+        grant = next(item for item in value["grants"] if item["plugin_id"] == "plugin-core")
+        manifest["requested_grants"]["functional_capabilities"] = ["render"]
+        grant["dimensions"]["functional_capabilities"] = ["render"]
+        manifest["manifest_digest"] = oracle.digest_value({key: item for key, item in manifest.items() if key != "manifest_digest"})
+        grant["grant_digest"] = oracle.digest_value({key: item for key, item in grant.items() if key != "grant_digest"})
+        decision = oracle.resolve_plugins(value)
+        matching = next(row for row in decision["rejections"] if row["plugin_id"] == "plugin-core")
+        self.assertIn("capability-denied", matching["reasons"])
+
+    def test_lifecycle_binding_epochs_are_exact(self) -> None:
+        for field in ["packet_epoch", "lease_epoch", "subscription_epoch"]:
+            value = bundle(9)["input"]
+            value["lifecycles"][0][field] = 0
+            decision = oracle.resolve_plugins(value)
+            matching = next(row for row in decision["rejections"] if row["plugin_id"] == value["lifecycles"][0]["plugin_id"])
+            self.assertIn("stale-plugin-epoch", matching["reasons"])
+
+    def test_cycle_rejection_propagates_to_noncycle_dependents(self) -> None:
+        value = bundle(11)["input"]
+        plugin_c = copy.deepcopy(value["manifests"][0])
+        plugin_c["id"] = "manifest-plugin-c"
+        plugin_c["plugin_id"] = "plugin-c"
+        plugin_c["dependencies"] = [{
+            "type": "PluginDependency@1", "plugin_id": "plugin-a",
+            "artifact_digest": value["manifests"][0]["artifact_digest"],
+            "dependency_lock_digest": value["manifests"][0]["dependency_lock_digest"],
+        }]
+        plugin_c["manifest_digest"] = oracle.digest_value({key: item for key, item in plugin_c.items() if key != "manifest_digest"})
+        grant_c = copy.deepcopy(value["grants"][0])
+        grant_c["id"] = "grant-plugin-c"
+        grant_c["plugin_id"] = "plugin-c"
+        grant_c["grant_digest"] = oracle.digest_value({key: item for key, item in grant_c.items() if key != "grant_digest"})
+        lifecycle_c = copy.deepcopy(value["lifecycles"][0])
+        lifecycle_c["plugin_id"] = "plugin-c"
+        value["manifests"].append(plugin_c)
+        value["grants"].append(grant_c)
+        value["lifecycles"].append(lifecycle_c)
+        value["enabled_plugin_ids"].append("plugin-c")
+        decision = oracle.resolve_plugins(value)
+        matching = next(row for row in decision["rejections"] if row["plugin_id"] == "plugin-c")
+        self.assertIn("dependency-ineligible", matching["reasons"])
+
+    def test_dependency_order_can_serialize_exclusive_ownership(self) -> None:
+        value = bundle(9)["input"]
+        for manifest in value["manifests"]:
+            manifest["exclusive_resources"] = ["terminal-input"]
+            manifest["manifest_digest"] = oracle.digest_value({key: item for key, item in manifest.items() if key != "manifest_digest"})
+        self.assertEqual(oracle.resolve_plugins(value)["status"], "resolved")
+
     def test_each_sensitive_grant_dimension_is_independent(self) -> None:
         fields = ["network_destinations", "credential_refs", "model_refs", "route_account_refs", "quota_units", "spend_microunits", "update", "downgrade", "grant_admin"]
         for field in fields:
@@ -246,6 +358,18 @@ class M1BAdversarialTests(unittest.TestCase):
         value["grant"]["grant_digest"] = oracle.digest_value({key: item for key, item in value["grant"].items() if key != "grant_digest"})
         self.assertEqual(oracle.evaluate_reload(value)["status"], "blocked")
 
+    def test_reload_with_unresolved_dependency_blocks(self) -> None:
+        value = bundle(16)["input"]
+        value["new_manifest"]["dependencies"] = [{
+            "type": "PluginDependency@1", "plugin_id": "plugin-missing",
+            "artifact_digest": "sha256:" + "8" * 64,
+            "dependency_lock_digest": "sha256:" + "7" * 64,
+        }]
+        value["new_manifest"]["manifest_digest"] = oracle.digest_value({key: item for key, item in value["new_manifest"].items() if key != "manifest_digest"})
+        decision = oracle.evaluate_reload(value)
+        self.assertEqual(decision["status"], "blocked")
+        self.assertIn("dependency-missing", decision["old_binding_reasons"])
+
     def test_process_unknown_and_unsupported_are_distinct_failures(self) -> None:
         for number, reason in [(18, "containment-unknown"), (19, "containment-unsupported")]:
             decision = oracle.evaluate_process(bundle(number)["input"])
@@ -263,6 +387,13 @@ class M1BAdversarialTests(unittest.TestCase):
         observation = bundle(24)["termination_observation"]
         observation["effect_conclusion"] = "success"
         self.assert_schema_rejects(observation, "ProcessTerminationObservation")
+
+    def test_termination_observation_binds_the_requirement(self) -> None:
+        value = bundle(24)
+        value["termination_observation"]["process_requirement_id"] = "process-requirement-other"
+        self.assert_schema_rejects(value)
+        with self.assertRaises(oracle.OracleError):
+            oracle.decide(value)
 
     def test_future_pause_policy_cannot_become_operative(self) -> None:
         requirement = bundle(24)["input"]["requirement"]
@@ -361,9 +492,46 @@ class M1BAdversarialTests(unittest.TestCase):
         value["messages"][1]["input_lease"] = "lease:unexpected"
         self.assertIn("welcome-lease-mismatch", oracle.replay_broker(value)["reasons"])
 
+    def test_zero_cursor_units_replay_gaps_and_resets_are_fenced(self) -> None:
+        value = bundle(20)["input"]
+        value["messages"][1]["cursor_unit"] = "utf8-byte"
+        self.assertIn("cursor-unit-mismatch", oracle.replay_broker(value)["reasons"])
+
+        value = bundle(20)["input"]
+        value["messages"][0]["last_cursor"] = 10
+        self.assertIn("cursor-nonmonotonic", oracle.replay_broker(value)["reasons"])
+
+        value = bundle(20)["input"]
+        value["messages"][1]["replay_floor"] = 1
+        value["messages"][1]["snapshot_cursor"] = 2
+        decision = oracle.replay_broker(value)
+        self.assertEqual(decision["status"], "refused")
+        self.assertIn("replay-gap", decision["reasons"])
+        value["messages"].append({"type": "RESET", "protocol_version": "m1b-broker/1", "client_id": "client-a", "stream_id": "stream-a", "daemon_epoch": 2, "reason": "gap", "snapshot_cursor": 2, "cursor_unit": "event"})
+        self.assertEqual(oracle.replay_broker(value)["status"], "accepted-reset")
+
+        value = bundle(23)["input"]
+        value["messages"].append({"type": "RESET", "protocol_version": "m1b-broker/1", "client_id": "client-a", "stream_id": "stream-a", "daemon_epoch": 2, "reason": "gap", "snapshot_cursor": 0, "cursor_unit": "utf8-byte"})
+        decision = oracle.replay_broker(value)
+        self.assertEqual(decision["status"], "refused")
+        self.assertIn("unexpected-reset", decision["reasons"])
+        self.assertIn("cursor-nonmonotonic", decision["reasons"])
+
+    def test_reset_requires_fresh_credit_and_identical_command_replay_is_noop(self) -> None:
+        value = bundle(22)["input"]
+        value["messages"].append({"type": "EVENT", "protocol_version": "m1b-broker/1", "stream_id": "stream-a", "daemon_epoch": 2, "cursor": 2, "cursor_unit": "event", "event_class": "output", "process_id": "process-a", "payload_base64": base64.b64encode(b"x").decode(), "payload_untrusted": True})
+        decision = oracle.replay_broker(value)
+        self.assertEqual(decision["status"], "refused")
+        self.assertIn("credit-missing", decision["reasons"])
+
+        value = bundle(21)["input"]
+        value["messages"][0]["input_lease"] = value["current_input_lease"]
+        value["messages"].append(copy.deepcopy(value["messages"][0]))
+        self.assertEqual(oracle.replay_broker(value)["status"], "accepted")
+
 
 if __name__ == "__main__":
     result = unittest.main(verbosity=2, exit=False)
     if result.result.wasSuccessful():
-        print("M1B_ADVERSARIAL_PASS probes=33 grant_dimensions=9")
+        print("M1B_ADVERSARIAL_PASS tests=43 union_mutations=48 grant_dimensions=9")
     raise SystemExit(0 if result.result.wasSuccessful() else 1)

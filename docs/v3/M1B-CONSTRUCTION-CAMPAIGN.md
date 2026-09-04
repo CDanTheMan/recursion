@@ -170,6 +170,35 @@ binding checks. The candidate is rejected; its passing receipt is not terminal e
 - Falsifier: any reproduced TERRA counterexample remains accepted, any repaired rule changes a
   fixture's intended outcome class, or the repair introduces runtime I/O or an Owner policy choice.
 
+## PlanRevision 4 — SOL semantic closure
+
+`PLAN-M1B-001@4` was triggered by two independent SOL reviews of
+`a074dd723da38b804e509b6c92404108570e0a22`. Both confirmed the four PlanRevision 3 repairs and
+rejected the candidate for generalized schema-valid false greens. Material findings covered
+unknown/contradictory pool and sandbox state; manifest authority beyond declared capability;
+reload dependency bypass; stale lifecycle sub-epochs; cycle-dependent propagation; termination
+identity; zero-cursor unit changes; replay-gap and RESET rollback; and route-decision output
+invariants. One review also showed that the required mutation matrix had only been sampled on the
+route union.
+
+- Retained: all prior Owner intent, boundaries, tasks, fixture IDs, purposes and expected outcome
+  classes. This remains an inert schema/oracle campaign with no production runtime.
+- Re-admitted: M1B-02 through M1B-06 on one new exact candidate. Prior passing sweeps and both SOL
+  dissent receipts are diagnostic evidence only.
+- Change: unknown billing and known-zero available capacity block; sandbox mode must back its
+  claimed egress/capability state; route result validation binds status and first eligible route.
+- Change: effective plugin functionality is bounded by the manifest declaration; lifecycle and
+  all binding epochs agree; cycle rejection propagates to noncycle dependents; dependency order
+  may serialize exclusive ownership; self-contained reload refuses unresolved dependencies.
+- Change: termination observations bind the exact requirement; broker cursor units bind even at
+  zero, WELCOME ranges cannot regress, replay gaps require RESET, RESET cannot roll back or appear
+  without a gap/exhaustion condition, and new output after RESET requires fresh credit.
+- Gate extension: every fixture union family receives unknown-field, discriminator/version, ID,
+  digest, integer, ordering, uniqueness and collection-bound mutations (48 matrix cases), plus the
+  exact SOL falsifiers.
+- Falsifier: any SOL counterexample remains accepted, route/plugin/process/broker output can claim
+  a mismatched identity or authority, or a RESET/ordering rule permits ambiguous continuation.
+
 ## Stop conditions
 
 Stop and append a PlanRevision if a canonical rule conflicts, an oracle must be weakened, a test

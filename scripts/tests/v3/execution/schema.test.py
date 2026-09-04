@@ -143,11 +143,39 @@ def _base64_bound(validator: Any, limit: int, instance: Any, schema: dict[str, A
         yield jsonschema.ValidationError(f"decoded base64 exceeds {limit} bytes")
 
 
+def _route_decision_invariant(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
+    del validator, schema
+    if not enabled or not isinstance(instance, dict):
+        return
+    evaluations = instance.get("candidate_evaluations")
+    if not isinstance(evaluations, list):
+        return
+    eligible = [item.get("route_id") for item in evaluations if isinstance(item, dict) and item.get("eligible") is True]
+    if instance.get("status") == "blocked" and eligible:
+        yield jsonschema.ValidationError("blocked route decision contains an eligible candidate")
+    if instance.get("status") == "selected" and (
+        not eligible or instance.get("selected_route_id") != eligible[0]
+    ):
+        yield jsonschema.ValidationError("selected route is not the first eligible candidate")
+
+
+def _process_fixture_invariant(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
+    del validator, schema
+    if not enabled or not isinstance(instance, dict):
+        return
+    observation = instance.get("termination_observation")
+    requirement = instance.get("input", {}).get("requirement", {})
+    if isinstance(observation, dict) and observation.get("process_requirement_id") != requirement.get("id"):
+        yield jsonschema.ValidationError("termination observation is bound to another process requirement")
+
+
 M1BValidator = validators.extend(
     jsonschema.Draft202012Validator,
     {"x-utf8MaxBytes": _utf8_max, "x-strictlySorted": _strictly_sorted,
      "x-strictlySortedBy": _strictly_sorted_by, "x-uniqueBy": _unique_by,
-     "x-rfc3339Utc": _utc_timestamp, "x-base64MaxDecodedBytes": _base64_bound},
+     "x-rfc3339Utc": _utc_timestamp, "x-base64MaxDecodedBytes": _base64_bound,
+     "x-routeDecisionInvariant": _route_decision_invariant,
+     "x-processFixtureInvariant": _process_fixture_invariant},
 )
 
 
@@ -302,6 +330,14 @@ class M1BSchemaTests(unittest.TestCase):
         validate(value, "RouteResolutionInput")
         decision = {"type": "RouteResolutionDecision@1", "status": "selected", "selected_route_id": "route-a", "candidate_evaluations": [{"type": "RouteCandidateEvaluation@1", "route_id": "route-a", "eligible": True, "reasons": []}]}
         validate(decision, "RouteResolutionDecision")
+        decision["status"] = "blocked"
+        decision["selected_route_id"] = None
+        with self.assertRaises(jsonschema.ValidationError):
+            validate(decision, "RouteResolutionDecision")
+        decision["status"] = "selected"
+        decision["selected_route_id"] = "route-b"
+        with self.assertRaises(jsonschema.ValidationError):
+            validate(decision, "RouteResolutionDecision")
 
     def test_plugin_records(self) -> None:
         validate(plugin_manifest(), "PluginManifest")

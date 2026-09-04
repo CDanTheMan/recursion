@@ -313,7 +313,10 @@ def build_schema() -> dict[str, Any]:
         {
             "status": {"enum": ["selected", "blocked"]},
             "selected_route_id": nullable(ref("Id")),
-            "candidate_evaluations": ordered("RouteCandidateEvaluation", minimum=1),
+            "candidate_evaluations": {
+                **ordered("RouteCandidateEvaluation", minimum=1),
+                "x-uniqueBy": "route_id",
+            },
         },
         allOf=[
             {
@@ -322,6 +325,7 @@ def build_schema() -> dict[str, Any]:
                 "else": {"properties": {"selected_route_id": {"type": "null"}}},
             }
         ],
+        **{"x-routeDecisionInvariant": True},
     )
 
     defs["PluginDependency"] = tagged(
@@ -666,8 +670,9 @@ def build_schema() -> dict[str, Any]:
         "ack-ahead", "attach-created-work", "client-mismatch", "credit-exhausted",
         "credit-missing", "cursor-nonmonotonic", "cursor-unit-mismatch",
         "duplicate-command-conflict", "output-command-injection", "passive-client-input",
-        "stale-daemon-epoch", "stale-lease", "stale-process-epoch", "stream-mismatch",
-        "utf8-byte-cursor-mismatch", "welcome-lease-mismatch",
+        "replay-gap", "stale-daemon-epoch", "stale-lease", "stale-process-epoch",
+        "stream-mismatch", "unexpected-reset", "utf8-byte-cursor-mismatch",
+        "welcome-lease-mismatch",
     ]
     defs["BrokerReason"] = {"enum": broker_reasons}
     defs["BrokerTraceDecision"] = tagged(
@@ -716,6 +721,8 @@ def build_schema() -> dict[str, Any]:
         if optional_name:
             properties[optional_name] = nullable(ref("ProcessTerminationObservation"))
         defs[name] = tagged(tag, properties)
+        if name == "ProcessFixtureBundle":
+            defs[name]["x-processFixtureInvariant"] = True
     defs["M1BFixtureBundle"] = {"oneOf": [ref(row[0]) for row in fixture_arms]}
     defs["FixtureManifestEntry"] = tagged(
         "FixtureManifestEntry@1",

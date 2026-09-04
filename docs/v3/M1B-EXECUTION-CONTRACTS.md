@@ -41,6 +41,9 @@ satisfied. Every candidate receives a complete sorted rejection list. If none is
 result is blocked. The oracle never invents a route, silently substitutes an unlisted candidate or
 turns subscription exhaustion/unknown billing into metered authorization.
 
+Unknown pool billing always blocks, as does available capacity with a known zero remainder.
+Sandbox modes—not capability labels alone—must back filesystem and egress claims.
+
 `verified-current` is the only directly selectable descriptor state. `documented`,
 `observed-uncertain`, `stale` and `unavailable` all block autonomous selection. A required
 tri-state capability must be `supported`; `unknown` is not weak support.
@@ -60,8 +63,9 @@ identity/review evidence, never runtime authority.
 
 Effective authority is an intersection. Functional capability and workspace scope require exact
 digest-bound grants whose GoalSpec and policy digests match the active policy envelope. Lifecycle
-artifact and epoch bindings must match too. Credential, network, model-launch, route/account,
-quota, spend, update, downgrade and grant-administration dimensions remain independently
+artifact and packet/lease/subscription epoch bindings must match too, and requested functional
+authority cannot exceed the manifest's provided capabilities. Credential, network, model-launch,
+route/account, quota, spend, update, downgrade and grant-administration dimensions remain independently
 represented. A deny at any source remains in the explanation. No manifest, edition, signature,
 acknowledgement or dependency can widen GoalSpec/policy authority.
 
@@ -79,6 +83,8 @@ Replacement verifies and stages the new digest, stops new admission to the old e
 cancels only as operative policy permits, fences old packets/leases/subscriptions, preserves prior
 evidence, advances the epoch and only then activates. Revocation blocks new admission immediately
 without claiming that a remote effect stopped.
+Because the bounded reload input is not the full capability graph, a candidate with dependencies
+returns to ordinary graph resolution rather than bypassing dependency validation.
 
 A disabled plugin is metadata only. Its trace must show zero implementation import/compile/
 instantiate, filesystem payload scan, process/thread/timer/watcher, network, credential access,
@@ -99,6 +105,7 @@ does not launch a process.
 `ProcessTerminationObservation@1` records process-tree status separately from an
 `effect_conclusion` fixed to `not-evaluated`. Termination, terminal close, EOF, job notification or
 missing PID cannot prove a remote/external effect succeeded, failed or rolled back.
+The observation is identity-bound to the exact process requirement it describes.
 
 The operative PAUSE field is fixed to `current-immediate`. Future checkpoint, interrupt, drain and
 emergency profiles may be listed as representable alternatives, but M1B cannot select or execute
@@ -118,6 +125,8 @@ leases, recovery and fanout. The closed message union is `HELLO`, `WELCOME`, `SN
   unacknowledged queue is cumulatively bounded.
 - ACK cannot advance beyond emitted output. Stream, client and WELCOME lease bindings are exact.
 - A gap yields explicit `RESET` with reason `gap` and a current snapshot cursor.
+- Cursor units bind even at zero; RESET cannot roll a cursor backward or occur without an
+  unrecovered replay gap or flow exhaustion, and it clears prior credit.
 - Slow or absent clients cannot block canonical append or cause an unbounded queue.
 - Attach, detach, replay and reset never launch a process/model turn or create an actor/effect.
 - Output bytes are untrusted data and never interpreted as broker commands.

@@ -64,7 +64,12 @@ without fence, platform mismatch, stale or chronologically invalid evidence, exa
 shape, mixed cursor units, non-monotonic or forward ACK cursor, absent/exhausted cumulative credit,
 cumulative queue overflow, stream/client/lease mismatch, conflicting command replay,
 output-as-command, passive-client input and attach that increments a launch counter. Lexical
-decoder probes include negative zero.
+decoder probes include negative zero. Each of the six fixture union families independently
+receives unknown-field, discriminator/version, ID, digest, integer, ordering, uniqueness and
+collection-bound mutations. Semantic probes additionally cover unknown/zero pool state,
+contradictory sandbox modes, route-result identity, manifest/effective-authority mismatch,
+lifecycle sub-epochs, cycle dependents, dependency-bearing reload, termination identity,
+zero-cursor unit changes, replay gaps and backward/unexpected RESET.
 
 The reference oracle is test-only. A fixture passes only when strict schema validation succeeds,
 the independently computed decision equals the literal expected decision byte-for-byte after

@@ -360,10 +360,12 @@
         "duplicate-command-conflict",
         "output-command-injection",
         "passive-client-input",
+        "replay-gap",
         "stale-daemon-epoch",
         "stale-lease",
         "stale-process-epoch",
         "stream-mismatch",
+        "unexpected-reset",
         "utf8-byte-cursor-mismatch",
         "welcome-lease-mismatch"
       ]
@@ -2539,7 +2541,8 @@
         "expected",
         "termination_observation"
       ],
-      "type": "object"
+      "type": "object",
+      "x-processFixtureInvariant": true
     },
     "ProcessReason": {
       "enum": [
@@ -3330,7 +3333,8 @@
           },
           "maxItems": 256,
           "minItems": 1,
-          "type": "array"
+          "type": "array",
+          "x-uniqueBy": "route_id"
         },
         "selected_route_id": {
           "anyOf": [
@@ -3358,7 +3362,8 @@
         "selected_route_id",
         "candidate_evaluations"
       ],
-      "type": "object"
+      "type": "object",
+      "x-routeDecisionInvariant": true
     },
     "RouteResolutionInput": {
       "additionalProperties": false,
