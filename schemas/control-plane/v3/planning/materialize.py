@@ -53,6 +53,7 @@ def array(
         result["uniqueItems"] = True
     if sorted_by is not None:
         result["x-sortedBy"] = sorted_by
+        result["x-uniqueBy"] = sorted_by
     return result
 
 
@@ -181,6 +182,7 @@ def build_schema() -> dict:
         "E-SCHEMA-UNKNOWN-FIELD",
         "E-SCHEMA-MISSING-FIELD",
         "E-SCHEMA-UNKNOWN-VERSION",
+        "E-SCHEMA-INVALID",
         "E-SCHEMA-DUPLICATE",
         "E-SCHEMA-BOUND",
         "E-DIGEST-MISMATCH",
@@ -316,7 +318,7 @@ def build_schema() -> dict:
             "attestation_id": ref("id"),
             "actor_id": ref("id"),
             "actor_role": enum("owner", "head", "arm", "worker", "verifier", "kernel-fixture-gate"),
-            "allowed_command_types": array(ref("command_type")),
+            "allowed_command_types": array(ref("command_type"), sorted_by="$value"),
             "candidate_digest": ref("digest"),
             "authority_policy_ref": ref("policy_ref"),
             "constitution_policy_ref": ref("policy_ref"),
@@ -338,7 +340,7 @@ def build_schema() -> dict:
             "constitution", "pause", "retry",
         ),
         "allowed_roles": ref("token_set"),
-        "allowed_command_types": array(ref("command_type")),
+        "allowed_command_types": array(ref("command_type"), sorted_by="$value"),
         "privacy_class_ids": ref("id_set"),
         "privacy_at_most_edges": array(
             relation_edge, sorted_by=["less_or_equal_id", "greater_or_equal_id"]
@@ -350,13 +352,15 @@ def build_schema() -> dict:
         "route_ids": ref("id_set"),
         "account_class_ids": ref("id_set"),
         "capacity_pool_ids": ref("id_set"),
-        "allowed_spend_classes": array(enum("none", "included")),
+        "allowed_spend_classes": array(enum("none", "included"), sorted_by="$value"),
         "accepted_evidence_types": array(accepted_evidence, sorted_by="failure_id"),
         "failure_capability_requirements": array(failure_capability, sorted_by="failure_id"),
         "required_verifier_dimensions": ref("token_set"),
         "owner_verifier_exception_allowed": {"type": "boolean"},
         "operative_pause_mode": const("current-immediate"),
-        "representable_future_pause_modes": array(enum("checkpoint", "interrupt", "drain")),
+        "representable_future_pause_modes": array(
+            enum("checkpoint", "interrupt", "drain"), sorted_by="$value"
+        ),
         "retry_maximum": ref("uint"),
         "content_digest": ref("digest"),
     }
@@ -516,6 +520,7 @@ def build_schema() -> dict:
     d["canonical_diff"] = array(
         ref("canonical_diff_entry"), maximum=2048, sorted_by="path_segments"
     )
+    d["canonical_diff"]["x-sortedByUtf16"] = d["canonical_diff"].pop("x-sortedBy")
 
     proposition = closed(
         {
@@ -596,7 +601,7 @@ def build_schema() -> dict:
         "novelty_schema_version": const("novelty-delta-1"),
         "delta_id": {"type": "string", "pattern": r"^delta-[a-z0-9][a-z0-9-]{0,62}$"},
         "prior_attempt_digest": ref("digest"),
-        "addresses_failure_ids": array(ref("id"), minimum=1),
+        "addresses_failure_ids": array(ref("id"), minimum=1, sorted_by="$value"),
         "old_descriptor_digest": ref("digest"),
         "new_descriptor_digest": ref("digest"),
         "canonical_diff": ref("canonical_diff"),
@@ -611,18 +616,28 @@ def build_schema() -> dict:
         "hypothesis-replaced": {
             "old_hypothesis": hypothesis,
             "new_hypothesis": hypothesis,
-            "changed_proposition_ids": array({"type": "string", "pattern": r"^proposition-[a-z0-9][a-z0-9-]{0,62}$"}, minimum=1),
+            "changed_proposition_ids": array(
+                {"type": "string", "pattern": r"^proposition-[a-z0-9][a-z0-9-]{0,62}$"},
+                minimum=1,
+                sorted_by="$value",
+            ),
         },
         "strategy-changed": {
             "old_strategy": strategy,
             "new_strategy": strategy,
-            "changed_operation_ids": array({"type": "string", "pattern": r"^operation-[a-z0-9][a-z0-9-]{0,62}$"}, minimum=1),
+            "changed_operation_ids": array(
+                {"type": "string", "pattern": r"^operation-[a-z0-9][a-z0-9-]{0,62}$"},
+                minimum=1,
+                sorted_by="$value",
+            ),
         },
         "route-capability-changed": {
             "old_route_descriptor": route_descriptor,
             "new_route_descriptor": route_descriptor,
             "newly_observed_capability_ids": array(
-                {"type": "string", "pattern": r"^capability-[a-z0-9][a-z0-9-]{0,62}$"}, minimum=1,
+                {"type": "string", "pattern": r"^capability-[a-z0-9][a-z0-9-]{0,62}$"},
+                minimum=1,
+                sorted_by="$value",
             ),
         },
         "task-narrowed": {"old_scope": task_scope, "new_scope": task_scope},
@@ -819,6 +834,8 @@ def build_schema() -> dict:
             "authority_policy_ref": policy_ref,
             "privacy_policy_ref": policy_ref,
             "egress_policy_ref": policy_ref,
+            "verifier_policy_ref": policy_ref,
+            "constitution_policy_ref": policy_ref,
             "route_assignment_ref": object_ref,
             "budget_reservation_ref": object_ref,
             "budget_limits": budget,
@@ -988,7 +1005,7 @@ def build_schema() -> dict:
             "nonce_digest": ref("digest"),
             "issued_logical_time": ref("logical_time"),
             "expires_logical_time": ref("logical_time"),
-            "allowed_command_types": array(ref("command_type")),
+            "allowed_command_types": array(ref("command_type"), sorted_by="$value"),
             "state": enum("active", "expired", "revoked", "replaced"),
         }
     )
@@ -1488,7 +1505,7 @@ def build_schema() -> dict:
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "https://recursion.invalid/schemas/control-plane/v3/planning/schema.json",
         "title": "Recursion v3 M1A closed planning wire schema",
-        "$comment": "Owner-approved M1A profile: 25 domain records, 22 commands, 27 events, 27 errors.",
+        "$comment": "Owner-approved M1A profile: 25 domain records, 22 commands, 27 events, 28 errors.",
         "x-maxDepth": 16,
         "oneOf": top_refs,
         "$defs": d,

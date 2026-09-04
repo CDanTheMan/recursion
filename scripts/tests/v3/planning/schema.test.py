@@ -50,6 +50,42 @@ def _validate_sorted_by(validator, selector, instance, schema):
         yield ValidationError(f"array is not sorted by {selector!r}")
 
 
+def _utf16_key(value):
+    if isinstance(value, str):
+        encoded = value.encode("utf-16-be")
+        return tuple(
+            int.from_bytes(encoded[index:index + 2], "big")
+            for index in range(0, len(encoded), 2)
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_utf16_key(item) for item in value)
+    return value
+
+
+def _validate_sorted_by_utf16(validator, selector, instance, schema):
+    if not isinstance(instance, list):
+        return
+    try:
+        keys = [_utf16_key(_sort_key(value, selector)) for value in instance]
+    except (KeyError, TypeError, UnicodeEncodeError):
+        return
+    if keys != sorted(keys):
+        yield ValidationError(f"array is not UTF-16 sorted by {selector!r}")
+
+
+def _validate_unique_by(validator, selector, instance, schema):
+    if not isinstance(instance, list):
+        return
+    try:
+        keys = [_sort_key(value, selector) for value in instance]
+    except (KeyError, TypeError):
+        return
+    for index, key in enumerate(keys):
+        if key in keys[:index]:
+            yield ValidationError(f"array has duplicate stable key {key!r} for {selector!r}")
+            return
+
+
 def _validate_utf8_bytes(validator, maximum, instance, schema):
     if isinstance(instance, str):
         try:
@@ -80,6 +116,8 @@ StrictValidator = validators.extend(
     Draft202012Validator,
     {
         "x-sortedBy": _validate_sorted_by,
+        "x-sortedByUtf16": _validate_sorted_by_utf16,
+        "x-uniqueBy": _validate_unique_by,
         "x-maxUtf8Bytes": _validate_utf8_bytes,
         "x-maxCanonicalBytes": _validate_canonical_bytes,
     },
@@ -92,6 +130,21 @@ def _reject_float(value):
 
 def _reject_constant(value):
     raise StrictDecodeError(f"I-JSON forbids {value}")
+
+
+def _parse_int(raw):
+    if raw == "-0":
+        raise StrictDecodeError("I-JSON forbids lexical negative zero")
+    digits = raw[1:] if raw.startswith("-") else raw
+    if len(digits) > 16:
+        raise StrictDecodeError("non-I-JSON integer")
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise StrictDecodeError("invalid integer") from exc
+    if abs(value) > MAX_UINT:
+        raise StrictDecodeError("non-I-JSON integer")
+    return value
 
 
 def _pairs_no_duplicates(pairs):
@@ -116,7 +169,7 @@ def _check_tree(value, *, depth=0):
     elif isinstance(value, bool) or value is None:
         return
     elif isinstance(value, int):
-        if value < 0 or value > MAX_UINT:
+        if abs(value) > MAX_UINT:
             raise StrictDecodeError("non-I-JSON integer")
     elif isinstance(value, list):
         if len(value) > 2048:
@@ -141,18 +194,24 @@ def strict_loads(raw: str | bytes):
             raw = raw.decode("utf-8", errors="strict")
         except UnicodeDecodeError as exc:
             raise StrictDecodeError("input is not UTF-8") from exc
-    elif len(raw.encode("utf-8", errors="strict")) > 1_048_576:
-        raise StrictDecodeError("input byte bound exceeded")
+    else:
+        try:
+            raw_size = len(raw.encode("utf-8", errors="strict"))
+        except UnicodeEncodeError as exc:
+            raise StrictDecodeError("unpaired surrogate") from exc
+        if raw_size > 1_048_576:
+            raise StrictDecodeError("input byte bound exceeded")
     try:
         value = json.loads(
             raw,
             object_pairs_hook=_pairs_no_duplicates,
+            parse_int=_parse_int,
             parse_float=_reject_float,
             parse_constant=_reject_constant,
         )
     except StrictDecodeError:
         raise
-    except (UnicodeError, json.JSONDecodeError) as exc:
+    except (UnicodeError, ValueError, RecursionError) as exc:
         raise StrictDecodeError("malformed JSON") from exc
     _check_tree(value)
     return value
@@ -257,7 +316,7 @@ class SchemaContractTests(unittest.TestCase):
         defs = self.schema["$defs"]
         self.assertEqual(22, len(defs["command_type"]["enum"]))
         self.assertEqual(27, len(defs["event_type"]["enum"]))
-        self.assertEqual(27, len(defs["error_code"]["enum"]))
+        self.assertEqual(28, len(defs["error_code"]["enum"]))
         self.assertEqual(25, len(defs["domain_record"]["oneOf"]))
         self.assertEqual(22, len(defs["command_envelope"]["oneOf"]))
         self.assertEqual(27, len(defs["planning_event"]["oneOf"]))
@@ -369,12 +428,26 @@ class SchemaContractTests(unittest.TestCase):
         self.assertFalse(self.validator_for("id_set").is_valid(["Z-ID", "A-ID"]))
         self.assertTrue(self.validator_for("id_set").is_valid(["A-ID", "Z-ID"]))
 
+        disposition = self.factory.make({"$ref": "#/$defs/disposition"})
+        duplicate_key = copy.deepcopy(disposition)
+        duplicate_key["reason_digest"] = "1" * 64
+        self.assertFalse(self.validator_for("disposition_set").is_valid([disposition, duplicate_key]))
+
+        astral = self.factory.make({"$ref": "#/$defs/canonical_diff_entry"})
+        astral["path_segments"] = ["\U00010000"]
+        bmp = copy.deepcopy(astral)
+        bmp["path_segments"] = ["\ue000"]
+        self.assertTrue(self.validator_for("canonical_diff").is_valid([astral, bmp]))
+        self.assertFalse(self.validator_for("canonical_diff").is_valid([bmp, astral]))
+
     def test_strict_json_rejects_duplicate_float_constant_utf8_and_depth(self):
         for raw in (
             '{"x":1,"x":2}',
             '{"x":1.0}',
             '{"x":NaN}',
             b'"\xff"',
+            '"\ud800"',
+            '-0',
             "[" * 17 + "0" + "]" * 17,
         ):
             with self.subTest(raw=repr(raw)), self.assertRaises(StrictDecodeError):
@@ -385,6 +458,8 @@ class SchemaContractTests(unittest.TestCase):
             strict_loads(str(MAX_UINT + 1))
         with self.assertRaises(StrictDecodeError):
             strict_loads("[" + ",".join("0" for _ in range(2049)) + "]")
+        self.assertEqual(-1, strict_loads("-1"))
+        self.assertFalse(self.validator_for("uint").is_valid(strict_loads("-1")))
 
     def test_command_payload_discriminator_is_exact(self):
         command = self.factory.make({"$ref": "#/$defs/command_record_owner_intent"})

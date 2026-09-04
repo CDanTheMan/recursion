@@ -342,3 +342,63 @@ earlier decisive error. These choices are assigned to Wave 2 and Terra for adver
 
 M1A-01 and M1A-02 are complete construction nodes, not a complete M1A or runtime claim. M1A-03
 remains gated on Wave 2 review and TERRA-M1A-01 PASS for this exact candidate lineage.
+
+### PlanRevision 4 — Wave 2 and Terra repair
+
+`PLAN-M1A-001@4` is triggered by the four Wave 2 Luna packets and TERRA-M1A-01's material
+`DISSENT` on exact candidate `d24d8c6b1011da44f7487f9f04ed8fa5bf912453`. Direct probes found
+that the schema accepted negative zero, unsorted set-valued fields and conflicting stable-key
+duplicates. Semantic inspection found incomplete PAUSE variants, invalid terminal/disposition
+state in F-M1A-005, vacuous ownership variants and missing disposition events in F-M1A-022,
+arbitrary retry/replan binding digests, invalid retry sequencing and a route/capacity mismatch.
+These are construction defects against already-approved rules, not a new product, provider,
+spending or constitutional choice.
+
+Disposition:
+
+- Retained: Owner intent, GoalSpec, boundaries/non-goals, the M1A-01/M1A-02 construction order,
+  all prior commits and receipts as immutable evidence, and every canonical fixture outcome.
+- Invalidated: schema freeze `ab9707480baf6ef7baff03b6bda444b890d78557`, red-oracle freeze
+  `b303ffd2c9af4a00e59d380cd7052395c33c4a4e`, and their completion claim in the preceding
+  receipt. Neither commit is rewritten or removed.
+- Quarantined: no production code; reducer construction remains unstarted.
+- Superseded: only the M1A-03 admission schedule under PlanRevision 3.
+- Re-admitted: M1A-01 schema repair, then M1A-02 oracle repair. M1A-03 remains blocked until the
+  same TERRA-M1A-01 adjudicator passes the replacement exact candidate.
+
+Construction decision `CD-M1A-012`: strict decode distinguishes malformed/type/pattern/enum
+input as `E-SCHEMA-INVALID`; lexical negative zero is invalid, while signed safe I-JSON integers
+decode and then fail the unsigned field schema where applicable. Parser overflow, recursion and
+Unicode failures normalize to typed decode failure. Sorted arrays retain the wire profile's
+code-point order except CanonicalDiff paths, whose semantic owner explicitly requires RFC 8785
+UTF-16 order. Schema annotations enforce both stable sorting and uniqueness by declared identity,
+not only whole-object equality. Falsifier: `-0`, a conflicting duplicate logical key or an
+unsorted set validates, or a raw parser exception escapes.
+
+Construction decision `CD-M1A-013`: WorkPacket carries the TaskNode-bound verifier and
+constitution policy refs required by the documented unchanged-binding operand. Retry and replan
+binding digests are computed from the exact named object, never label hashes. A passing gate moves
+a packet/task to gate-passed/verified; the exact-plan `PlanVerifierDecisionRecorded` event consumes
+verified terminal outputs and alone may move all current nodes to complete and the plan to a
+terminal status. Admitting a replacement plan resets the aggregate to nonterminal. This uses the
+existing event alphabet; no hidden completion event is invented. Falsifier: a plan terminates
+with a ready/unverified current node or an earlier-plan verifier decision closes a replacement.
+
+Construction decision `CD-M1A-014`: every admitted amendment/replan disposition produces its
+typed disposition record/event and atomically changes the target projection. `fence` makes old
+packets and leases stale, `invalidate` makes the target stale, `quarantine` makes it quarantined,
+and `supersede` makes it superseded; retain-terminal preserves only a proven compatible complete
+node. F-M1A-005 must execute and verify both old nodes, use disjoint declared ownership, bind an
+effect to the affected node, then end nonterminal with every old packet/lease fenced and its new
+plan unverified. F-M1A-022 must encode genuinely distinct conflict graphs and complete replan
+dispositions. Falsifier: a disposition event leaves its target live or a symbolic case name does
+not match its payload.
+
+Construction decision `CD-M1A-015`: F-M1A-014 covers post-PAUSE planning, packet, worker and
+effect commands; F-M1A-015 separately represents and refuses checkpoint, interrupt and drain and
+replays their unchanged authoritative state. Retry fixtures use root-array CanonicalDiff path
+`[]`, exact binding digests and sequential attempts; route replacement binds a matching capacity
+observation. Error precedence performs digest/idempotency journal lookup before new-command
+authority checks so a reused ID with different bytes remains `E-IDEMPOTENCY-CONFLICT`.
+Falsifier: an untested transition admits under PAUSE, a future mode changes behavior, retry skips
+an attempt, or a replacement route uses capacity evidence for another route.

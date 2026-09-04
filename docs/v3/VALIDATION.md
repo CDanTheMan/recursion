@@ -197,7 +197,7 @@ $errorIds = @($oracleLines | ForEach-Object {
 if ($commandIds.Count -ne 22 -or ($commandIds | Sort-Object -Unique).Count -ne 22) {
   throw 'closed command alphabet failed'
 }
-if ($errorIds.Count -ne 27 -or ($errorIds | Sort-Object -Unique).Count -ne 27) {
+if ($errorIds.Count -ne 28 -or ($errorIds | Sort-Object -Unique).Count -ne 28) {
   throw 'closed error registry failed'
 }
 "M1A_CLOSED_ALPHABETS_PASS commands=$($commandIds.Count) errors=$($errorIds.Count)"

@@ -19,7 +19,10 @@ Every field listed in this file is required. `T?` means the field value is eithe
 `null`; it never means the field may be omitted. Every record recursively has
 `additionalProperties=false`. JSON object member order is irrelevant before canonicalization;
 arrays marked `sorted` MUST already be in ascending Unicode-code-point order of their indicated
-key and MUST contain no duplicate key. All other arrays preserve their stated semantic order.
+key and MUST contain no duplicate key. The sole exception is `CanonicalDiff@1`, whose
+`path_segments` keys use RFC 8785 UTF-16 code-unit order. All other arrays preserve their stated
+semantic order. JSON Schema `uniqueItems` is not sufficient for keyed records: every sorted array
+also rejects duplicate indicated keys even when other fields differ.
 
 | Alias | Exact representation and bound |
 |---|---|
@@ -32,7 +35,7 @@ key and MUST contain no duplicate key. All other arrays preserve their stated se
 | `Text` | UTF-8 string, 0–4,096 bytes; no NUL or unpaired surrogate |
 | `NonemptyText` | `Text` with at least one Unicode scalar value |
 | `JsonInputText` | UTF-8 string, 0–262,144 bytes; no NUL or unpaired surrogate; interpreted only by the strict decoder |
-| `UInt` | JSON integer from 0 through 9,007,199,254,740,991 |
+| `UInt` | JSON integer from 0 through 9,007,199,254,740,991; the strict decoder may decode safe signed I-JSON integers, after which this schema rejects negative values |
 | `PosInt` | JSON integer from 1 through 2,147,483,647 |
 | `LogicalTime` | `UInt`, supplied by the fixture/event stream; never read from a clock |
 | `IdSet` | sorted array of `Id`, maximum 256 |
@@ -44,8 +47,10 @@ key and MUST contain no duplicate key. All other arrays preserve their stated se
 
 An individual command, domain record, event or receipt is at most 262,144 canonical UTF-8 bytes;
 a fixture bundle is at most 1,048,576 bytes; nesting depth is at most 16; commands/events/records
-per bundle are each at most 2,048. Floats, negative zero, binary values and non-I-JSON numbers are
-forbidden. `D(x)` is RFC 8785 canonical JSON followed by SHA-256. For every structure below,
+per bundle are each at most 2,048. Floats, lexical negative zero (`-0`), binary values and
+non-I-JSON numbers are forbidden. Parser overflow, excessive nesting, invalid UTF-8 and unpaired
+surrogates are normalized to a closed schema/decode error and never escape as host-language
+exceptions. `D(x)` is RFC 8785 canonical JSON followed by SHA-256. For every structure below,
 `content_digest` is the only field omitted when computing that structure's `D(x)`; nested
 structures retain their own digest fields. Fields named `*_digest` are never implicitly omitted.
 
@@ -301,7 +306,7 @@ mapping explicitly carries a proposed new record.
 | `plan-revision` / `m1a-plan-revision-1` | `{goal_ref: ObjectRef@1, arm_run_ref: ObjectRef@1, prior_plan_ref: ObjectRef@1?, trigger: initial or retry or replan or amendment, task_node_refs: sorted ObjectRef@1 by id, dependency_edges: sorted array of `{from_node_id: Id, to_node_id: Id}` by `(from_node_id,to_node_id)`, graph_digest: Digest, acceptance_gate_ids: IdSet, budget_limits: BudgetVector@1, read_resource_paths: ResourcePathSet, write_resource_paths: ResourcePathSet, effect_keys: IdSet, source_digests: DigestSet, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, assigned_plan_verifier_actor_id: Id, change_rationale_digest: Digest, dispositions: sorted Disposition@1}` |
 | `plan-transition` / `m1a-plan-transition-1` | `{from_plan_ref: ObjectRef@1?, to_plan_ref: ObjectRef@1, trigger_evidence_digests: DigestSet, dispositions: sorted Disposition@1, executive_lease_ref: LeaseRef@1, expected_goal_fence_epoch: UInt, checkpoint_ref: ObjectRef@1?}` |
 | `task-node` / `m1a-task-node-1` | `{plan_ref: PlanIdentityRef@1, semantic_definition_digest: Digest, output_schema_digest: Digest, dependency_node_ids: IdSet, input_digests: DigestSet, source_digests: DigestSet, read_resource_paths: ResourcePathSet, write_resource_paths: ResourcePathSet, effect_keys: IdSet, authority_ids: IdSet, capability_ids: IdSet, allowed_action_ids: IdSet, prohibition_ids: IdSet, route_ids: IdSet, route_capability_ids: IdSet, account_class_ids: IdSet, capacity_pool_ids: IdSet, authority_policy_ref: PolicyRef@1, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, budget_limits: BudgetVector@1, gate_requirements: sorted GateRequirement@1 by gate_id, retry_policy_ref: PolicyRef@1, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, terminal_contribution_digest: Digest, retry_maximum: UInt}` |
-| `work-packet` / `m1a-work-packet-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, supersedes_packet_ref: ObjectRef@1?, logical_worker_actor_id: Id, attempt: PosInt, work_lease_ref: LeaseRef@1, expected_goal_fence_epoch: UInt, expected_pause_epoch: UInt, authority_ids: IdSet, capability_ids: IdSet, allowed_resource_paths: ResourcePathSet, effect_keys: IdSet, privacy_class_id: Id, egress_class_id: Id, authority_policy_ref: PolicyRef@1, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, route_assignment_ref: ObjectRef@1, budget_reservation_ref: ObjectRef@1, budget_limits: BudgetVector@1, source_digests: DigestSet, gate_requirements: sorted GateRequirement@1 by gate_id, allowed_action_ids: IdSet, prohibition_ids: IdSet, inherited_non_goals: TextSet, output_schema_digest: Digest, deadline_logical_time: LogicalTime, checkpoint_ref: ObjectRef@1?}` |
+| `work-packet` / `m1a-work-packet-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, supersedes_packet_ref: ObjectRef@1?, logical_worker_actor_id: Id, attempt: PosInt, work_lease_ref: LeaseRef@1, expected_goal_fence_epoch: UInt, expected_pause_epoch: UInt, authority_ids: IdSet, capability_ids: IdSet, allowed_resource_paths: ResourcePathSet, effect_keys: IdSet, privacy_class_id: Id, egress_class_id: Id, authority_policy_ref: PolicyRef@1, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, route_assignment_ref: ObjectRef@1, budget_reservation_ref: ObjectRef@1, budget_limits: BudgetVector@1, source_digests: DigestSet, gate_requirements: sorted GateRequirement@1 by gate_id, allowed_action_ids: IdSet, prohibition_ids: IdSet, inherited_non_goals: TextSet, output_schema_digest: Digest, deadline_logical_time: LogicalTime, checkpoint_ref: ObjectRef@1?}` |
 | `worker-result` / `m1a-worker-result-1` | `{work_packet_ref: ObjectRef@1, candidate_digest: Digest, evidence_digests: DigestSet, output_digest: Digest, observed_effect_ref: ObjectRef@1?, disposition: submitted or failed}` |
 | `gate-result` / `m1a-gate-result-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, work_packet_ref: ObjectRef@1, candidate_digest: Digest, source_digests: DigestSet, evidence_digests: DigestSet, gate_requirement: GateRequirement@1, procedure_version: PosInt, observation_digest: Digest, expected_digest: Digest, actual_digest: Digest, independence: M1ASyntheticIndependenceProjection@1, disposition: pass or fail or error or missing or ambiguous, limitation_digests: DigestSet}` |
 | `retry-decision` / `m1a-retry-decision-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, failed_gate_result_ref: ObjectRef@1, prior_work_packet_ref: ObjectRef@1, novelty_delta: NoveltyDelta@1, novelty_delta_digest: Digest, unchanged_binding_digest: Digest, next_attempt: PosInt, remaining_budget: BudgetVector@1, retry_maximum: UInt, disposition: admitted or refused or exhausted}` |
@@ -423,6 +428,22 @@ receipt journal; that journal includes refusals and conflicts and is required to
 idempotency, while event replay reconstructs only the authoritative projection. Fixtures supply
 both events and receipts explicitly; M1A makes no durable-journal claim.
 
+Projection transitions are closed. `WorkerResultRecorded` moves its current packet to
+`result-submitted` and its task to `gate-pending`. A passing `GateResultRecorded` moves that
+packet to `gate-passed` and its task to `verified`; a nonpass moves the task to `failed` and never
+completes it. Only a `PlanVerifierDecisionRecorded` for the exact active plan may consume current
+verified task outputs: `pass` or valid `downgraded-pass` moves those tasks to `complete`, their
+packets to `consumed`, and the plan to the corresponding terminal status. A new admitted
+`PlanRevision` always resets the active projection to `nonterminal`, including after an amendment
+or replan. Thus gate passage is necessary but never independently terminal.
+
+Disposition event application is also atomic and normative. `fence` and `invalidate` mark their
+target `stale`; `quarantine` marks it `quarantined`; `supersede` marks it `superseded`; `cancel`
+marks it `canceled`; and `retain-terminal` preserves a terminal target state. A retained
+definition remains admitted but nonterminal. An ambiguous effect observation marks the effect,
+its packet and its task `quarantined`; blocker and escalation events project their bound target
+states as `blocked` and `escalated`. No disposition event is merely documentary.
+
 Receipt and event IDs are derivable without ambient state. For a first-seen command, if its ID
 begins `CMD-`, replace that prefix with `RCPT-`; otherwise prefix the complete ID with `RCPT-`.
 A conflict response instead uses `RCPT-CONFLICT-` plus the first 32 hexadecimal characters of
@@ -458,6 +479,11 @@ The matching `FixtureAuthorityAttestation@1.candidate_digest` MUST equal that co
 defines no other command-candidate selector. A GateResult or PlanVerifierDecision's separate
 `candidate_digest` remains the task/output candidate it judges; it does not replace the command
 candidate binding.
+
+After strict decode and self-digest validation, command-ID idempotency is checked against the
+supplied receipt journal before authority lookup. Therefore a reused ID with different content is
+always `E-IDEMPOTENCY-CONFLICT`, even when the conflicting envelope also names unknown authority;
+the retained first receipt and event stream remain unchanged.
 
 For `amend-goal-spec`, the Owner attestation binds the complete command candidate. The separate
 `arm_proposal_attestation_id` resolves an ARM attestation whose candidate is exactly
@@ -542,7 +568,8 @@ For `derive-work-packet`, `propose-retry` and `replace-route`, the kernel constr
 `work-packet` record; the caller never supplies that record. Its payload copies the current exact
 GoalSpec/PlanRevision/TaskNode refs, the worker actor and deadline from the active work lease, the
 goal fence and current PAUSE epochs, the TaskNode authority/capability/effect/privacy/egress/policy/
-source/gate/action/prohibition/output fields, the sorted union of its read/write paths, and the
+source/gate/action/prohibition/output fields, its verifier and constitution policy refs, the
+sorted union of its read/write paths, and the
 GoalSpec non-goals. It binds the selected route assignment and budget reservation; its budget
 limits equal the reservation's remaining vector. Initial derivation uses the command-carried
 lease/route and a null or latest admitted checkpoint. Retry reuses the prior packet's current
