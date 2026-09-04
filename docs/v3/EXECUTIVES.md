@@ -155,7 +155,7 @@ risk policy permits it. Releases, security-sensitive work, control-plane changes
 irreversible external effects block unless Lucas explicitly approves a recorded exception.
 Missing or weaker verification never becomes a full pass. The exact independence vector,
 downgrade receipt and transition behavior are canonical in the
-[amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md#ca-v3-005--risk-scaled-verifier-classes).
+[amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md).
 
 ## Capacity exhaustion
 
