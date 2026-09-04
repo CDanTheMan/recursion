@@ -6,7 +6,7 @@ import copy
 
 from scripts.v3.planning.validation.canonical import (
     M1AError, decode, digest, seal, validate_command_envelope,
-    validate_domain_record, validate_event_envelope, validate_projection,
+    validate_domain_record, validate_event_envelope, validate_genesis, validate_projection,
     validate_receipt,
 )
 from scripts.v3.planning.validation.contracts import validate_admission
@@ -80,6 +80,7 @@ def _sealed_state(value: dict) -> dict:
 def genesis(genesis_record: dict) -> dict:
     """Create the only valid empty projection from explicit genesis input."""
 
+    validate_genesis(genesis_record)
     return _sealed_state({
         "projection_schema_version": "m1a-projection-1",
         "stream_id": genesis_record["stream_id"],
@@ -545,16 +546,35 @@ def admit(immutable_state: dict, expected_state_digest: str, command: dict,
     }
     if projected != journaled:
         raise M1AError("E-DIGEST-MISMATCH", "incomplete receipt journal")
+    schema_error = None
+    try:
+        validate_command_envelope(command)
+    except M1AError as error:
+        schema_error = error.code
+    if schema_error is None and (
+        digest(command, omit_content_digest=True) != command.get("content_digest")
+        or digest(command["payload"]) != command.get("payload_digest")
+        or command.get("candidate_digest") != command.get("payload_digest")
+    ):
+        schema_error = "E-DIGEST-MISMATCH"
     same_id = [item for item in journal if item["command_id"] == command["command_id"]]
     original = next((item for item in same_id
                      if item["command_digest"] == command["content_digest"]), None)
+    if schema_error is not None:
+        try:
+            receipt = _receipt(command, "refused", schema_error, None, before, before, [])
+            validate_receipt(receipt)
+        except (AttributeError, KeyError, TypeError, M1AError) as error:
+            raise M1AError(schema_error, "command identity cannot bind a receipt") from error
+        journal.append(copy.deepcopy(receipt))
+        return state, [], receipt, journal
     if original is not None:
         journal.append(copy.deepcopy(original))
         return state, [], copy.deepcopy(original), journal
-    if expected_state_digest != before or command["expected_state_digest"] != before:
-        error, witness, disposition = "E-DIGEST-MISMATCH", None, "refused"
-    elif same_id:
+    if same_id:
         error, witness, disposition = "E-IDEMPOTENCY-CONFLICT", None, "conflict"
+    elif expected_state_digest != before or command["expected_state_digest"] != before:
+        error, witness, disposition = "E-DIGEST-MISMATCH", None, "refused"
     else:
         error, witness = validate_admission(state, command, authority_fixtures, policy_fixtures)
         disposition = "refused" if error else "accepted"

@@ -69,7 +69,7 @@ def main() -> int:
             elif isinstance(node, ast.ImportFrom) and node.module:
                 imports.add(node.module)
     assert imports.issubset({
-        "__future__", "copy", "hashlib", "json",
+        "__future__", "copy", "hashlib", "json", "re",
         "scripts.v3.planning.validation.canonical",
         "scripts.v3.planning.validation.contracts",
     }), sorted(imports)

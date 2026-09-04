@@ -5,7 +5,8 @@ from __future__ import annotations
 import copy
 
 from scripts.v3.planning.validation.canonical import (
-    M1AError, digest, seal, validate_command_envelope,
+    M1AError, digest, seal, validate_authority_attestation,
+    validate_command_envelope, validate_policy_fixture,
 )
 
 
@@ -342,6 +343,13 @@ def validate_admission(state: dict, command: dict, authority_fixtures: list[dict
 
     try:
         validate_command_envelope(command)
+    except M1AError as error:
+        return error.code, None
+    try:
+        for authority_fixture in authority_fixtures:
+            validate_authority_attestation(authority_fixture)
+        for policy_fixture in policy_fixtures:
+            validate_policy_fixture(policy_fixture)
     except M1AError as error:
         return error.code, None
     if digest(command, omit_content_digest=True) != command.get("content_digest"):

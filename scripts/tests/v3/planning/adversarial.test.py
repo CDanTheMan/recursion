@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.v3.planning.replay.kernel import (  # noqa: E402
     _sealed_state, admit, genesis, object_ref, replay,
 )
-from scripts.v3.planning.validation.canonical import M1AError, digest, seal  # noqa: E402
+from scripts.v3.planning.validation.canonical import M1AError, decode, digest, seal  # noqa: E402
 
 
 def _load(fixture: str, case_id: str) -> dict:
@@ -217,6 +217,92 @@ def run_adversarial() -> int:
         retry_case, retry_state, retry_journal, retry_command,
         _authorized(retry_case, retry_command), "E-RETRY-EXHAUSTED",
     )
+    probes += 1
+
+    invalid_id = copy.deepcopy(happy["commands"][0])
+    invalid_id["payload"]["id"] = "x"
+    invalid_id["payload"] = seal(invalid_id["payload"])
+    invalid_id = _reseal_command(invalid_id, genesis(happy["genesis"]))
+    raw_invalid_id = json.dumps(invalid_id, separators=(",", ":"))
+    try:
+        decode(raw_invalid_id)
+    except M1AError as error:
+        assert error.code == "E-SCHEMA-INVALID"
+    else:
+        raise AssertionError("invalid scalar ID decoded")
+    initial = genesis(happy["genesis"])
+    _assert_refused(
+        happy, initial, [], invalid_id, _authorized(happy, invalid_id), "E-SCHEMA-INVALID"
+    )
+    probes += 1
+
+    invalid_enum = copy.deepcopy(happy["commands"][0])
+    invalid_enum["payload"]["payload"]["source_kind"] = "not-an-owner-source"
+    invalid_enum["payload"] = seal(invalid_enum["payload"])
+    invalid_enum = _reseal_command(invalid_enum, initial)
+    try:
+        decode(json.dumps(invalid_enum, separators=(",", ":")))
+    except M1AError as error:
+        assert error.code == "E-SCHEMA-INVALID"
+    else:
+        raise AssertionError("invalid scalar enum decoded")
+    _assert_refused(
+        happy, initial, [], invalid_enum, _authorized(happy, invalid_enum), "E-SCHEMA-INVALID"
+    )
+    probes += 1
+
+    invalid_bound = copy.deepcopy(happy["commands"][0])
+    invalid_bound["payload"]["created_logical_time"] = -1
+    invalid_bound["payload"] = seal(invalid_bound["payload"])
+    invalid_bound = _reseal_command(invalid_bound, initial)
+    try:
+        decode(json.dumps(invalid_bound, separators=(",", ":")))
+    except M1AError as error:
+        assert error.code == "E-SCHEMA-INVALID"
+    else:
+        raise AssertionError("out-of-bound scalar decoded")
+    probes += 1
+
+    invalid_order = copy.deepcopy(happy["commands"][1])
+    allowed_actions = invalid_order["payload"]["payload"]["allowed_action_ids"]
+    invalid_order["payload"]["payload"]["allowed_action_ids"] = list(reversed(allowed_actions))
+    invalid_order["payload"] = seal(invalid_order["payload"])
+    invalid_order = _reseal_command(invalid_order, initial)
+    try:
+        decode(json.dumps(invalid_order, separators=(",", ":")))
+    except M1AError as error:
+        assert error.code == "E-SCHEMA-INVALID"
+    else:
+        raise AssertionError("unsorted scalar collection decoded")
+    probes += 1
+
+    effect_case = _load("F-M1A-016.json", "ambiguous")
+    invalid_conditional = copy.deepcopy(effect_case["commands"][0])
+    invalid_conditional["payload"]["payload"]["quarantine"] = False
+    invalid_conditional["payload"] = seal(invalid_conditional["payload"])
+    effect_state, _ = _run(effect_case, effect_case["initial_commands"])
+    invalid_conditional = _reseal_command(invalid_conditional, effect_state)
+    try:
+        decode(json.dumps(invalid_conditional, separators=(",", ":")))
+    except M1AError as error:
+        assert error.code == "E-SCHEMA-INVALID"
+    else:
+        raise AssertionError("invalid nullable conditional decoded")
+    probes += 1
+
+    conflict = copy.deepcopy(happy["commands"][0])
+    conflict["payload"]["payload"]["intent_text"] = "A different valid owner intent."
+    conflict["payload"] = seal(conflict["payload"])
+    conflict["payload_digest"] = digest(conflict["payload"])
+    conflict["candidate_digest"] = conflict["payload_digest"]
+    conflict = seal(conflict)
+    unchanged, conflict_events, conflict_receipt, _ = admit(
+        final_state, final_state["content_digest"], conflict,
+        _authorized(happy, conflict), happy["policy_fixtures"], final_journal,
+    )
+    assert unchanged == final_state and not conflict_events
+    assert conflict_receipt["disposition"] == "conflict"
+    assert conflict_receipt["primary_error"] == "E-IDEMPOTENCY-CONFLICT"
     probes += 1
 
     return probes
