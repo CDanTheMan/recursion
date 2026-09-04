@@ -142,7 +142,8 @@
         "payload_base64": {
           "maxLength": 87384,
           "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-          "type": "string"
+          "type": "string",
+          "x-base64MaxDecodedBytes": 65536
         },
         "payload_untrusted": {
           "const": true
@@ -275,7 +276,8 @@
         "bytes_base64": {
           "maxLength": 87384,
           "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-          "type": "string"
+          "type": "string",
+          "x-base64MaxDecodedBytes": 65536
         },
         "client_id": {
           "$ref": "#/$defs/Id"
@@ -2972,6 +2974,16 @@
         "allowed_route_ids": {
           "$ref": "#/$defs/IdSet"
         },
+        "estimated_metered_microunits": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Microunits"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "id": {
           "$ref": "#/$defs/Id"
         },
@@ -3007,6 +3019,7 @@
         "allowed_route_ids",
         "allowed_host_ids",
         "allowed_egress_destinations",
+        "estimated_metered_microunits",
         "max_metered_microunits",
         "required_sandbox_capabilities"
       ],
@@ -3185,7 +3198,8 @@
     },
     "Timestamp": {
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
-      "type": "string"
+      "type": "string",
+      "x-rfc3339Utc": true
     },
     "TriState": {
       "enum": [

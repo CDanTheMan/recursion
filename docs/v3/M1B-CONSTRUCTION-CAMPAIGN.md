@@ -122,6 +122,24 @@ is tri-state and source-bound. A requested required feature must be `supported`;
 `CD-M1B-005`: the broker wire is a requirements profile, not a stable runtime ABI. Cursors declare
 `utf8-byte` or `event` units explicitly; a view cannot create a process, actor, model turn or effect.
 
+## PlanRevision 2 — reachable billing refusal and scalar strictness
+
+`PLAN-M1B-001@2` was triggered during M1B-04 self-review of the frozen schema/fixture lineage at
+`bdccb786aa43dba49fdfabe92ddc624667503317`. The closed route alphabet included
+`metered-budget-exceeded`, but the input carried ceilings without an explicit task estimate. That
+made the refusal unreachable without inventing a cost. The review also found that the exact UTC
+and decoded-base64 requirements relied on lexical patterns alone.
+
+- Retained: Owner intent, GoalSpec, boundaries, all 24 fixture purposes/outcomes and the M1B DAG.
+- Superseded: the first `RouteRequirement@1` shape and the schema/fixture digests derived from it.
+- Re-admitted: M1B-02/M1B-03 repair, then M1B-04.
+- Change: add nullable `estimated_metered_microunits`; unknown blocks as `billing-unknown` and an
+  estimate above any pool/requirement/policy ceiling blocks as `metered-budget-exceeded`.
+- Change: validate calendar-correct canonical UTC timestamps and canonical base64 with a 65,536
+  decoded-byte ceiling.
+- Falsifier: any metered decision still needs an inferred amount, an invalid calendar timestamp or
+  non-canonical/oversized payload reaches the oracle, or a fixture purpose/outcome changes.
+
 Still reserved for Lucas or a later measured campaign: production route scoring; numeric resource
 defaults; provider/terminal support matrix; which sensitive plugin grants share consent; signing,
 sandbox, renderer and process-library selections; constitutional amendment; migration; and any

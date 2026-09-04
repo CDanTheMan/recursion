@@ -106,7 +106,8 @@ def route_requirement() -> dict[str, Any]:
         "type": "RouteRequirement@1", "id": "route-requirement", "required_capabilities": ["chat"],
         "privacy_class": "private", "allowed_billing": ["metered", "subscription"],
         "allowed_route_ids": ["route-a", "route-b"], "allowed_host_ids": ["host-a", "host-b"],
-        "allowed_egress_destinations": ["endpoint:a", "endpoint:b"], "max_metered_microunits": 500,
+        "allowed_egress_destinations": ["endpoint:a", "endpoint:b"],
+        "estimated_metered_microunits": 100, "max_metered_microunits": 500,
         "required_sandbox_capabilities": ["network-allowlist"],
     }
 

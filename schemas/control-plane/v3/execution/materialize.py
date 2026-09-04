@@ -89,6 +89,7 @@ def build_schema() -> dict[str, Any]:
     defs["Timestamp"] = {
         "type": "string",
         "pattern": r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+        "x-rfc3339Utc": True,
     }
     defs["Version"] = {
         "type": "string",
@@ -243,6 +244,7 @@ def build_schema() -> dict[str, Any]:
             "allowed_route_ids": ref("IdSet"),
             "allowed_host_ids": ref("IdSet"),
             "allowed_egress_destinations": ref("OpaqueRefSet"),
+            "estimated_metered_microunits": nullable(ref("Microunits")),
             "max_metered_microunits": nullable(ref("Microunits")),
             "required_sandbox_capabilities": ref("IdSet"),
         },
@@ -564,7 +566,7 @@ def build_schema() -> dict[str, Any]:
     broker_version = {"const": "m1b-broker/1"}
     cursor_unit = {"enum": ["utf8-byte", "event"]}
     dimensions = {"type": "integer", "minimum": 1, "maximum": 1000}
-    payload = {"type": "string", "pattern": r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$", "maxLength": 87384}
+    payload = {"type": "string", "pattern": r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$", "maxLength": 87384, "x-base64MaxDecodedBytes": 65536}
     message_common = {"protocol_version": broker_version}
     defs["BrokerHello"] = tagged("HELLO", {**message_common, "client_id": ref("Id"), "stream_id": ref("Id"), "daemon_epoch": ref("Count"), "last_cursor": ref("Count"), "cursor_unit": cursor_unit, "columns": dimensions, "rows": dimensions, "capabilities": ref("IdSet")})
     defs["BrokerWelcome"] = tagged("WELCOME", {**message_common, "client_id": ref("Id"), "stream_id": ref("Id"), "daemon_epoch": ref("Count"), "replay_floor": ref("Count"), "snapshot_cursor": ref("Count"), "cursor_unit": cursor_unit, "input_lease": nullable(ref("OpaqueRef")), "resize_lease": nullable(ref("OpaqueRef")), "capabilities": ref("IdSet")})

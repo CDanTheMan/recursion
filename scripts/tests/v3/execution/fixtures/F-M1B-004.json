@@ -258,6 +258,7 @@
         "route-a",
         "route-b"
       ],
+      "estimated_metered_microunits": 100,
       "id": "route-requirement",
       "max_metered_microunits": 500,
       "privacy_class": "private",

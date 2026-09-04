@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import copy
+import base64
 import importlib.util
 import json
 import sys
 import unittest
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -107,10 +109,38 @@ def _unique_by(validator: Any, field: str, instance: Any, schema: dict[str, Any]
             yield jsonschema.ValidationError(f"array is not unique by {field}")
 
 
+def _utc_timestamp(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
+    del validator, schema
+    if enabled and isinstance(instance, str):
+        try:
+            parsed = datetime.strptime(instance, "%Y-%m-%dT%H:%M:%SZ")
+        except ValueError:
+            yield jsonschema.ValidationError("invalid UTC timestamp")
+            return
+        if parsed.strftime("%Y-%m-%dT%H:%M:%SZ") != instance:
+            yield jsonschema.ValidationError("non-canonical UTC timestamp")
+
+
+def _base64_bound(validator: Any, limit: int, instance: Any, schema: dict[str, Any]):
+    del validator, schema
+    if not isinstance(instance, str):
+        return
+    try:
+        decoded = base64.b64decode(instance, validate=True)
+    except ValueError:
+        yield jsonschema.ValidationError("invalid base64")
+        return
+    if base64.b64encode(decoded).decode("ascii") != instance:
+        yield jsonschema.ValidationError("non-canonical base64")
+    if len(decoded) > limit:
+        yield jsonschema.ValidationError(f"decoded base64 exceeds {limit} bytes")
+
+
 M1BValidator = validators.extend(
     jsonschema.Draft202012Validator,
     {"x-utf8MaxBytes": _utf8_max, "x-strictlySorted": _strictly_sorted,
-     "x-strictlySortedBy": _strictly_sorted_by, "x-uniqueBy": _unique_by},
+     "x-strictlySortedBy": _strictly_sorted_by, "x-uniqueBy": _unique_by,
+     "x-rfc3339Utc": _utc_timestamp, "x-base64MaxDecodedBytes": _base64_bound},
 )
 
 
@@ -258,7 +288,7 @@ class M1BSchemaTests(unittest.TestCase):
     def test_route_input_and_decision(self) -> None:
         value = {
             "type": "RouteResolutionInput@1", "catalog": catalog(), "descriptors": [route_descriptor()],
-            "requirement": {"type": "RouteRequirement@1", "id": "req-a", "required_capabilities": ["chat"], "privacy_class": "private", "allowed_billing": ["subscription"], "allowed_route_ids": ["route-a"], "allowed_host_ids": ["host-a"], "allowed_egress_destinations": ["endpoint:a"], "max_metered_microunits": None, "required_sandbox_capabilities": ["workspace-read"]},
+            "requirement": {"type": "RouteRequirement@1", "id": "req-a", "required_capabilities": ["chat"], "privacy_class": "private", "allowed_billing": ["subscription"], "allowed_route_ids": ["route-a"], "allowed_host_ids": ["host-a"], "allowed_egress_destinations": ["endpoint:a"], "estimated_metered_microunits": None, "max_metered_microunits": None, "required_sandbox_capabilities": ["workspace-read"]},
             "policy": {"type": "RoutePolicyEnvelope@1", "id": "policy-a", "goal_spec_digest": DIGEST, "authority_digest": DIGEST, "policy_digest": DIGEST, "permitted_route_ids": ["route-a"], "permitted_host_ids": ["host-a"], "permitted_account_refs": ["account:a"], "permitted_egress_destinations": ["endpoint:a"], "metered_authorized": False, "max_metered_microunits": None, "pause_epoch": 0},
             "ranked_route_ids": ["route-a"],
         }
@@ -336,6 +366,16 @@ class M1BSchemaTests(unittest.TestCase):
             validate(True, "Count")
         with self.assertRaises(jsonschema.ValidationError):
             validate("é" * 49, "Id")
+
+    def test_timestamp_and_base64_are_semantically_strict(self) -> None:
+        validate("2026-09-04T00:00:00Z", "Timestamp")
+        with self.assertRaises(jsonschema.ValidationError):
+            validate("2026-99-99T99:99:99Z", "Timestamp")
+        event = {"type": "EVENT", "protocol_version": "m1b-broker/1", "stream_id": "stream-a", "daemon_epoch": 1, "cursor": 1, "cursor_unit": "event", "event_class": "status", "process_id": None, "payload_base64": "eA==", "payload_untrusted": True}
+        validate(event, "BrokerMessage")
+        event["payload_base64"] = "AB=="
+        with self.assertRaises(jsonschema.ValidationError):
+            validate(event, "BrokerMessage")
 
 
 if __name__ == "__main__":

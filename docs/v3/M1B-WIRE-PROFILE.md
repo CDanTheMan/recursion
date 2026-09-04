@@ -72,9 +72,14 @@ For a pool, `remaining_units` is non-null only when state is `available` or `exh
 
 `RouteRequirement@1` has `type`, `id`, sorted nonempty `required_capabilities`, `privacy_class`,
 sorted nonempty `allowed_billing`, sorted `allowed_route_ids`, sorted `allowed_host_ids`, sorted
-`allowed_egress_destinations`, nullable `max_metered_microunits`, and sorted
+`allowed_egress_destinations`, nullable `estimated_metered_microunits`, nullable
+`max_metered_microunits`, and sorted
 `required_sandbox_capabilities`. Empty allowed route/host/egress sets mean no additional allowlist,
 not permission to widen another bound.
+
+`estimated_metered_microunits` is the explicit task estimate used for admission. A metered
+candidate blocks with `billing-unknown` when it is null and with `metered-budget-exceeded` when it
+exceeds the pool, requirement or policy ceiling. It is evidence for admission, not a price claim.
 
 `RoutePolicyEnvelope@1` has `type`, `id`, `goal_spec_digest`, `authority_digest`, `policy_digest`,
 sorted `permitted_route_ids`, `permitted_host_ids`, `permitted_account_refs`,
