@@ -409,3 +409,18 @@ the replacement `PlanRevisionAdmitted` event. This closes the already-specified
 `narrowed_binding_digest` operand without an ambient assignment lookup or a reference to a budget
 reservation bound to the retired task. Falsifier: the digest cannot be recomputed solely from the
 replacement task plus records in the same accepted event group.
+
+### PlanRevision 4 repair freeze receipt
+
+M1A-01 repair is frozen at `eebd2de93288183fa5f949e16f9aaf24274c6002`; M1A-02 repair is
+frozen at `0f4d21bce153ddae9ce14a1653e604a2a06bffd2`. The replacement manifest SHA-256 is
+`a2e6b0a69cc8dc7b80937185f727b8a75fd2725321f20de158b908fa017d79af`, bound to schema SHA-256
+`5a8fbacee5228b2617481a2f763fad30830a4fe6088def53c681211dd84d9fd7`.
+
+The repaired corpus contains 23 bundles, 37 isolated cases, 267 commands/receipts, 253 events,
+11 decode failures and 10 replay cases. It covers all 133 schema definitions, 22 commands, 27
+events, 28 errors and 25 domain-record arms. Schema materialization and all 15 schema tests pass;
+fixture materialization and `red_fixture.test.py --validate-only` pass; the ordinary red run exits
+1 with the expected message that 15 positive bundles cannot execute because the reducer is
+missing. This is the required pre-implementation state. M1A-03 remains blocked until the same
+TERRA-M1A-01 adjudicator returns `PASS` for the exact candidate containing this receipt.
