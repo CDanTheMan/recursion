@@ -424,3 +424,26 @@ fixture materialization and `red_fixture.test.py --validate-only` pass; the ordi
 1 with the expected message that 15 positive bundles cannot execute because the reducer is
 missing. This is the required pre-implementation state. M1A-03 remains blocked until the same
 TERRA-M1A-01 adjudicator returns `PASS` for the exact candidate containing this receipt.
+
+### PlanRevision 5 — F-M1A-022 topology closure
+
+TERRA-M1A-01 returned `MATERIAL DISSENT` on exact candidate
+`cea032ac568b80859215a558b6b29c30604f4157`: the `write-write` case label was passed as an
+unrecognized constructor selector, leaving a one-node plan whose conflict witness named an absent
+second node. This invalidates only that candidate's red-oracle completion claim; all confirmed
+PlanRevision 4 repairs and frozen schema `eebd2de93288183fa5f949e16f9aaf24274c6002` remain valid.
+
+Construction decision `CD-M1A-017`: the repaired F-M1A-022 selector maps `write-write` to the
+two-node overlapping-writer constructor. The red structural gate now independently requires
+exactly two submitted task nodes in every F-M1A-022 case, exact plan/task-ref identity, witnesses
+whose object IDs equal submitted task IDs, an actual unordered write/write, read/write or
+same-effect predicate for the three refusals, the exact dependency edge plus disjoint ownership
+for ordered admission, and compatible unordered overlap for read/read admission. Falsifier: a
+symbolic case label can pass without its named graph predicate.
+
+The repaired red delta is frozen at `94342a14b6819c3f28835761005467b711dfb841`; manifest SHA-256
+is `0f6f568a51238517fc4fd7863f25d0b1ebcd40c64b986044d4a30e2a76d59aba`. All five F-M1A-022
+cases now carry exactly two plan-bound task records; the three refused graphs are unordered and
+the two admitted graphs retain their distinct ordered-disjoint/read-read predicates. Schema,
+fixture-materialization and red-structure gates pass; the ordinary red gate still exits 1 only
+because M1A-03 is absent. M1A-03 remains blocked for same-adjudicator re-review.
