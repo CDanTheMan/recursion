@@ -90,9 +90,10 @@ receipt are recorded in [M1A-CONSTRUCTION-CAMPAIGN.md](M1A-CONSTRUCTION-CAMPAIGN
 After M1A, a separate GoalSpec may add inert schemas/fixtures for route, plugin and process
 requirements. It still makes no provider call, launches no process and executes no plugin.
 
-Status 2026-09-04: Owner-authorized local construction is active under
-[M1B-CONSTRUCTION-CAMPAIGN.md](M1B-CONSTRUCTION-CAMPAIGN.md). The exact semantics, wire profile and
-24-case closed oracle are [M1B-EXECUTION-CONTRACTS.md](M1B-EXECUTION-CONTRACTS.md),
+Status 2026-09-04: local construction is complete; its exact candidate, SOL adjudication and
+limitations are recorded in [M1B-CONSTRUCTION-CAMPAIGN.md](M1B-CONSTRUCTION-CAMPAIGN.md).
+Publication and merge remain human-controlled. The exact semantics, wire profile and 24-case
+closed oracle are [M1B-EXECUTION-CONTRACTS.md](M1B-EXECUTION-CONTRACTS.md),
 [M1B-WIRE-PROFILE.md](M1B-WIRE-PROFILE.md) and
 [M1B-FIXTURE-ORACLES.md](M1B-FIXTURE-ORACLES.md).
 

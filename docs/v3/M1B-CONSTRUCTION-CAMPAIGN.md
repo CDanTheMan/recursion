@@ -1,6 +1,6 @@
 ---
 title: M1B route, plugin and process contract campaign
-status: executing-local-construction
+status: complete-local-construction
 last-updated: 2026-09-04
 ---
 
@@ -224,3 +224,37 @@ Stop and append a PlanRevision if a canonical rule conflicts, an oracle must be 
 requires external state, an open Owner decision must be chosen, M1A bytes must change, a required
 verifier is unavailable, or any changed path leaves the allowlist. No dissent is resolved by
 majority vote or hidden reasoning.
+
+## SOL final adjudication and terminal receipt
+
+The terminal implementation candidate is exact commit
+`0f1bd5f9fd4f32acf9718930f67101983216c5a3`. From clean state, the complete M1B gate set passed
+twice: byte-identical schema and 24-fixture materialization, 13 schema tests, eight fixture tests,
+two conformance tests over all 24 literal bundles with two internal oracle runs, 44 adversarial
+tests including 48 cross-union mutations and nine grant dimensions, and three static-isolation
+tests. Both retained SOL reviewers were used: one passed six focused PlanRevision 4 falsifiers on
+the prior candidate, while the holistic reviewer found the replay-gap ordering counterexample.
+After PlanRevision 5, that same holistic reviewer returned `PASS` with confidence 0.99 on the exact
+terminal candidate, independently reproducing the formerly accepted
+WELCOME-gap/CREDIT/EVENT/RESET trace as `refused` with `replay-gap-continuation` and confirming the
+immediate-RESET control remains `accepted-reset`.
+
+The unchanged M1A compatibility set also passed: both materializers; 15 schema tests; 37 replay
+cases with 267 commands, 253 events and 11 expected decode failures; 15 positive bundles; 46 DAG
+candidates; 15 attenuation variants; 10 graph permutations; two pure repeats; 15 adversarial
+probes; and static isolation over three production and seven test files. The complete v2 umbrella
+returned `recursion-v2-mvp.test: ALL PASS`.
+
+Candidate-range hygiene passed over all 44 changed files: every path is allowlisted,
+`git diff --check` is clean, eight Python files compile, all 114 relative links across eight
+changed Markdown files resolve, the secret scan is clean, the PAUSE sentinel is absent, and
+required M1A receipt
+`0960481683e2b17ff213a824bbd4b4d559f1c91a` is an ancestor. The frozen execution-schema SHA-256 is
+`5e442b76f707b69973b5fc95e5b3ab77fea3f24c984a42c5c7fb1545d8574e94`; the fixture-manifest
+SHA-256 is `96af1d9d9d22be3ca15d79a4f18657e6ec598fc2ae08f22e170a87bd943804d9`.
+
+M1B-01 through M1B-06 are complete for that exact implementation candidate. This receipt commit
+is a documentation-only descendant and does not alter the reviewed contract bytes. The result is
+same-family, synthetic and in-memory requirements evidence; it does not prove a production route
+fabric, plugin kernel or broker, live-provider behavior, performance, deployment, migration or
+external-effect safety. Push, publication, merge, deployment and M1C remain outside this campaign.
