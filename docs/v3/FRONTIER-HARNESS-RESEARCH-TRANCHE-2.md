@@ -1,6 +1,6 @@
 ---
 title: Recursion v3 frontier harness research — tranche two campaign
-status: active-documentation-demonstration
+status: complete-documentation-demonstration
 last-updated: 2026-09-03
 campaign-id: FHAR2-20260903
 parent-goal: ratified Option 2 construction architecture
@@ -161,9 +161,9 @@ retained/invalidated/superseded nodes rather than rewriting PR01.
 
 | Revision | Trigger | Retained | Invalidated | Superseded | Disposition |
 |---|---|---|---|---|---|
-| `PR-FHAR2-20260903-01` | Lucas's 2026-09-03 ratification and tranche-two authorization | all initial tasks and boundaries | none | none | active |
-| `PR-FHAR2-20260903-02` | `WP-FHAR2-107` showed the prior protocol confused 1,728 repeated attempts with 48 independent tasks and could not support its power guarantee. | GoalSpec, route/scope boundaries, task DAG and all completed work | none | prior `PROTO-FHAR-01` power/sample-size rule only | Active replacement: `PROTO-FHAR-01-R1`; no outcomes had been inspected. |
-| `PR-FHAR2-20260903-03` | Both Terra adjudicators dissented on exact synthesis `af485e7401c2fb9d760c46cb8223c7365b952a4f`. | GoalSpec, task DAG, source matrix, all supported findings and passed gates | incomplete admission signature, duplicate verifier projection, ambiguous PAUSE awareness row, unregistered eager-loader assertion and stale storage/history wording | exact candidate `af485e7`; its dissent remains evidence | Repair every item, rerun validation and require both adjudicators to review the new exact candidate. |
+| `PR-FHAR2-20260903-01` | Lucas's 2026-09-03 ratification and tranche-two authorization | all initial tasks and boundaries | none | none | Superseded by PR02 after evaluation evidence. |
+| `PR-FHAR2-20260903-02` | `WP-FHAR2-107` showed the prior protocol confused 1,728 repeated attempts with 48 independent tasks and could not support its power guarantee. | GoalSpec, route/scope boundaries, task DAG and all completed work | none | prior `PROTO-FHAR-01` power/sample-size rule only | Superseded by PR03 after adjudicator dissent; `PROTO-FHAR-01-R1` retained. |
+| `PR-FHAR2-20260903-03` | Both Terra adjudicators dissented on exact synthesis `af485e7401c2fb9d760c46cb8223c7365b952a4f`. | GoalSpec, task DAG, source matrix, all supported findings and passed gates | incomplete admission signature, duplicate verifier projection, ambiguous PAUSE awareness row, unregistered eager-loader assertion and stale storage/history wording | exact candidate `af485e7`; its dissent remains evidence | Complete. Every item repaired; exact semantic candidate `8645df42ffd989e460d9c17b729cbeaf780e62cd` received both R3 passes and full validation. |
 
 Capacity admissions, worker results, failed gates, adjudications, validation and final disposition
 append below. Earlier failures remain visible after repair.
@@ -188,3 +188,20 @@ append below. Earlier failures remain visible after repair.
 | `WP-FHAR2-302-R2` | `gpt-5.6-terra`/`xhigh`; exact semantic repair candidate `adb0f02026744991402848da27761b5fdcb3e470`; evidence/readiness re-adjudication returned `PASS`. EOF, pure admission, Wasmtime attribution, corrected evaluation and lean-boundary items passed. | Pass for semantic repair, same-family only. Exact final validation and candidate receipt still required. |
 | `VAL-FHAR2-001` | Full [VALIDATION.md](VALIDATION.md) procedure passed on clean exact candidate `71aa67d9ebf42913b3ff7adf889104e3c96a9634`: path/diff, 110 claims, 17 R lanes, 8 tranche-two lanes, 106 sources, links, secret/private-path scan and unchanged v2 umbrella. | Superseded as final validation by semantic repair; retained as an intermediate pass, not proof of `adb0f02`. |
 | `VAL-FHAR2-002` | Validation on `adb0f02` reached the tranche-two source-edge gate and stopped because a corrected explicit `SRC-V3-097` reference increased the set from 15 to 16. | Validator was too brittle: retain the evidence-coverage floor and unknown-ID rejection rather than forbid added registered evidence. Full rerun required on the next clean candidate. |
+| `WP-FHAR2-301-R3` | `gpt-5.6-terra`/`xhigh`; exact candidate `8645df42ffd989e460d9c17b729cbeaf780e62cd`; final authority confirmation returned `PASS`. M1A's `session` field is explicitly auxiliary/non-canonical and no new authority, Hermes, current-PAUSE or verifier conflict was found. | Accepted same-family adjudication. It is not cross-family independence or runtime/migration/formal-model proof. |
+| `WP-FHAR2-302-R3` | `gpt-5.6-terra`/`xhigh`; exact candidate `8645df42ffd989e460d9c17b729cbeaf780e62cd`; final evidence confirmation returned `PASS`. The eight-lane/source validator retains unknown-ID rejection and a reviewed coverage floor while allowing added registered evidence. | Accepted same-family adjudication. It is not semantic-source automation, runtime or performance proof. |
+| `VAL-FHAR2-003` | Full [VALIDATION.md](VALIDATION.md) procedure passed on clean exact semantic candidate `8645df42ffd989e460d9c17b729cbeaf780e62cd`: 39 campaign-range changed paths all under `docs/v3/**`; range `git diff --check`; 110/110 claim rows; 17 R lanes; 18 APQ items; 23 M1A fixtures/oracles; 7 M1A DAG nodes; 24+24+24 campaign gates; 8 tranche-two lanes; 106 source records; 16 direct tranche source references; all relative links; 47-file secret/credential/private-canary/path scan; and the complete unchanged `scripts/tests/recursion-v2-mvp.test.py` umbrella. | Pass. V2 regression evidence applies only to v2; no v3 runtime/performance inference. Deprecation warnings for `jsonschema.RefResolver` were non-failing test output and do not change this docs-only result. |
+
+## Final disposition
+
+`GATE-FHAR2-01` through `GATE-FHAR2-24` pass for the documentation campaign. Productive elapsed
+campaign time was approximately 1 hour 12 minutes, from the first capacity receipt at 17:05 to
+the final semantic validation at 18:17 America/Los_Angeles. Every planned research and review node
+completed; no route, verifier, source, counter or experiment absence is represented as success.
+
+The result is a construction-research baseline, not an implemented harness. Option 2 and sole
+Recursion canonical ownership are Owner-ratified architecture. Future PAUSE and verifier classes
+are exact Owner-authorized amendment proposals but remain non-operative. M1A remains documentation-
+ready for a separate authorized task; language, storage, renderer, plugin runtime, native model
+loop, numeric budgets, live migration and constitutional application remain future experiments or
+Lucas seams.
