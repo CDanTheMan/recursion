@@ -184,6 +184,8 @@ GenesisConfig@1 = {
 ReplayExpectation@1 = {
   replay_id: Id,
   checkpoint: ReplayCheckpoint@1?,
+  commands: CommandEnvelope@1[] in declared order,
+  receipts: CommandReceipt@1[] in command order,
   event_inputs: JsonInputText[] in declared order, maximum 2,048,
   expected_disposition: accepted or refused,
   primary_error: ErrorCode?,
@@ -212,8 +214,10 @@ digest. Its event inputs are literal JSON strings so an unknown event schema ver
 test input without making the enclosing fixture bundle schema-invalid. A non-null checkpoint
 contains the exact projection immediately before its `CheckpointRecorded` event plus the checkpoint
 record that binds that projection's version/digest/snapshots. Replay validates both and begins with
-that event. Corrupt checkpoint content is represented as a raw event/input case, never smuggled
-through the typed field.
+that event. Its typed commands/receipts supply the actor, authority, lease, state and event-group
+bindings for the raw events; every event command ID/digest must resolve exactly once. Corrupt
+checkpoint content is represented as a raw event/input case, never smuggled through the typed
+field.
 
 `M1ASyntheticIndependenceProjection@1` is a deliberately reduced, synthetic-only projection for
 the pure M1A fixtures. It maps `model_family`, `provider`, and `host` to the same-named canonical

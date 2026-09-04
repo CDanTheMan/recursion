@@ -290,3 +290,11 @@ conflict response cannot safely reuse the retained original receipt ID, while or
 events otherwise lack deterministic record IDs and type selection. Falsifier: identical inputs
 produce different IDs/event types, a conflict aliases its original receipt, or replay requires the
 amendment command payload to reconstruct a disposition event.
+
+Construction decision `CD-M1A-009`: fixture setup and standalone replay expectations carry the
+exact associated command/receipt sequences as well as events. Evidence: an event contains only a
+command ID/digest, so replay cannot recheck actor, attestation, lease, before/after state or event
+span from the event alone. Explicit provenance prevents hidden trusted fixture state and keeps
+invalid events isolated as raw strings. This supersedes the prior schema candidate before fixture
+freeze. Falsifier: replay validates an authority/receipt relation using ambient data or a fixture
+event has no unique command and receipt source.

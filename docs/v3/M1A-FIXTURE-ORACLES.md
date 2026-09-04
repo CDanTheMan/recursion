@@ -36,6 +36,8 @@ cases: nonempty sorted array by case_id of {
   genesis: GenesisConfig@1,
   authority_fixtures: sorted FixtureAuthorityAttestation@1 by attestation_id,
   policy_fixtures: sorted PolicyFixture@1 by (policy_id,policy_version),
+  initial_commands: CommandEnvelope@1[] in declared execution order,
+  initial_receipts: CommandReceipt@1[] in command order,
   initial_events: PlanningEvent@1[] in ascending contiguous sequence,
   decode_inputs: JsonInputText[] in declared order,
   expected_decode_failures: DecodeFailure@1[] in decode-input order,
