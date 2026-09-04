@@ -264,6 +264,21 @@ def _effect_bindings(validator: Any, enabled: bool, instance: Any, schema: dict[
             yield jsonschema.ValidationError("effect observation does not bind the intent")
 
 
+def _effect_decision(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
+    del validator, schema
+    if not enabled or not isinstance(instance, dict):
+        return
+    status = instance.get("status")
+    reasons = instance.get("reasons", [])
+    reconcile = instance.get("requires_reconciliation")
+    if status in {"prepared", "executing", "succeeded", "failed"} and (reasons or reconcile):
+        yield jsonschema.ValidationError("settled/nonterminal effect decision has contradictory reasons")
+    if status == "ambiguous" and (not reasons or reconcile is not True):
+        yield jsonschema.ValidationError("ambiguous effect decision must require reconciliation")
+    if status == "refused" and not reasons:
+        yield jsonschema.ValidationError("refused effect decision needs a reason")
+
+
 def _nondecreasing_times(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
     del validator, schema
     if enabled and isinstance(instance, dict):
@@ -292,6 +307,26 @@ def _publication_bindings(validator: Any, enabled: bool, instance: Any, schema: 
             yield jsonschema.ValidationError("publication receipt binding mismatch")
 
 
+def _publication_decision(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
+    del validator, schema
+    if not enabled or not isinstance(instance, dict):
+        return
+    status = instance.get("status")
+    reasons = instance.get("reasons", [])
+    published = instance.get("published_sha")
+    reconcile = instance.get("requires_reconciliation")
+    if status == "eligible" and (reasons or published is not None or reconcile):
+        yield jsonschema.ValidationError("eligible publication decision is contradictory")
+    if status == "published" and (reasons or published is None or reconcile):
+        yield jsonschema.ValidationError("published decision lacks an exact settled SHA")
+    if status == "ambiguous" and (not reasons or published is not None or reconcile is not True):
+        yield jsonschema.ValidationError("ambiguous publication must require reconciliation")
+    if status == "blocked" and not reasons:
+        yield jsonschema.ValidationError("blocked publication needs a reason")
+    if status == "rejected" and (reasons or published is not None or reconcile):
+        yield jsonschema.ValidationError("rejected publication decision is contradictory")
+
+
 def _state_invariant(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
     del validator, schema
     if not enabled or not isinstance(instance, dict):
@@ -299,6 +334,16 @@ def _state_invariant(validator: Any, enabled: bool, instance: Any, schema: dict[
     expected = set(instance.get("expected_writer_ids", []))
     if instance.get("canonical_writer_id") not in expected:
         yield jsonschema.ValidationError("canonical writer is absent from the expected inventory")
+
+
+def _state_decision(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
+    del validator, schema
+    if not enabled or not isinstance(instance, dict):
+        return
+    if instance.get("status") == "eligible" and instance.get("reasons"):
+        yield jsonschema.ValidationError("eligible state decision has reasons")
+    if instance.get("status") != "eligible" and not instance.get("reasons"):
+        yield jsonschema.ValidationError("non-eligible state decision needs reasons")
 
 
 def _retention_bindings(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
@@ -315,6 +360,21 @@ def _retention_bindings(validator: Any, enabled: bool, instance: Any, schema: di
         yield jsonschema.ValidationError("tombstone copy inventory mismatch")
 
 
+def _retention_decision(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
+    del validator, schema
+    if not enabled or not isinstance(instance, dict):
+        return
+    status = instance.get("status")
+    reasons = instance.get("reasons", [])
+    unresolved = instance.get("unresolved_copy_ids", [])
+    if status == "complete" and (reasons or unresolved):
+        yield jsonschema.ValidationError("complete retention decision retains unresolved evidence")
+    if status == "incomplete" and (not reasons or not unresolved):
+        yield jsonschema.ValidationError("incomplete retention decision needs unresolved copies")
+    if status == "blocked" and not reasons:
+        yield jsonschema.ValidationError("blocked retention decision needs reasons")
+
+
 M1CValidator = validators.extend(
     jsonschema.Draft202012Validator,
     {
@@ -326,9 +386,11 @@ M1CValidator = validators.extend(
         "x-stagePrefix": _stage_prefix, "x-selfDigestOmit": _self_digest,
         "x-sourceInvariant": _source_invariant, "x-evidenceBindings": _evidence_bindings,
         "x-evidenceDecisionInvariant": _evidence_decision, "x-effectBindings": _effect_bindings,
+        "x-effectDecisionInvariant": _effect_decision,
         "x-nondecreasingObservationTimes": _nondecreasing_times,
-        "x-publicationBindings": _publication_bindings, "x-stateContractInvariant": _state_invariant,
-        "x-retentionBindings": _retention_bindings,
+        "x-publicationBindings": _publication_bindings, "x-publicationDecisionInvariant": _publication_decision,
+        "x-stateContractInvariant": _state_invariant, "x-stateDecisionInvariant": _state_decision,
+        "x-retentionBindings": _retention_bindings, "x-retentionDecisionInvariant": _retention_decision,
     },
 )
 

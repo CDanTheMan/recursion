@@ -3019,6 +3019,7 @@
         "import-unknown",
         "lossy-import",
         "open-effect",
+        "duplicate-command-conflict",
         "open-lease",
         "pending-publication",
         "projection-mismatch",

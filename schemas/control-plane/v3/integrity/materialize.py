@@ -479,7 +479,7 @@ def build_schema() -> dict[str, Any]:
     defs["StateReason"] = {"enum": [
         "aggregate-scope-mismatch", "backup-unverified", "deployment-unknown", "digest-chain-invalid",
         "dual-writer", "event-unverified", "import-unknown", "lossy-import", "open-effect",
-        "open-lease", "pending-publication", "projection-mismatch", "projection-only",
+        "duplicate-command-conflict", "open-lease", "pending-publication", "projection-mismatch", "projection-only",
         "replay-mismatch", "restore-unverified", "reverse-reader-unverified", "rollback-unproved",
         "saga-incomplete", "sequence-gap", "stage-order-invalid", "stale-fence", "writer-inventory-incomplete",
         "writer-refusal-unproved", "writer-unknown",

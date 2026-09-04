@@ -226,7 +226,7 @@ state `closed`, `active`, `open`, `ambiguous`, `pending` or `partial`.
 `StateReason` is closed to: `aggregate-scope-mismatch`, `deployment-unknown`,
 `writer-inventory-incomplete`, `writer-unknown`, `dual-writer`, `writer-refusal-unproved`,
 `stale-fence`, `sequence-gap`, `digest-chain-invalid`, `event-unverified`, `lossy-import`,
-`import-unknown`, `replay-mismatch`, `projection-mismatch`, `projection-only`,
+`duplicate-command-conflict`, `import-unknown`, `replay-mismatch`, `projection-mismatch`, `projection-only`,
 `backup-unverified`, `restore-unverified`, `reverse-reader-unverified`, `rollback-unproved`,
 `stage-order-invalid`, `open-lease`, `open-effect`, `pending-publication`, `saga-incomplete`.
 
