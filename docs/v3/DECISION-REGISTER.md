@@ -16,9 +16,10 @@ The sanitized transcript preserves exact wording. This register deliberately gro
 ## Owner rulings and refinements — 2026-09-03
 
 These supersede the matching open questions below. They are v3 product direction. Where a
-ruling conflicts with the current `CONTROL_PLANE.md`, it is a proposed constitutional change
-until Lucas approves the separate amendment/review workflow; it is not authority for an agent
-to change the current deployment.
+ruling conflicts with the current `CONTROL_PLANE.md`, it remains non-operative until the exact
+amendment is reviewed and applied through an authorized control-plane session and recorded in
+`state/DECISIONS.md`. Lucas's authorization to research or draft that amendment is not permission
+for a docs-only campaign to edit the live constitution or deployment.
 
 | ID | Owner direction | Adjudication and remaining research |
 |---|---|---|
@@ -39,6 +40,9 @@ to change the current deployment.
 | OR-015 | The first single-writer rehearsal targets the local execution-attempt/lease aggregate using synthetic work and no external effects. | Ratified. Require exact replay parity, complete legacy-writer enumeration, fencing, crash recovery and proven rollback before ARM, remote-provider or publication aggregates. Resource, concurrency and model use remain configurable and quota-aware. |
 | OR-016 | Recursion's versioned program owns the canonical Head, headless integrator, orchestration semantics and performance policy. Hermes is not a permanent product authority dependency. | Ratified product boundary. A Hermes-derived implementation may remain a migration or optional engine adapter, but external session state cannot own Recursion actor identity, GoalSpec, grants, budgets, PAUSE, effects, evidence or publication. The current Hermes-specific constitution remains operative until separately amended. |
 | OR-017 | Authority/safety/privacy floors are non-tradeable; among conforming candidates, all optimization dimensions are considered equally and compared without a hidden scalar weight. Recommended defaults may be proposed from evidence. | Ratified research/optimization rule. Use Pareto comparison, expose unavailable denominators and regressions, and escalate a material non-dominated choice rather than inventing weights. This does not preselect a language, dependency or numeric resource target. |
+| OR-018 | Option 2—one small deterministic Recursion kernel with typed fail-closed adapters—is the ratified v3 construction architecture. | Ratified 2026-09-03. Kernel scope remains the minimal authority/event/effect/replay boundary; provider sampling, process implementation, terminal rendering, plugins, context optimization and frontends remain adapters or surfaces unless later evidence and an Owner amendment move a function. This ruling selects the architecture, not an implementation language and not permission to begin construction in this docs-only tranche. |
+| OR-019 | The versioned Recursion release is the sole canonical harness/control-plane dependency. | Ratified 2026-09-03. “Sole dependency” means no Hermes session, provider, model, terminal, plugin, database or other harness may be required to own or recover canonical identity, goals, authority, budgets, PAUSE, effects, evidence or publication state. It does not prohibit pinned third-party libraries or optional engines behind typed adapters. Hermes may exist only as a migration/compatibility adapter with removal criteria. |
+| OR-020 | Prepare the exact constitutional amendment for Recursion ownership, the already selected checkpoint-first future PAUSE family, and risk-scaled verifier downgrade classes. | Authorized 2026-09-03 for documentation research and amendment drafting. The amendment must preserve current immediate PAUSE until separately applied, define every per-effect transition and missing-verifier outcome, and never present a downgrade as full independence. This docs-only authorization does not itself modify `CONTROL_PLANE.md`, `state/DECISIONS.md` or runtime behavior. |
 
 ## Accepted directions
 
