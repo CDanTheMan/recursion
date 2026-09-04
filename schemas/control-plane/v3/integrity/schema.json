@@ -174,6 +174,16 @@
       "additionalProperties": false,
       "allOf": [
         {
+          "else": {
+            "properties": {
+              "expiry_boundary": {
+                "type": "null"
+              },
+              "expiry_reached": {
+                "const": false
+              }
+            }
+          },
           "if": {
             "properties": {
               "state": {
@@ -188,9 +198,6 @@
             "properties": {
               "expiry_boundary": {
                 "$ref": "#/$defs/Timestamp"
-              },
-              "expiry_reached": {
-                "const": true
               }
             }
           }
@@ -612,7 +619,8 @@
         "input",
         "expected"
       ],
-      "type": "object"
+      "type": "object",
+      "x-fixtureBindings": true
     },
     "EffectIntent": {
       "additionalProperties": false,
@@ -1079,7 +1087,8 @@
         "input",
         "expected"
       ],
-      "type": "object"
+      "type": "object",
+      "x-fixtureBindings": true
     },
     "EvidenceReason": {
       "enum": [
@@ -1745,7 +1754,8 @@
         "input",
         "expected"
       ],
-      "type": "object"
+      "type": "object",
+      "x-fixtureBindings": true
     },
     "PublicationIntent": {
       "additionalProperties": false,
@@ -2439,7 +2449,8 @@
         "input",
         "expected"
       ],
-      "type": "object"
+      "type": "object",
+      "x-fixtureBindings": true
     },
     "RetentionReason": {
       "enum": [
@@ -3006,7 +3017,8 @@
         "input",
         "expected"
       ],
-      "type": "object"
+      "type": "object",
+      "x-fixtureBindings": true
     },
     "StateReason": {
       "enum": [
@@ -3017,6 +3029,7 @@
         "dual-writer",
         "event-unverified",
         "import-unknown",
+        "logical-time-regression",
         "lossy-import",
         "open-effect",
         "duplicate-command-conflict",

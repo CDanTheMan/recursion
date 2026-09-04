@@ -237,15 +237,26 @@ def _evidence_decision(validator: Any, enabled: bool, instance: Any, schema: dic
     status = instance.get("status")
     accepted = instance.get("accepted_edge_ids", [])
     contradictions = instance.get("contradiction_edge_ids", [])
+    qualifications = instance.get("qualification_edge_ids", [])
     reasons = instance.get("reasons", [])
+    categories = [set(accepted), set(contradictions), set(qualifications)]
+    if any(left & right for index, left in enumerate(categories) for right in categories[index + 1:]):
+        yield jsonschema.ValidationError("evidence edge categories overlap")
+    if bool(contradictions) != ("contradiction-present" in reasons):
+        yield jsonschema.ValidationError("contradiction reason/list mismatch")
+    if bool(qualifications) != ("qualification-present" in reasons):
+        yield jsonschema.ValidationError("qualification reason/list mismatch")
     if status == "supported" and (not accepted or contradictions):
         yield jsonschema.ValidationError("supported decision has no support or retains contradiction")
     if status == "contested" and (not accepted or not contradictions):
         yield jsonschema.ValidationError("contested decision needs support and contradiction")
-    if status == "unknown" and accepted:
-        yield jsonschema.ValidationError("unknown decision cannot accept support")
-    if status == "refused" and not reasons:
-        yield jsonschema.ValidationError("refused decision needs a reason")
+    if status == "unknown" and (accepted or "support-insufficient" not in reasons):
+        yield jsonschema.ValidationError("unknown decision needs explicit insufficient support")
+    refusal_reasons = {"claim-binding-mismatch", "edge-binding-mismatch", "export-prohibited", "license-prohibited", "privacy-prohibited"}
+    if status == "refused" and (accepted or not refusal_reasons.intersection(reasons)):
+        yield jsonschema.ValidationError("refused decision needs a refusal reason and no accepted support")
+    if status != "unknown" and "support-insufficient" in reasons:
+        yield jsonschema.ValidationError("only unknown may claim insufficient support")
 
 
 def _effect_bindings(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
@@ -262,6 +273,19 @@ def _effect_bindings(validator: Any, enabled: bool, instance: Any, schema: dict[
     for observation in instance.get("observations", []):
         if any(observation.get(field) != intent.get(field) for field in identity):
             yield jsonschema.ValidationError("effect observation does not bind the intent")
+    identity_fields = {
+        "AttemptStarted@1": "attempt_id", "ExternalObserved@1": "observation_id",
+        "ReceiptRecorded@1": "receipt_id", "ReconciliationObserved@1": "reconciliation_id",
+    }
+    seen: dict[str, set[Any]] = {field: set() for field in identity_fields.values()}
+    for observation in instance.get("observations", []):
+        field = identity_fields.get(observation.get("type"))
+        if field is None:
+            continue
+        identifier = observation.get(field)
+        if identifier in seen[field]:
+            yield jsonschema.ValidationError(f"duplicate effect trace identity: {field}")
+        seen[field].add(identifier)
 
 
 def _effect_decision(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
@@ -271,12 +295,23 @@ def _effect_decision(validator: Any, enabled: bool, instance: Any, schema: dict[
     status = instance.get("status")
     reasons = instance.get("reasons", [])
     reconcile = instance.get("requires_reconciliation")
-    if status in {"prepared", "executing", "succeeded", "failed"} and (reasons or reconcile):
-        yield jsonschema.ValidationError("settled/nonterminal effect decision has contradictory reasons")
+    final_attempt = instance.get("final_attempt_number")
+    if status in {"prepared", "executing"} and (reasons or reconcile):
+        yield jsonschema.ValidationError("nonterminal effect decision has contradictory reasons")
+    if status in {"succeeded", "failed", "reconciled-succeeded", "reconciled-failed"} and reconcile:
+        yield jsonschema.ValidationError("settled effect decision cannot require reconciliation")
     if status == "ambiguous" and (not reasons or reconcile is not True):
         yield jsonschema.ValidationError("ambiguous effect decision must require reconciliation")
-    if status == "refused" and not reasons:
-        yield jsonschema.ValidationError("refused effect decision needs a reason")
+    if status == "ambiguous" and "reconciliation-required" not in reasons:
+        yield jsonschema.ValidationError("ambiguous effect decision needs the reconciliation reason")
+    if status == "refused" and (not reasons or reconcile):
+        yield jsonschema.ValidationError("refused effect decision needs a settled reason")
+    if status == "prepared" and final_attempt != 0:
+        yield jsonschema.ValidationError("prepared effect cannot have an attempt")
+    if status in {"executing", "succeeded", "failed", "ambiguous", "reconciled-succeeded", "reconciled-failed"} and (not isinstance(final_attempt, int) or final_attempt < 1):
+        yield jsonschema.ValidationError("attempted effect decision needs a final attempt")
+    if status != "ambiguous" and "reconciliation-required" in reasons:
+        yield jsonschema.ValidationError("settled effect cannot require reconciliation")
 
 
 def _nondecreasing_times(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
@@ -317,13 +352,15 @@ def _publication_decision(validator: Any, enabled: bool, instance: Any, schema: 
     reconcile = instance.get("requires_reconciliation")
     if status == "eligible" and (reasons or published is not None or reconcile):
         yield jsonschema.ValidationError("eligible publication decision is contradictory")
-    if status == "published" and (reasons or published is None or reconcile):
+    if status == "published" and (published is None or reconcile):
         yield jsonschema.ValidationError("published decision lacks an exact settled SHA")
     if status == "ambiguous" and (not reasons or published is not None or reconcile is not True):
         yield jsonschema.ValidationError("ambiguous publication must require reconciliation")
-    if status == "blocked" and not reasons:
-        yield jsonschema.ValidationError("blocked publication needs a reason")
-    if status == "rejected" and (reasons or published is not None or reconcile):
+    if status == "ambiguous" and "remote-state-unknown" not in reasons:
+        yield jsonschema.ValidationError("ambiguous publication needs unknown remote state")
+    if status == "blocked" and (not reasons or published is not None or reconcile):
+        yield jsonschema.ValidationError("blocked publication needs a settled reason")
+    if status == "rejected" and (published is not None or reconcile):
         yield jsonschema.ValidationError("rejected publication decision is contradictory")
 
 
@@ -344,6 +381,16 @@ def _state_decision(validator: Any, enabled: bool, instance: Any, schema: dict[s
         yield jsonschema.ValidationError("eligible state decision has reasons")
     if instance.get("status") != "eligible" and not instance.get("reasons"):
         yield jsonschema.ValidationError("non-eligible state decision needs reasons")
+    recovery_reasons = {
+        "aggregate-scope-mismatch", "digest-chain-invalid", "duplicate-command-conflict",
+        "event-unverified", "import-unknown", "logical-time-regression", "lossy-import",
+        "projection-mismatch", "replay-mismatch", "sequence-gap", "stale-fence",
+    }
+    reasons = set(instance.get("reasons", []))
+    if instance.get("status") == "recovery-required" and not reasons.intersection(recovery_reasons):
+        yield jsonschema.ValidationError("recovery-required decision lacks a recovery reason")
+    if instance.get("status") == "blocked" and reasons.intersection(recovery_reasons):
+        yield jsonschema.ValidationError("recovery reason cannot be relabeled blocked")
 
 
 def _retention_bindings(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
@@ -366,13 +413,52 @@ def _retention_decision(validator: Any, enabled: bool, instance: Any, schema: di
         return
     status = instance.get("status")
     reasons = instance.get("reasons", [])
+    resolved = instance.get("resolved_copy_ids", [])
     unresolved = instance.get("unresolved_copy_ids", [])
-    if status == "complete" and (reasons or unresolved):
+    if set(resolved) & set(unresolved):
+        yield jsonschema.ValidationError("retention copy partitions overlap")
+    if status == "complete" and (reasons or unresolved or not resolved):
         yield jsonschema.ValidationError("complete retention decision retains unresolved evidence")
-    if status == "incomplete" and (not reasons or not unresolved):
-        yield jsonschema.ValidationError("incomplete retention decision needs unresolved copies")
-    if status == "blocked" and not reasons:
-        yield jsonschema.ValidationError("blocked retention decision needs reasons")
+    if status == "incomplete" and (
+        not reasons or (not unresolved and "local-content-present" not in reasons)
+    ):
+        yield jsonschema.ValidationError("incomplete retention decision needs an unresolved proof")
+    blocking_reasons = {"copy-inventory-mismatch", "key-not-destroyed", "key-not-isolated", "legal-hold", "owner-policy-denied", "owner-policy-required", "tombstone-mismatch", "tombstone-sensitive"}
+    if status == "blocked" and not blocking_reasons.intersection(reasons):
+        yield jsonschema.ValidationError("blocked retention decision needs a blocking reason")
+    if status == "incomplete" and blocking_reasons.intersection(reasons):
+        yield jsonschema.ValidationError("blocking deletion proof cannot be relabeled incomplete")
+
+
+def _fixture_bindings(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):
+    del validator, schema
+    if not enabled or not isinstance(instance, dict):
+        return
+    value = instance.get("input", {})
+    expected = instance.get("expected", {})
+    kind = instance.get("type")
+    if kind == "EvidenceFixtureBundle@1":
+        edge_ids = {item.get("edge_id") for item in value.get("edges", [])}
+        source_ids = {item.get("source_id") for item in value.get("sources", [])}
+        decision_edges = set(expected.get("accepted_edge_ids", [])) | set(expected.get("contradiction_edge_ids", [])) | set(expected.get("qualification_edge_ids", []))
+        if not decision_edges <= edge_ids or not set(expected.get("rejected_source_ids", [])) <= source_ids:
+            yield jsonschema.ValidationError("evidence fixture output references unknown input identity")
+    elif kind == "EffectFixtureBundle@1":
+        final_attempt = max((item.get("attempt_number", 0) for item in value.get("observations", []) if item.get("type") == "AttemptStarted@1"), default=0)
+        if expected.get("final_attempt_number") != final_attempt:
+            yield jsonschema.ValidationError("effect fixture final attempt mismatch")
+    elif kind == "PublicationFixtureBundle@1":
+        if expected.get("publication_id") != value.get("intent", {}).get("publication_id"):
+            yield jsonschema.ValidationError("publication fixture identity mismatch")
+    elif kind == "StateFixtureBundle@1":
+        final_sequence = max((item.get("sequence", 0) for item in value.get("events", [])), default=0)
+        if expected.get("aggregate_id") != value.get("aggregate_id") or expected.get("current_fence_epoch") != value.get("current_fence_epoch") or expected.get("final_sequence") != final_sequence:
+            yield jsonschema.ValidationError("state fixture output binding mismatch")
+    elif kind == "RetentionFixtureBundle@1":
+        copy_ids = {item.get("copy_id") for item in value.get("copies", [])}
+        decision_ids = set(expected.get("resolved_copy_ids", [])) | set(expected.get("unresolved_copy_ids", []))
+        if expected.get("artifact_id") != value.get("artifact_id") or decision_ids != copy_ids:
+            yield jsonschema.ValidationError("retention fixture output binding mismatch")
 
 
 M1CValidator = validators.extend(
@@ -391,6 +477,7 @@ M1CValidator = validators.extend(
         "x-publicationBindings": _publication_bindings, "x-publicationDecisionInvariant": _publication_decision,
         "x-stateContractInvariant": _state_invariant, "x-stateDecisionInvariant": _state_decision,
         "x-retentionBindings": _retention_bindings, "x-retentionDecisionInvariant": _retention_decision,
+        "x-fixtureBindings": _fixture_bindings,
     },
 )
 
@@ -689,6 +776,23 @@ class M1CSchemaTests(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             validate(bad, "CopyDisposition")
 
+    def test_decision_and_fixture_outputs_cannot_claim_false_green_status(self) -> None:
+        invalid = [
+            ("EvidenceDecision", {"type": "EvidenceDecision@1", "status": "unknown", "reasons": [], "accepted_edge_ids": [], "contradiction_edge_ids": [], "qualification_edge_ids": [], "rejected_source_ids": []}),
+            ("EffectDecision", {"type": "EffectDecision@1", "status": "prepared", "reasons": [], "final_attempt_number": 1, "requires_reconciliation": False, "effect_count": 0, "external_call_count": 0}),
+            ("PublicationDecision", {"type": "PublicationDecision@1", "status": "eligible", "reasons": ["gate-failed"], "publication_id": "publication:one", "published_sha": None, "requires_reconciliation": False, "git_mutation_count": 0}),
+            ("StateDecision", {"type": "StateDecision@1", "status": "blocked", "reasons": ["replay-mismatch"], "aggregate_id": "aggregate:fabric", "final_sequence": 1, "current_fence_epoch": 1, "state_write_count": 0}),
+            ("RetentionDecision", {"type": "RetentionDecision@1", "status": "incomplete", "reasons": ["key-not-destroyed"], "artifact_id": "artifact:one", "resolved_copy_ids": [], "unresolved_copy_ids": ["copy:one"], "deletion_operation_count": 0}),
+        ]
+        for definition, value in invalid:
+            with self.subTest(definition=definition):
+                with self.assertRaises(jsonschema.ValidationError):
+                    validate(value, definition)
+
+        bundle = {"type": "EvidenceFixtureBundle@1", "fixture_id": "F-M1C-001", "purpose": "synthetic", "source_requirement_ids": ["REQ-M1C-EVIDENCE"], "input": evidence_input(), "expected": {"type": "EvidenceDecision@1", "status": "supported", "reasons": [], "accepted_edge_ids": ["edge:other"], "contradiction_edge_ids": [], "qualification_edge_ids": [], "rejected_source_ids": []}}
+        with self.assertRaises(jsonschema.ValidationError):
+            validate(bundle, "M1CFixtureBundle")
+
     def test_fixture_union_and_manifest_are_closed(self) -> None:
         bundle = {"type": "EvidenceFixtureBundle@1", "fixture_id": "F-M1C-001", "purpose": "synthetic", "source_requirement_ids": ["REQ-M1C-EVIDENCE"], "input": evidence_input(), "expected": {"type": "EvidenceDecision@1", "status": "supported", "reasons": [], "accepted_edge_ids": ["edge:one"], "contradiction_edge_ids": [], "qualification_edge_ids": [], "rejected_source_ids": []}}
         validate(bundle, "M1CFixtureBundle")
@@ -700,5 +804,5 @@ class M1CSchemaTests(unittest.TestCase):
 if __name__ == "__main__":
     result = unittest.main(verbosity=2, exit=False)
     if result.result.wasSuccessful():
-        print("M1C_SCHEMA_PASS tests=12")
+        print("M1C_SCHEMA_PASS tests=13")
     raise SystemExit(0 if result.result.wasSuccessful() else 1)

@@ -87,6 +87,34 @@ unverifiable or deployment-dependent evidence remains unknown or blocked.
 No production source adapter, effect actuator, publisher, database, migrator, backup tool,
 deletion tool or key manager is an output of this DAG.
 
+## PlanRevision 2 — historical consequence and incomplete-proof closure
+
+`PLAN-M1C-001@2` was triggered during lead review of exact candidate
+`a0f80280408c1f60def56636b51ed004482e35ae`. Four schema-valid counterexamples showed that the
+first oracle could: forget an ambiguous first attempt after a blind retry later received a
+receipt; admit a review ref naming a protected branch; label an exact observed remote publication
+only `blocked` when its preflight evidence also failed; and emit a schema-invalid deletion result
+when local content remained but every enumerated copy was resolved. The candidate and its passing
+sweeps are diagnostic evidence, not terminal evidence.
+
+- Retained: Owner authorization, GoalSpec, path/effect/privacy boundaries, five lanes, all 24
+  fixture IDs and literal expected outcomes, storage neutrality and open Owner seams.
+- Re-admitted: M1C-02 through M1C-06 on a repaired exact candidate.
+- Change: preserve unresolved-attempt state across the ordered trace; retain binding/result
+  conflicts and duplicate command identities; test the review ref itself against protected names;
+  let exact remote and effect receipts own historical outcome while retaining preflight or
+  admission violations as reasons; permit `local-content-present` to be the unresolved deletion
+  proof; apply the Owner erasure seam only to the receipt/audit classes named by the contract; and
+  bind every output status and fixture identity so a syntactically valid false green is rejected.
+- Gate extension: reproduce all four counterexamples plus result/observer conflicts, mismatching
+  persistent identifiers, claim/source freshness, unknown license, duplicate canonical
+  identities, monotonic event fence/logical time, contradictory observations, review-ref/target
+  separation, tombstone time/completeness, unreached expiry and the accepted-evidence/non-receipt
+  retention boundary, plus cross-input/output fixture identity and status/reason invariants.
+- Falsifier: a later receipt erases an earlier blind retry, a protected ref becomes eligible, an
+  observed durable consequence is relabeled as merely blocked, or any schema-valid input yields a
+  decision that fails its own output schema.
+
 ## Machine-checkable gates
 
 1. Schema and fixture materializers reproduce committed bytes exactly.

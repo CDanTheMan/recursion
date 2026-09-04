@@ -15,7 +15,6 @@ from typing import Any
 
 SUPPORT_RELATIONS = {"supports", "replicates", "updates"}
 PROTECTED_ARTIFACT_CLASSES = {
-    "accepted-evidence",
     "authority-receipt",
     "audit-record",
     "effect-receipt",
@@ -64,6 +63,10 @@ def assess_evidence(value: dict[str, Any]) -> dict[str, Any]:
     reasons: set[str] = set()
     rejected_sources: set[str] = set()
     source_reasons: dict[str, set[str]] = {}
+    claim_stale = (
+        claim.get("revalidate_after") is not None
+        and value["observed_at"] > claim["revalidate_after"]
+    )
 
     for source_id in claim["required_source_ids"]:
         if source_id not in sources:
@@ -78,9 +81,18 @@ def assess_evidence(value: dict[str, Any]) -> dict[str, Any]:
             faults.add("metadata-only")
         elif access != "accessible":
             faults.add("source-inaccessible")
-        elif source["lifecycle"] != "verified" or not any(
-            identifier["verification_state"] == "verified"
-            for identifier in source["persistent_identifiers"]
+        elif source["lifecycle"] == "expired":
+            faults.add("source-stale")
+        elif (
+            source["lifecycle"] != "verified"
+            or not any(
+                identifier["verification_state"] == "verified"
+                for identifier in source["persistent_identifiers"]
+            )
+            or any(
+                identifier["verification_state"] == "mismatch"
+                for identifier in source["persistent_identifiers"]
+            )
         ):
             faults.add("source-unverified")
 
@@ -96,9 +108,29 @@ def assess_evidence(value: dict[str, Any]) -> dict[str, Any]:
             and value["observed_at"] > source["revalidate_after"]
         ):
             faults.add("source-stale")
+        if claim_stale:
+            faults.add("source-stale")
+        if (
+            source.get("retrieved_at") is not None
+            and (
+                source["retrieved_at"] > value["observed_at"]
+                or (
+                    source.get("published_at") is not None
+                    and source["published_at"] > source["retrieved_at"]
+                )
+                or (
+                    source.get("revalidate_after") is not None
+                    and source["revalidate_after"] < source["retrieved_at"]
+                )
+            )
+        ):
+            faults.add("source-unverified")
         if claim["evidence_scope"] not in source["supported_scopes"]:
             faults.add("scope-inapplicable")
-        if source["license_state"] not in value["allowed_license_states"]:
+        if (
+            source["license_state"] in {"unknown", "prohibited"}
+            or source["license_state"] not in value["allowed_license_states"]
+        ):
             faults.add("license-prohibited")
         if source["privacy_class"] not in value["allowed_privacy_classes"]:
             faults.add("privacy-prohibited")
@@ -165,8 +197,6 @@ def assess_evidence(value: dict[str, Any]) -> dict[str, Any]:
     if reasons & refusal_reasons:
         status = "refused"
         accepted.clear()
-        contradictions.clear()
-        qualifications.clear()
     elif accepted and contradictions:
         status = "contested"
     elif accepted:
@@ -268,9 +298,15 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
         reasons.add("compensation-not-separate")
 
     attempts: dict[int, dict[str, Any]] = {}
-    external_by_attempt: dict[int, list[dict[str, Any]]] = {}
-    receipts: list[dict[str, Any]] = []
-    reconciliations: list[dict[str, Any]] = []
+    attempt_ids: set[str] = set()
+    pending_possible: set[int] = set()
+    settled_attempts: set[int] = set()
+    valid_externals: list[dict[str, Any]] = []
+    valid_receipts: list[dict[str, Any]] = []
+    valid_reconciliations: list[dict[str, Any]] = []
+    record_ids: dict[str, set[str]] = {
+        "observation_id": set(), "receipt_id": set(), "reconciliation_id": set(),
+    }
     common_fields = (
         "effect_id",
         "idempotency_key",
@@ -281,13 +317,24 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
     )
     for observation in observations:
         kind = observation["type"]
-        if any(observation[field] != intent[field] for field in common_fields):
+        binding_ok = not any(
+            observation[field] != intent[field] for field in common_fields
+        )
+        if not binding_ok:
             reasons.add(_effect_observation_binding_reason(kind))
         number = observation["attempt_number"]
         if kind == "AttemptStarted@1":
-            if number in attempts or observation["attempt_id"] != f"attempt:{number}":
+            expected_number = max(attempts, default=0) + 1
+            if (
+                number in attempts
+                or observation["attempt_id"] in attempt_ids
+                or number != expected_number
+            ):
                 reasons.add("attempt-binding-mismatch")
+            if pending_possible:
+                reasons.add("blind-retry-blocked")
             attempts[number] = observation
+            attempt_ids.add(observation["attempt_id"])
         else:
             attempt_value = attempts.get(number)
             if (
@@ -295,7 +342,16 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
                 or observation["attempt_id"] != attempt_value["attempt_id"]
             ):
                 reasons.add(_effect_observation_binding_reason(kind))
+                binding_ok = False
             authenticity = observation["authenticity"]
+            record_id_field = {
+                "ExternalObserved@1": "observation_id",
+                "ReceiptRecorded@1": "receipt_id",
+                "ReconciliationObserved@1": "reconciliation_id",
+            }[kind]
+            if observation[record_id_field] in record_ids[record_id_field]:
+                reasons.add("observation-conflict")
+            record_ids[record_id_field].add(observation[record_id_field])
             if authenticity != "verified":
                 reasons.add(
                     "reconciliation-unverified"
@@ -303,11 +359,74 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
                     else "observation-unverified"
                 )
             if kind == "ExternalObserved@1":
-                external_by_attempt.setdefault(number, []).append(observation)
+                if binding_ok and authenticity == "verified":
+                    valid_externals.append(observation)
+                    if (
+                        observation["outcome"] in {"accepted", "unknown"}
+                        and number not in settled_attempts
+                    ):
+                        pending_possible.add(number)
             elif kind == "ReceiptRecorded@1":
-                receipts.append(observation)
+                if binding_ok and authenticity == "verified":
+                    valid_receipts.append(observation)
+                    settled_attempts.add(number)
+                    pending_possible.discard(number)
             else:
-                reconciliations.append(observation)
+                if binding_ok and authenticity == "verified":
+                    valid_reconciliations.append(observation)
+                    if observation["outcome"] in {"succeeded", "failed"}:
+                        settled_attempts.add(number)
+                        pending_possible.discard(number)
+                    elif number not in settled_attempts:
+                        pending_possible.add(number)
+
+    for number in attempts:
+        external_values = [
+            item for item in valid_externals if item["attempt_number"] == number
+        ]
+        receipt_values = [
+            item for item in valid_receipts if item["attempt_number"] == number
+        ]
+        reconciliation_values = [
+            item for item in valid_reconciliations if item["attempt_number"] == number
+        ]
+        settlement_values = [*external_values, *receipt_values, *reconciliation_values]
+        remote_refs = {
+            item["remote_operation_ref"]
+            for item in settlement_values
+            if item["remote_operation_ref"] is not None
+        }
+        result_digests = {
+            item["result_digest"]
+            for item in settlement_values
+            if item["result_digest"] is not None
+        }
+        observers = {item["observer_ref"] for item in settlement_values}
+        receipt_outcomes = {
+            (item["result"], item["result_digest"], item["remote_operation_ref"])
+            for item in receipt_values
+        }
+        reconciliation_outcomes = {
+            (item["outcome"], item["result_digest"], item["remote_operation_ref"])
+            for item in reconciliation_values
+            if item["outcome"] in {"succeeded", "failed"}
+        }
+        external_outcomes = {item["outcome"] for item in external_values}
+        settled_succeeded = any(
+            item["result"] == "succeeded" for item in receipt_values
+        ) or any(
+            item["outcome"] == "succeeded" for item in reconciliation_values
+        )
+        if (
+            len(remote_refs) > 1
+            or len(result_digests) > 1
+            or len(observers) > 1
+            or len(receipt_outcomes) > 1
+            or len(reconciliation_outcomes) > 1
+            or len(external_outcomes) > 1
+            or ("rejected" in external_outcomes and settled_succeeded)
+        ):
+            reasons.add("observation-conflict")
 
     final_attempt = max(attempts, default=0)
     hard_refusal = reasons & {
@@ -321,19 +440,31 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
         "stale-admission",
         "stale-fence",
     }
-    if hard_refusal:
-        status = "refused"
-        reconcile = False
+    verified_reconciliations = [
+        item
+        for item in valid_reconciliations
+        if item["outcome"] in {"succeeded", "failed"}
+    ]
+    verified_receipts = valid_receipts
+    all_remote_refs = {
+        item["remote_operation_ref"]
+        for item in [*valid_externals, *valid_receipts, *valid_reconciliations]
+        if item["remote_operation_ref"] is not None
+    }
+    all_result_digests = {
+        item["result_digest"]
+        for item in [*valid_externals, *valid_receipts, *valid_reconciliations]
+        if item["result_digest"] is not None
+    }
+    if len(all_remote_refs) > 1 or len(all_result_digests) > 1:
+        reasons.add("observation-conflict")
+    if "observation-conflict" in reasons or pending_possible:
+        if pending_possible:
+            reasons.add("receipt-missing")
+        reasons.add("reconciliation-required")
+        status = "ambiguous"
+        reconcile = True
     else:
-        verified_reconciliations = [
-            item
-            for item in reconciliations
-            if item["authenticity"] == "verified"
-            and item["outcome"] in {"succeeded", "failed"}
-        ]
-        verified_receipts = [
-            item for item in receipts if item["authenticity"] == "verified"
-        ]
         settled = {
             *(item["result"] for item in verified_receipts),
             *(item["outcome"] for item in verified_reconciliations),
@@ -350,26 +481,21 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
         elif verified_receipts:
             status = verified_receipts[-1]["result"]
             reconcile = False
+        elif any(item["outcome"] == "rejected" for item in valid_externals):
+            status = "failed"
+            reconcile = False
+        elif hard_refusal:
+            status = "refused"
+            reconcile = False
         else:
-            possible_effect = any(
-                item["outcome"] in {"accepted", "unknown"}
-                for values in external_by_attempt.values()
-                for item in values
-            )
-            if possible_effect:
-                reasons.update({"receipt-missing", "reconciliation-required"})
-                if final_attempt > 1:
-                    reasons.add("blind-retry-blocked")
-                status = "ambiguous"
-                reconcile = True
-            elif final_attempt:
+            if final_attempt:
                 status = "executing"
                 reconcile = False
             else:
                 status = "prepared"
                 reconcile = False
 
-    if status not in {"ambiguous", "refused"} and reasons:
+    if status in {"prepared", "executing"} and reasons:
         status = "ambiguous"
         reasons.add("reconciliation-required")
         reconcile = True
@@ -390,6 +516,11 @@ def assess_publication(value: dict[str, Any]) -> dict[str, Any]:
     if not _valid_self_digest(intent, "intent_digest"):
         reasons.add("receipt-binding-mismatch")
 
+    review_branch = intent["review_ref"].removeprefix("refs/heads/")
+    if review_branch in intent["protected_branch_names"]:
+        reasons.add("protected-target")
+    if review_branch == intent["target_branch"]:
+        reasons.add("publication-kind-prohibited")
     if intent["publication_kind"] != "review-branch":
         reasons.add("publication-kind-prohibited")
         if intent["target_branch"] in intent["protected_branch_names"]:
@@ -455,6 +586,7 @@ def assess_publication(value: dict[str, Any]) -> dict[str, Any]:
     receipt = value["receipt"]
     published_sha = None
     reconcile = False
+    observed_remote_state = None
     if receipt is not None:
         receipt_fields = ("publication_id", "effect_id", "repository_ref", "review_ref", "candidate_sha")
         if (
@@ -470,15 +602,18 @@ def assess_publication(value: dict[str, Any]) -> dict[str, Any]:
                 reasons.add("receipt-binding-mismatch")
             else:
                 published_sha = receipt["remote_commit_sha"]
+                observed_remote_state = "observed"
+        else:
+            observed_remote_state = "rejected"
 
-    if "remote-state-unknown" in reasons:
+    if observed_remote_state == "observed":
+        status = "published"
+    elif observed_remote_state == "rejected":
+        status = "rejected"
+    elif "remote-state-unknown" in reasons:
         status = "ambiguous"
     elif reasons:
         status = "blocked"
-    elif receipt is not None and receipt["remote_state"] == "rejected":
-        status = "rejected"
-    elif published_sha is not None:
-        status = "published"
     else:
         status = "eligible"
     return {
@@ -519,8 +654,12 @@ def assess_state_contract(value: dict[str, Any]) -> dict[str, Any]:
         reasons.add("writer-refusal-unproved")
 
     events = value["events"]
-    command_payloads: dict[str, str] = {}
+    command_ids: set[str] = set()
+    idempotency_keys: set[str] = set()
+    event_ids: set[str] = set()
     previous_digest = None
+    previous_fence = 0
+    previous_logical_time = 0
     for index, event in enumerate(events, start=1):
         if event["aggregate_id"] != value["aggregate_id"]:
             reasons.add("aggregate-scope-mismatch")
@@ -532,16 +671,27 @@ def assess_state_contract(value: dict[str, Any]) -> dict[str, Any]:
             reasons.add("digest-chain-invalid")
         if event["authentication_state"] != "verified":
             reasons.add("event-unverified")
+        if event["writer_id"] != value["canonical_writer_id"]:
+            reasons.add("stale-fence")
         if (
-            event["writer_id"] != value["canonical_writer_id"]
-            or event["fence_epoch"] != value["current_fence_epoch"]
+            event["fence_epoch"] < previous_fence
+            or event["fence_epoch"] > value["current_fence_epoch"]
         ):
             reasons.add("stale-fence")
-        prior_payload = command_payloads.get(event["command_id"])
-        if prior_payload is not None and prior_payload != event["payload_digest"]:
+        if event["logical_time"] <= previous_logical_time:
+            reasons.add("logical-time-regression")
+        if (
+            event["command_id"] in command_ids
+            or event["idempotency_key"] in idempotency_keys
+            or event["event_id"] in event_ids
+        ):
             reasons.add("duplicate-command-conflict")
-        command_payloads[event["command_id"]] = event["payload_digest"]
+        command_ids.add(event["command_id"])
+        idempotency_keys.add(event["idempotency_key"])
+        event_ids.add(event["event_id"])
         previous_digest = event["event_digest"]
+        previous_fence = event["fence_epoch"]
+        previous_logical_time = event["logical_time"]
 
     if value["import_state"] == "lossy":
         reasons.add("lossy-import")
@@ -549,7 +699,8 @@ def assess_state_contract(value: dict[str, Any]) -> dict[str, Any]:
         reasons.add("import-unknown")
     if value["actual_replay_digest"] != value["expected_replay_digest"]:
         reasons.add("replay-mismatch")
-    if value["actual_projection_digest"] != value["expected_projection_digest"]:
+    projection_matches = value["actual_projection_digest"] == value["expected_projection_digest"]
+    if not projection_matches:
         reasons.add("projection-mismatch")
 
     proofs = {
@@ -564,7 +715,7 @@ def assess_state_contract(value: dict[str, Any]) -> dict[str, Any]:
     completed = value["completed_stages"]
     if completed != MIGRATION_STAGES[: len(completed)]:
         reasons.add("stage-order-invalid")
-    elif completed != MIGRATION_STAGES:
+    elif completed != MIGRATION_STAGES and projection_matches:
         reasons.add("projection-only")
 
     open_reasons = {
@@ -587,6 +738,7 @@ def assess_state_contract(value: dict[str, Any]) -> dict[str, Any]:
         "event-unverified",
         "import-unknown",
         "lossy-import",
+        "logical-time-regression",
         "projection-mismatch",
         "replay-mismatch",
         "sequence-gap",
@@ -647,6 +799,14 @@ def assess_retention(value: dict[str, Any]) -> dict[str, Any]:
                 reasons.add("copy-evidence-unverified")
             if item["state"] == "expiry-bound" and not item["expiry_reached"]:
                 reasons.add("expiry-not-reached")
+
+    disposed_at = tombstone["disposed_at"]
+    if disposed_at is not None and disposed_at < tombstone["requested_at"]:
+        reasons.add("tombstone-mismatch")
+    if disposed_at is not None and (unresolved or not value["local_content_deleted"]):
+        reasons.add("tombstone-mismatch")
+    if disposed_at is None and not unresolved and value["local_content_deleted"]:
+        reasons.add("tombstone-mismatch")
 
     if not value["local_content_deleted"]:
         reasons.add("local-content-present")

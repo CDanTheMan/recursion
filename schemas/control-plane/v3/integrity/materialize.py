@@ -478,7 +478,7 @@ def build_schema() -> dict[str, Any]:
     )
     defs["StateReason"] = {"enum": [
         "aggregate-scope-mismatch", "backup-unverified", "deployment-unknown", "digest-chain-invalid",
-        "dual-writer", "event-unverified", "import-unknown", "lossy-import", "open-effect",
+        "dual-writer", "event-unverified", "import-unknown", "logical-time-regression", "lossy-import", "open-effect",
         "duplicate-command-conflict", "open-lease", "pending-publication", "projection-mismatch", "projection-only",
         "replay-mismatch", "restore-unverified", "reverse-reader-unverified", "rollback-unproved",
         "saga-incomplete", "sequence-gap", "stage-order-invalid", "stale-fence", "writer-inventory-incomplete",
@@ -506,7 +506,10 @@ def build_schema() -> dict[str, Any]:
         },
         allOf=[{
             "if": {"properties": {"state": {"const": "expiry-bound"}}, "required": ["state"]},
-            "then": {"properties": {"expiry_boundary": ref("Timestamp"), "expiry_reached": {"const": True}}},
+            "then": {"properties": {"expiry_boundary": ref("Timestamp")}},
+            "else": {"properties": {
+                "expiry_boundary": {"type": "null"}, "expiry_reached": {"const": False},
+            }},
         }],
     )
     artifact_classes = ["raw-session", "temporary", "cache", "accepted-evidence", "gate-receipt", "publication-receipt", "effect-receipt", "authority-receipt", "audit-record"]
@@ -568,7 +571,11 @@ def build_schema() -> dict[str, Any]:
         ("RetentionFixtureBundle", "RetentionFixtureBundle@1", "RetentionAssessmentInput", "RetentionDecision"),
     ]
     for name, tag, input_name, output_name in fixture_arms:
-        defs[name] = tagged(tag, {**common_fixture, "input": ref(input_name), "expected": ref(output_name)})
+        defs[name] = tagged(
+            tag,
+            {**common_fixture, "input": ref(input_name), "expected": ref(output_name)},
+            **{"x-fixtureBindings": True},
+        )
     defs["M1CFixtureBundle"] = {"oneOf": [ref(name) for name, *_ in fixture_arms]}
     defs["FixtureManifestEntry"] = tagged(
         "FixtureManifestEntry@1",

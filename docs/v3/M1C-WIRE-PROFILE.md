@@ -95,6 +95,9 @@ sorted `reasons`, `accepted_edge_ids`, `contradiction_edge_ids`, `qualification_
 `rejected_source_ids`. Supported has at least one accepted supporting/replicating/updating edge and
 no accepted contradiction. Contested has both. Unknown has no admissible support. Refused carries
 a binding, privacy or export violation.
+The three edge sets are disjoint, contradiction/qualification reasons agree with their sets, and
+refusal clears accepted support without deleting otherwise admissible contradiction or
+qualification history.
 
 ## Effect records
 
@@ -150,6 +153,9 @@ Every attempt uses `attempt_number` 1–64. IDs are unique and timestamps are no
 `EffectDecision@1` has exactly `type`, status `refused`, `prepared`, `executing`, `succeeded`,
 `failed`, `ambiguous`, `reconciled-succeeded` or `reconciled-failed`, sorted reasons,
 `final_attempt_number`, `requires_reconciliation`, `effect_count`, `external_call_count`.
+An exact receipt or reconciliation owns the historical settled status even when reasons retain an
+admission violation. An unresolved prior attempt or conflicting bound result remains `ambiguous`;
+a later attempt or receipt cannot erase it.
 
 ## Publication records
 
@@ -192,6 +198,10 @@ matches `refs/heads/[A-Za-z0-9][A-Za-z0-9._/-]{0,159}` without `..`, `//`, `@{` 
 `PublicationDecision@1` has exactly `type`, status `eligible`, `blocked`, `published`, `rejected`
 or `ambiguous`, sorted reasons, `publication_id`, nullable `published_sha`,
 `requires_reconciliation`, `git_mutation_count`.
+The branch named by `review_ref`, not only `target_branch`, is checked against protected names. An
+eligible review ref is also distinct from its target branch. An
+exact `observed` or `rejected` receipt owns historical remote status; failed preflight reasons are
+retained but cannot relabel an observed remote publication as merely blocked.
 
 ## Fabric-only state records
 
@@ -225,7 +235,7 @@ state `closed`, `active`, `open`, `ambiguous`, `pending` or `partial`.
 
 `StateReason` is closed to: `aggregate-scope-mismatch`, `deployment-unknown`,
 `writer-inventory-incomplete`, `writer-unknown`, `dual-writer`, `writer-refusal-unproved`,
-`stale-fence`, `sequence-gap`, `digest-chain-invalid`, `event-unverified`, `lossy-import`,
+`stale-fence`, `sequence-gap`, `logical-time-regression`, `digest-chain-invalid`, `event-unverified`, `lossy-import`,
 `duplicate-command-conflict`, `import-unknown`, `replay-mismatch`, `projection-mismatch`, `projection-only`,
 `backup-unverified`, `restore-unverified`, `reverse-reader-unverified`, `rollback-unproved`,
 `stage-order-invalid`, `open-lease`, `open-effect`, `pending-publication`, `saga-incomplete`.
@@ -261,6 +271,12 @@ Copy dispositions are sorted by copy ID. Tombstone digest seals the record witho
 `RetentionDecision@1` has exactly `type`, status `complete`, `incomplete` or `blocked`, sorted
 reasons, `artifact_id`, `resolved_copy_ids`, `unresolved_copy_ids`,
 `deletion_operation_count` fixed zero.
+`incomplete` normally names unresolved copies, but `local-content-present` is independently
+sufficient even when every enumerated remote copy is resolved. The explicit Owner erasure seam
+applies to gate, publication, effect and authority receipts plus audit records; accepted evidence
+is not silently promoted into that reserved receipt-policy class.
+`disposed_at` is absent while proof is incomplete and is present no earlier than `requested_at`
+when all local and enumerated copy evidence is complete.
 
 ## Fixture unions and manifest
 

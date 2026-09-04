@@ -118,6 +118,107 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
         self.assertEqual(decision["status"], status)
         self.assertIn(reason, decision["reasons"])
 
+    def test_schema_valid_semantic_variant_matrix_has_closed_outputs(self) -> None:
+        count = 0
+
+        def check(
+            bundle: dict[str, Any], input_definition: str,
+            decision_definition: str, evaluator: Callable[[dict[str, Any]], dict[str, Any]],
+        ) -> None:
+            nonlocal count
+            schema_gate.validate(bundle["input"], input_definition)
+            schema_gate.validate(evaluator(bundle["input"]), decision_definition)
+            count += 1
+
+        for editorial in ("current", "corrected", "superseded", "retracted", "withdrawn", "unknown"):
+            bundle = load_fixture(1)
+            bundle["input"]["sources"][0]["editorial_state"] = editorial
+            check(bundle, "EvidenceAssessmentInput", "EvidenceDecision", oracle.assess_evidence)
+        for lifecycle in ("discovered", "identified", "retrieved", "verified", "quarantined", "expired"):
+            bundle = load_fixture(1)
+            bundle["input"]["sources"][0]["lifecycle"] = lifecycle
+            check(bundle, "EvidenceAssessmentInput", "EvidenceDecision", oracle.assess_evidence)
+        for license_state in ("permitted", "restricted", "prohibited", "unknown"):
+            bundle = load_fixture(1)
+            bundle["input"]["sources"][0]["license_state"] = license_state
+            bundle["input"]["allowed_license_states"] = [license_state]
+            check(bundle, "EvidenceAssessmentInput", "EvidenceDecision", oracle.assess_evidence)
+        for applicability in ("exact", "partial", "inapplicable", "unknown"):
+            bundle = load_fixture(1)
+            bundle["input"]["edges"][0]["applicability"] = applicability
+            check(bundle, "EvidenceAssessmentInput", "EvidenceDecision", oracle.assess_evidence)
+
+        for outcome in ("accepted", "rejected", "unknown"):
+            bundle = load_fixture(8)
+            bundle["input"]["observations"][-1]["outcome"] = outcome
+            bundle["input"]["observations"][-1]["result_digest"] = (
+                None if outcome == "unknown" else "sha256:" + "3" * 64
+            )
+            check(bundle, "EffectTraceInput", "EffectDecision", oracle.classify_effect_trace)
+        for authenticity in ("verified", "unverified", "mismatch"):
+            bundle = load_fixture(8)
+            bundle["input"]["observations"][-1]["authenticity"] = authenticity
+            check(bundle, "EffectTraceInput", "EffectDecision", oracle.classify_effect_trace)
+        for result in ("succeeded", "failed"):
+            bundle = load_fixture(7)
+            bundle["input"]["observations"][-1]["result"] = result
+            check(bundle, "EffectTraceInput", "EffectDecision", oracle.classify_effect_trace)
+
+        for publication_kind in ("review-branch", "merge", "release", "deployment"):
+            bundle = load_fixture(11)
+            bundle["input"]["intent"]["publication_kind"] = publication_kind
+            bundle["input"]["intent"] = schema_gate.seal(bundle["input"]["intent"], "intent_digest")
+            check(bundle, "PublicationAssessmentInput", "PublicationDecision", oracle.assess_publication)
+        for source_ancestry in ("known-ancestor", "not-ancestor", "unknown"):
+            bundle = load_fixture(11)
+            bundle["input"]["source_ancestry"] = source_ancestry
+            check(bundle, "PublicationAssessmentInput", "PublicationDecision", oracle.assess_publication)
+        for candidate_tree in ("clean", "dirty", "unknown"):
+            bundle = load_fixture(11)
+            bundle["input"]["candidate_tree"] = candidate_tree
+            check(bundle, "PublicationAssessmentInput", "PublicationDecision", oracle.assess_publication)
+        for authority in ("granted", "denied", "unknown"):
+            bundle = load_fixture(11)
+            bundle["input"]["publication_authority"] = authority
+            check(bundle, "PublicationAssessmentInput", "PublicationDecision", oracle.assess_publication)
+        for gate_status in ("pass", "fail", "unavailable"):
+            bundle = load_fixture(11)
+            bundle["input"]["gates"][0]["status"] = gate_status
+            check(bundle, "PublicationAssessmentInput", "PublicationDecision", oracle.assess_publication)
+        for verifier_status in ("pass", "dissent", "unavailable"):
+            bundle = load_fixture(11)
+            bundle["input"]["verifiers"][0]["status"] = verifier_status
+            check(bundle, "PublicationAssessmentInput", "PublicationDecision", oracle.assess_publication)
+
+        for import_state in ("lossless", "lossy", "unknown"):
+            bundle = load_fixture(16)
+            bundle["input"]["import_state"] = import_state
+            check(bundle, "StateContractAssessmentInput", "StateDecision", oracle.assess_state_contract)
+        for field in ("writer_refusal", "backup", "restore", "reverse_reader", "rollback"):
+            for proof in ("verified", "failed", "unknown"):
+                bundle = load_fixture(16)
+                bundle["input"][field] = proof
+                check(bundle, "StateContractAssessmentInput", "StateDecision", oracle.assess_state_contract)
+        for deployment in ("known", "unknown"):
+            bundle = load_fixture(16)
+            bundle["input"]["deployment_revision_state"] = deployment
+            check(bundle, "StateContractAssessmentInput", "StateDecision", oracle.assess_state_contract)
+
+        for key_state in ("destroyed", "active", "shared", "unknown"):
+            bundle = load_fixture(21)
+            bundle["input"]["key_state"] = key_state
+            check(bundle, "RetentionAssessmentInput", "RetentionDecision", oracle.assess_retention)
+        for key_scope in ("artifact", "project", "shared", "unknown"):
+            bundle = load_fixture(21)
+            bundle["input"]["key_scope"] = key_scope
+            check(bundle, "RetentionAssessmentInput", "RetentionDecision", oracle.assess_retention)
+        for owner_policy in ("granted", "denied", "unknown", "not-required"):
+            bundle = load_fixture(24)
+            bundle["input"]["owner_erasure_policy"] = owner_policy
+            check(bundle, "RetentionAssessmentInput", "RetentionDecision", oracle.assess_retention)
+
+        self.assertEqual(count, 79)
+
     def test_evidence_stale_inapplicable_and_unverified_never_support(self) -> None:
         cases = {
             "source-stale": lambda item: item["input"]["sources"][0].update(
@@ -149,6 +250,53 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
         decision = oracle.assess_evidence(bundle["input"])
         self.assertEqual(decision["status"], "contested")
         self.assertEqual(decision["contradiction_edge_ids"], ["edge:contradiction"])
+
+    def test_mismatching_persistent_identifier_cannot_hide_beside_verified_one(self) -> None:
+        bundle = load_fixture(1)
+        source = bundle["input"]["sources"][0]
+        source["persistent_identifiers"].insert(
+            0,
+            {
+                "type": "PersistentIdentifier@1",
+                "scheme": "arxiv",
+                "value": "mismatch:one",
+                "verification_state": "mismatch",
+                "verification_evidence_digest": None,
+            },
+        )
+        schema_gate.validate(bundle["input"], "EvidenceAssessmentInput")
+        decision = oracle.assess_evidence(bundle["input"])
+        self.assert_reason(decision, "source-unverified", "unknown")
+
+    def test_unknown_license_claim_expiry_and_future_retrieval_never_support(self) -> None:
+        cases = {
+            "license-prohibited": lambda item: (
+                item["input"]["sources"][0].update({"license_state": "unknown"}),
+                item["input"].update({"allowed_license_states": ["unknown"]}),
+            ),
+            "claim-expired": lambda item: item["input"]["claim"].update(
+                {"revalidate_after": "2026-01-01T00:00:00Z"}
+            ),
+            "future-retrieval": lambda item: item["input"]["sources"][0].update(
+                {"retrieved_at": "2026-09-05T00:00:00Z"}
+            ),
+            "expired-lifecycle": lambda item: item["input"]["sources"][0].update(
+                {"lifecycle": "expired"}
+            ),
+        }
+        for name, change in cases.items():
+            bundle = load_fixture(1)
+            change(bundle)
+            schema_gate.validate(bundle["input"], "EvidenceAssessmentInput")
+            decision = oracle.assess_evidence(bundle["input"])
+            with self.subTest(case=name):
+                self.assertNotEqual(decision["status"], "supported")
+                if name == "license-prohibited":
+                    self.assertIn("license-prohibited", decision["reasons"])
+                elif name in {"claim-expired", "expired-lifecycle"}:
+                    self.assertIn("source-stale", decision["reasons"])
+                else:
+                    self.assertIn("source-unverified", decision["reasons"])
 
     def test_effect_binding_receipt_dependency_and_retry_fail_closed(self) -> None:
         bundle = load_fixture(7)
@@ -197,6 +345,53 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
         self.assertEqual(decision["status"], "reconciled-succeeded")
         self.assertFalse(decision["requires_reconciliation"])
 
+        bundle["input"]["observations"][-1].update(
+            {"outcome": "unknown", "result_digest": None}
+        )
+        decision = oracle.classify_effect_trace(bundle["input"])
+        self.assert_reason(decision, "reconciliation-required", "ambiguous")
+
+    def test_later_receipt_cannot_erase_blind_retry_or_result_conflict(self) -> None:
+        bundle = load_fixture(9)
+        receipt = copy.deepcopy(load_fixture(7)["input"]["observations"][-1])
+        receipt.update({"attempt_id": "attempt:2", "attempt_number": 2})
+        bundle["input"]["observations"].append(receipt)
+        schema_gate.validate(bundle["input"], "EffectTraceInput")
+        decision = oracle.classify_effect_trace(bundle["input"])
+        self.assert_reason(decision, "blind-retry-blocked", "ambiguous")
+        self.assertIn("receipt-missing", decision["reasons"])
+
+        bundle = load_fixture(7)
+        bundle["input"]["observations"][-1]["result_digest"] = "sha256:" + "4" * 64
+        schema_gate.validate(bundle["input"], "EffectTraceInput")
+        decision = oracle.classify_effect_trace(bundle["input"])
+        self.assert_reason(decision, "observation-conflict", "ambiguous")
+
+        bundle = load_fixture(7)
+        bundle["input"]["observations"][-1]["observer_ref"] = "observer:other"
+        schema_gate.validate(bundle["input"], "EffectTraceInput")
+        decision = oracle.classify_effect_trace(bundle["input"])
+        self.assert_reason(decision, "observation-conflict", "ambiguous")
+
+        bundle = load_fixture(7)
+        contradictory = copy.deepcopy(bundle["input"]["observations"][1])
+        contradictory.update({"observation_id": "observation:two", "outcome": "rejected"})
+        bundle["input"]["observations"].insert(2, contradictory)
+        schema_gate.validate(bundle["input"], "EffectTraceInput")
+        decision = oracle.classify_effect_trace(bundle["input"])
+        self.assert_reason(decision, "observation-conflict", "ambiguous")
+
+    def test_exact_effect_receipt_owns_history_without_erasing_admission_violation(self) -> None:
+        bundle = load_fixture(7)
+        bundle["input"]["admission"].update(
+            {"decision": "refused", "pause_state": "paused", "reasons": ["paused"]}
+        )
+        schema_gate.validate(bundle["input"], "EffectTraceInput")
+        decision = oracle.classify_effect_trace(bundle["input"])
+        self.assertEqual(decision["status"], "succeeded")
+        self.assertEqual(decision["reasons"], ["admission-refused", "paused"])
+        schema_gate.validate(decision, "EffectDecision")
+
     def test_publication_exact_receipt_and_rejection_are_settled(self) -> None:
         for remote_state, expected in (("observed", "published"), ("rejected", "rejected")):
             bundle = load_fixture(15)
@@ -234,9 +429,47 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
             oracle.assess_publication(bundle["input"]), "receipt-binding-mismatch", "blocked"
         )
 
+    def test_protected_review_ref_blocks_but_observed_remote_history_remains_published(self) -> None:
+        bundle = load_fixture(11)
+        bundle["input"]["intent"]["review_ref"] = "refs/heads/master"
+        bundle["input"]["intent"] = schema_gate.seal(
+            bundle["input"]["intent"], "intent_digest"
+        )
+        schema_gate.validate(bundle["input"], "PublicationAssessmentInput")
+        self.assert_reason(
+            oracle.assess_publication(bundle["input"]), "protected-target", "blocked"
+        )
+
+        bundle = load_fixture(11)
+        bundle["input"]["intent"]["target_branch"] = "review/m1c"
+        bundle["input"]["intent"] = schema_gate.seal(
+            bundle["input"]["intent"], "intent_digest"
+        )
+        schema_gate.validate(bundle["input"], "PublicationAssessmentInput")
+        self.assert_reason(
+            oracle.assess_publication(bundle["input"]),
+            "publication-kind-prohibited",
+            "blocked",
+        )
+
+        bundle = load_fixture(15)
+        receipt = bundle["input"]["receipt"]
+        receipt.update(
+            {
+                "remote_state": "observed",
+                "remote_commit_sha": bundle["input"]["intent"]["candidate_sha"],
+            }
+        )
+        bundle["input"]["receipt"] = schema_gate.seal(receipt, "receipt_digest")
+        bundle["input"]["gates"][0]["status"] = "fail"
+        schema_gate.validate(bundle["input"], "PublicationAssessmentInput")
+        decision = oracle.assess_publication(bundle["input"])
+        self.assert_reason(decision, "gate-failed", "published")
+        schema_gate.validate(decision, "PublicationDecision")
+
     def test_state_duplicate_command_fence_and_event_auth_require_recovery(self) -> None:
         cases = {
-            "stale-fence": lambda item: item["input"]["events"][0].update({"fence_epoch": 1}),
+            "stale-fence": lambda item: item["input"]["events"][0].update({"fence_epoch": 3}),
             "event-unverified": lambda item: item["input"]["events"][0].update(
                 {"authentication_state": "unverified"}
             ),
@@ -284,6 +517,38 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
             "blocked",
         )
 
+    def test_event_fences_and_logical_time_are_monotonic_without_rewriting_history(self) -> None:
+        bundle = load_fixture(16)
+        bundle["input"]["events"][0]["fence_epoch"] = 1
+        bundle["input"]["events"][0] = schema_gate.seal(
+            bundle["input"]["events"][0], "event_digest"
+        )
+        schema_gate.validate(bundle["input"], "StateContractAssessmentInput")
+        decision = oracle.assess_state_contract(bundle["input"])
+        self.assertEqual(decision["status"], "eligible")
+
+        bundle = load_fixture(16)
+        first = bundle["input"]["events"][0]
+        second = copy.deepcopy(first)
+        second.update(
+            {
+                "sequence": 2,
+                "event_id": "event:two",
+                "command_id": "command:two",
+                "idempotency_key": "idempotency:two",
+                "causation_id": first["event_id"],
+                "logical_time": first["logical_time"],
+                "previous_event_digest": first["event_digest"],
+            }
+        )
+        bundle["input"]["events"].append(schema_gate.seal(second, "event_digest"))
+        schema_gate.validate(bundle["input"], "StateContractAssessmentInput")
+        self.assert_reason(
+            oracle.assess_state_contract(bundle["input"]),
+            "logical-time-regression",
+            "recovery-required",
+        )
+
     def test_retention_soft_delete_shared_key_and_tombstone_mismatch_fail(self) -> None:
         bundle = load_fixture(21)
         bundle["input"]["copies"][1].update(
@@ -296,6 +561,7 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
         bundle["input"]["tombstone"]["copy_dispositions"] = copy.deepcopy(
             bundle["input"]["copies"]
         )
+        bundle["input"]["tombstone"]["disposed_at"] = None
         bundle["input"]["tombstone"] = schema_gate.seal(
             bundle["input"]["tombstone"], "tombstone_digest"
         )
@@ -318,6 +584,66 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
         decision = oracle.assess_retention(load_fixture(24)["input"])
         self.assert_reason(decision, "owner-policy-required", "blocked")
 
+    def test_local_content_is_independent_incomplete_proof_and_evidence_is_not_receipt(self) -> None:
+        bundle = load_fixture(21)
+        bundle["input"]["local_content_deleted"] = False
+        bundle["input"]["tombstone"]["disposed_at"] = None
+        bundle["input"]["tombstone"] = schema_gate.seal(
+            bundle["input"]["tombstone"], "tombstone_digest"
+        )
+        schema_gate.validate(bundle["input"], "RetentionAssessmentInput")
+        decision = oracle.assess_retention(bundle["input"])
+        self.assert_reason(decision, "local-content-present", "incomplete")
+        self.assertEqual(decision["unresolved_copy_ids"], [])
+        schema_gate.validate(decision, "RetentionDecision")
+
+        bundle = load_fixture(21)
+        bundle["input"]["artifact_class"] = "accepted-evidence"
+        bundle["input"]["tombstone"]["artifact_class"] = "accepted-evidence"
+        bundle["input"]["tombstone"] = schema_gate.seal(
+            bundle["input"]["tombstone"], "tombstone_digest"
+        )
+        schema_gate.validate(bundle["input"], "RetentionAssessmentInput")
+        decision = oracle.assess_retention(bundle["input"])
+        self.assertEqual(decision["status"], "complete")
+        self.assertNotIn("owner-policy-required", decision["reasons"])
+
+    def test_tombstone_time_and_completion_bind_to_deletion_proof(self) -> None:
+        bundle = load_fixture(21)
+        bundle["input"]["tombstone"]["disposed_at"] = None
+        bundle["input"]["tombstone"] = schema_gate.seal(
+            bundle["input"]["tombstone"], "tombstone_digest"
+        )
+        schema_gate.validate(bundle["input"], "RetentionAssessmentInput")
+        self.assert_reason(
+            oracle.assess_retention(bundle["input"]), "tombstone-mismatch", "blocked"
+        )
+
+        bundle = load_fixture(21)
+        bundle["input"]["tombstone"]["disposed_at"] = "2026-09-04T11:59:00Z"
+        bundle["input"]["tombstone"] = schema_gate.seal(
+            bundle["input"]["tombstone"], "tombstone_digest"
+        )
+        schema_gate.validate(bundle["input"], "RetentionAssessmentInput")
+        self.assert_reason(
+            oracle.assess_retention(bundle["input"]), "tombstone-mismatch", "blocked"
+        )
+
+    def test_unreached_expiry_is_representable_and_incomplete(self) -> None:
+        bundle = load_fixture(21)
+        bundle["input"]["copies"][0]["expiry_reached"] = False
+        bundle["input"]["tombstone"]["copy_dispositions"] = copy.deepcopy(
+            bundle["input"]["copies"]
+        )
+        bundle["input"]["tombstone"]["disposed_at"] = None
+        bundle["input"]["tombstone"] = schema_gate.seal(
+            bundle["input"]["tombstone"], "tombstone_digest"
+        )
+        schema_gate.validate(bundle["input"], "RetentionAssessmentInput")
+        decision = oracle.assess_retention(bundle["input"])
+        self.assert_reason(decision, "expiry-not-reached", "incomplete")
+        self.assertEqual(decision["unresolved_copy_ids"], ["copy:backup"])
+
 
 if __name__ == "__main__":
     suite = unittest.TestSuite(
@@ -328,5 +654,5 @@ if __name__ == "__main__":
     )
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     if result.wasSuccessful():
-        print("M1C_ADVERSARIAL_PASS structural_mutations=40 semantic_groups=10")
+        print("M1C_ADVERSARIAL_PASS structural_mutations=40 semantic_groups=20 output_variants=79")
     raise SystemExit(0 if result.wasSuccessful() else 1)
