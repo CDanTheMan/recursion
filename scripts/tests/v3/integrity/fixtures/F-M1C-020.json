@@ -1,0 +1,91 @@
+{
+  "expected": {
+    "aggregate_id": "aggregate:fabric",
+    "current_fence_epoch": 2,
+    "final_sequence": 1,
+    "reasons": [
+      "backup-unverified",
+      "projection-only",
+      "restore-unverified",
+      "reverse-reader-unverified",
+      "rollback-unproved"
+    ],
+    "state_write_count": 0,
+    "status": "blocked",
+    "type": "StateDecision@1"
+  },
+  "fixture_id": "F-M1C-020",
+  "input": {
+    "actual_projection_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "actual_replay_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "aggregate_id": "aggregate:fabric",
+    "aggregate_type": "fabric-only",
+    "backup": "unknown",
+    "canonical_writer_id": "writer:canonical",
+    "completed_stages": [
+      "snapshotted",
+      "validated",
+      "legacy-writers-quiesced",
+      "fence-established",
+      "imported",
+      "replayed",
+      "shadow-read-verified"
+    ],
+    "current_fence_epoch": 2,
+    "deployment_revision_state": "known",
+    "events": [
+      {
+        "aggregate_id": "aggregate:fabric",
+        "authentication_state": "verified",
+        "causation_id": "event:genesis",
+        "command_id": "command:1",
+        "correlation_id": "correlation:one",
+        "event_digest": "sha256:98fd9b580e29caf7a36a8012883a9c931d054edf45de9684003a4714d048e70b",
+        "event_id": "event:1",
+        "fence_epoch": 2,
+        "idempotency_key": "idempotency:1",
+        "logical_time": 1,
+        "payload_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "previous_event_digest": null,
+        "schema_version": "v1",
+        "sequence": 1,
+        "type": "CanonicalEvent@1",
+        "writer_id": "writer:canonical"
+      }
+    ],
+    "expected_projection_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "expected_replay_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "expected_writer_ids": [
+      "writer:canonical"
+    ],
+    "immutable_assignment_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "import_state": "lossless",
+    "migration_id": "migration:one",
+    "observed_writers": [
+      {
+        "can_refuse": true,
+        "configured_fence_epoch": 2,
+        "mutation_path_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "observation_state": "known",
+        "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "type": "WriterRecord@1",
+        "writer_id": "writer:canonical"
+      }
+    ],
+    "open_work": [],
+    "restore": "unknown",
+    "reverse_reader": "unknown",
+    "rollback": "unknown",
+    "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_state_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "state_write_count": 0,
+    "type": "StateContractAssessmentInput@1",
+    "writer_refusal": "verified"
+  },
+  "purpose": "Projection equality without recovery and rollback proof is insufficient.",
+  "source_requirement_ids": [
+    "REQ-M1C-MIGRATION",
+    "REQ-M1C-STATE"
+  ],
+  "type": "StateFixtureBundle@1"
+}

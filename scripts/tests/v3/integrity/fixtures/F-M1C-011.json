@@ -1,0 +1,92 @@
+{
+  "expected": {
+    "git_mutation_count": 0,
+    "publication_id": "publication:one",
+    "published_sha": null,
+    "reasons": [],
+    "requires_reconciliation": false,
+    "status": "eligible",
+    "type": "PublicationDecision@1"
+  },
+  "fixture_id": "F-M1C-011",
+  "input": {
+    "artifacts": [
+      {
+        "artifact_id": "artifact:one",
+        "classification": "public",
+        "content_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "export_authorized": true,
+        "license_state": "permitted",
+        "redaction_state": "not-required",
+        "secret_scan": "pass",
+        "type": "PublicationArtifact@1"
+      }
+    ],
+    "candidate_tree": "clean",
+    "gates": [
+      {
+        "candidate_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "gate_id": "gate:one",
+        "observed_at": "2026-09-04T12:00:00Z",
+        "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "status": "pass",
+        "type": "GateEvidence@1"
+      }
+    ],
+    "git_mutation_count": 0,
+    "intent": {
+      "artifact_ids": [
+        "artifact:one"
+      ],
+      "candidate_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "candidate_tree_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "effect_id": "effect:publication",
+      "goal_spec_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "goal_spec_id": "goal:m1c",
+      "grant_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "intent_digest": "sha256:35a94a37871efab4f0c8b105d988f813766454f9c2312780847a50776ea3c7df",
+      "policy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "privacy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "protected_branch_names": [
+        "master"
+      ],
+      "publication_id": "publication:one",
+      "publication_kind": "review-branch",
+      "repository_ref": "repository:synthetic",
+      "required_gate_ids": [
+        "gate:one"
+      ],
+      "required_verifier_ids": [
+        "verifier:one"
+      ],
+      "review_ref": "refs/heads/review/m1c",
+      "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "target_branch": "master",
+      "type": "PublicationIntent@1"
+    },
+    "publication_authority": "granted",
+    "receipt": null,
+    "required_independence": "full",
+    "source_ancestry": "known-ancestor",
+    "type": "PublicationAssessmentInput@1",
+    "verifiers": [
+      {
+        "candidate_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "evidence_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "independence": "full",
+        "observed_at": "2026-09-04T12:00:00Z",
+        "policy_sufficient": true,
+        "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "status": "pass",
+        "type": "VerifierEvidence@1",
+        "verifier_id": "verifier:one"
+      }
+    ]
+  },
+  "purpose": "Exact clean review candidate with complete evidence is eligible.",
+  "source_requirement_ids": [
+    "REQ-M1C-PUBLICATION"
+  ],
+  "type": "PublicationFixtureBundle@1"
+}

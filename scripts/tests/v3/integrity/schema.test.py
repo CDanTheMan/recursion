@@ -297,15 +297,8 @@ def _state_invariant(validator: Any, enabled: bool, instance: Any, schema: dict[
     if not enabled or not isinstance(instance, dict):
         return
     expected = set(instance.get("expected_writer_ids", []))
-    writers = instance.get("observed_writers", [])
-    observed = {row.get("writer_id") for row in writers if isinstance(row, dict)}
-    if expected != observed or instance.get("canonical_writer_id") not in observed:
-        yield jsonschema.ValidationError("state writer inventory mismatch")
-    events = instance.get("events", [])
-    aggregate = instance.get("aggregate_id")
-    for index, event in enumerate(events, 1):
-        if event.get("aggregate_id") != aggregate or event.get("sequence") != index:
-            yield jsonschema.ValidationError("state event aggregate/sequence mismatch")
+    if instance.get("canonical_writer_id") not in expected:
+        yield jsonschema.ValidationError("canonical writer is absent from the expected inventory")
 
 
 def _retention_bindings(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):

@@ -1,0 +1,94 @@
+{
+  "expected": {
+    "artifact_id": "artifact:one",
+    "deletion_operation_count": 0,
+    "reasons": [
+      "copy-evidence-unverified",
+      "copy-unresolved"
+    ],
+    "resolved_copy_ids": [
+      "copy:local"
+    ],
+    "status": "incomplete",
+    "type": "RetentionDecision@1",
+    "unresolved_copy_ids": [
+      "copy:spool"
+    ]
+  },
+  "fixture_id": "F-M1C-022",
+  "input": {
+    "artifact_class": "raw-session",
+    "artifact_id": "artifact:one",
+    "copies": [
+      {
+        "copy_id": "copy:local",
+        "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "evidence_state": "verified",
+        "expiry_boundary": null,
+        "expiry_reached": false,
+        "kind": "local",
+        "state": "deleted",
+        "type": "CopyDisposition@1"
+      },
+      {
+        "copy_id": "copy:spool",
+        "evidence_digest": null,
+        "evidence_state": "unverified",
+        "expiry_boundary": null,
+        "expiry_reached": false,
+        "kind": "disconnected-spool",
+        "state": "disconnected",
+        "type": "CopyDisposition@1"
+      }
+    ],
+    "deletion_operation_count": 0,
+    "key_scope": "artifact",
+    "key_state": "destroyed",
+    "legal_hold": false,
+    "local_content_deleted": true,
+    "owner_erasure_policy": "not-required",
+    "policy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "privacy_class": "private",
+    "tombstone": {
+      "artifact_class": "raw-session",
+      "contains_content": false,
+      "contains_global_content_digest": false,
+      "contains_secret": false,
+      "copy_dispositions": [
+        {
+          "copy_id": "copy:local",
+          "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "evidence_state": "verified",
+          "expiry_boundary": null,
+          "expiry_reached": false,
+          "kind": "local",
+          "state": "deleted",
+          "type": "CopyDisposition@1"
+        },
+        {
+          "copy_id": "copy:spool",
+          "evidence_digest": null,
+          "evidence_state": "unverified",
+          "expiry_boundary": null,
+          "expiry_reached": false,
+          "kind": "disconnected-spool",
+          "state": "disconnected",
+          "type": "CopyDisposition@1"
+        }
+      ],
+      "disposed_at": null,
+      "policy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "requested_at": "2026-09-04T12:00:00Z",
+      "responsible_component": "component:retention",
+      "tombstone_digest": "sha256:d96498a448cb712b9a0b1c4a99d33d134377a180361f43634e63e93a06b86b06",
+      "tombstone_id": "tombstone:one",
+      "type": "DeletionTombstone@1"
+    },
+    "type": "RetentionAssessmentInput@1"
+  },
+  "purpose": "Disconnected unresolved copy keeps deletion incomplete.",
+  "source_requirement_ids": [
+    "REQ-M1C-RETENTION"
+  ],
+  "type": "RetentionFixtureBundle@1"
+}

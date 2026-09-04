@@ -1,0 +1,90 @@
+{
+  "expected": {
+    "artifact_id": "artifact:one",
+    "deletion_operation_count": 0,
+    "reasons": [],
+    "resolved_copy_ids": [
+      "copy:backup",
+      "copy:local"
+    ],
+    "status": "complete",
+    "type": "RetentionDecision@1",
+    "unresolved_copy_ids": []
+  },
+  "fixture_id": "F-M1C-021",
+  "input": {
+    "artifact_class": "raw-session",
+    "artifact_id": "artifact:one",
+    "copies": [
+      {
+        "copy_id": "copy:backup",
+        "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "evidence_state": "verified",
+        "expiry_boundary": "2026-09-01T00:00:00Z",
+        "expiry_reached": true,
+        "kind": "backup",
+        "state": "expiry-bound",
+        "type": "CopyDisposition@1"
+      },
+      {
+        "copy_id": "copy:local",
+        "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "evidence_state": "verified",
+        "expiry_boundary": null,
+        "expiry_reached": false,
+        "kind": "local",
+        "state": "deleted",
+        "type": "CopyDisposition@1"
+      }
+    ],
+    "deletion_operation_count": 0,
+    "key_scope": "artifact",
+    "key_state": "destroyed",
+    "legal_hold": false,
+    "local_content_deleted": true,
+    "owner_erasure_policy": "not-required",
+    "policy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "privacy_class": "private",
+    "tombstone": {
+      "artifact_class": "raw-session",
+      "contains_content": false,
+      "contains_global_content_digest": false,
+      "contains_secret": false,
+      "copy_dispositions": [
+        {
+          "copy_id": "copy:backup",
+          "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "evidence_state": "verified",
+          "expiry_boundary": "2026-09-01T00:00:00Z",
+          "expiry_reached": true,
+          "kind": "backup",
+          "state": "expiry-bound",
+          "type": "CopyDisposition@1"
+        },
+        {
+          "copy_id": "copy:local",
+          "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "evidence_state": "verified",
+          "expiry_boundary": null,
+          "expiry_reached": false,
+          "kind": "local",
+          "state": "deleted",
+          "type": "CopyDisposition@1"
+        }
+      ],
+      "disposed_at": "2026-09-04T12:01:00Z",
+      "policy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "requested_at": "2026-09-04T12:00:00Z",
+      "responsible_component": "component:retention",
+      "tombstone_digest": "sha256:05ac436832b90cc86dbbd50f82a3d62e68754841fceea8096d05d059d3a1186a",
+      "tombstone_id": "tombstone:one",
+      "type": "DeletionTombstone@1"
+    },
+    "type": "RetentionAssessmentInput@1"
+  },
+  "purpose": "Scoped key plus complete copy evidence and minimal tombstone complete deletion proof.",
+  "source_requirement_ids": [
+    "REQ-M1C-RETENTION"
+  ],
+  "type": "RetentionFixtureBundle@1"
+}
