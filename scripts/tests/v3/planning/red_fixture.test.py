@@ -244,8 +244,20 @@ def assert_f022_topology(case: dict, label: str) -> None:
     if len(tasks) != 2:
         fail(f"{label}: F022 candidate graph must contain exactly two task nodes")
     task_ids = {task["id"] for task in tasks}
-    plan_ids = {reference["id"] for reference in plan["payload"]["task_node_refs"]}
-    if task_ids != plan_ids:
+    submitted_refs = {
+        (task["object_type"], task["id"], task["version"], task["content_digest"])
+        for task in tasks
+    }
+    plan_refs = {
+        (
+            reference["object_type"],
+            reference["id"],
+            reference["version"],
+            reference["content_digest"],
+        )
+        for reference in plan["payload"]["task_node_refs"]
+    }
+    if submitted_refs != plan_refs:
         fail(f"{label}: F022 plan task refs do not match submitted task nodes")
     left, right = sorted(tasks, key=lambda task: task["id"])
     edges = plan["payload"]["dependency_edges"]
