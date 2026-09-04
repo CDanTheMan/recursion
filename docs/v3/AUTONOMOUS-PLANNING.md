@@ -84,7 +84,7 @@ Lifecycle is an event projection; no accepted object is updated in place.
 | `Blocker` | discovering actor proposes; kernel classifies/binds | type, exact blocked object, evidence, owner needed, allowed recovery, retry-after capacity observation if applicable | `open/deferred → resolved/superseded/escalated`; only a capacity blocker with a bound retry-after observation may enter `deferred`; only named authority supplies resolution | retained with failed/refused transitions; required blocker means node/plan cannot be complete |
 | `Escalation` | ARM to Head or Head to Owner; unique id | blocker/failure history, attempts/novelty, requested decision, available options, recommendation, scope frozen pending answer | `raised → acknowledged → resolved/declined/superseded`; target authority answers | never widens authority by itself; resolution references an authenticated decision/amendment |
 | `PlanVerifierDecision` | assigned plan verifier | exact GoalSpec/plan/event-log/gate/evidence digests, independence vector, `pass/downgraded-pass/fail/blocked`, assurance grade, optional Owner exception receipt, dissent and limitations | `submitted → admitted/refused`; missing verifier/evidence is `blocked`; `downgraded-pass` requires the exact policy-bound exception below | full `pass` is required for `terminal-verified`; a valid downgrade can produce only `terminal-verified-downgraded`; verifier cannot create a replacement plan |
-| `CommandEnvelope` / `CommandReceipt` | authenticated caller / kernel | command id/type/schema, actor/lease, expected aggregate version/digest, payload digest, bindings / accepted-refused-duplicate-conflict and emitted event span | validate → receive one receipt; stale/malformed/unauthorized commands refuse before semantic execution | same id+digest returns original receipt; same id+different digest is conflict |
+| `CommandEnvelope` / `CommandReceipt` | authenticated caller / kernel | command id/type/schema, actor/lease, expected aggregate version/digest, payload digest, bindings / accepted-refused-duplicate-conflict and emitted event span | strict decode → valid envelope receives one receipt; malformed JSON/schema returns `DecodeFailure`; stale/unauthorized valid commands refuse before semantic execution | same id+digest returns original receipt; same id+different digest is conflict |
 | `PlanningEvent` | kernel sequencer | stream id, sequence, previous/event digest, logical time, admitted command, type/version and payload | append-only after validation; no model writes event storage | replay source of truth; corrupt/gap/unknown event halts rebuild |
 | `ExecutiveLease` / `WorkLease` | kernel grants to logical actor | subject, goal/plan/task scope, epoch, nonce, issued/expiry logical time, allowed commands, revocation | `offered → active → expired/revoked/replaced`; only kernel grants/replaces after authority checks | replacement increments epoch; stale holder proposals refuse; lease alone is not external-effect fencing |
 | `Checkpoint` | kernel records from admitted evidence | aggregate versions/digests, open packets/effects, budget/route reservations, PAUSE/lease epochs and ambiguity set | `proposed → validated → durable`; required for widening/reassignment boundaries | replay optimization only; must reproduce event-derived digest or is ignored |
@@ -160,14 +160,16 @@ exactly:
 | `node_id`, `node_version`, `node_digest` | bounded identifier, positive integer, digest |
 | `semantic_definition_digest`, `output_schema_digest` | digest |
 | `dependency_node_ids`, `input_digests`, `source_digests`, `read_resource_paths`, `write_resource_paths`, `effect_keys` | duplicate-free sorted arrays of exact strings/digests |
-| `authority_ids`, `capability_ids`, `route_ids`, `route_capability_ids` | duplicate-free sorted identifier arrays |
-| `privacy_class_id`, `egress_class_id`, `privacy_policy_digest` | identifiers plus digest into the GoalSpec-bound finite policy order |
+| `authority_ids`, `capability_ids`, `allowed_action_ids`, `prohibition_ids`, `route_ids`, `route_capability_ids`, `account_class_ids`, `capacity_pool_ids` | duplicate-free sorted identifier arrays |
+| `privacy_class_id`, `egress_class_id`, `authority_policy_digest`, `privacy_policy_digest`, `egress_policy_digest` | identifiers plus exact GoalSpec-bound policy digests |
 | `budget_limits` | closed map `{model_turns, attempts, tokens, money_minor, cpu_ms, memory_bytes, output_bytes}`, each a non-negative integer |
 | `gate_requirements` | duplicate-free sorted `GateRequirement@1` array |
 | `retry_policy_digest`, `verifier_policy_digest`, `constitution_policy_digest`, `terminal_contribution_digest` | digest |
+| `retry_maximum` | non-negative integer |
 
 `GateRequirement@1` is exactly `{gate_id, procedure_digest, evidence_schema_digest,
-candidate_binding_digest, verifier_policy_digest}` and is sorted by `gate_id`. M1A defines no
+candidate_binding_digest, verifier_policy_digest, assigned_verifier_actor_id}` and is sorted by
+`gate_id`. M1A defines no
 implicit gate-strength order. Any added, removed or unequal gate requirement, procedure,
 evidence schema, candidate binding or verifier policy is a changed node contract and invalidates
 prior completion. A future non-conservative strength order requires a new policy version and
@@ -188,10 +190,11 @@ effect disposition. Evaluation is ordered and total:
 3. inequality in any old/new tuple field except `node_version` and `node_digest` produces
    `supersede` only when the non-null replacement fields match the new tuple and transition
    mapping; otherwise it produces `invalidate`;
-4. the new tuple must be attenuated by the new GoalSpec: every authority/capability/route/path/
-   effect set is a subset, privacy and egress are equal or more restrictive under the exact
-   finite policy relation, every budget limit is at most the goal limit, and consumed budget is
-   at most both the node and goal limit. Failure produces `invalidate`;
+4. the new tuple must be attenuated by the new GoalSpec: every authority/capability/allowed-action/
+   route/path/effect set is a subset, prohibitions are a superset, privacy and egress are equal or
+   more restrictive under the exact finite policy relation, every budget limit is at most the
+   goal limit, and consumed budget is at most both the node and goal limit. Failure produces
+   `invalidate`;
 5. a nonterminal old node satisfying 1–4 produces `retain-definition`; every old packet and
    lease is nevertheless stale and compatible work requires a newly derived packet;
 6. a terminal old node additionally requires the prior candidate/evidence/result digests to
@@ -200,6 +203,12 @@ effect disposition. Evaluation is ordered and total:
    otherwise its evidence remains historical and the node produces `invalidate`; and
 7. an observed immutable effect receipt remains evidence under its separate disposition but
    cannot retain task authority or convert ambiguity into success.
+
+The M1A wire profile breaks content-digest cycles deliberately: a TaskNode binds its containing
+plan by stable ID/version only, while the PlanRevision binds the complete TaskNode content
+digests. Projection state similarly stores processed receipt identity plus command digest rather
+than receipt content digest; the receipt binds the already-computed before/after state digests.
+No other identity-only reference is implied.
 
 Arrays compare byte-for-byte after duplicate rejection and required sorting; set inclusion is
 over exact identifiers; numeric comparison is exact integer comparison; privacy classes use the
@@ -255,6 +264,12 @@ binding tuple and current reservations. It copies exact source/input/output/gate
 computes capabilities, paths, effects, privacy/egress, routes, budget and resource limits by the
 attenuation rules above. Prohibitions and non-goals accumulate. The output includes exact
 attempt, lease epoch, PAUSE epoch, deadline/checkpoint and result schema.
+
+The exact assigned gate-verifier actor is part of each GateRequirement, and the exact assigned
+plan-verifier actor is part of PlanRevision. A self-reported independence vector cannot create or
+replace either assignment. GoalSpec binds authority, privacy, egress and route policies plus the
+allowed route, account-class and capacity-pool sets; every descendant copies or narrows those
+bindings.
 
 Only the kernel may assign the resulting content digest and admit the packet. Any amendment,
 new PlanRevision, grant/policy/route/budget/source change, PAUSE epoch, lease replacement or
@@ -336,7 +351,7 @@ The seven `kind` payloads and their complete mechanical rules are:
 | `hypothesis-replaced` | `old_hypothesis`, `new_hypothesis` and `changed_proposition_ids`; each descriptor is `{hypothesis_digest, propositions}` with a sorted nonempty array of `{proposition_id, proposition_digest}`. The kernel recomputes each hypothesis digest and the changed set as the sorted IDs added, removed or mapped to a different digest; that set must be nonempty and equal the supplied set. |
 | `strategy-changed` | `old_strategy`, `new_strategy` and `changed_operation_ids`; each descriptor is `{strategy_digest, operations, edges, goal_ceiling_digest, resource_ceiling_digest, effect_ceiling_digest}`. Operations are sorted `{operation_id, operation_digest}`; edges are sorted `{from_operation_id,to_operation_id}` over known operations. The kernel recomputes strategy digests and the changed set from added/removed/changed operations or incident edge changes. That set must be nonempty/equal the supplied set, while all three ceiling digests remain equal. |
 | `route-capability-changed` | `old_route_descriptor`, `new_route_descriptor` and `newly_observed_capability_ids`; each descriptor is `{descriptor_digest, route_id, account_class_id, capacity_pool_id, spend_class, capability_ids, observation_digest, allowed_envelope_digest}`. Descriptor digests are recomputed; the envelope digest and spend class are exactly equal, the spend class is `none` or `included`, both routes/accounts/pools are members of the bound envelope, and the supplied set must equal `new.capability_ids - old.capability_ids`. The finite failure-capability map must give every addressed failure a nonempty required set that was not satisfied by old capabilities and is satisfied by new capabilities; every added capability must occur in at least one addressed requirement. |
-| `task-narrowed` | `old_scope`, `new_scope`, each `{scope_digest, authority_ids, capability_ids, route_ids, route_capability_ids, read_resource_paths, write_resource_paths, effect_keys, privacy_class_id, egress_class_id, budget_limits, required_output_schema_digest, gate_requirements}`. Digests are recomputed. New sets must be subsets; privacy/egress must be equal or stricter under the bound finite order; each new integer limit must be `<=` old; output schema and `GateRequirement@1` arrays must be identical; and at least one set is proper, class is stricter or integer is lower. |
+| `task-narrowed` | `old_scope`, `new_scope`, each `{scope_digest, authority_ids, capability_ids, allowed_action_ids, prohibition_ids, route_ids, route_capability_ids, account_class_ids, capacity_pool_ids, read_resource_paths, write_resource_paths, effect_keys, privacy_class_id, egress_class_id, authority_policy_digest, privacy_policy_digest, egress_policy_digest, budget_limits, required_output_schema_digest, gate_requirements}`. Digests are recomputed. New allowed sets must be subsets, prohibitions must be a superset, all policy digests must remain exact, privacy/egress must be equal or stricter under the bound finite order, each new integer limit must be `<=` old, output schema and `GateRequirement@1` arrays must be identical, and at least one allowed set is proper, a prohibition is added, a class is stricter or an integer is lower. |
 | `dependency-repaired` | `{predicate_id, predicate_version, predicate_input_schema_digest, old_input, new_input, old_result_digest, repair_receipt_digest, new_result_digest}`. M1A's only registered predicate is `dependency-artifact-present` version 1 with input `{required_artifact_digest, observed_artifact_digests}`; it returns pass exactly when the required digest is in the duplicate-free sorted observed array. A result digest is `D({predicate_id,predicate_version,input_digest,verdict})`. The kernel recomputes the input/result digests and requires old=false, new=true, unequal inputs and the repair receipt digest to be one of the new observed digests. Unknown predicate/version/schema refuses. |
 | `owner-amended` | `{old_goal_ref, new_goal_ref, accepted_owner_command_receipt_digest, amendment_disposition_digest, retained_node_id, compatibility_input_digest}`. Replayed state must contain the exact accepted Owner receipt and amendment, the new goal must supersede the old, and the referenced `CompatibilityInput@1` must deterministically output `retain-definition` for that node. |
 
@@ -366,8 +381,10 @@ budget/privacy bounds.
 
 ## PAUSE and ambiguous effects
 
-The schema can encode `current-immediate`, `checkpoint`, `interrupt`, `drain` and
-`emergency-stop`, each tied to a constitution-policy version. Only `current-immediate` is
+The broader proposed schema family can encode `current-immediate`, `checkpoint`, `interrupt`,
+`drain` and `emergency-stop`, each tied to a constitution-policy version. M1A represents only
+`current-immediate` plus the inert `checkpoint`, `interrupt` and `drain` values; emergency policy
+is outside this construction slice. Only `current-immediate` is
 operative under the present constitution. On current PAUSE, the kernel refuses new planning,
 sampling, packet admission, worker execution and effect/publication transitions; it may record
 minimal awareness/status evidence allowed by the constitution. Representing a future policy does

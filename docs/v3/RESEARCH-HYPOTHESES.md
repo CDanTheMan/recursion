@@ -100,7 +100,7 @@ write fail-closed schemas/fixtures; it is not an empirical product result.
 ## Next experiment priority
 
 The architecture-proof and frontier-source campaigns narrowed H-020 through H-038 but did not
-execute their measured treatments. First complete separately authorized M1A. Then run pure
+execute their measured treatments. First complete the authorized M1A campaign. Then run pure
 contract/fault preparations for H-023/H-024/H-026, followed by the fixed-model component ladder,
 zero-cost-disabled path and terminal protocol tests. Language/runtime, JSONL/SQLite, native-loop,
 cache and swarm comparisons occur only after exact workloads, hosts, versions, practical margins,

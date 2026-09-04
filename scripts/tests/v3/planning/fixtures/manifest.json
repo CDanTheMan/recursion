@@ -1,0 +1,690 @@
+{
+  "closed_command_types": [
+    "record-owner-intent",
+    "accept-goal-spec",
+    "amend-goal-spec",
+    "record-owner-verifier-exception",
+    "start-arm-run",
+    "propose-plan-revision",
+    "derive-work-packet",
+    "replace-work-lease",
+    "replace-executive-lease",
+    "replace-route",
+    "record-capacity-observation",
+    "record-checkpoint",
+    "reserve-budget",
+    "submit-worker-result",
+    "submit-gate-result",
+    "propose-retry",
+    "propose-replan",
+    "raise-blocker",
+    "raise-escalation",
+    "submit-plan-verifier-decision",
+    "apply-pause",
+    "record-effect-observation"
+  ],
+  "closed_error_codes": [
+    "E-SCHEMA-UNKNOWN-FIELD",
+    "E-SCHEMA-MISSING-FIELD",
+    "E-SCHEMA-UNKNOWN-VERSION",
+    "E-SCHEMA-INVALID",
+    "E-SCHEMA-DUPLICATE",
+    "E-SCHEMA-BOUND",
+    "E-DIGEST-MISMATCH",
+    "E-AUTH-MISSING",
+    "E-AUTH-PARENT-MUTATION",
+    "E-AUTH-ROLE",
+    "E-SCOPE-WIDEN",
+    "E-BUDGET-WIDEN",
+    "E-DAG-CYCLE",
+    "E-DAG-DEPENDENCY",
+    "E-DAG-CONFLICT",
+    "E-STALE-GOAL",
+    "E-STALE-PLAN",
+    "E-STALE-LEASE",
+    "E-GATE-MISSING",
+    "E-VERIFIER-MISSING",
+    "E-RETRY-NONNOVEL",
+    "E-RETRY-EXHAUSTED",
+    "E-ROUTE-SPEND",
+    "E-PAUSED",
+    "E-EFFECT-AMBIGUOUS",
+    "E-IDEMPOTENCY-CONFLICT",
+    "E-AMENDMENT-INCOMPLETE",
+    "E-POLICY-UNKNOWN"
+  ],
+  "closed_event_types": [
+    "OwnerIntentRecorded",
+    "GoalSpecAccepted",
+    "GoalSpecAmended",
+    "OwnerVerifierExceptionRecorded",
+    "ArmRunStarted",
+    "PlanRevisionAdmitted",
+    "WorkPacketDerived",
+    "WorkLeaseReplaced",
+    "ExecutiveLeaseReplaced",
+    "RouteAssignmentReplaced",
+    "CapacityObservationRecorded",
+    "CheckpointRecorded",
+    "BudgetReserved",
+    "WorkerResultRecorded",
+    "GateResultRecorded",
+    "RetryAdmitted",
+    "ReplanAdmitted",
+    "BlockerRaised",
+    "EscalationRaised",
+    "PlanVerifierDecisionRecorded",
+    "PauseApplied",
+    "EffectObservationRecorded",
+    "PlanItemDisposed",
+    "PacketFenced",
+    "LeaseFenced",
+    "EffectDisposed",
+    "EvidenceDisposed"
+  ],
+  "domain_record_types": [
+    "arm-run",
+    "blocker",
+    "budget-reservation",
+    "capacity-observation",
+    "checkpoint",
+    "disposition",
+    "effect-observation",
+    "escalation",
+    "executive-lease",
+    "gate-result",
+    "goal-spec",
+    "goal-spec-amendment",
+    "owner-intent",
+    "owner-verifier-exception",
+    "pause-directive",
+    "plan-revision",
+    "plan-transition",
+    "plan-verifier-decision",
+    "replan-decision",
+    "retry-decision",
+    "route-assignment",
+    "task-node",
+    "work-lease",
+    "work-packet",
+    "worker-result"
+  ],
+  "fixture_count": 23,
+  "fixtures": [
+    {
+      "bytes": 174683,
+      "case_count": 1,
+      "command_count": 10,
+      "decode_failure_count": 0,
+      "error_codes": [],
+      "event_count": 10,
+      "expected_final_digests": [
+        "1d81d76665d47644295ec8739f8443c1d7bba9e694ba48a59102acc8c4766852"
+      ],
+      "fixture_id": "F-M1A-001",
+      "path": "F-M1A-001.json",
+      "receipt_count": 10,
+      "replay_case_count": 0,
+      "sha256": "2cbac58cdda5efcc1b9cbaeebd7c96528d028053a1c0bba422e926203a75c798"
+    },
+    {
+      "bytes": 22440,
+      "case_count": 1,
+      "command_count": 2,
+      "decode_failure_count": 9,
+      "error_codes": [
+        "E-AUTH-MISSING",
+        "E-AUTH-ROLE",
+        "E-SCHEMA-BOUND",
+        "E-SCHEMA-DUPLICATE",
+        "E-SCHEMA-INVALID",
+        "E-SCHEMA-MISSING-FIELD"
+      ],
+      "event_count": 0,
+      "expected_final_digests": [
+        "f858baa16245c716e0d4caec0b7a6020d80c77a1b6173d749a25573f661f75de"
+      ],
+      "fixture_id": "F-M1A-002",
+      "path": "F-M1A-002.json",
+      "receipt_count": 2,
+      "replay_case_count": 0,
+      "sha256": "b3d81662cf4ea8a7bfb3efbd9dca51e1bf3814a165a88df5db0901d512d78c2c"
+    },
+    {
+      "bytes": 520212,
+      "case_count": 5,
+      "command_count": 25,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-BUDGET-WIDEN",
+        "E-SCOPE-WIDEN"
+      ],
+      "event_count": 20,
+      "expected_final_digests": [
+        "41e3acdce127187a21e1d91ab376452fe45723657b386ed22d73e2b3156042b8",
+        "c00a2079a28fa2346af1514f21b3e6eb66b3d31655340a3f6ec5007bd44817aa",
+        "6c03b942ec166c9f510ea1810d05a4ab6f52ac059d5ac931399080ccad911169",
+        "8a2fd59bb4cd23ef2f80ca0bfe84f14a10eecd666002d2626aa19308f175b72d",
+        "6d631c6001db465c6817f0ad0502935d0a919470f1a6294e9bacde671be3a621"
+      ],
+      "fixture_id": "F-M1A-003",
+      "path": "F-M1A-003.json",
+      "receipt_count": 25,
+      "replay_case_count": 0,
+      "sha256": "8c2154d9806853db27c4876d278124d2db148c33830e577be37d06e9d0771049"
+    },
+    {
+      "bytes": 215349,
+      "case_count": 2,
+      "command_count": 10,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-DAG-CYCLE",
+        "E-DAG-DEPENDENCY"
+      ],
+      "event_count": 8,
+      "expected_final_digests": [
+        "1814d53e893a7ad18453f8a14aacb74d6e52db324f0cab53c378272ece2b1e17",
+        "cdd15c3ea330baa6a16d2b39024f6ba4aba7d848dffee19805fb453296a2e36a"
+      ],
+      "fixture_id": "F-M1A-004",
+      "path": "F-M1A-004.json",
+      "receipt_count": 10,
+      "replay_case_count": 0,
+      "sha256": "5301dc3c5b3469e5912ed274cd8eb3b1d951cf407cbcb17a2936eba51452b893"
+    },
+    {
+      "bytes": 713024,
+      "case_count": 1,
+      "command_count": 16,
+      "decode_failure_count": 0,
+      "error_codes": [],
+      "event_count": 27,
+      "expected_final_digests": [
+        "aa32add24551733fff1d44c2fcc46ff3eaeabef23f46dd4c9c326d679939b245"
+      ],
+      "fixture_id": "F-M1A-005",
+      "path": "F-M1A-005.json",
+      "receipt_count": 16,
+      "replay_case_count": 1,
+      "sha256": "e6b97a33e47977e811290db19ffac4adbb85b9254c4d01a860d0d72655fa4729"
+    },
+    {
+      "bytes": 441731,
+      "case_count": 3,
+      "command_count": 25,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-STALE-GOAL",
+        "E-STALE-LEASE",
+        "E-STALE-PLAN"
+      ],
+      "event_count": 22,
+      "expected_final_digests": [
+        "3ff462d7c11aefa721af57c5ab42c32c1e3578432547f0f3b8e941a6152f9b41",
+        "38a91df87ccaef21225a3d382b0be5f93bd36c35357690be0f9d8a5b8107b1f6",
+        "a6c2e576e2bfb2c124ab233dec4ecffb0c55c5c9cb2d328467229d72f82d1983"
+      ],
+      "fixture_id": "F-M1A-006",
+      "path": "F-M1A-006.json",
+      "receipt_count": 25,
+      "replay_case_count": 0,
+      "sha256": "dae00f86fe3ad9dd95306baddd3a929dbf45819e201853602c14474a0c114be3"
+    },
+    {
+      "bytes": 193709,
+      "case_count": 1,
+      "command_count": 10,
+      "decode_failure_count": 0,
+      "error_codes": [],
+      "event_count": 11,
+      "expected_final_digests": [
+        "66f5c6faf348200ddd90a5bf5626a688cb55c2b050c7674c56612c18eee8f391"
+      ],
+      "fixture_id": "F-M1A-007",
+      "path": "F-M1A-007.json",
+      "receipt_count": 10,
+      "replay_case_count": 0,
+      "sha256": "3ceead1f7c170b9e626437cab0d0da51829b6e53ccd41a0e20e2936925b9ffcd"
+    },
+    {
+      "bytes": 201914,
+      "case_count": 1,
+      "command_count": 11,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-RETRY-NONNOVEL"
+      ],
+      "event_count": 11,
+      "expected_final_digests": [
+        "a1ded01e76c18cc30e6833d1c926f2ddd3cb7faecfbe458efe5fc524a20aceb6"
+      ],
+      "fixture_id": "F-M1A-008",
+      "path": "F-M1A-008.json",
+      "receipt_count": 11,
+      "replay_case_count": 0,
+      "sha256": "06d341b8e6324adb86fb0e1c994d102c80248767e312dcd1bfdf55aae95e9ed5"
+    },
+    {
+      "bytes": 244672,
+      "case_count": 1,
+      "command_count": 15,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-RETRY-EXHAUSTED"
+      ],
+      "event_count": 15,
+      "expected_final_digests": [
+        "11a15effed7aef10bafc9554c83f458b3372a2859b8fc6da42d93ade0b95dfc8"
+      ],
+      "fixture_id": "F-M1A-009",
+      "path": "F-M1A-009.json",
+      "receipt_count": 15,
+      "replay_case_count": 0,
+      "sha256": "e4acdf4b8227bd8c50e8f4fbb06958c9291bdaad837ca74a7a6d5366de6915c9"
+    },
+    {
+      "bytes": 323540,
+      "case_count": 2,
+      "command_count": 19,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-GATE-MISSING",
+        "E-VERIFIER-MISSING"
+      ],
+      "event_count": 17,
+      "expected_final_digests": [
+        "a4018bf81d692ed7dfee613d27e4bab02f257ae26a0e0994240e4eeee588e581",
+        "4ee68a5fc0237d96a0b1ece8165ad879e055e2ddd80a4788dea62409993e7606"
+      ],
+      "fixture_id": "F-M1A-010",
+      "path": "F-M1A-010.json",
+      "receipt_count": 19,
+      "replay_case_count": 0,
+      "sha256": "de869db8c1b8866bdcd3f01b06a9671a5188d4575c3aaa8f772432974a94a905"
+    },
+    {
+      "bytes": 187207,
+      "case_count": 1,
+      "command_count": 11,
+      "decode_failure_count": 0,
+      "error_codes": [],
+      "event_count": 11,
+      "expected_final_digests": [
+        "5cb698527fd7052a2c8db8f16706d3189a01620afc6accf74fdbc930e550701e"
+      ],
+      "fixture_id": "F-M1A-011",
+      "path": "F-M1A-011.json",
+      "receipt_count": 11,
+      "replay_case_count": 0,
+      "sha256": "36a2f3c269824cc857fd85dca4b2cb0b49b8b9b230d53c12a03bd42db5bbe344"
+    },
+    {
+      "bytes": 162451,
+      "case_count": 1,
+      "command_count": 10,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-ROUTE-SPEND"
+      ],
+      "event_count": 9,
+      "expected_final_digests": [
+        "6999c5edbe1063aa66781bf0cb9669a6eaf9d024a8fdcc26c6a54850412a2455"
+      ],
+      "fixture_id": "F-M1A-012",
+      "path": "F-M1A-012.json",
+      "receipt_count": 10,
+      "replay_case_count": 0,
+      "sha256": "0695528c8b4dc858f0503d5e5206d6af630bcac3a541979a7ca87574604336b0"
+    },
+    {
+      "bytes": 251958,
+      "case_count": 1,
+      "command_count": 10,
+      "decode_failure_count": 0,
+      "error_codes": [],
+      "event_count": 11,
+      "expected_final_digests": [
+        "2a95a1b146776d1f9ab70aa377068ff9e272d4b017a5bff2749f843873e47855"
+      ],
+      "fixture_id": "F-M1A-013",
+      "path": "F-M1A-013.json",
+      "receipt_count": 10,
+      "replay_case_count": 1,
+      "sha256": "e3f479227c64c811a9368190a3ad676ea8aed8b53d2d4877df29505f6c82630c"
+    },
+    {
+      "bytes": 177830,
+      "case_count": 1,
+      "command_count": 12,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-PAUSED"
+      ],
+      "event_count": 8,
+      "expected_final_digests": [
+        "94c269491e4c980a005c2095decffaa6a5ac6b924f5fb2f634f4feb450644673"
+      ],
+      "fixture_id": "F-M1A-014",
+      "path": "F-M1A-014.json",
+      "receipt_count": 12,
+      "replay_case_count": 0,
+      "sha256": "297c794f20cacde635b404e7ebd571ec86b468cc37f423a97b23fd2ed26721c3"
+    },
+    {
+      "bytes": 173546,
+      "case_count": 3,
+      "command_count": 9,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-POLICY-UNKNOWN"
+      ],
+      "event_count": 6,
+      "expected_final_digests": [
+        "051108a9bcc9f9e306af9a02100942a0eabde6e78b7ef5b7c923d71215cc3e31",
+        "03d7bb30f354f2157c8f3dfba6223346ccce7558f4043f1146efa490f81cd5a4",
+        "0aac46ecbd9436135939a2bba8346095a7247f8f642a49712ef92ec287da0008"
+      ],
+      "fixture_id": "F-M1A-015",
+      "path": "F-M1A-015.json",
+      "receipt_count": 9,
+      "replay_case_count": 3,
+      "sha256": "63d80018ec2cca9d37f26b0ff776becc24e5d6e45716a3eb147011252f7ac1b2"
+    },
+    {
+      "bytes": 179054,
+      "case_count": 1,
+      "command_count": 11,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-EFFECT-AMBIGUOUS"
+      ],
+      "event_count": 10,
+      "expected_final_digests": [
+        "25dba9f2773141b51353c182a939f7c48e0f559eda12d5a3cc315fb468f5e8f2"
+      ],
+      "fixture_id": "F-M1A-016",
+      "path": "F-M1A-016.json",
+      "receipt_count": 11,
+      "replay_case_count": 0,
+      "sha256": "282288a0ba02bfa96b5a97530bc82d81a30c9de43575a0026315b51b1e21874b"
+    },
+    {
+      "bytes": 24818,
+      "case_count": 1,
+      "command_count": 3,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-IDEMPOTENCY-CONFLICT"
+      ],
+      "event_count": 1,
+      "expected_final_digests": [
+        "ae87890d7c1be13b29e09f488dc82040a510eab6fd5c640b739abba2e2659577"
+      ],
+      "fixture_id": "F-M1A-017",
+      "path": "F-M1A-017.json",
+      "receipt_count": 3,
+      "replay_case_count": 0,
+      "sha256": "d585b1f405e75b1bf614a9e48865d49c969c027a031d2dec44762ebaca65abe4"
+    },
+    {
+      "bytes": 519678,
+      "case_count": 1,
+      "command_count": 8,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-DIGEST-MISMATCH",
+        "E-SCHEMA-UNKNOWN-VERSION"
+      ],
+      "event_count": 8,
+      "expected_final_digests": [
+        "38680c2f2d98bea3f17e1ef6073b1056dd4888f55c2b9cbcabdbe9d321e12dc1"
+      ],
+      "fixture_id": "F-M1A-018",
+      "path": "F-M1A-018.json",
+      "receipt_count": 8,
+      "replay_case_count": 5,
+      "sha256": "2c47650a8d14ff0ca0da2c136a4b2ddb6d3fd60e1d99e5dfab97f5a1fdd0d633"
+    },
+    {
+      "bytes": 113216,
+      "case_count": 1,
+      "command_count": 6,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-STALE-LEASE"
+      ],
+      "event_count": 5,
+      "expected_final_digests": [
+        "0aefff0b599377a650bb87bc6e46575b458b864b9a3dc2f8b4038951d054bac5"
+      ],
+      "fixture_id": "F-M1A-019",
+      "path": "F-M1A-019.json",
+      "receipt_count": 6,
+      "replay_case_count": 0,
+      "sha256": "b2ea18474f6aeb234983e66825533a9e95c61d7d65bde212cb198e5b49c922da"
+    },
+    {
+      "bytes": 111704,
+      "case_count": 1,
+      "command_count": 6,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-AUTH-PARENT-MUTATION"
+      ],
+      "event_count": 4,
+      "expected_final_digests": [
+        "ec248e23a2fe60c144c472812270d87e0463cbb0c19ab716f258a54b646ddd2b"
+      ],
+      "fixture_id": "F-M1A-020",
+      "path": "F-M1A-020.json",
+      "receipt_count": 6,
+      "replay_case_count": 0,
+      "sha256": "cecdb27271a094c927d5d9f24ec8d9956523d22b624b116af71072bb8d79bce1"
+    },
+    {
+      "bytes": 43011,
+      "case_count": 1,
+      "command_count": 3,
+      "decode_failure_count": 2,
+      "error_codes": [
+        "E-POLICY-UNKNOWN",
+        "E-SCHEMA-UNKNOWN-FIELD",
+        "E-SCHEMA-UNKNOWN-VERSION"
+      ],
+      "event_count": 2,
+      "expected_final_digests": [
+        "5fb425c74b0e5c0812080474ea9ef1b073caedc12cb80f758e06a84f1eb4eb87"
+      ],
+      "fixture_id": "F-M1A-021",
+      "path": "F-M1A-021.json",
+      "receipt_count": 3,
+      "replay_case_count": 0,
+      "sha256": "8ea9132ceda92ef486ebaa9a6735dea310fa44241ce5e1fed14ca4efde10b3a9"
+    },
+    {
+      "bytes": 715078,
+      "case_count": 5,
+      "command_count": 27,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-DAG-CONFLICT"
+      ],
+      "event_count": 30,
+      "expected_final_digests": [
+        "f3a8bd5015c1213b937bd03ffa9cdfa20b5db5238c29297f33cea80812370f9a",
+        "4379479f5b1b6db4166420ac8baefa1f733f619da04a189d12d392d84fd76bd7",
+        "7d438679c4524b913e56ad1c61ea8b685f981c4d988f00aba1f2b0ea0d0142bc",
+        "5027e67ba35eaab9a06d160e8642c4f70b96588c65d5785f04324eed6b41b75a",
+        "3bb2bc8df09d4ade5be6fd9518755eecdf35d59c44e7eb4662209daca587645e"
+      ],
+      "fixture_id": "F-M1A-022",
+      "path": "F-M1A-022.json",
+      "receipt_count": 27,
+      "replay_case_count": 0,
+      "sha256": "daf64d6bb04a391b2feed55aed3ab3037212b1f01e826c89a928be391664e066"
+    },
+    {
+      "bytes": 161669,
+      "case_count": 1,
+      "command_count": 8,
+      "decode_failure_count": 0,
+      "error_codes": [
+        "E-AMENDMENT-INCOMPLETE"
+      ],
+      "event_count": 7,
+      "expected_final_digests": [
+        "369e937fb5d48fa7a6dfe4dcac677bb72764a3b9afffa075d12dc1c0a864f346"
+      ],
+      "fixture_id": "F-M1A-023",
+      "path": "F-M1A-023.json",
+      "receipt_count": 8,
+      "replay_case_count": 0,
+      "sha256": "891d2a02363d609439bbdd951ee3f789421b140211fbc03e70721fd13055831d"
+    }
+  ],
+  "manifest_schema_version": "m1a-red-manifest-1",
+  "projection_terminal_states": [
+    "nonterminal",
+    "terminal-verified",
+    "terminal-verified-downgraded",
+    "terminal-failed"
+  ],
+  "schema_candidate": "eebd2de93288183fa5f949e16f9aaf24274c6002",
+  "schema_definitions": [
+    "arm_run_record",
+    "authority_attestation",
+    "blocker_record",
+    "budget_reservation_record",
+    "budget_vector",
+    "canonical_diff",
+    "canonical_diff_entry",
+    "capacity_observation_record",
+    "checkpoint_record",
+    "command_accept_goal_spec",
+    "command_amend_goal_spec",
+    "command_apply_pause",
+    "command_derive_work_packet",
+    "command_envelope",
+    "command_id",
+    "command_propose_plan_revision",
+    "command_propose_replan",
+    "command_propose_retry",
+    "command_raise_blocker",
+    "command_raise_escalation",
+    "command_receipt",
+    "command_record_capacity_observation",
+    "command_record_checkpoint",
+    "command_record_effect_observation",
+    "command_record_owner_intent",
+    "command_record_owner_verifier_exception",
+    "command_replace_executive_lease",
+    "command_replace_route",
+    "command_replace_work_lease",
+    "command_reserve_budget",
+    "command_start_arm_run",
+    "command_submit_gate_result",
+    "command_submit_plan_verifier_decision",
+    "command_submit_worker_result",
+    "command_type",
+    "compatibility_input",
+    "decode_failure",
+    "digest",
+    "digest_set",
+    "disposition",
+    "disposition_record_record",
+    "disposition_set",
+    "domain_record",
+    "effect_observation_record",
+    "error_code",
+    "error_code_set",
+    "error_witness",
+    "escalation_record",
+    "event_ArmRunStarted",
+    "event_BlockerRaised",
+    "event_BudgetReserved",
+    "event_CapacityObservationRecorded",
+    "event_CheckpointRecorded",
+    "event_EffectDisposed",
+    "event_EffectObservationRecorded",
+    "event_EscalationRaised",
+    "event_EvidenceDisposed",
+    "event_ExecutiveLeaseReplaced",
+    "event_GateResultRecorded",
+    "event_GoalSpecAccepted",
+    "event_GoalSpecAmended",
+    "event_LeaseFenced",
+    "event_OwnerIntentRecorded",
+    "event_OwnerVerifierExceptionRecorded",
+    "event_PacketFenced",
+    "event_PauseApplied",
+    "event_PlanItemDisposed",
+    "event_PlanRevisionAdmitted",
+    "event_PlanVerifierDecisionRecorded",
+    "event_ReplanAdmitted",
+    "event_RetryAdmitted",
+    "event_RouteAssignmentReplaced",
+    "event_WorkLeaseReplaced",
+    "event_WorkPacketDerived",
+    "event_WorkerResultRecorded",
+    "event_type",
+    "evidence_ref",
+    "evidence_ref_set",
+    "executive_lease_record",
+    "fixture_bundle",
+    "fixture_case",
+    "gate_requirement",
+    "gate_requirement_set",
+    "gate_result_record",
+    "genesis_config",
+    "goal_spec_amendment_record",
+    "goal_spec_record",
+    "id",
+    "id_set",
+    "independence_projection",
+    "json_input_text",
+    "lease_ref",
+    "logical_time",
+    "node_compatibility_tuple",
+    "nonempty_text",
+    "novelty_delta",
+    "novelty_dependency_repaired",
+    "novelty_evidence_added",
+    "novelty_hypothesis_replaced",
+    "novelty_owner_amended",
+    "novelty_route_capability_changed",
+    "novelty_strategy_changed",
+    "novelty_task_narrowed",
+    "object_ref",
+    "owner_intent_record",
+    "owner_verifier_exception_record",
+    "pause_directive_record",
+    "plan_identity_ref",
+    "plan_revision_record",
+    "plan_transition_record",
+    "plan_verifier_decision_record",
+    "planning_event",
+    "policy_fixture",
+    "policy_ref",
+    "pos_int",
+    "projection_state",
+    "receipt_identity",
+    "replan_decision_record",
+    "replay_checkpoint",
+    "replay_expectation",
+    "resource_path",
+    "resource_path_set",
+    "retry_decision_record",
+    "route_assignment_record",
+    "task_node_record",
+    "text",
+    "text_set",
+    "token",
+    "token_set",
+    "uint",
+    "work_lease_record",
+    "work_packet_record",
+    "worker_result_record"
+  ],
+  "schema_sha256": "5a8fbacee5228b2617481a2f763fad30830a4fe6088def53c681211dd84d9fd7"
+}

@@ -1,6 +1,6 @@
 ---
 title: M1A — Autonomous Planning Contract and Replay Baseline
-status: construction-specification-candidate-not-authorized
+status: owner-authorized-construction-active
 last-updated: 2026-09-03
 ---
 
@@ -13,14 +13,17 @@ prove a v3 runtime, plan quality, external-effect safety or performance.
 
 The standalone handoff prompt is
 [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
-Neither this document nor that prompt authorizes execution.
+Lucas authorized bounded local construction on 2026-09-03. The immutable authorization,
+subsequent blocker and exact Owner-approved repair are recorded in
+[M1A-CONSTRUCTION-CAMPAIGN.md](M1A-CONSTRUCTION-CAMPAIGN.md). This authorizes only the local
+construction scope below; it does not make the proposed v3 constitution operative.
 
 The exact field/nesting/bound/digest encoding is in
 [M1A-WIRE-PROFILE.md](M1A-WIRE-PROFILE.md). The closed synthetic authority,
 logical-path/effect, command, event, error, digest and fixture oracle is in
-[M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md). Executable schemas and literal red bundles do
-not exist yet; materializing then freezing them are the first two future construction nodes,
-before reducer code, and are part of M1A rather than evidence that M1A has run.
+[M1A-FIXTURE-ORACLES.md](M1A-FIXTURE-ORACLES.md). Materializing executable schemas and then
+freezing literal red bundles are the first two construction nodes, before reducer code, and are
+part of M1A rather than evidence that M1A has run.
 
 ## Parent goal and exact scope
 
@@ -157,8 +160,9 @@ M1A is ready to call complete only if a future exact candidate satisfies all of 
 13. an assigned verifier independently reruns the exact candidate and records limitations; an
     unavailable verifier blocks instead of passing.
 
-Suggested future command names may be frozen in the construction task after repository tooling
-is inspected; the semantic gates above are canonical, not a dependency on one test runner.
+The exact command/event/error alphabets are now frozen in the Owner-approved wire profile and
+fixture oracle. Runner names remain an implementation choice; the semantic gates above do not
+depend on one test runner.
 
 ## Explicit M1B and M1C boundaries
 
@@ -175,10 +179,10 @@ machinery from bloating M1A's privileged planning slice.
 
 ## Readiness verdict
 
-The documentation contract, closed wire profile and oracle blueprint are ready for a separately
-authorized M1A build whose first node materializes strict schemas and whose second freezes
-executable red bundles, both before reducer code. The campaign's corrected candidate-range gates
-and targeted same-family Terra recheck passed. Numeric
+The documentation contract, closed wire profile and oracle blueprint are under an authorized M1A
+build whose first node materializes strict schemas and whose second freezes executable red
+bundles, both before reducer code. No construction or exact-candidate gate is claimed passed until
+its receipt is appended. Numeric
 production budgets, future PAUSE ratification, provider behavior and broader architecture
 superiority are not prerequisites because M1A encodes them only as strict inert references or
 explicit unknowns that block.
