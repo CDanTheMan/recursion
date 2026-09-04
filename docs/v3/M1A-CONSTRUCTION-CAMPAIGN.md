@@ -523,3 +523,40 @@ standalone conformance runner disagree.
 
 M1A-03 through M1A-06 are complete. M1A remains nonterminal until a fresh TERRA-M1A-02 verifies
 the exact clean candidate and its PASS, dissent or limitations are recorded.
+
+### PlanRevision 8 — TERRA-M1A-02 hardening repair
+
+TERRA-M1A-02 returned `MATERIAL DISSENT` on exact clean candidate
+`17763b76c4180d18aab59680dfc078d87b961f50`. Both complete M1A sweeps, both materializers,
+the v2 compatibility suites and repository hygiene gates passed, but nine re-sealed direct probes
+found behavior outside the literal corpus: a late exact duplicate could not recover its receipt;
+a tampered checkpoint was trusted; an unknown domain arm escaped as `KeyError`; an unknown
+TaskNode authority policy admitted; a self-dependency admitted; current PAUSE allowed retry; an
+executive command at the lease-expiry boundary admitted; an amendment with an empty amendment
+disposition set admitted; and retry could reuse attempt one.
+
+Disposition:
+
+- Retained: schema and red-oracle freezes, every prior repair, the three implementation commits,
+  all literal oracle outcomes and all passing compatibility evidence.
+- Invalidated: only the M1A-03 through M1A-06 completion claim for candidate `17763b76...`.
+- Quarantined: candidate `17763b76...` as evidence of insufficient generalized validation; it is
+  not an M1A completion candidate.
+- Re-admitted: a bounded implementation/test repair covering the nine decisive falsifiers, followed
+  by both full gate runs and same TERRA-M1A-02 re-adjudication.
+
+Construction decision `CD-M1A-022`: admission receives and returns the explicit ordered complete
+receipt journal already required by `M1A-WIRE-PROFILE.md`; the projection retains only accepted
+receipt identities. Exact duplicates resolve byte-identically from that supplied journal at any
+history position, while conflicting IDs append a deterministic conflict receipt. No hidden cache,
+mutable global or projection-schema change is introduced. Falsifier: duplicate behavior depends on
+history position or an unavailable ambient receipt store.
+
+Construction decision `CD-M1A-023`: replay validates checkpoint record and projection digests,
+version/active refs, packet/effect sets, budget/route/lease snapshots and first-event binding before
+using a checkpoint. Reducer admission validates registered event/domain arms before dispatch so no
+host lookup exception escapes. Cross-record validation additionally requires exact policy lookup
+and equality, dependency-edge congruence with no self-edge, current PAUSE coverage, half-open lease
+time/actor/command binding, retry attempt arithmetic, and identical complete amendment/replan
+disposition sets. Falsifier: any TERRA-M1A-02 probe mutates state, emits an event, trusts corrupt
+state or returns an untyped exception.
