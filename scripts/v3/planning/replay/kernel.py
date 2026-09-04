@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import copy
 
-from scripts.v3.planning.validation.canonical import M1AError, decode, digest, seal
+from scripts.v3.planning.validation.canonical import (
+    M1AError, decode, digest, seal, validate_command_envelope,
+    validate_domain_record, validate_event_envelope, validate_projection,
+    validate_receipt,
+)
 from scripts.v3.planning.validation.contracts import validate_admission
 
 
@@ -147,6 +151,8 @@ def _insert_record(state: dict, record: dict) -> None:
 def reduce(immutable_state: dict, ordered_event: dict) -> dict:
     """Apply one validated, contiguous event to an immutable projection."""
 
+    validate_projection(immutable_state)
+    validate_event_envelope(ordered_event)
     state = copy.deepcopy(immutable_state)
     event = copy.deepcopy(ordered_event)
     if event.get("event_schema_version") != "m1a-event-1":
@@ -168,6 +174,7 @@ def reduce(immutable_state: dict, ordered_event: dict) -> dict:
 
     records = [event["primary_record"], *event["related_records"]]
     for record in records:
+        validate_domain_record(record)
         if digest(record, omit_content_digest=True) != record.get("content_digest"):
             raise M1AError("E-DIGEST-MISMATCH", "record content digest")
         _insert_record(state, record)
@@ -507,49 +514,54 @@ def _receipt(command: dict, disposition: str, error: str | None, witness: dict |
 
 
 def admit(immutable_state: dict, expected_state_digest: str, command: dict,
-          authority_fixtures: list[dict], policy_fixtures: list[dict]) -> tuple[dict, list[dict], dict]:
-    """Admit exactly one command and return a new projection, events, and receipt."""
+          authority_fixtures: list[dict], policy_fixtures: list[dict],
+          receipt_journal: list[dict]) -> tuple[dict, list[dict], dict, list[dict]]:
+    """Admit one command and return projection, events, receipt, and complete journal."""
 
+    validate_projection(immutable_state)
+    if not isinstance(command, dict):
+        raise M1AError("E-SCHEMA-INVALID", "command must be an object")
+    missing_identity = {"command_id", "content_digest", "expected_state_digest"} - set(command)
+    if missing_identity:
+        raise M1AError("E-SCHEMA-MISSING-FIELD", min(missing_identity))
     state = copy.deepcopy(immutable_state)
+    journal = copy.deepcopy(receipt_journal)
     before = state["content_digest"]
-    existing = next((r for r in state["processed_command_receipts"]
-                     if r["command_id"] == command["command_id"]), None)
-    if existing is not None and existing["command_digest"] == command["content_digest"]:
-        if state["state_version"] == 1 and len(state["processed_command_receipts"]) == 1:
-            origin = genesis({
-                "stream_id": state["stream_id"],
-                "current_pause_policy_ref": state["current_pause_policy_ref"],
-                "current_pause_epoch": 0,
-            })
-            specs = _event_specs(origin, command)
-            events = []
-            for position, (event_type, primary, related) in enumerate(specs, 1):
-                event = _make_event(origin, command, position, event_type, primary, related)
-                origin = reduce(origin, event)
-                events.append(event)
-            origin["processed_command_receipts"].append(copy.deepcopy(existing))
-            origin = _sealed_state(origin)
-            if origin["content_digest"] == before:
-                return state, [], _receipt(
-                    command, "accepted", None, None,
-                    events[0]["previous_event_digest"] and genesis({
-                        "stream_id": state["stream_id"],
-                        "current_pause_policy_ref": state["current_pause_policy_ref"],
-                        "current_pause_epoch": 0,
-                    })["content_digest"],
-                    before, events,
-                )
-        raise M1AError("E-DIGEST-MISMATCH", "receipt journal unavailable")
+    for item in journal:
+        validate_receipt(item)
+    journal_keys = {}
+    for item in journal:
+        key = (item["command_id"], item["command_digest"])
+        if key in journal_keys and journal_keys[key] != item:
+            raise M1AError("E-DIGEST-MISMATCH", "conflicting receipt journal entry")
+        journal_keys[key] = item
+    projected = {
+        (item["receipt_id"], item["command_id"], item["command_digest"])
+        for item in state["processed_command_receipts"]
+    }
+    journaled = {
+        (item["receipt_id"], item["command_id"], item["command_digest"])
+        for item in journal if item["disposition"] == "accepted"
+    }
+    if projected != journaled:
+        raise M1AError("E-DIGEST-MISMATCH", "incomplete receipt journal")
+    same_id = [item for item in journal if item["command_id"] == command["command_id"]]
+    original = next((item for item in same_id
+                     if item["command_digest"] == command["content_digest"]), None)
+    if original is not None:
+        journal.append(copy.deepcopy(original))
+        return state, [], copy.deepcopy(original), journal
     if expected_state_digest != before or command["expected_state_digest"] != before:
         error, witness, disposition = "E-DIGEST-MISMATCH", None, "refused"
+    elif same_id:
+        error, witness, disposition = "E-IDEMPOTENCY-CONFLICT", None, "conflict"
     else:
-        if existing is not None:
-            error, witness, disposition = "E-IDEMPOTENCY-CONFLICT", None, "conflict"
-        else:
-            error, witness = validate_admission(state, command, authority_fixtures, policy_fixtures)
-            disposition = "refused" if error else "accepted"
+        error, witness = validate_admission(state, command, authority_fixtures, policy_fixtures)
+        disposition = "refused" if error else "accepted"
     if disposition != "accepted":
-        return state, [], _receipt(command, disposition, error, witness, before, before, [])
+        receipt = _receipt(command, disposition, error, witness, before, before, [])
+        journal.append(copy.deepcopy(receipt))
+        return state, [], receipt, journal
 
     events = []
     for position, (event_type, primary, related) in enumerate(_event_specs(state, command), 1):
@@ -563,34 +575,126 @@ def admit(immutable_state: dict, expected_state_digest: str, command: dict,
     state["processed_command_receipts"].append(identity)
     state = _sealed_state(state)
     receipt = _receipt(command, "accepted", None, None, before, state["content_digest"], events)
-    return state, events, receipt
+    journal.append(copy.deepcopy(receipt))
+    return state, events, receipt, journal
+
+
+def _checkpoint_ref_digest(state: dict, object_type: str) -> str:
+    refs = [object_ref(record) for record in state["records"]
+            if record["object_type"] == object_type]
+    return digest(sorted(refs, key=lambda ref: ref["id"]))
+
+
+def _validate_replay_checkpoint(checkpoint: dict, decoded_events: list[dict]) -> dict:
+    if not isinstance(checkpoint, dict):
+        raise M1AError("E-SCHEMA-INVALID", "replay checkpoint")
+    unknown = set(checkpoint) - {"checkpoint_record", "projection_snapshot"}
+    missing = {"checkpoint_record", "projection_snapshot"} - set(checkpoint)
+    if unknown:
+        raise M1AError("E-SCHEMA-UNKNOWN-FIELD", min(unknown))
+    if missing:
+        raise M1AError("E-SCHEMA-MISSING-FIELD", min(missing))
+    record = checkpoint["checkpoint_record"]
+    snapshot = checkpoint["projection_snapshot"]
+    validate_domain_record(record)
+    validate_projection(snapshot)
+    if record["object_type"] != "checkpoint":
+        raise M1AError("E-SCHEMA-INVALID", "checkpoint record type")
+    if digest(record, omit_content_digest=True) != record["content_digest"]:
+        raise M1AError("E-DIGEST-MISMATCH", "checkpoint record digest")
+    payload = record["payload"]
+    packet_refs = sorted(
+        [object_ref(item) for item in snapshot["records"]
+         if item["object_type"] == "work-packet"],
+        key=lambda ref: ref["id"],
+    )
+    lease_refs = sorted(
+        [lease_ref(item) for item in snapshot["records"]
+         if item["object_type"] in ("executive-lease", "work-lease")],
+        key=lambda ref: ref["lease_id"],
+    )
+    expected = {
+        "state_version": snapshot["state_version"],
+        "state_digest": snapshot["content_digest"],
+        "active_goal_ref": snapshot["operative_goal_ref"],
+        "active_plan_ref": snapshot["active_plan_ref"],
+        "open_packet_refs": packet_refs,
+        "ambiguous_effect_refs": snapshot["ambiguous_effect_refs"],
+        "budget_snapshot_digest": _checkpoint_ref_digest(snapshot, "budget-reservation"),
+        "route_snapshot_digest": _checkpoint_ref_digest(snapshot, "route-assignment"),
+        "pause_epoch": snapshot["current_pause_epoch"],
+        "lease_epoch_digest": digest(lease_refs),
+    }
+    if payload != expected:
+        raise M1AError("E-DIGEST-MISMATCH", "checkpoint projection binding")
+    if not decoded_events:
+        raise M1AError("E-DIGEST-MISMATCH", "checkpoint event missing")
+    first = decoded_events[0]
+    if first["event_type"] != "CheckpointRecorded" or first["primary_record"] != record:
+        raise M1AError("E-DIGEST-MISMATCH", "checkpoint first event binding")
+    return copy.deepcopy(snapshot)
 
 
 def replay(genesis_record: dict, event_inputs: list[str | bytes], commands: list[dict],
            receipts: list[dict], checkpoint: dict | None = None) -> dict:
     """Replay a complete or checkpointed stream, including receipt-journal boundaries."""
 
-    state = copy.deepcopy(checkpoint["projection_snapshot"]) if checkpoint else genesis(genesis_record)
-    command_map = {item["command_id"]: item for item in commands}
-    receipt_map = {item["command_id"]: item for item in receipts}
-    remaining = {item["command_id"] for item in commands}
     decoded_events = [decode(raw, "m1a-1") for raw in event_inputs]
-    for index, event in enumerate(decoded_events):
-        command = command_map.get(event["command_id"])
-        receipt = receipt_map.get(event["command_id"])
+    state = (_validate_replay_checkpoint(checkpoint, decoded_events)
+             if checkpoint else genesis(genesis_record))
+    for command in commands:
+        validate_command_envelope(command)
+    for receipt in receipts:
+        validate_receipt(receipt)
+    command_pairs = [(item["command_id"], item["content_digest"]) for item in commands]
+    receipt_pairs = [(item["command_id"], item["command_digest"]) for item in receipts]
+    if len(command_pairs) != len(set(command_pairs)) or len(receipt_pairs) != len(set(receipt_pairs)):
+        raise M1AError("E-DIGEST-MISMATCH", "duplicate replay journal key")
+    if command_pairs != receipt_pairs:
+        raise M1AError("E-DIGEST-MISMATCH", "command receipt journal order")
+    command_map = dict(zip(command_pairs, commands, strict=True))
+    receipt_map = dict(zip(receipt_pairs, receipts, strict=True))
+    remaining = {
+        key for key, item in receipt_map.items()
+        if item["disposition"] == "accepted" and item["event_ids"]
+    }
+    index = 0
+    while index < len(decoded_events):
+        event = decoded_events[index]
+        key = (event["command_id"], event["command_digest"])
+        command = command_map.get(key)
+        receipt = receipt_map.get(key)
         if command is None or receipt is None or event["command_digest"] != command["content_digest"]:
             raise M1AError("E-DIGEST-MISMATCH", "event journal binding")
-        state = reduce(state, event)
-        next_command = decoded_events[index + 1]["command_id"] if index + 1 < len(decoded_events) else None
-        if next_command != event["command_id"]:
-            if event["event_id"] != receipt["event_ids"][-1]:
-                raise M1AError("E-DIGEST-MISMATCH", "receipt event boundary")
-            state["processed_command_receipts"].append({
-                "receipt_id": receipt["receipt_id"], "command_id": receipt["command_id"],
-                "command_digest": receipt["command_digest"],
-            })
-            state = _sealed_state(state)
-            remaining.discard(event["command_id"])
+        if key not in remaining:
+            raise M1AError("E-DIGEST-MISMATCH", "event for non-accepted receipt")
+        if (command["expected_state_version"] != state["state_version"]
+                or command["expected_state_digest"] != state["content_digest"]
+                or receipt["state_before_digest"] != state["content_digest"]):
+            raise M1AError("E-DIGEST-MISMATCH", "command state boundary")
+        group = []
+        while index < len(decoded_events):
+            candidate = decoded_events[index]
+            candidate_key = (candidate["command_id"], candidate["command_digest"])
+            if candidate_key != key:
+                break
+            group.append(candidate)
+            index += 1
+        if [item["event_id"] for item in group] != receipt["event_ids"]:
+            raise M1AError("E-DIGEST-MISMATCH", "receipt event boundary")
+        if (receipt["first_event_sequence"] != group[0]["sequence"]
+                or receipt["last_event_sequence"] != group[-1]["sequence"]):
+            raise M1AError("E-DIGEST-MISMATCH", "receipt sequence boundary")
+        for grouped_event in group:
+            state = reduce(state, grouped_event)
+        state["processed_command_receipts"].append({
+            "receipt_id": receipt["receipt_id"], "command_id": receipt["command_id"],
+            "command_digest": receipt["command_digest"],
+        })
+        state = _sealed_state(state)
+        if state["content_digest"] != receipt["state_after_digest"]:
+            raise M1AError("E-DIGEST-MISMATCH", "receipt state-after boundary")
+        remaining.discard(key)
     if remaining:
         raise M1AError("E-DIGEST-MISMATCH", "missing command events")
     return state

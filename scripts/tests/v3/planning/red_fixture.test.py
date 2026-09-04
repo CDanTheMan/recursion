@@ -796,9 +796,12 @@ def main() -> int:
         return 1
     conformance = load_module("m1a_conformance", TEST_DIR / "conformance.test.py")
     cases, commands, events, decodes = conformance.run_conformance()
+    adversarial = load_module("m1a_adversarial", TEST_DIR / "adversarial.test.py")
+    probes = adversarial.run_adversarial()
     print(
         f"M1A_RED_GREEN cases={cases} commands={commands} events={events} "
-        f"decode_failures={decodes} positive_bundles={positive_fixture_count}"
+        f"decode_failures={decodes} adversarial_probes={probes} "
+        f"positive_bundles={positive_fixture_count}"
     )
     return 0
 

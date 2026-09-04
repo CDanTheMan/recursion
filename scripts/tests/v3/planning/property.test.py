@@ -24,15 +24,16 @@ def _load(fixture: str, case_id: str) -> dict:
     return next(case for case in bundle["cases"] if case["case_id"] == case_id)
 
 
-def _state_before_plan(case: dict) -> dict:
+def _state_before_plan(case: dict) -> tuple[dict, list[dict]]:
     state = genesis(case["genesis"])
+    journal = []
     for command in case["commands"][:3]:
-        state, _, receipt = admit(
+        state, _, receipt, journal = admit(
             state, state["content_digest"], command,
-            case["authority_fixtures"], case["policy_fixtures"],
+            case["authority_fixtures"], case["policy_fixtures"], journal,
         )
         assert receipt["disposition"] == "accepted"
-    return state
+    return state, journal
 
 
 def _mutated_candidate(case: dict, state: dict, field: str, value) -> tuple[dict, list[dict]]:
@@ -79,7 +80,7 @@ def _mutated_candidate(case: dict, state: dict, field: str, value) -> tuple[dict
 
 def main() -> int:
     base = _load("F-M1A-001.json", "happy")
-    state = _state_before_plan(base)
+    state, journal = _state_before_plan(base)
     mutations = {
         "authority_ids": "AUTHORITY-WIDE", "capability_ids": "CAPABILITY-WIDE",
         "allowed_action_ids": "ACTION-WIDE", "route_ids": "ROUTE-WIDE",
@@ -92,8 +93,9 @@ def main() -> int:
     for field, value in mutations.items():
         command, authorities = _mutated_candidate(base, state, field, value)
         original_state = copy.deepcopy(state)
-        after, events, receipt = admit(
-            state, state["content_digest"], command, authorities, base["policy_fixtures"]
+        after, events, receipt, _ = admit(
+            state, state["content_digest"], command, authorities,
+            base["policy_fixtures"], journal,
         )
         assert receipt["primary_error"] in {"E-BUDGET-WIDEN", "E-SCOPE-WIDEN"}, field
         assert after == original_state and not events
@@ -114,20 +116,21 @@ def main() -> int:
 
     pure_case = _load("F-M1A-007.json", "novel")
     pure_state = genesis(pure_case["genesis"])
+    pure_journal = []
     for command in pure_case["initial_commands"]:
-        pure_state, _, _ = admit(
+        pure_state, _, _, pure_journal = admit(
             pure_state, pure_state["content_digest"], command,
-            pure_case["authority_fixtures"], pure_case["policy_fixtures"],
+            pure_case["authority_fixtures"], pure_case["policy_fixtures"], pure_journal,
         )
     command = pure_case["commands"][0]
     frozen_state, frozen_command = copy.deepcopy(pure_state), copy.deepcopy(command)
     first = admit(
         pure_state, pure_state["content_digest"], command,
-        pure_case["authority_fixtures"], pure_case["policy_fixtures"],
+        pure_case["authority_fixtures"], pure_case["policy_fixtures"], pure_journal,
     )
     second = admit(
         pure_state, pure_state["content_digest"], command,
-        pure_case["authority_fixtures"], pure_case["policy_fixtures"],
+        pure_case["authority_fixtures"], pure_case["policy_fixtures"], pure_journal,
     )
     assert first == second and pure_state == frozen_state and command == frozen_command
     print(

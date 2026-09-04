@@ -18,6 +18,8 @@ from scripts.v3.planning.validation.canonical import M1AError, decode  # noqa: E
 
 def _execute_case(case: dict) -> tuple[int, int, int]:
     state = genesis(case["genesis"])
+    journal = []
+    expected_journal = []
     command_count = event_count = decode_count = 0
     for commands, receipts, expected_events in (
         (case["initial_commands"], case["initial_receipts"], case["initial_events"]),
@@ -26,14 +28,16 @@ def _execute_case(case: dict) -> tuple[int, int, int]:
         event_position = 0
         for command, expected_receipt in zip(commands, receipts, strict=True):
             prior = state
-            state, events, receipt = admit(
+            state, events, receipt, journal = admit(
                 state, state["content_digest"], command,
-                case["authority_fixtures"], case["policy_fixtures"],
+                case["authority_fixtures"], case["policy_fixtures"], journal,
             )
             expected_count = len(events)
             oracle_events = expected_events[event_position:event_position + expected_count]
             event_position += expected_count
             assert receipt == expected_receipt, command["command_id"]
+            expected_journal.append(expected_receipt)
+            assert journal == expected_journal, command["command_id"]
             assert events == oracle_events, command["command_id"]
             if expected_receipt["disposition"] != "accepted":
                 assert state == prior, command["command_id"]

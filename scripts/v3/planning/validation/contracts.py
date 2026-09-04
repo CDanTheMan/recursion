@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import copy
 
-from scripts.v3.planning.validation.canonical import digest, seal
+from scripts.v3.planning.validation.canonical import (
+    M1AError, digest, seal, validate_command_envelope,
+)
 
 
 PARENT_MUTATIONS = {"accept-goal-spec", "amend-goal-spec", "propose-plan-revision", "propose-replan"}
 PAUSE_SENSITIVE = {
-    "propose-plan-revision", "propose-replan", "derive-work-packet", "submit-worker-result",
-    "record-effect-observation",
+    "start-arm-run", "propose-plan-revision", "propose-replan", "propose-retry",
+    "derive-work-packet", "reserve-budget", "replace-route", "replace-work-lease",
+    "replace-executive-lease", "submit-worker-result", "record-effect-observation",
 }
 COMMAND_ROLES = {
     "record-owner-intent": "owner", "accept-goal-spec": "owner", "amend-goal-spec": "owner",
@@ -27,6 +30,7 @@ COMMAND_ROLES = {
 BUDGET_FIELDS = (
     "attempts", "cpu_ms", "memory_bytes", "model_turns", "money_minor", "output_bytes", "tokens",
 )
+LEASE_COMMAND_REPORTING_EXEMPT = {"raise-blocker", "raise-escalation"}
 
 
 def _find_record(state: dict, ref: dict | None, object_type: str | None = None) -> dict | None:
@@ -60,6 +64,7 @@ def _policy(policy_fixtures: list[dict], ref: dict | None, kind: str | None = No
                  if p["policy_id"] == ref.get("policy_id")
                  and p["policy_version"] == ref.get("policy_version")
                  and p["content_digest"] == ref.get("content_digest")
+                 and digest(p, omit_content_digest=True) == p["content_digest"]
                  and (kind is None or p["policy_kind"] == kind)), None)
 
 
@@ -105,6 +110,15 @@ def validate_dag(plan: dict, tasks: list[dict]) -> tuple[str | None, dict | None
         if task["payload"]["plan_ref"] != plan_ref:
             return "E-DAG-DEPENDENCY", _witness("E-DAG-DEPENDENCY", object_ids=[task["id"]])
     edges = plan["payload"]["dependency_edges"]
+    declared_edges = {(edge["from_node_id"], edge["to_node_id"]) for edge in edges}
+    node_edges = {(dependency, task["id"]) for task in tasks
+                  for dependency in task["payload"]["dependency_node_ids"]}
+    self_nodes = sorted({left for left, right in node_edges | declared_edges if left == right})
+    if self_nodes:
+        return "E-DAG-DEPENDENCY", _witness(
+            "E-DAG-DEPENDENCY", object_ids=self_nodes,
+            edges=[{"from_node_id": node, "to_node_id": node} for node in self_nodes],
+        )
     missing = sorted({endpoint for edge in edges
                       for endpoint in (edge["from_node_id"], edge["to_node_id"])
                       if endpoint not in node_ids})
@@ -112,6 +126,14 @@ def validate_dag(plan: dict, tasks: list[dict]) -> tuple[str | None, dict | None
         missing.extend(dep for dep in task["payload"]["dependency_node_ids"] if dep not in node_ids)
     if missing:
         return "E-DAG-DEPENDENCY", _witness("E-DAG-DEPENDENCY", object_ids=sorted(set(missing)))
+    if declared_edges != node_edges:
+        differing = declared_edges ^ node_edges
+        return "E-DAG-DEPENDENCY", _witness(
+            "E-DAG-DEPENDENCY",
+            object_ids=sorted({node for edge in differing for node in edge}),
+            edges=[{"from_node_id": left, "to_node_id": right}
+                   for left, right in sorted(differing)],
+        )
     graph = {node: [] for node in node_ids}
     for edge in edges:
         graph[edge["from_node_id"]].append(edge["to_node_id"])
@@ -163,6 +185,70 @@ def validate_dag(plan: dict, tasks: list[dict]) -> tuple[str | None, dict | None
     return None, None
 
 
+def _packet_binding_operand(packet: dict) -> dict:
+    payload = packet["payload"]
+    return {
+        field: copy.deepcopy(payload[field])
+        for field in (
+            "goal_ref", "plan_ref", "task_ref", "authority_policy_ref",
+            "privacy_policy_ref", "egress_policy_ref", "route_assignment_ref",
+            "budget_reservation_ref", "verifier_policy_ref", "constitution_policy_ref",
+        )
+    }
+
+
+def _object_ref(record: dict) -> dict:
+    return {
+        "object_type": record["object_type"], "id": record["id"],
+        "version": record["version"], "content_digest": record["content_digest"],
+    }
+
+
+def _lease_ref(record: dict) -> dict:
+    return {
+        "lease_id": record["id"], "lease_epoch": record["payload"]["lease_epoch"],
+        "content_digest": record["content_digest"],
+    }
+
+
+def _checkpoint_payload(state: dict) -> dict:
+    refs = lambda kind: sorted(
+        [_object_ref(record) for record in state["records"] if record["object_type"] == kind],
+        key=lambda ref: ref["id"],
+    )
+    leases = sorted(
+        [_lease_ref(record) for record in state["records"]
+         if record["object_type"] in {"executive-lease", "work-lease"}],
+        key=lambda ref: ref["lease_id"],
+    )
+    return {
+        "state_version": state["state_version"], "state_digest": state["content_digest"],
+        "active_goal_ref": state["operative_goal_ref"],
+        "active_plan_ref": state["active_plan_ref"],
+        "open_packet_refs": refs("work-packet"),
+        "ambiguous_effect_refs": state["ambiguous_effect_refs"],
+        "budget_snapshot_digest": digest(refs("budget-reservation")),
+        "route_snapshot_digest": digest(refs("route-assignment")),
+        "pause_epoch": state["current_pause_epoch"],
+        "lease_epoch_digest": digest(leases),
+    }
+
+
+def _dependencies_satisfied(state: dict, task: dict) -> bool:
+    plan = task["payload"]["plan_ref"]
+    for dependency_id in task["payload"]["dependency_node_ids"]:
+        dependency = next(
+            (record for record in state["records"]
+             if record["object_type"] == "task-node"
+             and record["id"] == dependency_id
+             and record["payload"]["plan_ref"] == plan),
+            None,
+        )
+        if dependency is None or _object_state(state, dependency) not in {"verified", "complete"}:
+            return False
+    return True
+
+
 def _validate_scope(goal: dict, plan: dict, tasks: list[dict]) -> str | None:
     gp = goal["payload"]
     candidates = [plan["payload"], *(task["payload"] for task in tasks)]
@@ -192,6 +278,33 @@ def _validate_scope(goal: dict, plan: dict, tasks: list[dict]) -> str | None:
         if item.get("egress_class_id") not in (None, gp["egress_class_id"]):
             return "E-SCOPE-WIDEN"
     return None
+
+
+def _validate_policy_bindings(goal: dict, plan: dict, tasks: list[dict],
+                              policy_fixtures: list[dict]) -> bool:
+    gp = goal["payload"]
+    required_goal = {
+        "authority_policy_ref": "authority", "privacy_policy_ref": "privacy-egress",
+        "egress_policy_ref": "privacy-egress", "route_policy_ref": "route-envelope",
+        "novelty_policy_ref": "novelty", "retry_policy_ref": "retry",
+        "verifier_policy_ref": "verifier", "constitution_policy_ref": "constitution",
+        "pause_policy_ref": "pause",
+    }
+    if any(_policy(policy_fixtures, gp[field], kind) is None
+           for field, kind in required_goal.items()):
+        return False
+    if (plan["payload"]["verifier_policy_ref"] != gp["verifier_policy_ref"]
+            or plan["payload"]["constitution_policy_ref"] != gp["constitution_policy_ref"]):
+        return False
+    task_fields = (
+        "authority_policy_ref", "privacy_policy_ref", "egress_policy_ref", "retry_policy_ref",
+        "verifier_policy_ref", "constitution_policy_ref",
+    )
+    return all(
+        task["payload"][field] == gp[field]
+        and _policy(policy_fixtures, task["payload"][field]) is not None
+        for task in tasks for field in task_fields
+    )
 
 
 def _required_amendment_targets(state: dict) -> set[tuple[str, str, int]]:
@@ -227,6 +340,10 @@ def validate_admission(state: dict, command: dict, authority_fixtures: list[dict
                        policy_fixtures: list[dict]) -> tuple[str | None, dict | None]:
     """Return the single deterministic primary error and optional canonical witness."""
 
+    try:
+        validate_command_envelope(command)
+    except M1AError as error:
+        return error.code, None
     if digest(command, omit_content_digest=True) != command.get("content_digest"):
         return "E-DIGEST-MISMATCH", None
     if digest(command["payload"]) != command.get("payload_digest"):
@@ -258,7 +375,17 @@ def validate_admission(state: dict, command: dict, authority_fixtures: list[dict
         return "E-STALE-PLAN", None
     if command["lease_ref"] is not None:
         lease = _find_record(state, command["lease_ref"])
-        if lease is None or _object_state(state, lease) != "active":
+        if (lease is None or _object_state(state, lease) != "active"
+                or lease["payload"]["lease_epoch"] != command["lease_ref"]["lease_epoch"]
+                or lease["payload"]["subject_actor_id"] != command["actor_id"]
+                or (command["command_type"] not in LEASE_COMMAND_REPORTING_EXEMPT
+                    and command["command_type"] not in lease["payload"]["allowed_command_types"])
+                or not lease["payload"]["issued_logical_time"] <= command["logical_time"]
+                < lease["payload"]["expires_logical_time"]
+                or (lease["payload"]["goal_ref"] is not None
+                    and lease["payload"]["goal_ref"] != command["goal_ref"])
+                or (lease["payload"]["plan_ref"] is not None
+                    and lease["payload"]["plan_ref"] != command["plan_ref"])):
             return "E-STALE-LEASE", None
 
     if state["current_pause_epoch"] > 0 and command["command_type"] in PAUSE_SENSITIVE:
@@ -273,19 +400,60 @@ def validate_admission(state: dict, command: dict, authority_fixtures: list[dict
 
     plan, tasks = _candidate_plan(command)
     if plan is not None:
-        goal_ref = command["goal_ref"] or plan["payload"]["goal_ref"]
-        goal = _find_record(state, goal_ref, "goal-spec")
-        if goal is not None:
-            error = _validate_scope(goal, plan, tasks)
-            if error:
-                return error, None
+        goal = (command["payload"]["new_goal_spec"]
+                if command["command_type"] == "amend-goal-spec"
+                else _find_record(state, command["goal_ref"] or plan["payload"]["goal_ref"], "goal-spec"))
+        if goal is None or plan["payload"]["goal_ref"] != {
+            "object_type": goal["object_type"], "id": goal["id"],
+            "version": goal["version"], "content_digest": goal["content_digest"],
+        }:
+            return "E-STALE-GOAL", None
+        if not _validate_policy_bindings(goal, plan, tasks, policy_fixtures):
+            return "E-POLICY-UNKNOWN", None
+        error = _validate_scope(goal, plan, tasks)
+        if error:
+            return error, None
+        graph_operand = {
+            "task_node_refs": plan["payload"]["task_node_refs"],
+            "dependency_edges": plan["payload"]["dependency_edges"],
+        }
+        if plan["payload"]["graph_digest"] != digest(graph_operand):
+            return "E-DIGEST-MISMATCH", None
         error, witness = validate_dag(plan, tasks)
         if error:
             return error, witness
 
+    if command["command_type"] == "derive-work-packet":
+        task = _find_record(state, command["payload"]["task_ref"], "task-node")
+        if (task is None or command["plan_ref"] is None
+                or task["payload"]["plan_ref"]["id"] != command["plan_ref"]["id"]
+                or task["payload"]["plan_ref"]["version"] != command["plan_ref"]["version"]
+                or not _dependencies_satisfied(state, task)):
+            return "E-DAG-DEPENDENCY", None
+
+    if (command["command_type"] == "record-checkpoint"
+            and command["payload"]["payload"] != _checkpoint_payload(state)):
+        return "E-DIGEST-MISMATCH", None
+
     if command["command_type"] == "propose-retry":
         retry = command["payload"]["payload"]
         prior_packet = _find_record(state, retry["prior_work_packet_ref"], "work-packet")
+        if prior_packet is None or retry["next_attempt"] != prior_packet["payload"]["attempt"] + 1:
+            return "E-RETRY-EXHAUSTED", None
+        goal = _find_record(state, retry["goal_ref"], "goal-spec")
+        task = _find_record(state, retry["task_ref"], "task-node")
+        retry_policy = (_policy(policy_fixtures, task["payload"]["retry_policy_ref"], "retry")
+                        if task is not None else None)
+        if (goal is None or task is None or retry_policy is None
+                or task["payload"]["retry_policy_ref"] != goal["payload"]["retry_policy_ref"]):
+            return "E-POLICY-UNKNOWN", None
+        ceiling = min(
+            retry_policy["retry_maximum"], task["payload"]["retry_maximum"],
+            goal["payload"]["budget_limits"]["attempts"],
+            task["payload"]["budget_limits"]["attempts"],
+        )
+        if retry["retry_maximum"] != ceiling:
+            return "E-RETRY-EXHAUSTED", None
         if (retry["next_attempt"] > retry["retry_maximum"] and prior_packet is not None
                 and _object_state(state, prior_packet) == "failed"):
             return "E-RETRY-EXHAUSTED", None
@@ -295,6 +463,33 @@ def validate_admission(state: dict, command: dict, authority_fixtures: list[dict
             return "E-RETRY-EXHAUSTED", None
         if state["ambiguous_effect_refs"]:
             return "E-EFFECT-AMBIGUOUS", None
+        gate = _find_record(state, retry["failed_gate_result_ref"], "gate-result")
+        novelty = copy.deepcopy(retry["novelty_delta"])
+        novelty_digest = novelty.pop("delta_digest", None)
+        canonical_diff_digest = digest(novelty.get("canonical_diff", []))
+        if (retry["goal_ref"] != prior_packet["payload"]["goal_ref"]
+                or retry["plan_ref"] != prior_packet["payload"]["plan_ref"]
+                or retry["task_ref"] != prior_packet["payload"]["task_ref"]
+                or retry["unchanged_binding_digest"] != digest(_packet_binding_operand(prior_packet))
+                or retry["novelty_delta_digest"] != retry["novelty_delta"].get("delta_digest")
+                or novelty_digest != digest(novelty)
+                or retry["novelty_delta"].get("canonical_diff_digest") != canonical_diff_digest
+                or gate is None
+                or gate["payload"]["goal_ref"] != retry["goal_ref"]
+                or gate["payload"]["plan_ref"] != retry["plan_ref"]
+                or gate["payload"]["task_ref"] != retry["task_ref"]
+                or gate["payload"]["work_packet_ref"] != retry["prior_work_packet_ref"]
+                or gate["payload"]["disposition"] != "fail"):
+            return "E-DIGEST-MISMATCH", None
+        reservation = _find_record(
+            state, prior_packet["payload"]["budget_reservation_ref"], "budget-reservation"
+        )
+        if reservation is None:
+            return "E-DIGEST-MISMATCH", None
+        expected_remaining = copy.deepcopy(reservation["payload"]["remaining"])
+        expected_remaining["attempts"] = ceiling - retry["next_attempt"]
+        if retry["remaining_budget"] != expected_remaining or retry["disposition"] != "admitted":
+            return "E-DIGEST-MISMATCH", None
     if command["command_type"] == "replace-route":
         route = command["payload"]["new_route"]["payload"]
         goal = _find_record(state, command["goal_ref"], "goal-spec")
@@ -306,9 +501,20 @@ def validate_admission(state: dict, command: dict, authority_fixtures: list[dict
         if error:
             return error, None
     if command["command_type"] == "amend-goal-spec":
-        dispositions = command["payload"]["replacement_plan_revision"]["payload"]["dispositions"]
+        amendment = command["payload"]["amendment"]["payload"]["dispositions"]
+        plan_dispositions = command["payload"]["replacement_plan_revision"]["payload"]["dispositions"]
+        transition = command["payload"]["plan_transition"]["payload"]["dispositions"]
+        if not amendment or amendment != plan_dispositions or amendment != transition:
+            return "E-AMENDMENT-INCOMPLETE", None
+        dispositions = amendment
         covered = {(d["object_ref"]["object_type"], d["object_ref"]["id"], d["object_ref"]["version"])
                    for d in dispositions}
-        if not _required_amendment_targets(state).issubset(covered):
+        if _required_amendment_targets(state) - covered:
+            return "E-AMENDMENT-INCOMPLETE", None
+    if command["command_type"] == "propose-replan":
+        decision = command["payload"]["decision"]["payload"]["dispositions"]
+        plan_dispositions = command["payload"]["new_plan_revision"]["payload"]["dispositions"]
+        transition = command["payload"]["transition"]["payload"]["dispositions"]
+        if not decision or decision != plan_dispositions or decision != transition:
             return "E-AMENDMENT-INCOMPLETE", None
     return None, None
