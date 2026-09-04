@@ -149,10 +149,11 @@ Disposition@1 = {
 ```
 
 `M1ASyntheticIndependenceProjection@1` is a deliberately reduced, synthetic-only projection for
-the pure M1A fixtures. It maps `model_family`, `provider`, `host`, and `session` directly to the
-same canonical `CA-V3-005` dimensions; `evidence_store` covers only the fixture's workspace/state
-and evidence-acquisition separation; the two actor IDs cover actor/authorship separation. It omits
-account/capacity-pool and evaluator/oracle dimensions and therefore MUST mark them missing whenever
+the pure M1A fixtures. It maps `model_family`, `provider`, and `host` to the same-named canonical
+`CA-V3-005` dimensions. `session` is M1A-only auxiliary context and is not a canonical dimension.
+`evidence_store` covers only the fixture's workspace/state and evidence-acquisition separation;
+the two actor IDs cover actor/authorship separation. It omits account/capacity-pool and evaluator/
+oracle dimensions and therefore MUST mark them missing whenever
 a referenced policy requires them. It is not a complete V0–V3 vector or a
 `VerifierDowngradeReceipt`, and it cannot make a constitutional/release assurance claim. The
 future canonical type is owned only by
