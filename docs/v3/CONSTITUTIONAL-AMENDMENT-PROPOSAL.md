@@ -100,7 +100,8 @@ reconnecting an adapter is never sufficient.
 
 | Operation at directive admission | `checkpoint` | `interrupt` | `drain` | `emergency` |
 |---|---|---|---|---|
-| owner status, canonical replay, evidence append | continue read-only/awareness | same | same | same |
+| owner status and canonical replay | continue read-only | same | same | same |
+| typed awareness evidence for an already-admitted operation | append only a bounded observation/late-result/cancellation/receipt record as staged, stale, quarantined or reconciled; it cannot admit a goal, plan, packet, route, plugin, follow-up or effect | same | same | same |
 | new GoalSpec/plan/task/packet/route/plugin admission | refuse | refuse | refuse | refuse |
 | queued but not running packet | cancel/fence | cancel/fence | cancel/fence | cancel/fence |
 | active pure deterministic kernel reduction | finish current atomic append, then stop | finish atomic append only | finish current admitted reduction | finish atomic append only |

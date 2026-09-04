@@ -128,12 +128,12 @@ future-contract mechanics only: current `CONTROL_PLANE.md` immediate PAUSE remai
 until the exact [constitutional amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md) is
 reviewed and applied.
 
-Verifier assurance is the explicit vector `deterministic`, `task`, `context`, `session`, `model`,
-`family`, `provider`, `host`, `gate_environment`, `human_owner` under proposed classes V0–V3.
-A permitted downgrade records every missing dimension and projects `downgraded-pass`; it never
-becomes full independence. V3 constitutional/release work blocks on an unavailable required
-verifier unless an authenticated Owner exception binds the exact candidate, GoalSpec, plan,
-policy, constitution and expiry. These classes remain inert until the amendment is applied.
+Verifier assurance uses only the canonical independence vector and downgrade receipt defined in
+[`CA-V3-005` and `CA-V3-006`](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md). This document does not define
+a second vector. A permitted downgrade records every missing dimension and projects
+`downgraded-pass`; it never becomes full independence. V3 constitutional/release work blocks on
+an unavailable required verifier unless an authenticated Owner exception has every canonical
+binding. These classes remain inert until the amendment is applied.
 
 ## Credentials
 

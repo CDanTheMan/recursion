@@ -128,7 +128,7 @@ GateRequirement@1 = {
   verifier_policy_digest: Digest
 }
 
-IndependenceVector@1 = {
+M1ASyntheticIndependenceProjection@1 = {
   model_family: Token,
   provider: Token,
   host: Token,
@@ -147,6 +147,16 @@ Disposition@1 = {
   reason_digest: Digest
 }
 ```
+
+`M1ASyntheticIndependenceProjection@1` is a deliberately reduced, synthetic-only projection for
+the pure M1A fixtures. It maps `model_family`, `provider`, `host`, and `session` directly to the
+same canonical `CA-V3-005` dimensions; `evidence_store` covers only the fixture's workspace/state
+and evidence-acquisition separation; the two actor IDs cover actor/authorship separation. It omits
+account/capacity-pool and evaluator/oracle dimensions and therefore MUST mark them missing whenever
+a referenced policy requires them. It is not a complete V0–V3 vector or a
+`VerifierDowngradeReceipt`, and it cannot make a constitutional/release assurance claim. The
+future canonical type is owned only by
+[CONSTITUTIONAL-AMENDMENT-PROPOSAL.md](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md).
 
 `GateRequirement@1` arrays sort by `gate_id`; `Disposition@1` arrays sort by
 `(object_ref.object_type, object_ref.id, object_ref.version)`. `CompatibilityInput@1`,
@@ -218,12 +228,12 @@ mapping explicitly carries a proposed new record.
 | `task-node` / `m1a-task-node-1` | `{plan_ref: ObjectRef@1, semantic_definition_digest: Digest, output_schema_digest: Digest, dependency_node_ids: IdSet, input_digests: DigestSet, source_digests: DigestSet, read_resource_paths: ResourcePathSet, write_resource_paths: ResourcePathSet, effect_keys: IdSet, authority_ids: IdSet, capability_ids: IdSet, route_ids: IdSet, route_capability_ids: IdSet, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, budget_limits: BudgetVector@1, gate_requirements: sorted GateRequirement@1 by gate_id, retry_policy_ref: PolicyRef@1, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, terminal_contribution_digest: Digest, retry_maximum: UInt}` |
 | `work-packet` / `m1a-work-packet-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, logical_worker_actor_id: Id, attempt: PosInt, work_lease_ref: LeaseRef@1, expected_goal_fence_epoch: UInt, expected_pause_epoch: UInt, authority_ids: IdSet, capability_ids: IdSet, allowed_resource_paths: ResourcePathSet, effect_keys: IdSet, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, route_assignment_ref: ObjectRef@1, budget_limits: BudgetVector@1, source_digests: DigestSet, gate_requirements: sorted GateRequirement@1 by gate_id, allowed_action_ids: IdSet, prohibition_ids: IdSet, output_schema_digest: Digest, deadline_logical_time: LogicalTime, checkpoint_ref: ObjectRef@1?}` |
 | `worker-result` / `m1a-worker-result-1` | `{work_packet_ref: ObjectRef@1, candidate_digest: Digest, evidence_digests: DigestSet, output_digest: Digest, observed_effect_ref: ObjectRef@1?, disposition: submitted or failed}` |
-| `gate-result` / `m1a-gate-result-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, work_packet_ref: ObjectRef@1, candidate_digest: Digest, source_digests: DigestSet, evidence_digests: DigestSet, gate_requirement: GateRequirement@1, procedure_version: PosInt, observation_digest: Digest, expected_digest: Digest, actual_digest: Digest, independence: IndependenceVector@1, disposition: pass or fail or error or missing or ambiguous, limitation_digests: DigestSet}` |
+| `gate-result` / `m1a-gate-result-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, work_packet_ref: ObjectRef@1, candidate_digest: Digest, source_digests: DigestSet, evidence_digests: DigestSet, gate_requirement: GateRequirement@1, procedure_version: PosInt, observation_digest: Digest, expected_digest: Digest, actual_digest: Digest, independence: M1ASyntheticIndependenceProjection@1, disposition: pass or fail or error or missing or ambiguous, limitation_digests: DigestSet}` |
 | `retry-decision` / `m1a-retry-decision-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, failed_gate_result_ref: ObjectRef@1, prior_work_packet_ref: ObjectRef@1, novelty_delta: NoveltyDelta@1, novelty_delta_digest: Digest, unchanged_binding_digest: Digest, next_attempt: PosInt, remaining_budget: BudgetVector@1, retry_maximum: UInt, disposition: admitted or refused or exhausted}` |
 | `replan-decision` / `m1a-replan-decision-1` | `{goal_ref: ObjectRef@1, old_plan_ref: ObjectRef@1, new_plan_ref: ObjectRef@1, trigger_evidence_digests: DigestSet, dispositions: sorted Disposition@1, narrowed_binding_digest: Digest, blocker_ref: ObjectRef@1?, escalation_ref: ObjectRef@1?, disposition: admitted or refused}` |
 | `blocker` / `m1a-blocker-1` | `{blocked_object_ref: ObjectRef@1, kind: authority or capacity or dependency or effect-ambiguity or gate or policy or provider-refusal or source or verifier, evidence_digests: DigestSet, required_actor_id: Id, allowed_recovery_ids: IdSet, retry_after_observation_ref: ObjectRef@1?, failure_fingerprint_digest: Digest, state: open or deferred or resolved or superseded or escalated}`. `deferred` is valid only when `kind=capacity` and `retry_after_observation_ref` is non-null; every other combination refuses schema admission. |
 | `escalation` / `m1a-escalation-1` | `{source_blocker_ref: ObjectRef@1, target_role: head or owner, failure_history_digests: DigestSet, requested_decision: NonemptyText, option_digests: DigestSet, recommendation_digest: Digest, frozen_scope_digest: Digest, state: raised or acknowledged or resolved or declined or superseded}` |
-| `plan-verifier-decision` / `m1a-plan-verifier-decision-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, candidate_digest: Digest, event_log_digest: Digest, gate_result_digests: DigestSet, evidence_digests: DigestSet, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, independence: IndependenceVector@1, disposition: pass or downgraded-pass or fail or blocked, assurance_grade: full or downgraded or none, owner_exception_ref: ObjectRef@1?, dissent_digest: Digest?, limitation_digests: DigestSet}` |
+| `plan-verifier-decision` / `m1a-plan-verifier-decision-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, candidate_digest: Digest, event_log_digest: Digest, gate_result_digests: DigestSet, evidence_digests: DigestSet, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, independence: M1ASyntheticIndependenceProjection@1, disposition: pass or downgraded-pass or fail or blocked, assurance_grade: full or downgraded or none, owner_exception_ref: ObjectRef@1?, dissent_digest: Digest?, limitation_digests: DigestSet}` |
 | `owner-verifier-exception` / `m1a-owner-verifier-exception-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, candidate_digest: Digest, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, missing_dimensions: TokenSet, reason_digest: Digest, owner_authority_attestation_id: Id, issued_logical_time: LogicalTime, expires_logical_time: LogicalTime}` |
 | `executive-lease` / `m1a-executive-lease-1`; `work-lease` / `m1a-work-lease-1` | `{subject_actor_id: Id, goal_ref: ObjectRef@1, plan_ref: ObjectRef@1?, task_ref: ObjectRef@1?, lease_epoch: UInt, nonce_digest: Digest, issued_logical_time: LogicalTime, expires_logical_time: LogicalTime, allowed_command_types: TokenSet, state: active or expired or revoked or replaced}` |
 | `checkpoint` / `m1a-checkpoint-1` | `{state_version: UInt, state_digest: Digest, active_goal_ref: ObjectRef@1?, active_plan_ref: ObjectRef@1?, open_packet_refs: sorted ObjectRef@1 by id, ambiguous_effect_refs: sorted ObjectRef@1 by id, budget_snapshot_digest: Digest, route_snapshot_digest: Digest, pause_epoch: UInt, lease_epoch_digest: Digest}` |

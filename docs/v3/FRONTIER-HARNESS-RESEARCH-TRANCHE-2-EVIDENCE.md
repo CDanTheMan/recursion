@@ -99,16 +99,20 @@ judgment into the kernel, or a deliberately fence-free mutant passes.
 **Question.** Which behavior belongs in the privileged kernel, and how can a language be chosen
 without reputation-based guessing?
 
-**Repository-local contract.** The complete privileged public API is initially:
+**Repository-local contract.** The minimal candidate privileged public API is initially:
 
 ```text
 decode(bytes, schema_epoch) -> closed typed command | typed refusal
-admit(state_digest, command, authority/policy fixtures) -> accepted event batch | typed refusal
+admit(immutable_state, expected_state_digest, command, authority/policy fixtures)
+  -> accepted event batch | typed refusal
 reduce(state, ordered_event) -> state
 derive_work_packet(state, admitted_task_id) -> immutable packet | typed refusal
 ```
 
-These functions receive logical time and random values only as admitted inputs. They perform no
+`admit` first canonicalizes and verifies `immutable_state` against `expected_state_digest`, then
+uses that state—not the digest as a data substitute—for command/receipt/idempotence, GoalSpec,
+lease, PAUSE, budget and cross-record checks. These functions receive logical time and random
+values only as admitted inputs. They perform no
 filesystem, network, process, provider, terminal, plugin, credential or wall-clock access. State
 storage, IPC, engines and views call the boundary; they do not move into it.
 
@@ -244,8 +248,9 @@ view-generated tool calls, PAUSE and missing provenance/license.
 
 **Contradiction.** A valid signature identifies an artifact/identity under a trust policy; it does
 not make behavior safe. WebAssembly sandboxing depends on host imports and runtime correctness.
-The Wasmtime example instantiates plugins eagerly, which directly contradicts any claim that an
-installed-but-disabled plugin is automatically zero cost.
+Any implementation that imports or instantiates installed-but-disabled plugins directly
+contradicts the required zero-cost-disabled contract; no registered source is used to claim that
+`SRC-V3-097` itself implements such a loader.
 
 **Decision.** Adopt the trust/lifecycle/zero-cost-disabled contract; defer Wasmtime and signing
 stack selection. Competing option: trusted in-process plugins. Failure mode: capability mediation
