@@ -14303,13 +14303,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "4d21be12a38ef186a7b3f76a2a7b1a99c7f54d46684d2195bd77a6fc0a7eeb74",
+          "candidate_digest": "83988ea194485e7195a840b2622f40213f4a8ca05080be7ec27483e6bd5d3d54",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "7d64f62d3193c5235749d004bc783cfc3d2c5f83743c26affc540031dbda05c1",
+          "content_digest": "eea4a09e8d29c1540c8909aa293e2893556418b11f6d66fa4354904dbc5c0f9a",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         }
@@ -14319,11 +14319,11 @@
         {
           "actor_id": "ARM-M1A",
           "auth_ref": "AUTH-F-M1A-022-write-write-05",
-          "candidate_digest": "4d21be12a38ef186a7b3f76a2a7b1a99c7f54d46684d2195bd77a6fc0a7eeb74",
+          "candidate_digest": "83988ea194485e7195a840b2622f40213f4a8ca05080be7ec27483e6bd5d3d54",
           "command_id": "CMD-F-M1A-022-write-write-05",
           "command_schema_version": "m1a-command-1",
           "command_type": "propose-plan-revision",
-          "content_digest": "7d58250916fa0c395c32d50d829db52b735b31c48dba46c6628c6a12652b76a6",
+          "content_digest": "9313d1d008f8f08cfba51f0a96d56770a01adadae8e3d46fd3305f00b0526cc7",
           "expected_state_digest": "3bb2bc8df09d4ade5be6fd9518755eecdf35d59c44e7eb4662209daca587645e",
           "expected_state_version": 4,
           "goal_ref": {
@@ -14341,7 +14341,7 @@
           "payload": {
             "plan_revision": {
               "causation_id": "CMD-F-M1A-022-write-write-05",
-              "content_digest": "2e51e42060490a4decefe1aab722a5f8ca3f0e5607b016fd886348f5ea5bf61a",
+              "content_digest": "c07ac592a63fe50c007f494f705ecd0dbf3d696cd9c04c897dbe1f8a165ae517",
               "correlation_id": "CORR-M1A",
               "created_by_actor_id": "ARM-M1A",
               "created_logical_time": 5,
@@ -14372,7 +14372,7 @@
                   "output_bytes": 65536,
                   "tokens": 1000
                 },
-                "change_rationale_digest": "cbf88f392e6f0d1af9fc10511623c4f18e877df6d768ff52783e4f4672bc5ffd",
+                "change_rationale_digest": "426d589ea6dcfad6887c395c5d2183b7a5cafcab97c00a926d13d94a8504438a",
                 "constitution_policy_ref": {
                   "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
                   "policy_id": "POLICY-CONSTITUTION",
@@ -14380,32 +14380,34 @@
                 },
                 "dependency_edges": [],
                 "dispositions": [],
-                "effect_keys": [
-                  "EFFECT-SYNTHETIC"
-                ],
+                "effect_keys": [],
                 "goal_ref": {
                   "content_digest": "2695132eef5417c9125ebdbb5c7061a25380ab239f0f37a640d70bd6c6634589",
                   "id": "GOAL-M1A",
                   "object_type": "goal-spec",
                   "version": 1
                 },
-                "graph_digest": "0571e9d0ba49246e010860158726186fb505659eada7d5b734ca8b8b8fe42f75",
+                "graph_digest": "ef90cbedcc7709dacd59f754f6ca22b51425234880128f62e0aac5f762896797",
                 "prior_plan_ref": {
                   "content_digest": "b42109116b7c1af41bd6efdbe581e0a1730d37430dbdc17184f764f00563878f",
                   "id": "PLAN-M1A",
                   "object_type": "plan-revision",
                   "version": 1
                 },
-                "read_resource_paths": [
-                  "workspace/input"
-                ],
+                "read_resource_paths": [],
                 "source_digests": [
                   "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
                 ],
                 "task_node_refs": [
                   {
-                    "content_digest": "62220af8a4fe6726b5007b5f8dc64f447b87dadd7c7a9b11d82b7501d1638f54",
+                    "content_digest": "6f95c2abee3b9473d0358278769e8e41a1d100ca7aaa3ad8396b31c554e9a50c",
                     "id": "TASK-CANDIDATE-A",
+                    "object_type": "task-node",
+                    "version": 2
+                  },
+                  {
+                    "content_digest": "2aafd1d5bad7508a33e6e8ff30a5f19cd5a8ca6782bf9629edfac9cb7accece3",
+                    "id": "TASK-CANDIDATE-B",
                     "object_type": "task-node",
                     "version": 2
                   }
@@ -14417,7 +14419,8 @@
                   "policy_version": 1
                 },
                 "write_resource_paths": [
-                  "workspace/output"
+                  "workspace/output",
+                  "workspace/output/child"
                 ]
               },
               "schema_version": "m1a-plan-revision-1",
@@ -14425,7 +14428,7 @@
             },
             "plan_transition": {
               "causation_id": "CMD-F-M1A-022-write-write-05",
-              "content_digest": "32394173de37043f5794860fdc39b619844a7e83979f19887fd6571d915098e7",
+              "content_digest": "80d97fdc2942f37067b83b3465964017e3ff516f85cd20df760ff5097626d4e6",
               "correlation_id": "CORR-M1A",
               "created_by_actor_id": "ARM-M1A",
               "created_logical_time": 5,
@@ -14452,13 +14455,13 @@
                   "version": 1
                 },
                 "to_plan_ref": {
-                  "content_digest": "2e51e42060490a4decefe1aab722a5f8ca3f0e5607b016fd886348f5ea5bf61a",
+                  "content_digest": "c07ac592a63fe50c007f494f705ecd0dbf3d696cd9c04c897dbe1f8a165ae517",
                   "id": "PLAN-CANDIDATE",
                   "object_type": "plan-revision",
                   "version": 2
                 },
                 "trigger_evidence_digests": [
-                  "4709a703291c588c04d1e8af760ca2da46bdd1807d0f8fd1adcdd0e055b1fc27"
+                  "aaa212572f16305608dc83e4b9b3e7c323410c67b44ef90f60622c8c3b39c783"
                 ]
               },
               "schema_version": "m1a-plan-transition-1",
@@ -14467,7 +14470,7 @@
             "task_nodes": [
               {
                 "causation_id": "CMD-F-M1A-022-write-write-05",
-                "content_digest": "62220af8a4fe6726b5007b5f8dc64f447b87dadd7c7a9b11d82b7501d1638f54",
+                "content_digest": "6f95c2abee3b9473d0358278769e8e41a1d100ca7aaa3ad8396b31c554e9a50c",
                 "correlation_id": "CORR-M1A",
                 "created_by_actor_id": "ARM-M1A",
                 "created_logical_time": 5,
@@ -14515,9 +14518,7 @@
                     "policy_version": 1
                   },
                   "dependency_node_ids": [],
-                  "effect_keys": [
-                    "EFFECT-SYNTHETIC"
-                  ],
+                  "effect_keys": [],
                   "egress_class_id": "EGRESS-NONE",
                   "egress_policy_ref": {
                     "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
@@ -14552,9 +14553,7 @@
                   "prohibition_ids": [
                     "PROHIBIT-EGRESS"
                   ],
-                  "read_resource_paths": [
-                    "workspace/input"
-                  ],
+                  "read_resource_paths": [],
                   "retry_maximum": 2,
                   "retry_policy_ref": {
                     "content_digest": "b395609880d404635c18a72b0c507218e2e3b611874e5c1257503ad8839f8bb4",
@@ -14584,10 +14583,126 @@
                 },
                 "schema_version": "m1a-task-node-1",
                 "version": 2
+              },
+              {
+                "causation_id": "CMD-F-M1A-022-write-write-05",
+                "content_digest": "2aafd1d5bad7508a33e6e8ff30a5f19cd5a8ca6782bf9629edfac9cb7accece3",
+                "correlation_id": "CORR-M1A",
+                "created_by_actor_id": "ARM-M1A",
+                "created_logical_time": 5,
+                "created_under_lease": {
+                  "content_digest": "95be915002abaff68981f7c4ffd8b6ea1fe9f88118e0694890c78e92d088a492",
+                  "lease_epoch": 1,
+                  "lease_id": "LEASE-EXEC-1"
+                },
+                "id": "TASK-CANDIDATE-B",
+                "object_type": "task-node",
+                "payload": {
+                  "account_class_ids": [
+                    "ACCOUNT-INCLUDED"
+                  ],
+                  "allowed_action_ids": [
+                    "ACTION-READ",
+                    "ACTION-WRITE"
+                  ],
+                  "authority_ids": [
+                    "AUTHORITY-M1A"
+                  ],
+                  "authority_policy_ref": {
+                    "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+                    "policy_id": "POLICY-AUTHORITY",
+                    "policy_version": 1
+                  },
+                  "budget_limits": {
+                    "attempts": 2,
+                    "cpu_ms": 10000,
+                    "memory_bytes": 1048576,
+                    "model_turns": 4,
+                    "money_minor": 0,
+                    "output_bytes": 65536,
+                    "tokens": 1000
+                  },
+                  "capability_ids": [
+                    "CAPABILITY-BASE"
+                  ],
+                  "capacity_pool_ids": [
+                    "CAPACITY-INCLUDED"
+                  ],
+                  "constitution_policy_ref": {
+                    "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                    "policy_id": "POLICY-CONSTITUTION",
+                    "policy_version": 1
+                  },
+                  "dependency_node_ids": [],
+                  "effect_keys": [],
+                  "egress_class_id": "EGRESS-NONE",
+                  "egress_policy_ref": {
+                    "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                    "policy_id": "POLICY-PRIVACY",
+                    "policy_version": 1
+                  },
+                  "gate_requirements": [
+                    {
+                      "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                      "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                      "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                      "gate_id": "GATE-M1A",
+                      "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                      "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+                    }
+                  ],
+                  "input_digests": [
+                    "6352c6328ea376ae6e4568db2089e359581c55ea55c4c8306d0097ba1def2478"
+                  ],
+                  "output_schema_digest": "fbd88ffb1b3cae20a2a3d084d65019eea332521fcab888b63b9db0b46cd0da80",
+                  "plan_ref": {
+                    "id": "PLAN-CANDIDATE",
+                    "object_type": "plan-revision",
+                    "version": 2
+                  },
+                  "privacy_class_id": "PRIVACY-SYNTHETIC",
+                  "privacy_policy_ref": {
+                    "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                    "policy_id": "POLICY-PRIVACY",
+                    "policy_version": 1
+                  },
+                  "prohibition_ids": [
+                    "PROHIBIT-EGRESS"
+                  ],
+                  "read_resource_paths": [],
+                  "retry_maximum": 2,
+                  "retry_policy_ref": {
+                    "content_digest": "b395609880d404635c18a72b0c507218e2e3b611874e5c1257503ad8839f8bb4",
+                    "policy_id": "POLICY-RETRY",
+                    "policy_version": 1
+                  },
+                  "route_capability_ids": [
+                    "CAPABILITY-BASE"
+                  ],
+                  "route_ids": [
+                    "ROUTE-INCLUDED",
+                    "ROUTE-ZERO"
+                  ],
+                  "semantic_definition_digest": "6fc28780b1c2f8012f8aff13ef641b1c0b97e2fa7d30f67c53907bd55c8b6f29",
+                  "source_digests": [
+                    "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+                  ],
+                  "terminal_contribution_digest": "e3684e9d47f8ee17078e1d7f17aaf4663a93272241ce62f1ecbf45537989d050",
+                  "verifier_policy_ref": {
+                    "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                    "policy_id": "POLICY-VERIFIER",
+                    "policy_version": 1
+                  },
+                  "write_resource_paths": [
+                    "workspace/output/child"
+                  ]
+                },
+                "schema_version": "m1a-task-node-1",
+                "version": 2
               }
             ]
           },
-          "payload_digest": "4d21be12a38ef186a7b3f76a2a7b1a99c7f54d46684d2195bd77a6fc0a7eeb74",
+          "payload_digest": "83988ea194485e7195a840b2622f40213f4a8ca05080be7ec27483e6bd5d3d54",
           "plan_ref": {
             "content_digest": "b42109116b7c1af41bd6efdbe581e0a1730d37430dbdc17184f764f00563878f",
             "id": "PLAN-M1A",
@@ -15200,9 +15315,9 @@
       },
       "expected_receipts": [
         {
-          "command_digest": "7d58250916fa0c395c32d50d829db52b735b31c48dba46c6628c6a12652b76a6",
+          "command_digest": "9313d1d008f8f08cfba51f0a96d56770a01adadae8e3d46fd3305f00b0526cc7",
           "command_id": "CMD-F-M1A-022-write-write-05",
-          "content_digest": "14f16c9bb559bc923d00ac4ee8c00ae3b91670c5215c859fa5c07cb8e1499d05",
+          "content_digest": "5b5aad140ede52a930f9a04e2a406568beb9efc0b3fcf44eff3c468e0937ad93",
           "disposition": "refused",
           "event_ids": [],
           "first_event_sequence": null,

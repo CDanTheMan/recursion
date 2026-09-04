@@ -194,6 +194,101 @@ def assert_event_chain(
         expected_sequence += 1
 
 
+def _paths_overlap(left: str, right: str) -> bool:
+    left_segments = left.split("/")
+    right_segments = right.split("/")
+    length = min(len(left_segments), len(right_segments))
+    return left_segments[:length] == right_segments[:length]
+
+
+def _resource_conflict(left: dict, right: dict) -> bool:
+    left_payload = left["payload"]
+    right_payload = right["payload"]
+    return any(
+        _paths_overlap(left_path, right_path)
+        for left_path, right_path in (
+            *(
+                (path, other)
+                for path in left_payload["write_resource_paths"]
+                for other in right_payload["write_resource_paths"]
+            ),
+            *(
+                (path, other)
+                for path in left_payload["read_resource_paths"]
+                for other in right_payload["write_resource_paths"]
+            ),
+            *(
+                (path, other)
+                for path in left_payload["write_resource_paths"]
+                for other in right_payload["read_resource_paths"]
+            ),
+        )
+    )
+
+
+def assert_f022_topology(case: dict, label: str) -> None:
+    candidate_commands = [
+        command
+        for command in case["commands"]
+        if command["command_type"] in ("propose-plan-revision", "propose-replan")
+    ]
+    if len(candidate_commands) != 1:
+        fail(f"{label}: F022 must have exactly one candidate graph command")
+    command = candidate_commands[0]
+    if command["command_type"] == "propose-replan":
+        plan = command["payload"]["new_plan_revision"]
+        tasks = command["payload"]["task_nodes"]
+    else:
+        plan = command["payload"]["plan_revision"]
+        tasks = command["payload"]["task_nodes"]
+    if len(tasks) != 2:
+        fail(f"{label}: F022 candidate graph must contain exactly two task nodes")
+    task_ids = {task["id"] for task in tasks}
+    plan_ids = {reference["id"] for reference in plan["payload"]["task_node_refs"]}
+    if task_ids != plan_ids:
+        fail(f"{label}: F022 plan task refs do not match submitted task nodes")
+    left, right = sorted(tasks, key=lambda task: task["id"])
+    edges = plan["payload"]["dependency_edges"]
+    shared_effect = bool(
+        set(left["payload"]["effect_keys"]) & set(right["payload"]["effect_keys"])
+    )
+    resource_conflict = _resource_conflict(left, right)
+    case_id = case["case_id"]
+    if case_id in ("write-write", "read-write", "same-effect"):
+        if edges:
+            fail(f"{label}: refused F022 conflict must be unordered")
+        expected = {
+            "write-write": any(
+                _paths_overlap(left_path, right_path)
+                for left_path in left["payload"]["write_resource_paths"]
+                for right_path in right["payload"]["write_resource_paths"]
+            ),
+            "read-write": resource_conflict,
+            "same-effect": shared_effect,
+        }[case_id]
+        if not expected:
+            fail(f"{label}: F022 {case_id} has no matching conflict predicate")
+        receipt = case["expected_receipts"][0]
+        witness_ids = set(receipt["witness"]["object_ids"])
+        if witness_ids != task_ids:
+            fail(f"{label}: F022 witness IDs are not the submitted task IDs")
+    elif case_id == "ordered-disjoint":
+        if edges != [{"from_node_id": left["id"], "to_node_id": right["id"]}]:
+            fail(f"{label}: ordered-disjoint case lacks its exact dependency edge")
+        if resource_conflict or shared_effect:
+            fail(f"{label}: ordered-disjoint case contains conflicting ownership")
+    elif case_id == "read-read":
+        shared_read = any(
+            _paths_overlap(left_path, right_path)
+            for left_path in left["payload"]["read_resource_paths"]
+            for right_path in right["payload"]["read_resource_paths"]
+        )
+        if edges or not shared_read or resource_conflict or shared_effect:
+            fail(f"{label}: read-read case is not an unordered compatible overlap")
+    else:
+        fail(f"{label}: unknown F022 case {case_id}")
+
+
 def assert_case(
     case: dict, label: str, *, root_validator, event_validator
 ) -> tuple[set[str], set[str], set[str], set[str]]:
@@ -206,6 +301,8 @@ def assert_case(
     assert_command_receipts(initial_commands, initial_receipts, label + "/initial")
     assert_command_receipts(commands, receipts, label + "/oracle")
     assert_event_chain([*initial_events, *events], label)
+    if label.startswith("F-M1A-022.json"):
+        assert_f022_topology(case, label)
 
     all_command_digests: dict[str, set[str]] = {}
     for command in [*initial_commands, *commands]:

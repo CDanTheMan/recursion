@@ -3343,7 +3343,9 @@ def build_fixture_022() -> list[dict]:
         )
         session.refuse(
             "propose-plan-revision", "arm",
-            lambda cid, mutation=case_id: candidate_plan_payload(
+            lambda cid, mutation=(
+                "write-conflict" if case_id == "write-write" else case_id
+            ): candidate_plan_payload(
                 session, world, cid, mutation=mutation
             ),
             "E-DAG-CONFLICT", lease=lease_ref(world["executive_lease"]),

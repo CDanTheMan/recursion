@@ -503,7 +503,7 @@
       "sha256": "8ea9132ceda92ef486ebaa9a6735dea310fa44241ce5e1fed14ca4efde10b3a9"
     },
     {
-      "bytes": 709548,
+      "bytes": 715078,
       "case_count": 5,
       "command_count": 27,
       "decode_failure_count": 0,
@@ -522,7 +522,7 @@
       "path": "F-M1A-022.json",
       "receipt_count": 27,
       "replay_case_count": 0,
-      "sha256": "01d2ce378741aae0ea8118a5aa51fe5b1d9967353a79ab71ee2e192e5c51b517"
+      "sha256": "daf64d6bb04a391b2feed55aed3ab3037212b1f01e826c89a928be391664e066"
     },
     {
       "bytes": 161669,
