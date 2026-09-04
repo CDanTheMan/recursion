@@ -1302,6 +1302,38 @@ def build_schema() -> dict:
         event_refs.append(ref(name))
     d["planning_event"] = {"oneOf": event_refs}
 
+    replay_expectation = closed(
+        {
+            "replay_id": ref("id"),
+            "checkpoint": nullable(ref("checkpoint_record")),
+            "event_inputs": array(ref("json_input_text"), maximum=2048, unique=False),
+            "expected_disposition": enum("accepted", "refused"),
+            "primary_error": nullable(ref("error_code")),
+            "expected_projection_digest": nullable(ref("digest")),
+        }
+    )
+    replay_expectation["allOf"] = [{
+        "oneOf": [
+            {
+                "properties": {
+                    "expected_disposition": const("accepted"),
+                    "primary_error": const(None),
+                    "expected_projection_digest": ref("digest"),
+                },
+                "required": ["expected_disposition", "primary_error", "expected_projection_digest"],
+            },
+            {
+                "properties": {
+                    "expected_disposition": const("refused"),
+                    "primary_error": ref("error_code"),
+                    "expected_projection_digest": const(None),
+                },
+                "required": ["expected_disposition", "primary_error", "expected_projection_digest"],
+            },
+        ]
+    }]
+    d["replay_expectation"] = replay_expectation
+
     object_state = closed({"object_ref": object_ref, "state": ref("token")})
     d["projection_state"] = closed(
         {
@@ -1351,6 +1383,7 @@ def build_schema() -> dict:
             "commands": array(ref("command_envelope"), maximum=2048, unique=False),
             "expected_receipts": array(ref("command_receipt"), maximum=2048, unique=False),
             "expected_events": array(ref("planning_event"), maximum=2048, unique=False),
+            "replay_cases": array(ref("replay_expectation"), maximum=256, unique=False),
             "expected_final_state": ref("projection_state"),
             "expected_final_digest": ref("digest"),
         }

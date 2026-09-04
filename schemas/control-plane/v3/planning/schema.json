@@ -10223,6 +10223,110 @@
         }
       ]
     },
+    "replay_expectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replay_id",
+        "checkpoint",
+        "event_inputs",
+        "expected_disposition",
+        "primary_error",
+        "expected_projection_digest"
+      ],
+      "properties": {
+        "replay_id": {
+          "$ref": "#/$defs/id"
+        },
+        "checkpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/checkpoint_record"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "event_inputs": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 2048,
+          "items": {
+            "$ref": "#/$defs/json_input_text"
+          }
+        },
+        "expected_disposition": {
+          "type": "string",
+          "enum": [
+            "accepted",
+            "refused"
+          ]
+        },
+        "primary_error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/error_code"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_projection_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "expected_disposition": {
+                  "const": "accepted"
+                },
+                "primary_error": {
+                  "const": null
+                },
+                "expected_projection_digest": {
+                  "$ref": "#/$defs/digest"
+                }
+              },
+              "required": [
+                "expected_disposition",
+                "primary_error",
+                "expected_projection_digest"
+              ]
+            },
+            {
+              "properties": {
+                "expected_disposition": {
+                  "const": "refused"
+                },
+                "primary_error": {
+                  "$ref": "#/$defs/error_code"
+                },
+                "expected_projection_digest": {
+                  "const": null
+                }
+              },
+              "required": [
+                "expected_disposition",
+                "primary_error",
+                "expected_projection_digest"
+              ]
+            }
+          ]
+        }
+      ]
+    },
     "projection_state": {
       "type": "object",
       "additionalProperties": false,
@@ -10412,6 +10516,7 @@
         "commands",
         "expected_receipts",
         "expected_events",
+        "replay_cases",
         "expected_final_state",
         "expected_final_digest"
       ],
@@ -10494,6 +10599,14 @@
           "maxItems": 2048,
           "items": {
             "$ref": "#/$defs/planning_event"
+          }
+        },
+        "replay_cases": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/replay_expectation"
           }
         },
         "expected_final_state": {

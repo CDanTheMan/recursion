@@ -306,12 +306,25 @@ class SchemaContractTests(unittest.TestCase):
             "genesis_config",
             "authority_attestation",
             "policy_fixture",
+            "replay_expectation",
             "projection_state",
             "fixture_bundle",
         ):
             with self.subTest(name=name):
                 value = self.factory.make({"$ref": f"#/$defs/{name}"})
                 self.assert_valid(name, value)
+
+    def test_replay_expectation_keeps_invalid_events_as_raw_inputs(self):
+        accepted = self.factory.make({"$ref": "#/$defs/replay_expectation"})
+        accepted["event_inputs"] = ['{"event_schema_version":"unknown"}']
+        self.assert_valid("replay_expectation", accepted)
+        refused = copy.deepcopy(accepted)
+        refused["expected_disposition"] = "refused"
+        refused["primary_error"] = "E-SCHEMA-UNKNOWN-VERSION"
+        refused["expected_projection_digest"] = None
+        self.assert_valid("replay_expectation", refused)
+        refused["expected_projection_digest"] = "0" * 64
+        self.assert_invalid("replay_expectation", refused)
 
     def test_every_declared_object_schema_is_closed(self):
         open_objects = []
