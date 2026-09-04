@@ -169,3 +169,4 @@ append below. Earlier failures remain visible after repair.
 | Receipt | Observation | Disposition |
 |---|---|---|
 | `PRE-FHAR2-001` | Clean `codex/v3-frontier-harness-research` at `b55a74fbcb70ce40e47f8e7809b5a15a3e7dcd87`; target `AGENTS.md` absent; effective instructions, `CONTROL_PLANE.md`, `ANCHOR.md` and active v3 campaign/evidence state reviewed. | Admit plan authoring only. No worker admitted before this checkpoint is committed. |
+| `CAP-FHAR2-W1` | 2026-09-03T17:05:15-07:00; 32 logical CPUs; 30.44/63.12 GiB free memory; 644.12 GiB free system disk; 433 processes; clean plan commit `41e63d159d6948c903427824b3b422e6d253ce3b`; read-only Codex surface reported 25% used in its 10,080-minute primary window, no credit balance, no reset credits and no spend-control trip. Account identity is deliberately not retained. | Admit four Luna/xhigh workers. Point observation only; no credit is consumed or created and no metered fallback is permitted. |
