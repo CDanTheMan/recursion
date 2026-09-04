@@ -1,0 +1,191 @@
+---
+title: Recursion v3 CLI direction
+status: accepted-surface-with-open-command-research
+last-updated: 2026-09-03
+---
+
+# Recursion v3 CLI hypothesis
+
+## Product requirement
+
+The first CLI is the canonical local operator surface for the headless v3 harness. It must let
+an owner configure and inspect Recursion without asking an agent to edit files or call commands.
+Telegram is an optional interactive transport, not a replacement configuration authority. No
+graphical frontend is required for the v3 release. The same design should remain teachable
+enough for later public users.
+
+The CLI is a schema-driven editor, validator, explainer, and control surface over human-readable configuration. It is not the only copy of settings and does not hide policy in an opaque database.
+
+## Interactive and detachable operation
+
+Running `recursion` without a one-shot subcommand opens the interactive general view. Additional
+terminals may attach to Head, a selected ARM, worker/session output, the communication graph,
+events or system state. Terminals are replaceable clients of the daemon: closing one detaches
+its stream and leaves the actor/process running. Explicit pause, stop, kill or daemon commands
+control lifetime.
+
+The interactive UI and one-shot commands compile to the same versioned command schema. A
+terminal widget, prompt buffer or operating-system window never becomes canonical state.
+Attaching a view must not launch an additional model process, plugin or repository indexer.
+See [TERMINAL-RUNTIME.md](TERMINAL-RUNTIME.md).
+
+## Configuration hierarchy
+
+```text
+built-in schema defaults
+  < edition preset
+  < installation/authority-domain config
+  < project config
+  < parent-goal config
+  < task override
+  < explicit ephemeral operator override
+```
+
+The most specific valid value wins. Child scopes may narrow hard bounds. Widening authority, privacy exposure, credentials, network, spending, or publication rights requires an explicit acknowledged operation at that scope.
+
+Configuration contains credential references only. Machine-private configuration remains outside the public source checkout; projects may carry safe `.recursion.yaml` files whose requested capabilities are admitted by the owner/controller.
+
+### Resolution and mutation contract
+
+One versioned schema drives file, CLI and transport editors, but schema validation is not the
+authority decision. A deterministic semantic validator resolves scope in the order above,
+proves every lower-scope authority/limit is a subset unless an authenticated widening command is
+present, validates cross-record route/plugin/GoalSpec dependencies, and emits the effective
+value plus provenance for every field. Unknown fields and invalid combinations fail before a
+side effect.
+
+An edit carries schema version, configuration scope/id, expected current version/digest,
+canonical before/after representations, principal, authority receipt, application lifecycle and
+idempotent command id. Stale-version edits fail rather than using last-write-wins. Canonical
+serialization is required before digest/signature comparison; human-readable TOML/YAML spelling
+is never itself an authority token.
+
+Configuration complexity is reported as a vector: field count, scope levels, cross-field
+constraints, lifecycle transitions, authority/billing/privacy edges, plugin/provider/model/host
+conflicts, invalid-combination classes, explainable-rejection coverage, valid round-trip coverage
+and migration/rollback coverage. Pairwise and three-way covering fixtures test representative
+core, standard, remote, full and custom manifests. A weighted aggregate may summarize only after
+every security, privacy, billing and correctness floor passes.
+
+The schema may use [JSON Schema 2020-12](https://json-schema.org/specification) for structural
+validation and [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html) for a canonical JSON
+digest/signature representation. Neither replaces the semantic authority/subset validator.
+TOML 1.0 or YAML may remain the human file syntax only when round-trip, duplicate-key, type and
+normalization fixtures prove that the compiled canonical representation is deterministic.
+
+## Setting lifecycle
+
+Schema metadata classifies every field as:
+
+- `goal-frozen`: snapshotted into GoalSpec and changed only by amendment;
+- `checkpoint-applied`: takes effect at the next machine-valid checkpoint;
+- `live`: safe operational control such as lower concurrency or notification preference;
+- `restart-required`: daemon/plugin lifecycle change.
+
+Restrictions may tighten immediately. A command explains effective value, provenance, validation, and application time before making a change.
+
+## Candidate command surface
+
+```text
+recursion
+recursion attach head|arm|task <id>
+recursion workspace open [layout]
+recursion view graph|events|system
+recursion detach
+recursion daemon status|start|stop|restart
+recursion init
+recursion configure [--profile ...]
+recursion config get|set|edit|validate|diff|apply|explain|migrate
+recursion provider add|auth|probe|disable|list
+recursion model list|show|suite|pin
+recursion pool list|status|reserve|disable
+recursion route explain|simulate|probe
+recursion node enroll|list|show|revoke|doctor
+recursion project add|list|show|classify|doctor
+recursion goal grill|draft|accept|amend|status|stop
+recursion arm list|show|checkpoint|replace|pause|resume
+recursion arm stop|kill <id>
+recursion queue list|explain|prioritize
+recursion context inspect|compact|rehydrate|doctor
+recursion evidence show|verify|export
+recursion research start|status|claims|sources|gaps|verify|export
+recursion branch inventory|explain|prune-safe
+recursion doctor [--quick|--full|--component ...]
+recursion pause|resume
+recursion observe|status|events|budget
+```
+
+Names are hypotheses. Research should compare established CLI conventions in the reference repositories and test discoverability.
+
+## Zero-model configuration wizard
+
+`recursion init` and `recursion configure` render from the versioned configuration schema. They:
+
+- discover installed CLIs and supported local capabilities without reading secret values;
+- offer minimal, standard, remote, full, and custom manifests;
+- explain subscription versus metered billing boundaries;
+- show privacy/egress implications;
+- validate provider-native authentication in place;
+- write only the requested config scope;
+- produce a before/after diff and rollback file;
+- require no model call.
+
+Advanced users retain manual file editing. CLI and file validation are generated from the same schema so they cannot drift.
+
+## Doctor tiers
+
+- `startup`: cached, zero-token checks necessary to use enabled features; target seconds.
+- `quick`: configuration, writable paths, SQLite health, Git, enabled plugin manifests, provider executable presence, and current PAUSE.
+- `component`: focused provider, node, route, context, gate, or plugin diagnostics.
+- `full`: release/conformance suite; never an ordinary startup dependency.
+
+Successful checks are cached against all relevant hashes and invalidated precisely.
+
+## Explainability
+
+`route explain`, `route simulate`, `queue explain`, `capacity plan`, and `config explain` do not invoke a model. They show:
+
+- candidate routes and rejection reasons;
+- inherited and overridden settings;
+- quality/cost/quota/privacy/resource inputs;
+- current reservations and waits;
+- checkpoint at which a change applies;
+- whether an action crosses a billing or authority boundary.
+
+## Full-access UX
+
+The CLI must expose owner-authorized full-access and provider-native dangerous modes without
+pretending that a restricted preset is absolute. It should display and configure a capability
+vector including filesystem/process/network, control-plane authoring, credential administration,
+provider enrollment, spending limits, publication, merge, deployment, service control and any
+permission to alter ordinary PAUSE defaults.
+
+A maximum `sovereign` preset may select every supported capability, including `grant-admin`.
+When that capability is explicitly enabled, the actor may mutate its own grants through a
+schema-checked CLI/kernel action. Each mutation shows the exact before/after blast radius,
+requires the configured authentication and acknowledgement, emits a durable receipt, and offers
+a reversible downgrade where the external effect permits one. Audit retention/deletion remains
+a separate displayed capability. This product behavior requires constitutional reconciliation
+before use in the current private deployment.
+
+## PAUSE and capacity UX
+
+Under the separately proposed future post-amendment profile, `recursion pause` defaults to the
+Owner-selected `checkpoint` policy and accepts explicit `interrupt` or `drain` alternatives,
+explains which current operations may finish, and separately exposes emergency stop.
+`recursion status` must show the applied policy, PAUSE epoch, in-flight operations and any
+quarantined ambiguous effects.
+
+That is a future v3 surface, not current private behavior. Until constitutional amendment,
+compatibility mode exposes the current immediate halt and must not relabel it as checkpoint.
+Every displayed command binds the operative constitution-policy reference and shows whether the
+requested behavior is unavailable under it.
+
+Branch and worktree admission is driven by measured machine and review-backlog capacity. The
+CLI shows the inferred limit, contributing signals, hysteresis, owner hard ceiling and why a new
+branch was admitted or refused. Seventy-five is historical policy input, not a universal v3
+constant.
+
+## Stable observer interface
+
+Scheduled tasks and external assistants receive a versioned read-only interface for status, events, budgets, blockers, health, and evidence references. Scoped control is a separate authenticated capability. This lets monitoring tools check Recursion without parsing terminal prose or receiving implementation authority.

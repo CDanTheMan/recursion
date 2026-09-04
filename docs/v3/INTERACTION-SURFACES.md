@@ -1,0 +1,173 @@
+---
+title: Recursion v3 interaction surfaces and collaborative ARM topology
+status: accepted-direction-with-open-research
+last-updated: 2026-09-03
+---
+
+# Recursion v3 interaction surfaces and collaborative ARM topology
+
+## Release surface ruling
+
+Recursion v3 is its own headless development harness with optimization as an acceptance target,
+not a measured property. It owns the durable actor
+runtime, goal/delegation protocol, state, routing, context, tools, evidence, policy and
+observer contracts even when an individual model turn runs inside an external CLI or agent
+loop. Reusing an optimized provider harness is an engine choice, not surrender of Recursion's
+product boundary. Under `OR-019`, no such engine is a canonical boot or recovery dependency.
+
+The v3 release requires no web, desktop or mobile graphical client. Its owner-facing surfaces
+are:
+
+- an interactive Recursion CLI as the canonical local configuration, inspection and control
+  surface, including detachable multi-window views;
+- Telegram as an optional interactive transport for conversation, commands and monitoring;
+- the versioned Observer Interface for read-only automation and future UIs.
+
+Telegram and CLI state are projections over the same actor/event model. Chat history, topic
+identity and provider sessions are never canonical task state.
+
+Multiple terminals can attach to Head, an ARM, a worker, a verifier, a communication graph or
+system state. Closing a terminal detaches the view without ending work. The persistent daemon
+and managed process broker own actors and process trees; deliberate pause/stop/kill commands own
+termination. The detailed proposal and research gate are in
+[TERMINAL-RUNTIME.md](TERMINAL-RUNTIME.md).
+
+## Accepted conversation topology
+
+### General surface
+
+The conceptual `#general` channel is the direct conversation with the Recursion Head. It supports
+macro planning, Grill Me, goal scoping, ARM creation, portfolio monitoring and escalation.
+The name is a presentation default, not a hard-coded protocol identifier.
+
+Head is the last automated semantic escalation level. A question that remains unresolved
+after the final approved Head route is recorded for the owner and included in the configured
+digest. Route exhaustion does not fabricate an answer.
+
+### ARM surfaces
+
+An ARM is a goal-scoped delegated executive that achieves its GoalSpec by planning and
+delegating a bounded fleet of workers, reviewers and harness sessions. One ARM per repository
+is the expected common configuration, not an identity invariant: a goal may span repositories,
+and a repository may host serial or explicitly independent ARM runs.
+
+Each active ARM may expose a dedicated Telegram topic or equivalent addressable conversation.
+The owner may talk to that ARM without relaying every message through `#general`. An accepted
+direct instruction becomes an attributable event under the ARM's existing GoalSpec; it cannot
+silently create an unrelated goal or widen privacy, spending, credentials, publication or
+deployment authority. A widening instruction is routed through amendment or escalation.
+
+Head remains aware through canonical events and monitoring, not by copying every chat message
+into Head's model context. Direct ARM access therefore reduces conversational bottlenecks
+without making the ARM independent of the constitutional hierarchy.
+
+## Multi-ARM collaboration hypothesis
+
+The referenced product is the official [SpaceXAI Grok Bot](https://docs.x.ai/grok-bot/overview),
+opened 2026-09-03. Its documentation defines a Bot as one persistent named agent, says multiple
+Bots can run in parallel on one user-scoped computer, message each other, share threads or group
+chats and pass ownership. That is evidence for the interaction pattern Lucas referenced, not
+evidence that shared-computer credentials, transcript-order authority or an unbounded handoff is
+safe for Recursion. The public [installer repository](https://github.com/grok-bot-app/grok-bot)
+describes a separate “Chief of Staff” role;
+Recursion does not adopt that role because Lucas rejected a distinct AI ARM Manager.
+
+Three topologies should be compared:
+
+1. **Head-routed room:** Head owns the shared conversation lease, solicits named ARM input and
+   commits one reconciled transition. This remains the simplest default.
+2. **Event-mediated peers:** ARMs exchange typed requests and evidence through the kernel while
+   one named ARM may hold a bounded, expiring coordination lease for each cross-ARM workflow
+   step. The owner has accepted this topology when the lease cannot change room membership,
+   overall goal, authority envelope, conflict policy or ARM lifecycle.
+3. **Direct peer delegation:** an ARM delegates to or directs another ARM. This is rejected by
+   default unless authority, budget accounting, deadlock handling and one-writer ownership can
+   be proved without creating a hidden executive tier.
+
+A workflow `supervisor` may be a temporary coordinator role held by Head or a named ARM inside
+one GoalSpec. It is not a new constitutional AI ARM Manager and may not acquire portfolio
+authority merely because several actors share a room.
+
+Head retains ownership of the overall goal, room membership, authority envelope, conflict
+resolution, ARM lifecycle and a substantial part of strategic model escalation even while a
+named ARM holds the step lease. Lease expiry, revocation, PAUSE or conflict returns coordination
+to Head without changing actor identity or treating transcript order as a handoff.
+
+## Required interaction semantics
+
+- Every visible message identifies the speaking logical actor, selected route and GoalSpec.
+- Addressing syntax and Telegram topics route messages; they do not grant authority.
+- Owner messages are preserved byte-exact or by immutable reference before summarization.
+- Multi-actor rooms separate proposals, accepted commands, evidence, status and narration.
+- Only the current executive lease holder may author an authoritative plan transition.
+- Cross-ARM requests carry causation, correlation, source, budget and return-channel identity.
+- Mute, archive, topic deletion, transport outage and bot replacement do not delete the ARM.
+- Head monitoring and owner digests are derived from canonical state, not transcript scraping.
+- A compromised or removed Telegram bot token affects one transport capability, not actor
+  identity, credential inventory or canonical state.
+
+## Evidence-grounded transport contract
+
+Telegram Bot API 10.3, opened 2026-09-03, exposes forum-topic `message_thread_id` values and
+separate new/edited-message updates. Its `update_id` is useful for duplicate and ordering
+recovery, but changes after a week without updates; it is therefore a transport cursor, not a
+permanent Recursion event sequence. Incoming updates are retained by Telegram for no longer than
+24 hours, and long polling and webhooks are mutually exclusive. A webhook can carry a configured
+secret-token header, but transport authentication does not authorize an actor transition.
+
+Each accepted inbound message is normalized before an executive sees it:
+
+```text
+transport + bot identity + chat/topic + update/message/edit identity
+  -> authenticated owner/actor endpoint mapping
+  -> immutable raw-message reference and receive time
+  -> GoalSpec + actor + authority + PAUSE + lease validation
+  -> typed proposal, command, evidence, status or narration event
+  -> one idempotent acceptance/rejection receipt
+```
+
+Edits and deletes are new transport observations; they never rewrite an accepted command or
+historical owner-intent event. A later correction uses an attributable amendment. Unknown,
+duplicate and out-of-order delivery is harmless until this normalization succeeds. Topic
+creation/deletion and bot replacement change routing metadata only.
+
+The default free Bot API guidance is roughly one message per second in one chat, 20 per minute
+in a group and about 30 per second for bulk broadcasts. Paid broadcasts are a separate Telegram
+Stars spending capability. Recursion therefore needs per-chat and global queues with backoff,
+coalesced status output and an explicit denial of paid-broadcast fallback unless the exact
+GoalSpec and grant authorize it. Presentation throttling must not delay the canonical PAUSE or
+authority event.
+
+These transport facts are pinned to [Telegram Bot API
+10.3](https://core.telegram.org/bots/api) and the official [Bot
+FAQ](https://core.telegram.org/bots/faq), opened 2026-09-03. They expire with an API or policy
+change and do not prove Telegram availability, entitlement or Recursion message correctness.
+
+### Shared-room step lease
+
+A `CoordinationLease` binds `room_id`, `workflow_step_id`, named holder, participating actor ids,
+allowed message/event verbs, budget slice, issue/expiry/revocation epochs and a fencing token.
+Only the current token may propose the step transition. It cannot add members, alter GoalSpecs,
+transfer itself, settle cross-goal disputes or change the conflict policy. Simultaneous valid
+proposals remain evidence until Head accepts one transition; transcript arrival order is never
+the tie-breaker. Expiry, PAUSE, holder replacement or conflicting owner instruction returns the
+step to Head and quarantines any ambiguous outward effect.
+
+## Research and acceptance questions
+
+Before this becomes a construction contract, research must establish:
+
+1. Which official Grok Bot interaction patterns remain useful after rejecting shared ambient
+   credentials, transcript-order authority and a distinct Chief-of-Staff executive tier.
+2. Whether one bot identity with actor routing or multiple bot identities gives better
+   isolation, usability, credential scope and operational resilience.
+3. How shared rooms resolve simultaneous commands, disagreement, cycles and cross-goal budget
+   ownership without transcript order becoming authority.
+4. Which events Head must observe immediately versus summarize for a digest.
+5. Whether direct ARM conversation measurably reduces owner effort without increasing lost
+   context, contradictory instructions or unreviewed work.
+
+Minimum acceptance requires synthetic multi-ARM conversation fixtures, duplicate/out-of-order
+delivery, edited/deleted messages, transport restart, token revocation, PAUSE, GoalSpec
+amendment, actor replacement and a proof that no chat topology creates a second portfolio
+executive.
