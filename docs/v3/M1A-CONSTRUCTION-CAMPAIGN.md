@@ -1,6 +1,6 @@
 ---
 title: M1A autonomous-planning construction campaign
-status: active-local-construction
+status: blocked-owner-decision
 last-updated: 2026-09-03
 ---
 
@@ -151,4 +151,22 @@ campaign.
 
 ## Later PlanRevisions
 
-None.
+### PlanRevision 2 — blocked before M1A-01
+
+`PLAN-M1A-001@2` was appended after all four Wave 1 read-only reviews of exact candidate
+`a256ad2ee7104f7abb1b679fc415afc49291556f`. The triggering evidence is recorded in
+[M1A-CONSTRUCTION-BLOCKER.md](M1A-CONSTRUCTION-BLOCKER.md).
+
+- Retained: the immutable campaign GoalSpec, allowed paths, non-goals, stop conditions,
+  campaign-preflight commit and all four Wave 1 research receipts.
+- Invalidated: the assumption that M1A-01 can mechanically translate the accepted profile
+  without a schema choice.
+- Quarantined: no code, schema or fixture output exists to quarantine.
+- Superseded: Revision 1's admission schedule. M1A-01 is blocked; M1A-02 through M1A-07, Wave 2
+  and both Terra adjudications are not admitted because their prerequisite exact commits do not
+  exist.
+- Required actor: Lucas, as Owner of the accepted construction intent and semantic decision seam.
+- Exact next action: approve a reviewed canonical-document revision that removes the event/error
+  token contradictions and defines acyclic plan/node and receipt/state digest construction. The
+  additional closed-wire gaps in the blocker receipt should be resolved in the same review before
+  the campaign is resumed.
