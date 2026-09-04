@@ -1,0 +1,68 @@
+{
+  "expected": {
+    "actor_create_count": 0,
+    "cursor_unit": "event",
+    "effect_count": 0,
+    "final_cursor": 1,
+    "launch_count": 0,
+    "model_turn_count": 0,
+    "reasons": [
+      "credit-exhausted"
+    ],
+    "requires_reset": true,
+    "status": "accepted-reset",
+    "type": "BrokerTraceDecision@1"
+  },
+  "fixture_id": "F-M1B-022",
+  "input": {
+    "actor_create_count": 0,
+    "current_input_lease": "lease:input:2",
+    "current_resize_lease": "lease:resize:2",
+    "effect_count": 0,
+    "initial_daemon_epoch": 2,
+    "initial_process_epoch": 2,
+    "launch_count": 0,
+    "messages": [
+      {
+        "bytes": 4,
+        "client_id": "client-a",
+        "daemon_epoch": 2,
+        "events": 1,
+        "protocol_version": "m1b-broker/1",
+        "stream_id": "stream-a",
+        "type": "CREDIT"
+      },
+      {
+        "cursor": 1,
+        "cursor_unit": "event",
+        "daemon_epoch": 2,
+        "event_class": "output",
+        "payload_base64": "b3ZlcmZsb3c=",
+        "payload_untrusted": true,
+        "process_id": "process-a",
+        "protocol_version": "m1b-broker/1",
+        "stream_id": "stream-a",
+        "type": "EVENT"
+      },
+      {
+        "client_id": "client-a",
+        "cursor_unit": "event",
+        "daemon_epoch": 2,
+        "protocol_version": "m1b-broker/1",
+        "reason": "gap",
+        "snapshot_cursor": 1,
+        "stream_id": "stream-a",
+        "type": "RESET"
+      }
+    ],
+    "model_turn_count": 0,
+    "queue_limit_bytes": 4,
+    "queue_limit_events": 1,
+    "type": "BrokerTraceInput@1"
+  },
+  "purpose": "Slow client exhaustion requires explicit reset and gap.",
+  "source_requirement_ids": [
+    "m1b-broker-flow"
+  ],
+  "type": "BrokerFixtureBundle@1"
+}

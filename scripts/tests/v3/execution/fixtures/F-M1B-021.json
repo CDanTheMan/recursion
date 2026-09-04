@@ -1,0 +1,48 @@
+{
+  "expected": {
+    "actor_create_count": 0,
+    "cursor_unit": "event",
+    "effect_count": 0,
+    "final_cursor": 0,
+    "launch_count": 0,
+    "model_turn_count": 0,
+    "reasons": [
+      "stale-lease"
+    ],
+    "requires_reset": false,
+    "status": "refused",
+    "type": "BrokerTraceDecision@1"
+  },
+  "fixture_id": "F-M1B-021",
+  "input": {
+    "actor_create_count": 0,
+    "current_input_lease": "lease:input:2",
+    "current_resize_lease": "lease:resize:2",
+    "effect_count": 0,
+    "initial_daemon_epoch": 2,
+    "initial_process_epoch": 2,
+    "launch_count": 0,
+    "messages": [
+      {
+        "bytes_base64": "eA==",
+        "client_id": "client-a",
+        "command_id": "command-a",
+        "daemon_epoch": 2,
+        "input_lease": "lease:input:1",
+        "process_epoch": 2,
+        "protocol_version": "m1b-broker/1",
+        "stream_id": "stream-a",
+        "type": "INPUT"
+      }
+    ],
+    "model_turn_count": 0,
+    "queue_limit_bytes": 64,
+    "queue_limit_events": 4,
+    "type": "BrokerTraceInput@1"
+  },
+  "purpose": "Stale input lease is refused.",
+  "source_requirement_ids": [
+    "m1b-broker-lease"
+  ],
+  "type": "BrokerFixtureBundle@1"
+}

@@ -1,0 +1,178 @@
+{
+  "expected": {
+    "activation_order": [],
+    "effective_grants": [],
+    "rejections": [
+      {
+        "plugin_id": "plugin-view",
+        "reasons": [
+          "grant-digest-mismatch"
+        ],
+        "type": "PluginRejection@1"
+      }
+    ],
+    "status": "blocked",
+    "type": "PluginResolutionDecision@1"
+  },
+  "fixture_id": "F-M1B-013",
+  "input": {
+    "enabled_plugin_ids": [
+      "plugin-view"
+    ],
+    "grants": [
+      {
+        "artifact_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "dependency_lock_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "dimensions": {
+          "credential_refs": [],
+          "downgrade": false,
+          "functional_capabilities": [
+            "render"
+          ],
+          "grant_admin": false,
+          "model_refs": [],
+          "network_destinations": [],
+          "quota_units": null,
+          "route_account_refs": [],
+          "spend_microunits": null,
+          "type": "PluginGrantDimensions@1",
+          "update": false,
+          "workspace_paths": [
+            "workspace:/repo"
+          ]
+        },
+        "goal_spec_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "grant_digest": "sha256:662185559ad3d337721df439626b9156e0e8533f027f8f85dc75d4970cbcbfd2",
+        "grant_epoch": 1,
+        "id": "grant-plugin-view",
+        "plugin_id": "plugin-view",
+        "policy_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "revoked": false,
+        "type": "PluginGrantEnvelope@1"
+      }
+    ],
+    "lifecycles": [
+      {
+        "artifact_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "epoch": 1,
+        "lease_epoch": 1,
+        "packet_epoch": 1,
+        "plugin_id": "plugin-view",
+        "replacement_digest": null,
+        "state": "verified",
+        "subscription_epoch": 1,
+        "type": "PluginLifecycleRecord@1"
+      }
+    ],
+    "manifests": [
+      {
+        "artifact_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "configuration_schema_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "conflicts_with_plugin_ids": [],
+        "dependencies": [],
+        "dependency_lock_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "durable_subscriptions": [],
+        "ephemeral_subscriptions": [],
+        "exclusive_resources": [],
+        "health_probe_ids": [],
+        "id": "manifest-plugin-view",
+        "isolation_mode": "isolated-subprocess",
+        "license_id": "MIT",
+        "lifecycle_hooks": [
+          "activate",
+          "drain",
+          "retire",
+          "stage",
+          "verify"
+        ],
+        "manifest_digest": "sha256:dd5e79ab2de903e4e302982b29c045288f67afeb31de16c0c5c8d534e0c4dc63",
+        "plugin_id": "plugin-view",
+        "protocol_version": "m1b-plugin/1",
+        "provenance_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "provided_capabilities": [
+          "render"
+        ],
+        "requested_grants": {
+          "credential_refs": [],
+          "downgrade": false,
+          "functional_capabilities": [
+            "render"
+          ],
+          "grant_admin": false,
+          "model_refs": [],
+          "network_destinations": [],
+          "quota_units": null,
+          "route_account_refs": [],
+          "spend_microunits": null,
+          "type": "PluginGrantDimensions@1",
+          "update": false,
+          "workspace_paths": [
+            "workspace:/repo"
+          ]
+        },
+        "required_capabilities": [],
+        "resource_envelope": {
+          "max_concurrency": 1,
+          "max_cpu_millis": 100,
+          "max_disk_bytes": 1048576,
+          "max_memory_bytes": 1048576,
+          "max_queue_bytes": 65536,
+          "max_queue_events": 64,
+          "type": "ResourceEnvelope@1"
+        },
+        "trust_tier": "T2-signed-isolated-third-party",
+        "type": "PluginManifest@1",
+        "update_source": null,
+        "version": "1.0.0"
+      }
+    ],
+    "policy": {
+      "allowed_capabilities": [
+        "index",
+        "render"
+      ],
+      "allowed_credential_refs": [
+        "credential:a"
+      ],
+      "allowed_isolation_modes": [
+        "isolated-subprocess",
+        "metadata-only",
+        "sandboxed-view",
+        "typed-in-process"
+      ],
+      "allowed_model_refs": [
+        "model:a"
+      ],
+      "allowed_network_destinations": [
+        "endpoint:a"
+      ],
+      "allowed_route_account_refs": [
+        "route-account:a"
+      ],
+      "allowed_trust_tiers": [
+        "T1-signed-built-in",
+        "T2-signed-isolated-third-party",
+        "T3-untrusted-view"
+      ],
+      "allowed_workspace_paths": [
+        "workspace:/repo"
+      ],
+      "downgrade_allowed": false,
+      "goal_spec_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "grant_admin_allowed": false,
+      "id": "plugin-policy",
+      "max_quota_units": 100,
+      "max_spend_microunits": 1000,
+      "pause_epoch": 0,
+      "policy_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "type": "PluginPolicyEnvelope@1",
+      "update_allowed": false
+    },
+    "type": "PluginResolutionInput@1"
+  },
+  "purpose": "Reject digest-bound grant after artifact substitution.",
+  "source_requirement_ids": [
+    "m1b-plugin-integrity"
+  ],
+  "type": "PluginFixtureBundle@1"
+}

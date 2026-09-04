@@ -1,0 +1,64 @@
+{
+  "expected": {
+    "actor_create_count": 0,
+    "cursor_unit": "event",
+    "effect_count": 0,
+    "final_cursor": 0,
+    "launch_count": 0,
+    "model_turn_count": 0,
+    "reasons": [],
+    "requires_reset": false,
+    "status": "accepted",
+    "type": "BrokerTraceDecision@1"
+  },
+  "fixture_id": "F-M1B-020",
+  "input": {
+    "actor_create_count": 0,
+    "current_input_lease": null,
+    "current_resize_lease": null,
+    "effect_count": 0,
+    "initial_daemon_epoch": 2,
+    "initial_process_epoch": 2,
+    "launch_count": 0,
+    "messages": [
+      {
+        "capabilities": [
+          "attach"
+        ],
+        "client_id": "client-a",
+        "columns": 80,
+        "cursor_unit": "event",
+        "daemon_epoch": 2,
+        "last_cursor": 0,
+        "protocol_version": "m1b-broker/1",
+        "rows": 24,
+        "stream_id": "stream-a",
+        "type": "HELLO"
+      },
+      {
+        "capabilities": [
+          "attach"
+        ],
+        "client_id": "client-a",
+        "cursor_unit": "event",
+        "daemon_epoch": 2,
+        "input_lease": null,
+        "protocol_version": "m1b-broker/1",
+        "replay_floor": 0,
+        "resize_lease": null,
+        "snapshot_cursor": 0,
+        "stream_id": "stream-a",
+        "type": "WELCOME"
+      }
+    ],
+    "model_turn_count": 0,
+    "queue_limit_bytes": 64,
+    "queue_limit_events": 4,
+    "type": "BrokerTraceInput@1"
+  },
+  "purpose": "Attach and detach are view-only and create no work.",
+  "source_requirement_ids": [
+    "m1b-broker-attach"
+  ],
+  "type": "BrokerFixtureBundle@1"
+}

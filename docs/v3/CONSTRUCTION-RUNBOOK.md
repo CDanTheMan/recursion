@@ -65,7 +65,8 @@ to falsify and obscured privileged-code ownership. M1A keeps only pure planning 
 route/budget/lease/PAUSE/effect references remain solely to test the mandatory failure states;
 they do not implement those subsystems.
 
-- **M1B** may later add inert route, plugin and process requirement contracts, still without a
+- **M1B** is Owner-authorized as a bounded local campaign after M1A's merge. It adds inert route,
+  plugin and process requirement contracts, still without a
   provider call, process launch or plugin execution. Its red fixtures should cover manifest-first
   no-import admission, full artifact/dependency digests, capability/policy intersection, stale
   reload fencing, daemon cursors/credit/input leases and zero-cost-disabled behavior described in
@@ -100,6 +101,10 @@ construction recommendation, not authorization to execute any node.
 
 The broad OR-015 migration rehearsal remains blocked by multiple writers without one proven
 fence. No M1A fixture may be called a migration rehearsal or runtime proof.
+
+M1B's exact local GoalSpec, allowlist, DAG and gates are in
+[M1B-CONSTRUCTION-CAMPAIGN.md](M1B-CONSTRUCTION-CAMPAIGN.md). Its schemas and fixtures are
+requirements evidence only and do not authorize Milestone 3 runtime work.
 
 ## Handoff, stop and rollback
 

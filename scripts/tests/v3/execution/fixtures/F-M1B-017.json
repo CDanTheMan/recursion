@@ -1,0 +1,103 @@
+{
+  "expected": {
+    "reasons": [],
+    "status": "admitted",
+    "type": "ProcessAdmissionDecision@1"
+  },
+  "fixture_id": "F-M1B-017",
+  "input": {
+    "descriptor": {
+      "cancellation_capabilities": [
+        {
+          "name": "observe-exit",
+          "state": "supported",
+          "type": "ProcessCancellationCapabilityState@1"
+        },
+        {
+          "name": "tree-terminate",
+          "state": "supported",
+          "type": "ProcessCancellationCapabilityState@1"
+        }
+      ],
+      "containment_capabilities": [
+        {
+          "name": "breakaway-prevention",
+          "state": "supported",
+          "type": "ProcessContainmentCapabilityState@1"
+        },
+        {
+          "name": "descendant-capture",
+          "state": "supported",
+          "type": "ProcessContainmentCapabilityState@1"
+        },
+        {
+          "name": "job-object",
+          "state": "supported",
+          "type": "ProcessContainmentCapabilityState@1"
+        }
+      ],
+      "descriptor_digest": "sha256:ecbf0598befaff89573a348d577ce283e49fa7de32c5072f650c2eb6e779d019",
+      "eligibility_state": "verified-current",
+      "evidence": {
+        "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "expires_at": null,
+        "observed_at": "2026-09-04T00:00:00Z",
+        "source_ids": [
+          "src-v3-021"
+        ],
+        "type": "EvidenceBinding@1"
+      },
+      "host_id": "host-windows",
+      "id": "process-profile-windows",
+      "platform": "windows",
+      "platform_version": "synthetic-1",
+      "transport_capabilities": [
+        {
+          "name": "conpty",
+          "state": "supported",
+          "type": "ProcessTransportCapabilityState@1"
+        }
+      ],
+      "type": "ProcessCapabilityDescriptor@1"
+    },
+    "requirement": {
+      "actor_id": "actor-a",
+      "attach_allowed": true,
+      "host_id": "host-windows",
+      "id": "process-requirement-windows",
+      "max_buffer_bytes": 65536,
+      "operative_pause_policy": "current-immediate",
+      "platform": "windows",
+      "representable_future_pause_policies": [
+        "checkpoint",
+        "drain",
+        "emergency",
+        "interrupt"
+      ],
+      "required_cancellation": [
+        "observe-exit",
+        "tree-terminate"
+      ],
+      "required_containment": [
+        "breakaway-prevention",
+        "descendant-capture",
+        "job-object"
+      ],
+      "required_transports": [
+        "conpty"
+      ],
+      "route_descriptor_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "stdio_encoding": "utf-8",
+      "task_id": "task-a",
+      "type": "ProcessRequirement@1",
+      "work_packet_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "type": "ProcessAdmissionInput@1"
+  },
+  "purpose": "Admit explicit synthetic Windows capability evidence.",
+  "source_requirement_ids": [
+    "m1b-process-capability"
+  ],
+  "termination_observation": null,
+  "type": "ProcessFixtureBundle@1"
+}

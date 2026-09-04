@@ -1,0 +1,96 @@
+{
+  "expected": {
+    "status": "resolved-disabled",
+    "trace": {
+      "cache_writes": 0,
+      "callbacks": 0,
+      "context_injections": 0,
+      "credential_reads": 0,
+      "event_subscriptions": 0,
+      "implementation_imports": 0,
+      "manifest_reads": 1,
+      "network_calls": 0,
+      "payload_scans": 0,
+      "processes": 0,
+      "quota_reservations": 0,
+      "spend_actions": 0,
+      "threads": 0,
+      "timers": 0,
+      "tool_registrations": 0,
+      "type": "DisabledActivityTrace@1",
+      "watchers": 0
+    },
+    "type": "DisabledPluginDecision@1"
+  },
+  "fixture_id": "F-M1B-015",
+  "input": {
+    "enabled": false,
+    "installed": true,
+    "manifest": {
+      "artifact_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "configuration_schema_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "conflicts_with_plugin_ids": [],
+      "dependencies": [],
+      "dependency_lock_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "durable_subscriptions": [],
+      "ephemeral_subscriptions": [],
+      "exclusive_resources": [],
+      "health_probe_ids": [],
+      "id": "manifest-plugin-view",
+      "isolation_mode": "isolated-subprocess",
+      "license_id": "MIT",
+      "lifecycle_hooks": [
+        "activate",
+        "drain",
+        "retire",
+        "stage",
+        "verify"
+      ],
+      "manifest_digest": "sha256:dd5e79ab2de903e4e302982b29c045288f67afeb31de16c0c5c8d534e0c4dc63",
+      "plugin_id": "plugin-view",
+      "protocol_version": "m1b-plugin/1",
+      "provenance_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "provided_capabilities": [
+        "render"
+      ],
+      "requested_grants": {
+        "credential_refs": [],
+        "downgrade": false,
+        "functional_capabilities": [
+          "render"
+        ],
+        "grant_admin": false,
+        "model_refs": [],
+        "network_destinations": [],
+        "quota_units": null,
+        "route_account_refs": [],
+        "spend_microunits": null,
+        "type": "PluginGrantDimensions@1",
+        "update": false,
+        "workspace_paths": [
+          "workspace:/repo"
+        ]
+      },
+      "required_capabilities": [],
+      "resource_envelope": {
+        "max_concurrency": 1,
+        "max_cpu_millis": 100,
+        "max_disk_bytes": 1048576,
+        "max_memory_bytes": 1048576,
+        "max_queue_bytes": 65536,
+        "max_queue_events": 64,
+        "type": "ResourceEnvelope@1"
+      },
+      "trust_tier": "T2-signed-isolated-third-party",
+      "type": "PluginManifest@1",
+      "update_source": null,
+      "version": "1.0.0"
+    },
+    "type": "DisabledPluginInput@1"
+  },
+  "purpose": "Disabled installed plugin performs metadata work only.",
+  "source_requirement_ids": [
+    "m1b-disabled-path"
+  ],
+  "type": "DisabledPluginFixtureBundle@1"
+}

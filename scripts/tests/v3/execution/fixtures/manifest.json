@@ -1,0 +1,174 @@
+{
+  "fixtures": [
+    {
+      "bundle_type": "RouteFixtureBundle@1",
+      "digest": "sha256:5d21745e9c543aab73021e9305c2e806f4b259013e270de619a03e30670a1106",
+      "fixture_id": "F-M1B-001",
+      "path": "F-M1B-001.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "RouteFixtureBundle@1",
+      "digest": "sha256:2f72a305bd8defb3c7b70dfec837ba220c46e14e90671afab9f65d568e167cb8",
+      "fixture_id": "F-M1B-002",
+      "path": "F-M1B-002.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "RouteFixtureBundle@1",
+      "digest": "sha256:25ee7a1713a33ca145d3f5bc78b6b033ebc0334d5606bda0cdc02a8a2be9969d",
+      "fixture_id": "F-M1B-003",
+      "path": "F-M1B-003.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "RouteFixtureBundle@1",
+      "digest": "sha256:151bc10bf9443e1d1e1d6ff39025cac5e70b5c4ffd6ca7c5e1cd76922810aba3",
+      "fixture_id": "F-M1B-004",
+      "path": "F-M1B-004.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "RouteFixtureBundle@1",
+      "digest": "sha256:bd0c615392fc5a6b4d9c87001346aecfcce952e5b594f826f3263a90fde68ba7",
+      "fixture_id": "F-M1B-005",
+      "path": "F-M1B-005.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "RouteFixtureBundle@1",
+      "digest": "sha256:9ec9c819f679f6879341687d97b7ba023dc0b0c3b61e4c7580d414c2a5e71759",
+      "fixture_id": "F-M1B-006",
+      "path": "F-M1B-006.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "RouteFixtureBundle@1",
+      "digest": "sha256:250b3c068510b85a3af94968f8faf92fbe987bebef9a62b4814561603f5729d3",
+      "fixture_id": "F-M1B-007",
+      "path": "F-M1B-007.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "RouteFixtureBundle@1",
+      "digest": "sha256:749b3c81f4303474ed2a0f043fba9d0bc2b261260254fe8d98078b5be89afb6c",
+      "fixture_id": "F-M1B-008",
+      "path": "F-M1B-008.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "PluginFixtureBundle@1",
+      "digest": "sha256:b34a9e9ee9ec7e6e16a527e79845b1b0e9d12fe4377874a89002b57b373ecb46",
+      "fixture_id": "F-M1B-009",
+      "path": "F-M1B-009.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "PluginFixtureBundle@1",
+      "digest": "sha256:37b44508f98320b6716e154fd15a82c830db4a97085ce3f8b456db86fe12f055",
+      "fixture_id": "F-M1B-010",
+      "path": "F-M1B-010.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "PluginFixtureBundle@1",
+      "digest": "sha256:af4ac1f4fcc7859a39d703f744b9d64802e2662a104c90eefcb509a8f946df95",
+      "fixture_id": "F-M1B-011",
+      "path": "F-M1B-011.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "PluginFixtureBundle@1",
+      "digest": "sha256:d6b399255e0dd8debffd546657953e2486d60496ea9ffe3d2f3c22b07292d78c",
+      "fixture_id": "F-M1B-012",
+      "path": "F-M1B-012.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "PluginFixtureBundle@1",
+      "digest": "sha256:f754630bd24df4362afa27c5858dcf03115813980756efe1af1e402ff81a66db",
+      "fixture_id": "F-M1B-013",
+      "path": "F-M1B-013.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "PluginFixtureBundle@1",
+      "digest": "sha256:71005cf2eca2218425c93a97b515db0dacc3f508bec94a57a277175cb3665c19",
+      "fixture_id": "F-M1B-014",
+      "path": "F-M1B-014.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "DisabledPluginFixtureBundle@1",
+      "digest": "sha256:f43c84736bb960beb91cabfccd04a809f56135d9a582cfc4f8807feae7e932d4",
+      "fixture_id": "F-M1B-015",
+      "path": "F-M1B-015.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "PluginReloadFixtureBundle@1",
+      "digest": "sha256:2313f60441ff47375ff06765a0f266df2bb40fd37dfdafd150357f642af3637e",
+      "fixture_id": "F-M1B-016",
+      "path": "F-M1B-016.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "ProcessFixtureBundle@1",
+      "digest": "sha256:1805edea1de2d637c906d14d12ba814592602b14f137b37b78a8ee876e8234b0",
+      "fixture_id": "F-M1B-017",
+      "path": "F-M1B-017.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "ProcessFixtureBundle@1",
+      "digest": "sha256:15d38fdc1ccd0fc3300111d934e9f6c928bce58330ee196603c085b4983e18c2",
+      "fixture_id": "F-M1B-018",
+      "path": "F-M1B-018.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "ProcessFixtureBundle@1",
+      "digest": "sha256:dff4e5d295cfe0fe0ecfe7de6ca4dd843da7c92b8f126b53b64343b1371fabf5",
+      "fixture_id": "F-M1B-019",
+      "path": "F-M1B-019.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "BrokerFixtureBundle@1",
+      "digest": "sha256:48abe7777c95222cf0993881671cfa1b50666c062828b2bdddfade1c30c05177",
+      "fixture_id": "F-M1B-020",
+      "path": "F-M1B-020.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "BrokerFixtureBundle@1",
+      "digest": "sha256:6f02f68abb2c9898ef213eec3016498d5f2d77e307240f112a1cfcc208be04a3",
+      "fixture_id": "F-M1B-021",
+      "path": "F-M1B-021.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "BrokerFixtureBundle@1",
+      "digest": "sha256:4439ff856026fbe640c461812c3271037ef17619d939654d93da74837e43b822",
+      "fixture_id": "F-M1B-022",
+      "path": "F-M1B-022.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "BrokerFixtureBundle@1",
+      "digest": "sha256:4c82f6e19fa67dc364deaf132c9d64453d4f200eb993adf9751311b735319667",
+      "fixture_id": "F-M1B-023",
+      "path": "F-M1B-023.json",
+      "type": "FixtureManifestEntry@1"
+    },
+    {
+      "bundle_type": "ProcessFixtureBundle@1",
+      "digest": "sha256:8a50a531183af9a3c95095561ba396f2c3e44b9780b6441ab16ef6458c297970",
+      "fixture_id": "F-M1B-024",
+      "path": "F-M1B-024.json",
+      "type": "FixtureManifestEntry@1"
+    }
+  ],
+  "schema_digest": "sha256:5e442b76f707b69973b5fc95e5b3ab77fea3f24c984a42c5c7fb1545d8574e94",
+  "type": "FixtureManifest@1"
+}
