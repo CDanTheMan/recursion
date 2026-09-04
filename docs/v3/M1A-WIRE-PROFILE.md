@@ -180,7 +180,23 @@ GenesisConfig@1 = {
   current_pause_policy_ref: PolicyRef@1,
   current_pause_epoch: UInt
 }
+
+ReplayExpectation@1 = {
+  replay_id: Id,
+  checkpoint: DomainRecord@1<checkpoint>?,
+  event_inputs: JsonInputText[] in declared order, maximum 2,048,
+  expected_disposition: accepted or refused,
+  primary_error: ErrorCode?,
+  expected_projection_digest: Digest?
+}
 ```
+
+A `ReplayExpectation@1` with `expected_disposition=accepted` has a null `primary_error` and a
+non-null projection digest. A refused replay has a non-null primary error and null projection
+digest. Its event inputs are literal JSON strings so an unknown event schema version can remain a
+test input without making the enclosing fixture bundle schema-invalid. A non-null checkpoint is
+itself schema/content-digest valid before replay; corrupt checkpoint content is represented as a
+raw event/input case, never smuggled through the typed field.
 
 `M1ASyntheticIndependenceProjection@1` is a deliberately reduced, synthetic-only projection for
 the pure M1A fixtures. It maps `model_family`, `provider`, and `host` to the same-named canonical

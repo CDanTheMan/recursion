@@ -42,6 +42,7 @@ cases: nonempty sorted array by case_id of {
   commands: CommandEnvelope@1[] in declared execution order,
   expected_receipts: CommandReceipt@1[] in command order,
   expected_events: PlanningEvent@1[] in ascending contiguous sequence,
+  replay_cases: ReplayExpectation@1[] in declared order,
   expected_final_state: ProjectionState@1,
   expected_final_digest: Digest equal to expected_final_state.content_digest
 }

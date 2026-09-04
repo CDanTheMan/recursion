@@ -257,3 +257,12 @@ packaging failure modes, while raw JSON Schema cannot express UTF-8 byte counts 
 arrays. The materializer is build tooling, not reducer runtime, and regeneration must be byte
 identical. Falsifier: a clean regeneration changes `schema.json`, any registered union arm lacks a
 valid closed instance, or a strict annotation is accepted without enforcement.
+
+Construction decision `CD-M1A-005`: each fixture case has typed `ReplayExpectation@1` entries
+whose event inputs are literal JSON strings. Evidence: F-M1A-018 requires valid, corrupt, gapped
+and unknown-version replay inputs and expected errors, but the original bundle shape could encode
+only schema-valid initial/expected events and command receipts. Raw event strings preserve the
+distinction between decode and replay refusal without weakening the enclosing bundle. This
+supersedes the first M1A-01 schema candidate and requires a replacement schema-only commit before
+M1A-02 freezes. Falsifier: F-M1A-018 still cannot encode every required replay result literally or
+an invalid event escapes into a typed event array.
