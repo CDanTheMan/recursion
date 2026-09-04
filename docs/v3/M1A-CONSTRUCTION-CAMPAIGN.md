@@ -247,3 +247,13 @@ source for required action/prohibition fields. A caller-supplied complete packet
 because it would make the caller, rather than the kernel, the packet authority. Falsifier: two
 implementations following the documented derivation produce different packet bytes or a packet
 widens any parent binding.
+
+Construction decision `CD-M1A-004`: the executable contract is one self-contained Draft 2020-12
+schema generated deterministically from a checked-in declarative Python materializer. Non-native
+byte-size and sorted-array constraints are explicit `x-*` annotations exercised by the strict
+schema test validator; duplicate keys, nesting and I-JSON restrictions are enforced before schema
+validation. Evidence: splitting 128 mutually recursive definitions across files adds resolver and
+packaging failure modes, while raw JSON Schema cannot express UTF-8 byte counts or general sorted
+arrays. The materializer is build tooling, not reducer runtime, and regeneration must be byte
+identical. Falsifier: a clean regeneration changes `schema.json`, any registered union arm lacks a
+valid closed instance, or a strict annotation is accepted without enforcement.
