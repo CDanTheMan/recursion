@@ -125,6 +125,7 @@ Test-Sequence 'docs/v3/M1A-FIXTURE-ORACLES.md' '^\| `(F-M1A-[0-9]{3})` \|' 'F-M1
 Test-Sequence 'docs/v3/AUTONOMOUS-PLANNING-CAMPAIGN.md' '^\| (GATE-V3DF-[0-9]{2}) \|' 'GATE-V3DF-' 1 24 2 'CAMPAIGN_GATES'
 Test-Sequence 'docs/v3/FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md' '^\| `(GATE-FHAR-[0-9]{2})` \|' 'GATE-FHAR-' 1 24 2 'FRONTIER_CAMPAIGN_GATES'
 Test-Sequence 'docs/v3/FRONTIER-HARNESS-RESEARCH-TRANCHE-2.md' '^\| `(GATE-FHAR2-[0-9]{2})` \|' 'GATE-FHAR2-' 1 24 2 'FRONTIER_TRANCHE2_GATES'
+Test-Sequence 'docs/v3/FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md' '^## (E-FHAR2-[0-9]{3}) —' 'E-FHAR2-' 101 108 3 'FRONTIER_TRANCHE2_LANES'
 Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| `(SRC-V3-[0-9]{3})` \|' 'SRC-V3-' 1 106 3 'SOURCE_RECORDS'
 Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| (R[0-9]+) \| `SRC-V3-' 'R' 1 17 0 'SOURCE_LANE_COVERAGE'
 
@@ -181,7 +182,7 @@ $unknownTranche2SourceRefs = @($tranche2SourceRefs | Where-Object { $_ -notin $s
 if ($unknownTranche2SourceRefs) {
   throw "tranche-two evidence has unregistered source references: $($unknownTranche2SourceRefs -join ', ')"
 }
-if ($tranche2SourceRefs.Count -lt 20) { throw 'tranche-two source coverage unexpectedly sparse' }
+if ($tranche2SourceRefs.Count -ne 15) { throw 'tranche-two source-reference set changed without validation review' }
 "FRONTIER_TRANCHE2_SOURCE_EDGES_PASS refs=$($tranche2SourceRefs.Count)"
 
 $oracleLines = Get-Content 'docs/v3/M1A-FIXTURE-ORACLES.md'
