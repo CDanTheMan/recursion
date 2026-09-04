@@ -104,6 +104,12 @@ publication and persistence/migration requirements. Live scholarly/provider adap
 external effects, Git/publication and migration stay out of M1C implementation unless a later
 explicit milestone authorizes each one.
 
+Status 2026-09-04: Owner-authorized local construction is active under
+[M1C-CONSTRUCTION-CAMPAIGN.md](M1C-CONSTRUCTION-CAMPAIGN.md). Its exact semantics, wire profile and
+24-case closed oracle are [M1C-INTEGRITY-CONTRACTS.md](M1C-INTEGRITY-CONTRACTS.md),
+[M1C-WIRE-PROFILE.md](M1C-WIRE-PROFILE.md) and
+[M1C-FIXTURE-ORACLES.md](M1C-FIXTURE-ORACLES.md).
+
 The exact M1A task graph, allowed paths and non-goals are projected in
 [CONSTRUCTION-RUNBOOK.md](CONSTRUCTION-RUNBOOK.md). This roadmap does not authorize any milestone.
 

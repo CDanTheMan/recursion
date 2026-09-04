@@ -1,0 +1,141 @@
+---
+title: M1C source, effect and persistence contract campaign
+status: executing-local-construction
+last-updated: 2026-09-04
+---
+
+# M1C source, effect and persistence contract campaign
+
+## Owner intent and immutable GoalSpec
+
+Owner authorization received 2026-09-04:
+
+> PR merged to master. I authorize M1C campaign.
+
+This authorization follows the accepted sequence: freeze M1A planning, freeze M1B execution
+requirements, then construct inert M1C source/evidence, effect-reconciliation, publication,
+persistence/migration and retention requirements. It authorizes bounded local documents,
+schemas, sanitized fixtures, deterministic test-only oracles, tests and coherent commits. It
+does not authorize a source/provider/network call, database or operational-state write, external
+effect, Git publication, migration, backup/restore operation, deletion, push, merge, deployment,
+service/configuration change, credential access, metered spending or constitutional change.
+
+| Field | Frozen value |
+|---|---|
+| Goal ID | `GOAL-REC-V3-M1C-001` |
+| Parent goal | Advance the ratified Recursion-owned Option 2 architecture after verified M1A and M1B contracts |
+| Outcome | Freeze strict fail-closed integrity schemas plus 24 literal sanitized evidence/effect/publication/state/retention cases |
+| Starting commit | `7f1a5695a19a1f6a12bd5a2a9a1707f0d9104d73` |
+| Required ancestor | M1B terminal receipt `99a10f6c94f28305aa83d4444d8ebb32218a51ae` |
+| Branch | `codex/v3-m1c-contracts` |
+| Worktree | `C:\Users\Lucas\Documents\GitHub\recursion-v3-m1c-contracts` |
+| Falsifier | Any gate needs live source/effect/store behavior, fabricates deployment/source truth, chooses an open Owner policy, permits two writers, repeats an ambiguous effect, or calls projection equality migration proof |
+| Terminal condition | Every M1C gate passes twice on one exact clean candidate and an independent exact-candidate review records PASS and limitations |
+
+This GoalSpec serves Recursion's shipped-work and employable-stack outcomes by making later
+runtime construction inspectable and recoverable. It does not create a new portfolio project.
+
+## Allowed paths
+
+Only these paths may change:
+
+- `schemas/control-plane/v3/integrity/**`
+- `scripts/tests/v3/integrity/**`
+- `docs/v3/**`
+
+Everything else is denied. M1A and M1B bytes, production runtime, the operative control plane,
+state, general scripts, configuration, authentication and environment files remain read-only.
+
+## Canonical ownership and source reconciliation
+
+- [M1C-INTEGRITY-CONTRACTS.md](M1C-INTEGRITY-CONTRACTS.md) owns M1C semantics and gates.
+- [M1C-WIRE-PROFILE.md](M1C-WIRE-PROFILE.md) owns exact fields, unions, bounds and reason alphabets.
+- [M1C-FIXTURE-ORACLES.md](M1C-FIXTURE-ORACLES.md) owns the 24 fixture IDs and expected outcomes.
+- [SCIENTIFIC-RESEARCH.md](SCIENTIFIC-RESEARCH.md), [STATE.md](STATE.md),
+  [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md), [SECURITY.md](SECURITY.md),
+  [ACCEPTANCE.md](ACCEPTANCE.md) and [ARCHITECTURE.md](ARCHITECTURE.md) remain source requirements.
+- [CONTROL_PLANE.md](../../CONTROL_PLANE.md) remains operative authority.
+
+`OR-015` selects a future local execution-attempt/lease rehearsal, but the writer audit proves
+that its broad aggregate is not yet fenceable. M1C therefore includes only a synthetic
+fabric-only state-contract fixture with immutable assignment input. That fixture proves
+vocabulary and deterministic readiness checks; it is not a cutover, live rehearsal or proof that
+the broader aggregate is ready.
+
+## Privacy, effect and storage boundary
+
+All fixture identities, source metadata, repository references, artifacts and store records are
+synthetic. M1C reads only committed fixture files and imports no adapter, database driver or
+production module. Source state is supplied as explicit evidence rather than looked up. Effect
+observations never actuate. Publication records never mutate Git. State and retention records
+never touch a store, key, backup, replica or artifact. Missing, stale, contradictory, inaccessible,
+unverifiable or deployment-dependent evidence remains unknown or blocked.
+
+## PlanRevision 1
+
+`PLAN-M1C-001@1` is the initial immutable construction plan.
+
+| Task | Depends on | Output | Gate |
+|---|---|---|---|
+| M1C-01 | Owner approval and merged M1B | campaign, semantics, wire profile and closed oracle | canonical owners agree; open policy seams remain explicit |
+| M1C-02 | M1C-01 | strict Draft 2020-12 integrity schema | every object/union closes; materialization is byte-identical |
+| M1C-03 | M1C-02 | 24 literal fixture bundles and digest manifest | exact IDs/digests; every bundle validates independently |
+| M1C-04 | M1C-03 | deterministic test-only evidence/effect/publication/state/retention oracle | expected outcomes reproduce twice without I/O or ambient state |
+| M1C-05 | M1C-04 | adversarial, static and M1A/M1B/v2 compatibility closure | fail-closed negatives and unchanged regressions pass |
+| M1C-06 | M1C-05 | exact-candidate independent adjudication and terminal receipt | PASS or smallest inspectable dissent |
+
+No production source adapter, effect actuator, publisher, database, migrator, backup tool,
+deletion tool or key manager is an output of this DAG.
+
+## Machine-checkable gates
+
+1. Schema and fixture materializers reproduce committed bytes exactly.
+2. Strict JSON rejects duplicate keys, invalid UTF-8, floats/constants, excessive depth and unknown fields.
+3. Every object is closed; versions, union arms, enums, IDs, digests, timestamps, integers, ordering, uniqueness and collection bounds fail closed.
+4. Source identity, retrieval, verification, access, editorial, license, privacy and expiry states remain separate and source-bound.
+5. Metadata-only, inaccessible, stale, retracted, inapplicable or unverifiable records cannot support an ordinary current claim.
+6. Contradictions and qualifications remain typed edges; no score or majority silently removes them, and insufficient evidence returns `unknown`.
+7. Effect intent, admission, attempt, observation, receipt, idempotency, authority, route, lease and fence identities bind exactly.
+8. Possible external acceptance without an exact authenticated receipt becomes `ambiguous`; blind retry and dependent effects remain blocked until reconciliation.
+9. Compensation is a new attributable effect and never rewrites an accepted, failed or ambiguous historical effect.
+10. Review publication requires an exact source/candidate/ref, clean candidate, ancestry, privacy/export checks, passing gates, verifier evidence and publication authority.
+11. Protected/default merge, deployment, secret/private export, stale candidate and missing or mismatched verification are never publication-eligible.
+12. One aggregate has one canonical writer and monotonic fence epoch; unknown or unenumerated mutation paths, dual writers, sequence/digest gaps and stale fences block.
+13. Projection equality is not replay proof. Migration readiness also requires lossless import, exact replay, writer refusal, backup/restore, reverse reader, rollback boundary and no open lease/effect/publication/saga.
+14. Deletion completes only with scoped-key destruction and verified deletion or expiry evidence for every recoverable copy; soft delete, delete markers, shared keys and disconnected copies remain incomplete.
+15. Audit/effect/authority receipt erasure remains an explicit Owner-policy seam; M1C cannot infer it from Full Access or ordinary grant administration.
+16. Current immediate PAUSE remains operative; future modes are representable only as inert values and never authorize an effect or publication.
+17. All 24 literal cases pass twice; static scans prove no network/source/plugin/process/database/Git/effect/key/clock/random/environment dependency; M1A, M1B and v2 regressions pass unchanged; path, diff, link and secret scans pass; exact-candidate review passes.
+
+## Construction decisions and open Owner seams
+
+`CD-M1C-001`: the semantic package is `integrity`, because all five lanes govern whether evidence
+or a durable consequence may be trusted. It is not named after a store, provider or milestone.
+
+`CD-M1C-002`: M1C evaluates supplied source/evidence state; it never claims to resolve a DOI,
+open a paper or decide scientific truth. `supported` means structurally admissible support for the
+scoped claim, not proof that the proposition is universally true.
+
+`CD-M1C-003`: publication is modeled as an external effect with a separate preflight decision and
+remote receipt. A review-ref observation may be ambiguous; restoring local state cannot unpush it.
+
+`CD-M1C-004`: persistence requirements are physical-store neutral. JSON/JSON Sequence plus CAS and
+SQLite WAL plus the same CAS remain measured competitors; neither is selected by M1C.
+
+`CD-M1C-005`: the state lane freezes only the synthetic fabric-only boundary already permitted by
+the writer audit. It cannot be relabeled as the Owner-selected broad rehearsal or migration.
+
+`CD-M1C-006`: raw-artifact deletion follows the ratified proof-state direction. Whether sovereign
+authority may erase audit, authority or effect receipts remains unresolved and blocks that case.
+
+Still reserved for Lucas or a later measured campaign: audit-retention/erasure authority,
+configuration merge algebra, Project Pilot import semantics, physical store selection, exact
+writer cutover boundary, storage-provider deletion proof, live adapter selection, publication or
+deployment authority changes, numeric storage/resource defaults, migration and any external effect.
+
+## Stop conditions
+
+Stop and append a PlanRevision if a canonical rule conflicts, an oracle must be weakened, a test
+requires external state, an open Owner decision must be chosen, M1A/M1B bytes must change, a
+required verifier is unavailable, or any changed path leaves the allowlist. No dissent is
+resolved by majority vote or hidden reasoning.

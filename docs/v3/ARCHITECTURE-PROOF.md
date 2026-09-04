@@ -261,6 +261,10 @@ adjudication before M1B began. Its terminal receipt is in
 [M1A-CONSTRUCTION-CAMPAIGN.md](M1A-CONSTRUCTION-CAMPAIGN.md). The standalone historical prompt is
 [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md).
 
+M1B subsequently completed and merged its inert execution-requirement campaign. M1C is now the
+separately Owner-authorized local campaign for the remaining integrity requirements; neither
+campaign is production runtime or performance evidence.
+
 ## Source and decision discipline
 
 The exact source revisions, licenses, locators, limitations, and revalidation triggers live in
