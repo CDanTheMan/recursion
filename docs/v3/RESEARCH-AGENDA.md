@@ -99,9 +99,10 @@ should remain behind Codex, Claude Code, Cursor, Gemini, OpenCode, Hermes or oth
 Compare turn lifecycle, tools, approvals, streaming, interruption, resume, subagents, context,
 compaction, provider affinity, evidence extraction, offline testability, extension seams,
 licenses and maintenance burden at pinned versions. Produce a responsibility matrix and one
-minimal native-loop spike specification. Falsify the current Option 2 recommendation if a
-required invariant cannot be enforced around an external engine or a native loop shows a
-decisive measured advantage.
+minimal native-loop spike specification. `OR-018` ratifies Option 2; evidence that a required
+invariant cannot be enforced at its adapter boundary escalates an amendment to Lucas, while a
+decisive native-loop result may move that bounded capability inside Recursion without replacing
+canonical kernel ownership.
 
 ### R2 — direct and collaborative ARM conversations
 
@@ -126,9 +127,8 @@ engines, job schedulers and agent harnesses. Model at least `checkpoint`, `inter
 transaction, subprocess, remote/disconnected action, read-only gate, publication and an
 ambiguous external effect. Produce a transition/crash matrix and constitutional amendment
 options. The operative current constitution is immediate halt. `checkpoint`, `interrupt`,
-`drain` and emergency behavior remain separately representable future proposals and are
-non-operative until Lucas ratifies an exact amendment. Research chooses mechanics, not
-operative authority.
+`drain` and emergency behavior are now specified in the Owner-authorized docs-only amendment
+proposal under `OR-020`, but remain non-operative until that exact amendment is applied.
 
 ### R4 — calibrated Full Access
 
@@ -154,7 +154,7 @@ Research software-assurance, reproducible-build, safety-case and multi-model eva
 practice. Compare separation by task, context, session, model, family, provider and host.
 Pre-register a blind matrix using exact candidates and deterministic gates. Produce risk tiers,
 fallback behavior when independent routes are unavailable, and release-blocking rules. The
-starting recommendation is: deterministic-only for purely mechanical evidence; clean separate
+Owner-authorized proposal is: deterministic-only for purely mechanical evidence; clean separate
 session for routine changes; different capable model/family for material changes; different
 provider/family plus owner approval and independent execution environment for constitutional,
 credential, spending, publication, deployment and release boundaries.
@@ -408,6 +408,12 @@ plugin/frontend, systems-performance and autonomy/evaluation methods. Its persis
 Option 2 kernel boundary plus twelve matched/fault experiments. It did not select a language,
 SQLite, binary IPC, plugin sandbox, terminal library or native model loop, and it produced no
 runtime/frontier/performance proof.
+
+The second [FHAR2-20260903 tranche](FRONTIER-HARNESS-RESEARCH-TRANCHE-2.md) converted `OR-018`
+through `OR-020` into an exact amendment proposal and falsifiable formal-model, neutral-kernel,
+persistence/IPC, process-broker, plugin/frontend, cache/context, evaluation and release contracts.
+Its [evidence packet](FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md) rejects the earlier
+`PROTO-FHAR-01` power claim and retains all technology/performance outcomes as experiments.
 
 ## Required outputs
 

@@ -79,6 +79,25 @@ same pure reducer/replay workload; JSONL versus SQLite metadata with identical a
 external-engine adapters versus a minimal native loop. Do not choose a production language, store,
 wire format, plugin sandbox or renderer inside M1A.
 
+The evidence-backed sequence after M1A contract freeze is:
+
+1. translate the accepted contracts into the bounded TLA+/PlusCal model and retain counterexamples
+   from deliberately removed authority, lease, amendment, PAUSE, retry, effect and verifier guards;
+2. freeze identical `decode`, `admit`, `reduce` and `derive_work_packet` vectors, then compare
+   CPython, Rust and Go on correctness/reproducibility floors before resources or speed;
+3. compare JSONL/JSON Sequence plus CAS against SQLite WAL metadata plus the same CAS under the
+   complete crash/corruption/disk-full/reader/migration matrix;
+4. specify and fixture the terminal/process broker wire protocol before choosing renderer or
+   process-library implementations;
+5. admit plugin/frontend, cache/context and release work only after their disabled-path,
+   capability, privacy and adapter-free boot fixtures exist; and
+6. run the corrected sealed-corpus harness attribution study only after blinded power simulation
+   establishes a unique-task count or explicitly labels the result exploratory.
+
+The precise contracts and falsifiers are in the second-tranche
+[evidence packet](FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md). This ordering is a future
+construction recommendation, not authorization to execute any node.
+
 The broad OR-015 migration rehearsal remains blocked by multiple writers without one proven
 fence. No M1A fixture may be called a migration rehearsal or runtime proof.
 

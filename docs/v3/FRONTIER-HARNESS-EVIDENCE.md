@@ -225,10 +225,10 @@ queues with reserved control/recovery/verification capacity, versioned length-de
 content-addressed evidence and sampled traces joining command, event, lease, effect and receipt.
 It does not select an implementation language, store or binary encoding.
 
-Rust is the leading candidate for a privileged kernel because ownership and bounded async
-primitives match the failure model; Go is a credible simpler alternative, and Python remains useful
-for migration and low-rate adapters (`SRC-V3-082`–`SRC-V3-085`). This is an unverified comparison hypothesis. After M1A, the
-same deterministic replay workload must compare CPython, Rust and Go under identical schema,
+Rust ownership/bounded-async mechanisms, Go's small static-runtime path and CPython's migration
+leverage make all three credible privileged-kernel candidates (`SRC-V3-082`–`SRC-V3-085`). Static
+mechanisms do not establish a leader. After M1A, the same deterministic replay workload must
+compare CPython, Rust and Go under identical schema,
 fault, platform and measurement profiles. Compiler memory rules, the GIL, goroutines or ecosystem
 reputation are not end-to-end performance evidence.
 
@@ -298,20 +298,25 @@ preregistered quality/continuity/security/resource metric without a hard-floor r
 
 ## Preregistered experiment queue
 
-### PROTO-FHAR-01 — component-ladder repetition and stopping rule
+### PROTO-FHAR-01-R1 — corrected attribution, repetition and stopping rule
 
-`EXP-FHAR-07` and `EXP-FHAR-08` use this frozen protocol unless a new PlanRevision explicitly
-supersedes it before any main-corpus outcome is inspected.
+This section supersedes the defective `PROTO-FHAR-01` before any main-corpus execution. The prior
+48 unique tasks were the independent units; multiplying them by treatments and attempts did not
+create 1,728 independent tasks and could not guarantee 80% power for a five-point binary outcome.
+No outcome was inspected. `EXP-FHAR-07` and `EXP-FHAR-08` use this replacement unless a new
+PlanRevision explicitly supersedes it before any main-corpus outcome is inspected.
 
-- The minimum main matrix is two frozen model versions × two task families × 24 unique held-out
-  tasks per family × all six cumulative ladder treatments × three fixed attempt seeds. This is
-  1,728 attempts. Treatment order is randomized in task/model blocks; every attempt starts from a
-  clean snapshot and shares the exact per-task/model total token, tool, wall-time and spend ceiling.
-- A disjoint four-task-per-family calibration set estimates variance only. Before freezing the
-  main manifest, a simulation using that variance must show at least 80% power to detect the
-  declared practical margin. If it does not, the manifest increases the main corpus in fixed
-  eight-task-per-family blocks until it reaches 80% or records the study infeasible. Calibration
-  tasks never enter the reported effect estimate.
+- The unit of inference is a unique task. Attempts/seeds are repeated observations nested within
+  task; they never increase the independent task count. F1 planning/replay and F2 terminal/tool/
+  evidence are separate required families. Optional F3 plugin/effect and F4 context/cache are
+  separate cohorts rather than pooled degrees of freedom.
+- A blinded disjoint pilot estimates baseline rate, paired discordance, family variance and
+  missingness. Before main-run unblinding, a simulation/analysis receipt either establishes the
+  unique-task count for the declared minimum detectable effect or labels the available corpus
+  exploratory and narrows the claim. No fixed task count or power is asserted in advance.
+- Each task binds immutable source/license, creation date, exposure class, environment/oracle
+  digest, risk profile and deterministic oracle preflight. Pilot tasks never enter the primary
+  effect estimate.
 - Before execution, the manifest freezes task/evaluator/environment hashes, model/route/tool
   descriptors, seeds, treatment order, all twelve metric definitions and directionality, and a
   practical margin per metric. Default margins are five percentage points for deterministic
@@ -319,16 +324,15 @@ supersedes it before any main-corpus outcome is inspected.
   tokens, latency and resource measures; a domain-specific replacement needs written rationale.
   Authority, privacy, PAUSE, stale-fence, ambiguous-effect and unreported-attempt violations have
   a zero-tolerance hard floor.
-- Analysis is paired within task/model and uses 10,000 hierarchical bootstrap resamples in
+- Analysis is paired within task/model and uses a frozen hierarchical or paired method in
   family → task → attempt order with two-sided 95% intervals. A component improvement is supported
   only when the interval clears its declared improvement margin, no hard floor fails, and no other
   metric's interval crosses its declared degradation margin. Otherwise the result is non-dominated,
   equivalent or inconclusive; no aggregate score or hidden weight breaks the tie.
-- There is no interim efficacy stop and no outcome-selected rerun. The study stops after every
-  valid cell in the frozen matrix completes. It may terminate early only for a hard-floor failure,
-  invalid evaluator/environment, or capacity/spending boundary; those dispositions are `rejected`
-  or `incomplete`, never a win. An inconclusive fixed sample remains inconclusive. More attempts
-  require a new preregistration and PlanRevision rather than post-hoc extension.
+- There is no favorable interim efficacy stop or outcome-selected rerun. Stopping is limited to
+  safety/privacy breach, invalid oracle/environment, budget exhaustion, or a preregistered
+  precision/futility rule. Those dispositions are `rejected`, `invalid` or `incomplete`, never a
+  win. Additional tasks or attempts require a new preregistration and PlanRevision.
 
 | ID | Frozen comparison | Measures and hard falsifier |
 |---|---|---|

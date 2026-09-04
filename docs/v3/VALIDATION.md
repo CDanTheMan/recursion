@@ -124,7 +124,8 @@ Test-Sequence 'docs/v3/M1A-AUTONOMOUS-PLANNING.md' '^\| (M1A-[0-9]{2}) [^|]*\|' 
 Test-Sequence 'docs/v3/M1A-FIXTURE-ORACLES.md' '^\| `(F-M1A-[0-9]{3})` \|' 'F-M1A-' 1 23 3 'M1A_ORACLES'
 Test-Sequence 'docs/v3/AUTONOMOUS-PLANNING-CAMPAIGN.md' '^\| (GATE-V3DF-[0-9]{2}) \|' 'GATE-V3DF-' 1 24 2 'CAMPAIGN_GATES'
 Test-Sequence 'docs/v3/FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md' '^\| `(GATE-FHAR-[0-9]{2})` \|' 'GATE-FHAR-' 1 24 2 'FRONTIER_CAMPAIGN_GATES'
-Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| `(SRC-V3-[0-9]{3})` \|' 'SRC-V3-' 1 95 3 'SOURCE_RECORDS'
+Test-Sequence 'docs/v3/FRONTIER-HARNESS-RESEARCH-TRANCHE-2.md' '^\| `(GATE-FHAR2-[0-9]{2})` \|' 'GATE-FHAR2-' 1 24 2 'FRONTIER_TRANCHE2_GATES'
+Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| `(SRC-V3-[0-9]{3})` \|' 'SRC-V3-' 1 106 3 'SOURCE_RECORDS'
 Test-Sequence 'docs/v3/SOURCE-REGISTER.md' '^\| (R[0-9]+) \| `SRC-V3-' 'R' 1 17 0 'SOURCE_LANE_COVERAGE'
 
 $sourceLines = Get-Content 'docs/v3/SOURCE-REGISTER.md'
@@ -172,6 +173,16 @@ $edgeCount += Test-SourceEdgeTable '## Durable execution findings' 6 'durable'
 $edgeCount += Test-SourceEdgeTable '## Context, token and cache findings' 7 'context'
 $edgeCount += Test-SourceEdgeTable '## Terminal, TUI and multi-view findings' 6 'terminal'
 "FRONTIER_SOURCE_EDGES_PASS refs=$($frontierSourceRefs.Count) rows=$edgeCount"
+
+$tranche2EvidenceText = Get-Content -Raw 'docs/v3/FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md'
+$tranche2SourceRefs = @([regex]::Matches($tranche2EvidenceText, 'SRC-V3-[0-9]{3}') |
+  ForEach-Object Value | Sort-Object -Unique)
+$unknownTranche2SourceRefs = @($tranche2SourceRefs | Where-Object { $_ -notin $sourceIds })
+if ($unknownTranche2SourceRefs) {
+  throw "tranche-two evidence has unregistered source references: $($unknownTranche2SourceRefs -join ', ')"
+}
+if ($tranche2SourceRefs.Count -lt 20) { throw 'tranche-two source coverage unexpectedly sparse' }
+"FRONTIER_TRANCHE2_SOURCE_EDGES_PASS refs=$($tranche2SourceRefs.Count)"
 
 $oracleLines = Get-Content 'docs/v3/M1A-FIXTURE-ORACLES.md'
 $commandIds = @($oracleLines | ForEach-Object {

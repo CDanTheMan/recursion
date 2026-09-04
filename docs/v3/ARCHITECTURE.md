@@ -1,16 +1,17 @@
 ---
-title: Recursion v3 architecture recommendation
-status: owner-direction-with-research-falsifiers
+title: Recursion v3 ratified architecture target
+status: owner-ratified-target-non-operative-until-amendment
 last-updated: 2026-09-03
 baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 ---
 
-# Recursion v3 architecture recommendation
+# Recursion v3 ratified architecture target
 
-> **Proposed target, not operative authority.** The hierarchy below describes the
-> owner-directed future Recursion product after an explicit constitutional amendment. The
+> **Ratified target, not operative authority.** `OR-018` and `OR-019` select the hierarchy and
+> Recursion-owned Option 2 boundary below. The
 > current `CONTROL_PLANE.md` still names Hermes as the automation-chain executive and remains
-> controlling. Nothing in this document activates a replacement Head or transfers authority.
+> controlling. The docs-only [amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md) does not
+> activate a replacement Head or transfer authority.
 
 ## Correct hierarchy
 
@@ -124,7 +125,7 @@ The system should not maintain independent operational truths in Markdown, SQLit
 ## Headless native harness and external integrations
 
 Recursion v3 is its own harness at the orchestration and product-contract level. The
-recommended construction architecture is a Recursion-owned deterministic contract/event kernel
+ratified construction architecture is a Recursion-owned deterministic contract/event kernel
 with compatibility adapters around existing loops. Codex, Cursor, Claude Code, Gemini CLI,
 OpenCode, Hermes, and future harnesses remain optional peer engines behind the same contracts.
 A Recursion-owned native agent turn loop is a separately measured capability, not a prerequisite
@@ -138,23 +139,24 @@ sampling, provider-specific wire/tool syntax and native retry/stream parsing; th
 Recursion actor/goal/task identity, authority, budgets, PAUSE epochs, process lifetime, evidence,
 canonical events or publication.
 
-The privileged kernel is intentionally smaller than the complete object catalog. Its proposed
+The privileged kernel is intentionally smaller than the complete object catalog. Its ratified
 implementation responsibilities are strict schema/canonicalization, authenticated command
 admission, a pure reducer and event sequence, authority/budget/privacy/fence checks, deterministic
 WorkPacket derivation, effect-intent/receipt classification, replay and publication gating.
 Provider selection/sampling, context construction, plugin dependency resolution, source retrieval,
 terminal rendering, telemetry and process implementation remain adapters that submit typed
 proposals. The exact code-informed evidence and falsifiers are in
-[FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md).
+[FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md) and the second-tranche
+[evidence packet](FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md).
 
 The product direction still permits a larger native harness later. It earns that scope only by
 demonstrating a required quality, continuity, security or resource improvement that external
 engines plus adapters cannot supply. See the compared options and falsifiers in
 [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md).
 
-“Optimized” remains an objective, not a measured property. Option 2 is conditional on the typed
-adapter contract and on a complete writer/migration boundary; a generic wrapper around arbitrary
-opaque CLIs would not satisfy it. A matched Option 1/Option 2/minimal-native-loop spike must show
+“Optimized” remains an objective, not a measured property. Implementing Option 2 is conditional
+on the typed adapter contract and on a complete writer/migration boundary; a generic wrapper around
+arbitrary opaque CLIs would not satisfy it. Matched neutral-API and minimal-native-loop spikes must show
 a declared quality, continuity, security or resource benefit before the native loop expands.
 
 ## Scientific research capability
@@ -229,8 +231,8 @@ trees, eagerly indexes every repository, or loads every plugin into one process.
 hypotheses with workloads and failure rules in [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md),
 not measured conclusions.
 
-No language is selected. Rust is the leading post-M1A candidate, with Go and CPython mandatory
-comparators on the same reducer/replay/fault workload. JSON/JSONL is the inspectable initial local
+No language is selected. CPython, Rust and Go are equal-entry post-M1A comparators on the same
+reducer/replay/fault workload. JSON/JSONL is the inspectable initial local
 protocol encoding; binary framing, SQLite and a native model loop must each demonstrate a
 non-dominated improvement without a hard-floor regression before adoption.
 
@@ -243,7 +245,8 @@ before private deployment configuration changes. OR-016 establishes the product 
 the Recursion-owned `Head` remains the accountable logical actor, models and external harnesses
 are authorized replaceable compute, deterministic code actuates, and Lucas retains authority.
 Current Hermes-specific operative wording remains in force until the separate constitutional
-migration is reviewed.
+amendment is applied. The exact proposed clauses and migration seam are recorded in
+[CONSTITUTIONAL-AMENDMENT-PROPOSAL.md](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md).
 
 The proposed future `checkpoint` PAUSE default and a maximum `sovereign` profile capable of receiving
 control-plane, credential, spending, publication, deployment and `grant-admin` authority

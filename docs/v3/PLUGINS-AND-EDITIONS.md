@@ -111,7 +111,7 @@ One source tree produces versioned release manifests:
 
 | Edition | Intended surface |
 |---|---|
-| `core` | kernel, local state, Git/worktree execution, one basic provider/engine path, CLI |
+| `core` | kernel, local replay/status and owner CLI; no provider, engine, plugin or frontend is required to boot or recover |
 | `standard` | common CLI/provider integrations, planning, context, telemetry, local verification |
 | `remote` | node enrollment, authenticated transport, remote execution and observation |
 | `full` | all first-party plugins and advanced policies |
@@ -150,15 +150,20 @@ tamper/traceability control rather than a safety verdict. Admission therefore bi
 artifact and dependency-lock digests to separate functional, OS, model-launch, route/account,
 quota, metered-spend, update and revocation grants.
 
-The lifecycle contract is:
+Trust tiers are `T0-kernel`, `T1-signed-built-in`, `T2-signed-isolated-third-party`,
+`T3-untrusted-view`, and `T4-external-engine/provider`. A tier is an isolation and review
+requirement, never an authority grant. Effective capability is the intersection of artifact
+declaration, GoalSpec, constitution, route/account, budget, privacy/egress, PAUSE and explicit
+Owner grants; every deny is retained.
+
+The canonical lifecycle contract is:
 
 ```text
-discovered -> inspected -> digest-pinned -> acknowledged -> admitted -> active
-                  |              |              |             |
-                  +---------- rejected/quarantined -----------+
-active -> suspended -> revalidated -> active
-active -> revoked -> draining/terminated -> retained-evidence/uninstalled
-update-proposed -> staged -> verified -> acknowledged -> activated | rolled-back
+discovered -> verified -> admitted -> staged -> active
+      |            |          |          |        |
+      +-------- quarantined/rejected -----+--------+
+active -> drain-and-fence -> retired | replaced
+active -> revoked -> drain-and-fence -> retained-evidence | retired
 ```
 
 Reload is a fenced transition, not an in-place mutation: discover and verify the candidate, stage
@@ -173,6 +178,9 @@ call; subprocess, thread, timer or watcher; background callback; context/tool en
 turn; quota reservation/debit; spend; or unbounded event subscription. The release manifest retains only the minimal identity/capability
 metadata needed to explain that absence; omitting installed payload weight does not omit the
 capability-resolution contract.
+
+The exact lifecycle, disabled-path traps, browser-origin rules and release receipts are specified
+in [FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md](FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md#e-fhar2-105--plugin-and-frontend-isolation).
 
 Trusted built-ins may use an immutable typed in-process contributor registry. Third-party or
 changeable plugins default to a bounded isolated subprocess or remote protocol adapter with a

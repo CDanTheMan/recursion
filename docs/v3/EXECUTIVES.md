@@ -4,11 +4,12 @@ status: accepted-direction-with-open-research
 last-updated: 2026-09-03
 ---
 
-# Recursion v3 executive model hypothesis
+# Recursion v3 executive model
 
-> **Proposed post-amendment model.** These role definitions are the product target recorded by
-> the Owner; they are not the operative repository constitution. Until Lucas ratifies and records
-> a constitutional amendment, Hermes retains the executive authority assigned by
+> **Ratified target, pending constitutional application.** `OR-018` and `OR-019` select these
+> Recursion-owned roles, but they are not the operative repository constitution. Until the
+> [authorized amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md) is reviewed and applied,
+> Hermes retains the executive authority assigned by
 > `CONTROL_PLANE.md`, and proposed ARM-exclusive DAG authorship is inert design material.
 
 ## Actor definitions
@@ -130,29 +131,31 @@ behavior. The kernel, not the model, would select an owner-approved policy and r
 - emergency stop — separate break-glass behavior that blocks new effects immediately and may
   sacrifice in-flight work.
 
-The current `CONTROL_PLANE.md` immediate halt is the only operative profile. The future values
-remain separately representable but non-operative until a reviewed constitutional amendment.
+The current `CONTROL_PLANE.md` immediate halt is the only operative profile. `OR-020` authorizes
+the future policy proposal, but those values remain separately representable and non-operative
+until the exact amendment is applied.
 The canonical state/fence behavior is in
 [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md#pause-and-ambiguous-effects).
 
-## Verifier independence recommendation
+## Verifier independence classes
 
-Verification is risk scaled. The proposed starting tiers are:
+Verification is risk scaled. `OR-020` authorizes these proposed post-amendment classes:
 
-1. **Mechanical:** deterministic gate re-execution; a model adds no authority.
-2. **Routine:** clean separate verifier task/session with no implementer persuasion; the same
+1. **V0 mechanical:** deterministic gate re-execution; a model adds no authority.
+2. **V1 routine reversible:** clean separate verifier task/session with no implementer persuasion; the same
    strong model or provider may be acceptable.
-3. **Material:** clean context plus a different capable model or family when eligible, exact
+3. **V2 sensitive:** clean context plus a different capable model or family when eligible, exact
    candidate binding and deterministic gates.
-4. **Constitutional/high-impact/release:** independent provider or family where eligible,
+4. **V3 constitutional/release:** independent provider or family where eligible,
    independent gate execution/environment, and owner approval for irreversible authority,
    credentials, spend, publication or deployment effects.
 
 Unavailable diversity is disclosed. Routine work may use a documented downgrade when its
 risk policy permits it. Releases, security-sensitive work, control-plane changes and
 irreversible external effects block unless Lucas explicitly approves a recorded exception.
-Missing or weaker verification never becomes a pass. Research must measure which separation
-dimensions find materially different defects and define the exact exception receipt.
+Missing or weaker verification never becomes a full pass. The exact independence vector,
+downgrade receipt and transition behavior are canonical in the
+[amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md#ca-v3-005--risk-scaled-verifier-classes).
 
 ## Capacity exhaustion
 

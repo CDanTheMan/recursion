@@ -41,7 +41,7 @@ because a second view attaches.
 
 ## Architecture alternatives
 
-1. **Daemon plus thin terminal clients — recommended.** Recursion owns actor/process lifetime,
+1. **Daemon/broker plus thin terminal clients — ratified ownership boundary, implementation unselected.** Recursion owns actor/process lifetime,
    IPC, event cursors and recovery; any terminal can attach. This is portable and gives a future
    GUI the same protocol, but makes daemon/process-broker correctness critical.
 2. **Terminal multiplexer as runtime.** Build directly around tmux, Zellij or an OS terminal
@@ -52,7 +52,8 @@ because a second view attaches.
    orphans work, duplicate views duplicate execution, and recovery becomes shell-specific.
    Reject as the canonical architecture.
 
-Pinned implementation review strengthens, but does not ratify, the first option: Zellij supplies
+Pinned implementation review supports the first option's ownership boundary without selecting
+an implementation: Zellij supplies
 the strongest inspected bounded multi-client/fair-writer pattern; tmux supplies live
 consumer-offset backpressure; Ratatui plus crossterm is the leading native Rust renderer/input
 candidate; and xterm.js is the leading browser renderer/accessibility candidate. Each remains a

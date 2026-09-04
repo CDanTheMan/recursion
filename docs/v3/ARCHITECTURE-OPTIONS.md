@@ -1,11 +1,11 @@
 ---
-title: Recursion v3 architecture options and recommendation
-status: recommendation-with-owner-directions-and-open-proof
+title: Recursion v3 architecture decision and falsifiers
+status: owner-ratified-architecture-with-open-implementation-proof
 last-updated: 2026-09-03
 baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 ---
 
-# Recursion v3 architecture options and recommendation
+# Recursion v3 architecture decision and falsifiers
 
 The options below are intentionally distinct. Scores are qualitative hypotheses grounded in
 the current source trace and pinned public mechanisms; they are not benchmarks.
@@ -77,12 +77,13 @@ tool, approval, cache and compaction behavior. Pi and DeepSeek show good loop se
 remove that replication burden. This option wins only after a bounded inner-loop spike shows a
 material quality, continuity or resource advantage that adapters cannot deliver.
 
-## Recommendation
+## Owner decision and retained rationale
 
-Recommend **Option 2**. Make the deterministic contract/event kernel native now; keep agent
-inner loops replaceable through engines; earn any later native loop one bounded capability at a
-time. This preserves the accepted custom-harness destination without treating a ground-up loop
-rewrite as a prerequisite.
+Lucas ratified **Option 2** in `OR-018`. Make the deterministic contract/event kernel native;
+keep agent inner loops replaceable through engines; earn any later native loop one bounded
+capability at a time. The earlier recommendation remains the rationale for the decision. It is
+not a benchmark result, a language or store selection, runtime proof, or authorization to begin
+construction in this docs-only campaign.
 
 The smallest privileged kernel owns schema versions, authority/budget checks, command
 idempotency, event sequencing, action admission, PAUSE epoch, credential-reference policy,
@@ -91,9 +92,9 @@ ARM plan, select architecture by model opinion or act as an AI ARM Manager. The 
 ARM executives propose semantic transitions; the kernel accepts or rejects and actuates only
 fixed verbs.
 
-### Recommendation falsifiers
+### Implementation-boundary falsifiers
 
-Reverse or narrow this recommendation if any of these is observed:
+Escalate to Lucas to reverse or narrow the ratified boundary if any of these is observed:
 
 1. A frozen v2 fixture cannot round-trip through the proposed contracts without losing an
    authority, evidence, publication or retry invariant.
@@ -124,9 +125,12 @@ whose reversal is not proven, retain the new record and reconcile forward under 
 The concrete strangler and stop rules are in
 [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md).
 
-## Constitutional reconciliation requiring Lucas
+## Constitutional reconciliation after OR-018 through OR-020
 
-These are proposed rulings, not decisions. `CONTROL_PLANE.md` remains authoritative.
+Option 2, Recursion ownership, the checkpoint-first future PAUSE family and risk-scaled verifier
+downgrades are Owner directions in `OR-018` through `OR-020`. The exact docs-only proposal is
+[CONSTITUTIONAL-AMENDMENT-PROPOSAL.md](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md). It is not operative:
+`CONTROL_PLANE.md` remains authoritative until the amendment is separately reviewed and applied.
 
 1. **Planning compute.** Lucas selected provider-neutral Head/ARM compute inside explicit
    owner-approved model/provider/account/pool envelopes. Amend the provider-specific clause
@@ -140,15 +144,15 @@ These are proposed rulings, not decisions. `CONTROL_PLANE.md` remains authoritat
    kernel event writer, with human-readable Git projections remaining review artifacts rather
    than concurrent authority.
 4. **PAUSE versus checkpoint completion.** Lucas selected `checkpoint` as the future product default,
-   with `interrupt`, `drain` and emergency stop explicit. Research must specify their behavior
-   per effect class before an amendment replaces the current immediate halt.
+   with `interrupt`, `drain` and emergency stop explicit. The amendment proposal now specifies
+   their behavior per operation class; current immediate halt remains operative until application.
 5. **Full access.** Lucas selected a genuinely expansive configurable Full Access that may
    include control-plane, credential, spend, publication, merge and deployment capability.
    Maximum `sovereign` may explicitly include `grant-admin` and modify its own grants. Research
    must define receipt-backed mutation, step-up, expiry and the separate audit-retention seam
    before constitutional amendment.
-6. **Native inner loop.** Ratify or amend Option 2 as the construction path and require a measured spike
-   before promoting a Recursion-owned inner agent loop from optional capability to core.
+6. **Native inner loop.** Option 2 is ratified. A measured spike remains mandatory before promoting
+   a Recursion-owned inner agent loop from optional capability to core.
 
 Publication provenance, no secret values in durable state, non-widening child inheritance and
 truthful verification status need no weakening. Merge/deploy/grant administration may move only

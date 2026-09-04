@@ -8,13 +8,14 @@ last-updated: 2026-09-03
 
 This is the canonical specification candidate for autonomous-planning objects, ownership,
 admission, transition and replay. Other v3 documents project this contract and link here; they
-must not redefine it. The contract is not an operative runtime, an Owner ratification of Option
-2, or evidence that a model can plan correctly.
+must not redefine it. `OR-018` ratifies its Option 2 architecture boundary, but the contract is
+not an operative runtime, construction authorization, or evidence that a model can plan correctly.
 
 Normative words (`MUST`, `MUST NOT`, `SHOULD`) describe the proposed v3 contract. Current
 constitutional authority continues to prevail over it. In particular, the current PAUSE halts
-planning and work immediately; future checkpoint, interrupt and drain profiles are data that
-remain non-operative until Lucas ratifies a constitutional amendment.
+planning and work immediately. `OR-020` authorizes the checkpoint/interrupt/drain/emergency
+proposal, but those profiles remain non-operative until the exact amendment is separately
+reviewed and applied.
 
 ## Authority and responsibility
 
@@ -275,8 +276,10 @@ unexpired logical-time bound. `fail` and `blocked` have `assurance_grade="none"`
 a plan. A full pass projects `terminal-verified`; a valid downgrade projects the distinct
 `terminal-verified-downgraded`. Policy, UI, receipts and reports MUST preserve that suffix and the
 missing dimensions. No downgrade is cross-family/full independence, and no absent or mismatched
-exception becomes a pass. This is a proposed representability rule; Lucas must ratify which
-real risk classes may issue such an exception before runtime use.
+exception becomes a pass. This is an Owner-authorized representability proposal; the exact risk
+classes and transition rules are in
+[CONSTITUTIONAL-AMENDMENT-PROPOSAL.md](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md). Those V0-V3 classes
+remain non-operative until that amendment is applied; runtime policy must not infer them early.
 
 A retry is admissible only with one `NoveltyDelta@1`. It has exactly the common fields
 `novelty_schema_version="novelty-delta-1"`, `delta_id`, `kind`, `prior_attempt_digest`,

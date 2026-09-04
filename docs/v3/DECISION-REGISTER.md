@@ -129,8 +129,10 @@ Head owns strategic goals and ARM lifecycle. ARM owns the implementation plan, d
 
 ## Open decisions requiring research or Lucas review
 
-1. Exact native Recursion agent-loop boundary versus typed external CLI/SDK engines, including an optional Hermes compatibility adapter.
-2. Exact amendment text replacing the Hermes-specific product identity with the Recursion-owned Head while preserving deterministic actuation and bounded migration compatibility.
+1. Measured boundary for any later native Recursion agent loop versus typed external CLI/SDK
+   engines; Option 2 and the minimal privileged interface are already selected by `OR-018`.
+2. Application review for [CONSTITUTIONAL-AMENDMENT-PROPOSAL.md](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md),
+   including migration readiness; the exact text is drafted but not operative.
 3. Stable public names and schemas for executives, runs, task nodes, capsules, route leases, and events.
 4. Numeric resource/performance budgets for each edition and node class.
 5. Exact public disclosure boundary for `CANARY-01`; its first task and local-only evidence boundary are fixed by OR-010.
@@ -142,16 +144,17 @@ Head owns strategic goals and ARM lifecycle. ARM owns the implementation plan, d
 11. Platform-specific proof that the OR-009 deletion contract reached every cache, backup and disconnected node.
 12. Whether Head and ARM use the same native loop implementation or specialized loops behind a shared executive protocol.
 
-## Candidate next foundational research decision
+## Ratified foundational architecture with open experiments
 
 Which parts of the inner agent turn loop should Recursion implement natively while treating
 Codex, Cursor, Claude Code, Gemini CLI, OpenCode, Hermes, and similar harnesses as optional peer
 execution engines behind the same ARM, context, evidence, terminal and telemetry contracts?
 
-OR-011 establishes that v3 is a Recursion-owned headless harness. It does not require v3 to
-reimplement every provider-optimized turn loop. The research campaign recommends a native
-deterministic kernel with compatibility adapters, while keeping a complete native inner loop as
-a separately measured capability. See [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md).
+OR-011 establishes that v3 is a Recursion-owned headless harness. OR-018 selects a native
+deterministic kernel with typed fail-closed adapters, and OR-019 makes the versioned Recursion
+release the sole canonical authority/recovery dependency. They do not require v3 to reimplement
+every provider-optimized turn loop. A complete native inner loop remains a separately measured
+capability. See [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md).
 
 ## Research adjudication, 2026-09-03
 
@@ -185,34 +188,28 @@ decisions.
 
 ## Remaining owner decisions after focused research
 
-The broad direction is now answered. Research should narrow these mechanisms before asking
-Lucas to ratify them:
+Option 2, sole Recursion ownership, future PAUSE direction and verifier classes are resolved by
+`OR-018` through `OR-020`. The remaining Owner decisions are:
 
-1. Confirm Option 2 as the construction path: deterministic kernel plus typed lifecycle
-   adapters, with a complete native inner loop only after a metric-bound spike wins.
-2. Approve amendment text for a provider-neutral Recursion Head/ARM design while preserving
-   deterministic actuation, current-authority migration and explicit billing/privacy envelopes.
-3. Approve the per-effect checkpoint/interrupt/drain/emergency matrix and current-to-future
-   PAUSE transition; current immediate PAUSE remains operative until then.
-4. Decide whether `sovereign` may receive separate `audit-retention-admin` or `audit-erasure`,
+1. Decide when the exact constitutional proposal is ready to apply after its migration and
+   machine-checkable policy gates pass; current Hermes/immediate-PAUSE authority remains operative.
+2. Decide whether `sovereign` may receive separate `audit-retention-admin` or `audit-erasure`,
    whether authority receipts are ever erasable, and which high-impact mutations require a
    single-use step-up.
-5. Select which unsigned-plugin dimensions may share one acknowledgement after artifact digest,
+3. Select which unsigned-plugin dimensions may share one acknowledgement after artifact digest,
    functionality, OS scope, egress, route/account, quota, spend, update and revocation remain
    separately represented.
-6. Ratify verifier risk tiers, documented routine downgrade evidence and the exact Lucas
-   exception receipt for release-blocking classes.
-7. Ratify the configuration merge algebra: intersection for allowlists, minimum/earliest for
+4. Ratify the configuration merge algebra: intersection for allowlists, minimum/earliest for
    limits, field lifecycle, equal-precedence refusal and authenticated widening.
-8. Decide shared-room conflict/deadlock semantics after the synthetic `CoordinationLease`
+5. Decide shared-room conflict/deadlock semantics after the synthetic `CoordinationLease`
    fixtures; transcript arrival order is already rejected as authority.
-9. Decide whether Project Pilot imports as an `ArmRun` predecessor only after the lossless
+6. Decide whether Project Pilot imports as an `ArmRun` predecessor only after the lossless
    compatibility fixture reports what can and cannot round-trip.
-10. Choose numeric edition/resource defaults and the supported terminal application matrix only
+7. Choose numeric edition/resource defaults and the supported terminal application matrix only
     after PERF-001–010 produce measurements. No defaults are requested from model confidence.
-11. Decide `CANARY-01` disclosure and stop rules only when construction evidence exists; its
+8. Decide `CANARY-01` disclosure and stop rules only when construction evidence exists; its
     fixed first task and no-external-effect boundary are not reopened.
-12. Ratify or amend the M1A proposal that only Lucas accepts/amends a GoalSpec digest, Head owns
+9. Ratify or amend the M1A proposal that only Lucas accepts/amends a GoalSpec digest, Head owns
     ARM lifecycle/conflicts, and each ARM exclusively owns its plan/DAG proposals while the
     deterministic kernel owns admission.
 
@@ -221,19 +218,15 @@ Lucas to ratify them:
 The preceding ten questions were answered by Lucas and are now represented by OR-003–OR-015.
 After the architecture-proof research, ask only the smallest still-decisive questions:
 
-1. Confirm Option 2 as the provisional construction path: deterministic Recursion kernel plus
-   typed fail-closed engine adapters, with no native inner-loop expansion unless a matched spike
-   wins a preregistered quality, continuity, security or resource metric?
+1. When should the exact constitutional amendment proposal be applied: before M1A, after M1A's
+   replay proof, or only at a later aggregate cutover?
 2. For maximum `sovereign`, may `audit-retention-admin` and `audit-erasure` be granted separately;
    may either remove historical authority/effect receipts, or only raw artifacts through the
    ratified deletion/tombstone protocol?
 3. For an unsigned local plugin, may one digest-specific acknowledgement combine only requested
    functional verbs and workspace OS scope, or may it also combine network, route/account or
    subscription-quota grants? Metered spending and grant administration remain separate.
-4. Approve or amend the proposed per-effect PAUSE rule: no new admission after the epoch;
-   checkpoint may finish only the already-running declared atomic segment; interrupt adds a
-   deadline/force path; drain uses an explicit cohort; emergency blocks local launches and
-   quarantines ambiguous remote effects?
-5. Which verifier risk classes may use same-family/provider/host downgrade, and what exact
-   authenticated Lucas exception receipt permits a release-blocking class to proceed when the
-   required independent route is unavailable?
+4. Should the first neutral kernel spike compare CPython, Rust and Go exactly as specified, or
+   should M1A first establish the language-neutral vectors in the existing implementation language?
+5. Which benchmark task families may be used for the sealed attribution corpus without creating
+   unacceptable training-exposure or licensing risk?

@@ -11,6 +11,11 @@ This document maps the accepted v2 source baseline to the proposed v3 design. It
 claim that the current deployment matches the repository. No deployment host was inspected
 during this campaign, so deployment state is `unknown`.
 
+`OR-019` selects the versioned Recursion release as the sole future canonical authority and
+recovery dependency. This does not alter the current live constitution or source paths. Hermes
+therefore migrates aggregate-by-aggregate behind a read/engine adapter and becomes removable;
+its session state never becomes the source from which v3 authority is reconstructed.
+
 ## Evidence boundary
 
 The repository was inspected at `98113d6c6d3debe2a4d207c51bb1780f7356d714`.
@@ -155,7 +160,7 @@ commit and, under separate authority, any live deployment. `Unknown` blocks a cu
 | Aggregate/effect | Baseline writer(s) and store | Fence condition before v3 admission | Proposed v3 ownership and rollback boundary |
 |---|---|---|---|
 | Head decision lifecycle | `decision-queue.py::enqueue/claim/transition`; decision journal plus pending/running/terminal projections; `conduct-hermes.sh` actuates | Stop legacy admission, reconcile every claimed decision, bind the last journal identity, then make compatibility views read-only | Kernel event writer owns decision state; fixed actuator remains post-commit. Before an external effect restore checkpoint; after an ambiguous effect reconcile forward |
-| Project goal/plan/window | `project-pilot.py::execute_value` and `project-reconcile.py::commit_reconcile_transition`; project/pilot/goal/task/event files | Quiesce both writers for the selected project aggregate, import exact digests, prove projection parity, then reject legacy mutation | Kernel owns `GoalSpec`/`ArmRun` events only after Lucas ratifies ARM semantics; legacy files become read-only projections |
+| Project goal/plan/window | `project-pilot.py::execute_value` and `project-reconcile.py::commit_reconcile_transition`; project/pilot/goal/task/event files | Quiesce both writers for the selected project aggregate, import exact digests, prove projection parity, then reject legacy mutation | Kernel owns `GoalSpec`/`ArmRun` events only after the ratified ARM target is applied constitutionally and migration gates pass; legacy files become read-only projections |
 | Worker assignment/run/evidence | `work.sh` plus `assignment.py::persist_assignment`, `worker-evidence.py`, run/task/evidence files | First-rehearsal target together with the local MVP fabric row: admit no new legacy run for the synthetic task class; enumerate/fence every applicable writer, terminalize or quarantine every existing run and bind worktree/source state | Kernel owns the synthetic local attempt/lease/result state only after exact replay/crash/rollback proof; engine adapter owns no canonical writes. No external effect is permitted |
 | MVP fabric lease/result/verification | `execution_fabric.py::DurableFabricStore` and `VerificationReceiptStore`; fabric JSONL/receipt stores | First-rehearsal target together with local worker assignment: prove no non-test runtime caller or, if later found, stop it and reconcile all leases before import | Treat baseline records as synthetic fixture shapes, not live truth. V3 writer starts only after replay equivalence, fencing and rollback proof; no dual journal |
 | Remote attempt/session/usage | `remote_backend.py::begin_attempt/reconcile_attempt/write_session/write_usage`; per-backend journals/projections | Verify deployment/manifest state; disable new remote mutation, reconcile every open/ambiguous attempt, advance the fencing epoch | Kernel owns attempt state; transport returns observations. Any possibly accepted remote request is reconciliation-only |

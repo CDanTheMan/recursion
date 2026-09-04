@@ -27,11 +27,11 @@ semantics live in [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md).
 | `CapabilityGrant` | Versioned subset of parent authority | a tool merely being installed or discoverable |
 | `grant-admin` | Explicit maximum-authority capability permitting receipt-backed mutation of the holder's grants within installation bounds | implicit self-escalation or permission to rewrite historical audit evidence |
 | `PermissionProfile` | Named schema-validated bundle of capability defaults; `sovereign` is the explicit maximum profile | an edition manifest or automatic consequence of installing `full` |
-| `VerifierPolicy` | Risk-class mapping to required deterministic, session, model/family/provider/host and owner-exception evidence | a missing verifier being treated as passed |
+| `VerifierPolicy` | Post-amendment risk-class mapping `V0-mechanical`/`V1-routine-reversible`/`V2-sensitive`/`V3-constitutional-release` to required deterministic, session, model/family/provider/host and owner-exception evidence | a missing verifier being treated as passed, or same-family review being called cross-family |
 | `ActorEndpoint` | Addressable CLI/Telegram view of Head or an ARM | actor identity, authority, lease or canonical state |
 | `TerminalView` | Detachable interactive client over actor/event/process state | the process owner or a durable executive |
 | `ProcessBroker` | Platform adapter that owns and reconciles PTY/process groups for bounded work | the model, terminal window or canonical state writer |
-| `PausePolicy` | Versioned constitutional behavior; `current-immediate` is operative, while checkpoint/interrupt/drain/emergency profiles are future non-operative values until ratified | a model choosing whether to honor PAUSE, or schema presence selecting future behavior |
+| `PauseDirective` / `PausePolicy` | Epoch-bearing PAUSE command plus versioned behavior; `current-immediate` is operative, while checkpoint/interrupt/drain/emergency profiles are Owner-authorized but non-operative until the exact amendment is applied | a model choosing whether to honor PAUSE, or schema presence selecting future behavior |
 
 The Recursion Head directly owns ARM lifecycle. An ARM directly owns its task DAG and delegates
 workers. The kernel owns neither portfolio priorities nor ARM plans.
@@ -74,6 +74,8 @@ workers. The kernel owns neither portfolio priorities nor ARM plans.
 | `ResearchClaim` | research/evidence plane | Exact falsifiable statement linked to sources, contradictions, experiments and confidence |
 | `SourceRecord` | research/evidence plane | Versioned paper, standard, dataset, documentation or source revision with provenance and access policy |
 | `ExperimentRecord` | evidence plane | Immutable experiment/workload identity, baseline/treatment, hard floors, measurements, exclusions, result and revalidation binding |
+| `ReleaseId` | release builder/kernel | Product SemVer plus protocol, schema epoch, constitution-policy, core artifact/dependency-lock, provenance, SBOM and edition-manifest identities; SemVer alone is insufficient |
+| `BootReceipt` | kernel | Exact ReleaseId/state/checkpoint/replay binding and status of every optional capability as absent, disabled, incompatible, unverified, quarantined or active |
 
 ## Route vocabulary
 
@@ -109,7 +111,7 @@ provider self-reports are observations until a trusted gate or reconciler binds 
 
 ## State ownership rule
 
-One aggregate has one writable authority at a time. SQLite/WAL is the proposed future event
-and projection store; content-addressed artifacts hold large payloads; Git/Markdown/JSON views
+One aggregate has one writable authority at a time. JSONL/JSON Sequence plus CAS and SQLite WAL
+metadata plus the same CAS remain competing future stores; Git/Markdown/JSON views
 remain configuration, evidence exports or compatibility projections. None may silently become
 a second runtime writer. See [CURRENT-AND-MIGRATION.md](CURRENT-AND-MIGRATION.md).

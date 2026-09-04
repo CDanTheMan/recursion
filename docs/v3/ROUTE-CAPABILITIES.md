@@ -42,13 +42,17 @@ or performance evidence. No returned account identifier was retained. Exact rece
 Official API documents opened 2026-09-03 establish only their own interfaces:
 
 - [OpenAI API prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
-  exposes model-dependent automatic prefix caching, `prompt_cache_key`, retention controls and
-  cached-token counters.
+  exposes model-dependent automatic/explicit prefix caching, `prompt_cache_key`, breakpoints,
+  retention controls and cached/write-token counters. The key influences routing but does not
+  pin a machine or guarantee a hit. [OpenAI compaction](https://developers.openai.com/api/docs/guides/compaction)
+  exposes stateful compaction configuration and an opaque compaction item; neither is canonical
+  Recursion evidence.
 - [Anthropic API prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
-  exposes automatic/explicit breakpoints, five-minute/one-hour TTL choices and cache read/write
-  counters.
-- [Gemini API context caching](https://ai.google.dev/gemini-api/docs/caching) distinguishes
-  implicit and explicit cached content; its API usage metadata exposes cached-token counts.
+  exposes automatic/explicit breakpoints, up to four explicit breakpoints, a 20-block lookback,
+  five-minute/one-hour TTL choices and cache read/write counters, with platform-specific isolation.
+- [Gemini API context caching](https://ai.google.dev/gemini-api/docs/generate-content/caching)
+  distinguishes implicit and explicit cached content, TTL/expiry/delete controls and cached-token
+  metadata. Conflicting official savings wording means cost benefit remains unknown until measured.
 
 These are not uniform or portable. They do not establish Codex OAuth CLI cache behavior,
 subscription debit, account-window attribution or cross-provider cache reuse. A future

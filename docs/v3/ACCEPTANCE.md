@@ -39,7 +39,13 @@ This document defines categories and provisional gates. Numeric performance budg
 - Frontier harness experiments bind model, harness release/config, task, environment, tools,
   route, policy, seed and attempt. ACI, planner, delegation, verifier and retry effects are
   isolated with fixed-model matched-budget treatments; successful-only averages are invalid.
+  The independent unit is the unique task, attempts are nested observations, and no power claim
+  is accepted without a blinded simulation receipt using observed discordance/variance.
 - A fabric-only state fixture is labeled as such and cannot pass the OR-015 broad rehearsal gate.
+- Core verifies its release/policy/schema/artifact identities, replays canonical state and exposes
+  local owner status with every provider, engine, plugin and frontend absent. Missing optional
+  capability blocks only work that explicitly requires it and never auto-installs, substitutes a
+  route or enables spending.
 
 ## M1A autonomous-planning gate
 

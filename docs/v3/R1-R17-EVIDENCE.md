@@ -395,9 +395,11 @@ supported the reconciled candidate at `640a6d2`, with same-family limitation.
 justify its code, operational and cognitive cost?
 
 **Evidence and claims:** The verified R1-R16 sources establish useful primitives and important
-limits, not a comparative Recursion result. Option 2's recommendation is a **local inference**;
-whole-system benefit, performance, maintenance cost and owner-review benefit remain
-**unverified hypotheses**. Current v2 tests can prove v2 regression behavior only.
+limits, not a comparative Recursion result. At this campaign's cutoff, Option 2's recommendation
+was a **local inference**. `OR-018` later ratified the architecture; that Owner decision does not
+turn whole-system benefit, performance, maintenance cost or owner-review benefit into measured
+results. They remain **unverified hypotheses**. Current v2 tests can prove v2 regression behavior
+only.
 
 **Contradiction/limit:** Option 1 may have a cheaper transition; a bounded native loop may win;
 adapter duplication and privileged-code cost are unmeasured. **Decision:** admit only the lean

@@ -108,8 +108,13 @@ Current constitutional conflicts and remaining Lucas decisions are recorded in
 [DECISION-REGISTER.md](DECISION-REGISTER.md). No runtime implementation, migration, provider
 change, terminal process, private canary, publication or deployment is authorized by this suite.
 
-The follow-on [frontier harness evidence](FRONTIER-HARNESS-EVIDENCE.md) narrows Option 2's
-privileged kernel and freezes twelve comparison/fault experiments. It does not change M1A's
-planning-only boundary or prove a runtime. The next authorized construction step remains M1A-01
-strict schema materialization followed by M1A-02 literal red fixtures; language, store, binary IPC,
-plugin isolation, renderer and native-loop choices remain later evidence gates.
+The follow-on [frontier harness evidence](FRONTIER-HARNESS-EVIDENCE.md) narrowed Option 2's
+privileged kernel and froze twelve comparison/fault experiments. Lucas then ratified Option 2 and
+Recursion's sole canonical harness/control-plane ownership in `OR-018` and `OR-019`. The
+[second research tranche](FRONTIER-HARNESS-RESEARCH-TRANCHE-2.md), its
+[evidence packet](FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md), and the exact docs-only
+[constitutional amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md) close the next
+formal-model, language, storage/IPC, process, plugin/frontend, cache/context, evaluation and
+release questions. The amendment is not operative and no runtime is proved. The next construction
+step remains separately authorized M1A-01 strict schema materialization followed by M1A-02 literal
+red fixtures; later implementation choices remain evidence gates.

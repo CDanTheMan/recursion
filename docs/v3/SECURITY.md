@@ -104,10 +104,10 @@ The full conformance suite is mandatory for official v3 release evidence and opt
 - Parent-goal envelopes and work packets are signed, scoped, expiring, and replay protected.
 - Risk-based step-up confirmation applies to authority expansion, high-impact commands, new egress, credentials, updates, and destructive actions.
 - Revocation prevents new admission immediately and causes in-flight work to checkpoint or terminate according to the versioned revocation policy.
-- The operative current PAUSE is immediate halt. `checkpoint`, `interrupt`, `drain` and emergency
-  behavior remain separately representable future policies and do not become operative merely
-  by appearing in a schema. Ambiguous recovered output is quarantined and cannot authorize a new
-  effect.
+- The operative current PAUSE is immediate halt. `OR-020` authorizes the proposed `checkpoint`,
+  `interrupt`, `drain` and emergency policy family, but it does not become operative merely by
+  appearing in a schema or proposal. Ambiguous recovered output is quarantined and cannot
+  authorize a new effect.
 - A disconnected node may finish only the local bounded operation explicitly permitted by its last valid grant and spool signed evidence. After reconnection, the controller revalidates the GoalSpec version, fencing token, lease, and PAUSE/revocation state before admitting that evidence or any derived action. It cannot widen scope or publish while disconnected.
 
 An owner authenticated on both devices may execute commands remotely when both devices, the goal, and the requested capability are authorized.
@@ -125,7 +125,15 @@ interrupt, then checkpoint. An action admitted before an epoch change but not ye
 stale and fails closed. An already accepted external effect becomes ambiguous and is reconciled
 by provider identity/status; it is never blindly retried or described as rolled back. These are
 future-contract mechanics only: current `CONTROL_PLANE.md` immediate PAUSE remains operative
-until a reviewed amendment says otherwise.
+until the exact [constitutional amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md) is
+reviewed and applied.
+
+Verifier assurance is the explicit vector `deterministic`, `task`, `context`, `session`, `model`,
+`family`, `provider`, `host`, `gate_environment`, `human_owner` under proposed classes V0–V3.
+A permitted downgrade records every missing dimension and projects `downgraded-pass`; it never
+becomes full independence. V3 constitutional/release work blocks on an unavailable required
+verifier unless an authenticated Owner exception binds the exact candidate, GoalSpec, plan,
+policy, constitution and expiry. These classes remain inert until the amendment is applied.
 
 ## Credentials
 

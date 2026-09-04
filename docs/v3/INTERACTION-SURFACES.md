@@ -13,7 +13,7 @@ not a measured property. It owns the durable actor
 runtime, goal/delegation protocol, state, routing, context, tools, evidence, policy and
 observer contracts even when an individual model turn runs inside an external CLI or agent
 loop. Reusing an optimized provider harness is an engine choice, not surrender of Recursion's
-product boundary.
+product boundary. Under `OR-019`, no such engine is a canonical boot or recovery dependency.
 
 The v3 release requires no web, desktop or mobile graphical client. Its owner-facing surfaces
 are:

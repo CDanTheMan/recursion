@@ -11,8 +11,13 @@ frontier-campaign-base: a97d5181ee413b87597ea58523708bb9a53f750b
 
 This is the durable synthesis of the 2026-09-03 evidence-closure and autonomous-planning
 campaign. It is a documentation result. It does not prove that a v3 runtime exists, authorize
-implementation, ratify Option 2, change the constitution, configure a provider, permit spending,
+implementation, change the constitution, configure a provider, permit spending,
 or authorize publication, deployment, service changes, or a private canary.
+
+The initial campaign did not ratify Option 2. Lucas subsequently ratified it and sole Recursion
+canonical ownership in `OR-018` and `OR-019`, and authorized the future PAUSE/verifier amendment
+proposal in `OR-020`. Those later Owner decisions select architecture but do not supply runtime
+proof or make the docs-only amendment operative.
 
 The exact campaign inputs, immutable demonstration `GoalSpec`, plan revisions, task DAG,
 worker packets, gates, and disposition are in
@@ -26,6 +31,13 @@ The 2026-09-03 frontier-harness continuation is independently inspectable in
 [FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md). It added exact code-path,
 terminal, plugin/frontend, systems-performance and evaluation-method evidence without changing
 the planning-only M1A scope or producing runtime proof.
+
+The second continuation is recorded in
+[FRONTIER-HARNESS-RESEARCH-TRANCHE-2.md](FRONTIER-HARNESS-RESEARCH-TRANCHE-2.md) and its
+[evidence packet](FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md). It adds formal-model,
+neutral-kernel, persistence/IPC, process-broker, plugin/frontend, cache/context, evaluation and
+release contracts and the exact
+[constitutional amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md).
 
 ## Orientation and preflight
 
@@ -162,7 +174,7 @@ external effects fail closed.
 
 | Finding | Confidence | Competing option, failure mode, and decisive test |
 |---|---|---|
-| Option 2—deterministic Recursion kernel plus typed fail-closed external-loop adapters—is the narrow recommendation, not owner authority. | high boundary; medium outcome | Option 1 or a later minimal native loop may win. Lossy lifecycle translation, unfenceable writers, or a preregistered matched comparison favoring another option falsifies it. |
+| Option 2—deterministic Recursion kernel plus typed fail-closed external-loop adapters—is the Owner-ratified architecture, not measured superiority. | high authority; medium implementation outcome | A hard invariant outside the boundary, lossy lifecycle translation or unfenceable writer requires an Owner amendment; measured components inside the boundary remain selectable. |
 | SQLite supports serialized writes but does not supply Recursion's authority/fencing contract. | high | Another durable store may fit. Multi-writer discovery, corrupt-reset exposure, or failed replay/fence fixtures defeats SQLite admission. |
 | Deterministic planning needs immutable accepted inputs, explicit revision/fence lineage, and kernel admission. | high contract; unproved runtime | Informal model-managed plans are simpler but permit stale mutation and ambiguous replay. M1A fixtures decide whether the minimum contract is coherent. |
 | Provider-specific cache observations must remain route-specific and experimental. | high | Portable provider-neutral context remains the baseline. A pinned cross-route comparison with exposed denominators may justify a route-specific optimization. |
@@ -198,8 +210,9 @@ external effects fail closed.
 
 ## Constitutional conflicts and Lucas seams
 
-`CONTROL_PLANE.md` remains operative. These proposed rules are non-operative until Lucas resolves
-them through the authoritative process:
+`CONTROL_PLANE.md` remains operative. `OR-018` through `OR-020` resolve the target direction, but
+these rules remain non-operative until the exact amendment is applied through the authoritative
+process:
 
 1. the current Hermes-specific Head identity versus the Recursion-owned `Head` selected in
    OR-016;
@@ -213,10 +226,11 @@ them through the authoritative process:
 7. proposed exclusive ARM authorship of implementation DAGs versus the current control-plane
    statement that Hermes decomposes goals and orders dependencies.
 
-Lucas must decide whether to ratify Option 2; the exact GoalSpec acceptance/amendment and
-Head-versus-ARM DAG-authority split; any future PAUSE policy; verifier downgrade policy; sovereign
-grant boundaries; provider-neutral routing; configuration merge rules; and later runtime-state
-migration. M1A represents these seams as versioned bindings and fixtures and does not choose them.
+The drafted amendment now covers Recursion ownership, Head-versus-ARM authority, future PAUSE and
+verifier downgrade classes. Lucas still must decide its application timing, sovereign grant and
+audit-erasure boundaries, provider-neutral live routing, configuration merge rules, and later
+runtime-state migration. M1A represents these seams as versioned bindings and fixtures and does
+not activate them.
 
 ## M1A verdict
 
@@ -259,5 +273,5 @@ fixture, or contradictory primary source invalidates the dependent conclusion un
 Recommendations remain falsifiable and subordinate to Lucas. Every intermediate adjudicator
 dissent and failed gate is preserved in the campaign artifact. The exact semantic candidate
 passed [VALIDATION.md](VALIDATION.md) and its targeted Terra recheck; that makes this an
-evidence-reconciled documentation baseline, not a runtime, policy ratification or performance
-result.
+evidence-reconciled documentation baseline, not a runtime or performance result. The later Owner
+ratification is recorded separately and does not change what the campaign proved.

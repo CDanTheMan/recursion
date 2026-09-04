@@ -6,11 +6,15 @@ last-updated: 2026-09-03
 
 # Recursion v3 state and persistence hypothesis
 
-## Canonical model
+## Canonical model and unselected persistence
 
-V3 should use lightweight SQLite-first persistence in WAL mode for canonical control events and projections, with large immutable artifacts stored as content-addressed files. Human-readable YAML/JSON remains configuration and import/export; Markdown remains documentation and rendered status. They do not compete as live task truth.
+V3 has one canonical event/projection boundary and content-addressed immutable artifacts. The
+physical event store is deliberately unselected: append-only canonical JSON/JSON Sequence plus
+CAS and single-writer SQLite WAL metadata plus the same CAS are the required competitors.
+Human-readable YAML/JSON remains configuration and import/export; Markdown remains documentation
+and rendered status. They do not compete as live task truth.
 
-This remains a persistence hypothesis outside M1A. SQLite's official isolation contract permits
+Persistence remains a hypothesis outside M1A. SQLite's official isolation contract permits
 only one writer per database at a time; that concurrency primitive does not identify an
 authorized Recursion writer, fence another store/process or reconcile an external effect. Those
 are application contracts. M1A uses in-memory replay and performs no SQLite migration or write.
@@ -23,11 +27,11 @@ The design target is one daemon per authority domain/OS account, not one supervi
 input
   -> authenticate principal or component
   -> validate schema and authority
-  -> begin SQLite transaction
-  -> append immutable event
-  -> update required projections
+  -> enter the selected store's atomic append boundary
+  -> append canonical immutable event/frame
+  -> update or checkpoint disposable projections
   -> enqueue idempotent action/outbox item
-  -> commit
+  -> flush/commit according to the pinned durability profile
 ```
 
 Only deterministic controller code writes canonical state. For each aggregate, exactly one fenced writer admits an event at a monotonically increasing sequence; cross-aggregate operations use an explicit saga/outbox boundary rather than a second writer. Every accepted event records the authenticated principal or component, authority/GoalSpec version, command id, fencing token where applicable, causation, correlation, schema version, sequence, and integrity/authenticity material. Hash chaining alone is not authentication. Models propose typed decisions. Remote nodes submit signed results that the controller validates and records.
@@ -190,7 +194,7 @@ machine-checkable.
 
 Required proof includes:
 
-- consistent SQLite plus artifact snapshot;
+- consistent selected-event-store plus artifact snapshot;
 - encrypted offsite option;
 - restore onto a fresh host;
 - key and credential references excluded or separately provisioned;
@@ -201,7 +205,8 @@ Required proof includes:
 ## Open questions
 
 - Which v2 records belong in canonical event history versus import evidence?
-- Is a single SQLite writer sufficient for every intended authority domain, or should high-volume telemetry use a separate store?
+- Does JSONL/JSON Sequence plus CAS or SQLite WAL metadata plus CAS best satisfy the complete
+  replay, recovery, contention and maintenance profile for each authority domain?
 - How should artifact encryption keys rotate without breaking content identity?
 - Which projections must be transactionally synchronous and which may be eventually rebuilt?
 - What measured event volume and database size should define the VPS acceptance envelope?

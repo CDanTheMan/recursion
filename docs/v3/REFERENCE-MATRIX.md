@@ -33,6 +33,19 @@ harness comparison and license review; it does not broaden a source record.
 | [OpenAI compaction, opened 2026-09-03](https://developers.openai.com/api/docs/guides/compaction) | Documentation terms | Native compaction may return an opaque encrypted item carrying prior state; it is not a human-inspectable portable Recursion record. | Preserve provider affinity where useful; require local intent/evidence fidelity and portable capsules independently. |
 | [OpenCode Go, opened 2026-09-03](https://dev.opencode.ai/docs/go/) | Documentation terms | Official docs list the exact Contributor model, usage limits and training/retention caveat; model list and limits are explicitly changeable. | Route capability evidence only. Contributor traffic stays public/synthetic and never becomes entitlement or billing proof. |
 
+## Tranche-two additions
+
+| Reference and inspected revision | License/status | Observed mechanism | Adopt/adapt/reject |
+|---|---|---|---|
+| [TLA+ high-level view](https://lamport.azurewebsites.net/tla/high-level-view.html), [PlusCal paper](https://lamport.org/pubs/pluscal.pdf), opened 2026-09-03 | Author/website terms | State-machine specification, safety/liveness reasoning and bounded model checking can expose counterexamples under explicit assumptions. | Adopt a bounded pre-code model and deliberately broken mutants; reject passing TLC as runtime/refinement proof. |
+| [Wasmtime security at `7bac2c2`](https://github.com/bytecodealliance/wasmtime/blob/7bac2c2775808aaec5d4aa5627a5e447b51102cf/docs/security.md), Apache-2.0 WITH LLVM-exception | Open-source implementation/security contract | Host imports and runtime configuration define material sandbox authority; WebAssembly isolation alone does not make a plugin safe. | Candidate isolated third-party runtime only after capability, resource and disabled-path fixtures. |
+| [Cosign `11926fa`](https://github.com/sigstore/cosign/tree/11926fa5bbbbde47e88fc006b625a17769b743b2), Apache-2.0 | Open-source signing tool | Artifact signing/verification and attestations bind identities and artifacts within the configured trust model. | Candidate supply-chain mechanism; reject signature-as-behavioral-safety. |
+| [MCP Apps transport `10195ad`](https://github.com/modelcontextprotocol/ext-apps/blob/10195ad91851502134930e9b80ec2c04e277a720/src/message-transport.ts), Apache-2.0 | Open-source transport | The pinned transport checks message source but posts with target origin `*`. | Adapt the protocol only behind exact source+origin+nonce binding and a non-authoritative view boundary. |
+| [mini-SWE-agent `04d809c`](https://github.com/SWE-agent/mini-swe-agent/tree/04d809ceeb41929a547d5ce31264419f61405c37), MIT; [tau2 `a2c0247`](https://github.com/sierra-research/tau2-bench/tree/a2c0247fa6bcc24c6d05d5e6b13a6d85c7391a08), MIT | Versioned benchmark/harness sources | Maintainers prefer a simpler harness default, and tau2 grading corrections make affected prior scores incomparable. | Use as contradictory evaluation evidence; require sealed tasks, versioned graders and unique-task statistical units. |
+
+Exact source records, versions, locators and revalidation triggers remain canonical in
+`SRC-V3-095` through `SRC-V3-106` in [SOURCE-REGISTER.md](SOURCE-REGISTER.md).
+
 ## Cross-reference questions
 
 ### Executive architecture

@@ -63,6 +63,13 @@ kernel, adapter boundaries, contradictions and twelve preregistered comparisons 
 language, store, wire encoding, plugin isolation, terminal libraries, native loop, performance and
 frontier standing are not selected or proved. M1A stays the first construction slice.
 
+Status update: `OR-018` and `OR-019` now ratify Option 2 and sole Recursion canonical ownership.
+The [second tranche](FRONTIER-HARNESS-RESEARCH-TRANCHE-2.md) adds a pre-code formal model,
+language-neutral kernel experiment, persistence/IPC crash matrix, process-broker protocol,
+plugin/frontend lifecycle, provider-neutral context capsule, corrected evaluation protocol and
+adapter-free release/boot contract. The architecture is selected; its implementations and
+performance remain unproved.
+
 ## Milestone 1A — autonomous-planning contract and replay baseline
 
 Deliver only strict planning schemas, pure cross-record and DAG validation, deterministic
@@ -120,7 +127,10 @@ Gate: supported routes negotiate from fixtures; disabled plugins are inert; fail
 
 ## Milestone 4 — Head and ARM executive runtime
 
-After Lucas ratifies ARM identity and Project Pilot compatibility semantics, deliver first-class logical actors, executive leases, the approved Project Pilot migration, model escalation, ARM-owned task DAGs, bounded delegation, checkpoint-driven route changes, quota-exhaustion behavior, and upward escalation.
+After the Owner-ratified Head/ARM target is applied constitutionally and Project Pilot compatibility
+semantics pass their separate decision gate, deliver first-class logical actors, executive leases,
+the approved Project Pilot migration, model escalation, ARM-owned task DAGs, bounded delegation,
+checkpoint-driven route changes, quota-exhaustion behavior, and upward escalation.
 
 Gate: Head directly manages multiple independent ARM runs; each survives model replacement and restart; the kernel never becomes a semantic ARM Manager; workers cannot redefine goals.
 
@@ -191,8 +201,9 @@ The temporary tools used to build v3—an overnight Codex lead, Cursor implement
    descriptor may infer entitlement from a model listing or successful prompt.
 4. Numeric coordinator/workstation budgets require the preregistered experiments in
    [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md).
-5. Plugin quota/consent composition, exact verifier tiers/exception receipts, interactive
-   terminal/process ownership and supported-app matrix, multi-ARM message semantics, sovereign
-   audit-retention authority and deletion proof require focused research and fault tests.
-6. A native inner-loop expansion remains an optional spike until it falsifies the recommended
-   adapter architecture on a declared metric.
+5. Plugin quota/consent composition, interactive terminal/process implementation and supported-app
+   matrix, multi-ARM message semantics, sovereign audit-retention authority and deletion proof
+   still require fault tests or Owner decisions. Verifier tiers/receipts are specified but inert
+   until the amendment is applied.
+6. A native inner-loop expansion remains an optional spike until it wins a preregistered metric;
+   it cannot replace Recursion's ratified canonical authority boundary without an Owner amendment.

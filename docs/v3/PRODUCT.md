@@ -36,6 +36,9 @@ Public usability remains an explicit design requirement. Users should be able to
    custom builds and full-access modes remain available. Explicit maximum `sovereign` authority
    may include receipt-backed administration of its own grants.
 2. **Provider neutrality.** A model, delivery route, billing pool, harness, and host are separate objects. Users can combine Codex, Cursor, Claude Code, Gemini CLI, OpenCode, Hermes, local models, APIs, and future adapters without rewriting goals.
+   The versioned Recursion release is the sole canonical authority and recovery dependency;
+   engines and providers are optional typed adapters, while ordinary pinned libraries remain
+   permitted implementation dependencies.
 3. **Durable autonomy.** Parent goals, ARM state, exact directives, checkpoints, evidence, and budgets survive process death and provider changes.
 4. **Quality before activity.** Machine gates and independent verification determine progress. Branch count, agent count, and token consumption do not.
 5. **Configurable optimization.** Users may optimize toward cost, quota conservation, quality, latency, privacy, local performance, or custom trade-offs.
@@ -48,6 +51,8 @@ Public usability remains an explicit design requirement. Users should be able to
 10. **Lean optionality.** Advanced capabilities remain physically optional and idle when
     disabled; capability growth must not make the privileged core opaque or the coordinator
     permanently heavy.
+11. **Adapter-free recovery.** Core can verify its release identity, replay canonical state and
+    expose owner status when every provider, external harness, plugin and frontend is absent.
 
 ## Primary workflows
 
