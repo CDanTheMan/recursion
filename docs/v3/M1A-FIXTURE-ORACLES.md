@@ -56,8 +56,9 @@ observation or unordered-map iteration participates.
 `content_digest` field omitted. Every future literal expected digest is computed by that rule and
 committed in the red bundle; placeholders such as `D(x)` are forbidden in the executable bundle.
 Fixture IDs and logical times are literal inputs. Commands use `CMD-<fixture>-<case>-<nn>`;
-receipts replace that prefix with `RCPT-`; admitted events replace it with `EV-` and append the
-one-based four-digit position within the command, exactly as defined by the wire profile. Each case
+first-seen receipts replace that prefix with `RCPT-`; conflict receipts use the digest-derived
+`RCPT-CONFLICT-*` form; admitted events replace it with `EV-` and append the one-based four-digit
+position within the command, exactly as defined by the wire profile. Each case
 starts from the exact genesis projection and fixed sequence-one previous-event digest defined by
 the wire profile.
 
@@ -115,6 +116,7 @@ ambient values fail; the reducer performs set inclusion and exact integer compar
 | `replace-executive-lease` | `head` | `ExecutiveLeaseReplaced` |
 | `replace-route` | `head` | `RouteAssignmentReplaced` |
 | `record-capacity-observation` | `kernel-fixture-gate` | `CapacityObservationRecorded` |
+| `record-checkpoint` | `kernel-fixture-gate` | `CheckpointRecorded` |
 | `reserve-budget` | `arm` | `BudgetReserved` |
 | `submit-worker-result` | `worker` (the packet-assigned worker only) | `WorkerResultRecorded` |
 | `submit-gate-result` | `verifier` or `kernel-fixture-gate` (the bound verifier assignment only) | `GateResultRecorded` |
@@ -189,12 +191,12 @@ oracle.
 | `F-M1A-010` | the PlanRevision names its required verifier actor, but the bundle has no matching current verifier attestation/result; attempt completion/verifier decision | `refused/E-VERIFIER-MISSING`; `NOEVENT`; node `gate-pending`/plan blocked, never verified/complete |
 | `F-M1A-011` | exact candidate plus an earlier admitted Owner exception record bound to GoalSpec/PlanRevision/candidate/verifier-policy/operative-constitution digests, reason, expiry logical time and missing dimensions | `record-owner-verifier-exception` emits `+OwnerVerifierExceptionRecorded`; accepted decision emits `+PlanVerifierDecisionRecorded`; disposition `downgraded-pass`, assurance `downgraded`, terminal projection if otherwise complete is `terminal-verified-downgraded`, and independence vector preserves missing dimensions; any missing/mismatched/expired binding gives `E-AUTH-MISSING`/`E-VERIFIER-MISSING` and `NOEVENT`; `terminal-verified` is forbidden |
 | `F-M1A-012` | active ready node plus a typed observed included-capacity exhaustion; request metered/unauthorized replacement | observation emits `+CapacityObservationRecorded`; blocker command records `+BlockerRaised` with `capacity/deferred`; replacement `refused/E-ROUTE-SPEND`, `NOEVENT`; no failure/success/debit |
-| `F-M1A-013` | checkpointed node and permitted nonmetered replacement descriptor within the same allowed set | `replace-route` accepted with `+RouteAssignmentReplaced,+WorkPacketDerived`; logical actor/goal/policy/privacy/budget digests equal, new packet route/epoch differs, old packet stale |
+| `F-M1A-013` | gate records the exact pre-event checkpoint, then a permitted nonmetered replacement descriptor within the same allowed set | checkpoint emits `+CheckpointRecorded`; `replace-route` emits `+RouteAssignmentReplaced,+WorkPacketDerived`; logical actor/goal/policy/privacy/budget digests equal, new packet route/epoch differs, old packet stale |
 | `F-M1A-014` | active state; Owner applies operative `current-immediate`; then plan/packet/result/effect commands | pause accepted `+PauseApplied`; each later command `refused/E-PAUSED`, `NOEVENT`; only status/receipt projection changes allowed |
 | `F-M1A-015` | fixture registry contains future checkpoint/interrupt/drain values but operative ref is `current-immediate`; round-trip/replay | schema accepts values as inert records; no behavior/event change; attempting to select one under current constitution is `refused/E-POLICY-UNKNOWN`; same final digest as equivalent state without selection attempt |
 | `F-M1A-016` | dispatched synthetic effect; gate records lost/contradictory receipt; attempt success and retry | observation accepted `+EffectObservationRecorded`, state `ambiguous/quarantined`; success/retry each `refused/E-EFFECT-AMBIGUOUS`, `NOEVENT`; plan cannot terminate verified |
-| `F-M1A-017` | accepted command; resend same ID/payload, then same ID/different payload | exact duplicate returns byte-identical original receipt/`NOEVENT`; conflicting payload `refused/E-IDEMPOTENCY-CONFLICT`/`NOEVENT`; event count unchanged after first command |
-| `F-M1A-018` | canonical event fixture; replay from genesis and supplied checkpoint twice; corrupt/gap/unknown variants | valid runs have byte-identical expected events/state/`D(state)`; corrupt digest `E-DIGEST-MISMATCH`, gap `E-DIGEST-MISMATCH`, unknown version `E-SCHEMA-UNKNOWN-VERSION`; no best-effort final state |
+| `F-M1A-017` | accepted command; resend same ID/payload, then same ID/different payload | exact duplicate returns byte-identical original receipt/`NOEVENT`; conflicting payload `conflict/E-IDEMPOTENCY-CONFLICT`/`NOEVENT`; event count unchanged after first command |
+| `F-M1A-018` | canonical event fixture; replay from genesis and the typed pre-event checkpoint snapshot twice; corrupt/gap/unknown raw-event variants | valid runs have byte-identical expected events/state/`D(state)`; corrupt digest `E-DIGEST-MISMATCH`, gap `E-DIGEST-MISMATCH`, unknown version `E-SCHEMA-UNKNOWN-VERSION`; no best-effort final state |
 | `F-M1A-019` | active ArmRun after admitted executive lease replacement; old ARM proposes revision | replacement emits `+ExecutiveLeaseReplaced`; old proposal is `refused/E-STALE-LEASE`; `NOEVENT`; plan digest/active revision unchanged |
 | `F-M1A-020` | authenticated assigned worker submits `amend-goal-spec`; authenticated assigned verifier submits `propose-plan-revision` | each `refused/E-AUTH-PARENT-MUTATION` under the closed precedence; `NOEVENT`; GoalSpec/PlanRevision digests unchanged and verifier assignment unchanged |
 | `F-M1A-021` | isolated unknown-field, unknown-schema-version and structurally valid unknown-policy-version inputs | the first two return `DecodeFailure/E-SCHEMA-UNKNOWN-FIELD` and `DecodeFailure/E-SCHEMA-UNKNOWN-VERSION`; the policy case returns `refused/E-POLICY-UNKNOWN`; `NOEVENT`; no permissive default or replay continuation |

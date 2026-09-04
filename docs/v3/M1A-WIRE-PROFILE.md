@@ -183,20 +183,37 @@ GenesisConfig@1 = {
 
 ReplayExpectation@1 = {
   replay_id: Id,
-  checkpoint: DomainRecord@1<checkpoint>?,
+  checkpoint: ReplayCheckpoint@1?,
   event_inputs: JsonInputText[] in declared order, maximum 2,048,
   expected_disposition: accepted or refused,
   primary_error: ErrorCode?,
   expected_projection_digest: Digest?
+}
+
+ReplayCheckpoint@1 = {
+  checkpoint_record: DomainRecord@1<checkpoint>,
+  projection_snapshot: ProjectionState@1
+}
+
+ErrorWitness@1 = {
+  witness_schema_version: "m1a-error-witness-1",
+  error_code: ErrorCode,
+  object_ids: IdSet,
+  dependency_edges: sorted array of {from_node_id: Id, to_node_id: Id}
+                    by (from_node_id,to_node_id),
+  field_paths: TextSet,
+  content_digest: Digest
 }
 ```
 
 A `ReplayExpectation@1` with `expected_disposition=accepted` has a null `primary_error` and a
 non-null projection digest. A refused replay has a non-null primary error and null projection
 digest. Its event inputs are literal JSON strings so an unknown event schema version can remain a
-test input without making the enclosing fixture bundle schema-invalid. A non-null checkpoint is
-itself schema/content-digest valid before replay; corrupt checkpoint content is represented as a
-raw event/input case, never smuggled through the typed field.
+test input without making the enclosing fixture bundle schema-invalid. A non-null checkpoint
+contains the exact projection immediately before its `CheckpointRecorded` event plus the checkpoint
+record that binds that projection's version/digest/snapshots. Replay validates both and begins with
+that event. Corrupt checkpoint content is represented as a raw event/input case, never smuggled
+through the typed field.
 
 `M1ASyntheticIndependenceProjection@1` is a deliberately reduced, synthetic-only projection for
 the pure M1A fixtures. It maps `model_family`, `provider`, and `host` to the same-named canonical
@@ -280,7 +297,7 @@ mapping explicitly carries a proposed new record.
 | `plan-revision` / `m1a-plan-revision-1` | `{goal_ref: ObjectRef@1, arm_run_ref: ObjectRef@1, prior_plan_ref: ObjectRef@1?, trigger: initial or retry or replan or amendment, task_node_refs: sorted ObjectRef@1 by id, dependency_edges: sorted array of `{from_node_id: Id, to_node_id: Id}` by `(from_node_id,to_node_id)`, graph_digest: Digest, acceptance_gate_ids: IdSet, budget_limits: BudgetVector@1, read_resource_paths: ResourcePathSet, write_resource_paths: ResourcePathSet, effect_keys: IdSet, source_digests: DigestSet, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, assigned_plan_verifier_actor_id: Id, change_rationale_digest: Digest, dispositions: sorted Disposition@1}` |
 | `plan-transition` / `m1a-plan-transition-1` | `{from_plan_ref: ObjectRef@1?, to_plan_ref: ObjectRef@1, trigger_evidence_digests: DigestSet, dispositions: sorted Disposition@1, executive_lease_ref: LeaseRef@1, expected_goal_fence_epoch: UInt, checkpoint_ref: ObjectRef@1?}` |
 | `task-node` / `m1a-task-node-1` | `{plan_ref: PlanIdentityRef@1, semantic_definition_digest: Digest, output_schema_digest: Digest, dependency_node_ids: IdSet, input_digests: DigestSet, source_digests: DigestSet, read_resource_paths: ResourcePathSet, write_resource_paths: ResourcePathSet, effect_keys: IdSet, authority_ids: IdSet, capability_ids: IdSet, allowed_action_ids: IdSet, prohibition_ids: IdSet, route_ids: IdSet, route_capability_ids: IdSet, account_class_ids: IdSet, capacity_pool_ids: IdSet, authority_policy_ref: PolicyRef@1, privacy_class_id: Id, egress_class_id: Id, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, budget_limits: BudgetVector@1, gate_requirements: sorted GateRequirement@1 by gate_id, retry_policy_ref: PolicyRef@1, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, terminal_contribution_digest: Digest, retry_maximum: UInt}` |
-| `work-packet` / `m1a-work-packet-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, logical_worker_actor_id: Id, attempt: PosInt, work_lease_ref: LeaseRef@1, expected_goal_fence_epoch: UInt, expected_pause_epoch: UInt, authority_ids: IdSet, capability_ids: IdSet, allowed_resource_paths: ResourcePathSet, effect_keys: IdSet, privacy_class_id: Id, egress_class_id: Id, authority_policy_ref: PolicyRef@1, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, route_assignment_ref: ObjectRef@1, budget_reservation_ref: ObjectRef@1, budget_limits: BudgetVector@1, source_digests: DigestSet, gate_requirements: sorted GateRequirement@1 by gate_id, allowed_action_ids: IdSet, prohibition_ids: IdSet, inherited_non_goals: TextSet, output_schema_digest: Digest, deadline_logical_time: LogicalTime, checkpoint_ref: ObjectRef@1?}` |
+| `work-packet` / `m1a-work-packet-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, supersedes_packet_ref: ObjectRef@1?, logical_worker_actor_id: Id, attempt: PosInt, work_lease_ref: LeaseRef@1, expected_goal_fence_epoch: UInt, expected_pause_epoch: UInt, authority_ids: IdSet, capability_ids: IdSet, allowed_resource_paths: ResourcePathSet, effect_keys: IdSet, privacy_class_id: Id, egress_class_id: Id, authority_policy_ref: PolicyRef@1, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, route_assignment_ref: ObjectRef@1, budget_reservation_ref: ObjectRef@1, budget_limits: BudgetVector@1, source_digests: DigestSet, gate_requirements: sorted GateRequirement@1 by gate_id, allowed_action_ids: IdSet, prohibition_ids: IdSet, inherited_non_goals: TextSet, output_schema_digest: Digest, deadline_logical_time: LogicalTime, checkpoint_ref: ObjectRef@1?}` |
 | `worker-result` / `m1a-worker-result-1` | `{work_packet_ref: ObjectRef@1, candidate_digest: Digest, evidence_digests: DigestSet, output_digest: Digest, observed_effect_ref: ObjectRef@1?, disposition: submitted or failed}` |
 | `gate-result` / `m1a-gate-result-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, work_packet_ref: ObjectRef@1, candidate_digest: Digest, source_digests: DigestSet, evidence_digests: DigestSet, gate_requirement: GateRequirement@1, procedure_version: PosInt, observation_digest: Digest, expected_digest: Digest, actual_digest: Digest, independence: M1ASyntheticIndependenceProjection@1, disposition: pass or fail or error or missing or ambiguous, limitation_digests: DigestSet}` |
 | `retry-decision` / `m1a-retry-decision-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, failed_gate_result_ref: ObjectRef@1, prior_work_packet_ref: ObjectRef@1, novelty_delta: NoveltyDelta@1, novelty_delta_digest: Digest, unchanged_binding_digest: Digest, next_attempt: PosInt, remaining_budget: BudgetVector@1, retry_maximum: UInt, disposition: admitted or refused or exhausted}` |
@@ -289,12 +306,12 @@ mapping explicitly carries a proposed new record.
 | `escalation` / `m1a-escalation-1` | `{source_blocker_ref: ObjectRef@1, target_role: head or owner, failure_history_digests: DigestSet, requested_decision: NonemptyText, option_digests: DigestSet, recommendation_digest: Digest, frozen_scope_digest: Digest, state: raised or acknowledged or resolved or declined or superseded}` |
 | `plan-verifier-decision` / `m1a-plan-verifier-decision-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, candidate_digest: Digest, event_log_digest: Digest, gate_result_digests: DigestSet, evidence_digests: DigestSet, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, independence: M1ASyntheticIndependenceProjection@1, disposition: pass or downgraded-pass or fail or blocked, assurance_grade: full or downgraded or none, owner_exception_ref: ObjectRef@1?, dissent_digest: Digest?, limitation_digests: DigestSet}` |
 | `owner-verifier-exception` / `m1a-owner-verifier-exception-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, candidate_digest: Digest, verifier_policy_ref: PolicyRef@1, constitution_policy_ref: PolicyRef@1, missing_dimensions: TokenSet, reason_digest: Digest, owner_authority_attestation_id: Id, issued_logical_time: LogicalTime, expires_logical_time: LogicalTime}` |
-| `executive-lease` / `m1a-executive-lease-1`; `work-lease` / `m1a-work-lease-1` | `{subject_actor_id: Id, goal_ref: ObjectRef@1, plan_ref: ObjectRef@1?, task_ref: ObjectRef@1?, lease_epoch: UInt, nonce_digest: Digest, issued_logical_time: LogicalTime, expires_logical_time: LogicalTime, allowed_command_types: TokenSet, state: active or expired or revoked or replaced}` |
+| `executive-lease` / `m1a-executive-lease-1`; `work-lease` / `m1a-work-lease-1` | `{subject_actor_id: Id, goal_ref: ObjectRef@1, plan_ref: ObjectRef@1?, task_ref: ObjectRef@1?, supersedes_lease_ref: LeaseRef@1?, lease_epoch: UInt, nonce_digest: Digest, issued_logical_time: LogicalTime, expires_logical_time: LogicalTime, allowed_command_types: TokenSet, state: active or expired or revoked or replaced}` |
 | `checkpoint` / `m1a-checkpoint-1` | `{state_version: UInt, state_digest: Digest, active_goal_ref: ObjectRef@1?, active_plan_ref: ObjectRef@1?, open_packet_refs: sorted ObjectRef@1 by id, ambiguous_effect_refs: sorted ObjectRef@1 by id, budget_snapshot_digest: Digest, route_snapshot_digest: Digest, pause_epoch: UInt, lease_epoch_digest: Digest}` |
-| `route-assignment` / `m1a-route-assignment-1` | `{logical_actor_id: Id, route_id: Id, route_capability_ids: IdSet, account_class_id: Id, capacity_pool_id: Id, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, route_policy_ref: PolicyRef@1, metered_spend_allowed: false, capacity_observation_ref: ObjectRef@1, assigned_logical_time: LogicalTime, expires_logical_time: LogicalTime, state: assigned or deferred or released or expired}` |
+| `route-assignment` / `m1a-route-assignment-1` | `{logical_actor_id: Id, route_id: Id, route_capability_ids: IdSet, account_class_id: Id, capacity_pool_id: Id, privacy_policy_ref: PolicyRef@1, egress_policy_ref: PolicyRef@1, route_policy_ref: PolicyRef@1, metered_spend_allowed: false, capacity_observation_ref: ObjectRef@1, supersedes_route_ref: ObjectRef@1?, assigned_logical_time: LogicalTime, expires_logical_time: LogicalTime, state: assigned or deferred or released or expired}` |
 | `capacity-observation` / `m1a-capacity-observation-1` | `{route_id: Id, account_class_id: Id, capacity_pool_id: Id, spend_class: none or included, available: true or false, remaining_units: UInt, observation_digest: Digest}` |
 | `budget-reservation` / `m1a-budget-reservation-1` | `{goal_ref: ObjectRef@1, plan_ref: ObjectRef@1, task_ref: ObjectRef@1, limits: BudgetVector@1, consumed: BudgetVector@1, remaining: BudgetVector@1, state: reserved or released or consumed}` |
-| `pause-directive` / `m1a-pause-directive-1` | `{pause_policy_ref: PolicyRef@1, mode: current-immediate, new_pause_epoch: UInt, reason_digest: Digest}` |
+| `pause-directive` / `m1a-pause-directive-1` | `{pause_policy_ref: PolicyRef@1, mode: current-immediate or checkpoint or interrupt or drain, new_pause_epoch: UInt, reason_digest: Digest}` |
 | `effect-observation` / `m1a-effect-observation-1` | `{effect_id: Id, effect_key: Id, work_packet_ref: ObjectRef@1, idempotency_key_digest: Digest, dispatch_state: undispatched or dispatched, receipt_digest: Digest?, provider_operation_id_digest: Digest?, observation: observed-success or observed-failure or ambiguous, quarantine: true or false}` |
 | `disposition` / `m1a-disposition-1` | the exact `Disposition@1` record |
 
@@ -320,7 +337,7 @@ route/account/pool tuple.
 CommandEnvelope@1 = {
   command_schema_version: "m1a-command-1",
   command_id: CommandId,
-  command_type: one of the 21 registered command tokens,
+  command_type: one of the 22 registered command tokens,
   actor_id: Id,
   auth_ref: Id,
   lease_ref: LeaseRef@1?,
@@ -343,6 +360,7 @@ CommandReceipt@1 = {
   disposition: accepted or refused or duplicate or conflict,
   primary_error: ErrorCode?,
   related_errors: ErrorCodeSet,
+  witness: ErrorWitness@1?,
   state_before_digest: Digest,
   state_after_digest: Digest,
   event_ids: IdSet,
@@ -401,18 +419,27 @@ receipt journal; that journal includes refusals and conflicts and is required to
 idempotency, while event replay reconstructs only the authoritative projection. Fixtures supply
 both events and receipts explicitly; M1A makes no durable-journal claim.
 
-Receipt and event IDs are derivable without ambient state. If a command ID begins `CMD-`, replace
-that prefix with `RCPT-`; otherwise prefix the complete ID with `RCPT-`. Event ID `n` replaces
-`CMD-` with `EV-` (or prefixes the complete ID with `EV-`) and appends `-<nnnn>`, where `nnnn` is
-the one-based, four-digit event position within that command. An accepted command's events are
-contiguous, share command ID/digest, and use those positions. The reconstructed original receipt
-uses that group and the supplied journal; no random identifier is permitted.
+Receipt and event IDs are derivable without ambient state. For a first-seen command, if its ID
+begins `CMD-`, replace that prefix with `RCPT-`; otherwise prefix the complete ID with `RCPT-`.
+A conflict response instead uses `RCPT-CONFLICT-` plus the first 32 hexadecimal characters of
+`D({command_id,command_digest})`, so it cannot alias the retained original receipt. Event ID `n`
+replaces `CMD-` with `EV-` (or prefixes the complete ID with `EV-`) and appends `-<nnnn>`, where
+`nnnn` is the one-based, four-digit event position within that command. An accepted command's
+events are contiguous, share command ID/digest, and use those positions. The reconstructed
+original receipt uses that group and the supplied journal; no random identifier is permitted.
+
+An accepted receipt has null error/witness fields, a nonempty event set and non-null sequence
+bounds. A refused/conflict receipt has a non-null primary error, an empty event set and null
+sequence bounds; its witness is non-null only when the error's deterministic proof is represented.
+`E-DAG-CYCLE`, `E-DAG-DEPENDENCY` and `E-DAG-CONFLICT` require a witness with stable sorted object
+IDs/edges/field paths. A duplicate-disposition receipt, if used by an API wrapper, has no error,
+witness or event; the M1A command journal instead returns the byte-identical original receipt.
 
 Each command payload is exactly one proposed `DomainRecord@1` except these closed composites:
 
 | Command | Exact `payload` |
 |---|---|
-| `record-owner-intent`, `accept-goal-spec`, `submit-worker-result`, `submit-gate-result`, `propose-retry`, `raise-blocker`, `raise-escalation`, `submit-plan-verifier-decision`, `record-owner-verifier-exception`, `record-capacity-observation`, `reserve-budget`, `record-effect-observation`, `apply-pause` | the correspondingly typed proposed `DomainRecord@1` |
+| `record-owner-intent`, `accept-goal-spec`, `submit-worker-result`, `submit-gate-result`, `propose-retry`, `raise-blocker`, `raise-escalation`, `submit-plan-verifier-decision`, `record-owner-verifier-exception`, `record-capacity-observation`, `record-checkpoint`, `reserve-budget`, `record-effect-observation`, `apply-pause` | the correspondingly typed proposed `DomainRecord@1` |
 | `start-arm-run` | `{executive_lease: DomainRecord@1<executive-lease>, arm_run: DomainRecord@1<arm-run>}` |
 | `amend-goal-spec` | `{new_goal_spec: DomainRecord@1<goal-spec>, amendment: DomainRecord@1<goal-spec-amendment>, replacement_plan_revision: DomainRecord@1<plan-revision>, plan_transition: DomainRecord@1<plan-transition>, task_nodes: sorted DomainRecord@1<task-node> by id, arm_proposal_attestation_id: Id}` |
 | `propose-plan-revision` | `{plan_revision: DomainRecord@1<plan-revision>, plan_transition: DomainRecord@1<plan-transition>, task_nodes: sorted DomainRecord@1<task-node> by id}` |
@@ -436,7 +463,7 @@ records and either admits the amendment, replacement plan and dispositions toget
 event. This is the only amendment bootstrap. A downgraded decision may refer only to an
 `owner-verifier-exception` admitted by an earlier `record-owner-verifier-exception` command.
 
-The event alphabet is the 21 admitted event types in the fixture blueprint plus
+The event alphabet is the 22 admitted event types in the fixture blueprint plus
 `PlanItemDisposed`, `PacketFenced`, `LeaseFenced`, `EffectDisposed` and `EvidenceDisposed`.
 Disposition events sort by `(primary_record.payload.object_ref.object_type,
 primary_record.payload.object_ref.id, primary_record.payload.object_ref.version)` after the
@@ -456,6 +483,7 @@ Each event's exact primary type is:
 | `ExecutiveLeaseReplaced` | `executive-lease` | none |
 | `RouteAssignmentReplaced` | `route-assignment` | none |
 | `CapacityObservationRecorded` | `capacity-observation` | none |
+| `CheckpointRecorded` | `checkpoint` | none |
 | `BudgetReserved` | `budget-reservation` | none |
 | `WorkerResultRecorded` | `worker-result` | none |
 | `GateResultRecorded` | `gate-result` | none |
@@ -470,6 +498,14 @@ Each event's exact primary type is:
 
 Every related record is complete, digest-valid and also inserted into the projection. It is never
 reduced to an unresolved reference. A record may appear exactly once in one admitted event group.
+
+Each `Disposition@1` in an admitted amendment/replan is materialized as a `disposition` domain
+record. Its ID is `DISPOSITION-` plus the first 32 hexadecimal characters of
+`D({command_id,disposition})`; version is 1; creator is `KERNEL-M1A`; causation is the command ID;
+correlation is the GoalSpec ID; logical time and lease are copied from the command; and payload is
+the exact disposition. Packet/lease/effect/evidence targets map respectively to `PacketFenced`,
+`LeaseFenced`, `EffectDisposed` and `EvidenceDisposed`; every other target maps to
+`PlanItemDisposed`. Record/event order remains the sorted disposition order above.
 
 ### Exact genesis and derived digests
 
@@ -519,6 +555,11 @@ Initial `attempt` is the command value, retry is the admitted decision's `next_a
 replacement preserves the prior attempt. The complete derived record digest MUST equal the
 command's expected digest where that field exists. An ID collision with unequal full content is
 `E-IDEMPOTENCY-CONFLICT`; no alternate ID or ambient lookup is allowed.
+
+Initial leases, routes and packets have null supersession refs. Every replacement record binds the
+exact prior current ref in its corresponding `supersedes_*_ref`; retry and route replacement bind
+the prior packet ref. Event replay marks that named record stale/replaced before activating the new
+record. A missing, already-stale or noncurrent supersession target refuses the whole command.
 
 ### Exact retry-policy calculation
 

@@ -266,3 +266,27 @@ distinction between decode and replay refusal without weakening the enclosing bu
 supersedes the first M1A-01 schema candidate and requires a replacement schema-only commit before
 M1A-02 freezes. Falsifier: F-M1A-018 still cannot encode every required replay result literally or
 an invalid event escapes into a typed event array.
+
+Construction decision `CD-M1A-006`: leases, route assignments and WorkPackets carry nullable
+typed supersession refs. Evidence: replacement events contain no command payload or ambient lookup,
+so without the prior ref replay can create the replacement but cannot deterministically fence the
+old record. Initial records use null; replacements must name the exact current prior record. This
+also supersedes the preceding M1A-01 schema candidate before fixture freeze. Falsifier: replay can
+leave two current leases/routes/packets or needs command storage to identify the stale record.
+
+Construction decision `CD-M1A-007`: the final pre-freeze profile adds (a) a typed checkpoint
+envelope containing the exact pre-event projection, (b) `record-checkpoint`/
+`CheckpointRecorded`, (c) typed sorted refusal witnesses, and (d) structurally representable but
+non-operative future PAUSE directive modes. Evidence: without these, checkpoint replay and route
+replacement have no admitted checkpoint, graph refusals cannot satisfy the promised stable witness,
+and F-M1A-015 becomes a schema failure instead of the required policy refusal. This expands the
+closed alphabet to 22 commands and 27 events including five disposition events, and supersedes all
+earlier M1A-01 candidates. Falsifier: any required fixture still needs an untyped side channel,
+cannot preserve a stable refusal proof, or admits a future PAUSE mode under current policy.
+
+Construction decision `CD-M1A-008`: conflict receipts and disposition records use explicit
+digest-derived IDs, and the disposition target type selects one exact event type. Evidence: a
+conflict response cannot safely reuse the retained original receipt ID, while ordered disposition
+events otherwise lack deterministic record IDs and type selection. Falsifier: identical inputs
+produce different IDs/event types, a conflict aliases its original receipt, or replay requires the
+amendment command payload to reconstruct a disposition event.

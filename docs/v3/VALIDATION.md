@@ -194,7 +194,7 @@ $commandIds = @($oracleLines | ForEach-Object {
 $errorIds = @($oracleLines | ForEach-Object {
   if ($_ -match '^\| `(E-[A-Z0-9-]+)` \|') { $Matches[1] }
 })
-if ($commandIds.Count -ne 21 -or ($commandIds | Sort-Object -Unique).Count -ne 21) {
+if ($commandIds.Count -ne 22 -or ($commandIds | Sort-Object -Unique).Count -ne 22) {
   throw 'closed command alphabet failed'
 }
 if ($errorIds.Count -ne 27 -or ($errorIds | Sort-Object -Unique).Count -ne 27) {
