@@ -164,6 +164,28 @@ diagnostic evidence, not terminal evidence.
 - Falsifier: a temporally unauthorized action or publication is clean, or contradictory deletion
   evidence is downgraded to an ordinary incomplete proof.
 
+## PlanRevision 5 — effect trace ownership closure
+
+`PLAN-M1C-001@5` was triggered by continued independent SOL review of exact candidate
+`31f9b348192836b8bec4760bcd66f2836c5e5ff3`. The reviewer confirmed every PlanRevision 3 and 4
+repair, then showed that an external observation or receipt could validate without a preceding
+matching `AttemptStarted`, yielding an ambiguous decision with final attempt zero that failed its
+own output schema. A duplicate attempt number could also replace the canonical attempt in the
+oracle and let a later receipt clear the wrong pending state. The candidate and its passing sweeps
+remain diagnostic, not terminal, evidence.
+
+- Retained: all prior authorization, boundaries, frozen fixture outcomes, Owner seams and
+  PlanRevision 2 through 4 repairs.
+- Re-admitted: M1C-02, M1C-04, M1C-05 and M1C-06 for ordered attempt ownership only.
+- Change: `AttemptStarted` records are unique, contiguous and canonical by number and ID; every
+  external observation, receipt and reconciliation must follow and bind its exact canonical start;
+  malformed direct traces never replace that owner and remain ambiguous with a schema-valid final
+  attempt derived from the supplied trace.
+- Gate extension: reproduce external-only, receipt-only and duplicate-number alias traces through
+  both semantic schema rejection and direct-oracle fail-closed output validation.
+- Falsifier: an effect outcome exists without an owned attempt, an invalid start replaces its
+  canonical predecessor, or any malformed direct trace emits an invalid decision.
+
 ## Machine-checkable gates
 
 1. Schema and fixture materializers reproduce committed bytes exactly.

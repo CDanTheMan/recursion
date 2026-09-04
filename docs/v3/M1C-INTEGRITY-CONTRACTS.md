@@ -78,6 +78,9 @@ payload, observer, result and fence. Contradictory or inexact observations remai
 Admission time precedes every observation, and attempt start cannot exceed the intent deadline.
 An exact receipt continues to own the historical outcome if supplied records violate that order,
 but the temporal authorization violation remains explicit and never becomes a clean success.
+Attempt starts are contiguous and unique by number and identity. Every external observation,
+receipt and reconciliation is owned by a preceding exact start; malformed records cannot create or
+replace that canonical attempt.
 
 An ambiguous effect cannot be retried or used to admit a dependent effect until an authenticated
 reconciliation observation resolves the same external operation. Reconciliation may produce

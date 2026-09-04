@@ -372,6 +372,51 @@ class M1CSemanticAdversarialTests(unittest.TestCase):
         self.assertIn("observation-unverified", decision["reasons"])
         self.assertIn("receipt-missing", decision["reasons"])
 
+        for number, keep_type in ((8, "ExternalObserved@1"), (7, "ReceiptRecorded@1")):
+            bundle = load_fixture(number)
+            bundle["input"]["observations"] = [
+                item for item in bundle["input"]["observations"] if item["type"] == keep_type
+            ]
+            with self.subTest(ownerless=keep_type), self.assertRaises(jsonschema.ValidationError):
+                schema_gate.validate(bundle["input"], "EffectTraceInput")
+            decision = oracle.classify_effect_trace(bundle["input"])
+            self.assert_reason(decision, "reconciliation-required", "ambiguous")
+            self.assertEqual(decision["final_attempt_number"], 1)
+            schema_gate.validate(decision, "EffectDecision")
+
+        bundle = load_fixture(9)
+        bundle["input"]["observations"][2]["attempt_number"] = 1
+        with self.assertRaises(jsonschema.ValidationError):
+            schema_gate.validate(bundle["input"], "EffectTraceInput")
+        receipt = copy.deepcopy(load_fixture(7)["input"]["observations"][-1])
+        bundle["input"]["observations"].append(receipt)
+        decision = oracle.classify_effect_trace(bundle["input"])
+        self.assert_reason(decision, "attempt-binding-mismatch", "ambiguous")
+        schema_gate.validate(decision, "EffectDecision")
+
+        bundle = load_fixture(9)
+        receipt_one = copy.deepcopy(load_fixture(7)["input"]["observations"][-1])
+        receipt_two = copy.deepcopy(receipt_one)
+        receipt_two.update(
+            {"attempt_id": "attempt:2", "attempt_number": 2, "receipt_id": "receipt:two"}
+        )
+        bundle["input"]["observations"].extend([receipt_one, receipt_two])
+        schema_gate.validate(bundle["input"], "EffectTraceInput")
+        decision = oracle.classify_effect_trace(bundle["input"])
+        self.assert_reason(decision, "blind-retry-blocked", "ambiguous")
+        schema_gate.validate(decision, "EffectDecision")
+
+        bundle = load_fixture(9)
+        bundle["input"]["observations"] = [
+            item
+            for item in bundle["input"]["observations"]
+            if item["type"] == "AttemptStarted@1"
+        ]
+        schema_gate.validate(bundle["input"], "EffectTraceInput")
+        decision = oracle.classify_effect_trace(bundle["input"])
+        self.assert_reason(decision, "blind-retry-blocked", "ambiguous")
+        schema_gate.validate(decision, "EffectDecision")
+
         bundle = load_fixture(7)
         bundle["input"]["observations"][-1]["result_digest"] = "sha256:" + "4" * 64
         schema_gate.validate(bundle["input"], "EffectTraceInput")

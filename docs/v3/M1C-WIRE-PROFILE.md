@@ -135,7 +135,9 @@ The ordered `EffectObservation` union contains:
   authenticity, outcome `succeeded`, `failed` or `unknown`, nullable `result_digest`, nullable
   `remote_operation_ref`, `observed_at`.
 
-Every attempt uses `attempt_number` 1–64. IDs are unique and timestamps are nondecreasing.
+Every attempt uses `attempt_number` 1–64. Starts are unique and contiguous from one by both number
+and ID. Every external observation, receipt or reconciliation follows and binds its exact canonical
+start. Record IDs are unique and timestamps are nondecreasing.
 
 `DependencyEffectState@1` has `type`, `effect_id`, and status `succeeded`, `failed`, `ambiguous`,
 `reconciled-succeeded` or `reconciled-failed`.

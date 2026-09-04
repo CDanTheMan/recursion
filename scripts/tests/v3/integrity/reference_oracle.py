@@ -310,6 +310,8 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
     attempt_ids: set[str] = set()
     pending_possible: set[int] = set()
     settled_attempts: set[int] = set()
+    open_attempts: set[int] = set()
+    unresolved_attempt_structure = False
     valid_externals: list[dict[str, Any]] = []
     valid_receipts: list[dict[str, Any]] = []
     valid_reconciliations: list[dict[str, Any]] = []
@@ -334,16 +336,20 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
         number = observation["attempt_number"]
         if kind == "AttemptStarted@1":
             expected_number = max(attempts, default=0) + 1
-            if (
+            attempt_valid = binding_ok and not (
                 number in attempts
                 or observation["attempt_id"] in attempt_ids
                 or number != expected_number
-            ):
+            )
+            if not attempt_valid:
                 reasons.add("attempt-binding-mismatch")
-            if pending_possible:
+                unresolved_attempt_structure = True
+            if open_attempts:
                 reasons.add("blind-retry-blocked")
-            attempts[number] = observation
-            attempt_ids.add(observation["attempt_id"])
+            if attempt_valid:
+                attempts[number] = observation
+                attempt_ids.add(observation["attempt_id"])
+                open_attempts.add(number)
         else:
             attempt_value = attempts.get(number)
             if (
@@ -352,6 +358,7 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
             ):
                 reasons.add(_effect_observation_binding_reason(kind))
                 binding_ok = False
+                unresolved_attempt_structure = True
             authenticity = observation["authenticity"]
             record_id_field = {
                 "ExternalObserved@1": "observation_id",
@@ -377,17 +384,21 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
                         and number not in settled_attempts
                     ):
                         pending_possible.add(number)
+                    elif observation["outcome"] == "rejected":
+                        open_attempts.discard(number)
             elif kind == "ReceiptRecorded@1":
                 if binding_ok and authenticity == "verified":
                     valid_receipts.append(observation)
                     settled_attempts.add(number)
                     pending_possible.discard(number)
+                    open_attempts.discard(number)
             else:
                 if binding_ok and authenticity == "verified":
                     valid_reconciliations.append(observation)
                     if observation["outcome"] in {"succeeded", "failed"}:
                         settled_attempts.add(number)
                         pending_possible.discard(number)
+                        open_attempts.discard(number)
                     elif number not in settled_attempts:
                         pending_possible.add(number)
 
@@ -439,7 +450,7 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
         ):
             reasons.add("observation-conflict")
 
-    final_attempt = max(attempts, default=0)
+    final_attempt = max((item["attempt_number"] for item in observations), default=0)
     hard_refusal = reasons & {
         "admission-refused",
         "authority-binding-mismatch",
@@ -471,7 +482,12 @@ def classify_effect_trace(value: dict[str, Any]) -> dict[str, Any]:
     }
     if len(all_remote_refs) > 1 or len(all_result_digests) > 1:
         reasons.add("observation-conflict")
-    if "observation-conflict" in reasons or pending_possible:
+    if (
+        "blind-retry-blocked" in reasons
+        or "observation-conflict" in reasons
+        or pending_possible
+        or unresolved_attempt_structure
+    ):
         if pending_possible:
             reasons.add("receipt-missing")
         reasons.add("reconciliation-required")

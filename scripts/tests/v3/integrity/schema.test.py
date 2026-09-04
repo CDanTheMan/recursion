@@ -313,6 +313,22 @@ def _effect_bindings(validator: Any, enabled: bool, instance: Any, schema: dict[
         if identifier in seen[field]:
             yield jsonschema.ValidationError(f"duplicate effect trace identity: {field}")
         seen[field].add(identifier)
+    attempts: dict[Any, Any] = {}
+    attempt_ids: set[Any] = set()
+    for observation in observations:
+        if not isinstance(observation, dict):
+            continue
+        number = observation.get("attempt_number")
+        attempt_id = observation.get("attempt_id")
+        if observation.get("type") == "AttemptStarted@1":
+            expected_number = len(attempts) + 1
+            if number in attempts or attempt_id in attempt_ids or number != expected_number:
+                yield jsonschema.ValidationError("effect attempt identity or sequence is not canonical")
+                continue
+            attempts[number] = attempt_id
+            attempt_ids.add(attempt_id)
+        elif attempts.get(number) != attempt_id:
+            yield jsonschema.ValidationError("effect observation has no preceding canonical attempt")
 
 
 def _effect_decision(validator: Any, enabled: bool, instance: Any, schema: dict[str, Any]):

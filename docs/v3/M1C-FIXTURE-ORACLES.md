@@ -94,7 +94,7 @@ Every fixture-union family receives at least: unknown field; combined discrimina
 fixture ID; digest; exact integer; ordering; uniqueness; and collection-bound mutation. Lane
 specific adversarial probes cover identity cross-binding, contradiction retention, inapplicable
 support, stale source, effect receipt/attempt/idempotency and admission/deadline ordering,
-ambiguity retry, source/candidate/ref/verifier publication mismatches and receipt ordering,
+attempt ownership/sequence, ambiguity retry, source/candidate/ref/verifier publication mismatches and receipt ordering,
 writer/fence/event chain discontinuity, projection-only claims, incomplete or contradictory copy
 evidence, shared keys and sensitive tombstones.
 
