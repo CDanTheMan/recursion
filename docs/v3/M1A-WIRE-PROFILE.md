@@ -442,7 +442,9 @@ target `stale`; `quarantine` marks it `quarantined`; `supersede` marks it `super
 marks it `canceled`; and `retain-terminal` preserves a terminal target state. A retained
 definition remains admitted but nonterminal. An ambiguous effect observation marks the effect,
 its packet and its task `quarantined`; blocker and escalation events project their bound target
-states as `blocked` and `escalated`. No disposition event is merely documentary.
+states as `blocked` and `escalated`. An `EvidenceDisposed` record is the authoritative tombstone
+for its externally referenced evidence, which has no separate M1A domain-record arm. No
+disposition event is merely documentary.
 
 Receipt and event IDs are derivable without ambient state. For a first-seen command, if its ID
 begins `CMD-`, replace that prefix with `RCPT-`; otherwise prefix the complete ID with `RCPT-`.

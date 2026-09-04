@@ -153,13 +153,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "d7292ddea145d2b282252d3aafffe0baf8ee6337dc07e21243792167e1c40417",
+          "candidate_digest": "a33b07945c1486da885638b1dd7c311d635025890ae5807a9bc8b1f2096816b8",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "1988cf0dd145530fb25aae52285a6991156178f76a48d91d0b00c873ae8d1590",
+          "content_digest": "e219e96d4146c88e8a08fb645c9a34979648435484ca429adb190c3a73f641e5",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -176,13 +176,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "7a2e23dca723c04bf5372a685319059e6001bb228484f9a8120bebe1acdaa164",
+          "candidate_digest": "cd30af278e57a41c73bce7e10cb4657fcbd08abbb11bf91f1ccbd7301cd97f75",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "f8017e7039f518212880895046225ed3b1a349ce1225e860faf8edbded5198d3",
+          "content_digest": "ccbc1d1d35227a2d456d0f0f634172aecb2d93f7d9e7aacde22cbfd7af1141a2",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -199,13 +199,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "804489e2c8e747a8793e0840cd407c1e44545448653a08b1f288d704624554d8",
+          "candidate_digest": "f603876bf49cd8af7413f558883a2cc4e75821b08ee9eebf077bc351a8619f3d",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "0d7b77c7ea38b1f62a3e40597691e94753869671724737cf11f566407f589fe5",
+          "content_digest": "01d19f973fd5c08ab8f7f9aa88c69368f8da1e34eedd3ed5f82ecf3abc653c26",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -222,13 +222,82 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "ec9dd101f6c95b10ece7b8d088ed8b26901ea828effceaf64d493cb134f8e621",
+          "candidate_digest": "8cbfebd495f57c203e744ed741bbeb6650e26bd910b9efcaf681f454eeec7389",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "0f96e3f82dc3108d719c84a4abbf40bfcc7464ae2614c2c3f19791dba9b08358",
+          "content_digest": "7c64299f71ab3d322124b8b9b0c7ce0bc91a3ee57f7cb1d61a4ec39261f25cf5",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "WORKER-LUNA",
+          "actor_role": "worker",
+          "allowed_command_types": [
+            "submit-worker-result"
+          ],
+          "attestation_id": "AUTH-F-M1A-009-exhausted-11",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "e43fefd153421a9d19a2a7d9e821ecc10f0aab9d72cd379bd434c4bedc0b92fe",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "bb44114dc833f20fd80580f6047137542d3cd4b6f0d4f0960a52afe283522c32",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "VERIFIER-TERRA",
+          "actor_role": "verifier",
+          "allowed_command_types": [
+            "submit-gate-result"
+          ],
+          "attestation_id": "AUTH-F-M1A-009-exhausted-12",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "2c7ca892aaa18af892a8509333a9f8f2b0f975348670ea5762f1d76a811768f4",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "0a1a59b2f83573dc34e3c9b63af21be585b84c0c80510160e6876f4cc5ec164a",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "ARM-M1A",
+          "actor_role": "arm",
+          "allowed_command_types": [
+            "propose-retry"
+          ],
+          "attestation_id": "AUTH-F-M1A-009-exhausted-13",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "181cba224baabe72fe1b68d41e7398b059da3f8af20712585f32e3a7de40e24a",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "00c0028b5ff1bdbd1a438fb9de30502a04369dd380b6a08ed2598918522c5cf0",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -238,20 +307,20 @@
           "allowed_command_types": [
             "raise-blocker"
           ],
-          "attestation_id": "AUTH-F-M1A-009-exhausted-11",
+          "attestation_id": "AUTH-F-M1A-009-exhausted-14",
           "attestation_schema_version": "m1a-fixture-authority-1",
           "authority_policy_ref": {
             "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "0d00324d12374dc4ef07420d04016599891986776761b75bb7c210d5770d3861",
+          "candidate_digest": "db8c0ffc0def30ab736913aec291564a12e29dca650488abd79e77e7d1bb0740",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "ee7ca4d1698abd17ea13c20ecfc9aa8dbf305a0cb252ceffca534f404b72626a",
+          "content_digest": "6da153d0beaa8f6e0c781239328e47f20046ca979eb2108a042fde79631ed793",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -261,20 +330,20 @@
           "allowed_command_types": [
             "raise-escalation"
           ],
-          "attestation_id": "AUTH-F-M1A-009-exhausted-12",
+          "attestation_id": "AUTH-F-M1A-009-exhausted-15",
           "attestation_schema_version": "m1a-fixture-authority-1",
           "authority_policy_ref": {
             "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "13f252a530f91b83f54d8814a5e2b6a96b167aae8c793c2647b4646b20c95a80",
+          "candidate_digest": "5a9c769f42698a8cf28b3494a9a60bbd5ceea509325319a655e6e97924d30740",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "49ef3a3302346184c2f1b64572a6613bbd5628dcf426b91a23188abfc2b77efa",
+          "content_digest": "acfbdd931bb7649416ae66fd3547672410f45673501f9f746bf96505398ce59c",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         }
@@ -284,12 +353,12 @@
         {
           "actor_id": "ARM-M1A",
           "auth_ref": "AUTH-F-M1A-009-exhausted-10",
-          "candidate_digest": "ec9dd101f6c95b10ece7b8d088ed8b26901ea828effceaf64d493cb134f8e621",
+          "candidate_digest": "8cbfebd495f57c203e744ed741bbeb6650e26bd910b9efcaf681f454eeec7389",
           "command_id": "CMD-F-M1A-009-exhausted-10",
           "command_schema_version": "m1a-command-1",
           "command_type": "propose-retry",
-          "content_digest": "2e0fb61226a2c63492da12a67d5f4e2f8b04e70edf7b02c12817242e9cc50ad7",
-          "expected_state_digest": "ac01fb62c0d20c2968ca51abee4e9800c632d8f9e256494207bdbab014b345a7",
+          "content_digest": "62045a9c9046122ec15ac3ff5120e757c63b17327fb8677452bf4a99b4a9cdb3",
+          "expected_state_digest": "e9f3e673736450998449ad0af52efe1a929b867e443265506297d11a632ec3b9",
           "expected_state_version": 9,
           "goal_ref": {
             "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
@@ -305,10 +374,294 @@
           "logical_time": 10,
           "payload": {
             "causation_id": "CMD-F-M1A-009-exhausted-10",
-            "content_digest": "bc978ba0e3001369d1401fb81782626bda80a100411aa9f6cbdef092af9a0c1b",
+            "content_digest": "9cfcaf7a69d57cc31be0baf347d89d033a77b3a9a8407fad7db55cf33ffcf330",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "ARM-M1A",
             "created_logical_time": 10,
+            "created_under_lease": {
+              "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "RETRY-DECISION-2",
+            "object_type": "retry-decision",
+            "payload": {
+              "disposition": "admitted",
+              "failed_gate_result_ref": {
+                "content_digest": "82431dc8639ce24ba50a658f570b00781dba94f7c2189fed8c4afccb8c8f48d8",
+                "id": "GATE-RESULT-M1A-1",
+                "object_type": "gate-result",
+                "version": 1
+              },
+              "goal_ref": {
+                "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "next_attempt": 2,
+              "novelty_delta": {
+                "addresses_failure_ids": [
+                  "FAIL-GATE"
+                ],
+                "canonical_diff": [
+                  {
+                    "new_value": {
+                      "digest": "f41ed738024b20674227c91faa89f71b67a80fe38685a3679007c1d9d7a2be07",
+                      "state": "present"
+                    },
+                    "old_value": {
+                      "digest": null,
+                      "state": "absent"
+                    },
+                    "path_segments": []
+                  }
+                ],
+                "canonical_diff_digest": "9564adaf1a34bf9914545299716141453a2edc1d31de9bf4d00b39fa5e916989",
+                "delta_digest": "7706192e40e001fb0b8e6140562e063e7e59c146fa027ec083c902b33240864a",
+                "delta_id": "delta-evidence-new",
+                "kind": "evidence-added",
+                "new_descriptor_digest": "16679c75f6fb7222ea6ad74fd5938a7612c020ea2b5ee23d487334fa4ebd143d",
+                "new_evidence_refs": [
+                  {
+                    "content_digest": "d896a3225c9180f004f444ee75fa111af0f975a2260aa9287f727a0f4205972e",
+                    "evidence_id": "evidence-new",
+                    "evidence_type": "fixture-observation",
+                    "locator": "fixture://evidence/evidence-new",
+                    "schema_digest": "a658998fd5db71044eb87d56a6f0044ad38f9fecb878c375727b239e842a1067"
+                  }
+                ],
+                "novelty_schema_version": "novelty-delta-1",
+                "old_descriptor_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "old_evidence_refs": [],
+                "prior_attempt_digest": "75f45b48d1c479c1dbd9d5f8ef9d5d42df0fd6504cccf896a6614291a770af99"
+              },
+              "novelty_delta_digest": "7706192e40e001fb0b8e6140562e063e7e59c146fa027ec083c902b33240864a",
+              "plan_ref": {
+                "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "prior_work_packet_ref": {
+                "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
+                "id": "PACKET-d52e3ed56484d45588e23962e45f2321",
+                "object_type": "work-packet",
+                "version": 1
+              },
+              "remaining_budget": {
+                "attempts": 0,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "retry_maximum": 2,
+              "task_ref": {
+                "content_digest": "8aae5f9807fdace5915261505d6dac7525a1576215395ed9380ed4a76a4c6ab8",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "unchanged_binding_digest": "cfa894e5f9b9d0068861816962baa36872b2bb65a00beb94b4020aa5678b3b45"
+            },
+            "schema_version": "m1a-retry-decision-1",
+            "version": 1
+          },
+          "payload_digest": "8cbfebd495f57c203e744ed741bbeb6650e26bd910b9efcaf681f454eeec7389",
+          "plan_ref": {
+            "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        },
+        {
+          "actor_id": "WORKER-LUNA",
+          "auth_ref": "AUTH-F-M1A-009-exhausted-11",
+          "candidate_digest": "e43fefd153421a9d19a2a7d9e821ecc10f0aab9d72cd379bd434c4bedc0b92fe",
+          "command_id": "CMD-F-M1A-009-exhausted-11",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "submit-worker-result",
+          "content_digest": "0737bc1ee5f0fd4444240b5658abfeccc3b695410822fa20561ffc7039c89bc2",
+          "expected_state_digest": "b07df87f3b8fcee7f3afc429e4b5f4946da7383edf0e22776a0b1b70d1fb52fa",
+          "expected_state_version": 11,
+          "goal_ref": {
+            "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": {
+            "content_digest": "9182621cc1169199c03ac219b430453336f9e14132c7360d41dd8487bca23d00",
+            "lease_epoch": 1,
+            "lease_id": "LEASE-WORK-1"
+          },
+          "logical_time": 12,
+          "payload": {
+            "causation_id": "CMD-F-M1A-009-exhausted-11",
+            "content_digest": "b3a1c9eb2d3d0a935989c86759132ceb940654b5aaeb30affe0c2ba5c5229519",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "WORKER-LUNA",
+            "created_logical_time": 12,
+            "created_under_lease": {
+              "content_digest": "9182621cc1169199c03ac219b430453336f9e14132c7360d41dd8487bca23d00",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-WORK-1"
+            },
+            "id": "RESULT-M1A-2",
+            "object_type": "worker-result",
+            "payload": {
+              "candidate_digest": "9c1d7a8cbf56232028039323277088d10bee3e62cdfda620a9170bf5235e59d3",
+              "disposition": "submitted",
+              "evidence_digests": [
+                "7c5aafd85b3cf4b44b5ff567e8d304a41c23c3f923a9849822e2cbceae142819"
+              ],
+              "observed_effect_ref": null,
+              "output_digest": "ab28dd9f626283750afd79ae1d6d9a27118eeb45c97843c61ff266dab9e8d067",
+              "work_packet_ref": {
+                "content_digest": "c8535522dda62b2a39d27eedf148d3c9d1c045486de04c2c54c03b4215ef76f4",
+                "id": "PACKET-9ece420fc619770d3372fcba3dac3e02",
+                "object_type": "work-packet",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-worker-result-1",
+            "version": 1
+          },
+          "payload_digest": "e43fefd153421a9d19a2a7d9e821ecc10f0aab9d72cd379bd434c4bedc0b92fe",
+          "plan_ref": {
+            "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        },
+        {
+          "actor_id": "VERIFIER-TERRA",
+          "auth_ref": "AUTH-F-M1A-009-exhausted-12",
+          "candidate_digest": "2c7ca892aaa18af892a8509333a9f8f2b0f975348670ea5762f1d76a811768f4",
+          "command_id": "CMD-F-M1A-009-exhausted-12",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "submit-gate-result",
+          "content_digest": "c86ccec479be3258b83b8f0bf9eec2295e9ea1143f2cacfb4a86ffb0640cab17",
+          "expected_state_digest": "f0b2f9f4af634a3254cf4e5efb1381b7111fda5e3983c5ba838ee5895991cd80",
+          "expected_state_version": 12,
+          "goal_ref": {
+            "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": null,
+          "logical_time": 13,
+          "payload": {
+            "causation_id": "CMD-F-M1A-009-exhausted-12",
+            "content_digest": "0d04ec2c9edbb16281d2b567f9308d0dbc7c82a18fdb516d8d1a3149bafabea3",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "VERIFIER-TERRA",
+            "created_logical_time": 13,
+            "created_under_lease": null,
+            "id": "GATE-RESULT-M1A-2",
+            "object_type": "gate-result",
+            "payload": {
+              "actual_digest": "067e755fb1c3829d9253a8a33e20cb7a68f577fb046ae23616595448d944d9c5",
+              "candidate_digest": "9c1d7a8cbf56232028039323277088d10bee3e62cdfda620a9170bf5235e59d3",
+              "disposition": "fail",
+              "evidence_digests": [
+                "7c5aafd85b3cf4b44b5ff567e8d304a41c23c3f923a9849822e2cbceae142819"
+              ],
+              "expected_digest": "44611fa4e64fc2d16704405875b8ea1092ff4d8bc6b1e620973e07e3a8ada99e",
+              "gate_requirement": {
+                "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                "gate_id": "GATE-M1A",
+                "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+              },
+              "goal_ref": {
+                "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "independence": {
+                "evidence_store": "fixture",
+                "host": "local",
+                "implementation_actor_id": "ACTOR-IMPLEMENTER",
+                "missing_dimensions": [],
+                "model_family": "gpt-family",
+                "provider": "openai",
+                "session": "fixture",
+                "verifier_actor_id": "VERIFIER-TERRA"
+              },
+              "limitation_digests": [],
+              "observation_digest": "e778945897e58ce62e27c89c3c299cfee5ad3bff855705a000bc571e59ead3be",
+              "plan_ref": {
+                "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "procedure_version": 1,
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "task_ref": {
+                "content_digest": "8aae5f9807fdace5915261505d6dac7525a1576215395ed9380ed4a76a4c6ab8",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "work_packet_ref": {
+                "content_digest": "c8535522dda62b2a39d27eedf148d3c9d1c045486de04c2c54c03b4215ef76f4",
+                "id": "PACKET-9ece420fc619770d3372fcba3dac3e02",
+                "object_type": "work-packet",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-gate-result-1",
+            "version": 1
+          },
+          "payload_digest": "2c7ca892aaa18af892a8509333a9f8f2b0f975348670ea5762f1d76a811768f4",
+          "plan_ref": {
+            "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        },
+        {
+          "actor_id": "ARM-M1A",
+          "auth_ref": "AUTH-F-M1A-009-exhausted-13",
+          "candidate_digest": "181cba224baabe72fe1b68d41e7398b059da3f8af20712585f32e3a7de40e24a",
+          "command_id": "CMD-F-M1A-009-exhausted-13",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "propose-retry",
+          "content_digest": "72eb107fb4cc537cc07c7643f95267b2e54bfa0480d8c830ea582ea8248c5b76",
+          "expected_state_digest": "6aa9cf8f78c775fc9e2005051b0afec9f743cacd9814086beb29c77e4d7d3ec1",
+          "expected_state_version": 13,
+          "goal_ref": {
+            "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": {
+            "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
+            "lease_epoch": 1,
+            "lease_id": "LEASE-EXEC-1"
+          },
+          "logical_time": 14,
+          "payload": {
+            "causation_id": "CMD-F-M1A-009-exhausted-13",
+            "content_digest": "4ed990c5aa62588fbccfd4980bdfe7b57ed9219c31610f8925783f25371604fa",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 14,
             "created_under_lease": {
               "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
               "lease_epoch": 1,
@@ -319,8 +672,8 @@
             "payload": {
               "disposition": "exhausted",
               "failed_gate_result_ref": {
-                "content_digest": "4cecc358f27867bd9b2749e6116399796d1d54bda8b20f32060243d98a68331b",
-                "id": "GATE-RESULT-M1A-1",
+                "content_digest": "0d04ec2c9edbb16281d2b567f9308d0dbc7c82a18fdb516d8d1a3149bafabea3",
+                "id": "GATE-RESULT-M1A-2",
                 "object_type": "gate-result",
                 "version": 1
               },
@@ -345,13 +698,11 @@
                       "digest": null,
                       "state": "absent"
                     },
-                    "path_segments": [
-                      "0"
-                    ]
+                    "path_segments": []
                   }
                 ],
-                "canonical_diff_digest": "c1f33504a248d5d4b0ad272235af7696f799e1da1570bf01a51dc9cb80c79291",
-                "delta_digest": "a2436f528030fb25b83d2cb7356f3f222f26262685d08b3f2fb20cacaa0bcb7c",
+                "canonical_diff_digest": "9564adaf1a34bf9914545299716141453a2edc1d31de9bf4d00b39fa5e916989",
+                "delta_digest": "7706192e40e001fb0b8e6140562e063e7e59c146fa027ec083c902b33240864a",
                 "delta_id": "delta-evidence-new",
                 "kind": "evidence-added",
                 "new_descriptor_digest": "16679c75f6fb7222ea6ad74fd5938a7612c020ea2b5ee23d487334fa4ebd143d",
@@ -369,7 +720,7 @@
                 "old_evidence_refs": [],
                 "prior_attempt_digest": "75f45b48d1c479c1dbd9d5f8ef9d5d42df0fd6504cccf896a6614291a770af99"
               },
-              "novelty_delta_digest": "a2436f528030fb25b83d2cb7356f3f222f26262685d08b3f2fb20cacaa0bcb7c",
+              "novelty_delta_digest": "7706192e40e001fb0b8e6140562e063e7e59c146fa027ec083c902b33240864a",
               "plan_ref": {
                 "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
                 "id": "PLAN-M1A",
@@ -377,7 +728,257 @@
                 "version": 1
               },
               "prior_work_packet_ref": {
-                "content_digest": "50dd5a8ef83dd1c781a672db6e7b9737d61fc0ffaefe97db6a576ad51fa9b1b6",
+                "content_digest": "c8535522dda62b2a39d27eedf148d3c9d1c045486de04c2c54c03b4215ef76f4",
+                "id": "PACKET-9ece420fc619770d3372fcba3dac3e02",
+                "object_type": "work-packet",
+                "version": 1
+              },
+              "remaining_budget": {
+                "attempts": 0,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "retry_maximum": 2,
+              "task_ref": {
+                "content_digest": "8aae5f9807fdace5915261505d6dac7525a1576215395ed9380ed4a76a4c6ab8",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "unchanged_binding_digest": "cfa894e5f9b9d0068861816962baa36872b2bb65a00beb94b4020aa5678b3b45"
+            },
+            "schema_version": "m1a-retry-decision-1",
+            "version": 1
+          },
+          "payload_digest": "181cba224baabe72fe1b68d41e7398b059da3f8af20712585f32e3a7de40e24a",
+          "plan_ref": {
+            "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        },
+        {
+          "actor_id": "ARM-M1A",
+          "auth_ref": "AUTH-F-M1A-009-exhausted-14",
+          "candidate_digest": "db8c0ffc0def30ab736913aec291564a12e29dca650488abd79e77e7d1bb0740",
+          "command_id": "CMD-F-M1A-009-exhausted-14",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "raise-blocker",
+          "content_digest": "9c71a525725d87efade8ebb70b9db36722aeecad8f4e8675de8783a069c2fb3f",
+          "expected_state_digest": "6aa9cf8f78c775fc9e2005051b0afec9f743cacd9814086beb29c77e4d7d3ec1",
+          "expected_state_version": 13,
+          "goal_ref": {
+            "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": {
+            "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
+            "lease_epoch": 1,
+            "lease_id": "LEASE-EXEC-1"
+          },
+          "logical_time": 14,
+          "payload": {
+            "causation_id": "CMD-F-M1A-009-exhausted-14",
+            "content_digest": "0e2d049756ef6603496f45145b3e99a1878004109ddab4b2dcc17315e28c4fbb",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 14,
+            "created_under_lease": {
+              "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "BLOCKER-M1A-1",
+            "object_type": "blocker",
+            "payload": {
+              "allowed_recovery_ids": [
+                "RECOVERY-REPLAN"
+              ],
+              "blocked_object_ref": {
+                "content_digest": "8aae5f9807fdace5915261505d6dac7525a1576215395ed9380ed4a76a4c6ab8",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "evidence_digests": [
+                "e26b81403b847a3a3e69a0c04f40d541e68c659590b0944e4b11554653c18fa2"
+              ],
+              "failure_fingerprint_digest": "aed8fa647f2bf99d78bae237bf9943ce6e2691a386f4cef93a9ba718dc27b50c",
+              "kind": "gate",
+              "required_actor_id": "HEAD-HERMES",
+              "retry_after_observation_ref": null,
+              "state": "open"
+            },
+            "schema_version": "m1a-blocker-1",
+            "version": 1
+          },
+          "payload_digest": "db8c0ffc0def30ab736913aec291564a12e29dca650488abd79e77e7d1bb0740",
+          "plan_ref": {
+            "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        },
+        {
+          "actor_id": "ARM-M1A",
+          "auth_ref": "AUTH-F-M1A-009-exhausted-15",
+          "candidate_digest": "5a9c769f42698a8cf28b3494a9a60bbd5ceea509325319a655e6e97924d30740",
+          "command_id": "CMD-F-M1A-009-exhausted-15",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "raise-escalation",
+          "content_digest": "898e4c6ca1453ab4e04ce7081e5a64a9c4a4293382ead3b8a6a9a0339dff8a94",
+          "expected_state_digest": "ea0b2450cd7ca735378e42349e1b65b51319d5b72446428c08c19eb75fd8d088",
+          "expected_state_version": 14,
+          "goal_ref": {
+            "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": {
+            "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
+            "lease_epoch": 1,
+            "lease_id": "LEASE-EXEC-1"
+          },
+          "logical_time": 15,
+          "payload": {
+            "causation_id": "CMD-F-M1A-009-exhausted-15",
+            "content_digest": "ecdca17ebb7e2f7404875386c58e9db9fa267e05778536f580dd94301d38d1c1",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 15,
+            "created_under_lease": {
+              "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "ESCALATION-M1A-1",
+            "object_type": "escalation",
+            "payload": {
+              "failure_history_digests": [
+                "c31b587c9f11b631e2dfb9e75349daa42ae5357e372f70ba20fc2fc6286436de"
+              ],
+              "frozen_scope_digest": "4f424e2aa225f7a6f450d126aef7e6ef462343408b84955ce1befd0d4be3c020",
+              "option_digests": [
+                "c4b310cdc1db1cddf0fe5de993fa3fcb8483e61a96a7d0760e0ad404d80a7b80"
+              ],
+              "recommendation_digest": "60ec1f91d7070e4687c7306b709f37b232e2359d009a7100144b4cf617f76287",
+              "requested_decision": "Choose a bounded recovery or stop.",
+              "source_blocker_ref": {
+                "content_digest": "0e2d049756ef6603496f45145b3e99a1878004109ddab4b2dcc17315e28c4fbb",
+                "id": "BLOCKER-M1A-1",
+                "object_type": "blocker",
+                "version": 1
+              },
+              "state": "raised",
+              "target_role": "head"
+            },
+            "schema_version": "m1a-escalation-1",
+            "version": 1
+          },
+          "payload_digest": "5a9c769f42698a8cf28b3494a9a60bbd5ceea509325319a655e6e97924d30740",
+          "plan_ref": {
+            "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        }
+      ],
+      "decode_inputs": [],
+      "description": "Retry exhaustion raises a blocker and escalation.",
+      "expected_decode_failures": [],
+      "expected_events": [
+        {
+          "command_digest": "62045a9c9046122ec15ac3ff5120e757c63b17327fb8677452bf4a99b4a9cdb3",
+          "command_id": "CMD-F-M1A-009-exhausted-10",
+          "content_digest": "e36b116f9474c4c93b6e5cd6879467f1527e5c1e1908fe9ad5be558da5f875cf",
+          "event_id": "EV-F-M1A-009-exhausted-10-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "RetryAdmitted",
+          "logical_time": 10,
+          "previous_event_digest": "24d812629fd45e27abfaa6e085cb8ccb8a7e608cbbc07ec9c8f9da68af5a8cfc",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-009-exhausted-10",
+            "content_digest": "9cfcaf7a69d57cc31be0baf347d89d033a77b3a9a8407fad7db55cf33ffcf330",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 10,
+            "created_under_lease": {
+              "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "RETRY-DECISION-2",
+            "object_type": "retry-decision",
+            "payload": {
+              "disposition": "admitted",
+              "failed_gate_result_ref": {
+                "content_digest": "82431dc8639ce24ba50a658f570b00781dba94f7c2189fed8c4afccb8c8f48d8",
+                "id": "GATE-RESULT-M1A-1",
+                "object_type": "gate-result",
+                "version": 1
+              },
+              "goal_ref": {
+                "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "next_attempt": 2,
+              "novelty_delta": {
+                "addresses_failure_ids": [
+                  "FAIL-GATE"
+                ],
+                "canonical_diff": [
+                  {
+                    "new_value": {
+                      "digest": "f41ed738024b20674227c91faa89f71b67a80fe38685a3679007c1d9d7a2be07",
+                      "state": "present"
+                    },
+                    "old_value": {
+                      "digest": null,
+                      "state": "absent"
+                    },
+                    "path_segments": []
+                  }
+                ],
+                "canonical_diff_digest": "9564adaf1a34bf9914545299716141453a2edc1d31de9bf4d00b39fa5e916989",
+                "delta_digest": "7706192e40e001fb0b8e6140562e063e7e59c146fa027ec083c902b33240864a",
+                "delta_id": "delta-evidence-new",
+                "kind": "evidence-added",
+                "new_descriptor_digest": "16679c75f6fb7222ea6ad74fd5938a7612c020ea2b5ee23d487334fa4ebd143d",
+                "new_evidence_refs": [
+                  {
+                    "content_digest": "d896a3225c9180f004f444ee75fa111af0f975a2260aa9287f727a0f4205972e",
+                    "evidence_id": "evidence-new",
+                    "evidence_type": "fixture-observation",
+                    "locator": "fixture://evidence/evidence-new",
+                    "schema_digest": "a658998fd5db71044eb87d56a6f0044ad38f9fecb878c375727b239e842a1067"
+                  }
+                ],
+                "novelty_schema_version": "novelty-delta-1",
+                "old_descriptor_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "old_evidence_refs": [],
+                "prior_attempt_digest": "75f45b48d1c479c1dbd9d5f8ef9d5d42df0fd6504cccf896a6614291a770af99"
+              },
+              "novelty_delta_digest": "7706192e40e001fb0b8e6140562e063e7e59c146fa027ec083c902b33240864a",
+              "plan_ref": {
+                "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "prior_work_packet_ref": {
+                "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
                 "id": "PACKET-d52e3ed56484d45588e23962e45f2321",
                 "object_type": "work-packet",
                 "version": 1
@@ -398,254 +999,397 @@
                 "object_type": "task-node",
                 "version": 1
               },
-              "unchanged_binding_digest": "46024243246d1f7525f997e427f0be35b374ba1206b0617df544828b8aa773c7"
+              "unchanged_binding_digest": "cfa894e5f9b9d0068861816962baa36872b2bb65a00beb94b4020aa5678b3b45"
             },
             "schema_version": "m1a-retry-decision-1",
             "version": 1
           },
-          "payload_digest": "ec9dd101f6c95b10ece7b8d088ed8b26901ea828effceaf64d493cb134f8e621",
-          "plan_ref": {
-            "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
-            "id": "PLAN-M1A",
-            "object_type": "plan-revision",
-            "version": 1
-          }
-        },
-        {
-          "actor_id": "ARM-M1A",
-          "auth_ref": "AUTH-F-M1A-009-exhausted-11",
-          "candidate_digest": "0d00324d12374dc4ef07420d04016599891986776761b75bb7c210d5770d3861",
-          "command_id": "CMD-F-M1A-009-exhausted-11",
-          "command_schema_version": "m1a-command-1",
-          "command_type": "raise-blocker",
-          "content_digest": "da8a528e76d27160d998dd521abbe15699949faec9024641321d3d4f5c24d96b",
-          "expected_state_digest": "ac01fb62c0d20c2968ca51abee4e9800c632d8f9e256494207bdbab014b345a7",
-          "expected_state_version": 9,
-          "goal_ref": {
-            "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
-            "id": "GOAL-M1A",
-            "object_type": "goal-spec",
-            "version": 1
-          },
-          "lease_ref": {
-            "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
-            "lease_epoch": 1,
-            "lease_id": "LEASE-EXEC-1"
-          },
-          "logical_time": 10,
-          "payload": {
-            "causation_id": "CMD-F-M1A-009-exhausted-11",
-            "content_digest": "3a1630415fd3157697c14dced199aa8842d5487c3b14f65ab22f47d4cc9a9ef9",
-            "correlation_id": "CORR-M1A",
-            "created_by_actor_id": "ARM-M1A",
-            "created_logical_time": 10,
-            "created_under_lease": {
-              "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
-              "lease_epoch": 1,
-              "lease_id": "LEASE-EXEC-1"
-            },
-            "id": "BLOCKER-M1A-1",
-            "object_type": "blocker",
-            "payload": {
-              "allowed_recovery_ids": [
-                "RECOVERY-REPLAN"
-              ],
-              "blocked_object_ref": {
-                "content_digest": "8aae5f9807fdace5915261505d6dac7525a1576215395ed9380ed4a76a4c6ab8",
-                "id": "TASK-M1A-A",
-                "object_type": "task-node",
-                "version": 1
-              },
-              "evidence_digests": [
-                "e26b81403b847a3a3e69a0c04f40d541e68c659590b0944e4b11554653c18fa2"
-              ],
-              "failure_fingerprint_digest": "aed8fa647f2bf99d78bae237bf9943ce6e2691a386f4cef93a9ba718dc27b50c",
-              "kind": "gate",
-              "required_actor_id": "HEAD-HERMES",
-              "retry_after_observation_ref": null,
-              "state": "open"
-            },
-            "schema_version": "m1a-blocker-1",
-            "version": 1
-          },
-          "payload_digest": "0d00324d12374dc4ef07420d04016599891986776761b75bb7c210d5770d3861",
-          "plan_ref": {
-            "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
-            "id": "PLAN-M1A",
-            "object_type": "plan-revision",
-            "version": 1
-          }
-        },
-        {
-          "actor_id": "ARM-M1A",
-          "auth_ref": "AUTH-F-M1A-009-exhausted-12",
-          "candidate_digest": "13f252a530f91b83f54d8814a5e2b6a96b167aae8c793c2647b4646b20c95a80",
-          "command_id": "CMD-F-M1A-009-exhausted-12",
-          "command_schema_version": "m1a-command-1",
-          "command_type": "raise-escalation",
-          "content_digest": "fa23685e40f131a84360fdd3d412f8e53bcded8f5a1aa14afc811d6d996e8627",
-          "expected_state_digest": "006afd0cf4ebe261bf0a998decd18722f151a80ba26df16964c97df838f1ce08",
-          "expected_state_version": 10,
-          "goal_ref": {
-            "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
-            "id": "GOAL-M1A",
-            "object_type": "goal-spec",
-            "version": 1
-          },
-          "lease_ref": {
-            "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
-            "lease_epoch": 1,
-            "lease_id": "LEASE-EXEC-1"
-          },
-          "logical_time": 11,
-          "payload": {
-            "causation_id": "CMD-F-M1A-009-exhausted-12",
-            "content_digest": "61388198fddf9a064cd372ca4e5a0b9977aee88d220b144a589a370a8782178f",
-            "correlation_id": "CORR-M1A",
-            "created_by_actor_id": "ARM-M1A",
-            "created_logical_time": 11,
-            "created_under_lease": {
-              "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
-              "lease_epoch": 1,
-              "lease_id": "LEASE-EXEC-1"
-            },
-            "id": "ESCALATION-M1A-1",
-            "object_type": "escalation",
-            "payload": {
-              "failure_history_digests": [
-                "c31b587c9f11b631e2dfb9e75349daa42ae5357e372f70ba20fc2fc6286436de"
-              ],
-              "frozen_scope_digest": "4f424e2aa225f7a6f450d126aef7e6ef462343408b84955ce1befd0d4be3c020",
-              "option_digests": [
-                "c4b310cdc1db1cddf0fe5de993fa3fcb8483e61a96a7d0760e0ad404d80a7b80"
-              ],
-              "recommendation_digest": "60ec1f91d7070e4687c7306b709f37b232e2359d009a7100144b4cf617f76287",
-              "requested_decision": "Choose a bounded recovery or stop.",
-              "source_blocker_ref": {
-                "content_digest": "3a1630415fd3157697c14dced199aa8842d5487c3b14f65ab22f47d4cc9a9ef9",
-                "id": "BLOCKER-M1A-1",
-                "object_type": "blocker",
-                "version": 1
-              },
-              "state": "raised",
-              "target_role": "head"
-            },
-            "schema_version": "m1a-escalation-1",
-            "version": 1
-          },
-          "payload_digest": "13f252a530f91b83f54d8814a5e2b6a96b167aae8c793c2647b4646b20c95a80",
-          "plan_ref": {
-            "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
-            "id": "PLAN-M1A",
-            "object_type": "plan-revision",
-            "version": 1
-          }
-        }
-      ],
-      "decode_inputs": [],
-      "description": "Retry exhaustion raises a blocker and escalation.",
-      "expected_decode_failures": [],
-      "expected_events": [
-        {
-          "command_digest": "da8a528e76d27160d998dd521abbe15699949faec9024641321d3d4f5c24d96b",
-          "command_id": "CMD-F-M1A-009-exhausted-11",
-          "content_digest": "9865e4ce7fa2255138a551adf7a56a42e1642e9d4db4e7b66ddeaf9a715ed588",
-          "event_id": "EV-F-M1A-009-exhausted-11-0001",
-          "event_schema_version": "m1a-event-1",
-          "event_type": "BlockerRaised",
-          "logical_time": 10,
-          "previous_event_digest": "1b5d48074785ffdbc57ef83890175076dbfb56a57d17f7d57752462860386102",
-          "primary_record": {
-            "causation_id": "CMD-F-M1A-009-exhausted-11",
-            "content_digest": "3a1630415fd3157697c14dced199aa8842d5487c3b14f65ab22f47d4cc9a9ef9",
-            "correlation_id": "CORR-M1A",
-            "created_by_actor_id": "ARM-M1A",
-            "created_logical_time": 10,
-            "created_under_lease": {
-              "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
-              "lease_epoch": 1,
-              "lease_id": "LEASE-EXEC-1"
-            },
-            "id": "BLOCKER-M1A-1",
-            "object_type": "blocker",
-            "payload": {
-              "allowed_recovery_ids": [
-                "RECOVERY-REPLAN"
-              ],
-              "blocked_object_ref": {
-                "content_digest": "8aae5f9807fdace5915261505d6dac7525a1576215395ed9380ed4a76a4c6ab8",
-                "id": "TASK-M1A-A",
-                "object_type": "task-node",
-                "version": 1
-              },
-              "evidence_digests": [
-                "e26b81403b847a3a3e69a0c04f40d541e68c659590b0944e4b11554653c18fa2"
-              ],
-              "failure_fingerprint_digest": "aed8fa647f2bf99d78bae237bf9943ce6e2691a386f4cef93a9ba718dc27b50c",
-              "kind": "gate",
-              "required_actor_id": "HEAD-HERMES",
-              "retry_after_observation_ref": null,
-              "state": "open"
-            },
-            "schema_version": "m1a-blocker-1",
-            "version": 1
-          },
           "related_records": [],
           "sequence": 10,
-          "state_delta_digest": "979c26735455a1739ee6b907765c5fd4aa9a40c8e70551454d31bcd454c40870",
+          "state_delta_digest": "d54d00f5f2b069a94719a59fc8a94cf4af0e43940d8673b96dfd67f7c19251b2",
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "fa23685e40f131a84360fdd3d412f8e53bcded8f5a1aa14afc811d6d996e8627",
-          "command_id": "CMD-F-M1A-009-exhausted-12",
-          "content_digest": "05359ace5d70ad914d8375508adf9ef266ab47811dfa96b8b59822040f16bdbe",
-          "event_id": "EV-F-M1A-009-exhausted-12-0001",
+          "command_digest": "62045a9c9046122ec15ac3ff5120e757c63b17327fb8677452bf4a99b4a9cdb3",
+          "command_id": "CMD-F-M1A-009-exhausted-10",
+          "content_digest": "32511a2aa608fa50e80f82dcffee6e87056b6bba43d0561509afbfb5c1177354",
+          "event_id": "EV-F-M1A-009-exhausted-10-0002",
           "event_schema_version": "m1a-event-1",
-          "event_type": "EscalationRaised",
-          "logical_time": 11,
-          "previous_event_digest": "9865e4ce7fa2255138a551adf7a56a42e1642e9d4db4e7b66ddeaf9a715ed588",
+          "event_type": "WorkPacketDerived",
+          "logical_time": 10,
+          "previous_event_digest": "e36b116f9474c4c93b6e5cd6879467f1527e5c1e1908fe9ad5be558da5f875cf",
           "primary_record": {
-            "causation_id": "CMD-F-M1A-009-exhausted-12",
-            "content_digest": "61388198fddf9a064cd372ca4e5a0b9977aee88d220b144a589a370a8782178f",
+            "causation_id": "CMD-F-M1A-009-exhausted-10",
+            "content_digest": "c8535522dda62b2a39d27eedf148d3c9d1c045486de04c2c54c03b4215ef76f4",
             "correlation_id": "CORR-M1A",
-            "created_by_actor_id": "ARM-M1A",
-            "created_logical_time": 11,
+            "created_by_actor_id": "KERNEL-M1A",
+            "created_logical_time": 10,
             "created_under_lease": {
               "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
               "lease_epoch": 1,
               "lease_id": "LEASE-EXEC-1"
             },
-            "id": "ESCALATION-M1A-1",
-            "object_type": "escalation",
+            "id": "PACKET-9ece420fc619770d3372fcba3dac3e02",
+            "object_type": "work-packet",
             "payload": {
-              "failure_history_digests": [
-                "c31b587c9f11b631e2dfb9e75349daa42ae5357e372f70ba20fc2fc6286436de"
+              "allowed_action_ids": [
+                "ACTION-READ",
+                "ACTION-WRITE"
               ],
-              "frozen_scope_digest": "4f424e2aa225f7a6f450d126aef7e6ef462343408b84955ce1befd0d4be3c020",
-              "option_digests": [
-                "c4b310cdc1db1cddf0fe5de993fa3fcb8483e61a96a7d0760e0ad404d80a7b80"
+              "allowed_resource_paths": [
+                "workspace/input",
+                "workspace/output"
               ],
-              "recommendation_digest": "60ec1f91d7070e4687c7306b709f37b232e2359d009a7100144b4cf617f76287",
-              "requested_decision": "Choose a bounded recovery or stop.",
-              "source_blocker_ref": {
-                "content_digest": "3a1630415fd3157697c14dced199aa8842d5487c3b14f65ab22f47d4cc9a9ef9",
-                "id": "BLOCKER-M1A-1",
-                "object_type": "blocker",
+              "attempt": 2,
+              "authority_ids": [
+                "AUTHORITY-M1A"
+              ],
+              "authority_policy_ref": {
+                "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+                "policy_id": "POLICY-AUTHORITY",
+                "policy_version": 1
+              },
+              "budget_limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "budget_reservation_ref": {
+                "content_digest": "f8716884c234fd8ec7c5f4d3ceb86581c8b62370a5bc20f471c673f4a3a73bc0",
+                "id": "BUDGET-RESERVATION-1",
+                "object_type": "budget-reservation",
                 "version": 1
               },
-              "state": "raised",
-              "target_role": "head"
+              "capability_ids": [
+                "CAPABILITY-BASE"
+              ],
+              "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "deadline_logical_time": 900,
+              "effect_keys": [
+                "EFFECT-SYNTHETIC"
+              ],
+              "egress_class_id": "EGRESS-NONE",
+              "egress_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "expected_goal_fence_epoch": 1,
+              "expected_pause_epoch": 0,
+              "gate_requirements": [
+                {
+                  "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                  "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                  "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                  "gate_id": "GATE-M1A",
+                  "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                  "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+                }
+              ],
+              "goal_ref": {
+                "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "inherited_non_goals": [
+                "no external effects",
+                "no publication"
+              ],
+              "logical_worker_actor_id": "WORKER-LUNA",
+              "output_schema_digest": "fbd88ffb1b3cae20a2a3d084d65019eea332521fcab888b63b9db0b46cd0da80",
+              "plan_ref": {
+                "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "privacy_class_id": "PRIVACY-SYNTHETIC",
+              "privacy_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "prohibition_ids": [
+                "PROHIBIT-EGRESS"
+              ],
+              "route_assignment_ref": {
+                "content_digest": "60f406cc3ec44754078fd613787897869af3b48e15ac5673100faa8e0379ca2b",
+                "id": "ROUTE-ASSIGNMENT-1",
+                "object_type": "route-assignment",
+                "version": 1
+              },
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "supersedes_packet_ref": {
+                "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
+                "id": "PACKET-d52e3ed56484d45588e23962e45f2321",
+                "object_type": "work-packet",
+                "version": 1
+              },
+              "task_ref": {
+                "content_digest": "8aae5f9807fdace5915261505d6dac7525a1576215395ed9380ed4a76a4c6ab8",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              },
+              "work_lease_ref": {
+                "content_digest": "9182621cc1169199c03ac219b430453336f9e14132c7360d41dd8487bca23d00",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-WORK-1"
+              }
             },
-            "schema_version": "m1a-escalation-1",
+            "schema_version": "m1a-work-packet-1",
             "version": 1
           },
           "related_records": [],
           "sequence": 11,
-          "state_delta_digest": "c631708ff3cf44c02cadad85f24ee32c6e8a59a027f3edcfe89a07c3c49fcf6a",
+          "state_delta_digest": "2431b6d03f37ade1232ccb37975d246535cb808d4c4ae617b63be5729de6baca",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "0737bc1ee5f0fd4444240b5658abfeccc3b695410822fa20561ffc7039c89bc2",
+          "command_id": "CMD-F-M1A-009-exhausted-11",
+          "content_digest": "331f4c797362f7d26ee347153c3e1431194b6f78222b6a1bf01b84fa02a65155",
+          "event_id": "EV-F-M1A-009-exhausted-11-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "WorkerResultRecorded",
+          "logical_time": 12,
+          "previous_event_digest": "32511a2aa608fa50e80f82dcffee6e87056b6bba43d0561509afbfb5c1177354",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-009-exhausted-11",
+            "content_digest": "b3a1c9eb2d3d0a935989c86759132ceb940654b5aaeb30affe0c2ba5c5229519",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "WORKER-LUNA",
+            "created_logical_time": 12,
+            "created_under_lease": {
+              "content_digest": "9182621cc1169199c03ac219b430453336f9e14132c7360d41dd8487bca23d00",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-WORK-1"
+            },
+            "id": "RESULT-M1A-2",
+            "object_type": "worker-result",
+            "payload": {
+              "candidate_digest": "9c1d7a8cbf56232028039323277088d10bee3e62cdfda620a9170bf5235e59d3",
+              "disposition": "submitted",
+              "evidence_digests": [
+                "7c5aafd85b3cf4b44b5ff567e8d304a41c23c3f923a9849822e2cbceae142819"
+              ],
+              "observed_effect_ref": null,
+              "output_digest": "ab28dd9f626283750afd79ae1d6d9a27118eeb45c97843c61ff266dab9e8d067",
+              "work_packet_ref": {
+                "content_digest": "c8535522dda62b2a39d27eedf148d3c9d1c045486de04c2c54c03b4215ef76f4",
+                "id": "PACKET-9ece420fc619770d3372fcba3dac3e02",
+                "object_type": "work-packet",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-worker-result-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 12,
+          "state_delta_digest": "b228b881216f3391bfeec41179ead7606ab00fe46dc744b001d83adb950c4a75",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "c86ccec479be3258b83b8f0bf9eec2295e9ea1143f2cacfb4a86ffb0640cab17",
+          "command_id": "CMD-F-M1A-009-exhausted-12",
+          "content_digest": "0d63b5dfb83e549c95f87011f41a4873b064eb912fc9c67d20406090f0d71018",
+          "event_id": "EV-F-M1A-009-exhausted-12-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "GateResultRecorded",
+          "logical_time": 13,
+          "previous_event_digest": "331f4c797362f7d26ee347153c3e1431194b6f78222b6a1bf01b84fa02a65155",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-009-exhausted-12",
+            "content_digest": "0d04ec2c9edbb16281d2b567f9308d0dbc7c82a18fdb516d8d1a3149bafabea3",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "VERIFIER-TERRA",
+            "created_logical_time": 13,
+            "created_under_lease": null,
+            "id": "GATE-RESULT-M1A-2",
+            "object_type": "gate-result",
+            "payload": {
+              "actual_digest": "067e755fb1c3829d9253a8a33e20cb7a68f577fb046ae23616595448d944d9c5",
+              "candidate_digest": "9c1d7a8cbf56232028039323277088d10bee3e62cdfda620a9170bf5235e59d3",
+              "disposition": "fail",
+              "evidence_digests": [
+                "7c5aafd85b3cf4b44b5ff567e8d304a41c23c3f923a9849822e2cbceae142819"
+              ],
+              "expected_digest": "44611fa4e64fc2d16704405875b8ea1092ff4d8bc6b1e620973e07e3a8ada99e",
+              "gate_requirement": {
+                "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                "gate_id": "GATE-M1A",
+                "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+              },
+              "goal_ref": {
+                "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "independence": {
+                "evidence_store": "fixture",
+                "host": "local",
+                "implementation_actor_id": "ACTOR-IMPLEMENTER",
+                "missing_dimensions": [],
+                "model_family": "gpt-family",
+                "provider": "openai",
+                "session": "fixture",
+                "verifier_actor_id": "VERIFIER-TERRA"
+              },
+              "limitation_digests": [],
+              "observation_digest": "e778945897e58ce62e27c89c3c299cfee5ad3bff855705a000bc571e59ead3be",
+              "plan_ref": {
+                "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "procedure_version": 1,
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "task_ref": {
+                "content_digest": "8aae5f9807fdace5915261505d6dac7525a1576215395ed9380ed4a76a4c6ab8",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "work_packet_ref": {
+                "content_digest": "c8535522dda62b2a39d27eedf148d3c9d1c045486de04c2c54c03b4215ef76f4",
+                "id": "PACKET-9ece420fc619770d3372fcba3dac3e02",
+                "object_type": "work-packet",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-gate-result-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 13,
+          "state_delta_digest": "31dfd1b794da607302ccd439afa46f8f6d2e61c47b66e23f12a8b4451288ed60",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "9c71a525725d87efade8ebb70b9db36722aeecad8f4e8675de8783a069c2fb3f",
+          "command_id": "CMD-F-M1A-009-exhausted-14",
+          "content_digest": "aad39956854e395d46a09cc4a2da258fef5cdf0fe1a8be571a66be7cd3a2d630",
+          "event_id": "EV-F-M1A-009-exhausted-14-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "BlockerRaised",
+          "logical_time": 14,
+          "previous_event_digest": "0d63b5dfb83e549c95f87011f41a4873b064eb912fc9c67d20406090f0d71018",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-009-exhausted-14",
+            "content_digest": "0e2d049756ef6603496f45145b3e99a1878004109ddab4b2dcc17315e28c4fbb",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 14,
+            "created_under_lease": {
+              "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "BLOCKER-M1A-1",
+            "object_type": "blocker",
+            "payload": {
+              "allowed_recovery_ids": [
+                "RECOVERY-REPLAN"
+              ],
+              "blocked_object_ref": {
+                "content_digest": "8aae5f9807fdace5915261505d6dac7525a1576215395ed9380ed4a76a4c6ab8",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "evidence_digests": [
+                "e26b81403b847a3a3e69a0c04f40d541e68c659590b0944e4b11554653c18fa2"
+              ],
+              "failure_fingerprint_digest": "aed8fa647f2bf99d78bae237bf9943ce6e2691a386f4cef93a9ba718dc27b50c",
+              "kind": "gate",
+              "required_actor_id": "HEAD-HERMES",
+              "retry_after_observation_ref": null,
+              "state": "open"
+            },
+            "schema_version": "m1a-blocker-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 14,
+          "state_delta_digest": "2192a6337b198716ca871b63d79453b73eb29ef1f24ab682caa3f0bd01fa3ca5",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "898e4c6ca1453ab4e04ce7081e5a64a9c4a4293382ead3b8a6a9a0339dff8a94",
+          "command_id": "CMD-F-M1A-009-exhausted-15",
+          "content_digest": "5b411368657137707ad090869bd9e7f5a9630ef651af61169e9eeb8edb5eb8d9",
+          "event_id": "EV-F-M1A-009-exhausted-15-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "EscalationRaised",
+          "logical_time": 15,
+          "previous_event_digest": "aad39956854e395d46a09cc4a2da258fef5cdf0fe1a8be571a66be7cd3a2d630",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-009-exhausted-15",
+            "content_digest": "ecdca17ebb7e2f7404875386c58e9db9fa267e05778536f580dd94301d38d1c1",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 15,
+            "created_under_lease": {
+              "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "ESCALATION-M1A-1",
+            "object_type": "escalation",
+            "payload": {
+              "failure_history_digests": [
+                "c31b587c9f11b631e2dfb9e75349daa42ae5357e372f70ba20fc2fc6286436de"
+              ],
+              "frozen_scope_digest": "4f424e2aa225f7a6f450d126aef7e6ef462343408b84955ce1befd0d4be3c020",
+              "option_digests": [
+                "c4b310cdc1db1cddf0fe5de993fa3fcb8483e61a96a7d0760e0ad404d80a7b80"
+              ],
+              "recommendation_digest": "60ec1f91d7070e4687c7306b709f37b232e2359d009a7100144b4cf617f76287",
+              "requested_decision": "Choose a bounded recovery or stop.",
+              "source_blocker_ref": {
+                "content_digest": "0e2d049756ef6603496f45145b3e99a1878004109ddab4b2dcc17315e28c4fbb",
+                "id": "BLOCKER-M1A-1",
+                "object_type": "blocker",
+                "version": 1
+              },
+              "state": "raised",
+              "target_role": "head"
+            },
+            "schema_version": "m1a-escalation-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 15,
+          "state_delta_digest": "4f5bc864332c3bd3152d5893d759a4388c6dae32d2b31b42139dfa5acedfb617",
           "stream_id": "STREAM-M1A"
         }
       ],
-      "expected_final_digest": "de4a52afd8519c4a908ebaef3d3cede3a6032f9dbc17e35d916fb5f24728a86c",
+      "expected_final_digest": "11a15effed7aef10bafc9554c83f458b3372a2859b8fc6da42d93ade0b95dfc8",
       "expected_final_state": {
         "active_arm_run_ref": {
           "content_digest": "971c3effee1571d50bee8d9886644ade0c85153708e9ebb73257eacb61cf643b",
@@ -660,16 +1404,18 @@
           "version": 1
         },
         "ambiguous_effect_refs": [],
-        "consumed_novelty_delta_digests": [],
-        "content_digest": "de4a52afd8519c4a908ebaef3d3cede3a6032f9dbc17e35d916fb5f24728a86c",
+        "consumed_novelty_delta_digests": [
+          "7706192e40e001fb0b8e6140562e063e7e59c146fa027ec083c902b33240864a"
+        ],
+        "content_digest": "11a15effed7aef10bafc9554c83f458b3372a2859b8fc6da42d93ade0b95dfc8",
         "current_pause_epoch": 0,
         "current_pause_policy_ref": {
           "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
           "policy_id": "POLICY-PAUSE",
           "policy_version": 1
         },
-        "last_event_digest": "05359ace5d70ad914d8375508adf9ef266ab47811dfa96b8b59822040f16bdbe",
-        "last_event_sequence": 11,
+        "last_event_digest": "5b411368657137707ad090869bd9e7f5a9630ef651af61169e9eeb8edb5eb8d9",
+        "last_event_sequence": 15,
         "object_states": [
           {
             "object_ref": {
@@ -682,12 +1428,12 @@
           },
           {
             "object_ref": {
-              "content_digest": "3a1630415fd3157697c14dced199aa8842d5487c3b14f65ab22f47d4cc9a9ef9",
+              "content_digest": "0e2d049756ef6603496f45145b3e99a1878004109ddab4b2dcc17315e28c4fbb",
               "id": "BLOCKER-M1A-1",
               "object_type": "blocker",
               "version": 1
             },
-            "state": "open"
+            "state": "escalated"
           },
           {
             "object_ref": {
@@ -709,7 +1455,7 @@
           },
           {
             "object_ref": {
-              "content_digest": "61388198fddf9a064cd372ca4e5a0b9977aee88d220b144a589a370a8782178f",
+              "content_digest": "ecdca17ebb7e2f7404875386c58e9db9fa267e05778536f580dd94301d38d1c1",
               "id": "ESCALATION-M1A-1",
               "object_type": "escalation",
               "version": 1
@@ -727,8 +1473,17 @@
           },
           {
             "object_ref": {
-              "content_digest": "4cecc358f27867bd9b2749e6116399796d1d54bda8b20f32060243d98a68331b",
+              "content_digest": "82431dc8639ce24ba50a658f570b00781dba94f7c2189fed8c4afccb8c8f48d8",
               "id": "GATE-RESULT-M1A-1",
+              "object_type": "gate-result",
+              "version": 1
+            },
+            "state": "recorded"
+          },
+          {
+            "object_ref": {
+              "content_digest": "0d04ec2c9edbb16281d2b567f9308d0dbc7c82a18fdb516d8d1a3149bafabea3",
+              "id": "GATE-RESULT-M1A-2",
               "object_type": "gate-result",
               "version": 1
             },
@@ -772,6 +1527,15 @@
           },
           {
             "object_ref": {
+              "content_digest": "9cfcaf7a69d57cc31be0baf347d89d033a77b3a9a8407fad7db55cf33ffcf330",
+              "id": "RETRY-DECISION-2",
+              "object_type": "retry-decision",
+              "version": 1
+            },
+            "state": "admitted"
+          },
+          {
+            "object_ref": {
               "content_digest": "60f406cc3ec44754078fd613787897869af3b48e15ac5673100faa8e0379ca2b",
               "id": "ROUTE-ASSIGNMENT-1",
               "object_type": "route-assignment",
@@ -786,7 +1550,7 @@
               "object_type": "task-node",
               "version": 1
             },
-            "state": "failed"
+            "state": "blocked"
           },
           {
             "object_ref": {
@@ -799,17 +1563,35 @@
           },
           {
             "object_ref": {
-              "content_digest": "50dd5a8ef83dd1c781a672db6e7b9737d61fc0ffaefe97db6a576ad51fa9b1b6",
+              "content_digest": "c8535522dda62b2a39d27eedf148d3c9d1c045486de04c2c54c03b4215ef76f4",
+              "id": "PACKET-9ece420fc619770d3372fcba3dac3e02",
+              "object_type": "work-packet",
+              "version": 1
+            },
+            "state": "failed"
+          },
+          {
+            "object_ref": {
+              "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
               "id": "PACKET-d52e3ed56484d45588e23962e45f2321",
               "object_type": "work-packet",
               "version": 1
             },
-            "state": "result-submitted"
+            "state": "stale"
           },
           {
             "object_ref": {
-              "content_digest": "7bb7692ac0c4e029afe9dae55c155722a8898786a5c65d6e089845dc79976b75",
+              "content_digest": "bf79335dbc309541af4d4ba5e06b68f967ea8d3b2f62716a13d56ef387806baf",
               "id": "RESULT-M1A-1",
+              "object_type": "worker-result",
+              "version": 1
+            },
+            "state": "submitted"
+          },
+          {
+            "object_ref": {
+              "content_digest": "b3a1c9eb2d3d0a935989c86759132ceb940654b5aaeb30affe0c2ba5c5229519",
+              "id": "RESULT-M1A-2",
               "object_type": "worker-result",
               "version": 1
             },
@@ -818,7 +1600,7 @@
         ],
         "open_blocker_refs": [
           {
-            "content_digest": "3a1630415fd3157697c14dced199aa8842d5487c3b14f65ab22f47d4cc9a9ef9",
+            "content_digest": "0e2d049756ef6603496f45145b3e99a1878004109ddab4b2dcc17315e28c4fbb",
             "id": "BLOCKER-M1A-1",
             "object_type": "blocker",
             "version": 1
@@ -826,7 +1608,7 @@
         ],
         "open_escalation_refs": [
           {
-            "content_digest": "61388198fddf9a064cd372ca4e5a0b9977aee88d220b144a589a370a8782178f",
+            "content_digest": "ecdca17ebb7e2f7404875386c58e9db9fa267e05778536f580dd94301d38d1c1",
             "id": "ESCALATION-M1A-1",
             "object_type": "escalation",
             "version": 1
@@ -870,29 +1652,44 @@
             "receipt_id": "RCPT-F-M1A-009-exhausted-06"
           },
           {
-            "command_digest": "d7728284de20719b101ddab4b805d2a16d67a742b55d6c58bfc3aab540b644f0",
+            "command_digest": "41e4321f219efc2f29d4455783cef837fdb98ad6fb85c02953e3fa86e92d4cd9",
             "command_id": "CMD-F-M1A-009-exhausted-07",
             "receipt_id": "RCPT-F-M1A-009-exhausted-07"
           },
           {
-            "command_digest": "6a6f270f31b13a050c79c2b66d851aa933cb72352ecdd6ca527dd9ab639fe6d4",
+            "command_digest": "dcf05824304009d5be7087f7321fb3359c85a8f879902bac780a324186edd5e2",
             "command_id": "CMD-F-M1A-009-exhausted-08",
             "receipt_id": "RCPT-F-M1A-009-exhausted-08"
           },
           {
-            "command_digest": "46f96c4c3c5c49654ed8f717941a82e4c7479e9f0b35769f711bf8390fe6b8f3",
+            "command_digest": "81115c0ace8085bb6abeb050cc5dc13c4da1893e25605b6e19b0aa83405fb160",
             "command_id": "CMD-F-M1A-009-exhausted-09",
             "receipt_id": "RCPT-F-M1A-009-exhausted-09"
           },
           {
-            "command_digest": "da8a528e76d27160d998dd521abbe15699949faec9024641321d3d4f5c24d96b",
+            "command_digest": "62045a9c9046122ec15ac3ff5120e757c63b17327fb8677452bf4a99b4a9cdb3",
+            "command_id": "CMD-F-M1A-009-exhausted-10",
+            "receipt_id": "RCPT-F-M1A-009-exhausted-10"
+          },
+          {
+            "command_digest": "0737bc1ee5f0fd4444240b5658abfeccc3b695410822fa20561ffc7039c89bc2",
             "command_id": "CMD-F-M1A-009-exhausted-11",
             "receipt_id": "RCPT-F-M1A-009-exhausted-11"
           },
           {
-            "command_digest": "fa23685e40f131a84360fdd3d412f8e53bcded8f5a1aa14afc811d6d996e8627",
+            "command_digest": "c86ccec479be3258b83b8f0bf9eec2295e9ea1143f2cacfb4a86ffb0640cab17",
             "command_id": "CMD-F-M1A-009-exhausted-12",
             "receipt_id": "RCPT-F-M1A-009-exhausted-12"
+          },
+          {
+            "command_digest": "9c71a525725d87efade8ebb70b9db36722aeecad8f4e8675de8783a069c2fb3f",
+            "command_id": "CMD-F-M1A-009-exhausted-14",
+            "receipt_id": "RCPT-F-M1A-009-exhausted-14"
+          },
+          {
+            "command_digest": "898e4c6ca1453ab4e04ce7081e5a64a9c4a4293382ead3b8a6a9a0339dff8a94",
+            "command_id": "CMD-F-M1A-009-exhausted-15",
+            "receipt_id": "RCPT-F-M1A-009-exhausted-15"
           }
         ],
         "projection_schema_version": "m1a-projection-1",
@@ -951,11 +1748,11 @@
             "version": 1
           },
           {
-            "causation_id": "CMD-F-M1A-009-exhausted-11",
-            "content_digest": "3a1630415fd3157697c14dced199aa8842d5487c3b14f65ab22f47d4cc9a9ef9",
+            "causation_id": "CMD-F-M1A-009-exhausted-14",
+            "content_digest": "0e2d049756ef6603496f45145b3e99a1878004109ddab4b2dcc17315e28c4fbb",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "ARM-M1A",
-            "created_logical_time": 10,
+            "created_logical_time": 14,
             "created_under_lease": {
               "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
               "lease_epoch": 1,
@@ -1071,11 +1868,11 @@
             "version": 1
           },
           {
-            "causation_id": "CMD-F-M1A-009-exhausted-12",
-            "content_digest": "61388198fddf9a064cd372ca4e5a0b9977aee88d220b144a589a370a8782178f",
+            "causation_id": "CMD-F-M1A-009-exhausted-15",
+            "content_digest": "ecdca17ebb7e2f7404875386c58e9db9fa267e05778536f580dd94301d38d1c1",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "ARM-M1A",
-            "created_logical_time": 11,
+            "created_logical_time": 15,
             "created_under_lease": {
               "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
               "lease_epoch": 1,
@@ -1094,7 +1891,7 @@
               "recommendation_digest": "60ec1f91d7070e4687c7306b709f37b232e2359d009a7100144b4cf617f76287",
               "requested_decision": "Choose a bounded recovery or stop.",
               "source_blocker_ref": {
-                "content_digest": "3a1630415fd3157697c14dced199aa8842d5487c3b14f65ab22f47d4cc9a9ef9",
+                "content_digest": "0e2d049756ef6603496f45145b3e99a1878004109ddab4b2dcc17315e28c4fbb",
                 "id": "BLOCKER-M1A-1",
                 "object_type": "blocker",
                 "version": 1
@@ -1143,7 +1940,7 @@
           },
           {
             "causation_id": "CMD-F-M1A-009-exhausted-09",
-            "content_digest": "4cecc358f27867bd9b2749e6116399796d1d54bda8b20f32060243d98a68331b",
+            "content_digest": "82431dc8639ce24ba50a658f570b00781dba94f7c2189fed8c4afccb8c8f48d8",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "VERIFIER-TERRA",
             "created_logical_time": 9,
@@ -1201,8 +1998,77 @@
                 "version": 1
               },
               "work_packet_ref": {
-                "content_digest": "50dd5a8ef83dd1c781a672db6e7b9737d61fc0ffaefe97db6a576ad51fa9b1b6",
+                "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
                 "id": "PACKET-d52e3ed56484d45588e23962e45f2321",
+                "object_type": "work-packet",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-gate-result-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-009-exhausted-12",
+            "content_digest": "0d04ec2c9edbb16281d2b567f9308d0dbc7c82a18fdb516d8d1a3149bafabea3",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "VERIFIER-TERRA",
+            "created_logical_time": 13,
+            "created_under_lease": null,
+            "id": "GATE-RESULT-M1A-2",
+            "object_type": "gate-result",
+            "payload": {
+              "actual_digest": "067e755fb1c3829d9253a8a33e20cb7a68f577fb046ae23616595448d944d9c5",
+              "candidate_digest": "9c1d7a8cbf56232028039323277088d10bee3e62cdfda620a9170bf5235e59d3",
+              "disposition": "fail",
+              "evidence_digests": [
+                "7c5aafd85b3cf4b44b5ff567e8d304a41c23c3f923a9849822e2cbceae142819"
+              ],
+              "expected_digest": "44611fa4e64fc2d16704405875b8ea1092ff4d8bc6b1e620973e07e3a8ada99e",
+              "gate_requirement": {
+                "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                "gate_id": "GATE-M1A",
+                "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+              },
+              "goal_ref": {
+                "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "independence": {
+                "evidence_store": "fixture",
+                "host": "local",
+                "implementation_actor_id": "ACTOR-IMPLEMENTER",
+                "missing_dimensions": [],
+                "model_family": "gpt-family",
+                "provider": "openai",
+                "session": "fixture",
+                "verifier_actor_id": "VERIFIER-TERRA"
+              },
+              "limitation_digests": [],
+              "observation_digest": "e778945897e58ce62e27c89c3c299cfee5ad3bff855705a000bc571e59ead3be",
+              "plan_ref": {
+                "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "procedure_version": 1,
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "task_ref": {
+                "content_digest": "8aae5f9807fdace5915261505d6dac7525a1576215395ed9380ed4a76a4c6ab8",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "work_packet_ref": {
+                "content_digest": "c8535522dda62b2a39d27eedf148d3c9d1c045486de04c2c54c03b4215ef76f4",
+                "id": "PACKET-9ece420fc619770d3372fcba3dac3e02",
                 "object_type": "work-packet",
                 "version": 1
               }
@@ -1473,6 +2339,104 @@
             "version": 1
           },
           {
+            "causation_id": "CMD-F-M1A-009-exhausted-10",
+            "content_digest": "9cfcaf7a69d57cc31be0baf347d89d033a77b3a9a8407fad7db55cf33ffcf330",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "ARM-M1A",
+            "created_logical_time": 10,
+            "created_under_lease": {
+              "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "RETRY-DECISION-2",
+            "object_type": "retry-decision",
+            "payload": {
+              "disposition": "admitted",
+              "failed_gate_result_ref": {
+                "content_digest": "82431dc8639ce24ba50a658f570b00781dba94f7c2189fed8c4afccb8c8f48d8",
+                "id": "GATE-RESULT-M1A-1",
+                "object_type": "gate-result",
+                "version": 1
+              },
+              "goal_ref": {
+                "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "next_attempt": 2,
+              "novelty_delta": {
+                "addresses_failure_ids": [
+                  "FAIL-GATE"
+                ],
+                "canonical_diff": [
+                  {
+                    "new_value": {
+                      "digest": "f41ed738024b20674227c91faa89f71b67a80fe38685a3679007c1d9d7a2be07",
+                      "state": "present"
+                    },
+                    "old_value": {
+                      "digest": null,
+                      "state": "absent"
+                    },
+                    "path_segments": []
+                  }
+                ],
+                "canonical_diff_digest": "9564adaf1a34bf9914545299716141453a2edc1d31de9bf4d00b39fa5e916989",
+                "delta_digest": "7706192e40e001fb0b8e6140562e063e7e59c146fa027ec083c902b33240864a",
+                "delta_id": "delta-evidence-new",
+                "kind": "evidence-added",
+                "new_descriptor_digest": "16679c75f6fb7222ea6ad74fd5938a7612c020ea2b5ee23d487334fa4ebd143d",
+                "new_evidence_refs": [
+                  {
+                    "content_digest": "d896a3225c9180f004f444ee75fa111af0f975a2260aa9287f727a0f4205972e",
+                    "evidence_id": "evidence-new",
+                    "evidence_type": "fixture-observation",
+                    "locator": "fixture://evidence/evidence-new",
+                    "schema_digest": "a658998fd5db71044eb87d56a6f0044ad38f9fecb878c375727b239e842a1067"
+                  }
+                ],
+                "novelty_schema_version": "novelty-delta-1",
+                "old_descriptor_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "old_evidence_refs": [],
+                "prior_attempt_digest": "75f45b48d1c479c1dbd9d5f8ef9d5d42df0fd6504cccf896a6614291a770af99"
+              },
+              "novelty_delta_digest": "7706192e40e001fb0b8e6140562e063e7e59c146fa027ec083c902b33240864a",
+              "plan_ref": {
+                "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "prior_work_packet_ref": {
+                "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
+                "id": "PACKET-d52e3ed56484d45588e23962e45f2321",
+                "object_type": "work-packet",
+                "version": 1
+              },
+              "remaining_budget": {
+                "attempts": 0,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "retry_maximum": 2,
+              "task_ref": {
+                "content_digest": "8aae5f9807fdace5915261505d6dac7525a1576215395ed9380ed4a76a4c6ab8",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "unchanged_binding_digest": "cfa894e5f9b9d0068861816962baa36872b2bb65a00beb94b4020aa5678b3b45"
+            },
+            "schema_version": "m1a-retry-decision-1",
+            "version": 1
+          },
+          {
             "causation_id": "CMD-F-M1A-009-exhausted-07",
             "content_digest": "60f406cc3ec44754078fd613787897869af3b48e15ac5673100faa8e0379ca2b",
             "correlation_id": "CORR-M1A",
@@ -1690,8 +2654,147 @@
             "version": 1
           },
           {
+            "causation_id": "CMD-F-M1A-009-exhausted-10",
+            "content_digest": "c8535522dda62b2a39d27eedf148d3c9d1c045486de04c2c54c03b4215ef76f4",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "KERNEL-M1A",
+            "created_logical_time": 10,
+            "created_under_lease": {
+              "content_digest": "e7521c7549feefa2fcd10dcfa41c37a2f1f96cbd3d806c1530f1920578f6c967",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-EXEC-1"
+            },
+            "id": "PACKET-9ece420fc619770d3372fcba3dac3e02",
+            "object_type": "work-packet",
+            "payload": {
+              "allowed_action_ids": [
+                "ACTION-READ",
+                "ACTION-WRITE"
+              ],
+              "allowed_resource_paths": [
+                "workspace/input",
+                "workspace/output"
+              ],
+              "attempt": 2,
+              "authority_ids": [
+                "AUTHORITY-M1A"
+              ],
+              "authority_policy_ref": {
+                "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+                "policy_id": "POLICY-AUTHORITY",
+                "policy_version": 1
+              },
+              "budget_limits": {
+                "attempts": 2,
+                "cpu_ms": 10000,
+                "memory_bytes": 1048576,
+                "model_turns": 4,
+                "money_minor": 0,
+                "output_bytes": 65536,
+                "tokens": 1000
+              },
+              "budget_reservation_ref": {
+                "content_digest": "f8716884c234fd8ec7c5f4d3ceb86581c8b62370a5bc20f471c673f4a3a73bc0",
+                "id": "BUDGET-RESERVATION-1",
+                "object_type": "budget-reservation",
+                "version": 1
+              },
+              "capability_ids": [
+                "CAPABILITY-BASE"
+              ],
+              "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
+              "deadline_logical_time": 900,
+              "effect_keys": [
+                "EFFECT-SYNTHETIC"
+              ],
+              "egress_class_id": "EGRESS-NONE",
+              "egress_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "expected_goal_fence_epoch": 1,
+              "expected_pause_epoch": 0,
+              "gate_requirements": [
+                {
+                  "assigned_verifier_actor_id": "VERIFIER-TERRA",
+                  "candidate_binding_digest": "b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260",
+                  "evidence_schema_digest": "02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9",
+                  "gate_id": "GATE-M1A",
+                  "procedure_digest": "c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b",
+                  "verifier_policy_digest": "58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763"
+                }
+              ],
+              "goal_ref": {
+                "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
+                "id": "GOAL-M1A",
+                "object_type": "goal-spec",
+                "version": 1
+              },
+              "inherited_non_goals": [
+                "no external effects",
+                "no publication"
+              ],
+              "logical_worker_actor_id": "WORKER-LUNA",
+              "output_schema_digest": "fbd88ffb1b3cae20a2a3d084d65019eea332521fcab888b63b9db0b46cd0da80",
+              "plan_ref": {
+                "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
+                "id": "PLAN-M1A",
+                "object_type": "plan-revision",
+                "version": 1
+              },
+              "privacy_class_id": "PRIVACY-SYNTHETIC",
+              "privacy_policy_ref": {
+                "content_digest": "49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22",
+                "policy_id": "POLICY-PRIVACY",
+                "policy_version": 1
+              },
+              "prohibition_ids": [
+                "PROHIBIT-EGRESS"
+              ],
+              "route_assignment_ref": {
+                "content_digest": "60f406cc3ec44754078fd613787897869af3b48e15ac5673100faa8e0379ca2b",
+                "id": "ROUTE-ASSIGNMENT-1",
+                "object_type": "route-assignment",
+                "version": 1
+              },
+              "source_digests": [
+                "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
+              ],
+              "supersedes_packet_ref": {
+                "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
+                "id": "PACKET-d52e3ed56484d45588e23962e45f2321",
+                "object_type": "work-packet",
+                "version": 1
+              },
+              "task_ref": {
+                "content_digest": "8aae5f9807fdace5915261505d6dac7525a1576215395ed9380ed4a76a4c6ab8",
+                "id": "TASK-M1A-A",
+                "object_type": "task-node",
+                "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              },
+              "work_lease_ref": {
+                "content_digest": "9182621cc1169199c03ac219b430453336f9e14132c7360d41dd8487bca23d00",
+                "lease_epoch": 1,
+                "lease_id": "LEASE-WORK-1"
+              }
+            },
+            "schema_version": "m1a-work-packet-1",
+            "version": 1
+          },
+          {
             "causation_id": "CMD-F-M1A-009-exhausted-07",
-            "content_digest": "50dd5a8ef83dd1c781a672db6e7b9737d61fc0ffaefe97db6a576ad51fa9b1b6",
+            "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
             "created_logical_time": 7,
@@ -1739,6 +2842,11 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
               "deadline_logical_time": 900,
               "effect_keys": [
                 "EFFECT-SYNTHETIC"
@@ -1804,6 +2912,11 @@
                 "object_type": "task-node",
                 "version": 1
               },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              },
               "work_lease_ref": {
                 "content_digest": "9182621cc1169199c03ac219b430453336f9e14132c7360d41dd8487bca23d00",
                 "lease_epoch": 1,
@@ -1815,7 +2928,7 @@
           },
           {
             "causation_id": "CMD-F-M1A-009-exhausted-08",
-            "content_digest": "7bb7692ac0c4e029afe9dae55c155722a8898786a5c65d6e089845dc79976b75",
+            "content_digest": "bf79335dbc309541af4d4ba5e06b68f967ea8d3b2f62716a13d56ef387806baf",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "WORKER-LUNA",
             "created_logical_time": 8,
@@ -1835,8 +2948,39 @@
               "observed_effect_ref": null,
               "output_digest": "fda8c795d7b36bfacd0419444d7391de96b0533e78631119f5a7203b3b8d38a7",
               "work_packet_ref": {
-                "content_digest": "50dd5a8ef83dd1c781a672db6e7b9737d61fc0ffaefe97db6a576ad51fa9b1b6",
+                "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
                 "id": "PACKET-d52e3ed56484d45588e23962e45f2321",
+                "object_type": "work-packet",
+                "version": 1
+              }
+            },
+            "schema_version": "m1a-worker-result-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-009-exhausted-11",
+            "content_digest": "b3a1c9eb2d3d0a935989c86759132ceb940654b5aaeb30affe0c2ba5c5229519",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "WORKER-LUNA",
+            "created_logical_time": 12,
+            "created_under_lease": {
+              "content_digest": "9182621cc1169199c03ac219b430453336f9e14132c7360d41dd8487bca23d00",
+              "lease_epoch": 1,
+              "lease_id": "LEASE-WORK-1"
+            },
+            "id": "RESULT-M1A-2",
+            "object_type": "worker-result",
+            "payload": {
+              "candidate_digest": "9c1d7a8cbf56232028039323277088d10bee3e62cdfda620a9170bf5235e59d3",
+              "disposition": "submitted",
+              "evidence_digests": [
+                "7c5aafd85b3cf4b44b5ff567e8d304a41c23c3f923a9849822e2cbceae142819"
+              ],
+              "observed_effect_ref": null,
+              "output_digest": "ab28dd9f626283750afd79ae1d6d9a27118eeb45c97843c61ff266dab9e8d067",
+              "work_packet_ref": {
+                "content_digest": "c8535522dda62b2a39d27eedf148d3c9d1c045486de04c2c54c03b4215ef76f4",
+                "id": "PACKET-9ece420fc619770d3372fcba3dac3e02",
                 "object_type": "work-packet",
                 "version": 1
               }
@@ -1845,61 +2989,116 @@
             "version": 1
           }
         ],
-        "state_version": 11,
+        "state_version": 15,
         "stream_id": "STREAM-M1A",
         "terminal_status": "nonterminal"
       },
       "expected_receipts": [
         {
-          "command_digest": "2e0fb61226a2c63492da12a67d5f4e2f8b04e70edf7b02c12817242e9cc50ad7",
+          "command_digest": "62045a9c9046122ec15ac3ff5120e757c63b17327fb8677452bf4a99b4a9cdb3",
           "command_id": "CMD-F-M1A-009-exhausted-10",
-          "content_digest": "d883d96c6f65380008b4d1f856a1a1b3ce85a86c99ee5b31433775ac85bd4a9e",
+          "content_digest": "18040f026b69d72bedb460f3db2b4ee04a0ef4fc35ee34a6bf006e919dd953fe",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-009-exhausted-10-0001",
+            "EV-F-M1A-009-exhausted-10-0002"
+          ],
+          "first_event_sequence": 10,
+          "last_event_sequence": 11,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-009-exhausted-10",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "b07df87f3b8fcee7f3afc429e4b5f4946da7383edf0e22776a0b1b70d1fb52fa",
+          "state_before_digest": "e9f3e673736450998449ad0af52efe1a929b867e443265506297d11a632ec3b9",
+          "witness": null
+        },
+        {
+          "command_digest": "0737bc1ee5f0fd4444240b5658abfeccc3b695410822fa20561ffc7039c89bc2",
+          "command_id": "CMD-F-M1A-009-exhausted-11",
+          "content_digest": "95b1e165498d0f130de439ea2b483c70e1e639c1ce5f9868efa2ea8f96fbf19a",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-009-exhausted-11-0001"
+          ],
+          "first_event_sequence": 12,
+          "last_event_sequence": 12,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-009-exhausted-11",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "f0b2f9f4af634a3254cf4e5efb1381b7111fda5e3983c5ba838ee5895991cd80",
+          "state_before_digest": "b07df87f3b8fcee7f3afc429e4b5f4946da7383edf0e22776a0b1b70d1fb52fa",
+          "witness": null
+        },
+        {
+          "command_digest": "c86ccec479be3258b83b8f0bf9eec2295e9ea1143f2cacfb4a86ffb0640cab17",
+          "command_id": "CMD-F-M1A-009-exhausted-12",
+          "content_digest": "fbafba63f8d57fdd43251f0a0608470fe750ae8dea26e40b7929163c551f85e1",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-009-exhausted-12-0001"
+          ],
+          "first_event_sequence": 13,
+          "last_event_sequence": 13,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-009-exhausted-12",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "6aa9cf8f78c775fc9e2005051b0afec9f743cacd9814086beb29c77e4d7d3ec1",
+          "state_before_digest": "f0b2f9f4af634a3254cf4e5efb1381b7111fda5e3983c5ba838ee5895991cd80",
+          "witness": null
+        },
+        {
+          "command_digest": "72eb107fb4cc537cc07c7643f95267b2e54bfa0480d8c830ea582ea8248c5b76",
+          "command_id": "CMD-F-M1A-009-exhausted-13",
+          "content_digest": "11afefdd9b35220a046d830eae19e31bfd6cbddf403ba45efdd1dce9bfe729c1",
           "disposition": "refused",
           "event_ids": [],
           "first_event_sequence": null,
           "last_event_sequence": null,
           "primary_error": "E-RETRY-EXHAUSTED",
-          "receipt_id": "RCPT-F-M1A-009-exhausted-10",
+          "receipt_id": "RCPT-F-M1A-009-exhausted-13",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "ac01fb62c0d20c2968ca51abee4e9800c632d8f9e256494207bdbab014b345a7",
-          "state_before_digest": "ac01fb62c0d20c2968ca51abee4e9800c632d8f9e256494207bdbab014b345a7",
+          "state_after_digest": "6aa9cf8f78c775fc9e2005051b0afec9f743cacd9814086beb29c77e4d7d3ec1",
+          "state_before_digest": "6aa9cf8f78c775fc9e2005051b0afec9f743cacd9814086beb29c77e4d7d3ec1",
           "witness": null
         },
         {
-          "command_digest": "da8a528e76d27160d998dd521abbe15699949faec9024641321d3d4f5c24d96b",
-          "command_id": "CMD-F-M1A-009-exhausted-11",
-          "content_digest": "01757d76ecdbc391fb9b10928ce4d80ac7b1576f552ad84e68e696e54369e06a",
+          "command_digest": "9c71a525725d87efade8ebb70b9db36722aeecad8f4e8675de8783a069c2fb3f",
+          "command_id": "CMD-F-M1A-009-exhausted-14",
+          "content_digest": "2e28d61715e58ee66f49353e7c3651ce68201fbf39305c3c6a50084e0c2028f0",
           "disposition": "accepted",
           "event_ids": [
-            "EV-F-M1A-009-exhausted-11-0001"
+            "EV-F-M1A-009-exhausted-14-0001"
           ],
-          "first_event_sequence": 10,
-          "last_event_sequence": 10,
+          "first_event_sequence": 14,
+          "last_event_sequence": 14,
           "primary_error": null,
-          "receipt_id": "RCPT-F-M1A-009-exhausted-11",
+          "receipt_id": "RCPT-F-M1A-009-exhausted-14",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "006afd0cf4ebe261bf0a998decd18722f151a80ba26df16964c97df838f1ce08",
-          "state_before_digest": "ac01fb62c0d20c2968ca51abee4e9800c632d8f9e256494207bdbab014b345a7",
+          "state_after_digest": "ea0b2450cd7ca735378e42349e1b65b51319d5b72446428c08c19eb75fd8d088",
+          "state_before_digest": "6aa9cf8f78c775fc9e2005051b0afec9f743cacd9814086beb29c77e4d7d3ec1",
           "witness": null
         },
         {
-          "command_digest": "fa23685e40f131a84360fdd3d412f8e53bcded8f5a1aa14afc811d6d996e8627",
-          "command_id": "CMD-F-M1A-009-exhausted-12",
-          "content_digest": "c031d441029b5db3b13c93e7e2359beb92786b89a3c341962e2c384411d56853",
+          "command_digest": "898e4c6ca1453ab4e04ce7081e5a64a9c4a4293382ead3b8a6a9a0339dff8a94",
+          "command_id": "CMD-F-M1A-009-exhausted-15",
+          "content_digest": "92fac81932add5a07f8e3855e1294522131bb87eb15b9b9c1018e91405ca63b5",
           "disposition": "accepted",
           "event_ids": [
-            "EV-F-M1A-009-exhausted-12-0001"
+            "EV-F-M1A-009-exhausted-15-0001"
           ],
-          "first_event_sequence": 11,
-          "last_event_sequence": 11,
+          "first_event_sequence": 15,
+          "last_event_sequence": 15,
           "primary_error": null,
-          "receipt_id": "RCPT-F-M1A-009-exhausted-12",
+          "receipt_id": "RCPT-F-M1A-009-exhausted-15",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "de4a52afd8519c4a908ebaef3d3cede3a6032f9dbc17e35d916fb5f24728a86c",
-          "state_before_digest": "006afd0cf4ebe261bf0a998decd18722f151a80ba26df16964c97df838f1ce08",
+          "state_after_digest": "11a15effed7aef10bafc9554c83f458b3372a2859b8fc6da42d93ade0b95dfc8",
+          "state_before_digest": "ea0b2450cd7ca735378e42349e1b65b51319d5b72446428c08c19eb75fd8d088",
           "witness": null
         }
       ],
@@ -2613,11 +3812,11 @@
         {
           "actor_id": "ARM-M1A",
           "auth_ref": "AUTH-F-M1A-009-exhausted-07",
-          "candidate_digest": "d7292ddea145d2b282252d3aafffe0baf8ee6337dc07e21243792167e1c40417",
+          "candidate_digest": "a33b07945c1486da885638b1dd7c311d635025890ae5807a9bc8b1f2096816b8",
           "command_id": "CMD-F-M1A-009-exhausted-07",
           "command_schema_version": "m1a-command-1",
           "command_type": "derive-work-packet",
-          "content_digest": "d7728284de20719b101ddab4b805d2a16d67a742b55d6c58bfc3aab540b644f0",
+          "content_digest": "41e4321f219efc2f29d4455783cef837fdb98ad6fb85c02953e3fa86e92d4cd9",
           "expected_state_digest": "6c9335934c8242467ff6f4f1a2db2915154a995f67c4c504586d37192d2b35d9",
           "expected_state_version": 6,
           "goal_ref": {
@@ -2640,7 +3839,7 @@
               "object_type": "budget-reservation",
               "version": 1
             },
-            "expected_work_packet_digest": "50dd5a8ef83dd1c781a672db6e7b9737d61fc0ffaefe97db6a576ad51fa9b1b6",
+            "expected_work_packet_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
             "route_assignment": {
               "causation_id": "CMD-F-M1A-009-exhausted-07",
               "content_digest": "60f406cc3ec44754078fd613787897869af3b48e15ac5673100faa8e0379ca2b",
@@ -2745,7 +3944,7 @@
               "version": 1
             }
           },
-          "payload_digest": "d7292ddea145d2b282252d3aafffe0baf8ee6337dc07e21243792167e1c40417",
+          "payload_digest": "a33b07945c1486da885638b1dd7c311d635025890ae5807a9bc8b1f2096816b8",
           "plan_ref": {
             "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
             "id": "PLAN-M1A",
@@ -2756,12 +3955,12 @@
         {
           "actor_id": "WORKER-LUNA",
           "auth_ref": "AUTH-F-M1A-009-exhausted-08",
-          "candidate_digest": "7a2e23dca723c04bf5372a685319059e6001bb228484f9a8120bebe1acdaa164",
+          "candidate_digest": "cd30af278e57a41c73bce7e10cb4657fcbd08abbb11bf91f1ccbd7301cd97f75",
           "command_id": "CMD-F-M1A-009-exhausted-08",
           "command_schema_version": "m1a-command-1",
           "command_type": "submit-worker-result",
-          "content_digest": "6a6f270f31b13a050c79c2b66d851aa933cb72352ecdd6ca527dd9ab639fe6d4",
-          "expected_state_digest": "64411f7896195dbee7a0644b340e216b00aa2ea3d2bb874d61cb5833731076f3",
+          "content_digest": "dcf05824304009d5be7087f7321fb3359c85a8f879902bac780a324186edd5e2",
+          "expected_state_digest": "76a9f231bca4ed4e457fcba1acf44924a4cb1df89667155657d73d13f62b962c",
           "expected_state_version": 7,
           "goal_ref": {
             "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
@@ -2777,7 +3976,7 @@
           "logical_time": 8,
           "payload": {
             "causation_id": "CMD-F-M1A-009-exhausted-08",
-            "content_digest": "7bb7692ac0c4e029afe9dae55c155722a8898786a5c65d6e089845dc79976b75",
+            "content_digest": "bf79335dbc309541af4d4ba5e06b68f967ea8d3b2f62716a13d56ef387806baf",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "WORKER-LUNA",
             "created_logical_time": 8,
@@ -2797,7 +3996,7 @@
               "observed_effect_ref": null,
               "output_digest": "fda8c795d7b36bfacd0419444d7391de96b0533e78631119f5a7203b3b8d38a7",
               "work_packet_ref": {
-                "content_digest": "50dd5a8ef83dd1c781a672db6e7b9737d61fc0ffaefe97db6a576ad51fa9b1b6",
+                "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
                 "id": "PACKET-d52e3ed56484d45588e23962e45f2321",
                 "object_type": "work-packet",
                 "version": 1
@@ -2806,7 +4005,7 @@
             "schema_version": "m1a-worker-result-1",
             "version": 1
           },
-          "payload_digest": "7a2e23dca723c04bf5372a685319059e6001bb228484f9a8120bebe1acdaa164",
+          "payload_digest": "cd30af278e57a41c73bce7e10cb4657fcbd08abbb11bf91f1ccbd7301cd97f75",
           "plan_ref": {
             "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
             "id": "PLAN-M1A",
@@ -2817,12 +4016,12 @@
         {
           "actor_id": "VERIFIER-TERRA",
           "auth_ref": "AUTH-F-M1A-009-exhausted-09",
-          "candidate_digest": "804489e2c8e747a8793e0840cd407c1e44545448653a08b1f288d704624554d8",
+          "candidate_digest": "f603876bf49cd8af7413f558883a2cc4e75821b08ee9eebf077bc351a8619f3d",
           "command_id": "CMD-F-M1A-009-exhausted-09",
           "command_schema_version": "m1a-command-1",
           "command_type": "submit-gate-result",
-          "content_digest": "46f96c4c3c5c49654ed8f717941a82e4c7479e9f0b35769f711bf8390fe6b8f3",
-          "expected_state_digest": "6ca356f442a1eb6708faeb976670ef0cd512b8ce7785851e7d7c03da4e0c5267",
+          "content_digest": "81115c0ace8085bb6abeb050cc5dc13c4da1893e25605b6e19b0aa83405fb160",
+          "expected_state_digest": "9b48ac669d41eab69c42cc7e064c491f56181dd65b8b41d9b807fc48ceb694e6",
           "expected_state_version": 8,
           "goal_ref": {
             "content_digest": "4e66537ef63d11b5f56946fa5ad9df77566696f24521c53c96c688c44d73a0d0",
@@ -2834,7 +4033,7 @@
           "logical_time": 9,
           "payload": {
             "causation_id": "CMD-F-M1A-009-exhausted-09",
-            "content_digest": "4cecc358f27867bd9b2749e6116399796d1d54bda8b20f32060243d98a68331b",
+            "content_digest": "82431dc8639ce24ba50a658f570b00781dba94f7c2189fed8c4afccb8c8f48d8",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "VERIFIER-TERRA",
             "created_logical_time": 9,
@@ -2892,7 +4091,7 @@
                 "version": 1
               },
               "work_packet_ref": {
-                "content_digest": "50dd5a8ef83dd1c781a672db6e7b9737d61fc0ffaefe97db6a576ad51fa9b1b6",
+                "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
                 "id": "PACKET-d52e3ed56484d45588e23962e45f2321",
                 "object_type": "work-packet",
                 "version": 1
@@ -2901,7 +4100,7 @@
             "schema_version": "m1a-gate-result-1",
             "version": 1
           },
-          "payload_digest": "804489e2c8e747a8793e0840cd407c1e44545448653a08b1f288d704624554d8",
+          "payload_digest": "f603876bf49cd8af7413f558883a2cc4e75821b08ee9eebf077bc351a8619f3d",
           "plan_ref": {
             "content_digest": "06ed0fb43583abd17474b72c1929ed5db8514fcad1d2ffed65a16e083f6db4a3",
             "id": "PLAN-M1A",
@@ -3554,9 +4753,9 @@
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "d7728284de20719b101ddab4b805d2a16d67a742b55d6c58bfc3aab540b644f0",
+          "command_digest": "41e4321f219efc2f29d4455783cef837fdb98ad6fb85c02953e3fa86e92d4cd9",
           "command_id": "CMD-F-M1A-009-exhausted-07",
-          "content_digest": "841e2efdd40099f3d9581c06c1e74c9761c16f707a6e9a3afcf68578e16af326",
+          "content_digest": "643c95b91282dedf6b1ebb747032ef2466d6056cee304184b45581e6f7a0c893",
           "event_id": "EV-F-M1A-009-exhausted-07-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "WorkPacketDerived",
@@ -3564,7 +4763,7 @@
           "previous_event_digest": "2490ddf22228390e84600345c26d31f2c41e0eaab38d24ee57eccaa95feb3291",
           "primary_record": {
             "causation_id": "CMD-F-M1A-009-exhausted-07",
-            "content_digest": "50dd5a8ef83dd1c781a672db6e7b9737d61fc0ffaefe97db6a576ad51fa9b1b6",
+            "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
             "created_logical_time": 7,
@@ -3612,6 +4811,11 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
               "deadline_logical_time": 900,
               "effect_keys": [
                 "EFFECT-SYNTHETIC"
@@ -3676,6 +4880,11 @@
                 "id": "TASK-M1A-A",
                 "object_type": "task-node",
                 "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
               },
               "work_lease_ref": {
                 "content_digest": "9182621cc1169199c03ac219b430453336f9e14132c7360d41dd8487bca23d00",
@@ -3786,21 +4995,21 @@
             }
           ],
           "sequence": 7,
-          "state_delta_digest": "57145269c4ca092b65793ca9f3452a26efef58932a911177f9e568e860e81bbb",
+          "state_delta_digest": "754ca00e796a9d5d79b26634e14e6820f940fd10ca5fcfbdb722e4eaa3435bd5",
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "6a6f270f31b13a050c79c2b66d851aa933cb72352ecdd6ca527dd9ab639fe6d4",
+          "command_digest": "dcf05824304009d5be7087f7321fb3359c85a8f879902bac780a324186edd5e2",
           "command_id": "CMD-F-M1A-009-exhausted-08",
-          "content_digest": "bc1ad1cce96837b3bd4140a36a2e1dd3da0aa013eeacd4d8277caf906ea70621",
+          "content_digest": "48fcfafeedd763e1b4386da34893f59a112d5f984f9e1e494966d831799f59c2",
           "event_id": "EV-F-M1A-009-exhausted-08-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "WorkerResultRecorded",
           "logical_time": 8,
-          "previous_event_digest": "841e2efdd40099f3d9581c06c1e74c9761c16f707a6e9a3afcf68578e16af326",
+          "previous_event_digest": "643c95b91282dedf6b1ebb747032ef2466d6056cee304184b45581e6f7a0c893",
           "primary_record": {
             "causation_id": "CMD-F-M1A-009-exhausted-08",
-            "content_digest": "7bb7692ac0c4e029afe9dae55c155722a8898786a5c65d6e089845dc79976b75",
+            "content_digest": "bf79335dbc309541af4d4ba5e06b68f967ea8d3b2f62716a13d56ef387806baf",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "WORKER-LUNA",
             "created_logical_time": 8,
@@ -3820,7 +5029,7 @@
               "observed_effect_ref": null,
               "output_digest": "fda8c795d7b36bfacd0419444d7391de96b0533e78631119f5a7203b3b8d38a7",
               "work_packet_ref": {
-                "content_digest": "50dd5a8ef83dd1c781a672db6e7b9737d61fc0ffaefe97db6a576ad51fa9b1b6",
+                "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
                 "id": "PACKET-d52e3ed56484d45588e23962e45f2321",
                 "object_type": "work-packet",
                 "version": 1
@@ -3831,21 +5040,21 @@
           },
           "related_records": [],
           "sequence": 8,
-          "state_delta_digest": "a138d7591c28ed5e44178db9962334d872c7360b24d5449c71cd20a720b60e22",
+          "state_delta_digest": "b67a120dc225a24d458dce8c37b6b7df434b3f4c3ee2881930fad2f449347a03",
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "46f96c4c3c5c49654ed8f717941a82e4c7479e9f0b35769f711bf8390fe6b8f3",
+          "command_digest": "81115c0ace8085bb6abeb050cc5dc13c4da1893e25605b6e19b0aa83405fb160",
           "command_id": "CMD-F-M1A-009-exhausted-09",
-          "content_digest": "1b5d48074785ffdbc57ef83890175076dbfb56a57d17f7d57752462860386102",
+          "content_digest": "24d812629fd45e27abfaa6e085cb8ccb8a7e608cbbc07ec9c8f9da68af5a8cfc",
           "event_id": "EV-F-M1A-009-exhausted-09-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "GateResultRecorded",
           "logical_time": 9,
-          "previous_event_digest": "bc1ad1cce96837b3bd4140a36a2e1dd3da0aa013eeacd4d8277caf906ea70621",
+          "previous_event_digest": "48fcfafeedd763e1b4386da34893f59a112d5f984f9e1e494966d831799f59c2",
           "primary_record": {
             "causation_id": "CMD-F-M1A-009-exhausted-09",
-            "content_digest": "4cecc358f27867bd9b2749e6116399796d1d54bda8b20f32060243d98a68331b",
+            "content_digest": "82431dc8639ce24ba50a658f570b00781dba94f7c2189fed8c4afccb8c8f48d8",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "VERIFIER-TERRA",
             "created_logical_time": 9,
@@ -3903,7 +5112,7 @@
                 "version": 1
               },
               "work_packet_ref": {
-                "content_digest": "50dd5a8ef83dd1c781a672db6e7b9737d61fc0ffaefe97db6a576ad51fa9b1b6",
+                "content_digest": "10c68ffe614592f7fb01347ef74c33854803fbbe50512b9923eaad732cc8b0cf",
                 "id": "PACKET-d52e3ed56484d45588e23962e45f2321",
                 "object_type": "work-packet",
                 "version": 1
@@ -3914,7 +5123,7 @@
           },
           "related_records": [],
           "sequence": 9,
-          "state_delta_digest": "dfe34d491bcf33b588b7189f6ec12f9aa5e2297c8c4ab00b1ea14cff06e113ca",
+          "state_delta_digest": "17ebfef69b14846a2d91fe1dc0ba21374a819ae2fa1373bda33870035f1d352a",
           "stream_id": "STREAM-M1A"
         }
       ],
@@ -4028,9 +5237,9 @@
           "witness": null
         },
         {
-          "command_digest": "d7728284de20719b101ddab4b805d2a16d67a742b55d6c58bfc3aab540b644f0",
+          "command_digest": "41e4321f219efc2f29d4455783cef837fdb98ad6fb85c02953e3fa86e92d4cd9",
           "command_id": "CMD-F-M1A-009-exhausted-07",
-          "content_digest": "de27b36cc8e7aee17caa1d4f51b68aa4863c5b39e7f489b1f76d513f7e731e4f",
+          "content_digest": "80091b8862cae56179ef912d198cd71140551cc149da33deadbfa4b50d845db4",
           "disposition": "accepted",
           "event_ids": [
             "EV-F-M1A-009-exhausted-07-0001"
@@ -4041,14 +5250,14 @@
           "receipt_id": "RCPT-F-M1A-009-exhausted-07",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "64411f7896195dbee7a0644b340e216b00aa2ea3d2bb874d61cb5833731076f3",
+          "state_after_digest": "76a9f231bca4ed4e457fcba1acf44924a4cb1df89667155657d73d13f62b962c",
           "state_before_digest": "6c9335934c8242467ff6f4f1a2db2915154a995f67c4c504586d37192d2b35d9",
           "witness": null
         },
         {
-          "command_digest": "6a6f270f31b13a050c79c2b66d851aa933cb72352ecdd6ca527dd9ab639fe6d4",
+          "command_digest": "dcf05824304009d5be7087f7321fb3359c85a8f879902bac780a324186edd5e2",
           "command_id": "CMD-F-M1A-009-exhausted-08",
-          "content_digest": "851fb740625049201f54fe34430bbdcdeaec8cee84d2c9a138f84a5ca969bc1c",
+          "content_digest": "c3fea89dd5282fc7369d972d02555d7150157ea5de6841b177ecadbd23fc18f5",
           "disposition": "accepted",
           "event_ids": [
             "EV-F-M1A-009-exhausted-08-0001"
@@ -4059,14 +5268,14 @@
           "receipt_id": "RCPT-F-M1A-009-exhausted-08",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "6ca356f442a1eb6708faeb976670ef0cd512b8ce7785851e7d7c03da4e0c5267",
-          "state_before_digest": "64411f7896195dbee7a0644b340e216b00aa2ea3d2bb874d61cb5833731076f3",
+          "state_after_digest": "9b48ac669d41eab69c42cc7e064c491f56181dd65b8b41d9b807fc48ceb694e6",
+          "state_before_digest": "76a9f231bca4ed4e457fcba1acf44924a4cb1df89667155657d73d13f62b962c",
           "witness": null
         },
         {
-          "command_digest": "46f96c4c3c5c49654ed8f717941a82e4c7479e9f0b35769f711bf8390fe6b8f3",
+          "command_digest": "81115c0ace8085bb6abeb050cc5dc13c4da1893e25605b6e19b0aa83405fb160",
           "command_id": "CMD-F-M1A-009-exhausted-09",
-          "content_digest": "fd64cfec611f459fcf5faf39633abbf367a3c7bacfa037298561f57de91d9477",
+          "content_digest": "48500ffe23df6dc51e481d58ff1ac5ec0322d7b8896fd7eabd6baca936514719",
           "disposition": "accepted",
           "event_ids": [
             "EV-F-M1A-009-exhausted-09-0001"
@@ -4077,8 +5286,8 @@
           "receipt_id": "RCPT-F-M1A-009-exhausted-09",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "ac01fb62c0d20c2968ca51abee4e9800c632d8f9e256494207bdbab014b345a7",
-          "state_before_digest": "6ca356f442a1eb6708faeb976670ef0cd512b8ce7785851e7d7c03da4e0c5267",
+          "state_after_digest": "e9f3e673736450998449ad0af52efe1a929b867e443265506297d11a632ec3b9",
+          "state_before_digest": "9b48ac669d41eab69c42cc7e064c491f56181dd65b8b41d9b807fc48ceb694e6",
           "witness": null
         }
       ],

@@ -7,6 +7,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -18,7 +19,7 @@ SCHEMA_PATH = ROOT / "schemas" / "control-plane" / "v3" / "planning" / "schema.j
 SCHEMA_TEST_PATH = TEST_DIR / "schema.test.py"
 MATERIALIZER_PATH = TEST_DIR / "materialize_fixtures.py"
 REDUCER_PATH = ROOT / "scripts" / "v3" / "planning" / "replay" / "kernel.py"
-EXPECTED_SCHEMA_CANDIDATE = "ab9707480baf6ef7baff03b6bda444b890d78557"
+EXPECTED_SCHEMA_CANDIDATE = "eebd2de93288183fa5f949e16f9aaf24274c6002"
 EXPECTED_FIXTURE_IDS = [f"F-M1A-{number:03d}" for number in range(1, 24)]
 GENESIS_DIGEST = "fb1168e6e4d1267c41ea3d7798ebb88963e6de7c05cc1500ed059ba4b2f75801"
 SEALED_MARKERS = {
@@ -119,6 +120,32 @@ def assert_digests(value, path: str) -> None:
             }
             if payload["graph_digest"] != fixture_materializer.digest(operand):
                 fail(f"{path}/payload/graph_digest mismatch")
+        if value.get("object_type") == "work-packet" and "schema_version" in value:
+            payload = value["payload"]
+            seed = {
+                "command_id": value["causation_id"],
+                "task_ref": payload["task_ref"],
+                "attempt": payload["attempt"],
+                "work_lease_ref": payload["work_lease_ref"],
+                "route_assignment_ref": payload["route_assignment_ref"],
+                "budget_reservation_ref": payload["budget_reservation_ref"],
+                "checkpoint_ref": payload["checkpoint_ref"],
+            }
+            expected_id = "PACKET-" + fixture_materializer.digest(seed)[:32]
+            if value["id"] != expected_id:
+                fail(f"{path}/id is not derived from packet_seed")
+        if value.get("object_type") == "disposition" and "schema_version" in value:
+            operand = {"command_id": value["causation_id"], "disposition": value["payload"]}
+            expected_id = "DISPOSITION-" + fixture_materializer.digest(operand)[:32]
+            if value["id"] != expected_id:
+                fail(f"{path}/id is not derived from disposition operand")
+        if value.get("novelty_schema_version") == "novelty-delta-1":
+            if value["canonical_diff_digest"] != fixture_materializer.digest(value["canonical_diff"]):
+                fail(f"{path}/canonical_diff_digest mismatch")
+            operand = copy.deepcopy(value)
+            supplied = operand.pop("delta_digest")
+            if supplied != fixture_materializer.digest(operand):
+                fail(f"{path}/delta_digest mismatch")
         for key, item in value.items():
             assert_digests(item, f"{path}/{key}")
     elif isinstance(value, list):
@@ -134,6 +161,15 @@ def assert_command_receipts(commands: list[dict], receipts: list[dict], label: s
             fail(f"{label}: command/receipt ID mismatch at position {index}")
         if receipt["command_digest"] != command["content_digest"]:
             fail(f"{label}: receipt does not bind command at position {index}")
+        if receipt["disposition"] == "conflict":
+            expected_id = "RCPT-CONFLICT-" + fixture_materializer.digest(
+                {"command_id": command["command_id"], "command_digest": command["content_digest"]}
+            )[:32]
+        else:
+            suffix = command["command_id"][4:] if command["command_id"].startswith("CMD-") else command["command_id"]
+            expected_id = "RCPT-" + suffix
+        if receipt["receipt_id"] != expected_id:
+            fail(f"{label}: receipt ID derivation mismatch at position {index}")
 
 
 def assert_event_chain(
@@ -144,6 +180,16 @@ def assert_event_chain(
             fail(f"{label}: expected event sequence {expected_sequence}, got {event['sequence']}")
         if event["previous_event_digest"] != prior:
             fail(f"{label}: broken previous-event digest at {event['event_id']}")
+        suffix = event["command_id"][4:] if event["command_id"].startswith("CMD-") else event["command_id"]
+        same_command_prior = [
+            prior_event for prior_event in events
+            if prior_event["command_id"] == event["command_id"]
+            and prior_event["command_digest"] == event["command_digest"]
+            and prior_event["sequence"] < event["sequence"]
+        ]
+        expected_event_id = f"EV-{suffix}-{len(same_command_prior) + 1:04d}"
+        if event["event_id"] != expected_event_id:
+            fail(f"{label}: event ID derivation mismatch at {event['event_id']}")
         prior = event["content_digest"]
         expected_sequence += 1
 
@@ -192,6 +238,8 @@ def assert_case(
                 fail(f"{label}: receipt {receipt['receipt_id']} first sequence mismatch")
             if receipt["last_event_sequence"] != max(sequences):
                 fail(f"{label}: receipt {receipt['receipt_id']} last sequence mismatch")
+            if sequences != list(range(min(sequences), max(sequences) + 1)):
+                fail(f"{label}: receipt {receipt['receipt_id']} event group is not contiguous")
         elif receipt["first_event_sequence"] is not None or receipt["last_event_sequence"] is not None:
             fail(f"{label}: eventless receipt has a sequence")
 
@@ -202,6 +250,135 @@ def assert_case(
     expected_last = all_events[-1]["content_digest"] if all_events else GENESIS_DIGEST
     if case["expected_final_state"]["last_event_digest"] != expected_last:
         fail(f"{label}: final event digest mismatch")
+
+    domain_records = []
+
+    def gather_records(value):
+        if isinstance(value, dict):
+            if all(
+                key in value
+                for key in ("object_type", "schema_version", "id", "version", "payload")
+            ):
+                domain_records.append(value)
+            for child in value.values():
+                gather_records(child)
+        elif isinstance(value, list):
+            for child in value:
+                gather_records(child)
+
+    gather_records(case)
+    record_by_ref = {
+        (record["object_type"], record["id"], record["version"], record["content_digest"]): record
+        for record in domain_records
+    }
+
+    def resolve_ref(reference):
+        return record_by_ref.get(
+            (
+                reference["object_type"],
+                reference["id"],
+                reference["version"],
+                reference["content_digest"],
+            )
+        )
+
+    for record in domain_records:
+        if record["object_type"] != "retry-decision":
+            continue
+        prior_packet = resolve_ref(record["payload"]["prior_work_packet_ref"])
+        if prior_packet is None:
+            fail(f"{label}: retry binding refers to an absent prior packet")
+        expected_binding = fixture_materializer.digest(
+            fixture_materializer.packet_binding_operand(prior_packet)
+        )
+        if record["payload"]["unchanged_binding_digest"] != expected_binding:
+            fail(f"{label}: retry unchanged_binding_digest mismatch")
+
+    for command in [*initial_commands, *commands]:
+        if command["command_type"] != "propose-replan":
+            continue
+        payload = command["payload"]
+        replacement_task = payload["task_nodes"][0]
+        route = payload["route_assignments"][0]
+        budget = payload["budget_reservations"][0]
+        operand = {
+            "goal_ref": payload["decision"]["payload"]["goal_ref"],
+            "plan_ref": fixture_materializer.object_ref(payload["new_plan_revision"]),
+            "task_ref": fixture_materializer.object_ref(replacement_task),
+            "authority_policy_ref": replacement_task["payload"]["authority_policy_ref"],
+            "privacy_policy_ref": replacement_task["payload"]["privacy_policy_ref"],
+            "egress_policy_ref": replacement_task["payload"]["egress_policy_ref"],
+            "route_assignment_ref": fixture_materializer.object_ref(route),
+            "budget_reservation_ref": fixture_materializer.object_ref(budget),
+            "verifier_policy_ref": replacement_task["payload"]["verifier_policy_ref"],
+            "constitution_policy_ref": replacement_task["payload"]["constitution_policy_ref"],
+        }
+        if payload["decision"]["payload"]["narrowed_binding_digest"] != fixture_materializer.digest(operand):
+            fail(f"{label}: replan narrowed_binding_digest mismatch")
+
+    final_states = {
+        (
+            item["object_ref"]["object_type"],
+            item["object_ref"]["id"],
+            item["object_ref"]["version"],
+            item["object_ref"]["content_digest"],
+        ): item["state"]
+        for item in case["expected_final_state"]["object_states"]
+    }
+    expected_disposition_state = {
+        "fence": "stale",
+        "invalidate": "stale",
+        "quarantine": "quarantined",
+        "supersede": "superseded",
+        "cancel": "canceled",
+        "retain-definition": "admitted",
+        "retain-terminal": "complete",
+    }
+    for event in all_events:
+        if event["event_type"] not in (
+            "PlanItemDisposed",
+            "PacketFenced",
+            "LeaseFenced",
+            "EffectDisposed",
+            "EvidenceDisposed",
+        ):
+            continue
+        disposition = event["primary_record"]["payload"]
+        target = disposition["object_ref"]
+        if target["object_type"] == "evidence":
+            continue
+        key = (target["object_type"], target["id"], target["version"], target["content_digest"])
+        if final_states.get(key) != expected_disposition_state[disposition["disposition"]]:
+            fail(f"{label}: disposition did not project target state for {target['id']}")
+
+    terminal = case["expected_final_state"]["terminal_status"]
+    if terminal in ("terminal-verified", "terminal-verified-downgraded"):
+        active_plan = case["expected_final_state"]["active_plan_ref"]
+        if active_plan is None:
+            fail(f"{label}: terminal projection has no active plan")
+        plan_tasks = [
+            record
+            for record in case["expected_final_state"]["records"]
+            if record["object_type"] == "task-node"
+            and record["payload"]["plan_ref"]["id"] == active_plan["id"]
+            and record["payload"]["plan_ref"]["version"] == active_plan["version"]
+        ]
+        if not plan_tasks or any(
+            final_states.get(("task-node", task["id"], task["version"], task["content_digest"]))
+            != "complete"
+            for task in plan_tasks
+        ):
+            fail(f"{label}: terminal projection has a non-complete current task")
+        required_disposition = "pass" if terminal == "terminal-verified" else "downgraded-pass"
+        exact_decisions = [
+            record
+            for record in case["expected_final_state"]["records"]
+            if record["object_type"] == "plan-verifier-decision"
+            and record["payload"]["plan_ref"] == active_plan
+            and record["payload"]["disposition"] == required_disposition
+        ]
+        if not exact_decisions:
+            fail(f"{label}: terminal projection lacks its exact plan-verifier decision")
 
     if len(case["decode_inputs"]) != len(case["expected_decode_failures"]):
         fail(f"{label}: decode input/failure cardinality differs")
@@ -214,6 +391,8 @@ def assert_case(
             if failure["primary_error"] == "E-SCHEMA-DUPLICATE" and "duplicate key" in str(exc):
                 continue
             if failure["primary_error"] == "E-SCHEMA-BOUND" and "exceeded" in str(exc):
+                continue
+            if failure["primary_error"] == "E-SCHEMA-INVALID":
                 continue
             fail(f"{label}: raw decode failure disagrees with {failure['primary_error']}: {exc}")
         if failure["primary_error"] in ("E-SCHEMA-DUPLICATE", "E-SCHEMA-BOUND"):
@@ -233,6 +412,38 @@ def assert_case(
             checkpoint = replay["checkpoint"]["checkpoint_record"]
             if checkpoint["payload"]["state_digest"] != snapshot["content_digest"]:
                 fail(f"{replay_label}: checkpoint does not bind snapshot")
+            snapshot_records = snapshot["records"]
+            budget_refs = sorted(
+                [
+                    fixture_materializer.object_ref(record)
+                    for record in snapshot_records
+                    if record["object_type"] == "budget-reservation"
+                ],
+                key=lambda reference: reference["id"],
+            )
+            route_refs = sorted(
+                [
+                    fixture_materializer.object_ref(record)
+                    for record in snapshot_records
+                    if record["object_type"] == "route-assignment"
+                ],
+                key=lambda reference: reference["id"],
+            )
+            lease_refs = sorted(
+                [
+                    fixture_materializer.lease_ref(record)
+                    for record in snapshot_records
+                    if record["object_type"] in ("executive-lease", "work-lease")
+                ],
+                key=lambda reference: reference["lease_id"],
+            )
+            for field, operand in (
+                ("budget_snapshot_digest", budget_refs),
+                ("route_snapshot_digest", route_refs),
+                ("lease_epoch_digest", lease_refs),
+            ):
+                if checkpoint["payload"][field] != fixture_materializer.digest(operand):
+                    fail(f"{replay_label}: checkpoint {field} mismatch")
             replay_prior = snapshot["last_event_digest"]
             replay_sequence = snapshot["last_event_sequence"] + 1
         else:
@@ -303,6 +514,21 @@ def validate_corpus() -> int:
     schema = schema_contract.strict_loads(schema_bytes)
     manifest_path = FIXTURE_DIR / "manifest.json"
     manifest = schema_contract.strict_loads(manifest_path.read_bytes())
+    expected_manifest_keys = {
+        "manifest_schema_version",
+        "schema_candidate",
+        "schema_sha256",
+        "schema_definitions",
+        "closed_command_types",
+        "closed_event_types",
+        "closed_error_codes",
+        "domain_record_types",
+        "projection_terminal_states",
+        "fixture_count",
+        "fixtures",
+    }
+    if set(manifest) != expected_manifest_keys:
+        fail("manifest shape is not closed")
     if manifest["schema_candidate"] != EXPECTED_SCHEMA_CANDIDATE:
         fail("manifest schema candidate is not the frozen M1A-01 commit")
     if manifest["schema_sha256"] != sha_bytes(schema_bytes):
@@ -333,6 +559,33 @@ def validate_corpus() -> int:
             fail(f"manifest {key} does not match schema")
 
     rows = manifest["fixtures"]
+    expected_row_keys = {
+        "fixture_id",
+        "path",
+        "sha256",
+        "bytes",
+        "case_count",
+        "command_count",
+        "receipt_count",
+        "event_count",
+        "decode_failure_count",
+        "replay_case_count",
+        "error_codes",
+        "expected_final_digests",
+    }
+    fixture_root = FIXTURE_DIR.resolve()
+    for row in rows:
+        if set(row) != expected_row_keys:
+            fail(f"manifest row {row.get('fixture_id', '<unknown>')} shape is not closed")
+        if re.fullmatch(r"F-M1A-[0-9]{3}\.json", row["path"]) is None:
+            fail(f"manifest path is not a closed fixture filename: {row['path']}")
+        path = FIXTURE_DIR / row["path"]
+        if path.is_symlink() or path.resolve().parent != fixture_root:
+            fail(f"manifest path escapes fixture root: {row['path']}")
+    expected_files = {"manifest.json", *(row["path"] for row in rows)}
+    actual_files = {path.name for path in FIXTURE_DIR.glob("*.json")}
+    if actual_files != expected_files:
+        fail("fixture directory and closed manifest differ")
     if [row["fixture_id"] for row in rows] != EXPECTED_FIXTURE_IDS:
         fail("manifest fixture IDs are incomplete or out of order")
     fixture_validator = schema_validator(schema, "fixture_bundle")

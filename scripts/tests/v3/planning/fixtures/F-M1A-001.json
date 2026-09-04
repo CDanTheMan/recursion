@@ -153,13 +153,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "db34e6d45f8366ee91a7ec5f478b2f24e3275c7d6768c6f1d5892f26f9cd5c3c",
+          "candidate_digest": "d0342e529d6f518e10cd9aa420936c82ee70c74f5d67a2b03b351b90c31712b4",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "f0077624bfb77e3296625af1eb59c74fa2a4b3f40958a11a95716581c4e9f0c0",
+          "content_digest": "26125d2d4586fcc6b6267cba8017bf4b1fc234ad7870cb9f0a436f31f63a06db",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -176,13 +176,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "68bb33fc9fcb5e950821b0cd02bcc1da1ea71af4f2e2e221cd4d114b7693a1bb",
+          "candidate_digest": "3b0457eb85c0771e4b7513c6c07c71a79994cbcdd6ddeb9e8e653d077f3a7569",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "70b0e9b9d1940a00a14cc7e5ca7e8c721574f92181ad47126129d6fb933da3d2",
+          "content_digest": "217d8842b99b411fa1f86cae95346423eaf4fcec4325f86203e26c09bb14d5d1",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -199,13 +199,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "c2bffab3590aed1c098d7f7f90828951f43eb2073fb0d61b21db0ff91d9998ff",
+          "candidate_digest": "72b385d1f70aeacd8e0799150167c9f9fc27022e1e7e2873fd9d2bcec0ccf21d",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "a545d86a2a6a20424ae3bcd3d5657025162f964cb83937e5af121f453b089897",
+          "content_digest": "3c26fcf9f95667a0a1d18078f44eb5a01d1fe6302bbe012e78a4497f3c12f4a3",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -222,13 +222,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "d64fed822ae218c7f5c24632296fec88dcec3fdf1b13d9645d5eb6cb86acbd9d",
+          "candidate_digest": "ae81c80499603ed8df79c3f06ecdaeeaa7fd9237004a412be294bd2a33f5a159",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "2774bc2c16eec4c3ed2f91f0fa3e6175cd3e8acb9c891060260585d82c71039d",
+          "content_digest": "904d133430856eb0ff8607e574ae23c6195cace3f9b3628eacd8ebc15409097a",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         }
@@ -934,11 +934,11 @@
         {
           "actor_id": "ARM-M1A",
           "auth_ref": "AUTH-F-M1A-001-happy-07",
-          "candidate_digest": "db34e6d45f8366ee91a7ec5f478b2f24e3275c7d6768c6f1d5892f26f9cd5c3c",
+          "candidate_digest": "d0342e529d6f518e10cd9aa420936c82ee70c74f5d67a2b03b351b90c31712b4",
           "command_id": "CMD-F-M1A-001-happy-07",
           "command_schema_version": "m1a-command-1",
           "command_type": "derive-work-packet",
-          "content_digest": "ad6e8b3ead38a4bae4875077d712d0ab621d422403a2de55278c12ed530e8628",
+          "content_digest": "1e753a7e0d1ea2c1247f8e395a3727d4f681f4f8c94865b7f6fdff4bf1a5a968",
           "expected_state_digest": "fb323acf0834503c96e05df654ce9ef05b1df120fe054236ab35d9d8d25a3074",
           "expected_state_version": 6,
           "goal_ref": {
@@ -961,7 +961,7 @@
               "object_type": "budget-reservation",
               "version": 1
             },
-            "expected_work_packet_digest": "9d56ef6f321ea39bbec80c693c8c03142d825aab6d72884c81ffe217914b6441",
+            "expected_work_packet_digest": "211fa9ab5a9581510102bd08075e2a35d8b3795ebc27c25f3ec4e5cf97cd1984",
             "route_assignment": {
               "causation_id": "CMD-F-M1A-001-happy-07",
               "content_digest": "cdeab233ec32fead7dcebd939a433472939915bda611b11aa9598534715444b5",
@@ -1066,7 +1066,7 @@
               "version": 1
             }
           },
-          "payload_digest": "db34e6d45f8366ee91a7ec5f478b2f24e3275c7d6768c6f1d5892f26f9cd5c3c",
+          "payload_digest": "d0342e529d6f518e10cd9aa420936c82ee70c74f5d67a2b03b351b90c31712b4",
           "plan_ref": {
             "content_digest": "4c86d1e7d41a281d481c5b8507100a13afae0f32f6d72a0b3e54efc475be6dc9",
             "id": "PLAN-M1A",
@@ -1077,12 +1077,12 @@
         {
           "actor_id": "WORKER-LUNA",
           "auth_ref": "AUTH-F-M1A-001-happy-08",
-          "candidate_digest": "68bb33fc9fcb5e950821b0cd02bcc1da1ea71af4f2e2e221cd4d114b7693a1bb",
+          "candidate_digest": "3b0457eb85c0771e4b7513c6c07c71a79994cbcdd6ddeb9e8e653d077f3a7569",
           "command_id": "CMD-F-M1A-001-happy-08",
           "command_schema_version": "m1a-command-1",
           "command_type": "submit-worker-result",
-          "content_digest": "64c170ddfbc07bd457d54e4901cf500469753693bad5cda6c0ca48adc45e54b1",
-          "expected_state_digest": "234be9b29829228a7a7d44c9e63c114de3cabea0f389715c4e84de34149dc657",
+          "content_digest": "76c650b3743cc214584b604c7a1159ae97daa4998354991c1e196065e2b409b3",
+          "expected_state_digest": "69ac5d52511aa63492ee89bafc995379e95691c2cda79a62672767757a19bddc",
           "expected_state_version": 7,
           "goal_ref": {
             "content_digest": "067066b032721b5b88938679246889b80df32639fe98ee7c9abdfd4fe3c22cfb",
@@ -1098,7 +1098,7 @@
           "logical_time": 8,
           "payload": {
             "causation_id": "CMD-F-M1A-001-happy-08",
-            "content_digest": "9363732d16ea012dccf79bc7669b7c1dc88cbb0a0fcd57fa62098336c5c041ba",
+            "content_digest": "96773093dd92bbf15adf045a65470e052013d6b7812b1d49a49c9a1f07350531",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "WORKER-LUNA",
             "created_logical_time": 8,
@@ -1118,7 +1118,7 @@
               "observed_effect_ref": null,
               "output_digest": "fda8c795d7b36bfacd0419444d7391de96b0533e78631119f5a7203b3b8d38a7",
               "work_packet_ref": {
-                "content_digest": "9d56ef6f321ea39bbec80c693c8c03142d825aab6d72884c81ffe217914b6441",
+                "content_digest": "211fa9ab5a9581510102bd08075e2a35d8b3795ebc27c25f3ec4e5cf97cd1984",
                 "id": "PACKET-70b55e16cbbcdc42cab9629562b30b58",
                 "object_type": "work-packet",
                 "version": 1
@@ -1127,7 +1127,7 @@
             "schema_version": "m1a-worker-result-1",
             "version": 1
           },
-          "payload_digest": "68bb33fc9fcb5e950821b0cd02bcc1da1ea71af4f2e2e221cd4d114b7693a1bb",
+          "payload_digest": "3b0457eb85c0771e4b7513c6c07c71a79994cbcdd6ddeb9e8e653d077f3a7569",
           "plan_ref": {
             "content_digest": "4c86d1e7d41a281d481c5b8507100a13afae0f32f6d72a0b3e54efc475be6dc9",
             "id": "PLAN-M1A",
@@ -1138,12 +1138,12 @@
         {
           "actor_id": "VERIFIER-TERRA",
           "auth_ref": "AUTH-F-M1A-001-happy-09",
-          "candidate_digest": "c2bffab3590aed1c098d7f7f90828951f43eb2073fb0d61b21db0ff91d9998ff",
+          "candidate_digest": "72b385d1f70aeacd8e0799150167c9f9fc27022e1e7e2873fd9d2bcec0ccf21d",
           "command_id": "CMD-F-M1A-001-happy-09",
           "command_schema_version": "m1a-command-1",
           "command_type": "submit-gate-result",
-          "content_digest": "371614ecb87d53603273b42bad6b983e0429d9fd293baa52df49f88729644061",
-          "expected_state_digest": "54d5ce1c730191aca7a2bb75dbb99448f84e44f7a46e7a9e32e0bf2f9eff003e",
+          "content_digest": "8ba5780ba724f88c9a2bae0ba3e0ac40013e32be661a0ab6d26de59d472c120d",
+          "expected_state_digest": "4adf3920a400fe38e797e2135e74ac486995d2dfac04ba7c8345331212568697",
           "expected_state_version": 8,
           "goal_ref": {
             "content_digest": "067066b032721b5b88938679246889b80df32639fe98ee7c9abdfd4fe3c22cfb",
@@ -1155,7 +1155,7 @@
           "logical_time": 9,
           "payload": {
             "causation_id": "CMD-F-M1A-001-happy-09",
-            "content_digest": "29f6018861616f9e7764f2da09cd88edbfd3f968ff861a9af21f3c863fdec686",
+            "content_digest": "86269ac9335877de1fafc71b5f21ebb68d166f0a060a9ca4075cb525ab5ad2d9",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "VERIFIER-TERRA",
             "created_logical_time": 9,
@@ -1213,7 +1213,7 @@
                 "version": 1
               },
               "work_packet_ref": {
-                "content_digest": "9d56ef6f321ea39bbec80c693c8c03142d825aab6d72884c81ffe217914b6441",
+                "content_digest": "211fa9ab5a9581510102bd08075e2a35d8b3795ebc27c25f3ec4e5cf97cd1984",
                 "id": "PACKET-70b55e16cbbcdc42cab9629562b30b58",
                 "object_type": "work-packet",
                 "version": 1
@@ -1222,7 +1222,7 @@
             "schema_version": "m1a-gate-result-1",
             "version": 1
           },
-          "payload_digest": "c2bffab3590aed1c098d7f7f90828951f43eb2073fb0d61b21db0ff91d9998ff",
+          "payload_digest": "72b385d1f70aeacd8e0799150167c9f9fc27022e1e7e2873fd9d2bcec0ccf21d",
           "plan_ref": {
             "content_digest": "4c86d1e7d41a281d481c5b8507100a13afae0f32f6d72a0b3e54efc475be6dc9",
             "id": "PLAN-M1A",
@@ -1233,12 +1233,12 @@
         {
           "actor_id": "VERIFIER-TERRA",
           "auth_ref": "AUTH-F-M1A-001-happy-10",
-          "candidate_digest": "d64fed822ae218c7f5c24632296fec88dcec3fdf1b13d9645d5eb6cb86acbd9d",
+          "candidate_digest": "ae81c80499603ed8df79c3f06ecdaeeaa7fd9237004a412be294bd2a33f5a159",
           "command_id": "CMD-F-M1A-001-happy-10",
           "command_schema_version": "m1a-command-1",
           "command_type": "submit-plan-verifier-decision",
-          "content_digest": "1fa97678f6c35ef9579e0b3b04e2bdfe36404a878d2adf9b73fbe917584efd72",
-          "expected_state_digest": "9572f265d44c7decda84f954b37221327ac61e97ffb065b4226a7d9a47d8f427",
+          "content_digest": "bccf3aaeaee2061deca5cdd4bb4feadfcd059d332c36574b3ade92319cafedc1",
+          "expected_state_digest": "6dd01534577c80e10a44c6b8f39bfb72d86349e1b305dc839f23cd1b15b37321",
           "expected_state_version": 9,
           "goal_ref": {
             "content_digest": "067066b032721b5b88938679246889b80df32639fe98ee7c9abdfd4fe3c22cfb",
@@ -1250,7 +1250,7 @@
           "logical_time": 10,
           "payload": {
             "causation_id": "CMD-F-M1A-001-happy-10",
-            "content_digest": "2f92c6a1ba2efe5a28f13a8194b582fef7b4c682abec0c2ad480032b7db704dd",
+            "content_digest": "01f569a202980ce5a7cfd28146edc3edd7d6ecdc30d0cfd7c0b3b7a49da6266d",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "VERIFIER-TERRA",
             "created_logical_time": 10,
@@ -1267,12 +1267,12 @@
               },
               "disposition": "pass",
               "dissent_digest": null,
-              "event_log_digest": "a59d047af68e89f63aa6f9dd77a698e08605817fe1a66135e7d5adcf96e09e41",
+              "event_log_digest": "c3a89d3f1777f2a080d9743a141a81b5e623536fcf87922b24770a70e3da167b",
               "evidence_digests": [
                 "1a51e28adffef1830ace3db8a23aed197b5a029c2bd05fa8a7a1e83eecf49e3c"
               ],
               "gate_result_digests": [
-                "29f6018861616f9e7764f2da09cd88edbfd3f968ff861a9af21f3c863fdec686"
+                "86269ac9335877de1fafc71b5f21ebb68d166f0a060a9ca4075cb525ab5ad2d9"
               ],
               "goal_ref": {
                 "content_digest": "067066b032721b5b88938679246889b80df32639fe98ee7c9abdfd4fe3c22cfb",
@@ -1307,7 +1307,7 @@
             "schema_version": "m1a-plan-verifier-decision-1",
             "version": 1
           },
-          "payload_digest": "d64fed822ae218c7f5c24632296fec88dcec3fdf1b13d9645d5eb6cb86acbd9d",
+          "payload_digest": "ae81c80499603ed8df79c3f06ecdaeeaa7fd9237004a412be294bd2a33f5a159",
           "plan_ref": {
             "content_digest": "4c86d1e7d41a281d481c5b8507100a13afae0f32f6d72a0b3e54efc475be6dc9",
             "id": "PLAN-M1A",
@@ -1963,9 +1963,9 @@
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "ad6e8b3ead38a4bae4875077d712d0ab621d422403a2de55278c12ed530e8628",
+          "command_digest": "1e753a7e0d1ea2c1247f8e395a3727d4f681f4f8c94865b7f6fdff4bf1a5a968",
           "command_id": "CMD-F-M1A-001-happy-07",
-          "content_digest": "46e1af58d1ebc960f417b7d08a681f7bdaaa0e6b38b8d5ecd5f23e6b0bd55657",
+          "content_digest": "130b59fb8d65b294d1e70207ac66f177f7060f1165f255d05cda0140d69afc24",
           "event_id": "EV-F-M1A-001-happy-07-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "WorkPacketDerived",
@@ -1973,7 +1973,7 @@
           "previous_event_digest": "a981612c5f22d41a41b21bb43b5dd3acdb88b3d434e8d10943f4846f6a52074f",
           "primary_record": {
             "causation_id": "CMD-F-M1A-001-happy-07",
-            "content_digest": "9d56ef6f321ea39bbec80c693c8c03142d825aab6d72884c81ffe217914b6441",
+            "content_digest": "211fa9ab5a9581510102bd08075e2a35d8b3795ebc27c25f3ec4e5cf97cd1984",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
             "created_logical_time": 7,
@@ -2021,6 +2021,11 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
               "deadline_logical_time": 900,
               "effect_keys": [
                 "EFFECT-SYNTHETIC"
@@ -2085,6 +2090,11 @@
                 "id": "TASK-M1A-A",
                 "object_type": "task-node",
                 "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
               },
               "work_lease_ref": {
                 "content_digest": "a4a72ef1070a30da676df28e282ab18122eb53975ac4642c6318700d0d578a84",
@@ -2195,21 +2205,21 @@
             }
           ],
           "sequence": 7,
-          "state_delta_digest": "abe26267bf7469934d5b7be1bf6a3819c849fed53f5d69b1fe7b1208b269a118",
+          "state_delta_digest": "d8ce3f9a366179ad8292a55183976a49ec21768014ea349c433ab067c6531fa9",
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "64c170ddfbc07bd457d54e4901cf500469753693bad5cda6c0ca48adc45e54b1",
+          "command_digest": "76c650b3743cc214584b604c7a1159ae97daa4998354991c1e196065e2b409b3",
           "command_id": "CMD-F-M1A-001-happy-08",
-          "content_digest": "227aa207a7531b4d443de57276071d88064c0a96ead86b72f8d27d920c526341",
+          "content_digest": "8cf4e1e1b71d28a136a8c9acde3bba05bffca5d2b98a7b2fd9ad392f087e72bb",
           "event_id": "EV-F-M1A-001-happy-08-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "WorkerResultRecorded",
           "logical_time": 8,
-          "previous_event_digest": "46e1af58d1ebc960f417b7d08a681f7bdaaa0e6b38b8d5ecd5f23e6b0bd55657",
+          "previous_event_digest": "130b59fb8d65b294d1e70207ac66f177f7060f1165f255d05cda0140d69afc24",
           "primary_record": {
             "causation_id": "CMD-F-M1A-001-happy-08",
-            "content_digest": "9363732d16ea012dccf79bc7669b7c1dc88cbb0a0fcd57fa62098336c5c041ba",
+            "content_digest": "96773093dd92bbf15adf045a65470e052013d6b7812b1d49a49c9a1f07350531",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "WORKER-LUNA",
             "created_logical_time": 8,
@@ -2229,7 +2239,7 @@
               "observed_effect_ref": null,
               "output_digest": "fda8c795d7b36bfacd0419444d7391de96b0533e78631119f5a7203b3b8d38a7",
               "work_packet_ref": {
-                "content_digest": "9d56ef6f321ea39bbec80c693c8c03142d825aab6d72884c81ffe217914b6441",
+                "content_digest": "211fa9ab5a9581510102bd08075e2a35d8b3795ebc27c25f3ec4e5cf97cd1984",
                 "id": "PACKET-70b55e16cbbcdc42cab9629562b30b58",
                 "object_type": "work-packet",
                 "version": 1
@@ -2240,21 +2250,21 @@
           },
           "related_records": [],
           "sequence": 8,
-          "state_delta_digest": "9885d79e0340bdff779de46e78ff0635ee9e81f72f2acf377c26b12e11bfac30",
+          "state_delta_digest": "e016c620ed74d7e3cb5d4a512644498c131a00560cf33a4ab5b050ecb335eca4",
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "371614ecb87d53603273b42bad6b983e0429d9fd293baa52df49f88729644061",
+          "command_digest": "8ba5780ba724f88c9a2bae0ba3e0ac40013e32be661a0ab6d26de59d472c120d",
           "command_id": "CMD-F-M1A-001-happy-09",
-          "content_digest": "736faea38a373407ef250183c33e7f4757a3e14796965c26f7286e7e85df34b0",
+          "content_digest": "5384177b7b64008d5cb886b90eb01853c3fa0acbe62b7598a685f712027dc7c9",
           "event_id": "EV-F-M1A-001-happy-09-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "GateResultRecorded",
           "logical_time": 9,
-          "previous_event_digest": "227aa207a7531b4d443de57276071d88064c0a96ead86b72f8d27d920c526341",
+          "previous_event_digest": "8cf4e1e1b71d28a136a8c9acde3bba05bffca5d2b98a7b2fd9ad392f087e72bb",
           "primary_record": {
             "causation_id": "CMD-F-M1A-001-happy-09",
-            "content_digest": "29f6018861616f9e7764f2da09cd88edbfd3f968ff861a9af21f3c863fdec686",
+            "content_digest": "86269ac9335877de1fafc71b5f21ebb68d166f0a060a9ca4075cb525ab5ad2d9",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "VERIFIER-TERRA",
             "created_logical_time": 9,
@@ -2312,7 +2322,7 @@
                 "version": 1
               },
               "work_packet_ref": {
-                "content_digest": "9d56ef6f321ea39bbec80c693c8c03142d825aab6d72884c81ffe217914b6441",
+                "content_digest": "211fa9ab5a9581510102bd08075e2a35d8b3795ebc27c25f3ec4e5cf97cd1984",
                 "id": "PACKET-70b55e16cbbcdc42cab9629562b30b58",
                 "object_type": "work-packet",
                 "version": 1
@@ -2323,21 +2333,21 @@
           },
           "related_records": [],
           "sequence": 9,
-          "state_delta_digest": "6982c3b24434c1ffd3f637d1c43aa3f335c0adceb679872a125d5eb5f243e425",
+          "state_delta_digest": "2174fae134ad438508de382103fcc2efc155d7eec3713f67345ef232c959d330",
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "1fa97678f6c35ef9579e0b3b04e2bdfe36404a878d2adf9b73fbe917584efd72",
+          "command_digest": "bccf3aaeaee2061deca5cdd4bb4feadfcd059d332c36574b3ade92319cafedc1",
           "command_id": "CMD-F-M1A-001-happy-10",
-          "content_digest": "d7729463977dfa88ff726b0afee726d42837f9cd9847d3283124221960f127c4",
+          "content_digest": "9893c9482c79240d671165a7bb70fbda5605424c6fcd5eb0b3d08f63c2f09e81",
           "event_id": "EV-F-M1A-001-happy-10-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "PlanVerifierDecisionRecorded",
           "logical_time": 10,
-          "previous_event_digest": "736faea38a373407ef250183c33e7f4757a3e14796965c26f7286e7e85df34b0",
+          "previous_event_digest": "5384177b7b64008d5cb886b90eb01853c3fa0acbe62b7598a685f712027dc7c9",
           "primary_record": {
             "causation_id": "CMD-F-M1A-001-happy-10",
-            "content_digest": "2f92c6a1ba2efe5a28f13a8194b582fef7b4c682abec0c2ad480032b7db704dd",
+            "content_digest": "01f569a202980ce5a7cfd28146edc3edd7d6ecdc30d0cfd7c0b3b7a49da6266d",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "VERIFIER-TERRA",
             "created_logical_time": 10,
@@ -2354,12 +2364,12 @@
               },
               "disposition": "pass",
               "dissent_digest": null,
-              "event_log_digest": "a59d047af68e89f63aa6f9dd77a698e08605817fe1a66135e7d5adcf96e09e41",
+              "event_log_digest": "c3a89d3f1777f2a080d9743a141a81b5e623536fcf87922b24770a70e3da167b",
               "evidence_digests": [
                 "1a51e28adffef1830ace3db8a23aed197b5a029c2bd05fa8a7a1e83eecf49e3c"
               ],
               "gate_result_digests": [
-                "29f6018861616f9e7764f2da09cd88edbfd3f968ff861a9af21f3c863fdec686"
+                "86269ac9335877de1fafc71b5f21ebb68d166f0a060a9ca4075cb525ab5ad2d9"
               ],
               "goal_ref": {
                 "content_digest": "067066b032721b5b88938679246889b80df32639fe98ee7c9abdfd4fe3c22cfb",
@@ -2396,11 +2406,11 @@
           },
           "related_records": [],
           "sequence": 10,
-          "state_delta_digest": "b95bad262d490c13ee3940101024524987849c838af19b25e732a5ceeb607258",
+          "state_delta_digest": "3209a6253fd487f39bcdb8dcc105b4b20c80c5de1428336e2bb2ac98ad827242",
           "stream_id": "STREAM-M1A"
         }
       ],
-      "expected_final_digest": "03e635157fd7a9b8acf8222155b1c96256a51fa20c3fd97c2760eb18a80709ae",
+      "expected_final_digest": "1d81d76665d47644295ec8739f8443c1d7bba9e694ba48a59102acc8c4766852",
       "expected_final_state": {
         "active_arm_run_ref": {
           "content_digest": "165ea49180eb0329cbb56759f9eaee3280bf2b298682727825cc35cb540f2152",
@@ -2416,14 +2426,14 @@
         },
         "ambiguous_effect_refs": [],
         "consumed_novelty_delta_digests": [],
-        "content_digest": "03e635157fd7a9b8acf8222155b1c96256a51fa20c3fd97c2760eb18a80709ae",
+        "content_digest": "1d81d76665d47644295ec8739f8443c1d7bba9e694ba48a59102acc8c4766852",
         "current_pause_epoch": 0,
         "current_pause_policy_ref": {
           "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
           "policy_id": "POLICY-PAUSE",
           "policy_version": 1
         },
-        "last_event_digest": "d7729463977dfa88ff726b0afee726d42837f9cd9847d3283124221960f127c4",
+        "last_event_digest": "9893c9482c79240d671165a7bb70fbda5605424c6fcd5eb0b3d08f63c2f09e81",
         "last_event_sequence": 10,
         "object_states": [
           {
@@ -2464,7 +2474,7 @@
           },
           {
             "object_ref": {
-              "content_digest": "29f6018861616f9e7764f2da09cd88edbfd3f968ff861a9af21f3c863fdec686",
+              "content_digest": "86269ac9335877de1fafc71b5f21ebb68d166f0a060a9ca4075cb525ab5ad2d9",
               "id": "GATE-RESULT-M1A-1",
               "object_type": "gate-result",
               "version": 1
@@ -2509,7 +2519,7 @@
           },
           {
             "object_ref": {
-              "content_digest": "2f92c6a1ba2efe5a28f13a8194b582fef7b4c682abec0c2ad480032b7db704dd",
+              "content_digest": "01f569a202980ce5a7cfd28146edc3edd7d6ecdc30d0cfd7c0b3b7a49da6266d",
               "id": "PLAN-VERIFIER-DECISION-1",
               "object_type": "plan-verifier-decision",
               "version": 1
@@ -2545,16 +2555,16 @@
           },
           {
             "object_ref": {
-              "content_digest": "9d56ef6f321ea39bbec80c693c8c03142d825aab6d72884c81ffe217914b6441",
+              "content_digest": "211fa9ab5a9581510102bd08075e2a35d8b3795ebc27c25f3ec4e5cf97cd1984",
               "id": "PACKET-70b55e16cbbcdc42cab9629562b30b58",
               "object_type": "work-packet",
               "version": 1
             },
-            "state": "result-submitted"
+            "state": "consumed"
           },
           {
             "object_ref": {
-              "content_digest": "9363732d16ea012dccf79bc7669b7c1dc88cbb0a0fcd57fa62098336c5c041ba",
+              "content_digest": "96773093dd92bbf15adf045a65470e052013d6b7812b1d49a49c9a1f07350531",
               "id": "RESULT-M1A-1",
               "object_type": "worker-result",
               "version": 1
@@ -2602,22 +2612,22 @@
             "receipt_id": "RCPT-F-M1A-001-happy-06"
           },
           {
-            "command_digest": "ad6e8b3ead38a4bae4875077d712d0ab621d422403a2de55278c12ed530e8628",
+            "command_digest": "1e753a7e0d1ea2c1247f8e395a3727d4f681f4f8c94865b7f6fdff4bf1a5a968",
             "command_id": "CMD-F-M1A-001-happy-07",
             "receipt_id": "RCPT-F-M1A-001-happy-07"
           },
           {
-            "command_digest": "64c170ddfbc07bd457d54e4901cf500469753693bad5cda6c0ca48adc45e54b1",
+            "command_digest": "76c650b3743cc214584b604c7a1159ae97daa4998354991c1e196065e2b409b3",
             "command_id": "CMD-F-M1A-001-happy-08",
             "receipt_id": "RCPT-F-M1A-001-happy-08"
           },
           {
-            "command_digest": "371614ecb87d53603273b42bad6b983e0429d9fd293baa52df49f88729644061",
+            "command_digest": "8ba5780ba724f88c9a2bae0ba3e0ac40013e32be661a0ab6d26de59d472c120d",
             "command_id": "CMD-F-M1A-001-happy-09",
             "receipt_id": "RCPT-F-M1A-001-happy-09"
           },
           {
-            "command_digest": "1fa97678f6c35ef9579e0b3b04e2bdfe36404a878d2adf9b73fbe917584efd72",
+            "command_digest": "bccf3aaeaee2061deca5cdd4bb4feadfcd059d332c36574b3ade92319cafedc1",
             "command_id": "CMD-F-M1A-001-happy-10",
             "receipt_id": "RCPT-F-M1A-001-happy-10"
           }
@@ -2800,7 +2810,7 @@
           },
           {
             "causation_id": "CMD-F-M1A-001-happy-09",
-            "content_digest": "29f6018861616f9e7764f2da09cd88edbfd3f968ff861a9af21f3c863fdec686",
+            "content_digest": "86269ac9335877de1fafc71b5f21ebb68d166f0a060a9ca4075cb525ab5ad2d9",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "VERIFIER-TERRA",
             "created_logical_time": 9,
@@ -2858,7 +2868,7 @@
                 "version": 1
               },
               "work_packet_ref": {
-                "content_digest": "9d56ef6f321ea39bbec80c693c8c03142d825aab6d72884c81ffe217914b6441",
+                "content_digest": "211fa9ab5a9581510102bd08075e2a35d8b3795ebc27c25f3ec4e5cf97cd1984",
                 "id": "PACKET-70b55e16cbbcdc42cab9629562b30b58",
                 "object_type": "work-packet",
                 "version": 1
@@ -3131,7 +3141,7 @@
           },
           {
             "causation_id": "CMD-F-M1A-001-happy-10",
-            "content_digest": "2f92c6a1ba2efe5a28f13a8194b582fef7b4c682abec0c2ad480032b7db704dd",
+            "content_digest": "01f569a202980ce5a7cfd28146edc3edd7d6ecdc30d0cfd7c0b3b7a49da6266d",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "VERIFIER-TERRA",
             "created_logical_time": 10,
@@ -3148,12 +3158,12 @@
               },
               "disposition": "pass",
               "dissent_digest": null,
-              "event_log_digest": "a59d047af68e89f63aa6f9dd77a698e08605817fe1a66135e7d5adcf96e09e41",
+              "event_log_digest": "c3a89d3f1777f2a080d9743a141a81b5e623536fcf87922b24770a70e3da167b",
               "evidence_digests": [
                 "1a51e28adffef1830ace3db8a23aed197b5a029c2bd05fa8a7a1e83eecf49e3c"
               ],
               "gate_result_digests": [
-                "29f6018861616f9e7764f2da09cd88edbfd3f968ff861a9af21f3c863fdec686"
+                "86269ac9335877de1fafc71b5f21ebb68d166f0a060a9ca4075cb525ab5ad2d9"
               ],
               "goal_ref": {
                 "content_digest": "067066b032721b5b88938679246889b80df32639fe98ee7c9abdfd4fe3c22cfb",
@@ -3407,7 +3417,7 @@
           },
           {
             "causation_id": "CMD-F-M1A-001-happy-07",
-            "content_digest": "9d56ef6f321ea39bbec80c693c8c03142d825aab6d72884c81ffe217914b6441",
+            "content_digest": "211fa9ab5a9581510102bd08075e2a35d8b3795ebc27c25f3ec4e5cf97cd1984",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
             "created_logical_time": 7,
@@ -3455,6 +3465,11 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
               "deadline_logical_time": 900,
               "effect_keys": [
                 "EFFECT-SYNTHETIC"
@@ -3520,6 +3535,11 @@
                 "object_type": "task-node",
                 "version": 1
               },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              },
               "work_lease_ref": {
                 "content_digest": "a4a72ef1070a30da676df28e282ab18122eb53975ac4642c6318700d0d578a84",
                 "lease_epoch": 1,
@@ -3531,7 +3551,7 @@
           },
           {
             "causation_id": "CMD-F-M1A-001-happy-08",
-            "content_digest": "9363732d16ea012dccf79bc7669b7c1dc88cbb0a0fcd57fa62098336c5c041ba",
+            "content_digest": "96773093dd92bbf15adf045a65470e052013d6b7812b1d49a49c9a1f07350531",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "WORKER-LUNA",
             "created_logical_time": 8,
@@ -3551,7 +3571,7 @@
               "observed_effect_ref": null,
               "output_digest": "fda8c795d7b36bfacd0419444d7391de96b0533e78631119f5a7203b3b8d38a7",
               "work_packet_ref": {
-                "content_digest": "9d56ef6f321ea39bbec80c693c8c03142d825aab6d72884c81ffe217914b6441",
+                "content_digest": "211fa9ab5a9581510102bd08075e2a35d8b3795ebc27c25f3ec4e5cf97cd1984",
                 "id": "PACKET-70b55e16cbbcdc42cab9629562b30b58",
                 "object_type": "work-packet",
                 "version": 1
@@ -3675,9 +3695,9 @@
           "witness": null
         },
         {
-          "command_digest": "ad6e8b3ead38a4bae4875077d712d0ab621d422403a2de55278c12ed530e8628",
+          "command_digest": "1e753a7e0d1ea2c1247f8e395a3727d4f681f4f8c94865b7f6fdff4bf1a5a968",
           "command_id": "CMD-F-M1A-001-happy-07",
-          "content_digest": "c72aff098b0aec47ec667444c3beb36e02e1125f6d10927b4ee6aefe63a0e2c3",
+          "content_digest": "90e7d585901edd6d77aad2bc04a23618546cc11ce6b9f86b131b52fa115f7d49",
           "disposition": "accepted",
           "event_ids": [
             "EV-F-M1A-001-happy-07-0001"
@@ -3688,14 +3708,14 @@
           "receipt_id": "RCPT-F-M1A-001-happy-07",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "234be9b29829228a7a7d44c9e63c114de3cabea0f389715c4e84de34149dc657",
+          "state_after_digest": "69ac5d52511aa63492ee89bafc995379e95691c2cda79a62672767757a19bddc",
           "state_before_digest": "fb323acf0834503c96e05df654ce9ef05b1df120fe054236ab35d9d8d25a3074",
           "witness": null
         },
         {
-          "command_digest": "64c170ddfbc07bd457d54e4901cf500469753693bad5cda6c0ca48adc45e54b1",
+          "command_digest": "76c650b3743cc214584b604c7a1159ae97daa4998354991c1e196065e2b409b3",
           "command_id": "CMD-F-M1A-001-happy-08",
-          "content_digest": "6382aebf5a7f0d11a563e8eba26c996219c7a2823673fc00ac39c9af2c2237d1",
+          "content_digest": "2de043f638266a2d882c12d2995b03a3052ab1203444ec7f36308e84097ec8bc",
           "disposition": "accepted",
           "event_ids": [
             "EV-F-M1A-001-happy-08-0001"
@@ -3706,14 +3726,14 @@
           "receipt_id": "RCPT-F-M1A-001-happy-08",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "54d5ce1c730191aca7a2bb75dbb99448f84e44f7a46e7a9e32e0bf2f9eff003e",
-          "state_before_digest": "234be9b29829228a7a7d44c9e63c114de3cabea0f389715c4e84de34149dc657",
+          "state_after_digest": "4adf3920a400fe38e797e2135e74ac486995d2dfac04ba7c8345331212568697",
+          "state_before_digest": "69ac5d52511aa63492ee89bafc995379e95691c2cda79a62672767757a19bddc",
           "witness": null
         },
         {
-          "command_digest": "371614ecb87d53603273b42bad6b983e0429d9fd293baa52df49f88729644061",
+          "command_digest": "8ba5780ba724f88c9a2bae0ba3e0ac40013e32be661a0ab6d26de59d472c120d",
           "command_id": "CMD-F-M1A-001-happy-09",
-          "content_digest": "f956486c5e2c93c82c7b0d50b344ac534a9a2ccf3c77afdd66aacdd6eae1fd49",
+          "content_digest": "1f1dfdf1e0721c4e8185b66c689f64c413a20d8c3e6e9c0630efb879aa26ce22",
           "disposition": "accepted",
           "event_ids": [
             "EV-F-M1A-001-happy-09-0001"
@@ -3724,14 +3744,14 @@
           "receipt_id": "RCPT-F-M1A-001-happy-09",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "9572f265d44c7decda84f954b37221327ac61e97ffb065b4226a7d9a47d8f427",
-          "state_before_digest": "54d5ce1c730191aca7a2bb75dbb99448f84e44f7a46e7a9e32e0bf2f9eff003e",
+          "state_after_digest": "6dd01534577c80e10a44c6b8f39bfb72d86349e1b305dc839f23cd1b15b37321",
+          "state_before_digest": "4adf3920a400fe38e797e2135e74ac486995d2dfac04ba7c8345331212568697",
           "witness": null
         },
         {
-          "command_digest": "1fa97678f6c35ef9579e0b3b04e2bdfe36404a878d2adf9b73fbe917584efd72",
+          "command_digest": "bccf3aaeaee2061deca5cdd4bb4feadfcd059d332c36574b3ade92319cafedc1",
           "command_id": "CMD-F-M1A-001-happy-10",
-          "content_digest": "222654373754665d4b4db8cabea19e2a0f0e6460d0928827e02b557ade5f536c",
+          "content_digest": "92d8bd42a90a47dde7f06d72d32d30363df4cf143cb5abd0a7fca74c71fec04c",
           "disposition": "accepted",
           "event_ids": [
             "EV-F-M1A-001-happy-10-0001"
@@ -3742,8 +3762,8 @@
           "receipt_id": "RCPT-F-M1A-001-happy-10",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "03e635157fd7a9b8acf8222155b1c96256a51fa20c3fd97c2760eb18a80709ae",
-          "state_before_digest": "9572f265d44c7decda84f954b37221327ac61e97ffb065b4226a7d9a47d8f427",
+          "state_after_digest": "1d81d76665d47644295ec8739f8443c1d7bba9e694ba48a59102acc8c4766852",
+          "state_before_digest": "6dd01534577c80e10a44c6b8f39bfb72d86349e1b305dc839f23cd1b15b37321",
           "witness": null
         }
       ],

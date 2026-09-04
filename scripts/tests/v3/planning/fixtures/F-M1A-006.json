@@ -153,13 +153,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "641d122e49851dff9365068c12be7368184e83839207d1ecfbd8726f2ac47f48",
+          "candidate_digest": "cc9132ee559a720c59ed7845d14e4a5a953ecdd031f8b50f19c9183b50366be0",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "83f1ea98e70b14da6089113ec55f1d402e76cd2e53f2211377e4562ba68a0979",
+          "content_digest": "c1183ed0a39f924acb4b6e34c1888566dce9e172ca7f5e6056980c288a043c40",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -176,13 +176,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "0eec7c4d8dd4fb5a6aac569f55e73f2d88d32df6b1df2a57fde773d2b25764f1",
+          "candidate_digest": "978d862540314fd0c28f36057a87f8881cd271fc6c475e35c621de7100208a9f",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "f448976bb5371ccec0cb76b54d72a7a4732e30b679f06991e3792fa1c421e836",
+          "content_digest": "5370654d778b1a2f751bb50750761b01e0b86eb56f18feed1852d2c1672579d5",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         }
@@ -192,12 +192,12 @@
         {
           "actor_id": "WORKER-LUNA",
           "auth_ref": "AUTH-F-M1A-006-stale-goal-08",
-          "candidate_digest": "0eec7c4d8dd4fb5a6aac569f55e73f2d88d32df6b1df2a57fde773d2b25764f1",
+          "candidate_digest": "978d862540314fd0c28f36057a87f8881cd271fc6c475e35c621de7100208a9f",
           "command_id": "CMD-F-M1A-006-stale-goal-08",
           "command_schema_version": "m1a-command-1",
           "command_type": "submit-worker-result",
-          "content_digest": "6a857a416845043a3192b300b29e6ad84b602ad42530c61eafe109343341405e",
-          "expected_state_digest": "990f7499fcad20fac6df3667e3ce453b0925628a5af7c62f705362b0e24b4ef0",
+          "content_digest": "b7c188d8e5d31ba06fc70f25deaa80d9e9bd2d052a50f2b98c697f3c42ff3c3c",
+          "expected_state_digest": "3ff462d7c11aefa721af57c5ab42c32c1e3578432547f0f3b8e941a6152f9b41",
           "expected_state_version": 7,
           "goal_ref": {
             "content_digest": "e2b986d4a1e91418c0786da01bfb713c0e778c1d2916f3d66a5dcf0f97b3f467",
@@ -213,7 +213,7 @@
           "logical_time": 8,
           "payload": {
             "causation_id": "CMD-F-M1A-006-stale-goal-08",
-            "content_digest": "5bac33d5209199c0db45b912007f214061add06fc8738f23ff91b6d3d9a04692",
+            "content_digest": "0224abb370cee6c045dc27c0e8eac33b57a33ba8a561fba2e501f284f3256f6f",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "WORKER-LUNA",
             "created_logical_time": 8,
@@ -229,7 +229,7 @@
               "observed_effect_ref": null,
               "output_digest": "57dcd3e20c352784a5f6509a12411b1b64118658f6dc2ba4044765b7ae99d51b",
               "work_packet_ref": {
-                "content_digest": "720a013bdbd8a762414be25aece4a558f0b2adf46260858972364b040a1a0159",
+                "content_digest": "42e25aa3320826552cae4f58d4d8d2a285d2fb2dbabf59fa0f43d07a7cfa80a7",
                 "id": "PACKET-e9425b4d928c16c40b66fe6e5d2cc3aa",
                 "object_type": "work-packet",
                 "version": 1
@@ -238,7 +238,7 @@
             "schema_version": "m1a-worker-result-1",
             "version": 1
           },
-          "payload_digest": "0eec7c4d8dd4fb5a6aac569f55e73f2d88d32df6b1df2a57fde773d2b25764f1",
+          "payload_digest": "978d862540314fd0c28f36057a87f8881cd271fc6c475e35c621de7100208a9f",
           "plan_ref": {
             "content_digest": "7e2b480763f7ac6711ad2621f937ead851a5937405c4b4d19225e49f2217b52e",
             "id": "PLAN-M1A",
@@ -251,7 +251,7 @@
       "description": "Reject stale-goal packet result.",
       "expected_decode_failures": [],
       "expected_events": [],
-      "expected_final_digest": "990f7499fcad20fac6df3667e3ce453b0925628a5af7c62f705362b0e24b4ef0",
+      "expected_final_digest": "3ff462d7c11aefa721af57c5ab42c32c1e3578432547f0f3b8e941a6152f9b41",
       "expected_final_state": {
         "active_arm_run_ref": {
           "content_digest": "fb2f605ab742cc9e365743912859dba46f414ef75ae26618559e784d44c4b033",
@@ -267,14 +267,14 @@
         },
         "ambiguous_effect_refs": [],
         "consumed_novelty_delta_digests": [],
-        "content_digest": "990f7499fcad20fac6df3667e3ce453b0925628a5af7c62f705362b0e24b4ef0",
+        "content_digest": "3ff462d7c11aefa721af57c5ab42c32c1e3578432547f0f3b8e941a6152f9b41",
         "current_pause_epoch": 0,
         "current_pause_policy_ref": {
           "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
           "policy_id": "POLICY-PAUSE",
           "policy_version": 1
         },
-        "last_event_digest": "e3c8a4ec8702ffebff7432f6be4c68b039fc447617c6603686fece9d7ff876a4",
+        "last_event_digest": "5497019729fea4e8acf04e1b120f85d3aad9b2ba7e4ac0675f2d7615d1d5a0be",
         "last_event_sequence": 7,
         "object_states": [
           {
@@ -378,7 +378,7 @@
           },
           {
             "object_ref": {
-              "content_digest": "720a013bdbd8a762414be25aece4a558f0b2adf46260858972364b040a1a0159",
+              "content_digest": "42e25aa3320826552cae4f58d4d8d2a285d2fb2dbabf59fa0f43d07a7cfa80a7",
               "id": "PACKET-e9425b4d928c16c40b66fe6e5d2cc3aa",
               "object_type": "work-packet",
               "version": 1
@@ -426,7 +426,7 @@
             "receipt_id": "RCPT-F-M1A-006-stale-goal-06"
           },
           {
-            "command_digest": "dc4283071aec0eddc8dfebb4785d16f0e2dc63f350d0ffe8bb82b015424e572b",
+            "command_digest": "5fb0fa2af05df0a81933a005ea765bc10eeaac36e4603dc51544b0f9c27bf6f4",
             "command_id": "CMD-F-M1A-006-stale-goal-07",
             "receipt_id": "RCPT-F-M1A-006-stale-goal-07"
           }
@@ -1088,7 +1088,7 @@
           },
           {
             "causation_id": "CMD-F-M1A-006-stale-goal-07",
-            "content_digest": "720a013bdbd8a762414be25aece4a558f0b2adf46260858972364b040a1a0159",
+            "content_digest": "42e25aa3320826552cae4f58d4d8d2a285d2fb2dbabf59fa0f43d07a7cfa80a7",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
             "created_logical_time": 7,
@@ -1136,6 +1136,11 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
               "deadline_logical_time": 900,
               "effect_keys": [
                 "EFFECT-SYNTHETIC"
@@ -1201,6 +1206,11 @@
                 "object_type": "task-node",
                 "version": 1
               },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              },
               "work_lease_ref": {
                 "content_digest": "cbba94a0a11995ec515426ad4084bb5c731db9c4100de1867d220a29afad0bb1",
                 "lease_epoch": 1,
@@ -1217,9 +1227,9 @@
       },
       "expected_receipts": [
         {
-          "command_digest": "6a857a416845043a3192b300b29e6ad84b602ad42530c61eafe109343341405e",
+          "command_digest": "b7c188d8e5d31ba06fc70f25deaa80d9e9bd2d052a50f2b98c697f3c42ff3c3c",
           "command_id": "CMD-F-M1A-006-stale-goal-08",
-          "content_digest": "ef42b1d68729b153d9baa740358e3cd96b358e0e2acde8aabfed817eb7771d2e",
+          "content_digest": "616f0ab197dbc98b2fec6ac4d3ff434011609d18e7069d608a972585c1e93064",
           "disposition": "refused",
           "event_ids": [],
           "first_event_sequence": null,
@@ -1228,8 +1238,8 @@
           "receipt_id": "RCPT-F-M1A-006-stale-goal-08",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "990f7499fcad20fac6df3667e3ce453b0925628a5af7c62f705362b0e24b4ef0",
-          "state_before_digest": "990f7499fcad20fac6df3667e3ce453b0925628a5af7c62f705362b0e24b4ef0",
+          "state_after_digest": "3ff462d7c11aefa721af57c5ab42c32c1e3578432547f0f3b8e941a6152f9b41",
+          "state_before_digest": "3ff462d7c11aefa721af57c5ab42c32c1e3578432547f0f3b8e941a6152f9b41",
           "witness": null
         }
       ],
@@ -1943,11 +1953,11 @@
         {
           "actor_id": "ARM-M1A",
           "auth_ref": "AUTH-F-M1A-006-stale-goal-07",
-          "candidate_digest": "641d122e49851dff9365068c12be7368184e83839207d1ecfbd8726f2ac47f48",
+          "candidate_digest": "cc9132ee559a720c59ed7845d14e4a5a953ecdd031f8b50f19c9183b50366be0",
           "command_id": "CMD-F-M1A-006-stale-goal-07",
           "command_schema_version": "m1a-command-1",
           "command_type": "derive-work-packet",
-          "content_digest": "dc4283071aec0eddc8dfebb4785d16f0e2dc63f350d0ffe8bb82b015424e572b",
+          "content_digest": "5fb0fa2af05df0a81933a005ea765bc10eeaac36e4603dc51544b0f9c27bf6f4",
           "expected_state_digest": "7977e17e7cf608bdc5949d58542667a869da96064abb4496f091da3857cc02db",
           "expected_state_version": 6,
           "goal_ref": {
@@ -1970,7 +1980,7 @@
               "object_type": "budget-reservation",
               "version": 1
             },
-            "expected_work_packet_digest": "720a013bdbd8a762414be25aece4a558f0b2adf46260858972364b040a1a0159",
+            "expected_work_packet_digest": "42e25aa3320826552cae4f58d4d8d2a285d2fb2dbabf59fa0f43d07a7cfa80a7",
             "route_assignment": {
               "causation_id": "CMD-F-M1A-006-stale-goal-07",
               "content_digest": "dc679e9d28e3508583c99ce2528d8b9cde0d7d0d4651490ed5485d498662df5a",
@@ -2075,7 +2085,7 @@
               "version": 1
             }
           },
-          "payload_digest": "641d122e49851dff9365068c12be7368184e83839207d1ecfbd8726f2ac47f48",
+          "payload_digest": "cc9132ee559a720c59ed7845d14e4a5a953ecdd031f8b50f19c9183b50366be0",
           "plan_ref": {
             "content_digest": "7e2b480763f7ac6711ad2621f937ead851a5937405c4b4d19225e49f2217b52e",
             "id": "PLAN-M1A",
@@ -2728,9 +2738,9 @@
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "dc4283071aec0eddc8dfebb4785d16f0e2dc63f350d0ffe8bb82b015424e572b",
+          "command_digest": "5fb0fa2af05df0a81933a005ea765bc10eeaac36e4603dc51544b0f9c27bf6f4",
           "command_id": "CMD-F-M1A-006-stale-goal-07",
-          "content_digest": "e3c8a4ec8702ffebff7432f6be4c68b039fc447617c6603686fece9d7ff876a4",
+          "content_digest": "5497019729fea4e8acf04e1b120f85d3aad9b2ba7e4ac0675f2d7615d1d5a0be",
           "event_id": "EV-F-M1A-006-stale-goal-07-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "WorkPacketDerived",
@@ -2738,7 +2748,7 @@
           "previous_event_digest": "dd1f48f5aa7067d51dc3f0d8744b3a4e0e1b24057046896d6d0170d3d9d9ffa9",
           "primary_record": {
             "causation_id": "CMD-F-M1A-006-stale-goal-07",
-            "content_digest": "720a013bdbd8a762414be25aece4a558f0b2adf46260858972364b040a1a0159",
+            "content_digest": "42e25aa3320826552cae4f58d4d8d2a285d2fb2dbabf59fa0f43d07a7cfa80a7",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
             "created_logical_time": 7,
@@ -2786,6 +2796,11 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
               "deadline_logical_time": 900,
               "effect_keys": [
                 "EFFECT-SYNTHETIC"
@@ -2850,6 +2865,11 @@
                 "id": "TASK-M1A-A",
                 "object_type": "task-node",
                 "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
               },
               "work_lease_ref": {
                 "content_digest": "cbba94a0a11995ec515426ad4084bb5c731db9c4100de1867d220a29afad0bb1",
@@ -2960,7 +2980,7 @@
             }
           ],
           "sequence": 7,
-          "state_delta_digest": "80cdab3eb4aae764cace64949fbde6302d5048f5eaddf575904630ad16c9b16e",
+          "state_delta_digest": "8066d8c60df963a093cd151e4e76a9937d88e3c29a48c09fe98066701c893e3e",
           "stream_id": "STREAM-M1A"
         }
       ],
@@ -3074,9 +3094,9 @@
           "witness": null
         },
         {
-          "command_digest": "dc4283071aec0eddc8dfebb4785d16f0e2dc63f350d0ffe8bb82b015424e572b",
+          "command_digest": "5fb0fa2af05df0a81933a005ea765bc10eeaac36e4603dc51544b0f9c27bf6f4",
           "command_id": "CMD-F-M1A-006-stale-goal-07",
-          "content_digest": "b4b1eeff8ab367a65d5eb88a398653f9ac25f901de53f04afc6aaf5ffe59655d",
+          "content_digest": "c50ad0e75e05c5a08e14c97562704965b3332faea499903339a0a60f092d94ae",
           "disposition": "accepted",
           "event_ids": [
             "EV-F-M1A-006-stale-goal-07-0001"
@@ -3087,7 +3107,7 @@
           "receipt_id": "RCPT-F-M1A-006-stale-goal-07",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "990f7499fcad20fac6df3667e3ce453b0925628a5af7c62f705362b0e24b4ef0",
+          "state_after_digest": "3ff462d7c11aefa721af57c5ab42c32c1e3578432547f0f3b8e941a6152f9b41",
           "state_before_digest": "7977e17e7cf608bdc5949d58542667a869da96064abb4496f091da3857cc02db",
           "witness": null
         }
@@ -3532,13 +3552,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "9eb1b7e69f9a966f827aaeb2bc118d8a2889e0070495406d7717daee22ef2ddc",
+          "candidate_digest": "ea768fad91f806232f05b7241fdf9646ada0a7824eba8772af9ad8ef906a8847",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "ca3102aa76d51d93a9cc3e47aae7a5ef5f47b22e40eb7dce330ccb971c62dacc",
+          "content_digest": "4597288a8e472f645d295eb7c9afe89ef3bc48a758b6b3e305a3d7a8a634ca91",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -3578,13 +3598,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "1fd9dc68f6b48795680b412d9116d2abb3b2e8ccf49df83f888bf811bfff709a",
+          "candidate_digest": "f2e814e3f7e4ee7f5fe65a4703b44bafec48b4e18015c861387aa96c018dff9f",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "e025deea013c2010f47dc81e1ebedd4b046b5fb671f2f7ed91dce532c887f723",
+          "content_digest": "cc0193e427d8c5d7c943dd47107b60c64dbb8acd242c20fdaed98b0037e453ed",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         }
@@ -3598,8 +3618,8 @@
           "command_id": "CMD-F-M1A-006-stale-lease-08",
           "command_schema_version": "m1a-command-1",
           "command_type": "replace-work-lease",
-          "content_digest": "cb461d5b4d6250c5d997afe6f89b5f6741ef9836e1e64db8eb3d74ba67d8fb30",
-          "expected_state_digest": "f4146b69125184a7ac4ec466316eefc486547b69eae51547331014fc0110f08b",
+          "content_digest": "47f58a9ddbb3277a7ff3f2ee43a56e3fa3a2ec9a9c030bbd4a6ab38d69f9ddff",
+          "expected_state_digest": "3beaf34b0a4f9a04b3000d64af160cb1ffd44ce6f0ac135b44bcfb3e12e7bca3",
           "expected_state_version": 7,
           "goal_ref": {
             "content_digest": "e66670a4fbba2fd073a949002a3e6473f87ff8f03d6981d27d216f320d7e26cb",
@@ -3673,12 +3693,12 @@
         {
           "actor_id": "WORKER-LUNA",
           "auth_ref": "AUTH-F-M1A-006-stale-lease-09",
-          "candidate_digest": "1fd9dc68f6b48795680b412d9116d2abb3b2e8ccf49df83f888bf811bfff709a",
+          "candidate_digest": "f2e814e3f7e4ee7f5fe65a4703b44bafec48b4e18015c861387aa96c018dff9f",
           "command_id": "CMD-F-M1A-006-stale-lease-09",
           "command_schema_version": "m1a-command-1",
           "command_type": "submit-worker-result",
-          "content_digest": "3b754ff3fb7a4219eef6d112444fb68d8c46da1464676cab455dcfed9649b970",
-          "expected_state_digest": "46989a4b4fc58374f21b8c4b66043e8347ffd1bbe7dd76315316094272945fe6",
+          "content_digest": "92fd72cec171162f5f78d4a648db2d81bf595b6abdcfba560c1d5ab2adeab19c",
+          "expected_state_digest": "38a91df87ccaef21225a3d382b0be5f93bd36c35357690be0f9d8a5b8107b1f6",
           "expected_state_version": 8,
           "goal_ref": {
             "content_digest": "e66670a4fbba2fd073a949002a3e6473f87ff8f03d6981d27d216f320d7e26cb",
@@ -3694,7 +3714,7 @@
           "logical_time": 9,
           "payload": {
             "causation_id": "CMD-F-M1A-006-stale-lease-09",
-            "content_digest": "f70e6e5113f241fada2d7c9bab4fbcf7dbf86c9be7f8255c9e137c1336064f8c",
+            "content_digest": "73a2e63defdd6b09649d9c540f4e8f64b98397c05b664623662869d7b5d28606",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "WORKER-LUNA",
             "created_logical_time": 9,
@@ -3710,7 +3730,7 @@
               "observed_effect_ref": null,
               "output_digest": "57dcd3e20c352784a5f6509a12411b1b64118658f6dc2ba4044765b7ae99d51b",
               "work_packet_ref": {
-                "content_digest": "3e0ac7b256a97fe01fa54a0f32fc5c16c190459e5306c223cbd6fd256a9f4cbc",
+                "content_digest": "8d005d7714ecd5a25e948a0d867fddccce63d4f7d1cf7fa22c0960479156b505",
                 "id": "PACKET-64d706ea8cebf7e1ffde329ebaca9a37",
                 "object_type": "work-packet",
                 "version": 1
@@ -3719,7 +3739,7 @@
             "schema_version": "m1a-worker-result-1",
             "version": 1
           },
-          "payload_digest": "1fd9dc68f6b48795680b412d9116d2abb3b2e8ccf49df83f888bf811bfff709a",
+          "payload_digest": "f2e814e3f7e4ee7f5fe65a4703b44bafec48b4e18015c861387aa96c018dff9f",
           "plan_ref": {
             "content_digest": "df0141f69c914b8171d10869a3781250dcb426e19ddab66a3ccc16cac0a3d115",
             "id": "PLAN-M1A",
@@ -3733,14 +3753,14 @@
       "expected_decode_failures": [],
       "expected_events": [
         {
-          "command_digest": "cb461d5b4d6250c5d997afe6f89b5f6741ef9836e1e64db8eb3d74ba67d8fb30",
+          "command_digest": "47f58a9ddbb3277a7ff3f2ee43a56e3fa3a2ec9a9c030bbd4a6ab38d69f9ddff",
           "command_id": "CMD-F-M1A-006-stale-lease-08",
-          "content_digest": "d8b9ced31746fb0f22e10e3b34bf6b58ba516c3f05308838de033af36001bf4d",
+          "content_digest": "95c480748571a1526117553e44f482e5c4588304ee4b2896e36d0f67e98f3225",
           "event_id": "EV-F-M1A-006-stale-lease-08-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "WorkLeaseReplaced",
           "logical_time": 8,
-          "previous_event_digest": "f2fc4d0984a7a8b3b9fbe4664944783648c10067caafc605b929d147da262697",
+          "previous_event_digest": "20fa24a0fc808fcb2898b0a10e0591c718da8a2f1b529149b5adcd6c2a8e3473",
           "primary_record": {
             "causation_id": "CMD-F-M1A-006-stale-lease-08",
             "content_digest": "126772bd37f916a5ea9d46d6f4e004a29f2c0c2dac0d834954c5a08313c6d206",
@@ -3793,7 +3813,7 @@
           "stream_id": "STREAM-M1A"
         }
       ],
-      "expected_final_digest": "46989a4b4fc58374f21b8c4b66043e8347ffd1bbe7dd76315316094272945fe6",
+      "expected_final_digest": "38a91df87ccaef21225a3d382b0be5f93bd36c35357690be0f9d8a5b8107b1f6",
       "expected_final_state": {
         "active_arm_run_ref": {
           "content_digest": "483f820f5b25a214f42f6f2534036f3ae3db591e63d90c678dccde8c07f4fd11",
@@ -3809,14 +3829,14 @@
         },
         "ambiguous_effect_refs": [],
         "consumed_novelty_delta_digests": [],
-        "content_digest": "46989a4b4fc58374f21b8c4b66043e8347ffd1bbe7dd76315316094272945fe6",
+        "content_digest": "38a91df87ccaef21225a3d382b0be5f93bd36c35357690be0f9d8a5b8107b1f6",
         "current_pause_epoch": 0,
         "current_pause_policy_ref": {
           "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
           "policy_id": "POLICY-PAUSE",
           "policy_version": 1
         },
-        "last_event_digest": "d8b9ced31746fb0f22e10e3b34bf6b58ba516c3f05308838de033af36001bf4d",
+        "last_event_digest": "95c480748571a1526117553e44f482e5c4588304ee4b2896e36d0f67e98f3225",
         "last_event_sequence": 8,
         "object_states": [
           {
@@ -3929,7 +3949,7 @@
           },
           {
             "object_ref": {
-              "content_digest": "3e0ac7b256a97fe01fa54a0f32fc5c16c190459e5306c223cbd6fd256a9f4cbc",
+              "content_digest": "8d005d7714ecd5a25e948a0d867fddccce63d4f7d1cf7fa22c0960479156b505",
               "id": "PACKET-64d706ea8cebf7e1ffde329ebaca9a37",
               "object_type": "work-packet",
               "version": 1
@@ -3977,12 +3997,12 @@
             "receipt_id": "RCPT-F-M1A-006-stale-lease-06"
           },
           {
-            "command_digest": "3364f6faafcff038a14c01938b75ca12a9be335e328166c7083ae6690c6a806a",
+            "command_digest": "a10b7eab210d163e9317a8e930cdb7205e843243abcd2059e3b6c701fd0fd723",
             "command_id": "CMD-F-M1A-006-stale-lease-07",
             "receipt_id": "RCPT-F-M1A-006-stale-lease-07"
           },
           {
-            "command_digest": "cb461d5b4d6250c5d997afe6f89b5f6741ef9836e1e64db8eb3d74ba67d8fb30",
+            "command_digest": "47f58a9ddbb3277a7ff3f2ee43a56e3fa3a2ec9a9c030bbd4a6ab38d69f9ddff",
             "command_id": "CMD-F-M1A-006-stale-lease-08",
             "receipt_id": "RCPT-F-M1A-006-stale-lease-08"
           }
@@ -4690,7 +4710,7 @@
           },
           {
             "causation_id": "CMD-F-M1A-006-stale-lease-07",
-            "content_digest": "3e0ac7b256a97fe01fa54a0f32fc5c16c190459e5306c223cbd6fd256a9f4cbc",
+            "content_digest": "8d005d7714ecd5a25e948a0d867fddccce63d4f7d1cf7fa22c0960479156b505",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
             "created_logical_time": 7,
@@ -4738,6 +4758,11 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
               "deadline_logical_time": 900,
               "effect_keys": [
                 "EFFECT-SYNTHETIC"
@@ -4803,6 +4828,11 @@
                 "object_type": "task-node",
                 "version": 1
               },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              },
               "work_lease_ref": {
                 "content_digest": "f7171cb5e8000a88c0557555f66244e99bfaf2825248506321374c30c3952b62",
                 "lease_epoch": 1,
@@ -4819,9 +4849,9 @@
       },
       "expected_receipts": [
         {
-          "command_digest": "cb461d5b4d6250c5d997afe6f89b5f6741ef9836e1e64db8eb3d74ba67d8fb30",
+          "command_digest": "47f58a9ddbb3277a7ff3f2ee43a56e3fa3a2ec9a9c030bbd4a6ab38d69f9ddff",
           "command_id": "CMD-F-M1A-006-stale-lease-08",
-          "content_digest": "f0cae9759816dd79c723c2fa47bf9948e7191a86062dceb7f04feb76a0650949",
+          "content_digest": "17ea62b6384b8a79900580324ecbd087ce09d216597fddfa6b08bb29d3a9adae",
           "disposition": "accepted",
           "event_ids": [
             "EV-F-M1A-006-stale-lease-08-0001"
@@ -4832,14 +4862,14 @@
           "receipt_id": "RCPT-F-M1A-006-stale-lease-08",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "46989a4b4fc58374f21b8c4b66043e8347ffd1bbe7dd76315316094272945fe6",
-          "state_before_digest": "f4146b69125184a7ac4ec466316eefc486547b69eae51547331014fc0110f08b",
+          "state_after_digest": "38a91df87ccaef21225a3d382b0be5f93bd36c35357690be0f9d8a5b8107b1f6",
+          "state_before_digest": "3beaf34b0a4f9a04b3000d64af160cb1ffd44ce6f0ac135b44bcfb3e12e7bca3",
           "witness": null
         },
         {
-          "command_digest": "3b754ff3fb7a4219eef6d112444fb68d8c46da1464676cab455dcfed9649b970",
+          "command_digest": "92fd72cec171162f5f78d4a648db2d81bf595b6abdcfba560c1d5ab2adeab19c",
           "command_id": "CMD-F-M1A-006-stale-lease-09",
-          "content_digest": "baa05289596989d2773ca05972e9d900c4005bb7b1ec8afb9dd47d03096e486e",
+          "content_digest": "fed0ae41867f50ff4d455de35507db2385bace41c66b57db97358518e878bb9e",
           "disposition": "refused",
           "event_ids": [],
           "first_event_sequence": null,
@@ -4848,8 +4878,8 @@
           "receipt_id": "RCPT-F-M1A-006-stale-lease-09",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "46989a4b4fc58374f21b8c4b66043e8347ffd1bbe7dd76315316094272945fe6",
-          "state_before_digest": "46989a4b4fc58374f21b8c4b66043e8347ffd1bbe7dd76315316094272945fe6",
+          "state_after_digest": "38a91df87ccaef21225a3d382b0be5f93bd36c35357690be0f9d8a5b8107b1f6",
+          "state_before_digest": "38a91df87ccaef21225a3d382b0be5f93bd36c35357690be0f9d8a5b8107b1f6",
           "witness": null
         }
       ],
@@ -5563,11 +5593,11 @@
         {
           "actor_id": "ARM-M1A",
           "auth_ref": "AUTH-F-M1A-006-stale-lease-07",
-          "candidate_digest": "9eb1b7e69f9a966f827aaeb2bc118d8a2889e0070495406d7717daee22ef2ddc",
+          "candidate_digest": "ea768fad91f806232f05b7241fdf9646ada0a7824eba8772af9ad8ef906a8847",
           "command_id": "CMD-F-M1A-006-stale-lease-07",
           "command_schema_version": "m1a-command-1",
           "command_type": "derive-work-packet",
-          "content_digest": "3364f6faafcff038a14c01938b75ca12a9be335e328166c7083ae6690c6a806a",
+          "content_digest": "a10b7eab210d163e9317a8e930cdb7205e843243abcd2059e3b6c701fd0fd723",
           "expected_state_digest": "7200431d347a452c399a3ed79e86dfb2d541df7d2a6e1f593e3539bd64303a98",
           "expected_state_version": 6,
           "goal_ref": {
@@ -5590,7 +5620,7 @@
               "object_type": "budget-reservation",
               "version": 1
             },
-            "expected_work_packet_digest": "3e0ac7b256a97fe01fa54a0f32fc5c16c190459e5306c223cbd6fd256a9f4cbc",
+            "expected_work_packet_digest": "8d005d7714ecd5a25e948a0d867fddccce63d4f7d1cf7fa22c0960479156b505",
             "route_assignment": {
               "causation_id": "CMD-F-M1A-006-stale-lease-07",
               "content_digest": "e066278802d7d9d3c304c0e91c770d8ee0b68cc565cab76af1f9ddd96d976867",
@@ -5695,7 +5725,7 @@
               "version": 1
             }
           },
-          "payload_digest": "9eb1b7e69f9a966f827aaeb2bc118d8a2889e0070495406d7717daee22ef2ddc",
+          "payload_digest": "ea768fad91f806232f05b7241fdf9646ada0a7824eba8772af9ad8ef906a8847",
           "plan_ref": {
             "content_digest": "df0141f69c914b8171d10869a3781250dcb426e19ddab66a3ccc16cac0a3d115",
             "id": "PLAN-M1A",
@@ -6348,9 +6378,9 @@
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "3364f6faafcff038a14c01938b75ca12a9be335e328166c7083ae6690c6a806a",
+          "command_digest": "a10b7eab210d163e9317a8e930cdb7205e843243abcd2059e3b6c701fd0fd723",
           "command_id": "CMD-F-M1A-006-stale-lease-07",
-          "content_digest": "f2fc4d0984a7a8b3b9fbe4664944783648c10067caafc605b929d147da262697",
+          "content_digest": "20fa24a0fc808fcb2898b0a10e0591c718da8a2f1b529149b5adcd6c2a8e3473",
           "event_id": "EV-F-M1A-006-stale-lease-07-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "WorkPacketDerived",
@@ -6358,7 +6388,7 @@
           "previous_event_digest": "6172e854370c3d28fda2e44c9770d30cbc4db90e6d2ae6b07b158b56bc6b47f4",
           "primary_record": {
             "causation_id": "CMD-F-M1A-006-stale-lease-07",
-            "content_digest": "3e0ac7b256a97fe01fa54a0f32fc5c16c190459e5306c223cbd6fd256a9f4cbc",
+            "content_digest": "8d005d7714ecd5a25e948a0d867fddccce63d4f7d1cf7fa22c0960479156b505",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
             "created_logical_time": 7,
@@ -6406,6 +6436,11 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
               "deadline_logical_time": 900,
               "effect_keys": [
                 "EFFECT-SYNTHETIC"
@@ -6470,6 +6505,11 @@
                 "id": "TASK-M1A-A",
                 "object_type": "task-node",
                 "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
               },
               "work_lease_ref": {
                 "content_digest": "f7171cb5e8000a88c0557555f66244e99bfaf2825248506321374c30c3952b62",
@@ -6580,7 +6620,7 @@
             }
           ],
           "sequence": 7,
-          "state_delta_digest": "fcfb8024acf1a71cbe53669c7e6120979cdec24173744639bc423f42fac05a3f",
+          "state_delta_digest": "ee4d3f34d0c95148fef55801398d38b21116c227275298bac81d9625139996ff",
           "stream_id": "STREAM-M1A"
         }
       ],
@@ -6694,9 +6734,9 @@
           "witness": null
         },
         {
-          "command_digest": "3364f6faafcff038a14c01938b75ca12a9be335e328166c7083ae6690c6a806a",
+          "command_digest": "a10b7eab210d163e9317a8e930cdb7205e843243abcd2059e3b6c701fd0fd723",
           "command_id": "CMD-F-M1A-006-stale-lease-07",
-          "content_digest": "a8dd28aa2e622c8311171efccc3f1b8cb3037d35bcfb8ac479a88c637c59657c",
+          "content_digest": "6fd2760ea46da59051cfae987475f489baa1da5a392c509edbd0abef9ddcff90",
           "disposition": "accepted",
           "event_ids": [
             "EV-F-M1A-006-stale-lease-07-0001"
@@ -6707,7 +6747,7 @@
           "receipt_id": "RCPT-F-M1A-006-stale-lease-07",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "f4146b69125184a7ac4ec466316eefc486547b69eae51547331014fc0110f08b",
+          "state_after_digest": "3beaf34b0a4f9a04b3000d64af160cb1ffd44ce6f0ac135b44bcfb3e12e7bca3",
           "state_before_digest": "7200431d347a452c399a3ed79e86dfb2d541df7d2a6e1f593e3539bd64303a98",
           "witness": null
         }
@@ -7152,13 +7192,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "e0b28d3f1afeb70d0da0011eed83d13409a64b56d82d2372e52fd707bbcf235c",
+          "candidate_digest": "073b2bb9a8e145b8cc3e77363b77328030529b2fe1056713c2bf96dda387cfe5",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "b5dbc27e6f19eeb6b8e533dd916ed2c559a991bb149c0e5be4f6e26553eaabce",
+          "content_digest": "a406615287de10e6b78757fa258077cd4ec1fc065f2d77973df4953d62bfd0ec",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -7175,13 +7215,13 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "0f0d59cf925c3d9e1c685f056d3de4eee2b4fbefc1a9c2d3b30f33673569c360",
+          "candidate_digest": "b6cd4a4be8a31ce725cae31d59c4928e86074731016da0c80825a7fa71d84aa5",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "5da3f825ddd53d5a641bc48d16e75cc68cf8dfef53006652528d76674430a069",
+          "content_digest": "a9d9b88180a10d778cd77f4d6d5834df303fbd4df459e69586cce5467980bbfa",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         }
@@ -7191,12 +7231,12 @@
         {
           "actor_id": "WORKER-LUNA",
           "auth_ref": "AUTH-F-M1A-006-stale-plan-08",
-          "candidate_digest": "0f0d59cf925c3d9e1c685f056d3de4eee2b4fbefc1a9c2d3b30f33673569c360",
+          "candidate_digest": "b6cd4a4be8a31ce725cae31d59c4928e86074731016da0c80825a7fa71d84aa5",
           "command_id": "CMD-F-M1A-006-stale-plan-08",
           "command_schema_version": "m1a-command-1",
           "command_type": "submit-worker-result",
-          "content_digest": "be501b3f44d35f1cdb8b0d88d37914ae1b771db9d13616dea456dc232f0b79a9",
-          "expected_state_digest": "72a153ff0b6c07036649c8f618edcd437ca74a036f13d5c150f037fccd5989fe",
+          "content_digest": "8cfe46fb479b52639f30a32ba4b064e21695573e4e2afbccfcc564f7da8b7584",
+          "expected_state_digest": "a6c2e576e2bfb2c124ab233dec4ecffb0c55c5c9cb2d328467229d72f82d1983",
           "expected_state_version": 7,
           "goal_ref": {
             "content_digest": "265a77c6989d4bbc5250238df0f70555f361228ae1c247426d7c0442f902f3fb",
@@ -7212,7 +7252,7 @@
           "logical_time": 8,
           "payload": {
             "causation_id": "CMD-F-M1A-006-stale-plan-08",
-            "content_digest": "41dd68564cb0e887dc81f16ac441d38cd2a782f66358951df1dbd8ab1a82915e",
+            "content_digest": "94cb747ab7bb4e07cdb56d66ec5120a30aa9d762af00c63cb184f73a689e3b14",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "WORKER-LUNA",
             "created_logical_time": 8,
@@ -7228,7 +7268,7 @@
               "observed_effect_ref": null,
               "output_digest": "57dcd3e20c352784a5f6509a12411b1b64118658f6dc2ba4044765b7ae99d51b",
               "work_packet_ref": {
-                "content_digest": "4c383580709ecbf9b553c3ec337fc2c19d7a35f4c3811a18ce92983db94cd95b",
+                "content_digest": "a6979e6e0ba73ef04d547373973e9e8c7eef218de4d9be735cc425c848f19431",
                 "id": "PACKET-d22f6271e718ccc1eb5ae032b4b934dc",
                 "object_type": "work-packet",
                 "version": 1
@@ -7237,7 +7277,7 @@
             "schema_version": "m1a-worker-result-1",
             "version": 1
           },
-          "payload_digest": "0f0d59cf925c3d9e1c685f056d3de4eee2b4fbefc1a9c2d3b30f33673569c360",
+          "payload_digest": "b6cd4a4be8a31ce725cae31d59c4928e86074731016da0c80825a7fa71d84aa5",
           "plan_ref": {
             "content_digest": "06d80fc5cdd86390807ee1cb051de202e101d38c04ea1c0cb55391787c70b826",
             "id": "PLAN-M1A",
@@ -7250,7 +7290,7 @@
       "description": "Reject stale-plan packet result.",
       "expected_decode_failures": [],
       "expected_events": [],
-      "expected_final_digest": "72a153ff0b6c07036649c8f618edcd437ca74a036f13d5c150f037fccd5989fe",
+      "expected_final_digest": "a6c2e576e2bfb2c124ab233dec4ecffb0c55c5c9cb2d328467229d72f82d1983",
       "expected_final_state": {
         "active_arm_run_ref": {
           "content_digest": "49dca8834a70907a5f362d716a29a7b0ff9c6cbde6f7e1753f1cf143bacb97fc",
@@ -7266,14 +7306,14 @@
         },
         "ambiguous_effect_refs": [],
         "consumed_novelty_delta_digests": [],
-        "content_digest": "72a153ff0b6c07036649c8f618edcd437ca74a036f13d5c150f037fccd5989fe",
+        "content_digest": "a6c2e576e2bfb2c124ab233dec4ecffb0c55c5c9cb2d328467229d72f82d1983",
         "current_pause_epoch": 0,
         "current_pause_policy_ref": {
           "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
           "policy_id": "POLICY-PAUSE",
           "policy_version": 1
         },
-        "last_event_digest": "e8b8255a2b1b53844cc4d14eee94ca67345cf28dbd81ccc00c62f35fdeefc98d",
+        "last_event_digest": "d9fca8d6704c18dc3ccdd851b424d61bf27fd1d5bff810d8f9068df09a639594",
         "last_event_sequence": 7,
         "object_states": [
           {
@@ -7377,7 +7417,7 @@
           },
           {
             "object_ref": {
-              "content_digest": "4c383580709ecbf9b553c3ec337fc2c19d7a35f4c3811a18ce92983db94cd95b",
+              "content_digest": "a6979e6e0ba73ef04d547373973e9e8c7eef218de4d9be735cc425c848f19431",
               "id": "PACKET-d22f6271e718ccc1eb5ae032b4b934dc",
               "object_type": "work-packet",
               "version": 1
@@ -7425,7 +7465,7 @@
             "receipt_id": "RCPT-F-M1A-006-stale-plan-06"
           },
           {
-            "command_digest": "21143ce7f47a3f4519af838a49ab2826c983e32d4aa93fe1e83db7645c98566a",
+            "command_digest": "479d1314409e5de9041724d365fdb72ea577f8501182d90fc5e0b8fd4aadca70",
             "command_id": "CMD-F-M1A-006-stale-plan-07",
             "receipt_id": "RCPT-F-M1A-006-stale-plan-07"
           }
@@ -8087,7 +8127,7 @@
           },
           {
             "causation_id": "CMD-F-M1A-006-stale-plan-07",
-            "content_digest": "4c383580709ecbf9b553c3ec337fc2c19d7a35f4c3811a18ce92983db94cd95b",
+            "content_digest": "a6979e6e0ba73ef04d547373973e9e8c7eef218de4d9be735cc425c848f19431",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
             "created_logical_time": 7,
@@ -8135,6 +8175,11 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
               "deadline_logical_time": 900,
               "effect_keys": [
                 "EFFECT-SYNTHETIC"
@@ -8200,6 +8245,11 @@
                 "object_type": "task-node",
                 "version": 1
               },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              },
               "work_lease_ref": {
                 "content_digest": "3dd6b58e168d2edadfabff1755b6d0a7f0709b57ef6d22182e8f7b6697332c44",
                 "lease_epoch": 1,
@@ -8216,9 +8266,9 @@
       },
       "expected_receipts": [
         {
-          "command_digest": "be501b3f44d35f1cdb8b0d88d37914ae1b771db9d13616dea456dc232f0b79a9",
+          "command_digest": "8cfe46fb479b52639f30a32ba4b064e21695573e4e2afbccfcc564f7da8b7584",
           "command_id": "CMD-F-M1A-006-stale-plan-08",
-          "content_digest": "32d870abd65a8486ae387e5105c3a8f6b7ba03b2e15e34e0c2b023d18b69b854",
+          "content_digest": "2d580dc38dadaeeefad9a8a9d0f013e585a81c3cf41adba24674acd62632d787",
           "disposition": "refused",
           "event_ids": [],
           "first_event_sequence": null,
@@ -8227,8 +8277,8 @@
           "receipt_id": "RCPT-F-M1A-006-stale-plan-08",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "72a153ff0b6c07036649c8f618edcd437ca74a036f13d5c150f037fccd5989fe",
-          "state_before_digest": "72a153ff0b6c07036649c8f618edcd437ca74a036f13d5c150f037fccd5989fe",
+          "state_after_digest": "a6c2e576e2bfb2c124ab233dec4ecffb0c55c5c9cb2d328467229d72f82d1983",
+          "state_before_digest": "a6c2e576e2bfb2c124ab233dec4ecffb0c55c5c9cb2d328467229d72f82d1983",
           "witness": null
         }
       ],
@@ -8942,11 +8992,11 @@
         {
           "actor_id": "ARM-M1A",
           "auth_ref": "AUTH-F-M1A-006-stale-plan-07",
-          "candidate_digest": "e0b28d3f1afeb70d0da0011eed83d13409a64b56d82d2372e52fd707bbcf235c",
+          "candidate_digest": "073b2bb9a8e145b8cc3e77363b77328030529b2fe1056713c2bf96dda387cfe5",
           "command_id": "CMD-F-M1A-006-stale-plan-07",
           "command_schema_version": "m1a-command-1",
           "command_type": "derive-work-packet",
-          "content_digest": "21143ce7f47a3f4519af838a49ab2826c983e32d4aa93fe1e83db7645c98566a",
+          "content_digest": "479d1314409e5de9041724d365fdb72ea577f8501182d90fc5e0b8fd4aadca70",
           "expected_state_digest": "361203ac5c8f66b2887e9ab3a2f1f465d7f4baf19b9d225192f96f168af2883d",
           "expected_state_version": 6,
           "goal_ref": {
@@ -8969,7 +9019,7 @@
               "object_type": "budget-reservation",
               "version": 1
             },
-            "expected_work_packet_digest": "4c383580709ecbf9b553c3ec337fc2c19d7a35f4c3811a18ce92983db94cd95b",
+            "expected_work_packet_digest": "a6979e6e0ba73ef04d547373973e9e8c7eef218de4d9be735cc425c848f19431",
             "route_assignment": {
               "causation_id": "CMD-F-M1A-006-stale-plan-07",
               "content_digest": "3de34a2adbfd8afda8664e1119e5a2fa8b9feb56da652c76b729d84520a1fec0",
@@ -9074,7 +9124,7 @@
               "version": 1
             }
           },
-          "payload_digest": "e0b28d3f1afeb70d0da0011eed83d13409a64b56d82d2372e52fd707bbcf235c",
+          "payload_digest": "073b2bb9a8e145b8cc3e77363b77328030529b2fe1056713c2bf96dda387cfe5",
           "plan_ref": {
             "content_digest": "06d80fc5cdd86390807ee1cb051de202e101d38c04ea1c0cb55391787c70b826",
             "id": "PLAN-M1A",
@@ -9727,9 +9777,9 @@
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "21143ce7f47a3f4519af838a49ab2826c983e32d4aa93fe1e83db7645c98566a",
+          "command_digest": "479d1314409e5de9041724d365fdb72ea577f8501182d90fc5e0b8fd4aadca70",
           "command_id": "CMD-F-M1A-006-stale-plan-07",
-          "content_digest": "e8b8255a2b1b53844cc4d14eee94ca67345cf28dbd81ccc00c62f35fdeefc98d",
+          "content_digest": "d9fca8d6704c18dc3ccdd851b424d61bf27fd1d5bff810d8f9068df09a639594",
           "event_id": "EV-F-M1A-006-stale-plan-07-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "WorkPacketDerived",
@@ -9737,7 +9787,7 @@
           "previous_event_digest": "159a1632757ace02e6d85d73821a9e5351c1cbf82d6f6b894ff60588ab670759",
           "primary_record": {
             "causation_id": "CMD-F-M1A-006-stale-plan-07",
-            "content_digest": "4c383580709ecbf9b553c3ec337fc2c19d7a35f4c3811a18ce92983db94cd95b",
+            "content_digest": "a6979e6e0ba73ef04d547373973e9e8c7eef218de4d9be735cc425c848f19431",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
             "created_logical_time": 7,
@@ -9785,6 +9835,11 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
               "deadline_logical_time": 900,
               "effect_keys": [
                 "EFFECT-SYNTHETIC"
@@ -9849,6 +9904,11 @@
                 "id": "TASK-M1A-A",
                 "object_type": "task-node",
                 "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
               },
               "work_lease_ref": {
                 "content_digest": "3dd6b58e168d2edadfabff1755b6d0a7f0709b57ef6d22182e8f7b6697332c44",
@@ -9959,7 +10019,7 @@
             }
           ],
           "sequence": 7,
-          "state_delta_digest": "3ee7ad8ffe58bde723b90b57af92f8ca5e9cbce9ff8a7d739378edf95a2a03b1",
+          "state_delta_digest": "844fbe4fde592cd2ebfd3c3cbd13cca4052c4f479cebf7c66938347a4dc21ec4",
           "stream_id": "STREAM-M1A"
         }
       ],
@@ -10073,9 +10133,9 @@
           "witness": null
         },
         {
-          "command_digest": "21143ce7f47a3f4519af838a49ab2826c983e32d4aa93fe1e83db7645c98566a",
+          "command_digest": "479d1314409e5de9041724d365fdb72ea577f8501182d90fc5e0b8fd4aadca70",
           "command_id": "CMD-F-M1A-006-stale-plan-07",
-          "content_digest": "a52234a5b14c1427133c0a16e6c03b455ecd86bb302a7aecd2127fdfa51f149a",
+          "content_digest": "e5dc29a49d77732e83d21c74917df06785238ef9203003dff1a18346f4da710a",
           "disposition": "accepted",
           "event_ids": [
             "EV-F-M1A-006-stale-plan-07-0001"
@@ -10086,7 +10146,7 @@
           "receipt_id": "RCPT-F-M1A-006-stale-plan-07",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "72a153ff0b6c07036649c8f618edcd437ca74a036f13d5c150f037fccd5989fe",
+          "state_after_digest": "a6c2e576e2bfb2c124ab233dec4ecffb0c55c5c9cb2d328467229d72f82d1983",
           "state_before_digest": "361203ac5c8f66b2887e9ab3a2f1f465d7f4baf19b9d225192f96f168af2883d",
           "witness": null
         }

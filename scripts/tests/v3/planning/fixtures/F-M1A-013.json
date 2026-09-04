@@ -153,13 +153,36 @@
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "20a4273ba3c0d552b3b4af5a463d47ca6f46f201cbb26400e84564392581d35d",
+          "candidate_digest": "47875275cffdf00e4c823734ce8d7f9dd6d1b38bcb259144f484d8eeba82be63",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "9b81d3567528798eea830f1e0601412900cf5346b2400db77003937dbbecf1b1",
+          "content_digest": "7e32c2c35b2a4ec76cbc51f518fbd1aa51f851b97397f6545d108e1f8bc06121",
+          "expires_logical_time": 10000,
+          "valid_from_logical_time": 0
+        },
+        {
+          "actor_id": "KERNEL-FIXTURE",
+          "actor_role": "kernel-fixture-gate",
+          "allowed_command_types": [
+            "record-capacity-observation"
+          ],
+          "attestation_id": "AUTH-F-M1A-013-replace-08",
+          "attestation_schema_version": "m1a-fixture-authority-1",
+          "authority_policy_ref": {
+            "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
+            "policy_id": "POLICY-AUTHORITY",
+            "policy_version": 1
+          },
+          "candidate_digest": "c0c4c9353283ff9daea5e3cc101a663db3c0f321b5946547d8c8d2e9f330882b",
+          "constitution_policy_ref": {
+            "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+            "policy_id": "POLICY-CONSTITUTION",
+            "policy_version": 1
+          },
+          "content_digest": "14b574ed16b7bce8ddb912374dd094c1e6e0303f958c5f1581d2a4726f495d14",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -169,20 +192,20 @@
           "allowed_command_types": [
             "record-checkpoint"
           ],
-          "attestation_id": "AUTH-F-M1A-013-replace-08",
+          "attestation_id": "AUTH-F-M1A-013-replace-09",
           "attestation_schema_version": "m1a-fixture-authority-1",
           "authority_policy_ref": {
             "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "aed1f807324157368d383319611e349ed0d7a32ffb6ab045a8f2533530b9c0b2",
+          "candidate_digest": "fb1a89ff48bdcbefe24e5bfc733b8ce09d39d0ecda18df61fe7ae2e34788cde9",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "f115c0df4f75510f1aa97c01ed42a1202d153bb07d3bac23868bb9dba65d25c0",
+          "content_digest": "f94b971e617778719f753d20b3ffca1611ffff953d0b94da8f3c8e387888ec7d",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         },
@@ -192,20 +215,20 @@
           "allowed_command_types": [
             "replace-route"
           ],
-          "attestation_id": "AUTH-F-M1A-013-replace-09",
+          "attestation_id": "AUTH-F-M1A-013-replace-10",
           "attestation_schema_version": "m1a-fixture-authority-1",
           "authority_policy_ref": {
             "content_digest": "8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0",
             "policy_id": "POLICY-AUTHORITY",
             "policy_version": 1
           },
-          "candidate_digest": "a6346cfe89755bbef1eeabca0f9f673462ff6982fddcb3c74510cd8aef188cd8",
+          "candidate_digest": "bc408d85ef3e94cdcd4d10fa7c69ed6e5ad2fe55cd525279563b03dec2315471",
           "constitution_policy_ref": {
             "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
             "policy_id": "POLICY-CONSTITUTION",
             "policy_version": 1
           },
-          "content_digest": "f0902572a7431e3f2c1638ba11483c70e1e8f88c5e58b045232e53ee91a5c687",
+          "content_digest": "1e7d130f12e6855b3f1e3fa1c9297a72e7b24a46792e4092c2e059f70f8b42b5",
           "expires_logical_time": 10000,
           "valid_from_logical_time": 0
         }
@@ -214,14 +237,14 @@
       "commands": [
         {
           "actor_id": "KERNEL-FIXTURE",
-          "auth_ref": "AUTH-F-M1A-013-replace-08",
-          "candidate_digest": "aed1f807324157368d383319611e349ed0d7a32ffb6ab045a8f2533530b9c0b2",
-          "command_id": "CMD-F-M1A-013-replace-08",
+          "auth_ref": "AUTH-F-M1A-013-replace-09",
+          "candidate_digest": "fb1a89ff48bdcbefe24e5bfc733b8ce09d39d0ecda18df61fe7ae2e34788cde9",
+          "command_id": "CMD-F-M1A-013-replace-09",
           "command_schema_version": "m1a-command-1",
           "command_type": "record-checkpoint",
-          "content_digest": "8a1fba90c575c9e217f9577648410ab5b0cdbdce7ee93da6c9ec73f971beedc4",
-          "expected_state_digest": "18b27b118f1d5e1d6300ca1647451ab6bb51876e4e5ccf64bc3f9c4f6f44cbc5",
-          "expected_state_version": 7,
+          "content_digest": "ddae91dcd72aea170fe0467cc701e3c4b9ec1416fe711aa0634f38a8de26f51f",
+          "expected_state_digest": "e5bbd87e42700a01e50603e56a1ca1dc7820be4d890d86cfaa731d5a68645306",
+          "expected_state_version": 8,
           "goal_ref": {
             "content_digest": "c56a37c805528a2a5e42a18458538c74a0b24d948abf90149f22c63d3931d798",
             "id": "GOAL-M1A",
@@ -229,13 +252,13 @@
             "version": 1
           },
           "lease_ref": null,
-          "logical_time": 8,
+          "logical_time": 9,
           "payload": {
-            "causation_id": "CMD-F-M1A-013-replace-08",
-            "content_digest": "7797ca6b94ef9b3e91e05ef876624db44d9d8894e094677f3f67b776ee73d76a",
+            "causation_id": "CMD-F-M1A-013-replace-09",
+            "content_digest": "bb48f222b1b39f54492c1fd5bfee823a6b8f22463c7509bed2ad2a954e14d2d0",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-FIXTURE",
-            "created_logical_time": 8,
+            "created_logical_time": 9,
             "created_under_lease": null,
             "id": "CHECKPOINT-M1A-1",
             "object_type": "checkpoint",
@@ -257,7 +280,7 @@
               "lease_epoch_digest": "ffb5796f53373b9243534a70afdac4840038cafcc2407bf3c1f25fc5e16cc816",
               "open_packet_refs": [
                 {
-                  "content_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+                  "content_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
                   "id": "PACKET-df98737626d5d4796337f7c5dcf28caf",
                   "object_type": "work-packet",
                   "version": 1
@@ -265,13 +288,13 @@
               ],
               "pause_epoch": 0,
               "route_snapshot_digest": "5cff473840e67b14c198d1e01721363a2746fa8aad10eba51599e1ec6dbfd07a",
-              "state_digest": "18b27b118f1d5e1d6300ca1647451ab6bb51876e4e5ccf64bc3f9c4f6f44cbc5",
-              "state_version": 7
+              "state_digest": "e5bbd87e42700a01e50603e56a1ca1dc7820be4d890d86cfaa731d5a68645306",
+              "state_version": 8
             },
             "schema_version": "m1a-checkpoint-1",
             "version": 1
           },
-          "payload_digest": "aed1f807324157368d383319611e349ed0d7a32ffb6ab045a8f2533530b9c0b2",
+          "payload_digest": "fb1a89ff48bdcbefe24e5bfc733b8ce09d39d0ecda18df61fe7ae2e34788cde9",
           "plan_ref": {
             "content_digest": "dac3b6b0a37dc915b2023f083b029a721216d3d415a9742b1480157048fae07d",
             "id": "PLAN-M1A",
@@ -281,14 +304,14 @@
         },
         {
           "actor_id": "HEAD-HERMES",
-          "auth_ref": "AUTH-F-M1A-013-replace-09",
-          "candidate_digest": "a6346cfe89755bbef1eeabca0f9f673462ff6982fddcb3c74510cd8aef188cd8",
-          "command_id": "CMD-F-M1A-013-replace-09",
+          "auth_ref": "AUTH-F-M1A-013-replace-10",
+          "candidate_digest": "bc408d85ef3e94cdcd4d10fa7c69ed6e5ad2fe55cd525279563b03dec2315471",
+          "command_id": "CMD-F-M1A-013-replace-10",
           "command_schema_version": "m1a-command-1",
           "command_type": "replace-route",
-          "content_digest": "9826f29e245baae833f4b0d28f8ad9b9e9bcbbc9dc5317443eb6fc0af144316e",
-          "expected_state_digest": "138c2908809c4f3a1543032a562912685d3054bd37a57542bdf9f4ff78f7d1e4",
-          "expected_state_version": 8,
+          "content_digest": "039d7d5db6297bfb70da1bcdc82f89f2adeaf0ca164e66121509dcfabe00b8a6",
+          "expected_state_digest": "69dbcade8be79a35e5cadbb235fec77635e999c1bf07f16c0466c21e753ed63a",
+          "expected_state_version": 9,
           "goal_ref": {
             "content_digest": "c56a37c805528a2a5e42a18458538c74a0b24d948abf90149f22c63d3931d798",
             "id": "GOAL-M1A",
@@ -296,21 +319,21 @@
             "version": 1
           },
           "lease_ref": null,
-          "logical_time": 9,
+          "logical_time": 10,
           "payload": {
             "checkpoint_ref": {
-              "content_digest": "7797ca6b94ef9b3e91e05ef876624db44d9d8894e094677f3f67b776ee73d76a",
+              "content_digest": "bb48f222b1b39f54492c1fd5bfee823a6b8f22463c7509bed2ad2a954e14d2d0",
               "id": "CHECKPOINT-M1A-1",
               "object_type": "checkpoint",
               "version": 1
             },
-            "expected_new_packet_digest": "1afb0a3bb9ea6d19c1b17310be7ae0b31b84f62119895bca2c0e35b5ffc29ac9",
+            "expected_new_packet_digest": "012025680e1635149e218a94781aa9b1d5a0b1a864aaeb352a7854f10a7f9c60",
             "new_route": {
-              "causation_id": "CMD-F-M1A-013-replace-09",
-              "content_digest": "8e4fc5264254f2cd371d98dfcc2b81fb6f82f9d114e808146f25b7bf5c039d1d",
+              "causation_id": "CMD-F-M1A-013-replace-10",
+              "content_digest": "de157af0a40dccac6f6b7dd6faf07eb0f36a1f5298553c531db12d46642411a2",
               "correlation_id": "CORR-M1A",
               "created_by_actor_id": "KERNEL-M1A",
-              "created_logical_time": 9,
+              "created_logical_time": 10,
               "created_under_lease": {
                 "content_digest": "e3468bf5e37fae88d1677e6dd9e501a37a3d4e8a69a22ea2c64915ef5177d069",
                 "lease_epoch": 1,
@@ -320,10 +343,10 @@
               "object_type": "route-assignment",
               "payload": {
                 "account_class_id": "ACCOUNT-INCLUDED",
-                "assigned_logical_time": 9,
+                "assigned_logical_time": 10,
                 "capacity_observation_ref": {
-                  "content_digest": "eeeabf85286e1457bdecf493ff0d45d636d02ea09317e94bbc06c90c73a3b94a",
-                  "id": "CAPACITY-OBS-1",
+                  "content_digest": "dcce878a147f5ef854fa28e4f41002f5dd48b39f463ce157584005f13fe5f220",
+                  "id": "CAPACITY-OBS-ZERO",
                   "object_type": "capacity-observation",
                   "version": 1
                 },
@@ -368,7 +391,7 @@
               "version": 1
             }
           },
-          "payload_digest": "a6346cfe89755bbef1eeabca0f9f673462ff6982fddcb3c74510cd8aef188cd8",
+          "payload_digest": "bc408d85ef3e94cdcd4d10fa7c69ed6e5ad2fe55cd525279563b03dec2315471",
           "plan_ref": {
             "content_digest": "dac3b6b0a37dc915b2023f083b029a721216d3d415a9742b1480157048fae07d",
             "id": "PLAN-M1A",
@@ -382,20 +405,20 @@
       "expected_decode_failures": [],
       "expected_events": [
         {
-          "command_digest": "8a1fba90c575c9e217f9577648410ab5b0cdbdce7ee93da6c9ec73f971beedc4",
-          "command_id": "CMD-F-M1A-013-replace-08",
-          "content_digest": "49490ac99a1714594208473fe035f35780d24aa4613d7d056a6ed9222450f561",
-          "event_id": "EV-F-M1A-013-replace-08-0001",
+          "command_digest": "ddae91dcd72aea170fe0467cc701e3c4b9ec1416fe711aa0634f38a8de26f51f",
+          "command_id": "CMD-F-M1A-013-replace-09",
+          "content_digest": "6a0e3a861d8d410c48de0a2c7840d9eefe01fb0fce82bb64391b68c4f4e51e46",
+          "event_id": "EV-F-M1A-013-replace-09-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "CheckpointRecorded",
-          "logical_time": 8,
-          "previous_event_digest": "6098e6f3984927a787ef19c9d44ed32c8532fc6a84f29b64b13068a5054029bb",
+          "logical_time": 9,
+          "previous_event_digest": "736d2af7fa348d803ef0c275a9ee5bb896de5d3b4a899578a400bdfb91f903a6",
           "primary_record": {
-            "causation_id": "CMD-F-M1A-013-replace-08",
-            "content_digest": "7797ca6b94ef9b3e91e05ef876624db44d9d8894e094677f3f67b776ee73d76a",
+            "causation_id": "CMD-F-M1A-013-replace-09",
+            "content_digest": "bb48f222b1b39f54492c1fd5bfee823a6b8f22463c7509bed2ad2a954e14d2d0",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-FIXTURE",
-            "created_logical_time": 8,
+            "created_logical_time": 9,
             "created_under_lease": null,
             "id": "CHECKPOINT-M1A-1",
             "object_type": "checkpoint",
@@ -417,7 +440,7 @@
               "lease_epoch_digest": "ffb5796f53373b9243534a70afdac4840038cafcc2407bf3c1f25fc5e16cc816",
               "open_packet_refs": [
                 {
-                  "content_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+                  "content_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
                   "id": "PACKET-df98737626d5d4796337f7c5dcf28caf",
                   "object_type": "work-packet",
                   "version": 1
@@ -425,32 +448,32 @@
               ],
               "pause_epoch": 0,
               "route_snapshot_digest": "5cff473840e67b14c198d1e01721363a2746fa8aad10eba51599e1ec6dbfd07a",
-              "state_digest": "18b27b118f1d5e1d6300ca1647451ab6bb51876e4e5ccf64bc3f9c4f6f44cbc5",
-              "state_version": 7
+              "state_digest": "e5bbd87e42700a01e50603e56a1ca1dc7820be4d890d86cfaa731d5a68645306",
+              "state_version": 8
             },
             "schema_version": "m1a-checkpoint-1",
             "version": 1
           },
           "related_records": [],
-          "sequence": 8,
-          "state_delta_digest": "81a43974d5e8998ce8d343ad95063b6b79da881573efe8e587f0a14612ac3d16",
+          "sequence": 9,
+          "state_delta_digest": "37f4ad077607cba09366ef6eed1609abf358b02334c167fa8d5a334324264d08",
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "9826f29e245baae833f4b0d28f8ad9b9e9bcbbc9dc5317443eb6fc0af144316e",
-          "command_id": "CMD-F-M1A-013-replace-09",
-          "content_digest": "4ea813bd9a8f9d63904361a5882f0269c1db8a8c912ffc7f539411c369869d91",
-          "event_id": "EV-F-M1A-013-replace-09-0001",
+          "command_digest": "039d7d5db6297bfb70da1bcdc82f89f2adeaf0ca164e66121509dcfabe00b8a6",
+          "command_id": "CMD-F-M1A-013-replace-10",
+          "content_digest": "1be9be37089cfed8ffd11364e6bbbcf2d4bf5151e2345157ad62f9f37073fa51",
+          "event_id": "EV-F-M1A-013-replace-10-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "RouteAssignmentReplaced",
-          "logical_time": 9,
-          "previous_event_digest": "49490ac99a1714594208473fe035f35780d24aa4613d7d056a6ed9222450f561",
+          "logical_time": 10,
+          "previous_event_digest": "6a0e3a861d8d410c48de0a2c7840d9eefe01fb0fce82bb64391b68c4f4e51e46",
           "primary_record": {
-            "causation_id": "CMD-F-M1A-013-replace-09",
-            "content_digest": "8e4fc5264254f2cd371d98dfcc2b81fb6f82f9d114e808146f25b7bf5c039d1d",
+            "causation_id": "CMD-F-M1A-013-replace-10",
+            "content_digest": "de157af0a40dccac6f6b7dd6faf07eb0f36a1f5298553c531db12d46642411a2",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
-            "created_logical_time": 9,
+            "created_logical_time": 10,
             "created_under_lease": {
               "content_digest": "e3468bf5e37fae88d1677e6dd9e501a37a3d4e8a69a22ea2c64915ef5177d069",
               "lease_epoch": 1,
@@ -460,10 +483,10 @@
             "object_type": "route-assignment",
             "payload": {
               "account_class_id": "ACCOUNT-INCLUDED",
-              "assigned_logical_time": 9,
+              "assigned_logical_time": 10,
               "capacity_observation_ref": {
-                "content_digest": "eeeabf85286e1457bdecf493ff0d45d636d02ea09317e94bbc06c90c73a3b94a",
-                "id": "CAPACITY-OBS-1",
+                "content_digest": "dcce878a147f5ef854fa28e4f41002f5dd48b39f463ce157584005f13fe5f220",
+                "id": "CAPACITY-OBS-ZERO",
                 "object_type": "capacity-observation",
                 "version": 1
               },
@@ -502,31 +525,31 @@
             "version": 1
           },
           "related_records": [],
-          "sequence": 9,
-          "state_delta_digest": "8802a4e3caf074db3f1865e76f96bc95eaf557d58fa7e0526b2ca6af417b87ee",
+          "sequence": 10,
+          "state_delta_digest": "149bb1bfc23d96dbf2256cdccce18a9e05ddcc2e582f9ada28e9e564515c114f",
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "9826f29e245baae833f4b0d28f8ad9b9e9bcbbc9dc5317443eb6fc0af144316e",
-          "command_id": "CMD-F-M1A-013-replace-09",
-          "content_digest": "5b4337fe75c347dd1f5fa672e249dc7e6bed50000ced5aa0b1f418b38ac65bd0",
-          "event_id": "EV-F-M1A-013-replace-09-0002",
+          "command_digest": "039d7d5db6297bfb70da1bcdc82f89f2adeaf0ca164e66121509dcfabe00b8a6",
+          "command_id": "CMD-F-M1A-013-replace-10",
+          "content_digest": "8f1eacfcd5b1ad2a9bca40715242f8cc77c39112f532bdaff3eec37d2ccdb00a",
+          "event_id": "EV-F-M1A-013-replace-10-0002",
           "event_schema_version": "m1a-event-1",
           "event_type": "WorkPacketDerived",
-          "logical_time": 9,
-          "previous_event_digest": "4ea813bd9a8f9d63904361a5882f0269c1db8a8c912ffc7f539411c369869d91",
+          "logical_time": 10,
+          "previous_event_digest": "1be9be37089cfed8ffd11364e6bbbcf2d4bf5151e2345157ad62f9f37073fa51",
           "primary_record": {
-            "causation_id": "CMD-F-M1A-013-replace-09",
-            "content_digest": "1afb0a3bb9ea6d19c1b17310be7ae0b31b84f62119895bca2c0e35b5ffc29ac9",
+            "causation_id": "CMD-F-M1A-013-replace-10",
+            "content_digest": "012025680e1635149e218a94781aa9b1d5a0b1a864aaeb352a7854f10a7f9c60",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
-            "created_logical_time": 9,
+            "created_logical_time": 10,
             "created_under_lease": {
               "content_digest": "e3468bf5e37fae88d1677e6dd9e501a37a3d4e8a69a22ea2c64915ef5177d069",
               "lease_epoch": 1,
               "lease_id": "LEASE-EXEC-1"
             },
-            "id": "PACKET-0d75d87e411d6b32d5c49099f4405230",
+            "id": "PACKET-92c4a19f1e240e95d21cab6b11927645",
             "object_type": "work-packet",
             "payload": {
               "allowed_action_ids": [
@@ -565,10 +588,15 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": {
-                "content_digest": "7797ca6b94ef9b3e91e05ef876624db44d9d8894e094677f3f67b776ee73d76a",
+                "content_digest": "bb48f222b1b39f54492c1fd5bfee823a6b8f22463c7509bed2ad2a954e14d2d0",
                 "id": "CHECKPOINT-M1A-1",
                 "object_type": "checkpoint",
                 "version": 1
+              },
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
               },
               "deadline_logical_time": 900,
               "effect_keys": [
@@ -620,7 +648,7 @@
                 "PROHIBIT-EGRESS"
               ],
               "route_assignment_ref": {
-                "content_digest": "8e4fc5264254f2cd371d98dfcc2b81fb6f82f9d114e808146f25b7bf5c039d1d",
+                "content_digest": "de157af0a40dccac6f6b7dd6faf07eb0f36a1f5298553c531db12d46642411a2",
                 "id": "ROUTE-ASSIGNMENT-2",
                 "object_type": "route-assignment",
                 "version": 1
@@ -629,7 +657,7 @@
                 "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
               ],
               "supersedes_packet_ref": {
-                "content_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+                "content_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
                 "id": "PACKET-df98737626d5d4796337f7c5dcf28caf",
                 "object_type": "work-packet",
                 "version": 1
@@ -639,6 +667,11 @@
                 "id": "TASK-M1A-A",
                 "object_type": "task-node",
                 "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
               },
               "work_lease_ref": {
                 "content_digest": "5bc97c41d359b95c2664b95431718f96634ef64159598d67586321843036c719",
@@ -650,12 +683,12 @@
             "version": 1
           },
           "related_records": [],
-          "sequence": 10,
-          "state_delta_digest": "53bc8f64475d6e5ea22f662345428af0b18ebd2f269d1e9468e3f70c7c962548",
+          "sequence": 11,
+          "state_delta_digest": "a90550012bd433a0cefa9e8635c48163cd715fcb7a78b8ad617b71003f02f9fc",
           "stream_id": "STREAM-M1A"
         }
       ],
-      "expected_final_digest": "a3575e537e8b4781aadc442ed34cc284894ba494a9240f8a0a5a98c64464f70a",
+      "expected_final_digest": "2a95a1b146776d1f9ab70aa377068ff9e272d4b017a5bff2749f843873e47855",
       "expected_final_state": {
         "active_arm_run_ref": {
           "content_digest": "818238f43c88f4e4e41ebfeb63ff19d7a198ea813f6eea749c28d08ede2ee5f9",
@@ -671,15 +704,15 @@
         },
         "ambiguous_effect_refs": [],
         "consumed_novelty_delta_digests": [],
-        "content_digest": "a3575e537e8b4781aadc442ed34cc284894ba494a9240f8a0a5a98c64464f70a",
+        "content_digest": "2a95a1b146776d1f9ab70aa377068ff9e272d4b017a5bff2749f843873e47855",
         "current_pause_epoch": 0,
         "current_pause_policy_ref": {
           "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
           "policy_id": "POLICY-PAUSE",
           "policy_version": 1
         },
-        "last_event_digest": "5b4337fe75c347dd1f5fa672e249dc7e6bed50000ced5aa0b1f418b38ac65bd0",
-        "last_event_sequence": 10,
+        "last_event_digest": "8f1eacfcd5b1ad2a9bca40715242f8cc77c39112f532bdaff3eec37d2ccdb00a",
+        "last_event_sequence": 11,
         "object_states": [
           {
             "object_ref": {
@@ -710,7 +743,16 @@
           },
           {
             "object_ref": {
-              "content_digest": "7797ca6b94ef9b3e91e05ef876624db44d9d8894e094677f3f67b776ee73d76a",
+              "content_digest": "dcce878a147f5ef854fa28e4f41002f5dd48b39f463ce157584005f13fe5f220",
+              "id": "CAPACITY-OBS-ZERO",
+              "object_type": "capacity-observation",
+              "version": 1
+            },
+            "state": "recorded"
+          },
+          {
+            "object_ref": {
+              "content_digest": "bb48f222b1b39f54492c1fd5bfee823a6b8f22463c7509bed2ad2a954e14d2d0",
               "id": "CHECKPOINT-M1A-1",
               "object_type": "checkpoint",
               "version": 1
@@ -773,7 +815,7 @@
           },
           {
             "object_ref": {
-              "content_digest": "8e4fc5264254f2cd371d98dfcc2b81fb6f82f9d114e808146f25b7bf5c039d1d",
+              "content_digest": "de157af0a40dccac6f6b7dd6faf07eb0f36a1f5298553c531db12d46642411a2",
               "id": "ROUTE-ASSIGNMENT-2",
               "object_type": "route-assignment",
               "version": 1
@@ -800,8 +842,8 @@
           },
           {
             "object_ref": {
-              "content_digest": "1afb0a3bb9ea6d19c1b17310be7ae0b31b84f62119895bca2c0e35b5ffc29ac9",
-              "id": "PACKET-0d75d87e411d6b32d5c49099f4405230",
+              "content_digest": "012025680e1635149e218a94781aa9b1d5a0b1a864aaeb352a7854f10a7f9c60",
+              "id": "PACKET-92c4a19f1e240e95d21cab6b11927645",
               "object_type": "work-packet",
               "version": 1
             },
@@ -809,7 +851,7 @@
           },
           {
             "object_ref": {
-              "content_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+              "content_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
               "id": "PACKET-df98737626d5d4796337f7c5dcf28caf",
               "object_type": "work-packet",
               "version": 1
@@ -857,19 +899,24 @@
             "receipt_id": "RCPT-F-M1A-013-replace-06"
           },
           {
-            "command_digest": "58c8e1b1b6ca1aa0ff8d23283f3f7986c4359a4938b39532156bb4e26b27daef",
+            "command_digest": "b58edd710fc965bf3ed63fa00ad081fba443820abf1273079b11ca7f4a2fabc4",
             "command_id": "CMD-F-M1A-013-replace-07",
             "receipt_id": "RCPT-F-M1A-013-replace-07"
           },
           {
-            "command_digest": "8a1fba90c575c9e217f9577648410ab5b0cdbdce7ee93da6c9ec73f971beedc4",
+            "command_digest": "01634941ad3fdae3406bc39438f6117d8e930e6daa72e9e7c2b70cd0dd58c420",
             "command_id": "CMD-F-M1A-013-replace-08",
             "receipt_id": "RCPT-F-M1A-013-replace-08"
           },
           {
-            "command_digest": "9826f29e245baae833f4b0d28f8ad9b9e9bcbbc9dc5317443eb6fc0af144316e",
+            "command_digest": "ddae91dcd72aea170fe0467cc701e3c4b9ec1416fe711aa0634f38a8de26f51f",
             "command_id": "CMD-F-M1A-013-replace-09",
             "receipt_id": "RCPT-F-M1A-013-replace-09"
+          },
+          {
+            "command_digest": "039d7d5db6297bfb70da1bcdc82f89f2adeaf0ca164e66121509dcfabe00b8a6",
+            "command_id": "CMD-F-M1A-013-replace-10",
+            "receipt_id": "RCPT-F-M1A-013-replace-10"
           }
         ],
         "projection_schema_version": "m1a-projection-1",
@@ -1014,10 +1061,31 @@
           },
           {
             "causation_id": "CMD-F-M1A-013-replace-08",
-            "content_digest": "7797ca6b94ef9b3e91e05ef876624db44d9d8894e094677f3f67b776ee73d76a",
+            "content_digest": "dcce878a147f5ef854fa28e4f41002f5dd48b39f463ce157584005f13fe5f220",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-FIXTURE",
             "created_logical_time": 8,
+            "created_under_lease": null,
+            "id": "CAPACITY-OBS-ZERO",
+            "object_type": "capacity-observation",
+            "payload": {
+              "account_class_id": "ACCOUNT-INCLUDED",
+              "available": true,
+              "capacity_pool_id": "CAPACITY-INCLUDED",
+              "observation_digest": "6964a06009fa283e9985ebc443da1c30d0eb42773a09ebb553a68e92a4854856",
+              "remaining_units": 100,
+              "route_id": "ROUTE-ZERO",
+              "spend_class": "none"
+            },
+            "schema_version": "m1a-capacity-observation-1",
+            "version": 1
+          },
+          {
+            "causation_id": "CMD-F-M1A-013-replace-09",
+            "content_digest": "bb48f222b1b39f54492c1fd5bfee823a6b8f22463c7509bed2ad2a954e14d2d0",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "KERNEL-FIXTURE",
+            "created_logical_time": 9,
             "created_under_lease": null,
             "id": "CHECKPOINT-M1A-1",
             "object_type": "checkpoint",
@@ -1039,7 +1107,7 @@
               "lease_epoch_digest": "ffb5796f53373b9243534a70afdac4840038cafcc2407bf3c1f25fc5e16cc816",
               "open_packet_refs": [
                 {
-                  "content_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+                  "content_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
                   "id": "PACKET-df98737626d5d4796337f7c5dcf28caf",
                   "object_type": "work-packet",
                   "version": 1
@@ -1047,8 +1115,8 @@
               ],
               "pause_epoch": 0,
               "route_snapshot_digest": "5cff473840e67b14c198d1e01721363a2746fa8aad10eba51599e1ec6dbfd07a",
-              "state_digest": "18b27b118f1d5e1d6300ca1647451ab6bb51876e4e5ccf64bc3f9c4f6f44cbc5",
-              "state_version": 7
+              "state_digest": "e5bbd87e42700a01e50603e56a1ca1dc7820be4d890d86cfaa731d5a68645306",
+              "state_version": 8
             },
             "schema_version": "m1a-checkpoint-1",
             "version": 1
@@ -1403,11 +1471,11 @@
             "version": 1
           },
           {
-            "causation_id": "CMD-F-M1A-013-replace-09",
-            "content_digest": "8e4fc5264254f2cd371d98dfcc2b81fb6f82f9d114e808146f25b7bf5c039d1d",
+            "causation_id": "CMD-F-M1A-013-replace-10",
+            "content_digest": "de157af0a40dccac6f6b7dd6faf07eb0f36a1f5298553c531db12d46642411a2",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
-            "created_logical_time": 9,
+            "created_logical_time": 10,
             "created_under_lease": {
               "content_digest": "e3468bf5e37fae88d1677e6dd9e501a37a3d4e8a69a22ea2c64915ef5177d069",
               "lease_epoch": 1,
@@ -1417,10 +1485,10 @@
             "object_type": "route-assignment",
             "payload": {
               "account_class_id": "ACCOUNT-INCLUDED",
-              "assigned_logical_time": 9,
+              "assigned_logical_time": 10,
               "capacity_observation_ref": {
-                "content_digest": "eeeabf85286e1457bdecf493ff0d45d636d02ea09317e94bbc06c90c73a3b94a",
-                "id": "CAPACITY-OBS-1",
+                "content_digest": "dcce878a147f5ef854fa28e4f41002f5dd48b39f463ce157584005f13fe5f220",
+                "id": "CAPACITY-OBS-ZERO",
                 "object_type": "capacity-observation",
                 "version": 1
               },
@@ -1625,17 +1693,17 @@
             "version": 1
           },
           {
-            "causation_id": "CMD-F-M1A-013-replace-09",
-            "content_digest": "1afb0a3bb9ea6d19c1b17310be7ae0b31b84f62119895bca2c0e35b5ffc29ac9",
+            "causation_id": "CMD-F-M1A-013-replace-10",
+            "content_digest": "012025680e1635149e218a94781aa9b1d5a0b1a864aaeb352a7854f10a7f9c60",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
-            "created_logical_time": 9,
+            "created_logical_time": 10,
             "created_under_lease": {
               "content_digest": "e3468bf5e37fae88d1677e6dd9e501a37a3d4e8a69a22ea2c64915ef5177d069",
               "lease_epoch": 1,
               "lease_id": "LEASE-EXEC-1"
             },
-            "id": "PACKET-0d75d87e411d6b32d5c49099f4405230",
+            "id": "PACKET-92c4a19f1e240e95d21cab6b11927645",
             "object_type": "work-packet",
             "payload": {
               "allowed_action_ids": [
@@ -1674,10 +1742,15 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": {
-                "content_digest": "7797ca6b94ef9b3e91e05ef876624db44d9d8894e094677f3f67b776ee73d76a",
+                "content_digest": "bb48f222b1b39f54492c1fd5bfee823a6b8f22463c7509bed2ad2a954e14d2d0",
                 "id": "CHECKPOINT-M1A-1",
                 "object_type": "checkpoint",
                 "version": 1
+              },
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
               },
               "deadline_logical_time": 900,
               "effect_keys": [
@@ -1729,7 +1802,7 @@
                 "PROHIBIT-EGRESS"
               ],
               "route_assignment_ref": {
-                "content_digest": "8e4fc5264254f2cd371d98dfcc2b81fb6f82f9d114e808146f25b7bf5c039d1d",
+                "content_digest": "de157af0a40dccac6f6b7dd6faf07eb0f36a1f5298553c531db12d46642411a2",
                 "id": "ROUTE-ASSIGNMENT-2",
                 "object_type": "route-assignment",
                 "version": 1
@@ -1738,7 +1811,7 @@
                 "bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add"
               ],
               "supersedes_packet_ref": {
-                "content_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+                "content_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
                 "id": "PACKET-df98737626d5d4796337f7c5dcf28caf",
                 "object_type": "work-packet",
                 "version": 1
@@ -1748,6 +1821,11 @@
                 "id": "TASK-M1A-A",
                 "object_type": "task-node",
                 "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
               },
               "work_lease_ref": {
                 "content_digest": "5bc97c41d359b95c2664b95431718f96634ef64159598d67586321843036c719",
@@ -1760,7 +1838,7 @@
           },
           {
             "causation_id": "CMD-F-M1A-013-replace-07",
-            "content_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+            "content_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
             "created_logical_time": 7,
@@ -1808,6 +1886,11 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
               "deadline_logical_time": 900,
               "effect_keys": [
                 "EFFECT-SYNTHETIC"
@@ -1873,6 +1956,11 @@
                 "object_type": "task-node",
                 "version": 1
               },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
+              },
               "work_lease_ref": {
                 "content_digest": "5bc97c41d359b95c2664b95431718f96634ef64159598d67586321843036c719",
                 "lease_epoch": 1,
@@ -1883,46 +1971,46 @@
             "version": 1
           }
         ],
-        "state_version": 10,
+        "state_version": 11,
         "stream_id": "STREAM-M1A",
         "terminal_status": "nonterminal"
       },
       "expected_receipts": [
         {
-          "command_digest": "8a1fba90c575c9e217f9577648410ab5b0cdbdce7ee93da6c9ec73f971beedc4",
-          "command_id": "CMD-F-M1A-013-replace-08",
-          "content_digest": "ce1445d8c40126be6788067796f57c837c25750a1603d2a4d170584e5634f8c5",
-          "disposition": "accepted",
-          "event_ids": [
-            "EV-F-M1A-013-replace-08-0001"
-          ],
-          "first_event_sequence": 8,
-          "last_event_sequence": 8,
-          "primary_error": null,
-          "receipt_id": "RCPT-F-M1A-013-replace-08",
-          "receipt_schema_version": "m1a-receipt-1",
-          "related_errors": [],
-          "state_after_digest": "138c2908809c4f3a1543032a562912685d3054bd37a57542bdf9f4ff78f7d1e4",
-          "state_before_digest": "18b27b118f1d5e1d6300ca1647451ab6bb51876e4e5ccf64bc3f9c4f6f44cbc5",
-          "witness": null
-        },
-        {
-          "command_digest": "9826f29e245baae833f4b0d28f8ad9b9e9bcbbc9dc5317443eb6fc0af144316e",
+          "command_digest": "ddae91dcd72aea170fe0467cc701e3c4b9ec1416fe711aa0634f38a8de26f51f",
           "command_id": "CMD-F-M1A-013-replace-09",
-          "content_digest": "d5d19972381d3b363cfce6023ab1c29f496c72005aa70428d95bd60e9c916420",
+          "content_digest": "d2dc4cf582f5d7d36bc37dd9ecb88625670320886e213d87b80b1cbd46fc3ff9",
           "disposition": "accepted",
           "event_ids": [
-            "EV-F-M1A-013-replace-09-0001",
-            "EV-F-M1A-013-replace-09-0002"
+            "EV-F-M1A-013-replace-09-0001"
           ],
           "first_event_sequence": 9,
-          "last_event_sequence": 10,
+          "last_event_sequence": 9,
           "primary_error": null,
           "receipt_id": "RCPT-F-M1A-013-replace-09",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "a3575e537e8b4781aadc442ed34cc284894ba494a9240f8a0a5a98c64464f70a",
-          "state_before_digest": "138c2908809c4f3a1543032a562912685d3054bd37a57542bdf9f4ff78f7d1e4",
+          "state_after_digest": "69dbcade8be79a35e5cadbb235fec77635e999c1bf07f16c0466c21e753ed63a",
+          "state_before_digest": "e5bbd87e42700a01e50603e56a1ca1dc7820be4d890d86cfaa731d5a68645306",
+          "witness": null
+        },
+        {
+          "command_digest": "039d7d5db6297bfb70da1bcdc82f89f2adeaf0ca164e66121509dcfabe00b8a6",
+          "command_id": "CMD-F-M1A-013-replace-10",
+          "content_digest": "ca4bdc1c178e6f13e714f53f58b3e470f0c78909afa5f32641f53a7b7aa68cde",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-013-replace-10-0001",
+            "EV-F-M1A-013-replace-10-0002"
+          ],
+          "first_event_sequence": 10,
+          "last_event_sequence": 11,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-013-replace-10",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "2a95a1b146776d1f9ab70aa377068ff9e272d4b017a5bff2749f843873e47855",
+          "state_before_digest": "69dbcade8be79a35e5cadbb235fec77635e999c1bf07f16c0466c21e753ed63a",
           "witness": null
         }
       ],
@@ -2636,11 +2724,11 @@
         {
           "actor_id": "ARM-M1A",
           "auth_ref": "AUTH-F-M1A-013-replace-07",
-          "candidate_digest": "20a4273ba3c0d552b3b4af5a463d47ca6f46f201cbb26400e84564392581d35d",
+          "candidate_digest": "47875275cffdf00e4c823734ce8d7f9dd6d1b38bcb259144f484d8eeba82be63",
           "command_id": "CMD-F-M1A-013-replace-07",
           "command_schema_version": "m1a-command-1",
           "command_type": "derive-work-packet",
-          "content_digest": "58c8e1b1b6ca1aa0ff8d23283f3f7986c4359a4938b39532156bb4e26b27daef",
+          "content_digest": "b58edd710fc965bf3ed63fa00ad081fba443820abf1273079b11ca7f4a2fabc4",
           "expected_state_digest": "23657fae9728e7edca35ae070f4768f9e7902a98ed5af6b6abd5b7a33279a26e",
           "expected_state_version": 6,
           "goal_ref": {
@@ -2663,7 +2751,7 @@
               "object_type": "budget-reservation",
               "version": 1
             },
-            "expected_work_packet_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+            "expected_work_packet_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
             "route_assignment": {
               "causation_id": "CMD-F-M1A-013-replace-07",
               "content_digest": "b8df39c577612b638962a682dfe487c8a11dc638b981e85b33f4b6279ce4d922",
@@ -2768,7 +2856,54 @@
               "version": 1
             }
           },
-          "payload_digest": "20a4273ba3c0d552b3b4af5a463d47ca6f46f201cbb26400e84564392581d35d",
+          "payload_digest": "47875275cffdf00e4c823734ce8d7f9dd6d1b38bcb259144f484d8eeba82be63",
+          "plan_ref": {
+            "content_digest": "dac3b6b0a37dc915b2023f083b029a721216d3d415a9742b1480157048fae07d",
+            "id": "PLAN-M1A",
+            "object_type": "plan-revision",
+            "version": 1
+          }
+        },
+        {
+          "actor_id": "KERNEL-FIXTURE",
+          "auth_ref": "AUTH-F-M1A-013-replace-08",
+          "candidate_digest": "c0c4c9353283ff9daea5e3cc101a663db3c0f321b5946547d8c8d2e9f330882b",
+          "command_id": "CMD-F-M1A-013-replace-08",
+          "command_schema_version": "m1a-command-1",
+          "command_type": "record-capacity-observation",
+          "content_digest": "01634941ad3fdae3406bc39438f6117d8e930e6daa72e9e7c2b70cd0dd58c420",
+          "expected_state_digest": "1adf3d1857ddfd26a75f314641473733030ca9ab825c666e3a31b8b3027a28d2",
+          "expected_state_version": 7,
+          "goal_ref": {
+            "content_digest": "c56a37c805528a2a5e42a18458538c74a0b24d948abf90149f22c63d3931d798",
+            "id": "GOAL-M1A",
+            "object_type": "goal-spec",
+            "version": 1
+          },
+          "lease_ref": null,
+          "logical_time": 8,
+          "payload": {
+            "causation_id": "CMD-F-M1A-013-replace-08",
+            "content_digest": "dcce878a147f5ef854fa28e4f41002f5dd48b39f463ce157584005f13fe5f220",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "KERNEL-FIXTURE",
+            "created_logical_time": 8,
+            "created_under_lease": null,
+            "id": "CAPACITY-OBS-ZERO",
+            "object_type": "capacity-observation",
+            "payload": {
+              "account_class_id": "ACCOUNT-INCLUDED",
+              "available": true,
+              "capacity_pool_id": "CAPACITY-INCLUDED",
+              "observation_digest": "6964a06009fa283e9985ebc443da1c30d0eb42773a09ebb553a68e92a4854856",
+              "remaining_units": 100,
+              "route_id": "ROUTE-ZERO",
+              "spend_class": "none"
+            },
+            "schema_version": "m1a-capacity-observation-1",
+            "version": 1
+          },
+          "payload_digest": "c0c4c9353283ff9daea5e3cc101a663db3c0f321b5946547d8c8d2e9f330882b",
           "plan_ref": {
             "content_digest": "dac3b6b0a37dc915b2023f083b029a721216d3d415a9742b1480157048fae07d",
             "id": "PLAN-M1A",
@@ -3421,9 +3556,9 @@
           "stream_id": "STREAM-M1A"
         },
         {
-          "command_digest": "58c8e1b1b6ca1aa0ff8d23283f3f7986c4359a4938b39532156bb4e26b27daef",
+          "command_digest": "b58edd710fc965bf3ed63fa00ad081fba443820abf1273079b11ca7f4a2fabc4",
           "command_id": "CMD-F-M1A-013-replace-07",
-          "content_digest": "6098e6f3984927a787ef19c9d44ed32c8532fc6a84f29b64b13068a5054029bb",
+          "content_digest": "5fe6d06be7382e577da4e24184cb93970224bd1e10dc40a09e04ae188ff58a5a",
           "event_id": "EV-F-M1A-013-replace-07-0001",
           "event_schema_version": "m1a-event-1",
           "event_type": "WorkPacketDerived",
@@ -3431,7 +3566,7 @@
           "previous_event_digest": "28abfbd3da035d2fca1a418fa6b8c40034da1112f6530084b6bf7848efce2c54",
           "primary_record": {
             "causation_id": "CMD-F-M1A-013-replace-07",
-            "content_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+            "content_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
             "correlation_id": "CORR-M1A",
             "created_by_actor_id": "KERNEL-M1A",
             "created_logical_time": 7,
@@ -3479,6 +3614,11 @@
                 "CAPABILITY-BASE"
               ],
               "checkpoint_ref": null,
+              "constitution_policy_ref": {
+                "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                "policy_id": "POLICY-CONSTITUTION",
+                "policy_version": 1
+              },
               "deadline_logical_time": 900,
               "effect_keys": [
                 "EFFECT-SYNTHETIC"
@@ -3543,6 +3683,11 @@
                 "id": "TASK-M1A-A",
                 "object_type": "task-node",
                 "version": 1
+              },
+              "verifier_policy_ref": {
+                "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                "policy_id": "POLICY-VERIFIER",
+                "policy_version": 1
               },
               "work_lease_ref": {
                 "content_digest": "5bc97c41d359b95c2664b95431718f96634ef64159598d67586321843036c719",
@@ -3653,7 +3798,42 @@
             }
           ],
           "sequence": 7,
-          "state_delta_digest": "b7b18b59b9ed68fd5a30943cd56b6d7421e2c76762563e2bb57d4a68a20eb4cd",
+          "state_delta_digest": "7106d05bdeb967fd652ef9e2b5b2a6f3c2ca1ebea11e59aaa5fb942ebf6cba82",
+          "stream_id": "STREAM-M1A"
+        },
+        {
+          "command_digest": "01634941ad3fdae3406bc39438f6117d8e930e6daa72e9e7c2b70cd0dd58c420",
+          "command_id": "CMD-F-M1A-013-replace-08",
+          "content_digest": "736d2af7fa348d803ef0c275a9ee5bb896de5d3b4a899578a400bdfb91f903a6",
+          "event_id": "EV-F-M1A-013-replace-08-0001",
+          "event_schema_version": "m1a-event-1",
+          "event_type": "CapacityObservationRecorded",
+          "logical_time": 8,
+          "previous_event_digest": "5fe6d06be7382e577da4e24184cb93970224bd1e10dc40a09e04ae188ff58a5a",
+          "primary_record": {
+            "causation_id": "CMD-F-M1A-013-replace-08",
+            "content_digest": "dcce878a147f5ef854fa28e4f41002f5dd48b39f463ce157584005f13fe5f220",
+            "correlation_id": "CORR-M1A",
+            "created_by_actor_id": "KERNEL-FIXTURE",
+            "created_logical_time": 8,
+            "created_under_lease": null,
+            "id": "CAPACITY-OBS-ZERO",
+            "object_type": "capacity-observation",
+            "payload": {
+              "account_class_id": "ACCOUNT-INCLUDED",
+              "available": true,
+              "capacity_pool_id": "CAPACITY-INCLUDED",
+              "observation_digest": "6964a06009fa283e9985ebc443da1c30d0eb42773a09ebb553a68e92a4854856",
+              "remaining_units": 100,
+              "route_id": "ROUTE-ZERO",
+              "spend_class": "none"
+            },
+            "schema_version": "m1a-capacity-observation-1",
+            "version": 1
+          },
+          "related_records": [],
+          "sequence": 8,
+          "state_delta_digest": "7158257c5a2a20e5f6b11926f679444bdad54fa4115187b84ef92960cd5a9240",
           "stream_id": "STREAM-M1A"
         }
       ],
@@ -3767,9 +3947,9 @@
           "witness": null
         },
         {
-          "command_digest": "58c8e1b1b6ca1aa0ff8d23283f3f7986c4359a4938b39532156bb4e26b27daef",
+          "command_digest": "b58edd710fc965bf3ed63fa00ad081fba443820abf1273079b11ca7f4a2fabc4",
           "command_id": "CMD-F-M1A-013-replace-07",
-          "content_digest": "6b294f01bec81122b36d5a3cd034f7d771b5c65db0d759188c590311748fcbcd",
+          "content_digest": "44caf472acda33dd09df1c359b9237fd8fa031e9e9e7c9a0f926221ccd006da4",
           "disposition": "accepted",
           "event_ids": [
             "EV-F-M1A-013-replace-07-0001"
@@ -3780,8 +3960,26 @@
           "receipt_id": "RCPT-F-M1A-013-replace-07",
           "receipt_schema_version": "m1a-receipt-1",
           "related_errors": [],
-          "state_after_digest": "18b27b118f1d5e1d6300ca1647451ab6bb51876e4e5ccf64bc3f9c4f6f44cbc5",
+          "state_after_digest": "1adf3d1857ddfd26a75f314641473733030ca9ab825c666e3a31b8b3027a28d2",
           "state_before_digest": "23657fae9728e7edca35ae070f4768f9e7902a98ed5af6b6abd5b7a33279a26e",
+          "witness": null
+        },
+        {
+          "command_digest": "01634941ad3fdae3406bc39438f6117d8e930e6daa72e9e7c2b70cd0dd58c420",
+          "command_id": "CMD-F-M1A-013-replace-08",
+          "content_digest": "0aeb2a198eb4887ff1669df29bd78ba5eaf4b82e4a10fd7f81eef79856341618",
+          "disposition": "accepted",
+          "event_ids": [
+            "EV-F-M1A-013-replace-08-0001"
+          ],
+          "first_event_sequence": 8,
+          "last_event_sequence": 8,
+          "primary_error": null,
+          "receipt_id": "RCPT-F-M1A-013-replace-08",
+          "receipt_schema_version": "m1a-receipt-1",
+          "related_errors": [],
+          "state_after_digest": "e5bbd87e42700a01e50603e56a1ca1dc7820be4d890d86cfaa731d5a68645306",
+          "state_before_digest": "1adf3d1857ddfd26a75f314641473733030ca9ab825c666e3a31b8b3027a28d2",
           "witness": null
         }
       ],
@@ -4074,11 +4272,11 @@
         {
           "checkpoint": {
             "checkpoint_record": {
-              "causation_id": "CMD-F-M1A-013-replace-08",
-              "content_digest": "7797ca6b94ef9b3e91e05ef876624db44d9d8894e094677f3f67b776ee73d76a",
+              "causation_id": "CMD-F-M1A-013-replace-09",
+              "content_digest": "bb48f222b1b39f54492c1fd5bfee823a6b8f22463c7509bed2ad2a954e14d2d0",
               "correlation_id": "CORR-M1A",
               "created_by_actor_id": "KERNEL-FIXTURE",
-              "created_logical_time": 8,
+              "created_logical_time": 9,
               "created_under_lease": null,
               "id": "CHECKPOINT-M1A-1",
               "object_type": "checkpoint",
@@ -4100,7 +4298,7 @@
                 "lease_epoch_digest": "ffb5796f53373b9243534a70afdac4840038cafcc2407bf3c1f25fc5e16cc816",
                 "open_packet_refs": [
                   {
-                    "content_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+                    "content_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
                     "id": "PACKET-df98737626d5d4796337f7c5dcf28caf",
                     "object_type": "work-packet",
                     "version": 1
@@ -4108,8 +4306,8 @@
                 ],
                 "pause_epoch": 0,
                 "route_snapshot_digest": "5cff473840e67b14c198d1e01721363a2746fa8aad10eba51599e1ec6dbfd07a",
-                "state_digest": "18b27b118f1d5e1d6300ca1647451ab6bb51876e4e5ccf64bc3f9c4f6f44cbc5",
-                "state_version": 7
+                "state_digest": "e5bbd87e42700a01e50603e56a1ca1dc7820be4d890d86cfaa731d5a68645306",
+                "state_version": 8
               },
               "schema_version": "m1a-checkpoint-1",
               "version": 1
@@ -4129,15 +4327,15 @@
               },
               "ambiguous_effect_refs": [],
               "consumed_novelty_delta_digests": [],
-              "content_digest": "18b27b118f1d5e1d6300ca1647451ab6bb51876e4e5ccf64bc3f9c4f6f44cbc5",
+              "content_digest": "e5bbd87e42700a01e50603e56a1ca1dc7820be4d890d86cfaa731d5a68645306",
               "current_pause_epoch": 0,
               "current_pause_policy_ref": {
                 "content_digest": "a2ee2a1c66b179baed3cade14f163917cf3d28915960eed12994a72e1707a378",
                 "policy_id": "POLICY-PAUSE",
                 "policy_version": 1
               },
-              "last_event_digest": "6098e6f3984927a787ef19c9d44ed32c8532fc6a84f29b64b13068a5054029bb",
-              "last_event_sequence": 7,
+              "last_event_digest": "736d2af7fa348d803ef0c275a9ee5bb896de5d3b4a899578a400bdfb91f903a6",
+              "last_event_sequence": 8,
               "object_states": [
                 {
                   "object_ref": {
@@ -4161,6 +4359,15 @@
                   "object_ref": {
                     "content_digest": "eeeabf85286e1457bdecf493ff0d45d636d02ea09317e94bbc06c90c73a3b94a",
                     "id": "CAPACITY-OBS-1",
+                    "object_type": "capacity-observation",
+                    "version": 1
+                  },
+                  "state": "recorded"
+                },
+                {
+                  "object_ref": {
+                    "content_digest": "dcce878a147f5ef854fa28e4f41002f5dd48b39f463ce157584005f13fe5f220",
+                    "id": "CAPACITY-OBS-ZERO",
                     "object_type": "capacity-observation",
                     "version": 1
                   },
@@ -4240,7 +4447,7 @@
                 },
                 {
                   "object_ref": {
-                    "content_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+                    "content_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
                     "id": "PACKET-df98737626d5d4796337f7c5dcf28caf",
                     "object_type": "work-packet",
                     "version": 1
@@ -4288,9 +4495,14 @@
                   "receipt_id": "RCPT-F-M1A-013-replace-06"
                 },
                 {
-                  "command_digest": "58c8e1b1b6ca1aa0ff8d23283f3f7986c4359a4938b39532156bb4e26b27daef",
+                  "command_digest": "b58edd710fc965bf3ed63fa00ad081fba443820abf1273079b11ca7f4a2fabc4",
                   "command_id": "CMD-F-M1A-013-replace-07",
                   "receipt_id": "RCPT-F-M1A-013-replace-07"
+                },
+                {
+                  "command_digest": "01634941ad3fdae3406bc39438f6117d8e930e6daa72e9e7c2b70cd0dd58c420",
+                  "command_id": "CMD-F-M1A-013-replace-08",
+                  "receipt_id": "RCPT-F-M1A-013-replace-08"
                 }
               ],
               "projection_schema_version": "m1a-projection-1",
@@ -4429,6 +4641,27 @@
                     "remaining_units": 100,
                     "route_id": "ROUTE-INCLUDED",
                     "spend_class": "included"
+                  },
+                  "schema_version": "m1a-capacity-observation-1",
+                  "version": 1
+                },
+                {
+                  "causation_id": "CMD-F-M1A-013-replace-08",
+                  "content_digest": "dcce878a147f5ef854fa28e4f41002f5dd48b39f463ce157584005f13fe5f220",
+                  "correlation_id": "CORR-M1A",
+                  "created_by_actor_id": "KERNEL-FIXTURE",
+                  "created_logical_time": 8,
+                  "created_under_lease": null,
+                  "id": "CAPACITY-OBS-ZERO",
+                  "object_type": "capacity-observation",
+                  "payload": {
+                    "account_class_id": "ACCOUNT-INCLUDED",
+                    "available": true,
+                    "capacity_pool_id": "CAPACITY-INCLUDED",
+                    "observation_digest": "6964a06009fa283e9985ebc443da1c30d0eb42773a09ebb553a68e92a4854856",
+                    "remaining_units": 100,
+                    "route_id": "ROUTE-ZERO",
+                    "spend_class": "none"
                   },
                   "schema_version": "m1a-capacity-observation-1",
                   "version": 1
@@ -4950,7 +5183,7 @@
                 },
                 {
                   "causation_id": "CMD-F-M1A-013-replace-07",
-                  "content_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+                  "content_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
                   "correlation_id": "CORR-M1A",
                   "created_by_actor_id": "KERNEL-M1A",
                   "created_logical_time": 7,
@@ -4998,6 +5231,11 @@
                       "CAPABILITY-BASE"
                     ],
                     "checkpoint_ref": null,
+                    "constitution_policy_ref": {
+                      "content_digest": "d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd",
+                      "policy_id": "POLICY-CONSTITUTION",
+                      "policy_version": 1
+                    },
                     "deadline_logical_time": 900,
                     "effect_keys": [
                       "EFFECT-SYNTHETIC"
@@ -5063,6 +5301,11 @@
                       "object_type": "task-node",
                       "version": 1
                     },
+                    "verifier_policy_ref": {
+                      "content_digest": "39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd",
+                      "policy_id": "POLICY-VERIFIER",
+                      "policy_version": 1
+                    },
                     "work_lease_ref": {
                       "content_digest": "5bc97c41d359b95c2664b95431718f96634ef64159598d67586321843036c719",
                       "lease_epoch": 1,
@@ -5073,7 +5316,7 @@
                   "version": 1
                 }
               ],
-              "state_version": 7,
+              "state_version": 8,
               "stream_id": "STREAM-M1A",
               "terminal_status": "nonterminal"
             }
@@ -5081,14 +5324,14 @@
           "commands": [
             {
               "actor_id": "KERNEL-FIXTURE",
-              "auth_ref": "AUTH-F-M1A-013-replace-08",
-              "candidate_digest": "aed1f807324157368d383319611e349ed0d7a32ffb6ab045a8f2533530b9c0b2",
-              "command_id": "CMD-F-M1A-013-replace-08",
+              "auth_ref": "AUTH-F-M1A-013-replace-09",
+              "candidate_digest": "fb1a89ff48bdcbefe24e5bfc733b8ce09d39d0ecda18df61fe7ae2e34788cde9",
+              "command_id": "CMD-F-M1A-013-replace-09",
               "command_schema_version": "m1a-command-1",
               "command_type": "record-checkpoint",
-              "content_digest": "8a1fba90c575c9e217f9577648410ab5b0cdbdce7ee93da6c9ec73f971beedc4",
-              "expected_state_digest": "18b27b118f1d5e1d6300ca1647451ab6bb51876e4e5ccf64bc3f9c4f6f44cbc5",
-              "expected_state_version": 7,
+              "content_digest": "ddae91dcd72aea170fe0467cc701e3c4b9ec1416fe711aa0634f38a8de26f51f",
+              "expected_state_digest": "e5bbd87e42700a01e50603e56a1ca1dc7820be4d890d86cfaa731d5a68645306",
+              "expected_state_version": 8,
               "goal_ref": {
                 "content_digest": "c56a37c805528a2a5e42a18458538c74a0b24d948abf90149f22c63d3931d798",
                 "id": "GOAL-M1A",
@@ -5096,13 +5339,13 @@
                 "version": 1
               },
               "lease_ref": null,
-              "logical_time": 8,
+              "logical_time": 9,
               "payload": {
-                "causation_id": "CMD-F-M1A-013-replace-08",
-                "content_digest": "7797ca6b94ef9b3e91e05ef876624db44d9d8894e094677f3f67b776ee73d76a",
+                "causation_id": "CMD-F-M1A-013-replace-09",
+                "content_digest": "bb48f222b1b39f54492c1fd5bfee823a6b8f22463c7509bed2ad2a954e14d2d0",
                 "correlation_id": "CORR-M1A",
                 "created_by_actor_id": "KERNEL-FIXTURE",
-                "created_logical_time": 8,
+                "created_logical_time": 9,
                 "created_under_lease": null,
                 "id": "CHECKPOINT-M1A-1",
                 "object_type": "checkpoint",
@@ -5124,7 +5367,7 @@
                   "lease_epoch_digest": "ffb5796f53373b9243534a70afdac4840038cafcc2407bf3c1f25fc5e16cc816",
                   "open_packet_refs": [
                     {
-                      "content_digest": "1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862",
+                      "content_digest": "f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28",
                       "id": "PACKET-df98737626d5d4796337f7c5dcf28caf",
                       "object_type": "work-packet",
                       "version": 1
@@ -5132,13 +5375,13 @@
                   ],
                   "pause_epoch": 0,
                   "route_snapshot_digest": "5cff473840e67b14c198d1e01721363a2746fa8aad10eba51599e1ec6dbfd07a",
-                  "state_digest": "18b27b118f1d5e1d6300ca1647451ab6bb51876e4e5ccf64bc3f9c4f6f44cbc5",
-                  "state_version": 7
+                  "state_digest": "e5bbd87e42700a01e50603e56a1ca1dc7820be4d890d86cfaa731d5a68645306",
+                  "state_version": 8
                 },
                 "schema_version": "m1a-checkpoint-1",
                 "version": 1
               },
-              "payload_digest": "aed1f807324157368d383319611e349ed0d7a32ffb6ab045a8f2533530b9c0b2",
+              "payload_digest": "fb1a89ff48bdcbefe24e5bfc733b8ce09d39d0ecda18df61fe7ae2e34788cde9",
               "plan_ref": {
                 "content_digest": "dac3b6b0a37dc915b2023f083b029a721216d3d415a9742b1480157048fae07d",
                 "id": "PLAN-M1A",
@@ -5148,14 +5391,14 @@
             },
             {
               "actor_id": "HEAD-HERMES",
-              "auth_ref": "AUTH-F-M1A-013-replace-09",
-              "candidate_digest": "a6346cfe89755bbef1eeabca0f9f673462ff6982fddcb3c74510cd8aef188cd8",
-              "command_id": "CMD-F-M1A-013-replace-09",
+              "auth_ref": "AUTH-F-M1A-013-replace-10",
+              "candidate_digest": "bc408d85ef3e94cdcd4d10fa7c69ed6e5ad2fe55cd525279563b03dec2315471",
+              "command_id": "CMD-F-M1A-013-replace-10",
               "command_schema_version": "m1a-command-1",
               "command_type": "replace-route",
-              "content_digest": "9826f29e245baae833f4b0d28f8ad9b9e9bcbbc9dc5317443eb6fc0af144316e",
-              "expected_state_digest": "138c2908809c4f3a1543032a562912685d3054bd37a57542bdf9f4ff78f7d1e4",
-              "expected_state_version": 8,
+              "content_digest": "039d7d5db6297bfb70da1bcdc82f89f2adeaf0ca164e66121509dcfabe00b8a6",
+              "expected_state_digest": "69dbcade8be79a35e5cadbb235fec77635e999c1bf07f16c0466c21e753ed63a",
+              "expected_state_version": 9,
               "goal_ref": {
                 "content_digest": "c56a37c805528a2a5e42a18458538c74a0b24d948abf90149f22c63d3931d798",
                 "id": "GOAL-M1A",
@@ -5163,21 +5406,21 @@
                 "version": 1
               },
               "lease_ref": null,
-              "logical_time": 9,
+              "logical_time": 10,
               "payload": {
                 "checkpoint_ref": {
-                  "content_digest": "7797ca6b94ef9b3e91e05ef876624db44d9d8894e094677f3f67b776ee73d76a",
+                  "content_digest": "bb48f222b1b39f54492c1fd5bfee823a6b8f22463c7509bed2ad2a954e14d2d0",
                   "id": "CHECKPOINT-M1A-1",
                   "object_type": "checkpoint",
                   "version": 1
                 },
-                "expected_new_packet_digest": "1afb0a3bb9ea6d19c1b17310be7ae0b31b84f62119895bca2c0e35b5ffc29ac9",
+                "expected_new_packet_digest": "012025680e1635149e218a94781aa9b1d5a0b1a864aaeb352a7854f10a7f9c60",
                 "new_route": {
-                  "causation_id": "CMD-F-M1A-013-replace-09",
-                  "content_digest": "8e4fc5264254f2cd371d98dfcc2b81fb6f82f9d114e808146f25b7bf5c039d1d",
+                  "causation_id": "CMD-F-M1A-013-replace-10",
+                  "content_digest": "de157af0a40dccac6f6b7dd6faf07eb0f36a1f5298553c531db12d46642411a2",
                   "correlation_id": "CORR-M1A",
                   "created_by_actor_id": "KERNEL-M1A",
-                  "created_logical_time": 9,
+                  "created_logical_time": 10,
                   "created_under_lease": {
                     "content_digest": "e3468bf5e37fae88d1677e6dd9e501a37a3d4e8a69a22ea2c64915ef5177d069",
                     "lease_epoch": 1,
@@ -5187,10 +5430,10 @@
                   "object_type": "route-assignment",
                   "payload": {
                     "account_class_id": "ACCOUNT-INCLUDED",
-                    "assigned_logical_time": 9,
+                    "assigned_logical_time": 10,
                     "capacity_observation_ref": {
-                      "content_digest": "eeeabf85286e1457bdecf493ff0d45d636d02ea09317e94bbc06c90c73a3b94a",
-                      "id": "CAPACITY-OBS-1",
+                      "content_digest": "dcce878a147f5ef854fa28e4f41002f5dd48b39f463ce157584005f13fe5f220",
+                      "id": "CAPACITY-OBS-ZERO",
                       "object_type": "capacity-observation",
                       "version": 1
                     },
@@ -5235,7 +5478,7 @@
                   "version": 1
                 }
               },
-              "payload_digest": "a6346cfe89755bbef1eeabca0f9f673462ff6982fddcb3c74510cd8aef188cd8",
+              "payload_digest": "bc408d85ef3e94cdcd4d10fa7c69ed6e5ad2fe55cd525279563b03dec2315471",
               "plan_ref": {
                 "content_digest": "dac3b6b0a37dc915b2023f083b029a721216d3d415a9742b1480157048fae07d",
                 "id": "PLAN-M1A",
@@ -5245,49 +5488,49 @@
             }
           ],
           "event_inputs": [
-            "{\"command_digest\":\"8a1fba90c575c9e217f9577648410ab5b0cdbdce7ee93da6c9ec73f971beedc4\",\"command_id\":\"CMD-F-M1A-013-replace-08\",\"content_digest\":\"49490ac99a1714594208473fe035f35780d24aa4613d7d056a6ed9222450f561\",\"event_id\":\"EV-F-M1A-013-replace-08-0001\",\"event_schema_version\":\"m1a-event-1\",\"event_type\":\"CheckpointRecorded\",\"logical_time\":8,\"previous_event_digest\":\"6098e6f3984927a787ef19c9d44ed32c8532fc6a84f29b64b13068a5054029bb\",\"primary_record\":{\"causation_id\":\"CMD-F-M1A-013-replace-08\",\"content_digest\":\"7797ca6b94ef9b3e91e05ef876624db44d9d8894e094677f3f67b776ee73d76a\",\"correlation_id\":\"CORR-M1A\",\"created_by_actor_id\":\"KERNEL-FIXTURE\",\"created_logical_time\":8,\"created_under_lease\":null,\"id\":\"CHECKPOINT-M1A-1\",\"object_type\":\"checkpoint\",\"payload\":{\"active_goal_ref\":{\"content_digest\":\"c56a37c805528a2a5e42a18458538c74a0b24d948abf90149f22c63d3931d798\",\"id\":\"GOAL-M1A\",\"object_type\":\"goal-spec\",\"version\":1},\"active_plan_ref\":{\"content_digest\":\"dac3b6b0a37dc915b2023f083b029a721216d3d415a9742b1480157048fae07d\",\"id\":\"PLAN-M1A\",\"object_type\":\"plan-revision\",\"version\":1},\"ambiguous_effect_refs\":[],\"budget_snapshot_digest\":\"a496a755ab94163fd1d6cb80ea5b061b9a6799856e91a918c91c2a5c24b510bf\",\"lease_epoch_digest\":\"ffb5796f53373b9243534a70afdac4840038cafcc2407bf3c1f25fc5e16cc816\",\"open_packet_refs\":[{\"content_digest\":\"1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862\",\"id\":\"PACKET-df98737626d5d4796337f7c5dcf28caf\",\"object_type\":\"work-packet\",\"version\":1}],\"pause_epoch\":0,\"route_snapshot_digest\":\"5cff473840e67b14c198d1e01721363a2746fa8aad10eba51599e1ec6dbfd07a\",\"state_digest\":\"18b27b118f1d5e1d6300ca1647451ab6bb51876e4e5ccf64bc3f9c4f6f44cbc5\",\"state_version\":7},\"schema_version\":\"m1a-checkpoint-1\",\"version\":1},\"related_records\":[],\"sequence\":8,\"state_delta_digest\":\"81a43974d5e8998ce8d343ad95063b6b79da881573efe8e587f0a14612ac3d16\",\"stream_id\":\"STREAM-M1A\"}",
-            "{\"command_digest\":\"9826f29e245baae833f4b0d28f8ad9b9e9bcbbc9dc5317443eb6fc0af144316e\",\"command_id\":\"CMD-F-M1A-013-replace-09\",\"content_digest\":\"4ea813bd9a8f9d63904361a5882f0269c1db8a8c912ffc7f539411c369869d91\",\"event_id\":\"EV-F-M1A-013-replace-09-0001\",\"event_schema_version\":\"m1a-event-1\",\"event_type\":\"RouteAssignmentReplaced\",\"logical_time\":9,\"previous_event_digest\":\"49490ac99a1714594208473fe035f35780d24aa4613d7d056a6ed9222450f561\",\"primary_record\":{\"causation_id\":\"CMD-F-M1A-013-replace-09\",\"content_digest\":\"8e4fc5264254f2cd371d98dfcc2b81fb6f82f9d114e808146f25b7bf5c039d1d\",\"correlation_id\":\"CORR-M1A\",\"created_by_actor_id\":\"KERNEL-M1A\",\"created_logical_time\":9,\"created_under_lease\":{\"content_digest\":\"e3468bf5e37fae88d1677e6dd9e501a37a3d4e8a69a22ea2c64915ef5177d069\",\"lease_epoch\":1,\"lease_id\":\"LEASE-EXEC-1\"},\"id\":\"ROUTE-ASSIGNMENT-2\",\"object_type\":\"route-assignment\",\"payload\":{\"account_class_id\":\"ACCOUNT-INCLUDED\",\"assigned_logical_time\":9,\"capacity_observation_ref\":{\"content_digest\":\"eeeabf85286e1457bdecf493ff0d45d636d02ea09317e94bbc06c90c73a3b94a\",\"id\":\"CAPACITY-OBS-1\",\"object_type\":\"capacity-observation\",\"version\":1},\"capacity_pool_id\":\"CAPACITY-INCLUDED\",\"egress_policy_ref\":{\"content_digest\":\"49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22\",\"policy_id\":\"POLICY-PRIVACY\",\"policy_version\":1},\"expires_logical_time\":900,\"logical_actor_id\":\"WORKER-LUNA\",\"metered_spend_allowed\":false,\"privacy_policy_ref\":{\"content_digest\":\"49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22\",\"policy_id\":\"POLICY-PRIVACY\",\"policy_version\":1},\"route_capability_ids\":[\"CAPABILITY-BASE\"],\"route_id\":\"ROUTE-ZERO\",\"route_policy_ref\":{\"content_digest\":\"90fb3a36b6529d0bb6e000e5fd3a1b7035bc7a41d626690c565976fcb716b898\",\"policy_id\":\"POLICY-ROUTE\",\"policy_version\":1},\"state\":\"assigned\",\"supersedes_route_ref\":{\"content_digest\":\"b8df39c577612b638962a682dfe487c8a11dc638b981e85b33f4b6279ce4d922\",\"id\":\"ROUTE-ASSIGNMENT-1\",\"object_type\":\"route-assignment\",\"version\":1}},\"schema_version\":\"m1a-route-assignment-1\",\"version\":1},\"related_records\":[],\"sequence\":9,\"state_delta_digest\":\"8802a4e3caf074db3f1865e76f96bc95eaf557d58fa7e0526b2ca6af417b87ee\",\"stream_id\":\"STREAM-M1A\"}",
-            "{\"command_digest\":\"9826f29e245baae833f4b0d28f8ad9b9e9bcbbc9dc5317443eb6fc0af144316e\",\"command_id\":\"CMD-F-M1A-013-replace-09\",\"content_digest\":\"5b4337fe75c347dd1f5fa672e249dc7e6bed50000ced5aa0b1f418b38ac65bd0\",\"event_id\":\"EV-F-M1A-013-replace-09-0002\",\"event_schema_version\":\"m1a-event-1\",\"event_type\":\"WorkPacketDerived\",\"logical_time\":9,\"previous_event_digest\":\"4ea813bd9a8f9d63904361a5882f0269c1db8a8c912ffc7f539411c369869d91\",\"primary_record\":{\"causation_id\":\"CMD-F-M1A-013-replace-09\",\"content_digest\":\"1afb0a3bb9ea6d19c1b17310be7ae0b31b84f62119895bca2c0e35b5ffc29ac9\",\"correlation_id\":\"CORR-M1A\",\"created_by_actor_id\":\"KERNEL-M1A\",\"created_logical_time\":9,\"created_under_lease\":{\"content_digest\":\"e3468bf5e37fae88d1677e6dd9e501a37a3d4e8a69a22ea2c64915ef5177d069\",\"lease_epoch\":1,\"lease_id\":\"LEASE-EXEC-1\"},\"id\":\"PACKET-0d75d87e411d6b32d5c49099f4405230\",\"object_type\":\"work-packet\",\"payload\":{\"allowed_action_ids\":[\"ACTION-READ\",\"ACTION-WRITE\"],\"allowed_resource_paths\":[\"workspace/input\",\"workspace/output\"],\"attempt\":1,\"authority_ids\":[\"AUTHORITY-M1A\"],\"authority_policy_ref\":{\"content_digest\":\"8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0\",\"policy_id\":\"POLICY-AUTHORITY\",\"policy_version\":1},\"budget_limits\":{\"attempts\":2,\"cpu_ms\":10000,\"memory_bytes\":1048576,\"model_turns\":4,\"money_minor\":0,\"output_bytes\":65536,\"tokens\":1000},\"budget_reservation_ref\":{\"content_digest\":\"380873b9f677399d9b834607361b6fe891fdbedfdbfde8b0e7823420bd37d3c4\",\"id\":\"BUDGET-RESERVATION-1\",\"object_type\":\"budget-reservation\",\"version\":1},\"capability_ids\":[\"CAPABILITY-BASE\"],\"checkpoint_ref\":{\"content_digest\":\"7797ca6b94ef9b3e91e05ef876624db44d9d8894e094677f3f67b776ee73d76a\",\"id\":\"CHECKPOINT-M1A-1\",\"object_type\":\"checkpoint\",\"version\":1},\"deadline_logical_time\":900,\"effect_keys\":[\"EFFECT-SYNTHETIC\"],\"egress_class_id\":\"EGRESS-NONE\",\"egress_policy_ref\":{\"content_digest\":\"49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22\",\"policy_id\":\"POLICY-PRIVACY\",\"policy_version\":1},\"expected_goal_fence_epoch\":1,\"expected_pause_epoch\":0,\"gate_requirements\":[{\"assigned_verifier_actor_id\":\"VERIFIER-TERRA\",\"candidate_binding_digest\":\"b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260\",\"evidence_schema_digest\":\"02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9\",\"gate_id\":\"GATE-M1A\",\"procedure_digest\":\"c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b\",\"verifier_policy_digest\":\"58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763\"}],\"goal_ref\":{\"content_digest\":\"c56a37c805528a2a5e42a18458538c74a0b24d948abf90149f22c63d3931d798\",\"id\":\"GOAL-M1A\",\"object_type\":\"goal-spec\",\"version\":1},\"inherited_non_goals\":[\"no external effects\",\"no publication\"],\"logical_worker_actor_id\":\"WORKER-LUNA\",\"output_schema_digest\":\"fbd88ffb1b3cae20a2a3d084d65019eea332521fcab888b63b9db0b46cd0da80\",\"plan_ref\":{\"content_digest\":\"dac3b6b0a37dc915b2023f083b029a721216d3d415a9742b1480157048fae07d\",\"id\":\"PLAN-M1A\",\"object_type\":\"plan-revision\",\"version\":1},\"privacy_class_id\":\"PRIVACY-SYNTHETIC\",\"privacy_policy_ref\":{\"content_digest\":\"49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22\",\"policy_id\":\"POLICY-PRIVACY\",\"policy_version\":1},\"prohibition_ids\":[\"PROHIBIT-EGRESS\"],\"route_assignment_ref\":{\"content_digest\":\"8e4fc5264254f2cd371d98dfcc2b81fb6f82f9d114e808146f25b7bf5c039d1d\",\"id\":\"ROUTE-ASSIGNMENT-2\",\"object_type\":\"route-assignment\",\"version\":1},\"source_digests\":[\"bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add\"],\"supersedes_packet_ref\":{\"content_digest\":\"1009376181a7737f734ed41ce17ef23e7462a402fc8f680d084b5fb2193f8862\",\"id\":\"PACKET-df98737626d5d4796337f7c5dcf28caf\",\"object_type\":\"work-packet\",\"version\":1},\"task_ref\":{\"content_digest\":\"1fbbb576c98dbe23ccdd7474db4ce91ef07f78fe8ed20efb7fec4062c2e212d4\",\"id\":\"TASK-M1A-A\",\"object_type\":\"task-node\",\"version\":1},\"work_lease_ref\":{\"content_digest\":\"5bc97c41d359b95c2664b95431718f96634ef64159598d67586321843036c719\",\"lease_epoch\":1,\"lease_id\":\"LEASE-WORK-1\"}},\"schema_version\":\"m1a-work-packet-1\",\"version\":1},\"related_records\":[],\"sequence\":10,\"state_delta_digest\":\"53bc8f64475d6e5ea22f662345428af0b18ebd2f269d1e9468e3f70c7c962548\",\"stream_id\":\"STREAM-M1A\"}"
+            "{\"command_digest\":\"ddae91dcd72aea170fe0467cc701e3c4b9ec1416fe711aa0634f38a8de26f51f\",\"command_id\":\"CMD-F-M1A-013-replace-09\",\"content_digest\":\"6a0e3a861d8d410c48de0a2c7840d9eefe01fb0fce82bb64391b68c4f4e51e46\",\"event_id\":\"EV-F-M1A-013-replace-09-0001\",\"event_schema_version\":\"m1a-event-1\",\"event_type\":\"CheckpointRecorded\",\"logical_time\":9,\"previous_event_digest\":\"736d2af7fa348d803ef0c275a9ee5bb896de5d3b4a899578a400bdfb91f903a6\",\"primary_record\":{\"causation_id\":\"CMD-F-M1A-013-replace-09\",\"content_digest\":\"bb48f222b1b39f54492c1fd5bfee823a6b8f22463c7509bed2ad2a954e14d2d0\",\"correlation_id\":\"CORR-M1A\",\"created_by_actor_id\":\"KERNEL-FIXTURE\",\"created_logical_time\":9,\"created_under_lease\":null,\"id\":\"CHECKPOINT-M1A-1\",\"object_type\":\"checkpoint\",\"payload\":{\"active_goal_ref\":{\"content_digest\":\"c56a37c805528a2a5e42a18458538c74a0b24d948abf90149f22c63d3931d798\",\"id\":\"GOAL-M1A\",\"object_type\":\"goal-spec\",\"version\":1},\"active_plan_ref\":{\"content_digest\":\"dac3b6b0a37dc915b2023f083b029a721216d3d415a9742b1480157048fae07d\",\"id\":\"PLAN-M1A\",\"object_type\":\"plan-revision\",\"version\":1},\"ambiguous_effect_refs\":[],\"budget_snapshot_digest\":\"a496a755ab94163fd1d6cb80ea5b061b9a6799856e91a918c91c2a5c24b510bf\",\"lease_epoch_digest\":\"ffb5796f53373b9243534a70afdac4840038cafcc2407bf3c1f25fc5e16cc816\",\"open_packet_refs\":[{\"content_digest\":\"f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28\",\"id\":\"PACKET-df98737626d5d4796337f7c5dcf28caf\",\"object_type\":\"work-packet\",\"version\":1}],\"pause_epoch\":0,\"route_snapshot_digest\":\"5cff473840e67b14c198d1e01721363a2746fa8aad10eba51599e1ec6dbfd07a\",\"state_digest\":\"e5bbd87e42700a01e50603e56a1ca1dc7820be4d890d86cfaa731d5a68645306\",\"state_version\":8},\"schema_version\":\"m1a-checkpoint-1\",\"version\":1},\"related_records\":[],\"sequence\":9,\"state_delta_digest\":\"37f4ad077607cba09366ef6eed1609abf358b02334c167fa8d5a334324264d08\",\"stream_id\":\"STREAM-M1A\"}",
+            "{\"command_digest\":\"039d7d5db6297bfb70da1bcdc82f89f2adeaf0ca164e66121509dcfabe00b8a6\",\"command_id\":\"CMD-F-M1A-013-replace-10\",\"content_digest\":\"1be9be37089cfed8ffd11364e6bbbcf2d4bf5151e2345157ad62f9f37073fa51\",\"event_id\":\"EV-F-M1A-013-replace-10-0001\",\"event_schema_version\":\"m1a-event-1\",\"event_type\":\"RouteAssignmentReplaced\",\"logical_time\":10,\"previous_event_digest\":\"6a0e3a861d8d410c48de0a2c7840d9eefe01fb0fce82bb64391b68c4f4e51e46\",\"primary_record\":{\"causation_id\":\"CMD-F-M1A-013-replace-10\",\"content_digest\":\"de157af0a40dccac6f6b7dd6faf07eb0f36a1f5298553c531db12d46642411a2\",\"correlation_id\":\"CORR-M1A\",\"created_by_actor_id\":\"KERNEL-M1A\",\"created_logical_time\":10,\"created_under_lease\":{\"content_digest\":\"e3468bf5e37fae88d1677e6dd9e501a37a3d4e8a69a22ea2c64915ef5177d069\",\"lease_epoch\":1,\"lease_id\":\"LEASE-EXEC-1\"},\"id\":\"ROUTE-ASSIGNMENT-2\",\"object_type\":\"route-assignment\",\"payload\":{\"account_class_id\":\"ACCOUNT-INCLUDED\",\"assigned_logical_time\":10,\"capacity_observation_ref\":{\"content_digest\":\"dcce878a147f5ef854fa28e4f41002f5dd48b39f463ce157584005f13fe5f220\",\"id\":\"CAPACITY-OBS-ZERO\",\"object_type\":\"capacity-observation\",\"version\":1},\"capacity_pool_id\":\"CAPACITY-INCLUDED\",\"egress_policy_ref\":{\"content_digest\":\"49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22\",\"policy_id\":\"POLICY-PRIVACY\",\"policy_version\":1},\"expires_logical_time\":900,\"logical_actor_id\":\"WORKER-LUNA\",\"metered_spend_allowed\":false,\"privacy_policy_ref\":{\"content_digest\":\"49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22\",\"policy_id\":\"POLICY-PRIVACY\",\"policy_version\":1},\"route_capability_ids\":[\"CAPABILITY-BASE\"],\"route_id\":\"ROUTE-ZERO\",\"route_policy_ref\":{\"content_digest\":\"90fb3a36b6529d0bb6e000e5fd3a1b7035bc7a41d626690c565976fcb716b898\",\"policy_id\":\"POLICY-ROUTE\",\"policy_version\":1},\"state\":\"assigned\",\"supersedes_route_ref\":{\"content_digest\":\"b8df39c577612b638962a682dfe487c8a11dc638b981e85b33f4b6279ce4d922\",\"id\":\"ROUTE-ASSIGNMENT-1\",\"object_type\":\"route-assignment\",\"version\":1}},\"schema_version\":\"m1a-route-assignment-1\",\"version\":1},\"related_records\":[],\"sequence\":10,\"state_delta_digest\":\"149bb1bfc23d96dbf2256cdccce18a9e05ddcc2e582f9ada28e9e564515c114f\",\"stream_id\":\"STREAM-M1A\"}",
+            "{\"command_digest\":\"039d7d5db6297bfb70da1bcdc82f89f2adeaf0ca164e66121509dcfabe00b8a6\",\"command_id\":\"CMD-F-M1A-013-replace-10\",\"content_digest\":\"8f1eacfcd5b1ad2a9bca40715242f8cc77c39112f532bdaff3eec37d2ccdb00a\",\"event_id\":\"EV-F-M1A-013-replace-10-0002\",\"event_schema_version\":\"m1a-event-1\",\"event_type\":\"WorkPacketDerived\",\"logical_time\":10,\"previous_event_digest\":\"1be9be37089cfed8ffd11364e6bbbcf2d4bf5151e2345157ad62f9f37073fa51\",\"primary_record\":{\"causation_id\":\"CMD-F-M1A-013-replace-10\",\"content_digest\":\"012025680e1635149e218a94781aa9b1d5a0b1a864aaeb352a7854f10a7f9c60\",\"correlation_id\":\"CORR-M1A\",\"created_by_actor_id\":\"KERNEL-M1A\",\"created_logical_time\":10,\"created_under_lease\":{\"content_digest\":\"e3468bf5e37fae88d1677e6dd9e501a37a3d4e8a69a22ea2c64915ef5177d069\",\"lease_epoch\":1,\"lease_id\":\"LEASE-EXEC-1\"},\"id\":\"PACKET-92c4a19f1e240e95d21cab6b11927645\",\"object_type\":\"work-packet\",\"payload\":{\"allowed_action_ids\":[\"ACTION-READ\",\"ACTION-WRITE\"],\"allowed_resource_paths\":[\"workspace/input\",\"workspace/output\"],\"attempt\":1,\"authority_ids\":[\"AUTHORITY-M1A\"],\"authority_policy_ref\":{\"content_digest\":\"8ed92af03ad14bc268d88a6634456990993efcbea8ab31badcb04794ff7688a0\",\"policy_id\":\"POLICY-AUTHORITY\",\"policy_version\":1},\"budget_limits\":{\"attempts\":2,\"cpu_ms\":10000,\"memory_bytes\":1048576,\"model_turns\":4,\"money_minor\":0,\"output_bytes\":65536,\"tokens\":1000},\"budget_reservation_ref\":{\"content_digest\":\"380873b9f677399d9b834607361b6fe891fdbedfdbfde8b0e7823420bd37d3c4\",\"id\":\"BUDGET-RESERVATION-1\",\"object_type\":\"budget-reservation\",\"version\":1},\"capability_ids\":[\"CAPABILITY-BASE\"],\"checkpoint_ref\":{\"content_digest\":\"bb48f222b1b39f54492c1fd5bfee823a6b8f22463c7509bed2ad2a954e14d2d0\",\"id\":\"CHECKPOINT-M1A-1\",\"object_type\":\"checkpoint\",\"version\":1},\"constitution_policy_ref\":{\"content_digest\":\"d970e45be5abd5cbfc5730de46167e427e418d9ec851b006d4d259822e9097bd\",\"policy_id\":\"POLICY-CONSTITUTION\",\"policy_version\":1},\"deadline_logical_time\":900,\"effect_keys\":[\"EFFECT-SYNTHETIC\"],\"egress_class_id\":\"EGRESS-NONE\",\"egress_policy_ref\":{\"content_digest\":\"49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22\",\"policy_id\":\"POLICY-PRIVACY\",\"policy_version\":1},\"expected_goal_fence_epoch\":1,\"expected_pause_epoch\":0,\"gate_requirements\":[{\"assigned_verifier_actor_id\":\"VERIFIER-TERRA\",\"candidate_binding_digest\":\"b2dc4b046083ab6a7da083a0bf936b691e7c8c43433a8aaf20f6457dfb326260\",\"evidence_schema_digest\":\"02c962f89a8e9957e15b4b61cb6aed8a1f2a865731ff3ac5e6ad8691715278f9\",\"gate_id\":\"GATE-M1A\",\"procedure_digest\":\"c99a5db86d097245e3e9faa1b21159d7093cc03cf2c78d9a943da3e12abdb95b\",\"verifier_policy_digest\":\"58405643d7eb3f9f1e8fbe413f914107a1a0ab187967ee02cd7931580910d763\"}],\"goal_ref\":{\"content_digest\":\"c56a37c805528a2a5e42a18458538c74a0b24d948abf90149f22c63d3931d798\",\"id\":\"GOAL-M1A\",\"object_type\":\"goal-spec\",\"version\":1},\"inherited_non_goals\":[\"no external effects\",\"no publication\"],\"logical_worker_actor_id\":\"WORKER-LUNA\",\"output_schema_digest\":\"fbd88ffb1b3cae20a2a3d084d65019eea332521fcab888b63b9db0b46cd0da80\",\"plan_ref\":{\"content_digest\":\"dac3b6b0a37dc915b2023f083b029a721216d3d415a9742b1480157048fae07d\",\"id\":\"PLAN-M1A\",\"object_type\":\"plan-revision\",\"version\":1},\"privacy_class_id\":\"PRIVACY-SYNTHETIC\",\"privacy_policy_ref\":{\"content_digest\":\"49b764f8e8bad681fcb62a8662f156f67808d236021e3e853777aa9bf05d7d22\",\"policy_id\":\"POLICY-PRIVACY\",\"policy_version\":1},\"prohibition_ids\":[\"PROHIBIT-EGRESS\"],\"route_assignment_ref\":{\"content_digest\":\"de157af0a40dccac6f6b7dd6faf07eb0f36a1f5298553c531db12d46642411a2\",\"id\":\"ROUTE-ASSIGNMENT-2\",\"object_type\":\"route-assignment\",\"version\":1},\"source_digests\":[\"bbe23121ca7ba39e8e00578fff2a60d30661ba124843298851f51d48276d7add\"],\"supersedes_packet_ref\":{\"content_digest\":\"f32ff34f75040b85990f6f1e4216b7f7dfbfbf163012e235aa9b91104ab45b28\",\"id\":\"PACKET-df98737626d5d4796337f7c5dcf28caf\",\"object_type\":\"work-packet\",\"version\":1},\"task_ref\":{\"content_digest\":\"1fbbb576c98dbe23ccdd7474db4ce91ef07f78fe8ed20efb7fec4062c2e212d4\",\"id\":\"TASK-M1A-A\",\"object_type\":\"task-node\",\"version\":1},\"verifier_policy_ref\":{\"content_digest\":\"39dadbbf16db3090597520fc820ab04b810e8da9b7280ee7053be36ad67506fd\",\"policy_id\":\"POLICY-VERIFIER\",\"policy_version\":1},\"work_lease_ref\":{\"content_digest\":\"5bc97c41d359b95c2664b95431718f96634ef64159598d67586321843036c719\",\"lease_epoch\":1,\"lease_id\":\"LEASE-WORK-1\"}},\"schema_version\":\"m1a-work-packet-1\",\"version\":1},\"related_records\":[],\"sequence\":11,\"state_delta_digest\":\"a90550012bd433a0cefa9e8635c48163cd715fcb7a78b8ad617b71003f02f9fc\",\"stream_id\":\"STREAM-M1A\"}"
           ],
           "expected_disposition": "accepted",
-          "expected_projection_digest": "a3575e537e8b4781aadc442ed34cc284894ba494a9240f8a0a5a98c64464f70a",
+          "expected_projection_digest": "2a95a1b146776d1f9ab70aa377068ff9e272d4b017a5bff2749f843873e47855",
           "primary_error": null,
           "receipts": [
             {
-              "command_digest": "8a1fba90c575c9e217f9577648410ab5b0cdbdce7ee93da6c9ec73f971beedc4",
-              "command_id": "CMD-F-M1A-013-replace-08",
-              "content_digest": "ce1445d8c40126be6788067796f57c837c25750a1603d2a4d170584e5634f8c5",
-              "disposition": "accepted",
-              "event_ids": [
-                "EV-F-M1A-013-replace-08-0001"
-              ],
-              "first_event_sequence": 8,
-              "last_event_sequence": 8,
-              "primary_error": null,
-              "receipt_id": "RCPT-F-M1A-013-replace-08",
-              "receipt_schema_version": "m1a-receipt-1",
-              "related_errors": [],
-              "state_after_digest": "138c2908809c4f3a1543032a562912685d3054bd37a57542bdf9f4ff78f7d1e4",
-              "state_before_digest": "18b27b118f1d5e1d6300ca1647451ab6bb51876e4e5ccf64bc3f9c4f6f44cbc5",
-              "witness": null
-            },
-            {
-              "command_digest": "9826f29e245baae833f4b0d28f8ad9b9e9bcbbc9dc5317443eb6fc0af144316e",
+              "command_digest": "ddae91dcd72aea170fe0467cc701e3c4b9ec1416fe711aa0634f38a8de26f51f",
               "command_id": "CMD-F-M1A-013-replace-09",
-              "content_digest": "d5d19972381d3b363cfce6023ab1c29f496c72005aa70428d95bd60e9c916420",
+              "content_digest": "d2dc4cf582f5d7d36bc37dd9ecb88625670320886e213d87b80b1cbd46fc3ff9",
               "disposition": "accepted",
               "event_ids": [
-                "EV-F-M1A-013-replace-09-0001",
-                "EV-F-M1A-013-replace-09-0002"
+                "EV-F-M1A-013-replace-09-0001"
               ],
               "first_event_sequence": 9,
-              "last_event_sequence": 10,
+              "last_event_sequence": 9,
               "primary_error": null,
               "receipt_id": "RCPT-F-M1A-013-replace-09",
               "receipt_schema_version": "m1a-receipt-1",
               "related_errors": [],
-              "state_after_digest": "a3575e537e8b4781aadc442ed34cc284894ba494a9240f8a0a5a98c64464f70a",
-              "state_before_digest": "138c2908809c4f3a1543032a562912685d3054bd37a57542bdf9f4ff78f7d1e4",
+              "state_after_digest": "69dbcade8be79a35e5cadbb235fec77635e999c1bf07f16c0466c21e753ed63a",
+              "state_before_digest": "e5bbd87e42700a01e50603e56a1ca1dc7820be4d890d86cfaa731d5a68645306",
+              "witness": null
+            },
+            {
+              "command_digest": "039d7d5db6297bfb70da1bcdc82f89f2adeaf0ca164e66121509dcfabe00b8a6",
+              "command_id": "CMD-F-M1A-013-replace-10",
+              "content_digest": "ca4bdc1c178e6f13e714f53f58b3e470f0c78909afa5f32641f53a7b7aa68cde",
+              "disposition": "accepted",
+              "event_ids": [
+                "EV-F-M1A-013-replace-10-0001",
+                "EV-F-M1A-013-replace-10-0002"
+              ],
+              "first_event_sequence": 10,
+              "last_event_sequence": 11,
+              "primary_error": null,
+              "receipt_id": "RCPT-F-M1A-013-replace-10",
+              "receipt_schema_version": "m1a-receipt-1",
+              "related_errors": [],
+              "state_after_digest": "2a95a1b146776d1f9ab70aa377068ff9e272d4b017a5bff2749f843873e47855",
+              "state_before_digest": "69dbcade8be79a35e5cadbb235fec77635e999c1bf07f16c0466c21e753ed63a",
               "witness": null
             }
           ],

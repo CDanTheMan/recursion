@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 FIXTURE_DIR = Path(__file__).with_name("fixtures")
-SCHEMA_CANDIDATE = "ab9707480baf6ef7baff03b6bda444b890d78557"
+SCHEMA_CANDIDATE = "eebd2de93288183fa5f949e16f9aaf24274c6002"
 GENESIS_DIGEST = "fb1168e6e4d1267c41ea3d7798ebb88963e6de7c05cc1500ed059ba4b2f75801"
 ZERO_BUDGET = {
     "model_turns": 0,
@@ -138,6 +138,25 @@ def policy_ref(policy: dict) -> dict:
         "policy_id": policy["policy_id"],
         "policy_version": policy["policy_version"],
         "content_digest": policy["content_digest"],
+    }
+
+
+def packet_binding_operand(packet: dict) -> dict:
+    payload = packet["payload"]
+    return {
+        field: copy.deepcopy(payload[field])
+        for field in (
+            "goal_ref",
+            "plan_ref",
+            "task_ref",
+            "authority_policy_ref",
+            "privacy_policy_ref",
+            "egress_policy_ref",
+            "route_assignment_ref",
+            "budget_reservation_ref",
+            "verifier_policy_ref",
+            "constitution_policy_ref",
+        )
     }
 
 
@@ -502,45 +521,107 @@ class Session:
             if payload["prior_plan_ref"]:
                 self._set_ref_state(payload["prior_plan_ref"], "superseded")
             self.state["active_plan_ref"] = object_ref(primary)
+            self.state["terminal_status"] = "nonterminal"
         elif event_type == "WorkerResultRecorded":
             packet_ref = payload["work_packet_ref"]
             self._set_ref_state(packet_ref, "result-submitted")
             for packet in self.state["records"]:
                 if packet["object_type"] == "work-packet" and packet["id"] == packet_ref["id"]:
-                    self._set_ref_state(packet["payload"]["task_ref"], "result-submitted")
+                    self._set_ref_state(packet["payload"]["task_ref"], "gate-pending")
         elif event_type == "GateResultRecorded":
             state = "verified" if payload["disposition"] == "pass" else "failed"
             self._set_ref_state(payload["task_ref"], state)
+            self._set_ref_state(
+                payload["work_packet_ref"],
+                "gate-passed" if payload["disposition"] == "pass" else "failed",
+            )
         elif event_type == "RetryAdmitted":
             self.state["consumed_novelty_delta_digests"].append(payload["novelty_delta_digest"])
             self._set_ref_state(payload["task_ref"], "ready")
         elif event_type == "BlockerRaised":
             self.state["open_blocker_refs"].append(object_ref(primary))
+            self._set_ref_state(payload["blocked_object_ref"], "blocked")
         elif event_type == "EscalationRaised":
             self.state["open_escalation_refs"].append(object_ref(primary))
+            self._set_ref_state(payload["source_blocker_ref"], "escalated")
         elif event_type == "PauseApplied":
             self.state["current_pause_epoch"] = payload["new_pause_epoch"]
         elif event_type == "EffectObservationRecorded" and payload["observation"] == "ambiguous":
             self.state["ambiguous_effect_refs"].append(object_ref(primary))
+            self._set_ref_state(payload["work_packet_ref"], "quarantined")
+            for packet in self.state["records"]:
+                if (
+                    packet["object_type"] == "work-packet"
+                    and packet["id"] == payload["work_packet_ref"]["id"]
+                ):
+                    self._set_ref_state(packet["payload"]["task_ref"], "quarantined")
+                    break
         elif event_type == "PlanVerifierDecisionRecorded":
-            if payload["disposition"] == "pass":
+            active = self.state["active_plan_ref"]
+            exact_active = active is not None and active == payload["plan_ref"]
+            plan_tasks = [
+                record
+                for record in self.state["records"]
+                if record["object_type"] == "task-node"
+                and record["payload"]["plan_ref"]["id"] == payload["plan_ref"]["id"]
+                and record["payload"]["plan_ref"]["version"] == payload["plan_ref"]["version"]
+            ]
+            verified_refs = {
+                (
+                    item["object_ref"]["object_type"],
+                    item["object_ref"]["id"],
+                    item["object_ref"]["version"],
+                )
+                for item in self.state["object_states"]
+                if item["state"] == "verified"
+            }
+            all_verified = bool(plan_tasks) and all(
+                ("task-node", task["id"], task["version"]) in verified_refs
+                for task in plan_tasks
+            )
+            if payload["disposition"] == "pass" and exact_active and all_verified:
                 self.state["terminal_status"] = "terminal-verified"
                 self._set_ref_state(payload["plan_ref"], "terminal-verified")
-                for record in self.state["records"]:
-                    if (
-                        record["object_type"] == "task-node"
-                        and record["payload"]["plan_ref"]["id"] == payload["plan_ref"]["id"]
-                    ):
-                        self._set_object_state(record, "complete")
-            elif payload["disposition"] == "downgraded-pass":
+                for task in plan_tasks:
+                    self._set_object_state(task, "complete")
+                    for packet in self.state["records"]:
+                        if (
+                            packet["object_type"] == "work-packet"
+                            and packet["payload"]["task_ref"] == object_ref(task)
+                        ):
+                            self._set_object_state(packet, "consumed")
+            elif (
+                payload["disposition"] == "downgraded-pass"
+                and exact_active
+                and all_verified
+            ):
                 self.state["terminal_status"] = "terminal-verified-downgraded"
                 self._set_ref_state(payload["plan_ref"], "terminal-verified-downgraded")
-                for record in self.state["records"]:
-                    if (
-                        record["object_type"] == "task-node"
-                        and record["payload"]["plan_ref"]["id"] == payload["plan_ref"]["id"]
-                    ):
-                        self._set_object_state(record, "complete")
+                for task in plan_tasks:
+                    self._set_object_state(task, "complete")
+                    for packet in self.state["records"]:
+                        if (
+                            packet["object_type"] == "work-packet"
+                            and packet["payload"]["task_ref"] == object_ref(task)
+                        ):
+                            self._set_object_state(packet, "consumed")
+        elif event_type in (
+            "PlanItemDisposed",
+            "PacketFenced",
+            "LeaseFenced",
+            "EffectDisposed",
+            "EvidenceDisposed",
+        ):
+            target_state = {
+                "fence": "stale",
+                "invalidate": "stale",
+                "quarantine": "quarantined",
+                "supersede": "superseded",
+                "cancel": "canceled",
+                "retain-definition": "admitted",
+            }.get(payload["disposition"])
+            if target_state is not None:
+                self._set_ref_state(payload["object_ref"], target_state)
 
         self.state["state_version"] += 1
         self.state["last_event_sequence"] = event["sequence"]
@@ -723,14 +804,14 @@ class Session:
         }
 
 
-def gate_requirement() -> dict:
+def gate_requirement(assigned_verifier_actor_id: str = ROLE_ACTORS["verifier"]) -> dict:
     return {
         "gate_id": "GATE-M1A",
         "procedure_digest": h("gate-procedure"),
         "evidence_schema_digest": h("gate-evidence-schema"),
         "candidate_binding_digest": h("candidate-binding"),
         "verifier_policy_digest": h("verifier-policy"),
-        "assigned_verifier_actor_id": ROLE_ACTORS["verifier"],
+        "assigned_verifier_actor_id": assigned_verifier_actor_id,
     }
 
 
@@ -741,6 +822,8 @@ def add_standard_setup(
     gate_disposition: str = "pass",
     verifier_disposition: str = "pass",
     two_nodes: bool = False,
+    assigned_gate_verifier_actor_id: str = ROLE_ACTORS["verifier"],
+    assigned_plan_verifier_actor_id: str = ROLE_ACTORS["verifier"],
 ) -> dict[str, dict]:
     world: dict[str, dict] = {}
     stages = ["intent", "goal", "arm", "plan", "capacity", "budget", "packet", "worker", "gate", "verifier"]
@@ -900,8 +983,10 @@ def add_standard_setup(
                     "input_digests": [h("task-input")],
                     "source_digests": [h("source-one")],
                     "read_resource_paths": ["workspace/input"],
-                    "write_resource_paths": ["workspace/output"],
-                    "effect_keys": ["EFFECT-SYNTHETIC"],
+                    "write_resource_paths": (
+                        ["workspace/output/a"] if two_nodes else ["workspace/output"]
+                    ),
+                    "effect_keys": [] if two_nodes else ["EFFECT-SYNTHETIC"],
                     "authority_ids": ["AUTHORITY-M1A"],
                     "capability_ids": ["CAPABILITY-BASE"],
                     "allowed_action_ids": ["ACTION-READ", "ACTION-WRITE"],
@@ -916,7 +1001,7 @@ def add_standard_setup(
                     "privacy_policy_ref": session.policy_ref("privacy-egress"),
                     "egress_policy_ref": session.policy_ref("privacy-egress"),
                     "budget_limits": LIMIT_BUDGET,
-                    "gate_requirements": [gate_requirement()],
+                    "gate_requirements": [gate_requirement(assigned_gate_verifier_actor_id)],
                     "retry_policy_ref": session.policy_ref("retry"),
                     "verifier_policy_ref": session.policy_ref("verifier"),
                     "constitution_policy_ref": session.policy_ref("constitution"),
@@ -937,8 +1022,8 @@ def add_standard_setup(
                     "object_type": "plan-revision", "id": "PLAN-M1A", "version": 1
                 }
                 second_payload["semantic_definition_digest"] = h("task-semantics-b")
-                second_payload["dependency_node_ids"] = ["TASK-M1A-A"]
-                second_payload["effect_keys"] = []
+                second_payload["dependency_node_ids"] = []
+                second_payload["effect_keys"] = ["EFFECT-SYNTHETIC"]
                 second_payload["write_resource_paths"] = ["workspace/output/b"]
                 second = domain_record(
                     "task-node",
@@ -951,7 +1036,6 @@ def add_standard_setup(
                     under_lease=lease_ref(world["executive_lease"]),
                 )
                 tasks.append(second)
-                edges.append({"from_node_id": "TASK-M1A-A", "to_node_id": "TASK-M1A-B"})
                 world["task_b"] = second
             task_refs = sorted([object_ref(item) for item in tasks], key=lambda item: item["id"])
             plan = domain_record(
@@ -969,12 +1053,16 @@ def add_standard_setup(
                     "acceptance_gate_ids": ["GATE-M1A"],
                     "budget_limits": LIMIT_BUDGET,
                     "read_resource_paths": ["workspace/input"],
-                    "write_resource_paths": ["workspace/output"],
-                    "effect_keys": ["EFFECT-SYNTHETIC"],
+                    "write_resource_paths": (
+                        ["workspace/output/a", "workspace/output/b"]
+                        if two_nodes
+                        else ["workspace/output"]
+                    ),
+                    "effect_keys": [] if two_nodes else ["EFFECT-SYNTHETIC"],
                     "source_digests": [h("source-one")],
                     "verifier_policy_ref": session.policy_ref("verifier"),
                     "constitution_policy_ref": session.policy_ref("constitution"),
-                    "assigned_plan_verifier_actor_id": ROLE_ACTORS["verifier"],
+                    "assigned_plan_verifier_actor_id": assigned_plan_verifier_actor_id,
                     "change_rationale_digest": h("initial-plan"),
                     "dispositions": [],
                 },
@@ -1156,18 +1244,24 @@ def add_standard_setup(
                     "expected_pause_epoch": 0,
                     "authority_ids": ["AUTHORITY-M1A"],
                     "capability_ids": ["CAPABILITY-BASE"],
-                    "allowed_resource_paths": ["workspace/input", "workspace/output"],
+                    "allowed_resource_paths": (
+                        ["workspace/input", "workspace/output/a"]
+                        if two_nodes
+                        else ["workspace/input", "workspace/output"]
+                    ),
                     "effect_keys": ["EFFECT-SYNTHETIC"],
                     "privacy_class_id": "PRIVACY-SYNTHETIC",
                     "egress_class_id": "EGRESS-NONE",
                     "authority_policy_ref": session.policy_ref("authority"),
                     "privacy_policy_ref": session.policy_ref("privacy-egress"),
                     "egress_policy_ref": session.policy_ref("privacy-egress"),
+                    "verifier_policy_ref": session.policy_ref("verifier"),
+                    "constitution_policy_ref": session.policy_ref("constitution"),
                     "route_assignment_ref": object_ref(route),
                     "budget_reservation_ref": object_ref(world["budget"]),
                     "budget_limits": LIMIT_BUDGET,
                     "source_digests": [h("source-one")],
-                    "gate_requirements": [gate_requirement()],
+                    "gate_requirements": [gate_requirement(assigned_gate_verifier_actor_id)],
                     "allowed_action_ids": ["ACTION-READ", "ACTION-WRITE"],
                     "prohibition_ids": ["PROHIBIT-EGRESS"],
                     "inherited_non_goals": ["no external effects", "no publication"],
@@ -1248,7 +1342,7 @@ def add_standard_setup(
                     "candidate_digest": h("candidate-one"),
                     "source_digests": [h("source-one")],
                     "evidence_digests": [h("evidence-one")],
-                    "gate_requirement": gate_requirement(),
+                    "gate_requirement": gate_requirement(assigned_gate_verifier_actor_id),
                     "procedure_version": 1,
                     "observation_digest": h("gate-observation"),
                     "expected_digest": h("expected-output"),
@@ -1346,7 +1440,7 @@ def novelty_delta() -> dict:
     }
     diff_entries = [
         {
-            "path_segments": ["0"],
+            "path_segments": [],
             "old_value": {"state": "absent", "digest": None},
             "new_value": {"state": "present", "digest": digest(evidence)},
         }
@@ -1429,6 +1523,22 @@ def candidate_plan_payload(
         task_payload["budget_limits"] = {**LIMIT_BUDGET, "tokens": LIMIT_BUDGET["tokens"] + 1}
     elif mutation == "missing-dependency":
         task_payload["dependency_node_ids"] = ["TASK-MISSING"]
+    elif mutation == "write-conflict":
+        task_payload["read_resource_paths"] = []
+        task_payload["write_resource_paths"] = ["workspace/output"]
+        task_payload["effect_keys"] = []
+    elif mutation == "read-write":
+        task_payload["read_resource_paths"] = ["workspace/output/child"]
+        task_payload["write_resource_paths"] = []
+        task_payload["effect_keys"] = []
+    elif mutation == "same-effect":
+        task_payload["write_resource_paths"] = ["workspace/output/a"]
+    elif mutation == "ordered-disjoint":
+        task_payload["write_resource_paths"] = ["workspace/output/a"]
+        task_payload["effect_keys"] = []
+    elif mutation == "read-read":
+        task_payload["write_resource_paths"] = ["workspace/output/a"]
+        task_payload["effect_keys"] = []
     task = domain_record(
         "task-node",
         "m1a-task-node-1",
@@ -1475,9 +1585,26 @@ def candidate_plan_payload(
             {"from_node_id": "TASK-CANDIDATE-A", "to_node_id": "TASK-CANDIDATE-B"},
             {"from_node_id": "TASK-CANDIDATE-B", "to_node_id": "TASK-CANDIDATE-A"},
         ]
-    elif mutation == "write-conflict":
+    elif mutation in (
+        "write-conflict", "read-write", "same-effect", "ordered-disjoint", "read-read"
+    ):
         second_payload = copy.deepcopy(task_payload)
-        second_payload["semantic_definition_digest"] = h("conflicting-task")
+        second_payload["semantic_definition_digest"] = h(f"candidate-task-b-{mutation}")
+        if mutation == "write-conflict":
+            second_payload["write_resource_paths"] = ["workspace/output/child"]
+        elif mutation == "read-write":
+            second_payload["read_resource_paths"] = []
+            second_payload["write_resource_paths"] = ["workspace/output"]
+        elif mutation == "same-effect":
+            second_payload["write_resource_paths"] = ["workspace/output/b"]
+        elif mutation == "ordered-disjoint":
+            second_payload["dependency_node_ids"] = ["TASK-CANDIDATE-A"]
+            second_payload["write_resource_paths"] = ["workspace/output/b"]
+            edges = [
+                {"from_node_id": "TASK-CANDIDATE-A", "to_node_id": "TASK-CANDIDATE-B"}
+            ]
+        elif mutation == "read-read":
+            second_payload["write_resource_paths"] = ["workspace/output/b"]
         second = domain_record(
             "task-node",
             "m1a-task-node-1",
@@ -1492,6 +1619,9 @@ def candidate_plan_payload(
         tasks = [task, second]
     task_refs = sorted([object_ref(item) for item in tasks], key=lambda item: item["id"])
     edges = sorted(edges, key=lambda item: (item["from_node_id"], item["to_node_id"]))
+    read_paths = sorted({path for item in tasks for path in item["payload"]["read_resource_paths"]})
+    write_paths = sorted({path for item in tasks for path in item["payload"]["write_resource_paths"]})
+    effect_keys = sorted({key for item in tasks for key in item["payload"]["effect_keys"]})
     plan = domain_record(
         "plan-revision",
         "m1a-plan-revision-1",
@@ -1504,7 +1634,9 @@ def candidate_plan_payload(
             "dependency_edges": edges,
             "graph_digest": digest({"task_node_refs": task_refs, "dependency_edges": edges}),
             "budget_limits": task_payload["budget_limits"],
-            "write_resource_paths": task_payload["write_resource_paths"],
+            "read_resource_paths": read_paths,
+            "write_resource_paths": write_paths,
+            "effect_keys": effect_keys,
             "change_rationale_digest": h(f"candidate-{mutation}"),
         },
         command_id,
@@ -1543,6 +1675,8 @@ def setup_case(
     *,
     gate_disposition: str = "pass",
     two_nodes: bool = False,
+    assigned_gate_verifier_actor_id: str = ROLE_ACTORS["verifier"],
+    assigned_plan_verifier_actor_id: str = ROLE_ACTORS["verifier"],
 ) -> tuple[Session, dict]:
     session = Session(fixture_id, case_id, description)
     world = add_standard_setup(
@@ -1550,6 +1684,8 @@ def setup_case(
         through,
         gate_disposition=gate_disposition,
         two_nodes=two_nodes,
+        assigned_gate_verifier_actor_id=assigned_gate_verifier_actor_id,
+        assigned_plan_verifier_actor_id=assigned_plan_verifier_actor_id,
     )
     session.promote_current_to_initial()
     return session, world
@@ -1726,7 +1862,7 @@ def retry_payload_and_packet(session: Session, world: dict, command_id: str, *, 
             "prior_work_packet_ref": object_ref(world["packet"]),
             "novelty_delta": delta,
             "novelty_delta_digest": delta["delta_digest"],
-            "unchanged_binding_digest": h("unchanged-binding"),
+            "unchanged_binding_digest": digest(packet_binding_operand(world["packet"])),
             "next_attempt": next_attempt,
             "remaining_budget": remaining,
             "retry_maximum": 2,
@@ -1808,6 +1944,9 @@ def build_fixture_002() -> list[dict]:
         session.add_decode_failure(raw, "E-SCHEMA-MISSING-FIELD")
     session.add_decode_failure('{"duplicate":1,"duplicate":2}', "E-SCHEMA-DUPLICATE")
     session.add_decode_failure("[" * 18 + "0" + "]" * 18, "E-SCHEMA-BOUND")
+    session.add_decode_failure('{"malformed":}', "E-SCHEMA-INVALID")
+    session.add_decode_failure("-0", "E-SCHEMA-INVALID")
+    session.add_decode_failure("42", "E-SCHEMA-INVALID")
 
     def payload(command_id):
         return domain_record(
@@ -1886,16 +2025,211 @@ def build_fixture_004() -> list[dict]:
 
 
 def build_fixture_005() -> list[dict]:
-    session, world = setup_case(
-        "F-M1A-005", "amend", "Atomic amendment retains one node and invalidates another.",
-        "verifier", two_nodes=True,
+    session = Session(
+        "F-M1A-005",
+        "amend",
+        "Atomic amendment retains one verified node and invalidates another.",
     )
+    world = add_standard_setup(session, "gate", two_nodes=True)
+    box_b = {}
+
+    def budget_b(command_id):
+        record = domain_record(
+            "budget-reservation",
+            "m1a-budget-reservation-1",
+            "BUDGET-RESERVATION-B",
+            {
+                "goal_ref": object_ref(world["goal"]),
+                "plan_ref": object_ref(world["plan"]),
+                "task_ref": object_ref(world["task_b"]),
+                "limits": LIMIT_BUDGET,
+                "consumed": ZERO_BUDGET,
+                "remaining": LIMIT_BUDGET,
+                "state": "reserved",
+            },
+            command_id,
+            ROLE_ACTORS["arm"],
+            session.state["last_event_sequence"] + 1,
+            under_lease=lease_ref(world["executive_lease"]),
+        )
+        box_b["budget"] = record
+        return record
+
+    session.accept(
+        "reserve-budget",
+        "arm",
+        budget_b,
+        lambda cid, payload: [("BudgetReserved", payload, [])],
+        lease=lease_ref(world["executive_lease"]),
+        goal=object_ref(world["goal"]),
+        plan=object_ref(world["plan"]),
+    )
+
+    def packet_b(command_id):
+        logical_time = session.state["last_event_sequence"] + 1
+        work_lease = domain_record(
+            "work-lease",
+            "m1a-work-lease-1",
+            "LEASE-WORK-B",
+            {
+                "subject_actor_id": ROLE_ACTORS["worker"],
+                "goal_ref": object_ref(world["goal"]),
+                "plan_ref": object_ref(world["plan"]),
+                "task_ref": object_ref(world["task_b"]),
+                "supersedes_lease_ref": None,
+                "lease_epoch": 1,
+                "nonce_digest": h("work-lease-b"),
+                "issued_logical_time": logical_time,
+                "expires_logical_time": 900,
+                "allowed_command_types": ["submit-worker-result"],
+                "state": "active",
+            },
+            command_id,
+            "KERNEL-M1A",
+            logical_time,
+            under_lease=lease_ref(world["executive_lease"]),
+        )
+        route = domain_record(
+            "route-assignment",
+            "m1a-route-assignment-1",
+            "ROUTE-ASSIGNMENT-B",
+            {
+                "logical_actor_id": ROLE_ACTORS["worker"],
+                "route_id": "ROUTE-INCLUDED",
+                "route_capability_ids": ["CAPABILITY-BASE"],
+                "account_class_id": "ACCOUNT-INCLUDED",
+                "capacity_pool_id": "CAPACITY-INCLUDED",
+                "privacy_policy_ref": session.policy_ref("privacy-egress"),
+                "egress_policy_ref": session.policy_ref("privacy-egress"),
+                "route_policy_ref": session.policy_ref("route-envelope"),
+                "metered_spend_allowed": False,
+                "capacity_observation_ref": object_ref(world["capacity"]),
+                "supersedes_route_ref": None,
+                "assigned_logical_time": logical_time,
+                "expires_logical_time": 900,
+                "state": "assigned",
+            },
+            command_id,
+            "KERNEL-M1A",
+            logical_time,
+            under_lease=lease_ref(world["executive_lease"]),
+        )
+        seed = {
+            "command_id": command_id,
+            "task_ref": object_ref(world["task_b"]),
+            "attempt": 1,
+            "work_lease_ref": lease_ref(work_lease),
+            "route_assignment_ref": object_ref(route),
+            "budget_reservation_ref": object_ref(box_b["budget"]),
+            "checkpoint_ref": None,
+        }
+        packet = domain_record(
+            "work-packet",
+            "m1a-work-packet-1",
+            "PACKET-" + digest(seed)[:32],
+            {
+                **copy.deepcopy(world["packet"]["payload"]),
+                "task_ref": object_ref(world["task_b"]),
+                "supersedes_packet_ref": None,
+                "work_lease_ref": lease_ref(work_lease),
+                "allowed_resource_paths": ["workspace/input", "workspace/output/b"],
+                "effect_keys": ["EFFECT-SYNTHETIC"],
+                "route_assignment_ref": object_ref(route),
+                "budget_reservation_ref": object_ref(box_b["budget"]),
+            },
+            command_id,
+            "KERNEL-M1A",
+            logical_time,
+            under_lease=lease_ref(world["executive_lease"]),
+        )
+        box_b.update({"work_lease": work_lease, "route": route, "packet": packet})
+        return {
+            "task_ref": object_ref(world["task_b"]),
+            "attempt": 1,
+            "work_lease": work_lease,
+            "route_assignment": route,
+            "budget_reservation_ref": object_ref(box_b["budget"]),
+            "expected_work_packet_digest": packet["content_digest"],
+        }
+
+    session.accept(
+        "derive-work-packet",
+        "arm",
+        packet_b,
+        lambda cid, payload: [
+            ("WorkPacketDerived", box_b["packet"], [payload["route_assignment"], payload["work_lease"]])
+        ],
+        lease=lease_ref(world["executive_lease"]),
+        goal=object_ref(world["goal"]),
+        plan=object_ref(world["plan"]),
+    )
+
+    def worker_b(command_id):
+        record = domain_record(
+            "worker-result",
+            "m1a-worker-result-1",
+            "RESULT-M1A-B",
+            {
+                "work_packet_ref": object_ref(box_b["packet"]),
+                "candidate_digest": h("candidate-b"),
+                "evidence_digests": [h("evidence-b")],
+                "output_digest": h("output-b"),
+                "observed_effect_ref": None,
+                "disposition": "submitted",
+            },
+            command_id,
+            ROLE_ACTORS["worker"],
+            session.state["last_event_sequence"] + 1,
+            under_lease=lease_ref(box_b["work_lease"]),
+        )
+        box_b["worker_result"] = record
+        return record
+
+    session.accept(
+        "submit-worker-result",
+        "worker",
+        worker_b,
+        lambda cid, payload: [("WorkerResultRecorded", payload, [])],
+        lease=lease_ref(box_b["work_lease"]),
+        goal=object_ref(world["goal"]),
+        plan=object_ref(world["plan"]),
+    )
+
+    def gate_b(command_id):
+        record = domain_record(
+            "gate-result",
+            "m1a-gate-result-1",
+            "GATE-RESULT-M1A-B",
+            {
+                **copy.deepcopy(world["gate_result"]["payload"]),
+                "task_ref": object_ref(world["task_b"]),
+                "work_packet_ref": object_ref(box_b["packet"]),
+                "candidate_digest": h("candidate-b"),
+                "evidence_digests": [h("evidence-b")],
+                "observation_digest": h("gate-observation-b"),
+            },
+            command_id,
+            ROLE_ACTORS["verifier"],
+            session.state["last_event_sequence"] + 1,
+        )
+        box_b["gate_result"] = record
+        return record
+
+    session.accept(
+        "submit-gate-result",
+        "verifier",
+        gate_b,
+        lambda cid, payload: [("GateResultRecorded", payload, [])],
+        goal=object_ref(world["goal"]),
+        plan=object_ref(world["plan"]),
+    )
+
     def prior_effect(command_id):
         record = domain_record(
             "effect-observation", "m1a-effect-observation-1", "EFFECT-OBS-AMENDMENT",
             {
                 "effect_id": "EFFECT-ID-AMENDMENT", "effect_key": "EFFECT-SYNTHETIC",
-                "work_packet_ref": object_ref(world["packet"]),
+                "work_packet_ref": object_ref(box_b["packet"]),
                 "idempotency_key_digest": h("amendment-effect-idempotency"),
                 "dispatch_state": "dispatched", "receipt_digest": h("effect-failure-receipt"),
                 "provider_operation_id_digest": h("effect-operation"),
@@ -1911,6 +2245,37 @@ def build_fixture_005() -> list[dict]:
         "record-effect-observation", "kernel-fixture-gate", prior_effect,
         lambda cid, payload: [("EffectObservationRecorded", payload, [])],
         goal=object_ref(world["goal"]), plan=object_ref(world["plan"]),
+    )
+
+    session.accept(
+        "submit-plan-verifier-decision",
+        "verifier",
+        lambda cid: plan_verifier_record(
+            session,
+            world,
+            cid,
+            "pass",
+            None,
+            gate_digests=sorted(
+                [
+                    world["gate_result"]["content_digest"],
+                    box_b["gate_result"]["content_digest"],
+                ]
+            ),
+        ),
+        lambda cid, payload: [("PlanVerifierDecisionRecorded", payload, [])],
+        goal=object_ref(world["goal"]),
+        plan=object_ref(world["plan"]),
+    )
+    world["verifier"] = session.events[-1]["primary_record"]
+    world.update(
+        {
+            "budget_b": box_b["budget"],
+            "work_lease_b": box_b["work_lease"],
+            "route_b": box_b["route"],
+            "packet_b": box_b["packet"],
+            "gate_result_b": box_b["gate_result"],
+        }
     )
     session.promote_current_to_initial()
     box = {}
@@ -1941,13 +2306,15 @@ def build_fixture_005() -> list[dict]:
         dispositions = [
             {
                 "object_ref": object_ref(world["effect"]),
-                "disposition": "cancel",
+                "disposition": "quarantine",
                 "replacement_ref": None,
                 "reason_digest": h("dispose-effect"),
             },
             {
                 "object_ref": {
-                    "object_type": "evidence", "id": "EVIDENCE-ONE", "version": 1,
+                    "object_type": "evidence",
+                    "id": "EVIDENCE-ONE",
+                    "version": 1,
                     "content_digest": h("evidence-one"),
                 },
                 "disposition": "invalidate",
@@ -1990,12 +2357,24 @@ def build_fixture_005() -> list[dict]:
                 "replacement_ref": None,
                 "reason_digest": h("fence-work-packet"),
             },
+            {
+                "object_ref": object_ref(world["work_lease_b"]),
+                "disposition": "fence",
+                "replacement_ref": None,
+                "reason_digest": h("fence-work-lease-b"),
+            },
+            {
+                "object_ref": object_ref(world["packet_b"]),
+                "disposition": "fence",
+                "replacement_ref": None,
+                "reason_digest": h("fence-work-packet-b"),
+            },
         ]
         dispositions.sort(key=lambda item: (
             item["object_ref"]["object_type"], item["object_ref"]["id"], item["object_ref"]["version"]
         ))
         task_refs = sorted([object_ref(item) for item in tasks], key=lambda item: item["id"])
-        edges = [{"from_node_id": "TASK-M1A-A", "to_node_id": "TASK-M1A-B"}]
+        edges = []
         plan_payload = copy.deepcopy(world["plan"]["payload"])
         plan_payload.update({
             "goal_ref": object_ref(new_goal),
@@ -2065,7 +2444,7 @@ def build_fixture_005() -> list[dict]:
             {
                 "old_goal_ref": object_ref(world["goal"]),
                 "new_goal_ref": object_ref(new_goal),
-                "changed_field_paths": ["outcome"],
+                "changed_field_paths": ["fence_epoch", "outcome"],
                 "rationale_digest": h("owner-amendment"),
                 "owner_authority_attestation_id": "AUTH-" + command_id[4:],
                 "effective_fence_epoch": 2,
@@ -2100,6 +2479,19 @@ def build_fixture_005() -> list[dict]:
         "amend-goal-spec", "owner", payload_builder, event_builder,
         goal=object_ref(world["goal"]), plan=object_ref(world["plan"]),
     )
+    session.replay_cases.append({
+        "replay_id": "REPLAY-AMENDMENT-GENESIS",
+        "checkpoint": None,
+        "commands": [*session.initial_commands, *session.commands],
+        "receipts": [*session.initial_receipts, *session.receipts],
+        "event_inputs": [
+            canonical_bytes(event).decode("utf-8")
+            for event in [*session.initial_events, *session.events]
+        ],
+        "expected_disposition": "accepted",
+        "primary_error": None,
+        "expected_projection_digest": session.state["content_digest"],
+    })
     return [session.fixture_case()]
 
 
@@ -2180,7 +2572,7 @@ def build_fixture_008() -> list[dict]:
     session.promote_current_to_initial()
     session.refuse(
         "propose-retry", "arm",
-        lambda cid: retry_payload_and_packet(session, world, cid)[0],
+        lambda cid: retry_payload_and_packet(session, world, cid, next_attempt=3)[0],
         "E-RETRY-NONNOVEL",
         lease=lease_ref(world["executive_lease"]), goal=object_ref(world["goal"]),
         plan=object_ref(world["plan"]),
@@ -2192,6 +2584,67 @@ def build_fixture_009() -> list[dict]:
     session, world = setup_case(
         "F-M1A-009", "exhausted", "Retry exhaustion raises a blocker and escalation.", "gate",
         gate_disposition="fail",
+    )
+    accept_retry(session, world)
+
+    def second_result(command_id):
+        record = domain_record(
+            "worker-result",
+            "m1a-worker-result-1",
+            "RESULT-M1A-2",
+            {
+                "work_packet_ref": object_ref(world["packet"]),
+                "candidate_digest": h("candidate-two"),
+                "evidence_digests": [h("evidence-two")],
+                "output_digest": h("output-two"),
+                "observed_effect_ref": None,
+                "disposition": "submitted",
+            },
+            command_id,
+            ROLE_ACTORS["worker"],
+            session.state["last_event_sequence"] + 1,
+            under_lease=lease_ref(world["work_lease"]),
+        )
+        world["worker_result"] = record
+        return record
+
+    session.accept(
+        "submit-worker-result",
+        "worker",
+        second_result,
+        lambda cid, payload: [("WorkerResultRecorded", payload, [])],
+        lease=lease_ref(world["work_lease"]),
+        goal=object_ref(world["goal"]),
+        plan=object_ref(world["plan"]),
+    )
+
+    def second_gate(command_id):
+        record = domain_record(
+            "gate-result",
+            "m1a-gate-result-1",
+            "GATE-RESULT-M1A-2",
+            {
+                **copy.deepcopy(world["gate_result"]["payload"]),
+                "work_packet_ref": object_ref(world["packet"]),
+                "candidate_digest": h("candidate-two"),
+                "evidence_digests": [h("evidence-two")],
+                "observation_digest": h("gate-observation-two"),
+                "actual_digest": h("actual-output-two"),
+            },
+            command_id,
+            ROLE_ACTORS["verifier"],
+            session.state["last_event_sequence"] + 1,
+        )
+        world["gate_result"] = record
+        return record
+
+    session.accept(
+        "submit-gate-result",
+        "verifier",
+        second_gate,
+        lambda cid, payload: [("GateResultRecorded", payload, [])],
+        goal=object_ref(world["goal"]),
+        plan=object_ref(world["plan"]),
     )
     session.refuse(
         "propose-retry", "arm",
@@ -2224,11 +2677,28 @@ def build_fixture_010() -> list[dict]:
         ("verifier-missing", "E-VERIFIER-MISSING"),
     ):
         session, world = setup_case(
-            "F-M1A-010", case_id, f"{case_id} blocks terminal completion.", "worker"
+            "F-M1A-010",
+            case_id,
+            f"{case_id} blocks terminal completion.",
+            "worker" if case_id == "gate-missing" else "gate",
+            assigned_plan_verifier_actor_id=(
+                "VERIFIER-OTHER" if case_id == "verifier-missing" else ROLE_ACTORS["verifier"]
+            ),
         )
 
         def payload(command_id):
-            return plan_verifier_record(session, world, command_id, "pass", None, gate_digests=[])
+            return plan_verifier_record(
+                session,
+                world,
+                command_id,
+                "pass",
+                None,
+                gate_digests=(
+                    []
+                    if case_id == "gate-missing"
+                    else [world["gate_result"]["content_digest"]]
+                ),
+            )
 
         session.refuse(
             "submit-plan-verifier-decision", "verifier", payload, error,
@@ -2349,8 +2819,39 @@ def build_fixture_013() -> list[dict]:
     session, world = setup_case(
         "F-M1A-013", "replace", "Checkpointed route replacement fences the prior packet.", "packet"
     )
-    snapshot = copy.deepcopy(session.state)
     box = {}
+
+    def zero_capacity(command_id):
+        record = domain_record(
+            "capacity-observation",
+            "m1a-capacity-observation-1",
+            "CAPACITY-OBS-ZERO",
+            {
+                "route_id": "ROUTE-ZERO",
+                "account_class_id": "ACCOUNT-INCLUDED",
+                "capacity_pool_id": "CAPACITY-INCLUDED",
+                "spend_class": "none",
+                "available": True,
+                "remaining_units": 100,
+                "observation_digest": h("capacity-zero-available"),
+            },
+            command_id,
+            ROLE_ACTORS["kernel-fixture-gate"],
+            session.state["last_event_sequence"] + 1,
+        )
+        box["zero_capacity"] = record
+        return record
+
+    session.accept(
+        "record-capacity-observation",
+        "kernel-fixture-gate",
+        zero_capacity,
+        lambda cid, payload: [("CapacityObservationRecorded", payload, [])],
+        goal=object_ref(world["goal"]),
+        plan=object_ref(world["plan"]),
+    )
+    session.promote_current_to_initial()
+    snapshot = copy.deepcopy(session.state)
 
     def checkpoint_builder(command_id):
         record = checkpoint_payload(session, world, command_id)
@@ -2368,6 +2869,7 @@ def build_fixture_013() -> list[dict]:
         route_payload = copy.deepcopy(world["route"]["payload"])
         route_payload.update({
             "route_id": "ROUTE-ZERO",
+            "capacity_observation_ref": object_ref(box["zero_capacity"]),
             "supersedes_route_ref": object_ref(world["route"]),
             "assigned_logical_time": logical_time,
         })
@@ -2449,29 +2951,184 @@ def build_fixture_014() -> list[dict]:
         lease=lease_ref(world["executive_lease"]), goal=object_ref(world["goal"]),
         plan=object_ref(world["plan"]),
     )
+
+    def paused_packet(command_id):
+        logical_time = session.state["last_event_sequence"] + 1
+        work_lease_payload = copy.deepcopy(world["work_lease"]["payload"])
+        work_lease_payload["issued_logical_time"] = logical_time
+        work_lease = domain_record(
+            "work-lease",
+            "m1a-work-lease-1",
+            "LEASE-WORK-PAUSED",
+            work_lease_payload,
+            command_id,
+            "KERNEL-M1A",
+            logical_time,
+            under_lease=lease_ref(world["executive_lease"]),
+        )
+        route_payload = copy.deepcopy(world["route"]["payload"])
+        route_payload["assigned_logical_time"] = logical_time
+        route = domain_record(
+            "route-assignment",
+            "m1a-route-assignment-1",
+            "ROUTE-ASSIGNMENT-PAUSED",
+            route_payload,
+            command_id,
+            "KERNEL-M1A",
+            logical_time,
+            under_lease=lease_ref(world["executive_lease"]),
+        )
+        seed = {
+            "command_id": command_id,
+            "task_ref": object_ref(world["task"]),
+            "attempt": 1,
+            "work_lease_ref": lease_ref(work_lease),
+            "route_assignment_ref": object_ref(route),
+            "budget_reservation_ref": object_ref(world["budget"]),
+            "checkpoint_ref": None,
+        }
+        packet_payload = copy.deepcopy(world["packet"]["payload"])
+        packet_payload.update({
+            "work_lease_ref": lease_ref(work_lease),
+            "route_assignment_ref": object_ref(route),
+        })
+        hypothetical_packet = domain_record(
+            "work-packet",
+            "m1a-work-packet-1",
+            "PACKET-" + digest(seed)[:32],
+            packet_payload,
+            command_id,
+            "KERNEL-M1A",
+            logical_time,
+            under_lease=lease_ref(world["executive_lease"]),
+        )
+        return {
+            "task_ref": object_ref(world["task"]),
+            "attempt": 1,
+            "work_lease": work_lease,
+            "route_assignment": route,
+            "budget_reservation_ref": object_ref(world["budget"]),
+            "expected_work_packet_digest": hypothetical_packet["content_digest"],
+        }
+
+    session.refuse(
+        "derive-work-packet",
+        "arm",
+        paused_packet,
+        "E-PAUSED",
+        lease=lease_ref(world["executive_lease"]),
+        goal=object_ref(world["goal"]),
+        plan=object_ref(world["plan"]),
+    )
+
+    def paused_result(command_id):
+        return domain_record(
+            "worker-result",
+            "m1a-worker-result-1",
+            "RESULT-M1A-PAUSED",
+            {
+                "work_packet_ref": object_ref(world["packet"]),
+                "candidate_digest": h("paused-candidate"),
+                "evidence_digests": [h("paused-evidence")],
+                "output_digest": h("paused-output"),
+                "observed_effect_ref": None,
+                "disposition": "submitted",
+            },
+            command_id,
+            ROLE_ACTORS["worker"],
+            session.state["last_event_sequence"] + 1,
+            under_lease=lease_ref(world["work_lease"]),
+        )
+
+    session.refuse(
+        "submit-worker-result",
+        "worker",
+        paused_result,
+        "E-PAUSED",
+        lease=lease_ref(world["work_lease"]),
+        goal=object_ref(world["goal"]),
+        plan=object_ref(world["plan"]),
+    )
+
+    def paused_effect(command_id):
+        return domain_record(
+            "effect-observation",
+            "m1a-effect-observation-1",
+            "EFFECT-OBS-PAUSED",
+            {
+                "effect_id": "EFFECT-ID-PAUSED",
+                "effect_key": "EFFECT-SYNTHETIC",
+                "work_packet_ref": object_ref(world["packet"]),
+                "idempotency_key_digest": h("paused-effect-idempotency"),
+                "dispatch_state": "dispatched",
+                "receipt_digest": h("paused-effect-receipt"),
+                "provider_operation_id_digest": h("paused-effect-operation"),
+                "observation": "observed-failure",
+                "quarantine": False,
+            },
+            command_id,
+            ROLE_ACTORS["kernel-fixture-gate"],
+            session.state["last_event_sequence"] + 1,
+        )
+
+    session.refuse(
+        "record-effect-observation",
+        "kernel-fixture-gate",
+        paused_effect,
+        "E-PAUSED",
+        goal=object_ref(world["goal"]),
+        plan=object_ref(world["plan"]),
+    )
     return [session.fixture_case()]
 
 
 def build_fixture_015() -> list[dict]:
-    session, world = setup_case(
-        "F-M1A-015", "future", "Future PAUSE values round-trip but are not operative.", "goal"
-    )
-
-    def future_pause(command_id):
-        return domain_record(
-            "pause-directive", "m1a-pause-directive-1", "PAUSE-DIRECTIVE-FUTURE",
-            {
-                "pause_policy_ref": session.policy_ref("pause"), "mode": "checkpoint",
-                "new_pause_epoch": 1, "reason_digest": h("future-pause"),
-            },
-            command_id, ROLE_ACTORS["owner"], session.state["last_event_sequence"] + 1,
+    cases = []
+    for mode in ("checkpoint", "interrupt", "drain"):
+        session, world = setup_case(
+            "F-M1A-015",
+            mode,
+            f"Future PAUSE mode {mode} round-trips but is not operative.",
+            "goal",
         )
 
-    session.refuse(
-        "apply-pause", "owner", future_pause, "E-POLICY-UNKNOWN",
-        goal=object_ref(world["goal"]),
-    )
-    return [session.fixture_case()]
+        def future_pause(command_id, selected_mode=mode):
+            return domain_record(
+                "pause-directive",
+                "m1a-pause-directive-1",
+                f"PAUSE-DIRECTIVE-{selected_mode.upper()}",
+                {
+                    "pause_policy_ref": session.policy_ref("pause"),
+                    "mode": selected_mode,
+                    "new_pause_epoch": 1,
+                    "reason_digest": h(f"future-pause-{selected_mode}"),
+                },
+                command_id,
+                ROLE_ACTORS["owner"],
+                session.state["last_event_sequence"] + 1,
+            )
+
+        session.refuse(
+            "apply-pause",
+            "owner",
+            future_pause,
+            "E-POLICY-UNKNOWN",
+            goal=object_ref(world["goal"]),
+        )
+        session.replay_cases.append({
+            "replay_id": f"REPLAY-PAUSE-{mode.upper()}",
+            "checkpoint": None,
+            "commands": session.initial_commands,
+            "receipts": session.initial_receipts,
+            "event_inputs": [
+                canonical_bytes(event).decode("utf-8") for event in session.initial_events
+            ],
+            "expected_disposition": "accepted",
+            "primary_error": None,
+            "expected_projection_digest": session.state["content_digest"],
+        })
+        cases.append(session.fixture_case())
+    return cases
 
 
 def build_fixture_016() -> list[dict]:
@@ -2686,7 +3343,9 @@ def build_fixture_022() -> list[dict]:
         )
         session.refuse(
             "propose-plan-revision", "arm",
-            lambda cid: candidate_plan_payload(session, world, cid, mutation="write-conflict"),
+            lambda cid, mutation=case_id: candidate_plan_payload(
+                session, world, cid, mutation=mutation
+            ),
             "E-DAG-CONFLICT", lease=lease_ref(world["executive_lease"]),
             goal=object_ref(world["goal"]), plan=object_ref(world["plan"]),
             witness=error_witness(
@@ -2696,68 +3355,182 @@ def build_fixture_022() -> list[dict]:
         )
         cases.append(session.fixture_case())
 
-    session, world = setup_case(
-        "F-M1A-022", "ordered", "Admit a deterministic conflict-free replan.", "plan"
-    )
-    box = {}
+    for case_id, mutation in (("ordered-disjoint", "ordered-disjoint"), ("read-read", "read-read")):
+        session, world = setup_case(
+            "F-M1A-022",
+            case_id,
+            f"Admit deterministic {case_id} ownership.",
+            "capacity",
+        )
+        box = {}
 
-    def replan_payload(command_id):
-        proposal = candidate_plan_payload(session, world, command_id)
-        disposition = {
-            "object_ref": object_ref(world["plan"]), "disposition": "supersede",
-            # The transition carries the exact replacement plan ref. Keeping the
-            # disposition replacement nullable avoids a self-digest cycle because
-            # the disposition is itself embedded in the replacement PlanRevision.
-            "replacement_ref": None,
-            "reason_digest": h("ordered-replan"),
-        }
-        transition_payload = copy.deepcopy(proposal["plan_transition"]["payload"])
-        transition_payload["dispositions"] = [disposition]
-        transition = domain_record(
-            "plan-transition", "m1a-plan-transition-1", "TRANSITION-CANDIDATE",
-            transition_payload, command_id, ROLE_ACTORS["arm"],
-            session.state["last_event_sequence"] + 1, version=2,
-            under_lease=lease_ref(world["executive_lease"]),
-        )
-        plan_payload = copy.deepcopy(proposal["plan_revision"]["payload"])
-        plan_payload["dispositions"] = [disposition]
-        plan = domain_record(
-            "plan-revision", "m1a-plan-revision-1", "PLAN-CANDIDATE", plan_payload,
-            command_id, ROLE_ACTORS["arm"], session.state["last_event_sequence"] + 1,
-            version=2, under_lease=lease_ref(world["executive_lease"]),
-        )
-        # Rebind the transition after the final plan digest.
-        transition_payload["to_plan_ref"] = object_ref(plan)
-        transition = domain_record(
-            "plan-transition", "m1a-plan-transition-1", "TRANSITION-CANDIDATE",
-            transition_payload, command_id, ROLE_ACTORS["arm"],
-            session.state["last_event_sequence"] + 1, version=2,
-            under_lease=lease_ref(world["executive_lease"]),
-        )
-        decision = domain_record(
-            "replan-decision", "m1a-replan-decision-1", "REPLAN-DECISION-1",
-            {
-                "goal_ref": object_ref(world["goal"]), "old_plan_ref": object_ref(world["plan"]),
-                "new_plan_ref": object_ref(plan), "trigger_evidence_digests": [h("ordered-replan")],
-                "dispositions": [disposition], "narrowed_binding_digest": h("narrowed-binding"),
-                "blocker_ref": None, "escalation_ref": None, "disposition": "admitted",
-            },
-            command_id, ROLE_ACTORS["arm"], session.state["last_event_sequence"] + 1,
-            under_lease=lease_ref(world["executive_lease"]),
-        )
-        box.update({"decision": decision, "plan": plan, "transition": transition, "tasks": proposal["task_nodes"]})
-        return {"decision": decision, "new_plan_revision": plan, "transition": transition, "task_nodes": proposal["task_nodes"]}
+        def replan_payload(command_id, selected_mutation=mutation):
+            logical_time = session.state["last_event_sequence"] + 1
+            proposal = candidate_plan_payload(
+                session, world, command_id, mutation=selected_mutation
+            )
+            dispositions = [
+                {
+                    "object_ref": object_ref(world["plan"]),
+                    "disposition": "supersede",
+                    "replacement_ref": None,
+                    "reason_digest": h(f"{selected_mutation}-replan"),
+                },
+                {
+                    "object_ref": object_ref(world["task"]),
+                    "disposition": "invalidate",
+                    "replacement_ref": object_ref(proposal["task_nodes"][0]),
+                    "reason_digest": h(f"{selected_mutation}-replace-task"),
+                },
+            ]
+            dispositions.sort(key=lambda item: (
+                item["object_ref"]["object_type"],
+                item["object_ref"]["id"],
+                item["object_ref"]["version"],
+            ))
+            plan_payload = copy.deepcopy(proposal["plan_revision"]["payload"])
+            plan_payload["dispositions"] = dispositions
+            plan = domain_record(
+                "plan-revision",
+                "m1a-plan-revision-1",
+                "PLAN-CANDIDATE",
+                plan_payload,
+                command_id,
+                ROLE_ACTORS["arm"],
+                logical_time,
+                version=2,
+                under_lease=lease_ref(world["executive_lease"]),
+            )
+            transition_payload = copy.deepcopy(proposal["plan_transition"]["payload"])
+            transition_payload.update({
+                "to_plan_ref": object_ref(plan),
+                "dispositions": dispositions,
+            })
+            transition = domain_record(
+                "plan-transition",
+                "m1a-plan-transition-1",
+                "TRANSITION-CANDIDATE",
+                transition_payload,
+                command_id,
+                ROLE_ACTORS["arm"],
+                logical_time,
+                version=2,
+                under_lease=lease_ref(world["executive_lease"]),
+            )
+            route = domain_record(
+                "route-assignment",
+                "m1a-route-assignment-1",
+                f"ROUTE-ASSIGNMENT-{selected_mutation.upper()}",
+                {
+                    "logical_actor_id": ROLE_ACTORS["worker"],
+                    "route_id": "ROUTE-INCLUDED",
+                    "route_capability_ids": ["CAPABILITY-BASE"],
+                    "account_class_id": "ACCOUNT-INCLUDED",
+                    "capacity_pool_id": "CAPACITY-INCLUDED",
+                    "privacy_policy_ref": session.policy_ref("privacy-egress"),
+                    "egress_policy_ref": session.policy_ref("privacy-egress"),
+                    "route_policy_ref": session.policy_ref("route-envelope"),
+                    "metered_spend_allowed": False,
+                    "capacity_observation_ref": object_ref(world["capacity"]),
+                    "supersedes_route_ref": None,
+                    "assigned_logical_time": logical_time,
+                    "expires_logical_time": 900,
+                    "state": "assigned",
+                },
+                command_id,
+                "KERNEL-M1A",
+                logical_time,
+                under_lease=lease_ref(world["executive_lease"]),
+            )
+            replacement_task = proposal["task_nodes"][0]
+            budget = domain_record(
+                "budget-reservation",
+                "m1a-budget-reservation-1",
+                f"BUDGET-RESERVATION-{selected_mutation.upper()}",
+                {
+                    "goal_ref": object_ref(world["goal"]),
+                    "plan_ref": object_ref(plan),
+                    "task_ref": object_ref(replacement_task),
+                    "limits": LIMIT_BUDGET,
+                    "consumed": ZERO_BUDGET,
+                    "remaining": LIMIT_BUDGET,
+                    "state": "reserved",
+                },
+                command_id,
+                ROLE_ACTORS["arm"],
+                logical_time,
+                under_lease=lease_ref(world["executive_lease"]),
+            )
+            narrowed_operand = {
+                "goal_ref": object_ref(world["goal"]),
+                "plan_ref": object_ref(plan),
+                "task_ref": object_ref(replacement_task),
+                "authority_policy_ref": replacement_task["payload"]["authority_policy_ref"],
+                "privacy_policy_ref": replacement_task["payload"]["privacy_policy_ref"],
+                "egress_policy_ref": replacement_task["payload"]["egress_policy_ref"],
+                "route_assignment_ref": object_ref(route),
+                "budget_reservation_ref": object_ref(budget),
+                "verifier_policy_ref": replacement_task["payload"]["verifier_policy_ref"],
+                "constitution_policy_ref": replacement_task["payload"]["constitution_policy_ref"],
+            }
+            decision = domain_record(
+                "replan-decision",
+                "m1a-replan-decision-1",
+                f"REPLAN-DECISION-{selected_mutation.upper()}",
+                {
+                    "goal_ref": object_ref(world["goal"]),
+                    "old_plan_ref": object_ref(world["plan"]),
+                    "new_plan_ref": object_ref(plan),
+                    "trigger_evidence_digests": [h(f"{selected_mutation}-replan")],
+                    "dispositions": dispositions,
+                    "narrowed_binding_digest": digest(narrowed_operand),
+                    "blocker_ref": None,
+                    "escalation_ref": None,
+                    "disposition": "admitted",
+                },
+                command_id,
+                ROLE_ACTORS["arm"],
+                logical_time,
+                under_lease=lease_ref(world["executive_lease"]),
+            )
+            box.update({
+                "decision": decision,
+                "plan": plan,
+                "transition": transition,
+                "tasks": proposal["task_nodes"],
+                "route": route,
+                "budget": budget,
+                "dispositions": dispositions,
+            })
+            return {
+                "decision": decision,
+                "new_plan_revision": plan,
+                "transition": transition,
+                "task_nodes": proposal["task_nodes"],
+                "route_assignments": [route],
+                "budget_reservations": [budget],
+            }
 
-    session.accept(
-        "propose-replan", "arm", replan_payload,
-        lambda cid, payload: [
-            ("ReplanAdmitted", box["decision"], []),
-            ("PlanRevisionAdmitted", box["plan"], [box["transition"], *box["tasks"]]),
-        ],
-        lease=lease_ref(world["executive_lease"]), goal=object_ref(world["goal"]),
-        plan=object_ref(world["plan"]),
-    )
-    cases.append(session.fixture_case())
+        def replan_events(command_id, payload):
+            events = [
+                ("ReplanAdmitted", box["decision"], [box["budget"], box["route"]]),
+                ("PlanRevisionAdmitted", box["plan"], [box["transition"], *box["tasks"]]),
+            ]
+            for disposition in box["dispositions"]:
+                record = disposition_domain(session, world, command_id, disposition)
+                events.append((disposition_event_type(disposition), record, []))
+            return events
+
+        session.accept(
+            "propose-replan",
+            "arm",
+            replan_payload,
+            replan_events,
+            lease=lease_ref(world["executive_lease"]),
+            goal=object_ref(world["goal"]),
+            plan=object_ref(world["plan"]),
+        )
+        cases.append(session.fixture_case())
     return cases
 
 
