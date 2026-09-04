@@ -255,12 +255,12 @@ class SchemaContractTests(unittest.TestCase):
 
     def test_meta_schema_and_closed_alphabets(self):
         defs = self.schema["$defs"]
-        self.assertEqual(21, len(defs["command_type"]["enum"]))
-        self.assertEqual(26, len(defs["event_type"]["enum"]))
+        self.assertEqual(22, len(defs["command_type"]["enum"]))
+        self.assertEqual(27, len(defs["event_type"]["enum"]))
         self.assertEqual(27, len(defs["error_code"]["enum"]))
         self.assertEqual(25, len(defs["domain_record"]["oneOf"]))
-        self.assertEqual(21, len(defs["command_envelope"]["oneOf"]))
-        self.assertEqual(26, len(defs["planning_event"]["oneOf"]))
+        self.assertEqual(22, len(defs["command_envelope"]["oneOf"]))
+        self.assertEqual(27, len(defs["planning_event"]["oneOf"]))
         self.assertEqual(16, self.schema["x-maxDepth"])
 
     def test_materializer_is_byte_identical(self):
@@ -303,6 +303,7 @@ class SchemaContractTests(unittest.TestCase):
         for name in (
             "command_receipt",
             "decode_failure",
+            "error_witness",
             "genesis_config",
             "authority_attestation",
             "policy_fixture",

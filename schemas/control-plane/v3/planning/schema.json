@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://recursion.invalid/schemas/control-plane/v3/planning/schema.json",
   "title": "Recursion v3 M1A closed planning wire schema",
-  "$comment": "Owner-approved M1A profile: 25 domain records, 21 commands, 26 events, 27 errors.",
+  "$comment": "Owner-approved M1A profile: 25 domain records, 22 commands, 27 events, 27 errors.",
   "x-maxDepth": 16,
   "oneOf": [
     {
@@ -161,6 +161,7 @@
         "replace-executive-lease",
         "replace-route",
         "record-capacity-observation",
+        "record-checkpoint",
         "reserve-budget",
         "submit-worker-result",
         "submit-gate-result",
@@ -187,6 +188,7 @@
         "ExecutiveLeaseReplaced",
         "RouteAssignmentReplaced",
         "CapacityObservationRecorded",
+        "CheckpointRecorded",
         "BudgetReserved",
         "WorkerResultRecorded",
         "GateResultRecorded",
@@ -245,6 +247,61 @@
       },
       "uniqueItems": true,
       "x-sortedBy": "$value"
+    },
+    "error_witness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "witness_schema_version",
+        "error_code",
+        "object_ids",
+        "dependency_edges",
+        "field_paths",
+        "content_digest"
+      ],
+      "properties": {
+        "witness_schema_version": {
+          "const": "m1a-error-witness-1"
+        },
+        "error_code": {
+          "$ref": "#/$defs/error_code"
+        },
+        "object_ids": {
+          "$ref": "#/$defs/id_set"
+        },
+        "dependency_edges": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from_node_id",
+              "to_node_id"
+            ],
+            "properties": {
+              "from_node_id": {
+                "$ref": "#/$defs/id"
+              },
+              "to_node_id": {
+                "$ref": "#/$defs/id"
+              }
+            }
+          },
+          "uniqueItems": true,
+          "x-sortedBy": [
+            "from_node_id",
+            "to_node_id"
+          ]
+        },
+        "field_paths": {
+          "$ref": "#/$defs/text_set"
+        },
+        "content_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
     },
     "object_ref": {
       "type": "object",
@@ -3870,6 +3927,7 @@
             "goal_ref",
             "plan_ref",
             "task_ref",
+            "supersedes_packet_ref",
             "logical_worker_actor_id",
             "attempt",
             "work_lease_ref",
@@ -3905,6 +3963,16 @@
             },
             "task_ref": {
               "$ref": "#/$defs/object_ref"
+            },
+            "supersedes_packet_ref": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/object_ref"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "logical_worker_actor_id": {
               "$ref": "#/$defs/id"
@@ -5098,6 +5166,7 @@
             "goal_ref",
             "plan_ref",
             "task_ref",
+            "supersedes_lease_ref",
             "lease_epoch",
             "nonce_digest",
             "issued_logical_time",
@@ -5126,6 +5195,16 @@
               "anyOf": [
                 {
                   "$ref": "#/$defs/object_ref"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "supersedes_lease_ref": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/lease_ref"
                 },
                 {
                   "type": "null"
@@ -5229,6 +5308,7 @@
             "goal_ref",
             "plan_ref",
             "task_ref",
+            "supersedes_lease_ref",
             "lease_epoch",
             "nonce_digest",
             "issued_logical_time",
@@ -5257,6 +5337,16 @@
               "anyOf": [
                 {
                   "$ref": "#/$defs/object_ref"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "supersedes_lease_ref": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/lease_ref"
                 },
                 {
                   "type": "null"
@@ -5499,6 +5589,7 @@
             "route_policy_ref",
             "metered_spend_allowed",
             "capacity_observation_ref",
+            "supersedes_route_ref",
             "assigned_logical_time",
             "expires_logical_time",
             "state"
@@ -5533,6 +5624,16 @@
             },
             "capacity_observation_ref": {
               "$ref": "#/$defs/object_ref"
+            },
+            "supersedes_route_ref": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/object_ref"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "assigned_logical_time": {
               "$ref": "#/$defs/logical_time"
@@ -5817,7 +5918,13 @@
               "$ref": "#/$defs/policy_ref"
             },
             "mode": {
-              "const": "current-immediate"
+              "type": "string",
+              "enum": [
+                "current-immediate",
+                "checkpoint",
+                "interrupt",
+                "drain"
+              ]
             },
             "new_pause_epoch": {
               "$ref": "#/$defs/uint"
@@ -7280,6 +7387,96 @@
       },
       "x-maxCanonicalBytes": 262144
     },
+    "command_record_checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command_schema_version",
+        "command_id",
+        "command_type",
+        "actor_id",
+        "auth_ref",
+        "lease_ref",
+        "logical_time",
+        "expected_state_version",
+        "expected_state_digest",
+        "goal_ref",
+        "plan_ref",
+        "payload",
+        "payload_digest",
+        "candidate_digest",
+        "content_digest"
+      ],
+      "properties": {
+        "command_schema_version": {
+          "const": "m1a-command-1"
+        },
+        "command_id": {
+          "$ref": "#/$defs/command_id"
+        },
+        "command_type": {
+          "const": "record-checkpoint"
+        },
+        "actor_id": {
+          "$ref": "#/$defs/id"
+        },
+        "auth_ref": {
+          "$ref": "#/$defs/id"
+        },
+        "lease_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/lease_ref"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logical_time": {
+          "$ref": "#/$defs/logical_time"
+        },
+        "expected_state_version": {
+          "$ref": "#/$defs/uint"
+        },
+        "expected_state_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "goal_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/object_ref"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plan_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/object_ref"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/checkpoint_record"
+        },
+        "payload_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "candidate_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "content_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "x-maxCanonicalBytes": 262144
+    },
     "command_reserve_budget": {
       "type": "object",
       "additionalProperties": false,
@@ -8244,6 +8441,9 @@
           "$ref": "#/$defs/command_record_capacity_observation"
         },
         {
+          "$ref": "#/$defs/command_record_checkpoint"
+        },
+        {
           "$ref": "#/$defs/command_reserve_budget"
         },
         {
@@ -8286,6 +8486,7 @@
         "disposition",
         "primary_error",
         "related_errors",
+        "witness",
         "state_before_digest",
         "state_after_digest",
         "event_ids",
@@ -8328,6 +8529,16 @@
         "related_errors": {
           "$ref": "#/$defs/error_code_set"
         },
+        "witness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/error_witness"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "state_before_digest": {
           "$ref": "#/$defs/digest"
         },
@@ -8361,7 +8572,111 @@
           "$ref": "#/$defs/digest"
         }
       },
-      "x-maxCanonicalBytes": 262144
+      "x-maxCanonicalBytes": 262144,
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "disposition": {
+                  "const": "accepted"
+                },
+                "primary_error": {
+                  "const": null
+                },
+                "related_errors": {
+                  "maxItems": 0
+                },
+                "witness": {
+                  "const": null
+                },
+                "event_ids": {
+                  "minItems": 1
+                },
+                "first_event_sequence": {
+                  "$ref": "#/$defs/uint"
+                },
+                "last_event_sequence": {
+                  "$ref": "#/$defs/uint"
+                }
+              },
+              "required": [
+                "disposition",
+                "primary_error",
+                "related_errors",
+                "witness",
+                "event_ids",
+                "first_event_sequence",
+                "last_event_sequence"
+              ]
+            },
+            {
+              "properties": {
+                "disposition": {
+                  "type": "string",
+                  "enum": [
+                    "refused",
+                    "conflict"
+                  ]
+                },
+                "primary_error": {
+                  "$ref": "#/$defs/error_code"
+                },
+                "event_ids": {
+                  "maxItems": 0
+                },
+                "first_event_sequence": {
+                  "const": null
+                },
+                "last_event_sequence": {
+                  "const": null
+                }
+              },
+              "required": [
+                "disposition",
+                "primary_error",
+                "event_ids",
+                "first_event_sequence",
+                "last_event_sequence"
+              ]
+            },
+            {
+              "properties": {
+                "disposition": {
+                  "const": "duplicate"
+                },
+                "primary_error": {
+                  "const": null
+                },
+                "related_errors": {
+                  "maxItems": 0
+                },
+                "witness": {
+                  "const": null
+                },
+                "event_ids": {
+                  "maxItems": 0
+                },
+                "first_event_sequence": {
+                  "const": null
+                },
+                "last_event_sequence": {
+                  "const": null
+                }
+              },
+              "required": [
+                "disposition",
+                "primary_error",
+                "related_errors",
+                "witness",
+                "event_ids",
+                "first_event_sequence",
+                "last_event_sequence"
+              ]
+            }
+          ]
+        }
+      ]
     },
     "event_OwnerIntentRecorded": {
       "type": "object",
@@ -9117,6 +9432,73 @@
         },
         "primary_record": {
           "$ref": "#/$defs/capacity_observation_record"
+        },
+        "related_records": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 0,
+          "items": {
+            "$ref": "#/$defs/domain_record"
+          },
+          "uniqueItems": true
+        },
+        "state_delta_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "content_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "x-maxCanonicalBytes": 262144
+    },
+    "event_CheckpointRecorded": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_schema_version",
+        "event_id",
+        "stream_id",
+        "sequence",
+        "previous_event_digest",
+        "logical_time",
+        "command_id",
+        "command_digest",
+        "event_type",
+        "primary_record",
+        "related_records",
+        "state_delta_digest",
+        "content_digest"
+      ],
+      "properties": {
+        "event_schema_version": {
+          "const": "m1a-event-1"
+        },
+        "event_id": {
+          "$ref": "#/$defs/id"
+        },
+        "stream_id": {
+          "$ref": "#/$defs/id"
+        },
+        "sequence": {
+          "$ref": "#/$defs/pos_int"
+        },
+        "previous_event_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "logical_time": {
+          "$ref": "#/$defs/logical_time"
+        },
+        "command_id": {
+          "$ref": "#/$defs/command_id"
+        },
+        "command_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "event_type": {
+          "const": "CheckpointRecorded"
+        },
+        "primary_record": {
+          "$ref": "#/$defs/checkpoint_record"
         },
         "related_records": {
           "type": "array",
@@ -10177,6 +10559,9 @@
           "$ref": "#/$defs/event_CapacityObservationRecorded"
         },
         {
+          "$ref": "#/$defs/event_CheckpointRecorded"
+        },
+        {
           "$ref": "#/$defs/event_BudgetReserved"
         },
         {
@@ -10223,6 +10608,22 @@
         }
       ]
     },
+    "replay_checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkpoint_record",
+        "projection_snapshot"
+      ],
+      "properties": {
+        "checkpoint_record": {
+          "$ref": "#/$defs/checkpoint_record"
+        },
+        "projection_snapshot": {
+          "$ref": "#/$defs/projection_state"
+        }
+      }
+    },
     "replay_expectation": {
       "type": "object",
       "additionalProperties": false,
@@ -10241,7 +10642,7 @@
         "checkpoint": {
           "anyOf": [
             {
-              "$ref": "#/$defs/checkpoint_record"
+              "$ref": "#/$defs/replay_checkpoint"
             },
             {
               "type": "null"

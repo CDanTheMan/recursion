@@ -136,6 +136,7 @@ def build_schema() -> dict:
         "replace-executive-lease",
         "replace-route",
         "record-capacity-observation",
+        "record-checkpoint",
         "reserve-budget",
         "submit-worker-result",
         "submit-gate-result",
@@ -159,6 +160,7 @@ def build_schema() -> dict:
         "ExecutiveLeaseReplaced",
         "RouteAssignmentReplaced",
         "CapacityObservationRecorded",
+        "CheckpointRecorded",
         "BudgetReserved",
         "WorkerResultRecorded",
         "GateResultRecorded",
@@ -208,6 +210,19 @@ def build_schema() -> dict:
     d["event_type"] = enum(*event_types)
     d["error_code"] = enum(*error_codes)
     d["error_code_set"] = array(ref("error_code"), maximum=64, sorted_by="$value")
+    witness_edge = closed({"from_node_id": ref("id"), "to_node_id": ref("id")})
+    d["error_witness"] = closed(
+        {
+            "witness_schema_version": const("m1a-error-witness-1"),
+            "error_code": ref("error_code"),
+            "object_ids": ref("id_set"),
+            "dependency_edges": array(
+                witness_edge, sorted_by=["from_node_id", "to_node_id"]
+            ),
+            "field_paths": ref("text_set"),
+            "content_digest": ref("digest"),
+        }
+    )
 
     d["object_ref"] = closed(
         {
@@ -789,6 +804,7 @@ def build_schema() -> dict:
             "goal_ref": object_ref,
             "plan_ref": object_ref,
             "task_ref": object_ref,
+            "supersedes_packet_ref": nullable(object_ref),
             "logical_worker_actor_id": ref("id"),
             "attempt": ref("pos_int"),
             "work_lease_ref": ref("lease_ref"),
@@ -967,6 +983,7 @@ def build_schema() -> dict:
             "goal_ref": object_ref,
             "plan_ref": nullable(object_ref),
             "task_ref": nullable(object_ref),
+            "supersedes_lease_ref": nullable(ref("lease_ref")),
             "lease_epoch": ref("uint"),
             "nonce_digest": ref("digest"),
             "issued_logical_time": ref("logical_time"),
@@ -1003,6 +1020,7 @@ def build_schema() -> dict:
             "route_policy_ref": policy_ref,
             "metered_spend_allowed": const(False),
             "capacity_observation_ref": object_ref,
+            "supersedes_route_ref": nullable(object_ref),
             "assigned_logical_time": ref("logical_time"),
             "expires_logical_time": ref("logical_time"),
             "state": enum("assigned", "deferred", "released", "expired"),
@@ -1033,7 +1051,7 @@ def build_schema() -> dict:
     payloads["pause_directive"] = closed(
         {
             "pause_policy_ref": policy_ref,
-            "mode": const("current-immediate"),
+            "mode": enum("current-immediate", "checkpoint", "interrupt", "drain"),
             "new_pause_epoch": ref("uint"),
             "reason_digest": ref("digest"),
         }
@@ -1148,6 +1166,7 @@ def build_schema() -> dict:
             }
         ),
         "record-capacity-observation": ref("capacity_observation_record"),
+        "record-checkpoint": ref("checkpoint_record"),
         "reserve-budget": ref("budget_reservation_record"),
         "submit-worker-result": ref("worker_result_record"),
         "submit-gate-result": ref("gate_result_record"),
@@ -1216,6 +1235,7 @@ def build_schema() -> dict:
             "disposition": enum("accepted", "refused", "duplicate", "conflict"),
             "primary_error": nullable(ref("error_code")),
             "related_errors": ref("error_code_set"),
+            "witness": nullable(ref("error_witness")),
             "state_before_digest": ref("digest"),
             "state_after_digest": ref("digest"),
             "event_ids": ref("id_set"),
@@ -1225,6 +1245,53 @@ def build_schema() -> dict:
         },
         **{"x-maxCanonicalBytes": 262144},
     )
+    d["command_receipt"]["allOf"] = [{
+        "oneOf": [
+            {
+                "properties": {
+                    "disposition": const("accepted"),
+                    "primary_error": const(None),
+                    "related_errors": {"maxItems": 0},
+                    "witness": const(None),
+                    "event_ids": {"minItems": 1},
+                    "first_event_sequence": ref("uint"),
+                    "last_event_sequence": ref("uint"),
+                },
+                "required": [
+                    "disposition", "primary_error", "related_errors", "witness", "event_ids",
+                    "first_event_sequence", "last_event_sequence",
+                ],
+            },
+            {
+                "properties": {
+                    "disposition": enum("refused", "conflict"),
+                    "primary_error": ref("error_code"),
+                    "event_ids": {"maxItems": 0},
+                    "first_event_sequence": const(None),
+                    "last_event_sequence": const(None),
+                },
+                "required": [
+                    "disposition", "primary_error", "event_ids", "first_event_sequence",
+                    "last_event_sequence",
+                ],
+            },
+            {
+                "properties": {
+                    "disposition": const("duplicate"),
+                    "primary_error": const(None),
+                    "related_errors": {"maxItems": 0},
+                    "witness": const(None),
+                    "event_ids": {"maxItems": 0},
+                    "first_event_sequence": const(None),
+                    "last_event_sequence": const(None),
+                },
+                "required": [
+                    "disposition", "primary_error", "related_errors", "witness", "event_ids",
+                    "first_event_sequence", "last_event_sequence",
+                ],
+            },
+        ]
+    }]
 
     no_related = array(ref("domain_record"), maximum=0)
     goal_related = array(ref("goal_spec_record"), minimum=1, maximum=1)
@@ -1261,6 +1328,7 @@ def build_schema() -> dict:
         "ExecutiveLeaseReplaced": ("executive_lease_record", no_related),
         "RouteAssignmentReplaced": ("route_assignment_record", no_related),
         "CapacityObservationRecorded": ("capacity_observation_record", no_related),
+        "CheckpointRecorded": ("checkpoint_record", no_related),
         "BudgetReserved": ("budget_reservation_record", no_related),
         "WorkerResultRecorded": ("worker_result_record", no_related),
         "GateResultRecorded": ("gate_result_record", no_related),
@@ -1302,10 +1370,16 @@ def build_schema() -> dict:
         event_refs.append(ref(name))
     d["planning_event"] = {"oneOf": event_refs}
 
+    d["replay_checkpoint"] = closed(
+        {
+            "checkpoint_record": ref("checkpoint_record"),
+            "projection_snapshot": ref("projection_state"),
+        }
+    )
     replay_expectation = closed(
         {
             "replay_id": ref("id"),
-            "checkpoint": nullable(ref("checkpoint_record")),
+            "checkpoint": nullable(ref("replay_checkpoint")),
             "event_inputs": array(ref("json_input_text"), maximum=2048, unique=False),
             "expected_disposition": enum("accepted", "refused"),
             "primary_error": nullable(ref("error_code")),
@@ -1410,7 +1484,7 @@ def build_schema() -> dict:
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "https://recursion.invalid/schemas/control-plane/v3/planning/schema.json",
         "title": "Recursion v3 M1A closed planning wire schema",
-        "$comment": "Owner-approved M1A profile: 25 domain records, 21 commands, 26 events, 27 errors.",
+        "$comment": "Owner-approved M1A profile: 25 domain records, 22 commands, 27 events, 27 errors.",
         "x-maxDepth": 16,
         "oneOf": top_refs,
         "$defs": d,
