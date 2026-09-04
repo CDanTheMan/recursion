@@ -104,9 +104,10 @@ publication and persistence/migration requirements. Live scholarly/provider adap
 external effects, Git/publication and migration stay out of M1C implementation unless a later
 explicit milestone authorizes each one.
 
-Status 2026-09-04: Owner-authorized local construction is active under
-[M1C-CONSTRUCTION-CAMPAIGN.md](M1C-CONSTRUCTION-CAMPAIGN.md). Its exact semantics, wire profile and
-24-case closed oracle are [M1C-INTEGRITY-CONTRACTS.md](M1C-INTEGRITY-CONTRACTS.md),
+Status 2026-09-04: local construction is complete; its exact candidate, SOL adjudication and
+limitations are recorded in [M1C-CONSTRUCTION-CAMPAIGN.md](M1C-CONSTRUCTION-CAMPAIGN.md).
+Publication and merge remain human-controlled. Its reviewed semantics, wire profile and 24-case
+closed oracle are [M1C-INTEGRITY-CONTRACTS.md](M1C-INTEGRITY-CONTRACTS.md),
 [M1C-WIRE-PROFILE.md](M1C-WIRE-PROFILE.md) and
 [M1C-FIXTURE-ORACLES.md](M1C-FIXTURE-ORACLES.md).
 

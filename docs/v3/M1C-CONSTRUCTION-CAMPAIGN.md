@@ -1,6 +1,6 @@
 ---
 title: M1C source, effect and persistence contract campaign
-status: executing-local-construction
+status: complete-local-awaiting-human-publication
 last-updated: 2026-09-04
 ---
 
@@ -238,3 +238,41 @@ Stop and append a PlanRevision if a canonical rule conflicts, an oracle must be 
 requires external state, an open Owner decision must be chosen, M1A/M1B bytes must change, a
 required verifier is unavailable, or any changed path leaves the allowlist. No dissent is
 resolved by majority vote or hidden reasoning.
+
+## SOL final adjudication and terminal receipt
+
+The terminal implementation candidate is exact commit
+`8cd1c8ef574b0e375000d7c68d133404928308cf`. From clean state, the complete M1C gate set passed
+twice: byte-identical schema and 24-fixture materialization, 13 schema tests, nine fixture tests,
+four conformance tests over all 24 literal bundles with two internal oracle runs, 21 adversarial
+tests covering 40 structural mutations, 20 semantic groups and 79 output variants, and seven
+static-isolation tests.
+
+The sole retained SOL reviewer first rejected exact candidates
+`7f4e2b73d5bbbce628177faf3fe5320d2f65b39f`,
+`2d1c40c1513ffcbedc24f181ce22e218f82b15e8` and
+`31f9b348192836b8bec4760bcd66f2836c5e5ff3` with reproducible consequence, binding, temporal,
+contradictory-proof and trace-ownership counterexamples. PlanRevision 3 through 5 preserve those
+failures and their dispositions. The same reviewer then returned `PASS` with confidence 0.99 on
+the exact terminal candidate after independently reproducing every retained falsifier, exhaustively
+checking the five lanes and rerunning the complete M1C suite. No release-blocking counterexample
+remained.
+
+The unchanged M1A and M1B compatibility suites passed in full on the terminal candidate, including
+both schema and fixture materializers and all schema, fixture, conformance, property/adversarial and
+static gates. The complete v2 umbrella returned `recursion-v2-mvp.test: ALL PASS`.
+
+Candidate-range hygiene passed over all 44 changed files: every path is allowlisted, M1A and M1B
+bytes are unchanged, `git diff --check` is clean, all 123 relative links across the eight changed
+Markdown files resolve, the secret scan is clean, the worktree is clean and the branch has no
+upstream. Starting master `7f1a5695a19a1f6a12bd5a2a9a1707f0d9104d73` and required M1B receipt
+`99a10f6c94f28305aa83d4444d8ebb32218a51ae` are ancestors. The frozen integrity-schema SHA-256 is
+`ee39479d32e66223720622b7683b7f08557871c20685b46549f48148f252e8a3`; the fixture-manifest
+SHA-256 is `5b7a38b24a7652b0444a2a5c6daf35c3ed099041b6718af83a4788d29f4fad80`.
+
+M1C-01 through M1C-06 are complete for that exact implementation candidate. This receipt commit is
+a documentation-only descendant and does not alter the reviewed schema, fixture, oracle or test
+bytes. The result is same-family, synthetic, inert and in-memory requirements evidence; it does not
+prove production source adapters, effect execution/reconciliation, Git publication, persistence,
+migration, deletion, live-provider behavior, performance or deployment. Push, publication, merge,
+runtime implementation and every external effect remain outside this campaign.
