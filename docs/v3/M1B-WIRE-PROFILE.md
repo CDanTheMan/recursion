@@ -40,7 +40,8 @@ payloads are base64 strings of at most 65,536 decoded bytes.
 
 `EvidenceBinding@1` has `source_ids` (nonempty sorted `Id` set), `observed_at`, nullable
 `expires_at`, and `evidence_digest`. Dates establish provenance only; the explicit eligibility
-state is the fixture input.
+state is the fixture input. When present, expiry must be strictly later than observation; neither
+field authorizes consulting an ambient clock.
 
 `RouteComponentCatalog@1` has the following arrays, each strictly ordered by `id`:
 
@@ -85,6 +86,9 @@ exceeds the pool, requirement or policy ceiling. It is evidence for admission, n
 sorted `permitted_route_ids`, `permitted_host_ids`, `permitted_account_refs`,
 `permitted_egress_destinations`, `metered_authorized`, nullable `max_metered_microunits`, and
 `pause_epoch`. The metered maximum is non-null exactly when metered authorization is true.
+Policy `permitted_*` sets are authority bounds: an empty route or host set permits no route, an
+empty account set permits no non-null account reference, and an empty egress set permits only a
+route with no egress destinations. They never inherit the requirement's empty-set convention.
 
 `RouteResolutionInput@1` has `type`, `catalog`, nonempty descriptor array ordered by descriptor
 `id`, `requirement`, `policy`, and nonempty ordered unique `ranked_route_ids`. Every ranked ID must
@@ -95,6 +99,10 @@ the closed route alphabet below. `RouteResolutionDecision@1` has `type`, `status
 (`selected` or `blocked`), nullable `selected_route_id`, and `candidate_evaluations` in exact
 ranked order. Selected requires exactly one selected ID and its evaluation eligible; blocked
 requires null and no eligible evaluation.
+
+A required route capability must be explicitly `supported` by the route descriptor and present
+in both its referenced engine and model descriptors. A route declaration cannot synthesize
+component support.
 
 Closed route reasons:
 
@@ -154,13 +162,21 @@ and booleans `update_allowed`, `downgrade_allowed`, `grant_admin_allowed`.
 `activation_order`, ordered `effective_grants`, and ordered `rejections`. Each rejection has
 `plugin_id` and sorted unique reasons.
 
+Every enabled, grant and lifecycle plugin ID must name a manifest. Every manifest required
+capability must have exactly one provider among its declared direct dependencies; zero or
+ambiguous providers block. A rejected dependency makes its dependents ineligible. Grant GoalSpec
+and policy digests must equal the active policy envelope. A lifecycle is required for admission
+and must bind the manifest artifact, the grant epoch and an admissible lifecycle state.
+
 Closed plugin reasons:
 
-`capability-denied`, `conflict-declared`, `dependency-cycle`, `dependency-digest-mismatch`,
-`dependency-missing`, `exclusive-resource-conflict`, `grant-digest-mismatch`, `grant-revoked`,
-`isolation-denied`, `manifest-digest-mismatch`, `plugin-not-enabled`, `policy-limit-exceeded`,
-`sensitive-grant-missing`, `stale-plugin-epoch`, `trust-tier-denied`, `unknown-capability`,
-`unknown-protocol`.
+`ambiguous-capability-provider`, `capability-denied`, `conflict-declared`, `dependency-cycle`,
+`dependency-digest-mismatch`, `dependency-ineligible`, `dependency-missing`,
+`exclusive-resource-conflict`, `grant-context-mismatch`, `grant-digest-mismatch`,
+`grant-revoked`, `isolation-denied`, `lifecycle-digest-mismatch`, `lifecycle-missing`,
+`lifecycle-state-denied`, `manifest-digest-mismatch`, `manifest-missing`, `plugin-not-enabled`,
+`policy-limit-exceeded`, `required-capability-missing`, `sensitive-grant-missing`,
+`stale-plugin-epoch`, `trust-tier-denied`, `unknown-capability`, `unknown-protocol`.
 
 `DisabledPluginInput@1` has `type`, `manifest`, `installed`, and `enabled` fixed false.
 `DisabledActivityTrace@1` has `manifest_reads` (0 or 1) and the exact zero-only fields
@@ -173,6 +189,9 @@ Closed plugin reasons:
 `old_binding_epochs` for packet/lease/subscription. `PluginReloadDecision@1` has status
 `resolved-reload` or `blocked`, `events`, `new_epoch`, and sorted unique `old_binding_reasons`.
 Successful events are exactly `verified`, `staged`, `drain-and-fence`, `replaced`, `active`.
+Reload revalidates the new manifest and grant against the supplied policy, requires the old active
+lifecycle and replacement digest to identify the transition exactly, and requires all old binding
+epochs to equal the old lifecycle epoch before fencing them.
 
 ## Process and broker records
 
@@ -193,6 +212,7 @@ sorted `representable_future_pause_policies` drawn from `checkpoint`, `interrupt
 
 `ProcessAdmissionInput@1` has `type`, `requirement` and `descriptor`.
 `ProcessAdmissionDecision@1` has `type`, status `admitted` or `blocked`, and sorted unique reasons.
+An admitted decision has no reasons; a blocked decision has at least one.
 Closed reasons are `cancellation-unknown`, `cancellation-unsupported`, `containment-unknown`,
 `containment-unsupported`, `descriptor-not-current`, `host-mismatch`, `platform-mismatch`,
 `transport-unknown`, `transport-unsupported`.
@@ -200,6 +220,7 @@ Closed reasons are `cancellation-unknown`, `cancellation-unsupported`, `containm
 `ProcessTerminationObservation@1` has `type`, `process_requirement_id`, `process_epoch`,
 `tree_status` (`terminated`,`partial`,`unknown`), sorted `remaining_process_refs`,
 `exit_evidence_digest`, and `effect_conclusion` fixed `not-evaluated`.
+`terminated` requires an empty remaining set; `partial` requires a nonempty remaining set.
 
 Every broker message has a `type` discriminator and `protocol_version` fixed `m1b-broker/1`.
 
@@ -221,12 +242,20 @@ credit is positive and capped at 16,777,216 bytes and 65,536 events. Lease value
 `BrokerTraceInput@1` has `type`, `initial_daemon_epoch`, `initial_process_epoch`, nullable current
 input/resize leases, positive `queue_limit_bytes`, `queue_limit_events`, ordered `messages`, and
 zero-based counters `launch_count`, `model_turn_count`, `actor_create_count`, `effect_count`.
+One trace represents one client and one stream; every later identifier must match the first one.
+`WELCOME` leases must equal the trace's current leases. CREDIT is required before EVENT delivery,
+is additive, and is consumed cumulatively by decoded bytes and event count. Pending queue bytes
+and events accumulate until a non-forward ACK releases them. Exhaustion remains unrecovered until
+an explicit RESET clears the pending queue and credit. INPUT and RESIZE reuse of a command ID is a
+no-op only for the byte-identical command; conflicting reuse is refused.
 
 `BrokerTraceDecision@1` has `type`, status `accepted`, `accepted-reset` or `refused`, sorted unique
 reasons, `final_cursor`, `cursor_unit`, the four final counters, and `requires_reset`.
-Closed reasons are `attach-created-work`, `credit-exhausted`, `cursor-nonmonotonic`,
-`cursor-unit-mismatch`, `output-command-injection`, `passive-client-input`, `stale-daemon-epoch`,
-`stale-lease`, `stale-process-epoch`, `utf8-byte-cursor-mismatch`.
+Closed reasons are `ack-ahead`, `attach-created-work`, `client-mismatch`, `credit-exhausted`,
+`credit-missing`, `cursor-nonmonotonic`, `cursor-unit-mismatch`,
+`duplicate-command-conflict`, `output-command-injection`, `passive-client-input`,
+`stale-daemon-epoch`, `stale-lease`, `stale-process-epoch`, `stream-mismatch`,
+`utf8-byte-cursor-mismatch`, `welcome-lease-mismatch`.
 
 ## Fixture unions and manifest
 

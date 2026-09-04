@@ -300,6 +300,13 @@ def build_schema() -> dict[str, Any]:
             "eligible": {"type": "boolean"},
             "reasons": scalar_set(ref("RouteReason")),
         },
+        allOf=[
+            {
+                "if": {"properties": {"eligible": {"const": True}}, "required": ["eligible"]},
+                "then": {"properties": {"reasons": {"maxItems": 0}}},
+                "else": {"properties": {"reasons": {"minItems": 1}}},
+            }
+        ],
     )
     defs["RouteResolutionDecision"] = tagged(
         "RouteResolutionDecision@1",
@@ -438,11 +445,14 @@ def build_schema() -> dict[str, Any]:
         },
     )
     plugin_reasons = [
-        "capability-denied", "conflict-declared", "dependency-cycle", "dependency-digest-mismatch",
-        "dependency-missing", "exclusive-resource-conflict", "grant-digest-mismatch", "grant-revoked",
-        "isolation-denied", "manifest-digest-mismatch", "plugin-not-enabled", "policy-limit-exceeded",
-        "sensitive-grant-missing", "stale-plugin-epoch", "trust-tier-denied", "unknown-capability",
-        "unknown-protocol",
+        "ambiguous-capability-provider", "capability-denied", "conflict-declared", "dependency-cycle",
+        "dependency-digest-mismatch", "dependency-ineligible", "dependency-missing",
+        "exclusive-resource-conflict", "grant-context-mismatch", "grant-digest-mismatch",
+        "grant-revoked", "isolation-denied", "lifecycle-digest-mismatch", "lifecycle-missing",
+        "lifecycle-state-denied", "manifest-digest-mismatch", "manifest-missing",
+        "plugin-not-enabled", "policy-limit-exceeded", "required-capability-missing",
+        "sensitive-grant-missing", "stale-plugin-epoch", "trust-tier-denied",
+        "unknown-capability", "unknown-protocol",
     ]
     defs["PluginReason"] = {"enum": plugin_reasons}
     defs["PluginRejection"] = tagged(
@@ -461,6 +471,25 @@ def build_schema() -> dict[str, Any]:
             "effective_grants": keyed_set("EffectivePluginGrant", key="plugin_id"),
             "rejections": keyed_set("PluginRejection", key="plugin_id"),
         },
+        allOf=[
+            {
+                "if": {"properties": {"status": {"const": "resolved"}}, "required": ["status"]},
+                "then": {
+                    "properties": {
+                        "activation_order": {"minItems": 1},
+                        "effective_grants": {"minItems": 1},
+                        "rejections": {"maxItems": 0},
+                    }
+                },
+                "else": {
+                    "properties": {
+                        "activation_order": {"maxItems": 0},
+                        "effective_grants": {"maxItems": 0},
+                        "rejections": {"minItems": 1},
+                    }
+                },
+            }
+        ],
     )
     zero = {"const": 0}
     defs["DisabledPluginInput"] = tagged(
@@ -500,6 +529,31 @@ def build_schema() -> dict[str, Any]:
             "new_epoch": ref("Count"),
             "old_binding_reasons": scalar_set(ref("PluginReason")),
         },
+        allOf=[
+            {
+                "if": {"properties": {"status": {"const": "resolved-reload"}}, "required": ["status"]},
+                "then": {
+                    "properties": {
+                        "events": {
+                            "minItems": 5, "maxItems": 5,
+                            "prefixItems": [
+                                {"const": "verified"}, {"const": "staged"},
+                                {"const": "drain-and-fence"}, {"const": "replaced"},
+                                {"const": "active"},
+                            ],
+                            "items": False,
+                        },
+                        "old_binding_reasons": {"minItems": 1},
+                    }
+                },
+                "else": {
+                    "properties": {
+                        "events": {"maxItems": 0},
+                        "old_binding_reasons": {"minItems": 1},
+                    }
+                },
+            }
+        ],
     )
 
     transport_names = ["pipe", "pty", "conpty"]
@@ -552,6 +606,13 @@ def build_schema() -> dict[str, Any]:
     defs["ProcessAdmissionDecision"] = tagged(
         "ProcessAdmissionDecision@1",
         {"status": {"enum": ["admitted", "blocked"]}, "reasons": scalar_set(ref("ProcessReason"))},
+        allOf=[
+            {
+                "if": {"properties": {"status": {"const": "admitted"}}, "required": ["status"]},
+                "then": {"properties": {"reasons": {"maxItems": 0}}},
+                "else": {"properties": {"reasons": {"minItems": 1}}},
+            }
+        ],
     )
     defs["ProcessTerminationObservation"] = tagged(
         "ProcessTerminationObservation@1",
@@ -561,6 +622,16 @@ def build_schema() -> dict[str, Any]:
             "remaining_process_refs": ref("OpaqueRefSet"), "exit_evidence_digest": ref("Digest"),
             "effect_conclusion": {"const": "not-evaluated"},
         },
+        allOf=[
+            {
+                "if": {"properties": {"tree_status": {"const": "terminated"}}, "required": ["tree_status"]},
+                "then": {"properties": {"remaining_process_refs": {"maxItems": 0}}},
+            },
+            {
+                "if": {"properties": {"tree_status": {"const": "partial"}}, "required": ["tree_status"]},
+                "then": {"properties": {"remaining_process_refs": {"minItems": 1}}},
+            },
+        ],
     )
 
     broker_version = {"const": "m1b-broker/1"}
@@ -592,9 +663,11 @@ def build_schema() -> dict[str, Any]:
         },
     )
     broker_reasons = [
-        "attach-created-work", "credit-exhausted", "cursor-nonmonotonic", "cursor-unit-mismatch",
-        "output-command-injection", "passive-client-input", "stale-daemon-epoch", "stale-lease",
-        "stale-process-epoch", "utf8-byte-cursor-mismatch",
+        "ack-ahead", "attach-created-work", "client-mismatch", "credit-exhausted",
+        "credit-missing", "cursor-nonmonotonic", "cursor-unit-mismatch",
+        "duplicate-command-conflict", "output-command-injection", "passive-client-input",
+        "stale-daemon-epoch", "stale-lease", "stale-process-epoch", "stream-mismatch",
+        "utf8-byte-cursor-mismatch", "welcome-lease-mismatch",
     ]
     defs["BrokerReason"] = {"enum": broker_reasons}
     defs["BrokerTraceDecision"] = tagged(
@@ -606,6 +679,24 @@ def build_schema() -> dict[str, Any]:
             "model_turn_count": ref("Count"), "actor_create_count": ref("Count"),
             "effect_count": ref("Count"), "requires_reset": {"type": "boolean"},
         },
+        allOf=[
+            {
+                "if": {"properties": {"status": {"const": "accepted"}}, "required": ["status"]},
+                "then": {
+                    "properties": {"reasons": {"maxItems": 0}, "requires_reset": {"const": False}}
+                },
+            },
+            {
+                "if": {"properties": {"status": {"const": "accepted-reset"}}, "required": ["status"]},
+                "then": {
+                    "properties": {"reasons": {"minItems": 1}, "requires_reset": {"const": True}}
+                },
+            },
+            {
+                "if": {"properties": {"status": {"const": "refused"}}, "required": ["status"]},
+                "then": {"properties": {"reasons": {"minItems": 1}}},
+            },
+        ],
     )
 
     common_fixture = {

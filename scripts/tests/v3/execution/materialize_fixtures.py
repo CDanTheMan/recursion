@@ -215,12 +215,12 @@ def resources() -> dict[str, Any]:
     return {"type": "ResourceEnvelope@1", "max_cpu_millis": 100, "max_memory_bytes": 1048576, "max_disk_bytes": 1048576, "max_concurrency": 1, "max_queue_events": 64, "max_queue_bytes": 65536}
 
 
-def plugin_manifest(plugin_id: str, *, provided: list[str] | None = None, dependencies: list[dict[str, Any]] | None = None, exclusive: list[str] | None = None, conflicts: list[str] | None = None, requested: dict[str, Any] | None = None, artifact: str | None = None) -> dict[str, Any]:
+def plugin_manifest(plugin_id: str, *, provided: list[str] | None = None, required: list[str] | None = None, dependencies: list[dict[str, Any]] | None = None, exclusive: list[str] | None = None, conflicts: list[str] | None = None, requested: dict[str, Any] | None = None, artifact: str | None = None) -> dict[str, Any]:
     value = {
         "type": "PluginManifest@1", "id": f"manifest-{plugin_id}", "plugin_id": plugin_id,
         "version": "1.0.0", "protocol_version": "m1b-plugin/1", "artifact_digest": artifact or D1,
         "dependency_lock_digest": D2, "trust_tier": "T2-signed-isolated-third-party",
-        "provided_capabilities": provided or ["render"], "required_capabilities": [],
+        "provided_capabilities": provided or ["render"], "required_capabilities": required or [],
         "dependencies": dependencies or [], "exclusive_resources": exclusive or [],
         "conflicts_with_plugin_ids": conflicts or [], "configuration_schema_digest": D3,
         "isolation_mode": "isolated-subprocess", "durable_subscriptions": [],
@@ -288,7 +288,7 @@ def plugin_fixtures() -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     core = plugin_manifest("plugin-core", provided=["index"], requested=grants(functional_capabilities=["index"]))
     dep = {"type": "PluginDependency@1", "plugin_id": "plugin-core", "artifact_digest": core["artifact_digest"], "dependency_lock_digest": core["dependency_lock_digest"]}
-    view = plugin_manifest("plugin-view", dependencies=[dep])
+    view = plugin_manifest("plugin-view", required=["index"], dependencies=[dep])
     value = plugin_input([core, view])
     rows.append(fixture("PluginFixtureBundle@1", "F-M1B-009", "Resolve valid manifest graph in dependency order.", ["m1b-plugin-graph"], value, plugin_decision("resolved", ["plugin-core", "plugin-view"], [effective(core), effective(view)])))
 
@@ -432,7 +432,10 @@ def process_and_broker_fixtures() -> list[dict[str, Any]]:
     rows.append(fixture("BrokerFixtureBundle@1", "F-M1B-022", "Slow client exhaustion requires explicit reset and gap.", ["m1b-broker-flow"], value, broker_decision("accepted-reset", ["credit-exhausted"], 1, "event", True)))
 
     snowman = "☃".encode("utf-8")
-    messages = [broker_message("EVENT", stream_id="stream-a", daemon_epoch=2, cursor=len(snowman), cursor_unit="utf8-byte", event_class="output", process_id="process-a", payload_base64=base64.b64encode(snowman).decode(), payload_untrusted=True)]
+    messages = [
+        broker_message("CREDIT", client_id="client-a", stream_id="stream-a", daemon_epoch=2, bytes=len(snowman), events=1),
+        broker_message("EVENT", stream_id="stream-a", daemon_epoch=2, cursor=len(snowman), cursor_unit="utf8-byte", event_class="output", process_id="process-a", payload_base64=base64.b64encode(snowman).decode(), payload_untrusted=True),
+    ]
     value = broker_input(messages)
     rows.append(fixture("BrokerFixtureBundle@1", "F-M1B-023", "Raw output cursor counts UTF-8 bytes rather than characters.", ["m1b-broker-cursor"], value, broker_decision("accepted", [], 3, "utf8-byte", False)))
 

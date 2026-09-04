@@ -350,16 +350,22 @@
     },
     "BrokerReason": {
       "enum": [
+        "ack-ahead",
         "attach-created-work",
+        "client-mismatch",
         "credit-exhausted",
+        "credit-missing",
         "cursor-nonmonotonic",
         "cursor-unit-mismatch",
+        "duplicate-command-conflict",
         "output-command-injection",
         "passive-client-input",
         "stale-daemon-epoch",
         "stale-lease",
         "stale-process-epoch",
-        "utf8-byte-cursor-mismatch"
+        "stream-mismatch",
+        "utf8-byte-cursor-mismatch",
+        "welcome-lease-mismatch"
       ]
     },
     "BrokerReset": {
@@ -498,6 +504,71 @@
     },
     "BrokerTraceDecision": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "accepted"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reasons": {
+                "maxItems": 0
+              },
+              "requires_reset": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "accepted-reset"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reasons": {
+                "minItems": 1
+              },
+              "requires_reset": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "refused"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reasons": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "actor_create_count": {
           "$ref": "#/$defs/Count"
@@ -1830,18 +1901,26 @@
     },
     "PluginReason": {
       "enum": [
+        "ambiguous-capability-provider",
         "capability-denied",
         "conflict-declared",
         "dependency-cycle",
         "dependency-digest-mismatch",
+        "dependency-ineligible",
         "dependency-missing",
         "exclusive-resource-conflict",
+        "grant-context-mismatch",
         "grant-digest-mismatch",
         "grant-revoked",
         "isolation-denied",
+        "lifecycle-digest-mismatch",
+        "lifecycle-missing",
+        "lifecycle-state-denied",
         "manifest-digest-mismatch",
+        "manifest-missing",
         "plugin-not-enabled",
         "policy-limit-exceeded",
+        "required-capability-missing",
         "sensitive-grant-missing",
         "stale-plugin-epoch",
         "trust-tier-denied",
@@ -1878,6 +1957,59 @@
     },
     "PluginReloadDecision": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "events": {
+                "maxItems": 0
+              },
+              "old_binding_reasons": {
+                "minItems": 1
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "status": {
+                "const": "resolved-reload"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "events": {
+                "items": false,
+                "maxItems": 5,
+                "minItems": 5,
+                "prefixItems": [
+                  {
+                    "const": "verified"
+                  },
+                  {
+                    "const": "staged"
+                  },
+                  {
+                    "const": "drain-and-fence"
+                  },
+                  {
+                    "const": "replaced"
+                  },
+                  {
+                    "const": "active"
+                  }
+                ]
+              },
+              "old_binding_reasons": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "events": {
           "items": {
@@ -1991,6 +2123,46 @@
     },
     "PluginResolutionDecision": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "activation_order": {
+                "maxItems": 0
+              },
+              "effective_grants": {
+                "maxItems": 0
+              },
+              "rejections": {
+                "minItems": 1
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "status": {
+                "const": "resolved"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "activation_order": {
+                "minItems": 1
+              },
+              "effective_grants": {
+                "minItems": 1
+              },
+              "rejections": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "activation_order": {
           "items": {
@@ -2117,6 +2289,34 @@
     },
     "ProcessAdmissionDecision": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "reasons": {
+                "minItems": 1
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "status": {
+                "const": "admitted"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reasons": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "reasons": {
           "items": {
@@ -2478,6 +2678,46 @@
     },
     "ProcessTerminationObservation": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "tree_status": {
+                "const": "terminated"
+              }
+            },
+            "required": [
+              "tree_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "remaining_process_refs": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "tree_status": {
+                "const": "partial"
+              }
+            },
+            "required": [
+              "tree_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "remaining_process_refs": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "effect_conclusion": {
           "const": "not-evaluated"
@@ -2609,6 +2849,34 @@
     },
     "RouteCandidateEvaluation": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "reasons": {
+                "minItems": 1
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "eligible": {
+                "const": true
+              }
+            },
+            "required": [
+              "eligible"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reasons": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "eligible": {
           "type": "boolean"

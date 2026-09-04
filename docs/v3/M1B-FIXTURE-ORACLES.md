@@ -56,11 +56,15 @@ this campaign; a changed oracle requires an appended campaign PlanRevision befor
 
 For each union family, tests mutate version, discriminator, unknown field, ID, digest, integer,
 enum, ordering, uniqueness and collection bound. Cross-record probes additionally cover duplicate
-route priority, unreferenced component, unknown capability, metered budget overflow, private
-egress widening, self-dependency, hidden graph cycle, transitive lock substitution, trust-as-grant,
-disabled activity, reload without fence, platform mismatch, stale evidence, mixed cursor units,
-non-monotonic cursor, zero/overflow credit, output-as-command, passive-client input and attach that
-increments a launch counter.
+route priority, unreferenced component, unsupported component claims, empty requirement versus
+policy allowlists, unknown capability, metered budget overflow, private egress widening,
+self-dependency, hidden graph cycle, missing or ambiguous capability provider, transitive lock
+substitution, grant/policy and lifecycle mismatch, trust-as-grant, disabled activity, reload
+without fence, platform mismatch, stale or chronologically invalid evidence, exact termination
+shape, mixed cursor units, non-monotonic or forward ACK cursor, absent/exhausted cumulative credit,
+cumulative queue overflow, stream/client/lease mismatch, conflicting command replay,
+output-as-command, passive-client input and attach that increments a launch counter. Lexical
+decoder probes include negative zero.
 
 The reference oracle is test-only. A fixture passes only when strict schema validation succeeds,
 the independently computed decision equals the literal expected decision byte-for-byte after

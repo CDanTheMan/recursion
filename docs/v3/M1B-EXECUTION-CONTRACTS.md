@@ -54,13 +54,16 @@ subscriptions, requested grant dimensions, resource envelope, provenance and lic
 
 The resolver rejects unknown protocol/capability values, missing dependencies, dependency cycles,
 digest or dependency-lock substitution, explicit conflicts and unordered exclusive-resource
-ownership. A valid signature or trust tier is identity/review evidence, never runtime authority.
+ownership. Required capabilities resolve to exactly one declared dependency provider; missing,
+ambiguous or rejected providers block their dependents. A valid signature or trust tier is
+identity/review evidence, never runtime authority.
 
 Effective authority is an intersection. Functional capability and workspace scope require exact
-digest-bound grants. Credential, network, model-launch, route/account, quota, spend, update,
-downgrade and grant-administration dimensions remain independently represented. A deny at any
-source remains in the explanation. No manifest, edition, signature, acknowledgement or dependency
-can widen GoalSpec/policy authority.
+digest-bound grants whose GoalSpec and policy digests match the active policy envelope. Lifecycle
+artifact and epoch bindings must match too. Credential, network, model-launch, route/account,
+quota, spend, update, downgrade and grant-administration dimensions remain independently
+represented. A deny at any source remains in the explanation. No manifest, edition, signature,
+acknowledgement or dependency can widen GoalSpec/policy authority.
 
 Lifecycle is:
 
@@ -111,7 +114,9 @@ leases, recovery and fanout. The closed message union is `HELLO`, `WELCOME`, `SN
 - Daemon and process epochs fence stale clients.
 - One current input lease and one current resize lease may write; passive clients cannot.
 - Commands are idempotency-bound.
-- Credit and queue limits are positive and bounded.
+- Credit is explicit and cumulatively consumed by decoded bytes and event count; each client's
+  unacknowledged queue is cumulatively bounded.
+- ACK cannot advance beyond emitted output. Stream, client and WELCOME lease bindings are exact.
 - A gap yields explicit `RESET` with reason `gap` and a current snapshot cursor.
 - Slow or absent clients cannot block canonical append or cause an unbounded queue.
 - Attach, detach, replay and reset never launch a process/model turn or create an actor/effect.

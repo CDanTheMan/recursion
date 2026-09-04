@@ -27,6 +27,12 @@ def verify_seal(value: dict[str, Any], field: str) -> None:
         raise OracleError(f"invalid {field}")
 
 
+def verify_evidence(value: dict[str, Any]) -> None:
+    expires_at = value["expires_at"]
+    if expires_at is not None and expires_at <= value["observed_at"]:
+        raise OracleError("evidence expiry must follow observation")
+
+
 def keyed(values: list[dict[str, Any]], field: str) -> dict[str, dict[str, Any]]:
     result = {value[field]: value for value in values}
     if len(result) != len(values):
@@ -48,6 +54,7 @@ def resolve_route(value: dict[str, Any]) -> dict[str, Any]:
         raise OracleError("ranked route is not described")
     for route in routes.values():
         verify_seal(route, "descriptor_digest")
+        verify_evidence(route["evidence"])
 
     engines = keyed(catalog["engines"], "id")
     providers = keyed(catalog["providers"], "id")
@@ -114,15 +121,15 @@ def resolve_route(value: dict[str, Any]) -> dict[str, Any]:
 
         if requirement["allowed_route_ids"] and route_id not in requirement["allowed_route_ids"]:
             reasons.add("route-denied")
-        if policy["permitted_route_ids"] and route_id not in policy["permitted_route_ids"]:
+        if route_id not in policy["permitted_route_ids"]:
             reasons.add("route-denied")
         if requirement["allowed_host_ids"] and route["host_id"] not in requirement["allowed_host_ids"]:
             reasons.add("host-denied")
-        if policy["permitted_host_ids"] and route["host_id"] not in policy["permitted_host_ids"]:
+        if route["host_id"] not in policy["permitted_host_ids"]:
             reasons.add("host-denied")
-        if route["account_ref"] is not None and policy["permitted_account_refs"] and route["account_ref"] not in policy["permitted_account_refs"]:
+        if route["account_ref"] is not None and route["account_ref"] not in policy["permitted_account_refs"]:
             reasons.add("account-mismatch")
-        if any(destination not in requirement["allowed_egress_destinations"] for destination in route["egress_destinations"]):
+        if requirement["allowed_egress_destinations"] and any(destination not in requirement["allowed_egress_destinations"] for destination in route["egress_destinations"]):
             reasons.add("egress-denied")
         if any(destination not in policy["permitted_egress_destinations"] for destination in route["egress_destinations"]):
             reasons.add("egress-denied")
@@ -138,6 +145,8 @@ def resolve_route(value: dict[str, Any]) -> dict[str, Any]:
                 reasons.add("capability-unknown")
             elif state != "supported":
                 reasons.add("capability-unsupported")
+            elif engine is None or model is None or capability not in engine["capabilities"] or capability not in model["capabilities"]:
+                reasons.add("component-mismatch")
         if sandbox is not None and any(capability not in sandbox["capabilities"] for capability in requirement["required_sandbox_capabilities"]):
             reasons.add("sandbox-capability-missing")
 
@@ -235,7 +244,9 @@ def resolve_plugins(value: dict[str, Any]) -> dict[str, Any]:
     grants = keyed(value["grants"], "plugin_id")
     lifecycles = keyed(value["lifecycles"], "plugin_id")
     policy = value["policy"]
-    reasons: dict[str, set[str]] = {plugin_id: set() for plugin_id in manifests}
+    enabled = set(value["enabled_plugin_ids"])
+    all_plugin_ids = set(manifests) | set(grants) | set(lifecycles) | enabled
+    reasons: dict[str, set[str]] = {plugin_id: set() for plugin_id in all_plugin_ids}
     graph: dict[str, set[str]] = {plugin_id: set() for plugin_id in manifests}
 
     for manifest in manifests.values():
@@ -243,8 +254,11 @@ def resolve_plugins(value: dict[str, Any]) -> dict[str, Any]:
     for grant in grants.values():
         verify_seal(grant, "grant_digest")
 
+    for plugin_id in all_plugin_ids - set(manifests):
+        reasons[plugin_id].add("manifest-missing")
+
     for plugin_id, manifest in manifests.items():
-        if plugin_id not in value["enabled_plugin_ids"]:
+        if plugin_id not in enabled:
             reasons[plugin_id].add("plugin-not-enabled")
         if manifest["protocol_version"] != "m1b-plugin/1":
             reasons[plugin_id].add("unknown-protocol")
@@ -260,12 +274,21 @@ def resolve_plugins(value: dict[str, Any]) -> dict[str, Any]:
         else:
             if grant["artifact_digest"] != manifest["artifact_digest"] or grant["dependency_lock_digest"] != manifest["dependency_lock_digest"]:
                 reasons[plugin_id].add("grant-digest-mismatch")
+            if grant["goal_spec_digest"] != policy["goal_spec_digest"] or grant["policy_digest"] != policy["policy_digest"]:
+                reasons[plugin_id].add("grant-context-mismatch")
             if grant["revoked"]:
                 reasons[plugin_id].add("grant-revoked")
             reasons[plugin_id].update(subset_dimensions(manifest["requested_grants"], grant["dimensions"], policy))
         lifecycle = lifecycles.get(plugin_id)
-        if lifecycle is not None and grant is not None and lifecycle["epoch"] != grant["grant_epoch"]:
-            reasons[plugin_id].add("stale-plugin-epoch")
+        if lifecycle is None:
+            reasons[plugin_id].add("lifecycle-missing")
+        else:
+            if lifecycle["artifact_digest"] != manifest["artifact_digest"]:
+                reasons[plugin_id].add("lifecycle-digest-mismatch")
+            if lifecycle["state"] not in {"verified", "admitted", "staged", "active"}:
+                reasons[plugin_id].add("lifecycle-state-denied")
+            if grant is not None and lifecycle["epoch"] != grant["grant_epoch"]:
+                reasons[plugin_id].add("stale-plugin-epoch")
         for dependency in manifest["dependencies"]:
             dependency_id = dependency["plugin_id"]
             graph[plugin_id].add(dependency_id)
@@ -274,6 +297,16 @@ def resolve_plugins(value: dict[str, Any]) -> dict[str, Any]:
                 reasons[plugin_id].add("dependency-missing")
             elif dependency["artifact_digest"] != target["artifact_digest"] or dependency["dependency_lock_digest"] != target["dependency_lock_digest"]:
                 reasons[plugin_id].add("dependency-digest-mismatch")
+        for capability in manifest["required_capabilities"]:
+            providers = [
+                dependency["plugin_id"] for dependency in manifest["dependencies"]
+                if dependency["plugin_id"] in manifests
+                and capability in manifests[dependency["plugin_id"]]["provided_capabilities"]
+            ]
+            if not providers:
+                reasons[plugin_id].add("required-capability-missing")
+            elif len(providers) > 1:
+                reasons[plugin_id].add("ambiguous-capability-provider")
         for conflict in manifest["conflicts_with_plugin_ids"]:
             if conflict in manifests:
                 reasons[plugin_id].add("conflict-declared")
@@ -289,6 +322,15 @@ def resolve_plugins(value: dict[str, Any]) -> dict[str, Any]:
         if len(owners) > 1:
             for plugin_id in owners:
                 reasons[plugin_id].add("exclusive-resource-conflict")
+
+    changed = True
+    while changed:
+        changed = False
+        for plugin_id, dependencies in graph.items():
+            if any(reasons.get(dependency_id, set()) - {"dependency-cycle", "dependency-ineligible"} for dependency_id in dependencies):
+                before = len(reasons[plugin_id])
+                reasons[plugin_id].add("dependency-ineligible")
+                changed = changed or len(reasons[plugin_id]) != before
 
     rejected = [plugin_rejection(plugin_id, problem) for plugin_id, problem in sorted(reasons.items()) if problem]
     if rejected:
@@ -315,18 +357,45 @@ def evaluate_reload(value: dict[str, Any]) -> dict[str, Any]:
     old = value["old_lifecycle"]
     new = value["new_manifest"]
     grant = value["grant"]
+    policy = value["policy"]
     verify_seal(new, "manifest_digest")
     verify_seal(grant, "grant_digest")
-    if new["plugin_id"] != old["plugin_id"] or new["artifact_digest"] == old["artifact_digest"]:
-        return {"type": "PluginReloadDecision@1", "status": "blocked", "events": [], "new_epoch": old["epoch"], "old_binding_reasons": []}
+    problems: set[str] = set()
+    if new["plugin_id"] != old["plugin_id"]:
+        problems.add("manifest-digest-mismatch")
+    if new["artifact_digest"] == old["artifact_digest"] or old["replacement_digest"] != new["artifact_digest"]:
+        problems.add("lifecycle-digest-mismatch")
+    if old["state"] != "active" or any(old[field] != old["epoch"] for field in ["packet_epoch", "lease_epoch", "subscription_epoch"]):
+        problems.add("lifecycle-state-denied")
     new_epoch = old["epoch"] + 1
-    if grant["plugin_id"] != new["plugin_id"] or grant["artifact_digest"] != new["artifact_digest"] or grant["grant_epoch"] != new_epoch:
-        return {"type": "PluginReloadDecision@1", "status": "blocked", "events": [], "new_epoch": old["epoch"], "old_binding_reasons": []}
-    stale = any(epoch < new_epoch for epoch in value["old_binding_epochs"].values() if isinstance(epoch, int))
+    if grant["plugin_id"] != new["plugin_id"] or grant["artifact_digest"] != new["artifact_digest"] or grant["dependency_lock_digest"] != new["dependency_lock_digest"]:
+        problems.add("grant-digest-mismatch")
+    if grant["goal_spec_digest"] != policy["goal_spec_digest"] or grant["policy_digest"] != policy["policy_digest"]:
+        problems.add("grant-context-mismatch")
+    if grant["grant_epoch"] != new_epoch or any(epoch != old["epoch"] for epoch in value["old_binding_epochs"].values() if isinstance(epoch, int)):
+        problems.add("stale-plugin-epoch")
+    if grant["revoked"]:
+        problems.add("grant-revoked")
+    if new["protocol_version"] != "m1b-plugin/1":
+        problems.add("unknown-protocol")
+    if new["trust_tier"] not in policy["allowed_trust_tiers"]:
+        problems.add("trust-tier-denied")
+    if new["isolation_mode"] not in policy["allowed_isolation_modes"]:
+        problems.add("isolation-denied")
+    if any(capability not in policy["allowed_capabilities"] for capability in new["provided_capabilities"]):
+        problems.add("capability-denied")
+    if new["required_capabilities"]:
+        problems.add("required-capability-missing")
+    problems.update(subset_dimensions(new["requested_grants"], grant["dimensions"], policy))
+    if problems:
+        return {
+            "type": "PluginReloadDecision@1", "status": "blocked", "events": [],
+            "new_epoch": old["epoch"], "old_binding_reasons": sorted(problems),
+        }
     return {
         "type": "PluginReloadDecision@1", "status": "resolved-reload",
         "events": ["verified", "staged", "drain-and-fence", "replaced", "active"],
-        "new_epoch": new_epoch, "old_binding_reasons": ["stale-plugin-epoch"] if stale else [],
+        "new_epoch": new_epoch, "old_binding_reasons": ["stale-plugin-epoch"],
     }
 
 
@@ -334,6 +403,7 @@ def evaluate_process(value: dict[str, Any]) -> dict[str, Any]:
     requirement = value["requirement"]
     descriptor = value["descriptor"]
     verify_seal(descriptor, "descriptor_digest")
+    verify_evidence(descriptor["evidence"])
     reasons: set[str] = set()
     if descriptor["eligibility_state"] != "verified-current":
         reasons.add("descriptor-not-current")
@@ -362,11 +432,19 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
     process_epoch = value["initial_process_epoch"]
     current_cursor = 0
     current_unit = "event"
+    acknowledged_cursor = 0
+    stream_id: str | None = None
+    client_id: str | None = None
     reasons: set[str] = set()
-    credit_bytes: int | None = None
-    credit_events: int | None = None
-    reset_seen = False
-    exhaustion = False
+    credit_bytes = 0
+    credit_events = 0
+    credit_seen = False
+    pending: list[tuple[int, int]] = []
+    pending_bytes = 0
+    reset_after_exhaustion = False
+    exhaustion_seen = False
+    exhaustion_unrecovered = False
+    commands: dict[str, bytes] = {}
 
     if any(value[field] for field in ["launch_count", "model_turn_count", "actor_create_count", "effect_count"]):
         reasons.add("attach-created-work")
@@ -375,11 +453,31 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
             reasons.add("stale-daemon-epoch")
             continue
         kind = message["type"]
+        message_stream = message["stream_id"]
+        if stream_id is None:
+            stream_id = message_stream
+        elif message_stream != stream_id:
+            reasons.add("stream-mismatch")
+            continue
+        if "client_id" in message:
+            if client_id is None:
+                client_id = message["client_id"]
+            elif message["client_id"] != client_id:
+                reasons.add("client-mismatch")
+                continue
         if kind == "CREDIT":
-            credit_bytes = message["bytes"]
-            credit_events = message["events"]
+            credit_seen = True
+            credit_bytes += message["bytes"]
+            credit_events += message["events"]
             continue
         if kind in {"INPUT", "RESIZE"}:
+            encoded = canonical_bytes(message)
+            prior = commands.get(message["command_id"])
+            if prior is not None:
+                if prior != encoded:
+                    reasons.add("duplicate-command-conflict")
+                continue
+            commands[message["command_id"]] = encoded
             if message["process_epoch"] != process_epoch:
                 reasons.add("stale-process-epoch")
             lease_field = "input_lease" if kind == "INPUT" else "resize_lease"
@@ -390,9 +488,17 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
                 reasons.add("stale-lease")
             continue
         if kind == "RESET":
-            reset_seen = True
+            if exhaustion_unrecovered:
+                reset_after_exhaustion = True
+                exhaustion_unrecovered = False
             current_cursor = message["snapshot_cursor"]
             current_unit = message["cursor_unit"]
+            acknowledged_cursor = current_cursor
+            pending.clear()
+            pending_bytes = 0
+            credit_seen = False
+            credit_bytes = 0
+            credit_events = 0
             continue
         if kind not in {"EVENT", "SNAPSHOT", "ACK", "HELLO", "WELCOME"}:
             continue
@@ -401,6 +507,11 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
             cursor = message["last_cursor"] if kind == "HELLO" else message["snapshot_cursor"]
             if current_cursor and unit != current_unit:
                 reasons.add("cursor-unit-mismatch")
+            if kind == "WELCOME" and (
+                message["input_lease"] != value["current_input_lease"]
+                or message["resize_lease"] != value["current_resize_lease"]
+            ):
+                reasons.add("welcome-lease-mismatch")
             current_unit = unit
             current_cursor = max(current_cursor, cursor)
             continue
@@ -420,24 +531,48 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
                 reasons.add("utf8-byte-cursor-mismatch")
             elif unit == "event" and cursor != expected:
                 reasons.add("cursor-nonmonotonic")
-            if credit_bytes is not None and payload_length > credit_bytes:
-                exhaustion = True
+            if not credit_seen:
+                exhaustion_seen = True
+                exhaustion_unrecovered = True
+                reasons.add("credit-missing")
+            elif payload_length > credit_bytes or credit_events < 1:
+                exhaustion_seen = True
+                exhaustion_unrecovered = True
                 reasons.add("credit-exhausted")
-            if credit_events is not None and credit_events < 1:
-                exhaustion = True
+            else:
+                credit_bytes -= payload_length
+                credit_events -= 1
+            pending.append((cursor, payload_length))
+            pending_bytes += payload_length
+            if pending_bytes > value["queue_limit_bytes"] or len(pending) > value["queue_limit_events"]:
+                exhaustion_seen = True
+                exhaustion_unrecovered = True
                 reasons.add("credit-exhausted")
-            if payload_length > value["queue_limit_bytes"] or value["queue_limit_events"] < 1:
-                exhaustion = True
-                reasons.add("credit-exhausted")
+            current_cursor = max(current_cursor, cursor)
+        elif kind == "ACK":
+            if cursor < acknowledged_cursor:
+                reasons.add("cursor-nonmonotonic")
+            elif cursor > current_cursor:
+                reasons.add("ack-ahead")
+            else:
+                acknowledged_cursor = cursor
+                retained: list[tuple[int, int]] = []
+                pending_bytes = 0
+                for pending_cursor, size in pending:
+                    if pending_cursor > cursor:
+                        retained.append((pending_cursor, size))
+                        pending_bytes += size
+                pending = retained
         elif cursor < current_cursor:
             reasons.add("cursor-nonmonotonic")
-        current_cursor = max(current_cursor, cursor)
+        else:
+            current_cursor = cursor
         current_unit = unit
 
     refusal_reasons = reasons - {"credit-exhausted"}
-    if refusal_reasons or (exhaustion and not reset_seen):
+    if refusal_reasons or exhaustion_unrecovered:
         status = "refused"
-    elif exhaustion and reset_seen:
+    elif exhaustion_seen and reset_after_exhaustion:
         status = "accepted-reset"
     else:
         status = "accepted"
@@ -446,7 +581,7 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
         "final_cursor": current_cursor, "cursor_unit": current_unit,
         "launch_count": value["launch_count"], "model_turn_count": value["model_turn_count"],
         "actor_create_count": value["actor_create_count"], "effect_count": value["effect_count"],
-        "requires_reset": exhaustion,
+        "requires_reset": exhaustion_seen,
     }
 
 

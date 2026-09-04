@@ -58,7 +58,7 @@
     },
     {
       "bundle_type": "PluginFixtureBundle@1",
-      "digest": "sha256:e6801036aa9b055bb3fa449fb4448b6edc2fd4ef124acbdd564f62b6ee80036e",
+      "digest": "sha256:b34a9e9ee9ec7e6e16a527e79845b1b0e9d12fe4377874a89002b57b373ecb46",
       "fixture_id": "F-M1B-009",
       "path": "F-M1B-009.json",
       "type": "FixtureManifestEntry@1"
@@ -156,7 +156,7 @@
     },
     {
       "bundle_type": "BrokerFixtureBundle@1",
-      "digest": "sha256:a78d62cdda8df3c33c98dc5c4d0fb6b226abbad7e7e3b38c01606d4b30719e66",
+      "digest": "sha256:4c82f6e19fa67dc364deaf132c9d64453d4f200eb993adf9751311b735319667",
       "fixture_id": "F-M1B-023",
       "path": "F-M1B-023.json",
       "type": "FixtureManifestEntry@1"
@@ -169,6 +169,6 @@
       "type": "FixtureManifestEntry@1"
     }
   ],
-  "schema_digest": "sha256:6a1ed985f265c0dba520e29f7601059226f66b924102996f5e0bef7238985ca7",
+  "schema_digest": "sha256:4835039ed55e19cb83b5bf88ff58fbb2f4565f161f39b4e31283bfb81de78917",
   "type": "FixtureManifest@1"
 }

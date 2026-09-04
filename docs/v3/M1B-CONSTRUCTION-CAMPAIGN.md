@@ -145,6 +145,31 @@ defaults; provider/terminal support matrix; which sensitive plugin grants share 
 sandbox, renderer and process-library selections; constitutional amendment; migration; and any
 live or external effect.
 
+## PlanRevision 3 — independent fail-closed repair
+
+`PLAN-M1B-001@3` was triggered by the TERRA-M1B-01 exact-candidate review of
+`5171473c875b84cbe7c67e10da9e9799eba6a332` and a concurrent lead audit. Although every supplied
+gate passed twice, the verifier reproduced four schema-valid false greens: lexical negative zero,
+empty requirement egress, grant/policy context mismatch and non-cumulative or absent broker
+credit. The lead audit found adjacent missing component, lifecycle, process-result and broker
+binding checks. The candidate is rejected; its passing receipt is not terminal evidence.
+
+- Retained: Owner intent, GoalSpec, allowed paths, no-runtime boundary, DAG, all 24 fixture IDs,
+  purposes and expected outcome classes.
+- Re-admitted: M1B-02 through M1B-06 on a repaired exact candidate.
+- Change: reject lexical `-0`; apply the documented no-additional-restriction meaning only to
+  requirement allowlists while policy authority sets remain fail-closed.
+- Change: require route capability component backing, plugin grant/policy and lifecycle bindings,
+  one dependency provider per required capability, and exact process result/termination shapes.
+- Change: broker traces bind one stream/client and current leases, consume explicit credit and
+  queue capacity cumulatively, reject forward ACKs and conflicting idempotency keys, and recover
+  exhaustion only through explicit RESET.
+- Gate extension: add independent adversarial probes for every reproduced falsifier and adjacent
+  binding rule; regenerate all schema/fixture digests; repeat every compatibility and hygiene gate;
+  obtain a new exact-candidate independent verdict.
+- Falsifier: any reproduced TERRA counterexample remains accepted, any repaired rule changes a
+  fixture's intended outcome class, or the repair introduces runtime I/O or an Owner policy choice.
+
 ## Stop conditions
 
 Stop and append a PlanRevision if a canonical rule conflicts, an oracle must be weakened, a test

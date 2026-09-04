@@ -236,7 +236,7 @@
           "stage",
           "verify"
         ],
-        "manifest_digest": "sha256:4df03c8b10e9cf192bd81d7990121307826122df489cb6d43dd7f759a7a853f4",
+        "manifest_digest": "sha256:9f39a49fea67a07056b3cb6fd0be2920fb774caf514883f05a17286e3a593b0f",
         "plugin_id": "plugin-view",
         "protocol_version": "m1b-plugin/1",
         "provenance_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
@@ -261,7 +261,9 @@
             "workspace:/repo"
           ]
         },
-        "required_capabilities": [],
+        "required_capabilities": [
+          "index"
+        ],
         "resource_envelope": {
           "max_concurrency": 1,
           "max_cpu_millis": 100,

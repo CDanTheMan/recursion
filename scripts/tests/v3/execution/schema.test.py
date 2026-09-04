@@ -38,6 +38,12 @@ def _reject_float(value: str) -> None:
     raise StrictJSONError(f"float not permitted: {value}")
 
 
+def _parse_int(value: str) -> int:
+    if value == "-0":
+        raise StrictJSONError("negative zero is forbidden")
+    return int(value, 10)
+
+
 def _object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -67,6 +73,7 @@ def strict_loads(raw: bytes) -> Any:
     value = json.loads(
         text,
         object_pairs_hook=_object_pairs,
+        parse_int=_parse_int,
         parse_float=_reject_float,
         parse_constant=_reject_constant,
     )
@@ -263,7 +270,7 @@ class M1BSchemaTests(unittest.TestCase):
         self.assertGreaterEqual(object_count, 50)
 
     def test_strict_decoder_rejects_ambiguous_json(self) -> None:
-        bad = [b'{"a":1,"a":2}', b'{"a":1.0}', b'{"a":NaN}', b'\xef\xbb\xbf{}', b'"\xff"']
+        bad = [b'{"a":1,"a":2}', b'{"a":1.0}', b'{"a":-0}', b'{"a":NaN}', b'\xef\xbb\xbf{}', b'"\xff"']
         for raw in bad:
             with self.subTest(raw=raw), self.assertRaises((StrictJSONError, UnicodeDecodeError, json.JSONDecodeError)):
                 strict_loads(raw)
@@ -322,6 +329,28 @@ class M1BSchemaTests(unittest.TestCase):
         bad["transport_capabilities"][0]["name"] = "job-object"
         with self.assertRaises(jsonschema.ValidationError):
             validate(bad, "ProcessCapabilityDescriptor")
+
+    def test_process_decision_and_termination_conditions(self) -> None:
+        validate({"type": "ProcessAdmissionDecision@1", "status": "admitted", "reasons": []}, "ProcessAdmissionDecision")
+        validate({"type": "ProcessAdmissionDecision@1", "status": "blocked", "reasons": ["host-mismatch"]}, "ProcessAdmissionDecision")
+        invalid_decisions = [
+            {"type": "ProcessAdmissionDecision@1", "status": "admitted", "reasons": ["host-mismatch"]},
+            {"type": "ProcessAdmissionDecision@1", "status": "blocked", "reasons": []},
+        ]
+        for decision in invalid_decisions:
+            with self.assertRaises(jsonschema.ValidationError):
+                validate(decision, "ProcessAdmissionDecision")
+        base = {
+            "type": "ProcessTerminationObservation@1", "process_requirement_id": "process-a",
+            "process_epoch": 1, "tree_status": "terminated", "remaining_process_refs": [],
+            "exit_evidence_digest": DIGEST, "effect_conclusion": "not-evaluated",
+        }
+        validate(base, "ProcessTerminationObservation")
+        base["remaining_process_refs"] = ["process:child"]
+        with self.assertRaises(jsonschema.ValidationError):
+            validate(base, "ProcessTerminationObservation")
+        base["tree_status"] = "partial"
+        validate(base, "ProcessTerminationObservation")
 
     def test_current_pause_is_only_operative_value(self) -> None:
         requirement = {

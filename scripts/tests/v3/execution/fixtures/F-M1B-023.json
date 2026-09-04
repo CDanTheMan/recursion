@@ -22,6 +22,15 @@
     "launch_count": 0,
     "messages": [
       {
+        "bytes": 3,
+        "client_id": "client-a",
+        "daemon_epoch": 2,
+        "events": 1,
+        "protocol_version": "m1b-broker/1",
+        "stream_id": "stream-a",
+        "type": "CREDIT"
+      },
+      {
         "cursor": 3,
         "cursor_unit": "utf8-byte",
         "daemon_epoch": 2,
