@@ -529,9 +529,23 @@ class M1BAdversarialTests(unittest.TestCase):
         value["messages"].append(copy.deepcopy(value["messages"][0]))
         self.assertEqual(oracle.replay_broker(value)["status"], "accepted")
 
+    def test_replay_gap_fences_continuation_even_if_reset_follows(self) -> None:
+        value = bundle(20)["input"]
+        value["messages"][1]["replay_floor"] = 1
+        value["messages"][1]["snapshot_cursor"] = 2
+        value["messages"].extend([
+            {"type": "CREDIT", "protocol_version": "m1b-broker/1", "client_id": "client-a", "stream_id": "stream-a", "daemon_epoch": 2, "bytes": 1, "events": 1},
+            {"type": "EVENT", "protocol_version": "m1b-broker/1", "stream_id": "stream-a", "daemon_epoch": 2, "cursor": 3, "cursor_unit": "event", "event_class": "output", "process_id": "process-a", "payload_base64": base64.b64encode(b"a").decode(), "payload_untrusted": True},
+            {"type": "RESET", "protocol_version": "m1b-broker/1", "client_id": "client-a", "stream_id": "stream-a", "daemon_epoch": 2, "reason": "gap", "snapshot_cursor": 3, "cursor_unit": "event"},
+        ])
+        decision = oracle.replay_broker(value)
+        self.assertEqual(decision["status"], "refused")
+        self.assertIn("replay-gap-continuation", decision["reasons"])
+        self.assertEqual(decision["final_cursor"], 3)
+
 
 if __name__ == "__main__":
     result = unittest.main(verbosity=2, exit=False)
     if result.result.wasSuccessful():
-        print("M1B_ADVERSARIAL_PASS tests=43 union_mutations=48 grant_dimensions=9")
+        print("M1B_ADVERSARIAL_PASS tests=44 union_mutations=48 grant_dimensions=9")
     raise SystemExit(0 if result.result.wasSuccessful() else 1)

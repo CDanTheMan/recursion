@@ -486,6 +486,7 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
     pending_bytes = 0
     recovery_needed_seen = False
     recovery_unrecovered = False
+    replay_gap_unrecovered = False
     reset_recovery_seen = False
     commands: dict[str, bytes] = {}
 
@@ -516,6 +517,9 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
             elif message["client_id"] != client_id:
                 reasons.add("client-mismatch")
                 continue
+        if replay_gap_unrecovered and kind != "RESET":
+            reasons.add("replay-gap-continuation")
+            continue
         if kind == "CREDIT":
             credit_seen = True
             credit_bytes += message["bytes"]
@@ -554,6 +558,7 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
                 credit_bytes = 0
                 credit_events = 0
                 recovery_unrecovered = False
+                replay_gap_unrecovered = False
                 reset_recovery_seen = True
             continue
         if kind not in {"EVENT", "SNAPSHOT", "ACK", "HELLO", "WELCOME"}:
@@ -578,6 +583,7 @@ def replay_broker(value: dict[str, Any]) -> dict[str, Any]:
                     reasons.add("replay-gap")
                     recovery_needed_seen = True
                     recovery_unrecovered = True
+                    replay_gap_unrecovered = True
             current_cursor = max(current_cursor, cursor)
             continue
         unit = message["cursor_unit"]

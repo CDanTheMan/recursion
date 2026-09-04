@@ -125,6 +125,8 @@ leases, recovery and fanout. The closed message union is `HELLO`, `WELCOME`, `SN
   unacknowledged queue is cumulatively bounded.
 - ACK cannot advance beyond emitted output. Stream, client and WELCOME lease bindings are exact.
 - A gap yields explicit `RESET` with reason `gap` and a current snapshot cursor.
+- Once a replay gap is detected, only RESET may continue that stream; any intervening message
+  permanently refuses the trace even when a later RESET is otherwise valid.
 - Cursor units bind even at zero; RESET cannot roll a cursor backward or occur without an
   unrecovered replay gap or flow exhaustion, and it clears prior credit.
 - Slow or absent clients cannot block canonical append or cause an unbounded queue.

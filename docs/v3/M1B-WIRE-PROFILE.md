@@ -262,6 +262,8 @@ an explicit RESET clears the pending queue and credit. INPUT and RESIZE reuse of
 no-op only for the byte-identical command; conflicting reuse is refused.
 Cursor-unit binding applies at cursor zero. `replay_floor` cannot exceed `snapshot_cursor`; a
 client cursor below the replay floor creates a `replay-gap` that must be recovered by RESET.
+After that gap is detected, RESET is the only permitted continuation; attempting any other
+same-stream message is a permanent `replay-gap-continuation` refusal even if RESET follows.
 RESET cannot lower the current cursor, cannot appear without an unrecovered replay gap or flow
 exhaustion, and clears credit so subsequent EVENT delivery requires fresh CREDIT.
 
@@ -270,8 +272,9 @@ reasons, `final_cursor`, `cursor_unit`, the four final counters, and `requires_r
 Closed reasons are `ack-ahead`, `attach-created-work`, `client-mismatch`, `credit-exhausted`,
 `credit-missing`, `cursor-nonmonotonic`, `cursor-unit-mismatch`,
 `duplicate-command-conflict`, `output-command-injection`, `passive-client-input`,
-`replay-gap`, `stale-daemon-epoch`, `stale-lease`, `stale-process-epoch`, `stream-mismatch`,
-`unexpected-reset`, `utf8-byte-cursor-mismatch`, `welcome-lease-mismatch`.
+`replay-gap`, `replay-gap-continuation`, `stale-daemon-epoch`, `stale-lease`,
+`stale-process-epoch`, `stream-mismatch`, `unexpected-reset`, `utf8-byte-cursor-mismatch`,
+`welcome-lease-mismatch`.
 
 ## Fixture unions and manifest
 

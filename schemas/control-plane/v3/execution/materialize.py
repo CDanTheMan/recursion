@@ -670,9 +670,9 @@ def build_schema() -> dict[str, Any]:
         "ack-ahead", "attach-created-work", "client-mismatch", "credit-exhausted",
         "credit-missing", "cursor-nonmonotonic", "cursor-unit-mismatch",
         "duplicate-command-conflict", "output-command-injection", "passive-client-input",
-        "replay-gap", "stale-daemon-epoch", "stale-lease", "stale-process-epoch",
-        "stream-mismatch", "unexpected-reset", "utf8-byte-cursor-mismatch",
-        "welcome-lease-mismatch",
+        "replay-gap", "replay-gap-continuation", "stale-daemon-epoch", "stale-lease",
+        "stale-process-epoch", "stream-mismatch", "unexpected-reset",
+        "utf8-byte-cursor-mismatch", "welcome-lease-mismatch",
     ]
     defs["BrokerReason"] = {"enum": broker_reasons}
     defs["BrokerTraceDecision"] = tagged(

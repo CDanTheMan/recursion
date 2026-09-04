@@ -199,6 +199,25 @@ route union.
 - Falsifier: any SOL counterexample remains accepted, route/plugin/process/broker output can claim
   a mismatched identity or authority, or a RESET/ordering rule permits ambiguous continuation.
 
+## PlanRevision 5 — replay-gap ordering fence
+
+`PLAN-M1B-001@5` was triggered by the holistic SOL review of exact candidate
+`4ae893e4588ea8c41e0b24a894fe046539d7b4b8`. The second SOL reviewer passed its six focused
+falsifiers, but the holistic reviewer produced one remaining schema-valid false green:
+WELCOME established a replay gap, CREDIT and EVENT continued the stream, and a later RESET masked
+that invalid continuation as `accepted-reset`.
+
+- Retained: every PlanRevision 4 repair, fixture outcome class, boundary and gate.
+- Re-admitted: M1B-04 through M1B-06 on one new exact candidate. The split SOL verdict on
+  `4ae893e4588ea8c41e0b24a894fe046539d7b4b8` is diagnostic evidence only.
+- Change: once WELCOME establishes an unrecovered replay gap, RESET is the only permitted next
+  coherent-stream message. Any other continuation records permanent `replay-gap-continuation`
+  refusal; a later valid RESET may advance recovery state but cannot erase that violation.
+- Gate extension: reproduce WELCOME gap, CREDIT, EVENT, RESET exactly and require a refused trace
+  carrying `replay-gap-continuation`.
+- Falsifier: any non-RESET message is processed while a replay gap is pending, or a later RESET
+  turns such a trace into `accepted-reset`.
+
 ## Stop conditions
 
 Stop and append a PlanRevision if a canonical rule conflicts, an oracle must be weakened, a test

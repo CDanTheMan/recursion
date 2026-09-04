@@ -361,6 +361,7 @@
         "output-command-injection",
         "passive-client-input",
         "replay-gap",
+        "replay-gap-continuation",
         "stale-daemon-epoch",
         "stale-lease",
         "stale-process-epoch",
