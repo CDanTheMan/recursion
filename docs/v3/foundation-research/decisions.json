@@ -14,7 +14,7 @@
         "One aggregate plus explicit adapter proof obligations (recommended): smallest reviewable state space; cannot claim broker/runtime proof.",
         "Include bounded broker cursor/credit state now: stronger interaction coverage with larger state space."
       ],
-      "recommendation": "Keep the existing finite scope; write a closed projection for effect/packet/goal/plan identities, distinct fence domains and ambiguity; model broker RESET as an adapter obligation unless a counterexample couples it to canonical append.",
+      "recommendation": "Keep the existing finite scope; write a closed projection for effect/packet/goal/plan identities, distinct fence domains and ambiguity; model broker RESET as an adapter obligation unless a counterexample couples it to canonical append. Both options retain the abstract FlowBound queue/retention and non-blocking-append invariant; only detailed broker wire state may move to an adapter proof.",
       "default_vs_configuration": "proposed fixed model boundary; future exploration bounds configurable",
       "sources": [
         "SRC-V3-095",
@@ -66,7 +66,12 @@
         "SRC-V3-113",
         "SRC-V3-114",
         "SRC-V3-120",
-        "SRC-V3-104"
+        "SRC-V3-104",
+        "SRC-V3-139",
+        "SRC-V3-140",
+        "SRC-V3-141",
+        "SRC-V3-142",
+        "SRC-V3-143"
       ],
       "claims": [
         "FND-004",
@@ -111,7 +116,9 @@
       "sources": [
         "SRC-V3-112",
         "SRC-V3-108",
-        "SRC-V3-116"
+        "SRC-V3-116",
+        "SRC-V3-139",
+        "SRC-V3-140"
       ],
       "claims": [
         "FND-006"

@@ -45,6 +45,13 @@ API authentication, but technical login support is not a universal OAuth or subs
 portability promise. [Anthropic guidance](https://code.claude.com/docs/en/legal-and-compliance),
 [Codex authentication](https://learn.chatgpt.com/docs/auth). FND-006.
 
+Configuration is part of that contract: Claude Code's bare mode excludes subscription login,
+while safe mode retains authentication but removes custom bridge extensions. Faster startup
+alone cannot select a profile. Direct CLI, command, session and permission sources now ground
+the binary matrix independently of SDK documentation. Exact mode, controls and overhead still
+need the preregistered adapter trial. [CLI reference](https://code.claude.com/docs/en/cli-reference),
+[headless operation](https://code.claude.com/docs/en/headless).
+
 A visible tool event or approval callback does not prove control of shell descendants, an
 engine's internal retries or independent network activity. The required fence must reach the
 resource performing the effect. Otherwise narrow the task/resource scope or refuse the route.

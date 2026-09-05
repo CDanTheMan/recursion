@@ -255,3 +255,43 @@ Endpoint-specific normalization and subscription debit still require later probe
 remained available at the later read-only check (63 percent remaining in the exposed weekly
 window); no reset or metered route was used. Final review attestations belong in the review
 channel and must name the exact clean candidate; this record does not predeclare their outcome.
+
+## PlanRevision 5 — independent review repairs
+
+`plan.foundation.5`, 2026-09-05. Retained: foundation verdict, accepted experiment sequence,
+immutable M1 boundaries, all 66 thought dispositions, eight unrun designs and ten pending Owner
+answers. Candidate `f90061aff18d6fcf2e605dbd8de081c85b706c5e` received two complete local passes
+with 25 existing regression entrypoints each. Receipt digests:
+`ab8a1093c7f3fb6fe524e9ce6c1fe12978f26e315b884d2c6d04af476b385bc3` and
+`425dd54439c0623d456f6305d9a43e5a0a3555579302708e13a45795056d730c`.
+Both private Terra high reviewers nevertheless returned **CHANGES REQUIRED** for that exact
+candidate. These passes are intermediate; they do not override review.
+
+Research review found a high-severity source gap: the Claude binary capability row borrowed
+legal/SDK evidence. Astra opened five direct official CLI/headless/command/session/permission
+documents, now SRC-V3-139 through SRC-V3-143; content hashes cover their official Markdown
+representations. An initial raw retrieval failed; a standard user-agent subsequently retrieved
+all five as text/markdown. No binary was installed or run. The revised matrix binds direct
+sources and retains unresolved process/interaction controls as requiring-probe. Configuration
+can change both auth eligibility and available bridge controls; adapter/resource designs now
+test those dimensions together. Total new source records are now 37, superseding the earlier
+preparation count of 32.
+
+Validation review reproduced malformed boolean metadata, overlapping or unknown registry
+fields, and valid-URL reassignment bypasses. The candidate's actual data and source mappings
+were correct. Astra added strict types, closed registry/range shapes, expanded-range overlap
+refusal including reserved IDs, and per-ID URL binding. Claim statements also bind to their
+own canonical row. Manifest types were tightened in the same audit. Twenty-nine in-memory
+adversarial mutations now cover the old checks and these repairs. Source truth, runtime behavior
+and complete privacy remain independent judgments.
+
+The first GRILLME recommendation now explicitly retains abstract FlowBound and non-blocking
+canonical append under either option; only detailed broker wire state may be an adapter proof.
+This clarifies the accepted boundary without selecting an Owner answer or expanding the model.
+
+Both reviewers independently checked the clean candidate, ancestry and evidence limitations;
+their partial checker invocations are not claimed as terminal independent regression receipts.
+Neither is an external-provider reviewer. Reuse these same two authorized reviewers after the
+repaired clean commit passes both full gates. Their final exact-candidate attestations remain
+in the review/tool channel, avoiding a self-referential receipt commit. No terminal outcome is
+predeclared by this PlanRevision.

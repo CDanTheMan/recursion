@@ -33,6 +33,13 @@ its user's own native sign-in. Current terms and exact interface coverage contro
 Recursion must not collect upstream session tokens. Codex technical ChatGPT login support is not
 a universal OAuth entitlement. `decision.foundation.authentication` remains pending. FND-006.
 
+The binary route now has direct CLI sources, separate from SDK evidence: SRC-V3-139 through
+SRC-V3-143. Certify binary, mode and configuration together. In particular, `--bare` excludes
+subscription sign-in; `--safe-mode` retains normal authentication but suppresses custom MCP/hooks.
+Neither is a ready-made governed profile. Native command availability varies with mode/version;
+profile optimization must preserve the required interaction controls. See
+`analysis.foundation.claude-bridge` and `experiment.foundation.adapter`.
+
 Deterministic zero-model setup remains the bootstrap. Optional agent-assisted `/setup` may explain
 presets and propose a scoped diff after first-auth; credentials stay in protected provider/OS flows.
 Validation, explicit apply, rollback and offline recovery must still work without the assistant.

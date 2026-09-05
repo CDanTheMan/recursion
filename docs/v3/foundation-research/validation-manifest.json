@@ -286,7 +286,7 @@
     },
     {
       "path": "docs/v3/CLAIM-LEDGER.md",
-      "git_blob_sha256": "b94d984a073d691534691721948576fe497fd56c429ccc971d3d82f061a5c503"
+      "git_blob_sha256": "d46bd5b65a54e744a3ebfbf42403717876cc13a7b617f97e648e6cb945627839"
     },
     {
       "path": "docs/v3/CLAIM-REGISTRY.json",
@@ -294,7 +294,7 @@
     },
     {
       "path": "docs/v3/CLI.md",
-      "git_blob_sha256": "2423278d35681d31f086e2a3694185c6f429ff6e364aaa6eca4dc06709ca0ebc"
+      "git_blob_sha256": "9f5cd7467c2241a7b28effc6af42035a142871c45648589a64dc0fecc8949c44"
     },
     {
       "path": "docs/v3/CONSTRUCTION-RUNBOOK.md",
@@ -350,15 +350,15 @@
     },
     {
       "path": "docs/v3/ROUTE-CAPABILITIES.md",
-      "git_blob_sha256": "808e66d8c6b9bda88bc7f029c366cf778d950a71cc871602e5b1f0f0481f6a83"
+      "git_blob_sha256": "8c5c810055564dbea71c0457661d71323ba113a5430a0bca21623d7b3e6e2a2a"
     },
     {
       "path": "docs/v3/SECURITY.md",
-      "git_blob_sha256": "be3aa3db133159d4c1a7feed1b42c611a57ee405c3edb3e3d572cda075c4a2ce"
+      "git_blob_sha256": "59f4c5c5bca0adb804a9b1f8dd71fcf4975137143a917e73c61d7fa27c0ed74b"
     },
     {
       "path": "docs/v3/SOURCE-REGISTER.md",
-      "git_blob_sha256": "e4c8fc5ec9277290fceb9d828e74f822b5f6cfa48aebc147b945484fa0663f39"
+      "git_blob_sha256": "e77f9c32ef65c1124432016774145235fd6d2f3f312fa01f65f86b1e470a0cf5"
     },
     {
       "path": "docs/v3/TELEMETRY.md",
@@ -370,35 +370,35 @@
     },
     {
       "path": "docs/v3/foundation-research/campaign.md",
-      "git_blob_sha256": "aa57bae3b1ead214e100d20e148f0671b34be068325be2510c0ca8bab0375da5"
+      "git_blob_sha256": "ca890b608beccf9295d12f5b305631d525d4c9f51ef0444f1cba96ec118f0a94"
     },
     {
       "path": "docs/v3/foundation-research/check.py",
-      "git_blob_sha256": "627e38ec7c4370b2a588c89fa0a9a68b687dc03c01c2ff2ea413503df9ea2743"
+      "git_blob_sha256": "4da3e6e9783b40b9912bd06feb8e71dd062d5f1452f9ec90f3ef0a1dc6b18d72"
     },
     {
       "path": "docs/v3/foundation-research/compatibility.json",
-      "git_blob_sha256": "38086227d91fc4ab3c028942b270a7b20c05656751614bd9c597f708a4172274"
+      "git_blob_sha256": "35ceb09312fc53393755955b8f5e7e1c187521be37191b4635ec214de33840a1"
     },
     {
       "path": "docs/v3/foundation-research/decisions.json",
-      "git_blob_sha256": "f8e0ef79c57d6d9bfefd7d16228aafd3f1d125c3cca1266cf686fc6fe5105a73"
+      "git_blob_sha256": "23f44a396c5927a8413184c350ab443a5c3558ebfe8facb2daa57e88166844ad"
     },
     {
       "path": "docs/v3/foundation-research/evidence.json",
-      "git_blob_sha256": "85ccfd97acaa0eddea54e54af4a9a50774c8e65a326af52b508203119b70b313"
+      "git_blob_sha256": "fbba5a8a95bd79170f2d1e957d17e40f3238cec054b9c737daddc849ee84872d"
     },
     {
       "path": "docs/v3/foundation-research/experiments.json",
-      "git_blob_sha256": "95e682b159cad19640fed722f6cae8ae2b6cb1b7717475362b6381794eb4860b"
+      "git_blob_sha256": "cd24988ed7daf59f8192c5e9ce834602cb6bae8784d634a2aa40a0bd3664da2c"
     },
     {
       "path": "docs/v3/foundation-research/grillme.md",
-      "git_blob_sha256": "69b04a2777aefa6158584d8e11e2b807b1948055a97e304a000a4fe61335b31d"
+      "git_blob_sha256": "ecb460a3159932b98a65f345b78ced5aabc14c925f75078919bcd26901231f6e"
     },
     {
       "path": "docs/v3/foundation-research/synthesis.md",
-      "git_blob_sha256": "8f8dde6e889766f074f16cb00a9807b9f05b11a2e3801eaf43c62317fa2d87b7"
+      "git_blob_sha256": "2f6c830c03bbd91e95b60481b3772205c34ea49f44e024897db46f3cf1d18bb2"
     }
   ],
   "limitations": [

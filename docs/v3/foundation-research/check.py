@@ -167,6 +167,7 @@ def path_ref(ref, origin=ROOT):
 
 
 def source_refs(refs, known):
+    require(type(refs) is list and all(type(r) is str and r.strip() for r in refs), 'source references must be strings')
     require(set(refs) <= known, 'unregistered source reference')
 
 
@@ -183,8 +184,9 @@ def data_gate(ev, co, ex, de, sources, claims):
     for root, key in ((ev, 'limitations'), (co, 'limitations'), (co, 'core_contract'), (co, 'command_bridge'), (ex, 'limitations')):
         require(type(root[key]) is list and root[key] and all(type(x) is str and x.strip() for x in root[key]), 'missing limitations/contract')
     require(type(de['finalization']) is str and 'Owner' in de['finalization'], 'finalization procedure')
+    require(type(co['upgrade_policy']) is str and co['upgrade_policy'].strip(), 'upgrade policy must be a nonempty string')
     unique(ev['sources'], 'sources')
-    require(unique(ev['sources'], 'source registry', 'registry_id') == {f'SRC-V3-{n:03}' for n in range(107, 139)}, 'source refresh inventory')
+    require(unique(ev['sources'], 'source registry', 'registry_id') == {f'SRC-V3-{n:03}' for n in range(107, 144)}, 'source refresh inventory')
     for r in ev['sources']:
         record(r, 'id registry_id publisher title url version_date retrieved section sha256 status applicability contradiction revalidate', 'source', nullable='sha256')
         require(r['id'].startswith('source.foundation.') and r['status'] == 'opened', 'source provenance')
@@ -257,10 +259,13 @@ def data_gate(ev, co, ex, de, sources, claims):
         unique(ev[key], key)
     b = ev['benchmark']
     closed(b, 'source methodology name version retrieved tasks aggregation rows uncertainty', 'benchmark')
+    for key in ('source', 'methodology', 'name', 'version', 'retrieved', 'aggregation', 'uncertainty'):
+        require(type(b[key]) is str and b[key].strip(), 'benchmark nonempty string ' + key)
     source_refs([b['source'], b['methodology']], sources)
     closed(b['tasks'], 'deep_swe terminal_bench_2_1 swe_atlas_qna total_unique attempts_per_task', 'benchmark tasks')
+    require(all(type(v) is int and v > 0 for v in b['tasks'].values()), 'benchmark integer denominators')
     require(b['tasks'] == dict(deep_swe=113, terminal_bench_2_1=89, swe_atlas_qna=124, total_unique=326, attempts_per_task=3), 'benchmark denominator')
-    require(len(b['rows']) == 4 and b['uncertainty'], 'benchmark missing uncertainty')
+    require(type(b['rows']) is list and len(b['rows']) == 4, 'benchmark row inventory')
     for r in b['rows']:
         record(r, 'harness model index reported_mean_usd version_span', 'benchmark row', numbers='index reported_mean_usd')
         require(r['index'] <= 1, 'benchmark score bound')
@@ -317,17 +322,76 @@ def publication_gate(changed):
             require(not re.search(pattern, text), 'publication scan ' + label + ' in ' + name)
 
 
+def registry_shape(registry, ledger):
+    closed(registry, 'schemaVersion canonicalLedger activeRoot excludedPaths idPattern referencePattern literalExclusions ranges foreignRegistries', 'claim registry')
+    require(type(registry['schemaVersion']) is int and registry['schemaVersion'] == 1, 'claim registry version')
+    require(registry['canonicalLedger'] == 'CLAIM-LEDGER.md' and registry['activeRoot'] == '.' and registry['excludedPaths'] == ['archive/**'], 'claim registry scope')
+    require(registry['idPattern'] == '^[A-Z][A-Z0-9]*-[0-9]{3}$' and registry['referencePattern'] == '(?<![-A-Z0-9])([A-Z][A-Z0-9]*-[0-9]{3})(?![-A-Z0-9])', 'claim registry patterns')
+    require(type(registry['literalExclusions']) is list and len(registry['literalExclusions']) == 1, 'claim literal exclusions')
+    for r in registry['literalExclusions']:
+        record(r, 'value reason', 'claim literal exclusion')
+        require(r['value'] == 'SHA-256', 'claim literal exclusion value')
+    require(type(registry['foreignRegistries']) is list and len(registry['foreignRegistries']) == 1, 'foreign registries')
+    for r in registry['foreignRegistries']:
+        record(r, 'prefix canonicalOwner idPattern', 'foreign registry')
+        require(r == dict(prefix='H', canonicalOwner='RESEARCH-HYPOTHESES.md', idPattern='^H-[0-9]{3}$'), 'foreign registry boundary')
+    require(type(registry['ranges']) is list and registry['ranges'], 'claim ranges')
+    expanded, expected = set(), set()
+    for r in registry['ranges']:
+        closed(r, 'prefix start end reserved', 'claim range')
+        require(type(r['prefix']) is str and re.fullmatch('[A-Z][A-Z0-9]*', r['prefix']), 'claim range prefix')
+        require(type(r['start']) is int and type(r['end']) is int and 1 <= r['start'] <= r['end'] <= 999, 'claim range bounds')
+        require(type(r['reserved']) is list and all(type(n) is int and r['start'] <= n <= r['end'] for n in r['reserved']), 'claim reserved bounds')
+        require(len(r['reserved']) == len(set(r['reserved'])), 'duplicate reserved claim')
+        for n in range(r['start'], r['end'] + 1):
+            claim = f"{r['prefix']}-{n:03}"
+            require(claim not in expanded, 'overlapping claim range: ' + claim)
+            expanded.add(claim)
+            if n not in r['reserved']:
+                expected.add(claim)
+    rows = re.findall(r'^\| ([A-Z][A-Z0-9]*-\d{3}) \|', ledger, re.M)
+    require(len(rows) == len(set(rows)), 'duplicate canonical claim row')
+    require(set(rows) == expected, 'canonical claim ranges')
+    return expected
+
+
+def source_bindings(ev, source_text):
+    rows = re.findall(r'^\| `(SRC-V3-\d{3})` \| ([^|]*)\|', source_text, re.M)
+    mapping = {key: re.findall(r'\[[^\]]*\]\((https://[^)]+)\)', cell) for key, cell in rows}
+    require(len(mapping) == len(rows), 'duplicate canonical source binding')
+    for r in ev['sources']:
+        require(r['url'] in mapping.get(r['registry_id'], []), 'source ID to URL binding drift: ' + r['registry_id'])
+
+
+def claim_bindings(ev, ledger):
+    rows = dict(re.findall(r'^\| (FND-\d{3}) \| ([^|]*)\|', ledger, re.M))
+    for r in ev['claims']:
+        require(rows.get(r['id'], '').strip() == r['statement'], 'claim ID to statement binding drift: ' + r['id'])
+
+
+def manifest_shape(manifest):
+    closed(manifest, 'schema_version campaign base baseline_runs artifacts limitations', 'manifest')
+    require(type(manifest['schema_version']) is int and manifest['schema_version'] == 1, 'manifest schema version')
+    require(manifest['campaign'] == CAMPAIGN and manifest['base'] == START, 'manifest identity')
+    require(type(manifest['limitations']) is list and manifest['limitations'] and all(type(x) is str and x.strip() for x in manifest['limitations']), 'manifest limitations')
+    unique(manifest['artifacts'], 'artifact manifest', 'path')
+    for r in manifest['artifacts']:
+        record(r, 'path git_blob_sha256', 'artifact manifest row')
+        require(HEX64.fullmatch(r['git_blob_sha256']), 'manifest artifact digest')
+    require(type(manifest['baseline_runs']) is list and manifest['baseline_runs'], 'manifest baseline runs')
+    for r in manifest['baseline_runs']:
+        record(r, 'candidate command exit_code seconds output_sha256', 'baseline run', lists='command', numbers='exit_code seconds')
+        require(r['command'] and type(r['exit_code']) is int and HEX40.fullmatch(r['candidate']) and HEX64.fullmatch(r['output_sha256']), 'manifest baseline metadata')
+
+
 def registry_gate():
     root = ROOT / 'docs/v3'
     registry = strict_json((root / 'CLAIM-REGISTRY.json').read_text(encoding='utf-8'))
-    ledger = (root / registry['canonicalLedger']).read_text(encoding='utf-8')
-    rows = re.findall(r'^\| ([A-Z][A-Z0-9]*-\d{3}) \|', ledger, re.M)
-    require(len(rows) == len(set(rows)), 'duplicate canonical claim row')
-    expected = {f"{r['prefix']}-{n:03}" for r in registry['ranges'] for n in range(r['start'], r['end'] + 1) if n not in r['reserved']}
-    require(set(rows) == expected, 'canonical claim ranges')
+    ledger = (root / 'CLAIM-LEDGER.md').read_text(encoding='utf-8')
+    expected = registry_shape(registry, ledger)
     source_text = (root / 'SOURCE-REGISTER.md').read_text(encoding='utf-8')
     source_rows = re.findall(r'^\| `(SRC-V3-\d{3})` \|', source_text, re.M)
-    require(source_rows == [f'SRC-V3-{n:03}' for n in range(1, 139)], 'canonical source sequence')
+    require(source_rows == [f'SRC-V3-{n:03}' for n in range(1, 144)], 'canonical source sequence')
     sources = set(source_rows)
     active = [p for p in root.rglob('*') if p.suffix in {'.md', '.json'} and 'archive' not in p.relative_to(root).parts]
     exclusions = {r['value'] for r in registry['literalExclusions']}
@@ -374,10 +438,12 @@ def registry_gate():
 
 
 def adversarial_gate(ev, co, ex, de, sources, claims):
+    rejected = []
     def rejects(fn, label):
         try:
             fn()
         except (ValueError, TypeError, KeyError):
+            rejected.append(label)
             return
         raise ValueError('gate accepted adversarial mutation: ' + label)
     rejects(lambda: strict_json('{"a":1,"a":2}'), 'duplicate JSON')
@@ -392,9 +458,39 @@ def adversarial_gate(ev, co, ex, de, sources, claims):
     x = copy.deepcopy(ex); x['experiments'][0]['hard_floors'] = []; cases.append((ev, co, x, de, 'missing experiment floor'))
     x = copy.deepcopy(ev); x['repository_records'].pop(); cases.append((x, co, ex, de, 'missing M1 ancestry record'))
     x = copy.deepcopy(ev); x['repository_records'][0]['candidate'] = START; cases.append((x, co, ex, de, 'substituted M1 candidate'))
+    for key in ('name', 'version', 'retrieved', 'aggregation', 'uncertainty'):
+        x = copy.deepcopy(ev); x['benchmark'][key] = False; cases.append((x, co, ex, de, 'boolean benchmark ' + key))
+    x = copy.deepcopy(co); x['upgrade_policy'] = False; cases.append((ev, x, ex, de, 'boolean upgrade policy'))
+    x = copy.deepcopy(ev); x['benchmark']['extra'] = 'unknown'; cases.append((x, co, ex, de, 'unknown benchmark field'))
     for a, b, c, d, label in cases:
         rejects(lambda: data_gate(a, b, c, d, sources, claims), label)
-    print('ADVERSARIAL_GATE_PASS mutations=11', flush=True)
+    registry = strict_json((ROOT / 'docs/v3/CLAIM-REGISTRY.json').read_text(encoding='utf-8'))
+    ledger = (ROOT / 'docs/v3/CLAIM-LEDGER.md').read_text(encoding='utf-8')
+    x = copy.deepcopy(registry); x['ranges'].append(copy.deepcopy(x['ranges'][0]))
+    rejects(lambda: registry_shape(x, ledger), 'overlapping claim range')
+    x = copy.deepcopy(registry); x['ranges'].append(dict(prefix='OR', start=1, end=1, reserved=[1]))
+    rejects(lambda: registry_shape(x, ledger), 'overlap hidden by reservation')
+    x = copy.deepcopy(registry); x['extra'] = 'unknown'
+    rejects(lambda: registry_shape(x, ledger), 'unknown registry field')
+    x = copy.deepcopy(registry); x['ranges'][0]['extra'] = 'unknown'
+    rejects(lambda: registry_shape(x, ledger), 'unknown range field')
+    x = copy.deepcopy(registry); x['ranges'][0]['start'] = True
+    rejects(lambda: registry_shape(x, ledger), 'boolean range bound')
+    x = copy.deepcopy(registry); x['referencePattern'] = '(never-match)'
+    rejects(lambda: registry_shape(x, ledger), 'weakened reference pattern')
+    source_text = (ROOT / 'docs/v3/SOURCE-REGISTER.md').read_text(encoding='utf-8')
+    x = copy.deepcopy(ev); x['sources'][0]['url'], x['sources'][1]['url'] = x['sources'][1]['url'], x['sources'][0]['url']
+    rejects(lambda: source_bindings(x, source_text), 'source URL reassignment')
+    x = copy.deepcopy(ev); x['claims'][0]['statement'], x['claims'][1]['statement'] = x['claims'][1]['statement'], x['claims'][0]['statement']
+    rejects(lambda: claim_bindings(x, ledger), 'claim statement reassignment')
+    manifest = read('validation-manifest.json')
+    x = copy.deepcopy(manifest); x['schema_version'] = True
+    rejects(lambda: manifest_shape(x), 'boolean manifest version')
+    x = copy.deepcopy(manifest); x['limitations'] = True
+    rejects(lambda: manifest_shape(x), 'boolean manifest limitations')
+    x = copy.deepcopy(manifest); x['extra'] = 'unknown'
+    rejects(lambda: manifest_shape(x), 'unknown manifest field')
+    print('ADVERSARIAL_GATE_PASS mutations=' + str(len(rejected)), flush=True)
 
 
 def main():
@@ -437,15 +533,12 @@ def main():
             text = (ROOT / name).read_text(encoding='utf-8')
             for ref in re.findall(r'\b(?:decision|experiment|thought|source|analysis|fixture|route|repository|search|dissent)\.(?:foundation|[a-h])\.[a-z0-9]+(?:[.-][a-z0-9]+)*', text):
                 require(ref in ids, 'unresolved campaign reference: ' + ref)
-    for r in ev['sources']:
-        require(r['url'] in (ROOT / 'docs/v3/SOURCE-REGISTER.md').read_text(encoding='utf-8'), 'source URL registry drift')
-    for r in ev['claims']:
-        require(r['statement'] in (ROOT / 'docs/v3/CLAIM-LEDGER.md').read_text(encoding='utf-8'), 'claim statement registry drift')
+    source_bindings(ev, (ROOT / 'docs/v3/SOURCE-REGISTER.md').read_text(encoding='utf-8'))
+    claim_bindings(ev, (ROOT / 'docs/v3/CLAIM-LEDGER.md').read_text(encoding='utf-8'))
     publication_gate(changed)
     adversarial_gate(ev, co, ex, de, sources, claims)
     manifest = read('validation-manifest.json')
-    closed(manifest, 'schema_version campaign base baseline_runs artifacts limitations', 'manifest')
-    require(manifest['schema_version'] == 1 and manifest['campaign'] == CAMPAIGN and manifest['base'] == START and manifest['limitations'], 'manifest identity/limits')
+    manifest_shape(manifest)
     artifact_rows = manifest['artifacts']
     require(unique(artifact_rows, 'artifact manifest', 'path') == set(changed) - {'docs/v3/foundation-research/validation-manifest.json'}, 'manifest complete candidate diff')
     for r in artifact_rows:
@@ -457,7 +550,7 @@ def main():
     for r in manifest['baseline_runs']:
         record(r, 'candidate command exit_code seconds output_sha256', 'baseline run', lists='command', numbers='exit_code seconds')
         require(r['candidate'] == 'c2c84fa62aa5ce682c3e701c47380c5f167d20de' and r['exit_code'] == 0 and HEX64.fullmatch(r['output_sha256']), 'baseline receipt')
-    print('DOCUMENT_GATE_PASS paths=' + str(len(changed)) + ' thoughts=66 claims=18 sources=32 routes=14 cells=238 experiments=8 decisions=10', flush=True)
+    print('DOCUMENT_GATE_PASS paths=' + str(len(changed)) + ' thoughts=66 claims=18 sources=37 routes=14 cells=238 experiments=8 decisions=10', flush=True)
     env = os.environ.copy()
     env['PYTHONDONTWRITEBYTECODE'] = '1'
     env['PYTHONUTF8'] = '1'

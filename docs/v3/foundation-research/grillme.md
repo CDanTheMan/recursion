@@ -12,7 +12,7 @@ Current rule and issue: OR-018/019 and E-FHAR2-101 already select the boundary; 
 1. One aggregate plus explicit adapter proof obligations (recommended): smallest reviewable state space; cannot claim broker/runtime proof.
 2. Include bounded broker cursor/credit state now: stronger interaction coverage with larger state space.
 
-Recommendation: Keep the existing finite scope; write a closed projection for effect/packet/goal/plan identities, distinct fence domains and ambiguity; model broker RESET as an adapter obligation unless a counterexample couples it to canonical append.
+Recommendation: Keep the existing finite scope; write a closed projection for effect/packet/goal/plan identities, distinct fence domains and ambiguity; model broker RESET as an adapter obligation unless a counterexample couples it to canonical append. Both options retain the abstract FlowBound queue/retention and non-blocking-append invariant; only detailed broker wire state may move to an adapter proof.
 
 Default versus configuration: proposed fixed model boundary; future exploration bounds configurable. Classification: prerequisite.
 
@@ -38,7 +38,7 @@ Recommendation: One Recursion CLI and canonical command bus; typed engine adapte
 
 Default versus configuration: proposed common base; optional capabilities and engine choice configurable. Classification: accommodation.
 
-Evidence: FND-004, FND-005, FND-006; SRC-V3-107, SRC-V3-113, SRC-V3-114, SRC-V3-120, SRC-V3-104. Proposal only; no Owner answer or runtime/performance outcome is supplied.
+Evidence: FND-004, FND-005, FND-006; SRC-V3-107, SRC-V3-113, SRC-V3-114, SRC-V3-120, SRC-V3-104, SRC-V3-139, SRC-V3-140, SRC-V3-141, SRC-V3-142, SRC-V3-143. Proposal only; no Owner answer or runtime/performance outcome is supplied.
 Required comparison: `experiment.foundation.adapter`.
 Falsifier: A supposedly governed route performs an effect outside its declared mediation/containment boundary.
 

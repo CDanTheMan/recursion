@@ -95,6 +95,12 @@ login and distribution boundaries. Codex ChatGPT authentication, API usage and e
 modes are distinct. Missing subscription debit, cache minimums or recovery observations remain
 unavailable, never zero. `decision.foundation.authentication` stays pending. FND-006/FND-010.
 
+Direct Claude Code CLI sources are SRC-V3-139 through SRC-V3-143, with retrieved-content digests
+in evidence.json. The binary route no longer borrows SDK callback evidence. Startup profile,
+credential eligibility, command availability and outer campaign budgets must be certified
+together; documented per-turn limits are not a campaign limit. See
+`analysis.foundation.claude-bridge`. No Claude binary interaction was probed here.
+
 Source refresh: OpenCode 1.18.29, DeepSeek Harness 0.1.3-alpha.1, T3 current source with release
 v0.0.38, Hermes v2026.8.31, Gemini nightly source/package pair and official Grok Build source are
 recorded with immutable pins and limitations. Meta's intended referent remains ambiguous.

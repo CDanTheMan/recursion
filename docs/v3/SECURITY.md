@@ -21,6 +21,12 @@ public support claims. Do not infer universal OAuth permission from Codex techni
 The [source-bound compatibility record](foundation-research/compatibility.json) is research evidence,
 not credential handling code or an entitlement certificate. FND-006.
 
+Claude Code print mode may load repository hooks and MCP configuration without a trust dialog
+(SRC-V3-139). Proposed adapters must enumerate and admit that configuration before startup.
+Native permission handling (SRC-V3-140/SRC-V3-143) remains distinct from Recursion grants and
+resource containment; neither a resumed plan mode nor an inherited session grant authorizes
+canonical work. This is an adapter requirement, not an execution performed by this campaign.
+
 Single-authority multi-node recovery is distinct from hosted multi-tenant isolation. Model
 offline revocation, split brain and reconnect revalidation before deployment claims. Imported
 commands/plugins retain independent grants and cannot inherit authority from source reputation.

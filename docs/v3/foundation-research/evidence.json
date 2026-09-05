@@ -483,6 +483,81 @@
       "applicability": "Explicit cache objects belong to generateContent; Interactions API supports implicit caching only. Endpoint-specific telemetry requires normalization.",
       "contradiction": "General Gemini caching claims must identify endpoint; neither mechanism establishes CLI OAuth debit.",
       "revalidate": "Before endpoint/model admission and on cache, pricing or SDK changes."
+    },
+    {
+      "id": "source.foundation.claudeheadless",
+      "registry_id": "SRC-V3-139",
+      "publisher": "Anthropic",
+      "title": "Run Claude Code programmatically",
+      "url": "https://code.claude.com/docs/en/headless",
+      "version_date": "Mutable official documentation retrieved 2026-09-05; installed binary and immutable document revision unavailable",
+      "retrieved": "2026-09-05",
+      "section": "Basic usage; bare mode; background tasks at exit; SIGTERM; structured output",
+      "sha256": "ac28df4a37449c955768b62e78b59ea5995d0eb404a31e822e3dd488b715a12e",
+      "status": "opened",
+      "applicability": "CLI print/stream output and configuration/lifetime distinctions",
+      "contradiction": "Bare mode excludes subscription auth. Mutable documentation is not an installed binary pin. SHA-256 covers the official .md representation retrieved with a standard user-agent; the mutable page has no immutable revision.",
+      "revalidate": "Before adapter admission and on binary, mode, configuration, terms or documentation change; mutable planning evidence expires after 30 days."
+    },
+    {
+      "id": "source.foundation.claudecli",
+      "registry_id": "SRC-V3-140",
+      "publisher": "Anthropic",
+      "title": "Claude Code CLI reference",
+      "url": "https://code.claude.com/docs/en/cli-reference",
+      "version_date": "Mutable official documentation retrieved 2026-09-05; installed binary and immutable document revision unavailable",
+      "retrieved": "2026-09-05",
+      "section": "input/output formats; permission-prompt-tool; tools; safe-mode; restricted; max-turns",
+      "sha256": "faef134806631e663899af18056cd85002516b3cdb23bea1b3a3d559855f3439",
+      "status": "opened",
+      "applicability": "Flag-specific typed CLI and configuration surfaces",
+      "contradiction": "Feature minima vary. Safe mode retains normal authentication but omits custom MCP/hooks; no certified Recursion bridge follows. SHA-256 covers the official .md representation retrieved with a standard user-agent; the mutable page has no immutable revision.",
+      "revalidate": "Before adapter admission and on binary, mode, configuration, terms or documentation change; mutable planning evidence expires after 30 days."
+    },
+    {
+      "id": "source.foundation.claudecommands",
+      "registry_id": "SRC-V3-141",
+      "publisher": "Anthropic",
+      "title": "Claude Code built-in commands",
+      "url": "https://code.claude.com/docs/en/commands",
+      "version_date": "Mutable official documentation retrieved 2026-09-05; installed binary and immutable document revision unavailable",
+      "retrieved": "2026-09-05",
+      "section": "Command availability; compact; model; permissions; reload-plugins",
+      "sha256": "78170eb226de8159d1d328240c17595c29601bfa4ab32274150c71751aa570fc",
+      "status": "opened",
+      "applicability": "Native commands and mode/version-dependent availability",
+      "contradiction": "Command visibility does not prove headless fidelity or Recursion authority. SHA-256 covers the official .md representation retrieved with a standard user-agent; the mutable page has no immutable revision.",
+      "revalidate": "Before adapter admission and on binary, mode, configuration, terms or documentation change; mutable planning evidence expires after 30 days."
+    },
+    {
+      "id": "source.foundation.claudesessions",
+      "registry_id": "SRC-V3-142",
+      "publisher": "Anthropic",
+      "title": "Manage Claude Code sessions",
+      "url": "https://code.claude.com/docs/en/sessions",
+      "version_date": "Mutable official documentation retrieved 2026-09-05; installed binary and immutable document revision unavailable",
+      "retrieved": "2026-09-05",
+      "section": "Resume a session; plan-mode restoration; branch a session; manage context",
+      "sha256": "87459731f147c99382e5e60a9f1991ba2f84b0edd071d15c15a27def0ea64885",
+      "status": "opened",
+      "applicability": "Continue/resume, fork identity, inherited grants and native compaction",
+      "contradiction": "Two terminals resuming one session can interleave messages; transcript identity is not a canonical writer fence. SHA-256 covers the official .md representation retrieved with a standard user-agent; the mutable page has no immutable revision.",
+      "revalidate": "Before adapter admission and on binary, mode, configuration, terms or documentation change; mutable planning evidence expires after 30 days."
+    },
+    {
+      "id": "source.foundation.claudepermissions",
+      "registry_id": "SRC-V3-143",
+      "publisher": "Anthropic",
+      "title": "Configure Claude Code permissions",
+      "url": "https://code.claude.com/docs/en/permissions",
+      "version_date": "Mutable official documentation retrieved 2026-09-05; installed binary and immutable document revision unavailable",
+      "retrieved": "2026-09-05",
+      "section": "Manage permissions; tool-specific rules; hooks and permission decisions",
+      "sha256": "f647cdef89d1714a92d57517808e9a0e1cb1b933be9ab6bd204c986e18f50c4b",
+      "status": "opened",
+      "applicability": "Native deny/ask/allow evaluation and tool-specific matching",
+      "contradiction": "Native permission rules do not establish OS containment or all descendant-effect mediation. SHA-256 covers the official .md representation retrieved with a standard user-agent; the mutable page has no immutable revision.",
+      "revalidate": "Before adapter admission and on binary, mode, configuration, terms or documentation change; mutable planning evidence expires after 30 days."
     }
   ],
   "claims": [
@@ -559,7 +634,11 @@
         "SRC-V3-107",
         "SRC-V3-113",
         "SRC-V3-120",
-        "SRC-V3-069"
+        "SRC-V3-069",
+        "SRC-V3-139",
+        "SRC-V3-140",
+        "SRC-V3-141",
+        "SRC-V3-142"
       ],
       "repository_anchors": [
         "docs/v3/CLI.md",
@@ -582,7 +661,8 @@
       "sources": [
         "SRC-V3-109",
         "SRC-V3-114",
-        "SRC-V3-104"
+        "SRC-V3-104",
+        "SRC-V3-143"
       ],
       "repository_anchors": [
         "docs/v3/SECURITY.md",
@@ -604,7 +684,9 @@
       "sources": [
         "SRC-V3-112",
         "SRC-V3-108",
-        "SRC-V3-116"
+        "SRC-V3-116",
+        "SRC-V3-139",
+        "SRC-V3-140"
       ],
       "repository_anchors": [
         "docs/v3/ROUTE-CAPABILITIES.md",
@@ -614,7 +696,7 @@
       "experiment": "experiment.foundation.adapter",
       "falsifier": "The intended credential or distribution flow violates current route terms or requires token intermediation.",
       "evidence_status": "supported-with-limits",
-      "contradiction": "No new Owner policy or runtime/performance result follows; see dissent and limitations.",
+      "contradiction": "Binary mode can change auth eligibility: bare mode omits subscription login. No portable OAuth entitlement or Recursion deployment follows.",
       "recommendation": "Keep Claude SDK/API and unmodified Claude Code sessions separate. Let the upstream binary conduct its own sign-in; no token interception or pooled credentials. Codex login capability does not establish a universal third-party OAuth right."
     },
     {
@@ -1120,7 +1202,7 @@
       "decision": "decision.foundation.authentication",
       "experiment": "experiment.foundation.adapter",
       "contract": "docs/v3/ROUTE-CAPABILITIES.md",
-      "finding": "Authentication promises must distinguish BYOK, SDK/API integration and user-authenticated upstream binaries; provider permissions are route-specific.",
+      "finding": "Authentication promises must distinguish BYOK, SDK/API integration and user-authenticated upstream binaries; provider permissions are route-specific. Direct binary documentation now supplies the source edges; profile selection must preserve both credential eligibility and required interaction controls.",
       "falsifier": "The intended credential or distribution flow violates current route terms or requires token intermediation."
     },
     {
@@ -1849,6 +1931,23 @@
         "docs/v3/PERFORMANCE-PLAN.md"
       ],
       "text": "Ranked adaptations: (1) replay-certified adapters catch upstream drift, medium maintenance cost, removable with engine; falsifier is an undetected semantic mutation. (2) capability-scoped command bridges preserve CLI familiarity, medium translation cost, removable mappings; falsifier is grant or argument expansion. (3) evidence-carrying handoffs preserve source/goal/lease identities, low-to-medium artifact/review cost, replaceable format; falsifier is a stale accepted packet. (4) compaction fidelity budgets may reduce recovery errors, extra compactor/review cost, opt-out to baseline; falsifier is directive loss or no net gain. (5) review-aware routing may improve accepted work per total budget, substantial evaluation cost, removable policy; falsifier is baseline dominance. Protocol negotiation, supply-chain checks, provenance and controlled agent evaluation are prior art. Their Recursion combination is an adaptation; no claim of first invention or industry leadership."
+    },
+    {
+      "id": "analysis.foundation.claude-bridge",
+      "sources": [
+        "SRC-V3-139",
+        "SRC-V3-140",
+        "SRC-V3-141",
+        "SRC-V3-142",
+        "SRC-V3-143"
+      ],
+      "contracts": [
+        "docs/v3/CLI.md",
+        "docs/v3/SECURITY.md",
+        "docs/v3/ROUTE-CAPABILITIES.md",
+        "docs/v3/PERFORMANCE-PLAN.md"
+      ],
+      "text": "Claude binary integration needs its own contract, independent of Agent SDK callbacks. Normal print mode may load project hooks and MCP without a trust dialog; preflight must enumerate ambient configuration. Bare mode changes authentication eligibility as well as startup work. Safe mode preserves normal authentication but suppresses custom hooks/MCP, so it may remove required bridge controls. Restricted mode has different tool/settings constraints; none is an admitted Recursion profile. Measure startup and per-event latency with equal capabilities and auth class. The CLI max-turns bound is per turn, so queued inputs require an outer campaign budget. Native command availability varies by mode/version. Session resume and branching must revalidate canonical identity, grants and unresolved effects; upstream plan-mode restoration is conditional and not a Recursion permission guarantee. Documented flags establish candidate controls, not complete effect enforcement."
     }
   ],
   "fixtures": [
@@ -2455,6 +2554,18 @@
       "initial": "Merged schemas might appear sufficient to start modeling without integration mapping.",
       "resolution": "Independent invariant lane found six explicit mapping/fence/ambiguity obligations; proposals and red designs preserve completed M1 contracts.",
       "remaining": "No model, refinement proof or runtime effect enforcement has run."
+    },
+    {
+      "id": "dissent.foundation.binary-sources",
+      "initial": "Both independent review contexts examined f90061aff18d6fcf2e605dbd8de081c85b706c5e; research reviewer rejected binary capability claims grounded only in legal and SDK sources.",
+      "resolution": "Lead opened five direct official CLI/headless/commands/session/permission documents, registered SRC-V3-139 through SRC-V3-143 and replaced binary source edges. Process ownership and unresolved controls remain requiring-probe.",
+      "remaining": "No installed Claude binary or cross-mode interaction was exercised. Direct .md retrieval subsequently succeeded with a standard user-agent, allowing all five source-content digests; immutable document revisions remain unavailable. Final repaired candidate still requires both gates and exact independent review."
+    },
+    {
+      "id": "dissent.foundation.gate-bypasses",
+      "initial": "Validation reviewer reproduced boolean metadata, overlapping/unknown registry fields and valid-URL reassignment bypasses on f90061aff18d6fcf2e605dbd8de081c85b706c5e. Candidate data itself was valid.",
+      "resolution": "Strict metadata types, closed registry/range records, overlap checks including reserved IDs and per-ID source URL binding added; canonical claim statement binding also tightened. Each bypass has an in-memory rejection case.",
+      "remaining": "Structural gates cannot establish scientific truth, complete privacy or runtime effect control. Review and repeated final-candidate regression evidence remain separate."
     }
   ],
   "limitations": [

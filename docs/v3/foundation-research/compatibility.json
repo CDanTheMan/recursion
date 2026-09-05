@@ -405,31 +405,34 @@
     {
       "id": "route.foundation.claude-binary",
       "name": "Unmodified Claude Code",
-      "version": "Current docs 2026-09-05; installed binary/build not probed",
+      "version": "Official CLI/headless/commands/session/permission docs retrieved 2026-09-05; exact binary/configuration not probed or certified",
       "interface": "Interactive or structured headless CLI under Recursion broker",
       "sources": [
         "SRC-V3-112",
-        "SRC-V3-113",
-        "SRC-V3-114"
+        "SRC-V3-139",
+        "SRC-V3-140",
+        "SRC-V3-141",
+        "SRC-V3-142",
+        "SRC-V3-143"
       ],
-      "auth": "User authenticates within upstream flow using own eligible credentials",
+      "auth": "Own eligible credentials through unmodified upstream authentication; bare mode requires API/cloud credentials and cannot use subscription login.",
       "distribution": "Unmodified binary and built-in authentication methods preserved; distribution conditions apply",
       "billing": "User billed directly under own agreement",
       "observation": null,
       "capabilities": {
         "streaming": {
           "status": "documented",
-          "detail": "Structured output is documented through Claude integration surfaces; exact binary flags freeze before use.",
+          "detail": "Print mode emits JSON or stream JSON; partial-token output needs the documented verbose/partial-message flags (SRC-V3-139/140).",
           "probe": "Verify exact frozen build; documentation is not an observed Recursion integration."
         },
         "turns": {
           "status": "documented",
-          "detail": "Native conversation; bridge turn targeting requires certification.",
+          "detail": "CLI print, continue/resume and structured stdin are documented (SRC-V3-139/140/142); Recursion turn and epoch correlation remains a probe.",
           "probe": "Verify exact frozen build; documentation is not an observed Recursion integration."
         },
         "queued_input": {
-          "status": "unknown",
-          "detail": "Exact behavior for this route/version is not established.",
+          "status": "requiring-probe",
+          "detail": "Structured stdin acknowledgment exists (SRC-V3-140); freeze ordering, cancellation, backpressure and turn targeting before exposing a queue.",
           "probe": "Freeze binary/config and replay the queued_input contract, including refusal, failure and reconnect cases."
         },
         "active_steering": {
@@ -444,7 +447,7 @@
         },
         "approvals": {
           "status": "documented",
-          "detail": "Native approval flow; exact external mediation protocol requires test.",
+          "detail": "An MCP permission-prompt tool can handle headless prompts (SRC-V3-140); correlated decisions, timeout/refusal and Recursion grant mapping need probes.",
           "probe": "Verify exact frozen build; documentation is not an observed Recursion integration."
         },
         "pre_effect": {
@@ -454,27 +457,27 @@
         },
         "tools": {
           "status": "documented",
-          "detail": "Native/MCP tools remain governed by mapped grants.",
+          "detail": "CLI built-in tool selection and MCP configuration are documented (SRC-V3-140); native permission rules (SRC-V3-143) do not prove mapped Recursion grants.",
           "probe": "Verify exact frozen build; documentation is not an observed Recursion integration."
         },
         "commands": {
           "status": "documented",
-          "detail": "Native slash command semantics remain upstream; import only verified mappings.",
+          "detail": "The native catalog distinguishes mode/version availability (SRC-V3-141). Certify each namespaced command; no universal interactive-to-headless equivalence.",
           "probe": "Verify exact frozen build; documentation is not an observed Recursion integration."
         },
         "subagents": {
-          "status": "unknown",
-          "detail": "Exact behavior for this route/version is not established.",
+          "status": "requiring-probe",
+          "detail": "Print-mode background-agent waiting is documented (SRC-V3-139); creation, steering, budget and recovery contracts still need certification.",
           "probe": "Freeze binary/config and replay the subagents contract, including refusal, failure and reconnect cases."
         },
         "resume": {
           "status": "documented",
-          "detail": "Native session continuation.",
+          "detail": "Continue/resume and session IDs are documented (SRC-V3-142); concurrent resumes may interleave one transcript, so enforce broker ownership separately.",
           "probe": "Verify exact frozen build; documentation is not an observed Recursion integration."
         },
         "fork": {
-          "status": "requiring-probe",
-          "detail": "Freeze fork behavior for selected binary interface.",
+          "status": "documented",
+          "detail": "CLI fork creates a separate session/process; in-process branch retains session grants while a separate process requires reapproval (SRC-V3-142). Canonical authority never follows automatically.",
           "probe": "Verify exact frozen build; documentation is not an observed Recursion integration."
         },
         "interrupt": {
@@ -484,17 +487,17 @@
         },
         "compaction": {
           "status": "documented",
-          "detail": "Native compaction remains engine-owned unless explicit coordinated extension exists.",
+          "detail": "Native compact replaces history with a summary (SRC-V3-141/142); engine ownership is separate from Recursion capsule preservation and headless command support.",
           "probe": "Verify exact frozen build; documentation is not an observed Recursion integration."
         },
         "usage": {
           "status": "requiring-probe",
-          "detail": "Extract only documented fields; subscription debit may be unavailable.",
+          "detail": "Headless cost fields are client estimates (SRC-V3-139), not verified billing or subscription debit; normalize available counters only after a route probe.",
           "probe": "Verify exact frozen build; documentation is not an observed Recursion integration."
         },
         "process_ownership": {
-          "status": "documented",
-          "detail": "Recursion broker may own subprocess lifetime; engine owns its inner loop.",
+          "status": "requiring-probe",
+          "detail": "Headless exit/background/SIGTERM behavior is documented (SRC-V3-139); broker supervision, Windows descendants and effect ambiguity still require conformance tests.",
           "probe": "Verify exact frozen build; documentation is not an observed Recursion integration."
         },
         "recovery": {
@@ -503,7 +506,7 @@
           "probe": "Verify exact frozen build; documentation is not an observed Recursion integration."
         }
       },
-      "limitations": "UI may be Recursion-owned, but missing controls must be disclosed and route scope restricted. Never intercept upstream session tokens.",
+      "limitations": "Direct CLI documentation supports these cells, not SDK substitution. Freeze mode and configuration as well as binary. Safe mode may preserve authentication while disabling bridge extensions; no mode is certified here. Never intercept session tokens.",
       "admission": "Research inventory only. No live provider or adapter execution occurred. Governed work requires all task-required capabilities and effect/resource fences to be certified.",
       "experiment": "experiment.foundation.adapter"
     },

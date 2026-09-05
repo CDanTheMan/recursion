@@ -97,7 +97,7 @@
       "status": "preregistered-not-run",
       "question": "What causes lag, and what overhead does each interaction surface add?",
       "current_contract": "docs/v3/PERFORMANCE-PLAN.md",
-      "baseline_treatment": "Same engine/task with CLI detached, CLI attached, and optional prototype UI only if separately authorized; ablate engine, indexer, language server, watchers, renderer and plugins independently.",
+      "baseline_treatment": "Same engine/task with CLI detached, CLI attached, and optional prototype UI only if separately authorized; ablate engine, indexer, language server, watchers, renderer and plugins independently. For CLI profile comparisons, hold authentication class and required controls constant; a profile dropping required capabilities is inadmissible, even if faster.",
       "unit_of_analysis": "distinct task; repeats, routes and attempts nested within task",
       "matched_budgets": "Freeze equal total model/reviewer tokens or measured provider debit and wall-clock limits before assignment; count research, compaction, retries, coordination and review. Report API USD and subscription observations separately; null counters remain null.",
       "hard_floors": [
@@ -138,7 +138,7 @@
       "workload": "Frozen synthetic transcripts plus 40 exploratory tasks; include question/approval interleaving, slash alias collisions, queued versus active input, reconnect and external acceptance-before-receipt.",
       "versions": "Freeze exact OS build, process tree, engine binary/SDK/protocol/model/effort, provider/account class, tools/config/prompt hashes, corpus and evaluator before execution. Current compatibility rows are candidates, not admitted experimental routes.",
       "metrics": "Unsupported capabilities correctly refused/unsupported requests; effects mediated at resource/all attempted effects; ambiguous outcomes quarantined/all ambiguous faults; p95 control latency; accepted tasks/tasks.",
-      "failure_cases": "Shell descendant network action, engine internal retry, partial process kill, injected prompt in tool output, token ownership crossing, resume state without filesystem rollback.",
+      "failure_cases": "Shell descendant network action, engine internal retry, partial process kill, injected prompt in tool output, token ownership crossing, resume state without filesystem rollback. Add Claude normal-print ambient configuration, mode-dependent authentication and lost bridge extensions; per-turn limits mistaken for campaign limits; resumed/forked session permission mismatch.",
       "analysis_uncertainty": "Exploratory design. Randomize paired task order and separate learning/order effects; task-cluster bootstrap intervals and paired failure counts, with all failures/timeouts included. Run blinded variance/discordance calibration and power simulation before any powered claim; no optional stopping or favorable subgroup selection.",
       "stop_rule": "Stop immediately on any hard-floor breach, unexpected external effect or exhausted authorized budget. Freeze a maximum run count before execution; record exclusions and incomplete runs. No extension after seeing favorable results.",
       "adoption_rejection": "Certify only declared capabilities and scoped effect domains; a single unmediated required effect refuses that governed route. Terminal-only fallback must disclose restrictions before admission.",
