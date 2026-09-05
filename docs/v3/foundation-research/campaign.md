@@ -1,8 +1,8 @@
 # Standalone harness foundation campaign
 
-Date: 2026-09-05. Status: **blocked at preflight; research not admitted**.
-This is a durable awareness/checkpoint record, not a completed research report or an
-accepted product decision. Existing Owner authorization remains valid.
+Date: 2026-09-05. Current status: **resumed after explicit Owner scope ruling**.
+Initial status was **blocked at preflight; research not admitted**. The initial evidence
+below is preserved. This is not yet a completed research report or accepted product decision.
 
 ## Frozen invocation and boundary
 
@@ -118,3 +118,15 @@ handoff, parent and Git evidence. Invalidated: assumption that local PAUSE absen
 admit this campaign without resolving the known operational sentinel. Quarantined: no
 research output exists. Superseded: none. Stopped before substantive discovery, delegation,
 canonical synthesis or experiment design. Resume from task.foundation.preflight.
+
+`plan.foundation.2`, 2026-09-05: Owner explicitly clarified in the current private
+conversation that this agent researches/develops the repository rather than operating
+Recursion and that operational restrictions do not apply to this campaign. This is the
+binding scope ruling for `blocker.foundation.operational-pause`; the blocker is resolved.
+Retained: the campaign GoalSpec, research-only allowlist, six-hour/zero-new-spend envelope,
+all preflight observations, current operational authority and live-system non-goals.
+Invalidated: applying the operational sentinel as an admission block to this isolated
+repository campaign. Quarantined: none. Superseded: the stopped admission disposition in
+plan.foundation.1, preserved above and in checkpoint commit
+`9266020f8907610d06026677b2a05db87f5c69f6`. No operational PAUSE/configuration is changed.
+Continue existing-evidence coverage, bounded discovery, synthesis and exact review.
