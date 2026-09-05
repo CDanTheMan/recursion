@@ -232,3 +232,26 @@ resource-level effect mediation and command fidelity; endpoint-specific counter 
 formal refinement, performance, security, user demand and enterprise isolation. All eight designs
 remain not run and all ten Owner answers remain pending. Proceed to exact-candidate gates/review;
 if the budget expires, preserve an explicitly incomplete checkpoint instead of claiming completion.
+
+## PlanRevision 4 — candidate validation hardening
+
+`plan.foundation.4`, 2026-09-05. Retained: all research dispositions and pending Owner answers.
+The coherent synthesis commit is `f7004400e6fbb050d9a9d84177495eff679a9437`; the initial gate and
+manifest commit is `4b8c1d7a410cbb803c3ca732790c8018b876d980`. A full gate on that clean candidate
+passed all 25 regression entrypoints, with receipt digest
+`691486d07bac5651052b64cb9a4ff791ec2a9de14659ffcf48737f4a062792a3`.
+It is an intermediate pass, not a terminal review.
+
+Lead audit tightened the checker to freeze the three M1 record identities and all six
+candidate/receipt hashes independently of editable research JSON. Added rejection probes for a
+removed M1 record and a substituted candidate; eleven internal adversarial checks now run.
+A wrong-base command separately returned nonzero as required. Superseded: the earlier checker
+candidate only. No research conclusions, M1 bytes, GoalSpec semantics or accepted priorities
+changed. New candidate must receive two full passes and exact independent review.
+
+A final source follow-up closed sampled cache-minimum and Gemini endpoint distinctions:
+Interactions supports implicit caching; generateContent additionally supports explicit objects.
+Endpoint-specific normalization and subscription debit still require later probes. Included quota
+remained available at the later read-only check (63 percent remaining in the exposed weekly
+window); no reset or metered route was used. Final review attestations belong in the review
+channel and must name the exact clean candidate; this record does not predeclare their outcome.

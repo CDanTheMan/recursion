@@ -21,6 +21,32 @@ ROOT = Path(__file__).resolve().parents[3]
 AREA = ROOT / 'docs/v3/foundation-research'
 START = 'f28f620644115b7d14eeab32f3f2d192034dd8ea'
 MERGED = 'a7cd9458d37f3090079930bf8d79ffd77c4f73e4'
+M1_PINS = {
+    "planning": {
+        "id": "repository.foundation.planning",
+        "path": "docs/v3/M1A-WIRE-PROFILE.md",
+        "candidate": "fb0e04584a402b659560b64591706beb18082a72",
+        "receipt": "0960481683e2b17ff213a824bbd4b4d559f1c91a",
+        "schema_sha256": "5a8fbacee5228b2617481a2f763fad30830a4fe6088def53c681211dd84d9fd7",
+        "fixture_manifest_sha256": "0f6f568a51238517fc4fd7863f25d0b1ebcd40c64b986044d4a30e2a76d59aba"
+    },
+    "execution": {
+        "id": "repository.foundation.execution",
+        "path": "docs/v3/M1B-EXECUTION-CONTRACTS.md",
+        "candidate": "0f1bd5f9fd4f32acf9718930f67101983216c5a3",
+        "receipt": "99a10f6c94f28305aa83d4444d8ebb32218a51ae",
+        "schema_sha256": "5e442b76f707b69973b5fc95e5b3ab77fea3f24c984a42c5c7fb1545d8574e94",
+        "fixture_manifest_sha256": "96af1d9d9d22be3ca15d79a4f18657e6ec598fc2ae08f22e170a87bd943804d9"
+    },
+    "integrity": {
+        "id": "repository.foundation.integrity",
+        "path": "docs/v3/M1C-INTEGRITY-CONTRACTS.md",
+        "candidate": "8cd1c8ef574b0e375000d7c68d133404928308cf",
+        "receipt": "338ea91f4aab531c95b47d83bd74cf279ab3aa83",
+        "schema_sha256": "ee39479d32e66223720622b7683b7f08557871c20685b46549f48148f252e8a3",
+        "fixture_manifest_sha256": "5b7a38b24a7652b0444a2a5c6daf35c3ed099041b6718af83a4788d29f4fad80"
+    }
+}
 BRANCH = 'codex/v3-formal-model-experiment'
 CAMPAIGN = 'recursion.v3.foundation.research.20260905'
 CANONICAL = set(('README PRODUCT ARCHITECTURE EXECUTIVES EXECUTION-FABRIC PLANNING CLI '
@@ -211,8 +237,10 @@ def data_gate(ev, co, ex, de, sources, claims):
         require(set(r['decisions']) <= dids and set(r['experiments']) <= eids, 'fixture edges')
         for p in r['contracts']:
             path_ref(p)
-    for r in ev['repository_records']:
+    require(len(ev['repository_records']) == 3, 'required M1 records missing')
+    for lane, r in zip(('planning', 'execution', 'integrity'), ev['repository_records']):
         record(r, 'id path symbol candidate receipt schema_sha256 fixture_manifest_sha256 status', 'repository record')
+        require(all(r[k] == v for k, v in M1_PINS[lane].items()), 'frozen M1 identity or digest differs')
         require(HEX40.fullmatch(r['candidate']) and HEX40.fullmatch(r['receipt']), 'repository commit')
         require(HEX64.fullmatch(r['schema_sha256']) and HEX64.fullmatch(r['fixture_manifest_sha256']), 'repository digest')
         path_ref(r['path'])
@@ -362,9 +390,11 @@ def adversarial_gate(ev, co, ex, de, sources, claims):
     x = copy.deepcopy(co); x['routes'][0]['capabilities']['usage']['status'] = 'observed'; cases.append((ev, x, ex, de, 'false observation'))
     x = copy.deepcopy(de); x['decisions'][0]['owner_answer'] = 'inferred'; cases.append((ev, co, ex, x, 'invented Owner answer'))
     x = copy.deepcopy(ex); x['experiments'][0]['hard_floors'] = []; cases.append((ev, co, x, de, 'missing experiment floor'))
+    x = copy.deepcopy(ev); x['repository_records'].pop(); cases.append((x, co, ex, de, 'missing M1 ancestry record'))
+    x = copy.deepcopy(ev); x['repository_records'][0]['candidate'] = START; cases.append((x, co, ex, de, 'substituted M1 candidate'))
     for a, b, c, d, label in cases:
         rejects(lambda: data_gate(a, b, c, d, sources, claims), label)
-    print('ADVERSARIAL_GATE_PASS mutations=9', flush=True)
+    print('ADVERSARIAL_GATE_PASS mutations=11', flush=True)
 
 
 def main():
