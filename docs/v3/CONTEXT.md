@@ -6,6 +6,28 @@ last-updated: 2026-09-03
 
 # Recursion v3 context, cache, and compaction hypothesis
 
+## Foundation compaction and cache disposition — 2026-09-05
+
+The existing non-droppable capsule and fidelity refusal remain the contract; configurable tiers
+and coordinated hybrid compaction remain unproved optimizations. Declare one governor per route
+epoch, detect native compaction, rehydrate/check bindings after session loss and reject summaries
+that lose Owner directives, goal/plan/lease identity, gates, blockers or evidence. An upstream
+session is acceleration state, not canonical recovery authority. FND-009.
+
+Capacity, semantic memory, cache retention and pricing thresholds are distinct. Current API
+snapshots and source IDs are in `analysis.foundation.cache-snapshots` of
+[evidence.json](foundation-research/evidence.json). Stable full schemas and serialization can help
+prefix matching; tool names alone cannot establish a hit. A universal discount or semantic decay
+after thirty minutes is unsupported. Native compaction may occur at token thresholds; comparative
+claims about Claude, Codex or Hermes remain unmeasured. FND-010.
+
+The proposed default is event-driven continuation without periodic model keepalive. Deterministic
+health checks are separate. Require the total-cost counterfactuals in
+`experiment.foundation.cache` before selecting refresh/retention. Count every refresh, compactor,
+retry and output exactly once; never preserve stale tool results merely for cache statistics.
+Opaque reasoning state, exposed text, summaries and usage counters have distinct visibility
+contracts. FND-011; `decision.foundation.context-policy` remains pending.
+
 ## Two different caches
 
 Provider-side prompt/KV caches are normally scoped to provider, model family, account, endpoint, prefix, or session under rules Recursion may not control. V3 must not promise one physical cache shared by unrelated providers.

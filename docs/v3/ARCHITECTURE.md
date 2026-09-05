@@ -7,6 +7,23 @@ baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 
 # Recursion v3 ratified architecture target
 
+## Foundation integration boundary — proposed 2026-09-05
+
+OR-018/OR-019 remain accepted. Standalone recovery and a complete native sampling loop are
+different commitments. Recursion owns canonical authority/recovery in both native and delegated
+execution. An upstream engine may own sampling, native tools and session state through an optional
+typed adapter. The [ownership matrix](foundation-research/compatibility.json) records each layer;
+neither terminal attachment nor an SDK transfers canonical ownership. FND-004–FND-006.
+
+Before formal-model freeze, make the M1A-to-M1C effect identity projection explicit; distinguish
+work lease, writer fence, process/daemon and PAUSE/admission epochs; preserve one canonical writer,
+current-immediate PAUSE and unresolved effects after partition/termination. Broker flow/replay is
+either bounded model state or an explicit adapter obligation. See
+`analysis.foundation.model` and `decision.foundation.model-boundary` in the
+[foundation evidence](foundation-research/evidence.json) and [decisions](foundation-research/decisions.json).
+These model-level mappings preserve immutable M1 contracts and the blocked OR-015 boundary.
+A failed mapping requires a separately scoped repair proposal, not a silent schema change. FND-002/FND-003.
+
 > **Ratified target, not operative authority.** `OR-018` and `OR-019` select the hierarchy and
 > Recursion-owned Option 2 boundary below. The
 > current `CONTROL_PLANE.md` still names Hermes as the automation-chain executive and remains

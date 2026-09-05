@@ -6,6 +6,21 @@ last-updated: 2026-09-03
 
 # Recursion v3 acceptance hypothesis
 
+## Foundation research acceptance boundary
+
+The campaign's [check.py](foundation-research/check.py) must bind the frozen start and exact clean
+candidate, validate the complete allowlisted diff and unchanged M1/protected bytes, close record
+schemas/IDs/links/coverage, preserve pending Owner answers, scan the publication set and rerun
+the M1/v2 regression entrypoints. Two passes and independent review bind the same final commit;
+a later receipt or repair creates a new candidate. This docs gate is not product certification.
+
+Before formal-model freeze, the effect/epoch/writer/PAUSE/partition/broker obligations in
+`analysis.foundation.model` need explicit model adapters and counterexamples. Before governed
+engine admission, prove declared resource mediation and truthful capability refusal under
+`experiment.foundation.adapter`; observational callbacks alone cannot pass. Before optimization
+claims, execute separately authorized comparisons with quality floors and complete cost accounting.
+FND-001–FND-005/FND-011.
+
 ## Principle
 
 Successful runs cannot prove the absence of failures. V3 release evidence must combine scenario coverage, invariant/property testing, fault injection, independent review, resource measurement, and private soak experience. A model's completion claim is never a release gate.

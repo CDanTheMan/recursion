@@ -7,6 +7,21 @@ authority: non-normative until ratified
 
 # Recursion v3 evidence-grounded design workspace
 
+## Foundation research reading route — 2026-09-05
+
+Read the [foundation synthesis](foundation-research/synthesis.md), then the prioritized
+[GRILLME packet](foundation-research/grillme.md). [Evidence](foundation-research/evidence.json)
+covers every handoff idea; [compatibility](foundation-research/compatibility.json) separates
+native Recursion behavior from upstream-engine behavior; [experiments](foundation-research/experiments.json)
+are designs only. [Campaign](foundation-research/campaign.md) records scope, provenance and gates.
+
+M1A, M1B and M1C are merged at the verified baseline
+`a7cd9458d37f3090079930bf8d79ffd77c4f73e4`. Historical “local only” or “future M1”
+descriptions below describe their original campaigns. Their pure/inert scope is unchanged.
+The next construction prerequisite is the integration mapping before E-FHAR2-101, followed
+by formal model, language-neutral comparison and storage comparison. FND-001–FND-003.
+All foundation product-policy additions are pending GRILLME; research does not complete a runtime milestone.
+
 Recursion v3 is hypothesized as a provider-neutral autonomous-development harness and integration system. It preserves the proven v2 execution and safety invariants while making the main assistant, ARM executives, provider routes, context flow, plugins, nodes, and operator experience first-class parts of one coherent product.
 
 This directory is a research baseline, not an implementation authorization. Where it conflicts with Lucas's current instruction, `CONTROL_PLANE.md`, or a ratified decision in `state/DECISIONS.md`, the higher-authority source wins. Any v3 change to the constitutional model must be proposed and reviewed explicitly; these files do not silently amend it.

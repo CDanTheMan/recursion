@@ -6,6 +6,39 @@ last-updated: 2026-09-03
 
 # Recursion v3 CLI hypothesis
 
+## One CLI over native and upstream loops — proposed accommodation
+
+Recursion commands address canonical goals, plans, permissions, evidence and status in both modes.
+A direct-API native loop would give Recursion control of sampling and tool orchestration.
+A delegated route retains the upstream inner loop and uses only its supported interface.
+Neither mode is assumed faster. See [compatibility.json](foundation-research/compatibility.json)
+for layer ownership and explicit capability gaps. FND-004/FND-005.
+
+Proposed command bridge:
+- Reserve canonical commands. Import native commands under an engine namespace; aliases bind
+  exact versions and argument schemas. Reject collisions and expose translation losses.
+- Register Recursion custom tools with a supported MCP/dynamic-tool surface only after grant
+  mapping. An upstream plugin or command origin confers no authority.
+- Distinguish “queue next input,” “steer active turn,” and “interrupt.” Bind target turn and route
+  epoch. If the engine lacks a control, show unavailable or offer an explicitly scoped native
+  session; do not emulate successful control through blind keystrokes or model-generated prose.
+- Render correlated question/approval events without polling a model. Local status/help and
+  deterministic commands need no inference request. Use bounded incremental event rendering;
+  measure bridge overhead separately from engine/provider time.
+- Report native session outcomes separately from canonical acceptance. Native compact/resume/fork
+  cannot silently overwrite the Recursion capsule, permissions or filesystem recovery state.
+
+For Claude, keep SDK/API integration distinct from an unmodified Claude Code binary conducting
+its user's own native sign-in. Current terms and exact interface coverage control eligibility;
+Recursion must not collect upstream session tokens. Codex technical ChatGPT login support is not
+a universal OAuth entitlement. `decision.foundation.authentication` remains pending. FND-006.
+
+Deterministic zero-model setup remains the bootstrap. Optional agent-assisted `/setup` may explain
+presets and propose a scoped diff after first-auth; credentials stay in protected provider/OS flows.
+Validation, explicit apply, rollback and offline recovery must still work without the assistant.
+This is a product proposal, never authorization for an agent to modify its own configuration.
+`decision.foundation.setup` and `experiment.foundation.setup` remain pending. FND-012.
+
 ## Product requirement
 
 The first CLI is the canonical local operator surface for the headless v3 harness. It must let

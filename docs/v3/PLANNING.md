@@ -6,6 +6,20 @@ last-updated: 2026-09-03
 
 # Recursion v3 planning and Grill Me projection
 
+## Foundation research to accepted construction
+
+The [foundation GRILLME packet](foundation-research/grillme.md) ranks ten unanswered decisions.
+The first concerns the bounded model integration contract; it does not reopen OR-018/OR-019.
+Record exact later Owner answers through private intent references, apply publication-safe
+dispositions to [decisions.json](foundation-research/decisions.json), reconcile cross-decision
+dependencies, then compile an accepted versioned GoalSpec and construction DAG. Silence supplies
+no answer. M1 contracts remain immutable inputs. FND-001/FND-002.
+
+The illustrative Propose → Plan → Research → Synthesize → Develop lifecycle also requires
+verification, integration, acceptance, checkpoint/recovery and stop transitions. Already bounded
+tasks may skip unnecessary discovery ceremony; they cannot skip admission, required gates or
+authority limits. Role/model/lease transitions remain distinct. FND-014.
+
 > **Proposed contract projection.** References below to the Recursion Head and ARM-owned DAGs
 > describe a future product boundary. The current Hermes-specific constitution remains operative
 > until Lucas approves a recorded amendment; this document cannot perform that amendment.

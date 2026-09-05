@@ -6,6 +6,20 @@ last-updated: 2026-09-03
 
 # Recursion v3 scientific research hypotheses
 
+## Foundation hypothesis disposition — 2026-09-05
+
+See [evidence.json](foundation-research/evidence.json) for FND-001–FND-018 and all 66 thought
+dispositions, and [experiments.json](foundation-research/experiments.json) for eight bounded
+follow-up designs. Hybrid compaction, cache refresh, mixed fleets, novice setup assistance,
+visible-work comprehension and resource improvements remain unproved. Enterprise demand and
+shareability remain hypotheses; universal feature parity, hidden-reasoning display and model
+voting are not accepted success criteria.
+
+M1A/M1B/M1C are merged; next resolve integration identities/fences before E-FHAR2-101, then retain
+language comparison and storage comparison priority. No trial, performance result or Owner answer
+is supplied by documentation synthesis. Earlier “first complete M1A” text is superseded by this
+verified status update. FND-001/FND-002.
+
 ## Evaluation objective
 
 Maximize verified development quality subject to owner-selected limits on subscription quota, metered cost, machine load, elapsed time, privacy, and human review attention. Report dimensions separately before constructing profile-specific scores.

@@ -6,6 +6,20 @@ last-updated: 2026-09-03
 
 # Recursion v3 telemetry and optimization hypothesis
 
+## Accounting and observation provenance
+
+Record engine/build/model/effort, route and compaction epochs, tool-schema identity, auth/account
+class (never credentials), counter origin and availability. Separate API charges, provider-reported
+subscription debit, inferred capacity and unavailable values; null is not zero. Normalize whether
+input totals include cache reads/writes before summing costs. Count refresh/compactor/retry calls
+as ordinary requests exactly once. Report human review and host resource costs separately unless
+explicit valuation weights are accepted. FND-010/FND-011.
+
+Measure bridge/control latency, input stability and resource attribution separately from
+inference latency. Visible activity is an observation, not percent-complete or an accepted result.
+The accounting equation, units and no-future-work/zero-miss edge cases are in
+`analysis.foundation.economics` of [evidence.json](foundation-research/evidence.json). FND-017.
+
 ## Objective
 
 Telemetry exists to improve verified development and preserve scarce capacity, not to maximize agent activity. It must answer:

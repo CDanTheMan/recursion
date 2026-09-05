@@ -130,3 +130,105 @@ repository campaign. Quarantined: none. Superseded: the stopped admission dispos
 plan.foundation.1, preserved above and in checkpoint commit
 `9266020f8907610d06026677b2a05db87f5c69f6`. No operational PAUSE/configuration is changed.
 Continue existing-evidence coverage, bounded discovery, synthesis and exact review.
+
+## PlanRevision 3 — completed discovery and source reconciliation
+
+`plan.foundation.3`, 2026-09-05. Retained: GoalSpec version 1, frozen start, accepted architecture,
+formal-model/language/storage sequence, all completed M1 work and Owner scope ruling. Superseded:
+initial pending discovery and byte-verification statuses in the historical preflight table.
+Invalidated: any general inference that observed tool events imply complete effect control;
+any blanket Claude subscription-hosting prohibition; universal cache TTL/discount and universal
+OpenCode leadership claims. Quarantined: performance, market, route-runtime and Meta-identity
+claims without decisive evidence. No product policy or Owner answer is invented.
+
+Additional Owner steering in the same private conversation explicitly emphasizes native
+standalone behavior and behavior above upstream harnesses, with Recursion CLI interaction over
+Claude Code where authentication requires that route. This clarifies the existing C/F lanes;
+it does not amend scope or authorize implementation. It is covered by
+`thought.c.claude-layer`, the ownership/capability matrix and the adapter experiment.
+
+Session admission/preflight completed by 2026-09-05T09:07:37Z; the conservative six-hour cutoff
+is 2026-09-05T15:07:37Z. No new metered spend, configuration/auth/model changes or live probes
+were made. Local Git history retains both admission checkpoints:
+`9266020f8907610d06026677b2a05db87f5c69f6` and
+`c2c84fa62aa5ce682c3e701c47380c5f167d20de`.
+
+## Discovery WorkPackets and integration
+
+Common packet boundary: parent and GoalSpec above; plan.foundation.2; frozen start
+`f28f620644115b7d14eeab32f3f2d192034dd8ea`; discovery checkout
+`c2c84fa62aa5ce682c3e701c47380c5f167d20de`; required merged baseline and all six M1
+candidate/receipt ancestors. Dependency: preflight and lane-specific coverage map.
+Inputs: immutable handoff/authority digests above, canonical paths below, pinned public sources.
+Read-only private repository input was admitted through native collaboration; public queries
+used generic independently written text, never private paths, hashes, messages or infrastructure.
+No shared writes, nested agents, provider trials, credential reads, account login or extra routes.
+Time cap: thirty minutes per packet, included capacity only; no separate token budget was
+specified. Each returned source/claim/path/version/confidence/contradiction/gap/stop evidence.
+Stop on scope ambiguity, privacy uncertainty, missing required input or exhausted budget.
+Astra alone consumed, verified, integrated and wrote.
+
+| Packet | Native route | Allowed lane inputs | Output and falsifier | Result |
+|---|---|---|---|---|
+| task.foundation.harness | Luna medium | SOURCE-REGISTER, REFERENCE-MATRIX, frontier evidence; generic public harness sources | Identity/license/version/benchmark inventory; invented product, unverified ranking or source continuity falsifies claim | completed read-only; lead closed Grok pin and dynamic benchmark gap; Meta referent retained ambiguous |
+| task.foundation.engines | Luna medium | ARCHITECTURE, EXECUTION-FABRIC, CLI, route/terminal/plugin docs; official interfaces | Capability/auth/ownership distinctions; missing coverage prevents governed-route claim | completed read-only; focused legal/source-pin correction retained |
+| task.foundation.context | Luna medium | CONTEXT, TELEMETRY, PERFORMANCE-PLAN, EXECUTIVES; provider docs/original papers | Cache/compaction/role economics and controls; unsupported price/TTL/performance claim rejected | completed read-only; current Astra threshold and publication-date corrections verified by lead |
+| task.foundation.invariants | Luna high | M1 contracts, schemas/pure oracles/tests/receipts; existing formal evidence | Ancestry/bytes/manifest audit and six cross-contract obligations; stale fence, ambiguous retry or false runtime inference falsifies readiness | completed read-only; no M1 edits |
+
+Additional frozen research-input SHA-256 digests at discovery:
+- SOURCE-REGISTER.md: `ce145777f219290291ea5abfc97c26152a5d686c8e2bb436a0fcbff216e49353`.
+- REFERENCE-MATRIX.md: `1af578a99fcde0bb268428560131dfd5445f6243b4de272eae4484630bca5a61`.
+- FRONTIER-HARNESS-EVIDENCE.md: `b18a64ba5331b8292f15b4102bfff84517c1bba58b52489564bbe762573c9aa1`.
+- FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md:
+  `e45c7ad095643bd4e4d9c8f41943f3cdd945c64c4745944de7b4e60ea1d3b73e`.
+
+No fifth discovery lane was justified: outputs converged and remaining uncertainty requires
+separately authorized experiments. Historical same-family M1 reviews and failed candidates
+remain untouched. Material disagreements and their resolutions are in evidence.json.
+
+## Candidate preparation and acceptance procedure
+
+Coverage/discovery/reconciliation/synthesis outputs are now in evidence.json (66 thought
+dispositions, 18 appended global claims, 31 appended canonical sources), compatibility.json
+(14 route profiles, 17 capability dimensions), experiments.json (eight not-run designs),
+decisions.json and grillme.md (ten pending answers). Canonical additions are explicitly proposed
+where they introduce product policy. Git evidence corrects M1 status to merged without changing
+its evidence boundary.
+
+Baseline regressions ran freshly on clean
+`c2c84fa62aa5ce682c3e701c47380c5f167d20de`: all planning/execution/integrity schema,
+fixture, conformance, adversarial/static and additional planning gates passed; v2 umbrella passed.
+The final documentation checker also invokes the separate planning validate-only entrypoint
+and all suites again, so its exact final candidate has fresh evidence. Commands and output digests
+are emitted as JSON; baseline records and candidate artifact digests are in validation-manifest.json.
+
+Run from the dedicated worktree:
+
+```text
+python -B docs/v3/foundation-research/check.py --base f28f620644115b7d14eeab32f3f2d192034dd8ea --candidate <full-candidate-sha>
+```
+
+The checker adapts VALIDATION.md without editing it. It includes strict record definitions,
+complete diff/ancestry/cleanliness, registry/source/coverage/reference/anchor checks, privacy
+patterns, artifact digests and fresh regressions. Its internal adversarial checks exercise
+closed fields, duplicate JSON, missing thought coverage, forged observations and invalid references.
+Automated structure is not scientific truth or a full privacy certification.
+
+Two successful runs and independent review must bind the identical clean commit. Exact final
+attestations stay in the review/tool channel to avoid self-reference; this committed procedure
+does not claim a future pass. Any repair or receipt commit requires both gates and exact review again.
+
+Reviewer allocation: Cursor Agent is installed, but the exact Grok 4.6 high/xhigh configuration,
+private-data eligibility and included pool could not be verified through the admitted read-only
+surface. Do not invoke or reconfigure that route. Use the explicitly authorized native Terra high
+fallback, up to two independent read-only reviewers, with no discovery-worker terminal review.
+They receive the exact candidate, frozen scope and artifacts plus canonical/private inputs.
+Review output must bind candidate, route/effort, independence, findings/severity, decisive checks
+and limitations. Separate context/model-role review provides procedural independence but not
+external-provider or GPT-family independence. No Contributor route was needed.
+
+Remaining product/evidence gaps: exact Meta referent and several package/binary contracts;
+resource-level effect mediation and command fidelity; cache minima and subscription debit;
+formal refinement, performance, security, user demand and enterprise isolation. All eight designs
+remain not run and all ten Owner answers remain pending. Proceed to exact-candidate gates/review;
+if the budget expires, preserve an explicitly incomplete checkpoint instead of claiming completion.

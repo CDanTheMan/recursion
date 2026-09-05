@@ -7,6 +7,22 @@ source: archive/session-transcript-2026-09-02.md plus owner direction 2026-09-03
 
 # Recursion v3 session decision register
 
+## Foundation proposals awaiting GRILLME — 2026-09-05
+
+The canonical accepted Owner rulings above are unchanged. The structured
+[foundation decisions](foundation-research/decisions.json) and ranked
+[GRILLME packet](foundation-research/grillme.md) contain ten **pending** proposals:
+model integration boundary; governed engine floor; public authentication promise; optional setup;
+compaction/refresh defaults; first remote authority domain; fleet evaluation profile; adapter
+support window; command/plugin import depth; and next external learning cohort after Lucas-first.
+
+These add no OR ruling, activate no future constitution and select no language/store/native loop.
+Git evidence corrects M1A/M1B/M1C status to merged pure/inert slices; historical pre-M1 wording
+elsewhere in this register is not a current construction prerequisite. The research's first
+decision is the model-level mapping/adapter scope, not a rerun of OR-018/OR-019. FND-001/FND-002.
+Exact later Owner answers must update status, provenance and affected documents before being
+compiled into a versioned accepted GoalSpec.
+
 ## Use and authority
 
 This register consolidates the 2026-09-02 design conversation. It does not amend `CONTROL_PLANE.md` or `state/DECISIONS.md`. `accepted-direction` means Lucas approved the direction in conversation; research may refine mechanics, and constitutional or implementation changes still require their normal review path.

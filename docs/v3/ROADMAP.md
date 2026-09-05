@@ -6,6 +6,20 @@ last-updated: 2026-09-03
 
 # Recursion v3 research and construction roadmap hypothesis
 
+## Foundation priority update — 2026-09-05
+
+Git evidence verifies merged M1A/M1B/M1C at
+`a7cd9458d37f3090079930bf8d79ffd77c4f73e4`; this corrects earlier local-only status prose.
+No runtime milestone is completed by this research. Next: resolve the model integration mapping,
+run the bounded formal model, freeze language-neutral vectors and compare CPython/Rust/Go,
+then compare JSONL/CAS and SQLite-WAL/CAS before canonical-state construction. FND-001/FND-002.
+
+CLI capability extensions, native/upstream engine boundaries, setup and update support are
+compatible proposals. Compaction/cache/fleet/resource benefits require later experiments.
+Hosted tenancy, commercial tiers and graphical/media expansion remain deferred. OR-015 and
+constitutional activation are not unblocked. The [GRILLME queue](foundation-research/grillme.md)
+contains pending choices without changing accepted priorities.
+
 ## Delivery model
 
 V3 is developed through small, independently verified milestones and released as one complete v3 product promise. `core`, `standard`, `remote`, `full`, and custom manifests control installation weight; they do not create incompatible products or closed feature tiers.

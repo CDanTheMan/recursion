@@ -6,6 +6,23 @@ last-updated: 2026-09-03
 
 # Recursion v3 plugins and editions hypothesis
 
+## Upstream compatibility and support policy — proposed
+
+Provider adapters, engine adapters and Recursion plugins have different ownership and billing
+boundaries. Proposed initial command imports are schema-declared and namespaced; execution of
+arbitrary upstream plugin environments remains deferred. Retain independent grants, digest-bound
+manifests, no-import disabled paths, staged/fenced reload and adapter-free boot/recovery. FND-016.
+
+A proposed support window is the current certified build plus one previous certified build.
+Discover and diff upstream source/schema/default tools/terms; stage, replay-test, quarantine,
+explicitly promote at a route-epoch boundary and retain a tested rollback. A security emergency
+may require refusing new admissions; it does not justify silent policy expansion. Signatures,
+SBOMs and protocol versions do not prove semantic compatibility. Pending
+`decision.foundation.updates` and `decision.foundation.plugin-bridge`; no updates were installed.
+
+One product with optional profiles remains the direction. The three audiences introduce research
+questions, not commercial editions, tenant isolation or compliance certification. FND-008.
+
 ## Boundary
 
 V3 should be extensible like a modern harness without making its integrity constitution replaceable by an ordinary plugin.

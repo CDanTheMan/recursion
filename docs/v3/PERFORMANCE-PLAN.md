@@ -6,6 +6,23 @@ last-updated: 2026-09-03
 
 # Recursion v3 performance and resource hypothesis plan
 
+## Foundation follow-up designs — 2026-09-05
+
+The [eight foundation designs](foundation-research/experiments.json) add explicit comparisons for
+compaction, total cache economics, fleet allocation, resource/UI cost, native/upstream adapter
+control, remote faults, setup and upgrade certification. All are preregistered exploratory
+proposals, not executed trials. Preserve the earlier formal-model → language → storage priorities.
+
+Match total budgets, count failures/retries/compaction and human review, and keep attempts nested
+within independent tasks. Freeze route/OS/build/model/evaluator and workloads before execution;
+run blinded power simulation before a powered claim. Stronger models or larger fleets are not
+verification by voting. Historic benchmark rankings and developer/agent studies motivate controls
+but do not establish current Recursion quality, performance or market effects. FND-015/FND-018.
+
+The Owner's desktop-lag report motivates component attribution, including UI, engine subprocess,
+language server, indexer, watchers, tools and inference. No headless speedup, GPU dependency or
+cache-heartbeat savings is presumed. FND-011/FND-012.
+
 No v3 performance improvement was measured in this campaign. This document defines workloads,
 metrics and decision rules so later implementation cannot convert expectations into facts.
 

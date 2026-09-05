@@ -6,6 +6,20 @@ last-updated: 2026-09-03
 
 # Recursion v3 executive model
 
+## Model allocation and persistent actors — research disposition
+
+Head/ARM/worker are durable roles, not model names. A stronger model does not gain a broader
+grant; failover, delegation, authority escalation and lease-holder replacement remain distinct.
+Direct Owner-to-ARM interaction is retained. Event-driven actors and deterministic health/status
+checks do not imply continuously running model requests. FND-014.
+
+Astra/Sol/Luna and public-only Muse examples are proposed experimental treatments, subject to
+exact route/privacy/capacity admission. Compare single-agent, simpler delegation, all-frontier and
+mixed fleets at the same total budget, including retries, compaction and human review. Escalation
+should be bounded and triggered by evidence, not a mandatory tour through model tiers.
+`experiment.foundation.delegation` and `decision.foundation.escalation` remain pending; controlled
+studies do not establish a universal fleet win. FND-015.
+
 > **Ratified target, pending constitutional application.** `OR-018` and `OR-019` select these
 > Recursion-owned roles, but they are not the operative repository constitution. Until the
 > [authorized amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md) is reviewed and applied,

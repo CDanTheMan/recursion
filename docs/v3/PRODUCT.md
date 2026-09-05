@@ -6,6 +6,22 @@ last-updated: 2026-09-03
 
 # Recursion v3 product hypothesis
 
+## Audience and execution-mode findings — 2026-09-05
+
+Lucas-first validation remains the accepted scope. A proposed next learning cohort is developers
+performing bounded repository tasks with inspectable diffs and recoverable interruptions. Casual
+users need unassisted setup, understandable permissions/cost and recoverable failures; organization
+operators additionally need identity, audit, secret and support controls. Hosted tenancy is a
+separate deferred authority/isolation design. Enterprise spending and viral adoption remain
+hypotheses; no commercial tier policy or compliance claim follows. FND-008/FND-017.
+
+One Recursion CLI can serve native and upstream-engine modes, with visible capability limits.
+The product's stable promise is Recursion-owned goals, authority, evidence and recovery; universal
+upstream feature parity and subscription portability are unproved. Proposed route-specific
+authentication wording and the next external cohort remain pending in
+[foundation decisions](foundation-research/decisions.json). See the
+[audience job analysis](foundation-research/evidence.json), `analysis.foundation.audiences`.
+
 ## Thesis
 
 Recursion is a self-hosted, headless harness for sustained, high-quality autonomous software development across models, subscriptions, APIs, CLIs, repositories, and machines. It turns an owner's intent into reviewable development while preserving authority, privacy, quota, machine responsiveness, and evidence.

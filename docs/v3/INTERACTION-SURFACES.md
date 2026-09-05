@@ -6,6 +6,18 @@ last-updated: 2026-09-03
 
 # Recursion v3 interaction surfaces and collaborative ARM topology
 
+## Visible work without fabricated activity — research proposal
+
+Prioritize event timelines, diffs, task dependencies, accepted state transitions, truthful
+uncertainty and actionable blockers in CLI-first v3. Distinguish engine activity from canonical
+acceptance; a busy spinner is not progress. Expose provider reasoning text/summaries only where
+returned, label opaque state and counters honestly, and never reconstruct hidden reasoning.
+
+Comprehension, accessibility, input stability, privacy and rendering/resource cost need separate
+tests. No automatic private export, graphical/media extension or viral-adoption claim is accepted
+by this research. See `experiment.foundation.resources` and `experiment.foundation.setup` in
+[experiments](foundation-research/experiments.json). FND-017.
+
 ## Release surface ruling
 
 Recursion v3 is its own headless development harness with optimization as an acceptance target,
