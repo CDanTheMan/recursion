@@ -1,0 +1,73 @@
+{
+  "expected": {
+    "artifact_id": "artifact:one",
+    "deletion_operation_count": 0,
+    "reasons": [
+      "owner-policy-required"
+    ],
+    "resolved_copy_ids": [
+      "copy:local"
+    ],
+    "status": "blocked",
+    "type": "RetentionDecision@1",
+    "unresolved_copy_ids": []
+  },
+  "fixture_id": "F-M1C-024",
+  "input": {
+    "artifact_class": "authority-receipt",
+    "artifact_id": "artifact:one",
+    "copies": [
+      {
+        "copy_id": "copy:local",
+        "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "evidence_state": "verified",
+        "expiry_boundary": null,
+        "expiry_reached": false,
+        "kind": "local",
+        "state": "deleted",
+        "type": "CopyDisposition@1"
+      }
+    ],
+    "deletion_operation_count": 0,
+    "key_scope": "artifact",
+    "key_state": "destroyed",
+    "legal_hold": false,
+    "local_content_deleted": true,
+    "owner_erasure_policy": "unknown",
+    "policy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "privacy_class": "private",
+    "tombstone": {
+      "artifact_class": "authority-receipt",
+      "artifact_id": "artifact:one",
+      "contains_content": false,
+      "contains_global_content_digest": false,
+      "contains_secret": false,
+      "copy_dispositions": [
+        {
+          "copy_id": "copy:local",
+          "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "evidence_state": "verified",
+          "expiry_boundary": null,
+          "expiry_reached": false,
+          "kind": "local",
+          "state": "deleted",
+          "type": "CopyDisposition@1"
+        }
+      ],
+      "disposed_at": "2026-09-04T12:01:00Z",
+      "policy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "requested_at": "2026-09-04T12:00:00Z",
+      "responsible_component": "component:retention",
+      "tombstone_digest": "sha256:3e73eed35d6a5bf415dda75c4bd2525acfa4b65643fc5521e9e756023808dfa8",
+      "tombstone_id": "tombstone:one",
+      "type": "DeletionTombstone@1"
+    },
+    "type": "RetentionAssessmentInput@1"
+  },
+  "purpose": "Unresolved Owner policy blocks authority-receipt erasure.",
+  "source_requirement_ids": [
+    "REQ-M1C-OWNER-SEAM",
+    "REQ-M1C-RETENTION"
+  ],
+  "type": "RetentionFixtureBundle@1"
+}

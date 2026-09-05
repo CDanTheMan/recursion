@@ -1,0 +1,121 @@
+{
+  "expected": {
+    "effect_count": 0,
+    "external_call_count": 0,
+    "final_attempt_number": 2,
+    "reasons": [
+      "blind-retry-blocked",
+      "receipt-missing",
+      "reconciliation-required"
+    ],
+    "requires_reconciliation": true,
+    "status": "ambiguous",
+    "type": "EffectDecision@1"
+  },
+  "fixture_id": "F-M1C-009",
+  "input": {
+    "admission": {
+      "actor_id": "actor:one",
+      "admission_epoch": 2,
+      "admission_id": "admission:one",
+      "admitted_at": "2026-09-04T12:00:00Z",
+      "budget_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "decision": "admitted",
+      "effect_id": "effect:one",
+      "fence_epoch": 3,
+      "goal_spec_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "grant_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "intent_digest": "sha256:17ab8deb6f60f1b3b1fb6de8af708ed2bb8f3c75cb532e918d0e67106a19af03",
+      "lease_id": "lease:one",
+      "pause_profile": "current-immediate",
+      "pause_state": "running",
+      "policy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "privacy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "reasons": [],
+      "route_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "type": "EffectAdmission@1"
+    },
+    "current_admission_epoch": 2,
+    "current_fence_epoch": 3,
+    "dependency_states": [],
+    "effect_count": 0,
+    "external_call_count": 0,
+    "intent": {
+      "actor_id": "actor:one",
+      "admission_epoch": 2,
+      "budget_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "command_id": "command:one",
+      "compensation_effect_id": null,
+      "deadline": "2026-09-05T00:00:00Z",
+      "dependency_effect_ids": [],
+      "effect_class": "external-idempotent",
+      "effect_id": "effect:one",
+      "fence_epoch": 3,
+      "goal_spec_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "goal_spec_id": "goal:m1c",
+      "grant_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "idempotency_key": "idempotency:one",
+      "intent_digest": "sha256:17ab8deb6f60f1b3b1fb6de8af708ed2bb8f3c75cb532e918d0e67106a19af03",
+      "lease_id": "lease:one",
+      "payload_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "plan_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "policy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "privacy_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "reversible": false,
+      "route_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "target_ref": "target:synthetic",
+      "type": "EffectIntent@1"
+    },
+    "observations": [
+      {
+        "admission_epoch": 2,
+        "attempt_id": "attempt:1",
+        "attempt_number": 1,
+        "effect_id": "effect:one",
+        "fence_epoch": 3,
+        "idempotency_key": "idempotency:one",
+        "observed_at": "2026-09-04T12:00:00Z",
+        "payload_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "target_ref": "target:synthetic",
+        "type": "AttemptStarted@1"
+      },
+      {
+        "admission_epoch": 2,
+        "attempt_id": "attempt:1",
+        "attempt_number": 1,
+        "authenticity": "verified",
+        "effect_id": "effect:one",
+        "fence_epoch": 3,
+        "idempotency_key": "idempotency:one",
+        "observation_id": "observation:one",
+        "observed_at": "2026-09-04T12:01:00Z",
+        "observer_ref": "observer:synthetic",
+        "outcome": "accepted",
+        "payload_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "remote_operation_ref": "remote:one",
+        "result_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "target_ref": "target:synthetic",
+        "type": "ExternalObserved@1"
+      },
+      {
+        "admission_epoch": 2,
+        "attempt_id": "attempt:2",
+        "attempt_number": 2,
+        "effect_id": "effect:one",
+        "fence_epoch": 3,
+        "idempotency_key": "idempotency:one",
+        "observed_at": "2026-09-04T12:02:00Z",
+        "payload_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "target_ref": "target:synthetic",
+        "type": "AttemptStarted@1"
+      }
+    ],
+    "type": "EffectTraceInput@1"
+  },
+  "purpose": "Fence a blind second attempt while the first is ambiguous.",
+  "source_requirement_ids": [
+    "REQ-M1C-AMBIGUITY",
+    "REQ-M1C-EFFECT"
+  ],
+  "type": "EffectFixtureBundle@1"
+}

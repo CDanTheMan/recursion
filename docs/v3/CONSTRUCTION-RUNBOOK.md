@@ -71,7 +71,8 @@ they do not implement those subsystems.
   no-import admission, full artifact/dependency digests, capability/policy intersection, stale
   reload fencing, daemon cursors/credit/input leases and zero-cost-disabled behavior described in
   [FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md).
-- **M1C** may later add inert source/effect/persistence requirement contracts. SQLite, scientific
+- **M1C** is Owner-authorized as a bounded local campaign after M1B's merge. It adds inert
+  source/effect/publication/persistence requirement contracts. SQLite, scientific
   adapters, Git, publication, external effects and migration remain later separately authorized
   work.
 
@@ -105,6 +106,11 @@ fence. No M1A fixture may be called a migration rehearsal or runtime proof.
 M1B's exact local GoalSpec, allowlist, DAG and gates are in
 [M1B-CONSTRUCTION-CAMPAIGN.md](M1B-CONSTRUCTION-CAMPAIGN.md). Its schemas and fixtures are
 requirements evidence only and do not authorize Milestone 3 runtime work.
+
+M1C's exact local GoalSpec, allowlist, DAG and gates are in
+[M1C-CONSTRUCTION-CAMPAIGN.md](M1C-CONSTRUCTION-CAMPAIGN.md). Its synthetic integrity fixtures
+prepare requirements evidence only; they do not authorize a database, effect, publication,
+deletion, migration or OR-015 cutover rehearsal.
 
 ## Handoff, stop and rollback
 

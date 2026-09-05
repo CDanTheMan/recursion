@@ -1,0 +1,107 @@
+{
+  "expected": {
+    "accepted_edge_ids": [],
+    "contradiction_edge_ids": [],
+    "qualification_edge_ids": [],
+    "reasons": [
+      "export-prohibited",
+      "license-prohibited",
+      "privacy-prohibited"
+    ],
+    "rejected_source_ids": [
+      "source:private"
+    ],
+    "status": "refused",
+    "type": "EvidenceDecision@1"
+  },
+  "fixture_id": "F-M1C-005",
+  "input": {
+    "allowed_license_states": [
+      "permitted"
+    ],
+    "allowed_privacy_classes": [
+      "public"
+    ],
+    "claim": {
+      "assumption_digests": [],
+      "claim_id": "claim:one",
+      "claim_kind": "fact",
+      "definition_digests": [],
+      "evidence_scope": "external-mechanism",
+      "goal_spec_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "goal_spec_id": "goal:m1c",
+      "intended_use": "public",
+      "proposition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "required_source_ids": [
+        "source:private"
+      ],
+      "revalidate_after": "2026-10-01T00:00:00Z",
+      "type": "ResearchClaim@1"
+    },
+    "edges": [
+      {
+        "applicability": "exact",
+        "claim_id": "claim:one",
+        "edge_id": "edge:private",
+        "extraction_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "extraction_verified": true,
+        "locator": "section:one",
+        "relation": "supports",
+        "source_id": "source:private",
+        "source_version": "v1",
+        "type": "EvidenceEdge@1"
+      }
+    ],
+    "observed_at": "2026-09-04T12:00:00Z",
+    "public_export_authorized": false,
+    "sources": [
+      {
+        "access_state": "accessible",
+        "adapter_ref": "adapter:synthetic",
+        "adapter_revision": "v1",
+        "canonical_uri": "https://example.invalid/source:private",
+        "content_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "creator_digests": [
+          "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "editorial_state": "current",
+        "license_state": "restricted",
+        "lifecycle": "verified",
+        "persistent_identifiers": [
+          {
+            "scheme": "doi",
+            "type": "PersistentIdentifier@1",
+            "value": "10.0000/source:private",
+            "verification_evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+            "verification_state": "verified"
+          }
+        ],
+        "primary_status": "primary",
+        "privacy_class": "private",
+        "published_at": "2026-09-01T00:00:00Z",
+        "publisher_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "related_source_ids": [],
+        "representation_size": 100,
+        "request_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "retrieved_at": "2026-09-04T12:00:00Z",
+        "revalidate_after": "2026-10-01T00:00:00Z",
+        "source_class": "paper",
+        "source_id": "source:private",
+        "supported_scopes": [
+          "external-mechanism"
+        ],
+        "title_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "type": "SourceRecord@1",
+        "verification_evidence_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "version": "v1"
+      }
+    ],
+    "type": "EvidenceAssessmentInput@1"
+  },
+  "purpose": "Refuse public export of private license-restricted evidence.",
+  "source_requirement_ids": [
+    "REQ-M1C-EVIDENCE",
+    "REQ-M1C-PRIVACY"
+  ],
+  "type": "EvidenceFixtureBundle@1"
+}

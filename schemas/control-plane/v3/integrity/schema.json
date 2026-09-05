@@ -1,0 +1,3239 @@
+{
+  "$defs": {
+    "AttemptStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "admission_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "attempt_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "attempt_number": {
+          "maximum": 64,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "effect_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "fence_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "idempotency_key": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "payload_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "target_ref": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "type": {
+          "const": "AttemptStarted@1"
+        }
+      },
+      "required": [
+        "type",
+        "effect_id",
+        "attempt_id",
+        "attempt_number",
+        "idempotency_key",
+        "target_ref",
+        "payload_digest",
+        "admission_epoch",
+        "fence_epoch",
+        "observed_at"
+      ],
+      "type": "object"
+    },
+    "CanonicalEvent": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "previous_event_digest": {
+                "$ref": "#/$defs/Digest"
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "sequence": {
+                "const": 1
+              }
+            },
+            "required": [
+              "sequence"
+            ]
+          },
+          "then": {
+            "properties": {
+              "previous_event_digest": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "aggregate_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "authentication_state": {
+          "enum": [
+            "verified",
+            "unverified",
+            "mismatch"
+          ]
+        },
+        "causation_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "command_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "event_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "event_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "fence_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "idempotency_key": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "logical_time": {
+          "$ref": "#/$defs/PositiveCount"
+        },
+        "payload_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "previous_event_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "$ref": "#/$defs/Token"
+        },
+        "sequence": {
+          "$ref": "#/$defs/PositiveCount"
+        },
+        "type": {
+          "const": "CanonicalEvent@1"
+        },
+        "writer_id": {
+          "$ref": "#/$defs/EntityId"
+        }
+      },
+      "required": [
+        "type",
+        "aggregate_id",
+        "sequence",
+        "event_id",
+        "command_id",
+        "idempotency_key",
+        "causation_id",
+        "correlation_id",
+        "writer_id",
+        "fence_epoch",
+        "logical_time",
+        "schema_version",
+        "previous_event_digest",
+        "payload_digest",
+        "event_digest",
+        "authentication_state"
+      ],
+      "type": "object",
+      "x-selfDigestOmit": "event_digest"
+    },
+    "CanonicalUri": {
+      "maxLength": 512,
+      "minLength": 1,
+      "pattern": "^(?:https://|urn:|recursion:)[^\\s#]+$",
+      "type": "string",
+      "x-canonicalUri": true,
+      "x-utf8MaxBytes": 512
+    },
+    "CopyDisposition": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "expiry_boundary": {
+                "type": "null"
+              },
+              "expiry_reached": {
+                "const": false
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "state": {
+                "const": "expiry-bound"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expiry_boundary": {
+                "$ref": "#/$defs/Timestamp"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "copy_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "evidence_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_state": {
+          "enum": [
+            "verified",
+            "unverified",
+            "mismatch"
+          ]
+        },
+        "expiry_boundary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expiry_reached": {
+          "type": "boolean"
+        },
+        "kind": {
+          "enum": [
+            "local",
+            "cache",
+            "replica",
+            "backup",
+            "disconnected-spool"
+          ]
+        },
+        "state": {
+          "enum": [
+            "deleted",
+            "expiry-bound",
+            "pending",
+            "soft-deleted",
+            "delete-marker",
+            "disconnected",
+            "unknown"
+          ]
+        },
+        "type": {
+          "const": "CopyDisposition@1"
+        }
+      },
+      "required": [
+        "type",
+        "copy_id",
+        "kind",
+        "state",
+        "evidence_state",
+        "evidence_digest",
+        "expiry_boundary",
+        "expiry_reached"
+      ],
+      "type": "object"
+    },
+    "Count": {
+      "maximum": 1000000,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "DeletionTombstone": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_class": {
+          "enum": [
+            "raw-session",
+            "temporary",
+            "cache",
+            "accepted-evidence",
+            "gate-receipt",
+            "publication-receipt",
+            "effect-receipt",
+            "authority-receipt",
+            "audit-record"
+          ]
+        },
+        "artifact_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "contains_content": {
+          "type": "boolean"
+        },
+        "contains_global_content_digest": {
+          "type": "boolean"
+        },
+        "contains_secret": {
+          "type": "boolean"
+        },
+        "copy_dispositions": {
+          "items": {
+            "$ref": "#/$defs/CopyDisposition"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "type": "array",
+          "x-strictlySortedBy": "copy_id",
+          "x-uniqueBy": "copy_id"
+        },
+        "disposed_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policy_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "requested_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "responsible_component": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "tombstone_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "tombstone_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "type": {
+          "const": "DeletionTombstone@1"
+        }
+      },
+      "required": [
+        "type",
+        "tombstone_id",
+        "artifact_id",
+        "artifact_class",
+        "policy_digest",
+        "responsible_component",
+        "requested_at",
+        "disposed_at",
+        "copy_dispositions",
+        "contains_content",
+        "contains_secret",
+        "contains_global_content_digest",
+        "tombstone_digest"
+      ],
+      "type": "object",
+      "x-selfDigestOmit": "tombstone_digest"
+    },
+    "DependencyEffectState": {
+      "additionalProperties": false,
+      "properties": {
+        "effect_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "status": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "ambiguous",
+            "reconciled-succeeded",
+            "reconciled-failed"
+          ]
+        },
+        "type": {
+          "const": "DependencyEffectState@1"
+        }
+      },
+      "required": [
+        "type",
+        "effect_id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "DigestSet": {
+      "items": {
+        "$ref": "#/$defs/Digest"
+      },
+      "maxItems": 128,
+      "minItems": 0,
+      "type": "array",
+      "uniqueItems": true,
+      "x-strictlySorted": true
+    },
+    "EffectAdmission": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "reasons": {
+                "minItems": 1
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "decision": {
+                "const": "admitted"
+              }
+            },
+            "required": [
+              "decision"
+            ]
+          },
+          "then": {
+            "properties": {
+              "pause_profile": {
+                "const": "current-immediate"
+              },
+              "pause_state": {
+                "const": "running"
+              },
+              "reasons": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "actor_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "admission_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "admission_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "admitted_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "budget_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "decision": {
+          "enum": [
+            "admitted",
+            "refused"
+          ]
+        },
+        "effect_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "fence_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "goal_spec_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "grant_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "intent_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "lease_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "pause_profile": {
+          "enum": [
+            "current-immediate",
+            "future-checkpoint",
+            "future-interrupt",
+            "future-drain"
+          ]
+        },
+        "pause_state": {
+          "enum": [
+            "running",
+            "paused"
+          ]
+        },
+        "policy_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "privacy_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "reasons": {
+          "items": {
+            "$ref": "#/$defs/EffectReason"
+          },
+          "maxItems": 128,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true,
+          "x-strictlySorted": true
+        },
+        "route_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "type": {
+          "const": "EffectAdmission@1"
+        }
+      },
+      "required": [
+        "type",
+        "admission_id",
+        "effect_id",
+        "intent_digest",
+        "decision",
+        "actor_id",
+        "lease_id",
+        "admission_epoch",
+        "fence_epoch",
+        "goal_spec_digest",
+        "policy_digest",
+        "grant_digest",
+        "privacy_digest",
+        "route_digest",
+        "budget_digest",
+        "pause_profile",
+        "pause_state",
+        "admitted_at",
+        "reasons"
+      ],
+      "type": "object"
+    },
+    "EffectDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "effect_count": {
+          "const": 0
+        },
+        "external_call_count": {
+          "const": 0
+        },
+        "final_attempt_number": {
+          "$ref": "#/$defs/Count"
+        },
+        "reasons": {
+          "items": {
+            "$ref": "#/$defs/EffectReason"
+          },
+          "maxItems": 128,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true,
+          "x-strictlySorted": true
+        },
+        "requires_reconciliation": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "refused",
+            "prepared",
+            "executing",
+            "succeeded",
+            "failed",
+            "ambiguous",
+            "reconciled-succeeded",
+            "reconciled-failed"
+          ]
+        },
+        "type": {
+          "const": "EffectDecision@1"
+        }
+      },
+      "required": [
+        "type",
+        "status",
+        "reasons",
+        "final_attempt_number",
+        "requires_reconciliation",
+        "effect_count",
+        "external_call_count"
+      ],
+      "type": "object",
+      "x-effectDecisionInvariant": true
+    },
+    "EffectFixtureBundle": {
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "$ref": "#/$defs/EffectDecision"
+        },
+        "fixture_id": {
+          "pattern": "^F-M1C-[0-9]{3}$",
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/$defs/EffectTraceInput"
+        },
+        "purpose": {
+          "$ref": "#/$defs/Text"
+        },
+        "source_requirement_ids": {
+          "$ref": "#/$defs/RequirementIdSet"
+        },
+        "type": {
+          "const": "EffectFixtureBundle@1"
+        }
+      },
+      "required": [
+        "type",
+        "fixture_id",
+        "purpose",
+        "source_requirement_ids",
+        "input",
+        "expected"
+      ],
+      "type": "object",
+      "x-fixtureBindings": true
+    },
+    "EffectIntent": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "compensation_effect_id": {
+                "type": "null"
+              },
+              "reversible": {
+                "const": false
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "effect_class": {
+                "const": "local-reversible"
+              }
+            },
+            "required": [
+              "effect_class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "compensation_effect_id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "reversible": {
+                "const": true
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "actor_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "admission_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "budget_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "command_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "compensation_effect_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EntityId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deadline": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "dependency_effect_ids": {
+          "$ref": "#/$defs/EntityIdSet"
+        },
+        "effect_class": {
+          "enum": [
+            "local-reversible",
+            "local-irreversible",
+            "external-idempotent",
+            "external-reconciliation-only",
+            "publication"
+          ]
+        },
+        "effect_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "fence_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "goal_spec_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "goal_spec_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "grant_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "idempotency_key": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "intent_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "lease_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "payload_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "plan_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "policy_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "privacy_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "reversible": {
+          "type": "boolean"
+        },
+        "route_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "target_ref": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "type": {
+          "const": "EffectIntent@1"
+        }
+      },
+      "required": [
+        "type",
+        "effect_id",
+        "command_id",
+        "idempotency_key",
+        "intent_digest",
+        "effect_class",
+        "target_ref",
+        "payload_digest",
+        "goal_spec_id",
+        "goal_spec_digest",
+        "policy_digest",
+        "grant_digest",
+        "privacy_digest",
+        "route_digest",
+        "budget_digest",
+        "plan_digest",
+        "actor_id",
+        "lease_id",
+        "admission_epoch",
+        "fence_epoch",
+        "deadline",
+        "dependency_effect_ids",
+        "reversible",
+        "compensation_effect_id"
+      ],
+      "type": "object",
+      "x-selfDigestOmit": "intent_digest"
+    },
+    "EffectObservation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AttemptStarted"
+        },
+        {
+          "$ref": "#/$defs/ExternalObserved"
+        },
+        {
+          "$ref": "#/$defs/ReceiptRecorded"
+        },
+        {
+          "$ref": "#/$defs/ReconciliationObserved"
+        }
+      ]
+    },
+    "EffectReason": {
+      "enum": [
+        "admission-refused",
+        "attempt-binding-mismatch",
+        "authority-binding-mismatch",
+        "blind-retry-blocked",
+        "compensation-not-separate",
+        "dependency-unresolved",
+        "deadline-expired",
+        "effect-time-order-invalid",
+        "future-pause-inoperative",
+        "intent-binding-mismatch",
+        "observation-binding-mismatch",
+        "observation-conflict",
+        "observation-unverified",
+        "paused",
+        "receipt-binding-mismatch",
+        "receipt-missing",
+        "reconciliation-required",
+        "reconciliation-unverified",
+        "stale-admission",
+        "stale-fence"
+      ]
+    },
+    "EffectTraceInput": {
+      "additionalProperties": false,
+      "properties": {
+        "admission": {
+          "$ref": "#/$defs/EffectAdmission"
+        },
+        "current_admission_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "current_fence_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "dependency_states": {
+          "items": {
+            "$ref": "#/$defs/DependencyEffectState"
+          },
+          "maxItems": 128,
+          "minItems": 0,
+          "type": "array",
+          "x-strictlySortedBy": "effect_id",
+          "x-uniqueBy": "effect_id"
+        },
+        "effect_count": {
+          "const": 0
+        },
+        "external_call_count": {
+          "const": 0
+        },
+        "intent": {
+          "$ref": "#/$defs/EffectIntent"
+        },
+        "observations": {
+          "items": {
+            "$ref": "#/$defs/EffectObservation"
+          },
+          "maxItems": 128,
+          "minItems": 0,
+          "type": "array"
+        },
+        "type": {
+          "const": "EffectTraceInput@1"
+        }
+      },
+      "required": [
+        "type",
+        "intent",
+        "admission",
+        "observations",
+        "dependency_states",
+        "current_admission_epoch",
+        "current_fence_epoch",
+        "effect_count",
+        "external_call_count"
+      ],
+      "type": "object",
+      "x-effectBindings": true,
+      "x-nondecreasingObservationTimes": true
+    },
+    "EntityId": {
+      "maxLength": 160,
+      "minLength": 3,
+      "pattern": "^[a-z][a-z0-9-]{1,31}:[A-Za-z0-9._~-]{1,128}$",
+      "type": "string",
+      "x-utf8MaxBytes": 160
+    },
+    "EntityIdSet": {
+      "items": {
+        "$ref": "#/$defs/EntityId"
+      },
+      "maxItems": 128,
+      "minItems": 0,
+      "type": "array",
+      "uniqueItems": true,
+      "x-strictlySorted": true
+    },
+    "Epoch": {
+      "$ref": "#/$defs/PositiveCount"
+    },
+    "EvidenceAssessmentInput": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_license_states": {
+          "$ref": "#/$defs/LicenseStateSet"
+        },
+        "allowed_privacy_classes": {
+          "$ref": "#/$defs/PrivacyClassSet"
+        },
+        "claim": {
+          "$ref": "#/$defs/ResearchClaim"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/EvidenceEdge"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "type": "array",
+          "x-strictlySortedBy": "edge_id",
+          "x-uniqueBy": "edge_id"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "public_export_authorized": {
+          "type": "boolean"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/SourceRecord"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "type": "array",
+          "x-strictlySortedBy": "source_id",
+          "x-uniqueBy": "source_id"
+        },
+        "type": {
+          "const": "EvidenceAssessmentInput@1"
+        }
+      },
+      "required": [
+        "type",
+        "observed_at",
+        "claim",
+        "sources",
+        "edges",
+        "allowed_privacy_classes",
+        "allowed_license_states",
+        "public_export_authorized"
+      ],
+      "type": "object",
+      "x-evidenceBindings": true
+    },
+    "EvidenceDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_edge_ids": {
+          "$ref": "#/$defs/EntityIdSet"
+        },
+        "contradiction_edge_ids": {
+          "$ref": "#/$defs/EntityIdSet"
+        },
+        "qualification_edge_ids": {
+          "$ref": "#/$defs/EntityIdSet"
+        },
+        "reasons": {
+          "items": {
+            "$ref": "#/$defs/EvidenceReason"
+          },
+          "maxItems": 128,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true,
+          "x-strictlySorted": true
+        },
+        "rejected_source_ids": {
+          "$ref": "#/$defs/EntityIdSet"
+        },
+        "status": {
+          "enum": [
+            "supported",
+            "contested",
+            "unknown",
+            "refused"
+          ]
+        },
+        "type": {
+          "const": "EvidenceDecision@1"
+        }
+      },
+      "required": [
+        "type",
+        "status",
+        "reasons",
+        "accepted_edge_ids",
+        "contradiction_edge_ids",
+        "qualification_edge_ids",
+        "rejected_source_ids"
+      ],
+      "type": "object",
+      "x-evidenceDecisionInvariant": true
+    },
+    "EvidenceEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "applicability": {
+          "enum": [
+            "exact",
+            "partial",
+            "inapplicable",
+            "unknown"
+          ]
+        },
+        "claim_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "edge_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "extraction_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "extraction_verified": {
+          "type": "boolean"
+        },
+        "locator": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "relation": {
+          "enum": [
+            "supports",
+            "contradicts",
+            "qualifies",
+            "replicates",
+            "updates",
+            "mentions",
+            "metadata-only",
+            "inapplicable"
+          ]
+        },
+        "source_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "source_version": {
+          "$ref": "#/$defs/Token"
+        },
+        "type": {
+          "const": "EvidenceEdge@1"
+        }
+      },
+      "required": [
+        "type",
+        "edge_id",
+        "claim_id",
+        "source_id",
+        "relation",
+        "locator",
+        "extraction_digest",
+        "source_version",
+        "applicability",
+        "extraction_verified"
+      ],
+      "type": "object"
+    },
+    "EvidenceFixtureBundle": {
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "$ref": "#/$defs/EvidenceDecision"
+        },
+        "fixture_id": {
+          "pattern": "^F-M1C-[0-9]{3}$",
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/$defs/EvidenceAssessmentInput"
+        },
+        "purpose": {
+          "$ref": "#/$defs/Text"
+        },
+        "source_requirement_ids": {
+          "$ref": "#/$defs/RequirementIdSet"
+        },
+        "type": {
+          "const": "EvidenceFixtureBundle@1"
+        }
+      },
+      "required": [
+        "type",
+        "fixture_id",
+        "purpose",
+        "source_requirement_ids",
+        "input",
+        "expected"
+      ],
+      "type": "object",
+      "x-fixtureBindings": true
+    },
+    "EvidenceReason": {
+      "enum": [
+        "claim-binding-mismatch",
+        "contradiction-present",
+        "edge-binding-mismatch",
+        "export-prohibited",
+        "extraction-unverified",
+        "license-prohibited",
+        "metadata-only",
+        "privacy-prohibited",
+        "qualification-present",
+        "scope-inapplicable",
+        "source-inaccessible",
+        "source-missing",
+        "source-retracted",
+        "source-stale",
+        "source-superseded",
+        "source-unverified",
+        "support-insufficient"
+      ]
+    },
+    "EvidenceScope": {
+      "enum": [
+        "external-mechanism",
+        "local-structural",
+        "empirical-fit"
+      ]
+    },
+    "EvidenceScopeSet": {
+      "items": {
+        "$ref": "#/$defs/EvidenceScope"
+      },
+      "maxItems": 128,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true,
+      "x-strictlySorted": true
+    },
+    "ExternalObserved": {
+      "additionalProperties": false,
+      "properties": {
+        "admission_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "attempt_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "attempt_number": {
+          "maximum": 64,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "authenticity": {
+          "enum": [
+            "verified",
+            "unverified",
+            "mismatch"
+          ]
+        },
+        "effect_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "fence_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "idempotency_key": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "observation_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "observer_ref": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "outcome": {
+          "enum": [
+            "accepted",
+            "rejected",
+            "unknown"
+          ]
+        },
+        "payload_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "remote_operation_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpaqueRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_ref": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "type": {
+          "const": "ExternalObserved@1"
+        }
+      },
+      "required": [
+        "type",
+        "effect_id",
+        "attempt_id",
+        "attempt_number",
+        "idempotency_key",
+        "target_ref",
+        "payload_digest",
+        "admission_epoch",
+        "fence_epoch",
+        "observed_at",
+        "observation_id",
+        "observer_ref",
+        "authenticity",
+        "outcome",
+        "remote_operation_ref",
+        "result_digest"
+      ],
+      "type": "object"
+    },
+    "FixtureManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "fixtures": {
+          "items": {
+            "$ref": "#/$defs/FixtureManifestEntry"
+          },
+          "maxItems": 24,
+          "minItems": 24,
+          "type": "array",
+          "x-strictlySortedBy": "fixture_id",
+          "x-uniqueBy": "fixture_id"
+        },
+        "schema_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "type": {
+          "const": "FixtureManifest@1"
+        }
+      },
+      "required": [
+        "type",
+        "schema_digest",
+        "fixtures"
+      ],
+      "type": "object"
+    },
+    "FixtureManifestEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "bundle_type": {
+          "enum": [
+            "EvidenceFixtureBundle@1",
+            "EffectFixtureBundle@1",
+            "PublicationFixtureBundle@1",
+            "StateFixtureBundle@1",
+            "RetentionFixtureBundle@1"
+          ]
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "fixture_id": {
+          "pattern": "^F-M1C-[0-9]{3}$",
+          "type": "string"
+        },
+        "path": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "type": {
+          "const": "FixtureManifestEntry@1"
+        }
+      },
+      "required": [
+        "type",
+        "fixture_id",
+        "path",
+        "digest",
+        "bundle_type"
+      ],
+      "type": "object"
+    },
+    "GateEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_sha": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "evidence_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "gate_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "source_sha": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "unavailable"
+          ]
+        },
+        "type": {
+          "const": "GateEvidence@1"
+        }
+      },
+      "required": [
+        "type",
+        "gate_id",
+        "source_sha",
+        "candidate_sha",
+        "status",
+        "evidence_digest",
+        "observed_at"
+      ],
+      "type": "object"
+    },
+    "GitSha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "LicenseState": {
+      "enum": [
+        "permitted",
+        "restricted",
+        "prohibited",
+        "unknown"
+      ]
+    },
+    "LicenseStateSet": {
+      "items": {
+        "$ref": "#/$defs/LicenseState"
+      },
+      "maxItems": 128,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true,
+      "x-strictlySorted": true
+    },
+    "M1CFixtureBundle": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/EvidenceFixtureBundle"
+        },
+        {
+          "$ref": "#/$defs/EffectFixtureBundle"
+        },
+        {
+          "$ref": "#/$defs/PublicationFixtureBundle"
+        },
+        {
+          "$ref": "#/$defs/StateFixtureBundle"
+        },
+        {
+          "$ref": "#/$defs/RetentionFixtureBundle"
+        }
+      ]
+    },
+    "NonEmptyDigestSet": {
+      "items": {
+        "$ref": "#/$defs/Digest"
+      },
+      "maxItems": 128,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true,
+      "x-strictlySorted": true
+    },
+    "NonEmptyEntityIdSet": {
+      "items": {
+        "$ref": "#/$defs/EntityId"
+      },
+      "maxItems": 128,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true,
+      "x-strictlySorted": true
+    },
+    "OpaqueRef": {
+      "maxLength": 192,
+      "minLength": 1,
+      "pattern": "^[\\x21-\\x7e]{1,192}$",
+      "type": "string",
+      "x-utf8MaxBytes": 192
+    },
+    "OpenWork": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "lease",
+            "effect",
+            "publication",
+            "saga"
+          ]
+        },
+        "state": {
+          "enum": [
+            "closed",
+            "active",
+            "open",
+            "ambiguous",
+            "pending",
+            "partial"
+          ]
+        },
+        "type": {
+          "const": "OpenWork@1"
+        },
+        "work_id": {
+          "$ref": "#/$defs/EntityId"
+        }
+      },
+      "required": [
+        "type",
+        "work_id",
+        "kind",
+        "state"
+      ],
+      "type": "object"
+    },
+    "PersistentIdentifier": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "verification_state": {
+                "const": "verified"
+              }
+            },
+            "required": [
+              "verification_state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "verification_evidence_digest": {
+                "$ref": "#/$defs/Digest"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "scheme": {
+          "enum": [
+            "doi",
+            "arxiv",
+            "isbn",
+            "rfc",
+            "repo-commit",
+            "dataset-doi",
+            "other"
+          ]
+        },
+        "type": {
+          "const": "PersistentIdentifier@1"
+        },
+        "value": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "verification_evidence_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verification_state": {
+          "enum": [
+            "verified",
+            "unverified",
+            "mismatch"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "scheme",
+        "value",
+        "verification_state",
+        "verification_evidence_digest"
+      ],
+      "type": "object"
+    },
+    "PositiveCount": {
+      "maximum": 1000000,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "PrivacyClass": {
+      "enum": [
+        "public",
+        "internal",
+        "private",
+        "restricted"
+      ]
+    },
+    "PrivacyClassSet": {
+      "items": {
+        "$ref": "#/$defs/PrivacyClass"
+      },
+      "maxItems": 128,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true,
+      "x-strictlySorted": true
+    },
+    "PublicationArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "classification": {
+          "$ref": "#/$defs/PrivacyClass"
+        },
+        "content_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "export_authorized": {
+          "type": "boolean"
+        },
+        "license_state": {
+          "$ref": "#/$defs/LicenseState"
+        },
+        "redaction_state": {
+          "enum": [
+            "not-required",
+            "verified",
+            "missing",
+            "unknown"
+          ]
+        },
+        "secret_scan": {
+          "enum": [
+            "pass",
+            "fail",
+            "unknown"
+          ]
+        },
+        "type": {
+          "const": "PublicationArtifact@1"
+        }
+      },
+      "required": [
+        "type",
+        "artifact_id",
+        "content_digest",
+        "classification",
+        "license_state",
+        "redaction_state",
+        "secret_scan",
+        "export_authorized"
+      ],
+      "type": "object"
+    },
+    "PublicationAssessmentInput": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/PublicationArtifact"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "type": "array",
+          "x-strictlySortedBy": "artifact_id",
+          "x-uniqueBy": "artifact_id"
+        },
+        "candidate_tree": {
+          "enum": [
+            "clean",
+            "dirty",
+            "unknown"
+          ]
+        },
+        "gates": {
+          "items": {
+            "$ref": "#/$defs/GateEvidence"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "type": "array",
+          "x-strictlySortedBy": "gate_id",
+          "x-uniqueBy": "gate_id"
+        },
+        "git_mutation_count": {
+          "const": 0
+        },
+        "intent": {
+          "$ref": "#/$defs/PublicationIntent"
+        },
+        "publication_authority": {
+          "enum": [
+            "granted",
+            "denied",
+            "unknown"
+          ]
+        },
+        "receipt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationReceipt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required_independence": {
+          "enum": [
+            "full",
+            "downgraded"
+          ]
+        },
+        "source_ancestry": {
+          "enum": [
+            "known-ancestor",
+            "not-ancestor",
+            "unknown"
+          ]
+        },
+        "type": {
+          "const": "PublicationAssessmentInput@1"
+        },
+        "verifiers": {
+          "items": {
+            "$ref": "#/$defs/VerifierEvidence"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "type": "array",
+          "x-strictlySortedBy": "verifier_id",
+          "x-uniqueBy": "verifier_id"
+        }
+      },
+      "required": [
+        "type",
+        "intent",
+        "artifacts",
+        "gates",
+        "verifiers",
+        "source_ancestry",
+        "candidate_tree",
+        "publication_authority",
+        "required_independence",
+        "receipt",
+        "git_mutation_count"
+      ],
+      "type": "object",
+      "x-publicationBindings": true
+    },
+    "PublicationDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "git_mutation_count": {
+          "const": 0
+        },
+        "publication_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "published_sha": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GitSha"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasons": {
+          "items": {
+            "$ref": "#/$defs/PublicationReason"
+          },
+          "maxItems": 128,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true,
+          "x-strictlySorted": true
+        },
+        "requires_reconciliation": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "eligible",
+            "blocked",
+            "published",
+            "rejected",
+            "ambiguous"
+          ]
+        },
+        "type": {
+          "const": "PublicationDecision@1"
+        }
+      },
+      "required": [
+        "type",
+        "status",
+        "reasons",
+        "publication_id",
+        "published_sha",
+        "requires_reconciliation",
+        "git_mutation_count"
+      ],
+      "type": "object",
+      "x-publicationDecisionInvariant": true
+    },
+    "PublicationFixtureBundle": {
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "$ref": "#/$defs/PublicationDecision"
+        },
+        "fixture_id": {
+          "pattern": "^F-M1C-[0-9]{3}$",
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/$defs/PublicationAssessmentInput"
+        },
+        "purpose": {
+          "$ref": "#/$defs/Text"
+        },
+        "source_requirement_ids": {
+          "$ref": "#/$defs/RequirementIdSet"
+        },
+        "type": {
+          "const": "PublicationFixtureBundle@1"
+        }
+      },
+      "required": [
+        "type",
+        "fixture_id",
+        "purpose",
+        "source_requirement_ids",
+        "input",
+        "expected"
+      ],
+      "type": "object",
+      "x-fixtureBindings": true
+    },
+    "PublicationIntent": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_ids": {
+          "$ref": "#/$defs/NonEmptyEntityIdSet"
+        },
+        "candidate_sha": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "candidate_tree_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "effect_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "goal_spec_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "goal_spec_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "grant_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "intent_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "policy_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "privacy_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "protected_branch_names": {
+          "items": {
+            "$ref": "#/$defs/RefName"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true,
+          "x-strictlySorted": true
+        },
+        "publication_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "publication_kind": {
+          "enum": [
+            "review-branch",
+            "merge",
+            "release",
+            "deployment"
+          ]
+        },
+        "repository_ref": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "required_gate_ids": {
+          "$ref": "#/$defs/NonEmptyEntityIdSet"
+        },
+        "required_verifier_ids": {
+          "$ref": "#/$defs/NonEmptyEntityIdSet"
+        },
+        "review_ref": {
+          "$ref": "#/$defs/ReviewRef"
+        },
+        "source_sha": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "target_branch": {
+          "$ref": "#/$defs/RefName"
+        },
+        "type": {
+          "const": "PublicationIntent@1"
+        }
+      },
+      "required": [
+        "type",
+        "publication_id",
+        "effect_id",
+        "intent_digest",
+        "publication_kind",
+        "repository_ref",
+        "source_sha",
+        "candidate_sha",
+        "review_ref",
+        "target_branch",
+        "protected_branch_names",
+        "goal_spec_id",
+        "goal_spec_digest",
+        "policy_digest",
+        "grant_digest",
+        "privacy_digest",
+        "candidate_tree_digest",
+        "required_gate_ids",
+        "required_verifier_ids",
+        "artifact_ids"
+      ],
+      "type": "object",
+      "x-selfDigestOmit": "intent_digest"
+    },
+    "PublicationReason": {
+      "enum": [
+        "artifact-binding-mismatch",
+        "artifact-export-prohibited",
+        "artifact-missing",
+        "authority-missing",
+        "candidate-dirty",
+        "candidate-state-unknown",
+        "gate-binding-mismatch",
+        "gate-failed",
+        "gate-missing",
+        "license-prohibited",
+        "protected-target",
+        "preflight-after-receipt",
+        "publication-kind-prohibited",
+        "receipt-binding-mismatch",
+        "remote-state-unknown",
+        "secret-scan-failed",
+        "source-ancestry-unknown",
+        "source-not-ancestor",
+        "verification-binding-mismatch",
+        "verification-insufficient",
+        "verification-missing"
+      ]
+    },
+    "PublicationReceipt": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "remote_commit_sha": {
+                "type": "null"
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "remote_state": {
+                "const": "observed"
+              }
+            },
+            "required": [
+              "remote_state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "remote_commit_sha": {
+                "$ref": "#/$defs/GitSha"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "candidate_sha": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "effect_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "publication_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "publisher_ref": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "receipt_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "receipt_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "remote_commit_sha": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GitSha"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remote_state": {
+          "enum": [
+            "observed",
+            "rejected",
+            "unknown"
+          ]
+        },
+        "repository_ref": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "review_ref": {
+          "$ref": "#/$defs/ReviewRef"
+        },
+        "type": {
+          "const": "PublicationReceipt@1"
+        }
+      },
+      "required": [
+        "type",
+        "receipt_id",
+        "publication_id",
+        "effect_id",
+        "repository_ref",
+        "review_ref",
+        "candidate_sha",
+        "publisher_ref",
+        "remote_state",
+        "remote_commit_sha",
+        "observed_at",
+        "receipt_digest"
+      ],
+      "type": "object",
+      "x-selfDigestOmit": "receipt_digest"
+    },
+    "ReceiptRecorded": {
+      "additionalProperties": false,
+      "properties": {
+        "admission_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "attempt_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "attempt_number": {
+          "maximum": 64,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "authenticity": {
+          "enum": [
+            "verified",
+            "unverified",
+            "mismatch"
+          ]
+        },
+        "effect_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "fence_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "idempotency_key": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "observer_ref": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "payload_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "receipt_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "remote_operation_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpaqueRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "enum": [
+            "succeeded",
+            "failed"
+          ]
+        },
+        "result_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "target_ref": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "type": {
+          "const": "ReceiptRecorded@1"
+        }
+      },
+      "required": [
+        "type",
+        "effect_id",
+        "attempt_id",
+        "attempt_number",
+        "idempotency_key",
+        "target_ref",
+        "payload_digest",
+        "admission_epoch",
+        "fence_epoch",
+        "observed_at",
+        "receipt_id",
+        "observer_ref",
+        "authenticity",
+        "result",
+        "result_digest",
+        "remote_operation_ref"
+      ],
+      "type": "object"
+    },
+    "ReconciliationObserved": {
+      "additionalProperties": false,
+      "properties": {
+        "admission_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "attempt_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "attempt_number": {
+          "maximum": 64,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "authenticity": {
+          "enum": [
+            "verified",
+            "unverified",
+            "mismatch"
+          ]
+        },
+        "effect_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "fence_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "idempotency_key": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "observer_ref": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "outcome": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "unknown"
+          ]
+        },
+        "payload_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "reconciliation_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "remote_operation_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpaqueRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_ref": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "type": {
+          "const": "ReconciliationObserved@1"
+        }
+      },
+      "required": [
+        "type",
+        "effect_id",
+        "attempt_id",
+        "attempt_number",
+        "idempotency_key",
+        "target_ref",
+        "payload_digest",
+        "admission_epoch",
+        "fence_epoch",
+        "observed_at",
+        "reconciliation_id",
+        "observer_ref",
+        "authenticity",
+        "outcome",
+        "result_digest",
+        "remote_operation_ref"
+      ],
+      "type": "object"
+    },
+    "RefName": {
+      "maxLength": 160,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,159}$",
+      "type": "string",
+      "x-gitRefComponent": true
+    },
+    "RequirementId": {
+      "maxLength": 96,
+      "pattern": "^[A-Z][A-Z0-9-]{2,95}$",
+      "type": "string"
+    },
+    "RequirementIdSet": {
+      "items": {
+        "$ref": "#/$defs/RequirementId"
+      },
+      "maxItems": 128,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true,
+      "x-strictlySorted": true
+    },
+    "ResearchClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "assumption_digests": {
+          "items": {
+            "$ref": "#/$defs/Digest"
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true,
+          "x-strictlySorted": true
+        },
+        "claim_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "claim_kind": {
+          "enum": [
+            "fact",
+            "inference",
+            "hypothesis",
+            "proposal",
+            "owner-direction"
+          ]
+        },
+        "definition_digests": {
+          "items": {
+            "$ref": "#/$defs/Digest"
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true,
+          "x-strictlySorted": true
+        },
+        "evidence_scope": {
+          "$ref": "#/$defs/EvidenceScope"
+        },
+        "goal_spec_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "goal_spec_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "intended_use": {
+          "enum": [
+            "internal",
+            "public"
+          ]
+        },
+        "proposition_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "required_source_ids": {
+          "items": {
+            "$ref": "#/$defs/EntityId"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true,
+          "x-strictlySorted": true
+        },
+        "revalidate_after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "ResearchClaim@1"
+        }
+      },
+      "required": [
+        "type",
+        "claim_id",
+        "goal_spec_id",
+        "goal_spec_digest",
+        "proposition_digest",
+        "claim_kind",
+        "evidence_scope",
+        "intended_use",
+        "required_source_ids",
+        "assumption_digests",
+        "definition_digests",
+        "revalidate_after"
+      ],
+      "type": "object"
+    },
+    "RetentionAssessmentInput": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_class": {
+          "enum": [
+            "raw-session",
+            "temporary",
+            "cache",
+            "accepted-evidence",
+            "gate-receipt",
+            "publication-receipt",
+            "effect-receipt",
+            "authority-receipt",
+            "audit-record"
+          ]
+        },
+        "artifact_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "copies": {
+          "items": {
+            "$ref": "#/$defs/CopyDisposition"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "type": "array",
+          "x-strictlySortedBy": "copy_id",
+          "x-uniqueBy": "copy_id"
+        },
+        "deletion_operation_count": {
+          "const": 0
+        },
+        "key_scope": {
+          "enum": [
+            "artifact",
+            "project",
+            "shared",
+            "unknown"
+          ]
+        },
+        "key_state": {
+          "enum": [
+            "destroyed",
+            "active",
+            "shared",
+            "unknown"
+          ]
+        },
+        "legal_hold": {
+          "type": "boolean"
+        },
+        "local_content_deleted": {
+          "type": "boolean"
+        },
+        "owner_erasure_policy": {
+          "enum": [
+            "granted",
+            "denied",
+            "unknown",
+            "not-required"
+          ]
+        },
+        "policy_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "privacy_class": {
+          "$ref": "#/$defs/PrivacyClass"
+        },
+        "tombstone": {
+          "$ref": "#/$defs/DeletionTombstone"
+        },
+        "type": {
+          "const": "RetentionAssessmentInput@1"
+        }
+      },
+      "required": [
+        "type",
+        "artifact_id",
+        "artifact_class",
+        "privacy_class",
+        "policy_digest",
+        "owner_erasure_policy",
+        "legal_hold",
+        "local_content_deleted",
+        "key_state",
+        "key_scope",
+        "copies",
+        "tombstone",
+        "deletion_operation_count"
+      ],
+      "type": "object",
+      "x-retentionBindings": true
+    },
+    "RetentionDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "deletion_operation_count": {
+          "const": 0
+        },
+        "reasons": {
+          "items": {
+            "$ref": "#/$defs/RetentionReason"
+          },
+          "maxItems": 128,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true,
+          "x-strictlySorted": true
+        },
+        "resolved_copy_ids": {
+          "$ref": "#/$defs/EntityIdSet"
+        },
+        "status": {
+          "enum": [
+            "complete",
+            "incomplete",
+            "blocked"
+          ]
+        },
+        "type": {
+          "const": "RetentionDecision@1"
+        },
+        "unresolved_copy_ids": {
+          "$ref": "#/$defs/EntityIdSet"
+        }
+      },
+      "required": [
+        "type",
+        "status",
+        "reasons",
+        "artifact_id",
+        "resolved_copy_ids",
+        "unresolved_copy_ids",
+        "deletion_operation_count"
+      ],
+      "type": "object",
+      "x-retentionDecisionInvariant": true
+    },
+    "RetentionFixtureBundle": {
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "$ref": "#/$defs/RetentionDecision"
+        },
+        "fixture_id": {
+          "pattern": "^F-M1C-[0-9]{3}$",
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/$defs/RetentionAssessmentInput"
+        },
+        "purpose": {
+          "$ref": "#/$defs/Text"
+        },
+        "source_requirement_ids": {
+          "$ref": "#/$defs/RequirementIdSet"
+        },
+        "type": {
+          "const": "RetentionFixtureBundle@1"
+        }
+      },
+      "required": [
+        "type",
+        "fixture_id",
+        "purpose",
+        "source_requirement_ids",
+        "input",
+        "expected"
+      ],
+      "type": "object",
+      "x-fixtureBindings": true
+    },
+    "RetentionReason": {
+      "enum": [
+        "copy-evidence-mismatch",
+        "copy-evidence-unverified",
+        "copy-inventory-mismatch",
+        "copy-unresolved",
+        "expiry-not-reached",
+        "key-not-destroyed",
+        "key-not-isolated",
+        "legal-hold",
+        "local-content-present",
+        "owner-policy-denied",
+        "owner-policy-required",
+        "tombstone-mismatch",
+        "tombstone-sensitive"
+      ]
+    },
+    "ReviewRef": {
+      "maxLength": 171,
+      "minLength": 12,
+      "pattern": "^refs/heads/[A-Za-z0-9][A-Za-z0-9._/-]{0,159}$",
+      "type": "string",
+      "x-gitRef": true
+    },
+    "SourceRecord": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "lifecycle": {
+                "enum": [
+                  "retrieved",
+                  "verified"
+                ]
+              }
+            },
+            "required": [
+              "lifecycle"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content_digest": {
+                "$ref": "#/$defs/Digest"
+              },
+              "representation_size": {
+                "$ref": "#/$defs/Count"
+              },
+              "request_digest": {
+                "$ref": "#/$defs/Digest"
+              },
+              "retrieved_at": {
+                "$ref": "#/$defs/Timestamp"
+              },
+              "verification_evidence_digest": {
+                "$ref": "#/$defs/Digest"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "access_state": {
+                "const": "metadata-only"
+              }
+            },
+            "required": [
+              "access_state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content_digest": {
+                "type": "null"
+              },
+              "representation_size": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "access_state": {
+          "enum": [
+            "accessible",
+            "inaccessible",
+            "metadata-only",
+            "unknown"
+          ]
+        },
+        "adapter_ref": {
+          "$ref": "#/$defs/OpaqueRef"
+        },
+        "adapter_revision": {
+          "$ref": "#/$defs/Token"
+        },
+        "canonical_uri": {
+          "$ref": "#/$defs/CanonicalUri"
+        },
+        "content_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "creator_digests": {
+          "items": {
+            "$ref": "#/$defs/Digest"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true,
+          "x-strictlySorted": true
+        },
+        "editorial_state": {
+          "enum": [
+            "current",
+            "corrected",
+            "superseded",
+            "retracted",
+            "withdrawn",
+            "unknown"
+          ]
+        },
+        "license_state": {
+          "$ref": "#/$defs/LicenseState"
+        },
+        "lifecycle": {
+          "enum": [
+            "discovered",
+            "identified",
+            "retrieved",
+            "verified",
+            "quarantined",
+            "expired"
+          ]
+        },
+        "persistent_identifiers": {
+          "items": {
+            "$ref": "#/$defs/PersistentIdentifier"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "type": "array",
+          "x-strictlySortedByFields": [
+            "scheme",
+            "value"
+          ],
+          "x-uniqueByFields": [
+            "scheme",
+            "value"
+          ]
+        },
+        "primary_status": {
+          "enum": [
+            "primary",
+            "secondary"
+          ]
+        },
+        "privacy_class": {
+          "$ref": "#/$defs/PrivacyClass"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publisher_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "related_source_ids": {
+          "$ref": "#/$defs/EntityIdSet"
+        },
+        "representation_size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Count"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retrieved_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revalidate_after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_class": {
+          "enum": [
+            "paper",
+            "standard",
+            "dataset",
+            "repository",
+            "official-documentation",
+            "web-secondary",
+            "experiment"
+          ]
+        },
+        "source_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "supported_scopes": {
+          "$ref": "#/$defs/EvidenceScopeSet"
+        },
+        "title_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "type": {
+          "const": "SourceRecord@1"
+        },
+        "verification_evidence_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "$ref": "#/$defs/Token"
+        }
+      },
+      "required": [
+        "type",
+        "source_id",
+        "canonical_uri",
+        "persistent_identifiers",
+        "title_digest",
+        "creator_digests",
+        "publisher_digest",
+        "source_class",
+        "primary_status",
+        "supported_scopes",
+        "lifecycle",
+        "editorial_state",
+        "access_state",
+        "license_state",
+        "privacy_class",
+        "version",
+        "published_at",
+        "retrieved_at",
+        "adapter_ref",
+        "adapter_revision",
+        "request_digest",
+        "content_digest",
+        "representation_size",
+        "verification_evidence_digest",
+        "related_source_ids",
+        "revalidate_after"
+      ],
+      "type": "object",
+      "x-sourceInvariant": true
+    },
+    "StateContractAssessmentInput": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_projection_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "actual_replay_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "aggregate_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "aggregate_type": {
+          "const": "fabric-only"
+        },
+        "backup": {
+          "enum": [
+            "verified",
+            "failed",
+            "unknown"
+          ]
+        },
+        "canonical_writer_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "completed_stages": {
+          "items": {
+            "enum": [
+              "snapshotted",
+              "validated",
+              "legacy-writers-quiesced",
+              "fence-established",
+              "imported",
+              "replayed",
+              "shadow-read-verified",
+              "v3-owner-active",
+              "checkpointed"
+            ]
+          },
+          "maxItems": 9,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true,
+          "x-stagePrefix": [
+            "snapshotted",
+            "validated",
+            "legacy-writers-quiesced",
+            "fence-established",
+            "imported",
+            "replayed",
+            "shadow-read-verified",
+            "v3-owner-active",
+            "checkpointed"
+          ]
+        },
+        "current_fence_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "deployment_revision_state": {
+          "enum": [
+            "known",
+            "unknown"
+          ]
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/CanonicalEvent"
+          },
+          "maxItems": 512,
+          "minItems": 1,
+          "type": "array"
+        },
+        "expected_projection_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "expected_replay_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "expected_writer_ids": {
+          "$ref": "#/$defs/NonEmptyEntityIdSet"
+        },
+        "immutable_assignment_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "import_state": {
+          "enum": [
+            "lossless",
+            "lossy",
+            "unknown"
+          ]
+        },
+        "migration_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "observed_writers": {
+          "items": {
+            "$ref": "#/$defs/WriterRecord"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "type": "array",
+          "x-strictlySortedBy": "writer_id",
+          "x-uniqueBy": "writer_id"
+        },
+        "open_work": {
+          "items": {
+            "$ref": "#/$defs/OpenWork"
+          },
+          "maxItems": 128,
+          "minItems": 0,
+          "type": "array",
+          "x-strictlySortedBy": "work_id",
+          "x-uniqueBy": "work_id"
+        },
+        "restore": {
+          "enum": [
+            "verified",
+            "failed",
+            "unknown"
+          ]
+        },
+        "reverse_reader": {
+          "enum": [
+            "verified",
+            "failed",
+            "unknown"
+          ]
+        },
+        "rollback": {
+          "enum": [
+            "verified",
+            "failed",
+            "unknown"
+          ]
+        },
+        "source_revision": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "source_state_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "state_write_count": {
+          "const": 0
+        },
+        "type": {
+          "const": "StateContractAssessmentInput@1"
+        },
+        "writer_refusal": {
+          "enum": [
+            "verified",
+            "failed",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "migration_id",
+        "aggregate_type",
+        "aggregate_id",
+        "source_revision",
+        "source_state_digest",
+        "immutable_assignment_digest",
+        "expected_writer_ids",
+        "observed_writers",
+        "canonical_writer_id",
+        "current_fence_epoch",
+        "events",
+        "import_state",
+        "expected_replay_digest",
+        "actual_replay_digest",
+        "expected_projection_digest",
+        "actual_projection_digest",
+        "writer_refusal",
+        "backup",
+        "restore",
+        "reverse_reader",
+        "rollback",
+        "completed_stages",
+        "open_work",
+        "deployment_revision_state",
+        "state_write_count"
+      ],
+      "type": "object",
+      "x-stateContractInvariant": true
+    },
+    "StateDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregate_id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "current_fence_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "final_sequence": {
+          "$ref": "#/$defs/Count"
+        },
+        "reasons": {
+          "items": {
+            "$ref": "#/$defs/StateReason"
+          },
+          "maxItems": 128,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true,
+          "x-strictlySorted": true
+        },
+        "state_write_count": {
+          "const": 0
+        },
+        "status": {
+          "enum": [
+            "eligible",
+            "blocked",
+            "recovery-required"
+          ]
+        },
+        "type": {
+          "const": "StateDecision@1"
+        }
+      },
+      "required": [
+        "type",
+        "status",
+        "reasons",
+        "aggregate_id",
+        "final_sequence",
+        "current_fence_epoch",
+        "state_write_count"
+      ],
+      "type": "object",
+      "x-stateDecisionInvariant": true
+    },
+    "StateFixtureBundle": {
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "$ref": "#/$defs/StateDecision"
+        },
+        "fixture_id": {
+          "pattern": "^F-M1C-[0-9]{3}$",
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/$defs/StateContractAssessmentInput"
+        },
+        "purpose": {
+          "$ref": "#/$defs/Text"
+        },
+        "source_requirement_ids": {
+          "$ref": "#/$defs/RequirementIdSet"
+        },
+        "type": {
+          "const": "StateFixtureBundle@1"
+        }
+      },
+      "required": [
+        "type",
+        "fixture_id",
+        "purpose",
+        "source_requirement_ids",
+        "input",
+        "expected"
+      ],
+      "type": "object",
+      "x-fixtureBindings": true
+    },
+    "StateReason": {
+      "enum": [
+        "aggregate-scope-mismatch",
+        "backup-unverified",
+        "deployment-unknown",
+        "digest-chain-invalid",
+        "dual-writer",
+        "event-unverified",
+        "import-unknown",
+        "logical-time-regression",
+        "lossy-import",
+        "open-effect",
+        "duplicate-command-conflict",
+        "open-lease",
+        "pending-publication",
+        "projection-mismatch",
+        "projection-only",
+        "replay-mismatch",
+        "restore-unverified",
+        "reverse-reader-unverified",
+        "rollback-unproved",
+        "saga-incomplete",
+        "sequence-gap",
+        "stage-order-invalid",
+        "stale-fence",
+        "writer-inventory-incomplete",
+        "writer-refusal-unproved",
+        "writer-unknown"
+      ]
+    },
+    "Text": {
+      "maxLength": 512,
+      "minLength": 1,
+      "type": "string",
+      "x-utf8MaxBytes": 512
+    },
+    "Timestamp": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "type": "string",
+      "x-rfc3339Utc": true
+    },
+    "Token": {
+      "maxLength": 96,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$",
+      "type": "string",
+      "x-utf8MaxBytes": 96
+    },
+    "VerifierEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_sha": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "evidence_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "independence": {
+          "enum": [
+            "full",
+            "downgraded",
+            "same-actor"
+          ]
+        },
+        "observed_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "policy_sufficient": {
+          "type": "boolean"
+        },
+        "source_sha": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "dissent",
+            "unavailable"
+          ]
+        },
+        "type": {
+          "const": "VerifierEvidence@1"
+        },
+        "verifier_id": {
+          "$ref": "#/$defs/EntityId"
+        }
+      },
+      "required": [
+        "type",
+        "verifier_id",
+        "source_sha",
+        "candidate_sha",
+        "status",
+        "independence",
+        "policy_sufficient",
+        "evidence_digest",
+        "observed_at"
+      ],
+      "type": "object"
+    },
+    "WriterRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "can_refuse": {
+          "type": "boolean"
+        },
+        "configured_fence_epoch": {
+          "$ref": "#/$defs/Epoch"
+        },
+        "mutation_path_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "observation_state": {
+          "enum": [
+            "known",
+            "unknown"
+          ]
+        },
+        "source_revision": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "type": {
+          "const": "WriterRecord@1"
+        },
+        "writer_id": {
+          "$ref": "#/$defs/EntityId"
+        }
+      },
+      "required": [
+        "type",
+        "writer_id",
+        "mutation_path_digest",
+        "observation_state",
+        "can_refuse",
+        "configured_fence_epoch",
+        "source_revision"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://recursion.local/schemas/control-plane/v3/integrity/schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/SourceRecord"
+    },
+    {
+      "$ref": "#/$defs/ResearchClaim"
+    },
+    {
+      "$ref": "#/$defs/EvidenceEdge"
+    },
+    {
+      "$ref": "#/$defs/EvidenceAssessmentInput"
+    },
+    {
+      "$ref": "#/$defs/EvidenceDecision"
+    },
+    {
+      "$ref": "#/$defs/EffectIntent"
+    },
+    {
+      "$ref": "#/$defs/EffectAdmission"
+    },
+    {
+      "$ref": "#/$defs/EffectObservation"
+    },
+    {
+      "$ref": "#/$defs/EffectTraceInput"
+    },
+    {
+      "$ref": "#/$defs/EffectDecision"
+    },
+    {
+      "$ref": "#/$defs/PublicationIntent"
+    },
+    {
+      "$ref": "#/$defs/PublicationReceipt"
+    },
+    {
+      "$ref": "#/$defs/PublicationAssessmentInput"
+    },
+    {
+      "$ref": "#/$defs/PublicationDecision"
+    },
+    {
+      "$ref": "#/$defs/CanonicalEvent"
+    },
+    {
+      "$ref": "#/$defs/StateContractAssessmentInput"
+    },
+    {
+      "$ref": "#/$defs/StateDecision"
+    },
+    {
+      "$ref": "#/$defs/RetentionAssessmentInput"
+    },
+    {
+      "$ref": "#/$defs/RetentionDecision"
+    },
+    {
+      "$ref": "#/$defs/M1CFixtureBundle"
+    },
+    {
+      "$ref": "#/$defs/FixtureManifest"
+    }
+  ],
+  "title": "Recursion v3 M1C integrity requirement contracts"
+}

@@ -49,6 +49,10 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [M1B-WIRE-PROFILE.md](M1B-WIRE-PROFILE.md) | What exact M1B JSON records, unions, bounds, nullability and reason alphabets must schemas implement? |
 | [M1B-FIXTURE-ORACLES.md](M1B-FIXTURE-ORACLES.md) | Which 24 sanitized route/plugin/process/broker outcomes form M1B's closed oracle? |
 | [M1B-CONSTRUCTION-CAMPAIGN.md](M1B-CONSTRUCTION-CAMPAIGN.md) | What Owner-authorized GoalSpec, DAG, boundaries, decisions and receipts govern M1B construction? |
+| [M1C-INTEGRITY-CONTRACTS.md](M1C-INTEGRITY-CONTRACTS.md) | What inert source/evidence, effect, publication, state and retention semantics must later runtimes satisfy? |
+| [M1C-WIRE-PROFILE.md](M1C-WIRE-PROFILE.md) | What exact M1C records, bounds, unions and reason alphabets must schemas implement? |
+| [M1C-FIXTURE-ORACLES.md](M1C-FIXTURE-ORACLES.md) | Which 24 sanitized integrity outcomes form M1C's closed literal oracle? |
+| [M1C-CONSTRUCTION-CAMPAIGN.md](M1C-CONSTRUCTION-CAMPAIGN.md) | What Owner-authorized GoalSpec, DAG, boundaries, decisions and receipts govern M1C construction? |
 | [SOURCE-REGISTER.md](SOURCE-REGISTER.md) | Which consequential primary-source versions, revisions, locators, limits and expiry triggers ground the synthesis? |
 | [VALIDATION.md](VALIDATION.md) | What exact candidate-bound command validates claim IDs, stable sequences, links, privacy, diff scope and v2 regression? |
 | [EXECUTION-FABRIC.md](EXECUTION-FABRIC.md) | How are models, CLIs, subscriptions, hosts, and tasks resolved? |
