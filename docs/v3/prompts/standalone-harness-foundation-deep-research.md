@@ -48,7 +48,8 @@ remains the executive control plane and portfolio owner. Astra is the research l
 sole integrator, and sole writer for this campaign. The ratified future Recursion Head
 and goal-scoped ARM design does not transfer current authority.
 
-Before planning, read all effective AGENTS.md instructions, CONTROL_PLANE.md, and ANCHOR.md.
+Before planning, read CONTROL_PLANE.md first, every effective CLAUDE.md and AGENTS.md
+instruction, then ANCHOR.md.
 Inspect the real repository and its WIP worktree. The prepared target is:
 
 - repository: the existing Recursion Git repository;
