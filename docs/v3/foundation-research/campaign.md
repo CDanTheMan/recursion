@@ -189,7 +189,7 @@ remain untouched. Material disagreements and their resolutions are in evidence.j
 ## Candidate preparation and acceptance procedure
 
 Coverage/discovery/reconciliation/synthesis outputs are now in evidence.json (66 thought
-dispositions, 18 appended global claims, 31 appended canonical sources), compatibility.json
+dispositions, 18 appended global claims, 32 appended canonical sources), compatibility.json
 (14 route profiles, 17 capability dimensions), experiments.json (eight not-run designs),
 decisions.json and grillme.md (ten pending answers). Canonical additions are explicitly proposed
 where they introduce product policy. Git evidence corrects M1 status to merged without changing
@@ -228,7 +228,7 @@ and limitations. Separate context/model-role review provides procedural independ
 external-provider or GPT-family independence. No Contributor route was needed.
 
 Remaining product/evidence gaps: exact Meta referent and several package/binary contracts;
-resource-level effect mediation and command fidelity; cache minima and subscription debit;
+resource-level effect mediation and command fidelity; endpoint-specific counter normalization and subscription debit;
 formal refinement, performance, security, user demand and enterprise isolation. All eight designs
 remain not run and all ten Owner answers remain pending. Proceed to exact-candidate gates/review;
 if the budget expires, preserve an explicitly incomplete checkpoint instead of claiming completion.

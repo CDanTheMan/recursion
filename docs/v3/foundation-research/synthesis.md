@@ -77,7 +77,7 @@ The model integration contract must:
 Retain E-FHAR2-101's finite bounds, guard-removal counterexamples and explicit fairness cases.
 Do not assume that the Owner, provider or network eventually responds. The precise mapping
 proposal and red designs are in [evidence.json](evidence.json), under
-`analysis.foundation.model` and `fixture.foundation.model.*`. These are new model-level
+`analysis.foundation.model` and the model fixture entries. These are new model-level
 obligations, not edits to immutable M1 schemas. FND-002.
 
 ## Consequential evidence corrections
@@ -158,7 +158,7 @@ in the initial model. The recommendation is the former unless a concrete couplin
 requires the latter. All ten answers remain pending in [decisions.json](decisions.json).
 
 The remaining gaps are named, not disguised as success: exact Meta identity, several binary/SDK
-versions, callback coverage and command fidelity, cache minimums and debit observations,
+versions, callback coverage and command fidelity, endpoint-specific counter normalization and debit observations,
 performance/market evidence, model refinement and real resource fencing. Review uses the
 authorized native fallback if external-family privacy/route eligibility cannot be verified.
 This limits provider diversity; it does not change the experiment sequence or authorize runtime work.
