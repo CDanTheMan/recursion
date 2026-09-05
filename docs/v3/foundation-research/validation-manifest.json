@@ -370,11 +370,11 @@
     },
     {
       "path": "docs/v3/foundation-research/campaign.md",
-      "git_blob_sha256": "ca890b608beccf9295d12f5b305631d525d4c9f51ef0444f1cba96ec118f0a94"
+      "git_blob_sha256": "5753ff24d835f0518331960b4593484666c5e03bb30e1800e8cd0c1ddbbdf303"
     },
     {
       "path": "docs/v3/foundation-research/check.py",
-      "git_blob_sha256": "4da3e6e9783b40b9912bd06feb8e71dd062d5f1452f9ec90f3ef0a1dc6b18d72"
+      "git_blob_sha256": "5fedd7cade1063dd58cca7f26066a7fea411dbce7ecf932e137a22b49fcab31f"
     },
     {
       "path": "docs/v3/foundation-research/compatibility.json",

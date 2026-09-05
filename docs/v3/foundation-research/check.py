@@ -286,7 +286,19 @@ def data_gate(ev, co, ex, de, sources, claims):
     require(len(co['modes']) == 4, 'ownership modes')
     for r in co['modes']:
         record(r, 'mode sampling tools permissions conversation compaction lifetime recovery billing', 'ownership mode')
-    return dids | eids | fids | {r['id'] for k in ('sources', 'thoughts', 'repository_records', 'analyses', 'searches', 'dissent') for r in ev[k]} | {r['id'] for r in co['routes']}
+    groups = [
+        (ev['sources'], 'source.foundation.'), (ev['thoughts'], 'thought.'),
+        (ev['repository_records'], 'repository.foundation.'), (ev['analyses'], 'analysis.foundation.'),
+        (ev['fixtures'], 'fixture.foundation.'), (ev['searches'], 'search.foundation.'),
+        (ev['dissent'], 'dissent.foundation.'), (ev['claims'], 'FND-'),
+        (co['routes'], 'route.foundation.'), (de['decisions'], 'decision.foundation.'),
+        (ex['experiments'], 'experiment.foundation.'),
+    ]
+    all_ids = [r['id'] for rows, _ in groups for r in rows]
+    require(len(all_ids) == len(set(all_ids)), 'duplicate campaign ID across collections')
+    for rows, prefix in groups:
+        require(all(r['id'].startswith(prefix) and re.fullmatch(r'[a-z0-9]+(?:[.-][a-z0-9]+)*', r['id'][len(prefix):]) for r in rows), 'campaign record namespace: ' + prefix)
+    return set(all_ids)
 
 
 def regression_commands():
@@ -462,6 +474,9 @@ def adversarial_gate(ev, co, ex, de, sources, claims):
         x = copy.deepcopy(ev); x['benchmark'][key] = False; cases.append((x, co, ex, de, 'boolean benchmark ' + key))
     x = copy.deepcopy(co); x['upgrade_policy'] = False; cases.append((ev, x, ex, de, 'boolean upgrade policy'))
     x = copy.deepcopy(ev); x['benchmark']['extra'] = 'unknown'; cases.append((x, co, ex, de, 'unknown benchmark field'))
+    x = copy.deepcopy(ev); x['analyses'][0]['id'] = x['sources'][0]['id']; cases.append((x, co, ex, de, 'analysis-source ID collision'))
+    x = copy.deepcopy(ev); x['searches'][0]['id'] = x['dissent'][0]['id']; cases.append((x, co, ex, de, 'search-dissent ID collision'))
+    x = copy.deepcopy(ev); x['analyses'][0]['id'] = 'unrelated.foundation.model'; cases.append((x, co, ex, de, 'wrong campaign namespace'))
     for a, b, c, d, label in cases:
         rejects(lambda: data_gate(a, b, c, d, sources, claims), label)
     registry = strict_json((ROOT / 'docs/v3/CLAIM-REGISTRY.json').read_text(encoding='utf-8'))

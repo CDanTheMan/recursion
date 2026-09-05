@@ -295,3 +295,28 @@ Neither is an external-provider reviewer. Reuse these same two authorized review
 repaired clean commit passes both full gates. Their final exact-candidate attestations remain
 in the review/tool channel, avoiding a self-referential receipt commit. No terminal outcome is
 predeclared by this PlanRevision.
+
+## PlanRevision 6 — global campaign identity closure
+
+`plan.foundation.6`, 2026-09-05. Candidate
+`fc756c3a5e115d0263d7234fd8c4bb7b7bf14085` passed both complete gates (25 regressions and
+29 adversarial mutations each), receipt digests
+`15b9e8a56a79b06f22c411f0aef1f212868c1d16c92be34bce28a2f20a438744` and
+`c5d32f1f6de75dc1e9bfdfc7680ed08689d8b0edffc46b787e6f23b1c7b87530`.
+The independent Terra high research reviewer approved that exact candidate after reopening
+all five direct Claude sources and legal guidance. The Terra high validation reviewer confirmed
+all prior repairs but returned **CHANGES REQUIRED** for a further identity ambiguity.
+
+Astra raised the cross-collection collision concern during the fixed-candidate audit; the
+reviewer independently reproduced both an analysis using a source ID and a search using a
+dissent ID. Per-list uniqueness and a final set union had hidden those collisions. Actual
+campaign records did not collide. The repaired gate now checks uniqueness across every campaign
+record collection, including claims, and enforces each collection's namespace. Both collisions
+and a wrong namespace are rejection cases; total adversarial mutations are now 32.
+
+Retained unchanged: research conclusions, source bytes/bindings, compatibility, all pending
+decisions, experiment designs, canonical documents and M1 evidence. Superseded: only the earlier
+gate candidate; neither earlier pass nor approval transfers. Commit this bounded repair,
+refresh its manifest, run both full gates, and reuse the same two independent reviewers on the
+new exact clean candidate. Final attestations remain in the review channel without another
+receipt commit. No additional discovery, runtime activity or metered route is required.
